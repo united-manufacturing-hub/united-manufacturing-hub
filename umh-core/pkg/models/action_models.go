@@ -515,10 +515,12 @@ type CommonDataFlowComponentRawYamlConfig struct {
 type LogType string
 
 const (
-	AgentLogType      LogType = "agent"
-	DFCLogType        LogType = "dfc"
-	RedpandaLogType   LogType = "redpanda"
-	TagBrowserLogType LogType = "tag-browser"
+	AgentLogType                  LogType = "agent"
+	DFCLogType                    LogType = "dfc"
+	ProtocolConverterReadLogType  LogType = "protocol-converter-read"
+	ProtocolConverterWriteLogType LogType = "protocol-converter-write"
+	RedpandaLogType               LogType = "redpanda"
+	TopicBrowserLogType           LogType = "topic-browser"
 )
 
 // GetLogsRequest contains the necessary fields for executing a `get-logs` action.
@@ -528,7 +530,7 @@ type GetLogsRequest struct {
 	// Type represents the type of the logs to retrieve
 	Type LogType `json:"type"`
 	// UUID represents the identifier of the entity to retrieve the logs for.
-	// This is optional and only used for DFC logs.
+	// This is optional and only used for DFC and Protocol Converter logs.
 	UUID string `json:"uuid"`
 }
 
@@ -668,3 +670,42 @@ const (
 	// It is not retryable because we already changed the config file and the user should refresh the page.
 	ErrGetCacheModTimeFailed = "ERR_GET_CACHE_MOD_TIME_FAILED"
 )
+
+type ProtocolConverterConnection struct {
+	IP   string `json:"ip" binding:"required"`
+	Port uint32 `json:"port" binding:"required"`
+}
+
+type ProtocolConverterDFC struct {
+	IgnoreErrors *bool                                 `json:"ignoreErrors,omitempty" yaml:"ignoreErrors,omitempty" mapstructure:"ignoreErrors,omitempty"`
+	Inputs       CommonDataFlowComponentInputConfig    `json:"inputs" yaml:"inputs" mapstructure:"inputs"`
+	Pipeline     CommonDataFlowComponentPipelineConfig `json:"pipeline" yaml:"pipeline" mapstructure:"pipeline"`
+	RawYAML      *CommonDataFlowComponentRawYamlConfig `json:"rawYAML,omitempty" yaml:"rawYAML,omitempty" mapstructure:"rawYAML,omitempty"`
+}
+
+type ProtocolConverterVariable struct {
+	Label string `json:"label" yaml:"label" mapstructure:"label"`
+	Value string `json:"value" yaml:"value" mapstructure:"value"`
+}
+
+type ProtocolConverterTemplateInfo struct {
+	IsTemplated bool                        `json:"isTemplated" yaml:"isTemplated" mapstructure:"isTemplated"`
+	Variables   []ProtocolConverterVariable `json:"variables" yaml:"variables" mapstructure:"variables"`
+	RootUUID    uuid.UUID                   `json:"rootUUID" yaml:"rootUUID" mapstructure:"rootUUID"`
+}
+
+type ProtocolConverter struct {
+	UUID         *uuid.UUID                     `json:"uuid" binding:"required"`
+	Name         string                         `json:"name" binding:"required"`
+	Location     map[int]string                 `json:"location"`
+	Connection   ProtocolConverterConnection    `json:"connection"`
+	ReadDFC      *ProtocolConverterDFC          `json:"readDFC"`
+	WriteDFC     *ProtocolConverterDFC          `json:"writeDFC"`
+	TemplateInfo *ProtocolConverterTemplateInfo `json:"templateInfo"`
+	Meta         *ProtocolConverterMeta         `json:"meta"`
+}
+
+type ProtocolConverterMeta struct {
+	ProcessingMode string `json:"processingMode"`
+	Protocol       string `json:"protocol"`
+}

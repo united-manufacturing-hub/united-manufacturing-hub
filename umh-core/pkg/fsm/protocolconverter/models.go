@@ -146,8 +146,12 @@ type ProtocolConverterObservedState struct {
 	// ServiceInfo contains information about the ProtocolConverter service
 	ServiceInfo protocolconvertersvc.ServiceInfo
 
-	// ObservedProtocolConverterConfig contains the observed ProtocolConverter service config
-	ObservedProtocolConverterConfig protocolconverterconfig.ProtocolConverterServiceConfigRuntime
+	// ObservedProtocolConverterRuntimeConfig contains the observed ProtocolConverter service config
+	ObservedProtocolConverterRuntimeConfig protocolconverterconfig.ProtocolConverterServiceConfigRuntime
+
+	// ObservedProtocolConverterSpecConfig contains the observed ProtocolConverter service config spec with variables
+	// it is here for the purpose of the UI to display the variables and the location
+	ObservedProtocolConverterSpecConfig protocolconverterconfig.ProtocolConverterServiceConfigSpec
 }
 
 // IsObservedState implements the ObservedState interface
@@ -172,15 +176,15 @@ type ProtocolConverterInstance struct {
 	// It has a manager that manages the protocolconverter service instances
 	service protocolconvertersvc.IProtocolConverterService
 
-	// config contains all the configuration spec for this service
-	config protocolconverterconfig.ProtocolConverterServiceConfigSpec
+	// specConfig contains all the configuration spec for this service
+	specConfig protocolconverterconfig.ProtocolConverterServiceConfigSpec
 
-	// renderedConfig is the last fully-rendered runtime configuration.
+	// runtimeConfig is the last fully-rendered runtime configuration.
 	// It is **zero-value** when the instance is first created; the real
 	// configuration is rendered during the *first* Reconcile() cycle
 	// once the instance has access to SystemSnapshot (agent location,
 	// global variables, node name, …).
-	renderedConfig protocolconverterconfig.ProtocolConverterServiceConfigRuntime
+	runtimeConfig protocolconverterconfig.ProtocolConverterServiceConfigRuntime
 }
 
 // GetLastObservedState returns the last known state of the instance
@@ -197,7 +201,7 @@ func (d *ProtocolConverterInstance) SetService(service protocolconvertersvc.IPro
 // GetConfig returns the ProtocolConverterServiceConfig for this service
 // This is a testing-only utility to access the private service field
 func (d *ProtocolConverterInstance) GetConfig() protocolconverterconfig.ProtocolConverterServiceConfigSpec {
-	return d.config
+	return d.specConfig
 }
 
 // GetLastError returns the last error of the instance

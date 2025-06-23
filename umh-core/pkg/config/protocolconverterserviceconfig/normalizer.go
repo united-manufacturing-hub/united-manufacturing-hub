@@ -60,8 +60,8 @@ func (n *Normalizer) NormalizeConfig(cfg ProtocolConverterServiceConfigSpec) Pro
 
 	// We need to first normalize the underlying DFCServiceConfig
 	dfcNormalizer := dataflowcomponentserviceconfig.NewNormalizer()
-	normalized.Template.DataflowComponentReadServiceConfig = dfcNormalizer.NormalizeConfig(normalized.GetDFCReadServiceConfig())
-	normalized.Template.DataflowComponentWriteServiceConfig = dfcNormalizer.NormalizeConfig(normalized.GetDFCWriteServiceConfig())
+	normalized.Config.DataflowComponentReadServiceConfig = dfcNormalizer.NormalizeConfig(normalized.GetDFCReadServiceConfig())
+	normalized.Config.DataflowComponentWriteServiceConfig = dfcNormalizer.NormalizeConfig(normalized.GetDFCWriteServiceConfig())
 
 	// Inject default downsampler for READ components only
 	// Write components process data leaving UNS, downsampling should happen before UNS entry
@@ -73,7 +73,7 @@ func (n *Normalizer) NormalizeConfig(cfg ProtocolConverterServiceConfigSpec) Pro
 	connectionNormalizer := connectionserviceconfig.NewNormalizer()
 	// If conversion fails, e.g., because the port is not a number, keep the original template config (graceful degradation during normalization)
 	if connRuntime, err := connectionserviceconfig.ConvertTemplateToRuntime(normalized.GetConnectionServiceConfig()); err == nil {
-		normalized.Template.ConnectionServiceConfig = connectionserviceconfig.ConvertRuntimeToTemplate(connectionNormalizer.NormalizeConfig(connRuntime))
+		normalized.Config.ConnectionServiceConfig = connectionserviceconfig.ConvertRuntimeToTemplate(connectionNormalizer.NormalizeConfig(connRuntime))
 	}
 
 	// Then we need to normalize the variables

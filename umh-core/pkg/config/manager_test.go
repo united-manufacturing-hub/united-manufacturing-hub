@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -248,7 +249,7 @@ agent:
     0: Enterprise
     1: Site
 `
-				config, err := parseConfig([]byte(validYAML), false)
+				config, err := ParseConfig([]byte(validYAML), false)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(config.Internal.Services).To(HaveLen(1))
@@ -262,14 +263,14 @@ agent:
 			})
 
 			It("should handle empty input", func() {
-				config, err := parseConfig([]byte{}, false)
+				config, err := ParseConfig([]byte{}, false)
 				Expect(err).To(HaveOccurred())
 				Expect(config).To(Equal(FullConfig{}))
 			})
 
 			It("should handle empty but valid YAML", func() {
 				emptyYAML := "---\n"
-				config, err := parseConfig([]byte(emptyYAML), false)
+				config, err := ParseConfig([]byte(emptyYAML), false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(config).To(Equal(FullConfig{}))
 			})
@@ -280,7 +281,7 @@ internal: {
   services: [
     { name: service1, desiredState: running,
 `
-				_, err := parseConfig([]byte(malformedYAML), false)
+				_, err := ParseConfig([]byte(malformedYAML), false)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("did not find expected node content"))
 			})
@@ -295,7 +296,7 @@ internal:
   unknownSection:
     key: value
 `
-				_, err := parseConfig([]byte(yamlWithUnknownFields), false)
+				_, err := ParseConfig([]byte(yamlWithUnknownFields), false)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to decode config"))
 			})
@@ -313,7 +314,7 @@ internal:
 agent:
   location: null
 `
-				config, err := parseConfig([]byte(yamlWithNulls), false)
+				config, err := ParseConfig([]byte(yamlWithNulls), false)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(config.Internal.Services).To(HaveLen(1))
 				Expect(config.Internal.Services[0].Name).To(Equal("service1"))
@@ -338,7 +339,7 @@ internal:
         configFiles:
           "file with spaces.txt": "content with multiple\nlines\nand \"quotes\""
 `
-				config, err := parseConfig([]byte(complexYAML), false)
+				config, err := ParseConfig([]byte(complexYAML), false)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(config.Internal.Services).To(HaveLen(1))
@@ -383,9 +384,108 @@ internal:
 					data, err := fsService.ReadFile(ctx, filepath.Join("../../examples", file.Name()))
 					Expect(err).NotTo(HaveOccurred())
 
-					_, err = parseConfig(data, false)
+					_, err = ParseConfig(data, false)
 					Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to parse %s", file.Name()))
 				}
+			})
+
+			It("should extract templates from the templated protocol converter example", func() {
+				// Test specifically with the example file that has templates
+				data, err := fsService.ReadFile(ctx, "../../examples/example-config-protocolconverter-templated.yaml")
+				Expect(err).NotTo(HaveOccurred())
+
+				config, err := ParseConfig(data, true)
+				Expect(err).NotTo(HaveOccurred())
+
+				// The example should have at least one protocol converter using a template
+				Expect(config.ProtocolConverter).NotTo(BeEmpty())
+			})
+		})
+	})
+
+	Describe("Round-trip config handling", func() {
+		var (
+			fsService filesystem.Service
+			ctx       context.Context
+			cancel    context.CancelFunc
+		)
+
+		BeforeEach(func() {
+			fsService = filesystem.NewDefaultService()
+			ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+		})
+
+		AfterEach(func() {
+			cancel()
+		})
+
+		Context("with templated protocol converter example", func() {
+			It("should read, parse, and write the config preserving templates", func() {
+				// Read the original example file
+				originalData, err := fsService.ReadFile(ctx, "../../examples/example-config-protocolconverter-templated.yaml")
+				Expect(err).NotTo(HaveOccurred())
+
+				// Parse the config with anchor extraction enabled
+				config, err := ParseConfig(originalData, true)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Verify we have the expected structure
+				Expect(config.ProtocolConverter).To(HaveLen(3))
+				Expect(config.Templates.ProtocolConverter).To(BeEmpty())
+
+				// Find the temperature-sensor-pc that uses the template
+				var tempSensorPC *ProtocolConverterConfig
+				for _, pc := range config.ProtocolConverter {
+					if pc.Name == "temperature-sensor-pc" {
+						tempSensorPC = &pc
+						break
+					}
+				}
+				Expect(tempSensorPC).NotTo(BeNil())
+				Expect(tempSensorPC.DesiredFSMState).To(Equal("active"))
+
+				// Write the config using the config manager
+				configManager.WithFileSystemService(mockFS)
+
+				// Set up mock filesystem for writing
+				var writtenData []byte
+				mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
+					return nil
+				})
+				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+					writtenData = data
+					return nil
+				})
+				mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+					return mockFS.NewMockFileInfo("config.yaml", int64(len(writtenData)), 0644, time.Now(), false), nil
+				})
+
+				// Write the config
+				err = configManager.writeConfig(ctx, config)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(writtenData).NotTo(BeEmpty())
+
+				// Parse the written data to verify it's still valid
+				writtenConfig, err := ParseConfig(writtenData, true)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Verify the structure is preserved
+				Expect(writtenConfig.ProtocolConverter).To(HaveLen(3))
+				Expect(writtenConfig.Agent.Location).To(HaveKeyWithValue(0, "plant-A"))
+				Expect(writtenConfig.Agent.Location).To(HaveKeyWithValue(1, "line-4"))
+
+				// Verify the protocol converters are preserved
+				var writtenTempSensorPC *ProtocolConverterConfig
+				for _, pc := range writtenConfig.ProtocolConverter {
+					if pc.Name == "temperature-sensor-pc" {
+						writtenTempSensorPC = &pc
+						break
+					}
+				}
+				Expect(writtenTempSensorPC).NotTo(BeNil())
+				Expect(writtenTempSensorPC.DesiredFSMState).To(Equal("active"))
+				Expect(writtenTempSensorPC.ProtocolConverterServiceConfig.Variables.User).To(HaveKeyWithValue("IP", "10.0.1.50"))
+				Expect(writtenTempSensorPC.ProtocolConverterServiceConfig.Variables.User).To(HaveKeyWithValue("PORT", "4840"))
 			})
 		})
 	})

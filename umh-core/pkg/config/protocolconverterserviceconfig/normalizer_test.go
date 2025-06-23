@@ -29,14 +29,14 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 
 			config = normalizer.NormalizeConfig(config)
 
-			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig).NotTo(BeNil())
-			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Output).NotTo(BeNil())
-			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline).NotTo(BeNil())
+			Expect(config.Config.DataflowComponentReadServiceConfig.BenthosConfig).NotTo(BeNil())
+			Expect(config.Config.DataflowComponentReadServiceConfig.BenthosConfig.Output).NotTo(BeNil())
+			Expect(config.Config.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline).NotTo(BeNil())
 		})
 
 		It("should preserve existing values", func() {
 			config := ProtocolConverterServiceConfigSpec{
-				Template: ProtocolConverterServiceConfigTemplate{
+				Config: ProtocolConverterServiceConfigTemplate{
 					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
@@ -73,15 +73,15 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 			config = normalizer.NormalizeConfig(config)
 
 			// Check input preserved
-			inputMqtt := config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Input["mqtt"].(map[string]any)
+			inputMqtt := config.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input["mqtt"].(map[string]any)
 			Expect(inputMqtt["topic"]).To(Equal("test/topic"))
 
 			// Check output preserved
-			outputUns := config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Output["uns"].(map[string]any) // note that this is NOT kafka, but uns
+			outputUns := config.Config.DataflowComponentReadServiceConfig.BenthosConfig.Output["uns"].(map[string]any) // note that this is NOT kafka, but uns
 			Expect(outputUns["bridged_by"]).To(Equal("{{ .internal.bridged_by }}"))
 
 			// Check pipeline processors preserved
-			processors := config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline["processors"].([]any)
+			processors := config.Config.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline["processors"].([]any)
 			Expect(processors).To(HaveLen(1))
 			processor := processors[0].(map[string]any)
 			processorText := processor["text"].(map[string]any)
@@ -90,7 +90,7 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 
 		It("should normalize maps by ensuring they're not nil", func() {
 			config := ProtocolConverterServiceConfigSpec{
-				Template: ProtocolConverterServiceConfigTemplate{
+				Config: ProtocolConverterServiceConfigTemplate{
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							// Input is nil
@@ -107,26 +107,26 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 			normalizer := NewNormalizer()
 			config = normalizer.NormalizeConfig(config)
 
-			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Input).NotTo(BeNil())
-			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Output).NotTo(BeNil())
+			Expect(config.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input).NotTo(BeNil())
+			Expect(config.Config.DataflowComponentReadServiceConfig.BenthosConfig.Output).NotTo(BeNil())
 			// processor subfield should exist in the pipeline field
-			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline).To(HaveKey("processors"))
-			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline["processors"]).To(BeEmpty())
+			Expect(config.Config.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline).To(HaveKey("processors"))
+			Expect(config.Config.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline["processors"]).To(BeEmpty())
 
 			// Check write-side configuration
-			Expect(config.Template.DataflowComponentWriteServiceConfig.BenthosConfig).NotTo(BeNil())
-			Expect(config.Template.DataflowComponentWriteServiceConfig.BenthosConfig.Input).NotTo(BeNil())
-			Expect(config.Template.DataflowComponentWriteServiceConfig.BenthosConfig.Output).NotTo(BeNil())
+			Expect(config.Config.DataflowComponentWriteServiceConfig.BenthosConfig).NotTo(BeNil())
+			Expect(config.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Input).NotTo(BeNil())
+			Expect(config.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Output).NotTo(BeNil())
 			// processor subfield should exist in the pipeline field
-			Expect(config.Template.DataflowComponentWriteServiceConfig.BenthosConfig.Pipeline).To(HaveKey("processors"))
-			Expect(config.Template.DataflowComponentWriteServiceConfig.BenthosConfig.Pipeline["processors"]).To(BeEmpty())
+			Expect(config.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Pipeline).To(HaveKey("processors"))
+			Expect(config.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Pipeline["processors"]).To(BeEmpty())
 
 			// Buffer should have the none buffer set
-			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Buffer).To(HaveKey("none"))
+			Expect(config.Config.DataflowComponentReadServiceConfig.BenthosConfig.Buffer).To(HaveKey("none"))
 
 			// These should be empty
-			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.CacheResources).To(BeEmpty())
-			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.RateLimitResources).To(BeEmpty())
+			Expect(config.Config.DataflowComponentReadServiceConfig.BenthosConfig.CacheResources).To(BeEmpty())
+			Expect(config.Config.DataflowComponentReadServiceConfig.BenthosConfig.RateLimitResources).To(BeEmpty())
 		})
 	})
 

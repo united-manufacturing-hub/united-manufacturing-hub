@@ -293,9 +293,13 @@ func (d *DataflowComponentInstance) reconcileStartingStates(ctx context.Context,
 			d.ObservedState.ServiceInfo.StatusReason = reason
 			return d.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
+		benthosStatusReason := d.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.StatusReason
+		if benthosStatusReason == "" {
+			benthosStatusReason = "not existing"
+		}
 
 		// 4. Otherwise remain in OperationalStateStarting and try again on next tick.
-		d.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting - waiting for benthos to be up: %s", d.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.StatusReason)
+		d.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting - waiting for benthos to be up: %s", benthosStatusReason)
 		return nil, false
 	case OperationalStateStartingFailed:
 	// Do not do anything here.
