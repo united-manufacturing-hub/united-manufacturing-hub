@@ -150,7 +150,7 @@ build-pprof:       EXTRA_ARGS := --build-arg PPROF=true
 build-debug:       EXTRA_ARGS := --build-arg DEBUG=true
 
 # Refresh cache and build docker binaries
-build build-pprof build-debug: download-docker-binaries
+build build-pprof build-debug: build-protobuf download-docker-binaries
 	$(call DOCKER_BUILD)
 
 FLAVOR ?=                         # empty → normal build
@@ -232,7 +232,7 @@ benchmark-s6-time:
 integration-test: stop-all-pods vet nilaway lint
 
 # Meta target to setup the environment for the tests
-pre-test: stop-all-pods vet nilaway lint
+pre-test: build-protobuf stop-all-pods vet nilaway lint
 
 # Meta target to setup the environment for the tests in CI environments
 pre-test-ci: vet lint
@@ -272,6 +272,16 @@ print-versions:
 ## Used by go-analysis.yml
 print-golang-version:
 	@echo "$(GOLANG_VERSION)"
+
+## Generate go files from protobuf for topic browser
+build-protobuf:
+	go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+	rm pkg/communicator/models/topicbrowser/pb/topic_browser_data.pb.go || true
+	protoc \
+		-I=pkg/communicator/models/topicbrowser/proto \
+		--go_out=pkg/communicator/models/topicbrowser/pb \
+		pkg/communicator/models/topicbrowser/proto/topic_browser_data.proto
+	@echo '// Copyright 2025 UMH Systems GmbH\n//\n// Licensed under the Apache License, Version 2.0 (the "License");\n// you may not use this file except in compliance with the License.\n// You may obtain a copy of the License at\n//\n//     http://www.apache.org/licenses/LICENSE-2.0\n//\n// Unless required by applicable law or agreed to in writing, software\n// distributed under the License is distributed on an "AS IS" BASIS,\n// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n// See the License for the specific language governing permissions and\n// limitations under the License.\n\n' | cat - pkg/communicator/models/topicbrowser/pb/topic_browser_data.pb.go > temp && mv temp pkg/communicator/models/topicbrowser/pb/topic_browser_data.pb.go
 
 ###############################################################################
 # choose build flavour                                                        #
