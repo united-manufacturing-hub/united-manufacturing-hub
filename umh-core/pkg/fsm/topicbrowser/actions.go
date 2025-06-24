@@ -22,21 +22,25 @@ import (
 	"time"
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
-	tbsvccfg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/topicbrowserserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	logger "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	tbsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
 // CreateInstance attempts to add the Topic Browser to the manager.
-func (i *Instance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (i *Instance) CreateInstance(ctx context.Context, services serviceregistry.Provider) error {
 	i.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding Topic Browser service %s to S6 manager ...", i.baseFSMInstance.GetID())
 
-	err := i.service.AddToManager(ctx, filesystemService, &i.config, i.baseFSMInstance.GetID())
+	// Generate the benthos config from the topic browser config
+	benthosConfig, err := i.service.GenerateConfig(i.baseFSMInstance.GetID())
+	if err != nil {
+		return fmt.Errorf("failed to generate benthos config for Topic Browser service %s: %w", i.baseFSMInstance.GetID(), err)
+	}
+
+	err = i.service.AddToManager(ctx, services, &benthosConfig)
 	if err != nil {
 		if err == tbsvc.ErrServiceAlreadyExists {
 			i.baseFSMInstance.GetLogger().Debugf("Topic Browser service %s already exists in S6 manager", i.baseFSMInstance.GetID())
@@ -52,13 +56,13 @@ func (i *Instance) CreateInstance(ctx context.Context, filesystemService filesys
 // RemoveInstance is executed while the Topic Browser FSM sits in the *removing* state.
 func (i *Instance) RemoveInstance(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 ) error {
 	i.baseFSMInstance.GetLogger().
 		Infof("Removing Topic Browser service %s from S6 manager …",
 			i.baseFSMInstance.GetID())
 
-	err := i.service.RemoveFromManager(ctx, filesystemService, i.baseFSMInstance.GetID())
+	err := i.service.RemoveFromManager(ctx, services.GetFileSystem(), i.baseFSMInstance.GetID())
 
 	switch {
 	// ---------------------------------------------------------------
@@ -100,11 +104,11 @@ func (i *Instance) RemoveInstance(
 }
 
 // StartInstance attempts to start the topic browser by setting the desired state to running for the given instance
-func (i *Instance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (i *Instance) StartInstance(ctx context.Context, services serviceregistry.Provider) error {
 	i.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting Topic Browser service %s ...", i.baseFSMInstance.GetID())
 
 	// Set the desired state to running for the given instance
-	err := i.service.Start(ctx, filesystemService, i.baseFSMInstance.GetID())
+	err := i.service.Start(ctx, services.GetFileSystem(), i.baseFSMInstance.GetID())
 	if err != nil {
 		// if the service is not there yet but we attempt to start it, we need to throw an error
 		return fmt.Errorf("failed to start Topic Browser service %s: %w", i.baseFSMInstance.GetID(), err)
@@ -115,11 +119,11 @@ func (i *Instance) StartInstance(ctx context.Context, filesystemService filesyst
 }
 
 // StopInstance attempts to stop the Topic Browser by setting the desired state to stopped for the given instance
-func (i *Instance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (i *Instance) StopInstance(ctx context.Context, services serviceregistry.Provider) error {
 	i.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping Topic Browser service %s ...", i.baseFSMInstance.GetID())
 
 	// Set the desired state to stopped for the given instance
-	err := i.service.Stop(ctx, filesystemService, i.baseFSMInstance.GetID())
+	err := i.service.Stop(ctx, services.GetFileSystem(), i.baseFSMInstance.GetID())
 	if err != nil {
 		// if the service is not there yet but we attempt to stop it, we need to throw an error
 		return fmt.Errorf("failed to stop Topic Browser service %s: %w", i.baseFSMInstance.GetID(), err)
@@ -131,14 +135,14 @@ func (i *Instance) StopInstance(ctx context.Context, filesystemService filesyste
 
 // CheckForCreation checks if the Topic Browser service should be created
 // NOTE: check if we really need this or just set true locally
-func (i *Instance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+func (i *Instance) CheckForCreation(ctx context.Context, services serviceregistry.Provider) bool {
 	return true
 }
 
 // getServiceStatus gets the status of the Topic Browser service
 // its main purpose is to handle the edge cases where the service is not yet created or not yet running
-func (i *Instance) getServiceStatus(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) (tbsvc.ServiceInfo, error) {
-	info, err := i.service.Status(ctx, services.GetFileSystem(), i.baseFSMInstance.GetID(), tick)
+func (i *Instance) getServiceStatus(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (tbsvc.ServiceInfo, error) {
+	info, err := i.service.Status(ctx, services, i.baseFSMInstance.GetID(), snapshot)
 	if err != nil {
 		// If there's an error getting the service status, we need to distinguish between cases
 
@@ -171,7 +175,7 @@ func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services s
 	}
 
 	start := time.Now()
-	info, err := i.getServiceStatus(ctx, services, snapshot.Tick, snapshot.SnapshotTime)
+	info, err := i.getServiceStatus(ctx, services, snapshot)
 	if err != nil {
 		return err
 	}
@@ -187,42 +191,23 @@ func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services s
 		return nil
 	}
 
-	// Fetch the actual Topic Browser config from the service
-	start = time.Now()
-	observedConfig, err := i.service.GetConfig(ctx, services.GetFileSystem(), i.baseFSMInstance.GetID())
-	metrics.ObserveReconcileTime(logger.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".getConfig", time.Since(start))
-	if err == nil {
-		// Only update if we successfully got the config
-		i.ObservedState.ObservedServiceConfig = observedConfig
+	// Check if the service exists and if we need to update the configuration
+	if i.service.ServiceExists(ctx, services.GetFileSystem(), i.baseFSMInstance.GetID()) {
+		// Generate the benthos config from the current topic browser config
+		benthosConfig, err := i.service.GenerateConfig(i.baseFSMInstance.GetID())
+		if err != nil {
+			return fmt.Errorf("failed to generate benthos config for Topic Browser service %s: %w", i.baseFSMInstance.GetID(), err)
+		}
+
+		// Update the config in the S6 manager
+		err = i.service.UpdateInManager(ctx, &benthosConfig)
+		if err != nil {
+			return fmt.Errorf("failed to update Topic Browser service configuration: %w", err)
+		}
+
+		i.baseFSMInstance.GetLogger().Debugf("Topic Browser service configuration updated")
 	} else {
-		if strings.Contains(err.Error(), tbsvc.ErrServiceNotExist.Error()) {
-			// Log the error but don't fail - this might happen during creation when the config file doesn't exist yet
-			i.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
-			return nil
-		} else {
-			return fmt.Errorf("failed to get observed Topic Browser config: %w", err)
-		}
-	}
-
-	// Detect a config change - but let the S6 manager handle the actual reconciliation
-	// Use new ConfigsEqual function that handles Benthos defaults properly
-	if !tbsvccfg.ConfigsEqual(i.config, i.ObservedState.ObservedServiceConfig) {
-		// Check if the service exists before attempting to update
-		if i.service.ServiceExists(ctx, services.GetFileSystem(), i.baseFSMInstance.GetID()) {
-			i.baseFSMInstance.GetLogger().Debugf("Observed Topic Browser config is different from desired config, updating S6 configuration")
-
-			// Use the new ConfigDiff function for better debug output
-			diffStr := tbsvccfg.ConfigDiff(i.config, i.ObservedState.ObservedServiceConfig)
-			i.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
-
-			// Update the config in the S6 manager
-			err := i.service.UpdateInManager(ctx, services.GetFileSystem(), &i.config, i.baseFSMInstance.GetID())
-			if err != nil {
-				return fmt.Errorf("failed to update Topic Browser service configuration: %w", err)
-			}
-		} else {
-			i.baseFSMInstance.GetLogger().Debugf("Config differences detected but service does not exist yet, skipping update")
-		}
+		i.baseFSMInstance.GetLogger().Debugf("Service does not exist yet, skipping configuration update")
 	}
 
 	return nil
