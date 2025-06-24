@@ -18,6 +18,8 @@ import (
 	"sync"
 
 	tbproto "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models/topicbrowser/pb"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -85,6 +87,18 @@ func (c *Cache) Update(obs *ObservedState) error {
 
 		var ub tbproto.UnsBundle
 		if err := proto.Unmarshal(buf.Payload, &ub); err != nil {
+			// Log the unmarshal error with context and report to Sentry
+			log := logger.For(logger.ComponentCommunicator)
+			log.Errorf("Failed to unmarshal protobuf data in topic browser cache: %v", err)
+
+			context := map[string]interface{}{
+				"operation":   "unmarshal_protobuf",
+				"buffer_size": len(buf.Payload),
+				"timestamp":   buf.Timestamp,
+				"component":   "topic_browser_cache",
+			}
+			sentry.ReportIssueWithContext(err, sentry.IssueTypeError, log, context)
+
 			// Skip invalid protobuf data
 			continue
 		}
@@ -139,21 +153,33 @@ func (c *Cache) ToUnsBundleProto() []byte {
 	// proto encode the uns bundle
 	encoded, err := proto.Marshal(ub)
 	if err != nil {
+		// Log the marshal error with context and report to Sentry
+		log := logger.For(logger.ComponentCommunicator)
+		log.Errorf("Failed to marshal UnsBundle to protobuf in topic browser cache: %v", err)
+
+		context := map[string]interface{}{
+			"operation":    "marshal_protobuf",
+			"events_count": len(ub.Events.Entries),
+			"unsmap_count": len(ub.UnsMap.Entries),
+			"component":    "topic_browser_cache",
+		}
+		sentry.ReportIssueWithContext(err, sentry.IssueTypeError, log, context)
+
 		return nil
 	}
 
 	return encoded
 }
 
-// Snapshot returns a deep copy of all cached bundles
-func (c *Cache) Snapshot() map[string]*tbproto.UnsBundle {
+// Snapshot returns a deep copy of all cached event table entries
+func (c *Cache) Snapshot() map[string]*tbproto.EventTableEntry {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	// Create a deep copy to avoid data races
-	dup := make(map[string]*tbproto.UnsBundle, len(c.eventMap))
-	for key, bundle := range c.eventMap {
-		dup[key] = proto.Clone(bundle).(*tbproto.UnsBundle)
+	dup := make(map[string]*tbproto.EventTableEntry, len(c.eventMap))
+	for key, entry := range c.eventMap {
+		dup[key] = proto.Clone(entry).(*tbproto.EventTableEntry)
 	}
 
 	return dup
