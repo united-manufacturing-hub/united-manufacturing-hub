@@ -24,6 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/subscriber"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/router"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -48,6 +49,7 @@ type CommunicationState struct {
 	ConfigManager         config.ConfigManager
 	ApiUrl                string
 	Logger                *zap.SugaredLogger
+	TopicBrowserCache     *topicbrowser.Cache
 }
 
 // NewCommunicationState creates a new CommunicationState with initialized mutex
@@ -61,6 +63,7 @@ func NewCommunicationState(
 	apiUrl string,
 	logger *zap.SugaredLogger,
 	insecureTLS bool,
+	topicBrowserCache *topicbrowser.Cache,
 ) *CommunicationState {
 	return &CommunicationState{
 		mu:                    &sync.RWMutex{},
@@ -74,6 +77,7 @@ func NewCommunicationState(
 		ApiUrl:                apiUrl,
 		Logger:                logger,
 		InsecureTLS:           insecureTLS,
+		TopicBrowserCache:     topicBrowserCache,
 	}
 }
 
@@ -183,6 +187,7 @@ func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 		systemSnapshotManager,
 		configManager,
 		c.Logger,
+		c.TopicBrowserCache,
 	)
 	if c.SubscriberHandler == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create subscriber handler")

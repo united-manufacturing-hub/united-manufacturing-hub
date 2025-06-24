@@ -16,6 +16,7 @@ package generator
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -29,6 +30,7 @@ type StatusCollectorType struct {
 	systemSnapshotManager *fsm.SnapshotManager
 	logger                *zap.SugaredLogger
 	configManager         config.ConfigManager
+	topicBrowserCache     *topicbrowser.Cache
 }
 
 func NewStatusCollector(
@@ -36,6 +38,7 @@ func NewStatusCollector(
 	systemSnapshotManager *fsm.SnapshotManager,
 	configManager config.ConfigManager,
 	logger *zap.SugaredLogger,
+	topicBrowserCache *topicbrowser.Cache,
 ) *StatusCollectorType {
 
 	collector := &StatusCollectorType{
@@ -43,6 +46,7 @@ func NewStatusCollector(
 		systemSnapshotManager: systemSnapshotManager,
 		logger:                logger,
 		configManager:         configManager,
+		topicBrowserCache:     topicBrowserCache,
 	}
 
 	return collector
