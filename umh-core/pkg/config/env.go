@@ -85,11 +85,12 @@ func LoadConfigWithEnvOverrides(ctx context.Context, configManager *FileConfigMa
 	// For AllowInsecureTLS, we need to know if it was explicitly set, so we first check the raw env var
 	var allowInsecureTLS bool
 	var allowInsecureTLSSet bool
-	if allowInsecureTLSStr := os.Getenv("ALLOW_INSECURE_TLS"); allowInsecureTLSStr != "" {
-		allowInsecureTLSSet = true
+	if allowInsecureTLSStr, exists := os.LookupEnv("ALLOW_INSECURE_TLS"); exists {
 		allowInsecureTLS, err = env.GetAsBool("ALLOW_INSECURE_TLS", false, false)
 		if err != nil {
-			sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to get ALLOW_INSECURE_TLS: %w", err)
+			sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to parse ALLOW_INSECURE_TLS=%q as boolean: %w. Existing config value will be kept to avoid accidental security regressions", allowInsecureTLSStr, err)
+		} else {
+			allowInsecureTLSSet = true
 		}
 	}
 
