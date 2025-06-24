@@ -135,16 +135,18 @@ type Service interface {
 //	offset – next byte to read on disk (monotonically increases until
 //	         rotation or truncation)
 //
-//	rotatedFile   – path to rotated file we need to finish reading to prevent
-//	                protobuf message loss during topic browser output parsing
-//	rotatedOffset – where we left off in the rotated file
+
+// logs   – backing array that holds *at most* S6MaxLines entries.
 //
-//	logs   – backing array that holds *at most* S6MaxLines entries.
-//	         Allocated once; after that, entries are overwritten in place.
-//	head   – index of the slot where the **next** entry will be written.
-//	         When head wraps from max-1 to 0, `full` is set to true.
-//	full   – true once the buffer has wrapped at least once; used to decide
-//	         how to linearise the ring when we copy it out.
+//	Allocated once; after that, entries are overwritten in place.
+//
+// head   – index of the slot where the **next** entry will be written.
+//
+//	When head wraps from max-1 to 0, `full` is set to true.
+//
+// full   – true once the buffer has wrapped at least once; used to decide
+//
+//	how to linearise the ring when we copy it out.
 type logState struct {
 	// mu guards every field in the struct (single-writer, multi-reader)
 	mu sync.Mutex
@@ -153,12 +155,6 @@ type logState struct {
 	// offset is the next byte to read on disk (monotonically increases until
 	// rotation or truncation)
 	offset int64
-
-	// rotatedFile is the path to rotated file we need to finish reading to prevent
-	// protobuf message loss during topic browser output parsing
-	rotatedFile string
-	// rotatedOffset is where we left off in the rotated file
-	rotatedOffset int64
 
 	// logs is the backing array that holds *at most* S6MaxLines entries.
 	// Allocated once; after that, entries are overwritten in place.
@@ -1369,121 +1365,40 @@ func (s *DefaultService) ForceRemove(
 	return nil
 }
 
-// finishRotatedFile reads remaining data from rotated file to prevent protobuf message loss.
-// This is critical for topic browser output parsing where binary protobuf messages
-// must be read completely to avoid corruption.
-//
-// Internal Logic:
-// ───────────────
-//
-//  1. **Early exit if no rotated file**: If st.rotatedFile is empty, there's nothing to finish.
-//     This happens on first calls or when no rotation has occurred.
-//
-//  2. **Resume reading from saved offset**: Uses st.rotatedOffset to continue reading from
-//     where we left off in the rotated file when rotation was detected.
-//
-//  3. **Read to EOF**: Rotated files are immutable/static (S6 never modifies them after
-//     rotation), so we can safely read from offset to end without worrying about concurrent writes.
-//
-//  4. **Error handling strategy**: On read errors, clears the rotated file state to prevent
-//     infinite retry loops. This is a fail-safe mechanism - better to lose some old data
-//     than to block all future reads.
-//
-//  5. **Parse and append**: Successfully read data is parsed into LogEntry structs and
-//     appended to the existing ring buffer, maintaining chronological order with current file data.
-//
-//  6. **State cleanup**: Always clears rotated file tracking once completed (successfully or not)
-//     to prevent processing the same rotated file multiple times.
-func (s *DefaultService) finishRotatedFile(ctx context.Context, st *logState, fsService filesystem.Service) {
-	// Early exit: no rotated file to finish (common case for first calls)
-	if st.rotatedFile == "" {
-		return
-	}
-
-	s.logger.Debugf("Finishing rotated file %s from offset %d", st.rotatedFile, st.rotatedOffset)
-
-	// Read from our saved offset to EOF (rotated files are immutable after creation)
-	// This ensures we capture any protobuf messages that were mid-read during rotation
-	chunk, _, err := fsService.ReadFileRange(ctx, st.rotatedFile, st.rotatedOffset)
-	if err != nil {
-		s.logger.Warnf("Failed to read rotated file %s: %v", st.rotatedFile, err)
-		// Fail-safe: clear rotated file state to prevent infinite retries
-		// Better to lose some old data than block all future GetLogs calls
-		st.rotatedFile = ""
-		st.rotatedOffset = 0
-		return
-	}
-
-	if len(chunk) > 0 {
-		// Parse the remaining log data from the rotated file
-		entries, err := ParseLogsFromBytes(chunk)
-		if err != nil {
-			s.logger.Warnf("Failed to parse rotated log entries from %s: %v", st.rotatedFile, err)
-		} else {
-			// Append to existing ring buffer - maintains chronological order
-			// since rotated file data is older than current file data
-			s.appendToRingBuffer(entries, st)
-		}
-	}
-
-	// Always clear rotated file tracking - we're done with this file
-	// (either successfully processed or failed, but don't retry)
-	s.logger.Debugf("Finished reading rotated file %s", st.rotatedFile)
-	st.rotatedFile = ""
-	st.rotatedOffset = 0
-}
-
-// findMostRecentRotatedFile finds the most recent rotated file (contains our unread protobuf data).
-// S6 rotates files by renaming current to @<TAI64N-timestamp>.
-func (s *DefaultService) findMostRecentRotatedFile(ctx context.Context, logDir string, fsService filesystem.Service) string {
+// findRotatedFileByInode attempts to find a rotated file that corresponds to the given inode.
+// This is a best-effort approach since we can't directly map inodes to rotated filenames.
+// Returns empty string if no suitable rotated file is found.
+func (s *DefaultService) findRotatedFileByInode(ctx context.Context, logDir string, targetInode uint64, fsService filesystem.Service) string {
 	entries, err := fsService.ReadDir(ctx, logDir)
 	if err != nil {
 		s.logger.Debugf("Failed to read log directory %s: %v", logDir, err)
 		return ""
 	}
 
-	var mostRecent string
-	var mostRecentTime time.Time
-
+	// Look for rotated files (@<timestamp> format)
 	for _, entry := range entries {
 		if !strings.HasPrefix(entry.Name(), "@") || entry.IsDir() {
 			continue
 		}
 
-		// Parse TAI64N timestamp from filename
 		filePath := filepath.Join(logDir, entry.Name())
-		timestamp, err := s.parseRotatedFileTimestamp(entry.Name())
+
+		// Get file info to check inode
+		fi, err := fsService.Stat(ctx, filePath)
 		if err != nil {
-			s.logger.Debugf("Failed to parse timestamp from rotated file %s: %v", entry.Name(), err)
 			continue
 		}
 
-		if timestamp.After(mostRecentTime) {
-			mostRecentTime = timestamp
-			mostRecent = filePath
+		if fi != nil && fi.Sys() != nil {
+			if sys, ok := fi.Sys().(*syscall.Stat_t); ok && sys.Ino == targetInode {
+				s.logger.Debugf("Found rotated file by inode %d: %s", targetInode, filePath)
+				return filePath
+			}
 		}
 	}
 
-	if mostRecent != "" {
-		s.logger.Debugf("Found most recent rotated file: %s", mostRecent)
-	}
-	return mostRecent
-}
-
-// parseRotatedFileTimestamp parses TAI64N timestamp from rotated filename (@<timestamp>).
-func (s *DefaultService) parseRotatedFileTimestamp(filename string) (time.Time, error) {
-	if !strings.HasPrefix(filename, "@") {
-		return time.Time{}, fmt.Errorf("not a rotated file: %s", filename)
-	}
-
-	// Keep the @ prefix for tai64.Parse
-	tai64Str := filename
-	timestamp, err := tai64.Parse(tai64Str)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("failed to parse TAI64N timestamp %s: %w", tai64Str, err)
-	}
-
-	return timestamp, nil
+	s.logger.Debugf("No rotated file found for inode %d in %s", targetInode, logDir)
+	return ""
 }
 
 // appendToRingBuffer appends entries to the ring buffer, extracted from existing GetLogs logic.
@@ -1524,7 +1439,7 @@ func (s *DefaultService) appendToRingBuffer(entries []LogEntry, st *logState) {
 //
 // That cursor stores where we stopped reading the file last time
 // (`offset`) and a fixed-size **ring buffer** with the most recent
-// lines.  Because of the ring buffer, we never re-allocate or shift
+// lines. Because of the ring buffer, we never re-allocate or shift
 // memory when trimming to the last *N* lines.
 //
 // High-level flow
@@ -1535,31 +1450,33 @@ func (s *DefaultService) appendToRingBuffer(entries []LogEntry, st *logState) {
 //     • fetch/create the cursor in `s.logCursors`
 //
 //  2. **Detect file rotation/truncation (or first-time initialization)**
-//     If the inode changed or the file shrank, we reset the cursor
-//     and start reading from the beginning.
+//     If the inode changed or the file shrank, we:
+//     - Find the rotated file that corresponds to our previous inode
+//     - Read any remaining data from that rotated file
+//     - Reset inode and offset for the new current file
 //
-//     **FIRST CALL scenario**: When called on a newly created current file
-//     with no rotated files, st.inode == 0 but actual inode != 0, triggering
-//     the rotation handler which:
-//     - Phase 1: finishRotatedFile() → no-op (st.rotatedFile == "")
-//     - Phase 2: findMostRecentRotatedFile() → returns "" (no @<timestamp> files)
-//     - Phase 3: initializes st.inode and resets st.offset to 0
+//     **FIRST CALL scenario**: When called on a newly created current file,
+//     st.inode == 0, so we simply initialize it to the current file's inode.
 //
-//  3. **Read only the delta**
+//  3. **Read content from current file**
 //     `ReadFileRange(ctx, path, st.offset)` returns the bytes that
 //     appeared since the previous call.  The cursor's `offset` is
 //     advanced whether or not anything changed.
 //
 //     **FIRST CALL**: Reads entire file from beginning (st.offset == 0).
 //
-//  4. **Ring-append the new entries**
+//  4. **Combine rotated and current content**
+//     If rotation occurred, we combine the rotated file content (older)
+//     with the current file content (newer) to maintain chronological order.
+//
+//  5. **Ring-append the entries**
 //     Parsed log lines are appended to the ring.  Once the buffer
 //     is full (`len == cap`), we start overwriting from `head`,
 //     giving us an O(1) "keep the last N lines" strategy.
 //
 //     **FIRST CALL**: Ring buffer is allocated and populated with all entries.
 //
-//  5. **Copy-out**
+//  6. **Copy-out**
 //     We linearise the ring into chronological order and copy it
 //     into a fresh slice so callers can never mutate our cache.
 //
@@ -1569,7 +1486,7 @@ func (s *DefaultService) appendToRingBuffer(entries []LogEntry, st *logState) {
 // ──────────────────────
 //   - **At most one allocation per process** for the ring buffer.
 //   - Zero‐copy maintenance while the program runs.
-//   - Exactly one `memmove` per call (the final copy-out).
+//   - At most two `memmove` operations per call (rotated + current content combination, final copy-out).
 //   - Thread-safety via the `logState.mu` mutex.
 //
 // Errors are returned early and unwrapped where they occur so callers
@@ -1620,39 +1537,54 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	sys := fi.Sys().(*syscall.Stat_t) // on Linux / Alpine
 	size, ino := fi.Size(), sys.Ino
 
-	// rotated or truncated ⇒ handle rotation seamlessly to prevent protobuf message loss
-	// NOTE: This condition also triggers on FIRST CALL (st.inode == 0, ino != 0)
-	// which is the initialization case for a newly created current file with no rotated files.
-	if st.inode != ino || st.offset > size {
+	// Check for rotation or truncation
+	var rotatedContent []byte
+	if st.inode != 0 && (st.inode != ino || st.offset > size) {
 		s.logger.Debugf("Detected rotation for log file %s (inode: %d->%d, offset: %d, size: %d)",
 			logFile, st.inode, ino, st.offset, size)
 
-		// Phase 1: Finish reading the rotated file to prevent protobuf message loss
-		// FIRST CALL: st.rotatedFile == "" → finishRotatedFile() returns early (no-op)
-		s.finishRotatedFile(ctx, st, fsService)
-
-		// Phase 2: Set new rotated file for next time (the file that was current before rotation)
-		// FIRST CALL: findMostRecentRotatedFile() returns "" (no @<timestamp> files exist)
+		// Find and read remaining content from the rotated file
 		logDir := filepath.Dir(logFile)
-		st.rotatedFile = s.findMostRecentRotatedFile(ctx, logDir, fsService)
-		st.rotatedOffset = st.offset // Continue from where we were
+		rotatedFile := s.findRotatedFileByInode(ctx, logDir, st.inode, fsService)
+		if rotatedFile != "" {
+			var err error
+			rotatedContent, _, err = fsService.ReadFileRange(ctx, rotatedFile, st.offset)
+			if err != nil {
+				s.logger.Warnf("Failed to read rotated file %s from offset %d: %v", rotatedFile, st.offset, err)
+			} else if len(rotatedContent) > 0 {
+				s.logger.Debugf("Read %d bytes from rotated file %s", len(rotatedContent), rotatedFile)
+			}
+		}
 
-		// Phase 3: Reset for new current file
-		// FIRST CALL: initializes st.inode to actual inode, st.offset to 0 (read from beginning)
+		// Reset for new current file
 		st.inode, st.offset = ino, 0
-		// Note: We don't reset st.logs here anymore since we preserve the ring buffer
-		// across rotations to maintain chronological order
+	} else if st.inode == 0 {
+		// First call - initialize inode
+		st.inode = ino
 	}
 
-	// ── 3. read only the new bytes ──────────────────────────────────
-	chunk, newSize, err := fsService.ReadFileRange(ctx, logFile, st.offset)
+	// ── 3. read new bytes from current file ─────────────────────────
+	currentContent, newSize, err := fsService.ReadFileRange(ctx, logFile, st.offset)
 	if err != nil {
 		return nil, err
 	}
-	st.offset = newSize // advance cursor even if chunk == nil
+	st.offset = newSize // advance cursor even if currentContent == nil
 
-	if len(chunk) != 0 {
-		entries, err := ParseLogsFromBytes(chunk)
+	// ── 4. combine rotated and current content ──────────────────────
+	// Rotated content comes first chronologically, then current content
+	var allContent []byte
+	if len(rotatedContent) > 0 && len(currentContent) > 0 {
+		allContent = make([]byte, len(rotatedContent)+len(currentContent))
+		copy(allContent, rotatedContent)
+		copy(allContent[len(rotatedContent):], currentContent)
+	} else if len(rotatedContent) > 0 {
+		allContent = rotatedContent
+	} else if len(currentContent) > 0 {
+		allContent = currentContent
+	}
+
+	if len(allContent) > 0 {
+		entries, err := ParseLogsFromBytes(allContent)
 		if err != nil {
 			return nil, err
 		}
@@ -1661,7 +1593,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 		s.appendToRingBuffer(entries, st)
 	}
 
-	// ── 4. return *copy* so caller can't mutate our cache ───────────
+	// ── 5. return *copy* so caller can't mutate our cache ───────────
 	var length int
 	if st.full {
 		length = constants.S6MaxLines
