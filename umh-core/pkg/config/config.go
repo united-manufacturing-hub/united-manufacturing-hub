@@ -52,6 +52,7 @@ type InternalConfig struct {
 type AgentConfig struct {
 	MetricsPort        int `yaml:"metricsPort"` // Port to expose metrics on
 	CommunicatorConfig `yaml:"communicator,omitempty"`
+	GraphQLConfig      GraphQLConfig  `yaml:"graphql,omitempty"` // GraphQL server configuration
 	ReleaseChannel     ReleaseChannel `yaml:"releaseChannel,omitempty"`
 	Location           map[int]string `yaml:"location,omitempty"`
 }
@@ -179,6 +180,14 @@ type ConnectionConfig struct {
 
 	// For the Connection service
 	ConnectionServiceConfig connectionserviceconfig.ConnectionServiceConfig `yaml:"connectionServiceConfig"`
+}
+
+type GraphQLConfig struct {
+	Enabled      bool     `yaml:"enabled"`                // Enable/disable GraphQL server
+	Port         int      `yaml:"port"`                   // Port to expose GraphQL on (default: 8090)
+	CORSOrigins  []string `yaml:"corsOrigins,omitempty"`  // CORS allowed origins (default: ["*"])
+	Debug        bool     `yaml:"debug,omitempty"`        // Enable GraphiQL playground and debug logging
+	AuthRequired bool     `yaml:"authRequired,omitempty"` // Require authentication (future use)
 }
 
 // Clone creates a deep copy of FullConfig
