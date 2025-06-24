@@ -73,22 +73,17 @@ download-docker-binaries:
 	@if [ ! -f .docker-cache/benthos/version ] || [ "$$(cat .docker-cache/benthos/version)" != "$(BENTHOS_UMH_VERSION)" ]; then \
 		rm -f .docker-cache/benthos/benthos-linux-*; \
 		echo "$(BENTHOS_UMH_VERSION)" > .docker-cache/benthos/version; \
-		if echo "$(BENTHOS_UMH_VERSION)" | grep -Eq "^[0-9]\+\.[0-9]\+\.[0-9]\+$"; then \
-			wget -O .docker-cache/benthos/benthos-linux-amd64 "https://github.com/united-manufacturing-hub/benthos-umh/releases/download/v$(BENTHOS_UMH_VERSION)/benthos-linux-amd64"; \
-			wget -O .docker-cache/benthos/benthos-linux-arm64 "https://github.com/united-manufacturing-hub/benthos-umh/releases/download/v$(BENTHOS_UMH_VERSION)/benthos-linux-arm64"; \
-		else \
-			echo "Extracting Benthos binary from Docker container for version $(BENTHOS_UMH_VERSION)..."; \
-			echo "Pulling ghcr.io/united-manufacturing-hub/benthos-umh:$(BENTHOS_UMH_VERSION) for amd64..."; \
-			docker pull --platform linux/amd64 ghcr.io/united-manufacturing-hub/benthos-umh:$(BENTHOS_UMH_VERSION); \
-			CONTAINER_AMD64=$$(docker create --platform linux/amd64 ghcr.io/united-manufacturing-hub/benthos-umh:$(BENTHOS_UMH_VERSION)); \
-			docker cp $$CONTAINER_AMD64:/benthos .docker-cache/benthos/benthos-linux-amd64; \
-			docker rm -v $$CONTAINER_AMD64; \
-			echo "Pulling ghcr.io/united-manufacturing-hub/benthos-umh:$(BENTHOS_UMH_VERSION) for arm64..."; \
-			docker pull --platform linux/arm64 ghcr.io/united-manufacturing-hub/benthos-umh:$(BENTHOS_UMH_VERSION); \
-			CONTAINER_ARM64=$$(docker create --platform linux/arm64 ghcr.io/united-manufacturing-hub/benthos-umh:$(BENTHOS_UMH_VERSION)); \
-			docker cp $$CONTAINER_ARM64:/benthos .docker-cache/benthos/benthos-linux-arm64; \
-			docker rm -v $$CONTAINER_ARM64; \
-		fi; \
+		echo "Extracting Benthos binary from Docker container for version $(BENTHOS_UMH_VERSION)..."; \
+		echo "Pulling ghcr.io/united-manufacturing-hub/benthos-umh:$(BENTHOS_UMH_VERSION) for amd64..."; \
+		docker pull --platform linux/amd64 ghcr.io/united-manufacturing-hub/benthos-umh:$(BENTHOS_UMH_VERSION); \
+		CONTAINER_AMD64=$$(docker create --platform linux/amd64 ghcr.io/united-manufacturing-hub/benthos-umh:$(BENTHOS_UMH_VERSION)); \
+		docker cp $$CONTAINER_AMD64:/benthos .docker-cache/benthos/benthos-linux-amd64; \
+		docker rm -v $$CONTAINER_AMD64; \
+		echo "Pulling ghcr.io/united-manufacturing-hub/benthos-umh:$(BENTHOS_UMH_VERSION) for arm64..."; \
+		docker pull --platform linux/arm64 ghcr.io/united-manufacturing-hub/benthos-umh:$(BENTHOS_UMH_VERSION); \
+		CONTAINER_ARM64=$$(docker create --platform linux/arm64 ghcr.io/united-manufacturing-hub/benthos-umh:$(BENTHOS_UMH_VERSION)); \
+		docker cp $$CONTAINER_ARM64:/benthos .docker-cache/benthos/benthos-linux-arm64; \
+		docker rm -v $$CONTAINER_ARM64; \
 		if [ ! -s .docker-cache/benthos/benthos-linux-amd64 ] || [ ! -s .docker-cache/benthos/benthos-linux-arm64 ]; then \
 			echo "Error: Extracted Benthos binaries are empty or missing"; \
 			rm -f .docker-cache/benthos/benthos-linux-amd64 .docker-cache/benthos/benthos-linux-arm64; \
