@@ -70,7 +70,7 @@ download-docker-binaries:
 	@if [ ! -f .docker-cache/benthos/version ] || [ "$$(cat .docker-cache/benthos/version)" != "$(BENTHOS_UMH_VERSION)" ]; then \
 		rm -f .docker-cache/benthos/benthos-linux-*; \
 		echo "$(BENTHOS_UMH_VERSION)" > .docker-cache/benthos/version; \
-		if echo "$(BENTHOS_UMH_VERSION)" | grep -q "^v[0-9]\+\.[0-9]\+\.[0-9]\+"; then \
+		if echo "$(BENTHOS_UMH_VERSION)" | grep -q "^[0-9]\+\.[0-9]\+\.[0-9]\+"; then \
 			wget -O .docker-cache/benthos/benthos-linux-amd64 "https://github.com/united-manufacturing-hub/benthos-umh/releases/download/v$(BENTHOS_UMH_VERSION)/benthos-linux-amd64"; \
 			wget -O .docker-cache/benthos/benthos-linux-arm64 "https://github.com/united-manufacturing-hub/benthos-umh/releases/download/v$(BENTHOS_UMH_VERSION)/benthos-linux-arm64"; \
 		else \
