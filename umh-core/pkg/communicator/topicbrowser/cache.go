@@ -198,3 +198,29 @@ func (c *Cache) SetLastSentTimestamp(timestamp int64) {
 	defer c.mu.Unlock()
 	c.lastSentTimestamp = timestamp
 }
+
+// GetEventMap returns a copy of the eventMap for testing purposes
+func (c *Cache) GetEventMap() map[string]*tbproto.EventTableEntry {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	eventMapCopy := make(map[string]*tbproto.EventTableEntry)
+	for k, v := range c.eventMap {
+		eventMapCopy[k] = v
+	}
+	return eventMapCopy
+}
+
+// GetUnsMap returns a copy of the unsMap for testing purposes
+func (c *Cache) GetUnsMap() *tbproto.TopicMap {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	unsMapCopy := &tbproto.TopicMap{
+		Entries: make(map[string]*tbproto.TopicInfo),
+	}
+	for k, v := range c.unsMap.Entries {
+		unsMapCopy.Entries[k] = v
+	}
+	return unsMapCopy
+}
