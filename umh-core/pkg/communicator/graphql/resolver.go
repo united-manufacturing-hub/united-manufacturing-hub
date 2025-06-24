@@ -4,8 +4,13 @@ package graphql
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
+
+	tbproto "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models/topicbrowser/pb"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 )
 
 // SnapshotProvider provides access to system snapshots containing topic data
@@ -19,25 +24,42 @@ type SystemSnapshot struct {
 }
 
 type Resolver struct {
-	SnapshotProvider SnapshotProvider
+	SnapshotManager   *fsm.SnapshotManager
+	TopicBrowserCache *topicbrowser.Cache
 }
 
 // Topics is the resolver for the topics field.
 func (r *queryResolver) Topics(ctx context.Context, filter *TopicFilter, limit *int) ([]*Topic, error) {
-	snapshot := r.SnapshotProvider.GetSnapshot()
-	if snapshot == nil {
+	if r.TopicBrowserCache == nil {
 		return []*Topic{}, nil
 	}
 
-	// Get topic browser state from snapshot
-	topicBrowserState, ok := snapshot.Managers["topic-browser"]
-	if !ok {
+	// Get snapshot of cached event data
+	eventMap := r.TopicBrowserCache.GetEventMap()
+	unsMap := r.TopicBrowserCache.GetUnsMap()
+
+	if unsMap == nil || unsMap.Entries == nil {
 		return []*Topic{}, nil
 	}
 
-	// Extract topics from the state
-	// This will be properly typed once we have the real types
-	topics := r.extractTopicsFromState(topicBrowserState)
+	var topics []*Topic
+
+	// Convert protobuf data to GraphQL models
+	for unsTreeId, topicInfo := range unsMap.Entries {
+		// Get latest event for this topic if available
+		var latestEvent Event
+		if eventEntry, exists := eventMap[unsTreeId]; exists {
+			latestEvent = r.mapEventEntryToGraphQL(eventEntry)
+		}
+
+		topic := &Topic{
+			Topic:     r.buildTopicName(topicInfo),
+			Metadata:  r.mapMetadataToGraphQL(topicInfo.Metadata),
+			LastEvent: latestEvent,
+		}
+
+		topics = append(topics, topic)
+	}
 
 	// Apply filters
 	if filter != nil {
@@ -72,86 +94,155 @@ func (r *queryResolver) Topic(ctx context.Context, topic string) (*Topic, error)
 	return nil, nil
 }
 
-// Helper methods for topic extraction and filtering
-func (r *queryResolver) extractTopicsFromState(state interface{}) []*Topic {
-	// For now, return a mock topic to test the structure
-	// This will be replaced with actual topic extraction logic
-	return []*Topic{
-		{
-			Topic: "enterprise.site.area.productionline.workstation.sensor.temperature",
-			Metadata: []*MetadataKv{
-				{Key: "location", Value: "workstation-1"},
-				{Key: "sensor-type", Value: "temperature"},
-			},
-			LastEvent: &TimeSeriesEvent{
-				ProducedAt: time.Now(),
-				Headers: []*MetadataKv{
-					{Key: "source", Value: "opcua-server"},
-				},
-				SourceTs:     time.Now().Add(-time.Minute),
-				ScalarType:   ScalarTypeNumeric,
-				NumericValue: func() *float64 { v := 23.5; return &v }(),
-			},
-		},
+// Helper methods for data conversion and filtering
+
+func (r *Resolver) buildTopicName(topicInfo *tbproto.TopicInfo) string {
+	parts := []string{topicInfo.Level0}
+	parts = append(parts, topicInfo.LocationSublevels...)
+	parts = append(parts, topicInfo.DataContract)
+
+	if topicInfo.VirtualPath != nil && *topicInfo.VirtualPath != "" {
+		parts = append(parts, *topicInfo.VirtualPath)
+	}
+
+	parts = append(parts, topicInfo.Name)
+
+	return strings.Join(parts, ".")
+}
+
+func (r *Resolver) mapMetadataToGraphQL(metadata map[string]string) []*MetadataKv {
+	var result []*MetadataKv
+	for key, value := range metadata {
+		result = append(result, &MetadataKv{
+			Key:   key,
+			Value: value,
+		})
+	}
+	return result
+}
+
+func (r *Resolver) mapEventEntryToGraphQL(entry *tbproto.EventTableEntry) Event {
+	timestamp := time.UnixMilli(int64(entry.ProducedAtMs))
+
+	// Determine event type based on payload format
+	switch entry.PayloadFormat {
+	case tbproto.PayloadFormat_TIMESERIES:
+		return r.mapTimeSeriesEvent(entry, timestamp)
+	case tbproto.PayloadFormat_RELATIONAL:
+		return r.mapRelationalEvent(entry, timestamp)
+	default:
+		// Default to time series for unknown formats
+		return r.mapTimeSeriesEvent(entry, timestamp)
 	}
 }
 
-func (r *queryResolver) filterTopics(topics []*Topic, filter *TopicFilter) []*Topic {
-	if filter == nil {
-		return topics
+func (r *Resolver) mapTimeSeriesEvent(entry *tbproto.EventTableEntry, timestamp time.Time) *TimeSeriesEvent {
+	headers := r.mapKafkaHeaders(entry.RawKafkaMsg)
+
+	// Get the time series payload
+	tsPayload := entry.GetTs()
+	if tsPayload == nil {
+		// Return empty time series event if no payload
+		return &TimeSeriesEvent{
+			ProducedAt:  timestamp,
+			Headers:     headers,
+			SourceTs:    timestamp,
+			ScalarType:  ScalarTypeString,
+			StringValue: nil,
+		}
 	}
 
+	var scalarType ScalarType
+	var numericValue *float64
+	var stringValue *string
+	var booleanValue *bool
+	var sourceTs time.Time
+
+	if tsPayload.TimestampMs > 0 {
+		sourceTs = time.UnixMilli(tsPayload.TimestampMs)
+	} else {
+		sourceTs = timestamp
+	}
+
+	// Extract scalar value based on type
+	switch tsPayload.ScalarType {
+	case tbproto.ScalarType_BOOLEAN:
+		scalarType = ScalarTypeBoolean
+		if boolVal := tsPayload.GetBooleanValue(); boolVal != nil {
+			value := boolVal.Value
+			booleanValue = &value
+		}
+	case tbproto.ScalarType_STRING:
+		scalarType = ScalarTypeString
+		if strVal := tsPayload.GetStringValue(); strVal != nil {
+			value := strVal.Value
+			stringValue = &value
+		}
+	case tbproto.ScalarType_NUMERIC:
+		scalarType = ScalarTypeNumeric
+		if numVal := tsPayload.GetNumericValue(); numVal != nil {
+			value := numVal.Value
+			numericValue = &value
+		}
+	default:
+		scalarType = ScalarTypeString
+		emptyStr := ""
+		stringValue = &emptyStr
+	}
+
+	return &TimeSeriesEvent{
+		ProducedAt:   timestamp,
+		Headers:      headers,
+		SourceTs:     sourceTs,
+		ScalarType:   scalarType,
+		NumericValue: numericValue,
+		StringValue:  stringValue,
+		BooleanValue: booleanValue,
+	}
+}
+
+func (r *Resolver) mapRelationalEvent(entry *tbproto.EventTableEntry, timestamp time.Time) *RelationalEvent {
+	headers := r.mapKafkaHeaders(entry.RawKafkaMsg)
+
+	// Get the relational payload
+	relPayload := entry.GetRel()
+	var jsonData map[string]any
+
+	if relPayload != nil && len(relPayload.Json) > 0 {
+		// Parse the JSON payload
+		if err := json.Unmarshal(relPayload.Json, &jsonData); err != nil {
+			// If JSON parsing fails, create empty object
+			jsonData = make(map[string]any)
+		}
+	} else {
+		jsonData = make(map[string]any)
+	}
+
+	return &RelationalEvent{
+		ProducedAt: timestamp,
+		Headers:    headers,
+		JSON:       jsonData,
+	}
+}
+
+func (r *Resolver) mapKafkaHeaders(eventKafka *tbproto.EventKafka) []*MetadataKv {
+	var headers []*MetadataKv
+	if eventKafka != nil && eventKafka.Headers != nil {
+		for key, value := range eventKafka.Headers {
+			headers = append(headers, &MetadataKv{
+				Key:   key,
+				Value: value,
+			})
+		}
+	}
+	return headers
+}
+
+func (r *Resolver) filterTopics(topics []*Topic, filter *TopicFilter) []*Topic {
 	var filtered []*Topic
 
 	for _, topic := range topics {
-		match := true
-
-		// Text filter - search in topic name and metadata
-		if filter.Text != nil && *filter.Text != "" {
-			textMatch := false
-			searchText := strings.ToLower(*filter.Text)
-
-			// Search in topic name
-			if strings.Contains(strings.ToLower(topic.Topic), searchText) {
-				textMatch = true
-			}
-
-			// Search in metadata
-			if !textMatch {
-				for _, meta := range topic.Metadata {
-					if strings.Contains(strings.ToLower(meta.Key), searchText) ||
-						strings.Contains(strings.ToLower(meta.Value), searchText) {
-						textMatch = true
-						break
-					}
-				}
-			}
-
-			if !textMatch {
-				match = false
-			}
-		}
-
-		// Metadata filters
-		if filter.Meta != nil && match {
-			for _, metaFilter := range filter.Meta {
-				found := false
-				for _, meta := range topic.Metadata {
-					if meta.Key == metaFilter.Key {
-						if metaFilter.Eq == nil || *metaFilter.Eq == meta.Value {
-							found = true
-							break
-						}
-					}
-				}
-				if !found {
-					match = false
-					break
-				}
-			}
-		}
-
-		if match {
+		if r.matchesFilter(topic, filter) {
 			filtered = append(filtered, topic)
 		}
 	}
@@ -159,7 +250,45 @@ func (r *queryResolver) filterTopics(topics []*Topic, filter *TopicFilter) []*To
 	return filtered
 }
 
-// Query returns QueryResolver implementation.
+func (r *Resolver) matchesFilter(topic *Topic, filter *TopicFilter) bool {
+	// Text filter
+	if filter.Text != nil && *filter.Text != "" {
+		if !strings.Contains(strings.ToLower(topic.Topic), strings.ToLower(*filter.Text)) {
+			return false
+		}
+	}
+
+	// Metadata filter (using the Meta field from TopicFilter)
+	if filter.Meta != nil && len(filter.Meta) > 0 {
+		if !r.matchesMetadataFilter(topic.Metadata, filter.Meta) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (r *Resolver) matchesMetadataFilter(topicMetadata []*MetadataKv, filterMetadata []*MetaExpr) bool {
+	metadataMap := make(map[string]string)
+	for _, kv := range topicMetadata {
+		metadataMap[kv.Key] = kv.Value
+	}
+
+	for _, metaFilter := range filterMetadata {
+		value, exists := metadataMap[metaFilter.Key]
+		if !exists {
+			return false
+		}
+
+		if metaFilter.Eq != nil && *metaFilter.Eq != value {
+			return false
+		}
+	}
+
+	return true
+}
+
+// Query returns QueryResolver which is required by gqlgen
 func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 
 type queryResolver struct{ *Resolver }
