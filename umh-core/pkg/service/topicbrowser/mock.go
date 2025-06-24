@@ -19,12 +19,14 @@ import (
 	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	benthossvccfg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
+	rpfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	rpsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
+	rpmonitor "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -43,7 +45,7 @@ type MockService struct {
 	ReconcileManagerCalled  bool
 
 	// Return values for each method
-	GenerateConfigResult       benthosserviceconfig.BenthosServiceConfig
+	GenerateConfigResult       benthossvccfg.BenthosServiceConfig
 	GenerateConfigError        error
 	StatusResult               ServiceInfo
 	StatusError                error
@@ -58,8 +60,9 @@ type MockService struct {
 	ReconcileManagerReconciled bool
 
 	// For more complex testing scenarios
-	States   map[string]*ServiceInfo
-	Existing map[string]bool
+	States         map[string]*ServiceInfo
+	Existing       map[string]bool
+	BenthosConfigs []config.BenthosConfig
 
 	// State control for FSM testing
 	stateFlags map[string]*StateFlags
@@ -76,6 +79,7 @@ type StateFlags struct {
 	BenthosFSMState       string
 	RedpandaFSMState      string
 	HasProcessingActivity bool
+	HasBenthosOutput      bool
 }
 
 // NewMockDataFlowComponentService creates a new mock DataFlowComponent service
@@ -89,21 +93,39 @@ func NewMockDataFlowComponentService() *MockService {
 }
 
 // SetComponentState sets all state flags for a component at once
-func (m *MockService) SetComponentState(componentName string, flags StateFlags) {
-	observedState := &benthosfsm.BenthosObservedState{
+func (m *MockService) SetComponentState(tbName string, flags StateFlags) {
+	bytesOut := 1024
+	batchSent := 1
+
+	if !flags.HasBenthosOutput {
+		batchSent = 0
+	}
+	benthosObservedState := &benthosfsm.BenthosObservedState{
 		ServiceInfo: benthossvc.ServiceInfo{
 			BenthosStatus: benthossvc.BenthosStatus{
 				BenthosMetrics: benthos_monitor.BenthosMetrics{
-					MetricsState: &benthos_monitor.BenthosMetricsState{
-						IsActive: flags.IsBenthosProcessingMetricsActive,
-					},
 					Metrics: benthos_monitor.Metrics{
-						Input: benthos_monitor.InputMetrics{
-							ConnectionUp:   boolToInt64(flags.IsBenthosProcessingMetricsActive),
-							ConnectionLost: 0,
-						},
 						Output: benthos_monitor.OutputMetrics{
 							ConnectionUp: 1,
+							BatchSent:    int64(batchSent),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if !flags.HasProcessingActivity {
+		bytesOut = 0
+	}
+
+	rpObservedState := &rpfsm.RedpandaObservedState{
+		ServiceInfo: rpsvc.ServiceInfo{
+			RedpandaStatus: rpsvc.RedpandaStatus{
+				RedpandaMetrics: rpmonitor.RedpandaMetrics{
+					Metrics: rpmonitor.Metrics{
+						Throughput: rpmonitor.ThroughputMetrics{
+							BytesOut: int64(bytesOut),
 						},
 					},
 				},
@@ -111,18 +133,22 @@ func (m *MockService) SetComponentState(componentName string, flags StateFlags) 
 		},
 	}
 	// Ensure ServiceInfo exists for this component
-	if _, exists := m.States[componentName]; !exists {
-		m.States[componentName] = &ServiceInfo{
-			BenthosFSMState:      flags.BenthosFSMState,
-			BenthosObservedState: *observedState,
+	if _, exists := m.States[tbName]; !exists {
+		m.States[tbName] = &ServiceInfo{
+			BenthosFSMState:       flags.BenthosFSMState,
+			RedpandaFSMState:      flags.RedpandaFSMState,
+			RedpandaObservedState: *rpObservedState,
+			BenthosObservedState:  *benthosObservedState,
 		}
 	} else {
-		m.States[componentName].BenthosObservedState = *observedState
-		m.States[componentName].BenthosFSMState = flags.BenthosFSMState
+		m.States[tbName].BenthosObservedState = *benthosObservedState
+		m.States[tbName].RedpandaObservedState = *rpObservedState
+		m.States[tbName].BenthosFSMState = flags.BenthosFSMState
+		m.States[tbName].RedpandaFSMState = flags.RedpandaFSMState
 	}
 
 	// Store the flags
-	m.stateFlags[componentName] = &flags
+	m.stateFlags[tbName] = &flags
 }
 
 // GetComponentState gets the state flags for a component
@@ -137,13 +163,18 @@ func (m *MockService) GetComponentState(componentName string) *StateFlags {
 }
 
 // GenerateBenthosConfigForDataFlowComponent mocks generating Benthos config for a DataFlowComponent
-func (m *MockService) GenerateConfig(tbName string) (benthosserviceconfig.BenthosServiceConfig, error) {
+func (m *MockService) GenerateConfig(tbName string) (benthossvccfg.BenthosServiceConfig, error) {
 	m.GenerateConfigCalled = true
 	return m.GenerateConfigResult, m.GenerateConfigError
 }
 
 // Status mocks getting the status of a DataFlowComponent
-func (m *MockService) Status(ctx context.Context, services serviceregistry.Provider, tbName string) (ServiceInfo, error) {
+func (m *MockService) Status(
+	ctx context.Context,
+	services serviceregistry.Provider,
+	tbName string,
+	snapshot fsm.SystemSnapshot,
+) (ServiceInfo, error) {
 	m.StatusCalled = true
 
 	// Check if the component exists in the ExistingComponents map
@@ -160,11 +191,16 @@ func (m *MockService) Status(ctx context.Context, services serviceregistry.Provi
 	return m.StatusResult, m.StatusError
 }
 
-// AddDataFlowComponentToBenthosManager mocks adding a DataFlowComponent to the Benthos manager
-func (m *MockService) AddDataFlowComponentToBenthosManager(ctx context.Context, filesystemService filesystem.Service, cfg *dataflowcomponentserviceconfig.DataflowComponentServiceConfig, componentName string) error {
+// AddToManager mocks adding a TopicBrowser to the Benthos manager
+func (m *MockService) AddToManager(
+	ctx context.Context,
+	services serviceregistry.Provider,
+	cfg *benthossvccfg.BenthosServiceConfig,
+	tbName string,
+) error {
 	m.AddToManagerCalled = true
 
-	benthosName := fmt.Sprintf("dataflow-%s", componentName)
+	benthosName := fmt.Sprintf("topicbrowser-%s", tbName)
 
 	// Check whether the component already exists
 	for _, benthosConfig := range m.BenthosConfigs {
@@ -174,7 +210,7 @@ func (m *MockService) AddDataFlowComponentToBenthosManager(ctx context.Context, 
 	}
 
 	// Add the component to the list of existing components
-	m.Existing[componentName] = true
+	m.Existing[tbName] = true
 
 	// Create a BenthosConfig for this component
 	benthosConfig := config.BenthosConfig{
@@ -191,11 +227,16 @@ func (m *MockService) AddDataFlowComponentToBenthosManager(ctx context.Context, 
 	return m.AddToManagerError
 }
 
-// UpdateDataFlowComponentInBenthosManager mocks updating a DataFlowComponent in the Benthos manager
-func (m *MockService) UpdateDataFlowComponentInBenthosManager(ctx context.Context, filesystemService filesystem.Service, cfg *dataflowcomponentserviceconfig.DataflowComponentServiceConfig, componentName string) error {
+// UpdateInManager mocks updating a TopicBrowser in the Benthos manager
+func (m *MockService) UpdateInManager(
+	ctx context.Context,
+	services serviceregistry.Provider,
+	cfg *benthossvccfg.BenthosServiceConfig,
+	tbName string,
+) error {
 	m.UpdateInManagerCalled = true
 
-	benthosName := fmt.Sprintf("dataflow-%s", componentName)
+	benthosName := fmt.Sprintf("topicbrowser-%s", tbName)
 
 	// Check if the component exists
 	found := false
@@ -209,7 +250,7 @@ func (m *MockService) UpdateDataFlowComponentInBenthosManager(ctx context.Contex
 	}
 
 	if !found {
-		return ErrServiceNotExists
+		return ErrServiceNotExist
 	}
 
 	// Update the BenthosConfig
@@ -225,11 +266,15 @@ func (m *MockService) UpdateDataFlowComponentInBenthosManager(ctx context.Contex
 	return m.UpdateInManagerError
 }
 
-// RemoveDataFlowComponentFromBenthosManager mocks removing a DataFlowComponent from the Benthos manager
-func (m *MockService) RemoveDataFlowComponentFromBenthosManager(ctx context.Context, filesystemService filesystem.Service, componentName string) error {
+// RemoveFromManager mocks removing a TopicBrowser from the Benthos manager
+func (m *MockService) RemoveFromManager(
+	ctx context.Context,
+	services serviceregistry.Provider,
+	tbName string,
+) error {
 	m.RemoveFromManagerCalled = true
 
-	benthosName := fmt.Sprintf("dataflow-%s", componentName)
+	benthosName := fmt.Sprintf("topicbrowser-%s", tbName)
 
 	found := false
 
@@ -243,21 +288,25 @@ func (m *MockService) RemoveDataFlowComponentFromBenthosManager(ctx context.Cont
 	}
 
 	if !found {
-		return ErrServiceNotExists
+		return ErrServiceNotExist
 	}
 
 	// Remove the component from the list of existing components
-	delete(m.Existing, componentName)
-	delete(m.States, componentName)
+	delete(m.Existing, tbName)
+	delete(m.States, tbName)
 
 	return m.RemoveFromManagerError
 }
 
-// StartDataFlowComponent mocks starting a DataFlowComponent
-func (m *MockService) StartDataFlowComponent(ctx context.Context, filesystemService filesystem.Service, componentName string) error {
+// Start mocks starting a Topic Browser
+func (m *MockService) Start(
+	ctx context.Context,
+	services serviceregistry.Provider,
+	tbName string,
+) error {
 	m.StartCalled = true
 
-	benthosName := fmt.Sprintf("dataflow-%s", componentName)
+	benthosName := fmt.Sprintf("topicbrowser-%s", tbName)
 
 	found := false
 
@@ -271,17 +320,21 @@ func (m *MockService) StartDataFlowComponent(ctx context.Context, filesystemServ
 	}
 
 	if !found {
-		return ErrServiceNotExists
+		return ErrServiceNotExist
 	}
 
 	return m.StartError
 }
 
-// StopDataFlowComponent mocks stopping a DataFlowComponent
-func (m *MockService) StopDataFlowComponent(ctx context.Context, filesystemService filesystem.Service, componentName string) error {
+// Stop mocks stopping a Topic Browser
+func (m *MockService) Stop(
+	ctx context.Context,
+	services serviceregistry.Provider,
+	tbName string,
+) error {
 	m.StopCalled = true
 
-	benthosName := fmt.Sprintf("dataflow-%s", componentName)
+	benthosName := fmt.Sprintf("topicbrowser-%s", tbName)
 
 	found := false
 
@@ -295,34 +348,38 @@ func (m *MockService) StopDataFlowComponent(ctx context.Context, filesystemServi
 	}
 
 	if !found {
-		return ErrServiceNotExists
+		return ErrServiceNotExist
 	}
 
 	return m.StopError
 }
 
-// ForceRemoveDataFlowComponent mocks force removing a DataFlowComponent
-func (m *MockService) ForceRemoveDataFlowComponent(ctx context.Context, filesystemService filesystem.Service, componentName string) error {
+// ForceRemove mocks force removing a Topic Browser
+func (m *MockService) ForceRemove(
+	ctx context.Context,
+	services serviceregistry.Provider,
+	tbname string,
+) error {
 	m.ForceRemoveCalled = true
 	return m.ForceRemoveError
 }
 
 // ServiceExists mocks checking if a DataFlowComponent exists
-func (m *MockService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, componentName string) bool {
+func (m *MockService) ServiceExists(
+	ctx context.Context,
+	serviecs serviceregistry.Provider,
+	tbName string,
+) bool {
 	m.ServiceExistsCalled = true
 	return m.ServiceExistsResult
 }
 
 // ReconcileManager mocks reconciling the DataFlowComponent manager
-func (m *MockService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool) {
+func (m *MockService) ReconcileManager(
+	ctx context.Context,
+	services serviceregistry.Provider,
+	tick uint64,
+) (error, bool) {
 	m.ReconcileManagerCalled = true
 	return m.ReconcileManagerError, m.ReconcileManagerReconciled
-}
-
-// boolToInt64 converts a boolean to int64 (1 for true, 0 for false)
-func boolToInt64(b bool) int64 {
-	if b {
-		return 1
-	}
-	return 0
 }
