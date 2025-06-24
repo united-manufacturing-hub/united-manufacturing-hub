@@ -24,14 +24,22 @@ import (
 // Cache maintains the latest UnsBundle for each topic key
 // This provides fast bootstrap for new subscribers and avoids re-decompressing data
 type Cache struct {
-	mu               sync.RWMutex
-	latestEventByKey map[string]*tbproto.UnsBundle // key = UnsTreeId from events
+	mu                  sync.RWMutex
+	eventMap            map[string]*tbproto.EventTableEntry // key = UnsTreeId from events
+	unsMap              *tbproto.TopicMap
+	lastCacheTimestamp  int64
+	lastBundleTimestamp int64
 }
 
 // NewCache creates a new topic browser cache
 func NewCache() *Cache {
 	return &Cache{
-		latestEventByKey: make(map[string]*tbproto.UnsBundle),
+		eventMap: make(map[string]*tbproto.EventTableEntry),
+		unsMap: &tbproto.TopicMap{
+			Entries: make(map[string]*tbproto.TopicInfo),
+		},
+		lastCacheTimestamp:  0,
+		lastBundleTimestamp: 0,
 	}
 }
 
@@ -57,7 +65,22 @@ func (c *Cache) Update(obs *ObservedState) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	// determine the relevant buffer elements (UnsBundles) to process
+	// the relevant buffers are the ones that have a timestamp greater than the last cache timestamp
+	// with this logic, we can avoid processing the same buffer multiple times becuase it will stay in the buffer for a while
+	latestProcessedTimestamp := c.lastCacheTimestamp
+	relevantBuffers := make([]*Buffer, 0)
 	for _, buf := range obs.ServiceInfo.Status.Buffer {
+		if buf.Timestamp > c.lastCacheTimestamp {
+			relevantBuffers = append(relevantBuffers, buf)
+			if buf.Timestamp > latestProcessedTimestamp {
+				latestProcessedTimestamp = buf.Timestamp
+			}
+		}
+	}
+
+	// process the relevant buffers
+	for _, buf := range relevantBuffers {
 		// Unmarshal the protobuf data (assuming it's already decompressed)
 
 		var ub tbproto.UnsBundle
@@ -66,20 +89,60 @@ func (c *Cache) Update(obs *ObservedState) error {
 			continue
 		}
 
-		// Extract the key from the events
-		// We need to check which entry is the newest - typically the last one in the array
-		if ub.Events != nil && len(ub.Events.Entries) > 0 {
-			// Get the last (newest) entry's UnsTreeId as the key
-			lastEntry := ub.Events.Entries[len(ub.Events.Entries)-1]
-			key := lastEntry.UnsTreeId
+		// upsert the latest event by UnsTreeId (key)
+		// if the event is newer, we overwrite the existing event
+		// if the event is older, we skip it
+		for _, entry := range ub.Events.Entries {
+			existing, exists := c.eventMap[entry.UnsTreeId]
+			if !exists || entry.ProducedAtMs > existing.ProducedAtMs {
+				c.eventMap[entry.UnsTreeId] = entry
+			}
+		}
 
-			// Store a deep copy of the UnsBundle
-			bundleCopy := proto.Clone(&ub).(*tbproto.UnsBundle)
-			c.latestEventByKey[key] = bundleCopy
+		// upsert the uns map
+		for _, entry := range ub.UnsMap.Entries {
+			c.unsMap.Entries[entry.Name] = entry
 		}
 	}
 
+	// update the last cache timestamp
+	c.lastCacheTimestamp = latestProcessedTimestamp
+
 	return nil
+}
+
+// this function is used to convert the cache into one proto-encoded UnsBundle
+func (c *Cache) ToUnsBundleProto() []byte {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	// create a new uns bundle
+	ub := &tbproto.UnsBundle{
+		Events: &tbproto.EventTable{
+			Entries: make([]*tbproto.EventTableEntry, 0, len(c.eventMap)),
+		},
+		UnsMap: &tbproto.TopicMap{
+			Entries: make(map[string]*tbproto.TopicInfo),
+		},
+	}
+
+	// add the latest events to the uns bundle
+	for _, entry := range c.eventMap {
+		ub.Events.Entries = append(ub.Events.Entries, entry)
+	}
+
+	// add the uns map to the uns bundle
+	for _, entry := range c.unsMap.Entries {
+		ub.UnsMap.Entries[entry.Name] = entry
+	}
+
+	// proto encode the uns bundle
+	encoded, err := proto.Marshal(ub)
+	if err != nil {
+		return nil
+	}
+
+	return encoded
 }
 
 // Snapshot returns a deep copy of all cached bundles
@@ -88,8 +151,8 @@ func (c *Cache) Snapshot() map[string]*tbproto.UnsBundle {
 	defer c.mu.RUnlock()
 
 	// Create a deep copy to avoid data races
-	dup := make(map[string]*tbproto.UnsBundle, len(c.latestEventByKey))
-	for key, bundle := range c.latestEventByKey {
+	dup := make(map[string]*tbproto.UnsBundle, len(c.eventMap))
+	for key, bundle := range c.eventMap {
 		dup[key] = proto.Clone(bundle).(*tbproto.UnsBundle)
 	}
 
@@ -101,8 +164,8 @@ func (c *Cache) GetKeys() []string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	keys := make([]string, 0, len(c.latestEventByKey))
-	for key := range c.latestEventByKey {
+	keys := make([]string, 0, len(c.eventMap))
+	for key := range c.eventMap {
 		keys = append(keys, key)
 	}
 	return keys
@@ -112,5 +175,5 @@ func (c *Cache) GetKeys() []string {
 func (c *Cache) Size() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return len(c.latestEventByKey)
+	return len(c.eventMap)
 }
