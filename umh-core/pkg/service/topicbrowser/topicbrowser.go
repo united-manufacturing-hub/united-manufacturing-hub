@@ -1,4 +1,4 @@
-// Copyright 2025 UMH Syjtems GmbH
+// Copyright 2025 UMH Systems GmbH
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
@@ -42,15 +43,15 @@ type ITopicBrowserService interface {
 	// Status returns information about the topic browser health
 	Status(ctx context.Context, services serviceregistry.Provider, tbName string, snapshot fsm.SystemSnapshot) (ServiceInfo, error)
 	// AddToManager registers a new topic browser
-	AddToManager(ctx context.Context, services serviceregistry.Provider, cfg *benthossvccfg.BenthosServiceConfig, tbName string) error
+	AddToManager(ctx context.Context, filesystemService filesystem.Service, cfg *benthossvccfg.BenthosServiceConfig, tbName string) error
 	// UpdateInManager modifies an existing topic browser configuration.
-	UpdateInManager(ctx context.Context, services serviceregistry.Provider, cfg *benthossvccfg.BenthosServiceConfig, tbName string) error
+	UpdateInManager(ctx context.Context, filesystemService filesystem.Service, cfg *benthossvccfg.BenthosServiceConfig, tbName string) error
 	// RemoveFromManager deletes a topic browser configuration.
-	RemoveFromManager(ctx context.Context, services serviceregistry.Provider, tbName string) error
+	RemoveFromManager(ctx context.Context, filesystemService filesystem.Service, tbName string) error
 	// Start begins the monitoring of a topic browser.
-	Start(ctx context.Context, services serviceregistry.Provider, tbName string) error
+	Start(ctx context.Context, filesystemService filesystem.Service, tbName string) error
 	// Stop stops the monitoring of a topic browser.
-	Stop(ctx context.Context, services serviceregistry.Provider, tbName string) error
+	Stop(ctx context.Context, filesystemService filesystem.Service, tbName string) error
 	// ForceRemove removes a topic browser instance
 	ForceRemove(ctx context.Context, services serviceregistry.Provider, tbName string) error
 	// ServiceExists checks if a topic browser with the given name exists.
@@ -86,6 +87,7 @@ type ServiceInfo struct {
 	// topic browser status
 	Status                Status
 	HasProcessingActivity bool
+	StatusReason          string
 }
 
 // Service implements ITopicBrowserService
@@ -123,11 +125,11 @@ func NewDefaultService(tbName string, opts ...ServiceOption) *Service {
 	service := &Service{
 		logger:         logger.For(managerName),
 		s6Service:      s6svc.NewDefaultService(),
-		benthosManager: benthosfsm.NewBenthosManager(managerName), // TODO: should reuse existing!
+		benthosManager: benthosfsm.NewBenthosManager(managerName),
 		benthosService: benthossvc.NewDefaultBenthosService(tbName),
 		benthosConfigs: []config.BenthosConfig{},
 		tbName:         tbName,
-		ringbuffer:     NewRingbuffer(8),
+		ringbuffer:     NewRingbuffer(8), // NOTE: adjustable, no real reason for 8
 	}
 
 	// Apply options
@@ -256,10 +258,7 @@ func (svc *Service) Status(
 		return ServiceInfo{}, fmt.Errorf("failed to parse block from logs: %w", err)
 	}
 
-	var activity bool
-	if redpandaObservedState.ServiceInfo.RedpandaStatus.RedpandaMetrics.Metrics.Throughput.BytesOut > 0 {
-		activity = true
-	}
+	statusReason, activity := svc.checkMetrics(redpandaObservedState, benthosObservedState)
 
 	// no direct reference
 	return ServiceInfo{
@@ -268,6 +267,7 @@ func (svc *Service) Status(
 		RedpandaObservedState: redpandaObservedState,
 		RedpandaFSMState:      redpandaFSMState,
 		HasProcessingActivity: activity,
+		StatusReason:          statusReason,
 		Status: Status{
 			Buffer: svc.ringbuffer.Get(),
 			Logs:   logs,
@@ -278,7 +278,7 @@ func (svc *Service) Status(
 // AddToManager registers a new topic browser to the benthos manager.
 func (svc *Service) AddToManager(
 	ctx context.Context,
-	services serviceregistry.Provider,
+	filesystemService filesystem.Service,
 	cfg *benthossvccfg.BenthosServiceConfig,
 	tbName string,
 ) error {
@@ -326,7 +326,7 @@ func (svc *Service) AddToManager(
 // UpdateInManager modifies an existing topic browser configuration.
 func (svc *Service) UpdateInManager(
 	ctx context.Context,
-	services serviceregistry.Provider,
+	filesystemServiec filesystem.Service,
 	cfg *benthossvccfg.BenthosServiceConfig,
 	tbName string,
 ) error {
@@ -380,7 +380,7 @@ func (svc *Service) UpdateInManager(
 // This stops monitoring the topic browser and removes all configuration.
 func (svc *Service) RemoveFromManager(
 	ctx context.Context,
-	services serviceregistry.Provider,
+	filesystemService filesystem.Service,
 	tbName string,
 ) error {
 	if svc.benthosManager == nil {
@@ -422,7 +422,7 @@ func (svc *Service) RemoveFromManager(
 // Start starts a topic browser
 func (svc *Service) Start(
 	ctx context.Context,
-	services serviceregistry.Provider,
+	filesystemServiec filesystem.Service,
 	tbName string,
 ) error {
 	if svc.benthosManager == nil {
@@ -455,7 +455,7 @@ func (svc *Service) Start(
 // Stop stops a Topic Browser
 func (svc *Service) Stop(
 	ctx context.Context,
-	services serviceregistry.Provider,
+	filesystemService filesystem.Service,
 	tbName string,
 ) error {
 	if svc.benthosManager == nil {
