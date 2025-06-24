@@ -1534,26 +1534,23 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	}
 	st.offset = newSize // advance cursor even if currentContent == nil
 
-	// ── 4. combine rotated and current content ──────────────────────
-	// Rotated content comes first chronologically, then current content
-	var allContent []byte
-	if len(rotatedContent) > 0 && len(currentContent) > 0 {
-		allContent = make([]byte, len(rotatedContent)+len(currentContent))
-		copy(allContent, rotatedContent)
-		copy(allContent[len(rotatedContent):], currentContent)
-	} else if len(rotatedContent) > 0 {
-		allContent = rotatedContent
-	} else if len(currentContent) > 0 {
-		allContent = currentContent
-	}
+	// ── 4. combine rotated and current content into the ring buffer ──────────────────────
+	// The order of the content is important: rotated content is older, current content is newer.
+	// We want to keep the newest lines at the end of the ring buffer.
 
-	if len(allContent) > 0 {
-		entries, err := ParseLogsFromBytes(allContent)
+	if len(rotatedContent) > 0 {
+		entries, err := ParseLogsFromBytes(rotatedContent)
 		if err != nil {
 			return nil, err
 		}
+		s.appendToRingBuffer(entries, st)
+	}
 
-		// --- Ring-buffer append using extracted helper ------------------
+	if len(currentContent) > 0 {
+		entries, err := ParseLogsFromBytes(currentContent)
+		if err != nil {
+			return nil, err
+		}
 		s.appendToRingBuffer(entries, st)
 	}
 
