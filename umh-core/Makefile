@@ -34,6 +34,8 @@ S6_OVERLAY_VERSION = 3.2.0.2
 REDPANDA_VERSION = 24.3.8
 ## Benthos version is a tag or a sha-<commit hash> (e.g. 0.9.4 or sha-a51a685) to be used in the docker image
 BENTHOS_UMH_VERSION = 0.9.4
+BUF_VERSION = 1.55.1
+PROTOC_GEN_GO_VERSION = 1.36.6
 
 
 # Note: Redpanda allocates 2GB of memory per core.
@@ -171,7 +173,7 @@ build-pprof:       EXTRA_ARGS := --build-arg PPROF=true
 build-debug:       EXTRA_ARGS := --build-arg DEBUG=true
 
 # Refresh cache and build docker binaries
-build build-pprof build-debug: download-docker-binaries
+build build-pprof build-debug: build-protobuf download-docker-binaries
 	$(call DOCKER_BUILD)
 
 FLAVOR ?=                         # empty → normal build
@@ -253,7 +255,7 @@ benchmark-s6-time:
 integration-test: stop-all-pods vet nilaway lint
 
 # Meta target to setup the environment for the tests
-pre-test: stop-all-pods vet nilaway lint
+pre-test: build-protobuf stop-all-pods vet nilaway lint
 
 # Meta target to setup the environment for the tests in CI environments
 pre-test-ci: vet lint
@@ -293,6 +295,24 @@ print-versions:
 ## Used by go-analysis.yml
 print-golang-version:
 	@echo "$(GOLANG_VERSION)"
+
+## Install buf for protobuf generation
+install-buf:
+	@echo "Installing buf via Go..."
+	@go install github.com/bufbuild/buf/cmd/buf@v$(BUF_VERSION)
+	@echo "Buf installed via Go"
+
+## Generate go files from protobuf for topic browser
+build-protobuf: install-buf
+	@echo "Installing protobuf dependencies..."
+	@go install google.golang.org/protobuf/cmd/protoc-gen-go@v$(PROTOC_GEN_GO_VERSION)
+	@echo "Generating Go from protobuf..."
+	@mkdir -p pkg/communicator/models/topicbrowser/pb
+	@rm -f pkg/communicator/models/topicbrowser/pb/topic_browser_data.pb.go || true
+	buf generate \
+		--template='{"version":"v1","plugins":[{"plugin":"go","out":"pkg/communicator/models/topicbrowser/pb","opt":["paths=source_relative"]}]}' \
+		pkg/communicator/models/topicbrowser/proto
+	@echo "Go protobuf files generated successfully."
 
 ###############################################################################
 # choose build flavour                                                        #
