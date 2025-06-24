@@ -1,0 +1,22 @@
+schema:
+  - schema.graphqls
+
+exec:
+  filename: generated.go
+
+model:
+  filename: models.go
+
+resolver:
+  filename: resolver.go
+  type: Resolver
+
+# Provide custom scalar implementations
+models:
+  Time:
+    model: github.com/99designs/gqlgen/graphql.Time
+  JSON:
+    model: github.com/99designs/gqlgen/graphql.Map
+
+# Skip generation for the resolver struct - we'll define it manually
+skip_validation: true 

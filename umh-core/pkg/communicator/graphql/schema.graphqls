@@ -1,0 +1,47 @@
+scalar Time      # RFC‑3339 via gqlgen
+scalar JSON      # map[string]interface{}
+
+enum ScalarType { NUMERIC STRING BOOLEAN }
+
+type MetadataKV { key: String!, value: String! }
+
+################  Event hierarchy  ################
+interface Event {
+  producedAt: Time!
+  headers:    [MetadataKV!]!
+}
+
+type TimeSeriesEvent implements Event {
+  producedAt: Time!
+  headers:    [MetadataKV!]!
+
+  sourceTs:   Time!
+  scalarType: ScalarType!
+  numericValue: Float
+  stringValue:  String
+  booleanValue: Boolean
+}
+
+type RelationalEvent implements Event {
+  producedAt: Time!
+  headers:    [MetadataKV!]!
+  json: JSON!
+}
+
+################  Topic & queries  ################
+type Topic {
+  topic:    String!            # full dot path
+  metadata: [MetadataKV!]!
+  lastEvent: Event
+}
+
+input MetaExpr { key: String!, eq: String }
+input TopicFilter {
+  text: String          # free‑text search in topic & metadata
+  meta: [MetaExpr!]
+}
+
+type Query {
+  topics(filter: TopicFilter, limit: Int = 100): [Topic!]!
+  topic(topic: String!): Topic
+} 
