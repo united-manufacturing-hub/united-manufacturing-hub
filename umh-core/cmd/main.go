@@ -109,6 +109,7 @@ func main() {
 	}
 
 	// Start the topic browser cache updater independent of the backend connection (e.g., for HTTP endpoints)
+	// it updates the TopicBrowserCache based on the observed state of the topic browser service once per second
 	communicationState.StartTopicBrowserCacheUpdater(systemSnapshotManager)
 
 	// Start the system snapshot logger
