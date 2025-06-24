@@ -16,12 +16,10 @@ package topicbrowser
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	benthossvccfg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -33,7 +31,6 @@ import (
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 	"go.uber.org/zap"
 )
 
@@ -41,7 +38,7 @@ type ITopicBrowserService interface {
 	// GenerateConfig generates a topic browser config
 	GenerateConfig(tbName string) (benthossvccfg.BenthosServiceConfig, error)
 	// Status returns information about the topic browser health
-	Status(ctx context.Context, services serviceregistry.Provider, tbName string, snapshot fsm.SystemSnapshot, tick uint64) (ServiceInfo, error)
+	Status(ctx context.Context, services serviceregistry.Provider, tbName string, snapshot fsm.SystemSnapshot) (ServiceInfo, error)
 	// AddToManager registers a new topic browser
 	AddToManager(ctx context.Context, services serviceregistry.Provider, cfg *benthossvccfg.BenthosServiceConfig) error
 	// UpdateInManager modifies an existing topic browser configuration.
@@ -95,14 +92,11 @@ type ServiceInfo struct {
 
 // Service implements ITopicBrowserService
 type Service struct {
-	logger          *zap.SugaredLogger
-	s6Manager       *s6fsm.S6Manager
-	s6Service       s6svc.Service
-	s6ServiceConfig *config.S6FSMConfig // There can only be one monitor per instance
+	logger    *zap.SugaredLogger
+	s6Service s6svc.Service
 
 	benthosManager *benthosfsm.BenthosManager
 	benthosService benthossvc.IBenthosService
-	benthosConfigs []config.BenthosConfig
 
 	tbName     string // normally a service can handle multiple instances, the service monitor here is different and can only handle one instance
 	ringbuffer *Ringbuffer
@@ -111,17 +105,15 @@ type Service struct {
 // ServiceOption is a function that configures a Service.
 type ServiceOption func(*Service)
 
-func WithService(s6svc s6svc.Service, benthossvc benthossvc.IBenthosService) ServiceOption {
+func WithService(svc benthossvc.IBenthosService) ServiceOption {
 	return func(s *Service) {
-		s.s6Service = s6svc
-		s.benthosService = benthossvc
+		s.benthosService = svc
 	}
 }
 
-func WithManager(s6mgr *s6fsm.S6Manager, benthosmgr *benthosfsm.BenthosManager) ServiceOption {
+func WithManager(mgr *benthosfsm.BenthosManager) ServiceOption {
 	return func(s *Service) {
-		s.s6Manager = s6mgr
-		s.benthosManager = benthosmgr
+		s.benthosManager = mgr
 	}
 }
 
@@ -131,11 +123,9 @@ func NewDefaultService(tbName string, opts ...ServiceOption) *Service {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentTopicBrowserService, tbName)
 	service := &Service{
 		logger:         logger.For(managerName),
-		s6Manager:      s6fsm.NewS6Manager(logger.ComponentTopicBrowserService),
 		s6Service:      s6svc.NewDefaultService(),
-		benthosManager: benthosfsm.NewBenthosManager(managerName), // should reuse existing?
+		benthosManager: benthosfsm.NewBenthosManager(managerName), // TODO: should reuse existing!
 		benthosService: benthossvc.NewDefaultBenthosService(tbName),
-		benthosConfigs: []config.BenthosConfig{},
 		tbName:         tbName,
 		ringbuffer:     NewRingbuffer(8),
 	}
@@ -151,6 +141,10 @@ func NewDefaultService(tbName string, opts ...ServiceOption) *Service {
 // getName converts the tbName (e.g. "myservice") that was given during NewService to its benthos service name (e.g. "topicbrowser-myservice")
 func (svc *Service) getName() string {
 	return fmt.Sprintf("topicbrowser-%s", svc.tbName)
+}
+
+func (svc *Service) getBenthosName() string {
+	return fmt.Sprintf("benthos-topicbrowser-%s", svc.tbName)
 }
 
 func (svc *Service) GenerateConfig(tbName string) (benthossvccfg.BenthosServiceConfig, error) {
@@ -185,7 +179,6 @@ func (svc *Service) Status(
 	services serviceregistry.Provider,
 	tbName string,
 	snapshot fsm.SystemSnapshot,
-	tick uint64,
 ) (ServiceInfo, error) {
 	start := time.Now()
 	defer func() {
@@ -205,18 +198,20 @@ func (svc *Service) Status(
 		return ServiceInfo{}, ErrServiceNotExist
 	}
 
-	// Let's get the status of the underlying benthos service
-	benthosObservedStateRaw, err := svc.benthosManager.GetLastObservedState(benthosName)
-	if err != nil {
-		return ServiceInfo{}, fmt.Errorf("failed to get benthos observed state: %w", err)
+	// get the benthos instance from the benthos manager
+	benthosInst, ok := fsm.FindInstance(snapshot, constants.BenthosManagerName, benthosName)
+	if !ok || benthosInst == nil {
+		return ServiceInfo{}, fmt.Errorf("benthos instance not found")
 	}
 
+	// get the redpanda instance from the redpanda manager
 	rpInst, ok := fsm.FindInstance(snapshot, constants.RedpandaManagerName, constants.RedpandaInstanceName)
 	if !ok || rpInst == nil {
 		return ServiceInfo{}, fmt.Errorf("redpanda instance not found")
 	}
 
 	redpandaStatus := rpInst.LastObservedState
+	benthosStatus := benthosInst.LastObservedState
 
 	// redpandaObservedStateSnapshot is slightly different from the others as it comes from the snapshot
 	// and not from the fsm-instance
@@ -225,27 +220,29 @@ func (svc *Service) Status(
 		return ServiceInfo{}, fmt.Errorf("redpanda status for redpanda %s is not a RedpandaObservedStateSnapshot", tbName)
 	}
 
+	benthosObservedStateSnapshot, ok := benthosStatus.(*benthosfsm.BenthosObservedStateSnapshot)
+	if !ok {
+		return ServiceInfo{}, fmt.Errorf("benthos status for benthos %s is not a BenthosObservedStateSnapshot", tbName)
+	}
+
 	// Now it is in the same format
 	redpandaObservedState := rpfsm.RedpandaObservedState{
 		ServiceInfo:                   redpandaObservedStateSnapshot.ServiceInfoSnapshot,
 		ObservedRedpandaServiceConfig: redpandaObservedStateSnapshot.Config,
 	}
 
+	// Now it is in the same format
+	benthosObservedState := benthosfsm.BenthosObservedState{
+		ServiceInfo:                  benthosObservedStateSnapshot.ServiceInfo,
+		ObservedBenthosServiceConfig: benthosObservedStateSnapshot.Config,
+	}
+
 	redpandaFSMState := rpInst.CurrentState
+	benthosFSMState := benthosInst.CurrentState
 
-	benthosObservedState, ok := benthosObservedStateRaw.(benthosfsm.BenthosObservedState)
-	if !ok {
-		return ServiceInfo{}, fmt.Errorf("observed state is not a BenthosObservedState: %v", benthosObservedStateRaw)
-	}
-
-	// Let's get the current FSM state of the underlying benthos FSM
-	benthosFSMState, err := svc.benthosManager.GetCurrentFSMState(benthosName)
-	if err != nil {
-		return ServiceInfo{}, fmt.Errorf("failed to get benthos FSM state: %w", err)
-	}
-
+	// NOTE: access the correct s6Service here
 	// Get logs
-	s6ServicePath := filepath.Join(constants.S6BaseDir, benthosName)
+	s6ServicePath := filepath.Join(constants.S6BaseDir, svc.getBenthosName())
 	logs, err := svc.s6Service.GetLogs(ctx, s6ServicePath, services.GetFileSystem())
 	if err != nil {
 		return ServiceInfo{}, fmt.Errorf("failed to get logs: %w", err)
@@ -261,7 +258,10 @@ func (svc *Service) Status(
 		return ServiceInfo{}, fmt.Errorf("failed to parse block from logs: %w", err)
 	}
 
-	// redpandaObservedState.ServiceInfo.RedpandaStatus.RedpandaMetrics.Metrics.Throughput.BytesOut
+	var activity bool
+	if redpandaObservedState.ServiceInfo.RedpandaStatus.RedpandaMetrics.Metrics.Throughput.BytesOut > 0 {
+		activity = true
+	}
 
 	// no direct reference
 	return ServiceInfo{
@@ -269,7 +269,7 @@ func (svc *Service) Status(
 		BenthosFSMState:       benthosFSMState,
 		RedpandaObservedState: redpandaObservedState,
 		RedpandaFSMState:      redpandaFSMState,
-		HasProcessingActivity: true,
+		HasProcessingActivity: activity,
 		Status: Status{
 			Buffer: svc.ringbuffer.Get(),
 			Logs:   logs,
@@ -283,10 +283,6 @@ func (svc *Service) AddToManager(
 	services serviceregistry.Provider,
 	cfg *benthossvccfg.BenthosServiceConfig,
 ) error {
-	if svc.benthosManager == nil {
-		return errors.New("benthos manager not initialized")
-	}
-
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -295,62 +291,20 @@ func (svc *Service) AddToManager(
 
 	benthosName := svc.getName()
 
-	// Check whether benthosConfig already contains an entry for this instance
-	for _, config := range svc.benthosConfigs {
-		if config.Name == benthosName {
-			return ErrServiceAlreadyExists
-		}
-	}
-
-	// Generate the benthos config for this instance
-	benthosCfg, err := svc.GenerateConfig(benthosName)
-	if err != nil {
-		return fmt.Errorf("failed to generate benthos config for topic browser service %s: %w", benthosName, err)
-	}
-
-	// Create the benthos FSM config for this instance
-	benthosFSMConfig := config.BenthosConfig{
-		FSMInstanceConfig: config.FSMInstanceConfig{
-			Name:            benthosName,
-			DesiredFSMState: benthosfsm.OperationalStateStopped,
-		},
-		BenthosServiceConfig: benthosCfg,
-	}
-
-	// add the benthos FSM config
-	svc.benthosConfigs = append(svc.benthosConfigs, benthosFSMConfig)
-
-	return nil
+	return svc.benthosService.AddBenthosToS6Manager(ctx, services.GetFileSystem(), cfg, benthosName)
 }
 
 // UpdateInManager modifies an existing topic browser configuration.
 func (svc *Service) UpdateInManager(
 	ctx context.Context,
+	services serviceregistry.Provider,
 	cfg *benthossvccfg.BenthosServiceConfig,
 ) error {
-	if svc.benthosManager == nil {
-		return errors.New("benthos manager not initialized")
-	}
-
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
 	benthosName := svc.getName()
-
-	found := false
-	index := -1
-	for i, config := range svc.benthosConfigs {
-		if config.Name == benthosName {
-			found = true
-			index = i
-			break
-		}
-	}
-
-	if !found {
-		return ErrServiceNotExist
-	}
 
 	// Generate the S6 config for this instance
 	benthosCfg, err := svc.GenerateConfig(benthosName)
@@ -358,27 +312,15 @@ func (svc *Service) UpdateInManager(
 		return fmt.Errorf("failed to generate benthos config for topic browser service %s: %w", benthosName, err)
 	}
 
-	currentDesiredState := svc.benthosConfigs[index].DesiredFSMState
-	svc.benthosConfigs[index] = config.BenthosConfig{
-		FSMInstanceConfig: config.FSMInstanceConfig{
-			Name:            benthosName,
-			DesiredFSMState: currentDesiredState,
-		},
-		BenthosServiceConfig: benthosCfg,
-	}
-
-	return nil
+	return svc.benthosService.UpdateBenthosInS6Manager(ctx, services.GetFileSystem(), &benthosCfg, benthosName)
 }
 
 // RemoveFromManager deletes a topic browser configuration.
 // This stops monitoring the topic browser and removes all configuration.
 func (svc *Service) RemoveFromManager(
 	ctx context.Context,
+	services serviceregistry.Provider,
 ) error {
-	if svc.benthosManager == nil {
-		return errors.New("benthos manager not initialized")
-	}
-
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -386,86 +328,35 @@ func (svc *Service) RemoveFromManager(
 	// Check that the instance was actually removed
 	benthosName := svc.getName()
 
-	// Helper that deletes exactly one element *without* reallocating when the
-	// element is already missing – keeps the call idempotent and allocation-free.
-	sliceRemoveByName := func(arr []config.BenthosConfig, name string) []config.BenthosConfig {
-		for i, cfg := range arr {
-			if cfg.Name == name {
-				return append(arr[:i], arr[i+1:]...)
-			}
-		}
-		return arr
-	}
-
-	svc.benthosConfigs = sliceRemoveByName(svc.benthosConfigs, benthosName)
-
-	if inst, ok := svc.benthosManager.GetInstance(benthosName); ok {
-		return fmt.Errorf("%w: Benthos instance state=%s", standarderrors.ErrRemovalPending, inst.GetCurrentFSMState())
-	}
-
-	return nil
+	return svc.benthosService.RemoveBenthosFromS6Manager(ctx, services.GetFileSystem(), benthosName)
 }
 
 // Start starts a topic browser
 func (svc *Service) Start(
 	ctx context.Context,
+	services serviceregistry.Provider,
 ) error {
-	if svc.benthosManager == nil {
-		return errors.New("benthos manager not initialized")
-	}
-
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
 	benthosName := svc.getName()
 
-	// Find and update our cached config
-	found := false
-	for i, config := range svc.benthosConfigs {
-		if config.Name == benthosName {
-			svc.benthosConfigs[i].DesiredFSMState = benthosfsm.OperationalStateActive
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		return ErrServiceNotExist
-	}
-
-	return nil
+	return svc.benthosService.StartBenthos(ctx, services.GetFileSystem(), benthosName)
 }
 
 // Stop stops a Topic Browser
 func (svc *Service) Stop(
 	ctx context.Context,
+	services serviceregistry.Provider,
 ) error {
-	if svc.s6Manager == nil {
-		return errors.New("benthos manager not initialized")
-	}
-
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
 	benthosName := svc.getName()
 
-	// Find and update our cached config
-	found := false
-	for i, config := range svc.benthosConfigs {
-		if config.Name == benthosName {
-			svc.benthosConfigs[i].DesiredFSMState = benthosfsm.OperationalStateStopped
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		return ErrServiceNotExist
-	}
-
-	return nil
+	return svc.benthosService.StopBenthos(ctx, services.GetFileSystem(), benthosName)
 }
 
 // ReconcileManager synchronizes the topic browser on each tick.
@@ -479,36 +370,21 @@ func (svc *Service) ReconcileManager(
 		metrics.ObserveReconcileTime(logger.ComponentTopicBrowserService, "ReconcileManager", time.Since(start))
 	}()
 
-	if svc.benthosManager == nil {
-		return errors.New("benthos manager not initialized"), false
-	}
-
 	if ctx.Err() != nil {
 		return ctx.Err(), false
 	}
 
-	// Reconcile the Benthos manager with our configs
+	// Reconcile the Benthos manager with our configs through the benthos service
 	// The Benthos manager will handle the reconciliation with the S6 manager
-	return svc.benthosManager.Reconcile(ctx, fsm.SystemSnapshot{
-		CurrentConfig: config.FullConfig{
-			Internal: config.InternalConfig{
-				Benthos: svc.benthosConfigs,
-			},
-		},
-		Tick: tick,
-	}, services)
+	return svc.benthosService.ReconcileManager(ctx, services, tick)
 }
 
-// ServiceExists checks if a connection with the given name exists.
+// ServiceExists checks if a service with the given name exists.
 // Used by the FSM to determine appropriate transitions.
 func (svc *Service) ServiceExists(
 	ctx context.Context,
 	services serviceregistry.Provider,
 ) bool {
-	if svc.benthosManager == nil {
-		return false
-	}
-
 	if ctx.Err() != nil {
 		return false
 	}
@@ -529,4 +405,19 @@ func (svc *Service) ForceRemove(
 
 	// Then force remove from Benthos manager
 	return svc.benthosService.ForceRemoveBenthos(ctx, services.GetFileSystem(), svc.getName())
+}
+
+func (svc *Service) checkMetrics(
+	rpObsState rpfsm.RedpandaObservedState,
+	benObsState benthosfsm.BenthosObservedState,
+) (string, bool) {
+	if rpObsState.ServiceInfo.RedpandaStatus.RedpandaMetrics.Metrics.Throughput.BytesOut > 0 {
+		return "", true
+	}
+
+	// Redpanda output but no benthos output
+	// Benthos output but not redpanda output
+	// Redpanda output but no benthos input
+
+	return "", false
 }

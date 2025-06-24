@@ -43,7 +43,7 @@ func (rb *Ringbuffer) Add(buf *Buffer) {
 	defer rb.mu.Unlock()
 
 	rb.buf[rb.writePos] = buf
-	rb.writePos = (rb.writePos + 1) % rb.count
+	rb.writePos = (rb.writePos + 1) % len(rb.buf)
 
 	if rb.count < len(rb.buf) {
 		rb.count++
@@ -62,7 +62,13 @@ func (rb *Ringbuffer) Get() []*Buffer {
 
 		buf := rb.buf[index]
 		if buf != nil {
-			out = append(out, buf)
+			// clone for new allocated memory
+			clone := &Buffer{Timestamp: buf.Timestamp}
+			if buf.Payload != nil {
+				clone.Payload = make([]byte, len(buf.Payload))
+				copy(clone.Payload, buf.Payload)
+			}
+			out = append(out, clone)
 		}
 	}
 
