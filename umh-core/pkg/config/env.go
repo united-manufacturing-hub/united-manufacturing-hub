@@ -113,6 +113,7 @@ func LoadConfigWithEnvOverrides(ctx context.Context, configManager *FileConfigMa
 						// 0 means no limit
 						DefaultTopicRetentionBytes:       0,
 						DefaultTopicCompressionAlgorithm: "snappy",
+						DefaultTopicCleanupPolicy:        "compact",
 					},
 					Resources: redpandaserviceconfig.ResourcesConfig{
 						MaxCores: 1,

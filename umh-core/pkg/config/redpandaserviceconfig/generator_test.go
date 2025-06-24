@@ -86,4 +86,28 @@ var _ = Describe("Redpanda YAML Generator", func() {
 			}),
 	)
 
+	It("should generate valid YAML with custom compression", func() {
+		cfg := RedpandaServiceConfig{}
+		cfg.Topic.DefaultTopicRetentionMs = 1000
+		cfg.Topic.DefaultTopicRetentionBytes = 1000
+		cfg.Topic.DefaultTopicCompressionAlgorithm = "lz4"
+		cfg.Topic.DefaultTopicCleanupPolicy = "delete"
+
+		generator := NewGenerator()
+		yaml, err := generator.RenderConfig(cfg)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(yaml).To(ContainSubstring("log_compression_type: \"lz4\""))
+		Expect(yaml).To(ContainSubstring("log_cleanup_policy: \"delete\""))
+	})
+
+	It("should use default cleanup policy when empty", func() {
+		cfg := RedpandaServiceConfig{}
+		cfg.Topic.DefaultTopicRetentionMs = 1000
+		cfg.Topic.DefaultTopicRetentionBytes = 1000
+
+		generator := NewGenerator()
+		yaml, err := generator.RenderConfig(cfg)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(yaml).To(ContainSubstring("log_cleanup_policy: \"compact\""))
+	})
 })

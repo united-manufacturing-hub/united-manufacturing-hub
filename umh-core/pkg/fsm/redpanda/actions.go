@@ -383,6 +383,19 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 			}
 		}
 
+		if r.PreviousObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicCleanupPolicy != r.config.Topic.DefaultTopicCleanupPolicy {
+			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#log_cleanup_policy
+
+			if r.config.Topic.DefaultTopicCleanupPolicy != "" {
+				changes["log_cleanup_policy"] = r.config.Topic.DefaultTopicCleanupPolicy
+			} else {
+				// If the config does not set a value, we update as needed
+				if r.PreviousObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicCleanupPolicy != constants.DefaultRedpandaTopicDefaultTopicCleanupPolicy {
+					changes["log_cleanup_policy"] = constants.DefaultRedpandaTopicDefaultTopicCleanupPolicy
+				}
+			}
+		}
+
 		// Only apply if there are changes.
 		if len(changes) > 0 {
 			err := r.service.UpdateRedpandaClusterConfig(ctx, r.baseFSMInstance.GetID(), changes)

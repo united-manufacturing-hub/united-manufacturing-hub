@@ -26,6 +26,7 @@ type TopicConfig struct {
 	DefaultTopicRetentionMs          int64  `yaml:"defaultTopicRetentionMs,omitempty"`
 	DefaultTopicRetentionBytes       int64  `yaml:"defaultTopicRetentionBytes,omitempty"`
 	DefaultTopicCompressionAlgorithm string `yaml:"defaultTopicCompressionAlgorithm,omitempty"`
+	DefaultTopicCleanupPolicy        string `yaml:"defaultTopicCleanupPolicy,omitempty"`
 }
 
 // ResourcesConfig represents the resource-related configuration for Redpanda
@@ -48,12 +49,13 @@ func (c RedpandaServiceConfig) Equal(other RedpandaServiceConfig) bool {
 }
 
 // RenderRedpandaYAML is a package-level function for easy YAML generation
-func RenderRedpandaYAML(defaultTopicRetentionMs int64, defaultTopicRetentionBytes int64, defaultTopicCompressionAlgorithm string) (string, error) {
+func RenderRedpandaYAML(defaultTopicRetentionMs int64, defaultTopicRetentionBytes int64, defaultTopicCompressionAlgorithm string, defaultTopicCleanupPolicy string) (string, error) {
 	// Create a config object from the individual components
 	cfg := RedpandaServiceConfig{}
 	cfg.Topic.DefaultTopicRetentionMs = defaultTopicRetentionMs
 	cfg.Topic.DefaultTopicRetentionBytes = defaultTopicRetentionBytes
 	cfg.Topic.DefaultTopicCompressionAlgorithm = defaultTopicCompressionAlgorithm
+	cfg.Topic.DefaultTopicCleanupPolicy = defaultTopicCleanupPolicy
 
 	// Use the generator to render the YAML
 	return defaultGenerator.RenderConfig(cfg)

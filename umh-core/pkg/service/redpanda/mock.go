@@ -161,6 +161,7 @@ func (m *MockRedpandaService) GetConfig(ctx context.Context, filesystemService f
 	config.Topic.DefaultTopicRetentionMs = 1000000
 	config.Topic.DefaultTopicRetentionBytes = 1000000000
 	config.Topic.DefaultTopicCompressionAlgorithm = "snappy"
+	config.Topic.DefaultTopicCleanupPolicy = "compact"
 	return config, nil
 }
 

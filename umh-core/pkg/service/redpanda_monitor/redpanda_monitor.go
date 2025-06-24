@@ -135,6 +135,7 @@ type TopicConfig struct {
 	DefaultTopicRetentionMs          int64
 	DefaultTopicRetentionBytes       int64
 	DefaultTopicCompressionAlgorithm string
+	DefaultTopicCleanupPolicy        string
 }
 
 // RedpandaMetrics contains information about the metrics of the Redpanda service
@@ -392,7 +393,7 @@ var markerReplacer = strings.NewReplacer(
 )
 
 // stripMarkers returns a copy of b with every marker removed.
-// If you’re on Go ≥ 1.20 you can avoid the extra string-copy with
+// If you're on Go ≥ 1.20 you can avoid the extra string-copy with
 //
 //	unsafe.String and unsafe.Slice, but the plain version is often fast enough.
 func StripMarkers(b []byte) []byte {
@@ -937,10 +938,21 @@ func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigData
 		return nil, fmt.Errorf("failed to parse cluster config data: no log_compression_type found")
 	}
 
-	s.logger.Debugf("Cluster config [log_retention_ms: %d, retention_bytes: %d, log_compression_type: %s]",
+	if value, ok := redpandaConfig["log_cleanup_policy"]; ok {
+		if strValue, ok := value.(string); ok {
+			result.Topic.DefaultTopicCleanupPolicy = strValue
+		} else {
+			return nil, fmt.Errorf("failed to parse cluster config data: log_cleanup_policy is not a string")
+		}
+	} else {
+		return nil, fmt.Errorf("failed to parse cluster config data: no log_cleanup_policy found")
+	}
+
+	s.logger.Debugf("Cluster config [log_retention_ms: %d, retention_bytes: %d, log_compression_type: %s, log_cleanup_policy: %s]",
 		result.Topic.DefaultTopicRetentionMs,
 		result.Topic.DefaultTopicRetentionBytes,
-		result.Topic.DefaultTopicCompressionAlgorithm)
+		result.Topic.DefaultTopicCompressionAlgorithm,
+		result.Topic.DefaultTopicCleanupPolicy)
 
 	return &result, nil
 }

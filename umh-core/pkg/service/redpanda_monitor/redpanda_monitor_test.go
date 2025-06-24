@@ -363,6 +363,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 		Expect(config.Topic.DefaultTopicCompressionAlgorithm).To(Equal("producer"))
 		Expect(config.Topic.DefaultTopicRetentionBytes).To(Equal(int64(0)))
 		Expect(config.Topic.DefaultTopicRetentionMs).To(Equal(int64(604800000)))
+		Expect(config.Topic.DefaultTopicCleanupPolicy).To(Equal("delete"))
 	})
 
 	Describe("RedpandaMetricsState", func() {

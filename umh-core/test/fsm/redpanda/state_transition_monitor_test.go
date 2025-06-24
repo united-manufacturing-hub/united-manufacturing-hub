@@ -87,6 +87,7 @@ func createMonitorMockLogs(freBytes, totalBytes uint64, hasSpaceAlert bool, topi
 		"log_retention_ms":     1000000,
 		"retention_bytes":      1000000000,
 		"log_compression_type": "producer",
+		"log_cleanup_policy":   "compact",
 	}
 
 	// Compress and hex-encode metrics data

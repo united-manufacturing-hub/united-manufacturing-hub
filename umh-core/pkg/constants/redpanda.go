@@ -60,4 +60,5 @@ const (
 	DefaultRedpandaTopicDefaultTopicRetentionMs          = 604800000 // 7 days
 	DefaultRedpandaTopicDefaultTopicRetentionBytes       = 0
 	DefaultRedpandaTopicDefaultTopicCompressionAlgorithm = "snappy"
+	DefaultRedpandaTopicDefaultTopicCleanupPolicy        = "compact"
 )

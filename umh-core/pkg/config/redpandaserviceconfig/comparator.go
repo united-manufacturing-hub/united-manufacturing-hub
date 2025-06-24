@@ -71,6 +71,11 @@ func (c *Comparator) ConfigDiff(desired, observed RedpandaServiceConfig) string 
 			normDesired.Topic.DefaultTopicCompressionAlgorithm, normObserved.Topic.DefaultTopicCompressionAlgorithm))
 	}
 
+	if normDesired.Topic.DefaultTopicCleanupPolicy != normObserved.Topic.DefaultTopicCleanupPolicy {
+		diff.WriteString(fmt.Sprintf("Topic.DefaultTopicCleanupPolicy: Want: %s, Have: %s\n",
+			normDesired.Topic.DefaultTopicCleanupPolicy, normObserved.Topic.DefaultTopicCleanupPolicy))
+	}
+
 	// Check resources configuration
 	if normDesired.Resources.MaxCores != normObserved.Resources.MaxCores {
 		diff.WriteString(fmt.Sprintf("Resources.MaxCores: Want: %d, Have: %d\n",

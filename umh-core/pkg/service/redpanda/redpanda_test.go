@@ -74,6 +74,7 @@ var _ = Describe("Redpanda Service", func() {
 		config.Topic.DefaultTopicRetentionMs = 1000000
 		config.Topic.DefaultTopicRetentionBytes = 1000000000
 		config.Topic.DefaultTopicCompressionAlgorithm = "snappy"
+		config.Topic.DefaultTopicCleanupPolicy = "compact"
 		ctx, cancel = newTimeoutContext()
 		defer cancel()
 		err = service.AddRedpandaToS6Manager(ctx, config, mockSvcRegistry.GetFileSystem(), redpandaName)
@@ -95,6 +96,7 @@ var _ = Describe("Redpanda Service", func() {
 				cfg.Topic.DefaultTopicRetentionMs = 1000000
 				cfg.Topic.DefaultTopicRetentionBytes = 1000000000
 				cfg.Topic.DefaultTopicCompressionAlgorithm = "snappy"
+				cfg.Topic.DefaultTopicCleanupPolicy = "compact"
 
 				s6Config, err := service.GenerateS6ConfigForRedpanda(cfg, service.GetS6ServiceName(redpandaName))
 				Expect(err).NotTo(HaveOccurred())
@@ -104,6 +106,7 @@ var _ = Describe("Redpanda Service", func() {
 				Expect(yaml).To(ContainSubstring("log_retention_ms: 1000000"))
 				Expect(yaml).To(ContainSubstring("retention_bytes: 1000000000"))
 				Expect(yaml).To(ContainSubstring("log_compression_type: \"snappy\""))
+				Expect(yaml).To(ContainSubstring("log_cleanup_policy: \"compact\""))
 			})
 		})
 
@@ -143,6 +146,7 @@ var _ = Describe("Redpanda Service", func() {
 			initialConfig.Topic.DefaultTopicRetentionMs = 1000000
 			initialConfig.Topic.DefaultTopicRetentionBytes = 1000000000
 			initialConfig.Topic.DefaultTopicCompressionAlgorithm = "snappy"
+			initialConfig.Topic.DefaultTopicCleanupPolicy = "compact"
 
 			// Add the service with initial config
 			By("Adding the Redpanda service with initial config")
@@ -157,6 +161,7 @@ var _ = Describe("Redpanda Service", func() {
 			updatedConfig.Topic.DefaultTopicRetentionMs = 2000000
 			updatedConfig.Topic.DefaultTopicRetentionBytes = 2000000000
 			updatedConfig.Topic.DefaultTopicCompressionAlgorithm = "lz4"
+			updatedConfig.Topic.DefaultTopicCleanupPolicy = "delete"
 
 			// Update the service configuration
 			By("Updating the Redpanda service configuration")

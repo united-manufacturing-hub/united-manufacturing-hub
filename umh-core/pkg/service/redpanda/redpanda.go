@@ -249,7 +249,7 @@ func (s *RedpandaService) generateRedpandaYaml(config *redpandaserviceconfig.Red
 		return "", fmt.Errorf("config is nil")
 	}
 
-	return redpandaserviceconfig.RenderRedpandaYAML(config.Topic.DefaultTopicRetentionMs, config.Topic.DefaultTopicRetentionBytes, config.Topic.DefaultTopicCompressionAlgorithm)
+	return redpandaserviceconfig.RenderRedpandaYAML(config.Topic.DefaultTopicRetentionMs, config.Topic.DefaultTopicRetentionBytes, config.Topic.DefaultTopicCompressionAlgorithm, config.Topic.DefaultTopicCleanupPolicy)
 }
 
 // generateS6ConfigForRedpanda creates a S6 config for a given redpanda instance
@@ -339,6 +339,7 @@ func (s *RedpandaService) GetConfig(ctx context.Context, filesystemService files
 			redpandaStatus.Topic.DefaultTopicRetentionMs = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.ClusterConfig.Topic.DefaultTopicRetentionMs
 			redpandaStatus.Topic.DefaultTopicRetentionBytes = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.ClusterConfig.Topic.DefaultTopicRetentionBytes
 			redpandaStatus.Topic.DefaultTopicCompressionAlgorithm = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.ClusterConfig.Topic.DefaultTopicCompressionAlgorithm
+			redpandaStatus.Topic.DefaultTopicCleanupPolicy = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.ClusterConfig.Topic.DefaultTopicCleanupPolicy
 		} else {
 			s.logger.Debugf("Cluster config is nil, skipping update")
 		}
