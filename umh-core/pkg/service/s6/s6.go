@@ -16,6 +16,7 @@ package s6
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/binary"
 	"encoding/hex"
@@ -1791,16 +1792,16 @@ func (s *DefaultService) ExecuteS6Command(ctx context.Context, servicePath strin
 	return string(output), nil
 }
 
-// findLatestRotatedFile finds the most recently rotated file based on lexicographic sorting.
+// findLatestRotatedFile finds the most recently rotated file using slices.MaxFunc.
 //
 // S6 creates rotated files with TAI64N timestamps in their names (e.g., @400000006501234567890abc.s).
-// Since TAI64N timestamps are designed to be lexicographically sortable, we can simply sort
-// the filenames and take the last one, which is more efficient than parsing each timestamp.
+// TAI64N timestamps are designed to be lexicographically sortable, so we can use string comparison
+// to find the chronologically latest file efficiently.
 //
-// This approach is more reliable and faster than timestamp parsing since:
-//   - TAI64N is explicitly designed for lexicographic sorting
-//   - No parsing overhead or error handling required
-//   - Simpler and more predictable performance (O(n log n) vs O(n) with high constant factor)
+// This approach uses slices.MaxFunc which provides optimal performance:
+//   - O(n) time complexity with single pass through entries
+//   - Zero memory allocations
+//   - No intermediate sorting required
 //
 // Returns an empty string if no valid rotated files are found.
 func (s *DefaultService) findLatestRotatedFile(entries []string) string {
@@ -1808,12 +1809,8 @@ func (s *DefaultService) findLatestRotatedFile(entries []string) string {
 		return ""
 	}
 
-	// Sort lexicographically - TAI64N timestamps are designed to be lexicographically sortable
-	// Internally this uses pattern-defeating quicksort which is O(n log n)
-	slices.Sort(entries)
+	// Use slices.MaxFunc to find the latest file
+	latestFile := slices.MaxFunc(entries, cmp.Compare[string])
 
-	// Return the last (newest) file
-	latestFile := entries[len(entries)-1]
-	s.logger.Debugf("Found latest rotated file: %s", latestFile)
 	return latestFile
 }
