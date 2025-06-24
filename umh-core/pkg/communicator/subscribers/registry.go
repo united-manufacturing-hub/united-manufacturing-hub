@@ -44,7 +44,7 @@ func NewRegistry(cullInterval, ttl time.Duration) *Registry {
 }
 
 // Add adds a subscriber to the registry. If the subscriber is new, it initializes
-// their metadata with Bootstraped=false so they receive the full topic tree.
+// their metadata with Bootstraped=false so they receive the full topic tree (see umh-core/pkg/communicator/pkg/generator/topicbrowser.go for more details)
 func (r *Registry) Add(email string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -59,6 +59,9 @@ func (r *Registry) Add(email string) {
 			LastSeq:     0,
 			Bootstraped: false,
 		}
+	} else {
+		// If the subscriber is not new, we need to update the metadata
+		r.meta[email].Bootstraped = false
 	}
 }
 
@@ -110,24 +113,3 @@ func (r *Registry) UpdateMeta(email string, updateFn func(*Meta)) {
 func (r *Registry) Length() int {
 	return r.subscribers.Length()
 }
-
-// cleanup removes expired entries from metadata map
-// This should be called periodically or triggered by expiremap events
-// func (r *Registry) cleanup() {
-// 	r.mu.Lock()
-// 	defer r.mu.Unlock()
-
-// 	// Get current active subscribers
-// 	activeSubscribers := make(map[string]bool)
-// 	r.subscribers.Range(func(key string, value string) bool {
-// 		activeSubscribers[key] = true
-// 		return true
-// 	})
-
-// 	// Remove metadata for expired subscribers
-// 	for email := range r.meta {
-// 		if !activeSubscribers[email] {
-// 			delete(r.meta, email)
-// 		}
-// 	}
-// }
