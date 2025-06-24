@@ -120,7 +120,7 @@ func (s *Handler) notify() {
 	s.subscriberRegistry.ForEach(func(email string, meta *subscribers.Meta) {
 		// Generate personalized status message based on bootstrap state
 		statusMessage := baseStatusMessage
-		if !meta.Bootstraped {
+		if !meta.Bootstrapped {
 			// If the subscriber is not bootstrapped, we need to generate a new status message
 			statusMessage = s.StatusCollector.GenerateStatusMessage(false)
 		}
@@ -151,9 +151,9 @@ func (s *Handler) notify() {
 		})
 
 		// Mark subscriber as bootstrapped after first message
-		if !meta.Bootstraped {
+		if !meta.Bootstrapped {
 			s.subscriberRegistry.UpdateMeta(email, func(m *subscribers.Meta) {
-				m.Bootstraped = true
+				m.Bootstrapped = true
 			})
 			s.logger.Debugf("Subscriber %s has been bootstrapped", email)
 		} else {

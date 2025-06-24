@@ -23,9 +23,9 @@ import (
 
 // Meta tracks metadata for each subscriber, particularly for topic browser bootstrapping
 type Meta struct {
-	FirstSeen   time.Time // When the subscriber was first added
-	LastSeq     uint64    // Last topic browser sequence delivered
-	Bootstraped bool      // Did we already send the backlog/full tree?
+	FirstSeen    time.Time // When the subscriber was first added
+	LastSeq      uint64    // Last topic browser sequence delivered
+	Bootstrapped bool      // Did we already send the backlog/full tree?
 }
 
 // Registry wraps expiremap and adds metadata tracking for subscribers
@@ -55,13 +55,13 @@ func (r *Registry) Add(email string) {
 	// Initialize metadata if this is a new subscriber
 	if _, exists := r.meta[email]; !exists {
 		r.meta[email] = &Meta{
-			FirstSeen:   time.Now(),
-			LastSeq:     0,
-			Bootstraped: false,
+			FirstSeen:    time.Now(),
+			LastSeq:      0,
+			Bootstrapped: false,
 		}
 	} else {
 		// If the subscriber is not new, we need to update the metadata
-		r.meta[email].Bootstraped = false
+		r.meta[email].Bootstrapped = false
 	}
 }
 

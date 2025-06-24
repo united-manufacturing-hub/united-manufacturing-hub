@@ -57,7 +57,7 @@ var _ = Describe("Registry", func() {
 				meta := registry.Meta(email)
 				Expect(meta.FirstSeen).To(BeTemporally("~", time.Now(), time.Second))
 				Expect(meta.LastSeq).To(Equal(uint64(0)))
-				Expect(meta.Bootstraped).To(BeFalse())
+				Expect(meta.Bootstrapped).To(BeFalse())
 			})
 		})
 
@@ -70,13 +70,13 @@ var _ = Describe("Registry", func() {
 
 				// Update metadata to simulate it being bootstrapped
 				registry.UpdateMeta(email, func(m *subscribers.Meta) {
-					m.Bootstraped = true
+					m.Bootstrapped = true
 					m.LastSeq = 100
 				})
 
 				// Verify it was bootstrapped
 				meta := registry.Meta(email)
-				Expect(meta.Bootstraped).To(BeTrue())
+				Expect(meta.Bootstrapped).To(BeTrue())
 				Expect(meta.LastSeq).To(Equal(uint64(100)))
 
 				// Add the same subscriber again
@@ -87,7 +87,7 @@ var _ = Describe("Registry", func() {
 
 				// Check that Bootstraped flag is reset but other metadata preserved
 				meta = registry.Meta(email)
-				Expect(meta.Bootstraped).To(BeFalse())      // Should be reset
+				Expect(meta.Bootstrapped).To(BeFalse())     // Should be reset
 				Expect(meta.LastSeq).To(Equal(uint64(100))) // Should be preserved
 			})
 		})
@@ -107,7 +107,7 @@ var _ = Describe("Registry", func() {
 					meta := registry.Meta(email)
 					Expect(meta.FirstSeen).To(BeTemporally("~", time.Now(), time.Second))
 					Expect(meta.LastSeq).To(Equal(uint64(0)))
-					Expect(meta.Bootstraped).To(BeFalse())
+					Expect(meta.Bootstrapped).To(BeFalse())
 				}
 			})
 		})
@@ -160,12 +160,12 @@ var _ = Describe("Registry", func() {
 				// Update metadata
 				registry.UpdateMeta(email, func(m *subscribers.Meta) {
 					m.LastSeq = 42
-					m.Bootstraped = true
+					m.Bootstrapped = true
 				})
 
 				meta := registry.Meta(email)
 				Expect(meta.LastSeq).To(Equal(uint64(42)))
-				Expect(meta.Bootstraped).To(BeTrue())
+				Expect(meta.Bootstrapped).To(BeTrue())
 				Expect(meta.FirstSeen).To(BeTemporally("~", time.Now(), time.Second))
 			})
 		})
@@ -176,7 +176,7 @@ var _ = Describe("Registry", func() {
 
 				Expect(meta.FirstSeen).To(BeZero())
 				Expect(meta.LastSeq).To(Equal(uint64(0)))
-				Expect(meta.Bootstraped).To(BeFalse())
+				Expect(meta.Bootstrapped).To(BeFalse())
 			})
 		})
 	})
@@ -217,7 +217,7 @@ var _ = Describe("Registry", func() {
 				for _, meta := range receivedMetas {
 					Expect(meta.FirstSeen).To(BeTemporally("~", time.Now(), time.Second))
 					Expect(meta.LastSeq).To(Equal(uint64(0)))
-					Expect(meta.Bootstraped).To(BeFalse())
+					Expect(meta.Bootstrapped).To(BeFalse())
 				}
 			})
 		})
@@ -233,12 +233,12 @@ var _ = Describe("Registry", func() {
 				// Update metadata for each subscriber differently
 				registry.UpdateMeta(email1, func(m *subscribers.Meta) {
 					m.LastSeq = 100
-					m.Bootstraped = true
+					m.Bootstrapped = true
 				})
 
 				registry.UpdateMeta(email2, func(m *subscribers.Meta) {
 					m.LastSeq = 200
-					m.Bootstraped = false
+					m.Bootstrapped = false
 				})
 
 				metaByEmail := make(map[string]subscribers.Meta)
@@ -248,10 +248,10 @@ var _ = Describe("Registry", func() {
 				})
 
 				Expect(metaByEmail[email1].LastSeq).To(Equal(uint64(100)))
-				Expect(metaByEmail[email1].Bootstraped).To(BeTrue())
+				Expect(metaByEmail[email1].Bootstrapped).To(BeTrue())
 
 				Expect(metaByEmail[email2].LastSeq).To(Equal(uint64(200)))
-				Expect(metaByEmail[email2].Bootstraped).To(BeFalse())
+				Expect(metaByEmail[email2].Bootstrapped).To(BeFalse())
 			})
 		})
 	})
@@ -265,18 +265,18 @@ var _ = Describe("Registry", func() {
 				// Initial state
 				meta := registry.Meta(email)
 				Expect(meta.LastSeq).To(Equal(uint64(0)))
-				Expect(meta.Bootstraped).To(BeFalse())
+				Expect(meta.Bootstrapped).To(BeFalse())
 
 				// Update metadata
 				registry.UpdateMeta(email, func(m *subscribers.Meta) {
 					m.LastSeq = 42
-					m.Bootstraped = true
+					m.Bootstrapped = true
 				})
 
 				// Verify update
 				meta = registry.Meta(email)
 				Expect(meta.LastSeq).To(Equal(uint64(42)))
-				Expect(meta.Bootstraped).To(BeTrue())
+				Expect(meta.Bootstrapped).To(BeTrue())
 			})
 
 			It("should allow multiple sequential updates", func() {
@@ -294,12 +294,12 @@ var _ = Describe("Registry", func() {
 				// Second update
 				registry.UpdateMeta(email, func(m *subscribers.Meta) {
 					m.LastSeq = m.LastSeq + 5
-					m.Bootstraped = true
+					m.Bootstrapped = true
 				})
 
 				meta = registry.Meta(email)
 				Expect(meta.LastSeq).To(Equal(uint64(15)))
-				Expect(meta.Bootstraped).To(BeTrue())
+				Expect(meta.Bootstrapped).To(BeTrue())
 			})
 		})
 
@@ -308,14 +308,14 @@ var _ = Describe("Registry", func() {
 				Expect(func() {
 					registry.UpdateMeta("nonexistent@example.com", func(m *subscribers.Meta) {
 						m.LastSeq = 42
-						m.Bootstraped = true
+						m.Bootstrapped = true
 					})
 				}).ToNot(Panic())
 
 				// Verify no changes were made
 				meta := registry.Meta("nonexistent@example.com")
 				Expect(meta.LastSeq).To(Equal(uint64(0)))
-				Expect(meta.Bootstraped).To(BeFalse())
+				Expect(meta.Bootstrapped).To(BeFalse())
 			})
 		})
 	})
@@ -374,7 +374,7 @@ var _ = Describe("Registry", func() {
 						// Update metadata
 						registry.UpdateMeta(email, func(m *subscribers.Meta) {
 							m.LastSeq = uint64(j)
-							m.Bootstraped = j%2 == 0
+							m.Bootstrapped = j%2 == 0
 						})
 
 						// Read metadata
@@ -442,7 +442,7 @@ var _ = Describe("Registry", func() {
 				// Update metadata
 				registry.UpdateMeta(email, func(m *subscribers.Meta) {
 					m.LastSeq = 42
-					m.Bootstraped = true
+					m.Bootstrapped = true
 				})
 
 				originalMeta := registry.Meta(email)
@@ -463,7 +463,7 @@ var _ = Describe("Registry", func() {
 				newMeta := registry.Meta(email)
 				Expect(newMeta.FirstSeen).To(Equal(originalMeta.FirstSeen)) // Preserved
 				Expect(newMeta.LastSeq).To(Equal(uint64(42)))               // Preserved
-				Expect(newMeta.Bootstraped).To(BeFalse())                   // Reset
+				Expect(newMeta.Bootstrapped).To(BeFalse())                  // Reset
 			})
 		})
 	})
