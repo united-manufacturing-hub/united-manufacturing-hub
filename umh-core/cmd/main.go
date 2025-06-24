@@ -17,12 +17,14 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/pprof"
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/graphql"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -101,6 +103,20 @@ func main() {
 		configData.Agent.AllowInsecureTLS,
 		topicbrowser.NewCache(),
 	)
+
+	// Start the GraphQL server
+	graphqlResolver := &graphql.Resolver{
+		SnapshotManager:   systemSnapshotManager,
+		TopicBrowserCache: communicationState.TopicBrowserCache,
+	}
+	graphqlServer := setupGraphQLEndpoint(graphqlResolver, log)
+	defer func() {
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer shutdownCancel()
+		if err := graphqlServer.Shutdown(shutdownCtx); err != nil {
+			sentry.ReportIssuef(sentry.IssueTypeError, log, "Failed to shutdown GraphQL server: %w", err)
+		}
+	}()
 
 	if configData.Agent.APIURL != "" && configData.Agent.AuthToken != "" {
 		enableBackendConnection(&configData, communicationState, controlLoop, communicationState.Logger)
@@ -243,4 +259,34 @@ func enableBackendConnection(config *config.FullConfig, communicationState *comm
 	}
 
 	logger.Info("Backend connection enabled")
+}
+
+// setupGraphQLEndpoint sets up GraphQL endpoint similar to metrics
+func setupGraphQLEndpoint(resolver *graphql.Resolver, logger *zap.SugaredLogger) *http.Server {
+	mux := http.NewServeMux()
+
+	// Simple GraphQL handler (without full gqlgen handler package)
+	mux.HandleFunc("/graphql", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			w.Write([]byte(`{"error": "only POST method allowed"}`))
+			return
+		}
+		// For now, return a simple response - will be replaced with proper GraphQL execution
+		w.Write([]byte(`{"data": {"message": "GraphQL endpoint working"}}`))
+	})
+
+	server := &http.Server{
+		Addr:    ":8090",
+		Handler: mux,
+	}
+
+	go func() {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			sentry.ReportIssue(err, sentry.IssueTypeFatal, logger)
+		}
+	}()
+
+	return server
 }
