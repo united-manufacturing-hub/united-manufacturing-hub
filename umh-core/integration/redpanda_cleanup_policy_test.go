@@ -69,51 +69,123 @@ var _ = Describe("Redpanda Cleanup Policy Integration Test", Ordered, Label("int
 			return err == nil && cleanupPolicy == "compact"
 		}, 30*time.Second, 2*time.Second).Should(BeTrue(), "Cleanup policy should be set to compact")
 
-		By("Creating a test topic with compact cleanup policy")
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		By("Creating a test topic with compact cleanup policy and short retention for testing")
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 
-		// Create topic explicitly to ensure it uses the current default settings
+		// Create topic with aggressive compaction settings for testing
 		_, err := runDockerCommandWithCtx(ctx, "exec", getContainerName(),
-			"/opt/redpanda/bin/rpk", "topic", "create", compactTopicName, "-p", "1", "-r", "1")
-		Expect(err).ToNot(HaveOccurred(), "Should be able to create test topic")
+			"/opt/redpanda/bin/rpk", "topic", "create", compactTopicName,
+			"-p", "1", "-r", "1",
+			"-c", "cleanup.policy=compact",
+			"-c", "retention.ms=30000", // 30 seconds retention
+			"-c", "segment.ms=10000", // 10 second segments
+			"-c", "min.compaction.lag.ms=5000", // 5 second compaction lag
+			"-c", "max.compaction.lag.ms=15000") // 15 second max lag
+		Expect(err).ToNot(HaveOccurred(), "Should be able to create test topic with compaction settings")
 
-		By("Producing multiple messages with the same keys to test compaction")
-		// Produce multiple messages for each key
-		for key := 0; key < testKeys; key++ {
-			for msg := 0; msg < messagesPerKey; msg++ {
-				messageContent := fmt.Sprintf(`{"key":"%d","message_id":%d,"timestamp":"%s","content":"message_%d_for_key_%d"}`,
-					key, msg, time.Now().Format(time.RFC3339), msg, key)
+		// Wait for topic to be fully created
+		time.Sleep(3 * time.Second)
 
-				// Use echo to pipe message content to rpk
-				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		By("Verifying the topic was created successfully")
+		topicListOutput, err := runDockerCommandWithCtx(ctx, "exec", getContainerName(),
+			"/opt/redpanda/bin/rpk", "topic", "list")
+		Expect(err).ToNot(HaveOccurred(), "Should be able to list topics")
+		Expect(topicListOutput).To(ContainSubstring(compactTopicName), "Topic should exist in topic list")
+		GinkgoWriter.Printf("Topics available: %s\n", topicListOutput)
+
+		By("Producing multiple messages for same keys to trigger compaction")
+		keys := []string{"user_1", "user_2", "user_3"}
+
+		// Phase 1: Produce initial messages
+		GinkgoWriter.Printf("Phase 1: Producing initial messages...\n")
+		for _, key := range keys {
+			for i := 0; i < 4; i++ {
+				messageContent := fmt.Sprintf(`{"key":"%s","version":%d,"timestamp":"%s","data":"old_data_%d"}`,
+					key, i, time.Now().Format(time.RFC3339), i)
+
 				_, err := runDockerCommandWithCtx(ctx, "exec", getContainerName(),
-					"sh", "-c", fmt.Sprintf(`echo '%s' | /opt/redpanda/bin/rpk topic produce %s --key key_%d`,
+					"sh", "-c", fmt.Sprintf(`echo '%s' | /opt/redpanda/bin/rpk topic produce %s --key %s`,
 						messageContent, compactTopicName, key))
-				cancel()
-
-				// Don't fail immediately on individual message failures, but log them
-				if err != nil {
-					GinkgoWriter.Printf("Warning: Failed to produce message %d for key %d: %v\n", msg, key, err)
-				}
-
-				// Small delay between messages to ensure different timestamps
-				time.Sleep(100 * time.Millisecond)
+				Expect(err).ToNot(HaveOccurred(), "Should produce initial message for key %s", key)
+				time.Sleep(200 * time.Millisecond)
 			}
 		}
 
-		// Wait a bit for compaction to potentially occur
-		time.Sleep(5 * time.Second)
+		// Read initial message count
+		initialMessages, _ := getTopicMessages(compactTopicName, 50)
+		GinkgoWriter.Printf("Initial messages produced: %d\n", len(initialMessages))
 
-		By("Verifying messages are available in the topic")
-		messages, err := getTopicMessages(compactTopicName, 50)
-		Expect(err).ToNot(HaveOccurred(), "Should be able to read messages from topic")
-		Expect(len(messages)).To(BeNumerically(">", 0), "Should have messages in the topic")
+		By("Waiting for segment to roll over")
+		time.Sleep(12 * time.Second) // Wait for segment.ms
 
-		GinkgoWriter.Printf("Found %d messages in compact topic\n", len(messages))
-		for i, msg := range messages {
-			GinkgoWriter.Printf("Message %d: %s\n", i, msg)
+		By("Producing final messages that should survive compaction")
+		GinkgoWriter.Printf("Phase 2: Producing final messages...\n")
+		for _, key := range keys {
+			finalMessage := fmt.Sprintf(`{"key":"%s","version":"final","timestamp":"%s","data":"final_data_for_%s"}`,
+				key, time.Now().Format(time.RFC3339), key)
+
+			_, err := runDockerCommandWithCtx(ctx, "exec", getContainerName(),
+				"sh", "-c", fmt.Sprintf(`echo '%s' | /opt/redpanda/bin/rpk topic produce %s --key %s`,
+					finalMessage, compactTopicName, key))
+			Expect(err).ToNot(HaveOccurred(), "Should produce final message for key %s", key)
+			time.Sleep(200 * time.Millisecond)
 		}
+
+		By("Waiting for compaction to occur")
+		GinkgoWriter.Printf("Waiting 45 seconds for compaction (retention.ms + compaction lag)...\n")
+		time.Sleep(45 * time.Second)
+
+		By("Verifying compaction behavior - only latest message per key should remain")
+		Eventually(func() bool {
+			messages, err := getTopicMessages(compactTopicName, 50)
+			if err != nil {
+				GinkgoWriter.Printf("Error reading messages: %v\n", err)
+				return false
+			}
+
+			GinkgoWriter.Printf("Messages after compaction: %d\n", len(messages))
+			for i, msg := range messages {
+				GinkgoWriter.Printf("Remaining message %d: %s\n", i+1, msg)
+			}
+
+			// After compaction, we should have exactly 3 messages (one per key)
+			// and they should all be the "final" versions
+			if len(messages) != 3 {
+				GinkgoWriter.Printf("Expected exactly 3 messages after compaction, got %d\n", len(messages))
+				return false
+			}
+
+			// Verify all remaining messages are the final versions
+			finalCount := 0
+			keysFound := make(map[string]bool)
+			for _, msg := range messages {
+				if strings.Contains(msg, "final_data") {
+					finalCount++
+					// Extract key from message to ensure we have one per key
+					if strings.Contains(msg, "user_1") {
+						keysFound["user_1"] = true
+					} else if strings.Contains(msg, "user_2") {
+						keysFound["user_2"] = true
+					} else if strings.Contains(msg, "user_3") {
+						keysFound["user_3"] = true
+					}
+				}
+			}
+
+			allKeysPresent := len(keysFound) == 3
+			allFinalMessages := finalCount == 3
+
+			GinkgoWriter.Printf("Final messages: %d, All keys present: %v\n", finalCount, allKeysPresent)
+			return allFinalMessages && allKeysPresent
+		}, 2*time.Minute, 15*time.Second).Should(BeTrue(), "Compaction should keep exactly one (the latest) message per key")
+
+		By("Verifying topic configuration shows compaction settings")
+		describeOutput, err := runDockerCommandWithCtx(ctx, "exec", getContainerName(),
+			"/opt/redpanda/bin/rpk", "topic", "describe", compactTopicName)
+		Expect(err).ToNot(HaveOccurred(), "Should be able to describe topic")
+		GinkgoWriter.Printf("Topic configuration: %s\n", describeOutput)
+		Expect(describeOutput).To(ContainSubstring("cleanup.policy"), "Topic should show cleanup policy configuration")
 	})
 
 	It("should update cleanup policy to delete and verify the configuration", func() {
@@ -225,24 +297,53 @@ var _ = Describe("Redpanda Cleanup Policy Integration Test", Ordered, Label("int
 
 // getTopicMessages retrieves messages from a topic using rpk
 func getTopicMessages(topic string, maxMessages int) ([]string, error) {
+	// Use a shorter timeout for the consume command to prevent hanging
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	out, err := runDockerCommandWithCtx(ctx, "exec", getContainerName(),
+	// Try to consume messages with a timeout and exit when no more messages are available
+	result, err := runDockerCommandWithCtx(ctx, "exec", getContainerName(),
 		"/opt/redpanda/bin/rpk", "topic", "consume", topic,
-		"--offset", "start", "-n", fmt.Sprintf("%d", maxMessages),
-		"--format", "%v")
+		"--offset", "start",
+		"-n", fmt.Sprintf("%d", maxMessages),
+		"--format", "%v",
+		"--timeout", "5s") // Add explicit timeout to rpk consume
 
 	if err != nil {
-		return nil, err
+		// Log the error but don't fail immediately - there might be no messages
+		GinkgoWriter.Printf("Note: rpk consume returned error (this may be normal if no messages): %v\n", err)
+
+		// Check if this is a timeout or "no messages" scenario
+		if ctx.Err() == context.DeadlineExceeded {
+			GinkgoWriter.Printf("Consume command timed out - assuming no messages available\n")
+			return []string{}, nil
+		}
+
+		// For other errors, still return what we got
+		if result != "" {
+			lines := strings.Split(strings.TrimSpace(result), "\n")
+			// Filter out empty lines
+			var messages []string
+			for _, line := range lines {
+				if strings.TrimSpace(line) != "" {
+					messages = append(messages, strings.TrimSpace(line))
+				}
+			}
+			return messages, nil
+		}
+
+		return []string{}, nil // Return empty slice instead of error
 	}
 
-	lines := strings.Split(strings.TrimSpace(out), "\n")
-	messages := make([]string, 0, len(lines))
+	if result == "" {
+		return []string{}, nil
+	}
 
+	lines := strings.Split(strings.TrimSpace(result), "\n")
+	var messages []string
 	for _, line := range lines {
-		if line != "" {
-			messages = append(messages, line)
+		if strings.TrimSpace(line) != "" {
+			messages = append(messages, strings.TrimSpace(line))
 		}
 	}
 
