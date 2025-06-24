@@ -118,7 +118,7 @@ func (s *Handler) notify() {
 	notified := 0
 	s.subscriberRegistry.ForEach(func(email string, meta *subscribers.Meta) {
 		// Generate personalized status message based on bootstrap state
-		statusMessage := s.StatusCollector.GenerateStatusMessageForSubscriber(meta.Bootstraped)
+		statusMessage := s.StatusCollector.GenerateStatusMessage(meta.Bootstraped)
 
 		if ctx.Err() != nil {
 			// It is expected that the first 1-2 times this might fail, due to the systems starting up

@@ -21,13 +21,13 @@ type StatusMessage struct {
 }
 
 type Core struct {
-	Health           *Health          `json:"health"`
-	Agent            Agent            `json:"agent"`
-	Container        Container        `json:"container"`
-	Dfcs             []Dfc            `json:"dfcs"`
-	Redpanda         Redpanda         `json:"redpanda"`
-	UnifiedNamespace UnifiedNamespace `json:"unifiedNamespace"`
-	Release          Release          `json:"release"`
+	Health       *Health      `json:"health"`
+	Agent        Agent        `json:"agent"`
+	Container    Container    `json:"container"`
+	Dfcs         []Dfc        `json:"dfcs"`
+	Redpanda     Redpanda     `json:"redpanda"`
+	TopicBrowser TopicBrowser `json:"topicBrowser"`
+	Release      Release      `json:"release"`
 }
 
 type Agent struct {
@@ -169,9 +169,10 @@ type Redpanda struct {
 	AvgOutgoingThroughputPerMinuteInBytesSec float64 `json:"avgOutgoingThroughputPerMinuteInBytesSec"` // Outgoing bytes per second, averaged over a minute
 }
 
-type UnifiedNamespace struct {
-	EventsTable map[string]EventsTable `json:"eventsTable,omitempty"`
-	UnsTable    map[string]UnsTable    `json:"unsTable,omitempty"`
+type TopicBrowser struct {
+	Health     *Health        `json:"health"`
+	TopicCount int            `json:"topicCount"`
+	UnsBundles map[int][]byte `json:"unsBundles"`
 }
 
 type EventsTable struct {
