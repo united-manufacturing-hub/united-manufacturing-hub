@@ -16,10 +16,16 @@ package s6
 
 import (
 	"bufio"
+	"context"
+	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/cactus/tai64"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 // parseLogLineOptimized is an optimized version of parseLogLine that:
@@ -79,6 +85,40 @@ func parseLogLineOriginal(line string) LogEntry {
 		Content:   parts[1],
 	}
 }
+
+// findLatestRotatedFileByParsing is the old implementation that parses TAI64N timestamps (for comparison)
+func findLatestRotatedFileByParsing(ctx context.Context, logDir string, fsService filesystem.Service) string {
+	pattern := filepath.Join(logDir, "@*.s")
+	entries, err := fsService.Glob(ctx, pattern)
+	if err != nil {
+		return ""
+	}
+
+	var latestFile string
+	var latestTime time.Time
+
+	for _, entry := range entries {
+		// Extract just the filename part for parsing
+		filename := filepath.Base(entry)
+		// Remove the .s extension to get just the TAI64N timestamp
+		if strings.HasSuffix(filename, ".s") {
+			timestamp := strings.TrimSuffix(filename, ".s")
+			parsedTime, err := tai64.Parse(timestamp)
+			if err != nil {
+				continue
+			}
+
+			if parsedTime.After(latestTime) {
+				latestTime = parsedTime
+				latestFile = entry
+			}
+		}
+	}
+
+	return latestFile
+}
+
+// Now we use the main implementation from s6.go via the service instance
 
 func BenchmarkParseLogLine(b *testing.B) {
 	// Test cases with different log line formats
@@ -308,6 +348,144 @@ func BenchmarkParseRealLogData(b *testing.B) {
 			}
 		})
 	}
+}
+
+// BenchmarkFindLatestRotatedFile benchmarks different approaches to finding the latest rotated file
+func BenchmarkFindLatestRotatedFile(b *testing.B) {
+	// Test with different numbers of rotated files
+	fileCounts := []int{1, 5, 10, 20, 50, 100}
+
+	for _, fileCount := range fileCounts {
+		b.Run(fmt.Sprintf("Files_%d", fileCount), func(b *testing.B) {
+			// Create temporary directory and files
+			tempDir := b.TempDir()
+			logDir := filepath.Join(tempDir, "logs")
+			err := os.MkdirAll(logDir, 0755)
+			if err != nil {
+				b.Fatalf("Failed to create log directory: %v", err)
+			}
+
+			fsService := filesystem.NewDefaultService()
+			ctx := context.Background()
+
+			// Create rotated files with incrementing timestamps
+			baseTime := time.Now().Add(-1 * time.Hour)
+			var expectedLatest string
+
+			for i := 0; i < fileCount; i++ {
+				timestamp := baseTime.Add(time.Duration(i) * time.Minute)
+				filename := tai64.FormatNano(timestamp) + ".s"
+				filepath := filepath.Join(logDir, filename)
+
+				err := os.WriteFile(filepath, []byte(fmt.Sprintf("log content %d", i)), 0644)
+				if err != nil {
+					b.Fatalf("Failed to create test file: %v", err)
+				}
+
+				if i == fileCount-1 {
+					expectedLatest = filepath
+				}
+			}
+
+			// Benchmark timestamp parsing approach
+			b.Run("TimestampParsing", func(b *testing.B) {
+				b.ReportAllocs()
+				b.ResetTimer()
+
+				for i := 0; i < b.N; i++ {
+					result := findLatestRotatedFileByParsing(ctx, logDir, fsService)
+					if result != expectedLatest {
+						b.Fatalf("Expected %s, got %s", expectedLatest, result)
+					}
+				}
+			})
+
+			// Benchmark lexicographic sorting approach
+			b.Run("LexicographicSorting", func(b *testing.B) {
+				service := NewDefaultService().(*DefaultService)
+				b.ReportAllocs()
+				b.ResetTimer()
+
+				for i := 0; i < b.N; i++ {
+					result := service.findLatestRotatedFile(ctx, logDir, fsService)
+					if result != expectedLatest {
+						b.Fatalf("Expected %s, got %s", expectedLatest, result)
+					}
+				}
+			})
+		})
+	}
+}
+
+// BenchmarkFindLatestRotatedFileRealistic benchmarks with realistic file patterns
+func BenchmarkFindLatestRotatedFileRealistic(b *testing.B) {
+	// Create temporary directory
+	tempDir := b.TempDir()
+	logDir := filepath.Join(tempDir, "logs")
+	err := os.MkdirAll(logDir, 0755)
+	if err != nil {
+		b.Fatalf("Failed to create log directory: %v", err)
+	}
+
+	fsService := filesystem.NewDefaultService()
+	ctx := context.Background()
+
+	// Create a realistic scenario with rotated files (@timestamp.s)
+	// In practice, only current, lock, state and rotated TAI64N files exist
+
+	baseTime := time.Now().Add(-2 * time.Hour)
+	var expectedLatest string
+
+	// Create 15 rotated files over 2 hours
+	for i := 0; i < 15; i++ {
+		timestamp := baseTime.Add(time.Duration(i*8) * time.Minute) // Every 8 minutes
+		filename := tai64.FormatNano(timestamp) + ".s"
+		filepath := filepath.Join(logDir, filename)
+
+		err := os.WriteFile(filepath, []byte(fmt.Sprintf("rotated log %d", i)), 0644)
+		if err != nil {
+			b.Fatalf("Failed to create rotated file: %v", err)
+		}
+
+		if i == 14 {
+			expectedLatest = filepath
+		}
+	}
+
+	// Create the standard S6 files that exist but should be ignored by glob
+	standardFiles := []string{"current", "lock", "state"}
+	for _, filename := range standardFiles {
+		filepath := filepath.Join(logDir, filename)
+		err := os.WriteFile(filepath, []byte("standard s6 file content"), 0644)
+		if err != nil {
+			b.Fatalf("Failed to create standard file: %v", err)
+		}
+	}
+
+	b.Run("TimestampParsing_Realistic", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			result := findLatestRotatedFileByParsing(ctx, logDir, fsService)
+			if result != expectedLatest {
+				b.Fatalf("Expected %s, got %s", expectedLatest, result)
+			}
+		}
+	})
+
+	b.Run("LexicographicSorting_Realistic", func(b *testing.B) {
+		service := NewDefaultService().(*DefaultService)
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			result := service.findLatestRotatedFile(ctx, logDir, fsService)
+			if result != expectedLatest {
+				b.Fatalf("Expected %s, got %s", expectedLatest, result)
+			}
+		}
+	})
 }
 
 // readLogLines reads lines from the test data file

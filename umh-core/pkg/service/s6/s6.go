@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -1784,16 +1785,16 @@ func (s *DefaultService) ExecuteS6Command(ctx context.Context, servicePath strin
 	return string(output), nil
 }
 
-// findLatestRotatedFile finds the most recently rotated file based on TAI64N timestamps in filenames.
+// findLatestRotatedFile finds the most recently rotated file based on lexicographic sorting.
 //
 // S6 creates rotated files with TAI64N timestamps in their names (e.g., @400000006501234567890abc.s).
-// This function scans the log directory for files matching the "@*.s" pattern, parses their
-// TAI64N timestamps, and returns the path to the file with the most recent timestamp.
+// Since TAI64N timestamps are designed to be lexicographically sortable, we can simply sort
+// the filenames and take the last one, which is more efficient than parsing each timestamp.
 //
-// This approach is more reliable than inode-based matching since:
-//   - Inodes can be reused on some filesystems
-//   - TAI64N timestamps are monotonic and unique
-//   - We leverage S6's existing naming convention
+// This approach is more reliable and faster than timestamp parsing since:
+//   - TAI64N is explicitly designed for lexicographic sorting
+//   - No parsing overhead or error handling required
+//   - Simpler and more predictable performance (O(n log n) vs O(n) with high constant factor)
 //
 // Returns an empty string if no valid rotated files are found.
 func (s *DefaultService) findLatestRotatedFile(ctx context.Context, logDir string, fsService filesystem.Service) string {
@@ -1804,25 +1805,16 @@ func (s *DefaultService) findLatestRotatedFile(ctx context.Context, logDir strin
 		return ""
 	}
 
-	var latestFile string
-	var latestTime time.Time
-
-	for _, entry := range entries {
-		// Parse TAI64N timestamp directly from filename
-		timestamp, err := tai64.Parse(entry)
-		if err != nil {
-			s.logger.Debugf("Failed to parse timestamp from rotated file %s: %v", entry, err)
-			continue
-		}
-
-		if timestamp.After(latestTime) {
-			latestTime = timestamp
-			latestFile = entry
-		}
+	if len(entries) == 0 {
+		return ""
 	}
 
-	if latestFile != "" {
-		s.logger.Debugf("Found latest rotated file: %s (timestamp: %v)", latestFile, latestTime)
-	}
+	// Sort lexicographically - TAI64N timestamps are designed to be lexicographically sortable
+	// Internally this uses pattern-defeating quicksort which is O(n log n)
+	slices.Sort(entries)
+
+	// Return the last (newest) file
+	latestFile := entries[len(entries)-1]
+	s.logger.Debugf("Found latest rotated file: %s", latestFile)
 	return latestFile
 }

@@ -20,7 +20,9 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
+	"github.com/cactus/tai64"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
@@ -484,5 +486,135 @@ var _ = Describe("S6 Service", func() {
 			err := svc.Remove(ctx, svcPath, mockFS)
 			Expect(err).To(MatchError(ContainSubstring("IO error")))
 		})
+	})
+})
+
+// Now we use the main implementation from s6.go for consistency
+
+// Additional test for lexicographic sorting correctness
+var _ = Describe("Lexicographic Sorting for Rotated Files", func() {
+	var (
+		ctx       context.Context
+		fsService filesystem.Service
+		tempDir   string
+		logDir    string
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		fsService = filesystem.NewDefaultService()
+		tempDir = GinkgoT().TempDir()
+		logDir = filepath.Join(tempDir, "logs")
+
+		err := fsService.EnsureDirectory(ctx, logDir)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("should correctly identify the latest file using lexicographic sorting", func() {
+		// Create files with timestamps in non-chronological order to test sorting
+		timestamps := []time.Time{
+			time.Date(2025, 1, 20, 10, 30, 0, 0, time.UTC), // Middle
+			time.Date(2025, 1, 20, 10, 15, 0, 0, time.UTC), // Oldest
+			time.Date(2025, 1, 20, 10, 45, 0, 0, time.UTC), // Newest (should be returned)
+			time.Date(2025, 1, 20, 10, 20, 0, 0, time.UTC), // Second oldest
+		}
+
+		var createdFiles []string
+		var expectedLatest string
+
+		// Create files in random order
+		for i, ts := range timestamps {
+			filename := tai64.FormatNano(ts) + ".s"
+			filepath := filepath.Join(logDir, filename)
+
+			err := fsService.WriteFile(ctx, filepath, []byte(fmt.Sprintf("log content %d", i)), 0644)
+			Expect(err).ToNot(HaveOccurred())
+
+			createdFiles = append(createdFiles, filepath)
+
+			// The third timestamp (index 2) is the newest
+			if i == 2 {
+				expectedLatest = filepath
+			}
+		}
+
+		// Use lexicographic sorting to find latest file
+		service := NewDefaultService().(*DefaultService)
+		result := service.findLatestRotatedFile(ctx, logDir, fsService)
+
+		// Should return the chronologically latest file
+		Expect(result).To(Equal(expectedLatest))
+	})
+
+	It("should handle empty directory gracefully", func() {
+		service := NewDefaultService().(*DefaultService)
+		result := service.findLatestRotatedFile(ctx, logDir, fsService)
+		Expect(result).To(BeEmpty())
+	})
+
+	It("should handle single file correctly", func() {
+		timestamp := time.Date(2025, 1, 20, 10, 15, 0, 0, time.UTC)
+		filename := tai64.FormatNano(timestamp) + ".s"
+		filepath := filepath.Join(logDir, filename)
+
+		err := fsService.WriteFile(ctx, filepath, []byte("single log"), 0644)
+		Expect(err).ToNot(HaveOccurred())
+
+		service := NewDefaultService().(*DefaultService)
+		result := service.findLatestRotatedFile(ctx, logDir, fsService)
+		Expect(result).To(Equal(filepath))
+	})
+
+	It("should ignore non-rotated files", func() {
+		// Create rotated file
+		timestamp := time.Date(2025, 1, 20, 10, 15, 0, 0, time.UTC)
+		rotatedFilename := tai64.FormatNano(timestamp) + ".s"
+		rotatedFilepath := filepath.Join(logDir, rotatedFilename)
+
+		err := fsService.WriteFile(ctx, rotatedFilepath, []byte("rotated log"), 0644)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Create non-rotated files that should be ignored
+		nonRotatedFiles := []string{"current", "lock", "state", "backup.log"}
+		for _, filename := range nonRotatedFiles {
+			filepath := filepath.Join(logDir, filename)
+			err := fsService.WriteFile(ctx, filepath, []byte("non-rotated content"), 0644)
+			Expect(err).ToNot(HaveOccurred())
+		}
+
+		service := NewDefaultService().(*DefaultService)
+		result := service.findLatestRotatedFile(ctx, logDir, fsService)
+		Expect(result).To(Equal(rotatedFilepath))
+	})
+
+	It("should correctly order files with very similar timestamps", func() {
+		// Create files with timestamps only milliseconds apart
+		baseTime := time.Date(2025, 1, 20, 10, 15, 30, 0, time.UTC)
+
+		timestamps := []time.Time{
+			baseTime.Add(100 * time.Millisecond), // Should be second
+			baseTime.Add(500 * time.Millisecond), // Should be latest
+			baseTime,                             // Should be first
+			baseTime.Add(200 * time.Millisecond), // Should be third
+		}
+
+		var expectedLatest string
+
+		for i, ts := range timestamps {
+			filename := tai64.FormatNano(ts) + ".s"
+			filepath := filepath.Join(logDir, filename)
+
+			err := fsService.WriteFile(ctx, filepath, []byte(fmt.Sprintf("precise log %d", i)), 0644)
+			Expect(err).ToNot(HaveOccurred())
+
+			// The file with 500ms offset (index 1) should be latest
+			if i == 1 {
+				expectedLatest = filepath
+			}
+		}
+
+		service := NewDefaultService().(*DefaultService)
+		result := service.findLatestRotatedFile(ctx, logDir, fsService)
+		Expect(result).To(Equal(expectedLatest))
 	})
 })

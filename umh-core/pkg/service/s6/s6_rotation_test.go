@@ -74,7 +74,9 @@ var _ = Describe("S6 Log Rotation", func() {
 		// Create temporary directory structure that matches S6 expectations
 		tempDir = GinkgoT().TempDir()
 		serviceName = "test-service"
-		// GetLogs uses constants.S6LogBaseDir, so we need to create the structure it expects
+
+		// GetLogs uses constants.S6LogBaseDir to find logs, so we need to set up the correct structure
+		// For tests, we'll use the temp directory structure
 		logDir = filepath.Join(tempDir, "data", "logs", serviceName)
 
 		err := fsService.EnsureDirectory(ctx, logDir)
@@ -356,14 +358,23 @@ var _ = Describe("S6 Log Rotation", func() {
 		var servicePath string
 
 		BeforeEach(func() {
-			servicePath = filepath.Join(tempDir, "service")
+			// GetLogs expects the service to exist in the constants.S6BaseDir structure
+			serviceBaseDir := filepath.Join(tempDir, "run", "service")
+			servicePath = filepath.Join(serviceBaseDir, serviceName)
 			err := fsService.EnsureDirectory(ctx, servicePath)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Also need to set up the log directory where GetLogs will look
+			// Since we can't easily change constants.S6LogBaseDir, we'll create the expected structure
+			actualLogDir := filepath.Join(constants.S6LogBaseDir, serviceName)
+			err = fsService.EnsureDirectory(ctx, actualLogDir)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should handle first call with no rotation", func() {
-			// Create initial log file
-			currentFile := filepath.Join(logDir, "current")
+			// Create initial log file in the actual log directory that GetLogs will check
+			actualLogDir := filepath.Join(constants.S6LogBaseDir, serviceName)
+			currentFile := filepath.Join(actualLogDir, "current")
 			logContent := "2025-01-20 10:00:00.000000000  initial message\n"
 			err := fsService.WriteFile(ctx, currentFile, []byte(logContent), 0644)
 			Expect(err).ToNot(HaveOccurred())
@@ -375,8 +386,9 @@ var _ = Describe("S6 Log Rotation", func() {
 		})
 
 		It("should handle subsequent calls without rotation", func() {
-			// Create initial log file
-			currentFile := filepath.Join(logDir, "current")
+			// Create initial log file in the actual log directory that GetLogs will check
+			actualLogDir := filepath.Join(constants.S6LogBaseDir, serviceName)
+			currentFile := filepath.Join(actualLogDir, "current")
 			initialContent := "2025-01-20 10:00:00.000000000  initial message\n"
 			err := fsService.WriteFile(ctx, currentFile, []byte(initialContent), 0644)
 			Expect(err).ToNot(HaveOccurred())
@@ -404,8 +416,9 @@ var _ = Describe("S6 Log Rotation", func() {
 		})
 
 		It("should gracefully handle missing rotated file on rotation", func() {
-			// Create a current file
-			currentFile := filepath.Join(logDir, "current")
+			// Create a current file in the actual log directory that GetLogs will check
+			actualLogDir := filepath.Join(constants.S6LogBaseDir, serviceName)
+			currentFile := filepath.Join(actualLogDir, "current")
 			initialContent := "2025-01-20 10:00:00.000000000  initial message\n"
 			err := fsService.WriteFile(ctx, currentFile, []byte(initialContent), 0644)
 			Expect(err).ToNot(HaveOccurred())
@@ -431,8 +444,9 @@ var _ = Describe("S6 Log Rotation", func() {
 		})
 
 		It("should read and combine rotated file with current file", func() {
-			// Create initial current file
-			currentFile := filepath.Join(logDir, "current")
+			// Create initial current file in the actual log directory that GetLogs will check
+			actualLogDir := filepath.Join(constants.S6LogBaseDir, serviceName)
+			currentFile := filepath.Join(actualLogDir, "current")
 			initialContent := "2025-01-20 10:00:00.000000000  initial message\n"
 			err := fsService.WriteFile(ctx, currentFile, []byte(initialContent), 0644)
 			Expect(err).ToNot(HaveOccurred())
@@ -445,7 +459,7 @@ var _ = Describe("S6 Log Rotation", func() {
 			// Create a rotated file with some content that would have been read
 			rotatedTime := time.Now().Add(-1 * time.Minute)
 			rotatedFileName := tai64.FormatNano(rotatedTime) + ".s"
-			rotatedFile := filepath.Join(logDir, rotatedFileName)
+			rotatedFile := filepath.Join(actualLogDir, rotatedFileName)
 			rotatedContent := "2025-01-20 10:00:01.000000000  rotated message\n"
 			err = fsService.WriteFile(ctx, rotatedFile, []byte(rotatedContent), 0644)
 			Expect(err).ToNot(HaveOccurred())
