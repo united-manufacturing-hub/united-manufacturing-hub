@@ -24,6 +24,7 @@ const (
 	DataflowcomponentManagerName = logger.ComponentDataFlowComponentManager + DefaultManagerName
 	AgentManagerName             = logger.ComponentAgentManager + "_" + DefaultManagerName
 	RedpandaManagerName          = logger.ComponentRedpandaManager + DefaultManagerName
+	ProtocolConverterManagerName = logger.ComponentProtocolConverterManager + DefaultManagerName
 
 	// Instance name constants
 	CoreInstanceName     = "Core"

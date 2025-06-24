@@ -288,6 +288,11 @@ func FindInstance(
 
 // FindDfcInstanceByUUID finds a dataflow component instance with the given UUID.
 // It returns the instance if found, otherwise an error is returned.
+//
+// This function exists because DFC instances are mostly referenced by UUID,
+// but stored by name internally. The UUID is generated deterministically from the instance name
+// using GenerateUUIDFromName, which ensures stable identifiers for client consumption
+// while allowing internal name changes without breaking external references.
 func FindDfcInstanceByUUID(systemSnapshot SystemSnapshot, dfcUUID string) (*FSMInstanceSnapshot, error) {
 	dfcManager, ok := FindManager(systemSnapshot, constants.DataflowcomponentManagerName)
 	if !ok {
@@ -308,4 +313,33 @@ func FindDfcInstanceByUUID(systemSnapshot SystemSnapshot, dfcUUID string) (*FSMI
 	}
 
 	return nil, fmt.Errorf("the requested DFC with UUID %s was not found", dfcUUID)
+}
+
+// FindProtocolConverterInstanceByUUID finds a protocol converter instance with the given UUID.
+// It returns the instance if found, otherwise an error is returned.
+//
+// This function exists because protocol converter instances are mostly referenced by UUID,
+// but stored by name internally. The UUID is generated deterministically from the instance name
+// using GenerateUUIDFromName, which ensures stable identifiers for client consumption
+// while allowing internal name changes without breaking external references.
+func FindProtocolConverterInstanceByUUID(systemSnapshot SystemSnapshot, protocolConverterUUID string) (*FSMInstanceSnapshot, error) {
+	protocolConverterManager, ok := FindManager(systemSnapshot, constants.ProtocolConverterManagerName)
+	if !ok {
+		return nil, fmt.Errorf("protocol converter manager not found")
+	}
+
+	protocolConverterInstances := protocolConverterManager.GetInstances()
+
+	for _, instance := range protocolConverterInstances {
+		if instance == nil {
+			continue
+		}
+
+		currentUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID).String()
+		if currentUUID == protocolConverterUUID {
+			return instance, nil
+		}
+	}
+
+	return nil, fmt.Errorf("the requested protocol converter with UUID %s was not found", protocolConverterUUID)
 }

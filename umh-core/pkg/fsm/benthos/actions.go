@@ -77,7 +77,6 @@ func (b *BenthosInstance) RemoveInstance(
 	ctx context.Context,
 	fs filesystem.Service,
 ) error {
-
 	b.baseFSMInstance.GetLogger().
 		Infof("Removing Benthos service %s from S6 manager …",
 			b.baseFSMInstance.GetID())
@@ -277,7 +276,11 @@ func (b *BenthosInstance) IsBenthosS6Running() (bool, string) {
 	if b.ObservedState.ServiceInfo.S6FSMState == s6fsm.OperationalStateRunning {
 		return true, ""
 	}
-	return false, fmt.Sprintf("s6 is not running, current state: %s", b.ObservedState.ServiceInfo.S6FSMState)
+	currentState := b.ObservedState.ServiceInfo.S6FSMState
+	if currentState == "" {
+		currentState = "not existing"
+	}
+	return false, fmt.Sprintf("s6 is not running, current state: %s", currentState)
 }
 
 // IsBenthosS6Stopped reports true when the FSM state is
@@ -375,9 +378,11 @@ func (b *BenthosInstance) IsBenthosHealthchecksPassed(currentTick uint64) (bool,
 		if elapsed >= constants.BenthosHealthCheckStableDurationInTicks {
 			return true, ""
 		}
-		return false, fmt.Sprintf("healthchecks passing but not stable yet (%.2f/%d)",
-			float64(elapsed)/float64(constants.BenthosHealthCheckStableDurationInTicks),
-			constants.BenthosHealthCheckStableDurationInTicks)
+
+		percentage := (100 * elapsed) / constants.BenthosHealthCheckStableDurationInTicks
+
+		return false, fmt.Sprintf("healthchecks passing but not stable yet (%d %%)",
+			percentage)
 	}
 	return false, fmt.Sprintf("healthchecks not passing: live=%t, ready=%t",
 		b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive,

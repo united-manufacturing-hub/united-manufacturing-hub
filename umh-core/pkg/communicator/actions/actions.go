@@ -159,8 +159,34 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 			actionLogger:          log,
 			systemSnapshotManager: systemSnapshotManager,
 		}
+
+	case models.DeployProtocolConverter:
+		action = &DeployProtocolConverterAction{
+			userEmail:             sender,
+			actionUUID:            payload.ActionUUID,
+			instanceUUID:          instanceUUID,
+			outboundChannel:       outboundChannel,
+			configManager:         configManager,
+			actionLogger:          log,
+			systemSnapshotManager: systemSnapshotManager,
+		}
+	case models.EditProtocolConverter:
+		action = &EditProtocolConverterAction{
+			userEmail:             sender,
+			actionUUID:            payload.ActionUUID,
+			instanceUUID:          instanceUUID,
+			outboundChannel:       outboundChannel,
+			configManager:         configManager,
+			systemSnapshotManager: systemSnapshotManager,
+			actionLogger:          log,
+		}
+	case models.GetProtocolConverter:
+		action = NewGetProtocolConverterAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
+
 	case models.GetMetrics:
 		action = NewGetMetricsAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, systemSnapshotManager, log)
+	case models.DeleteProtocolConverter:
+		action = NewDeleteProtocolConverterAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
 
 	default:
 		log.Errorf("Unknown action type: %s", payload.ActionType)
