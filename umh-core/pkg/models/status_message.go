@@ -170,8 +170,9 @@ type Redpanda struct {
 }
 
 type TopicBrowser struct {
-	Health     *Health        `json:"health"`
-	TopicCount int            `json:"topicCount"`
+	Health     *Health `json:"health"`
+	TopicCount int     `json:"topicCount"`
+	// UnsBundles is a map because ....
 	UnsBundles map[int][]byte `json:"unsBundles"`
 }
 

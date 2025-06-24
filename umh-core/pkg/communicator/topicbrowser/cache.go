@@ -24,11 +24,11 @@ import (
 // Cache maintains the latest UnsBundle for each topic key
 // This provides fast bootstrap for new subscribers and avoids re-decompressing data
 type Cache struct {
-	mu                  sync.RWMutex
-	eventMap            map[string]*tbproto.EventTableEntry // key = UnsTreeId from events
-	unsMap              *tbproto.TopicMap
-	lastCacheTimestamp  int64
-	lastBundleTimestamp int64
+	mu                 sync.RWMutex
+	eventMap           map[string]*tbproto.EventTableEntry // key = UnsTreeId from events
+	unsMap             *tbproto.TopicMap
+	lastCacheTimestamp int64
+	lastSentTimestamp  int64
 }
 
 // NewCache creates a new topic browser cache
@@ -38,8 +38,8 @@ func NewCache() *Cache {
 		unsMap: &tbproto.TopicMap{
 			Entries: make(map[string]*tbproto.TopicInfo),
 		},
-		lastCacheTimestamp:  0,
-		lastBundleTimestamp: 0,
+		lastCacheTimestamp: 0,
+		lastSentTimestamp:  0,
 	}
 }
 
@@ -176,4 +176,25 @@ func (c *Cache) Size() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return len(c.eventMap)
+}
+
+// GetLastCachedTimestamp returns the timestamp of the last bundle processed into the cache
+func (c *Cache) GetLastCachedTimestamp() int64 {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.lastCacheTimestamp
+}
+
+// GetLastSentTimestamp returns the timestamp of the last bundle sent to subscribers
+func (c *Cache) GetLastSentTimestamp() int64 {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.lastSentTimestamp
+}
+
+// SetLastSentTimestamp updates the timestamp of the last bundle sent to subscribers
+func (c *Cache) SetLastSentTimestamp(timestamp int64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.lastSentTimestamp = timestamp
 }
