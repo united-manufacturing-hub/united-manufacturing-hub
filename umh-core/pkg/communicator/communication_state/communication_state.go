@@ -149,6 +149,16 @@ func (c *CommunicationState) InitialiseAndStartRouter() {
 	c.Router.Start()
 }
 
+func (c *CommunicationState) StartTopicBrowserCacheUpdater(systemSnapshotManager *fsm.SnapshotManager) {
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		for {
+			<-ticker.C
+			c.TopicBrowserCache.Update(&topicbrowser.ObservedState{})
+		}
+	}()
+}
+
 // InitialiseAndStartSubscriberHandler creates a new subscriber handler and starts it
 // ttl is the time until a subscriber is considered dead (if no new subscriber message is received)
 // cull is the cycle time to remove dead subscribers

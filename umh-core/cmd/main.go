@@ -108,6 +108,9 @@ func main() {
 		log.Warnf("No backend connection enabled, please set API_URL and AUTH_TOKEN")
 	}
 
+	// Start the topic browser cache updater independent of the backend connection (e.g., for HTTP endpoints)
+	communicationState.StartTopicBrowserCacheUpdater(systemSnapshotManager)
+
 	// Start the system snapshot logger
 	go SystemSnapshotLogger(ctx, controlLoop)
 
