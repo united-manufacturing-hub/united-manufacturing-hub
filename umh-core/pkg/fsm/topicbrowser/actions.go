@@ -26,13 +26,14 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	logger "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	tbsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
 // CreateInstance attempts to add the Topic Browser to the manager.
-func (i *Instance) CreateInstance(ctx context.Context, services serviceregistry.Provider) error {
+func (i *Instance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	i.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding Topic Browser service %s to S6 manager ...", i.baseFSMInstance.GetID())
 
 	// Generate the benthos config from the topic browser config
@@ -41,7 +42,7 @@ func (i *Instance) CreateInstance(ctx context.Context, services serviceregistry.
 		return fmt.Errorf("failed to generate benthos config for Topic Browser service %s: %w", i.baseFSMInstance.GetID(), err)
 	}
 
-	err = i.service.AddToManager(ctx, services, &benthosConfig, constants.TopicBrowserServiceName)
+	err = i.service.AddToManager(ctx, filesystemService, &benthosConfig, constants.TopicBrowserServiceName)
 	if err != nil {
 		if err == tbsvc.ErrServiceAlreadyExists {
 			i.baseFSMInstance.GetLogger().Debugf("Topic Browser service %s already exists in S6 manager", i.baseFSMInstance.GetID())
@@ -57,13 +58,13 @@ func (i *Instance) CreateInstance(ctx context.Context, services serviceregistry.
 // RemoveInstance is executed while the Topic Browser FSM sits in the *removing* state.
 func (i *Instance) RemoveInstance(
 	ctx context.Context,
-	services serviceregistry.Provider,
+	filesystemService filesystem.Service,
 ) error {
 	i.baseFSMInstance.GetLogger().
 		Infof("Removing Topic Browser service %s from S6 manager …",
 			i.baseFSMInstance.GetID())
 
-	err := i.service.RemoveFromManager(ctx, services, i.baseFSMInstance.GetID())
+	err := i.service.RemoveFromManager(ctx, filesystemService, i.baseFSMInstance.GetID())
 
 	switch {
 	// ---------------------------------------------------------------
@@ -105,11 +106,11 @@ func (i *Instance) RemoveInstance(
 }
 
 // StartInstance attempts to start the topic browser by setting the desired state to running for the given instance
-func (i *Instance) StartInstance(ctx context.Context, services serviceregistry.Provider) error {
+func (i *Instance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	i.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting Topic Browser service %s ...", i.baseFSMInstance.GetID())
 
 	// Set the desired state to running for the given instance
-	err := i.service.Start(ctx, services, i.baseFSMInstance.GetID())
+	err := i.service.Start(ctx, filesystemService, i.baseFSMInstance.GetID())
 	if err != nil {
 		// if the service is not there yet but we attempt to start it, we need to throw an error
 		return fmt.Errorf("failed to start Topic Browser service %s: %w", i.baseFSMInstance.GetID(), err)
@@ -120,11 +121,11 @@ func (i *Instance) StartInstance(ctx context.Context, services serviceregistry.P
 }
 
 // StopInstance attempts to stop the Topic Browser by setting the desired state to stopped for the given instance
-func (i *Instance) StopInstance(ctx context.Context, services serviceregistry.Provider) error {
+func (i *Instance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	i.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping Topic Browser service %s ...", i.baseFSMInstance.GetID())
 
 	// Set the desired state to stopped for the given instance
-	err := i.service.Stop(ctx, services, i.baseFSMInstance.GetID())
+	err := i.service.Stop(ctx, filesystemService, i.baseFSMInstance.GetID())
 	if err != nil {
 		// if the service is not there yet but we attempt to stop it, we need to throw an error
 		return fmt.Errorf("failed to stop Topic Browser service %s: %w", i.baseFSMInstance.GetID(), err)
@@ -136,7 +137,7 @@ func (i *Instance) StopInstance(ctx context.Context, services serviceregistry.Pr
 
 // CheckForCreation checks if the Topic Browser service should be created
 // NOTE: check if we really need this or just set true locally
-func (i *Instance) CheckForCreation(ctx context.Context, services serviceregistry.Provider) bool {
+func (i *Instance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
 	return true
 }
 
