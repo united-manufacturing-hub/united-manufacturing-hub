@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"syscall"
 	"time"
 
 	"github.com/cactus/tai64"
@@ -39,9 +38,9 @@ import (
 // Test Categories:
 // ───────────────
 //
-// 1. **findRotatedFileByInode**: Discovery of rotated file by inode matching
-//   - Normal: Finding rotated file that matches previous inode
-//   - Edge: No matching rotated files, I/O errors, invalid files
+// 1. **findLatestRotatedFile**: Discovery of the most recent rotated file by TAI64N timestamp
+//   - Normal: Finding the latest rotated file among multiple candidates
+//   - Edge: No rotated files, malformed timestamps, empty directory
 //
 // 2. **appendToRingBuffer**: Ring buffer management for log entries
 //   - Normal: Appending to empty buffer, buffer growth
@@ -49,12 +48,12 @@ import (
 //
 // 3. **GetLogs Integration**: Full rotation scenario testing
 //   - Normal: Reading combined rotated + current content
-//   - Edge: Rotation without matching rotated file, chronological ordering
+//   - Edge: Rotation without rotated file, chronological ordering
 //
 // Simplified Approach Benefits:
 // ────────────────────────────
-// - No complex state tracking across calls
-// - Immediate handling of rotated content
+// - No complex inode tracking across calls
+// - Immediate handling of rotated content using timestamps
 // - Guaranteed chronological order
 // - Robust error handling with graceful fallbacks
 var _ = Describe("S6 Log Rotation", func() {
@@ -83,73 +82,92 @@ var _ = Describe("S6 Log Rotation", func() {
 	})
 
 	// ══════════════════════════════════════════════════════════════════
-	// findRotatedFileByInode: Inode-based Rotated File Discovery
+	// findLatestRotatedFile: TAI64N Timestamp-based Rotated File Discovery
 	// ══════════════════════════════════════════════════════════════════
 	//
-	// Tests the discovery of rotated files by matching inode numbers.
-	// This ensures we read from the correct rotated file that corresponds
-	// to the previous current file, preventing file/offset mismatches.
+	// Tests the discovery of the most recent rotated file by parsing TAI64N
+	// timestamps in filenames. This approach is more reliable than inode
+	// matching and leverages S6's existing naming convention.
 	//
 	// Normal Cases:
-	// • Finding rotated file with matching inode
-	// • Multiple rotated files - selects the one with correct inode
+	// • Finding the latest rotated file among multiple candidates
+	// • Parsing TAI64N timestamps correctly from filenames
 	//
 	// Edge Cases:
 	// • No rotated files exist - returns empty string gracefully
-	// • No matching inode found - returns empty string
+	// • Malformed filenames - skips them and continues
 	// • Directory read errors - returns empty string
 	//
-	Describe("findRotatedFileByInode", func() {
+	Describe("findLatestRotatedFile", func() {
 		It("should return empty string when no rotated files exist", func() {
-			result := service.findRotatedFileByInode(ctx, logDir, 12345, fsService)
+			result := service.findLatestRotatedFile(ctx, logDir, fsService)
 			Expect(result).To(BeEmpty())
 		})
 
-		It("should return empty string when no matching inode found", func() {
-			// Create a rotated file
-			rotatedFile := filepath.Join(logDir, tai64.FormatNano(time.Now()))
-			err := fsService.WriteFile(ctx, rotatedFile, []byte("content"), 0644)
-			Expect(err).ToNot(HaveOccurred())
+		It("should return empty string when no valid TAI64N files exist", func() {
+			// Create files that don't match the @TAI64N pattern
+			invalidFiles := []string{"current", "lock", "invalid@file", "@invalid"}
+			for _, fileName := range invalidFiles {
+				filePath := filepath.Join(logDir, fileName)
+				err := fsService.WriteFile(ctx, filePath, []byte("content"), 0644)
+				Expect(err).ToNot(HaveOccurred())
+			}
 
-			// Get its inode
-			fi, err := fsService.Stat(ctx, rotatedFile)
-			Expect(err).ToNot(HaveOccurred())
-			actualInode := fi.Sys().(*syscall.Stat_t).Ino
-
-			// Search for a different inode
-			result := service.findRotatedFileByInode(ctx, logDir, actualInode+999, fsService)
+			result := service.findLatestRotatedFile(ctx, logDir, fsService)
 			Expect(result).To(BeEmpty())
 		})
 
-		It("should find rotated file by matching inode", func() {
-			// Create a rotated file
-			rotatedFile := filepath.Join(logDir, tai64.FormatNano(time.Now()))
-			err := fsService.WriteFile(ctx, rotatedFile, []byte("content"), 0644)
-			Expect(err).ToNot(HaveOccurred())
+		It("should find the latest rotated file among multiple candidates", func() {
+			// Create multiple rotated files with different timestamps
+			baseTime := time.Now().Add(-1 * time.Hour)
 
-			// Get its inode
-			fi, err := fsService.Stat(ctx, rotatedFile)
-			Expect(err).ToNot(HaveOccurred())
-			targetInode := fi.Sys().(*syscall.Stat_t).Ino
+			// Create files at different times (older to newer)
+			times := []time.Time{
+				baseTime.Add(-30 * time.Minute), // Oldest
+				baseTime.Add(-20 * time.Minute),
+				baseTime.Add(-10 * time.Minute), // Newest
+			}
 
-			// Should find the file by inode
-			result := service.findRotatedFileByInode(ctx, logDir, targetInode, fsService)
-			Expect(result).To(Equal(rotatedFile))
+			var files []string
+			for i, t := range times {
+				fileName := tai64.FormatNano(t) + ".s"
+				filePath := filepath.Join(logDir, fileName)
+				content := fmt.Sprintf("content_%d", i)
+				err := fsService.WriteFile(ctx, filePath, []byte(content), 0644)
+				Expect(err).ToNot(HaveOccurred())
+				files = append(files, filePath)
+			}
+
+			// Should return the newest file (last one created)
+			result := service.findLatestRotatedFile(ctx, logDir, fsService)
+			Expect(result).To(Equal(files[2])) // The newest file
 		})
 
-		It("should ignore non-rotated files", func() {
-			// Create a regular file (should be ignored)
-			regularFile := filepath.Join(logDir, "current")
-			err := fsService.WriteFile(ctx, regularFile, []byte("current content"), 0644)
+		It("should handle mix of valid and invalid files", func() {
+			// Create some invalid files
+			invalidFiles := []string{"current", "@invalid", "regular.log"}
+			for _, fileName := range invalidFiles {
+				filePath := filepath.Join(logDir, fileName)
+				err := fsService.WriteFile(ctx, filePath, []byte("content"), 0644)
+				Expect(err).ToNot(HaveOccurred())
+			}
+
+			// Create one valid rotated file
+			validTime := time.Now().Add(-5 * time.Minute)
+			validFileName := tai64.FormatNano(validTime) + ".s"
+			validFilePath := filepath.Join(logDir, validFileName)
+			err := fsService.WriteFile(ctx, validFilePath, []byte("valid content"), 0644)
 			Expect(err).ToNot(HaveOccurred())
 
-			// Get its inode
-			fi, err := fsService.Stat(ctx, regularFile)
-			Expect(err).ToNot(HaveOccurred())
-			regularInode := fi.Sys().(*syscall.Stat_t).Ino
+			// Should find the valid file despite invalid ones
+			result := service.findLatestRotatedFile(ctx, logDir, fsService)
+			Expect(result).To(Equal(validFilePath))
+		})
 
-			// Should not find the regular file even with matching inode
-			result := service.findRotatedFileByInode(ctx, logDir, regularInode, fsService)
+		It("should handle directory read errors gracefully", func() {
+			// Try to read from non-existent directory
+			nonExistentDir := filepath.Join(tempDir, "non-existent")
+			result := service.findLatestRotatedFile(ctx, nonExistentDir, fsService)
 			Expect(result).To(BeEmpty())
 		})
 	})
@@ -385,23 +403,68 @@ var _ = Describe("S6 Log Rotation", func() {
 			Expect(entries[1].Content).To(Equal("additional message"))
 		})
 
-		It("should gracefully handle missing rotated file", func() {
+		It("should gracefully handle missing rotated file on rotation", func() {
 			// Create a current file
 			currentFile := filepath.Join(logDir, "current")
-			err := fsService.WriteFile(ctx, currentFile, []byte("test content\n"), 0644)
+			initialContent := "2025-01-20 10:00:00.000000000  initial message\n"
+			err := fsService.WriteFile(ctx, currentFile, []byte(initialContent), 0644)
 			Expect(err).ToNot(HaveOccurred())
 
-			// Manually set up log state to simulate a rotation where no rotated file exists
-			// This tests the fallback behavior when findRotatedFileByInode returns empty
-			service.logCursors.Store(currentFile, &logState{
-				inode:  999999, // Non-existent inode to trigger rotation detection
-				offset: 0,
-			})
-
-			// Should handle missing rotated file gracefully and just read current file
+			// First call to establish state
 			entries, err := service.GetLogs(ctx, servicePath, fsService)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(entries).To(HaveLen(0)) // No parseable log entries in "test content"
+			Expect(entries).To(HaveLen(1))
+
+			// Simulate rotation by creating a new current file (different inode)
+			// No rotated file exists, so should fallback gracefully
+			newContent := "2025-01-20 10:00:02.000000000  after rotation\n"
+			err = fsService.RemoveAll(ctx, currentFile)
+			Expect(err).ToNot(HaveOccurred())
+			err = fsService.WriteFile(ctx, currentFile, []byte(newContent), 0644)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Should handle missing rotated file gracefully and read current file
+			entries, err = service.GetLogs(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(entries).To(HaveLen(1))
+			Expect(entries[0].Content).To(Equal("after rotation"))
+		})
+
+		It("should read and combine rotated file with current file", func() {
+			// Create initial current file
+			currentFile := filepath.Join(logDir, "current")
+			initialContent := "2025-01-20 10:00:00.000000000  initial message\n"
+			err := fsService.WriteFile(ctx, currentFile, []byte(initialContent), 0644)
+			Expect(err).ToNot(HaveOccurred())
+
+			// First call to establish state
+			entries, err := service.GetLogs(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(entries).To(HaveLen(1))
+
+			// Create a rotated file with some content that would have been read
+			rotatedTime := time.Now().Add(-1 * time.Minute)
+			rotatedFileName := tai64.FormatNano(rotatedTime) + ".s"
+			rotatedFile := filepath.Join(logDir, rotatedFileName)
+			rotatedContent := "2025-01-20 10:00:01.000000000  rotated message\n"
+			err = fsService.WriteFile(ctx, rotatedFile, []byte(rotatedContent), 0644)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Simulate rotation by creating new current file
+			newContent := "2025-01-20 10:00:02.000000000  new current message\n"
+			err = fsService.RemoveAll(ctx, currentFile)
+			Expect(err).ToNot(HaveOccurred())
+			err = fsService.WriteFile(ctx, currentFile, []byte(newContent), 0644)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Should find rotated file and combine with current
+			entries, err = service.GetLogs(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(entries).To(HaveLen(2))
+
+			// Should be in chronological order: rotated content first, then current
+			Expect(entries[0].Content).To(Equal("rotated message"))
+			Expect(entries[1].Content).To(Equal("new current message"))
 		})
 	})
 })

@@ -1507,6 +1507,15 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 		s.logger.Debugf("Detected rotation for log file %s (inode: %d->%d, offset: %d, size: %d)",
 			logFile, st.inode, ino, st.offset, size)
 
+		// Reset ring buffer on rotation
+		if st.logs == nil {
+			st.logs = make([]LogEntry, 0, constants.S6MaxLines)
+		} else {
+			st.logs = st.logs[:0] // Reuse backing array, reset length
+		}
+		st.head = 0
+		st.full = false
+
 		// Find the most recent rotated file
 		logDir := filepath.Dir(logFile)
 		rotatedFile := s.findLatestRotatedFile(ctx, logDir, fsService)
