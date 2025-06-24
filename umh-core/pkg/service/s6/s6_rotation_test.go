@@ -213,7 +213,11 @@ var _ = Describe("S6 Log Rotation", func() {
 
 			service.appendToRingBuffer(entries, st)
 
-			Expect(st.logs).To(HaveLen(2))
+			// With preallocation optimization, st.logs always has length constants.S6MaxLines
+			Expect(st.logs).To(HaveLen(constants.S6MaxLines))
+			// Check logical state: head should point to position 2 (next write position)
+			Expect(st.head).To(Equal(2))
+			// Check the actual entries are in the correct positions
 			Expect(st.logs[0].Content).To(Equal("test1"))
 			Expect(st.logs[1].Content).To(Equal("test2"))
 			Expect(st.full).To(BeFalse())
@@ -390,8 +394,11 @@ var _ = Describe("S6 Log Rotation", func() {
 
 			// Set up mock filesystem
 			mockFS := fsService.(*filesystem.MockFileSystem)
-			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+			mockFS.WithPathExistsFunc(func(ctx context.Context, path string) (bool, error) {
 				if path == currentFile {
+					return true, nil
+				}
+				if path == servicePath {
 					return true, nil
 				}
 				return false, nil
@@ -449,8 +456,11 @@ var _ = Describe("S6 Log Rotation", func() {
 			var currentContent = initialContent
 			var currentInode = 12345
 
-			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+			mockFS.WithPathExistsFunc(func(ctx context.Context, path string) (bool, error) {
 				if path == currentFile {
+					return true, nil
+				}
+				if path == servicePath {
 					return true, nil
 				}
 				return false, nil
@@ -517,8 +527,11 @@ var _ = Describe("S6 Log Rotation", func() {
 			var currentContent = initialContent
 			var currentInode = 12345
 
-			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+			mockFS.WithPathExistsFunc(func(ctx context.Context, path string) (bool, error) {
 				if path == currentFile {
+					return true, nil
+				}
+				if path == servicePath {
 					return true, nil
 				}
 				return false, nil
@@ -593,12 +606,15 @@ var _ = Describe("S6 Log Rotation", func() {
 			var currentInode = 12345
 			var rotatedFiles = []string{}
 
-			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+			mockFS.WithPathExistsFunc(func(ctx context.Context, path string) (bool, error) {
 				if path == currentFile {
 					return true, nil
 				}
 				if path == rotatedFile {
 					return len(rotatedFiles) > 0, nil
+				}
+				if path == servicePath {
+					return true, nil
 				}
 				return false, nil
 			})

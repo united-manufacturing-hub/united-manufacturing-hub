@@ -1371,23 +1371,18 @@ func (s *DefaultService) ForceRemove(
 func (s *DefaultService) appendToRingBuffer(entries []LogEntry, st *logState) {
 	const max = constants.S6MaxLines
 
-	// allocate backing storage once, but with length 0 so the GC
-	// doesn't scan max empty structs before we actually need them
+	// Preallocate backing storage to full size once - it's recycled at runtime and never dropped
 	if st.logs == nil {
-		st.logs = make([]LogEntry, 0, max) // len == 0, cap == max
+		st.logs = make([]LogEntry, max) // len == max, cap == max
+		st.head = 0
+		st.full = false
 	}
 
 	for _, e := range entries {
-		if len(st.logs) < max { // not full yet → grow
-			st.logs = append(st.logs, e)
-			st.head = len(st.logs) % max // head always points at the
-			// *next* write slot
-			if len(st.logs) == max {
-				st.full = true // will overwrite next round
-			}
-		} else { // full → true ring overwrite
-			st.logs[st.head] = e
-			st.head = (st.head + 1) % max // advance circular pointer
+		st.logs[st.head] = e
+		st.head = (st.head + 1) % max
+		if !st.full && st.head == 0 {
+			st.full = true // wrapped around for the first time
 		}
 	}
 }
@@ -1480,7 +1475,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 
 	// Get the log file from /data/logs/<service-name>/current
 	logFile := filepath.Join(constants.S6LogBaseDir, serviceName, "current")
-	exists, err = fsService.FileExists(ctx, logFile)
+	exists, err = fsService.PathExists(ctx, logFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check if log file exists: %w", err)
 	}
@@ -1514,10 +1509,20 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 
 		// Reset ring buffer on rotation
 		if st.logs == nil {
-			st.logs = make([]LogEntry, 0, constants.S6MaxLines)
-		} else {
-			st.logs = st.logs[:0] // Reuse backing array, reset length
+			st.logs = make([]LogEntry, constants.S6MaxLines)
 		}
+		/*
+			Why the previous implementation used st.logs[:0]:
+				The old approach allocated with make([]LogEntry, 0, max) and used append(), so the slice would grow from length 0 to some length. On rotation, it needed to reset the length back to 0 with st.logs[:0] while keeping the capacity.
+
+			Why we don't need it now:
+				With our optimized approach:
+				We preallocate to full size: make([]LogEntry, max) - length is always max
+				We use direct indexing: st.logs[st.head] = e - no append operations
+				We track valid entries with st.head and st.full: The slice length never changes
+		*/
+
+		// Reset ring buffer state but keep the backing array
 		st.head = 0
 		st.full = false
 
@@ -1579,7 +1584,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	if st.full {
 		length = constants.S6MaxLines
 	} else {
-		length = len(st.logs) // always the number of valid entries
+		length = st.head // number of valid entries written so far
 	}
 
 	out := make([]LogEntry, length)
@@ -1590,17 +1595,12 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	//
 	//	[head … max-1]  followed by  [0 … head-1]
 	if st.full {
-		// len(st.logs) == constants.S6MaxLines by construction
-		// (but add a defensive check to satisfy the linter)
-		if len(st.logs) == 0 {
-			return out, nil // should never happen, but safe
-		}
-
-		// copy the wrapped tail first
+		// Ring buffer has wrapped - linearize it
 		n := copy(out, st.logs[st.head:])
 		copy(out[n:], st.logs[:st.head])
 	} else {
-		copy(out, st.logs) // simple copy before first wrap
+		// Ring buffer hasn't wrapped yet - simple copy from beginning
+		copy(out, st.logs[:st.head])
 	}
 
 	return out, nil
