@@ -1,3 +1,5 @@
+//go:generate go run github.com/99designs/gqlgen generate
+
 package graphql
 
 // THIS CODE WILL BE UPDATED WITH SCHEMA CHANGES. PREVIOUS IMPLEMENTATION FOR SCHEMA CHANGES WILL BE KEPT IN THE COMMENT SECTION. IMPLEMENTATION FOR UNCHANGED SCHEMA WILL BE KEPT.
@@ -97,10 +99,13 @@ func (r *queryResolver) Topic(ctx context.Context, topic string) (*Topic, error)
 // Helper methods for data conversion and filtering
 
 func (r *Resolver) buildTopicName(topicInfo *tbproto.TopicInfo) string {
-	parts := []string{topicInfo.Level0}
+	// Use expert's exact algorithm: Level0 + LocationSublevels + DataContract + VirtualPath + Name
+	var parts []string
+	parts = append(parts, topicInfo.Level0)
 	parts = append(parts, topicInfo.LocationSublevels...)
 	parts = append(parts, topicInfo.DataContract)
 
+	// VirtualPath may already contain dots; add as-is if present
 	if topicInfo.VirtualPath != nil && *topicInfo.VirtualPath != "" {
 		parts = append(parts, *topicInfo.VirtualPath)
 	}
@@ -251,14 +256,30 @@ func (r *Resolver) filterTopics(topics []*Topic, filter *TopicFilter) []*Topic {
 }
 
 func (r *Resolver) matchesFilter(topic *Topic, filter *TopicFilter) bool {
-	// Text filter
+	// Text filter - search in topic path AND metadata values as per expert feedback
 	if filter.Text != nil && *filter.Text != "" {
-		if !strings.Contains(strings.ToLower(topic.Topic), strings.ToLower(*filter.Text)) {
-			return false
+		searchText := strings.ToLower(*filter.Text)
+
+		// Search in topic path
+		if strings.Contains(strings.ToLower(topic.Topic), searchText) {
+			// Found in topic path, continue to metadata filter check
+		} else {
+			// Not found in topic path, check metadata
+			foundInMetadata := false
+			for _, kv := range topic.Metadata {
+				if strings.Contains(strings.ToLower(kv.Key), searchText) ||
+					strings.Contains(strings.ToLower(kv.Value), searchText) {
+					foundInMetadata = true
+					break
+				}
+			}
+			if !foundInMetadata {
+				return false
+			}
 		}
 	}
 
-	// Metadata filter (using the Meta field from TopicFilter)
+	// Metadata filter (exact key-value matching)
 	if filter.Meta != nil && len(filter.Meta) > 0 {
 		if !r.matchesMetadataFilter(topic.Metadata, filter.Meta) {
 			return false
