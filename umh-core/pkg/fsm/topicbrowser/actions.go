@@ -417,3 +417,35 @@ func (i *Instance) ShouldTransitionToDegraded(currentTime time.Time, logWindow t
 
 	return false, "degraded conditions not met"
 }
+
+// ShouldRecoverFromDegraded determines if the Topic Browser should recover from degraded state
+func (i *Instance) ShouldRecoverFromDegraded(currentTime time.Time, logWindow time.Duration, snapshot fsm.SystemSnapshot) (bool, string) {
+	// Check if underlying S6 service is now running
+	isS6Running, s6Reason := i.IsTopicBrowserS6Running()
+	if !isS6Running {
+		return false, fmt.Sprintf("S6 service still not running: %s", s6Reason)
+	}
+
+	// Check if health checks are passing
+	healthPassed, healthReason := i.IsTopicBrowserHealthchecksPassed()
+	if !healthPassed {
+		return false, fmt.Sprintf("health checks still failing: %s", healthReason)
+	}
+
+	// Check if service has been running without errors for some time
+	runningOk, runningReason := i.IsTopicBrowserRunningForSomeTimeWithoutErrors(currentTime, logWindow)
+	if !runningOk {
+		return false, fmt.Sprintf("service not stable yet: %s", runningReason)
+	}
+
+	// Check if the Redpanda processing activity mismatch is resolved
+	hasRedpandaActivity, _ := i.HasRedpandaProcessingActivity(snapshot)
+	hasTopicBrowserActivity, _ := i.IsTopicBrowserWithProcessingActivity()
+
+	// If Redpanda has activity, we should also have activity now
+	if hasRedpandaActivity && !hasTopicBrowserActivity {
+		return false, "Redpanda activity mismatch still exists"
+	}
+
+	return true, "all recovery conditions met"
+}
