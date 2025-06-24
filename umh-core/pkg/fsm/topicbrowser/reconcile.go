@@ -85,7 +85,7 @@ func (i *Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, s
 				func(ctx context.Context) error {
 					// Force removal when other approaches fail - bypasses state transitions
 					// and directly deletes files and resources
-					return i.service.ForceRemove(ctx, services.GetFileSystem(), tbInstanceName)
+					return i.service.ForceRemove(ctx, services, tbInstanceName)
 				},
 			)
 		}
@@ -235,7 +235,7 @@ func (i *Instance) reconcileTransitionToActive(ctx context.Context, services ser
 	switch {
 	// If we're stopped, we need to start first
 	case currentState == OperationalStateStopped:
-		err := i.StartInstance(ctx, services.GetFileSystem())
+		err := i.StartInstance(ctx, services)
 		if err != nil {
 			return err, false
 		}
@@ -318,7 +318,7 @@ func (i *Instance) reconcileTransitionToStopped(ctx context.Context, services se
 	case OperationalStateStopping:
 		return i.baseFSMInstance.SendEvent(ctx, EventStopDone), true
 	default:
-		if err := i.StopInstance(ctx, services.GetFileSystem()); err != nil {
+		if err := i.StopInstance(ctx, services); err != nil {
 			return err, false
 		}
 		// Send event to transition to Stopping

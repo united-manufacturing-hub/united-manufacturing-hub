@@ -22,6 +22,7 @@ import (
 	"time"
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	logger "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -40,7 +41,7 @@ func (i *Instance) CreateInstance(ctx context.Context, services serviceregistry.
 		return fmt.Errorf("failed to generate benthos config for Topic Browser service %s: %w", i.baseFSMInstance.GetID(), err)
 	}
 
-	err = i.service.AddToManager(ctx, services, &benthosConfig)
+	err = i.service.AddToManager(ctx, services, &benthosConfig, constants.TopicBrowserServiceName)
 	if err != nil {
 		if err == tbsvc.ErrServiceAlreadyExists {
 			i.baseFSMInstance.GetLogger().Debugf("Topic Browser service %s already exists in S6 manager", i.baseFSMInstance.GetID())
@@ -62,7 +63,7 @@ func (i *Instance) RemoveInstance(
 		Infof("Removing Topic Browser service %s from S6 manager …",
 			i.baseFSMInstance.GetID())
 
-	err := i.service.RemoveFromManager(ctx, services.GetFileSystem(), i.baseFSMInstance.GetID())
+	err := i.service.RemoveFromManager(ctx, services, i.baseFSMInstance.GetID())
 
 	switch {
 	// ---------------------------------------------------------------
@@ -108,7 +109,7 @@ func (i *Instance) StartInstance(ctx context.Context, services serviceregistry.P
 	i.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting Topic Browser service %s ...", i.baseFSMInstance.GetID())
 
 	// Set the desired state to running for the given instance
-	err := i.service.Start(ctx, services.GetFileSystem(), i.baseFSMInstance.GetID())
+	err := i.service.Start(ctx, services, i.baseFSMInstance.GetID())
 	if err != nil {
 		// if the service is not there yet but we attempt to start it, we need to throw an error
 		return fmt.Errorf("failed to start Topic Browser service %s: %w", i.baseFSMInstance.GetID(), err)
@@ -123,7 +124,7 @@ func (i *Instance) StopInstance(ctx context.Context, services serviceregistry.Pr
 	i.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping Topic Browser service %s ...", i.baseFSMInstance.GetID())
 
 	// Set the desired state to stopped for the given instance
-	err := i.service.Stop(ctx, services.GetFileSystem(), i.baseFSMInstance.GetID())
+	err := i.service.Stop(ctx, services, i.baseFSMInstance.GetID())
 	if err != nil {
 		// if the service is not there yet but we attempt to stop it, we need to throw an error
 		return fmt.Errorf("failed to stop Topic Browser service %s: %w", i.baseFSMInstance.GetID(), err)
@@ -192,7 +193,7 @@ func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services s
 	}
 
 	// Check if the service exists and if we need to update the configuration
-	if i.service.ServiceExists(ctx, services.GetFileSystem(), i.baseFSMInstance.GetID()) {
+	if i.service.ServiceExists(ctx, services, i.baseFSMInstance.GetID()) {
 		// Generate the benthos config from the current topic browser config
 		benthosConfig, err := i.service.GenerateConfig(i.baseFSMInstance.GetID())
 		if err != nil {
@@ -200,7 +201,7 @@ func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services s
 		}
 
 		// Update the config in the S6 manager
-		err = i.service.UpdateInManager(ctx, &benthosConfig)
+		err = i.service.UpdateInManager(ctx, services, &benthosConfig, constants.TopicBrowserServiceName)
 		if err != nil {
 			return fmt.Errorf("failed to update Topic Browser service configuration: %w", err)
 		}
@@ -215,7 +216,7 @@ func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services s
 
 // IsTopicBrowserS6Running checks if the Topic Browser S6 service is running
 func (i *Instance) IsTopicBrowserS6Running() (bool, string) {
-	s6State := i.ObservedState.ServiceInfo.S6FSMState
+	s6State := i.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.S6FSMState
 	if s6State == "" {
 		return false, "S6 FSM state is empty"
 	}
@@ -227,7 +228,7 @@ func (i *Instance) IsTopicBrowserS6Running() (bool, string) {
 	}
 
 	// Also check the S6 observed state for more detailed status
-	s6ObservedState := i.ObservedState.ServiceInfo.S6ObservedState
+	s6ObservedState := i.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.S6ObservedState
 	if s6ObservedState.ServiceInfo.Pid == 0 {
 		return false, "S6 service process not running"
 	}
@@ -237,7 +238,7 @@ func (i *Instance) IsTopicBrowserS6Running() (bool, string) {
 
 // IsTopicBrowserS6Stopped checks if the Topic Browser S6 service is stopped
 func (i *Instance) IsTopicBrowserS6Stopped() (bool, string) {
-	s6State := i.ObservedState.ServiceInfo.S6FSMState
+	s6State := i.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.S6FSMState
 	if s6State == "" {
 		return true, "S6 FSM state is empty (considered stopped)"
 	}
@@ -269,7 +270,7 @@ func (i *Instance) IsTopicBrowserHealthchecksPassed() (bool, string) {
 // AnyRestartsSinceCreation checks if there were any restarts since the service was created
 func (i *Instance) AnyRestartsSinceCreation() (bool, string) {
 	// Check the S6 service exit history for restart evidence
-	s6ObservedState := i.ObservedState.ServiceInfo.S6ObservedState
+	s6ObservedState := i.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.S6ObservedState
 	exitHistory := s6ObservedState.ServiceInfo.ExitHistory
 
 	if len(exitHistory) > 0 {
@@ -282,7 +283,7 @@ func (i *Instance) AnyRestartsSinceCreation() (bool, string) {
 // IsTopicBrowserRunningForSomeTimeWithoutErrors checks if the service has been running without errors for a specified time window
 func (i *Instance) IsTopicBrowserRunningForSomeTimeWithoutErrors(currentTime time.Time, logWindow time.Duration) (bool, string) {
 	// Check if service has been up long enough using S6 uptime
-	s6ObservedState := i.ObservedState.ServiceInfo.S6ObservedState
+	s6ObservedState := i.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.S6ObservedState
 	uptime := time.Duration(s6ObservedState.ServiceInfo.Uptime) * time.Second
 	if uptime < logWindow {
 		return false, fmt.Sprintf("service uptime (%v) is less than required window (%v)", uptime, logWindow)
