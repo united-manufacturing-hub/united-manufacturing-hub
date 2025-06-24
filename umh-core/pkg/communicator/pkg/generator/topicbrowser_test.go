@@ -120,6 +120,38 @@ var _ = Describe("TopicBrowser Generator", func() {
 				Expect(result.TopicCount).To(Equal(2))   // Cache size
 				Expect(result.UnsBundles).To(HaveLen(3)) // Cache + 2 new bundles
 
+				// Verify that the cache bundle contains the correct data
+				firstBundle := result.UnsBundles[0]
+				var firstBundleData tbproto.UnsBundle
+				err := proto.Unmarshal(firstBundle, &firstBundleData)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(firstBundleData.Events.Entries).To(HaveLen(2))
+				Expect(firstBundleData.Events.Entries[0].UnsTreeId).To(Equal("topic1"))
+				Expect(firstBundleData.Events.Entries[0].ProducedAtMs).To(Equal(uint64(1000)))
+				Expect(firstBundleData.Events.Entries[1].UnsTreeId).To(Equal("topic2"))
+				Expect(firstBundleData.Events.Entries[1].ProducedAtMs).To(Equal(uint64(1100)))
+				Expect(firstBundleData.UnsMap.Entries).To(HaveLen(2))
+
+				// Verify that the new bundles contain the correct data
+				secondBundle := result.UnsBundles[1]
+				var secondBundleData tbproto.UnsBundle
+				err = proto.Unmarshal(secondBundle, &secondBundleData)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(secondBundleData.Events.Entries).To(HaveLen(1))
+				Expect(secondBundleData.Events.Entries[0].UnsTreeId).To(Equal("topic3"))
+				Expect(secondBundleData.Events.Entries[0].ProducedAtMs).To(Equal(uint64(2000)))
+				Expect(secondBundleData.UnsMap.Entries).To(HaveLen(1))
+
+				thirdBundle := result.UnsBundles[2]
+				var thirdBundleData tbproto.UnsBundle
+				err = proto.Unmarshal(thirdBundle, &thirdBundleData)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(thirdBundleData.Events.Entries).To(HaveLen(1))
+
+				Expect(thirdBundleData.Events.Entries[0].UnsTreeId).To(Equal("topic4"))
+				Expect(thirdBundleData.Events.Entries[0].ProducedAtMs).To(Equal(uint64(2100)))
+				Expect(thirdBundleData.UnsMap.Entries).To(HaveLen(1))
+
 				// Verify bundle ordering
 				Expect(result.UnsBundles).To(HaveKey(0)) // Cache bundle
 				Expect(result.UnsBundles).To(HaveKey(1)) // First new bundle
@@ -131,7 +163,7 @@ var _ = Describe("TopicBrowser Generator", func() {
 
 				// Decode and verify cache bundle contains cached events
 				var cacheBundle tbproto.UnsBundle
-				err := proto.Unmarshal(cacheBundleData, &cacheBundle)
+				err = proto.Unmarshal(cacheBundleData, &cacheBundle)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(cacheBundle.Events.Entries).To(HaveLen(2))
 
