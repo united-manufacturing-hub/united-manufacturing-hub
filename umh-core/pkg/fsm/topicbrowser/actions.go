@@ -23,7 +23,6 @@ import (
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	tbsvccfg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/topicbrowserserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	logger "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -242,6 +241,12 @@ func (i *Instance) IsTopicBrowserS6Running() (bool, string) {
 		return false, fmt.Sprintf("S6 service is in state: %s", s6State)
 	}
 
+	// Also check the S6 observed state for more detailed status
+	s6ObservedState := i.ObservedState.ServiceInfo.S6ObservedState
+	if s6ObservedState.ServiceInfo.Pid == 0 {
+		return false, "S6 service process not running"
+	}
+
 	return true, "S6 service is running"
 }
 
@@ -262,7 +267,8 @@ func (i *Instance) IsTopicBrowserS6Stopped() (bool, string) {
 
 // IsTopicBrowserHealthchecksPassed checks if the Topic Browser health checks are passing
 func (i *Instance) IsTopicBrowserHealthchecksPassed() (bool, string) {
-	healthCheck := i.ObservedState.ServiceInfo.TopicBrowserStatus.HealthCheck
+	benthosStatus := i.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus
+	healthCheck := benthosStatus.HealthCheck
 
 	if !healthCheck.IsLive {
 		return false, "liveness check failed"
@@ -277,10 +283,12 @@ func (i *Instance) IsTopicBrowserHealthchecksPassed() (bool, string) {
 
 // AnyRestartsSinceCreation checks if there were any restarts since the service was created
 func (i *Instance) AnyRestartsSinceCreation() (bool, string) {
-	restartCount := i.ObservedState.ServiceInfo.TopicBrowserStatus.RestartCount
+	// Check the S6 service exit history for restart evidence
+	s6ObservedState := i.ObservedState.ServiceInfo.S6ObservedState
+	exitHistory := s6ObservedState.ServiceInfo.ExitHistory
 
-	if restartCount > 0 {
-		return true, fmt.Sprintf("service has restarted %d times", restartCount)
+	if len(exitHistory) > 0 {
+		return true, fmt.Sprintf("service has %d restart events", len(exitHistory))
 	}
 
 	return false, "no restarts detected"
@@ -288,8 +296,9 @@ func (i *Instance) AnyRestartsSinceCreation() (bool, string) {
 
 // IsTopicBrowserRunningForSomeTimeWithoutErrors checks if the service has been running without errors for a specified time window
 func (i *Instance) IsTopicBrowserRunningForSomeTimeWithoutErrors(currentTime time.Time, logWindow time.Duration) (bool, string) {
-	// Check if service has been up long enough
-	uptime := i.ObservedState.ServiceInfo.TopicBrowserStatus.Uptime
+	// Check if service has been up long enough using S6 uptime
+	s6ObservedState := i.ObservedState.ServiceInfo.S6ObservedState
+	uptime := time.Duration(s6ObservedState.ServiceInfo.Uptime) * time.Second
 	if uptime < logWindow {
 		return false, fmt.Sprintf("service uptime (%v) is less than required window (%v)", uptime, logWindow)
 	}
@@ -305,12 +314,23 @@ func (i *Instance) IsTopicBrowserRunningForSomeTimeWithoutErrors(currentTime tim
 
 // IsTopicBrowserLogsFine checks if the Topic Browser logs are free of errors within a time window
 func (i *Instance) IsTopicBrowserLogsFine(currentTime time.Time, logWindow time.Duration) (bool, string) {
-	logs := i.ObservedState.ServiceInfo.TopicBrowserStatus.Logs
+	// Get logs from the Benthos observed state
+	benthosStatus := i.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus
+	logs := benthosStatus.BenthosLogs
 
-	// Check for error patterns in recent logs
-	hasErrors := i.service.HasErrorsInLogs(logs, currentTime, logWindow)
-	if hasErrors {
-		return false, "error patterns found in logs"
+	// Check for error patterns in recent logs within the time window
+	cutoffTime := currentTime.Add(-logWindow)
+	for _, logEntry := range logs {
+		if logEntry.Timestamp.After(cutoffTime) {
+			// Simple error pattern check - look for common error indicators
+			content := strings.ToLower(logEntry.Content)
+			if strings.Contains(content, "error") ||
+				strings.Contains(content, "failed") ||
+				strings.Contains(content, "panic") ||
+				strings.Contains(content, "fatal") {
+				return false, "error patterns found in logs"
+			}
+		}
 	}
 
 	return true, "no errors in logs"
@@ -318,10 +338,19 @@ func (i *Instance) IsTopicBrowserLogsFine(currentTime time.Time, logWindow time.
 
 // IsTopicBrowserMetricsErrorFree checks if the Topic Browser metrics indicate no errors
 func (i *Instance) IsTopicBrowserMetricsErrorFree() (bool, string) {
-	metrics := i.ObservedState.ServiceInfo.TopicBrowserStatus.Metrics
+	benthosStatus := i.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus
+	benthosMetrics := benthosStatus.BenthosMetrics
 
-	if metrics.ErrorCount > 0 {
-		return false, fmt.Sprintf("metrics show %d errors", metrics.ErrorCount)
+	// Check for various error indicators in Benthos metrics
+	if benthosMetrics.Metrics.Output.Error > 0 {
+		return false, fmt.Sprintf("metrics show %d output errors", benthosMetrics.Metrics.Output.Error)
+	}
+
+	// Check processor errors
+	for path, processor := range benthosMetrics.Metrics.Process.Processors {
+		if processor.Error > 0 {
+			return false, fmt.Sprintf("processor %s shows %d errors", path, processor.Error)
+		}
 	}
 
 	return true, "metrics show no errors"
@@ -358,41 +387,48 @@ func (i *Instance) IsTopicBrowserDegraded(currentTime time.Time, logWindow time.
 
 // IsTopicBrowserWithProcessingActivity checks if the Topic Browser is actively processing data
 func (i *Instance) IsTopicBrowserWithProcessingActivity() (bool, string) {
-	metrics := i.ObservedState.ServiceInfo.TopicBrowserStatus.Metrics
+	benthosStatus := i.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus
+	benthosMetrics := benthosStatus.BenthosMetrics
 
-	// Check if there's recent message processing activity
-	if metrics.MessagesProcessed > 0 {
-		return true, fmt.Sprintf("processed %d messages", metrics.MessagesProcessed)
+	// Check if there's recent message processing activity using metrics state
+	if benthosMetrics.MetricsState != nil && benthosMetrics.MetricsState.IsActive {
+		return true, "benthos metrics show activity"
 	}
 
-	// Check if there are active connections/requests
-	if metrics.ActiveConnections > 0 {
-		return true, fmt.Sprintf("%d active connections", metrics.ActiveConnections)
+	// Check input/output throughput
+	if benthosMetrics.Metrics.Input.Received > 0 || benthosMetrics.Metrics.Output.Sent > 0 {
+		return true, fmt.Sprintf("received %d, sent %d messages",
+			benthosMetrics.Metrics.Input.Received, benthosMetrics.Metrics.Output.Sent)
 	}
 
 	return false, "no processing activity detected"
 }
 
 // HasRedpandaProcessingActivity checks if the associated Redpanda instance has processing activity
-// This uses the Redpanda manager from the system snapshot
+// This uses the Redpanda observed state directly from the ServiceInfo
 func (i *Instance) HasRedpandaProcessingActivity(snapshot fsm.SystemSnapshot) (bool, string) {
-	// Find the Redpanda instance using the helper function
-	redpandaInstance, found := fsm.FindInstance(snapshot, "redpanda", constants.RedpandaInstanceName)
-	if !found {
-		return false, fmt.Sprintf("Redpanda instance '%s' not found in snapshot", constants.RedpandaInstanceName)
+	redpandaObservedState := i.ObservedState.ServiceInfo.RedpandaObservedState
+	redpandaFSMState := i.ObservedState.ServiceInfo.RedpandaFSMState
+
+	// Check if Redpanda FSM is in an active state
+	if redpandaFSMState == "" {
+		return false, "Redpanda FSM state is empty"
 	}
 
-	// Check the observed state for processing activity indicators
-	if redpandaInstance.LastObservedState == nil {
-		return false, "Redpanda instance has no observed state"
+	if redpandaFSMState != "active" && redpandaFSMState != "running" {
+		return false, fmt.Sprintf("Redpanda FSM is in state: %s", redpandaFSMState)
 	}
 
-	// For now, we can check basic indicators from the snapshot
-	// The actual processing activity check would need to be implemented
-	// when the Redpanda observed state structure is defined
-	// This is a placeholder that assumes some activity if the instance is in active state
-	if redpandaInstance.CurrentState == "active" {
-		return true, "Redpanda instance is in active state"
+	// Check if Redpanda has processing activity using its metrics
+	redpandaMetrics := redpandaObservedState.ServiceInfo.RedpandaStatus.RedpandaMetrics
+	if redpandaMetrics.Metrics.Throughput.BytesIn > 0 || redpandaMetrics.Metrics.Throughput.BytesOut > 0 {
+		return true, fmt.Sprintf("Redpanda throughput: %d bytes in, %d bytes out",
+			redpandaMetrics.Metrics.Throughput.BytesIn, redpandaMetrics.Metrics.Throughput.BytesOut)
+	}
+
+	// Check if there are any topics with partitions (indicates activity)
+	if len(redpandaMetrics.Metrics.Topic.TopicPartitionMap) > 0 {
+		return true, fmt.Sprintf("Redpanda has %d topics", len(redpandaMetrics.Metrics.Topic.TopicPartitionMap))
 	}
 
 	return false, "no Redpanda processing activity detected"
