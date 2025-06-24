@@ -86,6 +86,12 @@ download-docker-binaries:
 			docker cp $$CONTAINER_ARM64:/benthos .docker-cache/benthos/benthos-linux-arm64; \
 			docker rm -v $$CONTAINER_ARM64; \
 		fi; \
+		if [ ! -s .docker-cache/benthos/benthos-linux-amd64 ] || [ ! -s .docker-cache/benthos/benthos-linux-arm64 ]; then \
+			echo "Error: Extracted Benthos binaries are empty or missing"; \
+			rm -f .docker-cache/benthos/benthos-linux-amd64 .docker-cache/benthos/benthos-linux-arm64; \
+			rm -f .docker-cache/benthos/version; \
+			exit 1; \
+		fi; \
 	fi
 
 	@# Check and update Redpanda version
