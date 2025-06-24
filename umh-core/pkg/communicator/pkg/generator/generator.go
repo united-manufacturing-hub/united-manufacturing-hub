@@ -154,3 +154,42 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 
 	return statusMessage
 }
+
+// GenerateStatusMessageForSubscriber generates a personalized status message based on subscriber state
+func (s *StatusCollectorType) GenerateStatusMessageForSubscriber(isBootstrapped bool) *models.StatusMessage {
+	// Generate base status message
+	statusMessage := s.GenerateStatusMessage()
+	if statusMessage == nil {
+		return nil
+	}
+
+	// Get current topic browser state
+	//sequence := s.tbCache.GetSequence()
+
+	// TODO: When TopicBrowser model is added to StatusMessage, implement:
+	// if isBootstrapped {
+	// 	// Existing subscriber - only send sequence, no bundles
+	// 	statusMessage.Core.TopicBrowser = models.TopicBrowser{
+	// 		Health:     topicBrowserHealth, // TODO: derive from FSM
+	// 		Sequence:   sequence,
+	// 		UnsBundles: nil, // No bundles for existing subscribers
+	// 	}
+	// } else {
+	// 	// New subscriber - send full bootstrap with all bundles
+	// 	_, bundles := s.tbCache.Snapshot()
+	// 	statusMessage.Core.TopicBrowser = models.TopicBrowser{
+	// 		Health:     topicBrowserHealth, // TODO: derive from FSM
+	// 		Sequence:   sequence,
+	// 		UnsBundles: bundles,
+	// 	}
+	// }
+
+	// For now, just log the differentiation logic
+	if isBootstrapped {
+		s.logger.Debugf("Generating status message for existing subscriber")
+	} else {
+		s.logger.Debugf("Generating status message for new subscriber with bootstrap data")
+	}
+
+	return statusMessage
+}
