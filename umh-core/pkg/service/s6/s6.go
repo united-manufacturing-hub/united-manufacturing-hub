@@ -1415,7 +1415,8 @@ func (s *DefaultService) appendToRingBuffer(entries []LogEntry, st *logState) {
 //
 //  2. **Detect file rotation/truncation (or first-time initialization)**
 //     If the inode changed or the file shrank, we:
-//     - Find the rotated file that corresponds to our previous inode
+//     - Reset the ring buffer to start fresh (preserving backing array)
+//     - Find the most recent rotated file by TAI64N timestamp
 //     - Read any remaining data from that rotated file
 //     - Reset inode and offset for the new current file
 //
@@ -1429,9 +1430,10 @@ func (s *DefaultService) appendToRingBuffer(entries []LogEntry, st *logState) {
 //
 //     **FIRST CALL**: Reads entire file from beginning (st.offset == 0).
 //
-//  4. **Combine rotated and current content**
-//     If rotation occurred, we combine the rotated file content (older)
-//     with the current file content (newer) to maintain chronological order.
+//  4. **Process rotated and current content separately**
+//     Both rotated file content (if any) and current file content are
+//     parsed and appended to the ring buffer in chronological order:
+//     rotated content first (older), then current content (newer).
 //
 //  5. **Ring-append the entries**
 //     Parsed log lines are appended to the ring.  Once the buffer
@@ -1449,8 +1451,9 @@ func (s *DefaultService) appendToRingBuffer(entries []LogEntry, st *logState) {
 // Performance guarantees
 // ──────────────────────
 //   - **At most one allocation per process** for the ring buffer.
-//   - Zero‐copy maintenance while the program runs.
-//   - At most two `memmove` operations per call (rotated + current content combination, final copy-out).
+//   - Zero‐copy maintenance while the program runs (except on rotation).
+//   - At most one additional allocation per rotation (for parsing entries).
+//   - One `memmove` operation per call for final copy-out.
 //   - Thread-safety via the `logState.mu` mutex.
 //
 // Errors are returned early and unwrapped where they occur so callers
@@ -1781,7 +1784,18 @@ func (s *DefaultService) ExecuteS6Command(ctx context.Context, servicePath strin
 	return string(output), nil
 }
 
-// findLatestRotatedFile finds the most recently rotated file based on TAI64N timestamps in filenames
+// findLatestRotatedFile finds the most recently rotated file based on TAI64N timestamps in filenames.
+//
+// S6 creates rotated files with TAI64N timestamps in their names (e.g., @400000006501234567890abc.s).
+// This function scans the log directory for files matching the "@*.s" pattern, parses their
+// TAI64N timestamps, and returns the path to the file with the most recent timestamp.
+//
+// This approach is more reliable than inode-based matching since:
+//   - Inodes can be reused on some filesystems
+//   - TAI64N timestamps are monotonic and unique
+//   - We leverage S6's existing naming convention
+//
+// Returns an empty string if no valid rotated files are found.
 func (s *DefaultService) findLatestRotatedFile(ctx context.Context, logDir string, fsService filesystem.Service) string {
 	pattern := filepath.Join(logDir, "@*.s")
 	entries, err := fsService.Glob(ctx, pattern)
