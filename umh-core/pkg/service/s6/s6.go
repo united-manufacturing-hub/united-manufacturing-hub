@@ -1522,7 +1522,13 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 
 		// Find the most recent rotated file
 		logDir := filepath.Dir(logFile)
-		rotatedFile := s.findLatestRotatedFile(ctx, logDir, fsService)
+		pattern := filepath.Join(logDir, "@*.s")
+		entries, err := fsService.Glob(ctx, pattern)
+		if err != nil {
+			s.logger.Debugf("Failed to read log directory %s: %v", logDir, err)
+			return nil, err
+		}
+		rotatedFile := s.findLatestRotatedFile(entries)
 		if rotatedFile != "" {
 			var err error
 			rotatedContent, _, err = fsService.ReadFileRange(ctx, rotatedFile, st.offset)
@@ -1797,14 +1803,7 @@ func (s *DefaultService) ExecuteS6Command(ctx context.Context, servicePath strin
 //   - Simpler and more predictable performance (O(n log n) vs O(n) with high constant factor)
 //
 // Returns an empty string if no valid rotated files are found.
-func (s *DefaultService) findLatestRotatedFile(ctx context.Context, logDir string, fsService filesystem.Service) string {
-	pattern := filepath.Join(logDir, "@*.s")
-	entries, err := fsService.Glob(ctx, pattern)
-	if err != nil {
-		s.logger.Debugf("Failed to read log directory %s: %v", logDir, err)
-		return ""
-	}
-
+func (s *DefaultService) findLatestRotatedFile(entries []string) string {
 	if len(entries) == 0 {
 		return ""
 	}

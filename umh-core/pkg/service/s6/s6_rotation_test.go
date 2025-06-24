@@ -64,6 +64,7 @@ var _ = Describe("S6 Log Rotation", func() {
 		logDir      string
 		serviceName string
 		ctx         context.Context
+		entries     []string
 	)
 
 	BeforeEach(func() {
@@ -80,6 +81,9 @@ var _ = Describe("S6 Log Rotation", func() {
 		logDir = filepath.Join(tempDir, "data", "logs", serviceName)
 
 		err := fsService.EnsureDirectory(ctx, logDir)
+		Expect(err).ToNot(HaveOccurred())
+
+		entries, err = fsService.Glob(ctx, filepath.Join(logDir, "@*.s"))
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -102,7 +106,7 @@ var _ = Describe("S6 Log Rotation", func() {
 	//
 	Describe("findLatestRotatedFile", func() {
 		It("should return empty string when no rotated files exist", func() {
-			result := service.findLatestRotatedFile(ctx, logDir, fsService)
+			result := service.findLatestRotatedFile(entries)
 			Expect(result).To(BeEmpty())
 		})
 
@@ -115,7 +119,7 @@ var _ = Describe("S6 Log Rotation", func() {
 				Expect(err).ToNot(HaveOccurred())
 			}
 
-			result := service.findLatestRotatedFile(ctx, logDir, fsService)
+			result := service.findLatestRotatedFile(entries)
 			Expect(result).To(BeEmpty())
 		})
 
@@ -141,7 +145,7 @@ var _ = Describe("S6 Log Rotation", func() {
 			}
 
 			// Should return the newest file (last one created)
-			result := service.findLatestRotatedFile(ctx, logDir, fsService)
+			result := service.findLatestRotatedFile(files)
 			Expect(result).To(Equal(files[2])) // The newest file
 		})
 
@@ -162,15 +166,8 @@ var _ = Describe("S6 Log Rotation", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// Should find the valid file despite invalid ones
-			result := service.findLatestRotatedFile(ctx, logDir, fsService)
+			result := service.findLatestRotatedFile(entries)
 			Expect(result).To(Equal(validFilePath))
-		})
-
-		It("should handle directory read errors gracefully", func() {
-			// Try to read from non-existent directory
-			nonExistentDir := filepath.Join(tempDir, "non-existent")
-			result := service.findLatestRotatedFile(ctx, nonExistentDir, fsService)
-			Expect(result).To(BeEmpty())
 		})
 	})
 

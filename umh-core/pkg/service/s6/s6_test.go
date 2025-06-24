@@ -498,6 +498,7 @@ var _ = Describe("Lexicographic Sorting for Rotated Files", func() {
 		fsService filesystem.Service
 		tempDir   string
 		logDir    string
+		entries   []string
 	)
 
 	BeforeEach(func() {
@@ -507,6 +508,9 @@ var _ = Describe("Lexicographic Sorting for Rotated Files", func() {
 		logDir = filepath.Join(tempDir, "logs")
 
 		err := fsService.EnsureDirectory(ctx, logDir)
+		Expect(err).ToNot(HaveOccurred())
+
+		entries, err = fsService.Glob(ctx, filepath.Join(logDir, "@*.s"))
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -519,7 +523,6 @@ var _ = Describe("Lexicographic Sorting for Rotated Files", func() {
 			time.Date(2025, 1, 20, 10, 20, 0, 0, time.UTC), // Second oldest
 		}
 
-		var createdFiles []string
 		var expectedLatest string
 
 		// Create files in random order
@@ -530,8 +533,6 @@ var _ = Describe("Lexicographic Sorting for Rotated Files", func() {
 			err := fsService.WriteFile(ctx, filepath, []byte(fmt.Sprintf("log content %d", i)), 0644)
 			Expect(err).ToNot(HaveOccurred())
 
-			createdFiles = append(createdFiles, filepath)
-
 			// The third timestamp (index 2) is the newest
 			if i == 2 {
 				expectedLatest = filepath
@@ -540,7 +541,7 @@ var _ = Describe("Lexicographic Sorting for Rotated Files", func() {
 
 		// Use lexicographic sorting to find latest file
 		service := NewDefaultService().(*DefaultService)
-		result := service.findLatestRotatedFile(ctx, logDir, fsService)
+		result := service.findLatestRotatedFile(entries)
 
 		// Should return the chronologically latest file
 		Expect(result).To(Equal(expectedLatest))
@@ -548,7 +549,7 @@ var _ = Describe("Lexicographic Sorting for Rotated Files", func() {
 
 	It("should handle empty directory gracefully", func() {
 		service := NewDefaultService().(*DefaultService)
-		result := service.findLatestRotatedFile(ctx, logDir, fsService)
+		result := service.findLatestRotatedFile(entries)
 		Expect(result).To(BeEmpty())
 	})
 
@@ -561,7 +562,7 @@ var _ = Describe("Lexicographic Sorting for Rotated Files", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		service := NewDefaultService().(*DefaultService)
-		result := service.findLatestRotatedFile(ctx, logDir, fsService)
+		result := service.findLatestRotatedFile(entries)
 		Expect(result).To(Equal(filepath))
 	})
 
@@ -583,7 +584,7 @@ var _ = Describe("Lexicographic Sorting for Rotated Files", func() {
 		}
 
 		service := NewDefaultService().(*DefaultService)
-		result := service.findLatestRotatedFile(ctx, logDir, fsService)
+		result := service.findLatestRotatedFile(entries)
 		Expect(result).To(Equal(rotatedFilepath))
 	})
 
@@ -614,7 +615,7 @@ var _ = Describe("Lexicographic Sorting for Rotated Files", func() {
 		}
 
 		service := NewDefaultService().(*DefaultService)
-		result := service.findLatestRotatedFile(ctx, logDir, fsService)
+		result := service.findLatestRotatedFile(entries)
 		Expect(result).To(Equal(expectedLatest))
 	})
 })
