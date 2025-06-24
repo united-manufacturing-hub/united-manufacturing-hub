@@ -175,7 +175,7 @@ func (c *Cache) GetKeys() []string {
 func (c *Cache) Size() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return len(c.eventMap)
+	return len(c.unsMap.Entries)
 }
 
 // GetLastCachedTimestamp returns the timestamp of the last bundle processed into the cache
