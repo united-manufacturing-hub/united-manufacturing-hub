@@ -154,7 +154,10 @@ func (c *CommunicationState) StartTopicBrowserCacheUpdater(systemSnapshotManager
 		ticker := time.NewTicker(1 * time.Second)
 		for {
 			<-ticker.C
-			c.TopicBrowserCache.Update(&topicbrowser.ObservedState{})
+			err := c.TopicBrowserCache.Update(&topicbrowser.ObservedState{})
+			if err != nil {
+				sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to update topic browser cache: %w", err)
+			}
 		}
 	}()
 }
