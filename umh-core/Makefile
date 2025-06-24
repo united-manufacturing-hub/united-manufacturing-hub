@@ -31,8 +31,9 @@ GOLANG_VERSION = 1.24.4
 ALPINE_VERSION = 3.21
 NMAP_VERSION = 7.95-r1
 S6_OVERLAY_VERSION = 3.2.0.2
-BENTHOS_UMH_VERSION = 0.9.4
 REDPANDA_VERSION = 24.3.8
+## Benthos version is a tag or a sha-<commit hash> (e.g. 0.9.4 or sha-a51a685) to be used in the docker image
+BENTHOS_UMH_VERSION = 0.9.4
 
 
 # Note: Redpanda allocates 2GB of memory per core.
@@ -70,7 +71,7 @@ download-docker-binaries:
 	@if [ ! -f .docker-cache/benthos/version ] || [ "$$(cat .docker-cache/benthos/version)" != "$(BENTHOS_UMH_VERSION)" ]; then \
 		rm -f .docker-cache/benthos/benthos-linux-*; \
 		echo "$(BENTHOS_UMH_VERSION)" > .docker-cache/benthos/version; \
-		if echo "$(BENTHOS_UMH_VERSION)" | grep -q "^[0-9]\+\.[0-9]\+\.[0-9]\+"; then \
+		if echo "$(BENTHOS_UMH_VERSION)" | grep -Eq "^[0-9]\+\.[0-9]\+\.[0-9]\+$"; then \
 			wget -O .docker-cache/benthos/benthos-linux-amd64 "https://github.com/united-manufacturing-hub/benthos-umh/releases/download/v$(BENTHOS_UMH_VERSION)/benthos-linux-amd64"; \
 			wget -O .docker-cache/benthos/benthos-linux-arm64 "https://github.com/united-manufacturing-hub/benthos-umh/releases/download/v$(BENTHOS_UMH_VERSION)/benthos-linux-arm64"; \
 		else \
