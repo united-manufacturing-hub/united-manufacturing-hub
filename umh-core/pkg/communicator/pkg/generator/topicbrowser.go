@@ -22,18 +22,18 @@ import (
 func GenerateTopicBrowser(cache *topicbrowser.Cache, obs *topicbrowser.ObservedState, isBootstrapped bool) *models.TopicBrowser {
 	if isBootstrapped {
 		// Existing subscriber: Get only pending bundles from observed state
-		return generateTbContent(cache, obs)
+		return GenerateTbContent(cache, obs)
 	} else {
 		// New subscriber: Get the full cache PLUS any new bundles since cache was updated
 		// First get the content as if for an existing subscriber (new bundles since cache was updated)
 		tb := generateTbContentForNewSubscriber(cache, obs)
-		return addCachedBundleToTbContent(cache, obs, tb)
+		return AddCachedBundleToTbContent(cache, tb)
 	}
 }
 
-// generateTbContent generates content for existing subscribers
+// GenerateTbContent generates content for existing subscribers
 // Gets only pending bundles that arrived after the last sent timestamp
-func generateTbContent(cache *topicbrowser.Cache, obs *topicbrowser.ObservedState) *models.TopicBrowser {
+func GenerateTbContent(cache *topicbrowser.Cache, obs *topicbrowser.ObservedState) *models.TopicBrowser {
 	unsBundles := make(map[int][]byte)
 	var latestTimestamp int64
 
@@ -59,9 +59,9 @@ func generateTbContent(cache *topicbrowser.Cache, obs *topicbrowser.ObservedStat
 	}
 }
 
-// addCachedBundleToTbContent takes existing subscriber content and adds the cached bundle at the beginning
+// AddCachedBundleToTbContent takes existing subscriber content and adds the cached bundle at the beginning
 // This is used for new subscribers who need the full cache plus any new bundles
-func addCachedBundleToTbContent(cache *topicbrowser.Cache, obs *topicbrowser.ObservedState, tb *models.TopicBrowser) *models.TopicBrowser {
+func AddCachedBundleToTbContent(cache *topicbrowser.Cache, tb *models.TopicBrowser) *models.TopicBrowser {
 
 	// Create new unsBundles map with cache bundle at index 0
 	newUnsBundles := make(map[int][]byte)

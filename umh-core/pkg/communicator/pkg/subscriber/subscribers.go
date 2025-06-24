@@ -116,9 +116,14 @@ func (s *Handler) notify() {
 	defer cncl()
 
 	notified := 0
+	baseStatusMessage := s.StatusCollector.GenerateStatusMessage(true)
 	s.subscriberRegistry.ForEach(func(email string, meta *subscribers.Meta) {
 		// Generate personalized status message based on bootstrap state
-		statusMessage := s.StatusCollector.GenerateStatusMessage(meta.Bootstraped)
+		statusMessage := baseStatusMessage
+		if !meta.Bootstraped {
+			// If the subscriber is not bootstrapped, we need to generate a new status message
+			statusMessage = s.StatusCollector.GenerateStatusMessage(false)
+		}
 
 		if ctx.Err() != nil {
 			// It is expected that the first 1-2 times this might fail, due to the systems starting up
@@ -149,13 +154,11 @@ func (s *Handler) notify() {
 		if !meta.Bootstraped {
 			s.subscriberRegistry.UpdateMeta(email, func(m *subscribers.Meta) {
 				m.Bootstraped = true
-				//m.LastSeq = s.StatusCollector.GetTopicBrowserSequence()
 			})
 			s.logger.Debugf("Subscriber %s has been bootstrapped", email)
 		} else {
 			// Update last sequence for existing subscribers
 			s.subscriberRegistry.UpdateMeta(email, func(m *subscribers.Meta) {
-				//m.LastSeq = s.StatusCollector.GetTopicBrowserSequence()
 			})
 		}
 
