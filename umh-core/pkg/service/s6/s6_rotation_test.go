@@ -17,7 +17,9 @@ package s6
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/cactus/tai64"
@@ -26,6 +28,25 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
+
+// mockFileInfoWithSys is a custom mock FileInfo that implements Sys() to return syscall.Stat_t
+type mockFileInfoWithSys struct {
+	name    string
+	size    int64
+	mode    os.FileMode
+	modTime time.Time
+	isDir   bool
+	inode   uint64
+}
+
+func (m *mockFileInfoWithSys) Name() string       { return m.name }
+func (m *mockFileInfoWithSys) Size() int64        { return m.size }
+func (m *mockFileInfoWithSys) Mode() os.FileMode  { return m.mode }
+func (m *mockFileInfoWithSys) ModTime() time.Time { return m.modTime }
+func (m *mockFileInfoWithSys) IsDir() bool        { return m.isDir }
+func (m *mockFileInfoWithSys) Sys() interface{} {
+	return &syscall.Stat_t{Ino: m.inode}
+}
 
 // S6 Log Rotation Test Coverage
 // ═════════════════════════════
@@ -69,7 +90,7 @@ var _ = Describe("S6 Log Rotation", func() {
 
 	BeforeEach(func() {
 		service = NewDefaultService().(*DefaultService)
-		fsService = filesystem.NewDefaultService()
+		fsService = filesystem.NewMockFileSystem()
 		ctx = context.Background()
 
 		// Create temporary directory structure that matches S6 expectations
@@ -80,11 +101,8 @@ var _ = Describe("S6 Log Rotation", func() {
 		// For tests, we'll use the temp directory structure
 		logDir = filepath.Join(tempDir, "data", "logs", serviceName)
 
-		err := fsService.EnsureDirectory(ctx, logDir)
-		Expect(err).ToNot(HaveOccurred())
-
-		entries, err = fsService.Glob(ctx, filepath.Join(logDir, "@*.s"))
-		Expect(err).ToNot(HaveOccurred())
+		// Mock filesystem doesn't need actual directory creation
+		entries = []string{} // Start with empty entries
 	})
 
 	// ══════════════════════════════════════════════════════════════════
@@ -140,12 +158,9 @@ var _ = Describe("S6 Log Rotation", func() {
 			}
 
 			var files []string
-			for i, t := range times {
+			for _, t := range times {
 				fileName := tai64.FormatNano(t) + ".s"
 				filePath := filepath.Join(logDir, fileName)
-				content := fmt.Sprintf("content_%d", i)
-				err := fsService.WriteFile(ctx, filePath, []byte(content), 0644)
-				Expect(err).ToNot(HaveOccurred())
 				files = append(files, filePath)
 			}
 
@@ -155,24 +170,13 @@ var _ = Describe("S6 Log Rotation", func() {
 		})
 
 		It("should handle mix of valid and invalid files", func() {
-			// Create some invalid files
-			invalidFiles := []string{"current", "@invalid", "regular.log"}
-			for _, fileName := range invalidFiles {
-				filePath := filepath.Join(logDir, fileName)
-				err := fsService.WriteFile(ctx, filePath, []byte("content"), 0644)
-				Expect(err).ToNot(HaveOccurred())
-			}
-
 			// Create one valid rotated file
 			validTime := time.Now().Add(-5 * time.Minute)
 			validFileName := tai64.FormatNano(validTime) + ".s"
 			validFilePath := filepath.Join(logDir, validFileName)
-			err := fsService.WriteFile(ctx, validFilePath, []byte("valid content"), 0644)
-			Expect(err).ToNot(HaveOccurred())
 
-			// Re-read entries after creating files
-			entries, err := fsService.Glob(ctx, filepath.Join(logDir, "@*.s"))
-			Expect(err).ToNot(HaveOccurred())
+			// Create list of files including valid one
+			entries := []string{validFilePath}
 
 			// Should find the valid file despite invalid ones
 			result := service.findLatestRotatedFile(entries)
@@ -367,14 +371,15 @@ var _ = Describe("S6 Log Rotation", func() {
 			// GetLogs expects the service to exist in the constants.S6BaseDir structure
 			serviceBaseDir := filepath.Join(tempDir, "run", "service")
 			servicePath = filepath.Join(serviceBaseDir, serviceName)
-			err := fsService.EnsureDirectory(ctx, servicePath)
-			Expect(err).ToNot(HaveOccurred())
 
-			// Also need to set up the log directory where GetLogs will look
-			// Since we can't easily change constants.S6LogBaseDir, we'll create the expected structure
-			actualLogDir := filepath.Join(constants.S6LogBaseDir, serviceName)
-			err = fsService.EnsureDirectory(ctx, actualLogDir)
-			Expect(err).ToNot(HaveOccurred())
+			// Set up mock filesystem to simulate service directory existence
+			mockFS := fsService.(*filesystem.MockFileSystem)
+			mockFS.WithPathExistsFunc(func(ctx context.Context, path string) (bool, error) {
+				if path == servicePath {
+					return true, nil
+				}
+				return false, nil
+			})
 		})
 
 		It("should handle first call with no rotation", func() {
@@ -382,8 +387,48 @@ var _ = Describe("S6 Log Rotation", func() {
 			actualLogDir := filepath.Join(constants.S6LogBaseDir, serviceName)
 			currentFile := filepath.Join(actualLogDir, "current")
 			logContent := "2025-01-20 10:00:00.000000000  initial message\n"
-			err := fsService.WriteFile(ctx, currentFile, []byte(logContent), 0644)
-			Expect(err).ToNot(HaveOccurred())
+
+			// Set up mock filesystem
+			mockFS := fsService.(*filesystem.MockFileSystem)
+			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+				if path == currentFile {
+					return true, nil
+				}
+				return false, nil
+			})
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+				if path == currentFile {
+					return []byte(logContent), nil
+				}
+				return nil, os.ErrNotExist
+			})
+			mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+				if path == currentFile {
+					return &mockFileInfoWithSys{
+						name:    "current",
+						size:    int64(len(logContent)),
+						mode:    0644,
+						modTime: time.Now(),
+						isDir:   false,
+						inode:   12345,
+					}, nil
+				}
+				return nil, os.ErrNotExist
+			})
+			mockFS.WithGlobFunc(func(ctx context.Context, pattern string) ([]string, error) {
+				// No rotated files
+				return []string{}, nil
+			})
+			mockFS.WithReadFileRangeFunc(func(ctx context.Context, path string, from int64) ([]byte, int64, error) {
+				if path == currentFile {
+					content := []byte(logContent)
+					if from >= int64(len(content)) {
+						return nil, int64(len(content)), nil // No new data
+					}
+					return content[from:], int64(len(content)), nil
+				}
+				return nil, 0, os.ErrNotExist
+			})
 
 			entries, err := service.GetLogs(ctx, servicePath, fsService)
 			Expect(err).ToNot(HaveOccurred())
@@ -396,24 +441,63 @@ var _ = Describe("S6 Log Rotation", func() {
 			actualLogDir := filepath.Join(constants.S6LogBaseDir, serviceName)
 			currentFile := filepath.Join(actualLogDir, "current")
 			initialContent := "2025-01-20 10:00:00.000000000  initial message\n"
-			err := fsService.WriteFile(ctx, currentFile, []byte(initialContent), 0644)
-			Expect(err).ToNot(HaveOccurred())
+			additionalContent := "2025-01-20 10:00:01.000000000  additional message\n"
+			combinedContent := initialContent + additionalContent
+
+			// Set up mock filesystem
+			mockFS := fsService.(*filesystem.MockFileSystem)
+			var currentContent string = initialContent
+			var currentInode uint64 = 12345
+
+			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+				if path == currentFile {
+					return true, nil
+				}
+				return false, nil
+			})
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+				if path == currentFile {
+					return []byte(currentContent), nil
+				}
+				return nil, os.ErrNotExist
+			})
+			mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+				if path == currentFile {
+					return &mockFileInfoWithSys{
+						name:    "current",
+						size:    int64(len(currentContent)),
+						mode:    0644,
+						modTime: time.Now(),
+						isDir:   false,
+						inode:   currentInode,
+					}, nil
+				}
+				return nil, os.ErrNotExist
+			})
+			mockFS.WithGlobFunc(func(ctx context.Context, pattern string) ([]string, error) {
+				// No rotated files
+				return []string{}, nil
+			})
+			mockFS.WithReadFileRangeFunc(func(ctx context.Context, path string, from int64) ([]byte, int64, error) {
+				if path == currentFile {
+					content := []byte(currentContent)
+					if from >= int64(len(content)) {
+						return nil, int64(len(content)), nil // No new data
+					}
+					return content[from:], int64(len(content)), nil
+				}
+				return nil, 0, os.ErrNotExist
+			})
 
 			// First call
 			entries, err := service.GetLogs(ctx, servicePath, fsService)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(entries).To(HaveLen(1))
 
-			// Append more content by reading existing and writing combined
-			existingContent, err := fsService.ReadFile(ctx, currentFile)
-			Expect(err).ToNot(HaveOccurred())
+			// Simulate content growth (same inode, larger file)
+			currentContent = combinedContent
 
-			additionalContent := "2025-01-20 10:00:01.000000000  additional message\n"
-			combinedContent := string(existingContent) + additionalContent
-			err = fsService.WriteFile(ctx, currentFile, []byte(combinedContent), 0644)
-			Expect(err).ToNot(HaveOccurred())
-
-			// Second call should only get the new content
+			// Second call should get both messages
 			entries, err = service.GetLogs(ctx, servicePath, fsService)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(entries).To(HaveLen(2)) // Both messages in ring buffer
@@ -426,21 +510,61 @@ var _ = Describe("S6 Log Rotation", func() {
 			actualLogDir := filepath.Join(constants.S6LogBaseDir, serviceName)
 			currentFile := filepath.Join(actualLogDir, "current")
 			initialContent := "2025-01-20 10:00:00.000000000  initial message\n"
-			err := fsService.WriteFile(ctx, currentFile, []byte(initialContent), 0644)
-			Expect(err).ToNot(HaveOccurred())
+			newContent := "2025-01-20 10:00:02.000000000  after rotation\n"
+
+			// Set up mock filesystem
+			mockFS := fsService.(*filesystem.MockFileSystem)
+			var currentContent string = initialContent
+			var currentInode uint64 = 12345
+
+			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+				if path == currentFile {
+					return true, nil
+				}
+				return false, nil
+			})
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+				if path == currentFile {
+					return []byte(currentContent), nil
+				}
+				return nil, os.ErrNotExist
+			})
+			mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+				if path == currentFile {
+					return &mockFileInfoWithSys{
+						name:    "current",
+						size:    int64(len(currentContent)),
+						mode:    0644,
+						modTime: time.Now(),
+						isDir:   false,
+						inode:   currentInode,
+					}, nil
+				}
+				return nil, os.ErrNotExist
+			})
+			mockFS.WithGlobFunc(func(ctx context.Context, pattern string) ([]string, error) {
+				// No rotated files
+				return []string{}, nil
+			})
+			mockFS.WithReadFileRangeFunc(func(ctx context.Context, path string, from int64) ([]byte, int64, error) {
+				if path == currentFile {
+					content := []byte(currentContent)
+					if from >= int64(len(content)) {
+						return nil, int64(len(content)), nil // No new data
+					}
+					return content[from:], int64(len(content)), nil
+				}
+				return nil, 0, os.ErrNotExist
+			})
 
 			// First call to establish state
 			entries, err := service.GetLogs(ctx, servicePath, fsService)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(entries).To(HaveLen(1))
 
-			// Simulate rotation by creating a new current file (different inode)
-			// No rotated file exists, so should fallback gracefully
-			newContent := "2025-01-20 10:00:02.000000000  after rotation\n"
-			err = fsService.RemoveAll(ctx, currentFile)
-			Expect(err).ToNot(HaveOccurred())
-			err = fsService.WriteFile(ctx, currentFile, []byte(newContent), 0644)
-			Expect(err).ToNot(HaveOccurred())
+			// Simulate rotation by changing inode (new file) and content
+			currentContent = newContent
+			currentInode = 54321 // Different inode indicates file rotation
 
 			// Should handle missing rotated file gracefully and read current file
 			entries, err = service.GetLogs(ctx, servicePath, fsService)
@@ -454,28 +578,82 @@ var _ = Describe("S6 Log Rotation", func() {
 			actualLogDir := filepath.Join(constants.S6LogBaseDir, serviceName)
 			currentFile := filepath.Join(actualLogDir, "current")
 			initialContent := "2025-01-20 10:00:00.000000000  initial message\n"
-			err := fsService.WriteFile(ctx, currentFile, []byte(initialContent), 0644)
-			Expect(err).ToNot(HaveOccurred())
+			// Rotated file should have the initial content PLUS new content that wasn't read yet
+			rotatedContent := initialContent + "2025-01-20 10:00:01.000000000  rotated message\n"
+			newContent := "2025-01-20 10:00:02.000000000  new current message\n"
+
+			// Create rotated file name
+			rotatedTime := time.Now().Add(-1 * time.Minute)
+			rotatedFileName := tai64.FormatNano(rotatedTime) + ".s"
+			rotatedFile := filepath.Join(actualLogDir, rotatedFileName)
+
+			// Set up mock filesystem
+			mockFS := fsService.(*filesystem.MockFileSystem)
+			var currentContent string = initialContent
+			var currentInode uint64 = 12345
+			var rotatedFiles []string = []string{}
+
+			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+				if path == currentFile {
+					return true, nil
+				}
+				if path == rotatedFile {
+					return len(rotatedFiles) > 0, nil
+				}
+				return false, nil
+			})
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+				if path == currentFile {
+					return []byte(currentContent), nil
+				}
+				if path == rotatedFile && len(rotatedFiles) > 0 {
+					return []byte(rotatedContent), nil
+				}
+				return nil, os.ErrNotExist
+			})
+			mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+				if path == currentFile {
+					return &mockFileInfoWithSys{
+						name:    "current",
+						size:    int64(len(currentContent)),
+						mode:    0644,
+						modTime: time.Now(),
+						isDir:   false,
+						inode:   currentInode,
+					}, nil
+				}
+				return nil, os.ErrNotExist
+			})
+			mockFS.WithGlobFunc(func(ctx context.Context, pattern string) ([]string, error) {
+				return rotatedFiles, nil
+			})
+			mockFS.WithReadFileRangeFunc(func(ctx context.Context, path string, from int64) ([]byte, int64, error) {
+				if path == currentFile {
+					content := []byte(currentContent)
+					if from >= int64(len(content)) {
+						return nil, int64(len(content)), nil // No new data
+					}
+					return content[from:], int64(len(content)), nil
+				}
+				if path == rotatedFile && len(rotatedFiles) > 0 {
+					content := []byte(rotatedContent)
+					if from >= int64(len(content)) {
+						return nil, int64(len(content)), nil // No new data
+					}
+					return content[from:], int64(len(content)), nil
+				}
+				return nil, 0, os.ErrNotExist
+			})
 
 			// First call to establish state
 			entries, err := service.GetLogs(ctx, servicePath, fsService)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(entries).To(HaveLen(1))
 
-			// Create a rotated file with some content that would have been read
-			rotatedTime := time.Now().Add(-1 * time.Minute)
-			rotatedFileName := tai64.FormatNano(rotatedTime) + ".s"
-			rotatedFile := filepath.Join(actualLogDir, rotatedFileName)
-			rotatedContent := "2025-01-20 10:00:01.000000000  rotated message\n"
-			err = fsService.WriteFile(ctx, rotatedFile, []byte(rotatedContent), 0644)
-			Expect(err).ToNot(HaveOccurred())
-
-			// Simulate rotation by creating new current file
-			newContent := "2025-01-20 10:00:02.000000000  new current message\n"
-			err = fsService.RemoveAll(ctx, currentFile)
-			Expect(err).ToNot(HaveOccurred())
-			err = fsService.WriteFile(ctx, currentFile, []byte(newContent), 0644)
-			Expect(err).ToNot(HaveOccurred())
+			// Simulate rotation by changing inode and adding rotated file
+			currentContent = newContent
+			currentInode = 54321                 // Different inode indicates file rotation
+			rotatedFiles = []string{rotatedFile} // Now there's a rotated file
 
 			// Should find rotated file and combine with current
 			entries, err = service.GetLogs(ctx, servicePath, fsService)

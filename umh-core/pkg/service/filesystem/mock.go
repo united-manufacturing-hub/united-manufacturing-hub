@@ -142,7 +142,25 @@ func (m *MockFileSystem) ReadFile(ctx context.Context, path string) ([]byte, err
 //   - chunk   – the data that was read (nil if nothing new)
 //   - newSize – the file size **after** the read (use it as next offset)
 func (m *MockFileSystem) ReadFileRange(ctx context.Context, path string, from int64) ([]byte, int64, error) {
-	panic("not implemented")
+	if m.ReadFileRangeFunc != nil {
+		return m.ReadFileRangeFunc(ctx, path, from)
+	}
+
+	shouldFail, delay := m.simulateRandomBehavior("ReadFileRange:" + path)
+
+	if delay > 0 {
+		select {
+		case <-time.After(delay):
+			// Delay completed
+		case <-ctx.Done():
+			return nil, 0, ctx.Err()
+		}
+	}
+
+	if shouldFail {
+		return nil, 0, errors.New("simulated failure in ReadFileRange")
+	}
+	return nil, 0, errors.New("not implemented")
 }
 
 // Glob is a wrapper around filepath.Glob that respects the context
@@ -434,6 +452,12 @@ func (m *MockFileSystem) WithEnsureDirectoryFunc(fn func(ctx context.Context, pa
 // WithReadFileFunc sets a custom implementation for ReadFile
 func (m *MockFileSystem) WithReadFileFunc(fn func(ctx context.Context, path string) ([]byte, error)) *MockFileSystem {
 	m.ReadFileFunc = fn
+	return m
+}
+
+// WithReadFileRangeFunc sets a custom implementation for ReadFileRange
+func (m *MockFileSystem) WithReadFileRangeFunc(fn func(ctx context.Context, path string, from int64) ([]byte, int64, error)) *MockFileSystem {
+	m.ReadFileRangeFunc = fn
 	return m
 }
 
