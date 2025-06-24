@@ -23,6 +23,7 @@ import (
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	tbsvccfg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/topicbrowserserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	logger "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -226,4 +227,193 @@ func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services s
 	}
 
 	return nil
+}
+
+// IsTopicBrowserS6Running checks if the Topic Browser S6 service is running
+func (i *Instance) IsTopicBrowserS6Running() (bool, string) {
+	s6State := i.ObservedState.ServiceInfo.S6FSMState
+	if s6State == "" {
+		return false, "S6 FSM state is empty"
+	}
+
+	// Check if S6 service is in a running state
+	isRunning := s6State == "running" || s6State == "active"
+	if !isRunning {
+		return false, fmt.Sprintf("S6 service is in state: %s", s6State)
+	}
+
+	return true, "S6 service is running"
+}
+
+// IsTopicBrowserS6Stopped checks if the Topic Browser S6 service is stopped
+func (i *Instance) IsTopicBrowserS6Stopped() (bool, string) {
+	s6State := i.ObservedState.ServiceInfo.S6FSMState
+	if s6State == "" {
+		return true, "S6 FSM state is empty (considered stopped)"
+	}
+
+	isStopped := s6State == "stopped" || s6State == "stopping"
+	if !isStopped {
+		return false, fmt.Sprintf("S6 service is in state: %s", s6State)
+	}
+
+	return true, "S6 service is stopped"
+}
+
+// IsTopicBrowserHealthchecksPassed checks if the Topic Browser health checks are passing
+func (i *Instance) IsTopicBrowserHealthchecksPassed() (bool, string) {
+	healthCheck := i.ObservedState.ServiceInfo.TopicBrowserStatus.HealthCheck
+
+	if !healthCheck.IsLive {
+		return false, "liveness check failed"
+	}
+
+	if !healthCheck.IsReady {
+		return false, "readiness check failed"
+	}
+
+	return true, "health checks passed"
+}
+
+// AnyRestartsSinceCreation checks if there were any restarts since the service was created
+func (i *Instance) AnyRestartsSinceCreation() (bool, string) {
+	restartCount := i.ObservedState.ServiceInfo.TopicBrowserStatus.RestartCount
+
+	if restartCount > 0 {
+		return true, fmt.Sprintf("service has restarted %d times", restartCount)
+	}
+
+	return false, "no restarts detected"
+}
+
+// IsTopicBrowserRunningForSomeTimeWithoutErrors checks if the service has been running without errors for a specified time window
+func (i *Instance) IsTopicBrowserRunningForSomeTimeWithoutErrors(currentTime time.Time, logWindow time.Duration) (bool, string) {
+	// Check if service has been up long enough
+	uptime := i.ObservedState.ServiceInfo.TopicBrowserStatus.Uptime
+	if uptime < logWindow {
+		return false, fmt.Sprintf("service uptime (%v) is less than required window (%v)", uptime, logWindow)
+	}
+
+	// Check for errors in logs within the time window
+	isLogsFine, reason := i.IsTopicBrowserLogsFine(currentTime, logWindow)
+	if !isLogsFine {
+		return false, fmt.Sprintf("logs contain errors: %s", reason)
+	}
+
+	return true, "service running without errors"
+}
+
+// IsTopicBrowserLogsFine checks if the Topic Browser logs are free of errors within a time window
+func (i *Instance) IsTopicBrowserLogsFine(currentTime time.Time, logWindow time.Duration) (bool, string) {
+	logs := i.ObservedState.ServiceInfo.TopicBrowserStatus.Logs
+
+	// Check for error patterns in recent logs
+	hasErrors := i.service.HasErrorsInLogs(logs, currentTime, logWindow)
+	if hasErrors {
+		return false, "error patterns found in logs"
+	}
+
+	return true, "no errors in logs"
+}
+
+// IsTopicBrowserMetricsErrorFree checks if the Topic Browser metrics indicate no errors
+func (i *Instance) IsTopicBrowserMetricsErrorFree() (bool, string) {
+	metrics := i.ObservedState.ServiceInfo.TopicBrowserStatus.Metrics
+
+	if metrics.ErrorCount > 0 {
+		return false, fmt.Sprintf("metrics show %d errors", metrics.ErrorCount)
+	}
+
+	return true, "metrics show no errors"
+}
+
+// IsTopicBrowserDegraded determines if the Topic Browser is in a degraded state
+func (i *Instance) IsTopicBrowserDegraded(currentTime time.Time, logWindow time.Duration) (bool, string) {
+	// Check if underlying S6 service is not running
+	isS6Running, s6Reason := i.IsTopicBrowserS6Running()
+	if !isS6Running {
+		return true, fmt.Sprintf("underlying S6 service not running: %s", s6Reason)
+	}
+
+	// Check health checks
+	healthPassed, healthReason := i.IsTopicBrowserHealthchecksPassed()
+	if !healthPassed {
+		return true, fmt.Sprintf("health checks failed: %s", healthReason)
+	}
+
+	// Check for errors in logs
+	logsFine, logsReason := i.IsTopicBrowserLogsFine(currentTime, logWindow)
+	if !logsFine {
+		return true, fmt.Sprintf("logs indicate issues: %s", logsReason)
+	}
+
+	// Check metrics for errors
+	metricsOk, metricsReason := i.IsTopicBrowserMetricsErrorFree()
+	if !metricsOk {
+		return true, fmt.Sprintf("metrics indicate errors: %s", metricsReason)
+	}
+
+	return false, "service appears healthy"
+}
+
+// IsTopicBrowserWithProcessingActivity checks if the Topic Browser is actively processing data
+func (i *Instance) IsTopicBrowserWithProcessingActivity() (bool, string) {
+	metrics := i.ObservedState.ServiceInfo.TopicBrowserStatus.Metrics
+
+	// Check if there's recent message processing activity
+	if metrics.MessagesProcessed > 0 {
+		return true, fmt.Sprintf("processed %d messages", metrics.MessagesProcessed)
+	}
+
+	// Check if there are active connections/requests
+	if metrics.ActiveConnections > 0 {
+		return true, fmt.Sprintf("%d active connections", metrics.ActiveConnections)
+	}
+
+	return false, "no processing activity detected"
+}
+
+// HasRedpandaProcessingActivity checks if the associated Redpanda instance has processing activity
+// This uses the Redpanda manager from the system snapshot
+func (i *Instance) HasRedpandaProcessingActivity(snapshot fsm.SystemSnapshot) (bool, string) {
+	// Find the Redpanda instance using the helper function
+	redpandaInstance, found := fsm.FindInstance(snapshot, "redpanda", constants.RedpandaInstanceName)
+	if !found {
+		return false, fmt.Sprintf("Redpanda instance '%s' not found in snapshot", constants.RedpandaInstanceName)
+	}
+
+	// Check the observed state for processing activity indicators
+	if redpandaInstance.LastObservedState == nil {
+		return false, "Redpanda instance has no observed state"
+	}
+
+	// For now, we can check basic indicators from the snapshot
+	// The actual processing activity check would need to be implemented
+	// when the Redpanda observed state structure is defined
+	// This is a placeholder that assumes some activity if the instance is in active state
+	if redpandaInstance.CurrentState == "active" {
+		return true, "Redpanda instance is in active state"
+	}
+
+	return false, "no Redpanda processing activity detected"
+}
+
+// ShouldTransitionToDegraded determines if the Topic Browser should transition to degraded state
+// This implements the degraded trigger conditions specified by the user
+func (i *Instance) ShouldTransitionToDegraded(currentTime time.Time, logWindow time.Duration, snapshot fsm.SystemSnapshot) (bool, string) {
+	// Check if underlying S6 service is not running
+	isS6Running, s6Reason := i.IsTopicBrowserS6Running()
+	if !isS6Running {
+		return true, fmt.Sprintf("underlying S6 service not running: %s", s6Reason)
+	}
+
+	// Check for Redpanda processing activity mismatch
+	hasRedpandaActivity, redpandaReason := i.HasRedpandaProcessingActivity(snapshot)
+	hasTopicBrowserActivity, tbReason := i.IsTopicBrowserWithProcessingActivity()
+
+	if hasRedpandaActivity && !hasTopicBrowserActivity {
+		return true, fmt.Sprintf("Redpanda has activity (%s) but Topic Browser doesn't (%s)", redpandaReason, tbReason)
+	}
+
+	return false, "degraded conditions not met"
 }
