@@ -202,7 +202,7 @@ func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services s
 		}
 
 		// Update the config in the S6 manager
-		err = i.service.UpdateInManager(ctx, services, &benthosConfig, constants.TopicBrowserServiceName)
+		err = i.service.UpdateInManager(ctx, services.GetFileSystem(), &benthosConfig, constants.TopicBrowserServiceName)
 		if err != nil {
 			return fmt.Errorf("failed to update Topic Browser service configuration: %w", err)
 		}
