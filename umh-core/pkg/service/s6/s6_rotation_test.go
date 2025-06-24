@@ -446,8 +446,8 @@ var _ = Describe("S6 Log Rotation", func() {
 
 			// Set up mock filesystem
 			mockFS := fsService.(*filesystem.MockFileSystem)
-			var currentContent string = initialContent
-			var currentInode uint64 = 12345
+			var currentContent = initialContent
+			var currentInode = 12345
 
 			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
 				if path == currentFile {
@@ -469,7 +469,7 @@ var _ = Describe("S6 Log Rotation", func() {
 						mode:    0644,
 						modTime: time.Now(),
 						isDir:   false,
-						inode:   currentInode,
+						inode:   uint64(currentInode),
 					}, nil
 				}
 				return nil, os.ErrNotExist
@@ -514,8 +514,8 @@ var _ = Describe("S6 Log Rotation", func() {
 
 			// Set up mock filesystem
 			mockFS := fsService.(*filesystem.MockFileSystem)
-			var currentContent string = initialContent
-			var currentInode uint64 = 12345
+			var currentContent = initialContent
+			var currentInode = 12345
 
 			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
 				if path == currentFile {
@@ -537,7 +537,7 @@ var _ = Describe("S6 Log Rotation", func() {
 						mode:    0644,
 						modTime: time.Now(),
 						isDir:   false,
-						inode:   currentInode,
+						inode:   uint64(currentInode),
 					}, nil
 				}
 				return nil, os.ErrNotExist
@@ -589,9 +589,9 @@ var _ = Describe("S6 Log Rotation", func() {
 
 			// Set up mock filesystem
 			mockFS := fsService.(*filesystem.MockFileSystem)
-			var currentContent string = initialContent
-			var currentInode uint64 = 12345
-			var rotatedFiles []string = []string{}
+			var currentContent = initialContent
+			var currentInode = 12345
+			var rotatedFiles = []string{}
 
 			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
 				if path == currentFile {
@@ -619,7 +619,7 @@ var _ = Describe("S6 Log Rotation", func() {
 						mode:    0644,
 						modTime: time.Now(),
 						isDir:   false,
-						inode:   currentInode,
+						inode:   uint64(currentInode),
 					}, nil
 				}
 				return nil, os.ErrNotExist
