@@ -43,6 +43,7 @@ type MockFileSystem struct {
 	ReadDirFunc         func(ctx context.Context, path string) ([]os.DirEntry, error)
 	ExecuteCommandFunc  func(ctx context.Context, name string, args ...string) ([]byte, error)
 	ChownFunc           func(ctx context.Context, path string, user string, group string) error
+	GlobFunc            func(ctx context.Context, pattern string) ([]string, error)
 	mutex               sync.Mutex
 }
 
@@ -141,6 +142,14 @@ func (m *MockFileSystem) ReadFile(ctx context.Context, path string) ([]byte, err
 //   - chunk   – the data that was read (nil if nothing new)
 //   - newSize – the file size **after** the read (use it as next offset)
 func (m *MockFileSystem) ReadFileRange(ctx context.Context, path string, from int64) ([]byte, int64, error) {
+	panic("not implemented")
+}
+
+// Glob is a wrapper around filepath.Glob that respects the context
+func (m *MockFileSystem) Glob(ctx context.Context, pattern string) ([]string, error) {
+	if m.GlobFunc != nil {
+		return m.GlobFunc(ctx, pattern)
+	}
 	panic("not implemented")
 }
 
@@ -491,6 +500,12 @@ func (m *MockFileSystem) WithReadDirFunc(fn func(ctx context.Context, path strin
 // WithExecuteCommandFunc sets a custom implementation for ExecuteCommand
 func (m *MockFileSystem) WithExecuteCommandFunc(fn func(ctx context.Context, name string, args ...string) ([]byte, error)) *MockFileSystem {
 	m.ExecuteCommandFunc = fn
+	return m
+}
+
+// WithGlobFunc sets a custom implementation for Glob
+func (m *MockFileSystem) WithGlobFunc(fn func(ctx context.Context, pattern string) ([]string, error)) *MockFileSystem {
+	m.GlobFunc = fn
 	return m
 }
 

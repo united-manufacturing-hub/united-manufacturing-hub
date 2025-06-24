@@ -1365,42 +1365,6 @@ func (s *DefaultService) ForceRemove(
 	return nil
 }
 
-// findRotatedFileByInode attempts to find a rotated file that corresponds to the given inode.
-// This is a best-effort approach since we can't directly map inodes to rotated filenames.
-// Returns empty string if no suitable rotated file is found.
-func (s *DefaultService) findRotatedFileByInode(ctx context.Context, logDir string, targetInode uint64, fsService filesystem.Service) string {
-	entries, err := fsService.ReadDir(ctx, logDir)
-	if err != nil {
-		s.logger.Debugf("Failed to read log directory %s: %v", logDir, err)
-		return ""
-	}
-
-	// Look for rotated files (@<timestamp> format)
-	for _, entry := range entries {
-		if !strings.HasPrefix(entry.Name(), "@") || entry.IsDir() {
-			continue
-		}
-
-		filePath := filepath.Join(logDir, entry.Name())
-
-		// Get file info to check inode
-		fi, err := fsService.Stat(ctx, filePath)
-		if err != nil {
-			continue
-		}
-
-		if fi != nil && fi.Sys() != nil {
-			if sys, ok := fi.Sys().(*syscall.Stat_t); ok && sys.Ino == targetInode {
-				s.logger.Debugf("Found rotated file by inode %d: %s", targetInode, filePath)
-				return filePath
-			}
-		}
-	}
-
-	s.logger.Debugf("No rotated file found for inode %d in %s", targetInode, logDir)
-	return ""
-}
-
 // appendToRingBuffer appends entries to the ring buffer, extracted from existing GetLogs logic.
 func (s *DefaultService) appendToRingBuffer(entries []LogEntry, st *logState) {
 	const max = constants.S6MaxLines
@@ -1543,9 +1507,9 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 		s.logger.Debugf("Detected rotation for log file %s (inode: %d->%d, offset: %d, size: %d)",
 			logFile, st.inode, ino, st.offset, size)
 
-		// Find and read remaining content from the rotated file
+		// Find the most recent rotated file
 		logDir := filepath.Dir(logFile)
-		rotatedFile := s.findRotatedFileByInode(ctx, logDir, st.inode, fsService)
+		rotatedFile := s.findLatestRotatedFile(ctx, logDir, fsService)
 		if rotatedFile != "" {
 			var err error
 			rotatedContent, _, err = fsService.ReadFileRange(ctx, rotatedFile, st.offset)
@@ -1809,4 +1773,36 @@ func (s *DefaultService) ExecuteS6Command(ctx context.Context, servicePath strin
 	}
 
 	return string(output), nil
+}
+
+// findLatestRotatedFile finds the most recently rotated file based on TAI64N timestamps in filenames
+func (s *DefaultService) findLatestRotatedFile(ctx context.Context, logDir string, fsService filesystem.Service) string {
+	pattern := filepath.Join(logDir, "@*.s")
+	entries, err := fsService.Glob(ctx, pattern)
+	if err != nil {
+		s.logger.Debugf("Failed to read log directory %s: %v", logDir, err)
+		return ""
+	}
+
+	var latestFile string
+	var latestTime time.Time
+
+	for _, entry := range entries {
+		// Parse TAI64N timestamp directly from filename
+		timestamp, err := tai64.Parse(entry)
+		if err != nil {
+			s.logger.Debugf("Failed to parse timestamp from rotated file %s: %v", entry, err)
+			continue
+		}
+
+		if timestamp.After(latestTime) {
+			latestTime = timestamp
+			latestFile = entry
+		}
+	}
+
+	if latestFile != "" {
+		s.logger.Debugf("Found latest rotated file: %s (timestamp: %v)", latestFile, latestTime)
+	}
+	return latestFile
 }
