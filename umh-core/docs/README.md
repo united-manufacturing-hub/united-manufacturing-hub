@@ -2,7 +2,7 @@
 
 > **Looking for the old Kubernetes Helm stack?** See the [UMH Core vs UMH Classic FAQ](umh-core-vs-classic-faq.md) to understand which edition fits your project and the current migration path.
 
-UMH-Core is a **single Docker container that turns any PC, VM, or edge gateway into an Industrial Data Hub**.
+UMH Core is a **single Docker container that turns any PC, VM, or edge gateway into an Industrial Data Hub**.
 
 Inside that one image you'll find:
 
@@ -11,7 +11,7 @@ Inside that one image you'll find:
 * **Agent** – a Go service that reads `config.yaml`, launches pipelines, watches health, and phones home to the Management Console.
 * **S6 Supervisor** – keeps every subprocess alive and starts them in the correct order.
 
-### Why teams pick UMH-Core
+### Why teams pick UMH Core
 
 | Benefit         | What it means in practice                                                                                               |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------- |

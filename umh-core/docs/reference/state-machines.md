@@ -1,10 +1,10 @@
 # State Machines
 
-**State machines are the core orchestration mechanism in UMH-Core.** Every component is managed by a finite state machine (FSM) with clearly defined states and transitions. This provides predictable, observable behavior and enables reliable error handling and recovery.
+**State machines are the core orchestration mechanism in UMH Core.** Every component is managed by a finite state machine (FSM) with clearly defined states and transitions. This provides predictable, observable behavior and enables reliable error handling and recovery.
 
 ## How It Works
 
-UMH-Core uses hierarchical state machines where components build upon each other:
+UMH Core uses hierarchical state machines where components build upon each other:
 
 - **Bridge** (formerly Protocol Converter) = Connection + Source Flow + Sink Flow
 - **Flow** (DataFlow Component) = Benthos instance with lifecycle management  

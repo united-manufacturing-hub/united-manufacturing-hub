@@ -249,7 +249,7 @@ protocolConverter:
 
 ### Internal - Built-In Services (expert)
 
-UMH-Core injects this section automatically.
+UMH Core injects this section automatically.
 
 ```yaml
 internal:

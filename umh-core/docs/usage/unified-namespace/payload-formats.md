@@ -1,6 +1,6 @@
 # Payload Formats
 
-UMH-Core recognises **two** payload formats. Pick the one that matches your sensor / message **before** you build a bridge or stream-processor.
+UMH Core recognizes **two** payload formats. Pick the one that matches your sensor / message **before** you build a bridge or stream-processor.
 
 ### TLDR
 
@@ -75,7 +75,7 @@ umh.v1.acme._historian.weather
 
 _Result:_ every integrator ends up writing brittle glue scripts and the Tag-Browser (which once parsed the payload to build a "full-tag-name") turns into a complexity monster.
 
-#### UMH-Core's guiding rule
+#### UMH Core's guiding rule
 
 > **"One tag, one message, one topic."**
 
