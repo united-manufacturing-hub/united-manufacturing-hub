@@ -118,6 +118,12 @@ func main() {
 			configData.Agent.GraphQLConfig.CORSOrigins = []string{"*"}
 		}
 
+		// Populate mock data if enabled
+		if configData.Agent.GraphQLConfig.MockData {
+			log.Info("Populating GraphQL cache with mock data for testing")
+			graphql.PopulateMockData(communicationState.TopicBrowserCache)
+		}
+
 		graphqlResolver := &graphql.Resolver{
 			SnapshotManager:   systemSnapshotManager,
 			TopicBrowserCache: communicationState.TopicBrowserCache,
@@ -128,7 +134,7 @@ func main() {
 				shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
 				defer shutdownCancel()
 				if err := graphqlServer.Shutdown(shutdownCtx); err != nil {
-					sentry.ReportIssuef(sentry.IssueTypeError, log, "Failed to shutdown GraphQL server: %w", err)
+					log.Errorf("Failed to shutdown GraphQL server: %v", err)
 				}
 			}
 		}()

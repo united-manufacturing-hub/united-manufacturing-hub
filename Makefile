@@ -64,3 +64,12 @@ install-git-hooks:
 	@echo "Installing git hooks..."
 	go install github.com/evilmartians/lefthook@latest
 	lefthook install
+
+# Convenience target: direct users to the correct location for GraphQL testing
+test-graphql:
+	@echo "❌ Please run GraphQL tests from the umh-core directory:"
+	@echo ""
+	@echo "   cd umh-core"
+	@echo "   make help            # Show all available commands"
+	@echo "   make test-graphql    # Start GraphQL server with mock data"
+	@echo ""

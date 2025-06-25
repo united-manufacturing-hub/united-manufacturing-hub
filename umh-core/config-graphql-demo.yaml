@@ -1,0 +1,35 @@
+# Sample config for GraphQL API with mock data
+# Use: go run cmd/main.go --config config-graphql-demo.yaml
+
+metricsPort: 8080
+
+# Enable GraphQL API with mock data for quick testing
+graphql:
+  enabled: true        # Enable GraphQL server
+  port: 8090          # GraphQL endpoint at http://localhost:8090/graphql
+  debug: true         # Enable GraphiQL playground at http://localhost:8090/
+  mockData: true      # Populate cache with realistic UNS sample data
+  corsOrigins:        # Allow all origins for development
+    - "*"
+
+# Minimal communicator config for testing (optional MQTT)
+communicator:
+  mqttHost: "localhost"
+  mqttPort: 1883
+  mqttTopic: "umh/v1/+/+/+/+/+"
+  mqttClientID: "umh-core-graphql-demo"
+  enableKafka: false   # Disable Kafka for simplicity
+  enableRedis: false   # Disable Redis for simplicity
+
+# Location hierarchy for UNS structure
+location:
+  0: "acme"
+  1: "cologne"
+  2: "packaging"
+  3: "station1"
+
+# Release channel
+releaseChannel: "stable"
+
+# Disable features that require persistence
+allowInsecureTLS: true 

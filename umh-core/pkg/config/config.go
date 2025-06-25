@@ -187,6 +187,7 @@ type GraphQLConfig struct {
 	Port         int      `yaml:"port"`                   // Port to expose GraphQL on (default: 8090)
 	CORSOrigins  []string `yaml:"corsOrigins,omitempty"`  // CORS allowed origins (default: ["*"])
 	Debug        bool     `yaml:"debug,omitempty"`        // Enable GraphiQL playground and debug logging
+	MockData     bool     `yaml:"mockData,omitempty"`     // Populate cache with mock data for testing
 	AuthRequired bool     `yaml:"authRequired,omitempty"` // Require authentication (future use)
 }
 
