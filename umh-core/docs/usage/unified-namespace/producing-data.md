@@ -1,7 +1,7 @@
 # Producing Data
 
-> **UMH Classic Users:** The previous `_historian` data contract is not used anymore in UMH core. Use `_raw` for simple sensor data and explicit data contracts (like `_temperature`, `_pump`) with the new [data modeling system](broken-reference) 🚧 for structured industrial data. See [Migration from UMH Classic to UMH Core](broken-reference) for complete migration instructions.
-
+> **UMH Classic Users:** The previous `_historian` data contract is not used anymore in UMH core. Use `_raw` for simple sensor data and explicit data contracts (like `_temperature`, `_pump`) with the new [data modeling system](../data-modeling/README.md) 🚧 for structured industrial data. See [Migration from UMH Classic to UMH Core](../../production/migration-from-classic.md) for complete migration instructions.
+> 
 > 🚧 **Roadmap Item** - Enhanced producer tooling and simplified configuration are under development.
 
 Publishing data to the Unified Namespace involves creating Bridges (shown as `protocolConverter:` in YAML) or Stand-alone Flows (shown as `dataFlow:` in YAML) that read from your devices and format messages according to UNS conventions.

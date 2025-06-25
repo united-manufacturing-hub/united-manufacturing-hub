@@ -9,7 +9,7 @@
   * _UMH Classic_: many pods, sidecars, service meshes → a forest of YAML.
   * _UMH Core_: **one image, one command**, sub-second startup.
 * **Observability & recovery**
-  * _Classic_: error clues spread across pod logs, `kubectl` events, load-balancers. Kubernetes states (PodPending, Running, etc.) is usually not want the user woudl expect (Running does not mean the pod is healthy)
+  * _Classic_: error clues spread across pod logs, `kubectl` events and load-balancers. Kubernetes states (`Pending`, `Running`, …) are usually not what the user would expect—`Running` does **not** guarantee the pod is healthy.
   * _Core_: **each component has well-defined states** and is recovered if the state is not healthy (e.g., incl. watching out for error or warning logs, metrics checks, etc.); S6 restarts failed processes instantly.
 * **Real-time responsiveness**
   * _Classic_: waiting thirty seconds for a new pipeline to launch due to Kubernetes overhead

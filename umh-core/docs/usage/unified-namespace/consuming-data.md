@@ -1,8 +1,6 @@
 # Consuming Data
 
-### 1. Bridge Sink Flows 🚧
-
-> 🚧 **Roadmap Item** - Enhanced consumer tooling, Topic Browser, and REST API are under development.
+> 🚧 **Roadmap Item** – Enhanced consumer tooling, Topic Browser, and REST API are under development.
 
 Consuming data from the Unified Namespace involves subscribing to specific topics or patterns and processing the standardized message formats. UMH Core provides multiple consumption methods for different use cases.
 
