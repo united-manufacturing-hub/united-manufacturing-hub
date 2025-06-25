@@ -32,7 +32,7 @@ const (
 	MaxBufferSize = 100 * 1024 * 1024
 
 	// MaxBundlesPerRequest limits bundles returned in a single request
-	MaxBundlesPerRequest = 4
+	MaxBundlesPerRequest = 5
 )
 
 // GenerateTopicBrowser is the main entry point for generating TopicBrowser content.

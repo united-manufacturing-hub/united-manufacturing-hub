@@ -120,16 +120,24 @@ var _ = Describe("TopicBrowser Generator", func() {
 				Expect(result.TopicCount).To(Equal(2))   // Cache size
 				Expect(result.UnsBundles).To(HaveLen(3)) // Cache + 2 new bundles
 
-				// Verify that the cache bundle contains the correct data
+				// Verify that the cache bundle contains the correct data (order-agnostic)
 				firstBundle := result.UnsBundles[0]
 				var firstBundleData tbproto.UnsBundle
 				err := proto.Unmarshal(firstBundle, &firstBundleData)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(firstBundleData.Events.Entries).To(HaveLen(2))
-				Expect(firstBundleData.Events.Entries[0].UnsTreeId).To(Equal("topic1"))
-				Expect(firstBundleData.Events.Entries[0].ProducedAtMs).To(Equal(uint64(1000)))
-				Expect(firstBundleData.Events.Entries[1].UnsTreeId).To(Equal("topic2"))
-				Expect(firstBundleData.Events.Entries[1].ProducedAtMs).To(Equal(uint64(1100)))
+
+				// Create a map for order-agnostic verification
+				eventsByTreeId := make(map[string]*tbproto.EventTableEntry)
+				for _, entry := range firstBundleData.Events.Entries {
+					eventsByTreeId[entry.UnsTreeId] = entry
+				}
+
+				// Verify both topics are present with correct timestamps
+				Expect(eventsByTreeId).To(HaveKey("topic1"))
+				Expect(eventsByTreeId).To(HaveKey("topic2"))
+				Expect(eventsByTreeId["topic1"].ProducedAtMs).To(Equal(uint64(1000)))
+				Expect(eventsByTreeId["topic2"].ProducedAtMs).To(Equal(uint64(1100)))
 				Expect(firstBundleData.UnsMap.Entries).To(HaveLen(2))
 
 				// Verify that the new bundles contain the correct data
@@ -148,10 +156,16 @@ var _ = Describe("TopicBrowser Generator", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(thirdBundleData.Events.Entries).To(HaveLen(2))
 
-				Expect(thirdBundleData.Events.Entries[0].UnsTreeId).To(Equal("topic4"))
-				Expect(thirdBundleData.Events.Entries[0].ProducedAtMs).To(Equal(uint64(2100)))
-				Expect(thirdBundleData.Events.Entries[1].UnsTreeId).To(Equal("topic5"))
-				Expect(thirdBundleData.Events.Entries[1].ProducedAtMs).To(Equal(uint64(2200)))
+				// Create map for order-agnostic verification of third bundle
+				thirdEventsByTreeId := make(map[string]*tbproto.EventTableEntry)
+				for _, entry := range thirdBundleData.Events.Entries {
+					thirdEventsByTreeId[entry.UnsTreeId] = entry
+				}
+
+				Expect(thirdEventsByTreeId).To(HaveKey("topic4"))
+				Expect(thirdEventsByTreeId).To(HaveKey("topic5"))
+				Expect(thirdEventsByTreeId["topic4"].ProducedAtMs).To(Equal(uint64(2100)))
+				Expect(thirdEventsByTreeId["topic5"].ProducedAtMs).To(Equal(uint64(2200)))
 				Expect(thirdBundleData.UnsMap.Entries).To(HaveLen(2))
 
 				// Verify bundle ordering
