@@ -21,12 +21,9 @@ import (
 )
 
 // Generator handles the generation of Topic Browser YAML configurations
-// Currently BoilerPlate-Code
 type Generator struct{}
 
 // NewGenerator creates a new YAML generator for Topic Browser configurations
-// Currently BoilerPlate-Code
-
 func NewGenerator() *Generator {
 	return &Generator{}
 }

@@ -16,6 +16,8 @@ agent:
   metricsPort: 8080
 
 internal:
+  topicbrowser:
+    desiredState: stopped
   redpanda:
     desiredState: active
     redpandaServiceConfig:
