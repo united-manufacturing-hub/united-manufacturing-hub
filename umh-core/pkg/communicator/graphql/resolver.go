@@ -6,10 +6,12 @@ package graphql
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"strings"
 	"time"
 
+	"github.com/cespare/xxhash/v2"
 	tbproto "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models/topicbrowser/pb"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -47,10 +49,13 @@ func (r *queryResolver) Topics(ctx context.Context, filter *TopicFilter, limit *
 	var topics []*Topic
 
 	// Convert protobuf data to GraphQL models
-	for unsTreeId, topicInfo := range unsMap.Entries {
+	for _, topicInfo := range unsMap.Entries {
+		// Calculate the hashed UNS tree ID for this topic (same as simulator)
+		hashedTreeId := r.hashUNSTableEntry(topicInfo)
+
 		// Get latest event for this topic if available
 		var latestEvent Event
-		if eventEntry, exists := eventMap[unsTreeId]; exists {
+		if eventEntry, exists := eventMap[hashedTreeId]; exists {
 			latestEvent = r.mapEventEntryToGraphQL(eventEntry)
 		}
 
@@ -113,6 +118,40 @@ func (r *Resolver) buildTopicName(topicInfo *tbproto.TopicInfo) string {
 	parts = append(parts, topicInfo.Name)
 
 	return strings.Join(parts, ".")
+}
+
+// hashUNSTableEntry generates an xxHash from the Levels and datacontract.
+// This is used by the frontend to identify which topic an entry belongs to.
+// We use it over full topic names to reduce the amount of data we need to send to the frontend.
+//
+// ✅ FIX: Uses null byte delimiters to prevent hash collisions between different segment combinations.
+// For example, ["ab","c"] vs ["a","bc"] would produce different hashes instead of identical ones.
+func (r *Resolver) hashUNSTableEntry(info *tbproto.TopicInfo) string {
+	hasher := xxhash.New()
+
+	// Helper function to write each component followed by NUL delimiter to avoid ambiguity
+	write := func(s string) {
+		_, _ = hasher.Write(append([]byte(s), 0))
+	}
+
+	write(info.Level0)
+
+	// Hash all location sublevels
+	for _, level := range info.LocationSublevels {
+		write(level)
+	}
+
+	write(info.DataContract)
+
+	// Hash virtual path if it exists
+	if info.VirtualPath != nil {
+		write(*info.VirtualPath)
+	}
+
+	// Hash the name (new field)
+	write(info.Name)
+
+	return hex.EncodeToString(hasher.Sum(nil))
 }
 
 func (r *Resolver) mapMetadataToGraphQL(metadata map[string]string) []*MetadataKv {
