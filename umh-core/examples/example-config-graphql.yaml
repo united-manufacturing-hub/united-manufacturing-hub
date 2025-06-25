@@ -1,54 +1,35 @@
-# Copyright 2025 UMH Systems GmbH
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 agent:
-  metricsPort: 8080
-  
-  # GraphQL API Configuration
-  graphql:
-    enabled: true        # Enable GraphQL server
-    port: 8090          # GraphQL endpoint at http://localhost:8090/graphql
-    debug: true         # Enable GraphiQL playground
-    corsOrigins:        # Allow all origins for development
-      - "*"
-  
-  communicator:
-    apiUrl: https://management.umh.app/api
-    # No authToken needed for GraphQL demo
-  
-  releaseChannel: stable
-  
-  location:
-      0: acme
-      1: cologne
-      2: packaging
-      3: station1
-
-# Optional: Add a simple data flow to show how data would flow through the system
+    metricsPort: 8080
+    communicator:
+        apiUrl: https://management.umh.app/api
+    graphql:
+        enabled: true
+        port: 8090
+        corsOrigins:
+            - '*'
+        debug: true
+    releaseChannel: stable
+    location:
+        0: acme
+        1: cologne
+        2: packaging
+        3: station1
 dataFlow:
-  - name: mock-data-generator
-    desiredState: stopped  # Keep stopped for GraphQL-only demo
-    dataFlowComponentConfig:
-      benthos:
-        input:
-          generate:
-            mapping: |
-              root.timestamp = now()
-              root.topic = "umh.v1.acme.cologne.packaging.station1.temperature"
-              root.value = 20 + (random_int() % 20)
-              root.unit = "°C"
-            interval: 5s
-            count: 0
-        output:
-          stdout: {} 
+    - name: mock-data-generator
+      desiredState: stopped
+      dataFlowComponentConfig:
+        benthos:
+            input:
+                generate:
+                    count: 0
+                    interval: 5s
+                    mapping: |
+                        root.timestamp = now()
+                        root.topic = "umh.v1.acme.cologne.packaging.station1.temperature"
+                        root.value = 20 + (random_int() % 20)
+                        root.unit = "°C"
+            output:
+                stdout: {}
+internal:
+    redpanda:
+        desiredState: active
