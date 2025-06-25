@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/pierrec/lz4/v4"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -36,21 +37,9 @@ var _ = Describe("extractRaw / parseBlock", func() {
 		service    *Service    // minimal service with just the ring-buffer
 	)
 
-	// helper to build a full, well-formed log slice
-	buildLogs := func(includeTimestamp bool, dataLine string) []s6svc.LogEntry {
-		logs := []s6svc.LogEntry{
-			{Content: BLOCK_START_MARKER},
-			{Content: dataLine},
-			{Content: DATA_END_MARKER},
-		}
-		if includeTimestamp {
-			logs = append(logs, s6svc.LogEntry{Content: strconv.FormatInt(epochMS, 10)})
-		}
-		logs = append(logs, s6svc.LogEntry{Content: BLOCK_END_MARKER})
-		return logs
-	}
-
 	BeforeEach(func() {
+		// create a ringbuffer with length=4
+		// then add 1 entry with hex encoded and lz4 compressed example data
 		payload = []byte("hello world")
 
 		var buf bytes.Buffer
@@ -68,7 +57,10 @@ var _ = Describe("extractRaw / parseBlock", func() {
 
 	Context("extraction and decompression", func() {
 		It("extracts, decompresses and stores the block", func() {
-			logs := buildLogs(true, string(compressed))
+			// confirms that parseBlock can recognise a complete log block, hex-decode
+			// and LZ4-decompress the payload, then write exactly one entry to the
+			// ring buffer whose bytes and timestamp match the originals.
+			logs := buildLogs(true, string(compressed), epochMS)
 
 			err := service.parseBlock(logs)
 			Expect(err).NotTo(HaveOccurred())
@@ -84,7 +76,7 @@ var _ = Describe("extractRaw / parseBlock", func() {
 		It("returns without error and without writing", func() {
 			// missing DATA_END + tail markers
 			logs := []s6svc.LogEntry{
-				{Content: BLOCK_START_MARKER},
+				{Content: constants.BLOCK_START_MARKER},
 				{Content: string(compressed)},
 			}
 
@@ -96,7 +88,7 @@ var _ = Describe("extractRaw / parseBlock", func() {
 
 	Context("missing timestamp line", func() {
 		It("fails with a clear error", func() {
-			logs := buildLogs(false, string(compressed)) // no ts line
+			logs := buildLogs(false, string(compressed), epochMS) // no ts line
 
 			err := service.parseBlock(logs)
 			Expect(err).To(HaveOccurred())
@@ -107,7 +99,7 @@ var _ = Describe("extractRaw / parseBlock", func() {
 
 	Context("corrupt compressed data", func() {
 		It("propagates the decompression error", func() {
-			logs := buildLogs(true, "not-lz4-bytes")
+			logs := buildLogs(true, "not-lz4-bytes", epochMS)
 
 			err := service.parseBlock(logs)
 			Expect(err).To(HaveOccurred())
@@ -115,3 +107,20 @@ var _ = Describe("extractRaw / parseBlock", func() {
 		})
 	})
 })
+
+// buildLogs creates a synthetic Benthos log block for tests.  It wraps the
+// supplied hex-encoded data line between BLOCK_START / DATA_END / BLOCK_END
+// markers and, if includeTimestamp is true, inserts the given epochMS as the
+// timestamp line.  The returned slice is ready to be fed into parseBlock.
+func buildLogs(includeTimestamp bool, dataLine string, epochMS int64) []s6svc.LogEntry {
+	logs := []s6svc.LogEntry{
+		{Content: constants.BLOCK_START_MARKER},
+		{Content: dataLine},
+		{Content: constants.DATA_END_MARKER},
+	}
+	if includeTimestamp {
+		logs = append(logs, s6svc.LogEntry{Content: strconv.FormatInt(epochMS, 10)})
+	}
+	logs = append(logs, s6svc.LogEntry{Content: constants.BLOCK_END_MARKER})
+	return logs
+}

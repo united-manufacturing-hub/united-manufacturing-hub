@@ -195,11 +195,11 @@ var _ = Describe("TopicBrowserService", func() {
 			hexBlock := makeLZ4Hex(payload)
 
 			mockS6.GetLogsResult = []s6svc.LogEntry{
-				{Content: BLOCK_START_MARKER, Timestamp: time.Now()},
+				{Content: constants.BLOCK_START_MARKER, Timestamp: time.Now()},
 				{Content: hexBlock, Timestamp: time.Now()},
-				{Content: DATA_END_MARKER, Timestamp: time.Now()},
+				{Content: constants.DATA_END_MARKER, Timestamp: time.Now()},
 				{Content: "1750091514783", Timestamp: time.Now()},
-				{Content: BLOCK_END_MARKER, Timestamp: time.Now()},
+				{Content: constants.BLOCK_END_MARKER, Timestamp: time.Now()},
 			}
 
 			// Create service with our official mock benthos manager

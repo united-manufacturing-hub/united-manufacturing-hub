@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package topicbrowser
+package constants
 
 const (
 	// BLOCK_START_MARKER marks the begin of a new data/general block inside the logs.

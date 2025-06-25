@@ -153,27 +153,28 @@ func (svc *Service) getBenthosName() string {
 	return fmt.Sprintf("benthos-topicbrowser-%s", svc.tbName)
 }
 
+// GenerateConfig provides a fixed benthosserviceconfig to ensure deploying
+// a benthos instants that reads data from uns, processes it to get into a
+// proper protobuf format and writes it to stdout using an additional timestamp.
 func (svc *Service) GenerateConfig(tbName string) (benthossvccfg.BenthosServiceConfig, error) {
 	return benthossvccfg.BenthosServiceConfig{
 		Input: map[string]any{
-			"input:": map[string]any{
-				"uns:": map[string]any{
-					"umh_topic:":      "umh.v1.*",
-					"kafka_topic:":    "umh.messages",
-					"broker_address:": "localhost:9092",
-					"consumer_group:": "benthos_kafka_test",
-				},
+			"uns": map[string]any{
+				"umh_topic":      "umh.v1.*",
+				"kafka_topic":    "umh.messages",
+				"broker_address": "localhost:9092",
+				"consumer_group": "benthos_kafka_test",
 			},
 		},
 		Pipeline: map[string]any{
-			"processors:": map[string]any{
-				"topic-browser:": "{}",
+			"processors": []map[string]any{
+				{
+					"topic_browser": map[string]any{},
+				},
 			},
 		},
 		Output: map[string]any{
-			"output:": map[string]any{
-				"stdout:": "{}",
-			},
+			"stdout": map[string]any{},
 		},
 		LogLevel: constants.DefaultBenthosLogLevel,
 	}, nil
