@@ -88,15 +88,32 @@ func (r *Registry) Meta(email string) Meta {
 
 // ForEach iterates over all active subscribers and their metadata
 func (r *Registry) ForEach(fn func(email string, m *Meta)) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+	// Collect all subscriber data first to avoid holding locks during callback
+	type subscriberData struct {
+		email string
+		meta  *Meta
+	}
 
+	var subscribers []subscriberData
+
+	r.mu.RLock()
 	r.subscribers.Range(func(key string, value string) bool {
 		if meta, exists := r.meta[key]; exists {
-			fn(key, meta)
+			// Make a copy of the meta to avoid sharing memory
+			metaCopy := *meta
+			subscribers = append(subscribers, subscriberData{
+				email: key,
+				meta:  &metaCopy,
+			})
 		}
 		return true
 	})
+	r.mu.RUnlock()
+
+	// Now call callbacks without holding any locks
+	for _, sub := range subscribers {
+		fn(sub.email, sub.meta)
+	}
 }
 
 // UpdateMeta updates the metadata for a subscriber
