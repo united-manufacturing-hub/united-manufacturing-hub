@@ -15,6 +15,7 @@
 package communication_state
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -151,14 +152,14 @@ func (c *CommunicationState) InitialiseAndStartRouter() {
 	c.Router.Start()
 }
 
-func (c *CommunicationState) StartTopicBrowserCacheUpdater(systemSnapshotManager *fsm.SnapshotManager) {
+func (c *CommunicationState) StartTopicBrowserCacheUpdater(systemSnapshotManager *fsm.SnapshotManager, ctx context.Context) {
 
 	runSimulator := false
 	c.TopicBrowserSimulator = topicbrowser.NewSimulator()
 
-	ctx, cncl := tools.Get1SecondContext()
+	ctxCfg, cncl := tools.Get1SecondContext()
 	defer cncl()
-	configCopy, err := c.ConfigManager.GetConfig(ctx, 0)
+	configCopy, err := c.ConfigManager.GetConfig(ctxCfg, 0)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to get config: %w", err)
 	}
@@ -170,13 +171,18 @@ func (c *CommunicationState) StartTopicBrowserCacheUpdater(systemSnapshotManager
 	go func() {
 		ticker := time.NewTicker(1 * time.Second)
 		for {
-			<-ticker.C
-			if runSimulator {
-				c.TopicBrowserSimulator.Tick()
-			}
-			err := c.TopicBrowserCache.Update(c.TopicBrowserSimulator.GetSimObservedState())
-			if err != nil {
-				sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to update topic browser cache: %w", err)
+			select {
+			case <-ctx.Done():
+				ticker.Stop()
+				return
+			case <-ticker.C:
+				if runSimulator {
+					c.TopicBrowserSimulator.Tick()
+				}
+				err := c.TopicBrowserCache.Update(c.TopicBrowserSimulator.GetSimObservedState())
+				if err != nil {
+					sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to update topic browser cache: %w", err)
+				}
 			}
 		}
 	}()

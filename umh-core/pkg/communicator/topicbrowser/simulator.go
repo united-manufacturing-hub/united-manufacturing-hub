@@ -52,7 +52,7 @@ func NewSimulator() *Simulator {
 // It is called when the simulator is enabled via the config file.
 func (s *Simulator) InitializeSimulator() {
 	s.simulatorEnabled = true
-	// add some hardcodedinitial topics to the simulator and use the HashUNSTableEntry function to generate the key
+	// add some hardcoded initial topics to the simulator and use the HashUNSTableEntry function to generate the key
 	s.topics = make(map[string]*tbproto.TopicInfo)
 
 	newTopic := &tbproto.TopicInfo{

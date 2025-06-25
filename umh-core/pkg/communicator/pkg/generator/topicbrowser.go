@@ -15,8 +15,24 @@
 package generator
 
 import (
+	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+)
+
+const (
+	// MaxTopicCount limits the number of topics to prevent memory exhaustion
+	MaxTopicCount = 1_000_000
+
+	// MaxBundleSize limits individual bundle size to 10MB
+	MaxBundleSize = 10 * 1024 * 1024
+
+	// MaxBufferSize limits total buffer size to 100MB
+	MaxBufferSize = 100 * 1024 * 1024
+
+	// MaxBundlesPerRequest limits bundles returned in a single request
+	MaxBundlesPerRequest = 4
 )
 
 // GenerateTopicBrowser is the main entry point for generating TopicBrowser content.
@@ -38,6 +54,34 @@ import (
 //   - Uses lastSentTimestamp to determine which bundles haven't been sent yet
 //   - This provides incremental updates to maintain real-time synchronization
 func GenerateTopicBrowser(cache *topicbrowser.Cache, obs *topicbrowser.ObservedState, isBootstrapped bool) *models.TopicBrowser {
+	// Validate topic count to prevent memory exhaustion
+	if err := validateTopicCount(cache); err != nil {
+		return &models.TopicBrowser{
+			Health: &models.Health{
+				Message:       err.Error(),
+				ObservedState: "error",
+				DesiredState:  "running",
+				Category:      models.Degraded,
+			},
+			TopicCount: 0,
+			UnsBundles: make(map[int][]byte),
+		}
+	}
+
+	// Validate buffer size to prevent excessive memory usage
+	if err := validateBufferSize(obs); err != nil {
+		return &models.TopicBrowser{
+			Health: &models.Health{
+				Message:       err.Error(),
+				ObservedState: "error",
+				DesiredState:  "running",
+				Category:      models.Degraded,
+			},
+			TopicCount: cache.Size(),
+			UnsBundles: make(map[int][]byte),
+		}
+	}
+
 	if isBootstrapped {
 		// Existing subscriber: Get only pending bundles from observed state
 		return GenerateTbContent(cache, obs)
@@ -47,6 +91,45 @@ func GenerateTopicBrowser(cache *topicbrowser.Cache, obs *topicbrowser.ObservedS
 		tb := generateTbContentForNewSubscriber(cache, obs)
 		return AddCachedBundleToTbContent(cache, tb)
 	}
+}
+
+// validateTopicCount ensures the topic count doesn't exceed safe limits
+func validateTopicCount(cache *topicbrowser.Cache) error {
+	topicCount := cache.Size()
+	if topicCount > MaxTopicCount {
+		return fmt.Errorf("topic count %d exceeds maximum limit of %d", topicCount, MaxTopicCount)
+	}
+	return nil
+}
+
+// validateBufferSize ensures the observed state buffer doesn't exceed safe limits
+func validateBufferSize(obs *topicbrowser.ObservedState) error {
+	totalSize := int64(0)
+	for _, buf := range obs.ServiceInfo.Status.Buffer {
+		bundleSize := int64(len(buf.Payload))
+
+		// Check individual bundle size
+		if bundleSize > MaxBundleSize {
+			return fmt.Errorf("bundle size %d bytes exceeds maximum limit of %d bytes", bundleSize, MaxBundleSize)
+		}
+
+		totalSize += bundleSize
+	}
+
+	// Check total buffer size
+	if totalSize > MaxBufferSize {
+		return fmt.Errorf("total buffer size %d bytes exceeds maximum limit of %d bytes", totalSize, MaxBufferSize)
+	}
+
+	return nil
+}
+
+// validateAndLimitBundles ensures bundle count doesn't exceed safe limits
+func validateAndLimitBundles(bundles [][]byte) [][]byte {
+	if len(bundles) > MaxBundlesPerRequest {
+		return bundles[:MaxBundlesPerRequest]
+	}
+	return bundles
 }
 
 // GenerateTbContent generates content for existing subscribers who are already bootstrapped.
@@ -169,7 +252,8 @@ func getPendingBundlesFromObservedState(cache *topicbrowser.Cache, obs *topicbro
 		}
 	}
 
-	return pendingBundles
+	// Apply bundle count protection
+	return validateAndLimitBundles(pendingBundles)
 }
 
 // getNewBundlesSinceLastCached retrieves incremental bundles for new subscribers.
@@ -194,7 +278,8 @@ func getNewBundlesSinceLastCached(cache *topicbrowser.Cache, obs *topicbrowser.O
 		}
 	}
 
-	return newBundles
+	// Apply bundle count protection
+	return validateAndLimitBundles(newBundles)
 }
 
 // getLastCachedTimestamp extracts the lastCachedTimestamp from the cache.
