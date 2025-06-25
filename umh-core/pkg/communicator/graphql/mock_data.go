@@ -15,33 +15,65 @@
 package graphql
 
 import (
+	"encoding/hex"
 	"reflect"
+	"strings"
 	"time"
 	"unsafe"
 
+	"github.com/cespare/xxhash/v2"
 	tbproto "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models/topicbrowser/pb"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 )
+
+// calculateUnsTreeId computes xxhash of topic elements separated by null delimiter
+func calculateUnsTreeId(level0 string, locationSublevels []string, dataContract string, virtualPath string, name string) string {
+	// Build the elements in order following UNS topic convention
+	elements := []string{level0}
+	elements = append(elements, locationSublevels...)
+	elements = append(elements, dataContract)
+	if virtualPath != "" {
+		elements = append(elements, virtualPath)
+	}
+	elements = append(elements, name)
+
+	// Join with null delimiter and compute xxhash
+	combined := strings.Join(elements, "\x00")
+	hash := xxhash.Sum64String(combined)
+
+	// Convert to hex string
+	return hex.EncodeToString([]byte{
+		byte(hash >> 56), byte(hash >> 48), byte(hash >> 40), byte(hash >> 32),
+		byte(hash >> 24), byte(hash >> 16), byte(hash >> 8), byte(hash),
+	})
+}
 
 // PopulateMockData fills the cache with realistic UNS sample data for GraphQL testing
 // Uses reflection to access private fields since there's no public API for direct population
 func PopulateMockData(cache *topicbrowser.Cache) {
+	log := logger.For(logger.ComponentCommunicator)
 	now := time.Now()
 
-	// Mock topics with realistic UNS data
-	mockData := []struct {
-		unsTreeId string
-		topicName string
-		value     float64
-		unit      string
-		metadata  map[string]string
+	// Mock topics following proper UNS convention: umh.v1.<location_path>.<data_contract>[.<virtual_path>].<tag_name>
+	mockTopics := []struct {
+		level0            string
+		locationSublevels []string
+		dataContract      string
+		virtualPath       string
+		name              string
+		value             float64
+		metadata          map[string]string
 	}{
 		{
-			unsTreeId: "acme.cologne.packaging.station1.temperature",
-			topicName: "umh.v1.acme.cologne.packaging.station1.temperature",
-			value:     23.9,
-			unit:      "°C",
+			level0:            "acme",
+			locationSublevels: []string{"cologne", "packaging", "station1"},
+			dataContract:      "_historian",
+			virtualPath:       "",
+			name:              "temperature",
+			value:             23.9,
 			metadata: map[string]string{
+				"unit":       "°C",
 				"sensor_id":  "temp_001",
 				"location":   "Packaging Station 1",
 				"alarm_high": "80",
@@ -49,11 +81,14 @@ func PopulateMockData(cache *topicbrowser.Cache) {
 			},
 		},
 		{
-			unsTreeId: "acme.cologne.packaging.station1.pressure",
-			topicName: "umh.v1.acme.cologne.packaging.station1.pressure",
-			value:     1.19,
-			unit:      "bar",
+			level0:            "acme",
+			locationSublevels: []string{"cologne", "packaging", "station1"},
+			dataContract:      "_historian",
+			virtualPath:       "",
+			name:              "pressure",
+			value:             1.19,
 			metadata: map[string]string{
+				"unit":       "bar",
 				"sensor_id":  "press_001",
 				"location":   "Packaging Station 1",
 				"alarm_high": "2.0",
@@ -61,55 +96,70 @@ func PopulateMockData(cache *topicbrowser.Cache) {
 			},
 		},
 		{
-			unsTreeId: "acme.cologne.packaging.station1.count",
-			topicName: "umh.v1.acme.cologne.packaging.station1.count",
-			value:     1454,
-			unit:      "pieces",
+			level0:            "acme",
+			locationSublevels: []string{"cologne", "packaging", "station1"},
+			dataContract:      "_historian",
+			virtualPath:       "",
+			name:              "count",
+			value:             1454,
 			metadata: map[string]string{
+				"unit":         "pieces",
 				"counter_id":   "cnt_001",
 				"location":     "Packaging Station 1",
 				"target_daily": "2000",
 			},
 		},
 		{
-			unsTreeId: "acme.cologne.assembly.robot1.cycle_time",
-			topicName: "umh.v1.acme.cologne.assembly.robot1.cycle_time",
-			value:     12.4,
-			unit:      "seconds",
+			level0:            "acme",
+			locationSublevels: []string{"cologne", "assembly", "robot1"},
+			dataContract:      "_historian",
+			virtualPath:       "",
+			name:              "cycle_time",
+			value:             12.4,
 			metadata: map[string]string{
+				"unit":        "seconds",
 				"robot_id":    "rob_001",
 				"location":    "Assembly Line",
 				"target_time": "12.0",
 			},
 		},
 		{
-			unsTreeId: "acme.cologne.quality.vision1.defect_rate",
-			topicName: "umh.v1.acme.cologne.quality.vision1.defect_rate",
-			value:     0.6,
-			unit:      "%",
+			level0:            "acme",
+			locationSublevels: []string{"cologne", "quality", "vision1"},
+			dataContract:      "_historian",
+			virtualPath:       "",
+			name:              "defect_rate",
+			value:             0.6,
 			metadata: map[string]string{
+				"unit":        "%",
 				"camera_id":   "vis_001",
 				"location":    "Quality Station",
 				"target_rate": "<1.0",
 			},
 		},
 		{
-			unsTreeId: "acme.cologne.energy.main.power",
-			topicName: "umh.v1.acme.cologne.energy.main.power",
-			value:     146.9,
-			unit:      "kW",
+			level0:            "acme",
+			locationSublevels: []string{"cologne", "energy"},
+			dataContract:      "_historian",
+			virtualPath:       "",
+			name:              "power",
+			value:             146.9,
 			metadata: map[string]string{
+				"unit":         "kW",
 				"meter_id":     "pow_001",
 				"location":     "Main Distribution",
 				"contract_max": "200",
 			},
 		},
 		{
-			unsTreeId: "acme.cologne.maintenance.pump1.vibration",
-			topicName: "umh.v1.acme.cologne.maintenance.pump1.vibration",
-			value:     2.2,
-			unit:      "mm/s",
+			level0:            "acme",
+			locationSublevels: []string{"cologne", "maintenance", "pump1"},
+			dataContract:      "_historian",
+			virtualPath:       "diagnostics",
+			name:              "vibration",
+			value:             2.2,
 			metadata: map[string]string{
+				"unit":          "mm/s",
 				"sensor_id":     "vib_001",
 				"location":      "Cooling System",
 				"alarm_level":   "5.0",
@@ -124,7 +174,8 @@ func PopulateMockData(cache *topicbrowser.Cache) {
 	// Get the mutex and lock it
 	muField := cacheValue.FieldByName("mu")
 	if !muField.IsValid() {
-		return // Cannot access mutex, skip mock data
+		log.Errorf("Cannot access cache mutex field")
+		return
 	}
 
 	// Get eventMap field
@@ -149,30 +200,66 @@ func PopulateMockData(cache *topicbrowser.Cache) {
 
 	timestampMs := now.UnixMilli()
 
-	for _, mock := range mockData {
-		// Create event entry - simplified to match actual protobuf structure
+	for i, mock := range mockTopics {
+		// Calculate the proper UNS tree ID
+		unsTreeId := calculateUnsTreeId(mock.level0, mock.locationSublevels, mock.dataContract, mock.virtualPath, mock.name)
+
+		// Build full topic name following UNS convention
+		topicParts := []string{"umh", "v1", mock.level0}
+		topicParts = append(topicParts, mock.locationSublevels...)
+		topicParts = append(topicParts, mock.dataContract)
+		if mock.virtualPath != "" {
+			topicParts = append(topicParts, mock.virtualPath)
+		}
+		topicParts = append(topicParts, mock.name)
+		topicName := strings.Join(topicParts, ".")
+
+		log.Infof("Creating mock data %d: unsTreeId=%s, topicName=%s", i, unsTreeId, topicName)
+
+		// Create event entry
 		event := &tbproto.EventTableEntry{
-			UnsTreeId:    mock.unsTreeId,
+			UnsTreeId:    unsTreeId,
 			ProducedAtMs: uint64(timestampMs),
 		}
-		eventMap[mock.unsTreeId] = event
+		eventMap[unsTreeId] = event
 
-		// Create topic info
+		// Create topic info with proper structure
 		topicInfo := &tbproto.TopicInfo{
-			Name:     mock.topicName,
-			Metadata: make(map[string]string),
+			Level0:            mock.level0,
+			LocationSublevels: mock.locationSublevels,
+			DataContract:      mock.dataContract,
+			VirtualPath:       &mock.virtualPath, // Optional field
+			Name:              mock.name,
+			Metadata:          make(map[string]string),
 		}
+
+		// Copy metadata including unit
 		for key, value := range mock.metadata {
 			topicInfo.Metadata[key] = value
 		}
-		unsMap.Entries[mock.topicName] = topicInfo
+
+		// Debug logging
+		log.Infof("TopicInfo metadata for %s: %+v", mock.name, topicInfo.Metadata)
+
+		// IMPORTANT: Use unsTreeId as key in unsMap.Entries, not topic name
+		// This matches how the resolver expects to find entries
+		unsMap.Entries[unsTreeId] = topicInfo
 	}
 
 	// Set the fields if possible
 	if eventMapField.CanSet() {
 		eventMapField.Set(reflect.ValueOf(eventMap))
+		log.Infof("Set eventMap with %d entries", len(eventMap))
+	} else {
+		log.Errorf("Cannot set eventMap field")
 	}
+
 	if unsMapField.CanSet() {
 		unsMapField.Set(reflect.ValueOf(unsMap))
+		log.Infof("Set unsMap with %d entries", len(unsMap.Entries))
+	} else {
+		log.Errorf("Cannot set unsMap field")
 	}
+
+	log.Infof("Mock data population completed")
 }
