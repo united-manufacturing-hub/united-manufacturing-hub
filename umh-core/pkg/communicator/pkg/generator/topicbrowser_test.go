@@ -108,7 +108,7 @@ var _ = Describe("TopicBrowser Generator", func() {
 				// Create observed state with buffers newer than lastCachedTimestamp
 				obs = createMockObservedState([]*topicbrowser.Buffer{
 					{Payload: createMockUnsBundleBytes(map[string]int64{"topic3": 2000}), Timestamp: 2000},
-					{Payload: createMockUnsBundleBytes(map[string]int64{"topic4": 2100}), Timestamp: 2100},
+					{Payload: createMockUnsBundleBytes(map[string]int64{"topic4": 2100, "topic5": 2200}), Timestamp: 2100}, // add two new topics in one bundle
 				})
 
 				// Act: Generate content for new subscriber
@@ -146,11 +146,13 @@ var _ = Describe("TopicBrowser Generator", func() {
 				var thirdBundleData tbproto.UnsBundle
 				err = proto.Unmarshal(thirdBundle, &thirdBundleData)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(thirdBundleData.Events.Entries).To(HaveLen(1))
+				Expect(thirdBundleData.Events.Entries).To(HaveLen(2))
 
 				Expect(thirdBundleData.Events.Entries[0].UnsTreeId).To(Equal("topic4"))
 				Expect(thirdBundleData.Events.Entries[0].ProducedAtMs).To(Equal(uint64(2100)))
-				Expect(thirdBundleData.UnsMap.Entries).To(HaveLen(1))
+				Expect(thirdBundleData.Events.Entries[1].UnsTreeId).To(Equal("topic5"))
+				Expect(thirdBundleData.Events.Entries[1].ProducedAtMs).To(Equal(uint64(2200)))
+				Expect(thirdBundleData.UnsMap.Entries).To(HaveLen(2))
 
 				// Verify bundle ordering
 				Expect(result.UnsBundles).To(HaveKey(0)) // Cache bundle
