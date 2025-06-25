@@ -22,121 +22,202 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"testing"
 	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
-func TestIntegration_GraphQLServer(t *testing.T) {
-	// Setup test server
-	resolver := &Resolver{
-		TopicBrowserCache: NewMockTopicBrowserCache(),
-	}
+var _ = Describe("GraphQL Integration Tests", func() {
+	var (
+		server    *Server
+		serverCtx context.Context
+		cancel    context.CancelFunc
+		port      = 8899 // Use different port for testing
+	)
 
-	config := &ServerConfig{
-		Port:        8899, // Use different port for testing
-		Debug:       true,
-		CORSOrigins: []string{"*"},
-	}
-
-	server, err := NewServer(resolver, config, nil)
-	if err != nil {
-		t.Fatalf("Failed to create server: %v", err)
-	}
-
-	// Start server in background
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	go func() {
-		if err := server.Start(ctx); err != nil {
-			t.Logf("Server start error: %v", err)
+	BeforeEach(func() {
+		// Setup test server
+		resolver := &Resolver{
+			TopicBrowserCache: NewMockTopicBrowserCache(),
 		}
-	}()
 
-	// Wait for server to start
-	time.Sleep(100 * time.Millisecond)
+		config := &ServerConfig{
+			Port:        port,
+			Debug:       true,
+			CORSOrigins: []string{"*"},
+		}
 
-	// Ensure cleanup
-	defer func() {
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer shutdownCancel()
-		server.Stop(shutdownCtx)
-	}()
+		var err error
+		server, err = NewServer(resolver, config, nil)
+		Expect(err).NotTo(HaveOccurred())
 
-	// Test GraphQL query
-	t.Run("TopicsQuery", func(t *testing.T) {
-		query := `{
-			topics(limit: 10) {
-				topic
-				metadata {
-					key
-					value
-				}
-				lastEvent {
-					... on TimeSeriesEvent {
-						producedAt
-						scalarType
-						stringValue
+		// Start server in background
+		serverCtx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+
+		go func() {
+			defer GinkgoRecover()
+			if err := server.Start(serverCtx); err != nil {
+				GinkgoWriter.Printf("Server start error: %v\n", err)
+			}
+		}()
+
+		// Wait for server to start
+		time.Sleep(200 * time.Millisecond)
+	})
+
+	AfterEach(func() {
+		if server != nil {
+			shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer shutdownCancel()
+			server.Stop(shutdownCtx)
+		}
+		if cancel != nil {
+			cancel()
+		}
+	})
+
+	Describe("GraphQL Queries", func() {
+		Context("when querying topics", func() {
+			It("should return topics with metadata and events", func() {
+				query := `{
+					topics(limit: 10) {
+						topic
+						metadata {
+							key
+							value
+						}
+						lastEvent {
+							... on TimeSeriesEvent {
+								producedAt
+								scalarType
+								stringValue
+							}
+						}
 					}
-				}
-			}
-		}`
+				}`
 
-		response := executeGraphQLQuery(t, query, 8899)
+				response := executeGraphQLQuery(query, port)
 
-		// Verify response structure
-		if response.Data == nil {
-			t.Error("Expected data in response, got nil")
-		}
+				Expect(response.Data).NotTo(BeNil())
+				Expect(response.Errors).To(BeEmpty())
+			})
 
-		if len(response.Errors) > 0 {
-			t.Errorf("Expected no errors, got: %v", response.Errors)
-		}
+			It("should handle topic filtering", func() {
+				query := `{
+					topics(filter: { text: "temperature" }, limit: 5) {
+						topic
+						metadata {
+							key
+							value
+						}
+					}
+				}`
+
+				response := executeGraphQLQuery(query, port)
+
+				Expect(response.Data).NotTo(BeNil())
+				Expect(response.Errors).To(BeEmpty())
+			})
+		})
+
+		Context("when querying a specific topic", func() {
+			It("should return the topic details", func() {
+				query := `{
+					topic(topic: "enterprise.site.area.productionLine.workstation.sensor.temperature") {
+						topic
+						metadata {
+							key
+							value
+						}
+					}
+				}`
+
+				response := executeGraphQLQuery(query, port)
+
+				Expect(response.Data).NotTo(BeNil())
+				Expect(response.Errors).To(BeEmpty())
+			})
+
+			It("should handle non-existent topics gracefully", func() {
+				query := `{
+					topic(topic: "non.existent.topic") {
+						topic
+						metadata {
+							key
+							value
+						}
+					}
+				}`
+
+				response := executeGraphQLQuery(query, port)
+
+				// Should not error, just return null
+				Expect(response.Errors).To(BeEmpty())
+			})
+		})
 	})
 
-	t.Run("SingleTopicQuery", func(t *testing.T) {
-		query := `{
-			topic(topic: "enterprise.site.area.productionLine.workstation.sensor.temperature") {
-				topic
-				metadata {
-					key
-					value
-				}
-			}
-		}`
+	Describe("HTTP Server Features", func() {
+		Context("CORS functionality", func() {
+			It("should set CORS headers for OPTIONS requests", func() {
+				client := &http.Client{Timeout: 5 * time.Second}
 
-		response := executeGraphQLQuery(t, query, 8899)
+				req, err := http.NewRequest("OPTIONS", fmt.Sprintf("http://localhost:%d/graphql", port), nil)
+				Expect(err).NotTo(HaveOccurred())
+				req.Header.Set("Origin", "http://localhost:3000")
 
-		if response.Data == nil {
-			t.Error("Expected data in response, got nil")
-		}
+				resp, err := client.Do(req)
+				Expect(err).NotTo(HaveOccurred())
+				defer resp.Body.Close()
 
-		if len(response.Errors) > 0 {
-			t.Errorf("Expected no errors, got: %v", response.Errors)
-		}
+				corsHeader := resp.Header.Get("Access-Control-Allow-Origin")
+				Expect(corsHeader).NotTo(BeEmpty())
+			})
+		})
+
+		Context("GraphiQL playground", func() {
+			It("should serve playground in debug mode", func() {
+				client := &http.Client{Timeout: 5 * time.Second}
+
+				resp, err := client.Get(fmt.Sprintf("http://localhost:%d/", port))
+				Expect(err).NotTo(HaveOccurred())
+				defer resp.Body.Close()
+
+				Expect(resp.StatusCode).To(Equal(http.StatusOK))
+			})
+		})
+
+		Context("error handling", func() {
+			It("should handle malformed GraphQL queries", func() {
+				client := &http.Client{Timeout: 5 * time.Second}
+
+				malformedJSON := `{"query": "{ invalid syntax }`
+
+				req, err := http.NewRequest("POST", fmt.Sprintf("http://localhost:%d/graphql", port),
+					bytes.NewBufferString(malformedJSON))
+				Expect(err).NotTo(HaveOccurred())
+				req.Header.Set("Content-Type", "application/json")
+
+				resp, err := client.Do(req)
+				Expect(err).NotTo(HaveOccurred())
+				defer resp.Body.Close()
+
+				// Should return 400 for malformed JSON
+				Expect(resp.StatusCode).To(Equal(http.StatusBadRequest))
+			})
+
+			It("should handle invalid GraphQL syntax gracefully", func() {
+				query := `{ invalidField }`
+
+				response := executeGraphQLQueryAllowingErrors(query, port)
+
+				// Should return GraphQL errors for invalid fields
+				Expect(response.Errors).NotTo(BeEmpty())
+			})
+		})
 	})
-
-	t.Run("CORSHeaders", func(t *testing.T) {
-		client := &http.Client{Timeout: 5 * time.Second}
-
-		req, err := http.NewRequest("OPTIONS", "http://localhost:8899/graphql", nil)
-		if err != nil {
-			t.Fatalf("Failed to create request: %v", err)
-		}
-		req.Header.Set("Origin", "http://localhost:3000")
-
-		resp, err := client.Do(req)
-		if err != nil {
-			t.Fatalf("Failed to make request: %v", err)
-		}
-		defer resp.Body.Close()
-
-		corsHeader := resp.Header.Get("Access-Control-Allow-Origin")
-		if corsHeader == "" {
-			t.Error("Expected CORS header, got none")
-		}
-	})
-}
+})
 
 type GraphQLResponse struct {
 	Data   interface{}    `json:"data"`
@@ -148,7 +229,7 @@ type GraphQLError struct {
 	Path    []interface{} `json:"path"`
 }
 
-func executeGraphQLQuery(t *testing.T, query string, port int) *GraphQLResponse {
+func executeGraphQLQuery(query string, port int) *GraphQLResponse {
 	client := &http.Client{Timeout: 5 * time.Second}
 
 	reqBody := map[string]string{
@@ -156,30 +237,46 @@ func executeGraphQLQuery(t *testing.T, query string, port int) *GraphQLResponse 
 	}
 
 	jsonBody, err := json.Marshal(reqBody)
-	if err != nil {
-		t.Fatalf("Failed to marshal request: %v", err)
-	}
+	Expect(err).NotTo(HaveOccurred())
 
 	req, err := http.NewRequest("POST", fmt.Sprintf("http://localhost:%d/graphql", port), bytes.NewBuffer(jsonBody))
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
+	Expect(err).NotTo(HaveOccurred())
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatalf("Failed to make request: %v", err)
-	}
+	Expect(err).NotTo(HaveOccurred())
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("Expected status 200, got %d", resp.StatusCode)
-	}
+	Expect(resp.StatusCode).To(Equal(http.StatusOK))
 
 	var response GraphQLResponse
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		t.Fatalf("Failed to decode response: %v", err)
+	err = json.NewDecoder(resp.Body).Decode(&response)
+	Expect(err).NotTo(HaveOccurred())
+
+	return &response
+}
+
+func executeGraphQLQueryAllowingErrors(query string, port int) *GraphQLResponse {
+	client := &http.Client{Timeout: 5 * time.Second}
+
+	reqBody := map[string]string{
+		"query": query,
 	}
+
+	jsonBody, err := json.Marshal(reqBody)
+	Expect(err).NotTo(HaveOccurred())
+
+	req, err := http.NewRequest("POST", fmt.Sprintf("http://localhost:%d/graphql", port), bytes.NewBuffer(jsonBody))
+	Expect(err).NotTo(HaveOccurred())
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	Expect(err).NotTo(HaveOccurred())
+	defer resp.Body.Close()
+
+	var response GraphQLResponse
+	err = json.NewDecoder(resp.Body).Decode(&response)
+	Expect(err).NotTo(HaveOccurred())
 
 	return &response
 }
