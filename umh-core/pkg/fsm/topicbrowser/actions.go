@@ -23,6 +23,7 @@ import (
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	logger "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -216,38 +217,38 @@ func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services s
 
 // isTopicBrowserHealthy checks if the Topic Browser service is healthy based on ServiceInfo
 // This leverages the existing service health analysis instead of reimplementing it
-func (i *Instance) isTopicBrowserHealthy() bool {
+func (i *Instance) isTopicBrowserHealthy() (bool, string) {
 	// Use the service's existing health analysis
 	serviceInfo := i.ObservedState.ServiceInfo
 
 	// If there's a specific status reason indicating issues, it's not healthy
 	if serviceInfo.StatusReason != "" {
-		return false
+		return false, "unknown status reason"
 	}
 
 	// Check if the underlying Benthos FSM is in a healthy state
 	if serviceInfo.BenthosFSMState != "active" {
-		return false
+		return false, "benthos fsm not active"
 	}
 
 	// Check if Redpanda FSM is in a healthy state
 	if serviceInfo.RedpandaFSMState != "active" {
-		return false
+		return false, "redpanda fsm not active"
 	}
 
 	// Additional basic health checks from Benthos observed state
 	benthosObservedState := serviceInfo.BenthosObservedState
 	if benthosObservedState.ServiceInfo.S6FSMState != "running" && benthosObservedState.ServiceInfo.S6FSMState != "active" {
-		return false
+		return false, "benthos s6 fsm not running"
 	}
 
 	// Check Benthos health checks
 	healthCheck := benthosObservedState.ServiceInfo.BenthosStatus.HealthCheck
 	if !healthCheck.IsLive || !healthCheck.IsReady {
-		return false
+		return false, "benthos health check not live or ready"
 	}
 
-	return true
+	return true, ""
 }
 
 // isTopicBrowserDegraded determines if the Topic Browser should be considered degraded
@@ -261,8 +262,9 @@ func (i *Instance) isTopicBrowserDegraded() (bool, string) {
 	}
 
 	// If there's processing activity but health checks fail, it's degraded
-	if serviceInfo.HasProcessingActivity && !i.isTopicBrowserHealthy() {
-		return true, "has processing activity but health checks failing"
+	healthy, reason := i.isTopicBrowserHealthy()
+	if serviceInfo.HasProcessingActivity && !healthy {
+		return true, fmt.Sprintf("has processing activity but health checks failing: %s", reason)
 	}
 
 	// Check for restart events in S6 service
@@ -274,8 +276,18 @@ func (i *Instance) isTopicBrowserDegraded() (bool, string) {
 	return false, "service appears healthy"
 }
 
+// isTopicBrowserStopped determines if the Topic Browser is stopped
+func (i *Instance) isTopicBrowserStopped() (bool, string) {
+	if i.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.S6FSMState == s6fsm.OperationalStateStopped {
+		return true, ""
+	}
+
+	return false, fmt.Sprintf("service is not in %s state", s6fsm.OperationalStateStopped)
+}
+
 // shouldRecoverFromDegraded determines if the Topic Browser should recover from degraded state
 func (i *Instance) shouldRecoverFromDegraded() bool {
 	// If the service is now healthy and there are no status reasons indicating issues
-	return i.isTopicBrowserHealthy()
+	healthy, _ := i.isTopicBrowserHealthy()
+	return healthy
 }
