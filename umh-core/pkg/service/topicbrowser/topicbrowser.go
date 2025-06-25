@@ -61,7 +61,7 @@ type ITopicBrowserService interface {
 }
 
 type Status struct {
-	Buffer []*Buffer
+	Buffer []*Buffer        // contains the ringbuffer sorted from newest to oldest
 	Logs   []s6svc.LogEntry // contain the structured s6 logs entries
 }
 
@@ -85,9 +85,12 @@ type ServiceInfo struct {
 	RedpandaFSMState      string
 
 	// topic browser status
-	Status                Status
-	HasProcessingActivity bool
-	StatusReason          string
+	Status Status
+	// processing activities
+	BenthosProcessing  bool // is benthos active
+	RedpandaProcessing bool // is redpanda active
+	InvalidMetrics     bool // if there is invalid metrics e.g. redpanda has no output but benthos has input
+	StatusReason       string
 }
 
 // Service implements ITopicBrowserService
@@ -266,7 +269,9 @@ func (svc *Service) Status(
 		BenthosFSMState:       benthosFSMState,
 		RedpandaObservedState: redpandaObservedState,
 		RedpandaFSMState:      redpandaFSMState,
-		HasProcessingActivity: activity,
+		BenthosProcessing:     svc.benthosProcessingActivity(benthosObservedState),
+		RedpandaProcessing:    svc.redpandaProcessingActivity(redpandaObservedState),
+		InvalidMetrics:        activity,
 		StatusReason:          statusReason,
 		Status: Status{
 			Buffer: svc.ringbuffer.Get(),
@@ -569,4 +574,18 @@ func (svc *Service) checkMetrics(
 	}
 
 	return "", true
+}
+
+func (svc *Service) benthosProcessingActivity(observedState benthosfsm.BenthosObservedState) bool {
+	return observedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState.IsActive
+}
+
+func (svc *Service) redpandaProcessingActivity(observedState rpfsm.RedpandaObservedState) bool {
+	if observedState.ServiceInfo.RedpandaStatus.RedpandaMetrics.MetricsState == nil {
+		return false
+	}
+	if observedState.ServiceInfo.RedpandaStatus.RedpandaMetrics.MetricsState.IsActive {
+		return true
+	}
+	return false
 }
