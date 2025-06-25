@@ -71,5 +71,5 @@ test-graphql:
 	@echo ""
 	@echo "   cd umh-core"
 	@echo "   make help            # Show all available commands"
-	@echo "   make test-graphql    # Start GraphQL server with mock data"
+	@echo "   make test-graphql    # Start GraphQL server with simulator data"
 	@echo ""

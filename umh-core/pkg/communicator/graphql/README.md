@@ -6,7 +6,7 @@ This package provides a GraphQL API for browsing UMH Core topic browser data.
 
 - **Complete GraphQL server** with Gin framework integration
 - **Interactive GraphiQL playground** for development and testing
-- **Mock data mode** with 7 realistic UNS manufacturing topics
+- **Real-time data** from built-in simulator with UNS manufacturing topics
 - **CORS support** for web development
 - **Filtering and pagination** for topic queries
 - **Rich metadata** including units, sensor IDs, locations, and alarm levels
@@ -18,7 +18,14 @@ This package provides a GraphQL API for browsing UMH Core topic browser data.
 - `resolver.go` - GraphQL query resolvers
 - `models.go` - GraphQL type definitions  
 - `schema.graphqls` - GraphQL schema definition
-- `mock_data.go` - Mock UNS data for testing/demo with xxhash UNS tree IDs
+
+## Data Source
+
+The GraphQL API uses real data from the built-in simulator that:
+- **Generates UNS-compliant topics** every second with proper topic structure
+- **Provides realistic sensor data** (temperature, pressure, etc.) with continuous updates
+- **Automatically populates** the topic browser cache used by GraphQL
+- **Uses proper xxhash-based UNS tree IDs** matching production behavior
 
 ## Start Server
 
@@ -26,7 +33,7 @@ This package provides a GraphQL API for browsing UMH Core topic browser data.
 ```bash
 cd umh-core
 make help            # Show all available commands
-make test-graphql    # Start GraphQL server with mock data
+make test-graphql    # Start GraphQL server with simulator data
 ```
 
 ### Alternative: Direct Go execution
@@ -67,7 +74,7 @@ query {
 ### Filter topics by text
 ```graphql
 query {
-  topics(filter: { text: "temperature" }) {
+  topics(filter: { text: "topic1" }) {
     topic
     lastEvent {
       producedAt
@@ -87,7 +94,7 @@ query {
 ### Get specific topic
 ```graphql
 query {
-  topic(topic: "acme.cologne.packaging.station1._historian.temperature") {
+  topic(topic: "uns.topic1") {
     topic
     lastEvent {
       producedAt
@@ -120,37 +127,29 @@ query {
 }
 ```
 
-## Mock Data Included
+## Simulator Data
 
-The mock data includes 7 realistic UNS manufacturing topics following proper UNS convention with data contracts:
+The built-in simulator provides 2 UNS manufacturing topics with realistic data:
 
-- `acme.cologne.packaging.station1._historian.temperature` (unit: °C, 23.9°C)
-- `acme.cologne.packaging.station1._historian.pressure` (unit: bar, 1.19 bar)  
-- `acme.cologne.packaging.station1._historian.count` (unit: pieces, 1454 pieces)
-- `acme.cologne.assembly.robot1._historian.cycle_time` (unit: seconds, 12.4 seconds)
-- `acme.cologne.quality.vision1._historian.defect_rate` (unit: %, 0.6%)
-- `acme.cologne.energy._historian.power` (unit: kW, 146.9 kW)
-- `acme.cologne.maintenance.pump1._historian.diagnostics.vibration` (unit: mm/s, 2.2 mm/s)
+- `uns.topic1` - Corporate A, Plant 1, Line 4, Pump 41 (random numeric values)
+- `uns.topic2` - Corporate A, Plant 1, Line 4, Pump 42 (random numeric values)
 
 ### Topic Structure
 
 Topics follow the UNS convention: `<enterprise>.<location_path>.<data_contract>[.<virtual_path>].<tag_name>`
 
-- **Enterprise**: `acme`
-- **Location Path**: `cologne.packaging.station1`, `cologne.assembly.robot1`, etc.
-- **Data Contract**: `_historian` (for time-series data)
-- **Virtual Path**: `diagnostics` (optional, used for vibration topic)
-- **Tag Name**: `temperature`, `pressure`, `count`, etc.
+- **Enterprise**: `corpA`
+- **Location Path**: `plant-1.line-4.pump-41`, `plant-1.line-4.pump-42`
+- **Data Contract**: `uns.topic1`, `uns.topic2`
 
-### Metadata Structure
+### Real-Time Updates
 
-Each topic includes comprehensive metadata:
-- **Unit**: Physical unit of measurement (°C, bar, pieces, etc.)
-- **Sensor IDs**: Unique identifiers (temp_001, press_001, etc.)
-- **Physical Locations**: Human-readable locations (Packaging Station 1, Assembly Line, etc.)
-- **Alarm Levels**: Operational thresholds (high/low limits, warning levels)
-- **Target Values**: Performance targets (daily counts, cycle times, etc.)
+The simulator:
+- **Updates every second** with new random values
+- **Maintains topic structure** with proper UNS tree IDs
+- **Provides continuous data** for testing GraphQL queries
+- **Uses realistic manufacturing context** (corporate facilities, production lines)
 
 ### UNS Tree ID Calculation
 
-The mock data uses proper xxhash calculation for UNS tree IDs, computed from topic elements separated by null delimiters, matching production behavior. 
+The simulator uses proper xxhash calculation for UNS tree IDs, computed from topic elements separated by null delimiters, matching production behavior. 

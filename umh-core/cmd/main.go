@@ -118,11 +118,7 @@ func main() {
 			configData.Agent.GraphQLConfig.CORSOrigins = []string{"*"}
 		}
 
-		// Populate mock data if enabled
-		if configData.Agent.GraphQLConfig.MockData {
-			log.Info("Populating GraphQL cache with mock data for testing")
-			graphql.PopulateMockData(communicationState.TopicBrowserCache)
-		}
+		// GraphQL server uses real data from the simulator via TopicBrowserCache
 
 		graphqlResolver := &graphql.Resolver{
 			SnapshotManager:   systemSnapshotManager,

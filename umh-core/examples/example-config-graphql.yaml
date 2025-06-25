@@ -20,7 +20,6 @@ agent:
     enabled: true        # Enable GraphQL server
     port: 8090          # GraphQL endpoint at http://localhost:8090/graphql
     debug: true         # Enable GraphiQL playground
-    mockData: true      # Populate cache with realistic UNS sample data
     corsOrigins:        # Allow all origins for development
       - "*"
   

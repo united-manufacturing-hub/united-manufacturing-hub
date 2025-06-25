@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-.PHONY: build run clean test help
+.PHONY: build run clean test help test-graphql
 
 # Show available commands and common usage patterns
 help: ## Display available make targets and usage information
@@ -20,7 +20,7 @@ help: ## Display available make targets and usage information
 	@echo "=================================="
 	@echo ""
 	@echo "📊 QUICK START - GraphQL API Demo:"
-	@echo "   make test-graphql    # Start GraphQL server with mock data (port 8090)"
+	@echo "   make test-graphql    # Start GraphQL server with simulator data (port 8090)"
 	@echo ""
 	@echo "🔨 BUILD COMMANDS:"
 	@echo "   make build          # Build Docker image"
@@ -28,7 +28,7 @@ help: ## Display available make targets and usage information
 	@echo "   make build-pprof    # Build with profiling support"
 	@echo ""
 	@echo "🧪 TEST COMMANDS:"
-	@echo "   make test-graphql      # GraphQL API with mock UNS data (recommended)"
+	@echo "   make test-graphql      # GraphQL API with real-time simulator data (recommended)"
 	@echo "   make test-dfc          # Data Flow Components"
 	@echo "   make test-redpanda     # Redpanda message broker"
 	@echo "   make test-connection   # Connection services"
@@ -516,16 +516,16 @@ test-benthos-monitor: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 		--cpus $(CPUS) \
 		ghcr.io/united-manufacturing-hub/united-manufacturing-hub/umh-core:staging
 
-# GraphQL API Demo: Complete GraphQL server with mock UNS data
+# GraphQL API Demo: Complete GraphQL server with real-time simulator data
 # 
 # USAGE: cd umh-core && make test-graphql
 # 
-# This target starts UMH Core with GraphQL API enabled and mock data populated.
+# This target starts UMH Core with GraphQL API enabled and built-in simulator providing real data.
 # Perfect for quick testing and development without requiring MQTT/Redis infrastructure.
 #
 # FEATURES:
 # - GraphQL server on port 8090 with Gin framework
-# - 7 realistic UNS topics with rich metadata (temperature, pressure, counts, etc.)
+# - Real-time UNS topics from built-in simulator (updates every second)
 # - GraphiQL Playground for interactive querying
 # - CORS enabled for web development
 # - No external dependencies required
@@ -537,19 +537,19 @@ test-benthos-monitor: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 #
 # SAMPLE QUERIES:
 # - All topics: { topics { topic metadata { key value } } }
-# - Filtered:   { topics(filter: {text: "temperature"}) { topic } }
+# - Filtered:   { topics(filter: {text: "topic1"}) { topic } }
 # - Limited:    { topics(limit: 3) { topic } }
-# - Single:     { topic(topic: "..umh.v1.acme.cologne.energy.main.power") { topic } }
+# - Single:     { topic(topic: "uns.topic1") { topic } }
 #
 # TROUBLESHOOTING:
 # - If GraphQL server doesn't start, check logs: docker logs umh-core
 # - Ensure ports 8090 and 8081 are not in use
 # - Container must have config.yaml with graphql.enabled=true
-# - Mock data appears in logs: "Populating GraphQL cache with mock data"
+# - Simulator data appears in logs with topic updates every second
 #
 # TECHNICAL NOTES:
-# - Mock data simulates realistic manufacturing UNS topics
-# - Uses reflection to populate internal topic browser cache
+# - Built-in simulator generates realistic UNS topics with proper structure
+# - Simulator automatically populates topic browser cache every second
 # - GraphQL schema supports both time series and relational events
 # - Server uses graceful shutdown with 3-second timeout
 # - See pkg/communicator/graphql/README.md for detailed documentation
@@ -566,14 +566,14 @@ test-graphql: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 	@echo "   Metrics:            http://localhost:8081/metrics"
 	@echo ""
 	@echo "🔧 FEATURES:"
-	@echo "   • 7 mock UNS topics with realistic data"
+	@echo "   • Real-time UNS topics from built-in simulator"
 	@echo "   • Interactive GraphiQL Playground"
 	@echo "   • Topic filtering and pagination" 
-	@echo "   • Rich metadata (sensor IDs, locations, alarms)"
+	@echo "   • Data updates every second automatically"
 	@echo ""
 	@echo "📋 SAMPLE QUERIES:"
 	@echo '   { topics { topic metadata { key value } } }'
-	@echo '   { topics(filter: {text: "temperature"}) { topic } }'
+	@echo '   { topics(filter: {text: "topic1"}) { topic } }'
 	@echo '   { topics(limit: 3) { topic } }'
 	@echo ""
 	@echo "🐛 TROUBLESHOOTING:"
