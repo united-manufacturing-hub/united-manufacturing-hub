@@ -106,7 +106,7 @@ func NewInstance(
 
 	instance.registerCallbacks()
 
-	metrics.InitErrorCounter(metrics.ComponentConnectionInstance, config.Name)
+	metrics.InitErrorCounter(metrics.ComponentTopicBrowserInstance, config.Name)
 
 	return instance
 }
@@ -172,5 +172,5 @@ func (i *Instance) PrintState() {
 
 // GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance
 func (i *Instance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
-	return constants.ConnectionExpectedMaxP95ExecutionTimePerInstance
+	return constants.TopicBrowserExpectedMaxP95ExecutionTimePerInstance
 }

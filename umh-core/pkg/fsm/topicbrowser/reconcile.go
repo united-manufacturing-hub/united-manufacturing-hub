@@ -131,7 +131,7 @@ func (i *Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, s
 	managerErr, managerReconciled := i.service.ReconcileManager(ctx, services, snapshot.Tick)
 	if managerErr != nil {
 		i.baseFSMInstance.SetError(managerErr, snapshot.Tick)
-		i.baseFSMInstance.GetLogger().Errorf("error reconciling nmapManager: %s", managerErr)
+		i.baseFSMInstance.GetLogger().Errorf("error reconciling Topic Browser manager: %s", managerErr)
 		return nil, false
 	}
 

@@ -38,7 +38,7 @@ func (instance *Instance) registerCallbacks() {
 
 	// Running phase state callbacks
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateActive, func(ctx context.Context, e *fsm.Event) {
-		instance.baseFSMInstance.GetLogger().Infof("Entering down state for %s", instance.baseFSMInstance.GetID())
+		instance.baseFSMInstance.GetLogger().Infof("Entering active state for %s", instance.baseFSMInstance.GetID())
 	})
 
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateDegraded, func(ctx context.Context, e *fsm.Event) {
