@@ -80,7 +80,7 @@ func (s *Simulator) GenerateNewUnsBundle() []byte {
 					ScalarType: tbproto.ScalarType_NUMERIC,
 					Value: &tbproto.TimeSeriesPayload_NumericValue{
 						NumericValue: &wrapperspb.DoubleValue{
-							Value: rand.Float64(),
+							Value: rand.Float64() * 100,
 						},
 					},
 				},
@@ -112,6 +112,10 @@ func (s *Simulator) AddUnsBundleToSimObservedState(bundle []byte) {
 		Payload:   bundle,
 		Timestamp: time.Now().Unix(),
 	})
+	// limit the buffer to 100 entries and delete the oldest entry if the buffer is full
+	if len(s.simObservedState.ServiceInfo.Status.Buffer) > 100 {
+		s.simObservedState.ServiceInfo.Status.Buffer = s.simObservedState.ServiceInfo.Status.Buffer[1:]
+	}
 }
 
 func (s *Simulator) GetSimObservedState() *ObservedState {
