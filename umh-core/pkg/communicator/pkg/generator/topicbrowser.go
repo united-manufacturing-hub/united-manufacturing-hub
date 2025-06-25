@@ -19,6 +19,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"go.uber.org/zap"
 )
 
 const (
@@ -53,7 +54,20 @@ const (
 //   - Get only pending bundles from observed state
 //   - Uses lastSentTimestamp to determine which bundles haven't been sent yet
 //   - This provides incremental updates to maintain real-time synchronization
-func GenerateTopicBrowser(cache *topicbrowser.Cache, obs *topicbrowser.ObservedState, isBootstrapped bool) *models.TopicBrowser {
+func GenerateTopicBrowser(cache *topicbrowser.Cache, obs *topicbrowser.ObservedState, isBootstrapped bool, logger *zap.SugaredLogger) *models.TopicBrowser {
+	// Validate input parameters
+	if cache == nil || obs == nil {
+		return &models.TopicBrowser{
+			Health: &models.Health{
+				Message:       "invalid parameters: cache or observed state is nil",
+				ObservedState: "error",
+				DesiredState:  "running",
+				Category:      models.Degraded,
+			},
+			TopicCount: 0,
+			UnsBundles: make(map[int][]byte),
+		}
+	}
 	// Validate topic count to prevent memory exhaustion
 	if err := validateTopicCount(cache); err != nil {
 		return &models.TopicBrowser{
@@ -84,11 +98,11 @@ func GenerateTopicBrowser(cache *topicbrowser.Cache, obs *topicbrowser.ObservedS
 
 	if isBootstrapped {
 		// Existing subscriber: Get only pending bundles from observed state
-		return GenerateTbContent(cache, obs)
+		return GenerateTbContent(cache, obs, logger)
 	} else {
 		// New subscriber: Get the full cache PLUS any new bundles since cache was updated
 		// First get the content as if for an existing subscriber (new bundles since cache was updated)
-		tb := generateTbContentForNewSubscriber(cache, obs)
+		tb := generateTbContentForNewSubscriber(cache, obs, logger)
 		return AddCachedBundleToTbContent(cache, tb)
 	}
 }
@@ -125,8 +139,9 @@ func validateBufferSize(obs *topicbrowser.ObservedState) error {
 }
 
 // validateAndLimitBundles ensures bundle count doesn't exceed safe limits
-func validateAndLimitBundles(bundles [][]byte) [][]byte {
+func validateAndLimitBundles(bundles [][]byte, logger *zap.SugaredLogger) [][]byte {
 	if len(bundles) > MaxBundlesPerRequest {
+		logger.Warnf("bundle count %d exceeds maximum limit of %d", len(bundles), MaxBundlesPerRequest)
 		return bundles[:MaxBundlesPerRequest]
 	}
 	return bundles
@@ -141,13 +156,13 @@ func validateAndLimitBundles(bundles [][]byte) [][]byte {
 //
 // This ensures existing subscribers receive only incremental updates,
 // preventing duplicate data and maintaining efficient real-time synchronization.
-func GenerateTbContent(cache *topicbrowser.Cache, obs *topicbrowser.ObservedState) *models.TopicBrowser {
+func GenerateTbContent(cache *topicbrowser.Cache, obs *topicbrowser.ObservedState, logger *zap.SugaredLogger) *models.TopicBrowser {
 	unsBundles := make(map[int][]byte)
 	var latestTimestamp int64
 
 	// Get only pending bundles from observed state
 	// These are bundles that arrived after the last sent timestamp
-	pendingBundles := getPendingBundlesFromObservedState(cache, obs)
+	pendingBundles := getPendingBundlesFromObservedState(cache, obs, logger)
 	for i, bundle := range pendingBundles {
 		unsBundles[i] = bundle
 	}
@@ -204,13 +219,13 @@ func AddCachedBundleToTbContent(cache *topicbrowser.Cache, tb *models.TopicBrows
 // - Updates lastSentTimestamp to track what was sent to the new subscriber
 //
 // Note: This is called before AddCachedBundleToTbContent, which adds the full cache.
-func generateTbContentForNewSubscriber(cache *topicbrowser.Cache, obs *topicbrowser.ObservedState) *models.TopicBrowser {
+func generateTbContentForNewSubscriber(cache *topicbrowser.Cache, obs *topicbrowser.ObservedState, logger *zap.SugaredLogger) *models.TopicBrowser {
 	unsBundles := make(map[int][]byte)
 	var latestTimestamp int64
 
 	// Get new bundles that arrived after the cache was last updated
 	// These provide incremental updates on top of the cached snapshot
-	newBundles := getNewBundlesSinceLastCached(cache, obs)
+	newBundles := getNewBundlesSinceLastCached(cache, obs, logger)
 	for i, bundle := range newBundles {
 		unsBundles[i] = bundle
 	}
@@ -238,7 +253,7 @@ func generateTbContentForNewSubscriber(cache *topicbrowser.Cache, obs *topicbrow
 // - This ensures existing subscribers get only new data they haven't seen yet
 //
 // This implements the incremental update strategy for existing subscribers.
-func getPendingBundlesFromObservedState(cache *topicbrowser.Cache, obs *topicbrowser.ObservedState) [][]byte {
+func getPendingBundlesFromObservedState(cache *topicbrowser.Cache, obs *topicbrowser.ObservedState, logger *zap.SugaredLogger) [][]byte {
 	var pendingBundles [][]byte
 
 	// Get the timestamp of the last bundle sent to subscribers
@@ -253,7 +268,7 @@ func getPendingBundlesFromObservedState(cache *topicbrowser.Cache, obs *topicbro
 	}
 
 	// Apply bundle count protection
-	return validateAndLimitBundles(pendingBundles)
+	return validateAndLimitBundles(pendingBundles, logger)
 }
 
 // getNewBundlesSinceLastCached retrieves incremental bundles for new subscribers.
@@ -264,7 +279,7 @@ func getPendingBundlesFromObservedState(cache *topicbrowser.Cache, obs *topicbro
 // - New subscribers need these in addition to the cache for complete coverage
 //
 // This ensures new subscribers get both the cache snapshot AND latest updates.
-func getNewBundlesSinceLastCached(cache *topicbrowser.Cache, obs *topicbrowser.ObservedState) [][]byte {
+func getNewBundlesSinceLastCached(cache *topicbrowser.Cache, obs *topicbrowser.ObservedState, logger *zap.SugaredLogger) [][]byte {
 	var newBundles [][]byte
 
 	// Get the timestamp when cache was last updated
@@ -279,7 +294,7 @@ func getNewBundlesSinceLastCached(cache *topicbrowser.Cache, obs *topicbrowser.O
 	}
 
 	// Apply bundle count protection
-	return validateAndLimitBundles(newBundles)
+	return validateAndLimitBundles(newBundles, logger)
 }
 
 // getLastCachedTimestamp extracts the lastCachedTimestamp from the cache.

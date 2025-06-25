@@ -106,7 +106,7 @@ func (s *StatusCollectorType) GenerateStatusMessage(isBootstrapped bool) *models
 	}
 
 	// --- topic browser -------------------------------------------------------------
-	topicBrowserData := GenerateTopicBrowser(s.topicBrowserCache, s.topicBrowserSimulator.GetSimObservedState(), isBootstrapped)
+	topicBrowserData := GenerateTopicBrowser(s.topicBrowserCache, s.topicBrowserSimulator.GetSimObservedState(), isBootstrapped, s.logger)
 
 	// Step 3: Create the status message
 	statusMessage := &models.StatusMessage{

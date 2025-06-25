@@ -17,6 +17,7 @@ package generator_test
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 
 	tbproto "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models/topicbrowser/pb"
@@ -26,13 +27,15 @@ import (
 
 var _ = Describe("TopicBrowser Generator", func() {
 	var (
-		cache *topicbrowser.Cache
-		obs   *topicbrowser.ObservedState
+		cache  *topicbrowser.Cache
+		obs    *topicbrowser.ObservedState
+		logger *zap.SugaredLogger
 	)
 
 	BeforeEach(func() {
 		cache = topicbrowser.NewCache()
 		obs = createMockObservedState([]*topicbrowser.Buffer{})
+		logger = zap.NewNop().Sugar()
 	})
 
 	Describe("GenerateTopicBrowser", func() {
@@ -54,7 +57,7 @@ var _ = Describe("TopicBrowser Generator", func() {
 				cache.SetLastSentTimestamp(1500)
 
 				// Act: Generate content for existing subscriber
-				result := generator.GenerateTopicBrowser(cache, obs, true)
+				result := generator.GenerateTopicBrowser(cache, obs, true, logger)
 
 				// Assert: Should contain only pending bundles, no cache bundle
 				Expect(result).ToNot(BeNil())
@@ -85,7 +88,7 @@ var _ = Describe("TopicBrowser Generator", func() {
 				cache.SetLastSentTimestamp(2000)
 
 				// Act: Generate content for existing subscriber
-				result := generator.GenerateTopicBrowser(cache, obs, true)
+				result := generator.GenerateTopicBrowser(cache, obs, true, logger)
 
 				// Assert: Should return empty bundles
 				Expect(result).ToNot(BeNil())
@@ -112,7 +115,7 @@ var _ = Describe("TopicBrowser Generator", func() {
 				})
 
 				// Act: Generate content for new subscriber
-				result := generator.GenerateTopicBrowser(cache, obs, false)
+				result := generator.GenerateTopicBrowser(cache, obs, false, logger)
 
 				// Assert: Should contain cache bundle at index 0 + new bundles at indices 1,2
 				Expect(result).ToNot(BeNil())
@@ -200,7 +203,7 @@ var _ = Describe("TopicBrowser Generator", func() {
 				})
 
 				// Act: Generate content for new subscriber
-				result := generator.GenerateTopicBrowser(cache, obs, false)
+				result := generator.GenerateTopicBrowser(cache, obs, false, logger)
 
 				// Assert: Should contain only the cache bundle at index 0
 				Expect(result).ToNot(BeNil())
@@ -223,7 +226,7 @@ var _ = Describe("TopicBrowser Generator", func() {
 				})
 
 				// Act: Generate content for new subscriber
-				result := generator.GenerateTopicBrowser(cache, obs, false)
+				result := generator.GenerateTopicBrowser(cache, obs, false, logger)
 
 				// Assert: Should contain cache bundle (empty) + new bundles
 				Expect(result).ToNot(BeNil())
@@ -254,7 +257,7 @@ var _ = Describe("TopicBrowser Generator", func() {
 				})
 
 				// Act: Generate for existing subscriber
-				result := generator.GenerateTopicBrowser(cache, obs, true)
+				result := generator.GenerateTopicBrowser(cache, obs, true, logger)
 
 				// Assert: Should update to latest timestamp
 				Expect(result.UnsBundles).To(HaveLen(3))                    // All bundles are newer than lastSentTimestamp
@@ -272,7 +275,7 @@ var _ = Describe("TopicBrowser Generator", func() {
 				})
 
 				// Act: Generate for new subscriber
-				result := generator.GenerateTopicBrowser(cache, obs, false)
+				result := generator.GenerateTopicBrowser(cache, obs, false, logger)
 
 				// Assert: Should include cache + new bundles and update timestamp
 				Expect(result.UnsBundles).To(HaveLen(3))                    // Cache + 2 new
@@ -289,10 +292,10 @@ var _ = Describe("TopicBrowser Generator", func() {
 				obs = createMockObservedState([]*topicbrowser.Buffer{})
 
 				// Test both scenarios
-				existingResult := generator.GenerateTopicBrowser(cache, obs, true)
+				existingResult := generator.GenerateTopicBrowser(cache, obs, true, logger)
 				Expect(existingResult.UnsBundles).To(HaveLen(0))
 
-				newResult := generator.GenerateTopicBrowser(cache, obs, false)
+				newResult := generator.GenerateTopicBrowser(cache, obs, false, logger)
 				Expect(newResult.UnsBundles).To(HaveLen(1)) // Only cache bundle
 			})
 
@@ -303,11 +306,11 @@ var _ = Describe("TopicBrowser Generator", func() {
 
 				// Test that nil cache causes panic (expected behavior)
 				Expect(func() {
-					generator.GenerateTopicBrowser(nil, obs, true)
+					generator.GenerateTopicBrowser(nil, obs, true, logger)
 				}).To(Panic())
 
 				Expect(func() {
-					generator.GenerateTopicBrowser(nil, obs, false)
+					generator.GenerateTopicBrowser(nil, obs, false, logger)
 				}).To(Panic())
 			})
 		})
