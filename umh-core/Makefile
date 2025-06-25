@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-.PHONY: build run clean test help test-graphql
+.PHONY: build run clean test help
 
 # Show available commands and common usage patterns
 help: ## Display available make targets and usage information
@@ -45,6 +45,7 @@ help: ## Display available make targets and usage information
 	@echo "   • Containers auto-cleanup on restart"
 	@echo "   • Check 'docker logs umh-core' for troubleshooting"
 	@echo "   • GraphQL playground available at http://localhost:8090/"
+	@echo "   • Full GraphQL docs: pkg/communicator/graphql/README.md"
 	@echo ""
 
 IMAGE_NAME = umh-core
@@ -551,6 +552,7 @@ test-benthos-monitor: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 # - Uses reflection to populate internal topic browser cache
 # - GraphQL schema supports both time series and relational events
 # - Server uses graceful shutdown with 3-second timeout
+# - See pkg/communicator/graphql/README.md for detailed documentation
 test-graphql: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-graphql.yaml $(PWD)/data/config.yaml
