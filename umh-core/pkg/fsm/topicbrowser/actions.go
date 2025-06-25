@@ -253,7 +253,11 @@ func (i *Instance) isTopicBrowserHealthy() (bool, string) {
 
 // isTopicBrowserDegraded determines if the Topic Browser should be considered degraded
 // This leverages the service's sophisticated cross-component analysis
-func (i *Instance) isTopicBrowserDegraded() (bool, string) {
+func (i *Instance) isTopicBrowserDegraded() (isDegraded bool, reason string) {
+	defer func() {
+		i.baseFSMInstance.GetLogger().Debugf("isTopicBrowserDegraded: %t, reason: %s", isDegraded, reason)
+	}()
+
 	serviceInfo := i.ObservedState.ServiceInfo
 
 	// If the service has provided a specific status reason, use that
@@ -288,6 +292,6 @@ func (i *Instance) isTopicBrowserStopped() (bool, string) {
 // shouldRecoverFromDegraded determines if the Topic Browser should recover from degraded state
 func (i *Instance) shouldRecoverFromDegraded() bool {
 	// If the service is now healthy and there are no status reasons indicating issues
-	healthy, _ := i.isTopicBrowserHealthy()
-	return healthy
+	degraded, _ := i.isTopicBrowserDegraded()
+	return !degraded
 }
