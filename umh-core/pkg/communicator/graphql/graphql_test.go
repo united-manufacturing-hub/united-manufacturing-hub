@@ -126,6 +126,7 @@ func TestServer_Creation(t *testing.T) {
 
 	if server == nil {
 		t.Fatal("NewServer should not return nil")
+		return // This return is never reached but helps static analysis
 	}
 
 	if server.resolver != resolver {
