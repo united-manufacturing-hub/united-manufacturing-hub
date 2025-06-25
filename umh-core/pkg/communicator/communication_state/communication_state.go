@@ -150,11 +150,13 @@ func (c *CommunicationState) InitialiseAndStartRouter() {
 }
 
 func (c *CommunicationState) StartTopicBrowserCacheUpdater(systemSnapshotManager *fsm.SnapshotManager) {
+	simulator := topicbrowser.NewSimulator()
 	go func() {
 		ticker := time.NewTicker(1 * time.Second)
 		for {
 			<-ticker.C
-			err := c.TopicBrowserCache.Update(&topicbrowser.ObservedState{})
+			simulator.Tick()
+			err := c.TopicBrowserCache.Update(simulator.GetSimObservedState())
 			if err != nil {
 				sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to update topic browser cache: %w", err)
 			}

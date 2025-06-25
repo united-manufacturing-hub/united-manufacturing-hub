@@ -17,6 +17,7 @@ package topicbrowser
 import (
 	"encoding/hex"
 	"math/rand/v2"
+	"sync"
 	"time"
 
 	"github.com/cespare/xxhash/v2"
@@ -26,15 +27,17 @@ import (
 )
 
 type Simulator struct {
-	simObservedState *ObservedState
-	ticker           int
-	topics           map[string]*tbproto.TopicInfo
+	simObservedState   *ObservedState
+	simObservedStateMu *sync.RWMutex
+	ticker             int
+	topics             map[string]*tbproto.TopicInfo
 }
 
 func NewSimulator() *Simulator {
 	s := &Simulator{
-		simObservedState: &ObservedState{},
-		ticker:           0,
+		simObservedState:   &ObservedState{},
+		simObservedStateMu: &sync.RWMutex{},
+		ticker:             0,
 	}
 	s.InitializeSimulator()
 	return s
@@ -103,10 +106,18 @@ func (s *Simulator) GenerateNewUnsBundle() []byte {
 
 // AddUnsBundleToSimObservedState adds a new bundle to the simulated observed state
 func (s *Simulator) AddUnsBundleToSimObservedState(bundle []byte) {
+	s.simObservedStateMu.Lock()
+	defer s.simObservedStateMu.Unlock()
 	s.simObservedState.ServiceInfo.Status.Buffer = append(s.simObservedState.ServiceInfo.Status.Buffer, &Buffer{
 		Payload:   bundle,
 		Timestamp: time.Now().Unix(),
 	})
+}
+
+func (s *Simulator) GetSimObservedState() *ObservedState {
+	s.simObservedStateMu.RLock()
+	defer s.simObservedStateMu.RUnlock()
+	return s.simObservedState
 }
 
 // HashUNSTableEntry generates an xxHash from the Levels and datacontract.
