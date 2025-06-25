@@ -214,6 +214,8 @@ func (i *Instance) reconcileOperationalStates(ctx context.Context, services serv
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".reconcileOperationalStates", time.Since(start))
 	}()
 
+	i.baseFSMInstance.GetLogger().Debugf("reconciling operational states from state %s to state %s", currentState, desiredState)
+
 	switch desiredState {
 	case OperationalStateActive:
 		return i.reconcileTransitionToActive(ctx, services, currentState, currentTime, snapshot)
@@ -231,6 +233,8 @@ func (i *Instance) reconcileTransitionToActive(ctx context.Context, services ser
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
 	}()
+
+	i.baseFSMInstance.GetLogger().Debugf("reconciling transition to active from state %s", currentState)
 
 	switch {
 	// If we're stopped, we need to start first
@@ -262,13 +266,10 @@ func (i *Instance) reconcileStartingStates(ctx context.Context, services service
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".reconcileStartingStates", time.Since(start))
 	}()
 
+	i.baseFSMInstance.GetLogger().Debugf("reconciling starting states from state %s", currentState)
+
 	switch currentState {
 	case OperationalStateStarting:
-		// Only transition to active if TopicBrowser is healthy
-		if healthy, reason := i.isTopicBrowserHealthy(); !healthy {
-			i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reason)
-			return nil, false
-		}
 		return i.baseFSMInstance.SendEvent(ctx, EventStartDone), true
 	default:
 		return fmt.Errorf("invalid starting state: %s", currentState), false
@@ -281,6 +282,8 @@ func (i *Instance) reconcileRunningStates(ctx context.Context, services servicer
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".reconcileRunningStates", time.Since(start))
 	}()
+
+	i.baseFSMInstance.GetLogger().Debugf("reconciling running states from state %s", currentState)
 
 	switch currentState {
 	case OperationalStateActive:
@@ -309,6 +312,8 @@ func (i *Instance) reconcileTransitionToStopped(ctx context.Context, services se
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".reconcileTransitionToStopped", time.Since(start))
 	}()
+
+	i.baseFSMInstance.GetLogger().Debugf("reconciling transition to stopped from state %s", currentState)
 
 	// If we're in any operational state except Stopped or Stopping, initiate stop
 	if currentState != OperationalStateStopped && currentState != OperationalStateStopping {
