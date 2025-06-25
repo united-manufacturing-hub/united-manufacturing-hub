@@ -45,17 +45,6 @@ func (svc *Service) parseBlock(entries []s6svc.LogEntry) error {
 		return err
 	}
 
-	// LZ4 block-decompression
-	//	dst := make([]byte, len(raw)*4)
-	//	n, err := lz4.UncompressBlock(raw, dst)
-	//	if err == lz4.ErrInvalidSourceShortBuffer {
-	//		dst = make([]byte, len(raw)*8)
-	//		n, err = lz4.UncompressBlock(raw, dst)
-	//	}
-	//	if err != nil {
-	//		return err
-	//	}
-
 	svc.ringbuffer.Add(&Buffer{
 		Payload:   payload,
 		Timestamp: time.UnixMilli(epoch),

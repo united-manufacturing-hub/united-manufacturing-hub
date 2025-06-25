@@ -241,7 +241,6 @@ func (svc *Service) Status(
 
 	redpandaFSMState := rpInst.CurrentState
 
-	// NOTE: access the correct s6Service here
 	// Get logs
 	s6ServicePath := filepath.Join(constants.S6BaseDir, svc.getBenthosName())
 	logs, err := svc.s6Service.GetLogs(ctx, s6ServicePath, services.GetFileSystem())
@@ -551,13 +550,23 @@ func (svc *Service) checkMetrics(
 	rpObsState rpfsm.RedpandaObservedState,
 	benObsState benthosfsm.BenthosObservedState,
 ) (string, bool) {
-	if rpObsState.ServiceInfo.RedpandaStatus.RedpandaMetrics.Metrics.Throughput.BytesOut > 0 {
-		return "", true
+	// Redpanda output but no benthos output
+	if rpObsState.ServiceInfo.RedpandaStatus.RedpandaMetrics.Metrics.Throughput.BytesOut > 0 &&
+		benObsState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState.Output.MessagesPerTick == 0 {
+		return "redpanda has output, but benthos no output", false
 	}
 
-	// Redpanda output but no benthos output
 	// Benthos output but not redpanda output
-	// Redpanda output but no benthos input
+	if rpObsState.ServiceInfo.RedpandaStatus.RedpandaMetrics.Metrics.Throughput.BytesOut == 0 &&
+		benObsState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState.Output.MessagesPerTick > 0 {
+		return "redpanda has no output, but benthos has output", false
+	}
 
-	return "", false
+	// Redpanda output but no benthos input
+	if rpObsState.ServiceInfo.RedpandaStatus.RedpandaMetrics.Metrics.Throughput.BytesOut > 0 &&
+		benObsState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState.Input.MessagesPerTick == 0 {
+		return "redpanda has output, but benthos no input", false
+	}
+
+	return "", true
 }
