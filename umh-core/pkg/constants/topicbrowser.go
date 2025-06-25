@@ -21,10 +21,7 @@ const (
 )
 
 const (
-	// ConnectionExpectedMaxP95ExecutionTimePerInstance means that an instance will not reconcile if not 40ms are left
-	// Note: in the integration test, we defined an alerting threshold of 80% of the max ticker time, which is 100ms
-	// So by setting this to 40 ms, we can ensure that an instance will never start if it triggers the alerting threshold
-	TopicBrowserExpectedMaxP95ExecutionTimePerInstance = time.Millisecond * 40 // needs to be higher than NmapExpectedMaxP95ExecutionTimePerInstance
+	TopicBrowserExpectedMaxP95ExecutionTimePerInstance = TopicBrowserUpdateObservedStateTimeout + time.Millisecond*40 // needs to be higher than S6ExpectedMaxP95ExecutionTimePerInstance
 )
 
 const (

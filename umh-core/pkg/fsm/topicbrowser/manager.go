@@ -48,10 +48,15 @@ func NewTopicBrowserManager(name string) *Manager {
 		// Extract the topic browser config from fullConfig
 		func(fullConfig config.FullConfig) ([]config.TopicBrowserConfig, error) {
 			tbConfig := fullConfig.Internal.TopicBrowser
+			// Force topic browser name to be "topicbrowser"
+			tbConfig.Name = constants.TopicBrowserServiceName
 			return []config.TopicBrowserConfig{tbConfig}, nil
 		},
 		// Get name for topic browser config
 		func(cfg config.TopicBrowserConfig) (string, error) {
+			if cfg.Name == "" {
+				return "", fmt.Errorf("topic browser config name cannot be empty")
+			}
 			return cfg.Name, nil
 		},
 		// Get desired state for topic browser config
