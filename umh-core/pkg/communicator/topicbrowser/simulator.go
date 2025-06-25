@@ -26,6 +26,9 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
+// Simulator is a simulator for the topic browser service.
+// The simulated observed state is used to generate the topic browser data for the status message.
+// It can be enabled via the config file (Agent.Simulator) and is disabled by default.
 type Simulator struct {
 	simObservedState   *ObservedState
 	simObservedStateMu *sync.RWMutex
@@ -45,6 +48,8 @@ func NewSimulator() *Simulator {
 	return s
 }
 
+// InitializeSimulator initializes the simulator and adds some hardcoded topics to the simulator.
+// It is called when the simulator is enabled via the config file.
 func (s *Simulator) InitializeSimulator() {
 	s.simulatorEnabled = true
 	// add some hardcodedinitial topics to the simulator and use the HashUNSTableEntry function to generate the key
@@ -133,6 +138,7 @@ func (s *Simulator) GetSimObservedState() *ObservedState {
 //
 // ✅ FIX: Uses null byte delimiters to prevent hash collisions between different segment combinations.
 // For example, ["ab","c"] vs ["a","bc"] would produce different hashes instead of identical ones.
+// This is a copy of the HashUNSTableEntry function in the benthos topicbrowser plugin.
 func HashUNSTableEntry(info *tbproto.TopicInfo) string {
 	hasher := xxhash.New()
 
@@ -161,6 +167,7 @@ func HashUNSTableEntry(info *tbproto.TopicInfo) string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
+// Tick is called once per second to generate a new uns bundle and add it to the simulated observed state.
 func (s *Simulator) Tick() {
 	if !s.simulatorEnabled {
 		return
