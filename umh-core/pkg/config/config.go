@@ -55,6 +55,7 @@ type AgentConfig struct {
 	GraphQLConfig      GraphQLConfig  `yaml:"graphql,omitempty"` // GraphQL server configuration
 	ReleaseChannel     ReleaseChannel `yaml:"releaseChannel,omitempty"`
 	Location           map[int]string `yaml:"location,omitempty"`
+	Simulator          bool           `yaml:"simulator,omitempty"`
 }
 
 type CommunicatorConfig struct {

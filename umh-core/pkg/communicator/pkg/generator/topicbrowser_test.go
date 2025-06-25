@@ -17,6 +17,7 @@ package generator_test
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 
 	tbproto "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models/topicbrowser/pb"
@@ -26,13 +27,15 @@ import (
 
 var _ = Describe("TopicBrowser Generator", func() {
 	var (
-		cache *topicbrowser.Cache
-		obs   *topicbrowser.ObservedState
+		cache  *topicbrowser.Cache
+		obs    *topicbrowser.ObservedState
+		logger *zap.SugaredLogger
 	)
 
 	BeforeEach(func() {
 		cache = topicbrowser.NewCache()
 		obs = createMockObservedState([]*topicbrowser.Buffer{})
+		logger = zap.NewNop().Sugar()
 	})
 
 	Describe("GenerateTopicBrowser", func() {
@@ -54,7 +57,7 @@ var _ = Describe("TopicBrowser Generator", func() {
 				cache.SetLastSentTimestamp(1500)
 
 				// Act: Generate content for existing subscriber
-				result := generator.GenerateTopicBrowser(cache, obs, true)
+				result := generator.GenerateTopicBrowser(cache, obs, true, logger)
 
 				// Assert: Should contain only pending bundles, no cache bundle
 				Expect(result).ToNot(BeNil())
@@ -85,7 +88,7 @@ var _ = Describe("TopicBrowser Generator", func() {
 				cache.SetLastSentTimestamp(2000)
 
 				// Act: Generate content for existing subscriber
-				result := generator.GenerateTopicBrowser(cache, obs, true)
+				result := generator.GenerateTopicBrowser(cache, obs, true, logger)
 
 				// Assert: Should return empty bundles
 				Expect(result).ToNot(BeNil())
@@ -112,7 +115,7 @@ var _ = Describe("TopicBrowser Generator", func() {
 				})
 
 				// Act: Generate content for new subscriber
-				result := generator.GenerateTopicBrowser(cache, obs, false)
+				result := generator.GenerateTopicBrowser(cache, obs, false, logger)
 
 				// Assert: Should contain cache bundle at index 0 + new bundles at indices 1,2
 				Expect(result).ToNot(BeNil())
@@ -120,16 +123,24 @@ var _ = Describe("TopicBrowser Generator", func() {
 				Expect(result.TopicCount).To(Equal(2))   // Cache size
 				Expect(result.UnsBundles).To(HaveLen(3)) // Cache + 2 new bundles
 
-				// Verify that the cache bundle contains the correct data
+				// Verify that the cache bundle contains the correct data (order-agnostic)
 				firstBundle := result.UnsBundles[0]
 				var firstBundleData tbproto.UnsBundle
 				err := proto.Unmarshal(firstBundle, &firstBundleData)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(firstBundleData.Events.Entries).To(HaveLen(2))
-				Expect(firstBundleData.Events.Entries[0].UnsTreeId).To(Equal("topic1"))
-				Expect(firstBundleData.Events.Entries[0].ProducedAtMs).To(Equal(uint64(1000)))
-				Expect(firstBundleData.Events.Entries[1].UnsTreeId).To(Equal("topic2"))
-				Expect(firstBundleData.Events.Entries[1].ProducedAtMs).To(Equal(uint64(1100)))
+
+				// Create a map for order-agnostic verification
+				eventsByTreeId := make(map[string]*tbproto.EventTableEntry)
+				for _, entry := range firstBundleData.Events.Entries {
+					eventsByTreeId[entry.UnsTreeId] = entry
+				}
+
+				// Verify both topics are present with correct timestamps
+				Expect(eventsByTreeId).To(HaveKey("topic1"))
+				Expect(eventsByTreeId).To(HaveKey("topic2"))
+				Expect(eventsByTreeId["topic1"].ProducedAtMs).To(Equal(uint64(1000)))
+				Expect(eventsByTreeId["topic2"].ProducedAtMs).To(Equal(uint64(1100)))
 				Expect(firstBundleData.UnsMap.Entries).To(HaveLen(2))
 
 				// Verify that the new bundles contain the correct data
@@ -148,10 +159,16 @@ var _ = Describe("TopicBrowser Generator", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(thirdBundleData.Events.Entries).To(HaveLen(2))
 
-				Expect(thirdBundleData.Events.Entries[0].UnsTreeId).To(Equal("topic4"))
-				Expect(thirdBundleData.Events.Entries[0].ProducedAtMs).To(Equal(uint64(2100)))
-				Expect(thirdBundleData.Events.Entries[1].UnsTreeId).To(Equal("topic5"))
-				Expect(thirdBundleData.Events.Entries[1].ProducedAtMs).To(Equal(uint64(2200)))
+				// Create map for order-agnostic verification of third bundle
+				thirdEventsByTreeId := make(map[string]*tbproto.EventTableEntry)
+				for _, entry := range thirdBundleData.Events.Entries {
+					thirdEventsByTreeId[entry.UnsTreeId] = entry
+				}
+
+				Expect(thirdEventsByTreeId).To(HaveKey("topic4"))
+				Expect(thirdEventsByTreeId).To(HaveKey("topic5"))
+				Expect(thirdEventsByTreeId["topic4"].ProducedAtMs).To(Equal(uint64(2100)))
+				Expect(thirdEventsByTreeId["topic5"].ProducedAtMs).To(Equal(uint64(2200)))
 				Expect(thirdBundleData.UnsMap.Entries).To(HaveLen(2))
 
 				// Verify bundle ordering
@@ -186,7 +203,7 @@ var _ = Describe("TopicBrowser Generator", func() {
 				})
 
 				// Act: Generate content for new subscriber
-				result := generator.GenerateTopicBrowser(cache, obs, false)
+				result := generator.GenerateTopicBrowser(cache, obs, false, logger)
 
 				// Assert: Should contain only the cache bundle at index 0
 				Expect(result).ToNot(BeNil())
@@ -209,7 +226,7 @@ var _ = Describe("TopicBrowser Generator", func() {
 				})
 
 				// Act: Generate content for new subscriber
-				result := generator.GenerateTopicBrowser(cache, obs, false)
+				result := generator.GenerateTopicBrowser(cache, obs, false, logger)
 
 				// Assert: Should contain cache bundle (empty) + new bundles
 				Expect(result).ToNot(BeNil())
@@ -240,7 +257,7 @@ var _ = Describe("TopicBrowser Generator", func() {
 				})
 
 				// Act: Generate for existing subscriber
-				result := generator.GenerateTopicBrowser(cache, obs, true)
+				result := generator.GenerateTopicBrowser(cache, obs, true, logger)
 
 				// Assert: Should update to latest timestamp
 				Expect(result.UnsBundles).To(HaveLen(3))                    // All bundles are newer than lastSentTimestamp
@@ -258,7 +275,7 @@ var _ = Describe("TopicBrowser Generator", func() {
 				})
 
 				// Act: Generate for new subscriber
-				result := generator.GenerateTopicBrowser(cache, obs, false)
+				result := generator.GenerateTopicBrowser(cache, obs, false, logger)
 
 				// Assert: Should include cache + new bundles and update timestamp
 				Expect(result.UnsBundles).To(HaveLen(3))                    // Cache + 2 new
@@ -275,26 +292,23 @@ var _ = Describe("TopicBrowser Generator", func() {
 				obs = createMockObservedState([]*topicbrowser.Buffer{})
 
 				// Test both scenarios
-				existingResult := generator.GenerateTopicBrowser(cache, obs, true)
+				existingResult := generator.GenerateTopicBrowser(cache, obs, true, logger)
 				Expect(existingResult.UnsBundles).To(HaveLen(0))
 
-				newResult := generator.GenerateTopicBrowser(cache, obs, false)
+				newResult := generator.GenerateTopicBrowser(cache, obs, false, logger)
 				Expect(newResult.UnsBundles).To(HaveLen(1)) // Only cache bundle
 			})
 
-			It("should handle nil cache by panicking (expected behavior)", func() {
-				// This test documents that nil cache will cause a panic
-				// In practice, this shouldn't happen as cache is always initialized
+			It("should handle nil cache", func() {
 				obs = createMockObservedState([]*topicbrowser.Buffer{})
 
-				// Test that nil cache causes panic (expected behavior)
 				Expect(func() {
-					generator.GenerateTopicBrowser(nil, obs, true)
-				}).To(Panic())
+					generator.GenerateTopicBrowser(nil, obs, true, logger)
+				}).NotTo(Panic())
 
 				Expect(func() {
-					generator.GenerateTopicBrowser(nil, obs, false)
-				}).To(Panic())
+					generator.GenerateTopicBrowser(nil, obs, false, logger)
+				}).NotTo(Panic())
 			})
 		})
 	})

@@ -26,11 +26,15 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
+// Simulator is a simulator for the topic browser service.
+// The simulated observed state is used to generate the topic browser data for the status message.
+// It can be enabled via the config file (Agent.Simulator) and is disabled by default.
 type Simulator struct {
 	simObservedState   *ObservedState
 	simObservedStateMu *sync.RWMutex
 	ticker             int
 	topics             map[string]*tbproto.TopicInfo
+	simulatorEnabled   bool
 }
 
 func NewSimulator() *Simulator {
@@ -38,13 +42,17 @@ func NewSimulator() *Simulator {
 		simObservedState:   &ObservedState{},
 		simObservedStateMu: &sync.RWMutex{},
 		ticker:             0,
+		simulatorEnabled:   false,
 	}
 	s.InitializeSimulator()
 	return s
 }
 
+// InitializeSimulator initializes the simulator and adds some hardcoded topics to the simulator.
+// It is called when the simulator is enabled via the config file.
 func (s *Simulator) InitializeSimulator() {
-	// add some hardcodedinitial topics to the simulator and use the HashUNSTableEntry function to generate the key
+	s.simulatorEnabled = true
+	// add some hardcoded initial topics to the simulator and use the HashUNSTableEntry function to generate the key
 	s.topics = make(map[string]*tbproto.TopicInfo)
 
 	newTopic := &tbproto.TopicInfo{
@@ -80,7 +88,7 @@ func (s *Simulator) GenerateNewUnsBundle() []byte {
 					ScalarType: tbproto.ScalarType_NUMERIC,
 					Value: &tbproto.TimeSeriesPayload_NumericValue{
 						NumericValue: &wrapperspb.DoubleValue{
-							Value: rand.Float64(),
+							Value: rand.Float64() * 100,
 						},
 					},
 				},
@@ -112,6 +120,10 @@ func (s *Simulator) AddUnsBundleToSimObservedState(bundle []byte) {
 		Payload:   bundle,
 		Timestamp: time.Now().Unix(),
 	})
+	// limit the buffer to 100 entries and delete the oldest entry if the buffer is full
+	if len(s.simObservedState.ServiceInfo.Status.Buffer) > 100 {
+		s.simObservedState.ServiceInfo.Status.Buffer = s.simObservedState.ServiceInfo.Status.Buffer[1:]
+	}
 }
 
 func (s *Simulator) GetSimObservedState() *ObservedState {
@@ -126,6 +138,7 @@ func (s *Simulator) GetSimObservedState() *ObservedState {
 //
 // ✅ FIX: Uses null byte delimiters to prevent hash collisions between different segment combinations.
 // For example, ["ab","c"] vs ["a","bc"] would produce different hashes instead of identical ones.
+// This is a copy of the HashUNSTableEntry function in the benthos topicbrowser plugin.
 func HashUNSTableEntry(info *tbproto.TopicInfo) string {
 	hasher := xxhash.New()
 
@@ -154,7 +167,11 @@ func HashUNSTableEntry(info *tbproto.TopicInfo) string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
+// Tick is called once per second to generate a new uns bundle and add it to the simulated observed state.
 func (s *Simulator) Tick() {
+	if !s.simulatorEnabled {
+		return
+	}
 	s.ticker++
 	s.AddUnsBundleToSimObservedState(s.GenerateNewUnsBundle())
 }

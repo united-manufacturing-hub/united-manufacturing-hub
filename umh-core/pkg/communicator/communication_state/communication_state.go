@@ -15,6 +15,7 @@
 package communication_state
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/pull"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/push"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/subscriber"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/router"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
@@ -50,6 +52,7 @@ type CommunicationState struct {
 	ApiUrl                string
 	Logger                *zap.SugaredLogger
 	TopicBrowserCache     *topicbrowser.Cache
+	TopicBrowserSimulator *topicbrowser.Simulator
 }
 
 // NewCommunicationState creates a new CommunicationState with initialized mutex
@@ -149,16 +152,37 @@ func (c *CommunicationState) InitialiseAndStartRouter() {
 	c.Router.Start()
 }
 
-func (c *CommunicationState) StartTopicBrowserCacheUpdater(systemSnapshotManager *fsm.SnapshotManager) {
-	simulator := topicbrowser.NewSimulator()
+func (c *CommunicationState) StartTopicBrowserCacheUpdater(systemSnapshotManager *fsm.SnapshotManager, ctx context.Context) {
+
+	runSimulator := false
+	c.TopicBrowserSimulator = topicbrowser.NewSimulator()
+
+	ctxCfg, cncl := tools.Get1SecondContext()
+	defer cncl()
+	configCopy, err := c.ConfigManager.GetConfig(ctxCfg, 0)
+	if err != nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to get config: %w", err)
+	}
+	if configCopy.Agent.Simulator {
+		runSimulator = true
+		c.TopicBrowserSimulator.InitializeSimulator()
+	}
+
 	go func() {
 		ticker := time.NewTicker(1 * time.Second)
 		for {
-			<-ticker.C
-			simulator.Tick()
-			err := c.TopicBrowserCache.Update(simulator.GetSimObservedState())
-			if err != nil {
-				sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to update topic browser cache: %w", err)
+			select {
+			case <-ctx.Done():
+				ticker.Stop()
+				return
+			case <-ticker.C:
+				if runSimulator {
+					c.TopicBrowserSimulator.Tick()
+				}
+				err := c.TopicBrowserCache.Update(c.TopicBrowserSimulator.GetSimObservedState())
+				if err != nil {
+					sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to update topic browser cache: %w", err)
+				}
 			}
 		}
 	}()
@@ -203,6 +227,7 @@ func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 		configManager,
 		c.Logger,
 		c.TopicBrowserCache,
+		c.TopicBrowserSimulator,
 	)
 	if c.SubscriberHandler == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create subscriber handler")
