@@ -396,3 +396,162 @@ func ReconcileTopicbrowserUntilError(
 	// No error found after maxAttempts
 	return tick, nil, true
 }
+
+// === MANAGER TEST HELPERS ===
+
+// CreateMockTopicBrowserManager creates a TopicBrowser manager with a mock service for testing
+func CreateMockTopicBrowserManager(managerName string) (*topicbrowserfsm.Manager, *topicbrowsersvc.MockService) {
+	manager := topicbrowserfsm.NewManager(managerName)
+	mockService := topicbrowsersvc.NewMockDataFlowComponentService()
+	return manager, mockService
+}
+
+// ConfigureTopicBrowserManagerForState configures the mock service for manager-level testing
+func ConfigureTopicBrowserManagerForState(mockService *topicbrowsersvc.MockService, tbName string, targetState string) {
+	// For manager tests, we configure the service to respond as if it's in the target state
+	TransitionToTopicbrowserState(mockService, tbName, targetState)
+}
+
+// WaitForTopicBrowserManagerStable waits for the manager to reach a stable state with no reconciliation activity
+func WaitForTopicBrowserManagerStable(
+	ctx context.Context,
+	snapshot fsm.SystemSnapshot,
+	manager *topicbrowserfsm.Manager,
+	services serviceregistry.Provider,
+) (uint64, error) {
+	maxAttempts := 10
+	tick := snapshot.Tick
+
+	for i := 0; i < maxAttempts; i++ {
+		currentSnapshot := snapshot
+		currentSnapshot.Tick = tick
+		err, reconciled := manager.Reconcile(ctx, currentSnapshot, services)
+		if err != nil {
+			return tick, err
+		}
+		tick++
+
+		// If no reconciliation happened, we're stable
+		if !reconciled {
+			return tick, nil
+		}
+	}
+
+	return tick, fmt.Errorf("manager did not stabilize after %d attempts", maxAttempts)
+}
+
+// WaitForTopicBrowserManagerInstanceState waits for a specific instance to reach a target state
+func WaitForTopicBrowserManagerInstanceState(
+	ctx context.Context,
+	snapshot fsm.SystemSnapshot,
+	manager *topicbrowserfsm.Manager,
+	services serviceregistry.Provider,
+	tbName string,
+	targetState string,
+	maxAttempts int,
+) (uint64, error) {
+	tick := snapshot.Tick
+
+	for i := 0; i < maxAttempts; i++ {
+		currentSnapshot := snapshot
+		currentSnapshot.Tick = tick
+		err, _ := manager.Reconcile(ctx, currentSnapshot, services)
+		if err != nil {
+			return tick, err
+		}
+		tick++
+
+		// Check if the instance exists and is in the target state
+		if instance, exists := manager.GetInstance(tbName); exists {
+			if instance.GetCurrentFSMState() == targetState {
+				return tick, nil
+			}
+		}
+	}
+
+	// Get current state for error message
+	currentState := "not_found"
+	if instance, exists := manager.GetInstance(tbName); exists {
+		currentState = instance.GetCurrentFSMState()
+	}
+
+	return tick, fmt.Errorf(
+		"failed to reach state %s after %d attempts; current state: %s",
+		targetState, maxAttempts, currentState)
+}
+
+// WaitForTopicBrowserManagerInstanceRemoval waits for an instance to be completely removed from the manager
+func WaitForTopicBrowserManagerInstanceRemoval(
+	ctx context.Context,
+	snapshot fsm.SystemSnapshot,
+	manager *topicbrowserfsm.Manager,
+	services serviceregistry.Provider,
+	tbName string,
+	maxAttempts int,
+) (uint64, error) {
+	tick := snapshot.Tick
+
+	for i := 0; i < maxAttempts; i++ {
+		currentSnapshot := snapshot
+		currentSnapshot.Tick = tick
+		err, _ := manager.Reconcile(ctx, currentSnapshot, services)
+		if err != nil {
+			return tick, err
+		}
+		tick++
+
+		// Check if the instance no longer exists
+		if _, exists := manager.GetInstance(tbName); !exists {
+			return tick, nil
+		}
+	}
+
+	return tick, fmt.Errorf("instance %s was not removed after %d attempts", tbName, maxAttempts)
+}
+
+// WaitForTopicBrowserManagerMultiState waits for multiple instances to reach their desired states
+func WaitForTopicBrowserManagerMultiState(
+	ctx context.Context,
+	snapshot fsm.SystemSnapshot,
+	manager *topicbrowserfsm.Manager,
+	services serviceregistry.Provider,
+	desiredStates map[string]string,
+	maxAttempts int,
+) (uint64, error) {
+	tick := snapshot.Tick
+
+	for i := 0; i < maxAttempts; i++ {
+		currentSnapshot := snapshot
+		currentSnapshot.Tick = tick
+		err, _ := manager.Reconcile(ctx, currentSnapshot, services)
+		if err != nil {
+			return tick, err
+		}
+		tick++
+
+		// Check if all instances are in their desired states
+		allReached := true
+		for tbName, targetState := range desiredStates {
+			if instance, exists := manager.GetInstance(tbName); !exists || instance.GetCurrentFSMState() != targetState {
+				allReached = false
+				break
+			}
+		}
+
+		if allReached {
+			return tick, nil
+		}
+	}
+
+	// Build error message with current states
+	var currentStates []string
+	for tbName, targetState := range desiredStates {
+		currentState := "not_found"
+		if instance, exists := manager.GetInstance(tbName); exists {
+			currentState = instance.GetCurrentFSMState()
+		}
+		currentStates = append(currentStates, fmt.Sprintf("%s: %s (wanted %s)", tbName, currentState, targetState))
+	}
+
+	return tick, fmt.Errorf("not all instances reached desired states after %d attempts: %v", maxAttempts, currentStates)
+}
