@@ -267,7 +267,7 @@ func (i *Instance) isTopicBrowserDegraded() (isDegraded bool, reason string) {
 
 	// If there's processing activity but health checks fail, it's degraded
 	healthy, reason := i.isTopicBrowserHealthy()
-	if serviceInfo.HasProcessingActivity && !healthy {
+	if serviceInfo.InvalidMetrics || !healthy {
 		return true, fmt.Sprintf("has processing activity but health checks failing: %s", reason)
 	}
 
