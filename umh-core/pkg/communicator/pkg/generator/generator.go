@@ -31,6 +31,7 @@ type StatusCollectorType struct {
 	logger                *zap.SugaredLogger
 	configManager         config.ConfigManager
 	topicBrowserCache     *topicbrowser.Cache
+	topicBrowserSimulator *topicbrowser.Simulator
 }
 
 func NewStatusCollector(
@@ -39,6 +40,7 @@ func NewStatusCollector(
 	configManager config.ConfigManager,
 	logger *zap.SugaredLogger,
 	topicBrowserCache *topicbrowser.Cache,
+	topicBrowserSimulator *topicbrowser.Simulator,
 ) *StatusCollectorType {
 
 	collector := &StatusCollectorType{
@@ -47,6 +49,7 @@ func NewStatusCollector(
 		logger:                logger,
 		configManager:         configManager,
 		topicBrowserCache:     topicBrowserCache,
+		topicBrowserSimulator: topicBrowserSimulator,
 	}
 
 	return collector
@@ -103,7 +106,7 @@ func (s *StatusCollectorType) GenerateStatusMessage(isBootstrapped bool) *models
 	}
 
 	// --- topic browser -------------------------------------------------------------
-	topicBrowserData := GenerateTopicBrowser(s.topicBrowserCache, &topicbrowser.ObservedState{}, isBootstrapped)
+	topicBrowserData := GenerateTopicBrowser(s.topicBrowserCache, s.topicBrowserSimulator.GetSimObservedState(), isBootstrapped)
 
 	// Step 3: Create the status message
 	statusMessage := &models.StatusMessage{

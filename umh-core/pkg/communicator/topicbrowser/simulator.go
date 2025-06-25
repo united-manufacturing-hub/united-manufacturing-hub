@@ -31,6 +31,7 @@ type Simulator struct {
 	simObservedStateMu *sync.RWMutex
 	ticker             int
 	topics             map[string]*tbproto.TopicInfo
+	simulatorEnabled   bool
 }
 
 func NewSimulator() *Simulator {
@@ -38,12 +39,14 @@ func NewSimulator() *Simulator {
 		simObservedState:   &ObservedState{},
 		simObservedStateMu: &sync.RWMutex{},
 		ticker:             0,
+		simulatorEnabled:   false,
 	}
 	s.InitializeSimulator()
 	return s
 }
 
 func (s *Simulator) InitializeSimulator() {
+	s.simulatorEnabled = true
 	// add some hardcodedinitial topics to the simulator and use the HashUNSTableEntry function to generate the key
 	s.topics = make(map[string]*tbproto.TopicInfo)
 
@@ -159,6 +162,9 @@ func HashUNSTableEntry(info *tbproto.TopicInfo) string {
 }
 
 func (s *Simulator) Tick() {
+	if !s.simulatorEnabled {
+		return
+	}
 	s.ticker++
 	s.AddUnsBundleToSimObservedState(s.GenerateNewUnsBundle())
 }

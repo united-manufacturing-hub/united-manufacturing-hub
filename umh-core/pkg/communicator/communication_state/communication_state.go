@@ -51,6 +51,7 @@ type CommunicationState struct {
 	ApiUrl                string
 	Logger                *zap.SugaredLogger
 	TopicBrowserCache     *topicbrowser.Cache
+	TopicBrowserSimulator *topicbrowser.Simulator
 }
 
 // NewCommunicationState creates a new CommunicationState with initialized mutex
@@ -153,7 +154,7 @@ func (c *CommunicationState) InitialiseAndStartRouter() {
 func (c *CommunicationState) StartTopicBrowserCacheUpdater(systemSnapshotManager *fsm.SnapshotManager) {
 
 	runSimulator := false
-	simulator := topicbrowser.NewSimulator()
+	c.TopicBrowserSimulator = topicbrowser.NewSimulator()
 
 	ctx, cncl := tools.Get1SecondContext()
 	defer cncl()
@@ -163,7 +164,7 @@ func (c *CommunicationState) StartTopicBrowserCacheUpdater(systemSnapshotManager
 	}
 	if configCopy.Agent.Simulator {
 		runSimulator = true
-		simulator.InitializeSimulator()
+		c.TopicBrowserSimulator.InitializeSimulator()
 	}
 
 	go func() {
@@ -171,9 +172,9 @@ func (c *CommunicationState) StartTopicBrowserCacheUpdater(systemSnapshotManager
 		for {
 			<-ticker.C
 			if runSimulator {
-				simulator.Tick()
+				c.TopicBrowserSimulator.Tick()
 			}
-			err := c.TopicBrowserCache.Update(simulator.GetSimObservedState())
+			err := c.TopicBrowserCache.Update(c.TopicBrowserSimulator.GetSimObservedState())
 			if err != nil {
 				sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to update topic browser cache: %w", err)
 			}
@@ -220,6 +221,7 @@ func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 		configManager,
 		c.Logger,
 		c.TopicBrowserCache,
+		c.TopicBrowserSimulator,
 	)
 	if c.SubscriberHandler == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create subscriber handler")

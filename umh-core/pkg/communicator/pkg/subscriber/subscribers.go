@@ -58,6 +58,7 @@ func NewHandler(
 	configManager config.ConfigManager,
 	logger *zap.SugaredLogger,
 	topicBrowserCache *topicbrowser.Cache,
+	topicBrowserSimulator *topicbrowser.Simulator,
 ) *Handler {
 	s := &Handler{}
 	s.subscriberRegistry = subscribers.NewRegistry(cull, ttl)
@@ -73,6 +74,7 @@ func NewHandler(
 		configManager,
 		logger,
 		topicBrowserCache,
+		topicBrowserSimulator,
 	)
 
 	return s
