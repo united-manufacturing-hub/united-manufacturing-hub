@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
@@ -215,260 +214,68 @@ func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services s
 	return nil
 }
 
-// IsTopicBrowserS6Running checks if the Topic Browser S6 service is running
-func (i *Instance) IsTopicBrowserS6Running() (bool, string) {
-	s6State := i.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.S6FSMState
-	if s6State == "" {
-		return false, "S6 FSM state is empty"
+// isTopicBrowserHealthy checks if the Topic Browser service is healthy based on ServiceInfo
+// This leverages the existing service health analysis instead of reimplementing it
+func (i *Instance) isTopicBrowserHealthy() bool {
+	// Use the service's existing health analysis
+	serviceInfo := i.ObservedState.ServiceInfo
+
+	// If there's a specific status reason indicating issues, it's not healthy
+	if serviceInfo.StatusReason != "" {
+		return false
 	}
 
-	// Check if S6 service is in a running state
-	isRunning := s6State == "running" || s6State == "active"
-	if !isRunning {
-		return false, fmt.Sprintf("S6 service is in state: %s", s6State)
+	// Check if the underlying Benthos FSM is in a healthy state
+	if serviceInfo.BenthosFSMState != "active" {
+		return false
 	}
 
-	// Also check the S6 observed state for more detailed status
-	s6ObservedState := i.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.S6ObservedState
-	if s6ObservedState.ServiceInfo.Pid == 0 {
-		return false, "S6 service process not running"
+	// Check if Redpanda FSM is in a healthy state
+	if serviceInfo.RedpandaFSMState != "active" {
+		return false
 	}
 
-	return true, "S6 service is running"
+	// Additional basic health checks from Benthos observed state
+	benthosObservedState := serviceInfo.BenthosObservedState
+	if benthosObservedState.ServiceInfo.S6FSMState != "running" && benthosObservedState.ServiceInfo.S6FSMState != "active" {
+		return false
+	}
+
+	// Check Benthos health checks
+	healthCheck := benthosObservedState.ServiceInfo.BenthosStatus.HealthCheck
+	if !healthCheck.IsLive || !healthCheck.IsReady {
+		return false
+	}
+
+	return true
 }
 
-// IsTopicBrowserS6Stopped checks if the Topic Browser S6 service is stopped
-func (i *Instance) IsTopicBrowserS6Stopped() (bool, string) {
-	s6State := i.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.S6FSMState
-	if s6State == "" {
-		return true, "S6 FSM state is empty (considered stopped)"
+// isTopicBrowserDegraded determines if the Topic Browser should be considered degraded
+// This leverages the service's sophisticated cross-component analysis
+func (i *Instance) isTopicBrowserDegraded() (bool, string) {
+	serviceInfo := i.ObservedState.ServiceInfo
+
+	// If the service has provided a specific status reason, use that
+	if serviceInfo.StatusReason != "" {
+		return true, serviceInfo.StatusReason
 	}
 
-	isStopped := s6State == "stopped" || s6State == "stopping"
-	if !isStopped {
-		return false, fmt.Sprintf("S6 service is in state: %s", s6State)
+	// If there's processing activity but health checks fail, it's degraded
+	if serviceInfo.HasProcessingActivity && !i.isTopicBrowserHealthy() {
+		return true, "has processing activity but health checks failing"
 	}
 
-	return true, "S6 service is stopped"
-}
-
-// IsTopicBrowserHealthchecksPassed checks if the Topic Browser health checks are passing
-func (i *Instance) IsTopicBrowserHealthchecksPassed() (bool, string) {
-	benthosStatus := i.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus
-	healthCheck := benthosStatus.HealthCheck
-
-	if !healthCheck.IsLive {
-		return false, "liveness check failed"
-	}
-
-	if !healthCheck.IsReady {
-		return false, "readiness check failed"
-	}
-
-	return true, "health checks passed"
-}
-
-// AnyRestartsSinceCreation checks if there were any restarts since the service was created
-func (i *Instance) AnyRestartsSinceCreation() (bool, string) {
-	// Check the S6 service exit history for restart evidence
-	s6ObservedState := i.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.S6ObservedState
-	exitHistory := s6ObservedState.ServiceInfo.ExitHistory
-
-	if len(exitHistory) > 0 {
-		return true, fmt.Sprintf("service has %d restart events", len(exitHistory))
-	}
-
-	return false, "no restarts detected"
-}
-
-// IsTopicBrowserRunningForSomeTimeWithoutErrors checks if the service has been running without errors for a specified time window
-func (i *Instance) IsTopicBrowserRunningForSomeTimeWithoutErrors(currentTime time.Time, logWindow time.Duration) (bool, string) {
-	// Check if service has been up long enough using S6 uptime
-	s6ObservedState := i.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.S6ObservedState
-	uptime := time.Duration(s6ObservedState.ServiceInfo.Uptime) * time.Second
-	if uptime < logWindow {
-		return false, fmt.Sprintf("service uptime (%v) is less than required window (%v)", uptime, logWindow)
-	}
-
-	// Check for errors in logs within the time window
-	isLogsFine, reason := i.IsTopicBrowserLogsFine(currentTime, logWindow)
-	if !isLogsFine {
-		return false, fmt.Sprintf("logs contain errors: %s", reason)
-	}
-
-	return true, "service running without errors"
-}
-
-// IsTopicBrowserLogsFine checks if the Topic Browser logs are free of errors within a time window
-func (i *Instance) IsTopicBrowserLogsFine(currentTime time.Time, logWindow time.Duration) (bool, string) {
-	// Get logs from the Benthos observed state
-	benthosStatus := i.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus
-	logs := benthosStatus.BenthosLogs
-
-	// Check for error patterns in recent logs within the time window
-	cutoffTime := currentTime.Add(-logWindow)
-	for _, logEntry := range logs {
-		if logEntry.Timestamp.After(cutoffTime) {
-			// Simple error pattern check - look for common error indicators
-			content := strings.ToLower(logEntry.Content)
-			if strings.Contains(content, "error") ||
-				strings.Contains(content, "failed") ||
-				strings.Contains(content, "panic") ||
-				strings.Contains(content, "fatal") {
-				return false, "error patterns found in logs"
-			}
-		}
-	}
-
-	return true, "no errors in logs"
-}
-
-// IsTopicBrowserMetricsErrorFree checks if the Topic Browser metrics indicate no errors
-func (i *Instance) IsTopicBrowserMetricsErrorFree() (bool, string) {
-	benthosStatus := i.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus
-	benthosMetrics := benthosStatus.BenthosMetrics
-
-	// Check for various error indicators in Benthos metrics
-	if benthosMetrics.Metrics.Output.Error > 0 {
-		return false, fmt.Sprintf("metrics show %d output errors", benthosMetrics.Metrics.Output.Error)
-	}
-
-	// Check processor errors
-	for path, processor := range benthosMetrics.Metrics.Process.Processors {
-		if processor.Error > 0 {
-			return false, fmt.Sprintf("processor %s shows %d errors", path, processor.Error)
-		}
-	}
-
-	return true, "metrics show no errors"
-}
-
-// IsTopicBrowserDegraded determines if the Topic Browser is in a degraded state
-func (i *Instance) IsTopicBrowserDegraded(currentTime time.Time, logWindow time.Duration) (bool, string) {
-	// Check if underlying S6 service is not running
-	isS6Running, s6Reason := i.IsTopicBrowserS6Running()
-	if !isS6Running {
-		return true, fmt.Sprintf("underlying S6 service not running: %s", s6Reason)
-	}
-
-	// Check health checks
-	healthPassed, healthReason := i.IsTopicBrowserHealthchecksPassed()
-	if !healthPassed {
-		return true, fmt.Sprintf("health checks failed: %s", healthReason)
-	}
-
-	// Check for errors in logs
-	logsFine, logsReason := i.IsTopicBrowserLogsFine(currentTime, logWindow)
-	if !logsFine {
-		return true, fmt.Sprintf("logs indicate issues: %s", logsReason)
-	}
-
-	// Check metrics for errors
-	metricsOk, metricsReason := i.IsTopicBrowserMetricsErrorFree()
-	if !metricsOk {
-		return true, fmt.Sprintf("metrics indicate errors: %s", metricsReason)
+	// Check for restart events in S6 service
+	s6ObservedState := serviceInfo.BenthosObservedState.ServiceInfo.S6ObservedState
+	if len(s6ObservedState.ServiceInfo.ExitHistory) > 0 {
+		return true, fmt.Sprintf("service has %d restart events", len(s6ObservedState.ServiceInfo.ExitHistory))
 	}
 
 	return false, "service appears healthy"
 }
 
-// IsTopicBrowserWithProcessingActivity checks if the Topic Browser is actively processing data
-func (i *Instance) IsTopicBrowserWithProcessingActivity() (bool, string) {
-	benthosStatus := i.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus
-	benthosMetrics := benthosStatus.BenthosMetrics
-
-	// Check if there's recent message processing activity using metrics state
-	if benthosMetrics.MetricsState != nil && benthosMetrics.MetricsState.IsActive {
-		return true, "benthos metrics show activity"
-	}
-
-	// Check input/output throughput
-	if benthosMetrics.Metrics.Input.Received > 0 || benthosMetrics.Metrics.Output.Sent > 0 {
-		return true, fmt.Sprintf("received %d, sent %d messages",
-			benthosMetrics.Metrics.Input.Received, benthosMetrics.Metrics.Output.Sent)
-	}
-
-	return false, "no processing activity detected"
-}
-
-// HasRedpandaProcessingActivity checks if the associated Redpanda instance has processing activity
-// This uses the Redpanda observed state directly from the ServiceInfo
-func (i *Instance) HasRedpandaProcessingActivity(snapshot fsm.SystemSnapshot) (bool, string) {
-	redpandaObservedState := i.ObservedState.ServiceInfo.RedpandaObservedState
-	redpandaFSMState := i.ObservedState.ServiceInfo.RedpandaFSMState
-
-	// Check if Redpanda FSM is in an active state
-	if redpandaFSMState == "" {
-		return false, "Redpanda FSM state is empty"
-	}
-
-	if redpandaFSMState != "active" && redpandaFSMState != "running" {
-		return false, fmt.Sprintf("Redpanda FSM is in state: %s", redpandaFSMState)
-	}
-
-	// Check if Redpanda has processing activity using its metrics
-	redpandaMetrics := redpandaObservedState.ServiceInfo.RedpandaStatus.RedpandaMetrics
-	if redpandaMetrics.Metrics.Throughput.BytesIn > 0 || redpandaMetrics.Metrics.Throughput.BytesOut > 0 {
-		return true, fmt.Sprintf("Redpanda throughput: %d bytes in, %d bytes out",
-			redpandaMetrics.Metrics.Throughput.BytesIn, redpandaMetrics.Metrics.Throughput.BytesOut)
-	}
-
-	// Check if there are any topics with partitions (indicates activity)
-	if len(redpandaMetrics.Metrics.Topic.TopicPartitionMap) > 0 {
-		return true, fmt.Sprintf("Redpanda has %d topics", len(redpandaMetrics.Metrics.Topic.TopicPartitionMap))
-	}
-
-	return false, "no Redpanda processing activity detected"
-}
-
-// ShouldTransitionToDegraded determines if the Topic Browser should transition to degraded state
-// This implements the degraded trigger conditions specified by the user
-func (i *Instance) ShouldTransitionToDegraded(currentTime time.Time, logWindow time.Duration, snapshot fsm.SystemSnapshot) (bool, string) {
-	// Check if underlying S6 service is not running
-	isS6Running, s6Reason := i.IsTopicBrowserS6Running()
-	if !isS6Running {
-		return true, fmt.Sprintf("underlying S6 service not running: %s", s6Reason)
-	}
-
-	// Check for Redpanda processing activity mismatch
-	hasRedpandaActivity, redpandaReason := i.HasRedpandaProcessingActivity(snapshot)
-	hasTopicBrowserActivity, tbReason := i.IsTopicBrowserWithProcessingActivity()
-
-	if hasRedpandaActivity && !hasTopicBrowserActivity {
-		return true, fmt.Sprintf("Redpanda has activity (%s) but Topic Browser doesn't (%s)", redpandaReason, tbReason)
-	}
-
-	return false, "degraded conditions not met"
-}
-
-// ShouldRecoverFromDegraded determines if the Topic Browser should recover from degraded state
-func (i *Instance) ShouldRecoverFromDegraded(currentTime time.Time, logWindow time.Duration, snapshot fsm.SystemSnapshot) (bool, string) {
-	// Check if underlying S6 service is now running
-	isS6Running, s6Reason := i.IsTopicBrowserS6Running()
-	if !isS6Running {
-		return false, fmt.Sprintf("S6 service still not running: %s", s6Reason)
-	}
-
-	// Check if health checks are passing
-	healthPassed, healthReason := i.IsTopicBrowserHealthchecksPassed()
-	if !healthPassed {
-		return false, fmt.Sprintf("health checks still failing: %s", healthReason)
-	}
-
-	// Check if service has been running without errors for some time
-	runningOk, runningReason := i.IsTopicBrowserRunningForSomeTimeWithoutErrors(currentTime, logWindow)
-	if !runningOk {
-		return false, fmt.Sprintf("service not stable yet: %s", runningReason)
-	}
-
-	// Check if the Redpanda processing activity mismatch is resolved
-	hasRedpandaActivity, _ := i.HasRedpandaProcessingActivity(snapshot)
-	hasTopicBrowserActivity, _ := i.IsTopicBrowserWithProcessingActivity()
-
-	// If Redpanda has activity, we should also have activity now
-	if hasRedpandaActivity && !hasTopicBrowserActivity {
-		return false, "Redpanda activity mismatch still exists"
-	}
-
-	return true, "all recovery conditions met"
+// shouldRecoverFromDegraded determines if the Topic Browser should recover from degraded state
+func (i *Instance) shouldRecoverFromDegraded() bool {
+	// If the service is now healthy and there are no status reasons indicating issues
+	return i.isTopicBrowserHealthy()
 }
