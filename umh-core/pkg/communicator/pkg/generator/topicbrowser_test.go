@@ -299,19 +299,16 @@ var _ = Describe("TopicBrowser Generator", func() {
 				Expect(newResult.UnsBundles).To(HaveLen(1)) // Only cache bundle
 			})
 
-			It("should handle nil cache by panicking (expected behavior)", func() {
-				// This test documents that nil cache will cause a panic
-				// In practice, this shouldn't happen as cache is always initialized
+			It("should handle nil cache", func() {
 				obs = createMockObservedState([]*topicbrowser.Buffer{})
 
-				// Test that nil cache causes panic (expected behavior)
 				Expect(func() {
 					generator.GenerateTopicBrowser(nil, obs, true, logger)
-				}).To(Panic())
+				}).NotTo(Panic())
 
 				Expect(func() {
 					generator.GenerateTopicBrowser(nil, obs, false, logger)
-				}).To(Panic())
+				}).NotTo(Panic())
 			})
 		})
 	})
