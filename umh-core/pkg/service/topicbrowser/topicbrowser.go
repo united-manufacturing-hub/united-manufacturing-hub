@@ -106,9 +106,10 @@ type Service struct {
 // ServiceOption is a function that configures a Service.
 type ServiceOption func(*Service)
 
-func WithService(svc benthossvc.IBenthosService) ServiceOption {
+func WithService(benthossvc benthossvc.IBenthosService, s6svc s6svc.Service) ServiceOption {
 	return func(s *Service) {
-		s.benthosService = svc
+		s.benthosService = benthossvc
+		s.s6Service = s6svc
 	}
 }
 

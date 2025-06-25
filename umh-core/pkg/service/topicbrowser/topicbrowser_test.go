@@ -15,21 +15,28 @@
 package topicbrowser
 
 import (
+	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/pierrec/lz4/v4"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	benthossvccfg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
+	rpsvccfg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
+	rpfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
+	rpsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
+	rpmonitor "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
@@ -38,6 +45,7 @@ var _ = Describe("TopicBrowserService", func() {
 	var (
 		service         *Service
 		mockBenthos     *benthossvc.MockBenthosService
+		mockS6          *s6svc.MockService
 		ctx             context.Context
 		tick            uint64
 		tbName          string
@@ -52,10 +60,11 @@ var _ = Describe("TopicBrowserService", func() {
 
 		// Set up mock benthos service
 		mockBenthos = benthossvc.NewMockBenthosService()
+		mockS6 = s6svc.NewMockService()
 
 		// Set up a real service with mocked dependencies
 		service = NewDefaultService(tbName,
-			WithService(mockBenthos))
+			WithService(mockBenthos, mockS6))
 		mockSvcRegistry = serviceregistry.NewMockRegistry()
 	})
 
@@ -182,9 +191,20 @@ var _ = Describe("TopicBrowserService", func() {
 			// Use the official mock manager from the FSM package
 			manager, mockBenthosService = benthosfsm.NewBenthosManagerWithMockedServices("test")
 
+			payload := []byte("hello world")
+			hexBlock := makeLZ4Hex(payload)
+
+			mockS6.GetLogsResult = []s6svc.LogEntry{
+				{Content: BLOCK_START_MARKER, Timestamp: time.Now()},
+				{Content: hexBlock, Timestamp: time.Now()},
+				{Content: DATA_END_MARKER, Timestamp: time.Now()},
+				{Content: "1750091514783", Timestamp: time.Now()},
+				{Content: BLOCK_END_MARKER, Timestamp: time.Now()},
+			}
+
 			// Create service with our official mock benthos manager
 			statusService = NewDefaultService(tbName,
-				WithService(mockBenthosService),
+				WithService(mockBenthosService, mockS6),
 				WithManager(manager))
 
 			// Add the topic browser to the service
@@ -254,7 +274,32 @@ var _ = Describe("TopicBrowserService", func() {
 			_, reconciled := statusService.ReconcileManager(ctx, mockSvcRegistry, tick)
 			Expect(reconciled).To(BeFalse())
 
-			snapshot := fsm.SystemSnapshot{Tick: tick}
+			rpObserved := &rpfsm.RedpandaObservedStateSnapshot{
+				ServiceInfoSnapshot: rpsvc.ServiceInfo{
+					RedpandaStatus: rpsvc.RedpandaStatus{
+						RedpandaMetrics: rpmonitor.RedpandaMetrics{},
+					},
+				},
+				Config: rpsvccfg.RedpandaServiceConfig{},
+			}
+
+			rpInstSnapshot := &fsm.FSMInstanceSnapshot{
+				ID:                constants.RedpandaInstanceName,
+				CurrentState:      rpfsm.OperationalStateActive,
+				LastObservedState: rpObserved,
+			}
+
+			rpMgrSnapshot := &fsm.BaseManagerSnapshot{
+				Name: constants.RedpandaManagerName,
+				Instances: map[string]*fsm.FSMInstanceSnapshot{
+					constants.RedpandaInstanceName: rpInstSnapshot,
+				},
+				SnapshotTime: time.Now(),
+			}
+
+			snapshot := fsm.SystemSnapshot{Managers: map[string]fsm.ManagerSnapshot{
+				constants.RedpandaManagerName: rpMgrSnapshot,
+			}, Tick: tick}
 
 			// Call Status
 			status, err := statusService.Status(ctx, mockSvcRegistry, tbName, snapshot)
@@ -263,10 +308,9 @@ var _ = Describe("TopicBrowserService", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(status.BenthosFSMState).To(Equal(benthosfsm.OperationalStateActive))
 			Expect(status.BenthosObservedState.ServiceInfo.S6ObservedState.ServiceInfo.Status).To(Equal(s6svc.ServiceUp))
-			Expect(status.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive).To(BeTrue())
-			Expect(status.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady).To(BeTrue())
-			Expect(status.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics.Input.Received).To(Equal(int64(10)))
-			Expect(status.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics.Output.Sent).To(Equal(int64(10)))
+			// check the ringbuffer if logs appear
+			Expect(status.Status.Buffer[0].Timestamp.UnixMilli()).To(Equal(int64(1750091514783)))
+			Expect(status.Status.Buffer[0].Payload).To(Equal("hello world"))
 		})
 
 		It("should return error for non-existent topic browser", func() {
@@ -566,7 +610,7 @@ var _ = Describe("TopicBrowserService", func() {
 
 			// Create a service with our mocked manager
 			testService := NewDefaultService("test-error-service",
-				WithService(mockBenthosService),
+				WithService(mockBenthosService, mockS6),
 				WithManager(mockManager))
 
 			// Add a test component to have something to reconcile (just like in the other test)
@@ -804,4 +848,12 @@ func WaitForBenthosManagerInstanceState(
 		}
 	}
 	return tick, fmt.Errorf("instance didn't reach expected state: %s", expectedState)
+}
+
+func makeLZ4Hex(payload []byte) string {
+	var buf bytes.Buffer
+	w := lz4.NewWriter(&buf)
+	_, _ = w.Write(payload) // errors impossible in tests
+	_ = w.Close()
+	return hex.EncodeToString(buf.Bytes())
 }

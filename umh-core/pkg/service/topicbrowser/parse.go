@@ -16,7 +16,9 @@ package topicbrowser
 
 import (
 	"bytes"
+	"encoding/hex"
 	"errors"
+	"io"
 	"strconv"
 	"strings"
 	"time"
@@ -27,24 +29,35 @@ import (
 
 // parseBlock parses the logs, decompresses the payload and sets the timestamp
 func (svc *Service) parseBlock(entries []s6svc.LogEntry) error {
-	raw, epoch, err := extractRaw(entries)
-	if err != nil || raw == nil {
+	hexBuf, epoch, err := extractRaw(entries)
+	if err != nil || len(hexBuf) == 0 {
 		return err
 	}
 
-	// LZ4 block-decompression
-	dst := make([]byte, len(raw)*4)
-	n, err := lz4.UncompressBlock(raw, dst)
-	if err == lz4.ErrInvalidSourceShortBuffer {
-		dst = make([]byte, len(raw)*8)
-		n, err = lz4.UncompressBlock(raw, dst)
+	compressed := make([]byte, hex.DecodedLen(len(hexBuf)))
+	if _, err = hex.Decode(compressed, hexBuf); err != nil {
+		return err
 	}
+
+	r := lz4.NewReader(bytes.NewReader(compressed))
+	payload, err := io.ReadAll(r)
 	if err != nil {
 		return err
 	}
 
+	// LZ4 block-decompression
+	//	dst := make([]byte, len(raw)*4)
+	//	n, err := lz4.UncompressBlock(raw, dst)
+	//	if err == lz4.ErrInvalidSourceShortBuffer {
+	//		dst = make([]byte, len(raw)*8)
+	//		n, err = lz4.UncompressBlock(raw, dst)
+	//	}
+	//	if err != nil {
+	//		return err
+	//	}
+
 	svc.ringbuffer.Add(&Buffer{
-		Payload:   dst[:n],
+		Payload:   payload,
 		Timestamp: time.UnixMilli(epoch),
 	})
 

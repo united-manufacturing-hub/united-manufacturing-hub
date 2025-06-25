@@ -15,6 +15,8 @@
 package topicbrowser
 
 import (
+	"bytes"
+	"encoding/hex"
 	"strconv"
 	"time"
 
@@ -50,17 +52,21 @@ var _ = Describe("extractRaw / parseBlock", func() {
 
 	BeforeEach(func() {
 		payload = []byte("hello world")
-		dst := make([]byte, lz4.CompressBlockBound(len(payload)))
-		n, err := lz4.CompressBlock(payload, dst, nil)
+
+		var buf bytes.Buffer
+		w := lz4.NewWriter(&buf)
+		_, err := w.Write(payload)
 		Expect(err).NotTo(HaveOccurred())
-		compressed = dst[:n]
+		Expect(w.Close()).To(Succeed())
+
+		compressed = []byte(hex.EncodeToString(buf.Bytes()))
 
 		epochMS = time.Now().UnixMilli()
 		rb = NewRingbuffer(4)
 		service = &Service{ringbuffer: rb}
 	})
 
-	Context("happy path", func() {
+	Context("extraction and decompression", func() {
 		It("extracts, decompresses and stores the block", func() {
 			logs := buildLogs(true, string(compressed))
 
