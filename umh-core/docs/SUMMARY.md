@@ -29,13 +29,14 @@
   * [Container Layout](reference/container-layout.md)
   * [State Machines](reference/state-machines.md)
   * [Environment Variables](reference/environment-variables.md)
+  * [Variables](reference/variables.md)
 * [UMH Core vs UMH Classic](umh-core-vs-classic-faq.md)
 
 ## UMH Classic
 
 * [Go To Documentation](https://umh.docs.umh.app/)
 
-## Ressources
+## Resources
 
 * [Website](https://www.umh.app/)
 * [Blog](https://learn.umh.app/)
