@@ -144,7 +144,7 @@ protocolConverter:
         benthos:
           input:
             opcua:
-              endpoint: "opc.tcp://192.168.0.50:4840"
+              endpoint: "opc.tcp://{{ .IP }}:{{ .PORT }}"
               nodeIDs: ["ns=2;s=MachineFolder"]
           pipeline:
             processors:
