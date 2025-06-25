@@ -1,11 +1,24 @@
 ---
-description: 
-globs: 
+description: Rules for synchronizing UMH Core documentation between gitbook-docs and staging branches
+globs: ["umh-core/docs/**/*.md"]
 alwaysApply: false
 ---
-# UMH Core Documentation Sync Rule
+# UMH Core Documentation Sync Rules
 
-For any changes to umh-core code, you MUST update corresponding documentation.
+When working with UMH Core documentation:
+
+1. **Product Name**: Use "UMH Core" (not "UMH-Core") for the product name
+2. **Technical References**: Use "umh-core" (lowercase with hyphen) for:
+   - Container names
+   - API endpoints  
+   - File/directory names
+   - Technical identifiers
+
+3. **Spelling**: Use American English (e.g., "recognizes" not "recognises")
+
+4. **Heading Hierarchy**: Follow proper H1 → H2 → H3 progression
+
+5. **Consistency**: Maintain consistent terminology throughout all documentation files
 
 ## Configuration Changes
 - Changes to `config.yaml` structure, new fields, or removed fields → update `umh-core/docs/reference/configuration-reference.md`
