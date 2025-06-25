@@ -475,4 +475,17 @@ var _ = Describe("Simulator", func() {
 			}
 		})
 	})
+
+	Describe("TestDecodeUnsBundle", func() {
+		It("should decode uns bundle", func() {
+
+			bundle := simulator.GenerateNewUnsBundle()
+
+			var unsBundle tbproto.UnsBundle
+			err := proto.Unmarshal(bundle, &unsBundle)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(unsBundle.UnsMap).NotTo(BeNil())
+			Expect(unsBundle.Events).NotTo(BeNil())
+		})
+	})
 })
