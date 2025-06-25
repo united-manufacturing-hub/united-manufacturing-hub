@@ -83,8 +83,8 @@ type StateFlags struct {
 	HasBenthosOutput      bool
 }
 
-// NewMockDataFlowComponentService creates a new mock DataFlowComponent service
-func NewMockDataFlowComponentService() *MockService {
+// NewMockService creates a new mock topic browser service
+func NewMockService() *MockService {
 	return &MockService{
 		States:         make(map[string]*ServiceInfo),
 		Existing:       make(map[string]bool),
@@ -93,8 +93,8 @@ func NewMockDataFlowComponentService() *MockService {
 	}
 }
 
-// SetComponentState sets all state flags for a component at once
-func (m *MockService) SetComponentState(tbName string, flags StateFlags) {
+// SetState sets all state flags for a topic browser at once
+func (m *MockService) SetState(tbName string, flags StateFlags) {
 	bytesOut := 1024
 	batchSent := 1
 
@@ -133,7 +133,7 @@ func (m *MockService) SetComponentState(tbName string, flags StateFlags) {
 			},
 		},
 	}
-	// Ensure ServiceInfo exists for this component
+	// Ensure ServiceInfo exists for this topic browser
 	if _, exists := m.States[tbName]; !exists {
 		m.States[tbName] = &ServiceInfo{
 			BenthosFSMState:       flags.BenthosFSMState,
@@ -152,24 +152,24 @@ func (m *MockService) SetComponentState(tbName string, flags StateFlags) {
 	m.stateFlags[tbName] = &flags
 }
 
-// GetComponentState gets the state flags for a component
-func (m *MockService) GetComponentState(componentName string) *StateFlags {
-	if flags, exists := m.stateFlags[componentName]; exists {
+// GetState gets the state flags for a topic browser
+func (m *MockService) GetState(tbName string) *StateFlags {
+	if flags, exists := m.stateFlags[tbName]; exists {
 		return flags
 	}
 	// Initialize with default flags if not exists
 	flags := &StateFlags{}
-	m.stateFlags[componentName] = flags
+	m.stateFlags[tbName] = flags
 	return flags
 }
 
-// GenerateBenthosConfigForDataFlowComponent mocks generating Benthos config for a DataFlowComponent
+// GenerateConfig mocks generating Benthos config for a topic browser
 func (m *MockService) GenerateConfig(tbName string) (benthossvccfg.BenthosServiceConfig, error) {
 	m.GenerateConfigCalled = true
 	return m.GenerateConfigResult, m.GenerateConfigError
 }
 
-// Status mocks getting the status of a DataFlowComponent
+// Status mocks getting the status of a topic browser
 func (m *MockService) Status(
 	ctx context.Context,
 	services serviceregistry.Provider,
@@ -178,7 +178,7 @@ func (m *MockService) Status(
 ) (ServiceInfo, error) {
 	m.StatusCalled = true
 
-	// Check if the component exists in the ExistingComponents map
+	// Check if the topic browser exists in the Existing map
 	if exists, ok := m.Existing[tbName]; !ok || !exists {
 		return ServiceInfo{}, ErrServiceNotExist
 	}
@@ -203,17 +203,17 @@ func (m *MockService) AddToManager(
 
 	benthosName := fmt.Sprintf("topicbrowser-%s", tbName)
 
-	// Check whether the component already exists
+	// Check whether the topic browser already exists
 	for _, benthosConfig := range m.BenthosConfigs {
 		if benthosConfig.Name == benthosName {
 			return ErrServiceAlreadyExists
 		}
 	}
 
-	// Add the component to the list of existing components
+	// Add the topic browser to the list of existing ones
 	m.Existing[tbName] = true
 
-	// Create a BenthosConfig for this component
+	// Create a BenthosConfig for this topic browser
 	benthosConfig := config.BenthosConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            benthosName,
@@ -239,7 +239,7 @@ func (m *MockService) UpdateInManager(
 
 	benthosName := fmt.Sprintf("topicbrowser-%s", tbName)
 
-	// Check if the component exists
+	// Check if the topic browser exists
 	found := false
 	index := -1
 	for i, benthosConfig := range m.BenthosConfigs {
@@ -292,7 +292,7 @@ func (m *MockService) RemoveFromManager(
 		return ErrServiceNotExist
 	}
 
-	// Remove the component from the list of existing components
+	// Remove the topic browser from the list of existing ones
 	delete(m.Existing, tbName)
 	delete(m.States, tbName)
 
@@ -311,7 +311,7 @@ func (m *MockService) Start(
 
 	found := false
 
-	// Set the desired state to active for the given component
+	// Set the desired state to active for the given topic browser
 	for i, benthosConfig := range m.BenthosConfigs {
 		if benthosConfig.Name == benthosName {
 			m.BenthosConfigs[i].DesiredFSMState = benthosfsm.OperationalStateActive
@@ -339,7 +339,7 @@ func (m *MockService) Stop(
 
 	found := false
 
-	// Set the desired state to stopped for the given component
+	// Set the desired state to stopped for the given topic browser
 	for i, benthosConfig := range m.BenthosConfigs {
 		if benthosConfig.Name == benthosName {
 			m.BenthosConfigs[i].DesiredFSMState = benthosfsm.OperationalStateStopped
@@ -365,17 +365,17 @@ func (m *MockService) ForceRemove(
 	return m.ForceRemoveError
 }
 
-// ServiceExists mocks checking if a DataFlowComponent exists
+// ServiceExists mocks checking if a topic browser exists
 func (m *MockService) ServiceExists(
 	ctx context.Context,
-	serviecs serviceregistry.Provider,
+	services serviceregistry.Provider,
 	tbName string,
 ) bool {
 	m.ServiceExistsCalled = true
 	return m.ServiceExistsResult
 }
 
-// ReconcileManager mocks reconciling the DataFlowComponent manager
+// ReconcileManager mocks reconciling the topic browser manager
 func (m *MockService) ReconcileManager(
 	ctx context.Context,
 	services serviceregistry.Provider,

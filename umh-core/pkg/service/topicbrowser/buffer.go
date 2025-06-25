@@ -32,6 +32,9 @@ type Ringbuffer struct {
 }
 
 func NewRingbuffer(capacity uint32) *Ringbuffer {
+	if capacity == 0 {
+		capacity = 8
+	}
 	return &Ringbuffer{
 		buf: make([]*Buffer, capacity),
 	}

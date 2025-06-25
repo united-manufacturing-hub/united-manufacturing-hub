@@ -261,7 +261,7 @@ func (svc *Service) Status(
 		return ServiceInfo{}, fmt.Errorf("failed to parse block from logs: %w", err)
 	}
 
-	statusReason, activity := svc.checkMetrics(redpandaObservedState, benthosObservedState)
+	statusReason, invalidMetrics := svc.checkMetrics(redpandaObservedState, benthosObservedState)
 
 	// no direct reference
 	return ServiceInfo{
@@ -271,7 +271,7 @@ func (svc *Service) Status(
 		RedpandaFSMState:      redpandaFSMState,
 		BenthosProcessing:     svc.benthosProcessingActivity(benthosObservedState),
 		RedpandaProcessing:    svc.redpandaProcessingActivity(redpandaObservedState),
-		InvalidMetrics:        activity,
+		InvalidMetrics:        invalidMetrics,
 		StatusReason:          statusReason,
 		Status: Status{
 			Buffer: svc.ringbuffer.Get(),
@@ -331,7 +331,7 @@ func (svc *Service) AddToManager(
 // UpdateInManager modifies an existing topic browser configuration.
 func (svc *Service) UpdateInManager(
 	ctx context.Context,
-	filesystemServiec filesystem.Service,
+	filesystemService filesystem.Service,
 	cfg *benthossvccfg.BenthosServiceConfig,
 	tbName string,
 ) error {
@@ -427,7 +427,7 @@ func (svc *Service) RemoveFromManager(
 // Start starts a topic browser
 func (svc *Service) Start(
 	ctx context.Context,
-	filesystemServiec filesystem.Service,
+	filesystemService filesystem.Service,
 	tbName string,
 ) error {
 	if svc.benthosManager == nil {
@@ -555,28 +555,39 @@ func (svc *Service) checkMetrics(
 	rpObsState rpfsm.RedpandaObservedState,
 	benObsState benthosfsm.BenthosObservedState,
 ) (string, bool) {
+	if rpObsState.ServiceInfo.RedpandaStatus.RedpandaMetrics.MetricsState == nil {
+		return "no redpanda metrics available", true
+	}
+
+	if benObsState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState == nil {
+		return "no benthos metrics available", true
+	}
+
 	// Redpanda output but no benthos output
 	if rpObsState.ServiceInfo.RedpandaStatus.RedpandaMetrics.Metrics.Throughput.BytesOut > 0 &&
 		benObsState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState.Output.MessagesPerTick == 0 {
-		return "redpanda has output, but benthos no output", false
+		return "redpanda has output, but benthos no output", true
 	}
 
 	// Benthos output but not redpanda output
 	if rpObsState.ServiceInfo.RedpandaStatus.RedpandaMetrics.Metrics.Throughput.BytesOut == 0 &&
 		benObsState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState.Output.MessagesPerTick > 0 {
-		return "redpanda has no output, but benthos has output", false
+		return "redpanda has no output, but benthos has output", true
 	}
 
 	// Redpanda output but no benthos input
 	if rpObsState.ServiceInfo.RedpandaStatus.RedpandaMetrics.Metrics.Throughput.BytesOut > 0 &&
 		benObsState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState.Input.MessagesPerTick == 0 {
-		return "redpanda has output, but benthos no input", false
+		return "redpanda has output, but benthos no input", true
 	}
 
-	return "", true
+	return "", false
 }
 
 func (svc *Service) benthosProcessingActivity(observedState benthosfsm.BenthosObservedState) bool {
+	if observedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState == nil {
+		return false
+	}
 	return observedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState.IsActive
 }
 

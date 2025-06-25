@@ -78,9 +78,7 @@ var _ = Describe("Ringbuffer", func() {
 			// mutate the original payload
 			orig.Payload[0] = 99
 
-			rb.mu.Lock() // safe access inside the test
-			rb.buf[0].Payload[0] = 42
-			rb.mu.Unlock()
+			rb.Add(&Buffer{Payload: []byte{42}, Timestamp: time.Now()})
 
 			// the snapshot must remain unchanged
 			Expect(snapshot[0].Payload[0]).To(Equal(byte(7)))

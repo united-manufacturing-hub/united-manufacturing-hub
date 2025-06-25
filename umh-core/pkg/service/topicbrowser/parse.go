@@ -106,7 +106,7 @@ func extractRaw(entries []s6svc.LogEntry) (compressed []byte, epochMS int64, err
 		}
 	}
 	if tsLine == "" {
-		return nil, 0, errors.New("timestamp missing in block")
+		return nil, 0, errors.New("timestamp line is missing between block markers")
 	}
 
 	epochMS, err = strconv.ParseInt(tsLine, 10, 64)

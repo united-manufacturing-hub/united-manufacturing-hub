@@ -100,7 +100,7 @@ var _ = Describe("extractRaw / parseBlock", func() {
 
 			err := service.parseBlock(logs)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("timestamp missing"))
+			Expect(err.Error()).To(ContainSubstring("timestamp line is missing between block markers"))
 			Expect(rb.Len()).To(Equal(0))
 		})
 	})
