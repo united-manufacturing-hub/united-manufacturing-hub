@@ -158,7 +158,7 @@ protocolConverter:
             uns: {}
     variables:
       # Optional templating support
-      HOST: "192.168.0.50"
+      IP: "192.168.0.50"
       PORT: "4840"
 ```
 

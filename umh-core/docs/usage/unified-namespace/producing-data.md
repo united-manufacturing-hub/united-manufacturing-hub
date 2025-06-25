@@ -40,7 +40,7 @@ protocolConverter:
             output:
               uns: {}
       variables:
-        HOST: "192.168.1.100"
+        IP: "192.168.1.100"
         PORT: "4840"
 ```
 
