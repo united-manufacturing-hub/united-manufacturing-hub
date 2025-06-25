@@ -106,10 +106,6 @@ Example result: `umh.v1.acme.plant1.line4.sensor1._temperature.temperature_in_c`
 
 For choosing between Bridges and Stand-alone Flows, see the [complete comparison in Bridges documentation](../data-flows/bridges.md#when-to-use-bridges).
 
-## Migration from UMH Classic
-
-> **UMH Classic Users:** The previous `_historian` data contract is deprecated. Use `_raw` for simple sensor data and explicit data contracts (like `_temperature`, `_pump`) with the new [data modeling system](../data-modeling/) 🚧 for structured industrial data. See [Migration from UMH Classic to UMH Core](../../production/migration-from-classic.md) for complete migration instructions.
-
 ## Next Steps
 
 * [**Consuming Data**](consuming-data.md) 🚧 - Process UNS messages
