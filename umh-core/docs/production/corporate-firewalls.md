@@ -16,26 +16,3 @@ agent:
 * You're behind a corporate firewall that you trust
 * You cannot add your corporate CA certificate
 * You understand the security implications
-
-## Proxy Configuration
-
-If your network requires a proxy, add these environment variables to your Docker run command:
-
-```bash
--e HTTP_PROXY=http://proxy.company.com:8080 \
--e HTTPS_PROXY=https://proxy.company.com:8080 \
--e NO_PROXY=localhost,127.0.0.1,.local
-```
-
-Supported proxy environment variables: `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY` (and their lowercase variants).
-
-For authenticated proxies, include credentials in the URL:
-```bash
--e HTTP_PROXY=http://username:password@proxy.company.com:8080
-```
-
-Supported proxy types: HTTP and HTTPS.
-
-## Common Configuration
-
-In most corporate environments, proxy usage and TLS interception go together. If you need to configure a proxy, you'll likely also need to add your corporate CA certificate to handle TLS inspection. See both sections above for complete configuration.

@@ -1,5 +1,9 @@
 # Getting Started
 
+**60 seconds — that's all it takes to launch UMH-Core.**
+
+No kubectl, no Kubernetes setup, just a single Docker container. Anything that runs Docker works — from your MacBook terminal to enterprise edge boxes.
+
 ### System requirements
 
 **Minimum:**
@@ -8,7 +12,7 @@
 * 4 GB RAM
 * 40 GB SSD
 
-See also  [sizing-guide.md](production/sizing-guide.md "mention") for more information
+See also [sizing-guide.md](production/sizing-guide.md "mention") for more information
 
 ### Connecting to the Management Console (recommended)
 
@@ -48,7 +52,7 @@ From the Console you can :
           template:
             connection:
               nmap:
-                target:   "{{ .HOST }}"
+                target:   "{{ .IP }}"
                 port:     "{{ .PORT }}"
             dataflowcomponent_read:
               benthos:
@@ -67,7 +71,7 @@ From the Console you can :
                             msg.meta.tag_name      = "random_int"; // Your tag name 
                             return msg;
           variables:
-            HOST:   "localhost"
+            IP:   "localhost"
             PORT: "8080"   
     ```
 3.  **Run the container**
@@ -76,6 +80,9 @@ From the Console you can :
     <strong>     --name umh-core -v $(pwd):/data \
     </strong>     management.umh.app/oci/united-manufacturing-hub/umh-core:latest
     </code></pre>
+
+> **Note for UMH Classic users:** the former Helm/Kubernetes installation is no longer required. UMH Core ships as a single container; Kubernetes is purely optional if you need scaling or HA.
+
 4.  **Watch it work**
 
     Open the Topic Browser in the console; you should see `random_int` under `plant-A.line-4.machine-7._raw.random_int`&#x20;
@@ -103,7 +110,40 @@ If you're behind a corporate proxy, follow the steps in [corporate-firewalls.md]
 -e NO_PROXY=localhost,127.0.0.1,.local
 ```
 
+### Migration from UMH Classic
+
+> **UMH Classic users:** See [Migration from UMH Classic to UMH Core](production/migration-from-classic.md) for complete migration instructions including data contract changes and configuration updates.
+
 ### Next steps
 
-* **Add a real producer** – point an OPC UA input at your PLC and let the `tag_processor` contextualize your data.
-* **Add a consumer** – create a second protocol converter that reads from `umh.v1.plant-A.lineA.machine-7._raw.random_int` and writes to MQTT or TimescaleDB.
+* **Add a real producer** – point an OPC UA input at your PLC and let the `tag_processor` contextualize your data. See [Producing Data](usage/unified-namespace/producing-data.md) 🚧 for examples.
+* **Add a consumer** – create a second protocol converter that reads from `umh.v1.plant-A.lineA.machine-7._raw.random_int` and writes to MQTT or TimescaleDB. See [Consuming Data](usage/unified-namespace/consuming-data.md) 🚧 for patterns.
+* **Structure your data** – move beyond `_raw` contracts to explicit [Data Models](usage/data-modeling/README.md) 🚧 for enterprise-scale analytics.
+* **Scale your deployment** – follow the [Production](production/README.md) guides for sizing, security, and monitoring.
+
+## Understanding the Configuration
+
+The example above shows:
+
+- **`protocolConverter:`** - Creates a Bridge (UI terminology) for device connectivity
+- **`tag_processor`** 🚧 - Adds UNS metadata for proper topic construction (will be updated in next release to align with new data model)
+- **Location hierarchy** - Combines `agent.location` + `protocolConverter.location` for hierarchical paths (supports ISA-95, KKS, or custom naming)
+- **Data contracts** - `_raw` is the simplest contract for unprocessed data
+
+For complete configuration syntax, see [Configuration Reference](reference/configuration-reference.md).
+
+## Learn More
+
+### Core Concepts
+- **[Unified Namespace Overview](usage/unified-namespace/overview.md)** - Understand the messaging architecture
+- **[Topic Convention](usage/unified-namespace/topic-convention.md)** - How UNS addresses data
+- **[Payload Formats](usage/unified-namespace/payload-formats.md)** - Message structure standards
+
+### Educational Content
+- **[The Rise of the Unified Namespace](https://learn.umh.app/lesson/chapter-2-the-rise-of-the-unified-namespace/)** - Core UNS principles
+- **[Industrial IoT Platforms vs. The Unified Namespace](https://learn.umh.app/blog/industrial-iot-platforms-vs-the-unified-namespace-uns/)** - Architectural comparison
+- **[Connect ifm IO-Link Masters](https://learn.umh.app/blog/connect-ifm-io-link-masters-with-the-uns/)** - Real-world connectivity example
+
+### Technical Deep Dives
+- **[Why Most Manufacturing Software Sucks](https://learn.umh.app/blog/why-most-manufacturing-software-sucks-and-what-we-do-differently-at-umh/)** - UMH's architectural philosophy
+- **[Benthos-UMH Documentation](https://docs.umh.app/benthos-umh)** - Complete protocol and processor reference
