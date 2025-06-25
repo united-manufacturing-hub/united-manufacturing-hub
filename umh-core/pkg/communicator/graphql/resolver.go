@@ -316,18 +316,6 @@ func (r *Resolver) mapKafkaHeaders(eventKafka *tbproto.EventKafka) []*MetadataKv
 	return headers
 }
 
-func (r *Resolver) filterTopics(topics []*Topic, filter *TopicFilter) []*Topic {
-	var filtered []*Topic
-
-	for _, topic := range topics {
-		if r.matchesFilter(topic, filter) {
-			filtered = append(filtered, topic)
-		}
-	}
-
-	return filtered
-}
-
 func (r *Resolver) matchesFilter(topic *Topic, filter *TopicFilter) bool {
 	// Text filter - search in topic path AND metadata values as per expert feedback
 	if filter.Text != nil && *filter.Text != "" {
@@ -353,7 +341,7 @@ func (r *Resolver) matchesFilter(topic *Topic, filter *TopicFilter) bool {
 	}
 
 	// Metadata filter (exact key-value matching)
-	if filter.Meta != nil && len(filter.Meta) > 0 {
+	if len(filter.Meta) > 0 {
 		if !r.matchesMetadataFilter(topic.Metadata, filter.Meta) {
 			return false
 		}

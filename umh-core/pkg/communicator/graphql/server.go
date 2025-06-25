@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/99designs/gqlgen/graphql/handler"
+	"github.com/99designs/gqlgen/graphql/handler/transport"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -79,7 +80,14 @@ func (s *Server) Start(ctx context.Context) error {
 
 	// Create GraphQL schema and handler
 	schema := NewExecutableSchema(Config{Resolvers: s.resolver})
-	srv := handler.NewDefaultServer(schema)
+	srv := handler.New(schema)
+
+	// Add transports (replaces functionality from deprecated NewDefaultServer)
+	srv.AddTransport(&transport.Websocket{})
+	srv.AddTransport(&transport.Options{})
+	srv.AddTransport(&transport.GET{})
+	srv.AddTransport(&transport.POST{})
+	srv.AddTransport(&transport.MultipartForm{})
 
 	// Add error handling and recovery
 	srv.SetRecoverFunc(func(ctx context.Context, err interface{}) error {

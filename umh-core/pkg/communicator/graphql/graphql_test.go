@@ -125,7 +125,7 @@ func TestServer_Creation(t *testing.T) {
 	}
 
 	if server == nil {
-		t.Error("NewServer should not return nil")
+		t.Fatal("NewServer should not return nil")
 	}
 
 	if server.resolver != resolver {
