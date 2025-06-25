@@ -20,11 +20,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Generator handles the generation of Nmap YAML configurations
+// Generator handles the generation of Topic Browser YAML configurations
 // Currently BoilerPlate-Code
 type Generator struct{}
 
-// NewGenerator creates a new YAML generator for Nmap configurations
+// NewGenerator creates a new YAML generator for Topic Browser configurations
 // Currently BoilerPlate-Code
 
 func NewGenerator() *Generator {
@@ -40,7 +40,7 @@ func (g *Generator) RenderConfig(cfg Config) (string, error) {
 	// Marshal to YAML
 	yamlBytes, err := yaml.Marshal(normalizedMap)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal Nmap config: %w", err)
+		return "", fmt.Errorf("failed to marshal Topic Browser config: %w", err)
 	}
 
 	yamlStr := string(yamlBytes)
@@ -57,7 +57,7 @@ func (g *Generator) ConfigToMap(cfg Config) map[string]any {
 	return configMap
 }
 
-// normalizeConfig applies nothing since Nmap has no default settings
+// normalizeConfig applies nothing since Topic Browser has no default settings
 func normalizeConfig(raw map[string]any) map[string]any {
 	return raw
 }

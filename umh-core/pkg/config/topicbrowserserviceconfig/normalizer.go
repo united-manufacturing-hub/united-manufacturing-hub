@@ -14,10 +14,10 @@
 
 package topicbrowserserviceconfig
 
-// Normalizer handles the normalization of Nmap configurations
+// Normalizer handles the normalization of Topic Browser configurations
 type Normalizer struct{}
 
-// NewNormalizer creates a new configuration normalizer for Nmap
+// NewNormalizer creates a new configuration normalizer for Topic Browser
 func NewNormalizer() *Normalizer {
 	return &Normalizer{}
 }

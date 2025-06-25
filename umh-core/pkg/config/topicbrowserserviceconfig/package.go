@@ -23,6 +23,7 @@ var (
 // Config represents the configuration for a Topic Browser service
 type Config struct {
 	// to be filled
+	// If you add fields, make sure to update the ConfigsEqual and ConfigDiff functions
 }
 
 // Equal checks if two BenthosServiceConfigs are equal
@@ -35,14 +36,15 @@ func RenderYAML(target string, port uint16) (string, error) {
 	// Create a config object from the individual components
 	cfg := Config{
 		// to be filled
+		// If you add fields, make sure to update the ConfigsEqual and ConfigDiff functions
 	}
 
 	// Use the generator to render the YAML
 	return defaultGenerator.RenderConfig(cfg)
 }
 
-// NormalizeNmapConfig is a package-level function for easy config normalization
-func NormalizeNmapConfig(cfg Config) Config {
+// NormalizeTopicBrowserConfig is a package-level function for easy config normalization
+func NormalizeTopicBrowserConfig(cfg Config) Config {
 	return defaultNormalizer.NormalizeConfig(cfg)
 }
 

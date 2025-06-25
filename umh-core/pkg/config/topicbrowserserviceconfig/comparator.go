@@ -43,7 +43,9 @@ func (c *Comparator) ConfigsEqual(desired, observed Config) (isEqual bool) {
 		}
 	}()
 
-	return true
+	// Since Config is currently empty, they are always equal
+	// When fields are added to Config, add comparison logic here
+	return normDesired == normObserved
 }
 
 // ConfigDiff returns a human-readable string describing differences between configs
@@ -51,10 +53,14 @@ func (c *Comparator) ConfigDiff(desired, observed Config) string {
 	var diff strings.Builder
 
 	// First normalize both configs
-	//	normDesired := c.normalizer.NormalizeConfig(desired)
-	//	normObserved := c.normalizer.NormalizeConfig(observed)
+	normDesired := c.normalizer.NormalizeConfig(desired)
+	normObserved := c.normalizer.NormalizeConfig(observed)
 
-	// Check basic fields
+	// Since Config is currently empty, check for structural differences
+	// When fields are added to Config, add specific field comparison logic here
+	if normDesired != normObserved {
+		diff.WriteString("Topic Browser configs differ\n")
+	}
 
 	if diff.Len() == 0 {
 		return "No significant differences"
