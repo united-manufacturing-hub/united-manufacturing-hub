@@ -22,6 +22,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/topicbrowserserviceconfig"
 
 	"github.com/tiendc/go-deepcopy"
 )
@@ -47,6 +48,7 @@ type InternalConfig struct {
 	BenthosMonitor  []BenthosMonitorConfig  `yaml:"benthosMonitor,omitempty"`  // BenthosMonitor config, can be updated while running
 	Connection      []ConnectionConfig      `yaml:"connection,omitempty"`      // Connection services to manage, can be updated while running
 	RedpandaMonitor []RedpandaMonitorConfig `yaml:"redpandaMonitor,omitempty"` // RedpandaMonitor config, can be updated while running
+	TopicBrowser    TopicBrowserConfig      `yaml:"topic_browser,omitempty"`
 }
 
 type AgentConfig struct {
@@ -189,6 +191,15 @@ type GraphQLConfig struct {
 	CORSOrigins  []string `yaml:"corsOrigins,omitempty"`  // CORS allowed origins (default: ["*"])
 	Debug        bool     `yaml:"debug,omitempty"`        // Enable GraphiQL playground and debug logging
 	AuthRequired bool     `yaml:"authRequired,omitempty"` // Require authentication (future use)
+}
+
+// TopicBrowserConfig contains configuration for creating a Topic Browser service
+type TopicBrowserConfig struct {
+	// For the FSM
+	FSMInstanceConfig `yaml:",inline"`
+
+	// For the Connection service
+	ServiceConfig topicbrowserserviceconfig.Config `yaml:"serviceConfig"`
 }
 
 // Clone creates a deep copy of FullConfig

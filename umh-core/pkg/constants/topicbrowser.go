@@ -14,6 +14,24 @@
 
 package constants
 
+import "time"
+
+const (
+	TopicBrowserServiceName = "topic-browser"
+)
+
+const (
+	// ConnectionExpectedMaxP95ExecutionTimePerInstance means that an instance will not reconcile if not 40ms are left
+	// Note: in the integration test, we defined an alerting threshold of 80% of the max ticker time, which is 100ms
+	// So by setting this to 40 ms, we can ensure that an instance will never start if it triggers the alerting threshold
+	TopicBrowserExpectedMaxP95ExecutionTimePerInstance = time.Millisecond * 40 // needs to be higher than NmapExpectedMaxP95ExecutionTimePerInstance
+)
+
+const (
+	// TopicBrowserUpdateObservedStateTimeout is the timeout for updating the observed state
+	TopicBrowserUpdateObservedStateTimeout = 5 * time.Millisecond
+)
+
 const (
 	// BLOCK_START_MARKER marks the begin of a new data/general block inside the logs.
 	BLOCK_START_MARKER = "STARTSTARTSTART"
