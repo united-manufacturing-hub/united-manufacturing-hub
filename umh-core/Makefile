@@ -12,7 +12,41 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-.PHONY: build run clean test
+.PHONY: build run clean test help
+
+# Show available commands and common usage patterns
+help: ## Display available make targets and usage information
+	@echo "🏭 UMH Core - Build & Test Commands"
+	@echo "=================================="
+	@echo ""
+	@echo "📊 QUICK START - GraphQL API Demo:"
+	@echo "   make test-graphql    # Start GraphQL server with mock data (port 8090)"
+	@echo ""
+	@echo "🔨 BUILD COMMANDS:"
+	@echo "   make build          # Build Docker image"
+	@echo "   make build-debug    # Build with debug support"
+	@echo "   make build-pprof    # Build with profiling support"
+	@echo ""
+	@echo "🧪 TEST COMMANDS:"
+	@echo "   make test-graphql      # GraphQL API with mock UNS data (recommended)"
+	@echo "   make test-dfc          # Data Flow Components"
+	@echo "   make test-redpanda     # Redpanda message broker"
+	@echo "   make test-connection   # Connection services"
+	@echo "   make test-debug        # Debug configuration"
+	@echo ""
+	@echo "🛠️  UTILITY COMMANDS:"
+	@echo "   make pod-shell      # Shell into running container"
+	@echo "   make stop-all-pods  # Stop all UMH Core containers"
+	@echo "   make dump-metrics   # Save metrics to file"
+	@echo "   make cleanup-all    # Clean all Docker resources"
+	@echo ""
+	@echo "💡 NOTES:"
+	@echo "   • All test commands run in Docker containers"
+	@echo "   • Containers auto-cleanup on restart"
+	@echo "   • Check 'docker logs umh-core' for troubleshooting"
+	@echo "   • GraphQL playground available at http://localhost:8090/"
+	@echo "   • Full GraphQL docs: pkg/communicator/graphql/README.md"
+	@echo ""
 
 IMAGE_NAME = umh-core
 TAG = latest
@@ -481,6 +515,85 @@ test-benthos-monitor: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
 		ghcr.io/united-manufacturing-hub/united-manufacturing-hub/umh-core:staging
+
+# GraphQL API Demo: Complete GraphQL server with mock UNS data
+# 
+# USAGE: cd umh-core && make test-graphql
+# 
+# This target starts UMH Core with GraphQL API enabled and mock data populated.
+# Perfect for quick testing and development without requiring MQTT/Redis infrastructure.
+#
+# FEATURES:
+# - GraphQL server on port 8090 with Gin framework
+# - 7 realistic UNS topics with rich metadata (temperature, pressure, counts, etc.)
+# - GraphiQL Playground for interactive querying
+# - CORS enabled for web development
+# - No external dependencies required
+#
+# ENDPOINTS:
+# - http://localhost:8090/graphql    - GraphQL API endpoint
+# - http://localhost:8090/           - GraphiQL Playground (interactive UI)
+# - http://localhost:8081/metrics    - Prometheus metrics
+#
+# SAMPLE QUERIES:
+# - All topics: { topics { topic metadata { key value } } }
+# - Filtered:   { topics(filter: {text: "temperature"}) { topic } }
+# - Limited:    { topics(limit: 3) { topic } }
+# - Single:     { topic(topic: "..umh.v1.acme.cologne.energy.main.power") { topic } }
+#
+# TROUBLESHOOTING:
+# - If GraphQL server doesn't start, check logs: docker logs umh-core
+# - Ensure ports 8090 and 8081 are not in use
+# - Container must have config.yaml with graphql.enabled=true
+# - Mock data appears in logs: "Populating GraphQL cache with mock data"
+#
+# TECHNICAL NOTES:
+# - Mock data simulates realistic manufacturing UNS topics
+# - Uses reflection to populate internal topic browser cache
+# - GraphQL schema supports both time series and relational events
+# - Server uses graceful shutdown with 3-second timeout
+# - See pkg/communicator/graphql/README.md for detailed documentation
+test-graphql: stop-and-remove-umh-core-latest $(BUILD_TARGET)
+	@mkdir -p $(PWD)/data
+	@cp $(PWD)/examples/example-config-graphql.yaml $(PWD)/data/config.yaml
+	@echo "=========================================="
+	@echo "🚀 Starting UMH Core with GraphQL API..."
+	@echo "=========================================="
+	@echo ""
+	@echo "📡 ENDPOINTS:"
+	@echo "   GraphQL API:        http://localhost:8090/graphql"
+	@echo "   GraphiQL Playground: http://localhost:8090/"
+	@echo "   Metrics:            http://localhost:8081/metrics"
+	@echo ""
+	@echo "🔧 FEATURES:"
+	@echo "   • 7 mock UNS topics with realistic data"
+	@echo "   • Interactive GraphiQL Playground"
+	@echo "   • Topic filtering and pagination" 
+	@echo "   • Rich metadata (sensor IDs, locations, alarms)"
+	@echo ""
+	@echo "📋 SAMPLE QUERIES:"
+	@echo '   { topics { topic metadata { key value } } }'
+	@echo '   { topics(filter: {text: "temperature"}) { topic } }'
+	@echo '   { topics(limit: 3) { topic } }'
+	@echo ""
+	@echo "🐛 TROUBLESHOOTING:"
+	@echo "   • Check logs: docker logs umh-core"
+	@echo "   • Verify ports 8090/8081 are free"
+	@echo "   • Look for: 'Starting GraphQL server on port 8090'"
+	@echo ""
+	@echo "⏳ Starting container..."
+	docker run \
+		--name $(IMAGE_NAME) \
+		-v $(PWD)/data:/data \
+		-e LOGGING_LEVEL=DEBUG \
+		-p 8081:8080 \
+		-p 8090:8090 \
+		-p 4195:4195 \
+		-p 6060:6060 \
+		-p 40000:40000 \
+		--memory $(MEMORY) \
+		--cpus $(CPUS) \
+		$(IMAGE_NAME):$(TAG)
 
 test-debug: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 	@mkdir -p $(PWD)/data
