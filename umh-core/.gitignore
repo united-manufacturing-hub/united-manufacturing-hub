@@ -7,3 +7,6 @@ integration/umh-config
 .docker-cache
 
 tmp/
+
+# Compiled binaries
+main

@@ -17,13 +17,9 @@ package main
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"time"
 
-	"github.com/99designs/gqlgen/graphql/handler"
-	"github.com/99designs/gqlgen/graphql/playground"
-	"github.com/gin-gonic/gin"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/pprof"
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
@@ -112,7 +108,7 @@ func main() {
 	communicationState.StartTopicBrowserCacheUpdater(systemSnapshotManager, ctx)
 
 	// Start the GraphQL server if enabled
-	var graphqlServer *http.Server
+	var graphqlServer *graphql.Server
 	if configData.Agent.GraphQLConfig.Enabled {
 		// Set defaults for GraphQL config if not specified
 		if configData.Agent.GraphQLConfig.Port == 0 {
@@ -122,19 +118,28 @@ func main() {
 			configData.Agent.GraphQLConfig.CORSOrigins = []string{"*"}
 		}
 
-		// GraphQL server uses real data from the simulator via TopicBrowserCache
-
+		// Create GraphQL resolver with necessary dependencies
+		//
+		// TopicBrowserCache: Required for GraphQL to access the unified namespace data
+		// SnapshotManager: Required for GraphQL to access system configuration and state
 		graphqlResolver := &graphql.Resolver{
 			SnapshotManager:   systemSnapshotManager,
 			TopicBrowserCache: communicationState.TopicBrowserCache,
 		}
-		graphqlServer = setupGraphQLEndpoint(graphqlResolver, &configData.Agent.GraphQLConfig, log)
+
+		// Start GraphQL server using the new streamlined implementation
+		var err error
+		graphqlServer, err = graphql.StartGraphQLServer(graphqlResolver, &configData.Agent.GraphQLConfig, log)
+		if err != nil {
+			sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to start GraphQL server: %w", err)
+		}
+
 		defer func() {
 			if graphqlServer != nil {
 				shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
 				defer shutdownCancel()
-				if err := graphqlServer.Shutdown(shutdownCtx); err != nil {
-					log.Errorf("Failed to shutdown GraphQL server: %v", err)
+				if err := graphqlServer.Stop(shutdownCtx); err != nil {
+					sentry.ReportIssuef(sentry.IssueTypeError, log, "Failed to shutdown GraphQL server: %w", err)
 				}
 			}
 		}()
@@ -279,81 +284,4 @@ func enableBackendConnection(config *config.FullConfig, communicationState *comm
 	}
 
 	logger.Info("Backend connection enabled")
-}
-
-// setupGraphQLEndpoint sets up GraphQL endpoint using Gin and proper gqlgen handler
-func setupGraphQLEndpoint(resolver *graphql.Resolver, cfg *config.GraphQLConfig, logger *zap.SugaredLogger) *http.Server {
-	// Set Gin mode based on debug setting
-	if cfg.Debug {
-		gin.SetMode(gin.DebugMode)
-	} else {
-		gin.SetMode(gin.ReleaseMode)
-	}
-
-	router := gin.New()
-
-	// Add middleware
-	router.Use(gin.Recovery())
-	router.Use(func(c *gin.Context) {
-		// Simple logging middleware
-		start := time.Now()
-		c.Next()
-		if cfg.Debug {
-			logger.Infof("GraphQL %s %s %d %v", c.Request.Method, c.Request.URL.Path, c.Writer.Status(), time.Since(start))
-		}
-	})
-
-	// Add CORS middleware if origins are specified
-	if len(cfg.CORSOrigins) > 0 {
-		router.Use(func(c *gin.Context) {
-			origin := c.Request.Header.Get("Origin")
-			// Simple CORS - in production, use proper CORS middleware
-			for _, allowedOrigin := range cfg.CORSOrigins {
-				if allowedOrigin == "*" || allowedOrigin == origin {
-					c.Header("Access-Control-Allow-Origin", allowedOrigin)
-					c.Header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-					c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
-					break
-				}
-			}
-			if c.Request.Method == "OPTIONS" {
-				c.AbortWithStatus(204)
-				return
-			}
-			c.Next()
-		})
-	}
-
-	// Create proper GraphQL handler
-	schema := graphql.NewExecutableSchema(graphql.Config{Resolvers: resolver})
-	srv := handler.NewDefaultServer(schema)
-
-	// Add error handling and recovery
-	srv.SetRecoverFunc(func(ctx context.Context, err interface{}) error {
-		sentry.ReportIssue(fmt.Errorf("GraphQL panic: %v", err), sentry.IssueTypeFatal, logger)
-		return fmt.Errorf("internal server error")
-	})
-
-	// Add GraphQL routes
-	router.POST("/graphql", gin.WrapH(srv))
-	router.GET("/graphql", gin.WrapH(srv)) // Allow GET for introspection
-
-	// Add GraphiQL playground for development
-	if cfg.Debug {
-		router.GET("/", gin.WrapH(playground.Handler("GraphQL Playground", "/graphql")))
-	}
-
-	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", cfg.Port),
-		Handler: router,
-	}
-
-	go func() {
-		logger.Infof("Starting GraphQL server on port %d (debug: %v)", cfg.Port, cfg.Debug)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			sentry.ReportIssue(err, sentry.IssueTypeFatal, logger)
-		}
-	}()
-
-	return server
 }

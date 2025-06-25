@@ -13,8 +13,8 @@ import (
 
 	"github.com/cespare/xxhash/v2"
 	tbproto "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models/topicbrowser/pb"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 )
 
 // SnapshotProvider provides access to system snapshots containing topic data
@@ -27,9 +27,15 @@ type SystemSnapshot struct {
 	Managers map[string]interface{}
 }
 
+// TopicBrowserCacheInterface defines the interface for topic browser cache
+type TopicBrowserCacheInterface interface {
+	GetEventMap() map[string]*tbproto.EventTableEntry
+	GetUnsMap() *tbproto.TopicMap
+}
+
 type Resolver struct {
 	SnapshotManager   *fsm.SnapshotManager
-	TopicBrowserCache *topicbrowser.Cache
+	TopicBrowserCache TopicBrowserCacheInterface
 }
 
 // Topics is the resolver for the topics field.
@@ -46,40 +52,56 @@ func (r *queryResolver) Topics(ctx context.Context, filter *TopicFilter, limit *
 		return []*Topic{}, nil
 	}
 
+	// Determine effective limit early
+	const defaultMaxLimit = 100
+	maxLimit := defaultMaxLimit
+	if limit != nil && *limit > 0 && *limit < defaultMaxLimit {
+		maxLimit = *limit
+	}
+
 	var topics []*Topic
 
-	// Convert protobuf data to GraphQL models
+	// Convert protobuf data to GraphQL models with early termination
+	processedCount := 0
 	for _, topicInfo := range unsMap.Entries {
+		// Check context cancellation for long-running operations
+		if processedCount%50 == 0 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			default:
+			}
+		}
+
 		// Calculate the hashed UNS tree ID for this topic (same as simulator)
 		hashedTreeId := r.hashUNSTableEntry(topicInfo)
 
-		// Get latest event for this topic if available
-		var latestEvent Event
-		if eventEntry, exists := eventMap[hashedTreeId]; exists {
-			latestEvent = r.mapEventEntryToGraphQL(eventEntry)
-		}
-
+		// Create topic object
 		topic := &Topic{
 			Topic:     r.buildTopicName(topicInfo),
 			Metadata:  r.mapMetadataToGraphQL(topicInfo.Metadata),
-			LastEvent: latestEvent,
+			LastEvent: nil, // Will be populated below if event exists
+		}
+
+		// Apply filters early to avoid unnecessary processing
+		if filter != nil && !r.matchesFilter(topic, filter) {
+			processedCount++
+			continue
+		}
+
+		// Get latest event for this topic if available (only after filtering)
+		if eventEntry, exists := eventMap[hashedTreeId]; exists {
+			topic.LastEvent = r.mapEventEntryToGraphQL(eventEntry)
 		}
 
 		topics = append(topics, topic)
-	}
 
-	// Apply filters
-	if filter != nil {
-		topics = r.filterTopics(topics, filter)
-	}
+		// Stop processing if we've reached the limit (after filtering)
+		if len(topics) >= maxLimit {
+			break
+		}
 
-	// Apply limit
-	maxLimit := 100
-	if limit != nil && *limit > 0 && *limit < maxLimit {
-		maxLimit = *limit
-	}
-	if len(topics) > maxLimit {
-		topics = topics[:maxLimit]
+		processedCount++
 	}
 
 	return topics, nil
@@ -255,8 +277,20 @@ func (r *Resolver) mapRelationalEvent(entry *tbproto.EventTableEntry, timestamp 
 	if relPayload != nil && len(relPayload.Json) > 0 {
 		// Parse the JSON payload
 		if err := json.Unmarshal(relPayload.Json, &jsonData); err != nil {
-			// If JSON parsing fails, create empty object
-			jsonData = make(map[string]any)
+			// Log the error for debugging/monitoring (with context)
+			log := logger.For(logger.ComponentCommunicator)
+			log.Warnw("Failed to unmarshal relational event JSON in GraphQL resolver",
+				"error", err,
+				"payload_size", len(relPayload.Json),
+				"uns_tree_id", entry.UnsTreeId,
+				"produced_at_ms", entry.ProducedAtMs,
+			)
+
+			// Create object with parse error indicator for debugging
+			jsonData = map[string]any{
+				"_parseError": err.Error(),
+				"_rawSize":    len(relPayload.Json),
+			}
 		}
 	} else {
 		jsonData = make(map[string]any)
