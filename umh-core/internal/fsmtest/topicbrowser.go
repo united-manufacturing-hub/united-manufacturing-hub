@@ -401,7 +401,7 @@ func ReconcileTopicbrowserUntilError(
 
 // CreateMockTopicBrowserManager creates a TopicBrowser manager with a mock service for testing
 func CreateMockTopicBrowserManager(managerName string) (*topicbrowserfsm.Manager, *topicbrowsersvc.MockService) {
-	manager := topicbrowserfsm.NewManager(managerName)
+	manager := topicbrowserfsm.NewTopicBrowserManager(managerName)
 	mockService := topicbrowsersvc.NewMockDataFlowComponentService()
 	return manager, mockService
 }

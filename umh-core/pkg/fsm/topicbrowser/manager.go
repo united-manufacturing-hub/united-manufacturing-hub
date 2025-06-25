@@ -40,7 +40,7 @@ type Snapshot struct {
 	*public_fsm.BaseManagerSnapshot
 }
 
-func NewManager(name string) *Manager {
+func NewTopicBrowserManager(name string) *Manager {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentTopicBrowserManager, name)
 	baseManager := public_fsm.NewBaseFSMManager[config.TopicBrowserConfig](
 		managerName,
