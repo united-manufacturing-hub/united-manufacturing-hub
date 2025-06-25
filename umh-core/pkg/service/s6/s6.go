@@ -671,7 +671,7 @@ func (s *DefaultService) Status(ctx context.Context, servicePath string, fsServi
 		info.Status = ServiceDown
 		// Interpret wstat as a wait status.
 		// We convert to syscall.WaitStatus so that we can check if the process exited normally.
-		var ws = syscall.WaitStatus(wstat)
+		ws := syscall.WaitStatus(wstat)
 		if ws.Exited() {
 			info.ExitCode = ws.ExitStatus()
 		} else if ws.Signaled() {
@@ -707,7 +707,7 @@ func (s *DefaultService) Status(ctx context.Context, servicePath string, fsServi
 		return info, fmt.Errorf("failed to get exit history: %w", histErr)
 	}
 
-	//s.logger.Debugf("Status for S6 service %s: %+v", servicePath, info)
+	// s.logger.Debugf("Status for S6 service %s: %+v", servicePath, info)
 
 	return info, nil
 }
@@ -783,7 +783,7 @@ func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, f
 		})
 	}
 
-	//s.logger.Debugf("Exit history for S6 service %s: %+v", superviseDir, history)
+	// s.logger.Debugf("Exit history for S6 service %s: %+v", superviseDir, history)
 	return history, nil
 }
 
@@ -1481,7 +1481,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	}
 	if !exists {
 		s.logger.Debugf("Log file %s does not exist, returning ErrLogFileNotFound", logFile)
-		return nil, ErrLogFileNotFound
+		return nil, fmt.Errorf("path: %s err :%w", logFile, ErrLogFileNotFound)
 	}
 
 	// ── 1. grab / create state ──────────────────────────────────────
@@ -1763,7 +1763,6 @@ func (s *DefaultService) EnsureSupervision(ctx context.Context, servicePath stri
 //   - Exit code 127: Command not found, returns ErrS6ProgramNotFound
 //   - Other exit codes: Returns a descriptive error with the exit code and output
 func (s *DefaultService) ExecuteS6Command(ctx context.Context, servicePath string, fsService filesystem.Service, name string, args ...string) (string, error) {
-
 	output, err := fsService.ExecuteCommand(ctx, name, args...)
 	if err != nil {
 		// Check exit codes using errors.As to handle wrapped errors
