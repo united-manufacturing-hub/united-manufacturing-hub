@@ -22,6 +22,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/pull"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/push"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/subscriber"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/router"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
@@ -150,12 +151,28 @@ func (c *CommunicationState) InitialiseAndStartRouter() {
 }
 
 func (c *CommunicationState) StartTopicBrowserCacheUpdater(systemSnapshotManager *fsm.SnapshotManager) {
+
+	runSimulator := false
 	simulator := topicbrowser.NewSimulator()
+
+	ctx, cncl := tools.Get1SecondContext()
+	defer cncl()
+	configCopy, err := c.ConfigManager.GetConfig(ctx, 0)
+	if err != nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to get config: %w", err)
+	}
+	if configCopy.Agent.Simulator {
+		runSimulator = true
+		simulator.InitializeSimulator()
+	}
+
 	go func() {
 		ticker := time.NewTicker(1 * time.Second)
 		for {
 			<-ticker.C
-			simulator.Tick()
+			if runSimulator {
+				simulator.Tick()
+			}
 			err := c.TopicBrowserCache.Update(simulator.GetSimObservedState())
 			if err != nil {
 				sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to update topic browser cache: %w", err)
