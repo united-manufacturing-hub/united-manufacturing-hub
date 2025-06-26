@@ -55,6 +55,9 @@ func (r *Registry) Add(email string) {
 
 // List returns all active subscriber emails
 func (r *Registry) List() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
 	var subscribers []string
 	r.subscribers.Range(func(key string, value *SubscriberData) bool {
 		subscribers = append(subscribers, value.Email)
