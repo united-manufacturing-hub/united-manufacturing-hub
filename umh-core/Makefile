@@ -328,6 +328,14 @@ build-protobuf: install-buf
 		pkg/communicator/models/topicbrowser/proto
 	@echo "Go protobuf files generated successfully."
 
+## Generate GraphQL code from schema
+generate-graphql:
+	@echo "Installing gqlgen..."
+	@go install github.com/99designs/gqlgen@latest
+	@echo "Generating GraphQL code..."
+	@cd pkg/communicator/graphql && gqlgen generate
+	@echo "GraphQL code generated successfully."
+
 ###############################################################################
 # choose build flavour                                                        #
 #   make test-dfc              → uses normal  image (build)                  #
