@@ -53,7 +53,7 @@ var _ = Describe("TopicBrowserService", func() {
 	)
 
 	BeforeEach(func() {
-		ctx, cancelFunc = context.WithDeadline(context.Background(), time.Now().Add(500*time.Second))
+		ctx, cancelFunc = context.WithDeadline(context.Background(), time.Now().Add(30*time.Second))
 		tick = 1
 		tbName = "test-component"
 
@@ -140,10 +140,10 @@ var _ = Describe("TopicBrowserService", func() {
 
 			// Reconcile to ensure the topic browser is passed to benthos manager
 			mockBenthos.ReconcileManagerReconciled = true
-			_, _ = service.ReconcileManager(ctx, mockSvcRegistry, tick)
+			_, reconciled := service.ReconcileManager(ctx, mockSvcRegistry, tick)
 
 			// Assert
-			// Expect(reconciled).To(BeTrue())
+			Expect(reconciled).To(BeTrue())
 			Expect(service.benthosConfigs).To(HaveLen(1))
 		})
 	})
