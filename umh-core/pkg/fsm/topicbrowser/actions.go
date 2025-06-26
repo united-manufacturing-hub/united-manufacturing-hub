@@ -231,16 +231,6 @@ func (i *TopicBrowserInstance) UpdateObservedStateOfInstance(ctx context.Context
 	return nil
 }
 
-// isTopicBrowserBenthosRunning checks if the Topic Browser service is running
-func (i *TopicBrowserInstance) isTopicBrowserBenthosRunning() bool {
-	switch i.ObservedState.ServiceInfo.BenthosFSMState {
-	// Consider Active , Degraded and Idle as running states
-	case benthosfsm.OperationalStateActive, benthosfsm.OperationalStateIdle, benthosfsm.OperationalStateDegraded:
-		return true
-	}
-	return false
-}
-
 // isTopicBrowserHealthy checks if the Topic Browser service is healthy based on ServiceInfo
 // This leverages the existing service health analysis instead of reimplementing it
 func (i *TopicBrowserInstance) isTopicBrowserHealthy() (bool, string) {
@@ -292,13 +282,6 @@ func (i *TopicBrowserInstance) IsTopicBrowserDegraded() (isDegraded bool, reason
 	}
 
 	return false, "service appears healthy"
-}
-
-// shouldRecoverFromDegraded determines if the Topic Browser should recover from degraded state
-func (i *TopicBrowserInstance) shouldRecoverFromDegraded() bool {
-	// If the service is now healthy and there are no status reasons indicating issues
-	degraded, _ := i.IsTopicBrowserDegraded()
-	return !degraded
 }
 
 // isBenthosRunning checks if the Benthos service is running
