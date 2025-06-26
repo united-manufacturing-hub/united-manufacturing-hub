@@ -86,6 +86,7 @@ func (i *Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, s
 				func(ctx context.Context) error {
 					// Force removal when other approaches fail - bypasses state transitions
 					// and directly deletes files and resources
+					// Uses services instead of the filesystem service, because the interface requests it.
 					return i.service.ForceRemove(ctx, services, tbInstanceName)
 				},
 			)
@@ -106,6 +107,7 @@ func (i *Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, s
 
 			i.baseFSMInstance.SetError(err, snapshot.Tick)
 			i.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
+
 			if errors.Is(err, context.DeadlineExceeded) {
 				// Healthchecks occasionally take longer (sometimes up to 70ms),
 				// resulting in context.DeadlineExceeded errors. In this case, we want to
@@ -187,6 +189,9 @@ func (i *Instance) reconcileStateTransition(ctx context.Context, services servic
 	currentState := i.baseFSMInstance.GetCurrentFSMState()
 	desiredState := i.baseFSMInstance.GetDesiredFSMState()
 
+	// Report current and desired state metrics
+	metrics.UpdateServiceState(metrics.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID(), currentState, desiredState)
+
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {
 		err, reconciled = i.baseFSMInstance.ReconcileLifecycleStates(
@@ -204,7 +209,7 @@ func (i *Instance) reconcileStateTransition(ctx context.Context, services servic
 
 	// Handle operational states
 	if IsOperationalState(currentState) {
-		err, reconciled = i.reconcileOperationalStates(ctx, services, currentState, desiredState, currentTime, snapshot)
+		err, reconciled = i.reconcileOperationalStates(ctx, services, currentState, desiredState, currentTime)
 		if err != nil {
 			return err, false
 		}
@@ -215,7 +220,7 @@ func (i *Instance) reconcileStateTransition(ctx context.Context, services servic
 }
 
 // reconcileOperationalStates handles states related to instance operations (starting/stopping)
-func (i *Instance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time, snapshot fsm.SystemSnapshot) (err error, reconciled bool) {
+func (i *Instance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".reconcileOperationalStates", time.Since(start))
@@ -225,7 +230,7 @@ func (i *Instance) reconcileOperationalStates(ctx context.Context, services serv
 
 	switch desiredState {
 	case OperationalStateActive:
-		return i.reconcileTransitionToActive(ctx, services, currentState, currentTime, snapshot)
+		return i.reconcileTransitionToActive(ctx, services, currentState, currentTime)
 	case OperationalStateStopped:
 		return i.reconcileTransitionToStopped(ctx, services, currentState)
 	default:
@@ -235,7 +240,7 @@ func (i *Instance) reconcileOperationalStates(ctx context.Context, services serv
 
 // reconcileTransitionToActive handles transitions when the desired state is Active.
 // It deals with moving from various states to the Active state.
-func (i *Instance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time, snapshot fsm.SystemSnapshot) (err error, reconciled bool) {
+func (i *Instance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
@@ -255,7 +260,7 @@ func (i *Instance) reconcileTransitionToActive(ctx context.Context, services ser
 	case IsStartingState(currentState):
 		return i.reconcileStartingStates(ctx, services, currentState, currentTime)
 	case IsRunningState(currentState):
-		return i.reconcileRunningStates(ctx, services, currentState, currentTime, snapshot)
+		return i.reconcileRunningStates(ctx, services, currentState, currentTime)
 	case currentState == OperationalStateStopping:
 		// There can be the edge case where an fsm is set to stopped, and then a cycle later again to active
 		// It will cause the stopping process to start, but then the deisred state is again active, so it will land up in reconcileTransitionToActive
@@ -284,7 +289,7 @@ func (i *Instance) reconcileStartingStates(ctx context.Context, services service
 }
 
 // reconcileRunningStates handles the various running states when transitioning to Active.
-func (i *Instance) reconcileRunningStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time, snapshot fsm.SystemSnapshot) (err error, reconciled bool) {
+func (i *Instance) reconcileRunningStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".reconcileRunningStates", time.Since(start))
