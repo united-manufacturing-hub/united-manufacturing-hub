@@ -24,6 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	topicbrowsersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
@@ -95,8 +96,16 @@ func (i *Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, s
 	// Step 2: Detect external changes.
 	if err = i.reconcileExternalChanges(ctx, services, snapshot); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
-		if !errors.Is(err, topicbrowsersvc.ErrServiceNotExist) {
+		if !errors.Is(err, topicbrowsersvc.ErrServiceNotExist) && !errors.Is(err, s6.ErrServiceNotExist) {
+			// Consider a special case for TopicBrowser FSM here
+			// While creating for the first time, reconcileExternalChanges function will throw an error such as
+			// s6 service not found in the path since TopicBrowser fsm is relying on BenthosFSM and Benthos in turn relies on S6 fsm
+			// Inorder for TopicBrowser fsm to start, benthosManager.Reconcile should be called and this is called at the end of the function
+			// So set the err to nil in this case
+			// An example error: "failed to update observed state: failed to get observed DataflowComponent config: failed to get benthos config: failed to get benthos config file for service benthos-dataflow-hello-world-dfc: service does not exist"
 
+			i.baseFSMInstance.SetError(err, snapshot.Tick)
+			i.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
 			if errors.Is(err, context.DeadlineExceeded) {
 				// Healthchecks occasionally take longer (sometimes up to 70ms),
 				// resulting in context.DeadlineExceeded errors. In this case, we want to
@@ -105,8 +114,6 @@ func (i *Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, s
 				// further reconciliation attempts in the current tick.
 				return nil, true // We don't want to return an error here, as this can happen in normal operations
 			}
-			i.baseFSMInstance.SetError(err, snapshot.Tick)
-			i.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
 
