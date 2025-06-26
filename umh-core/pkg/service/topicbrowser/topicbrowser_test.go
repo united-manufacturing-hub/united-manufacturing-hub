@@ -79,24 +79,22 @@ var _ = Describe("TopicBrowserService", func() {
 
 			cfg = &benthossvccfg.BenthosServiceConfig{
 				Input: map[string]any{
-					"input:": map[string]any{
-						"uns:": map[string]any{
-							"umh_topic:":      "umh.v1.*",
-							"kafka_topic:":    "umh.messages",
-							"broker_address:": "localhost:9092",
-							"consumer_group:": "benthos_kafka_test",
-						},
+					"uns": map[string]any{
+						"umh_topic":      "umh.v1.*",
+						"kafka_topic":    "umh.messages",
+						"broker_address": "localhost:9092",
+						"consumer_group": "benthos_kafka_test",
 					},
 				},
 				Pipeline: map[string]any{
-					"processors:": map[string]any{
-						"topic-browser:": "{}",
+					"processors": []map[string]any{
+						{
+							"topic-browser": map[string]any{},
+						},
 					},
 				},
 				Output: map[string]any{
-					"output:": map[string]any{
-						"stdout:": "{}",
-					},
+					"stdout": map[string]any{},
 				},
 				LogLevel: constants.DefaultBenthosLogLevel,
 			}
@@ -165,24 +163,22 @@ var _ = Describe("TopicBrowserService", func() {
 
 			cfg = &benthossvccfg.BenthosServiceConfig{
 				Input: map[string]any{
-					"input:": map[string]any{
-						"uns:": map[string]any{
-							"umh_topic:":      "umh.v1.*",
-							"kafka_topic:":    "umh.messages",
-							"broker_address:": "localhost:9092",
-							"consumer_group:": "benthos_kafka_test",
-						},
+					"uns": map[string]any{
+						"umh_topic":      "umh.v1.*",
+						"kafka_topic":    "umh.messages",
+						"broker_address": "localhost:9092",
+						"consumer_group": "benthos_kafka_test",
 					},
 				},
 				Pipeline: map[string]any{
-					"processors:": map[string]any{
-						"topic-browser:": "{}",
+					"processors": []map[string]any{
+						{
+							"topic-browser": map[string]any{},
+						},
 					},
 				},
 				Output: map[string]any{
-					"output:": map[string]any{
-						"stdout:": "{}",
-					},
+					"stdout": map[string]any{},
 				},
 				LogLevel: constants.DefaultBenthosLogLevel,
 			}
@@ -341,24 +337,22 @@ var _ = Describe("TopicBrowserService", func() {
 
 			cfg = &benthossvccfg.BenthosServiceConfig{
 				Input: map[string]any{
-					"input:": map[string]any{
-						"uns:": map[string]any{
-							"umh_topic:":      "umh.v1.*",
-							"kafka_topic:":    "umh.messages",
-							"broker_address:": "localhost:9092",
-							"consumer_group:": "benthos_kafka_test",
-						},
+					"uns": map[string]any{
+						"umh_topic":      "umh.v1.*",
+						"kafka_topic":    "umh.messages",
+						"broker_address": "localhost:9092",
+						"consumer_group": "benthos_kafka_test",
 					},
 				},
 				Pipeline: map[string]any{
-					"processors:": map[string]any{
-						"topic-browser:": "{}",
+					"processors": []map[string]any{
+						{
+							"topic-browser": map[string]any{},
+						},
 					},
 				},
 				Output: map[string]any{
-					"output:": map[string]any{
-						"stdout:": "{}",
-					},
+					"stdout": map[string]any{},
 				},
 				LogLevel: constants.DefaultBenthosLogLevel,
 			}
@@ -366,24 +360,22 @@ var _ = Describe("TopicBrowserService", func() {
 			// Updated config with different settings
 			updatedCfg = &benthossvccfg.BenthosServiceConfig{
 				Input: map[string]any{
-					"input:": map[string]any{
-						"uns:": map[string]any{
-							"umh_topic:":      "umh.v1.*",
-							"kafka_topic:":    "umh.messages",
-							"broker_address:": "localhost:9092",
-							"consumer_group:": "updated_consumer_group",
-						},
+					"uns": map[string]any{
+						"umh_topic":      "umh.v1.*",
+						"kafka_topic":    "umh.messages",
+						"broker_address": "localhost:9092",
+						"consumer_group": "updated_consumer_group",
 					},
 				},
 				Pipeline: map[string]any{
-					"processors:": map[string]any{
-						"topic-browser:": "{}",
+					"processors": []map[string]any{
+						{
+							"topic-browser": map[string]any{},
+						},
 					},
 				},
 				Output: map[string]any{
-					"output:": map[string]any{
-						"stdout:": "{}",
-					},
+					"stdout": map[string]any{},
 				},
 				LogLevel: constants.DefaultBenthosLogLevel,
 			}
@@ -430,24 +422,22 @@ var _ = Describe("TopicBrowserService", func() {
 			// Create a basic config for testing
 			cfg = &benthossvccfg.BenthosServiceConfig{
 				Input: map[string]any{
-					"input:": map[string]any{
-						"uns:": map[string]any{
-							"umh_topic:":      "umh.v1.*",
-							"kafka_topic:":    "umh.messages",
-							"broker_address:": "localhost:9092",
-							"consumer_group:": "benthos_kafka_test",
-						},
+					"uns": map[string]any{
+						"umh_topic":      "umh.v1.*",
+						"kafka_topic":    "umh.messages",
+						"broker_address": "localhost:9092",
+						"consumer_group": "benthos_kafka_test",
 					},
 				},
 				Pipeline: map[string]any{
-					"processors:": map[string]any{
-						"topic-browser:": "{}",
+					"processors": []map[string]any{
+						{
+							"topic-browser": map[string]any{},
+						},
 					},
 				},
 				Output: map[string]any{
-					"output:": map[string]any{
-						"stdout:": "{}",
-					},
+					"stdout": map[string]any{},
 				},
 				LogLevel: constants.DefaultBenthosLogLevel,
 			}
@@ -508,24 +498,22 @@ var _ = Describe("TopicBrowserService", func() {
 			// Create a basic config for testing
 			cfg = &benthossvccfg.BenthosServiceConfig{
 				Input: map[string]any{
-					"input:": map[string]any{
-						"uns:": map[string]any{
-							"umh_topic:":      "umh.v1.*",
-							"kafka_topic:":    "umh.messages",
-							"broker_address:": "localhost:9092",
-							"consumer_group:": "benthos_kafka_test",
-						},
+					"uns": map[string]any{
+						"umh_topic":      "umh.v1.*",
+						"kafka_topic":    "umh.messages",
+						"broker_address": "localhost:9092",
+						"consumer_group": "benthos_kafka_test",
 					},
 				},
 				Pipeline: map[string]any{
-					"processors:": map[string]any{
-						"topic-browser:": "{}",
+					"processors": []map[string]any{
+						{
+							"topic-browser": map[string]any{},
+						},
 					},
 				},
 				Output: map[string]any{
-					"output:": map[string]any{
-						"stdout:": "{}",
-					},
+					"stdout": map[string]any{},
 				},
 				LogLevel: constants.DefaultBenthosLogLevel,
 			}
@@ -562,24 +550,22 @@ var _ = Describe("TopicBrowserService", func() {
 			// Add a test topic browser to have something to reconcile
 			cfg := &benthossvccfg.BenthosServiceConfig{
 				Input: map[string]any{
-					"input:": map[string]any{
-						"uns:": map[string]any{
-							"umh_topic:":      "umh.v1.*",
-							"kafka_topic:":    "umh.messages",
-							"broker_address:": "localhost:9092",
-							"consumer_group:": "benthos_kafka_test",
-						},
+					"uns": map[string]any{
+						"umh_topic":      "umh.v1.*",
+						"kafka_topic":    "umh.messages",
+						"broker_address": "localhost:9092",
+						"consumer_group": "benthos_kafka_test",
 					},
 				},
 				Pipeline: map[string]any{
-					"processors:": map[string]any{
-						"topic-browser:": "{}",
+					"processors": []map[string]any{
+						{
+							"topic-browser": map[string]any{},
+						},
 					},
 				},
 				Output: map[string]any{
-					"output:": map[string]any{
-						"stdout:": "{}",
-					},
+					"stdout": map[string]any{},
 				},
 				LogLevel: constants.DefaultBenthosLogLevel,
 			}
@@ -619,24 +605,22 @@ var _ = Describe("TopicBrowserService", func() {
 			testComponentName := "test-error-topicbrowser"
 			cfg := &benthossvccfg.BenthosServiceConfig{
 				Input: map[string]any{
-					"input:": map[string]any{
-						"uns:": map[string]any{
-							"umh_topic:":      "umh.v1.*",
-							"kafka_topic:":    "umh.messages",
-							"broker_address:": "localhost:9092",
-							"consumer_group:": "benthos_kafka_test",
-						},
+					"uns": map[string]any{
+						"umh_topic":      "umh.v1.*",
+						"kafka_topic":    "umh.messages",
+						"broker_address": "localhost:9092",
+						"consumer_group": "benthos_kafka_test",
 					},
 				},
 				Pipeline: map[string]any{
-					"processors:": map[string]any{
-						"topic-browser:": "{}",
+					"processors": []map[string]any{
+						{
+							"topic-browser": map[string]any{},
+						},
 					},
 				},
 				Output: map[string]any{
-					"output:": map[string]any{
-						"stdout:": "{}",
-					},
+					"stdout": map[string]any{},
 				},
 				LogLevel: constants.DefaultBenthosLogLevel,
 			}
