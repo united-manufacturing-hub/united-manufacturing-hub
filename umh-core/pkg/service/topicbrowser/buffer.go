@@ -32,6 +32,7 @@
 package topicbrowser
 
 import (
+	"math"
 	"sync"
 	"time"
 )
@@ -48,10 +49,16 @@ type Ringbuffer struct {
 	mu       sync.Mutex
 }
 
-func NewRingbuffer(capacity uint32) *Ringbuffer {
-	if capacity == 0 {
-		capacity = 8
+func NewRingbuffer(capacity uint64) *Ringbuffer {
+	const (
+		defaultCap = 8
+		maxCap     = uint64(math.MaxInt64)
+	)
+
+	if capacity == 0 || capacity > maxCap {
+		capacity = defaultCap
 	}
+
 	return &Ringbuffer{
 		buf: make([]*Buffer, capacity),
 	}
@@ -69,6 +76,60 @@ func (rb *Ringbuffer) Add(buf *Buffer) {
 
 	if rb.count < len(rb.buf) {
 		rb.count++
+	}
+}
+
+// Two pools: one for Buffer structs, one for byte slices large enough to
+// hold typical payloads (capacity grows on demand).
+var (
+	bufPool = sync.Pool{
+		New: func() any { return new(Buffer) },
+	}
+	bytePool = sync.Pool{
+		New: func() any { return make([]byte, 0) },
+	}
+)
+
+// Get the current Buffers from newest to oldest
+// to reduce load on GC call PutBuffers afterwards
+func (rb *Ringbuffer) GetBuffers() []*Buffer {
+	rb.mu.Lock()
+	defer rb.mu.Unlock()
+
+	snap := make([]*Buffer, 0, rb.count)
+	for i := 0; i < rb.count; i++ {
+		idx := (rb.writePos - 1 - i + len(rb.buf)) % len(rb.buf)
+		if b := rb.buf[idx]; b != nil {
+			snap = append(snap, b)
+		}
+	}
+
+	clones := make([]*Buffer, len(snap))
+
+	for i, src := range snap {
+		dst := bufPool.Get().(*Buffer)
+		dst.Timestamp = src.Timestamp
+
+		// Ensure capacity without reallocating every time.
+		b := bytePool.Get().([]byte)
+		if cap(b) < len(src.Payload) {
+			b = make([]byte, len(src.Payload))
+		}
+		b = b[:len(src.Payload)]
+		copy(b, src.Payload)
+
+		dst.Payload = b
+		clones[i] = dst
+	}
+	return clones
+}
+
+// PutBuffers allows callers to recycle clones obtained from CloneSlice.
+func PutBuffers(bs []*Buffer) {
+	for _, b := range bs {
+		bytePool.Put(b.Payload[:0]) // keep underlying array for reuse
+		b.Payload = nil
+		bufPool.Put(b)
 	}
 }
 

@@ -15,6 +15,8 @@
 package topicbrowser
 
 import (
+	"math"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -22,7 +24,7 @@ import (
 )
 
 var _ = Describe("Ringbuffer", func() {
-	const cap uint32 = 3
+	const cap uint64 = 3
 	var rb *Ringbuffer
 
 	newBuf := func(id byte) *Buffer {
@@ -84,4 +86,80 @@ var _ = Describe("Ringbuffer", func() {
 			Expect(snapshot[0].Payload[0]).To(Equal(byte(7)))
 		})
 	})
+
+	Context("capacity overflow guard", func() {
+		It("falls back to the default when asked for an absurd capacity", func() {
+			rb := NewRingbuffer(math.MaxUint64) // far above MaxInt
+			Expect(len(rb.buf)).To(BeNumerically(">=", 1))
+			Expect(len(rb.buf)).To(BeNumerically("<=", 8)) // defaultCap
+		})
+	})
+
+	// should be run with ginkgo -race and needs CGO_ENABLED=1
+	Context("concurrent Add and Get", func() {
+		It("is race‑free with many goroutines", func() {
+			const (
+				capacity   = 64
+				writers    = 16
+				readers    = 16
+				iterations = 1_000
+			)
+			rb := NewRingbuffer(capacity)
+
+			// spawn goroutines to perform concurrent write and read and wait for all
+			// iterations to be done
+			var wg sync.WaitGroup
+			for w := range writers {
+				wg.Add(1)
+				go helperWriter(rb, byte(w), iterations, &wg)
+			}
+			for range readers {
+				wg.Add(1)
+				go helperReaderGet(rb, int(capacity), iterations, &wg)
+			}
+			wg.Wait()
+		})
+	})
+
+	Context("GetBuffers / PutBuffers", func() {
+		It("clones and recycles without leaking", func() {
+			rb := NewRingbuffer(4)
+			rb.Add(helperBuf(42))
+
+			clones := rb.GetBuffers()
+			Expect(clones).To(HaveLen(1))
+			clones[0].Payload[0] = 99 // mutate clone
+
+			PutBuffers(clones)
+			Expect(clones[0].Payload).To(BeNil()) // zeroed by PutBuffers
+		})
+	})
 })
+
+// helper for buffer format
+func helperBuf(id byte) *Buffer {
+	return &Buffer{Payload: []byte{id}, Timestamp: time.Now()}
+}
+
+// helper to Add to ringbuffer
+func helperWriter(rb *Ringbuffer, id byte, n int, wg *sync.WaitGroup) {
+	defer GinkgoRecover()
+	defer wg.Done()
+	for range n {
+		rb.Add(helperBuf(id))
+	}
+}
+
+// helper to Get from ringbuffer
+func helperReaderGet(rb *Ringbuffer, capacity int, n int, wg *sync.WaitGroup) {
+	defer GinkgoRecover()
+	defer wg.Done()
+	for range n {
+		out := rb.Get()
+		Expect(len(out)).To(BeNumerically("<=", capacity))
+		for _, b := range out {
+			Expect(b).NotTo(BeNil())
+			Expect(b.Payload).NotTo(BeNil())
+		}
+	}
+}

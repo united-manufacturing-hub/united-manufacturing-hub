@@ -31,7 +31,11 @@ import (
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
+// lz4 frame for decompression logic
 var lz4FrameMagic = []byte{0x04, 0x22, 0x4d, 0x18}
+
+// 10MiB - can be tweaked based on the output size of benthos
+const maxPayloadBytes = 10 << 20
 
 // / extractRaw searches log entries for a complete START‒END block and returns
 // the hex-encoded LZ4 payload plus its epoch-ms timestamp.
@@ -40,8 +44,8 @@ var lz4FrameMagic = []byte{0x04, 0x22, 0x4d, 0x18}
 //
 // Logs will come in this format:
 // STARTSTARTSTART
-// 042290f3a1b060f0708340f5602050fc2036c0f6f02000f1803040f6a02080f90600d2f9fe86a02190f2a01220f39024b0f2601000f1702340f5703530f0a064f0f5b030c0ffb0e1a0f6a02080f24180d2f87f06a02310f9501530f1601050f5a02340f92010a0f2f034b0f4b05050f8702340f5202720f3f0d030f6a02050f57024e0ff61f000f6a02071f3324180d2fa0e56a02310f0d01050eab000fab2d0b0f95024b0f10030a0fe801050f8302530f36024f0f9203330f6a02080fd8900d2f88ed6a02190f27020a0f9401530f3201330f123f500fbb02050f4e034b0ff403050f66030c0f550d150f6a02081f323e070c2ff1f46a02190fa001510ff500030f6102340f6505020fba11080f3e03530f7d024d0f96071b0f4f0
-// ENDDATAENDDATENDDATA
+// <hex-encoded LZ4>
+// ENDDATAENDDATAENDDATA
 // 1750091514783
 // ENDENDENDEND
 func extractRaw(entries []s6svc.LogEntry) (compressed []byte, epochMS int64, err error) {
@@ -101,7 +105,7 @@ func extractRaw(entries []s6svc.LogEntry) (compressed []byte, epochMS int64, err
 
 	epochMS, err = strconv.ParseInt(tsLine, 10, 64)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, fmt.Errorf("failed to parse timestamp: %w", err)
 	}
 
 	return raw, epochMS, nil
@@ -123,6 +127,10 @@ func (svc *Service) parseBlock(entries []s6svc.LogEntry) error {
 		return err
 	}
 
+	if len(payload) > maxPayloadBytes {
+		return fmt.Errorf("payload %d bytes exceed max %d limit", len(payload), maxPayloadBytes)
+	}
+
 	svc.ringbuffer.Add(&Buffer{
 		Payload:   payload,
 		Timestamp: time.UnixMilli(epoch),
@@ -134,7 +142,7 @@ func (svc *Service) parseBlock(entries []s6svc.LogEntry) error {
 var decompressionBufferPool = sync.Pool{
 	New: func() any {
 		// Start with 64KB buffer, will grow as needed
-		b := make([]byte, 0, 64*1024)
+		b := make([]byte, 0, 64<<10)
 		return &b
 	},
 }

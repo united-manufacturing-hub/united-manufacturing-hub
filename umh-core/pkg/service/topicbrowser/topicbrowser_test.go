@@ -652,7 +652,85 @@ var _ = Describe("TopicBrowserService", func() {
 			// but for a unit test, verifying that reconciled is false is sufficient
 		})
 	})
+	DescribeTable("checkMetrics mismatch scenarios",
+		func(
+			rpBytesOut int64,
+			rpHasState bool,
+			benthosBytesOut float64,
+			benthosBytesIn float64,
+			benthosHasState bool,
+			expectedReason string,
+			expectedMismatch bool,
+		) {
+			rpObservedState := buildRedpandaObs(rpBytesOut, rpHasState)
+			beObservedState := buildBenthosObs(benthosBytesOut, benthosBytesIn, benthosHasState)
+
+			reason, mismatch := service.checkMetrics(rpObservedState, beObservedState)
+
+			Expect(mismatch).To(Equal(expectedMismatch))
+			Expect(reason).To(Equal(expectedReason))
+		},
+		Entry("no Redpanda metrics state",
+			int64(0), false, // rp
+			float64(0), float64(0), true, // benthos
+			"no redpanda metrics available", true,
+		),
+
+		Entry("no Benthos metrics state",
+			int64(0), true,
+			float64(0), float64(0), false,
+			"no benthos metrics available", true,
+		),
+
+		Entry("Redpanda output >0, Benthos output ==0",
+			int64(500), true,
+			float64(0), float64(10), true,
+			"redpanda has output, but benthos no output", true,
+		),
+
+		Entry("Benthos output >0, Redpanda output ==0",
+			int64(0), true,
+			float64(20), float64(10), true,
+			"redpanda has no output, but benthos has output", true,
+		),
+
+		Entry("Redpanda output >0, Benthos input ==0",
+			int64(123), true,
+			float64(20), float64(0), true,
+			"redpanda has output, but benthos no input", true,
+		),
+
+		Entry("all metrics consistent",
+			int64(0), true,
+			float64(0), float64(0), true,
+			"", false,
+		),
+	)
 })
+
+// build redpanda observedState for checkMetrics
+func buildRedpandaObs(bytesOut int64, withState bool) rpfsm.RedpandaObservedState {
+	var rpObservedState rpfsm.RedpandaObservedState
+	rpObservedState.ServiceInfo.RedpandaStatus.RedpandaMetrics.
+		Metrics.Throughput.BytesOut = bytesOut
+	if withState {
+		rpObservedState.ServiceInfo.RedpandaStatus.RedpandaMetrics.
+			MetricsState = &rpmonitor.RedpandaMetricsState{}
+	}
+	return rpObservedState
+}
+
+// build benthos observedState for checkMetrics
+func buildBenthosObs(outMsgs, inMsgs float64, withState bool) benthosfsm.BenthosObservedState {
+	var beObservedState benthosfsm.BenthosObservedState
+	if withState {
+		metricsState := &benthos_monitor.BenthosMetricsState{}
+		metricsState.Output.MessagesPerTick = outMsgs
+		metricsState.Input.MessagesPerTick = inMsgs
+		beObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState = metricsState
+	}
+	return beObservedState
+}
 
 // ConfigureBenthosManagerForState configures mock service for proper transitions
 func ConfigureBenthosManagerForState(mockService *benthossvc.MockBenthosService, serviceName string, targetState string) {

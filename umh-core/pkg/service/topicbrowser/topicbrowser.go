@@ -176,7 +176,7 @@ func (svc *Service) GenerateConfig(tbName string) (benthossvccfg.BenthosServiceC
 				"umh_topic":      "umh.v1.*",
 				"kafka_topic":    "umh.messages",
 				"broker_address": "localhost:9092",
-				"consumer_group": "benthos_kafka_test",
+				"consumer_group": "topic-browser",
 			},
 		},
 		Pipeline: map[string]any{
@@ -261,16 +261,14 @@ func (svc *Service) Status(
 	// Get logs
 	logs := benthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
 
-	//	if len(logs) == 0 {
-	//		return ServiceInfo{}, ErrServiceNoLogFile
-	//	}
-
-	// Parse the logs
+	// Parse the logs and decompress it via lz4, afterwards the data gets written
+	// into the ringbuffer
 	err = svc.parseBlock(logs)
 	if err != nil {
 		return ServiceInfo{}, fmt.Errorf("failed to parse block from logs: %w", err)
 	}
 
+	// check for invalidMetrics from benthos and redpanda
 	statusReason, invalidMetrics := svc.checkMetrics(redpandaObservedState, benthosObservedState)
 
 	// no direct reference
@@ -561,6 +559,10 @@ func (svc *Service) ForceRemove(
 	return svc.benthosService.ForceRemoveBenthos(ctx, services.GetFileSystem(), svc.getName(tbName))
 }
 
+// checks for invalid metric states e.g.:
+// - redpanda has output but benthos no input
+// - redpanda has no output but benthos has
+// - redpanda has output but benthos not
 func (svc *Service) checkMetrics(
 	rpObsState rpfsm.RedpandaObservedState,
 	benObsState benthosfsm.BenthosObservedState,
@@ -594,6 +596,8 @@ func (svc *Service) checkMetrics(
 	return "", false
 }
 
+// check if benthos is active / has processing activity to provide information
+// for starting phase of fsm
 func (svc *Service) benthosProcessingActivity(observedState benthosfsm.BenthosObservedState) bool {
 	if observedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState == nil {
 		return false
@@ -601,6 +605,8 @@ func (svc *Service) benthosProcessingActivity(observedState benthosfsm.BenthosOb
 	return observedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState.IsActive
 }
 
+// check if redpanda is active / has processing activity to provide information
+// for starting phase of fsm
 func (svc *Service) redpandaProcessingActivity(observedState rpfsm.RedpandaObservedState) bool {
 	if observedState.ServiceInfo.RedpandaStatus.RedpandaMetrics.MetricsState == nil {
 		return false
