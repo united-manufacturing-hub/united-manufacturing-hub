@@ -173,21 +173,21 @@ var _ = FDescribe("Redpanda Cleanup Policy Integration Test", Ordered, Label("in
 		By("Waiting for the compaction to happen")
 
 		By("Forcing compaction to run")
-		// Reduce compaction interval and dirty ratio to force immediate compaction
+		// Try to set compaction interval to run more frequently
 		var output string
 		output, err = runDockerCommandWithCtx(context.Background(), "exec", getContainerName(),
 			"/opt/redpanda/bin/rpk", "cluster", "config", "set", "log_compaction_interval_ms", "1000")
-		GinkgoWriter.Printf("Output: %s\n", output)
+		GinkgoWriter.Printf("Compaction interval output: %s\n", output)
 		if err != nil {
 			GinkgoWriter.Printf("Failed to set compaction interval: %v\n", err)
 		}
 
-		// Lower the dirty ratio threshold to make compaction more aggressive
+		// Try topic-level config instead of cluster-level for dirty ratio
 		output, err = runDockerCommandWithCtx(context.Background(), "exec", getContainerName(),
-			"/opt/redpanda/bin/rpk", "cluster", "config", "set", "min_cleanable_dirty_ratio", "0.1")
-		GinkgoWriter.Printf("Output: %s\n", output)
+			"/opt/redpanda/bin/rpk", "topic", "alter-config", topicName, "--set", "min.cleanable.dirty.ratio=0.1")
+		GinkgoWriter.Printf("Topic dirty ratio output: %s\n", output)
 		if err != nil {
-			GinkgoWriter.Printf("Failed to set cleanable ratio: %v\n", err)
+			GinkgoWriter.Printf("Failed to set topic dirty ratio: %v\n", err)
 		}
 
 		now := time.Now()
