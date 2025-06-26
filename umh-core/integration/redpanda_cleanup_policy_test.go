@@ -15,7 +15,9 @@
 package integration_test
 
 import (
+	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -28,8 +30,9 @@ var _ = FDescribe("Redpanda Cleanup Policy Integration Test", Ordered, Label("in
 		messagesPerSecond = 5
 		testDuration      = 10 * time.Second
 		postRestartWait   = 5 * time.Second
-		compactionTime    = 30000 // 30 seconds in milliseconds
-		segmentTime       = 60000 // 1 minute in milliseconds (lowest value redpanda allows)
+		retentionTime     = 86400000 // A day in ms (not required for this test)
+		segmentTime       = 60000    // 1 minute in milliseconds (lowest value redpanda allows)
+		policy            = "compact"
 	)
 
 	var lastOffset = -1
@@ -74,8 +77,8 @@ var _ = FDescribe("Redpanda Cleanup Policy Integration Test", Ordered, Label("in
 		}, 30*time.Second, 1*time.Second).Should(BeTrue(), "Messages should be produced initially")
 
 		By("Updating Redpanda configuration with new retention, segment time and cleanup policy")
-		builder.full.Internal.Redpanda.RedpandaServiceConfig.Topic.DefaultTopicRetentionMs = compactionTime
-		builder.full.Internal.Redpanda.RedpandaServiceConfig.Topic.DefaultTopicCleanupPolicy = "compact"
+		builder.full.Internal.Redpanda.RedpandaServiceConfig.Topic.DefaultTopicRetentionMs = retentionTime
+		builder.full.Internal.Redpanda.RedpandaServiceConfig.Topic.DefaultTopicCleanupPolicy = policy
 		builder.full.Internal.Redpanda.RedpandaServiceConfig.Topic.DefaultTopicSegmentMs = segmentTime
 		cfg := builder.BuildYAML()
 		GinkgoWriter.Printf("Updated config: %s\n", cfg)
@@ -83,12 +86,14 @@ var _ = FDescribe("Redpanda Cleanup Policy Integration Test", Ordered, Label("in
 
 		By("Checking if the config has been applied")
 		Eventually(func() bool {
-			redpandaConfig, err := getRedpandaConfig("log_retention_ms")
-			cleanupPolicy, err2 := getRedpandaConfig("log_cleanup_policy")
-			GinkgoWriter.Printf("Redpanda config: %s\n", redpandaConfig)
-			GinkgoWriter.Printf("Cleanup policy: %s\n", cleanupPolicy)
+			compactionTimeRead, err := getRedpandaConfig("log_retention_ms")
+			cleanupPolicyRead, err2 := getRedpandaConfig("log_cleanup_policy")
+			segmentTimeRead, err3 := getRedpandaConfig("log_segment_ms")
+			GinkgoWriter.Printf("Redpanda config: %s\n", compactionTimeRead)
+			GinkgoWriter.Printf("Cleanup policy: %s\n", cleanupPolicyRead)
+			GinkgoWriter.Printf("Segment time: %s\n", segmentTimeRead)
 			GinkgoWriter.Printf("Error: %v\n", err)
-			return err == nil && err2 == nil && redpandaConfig == fmt.Sprintf("%d", compactionTime) && cleanupPolicy == "compact"
+			return err == nil && err2 == nil && err3 == nil && compactionTimeRead == fmt.Sprintf("%d", retentionTime) && cleanupPolicyRead == policy && segmentTimeRead == fmt.Sprintf("%d", segmentTime)
 		}, 20*time.Second, 1*time.Second).Should(BeTrue(), "Redpanda config should be updated")
 
 		By("Waiting for Redpanda to restart and apply new config")
@@ -135,12 +140,14 @@ var _ = FDescribe("Redpanda Cleanup Policy Integration Test", Ordered, Label("in
 
 		By("Checking if the config has not been changed back")
 		Eventually(func() bool {
-			redpandaConfig, err := getRedpandaConfig("log_retention_ms")
-			cleanupPolicy, err2 := getRedpandaConfig("log_cleanup_policy")
-			GinkgoWriter.Printf("Redpanda config: %s\n", redpandaConfig)
-			GinkgoWriter.Printf("Cleanup policy: %s\n", cleanupPolicy)
+			compactionTimeRead, err := getRedpandaConfig("log_retention_ms")
+			cleanupPolicyRead, err2 := getRedpandaConfig("log_cleanup_policy")
+			segmentTimeRead, err3 := getRedpandaConfig("log_segment_ms")
+			GinkgoWriter.Printf("Redpanda config: %s\n", compactionTimeRead)
+			GinkgoWriter.Printf("Cleanup policy: %s\n", cleanupPolicyRead)
+			GinkgoWriter.Printf("Segment time: %s\n", segmentTimeRead)
 			GinkgoWriter.Printf("Error: %v\n", err)
-			return err == nil && err2 == nil && redpandaConfig == fmt.Sprintf("%d", compactionTime) && cleanupPolicy == "compact"
+			return err == nil && err2 == nil && err3 == nil && compactionTimeRead == fmt.Sprintf("%d", retentionTime) && cleanupPolicyRead == policy && segmentTimeRead == fmt.Sprintf("%d", segmentTime)
 		}, 5*time.Second, 1*time.Second).Should(BeTrue(), "Redpanda config should not be changed back")
 
 		// Now we disable the producer, and wait for the compaction to happen (e.g waiting 1 minute)
@@ -150,13 +157,54 @@ var _ = FDescribe("Redpanda Cleanup Policy Integration Test", Ordered, Label("in
 
 		Expect(writeConfigFile(newYaml, getContainerName())).To(Succeed())
 
+		By("Waiting for segment to roll (should happen after 60s due to segment.ms)")
+		Eventually(func() bool {
+			segmentInfo, err := runDockerCommandWithCtx(context.Background(), "exec", getContainerName(),
+				"/opt/redpanda/bin/rpk", "topic", "describe-storage", topicName)
+			if err != nil {
+				GinkgoWriter.Printf("Error getting segment info: %v\n", err)
+				return false
+			}
+			GinkgoWriter.Printf("Segment info: %s\n", segmentInfo)
+			// Look for LOCAL-SEGMENTS > 1 indicating segment has rolled
+			return strings.Contains(segmentInfo, "LOCAL-SEGMENTS") && !strings.Contains(segmentInfo, "LOCAL-SEGMENTS  1")
+		}, 90*time.Second, 5*time.Second).Should(BeTrue(), "Segment should roll after segment.ms timeout")
+
 		By("Waiting for the compaction to happen")
 
+		By("Forcing compaction to run")
+		// Reduce compaction interval and dirty ratio to force immediate compaction
+		var output string
+		output, err = runDockerCommandWithCtx(context.Background(), "exec", getContainerName(),
+			"/opt/redpanda/bin/rpk", "cluster", "config", "set", "log_compaction_interval_ms", "1000")
+		GinkgoWriter.Printf("Output: %s\n", output)
+		if err != nil {
+			GinkgoWriter.Printf("Failed to set compaction interval: %v\n", err)
+		}
+
+		// Lower the dirty ratio threshold to make compaction more aggressive
+		output, err = runDockerCommandWithCtx(context.Background(), "exec", getContainerName(),
+			"/opt/redpanda/bin/rpk", "cluster", "config", "set", "min_cleanable_dirty_ratio", "0.1")
+		GinkgoWriter.Printf("Output: %s\n", output)
+		if err != nil {
+			GinkgoWriter.Printf("Failed to set cleanable ratio: %v\n", err)
+		}
+
+		now := time.Now()
 		Eventually(func() bool {
 			messages, err := getRPKSample(topicName)
 			GinkgoWriter.Printf("Messages: %v\n", messages)
+			GinkgoWriter.Printf("Time: %s\n", time.Since(now))
+
+			// Check message keys for debugging
+			keyInfo, keyErr := runDockerCommandWithCtx(context.Background(), "exec", getContainerName(),
+				"/opt/redpanda/bin/rpk", "topic", "consume", topicName, "--offset", "-10", "-n", "10", "--format", "%k:%v\n")
+			if keyErr == nil {
+				GinkgoWriter.Printf("Message keys and values: %s\n", keyInfo)
+			}
+
 			return err == nil && len(messages) == 1
-		}, 120*time.Second, 1*time.Second).Should(BeTrue(), "Exactly 1 message should be produced")
+		}, 600*time.Second, 1*time.Second).Should(BeTrue(), "Exactly 1 message should be produced")
 
 	})
 })
