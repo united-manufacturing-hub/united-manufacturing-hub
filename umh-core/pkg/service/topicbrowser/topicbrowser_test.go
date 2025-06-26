@@ -310,8 +310,8 @@ var _ = Describe("TopicBrowserService", func() {
 			Expect(status.BenthosFSMState).To(Equal(benthosfsm.OperationalStateActive))
 			Expect(status.BenthosObservedState.ServiceInfo.S6ObservedState.ServiceInfo.Status).To(Equal(s6svc.ServiceUp))
 			// check the ringbuffer if logs appear
-			//	Expect(status.Status.Buffer[0].Timestamp.UnixMilli()).To(Equal(int64(1750091514783)))
-			//	Expect(status.Status.Buffer[0].Payload).To(Equal([]byte("hello world")))
+			Expect(status.Status.Buffer[0].Timestamp.UnixMilli()).To(Equal(int64(1750091514783)))
+			Expect(status.Status.Buffer[0].Payload).To(Equal([]byte("hello world")))
 		})
 
 		It("should return error for non-existent topic browser", func() {
