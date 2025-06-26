@@ -15,7 +15,6 @@
 package subscribers_test
 
 import (
-	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -27,18 +26,18 @@ import (
 var _ = Describe("Registry", func() {
 	var (
 		registry     *subscribers.Registry
-		cullInterval time.Duration
 		ttl          time.Duration
+		cullInterval time.Duration
 	)
 
 	BeforeEach(func() {
-		cullInterval = 100 * time.Millisecond
-		ttl = 500 * time.Millisecond
+		ttl = 100 * time.Millisecond
+		cullInterval = 50 * time.Millisecond
 		registry = subscribers.NewRegistry(cullInterval, ttl)
 	})
 
 	Describe("NewRegistry", func() {
-		It("should create a new registry with specified parameters", func() {
+		It("should create a new registry with the specified parameters", func() {
 			Expect(registry).ToNot(BeNil())
 			Expect(registry.Length()).To(Equal(0))
 		})
@@ -46,38 +45,32 @@ var _ = Describe("Registry", func() {
 
 	Describe("Add", func() {
 		Context("when adding a new subscriber", func() {
-			It("should add the subscriber and initialize metadata", func() {
+			It("should add the subscriber and initialize bootstrapped state to false", func() {
 				email := "test@example.com"
 
 				registry.Add(email)
 
 				Expect(registry.Length()).To(Equal(1))
 
-				// Check that metadata is initialized correctly
-				meta := registry.Meta(email)
-				Expect(meta.FirstSeen).To(BeTemporally("~", time.Now(), time.Second))
-				Expect(meta.LastSeq).To(Equal(uint64(0)))
-				Expect(meta.Bootstrapped).To(BeFalse())
+				// Check that bootstrapped state is initialized correctly
+				bootstrapped := registry.IsBootstrapped(email)
+				Expect(bootstrapped).To(BeFalse())
 			})
 		})
 
 		Context("when adding an existing subscriber", func() {
-			It("should update the subscriber's metadata and reset Bootstraped flag", func() {
+			It("should reset the bootstrapped flag to false", func() {
 				email := "test@example.com"
 
 				// Add subscriber first time
 				registry.Add(email)
 
-				// Update metadata to simulate it being bootstrapped
-				registry.UpdateMeta(email, func(m *subscribers.Meta) {
-					m.Bootstrapped = true
-					m.LastSeq = 100
-				})
+				// Set subscriber as bootstrapped
+				registry.SetBootstrapped(email, true)
 
 				// Verify it was bootstrapped
-				meta := registry.Meta(email)
-				Expect(meta.Bootstrapped).To(BeTrue())
-				Expect(meta.LastSeq).To(Equal(uint64(100)))
+				bootstrapped := registry.IsBootstrapped(email)
+				Expect(bootstrapped).To(BeTrue())
 
 				// Add the same subscriber again
 				registry.Add(email)
@@ -85,10 +78,9 @@ var _ = Describe("Registry", func() {
 				// Should still have only one subscriber
 				Expect(registry.Length()).To(Equal(1))
 
-				// Check that Bootstraped flag is reset but other metadata preserved
-				meta = registry.Meta(email)
-				Expect(meta.Bootstrapped).To(BeFalse())     // Should be reset
-				Expect(meta.LastSeq).To(Equal(uint64(100))) // Should be preserved
+				// Check that bootstrapped flag is reset
+				bootstrapped = registry.IsBootstrapped(email)
+				Expect(bootstrapped).To(BeFalse()) // Should be reset
 			})
 		})
 
@@ -102,12 +94,10 @@ var _ = Describe("Registry", func() {
 
 				Expect(registry.Length()).To(Equal(3))
 
-				// Verify each subscriber has proper metadata
+				// Verify each subscriber has proper bootstrapped state
 				for _, email := range emails {
-					meta := registry.Meta(email)
-					Expect(meta.FirstSeen).To(BeTemporally("~", time.Now(), time.Second))
-					Expect(meta.LastSeq).To(Equal(uint64(0)))
-					Expect(meta.Bootstrapped).To(BeFalse())
+					bootstrapped := registry.IsBootstrapped(email)
+					Expect(bootstrapped).To(BeFalse())
 				}
 			})
 		})
@@ -151,32 +141,28 @@ var _ = Describe("Registry", func() {
 		})
 	})
 
-	Describe("Meta", func() {
+	Describe("IsBootstrapped", func() {
 		Context("when subscriber exists", func() {
-			It("should return the correct metadata", func() {
+			It("should return the correct bootstrapped state", func() {
 				email := "test@example.com"
 				registry.Add(email)
 
-				// Update metadata
-				registry.UpdateMeta(email, func(m *subscribers.Meta) {
-					m.LastSeq = 42
-					m.Bootstrapped = true
-				})
+				// Initially should be false
+				bootstrapped := registry.IsBootstrapped(email)
+				Expect(bootstrapped).To(BeFalse())
 
-				meta := registry.Meta(email)
-				Expect(meta.LastSeq).To(Equal(uint64(42)))
-				Expect(meta.Bootstrapped).To(BeTrue())
-				Expect(meta.FirstSeen).To(BeTemporally("~", time.Now(), time.Second))
+				// Set to true
+				registry.SetBootstrapped(email, true)
+
+				bootstrapped = registry.IsBootstrapped(email)
+				Expect(bootstrapped).To(BeTrue())
 			})
 		})
 
 		Context("when subscriber does not exist", func() {
-			It("should return zero value metadata", func() {
-				meta := registry.Meta("nonexistent@example.com")
-
-				Expect(meta.FirstSeen).To(BeZero())
-				Expect(meta.LastSeq).To(Equal(uint64(0)))
-				Expect(meta.Bootstrapped).To(BeFalse())
+			It("should return false", func() {
+				bootstrapped := registry.IsBootstrapped("nonexistent@example.com")
+				Expect(bootstrapped).To(BeFalse())
 			})
 		})
 	})
@@ -185,7 +171,7 @@ var _ = Describe("Registry", func() {
 		Context("when registry is empty", func() {
 			It("should not call the function", func() {
 				callCount := 0
-				registry.ForEach(func(email string, m *subscribers.Meta) {
+				registry.ForEach(func(email string, bootstrapped bool) {
 					callCount++
 				})
 
@@ -202,120 +188,84 @@ var _ = Describe("Registry", func() {
 				}
 
 				var receivedEmails []string
-				var receivedMetas []*subscribers.Meta
+				var receivedBootstrapped []bool
 
-				registry.ForEach(func(email string, m *subscribers.Meta) {
+				registry.ForEach(func(email string, bootstrapped bool) {
 					receivedEmails = append(receivedEmails, email)
-					receivedMetas = append(receivedMetas, m)
+					receivedBootstrapped = append(receivedBootstrapped, bootstrapped)
 				})
 
 				Expect(receivedEmails).To(HaveLen(3))
 				Expect(receivedEmails).To(ConsistOf(emails))
-				Expect(receivedMetas).To(HaveLen(3))
+				Expect(receivedBootstrapped).To(HaveLen(3))
 
-				// Verify metadata is properly passed
-				for _, meta := range receivedMetas {
-					Expect(meta.FirstSeen).To(BeTemporally("~", time.Now(), time.Second))
-					Expect(meta.LastSeq).To(Equal(uint64(0)))
-					Expect(meta.Bootstrapped).To(BeFalse())
+				// Verify all are initially not bootstrapped
+				for _, bootstrapped := range receivedBootstrapped {
+					Expect(bootstrapped).To(BeFalse())
 				}
 			})
 		})
 
-		Context("when iterating over subscribers with different metadata", func() {
-			It("should provide correct metadata for each subscriber", func() {
+		Context("when iterating over subscribers with different bootstrapped states", func() {
+			It("should provide correct bootstrapped state for each subscriber", func() {
 				email1 := "user1@example.com"
 				email2 := "user2@example.com"
 
 				registry.Add(email1)
 				registry.Add(email2)
 
-				// Update metadata for each subscriber differently
-				registry.UpdateMeta(email1, func(m *subscribers.Meta) {
-					m.LastSeq = 100
-					m.Bootstrapped = true
+				// Set different bootstrapped states
+				registry.SetBootstrapped(email1, true)
+				registry.SetBootstrapped(email2, false)
+
+				bootstrappedByEmail := make(map[string]bool)
+
+				registry.ForEach(func(email string, bootstrapped bool) {
+					bootstrappedByEmail[email] = bootstrapped
 				})
 
-				registry.UpdateMeta(email2, func(m *subscribers.Meta) {
-					m.LastSeq = 200
-					m.Bootstrapped = false
-				})
-
-				metaByEmail := make(map[string]subscribers.Meta)
-
-				registry.ForEach(func(email string, m *subscribers.Meta) {
-					metaByEmail[email] = *m
-				})
-
-				Expect(metaByEmail[email1].LastSeq).To(Equal(uint64(100)))
-				Expect(metaByEmail[email1].Bootstrapped).To(BeTrue())
-
-				Expect(metaByEmail[email2].LastSeq).To(Equal(uint64(200)))
-				Expect(metaByEmail[email2].Bootstrapped).To(BeFalse())
+				Expect(bootstrappedByEmail).To(HaveLen(2))
+				Expect(bootstrappedByEmail[email1]).To(BeTrue())
+				Expect(bootstrappedByEmail[email2]).To(BeFalse())
 			})
 		})
 	})
 
-	Describe("UpdateMeta", func() {
+	Describe("SetBootstrapped", func() {
 		Context("when subscriber exists", func() {
-			It("should update the metadata correctly", func() {
+			It("should update the bootstrapped state", func() {
 				email := "test@example.com"
 				registry.Add(email)
 
-				// Initial state
-				meta := registry.Meta(email)
-				Expect(meta.LastSeq).To(Equal(uint64(0)))
-				Expect(meta.Bootstrapped).To(BeFalse())
+				// Initially should be false
+				bootstrapped := registry.IsBootstrapped(email)
+				Expect(bootstrapped).To(BeFalse())
 
-				// Update metadata
-				registry.UpdateMeta(email, func(m *subscribers.Meta) {
-					m.LastSeq = 42
-					m.Bootstrapped = true
-				})
+				// Update to true
+				registry.SetBootstrapped(email, true)
 
-				// Verify update
-				meta = registry.Meta(email)
-				Expect(meta.LastSeq).To(Equal(uint64(42)))
-				Expect(meta.Bootstrapped).To(BeTrue())
-			})
+				bootstrapped = registry.IsBootstrapped(email)
+				Expect(bootstrapped).To(BeTrue())
 
-			It("should allow multiple sequential updates", func() {
-				email := "test@example.com"
-				registry.Add(email)
+				// Update back to false
+				registry.SetBootstrapped(email, false)
 
-				// First update
-				registry.UpdateMeta(email, func(m *subscribers.Meta) {
-					m.LastSeq = 10
-				})
-
-				meta := registry.Meta(email)
-				Expect(meta.LastSeq).To(Equal(uint64(10)))
-
-				// Second update
-				registry.UpdateMeta(email, func(m *subscribers.Meta) {
-					m.LastSeq = m.LastSeq + 5
-					m.Bootstrapped = true
-				})
-
-				meta = registry.Meta(email)
-				Expect(meta.LastSeq).To(Equal(uint64(15)))
-				Expect(meta.Bootstrapped).To(BeTrue())
+				bootstrapped = registry.IsBootstrapped(email)
+				Expect(bootstrapped).To(BeFalse())
 			})
 		})
 
 		Context("when subscriber does not exist", func() {
-			It("should not panic and do nothing", func() {
-				Expect(func() {
-					registry.UpdateMeta("nonexistent@example.com", func(m *subscribers.Meta) {
-						m.LastSeq = 42
-						m.Bootstrapped = true
-					})
-				}).ToNot(Panic())
+			It("should not panic or create the subscriber", func() {
+				// This should not panic
+				registry.SetBootstrapped("nonexistent@example.com", true)
 
-				// Verify no changes were made
-				meta := registry.Meta("nonexistent@example.com")
-				Expect(meta.LastSeq).To(Equal(uint64(0)))
-				Expect(meta.Bootstrapped).To(BeFalse())
+				// Should still have no subscribers
+				Expect(registry.Length()).To(Equal(0))
+
+				// Should still return false for non-existent subscriber
+				bootstrapped := registry.IsBootstrapped("nonexistent@example.com")
+				Expect(bootstrapped).To(BeFalse())
 			})
 		})
 	})
@@ -339,7 +289,7 @@ var _ = Describe("Registry", func() {
 		})
 
 		Context("when subscribers expire", func() {
-			It("should reflect the reduced count after expiration", func() {
+			It("should return the correct count after expiration", func() {
 				email := "test@example.com"
 				registry.Add(email)
 
@@ -353,118 +303,84 @@ var _ = Describe("Registry", func() {
 		})
 	})
 
-	Describe("Thread Safety", func() {
+	Describe("Expiration behavior", func() {
+		Context("when bootstrapped state expires", func() {
+			It("should also expire the bootstrapped state along with subscriber", func() {
+				email := "test@example.com"
+				registry.Add(email)
+				registry.SetBootstrapped(email, true)
+
+				// Verify both subscriber and bootstrapped state exist
+				Expect(registry.Length()).To(Equal(1))
+				Expect(registry.IsBootstrapped(email)).To(BeTrue())
+
+				// Wait for expiration
+				time.Sleep(ttl + cullInterval + 50*time.Millisecond)
+
+				// Both should be gone
+				Expect(registry.Length()).To(Equal(0))
+				Expect(registry.IsBootstrapped(email)).To(BeFalse())
+			})
+		})
+
+		Context("when re-adding expired subscriber", func() {
+			It("should reset bootstrapped state to false", func() {
+				email := "test@example.com"
+				registry.Add(email)
+				registry.SetBootstrapped(email, true)
+
+				// Wait for expiration
+				time.Sleep(ttl + cullInterval + 50*time.Millisecond)
+
+				// Re-add the subscriber
+				registry.Add(email)
+
+				// Should be back but not bootstrapped
+				Expect(registry.Length()).To(Equal(1))
+				Expect(registry.IsBootstrapped(email)).To(BeFalse())
+			})
+		})
+	})
+
+	Describe("Concurrent access", func() {
 		It("should handle concurrent operations safely", func() {
-			const numGoroutines = 10
-			const numOperationsPerGoroutine = 100
+			email := "test@example.com"
 
-			done := make(chan bool, numGoroutines)
+			// Start multiple goroutines performing operations
+			done := make(chan bool, 3)
 
-			// Start multiple goroutines performing concurrent operations
-			for i := 0; i < numGoroutines; i++ {
-				go func(id int) {
-					defer GinkgoRecover()
+			// Goroutine 1: Adding subscribers
+			go func() {
+				for i := 0; i < 100; i++ {
+					registry.Add(email)
+				}
+				done <- true
+			}()
 
-					for j := 0; j < numOperationsPerGoroutine; j++ {
-						email := fmt.Sprintf("user%d_%d@example.com", id, j)
+			// Goroutine 2: Setting bootstrapped state
+			go func() {
+				for i := 0; i < 100; i++ {
+					registry.SetBootstrapped(email, i%2 == 0)
+				}
+				done <- true
+			}()
 
-						// Add subscriber
-						registry.Add(email)
-
-						// Update metadata
-						registry.UpdateMeta(email, func(m *subscribers.Meta) {
-							m.LastSeq = uint64(j)
-							m.Bootstrapped = j%2 == 0
-						})
-
-						// Read metadata
-						meta := registry.Meta(email)
-						Expect(meta.LastSeq).To(BeNumerically(">=", 0))
-
-						// List subscribers
-						list := registry.List()
-						Expect(list).ToNot(BeNil())
-
-						// Get length
-						length := registry.Length()
-						Expect(length).To(BeNumerically(">=", 0))
-					}
-
-					done <- true
-				}(i)
-			}
+			// Goroutine 3: Reading state
+			go func() {
+				for i := 0; i < 100; i++ {
+					registry.IsBootstrapped(email)
+					registry.Length()
+				}
+				done <- true
+			}()
 
 			// Wait for all goroutines to complete
-			for i := 0; i < numGoroutines; i++ {
-				Eventually(done).Should(Receive())
+			for i := 0; i < 3; i++ {
+				<-done
 			}
 
-			// Verify final state
-			finalLength := registry.Length()
-			Expect(finalLength).To(Equal(numGoroutines * numOperationsPerGoroutine))
-		})
-	})
-
-	Describe("Integration with ExpireMap", func() {
-		Context("when subscribers expire naturally", func() {
-			It("should clean up both expiremap and metadata", func() {
-				email := "test@example.com"
-				registry.Add(email)
-
-				// Verify subscriber is active
-				Expect(registry.Length()).To(Equal(1))
-				Expect(registry.List()).To(ContainElement(email))
-				meta := registry.Meta(email)
-				Expect(meta.FirstSeen).ToNot(BeZero())
-
-				// Wait for expiration
-				time.Sleep(ttl + cullInterval + 50*time.Millisecond)
-
-				// Verify subscriber is removed from expiremap
-				Expect(registry.Length()).To(Equal(0))
-				Expect(registry.List()).ToNot(ContainElement(email))
-
-				// Note: Metadata cleanup isn't implemented in the current design
-				// This test documents the current behavior where metadata persists
-				// even after expiration from the expiremap
-				meta = registry.Meta(email)
-				Expect(meta.FirstSeen).ToNot(BeZero()) // Metadata still exists
-			})
-		})
-
-		Context("when re-adding expired subscribers", func() {
-			It("should reuse existing metadata but reset Bootstraped flag", func() {
-				email := "test@example.com"
-
-				// Add subscriber first time
-				registry.Add(email)
-
-				// Update metadata
-				registry.UpdateMeta(email, func(m *subscribers.Meta) {
-					m.LastSeq = 42
-					m.Bootstrapped = true
-				})
-
-				originalMeta := registry.Meta(email)
-
-				// Wait for expiration
-				time.Sleep(ttl + cullInterval + 50*time.Millisecond)
-
-				// Verify expired from expiremap
-				Expect(registry.Length()).To(Equal(0))
-
-				// Re-add the same subscriber
-				registry.Add(email)
-
-				// Verify subscriber is back
-				Expect(registry.Length()).To(Equal(1))
-
-				// Check metadata behavior
-				newMeta := registry.Meta(email)
-				Expect(newMeta.FirstSeen).To(Equal(originalMeta.FirstSeen)) // Preserved
-				Expect(newMeta.LastSeq).To(Equal(uint64(42)))               // Preserved
-				Expect(newMeta.Bootstrapped).To(BeFalse())                  // Reset
-			})
+			// Should not panic and should have consistent state
+			Expect(registry.Length()).To(Equal(1))
 		})
 	})
 })

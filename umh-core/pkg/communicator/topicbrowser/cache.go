@@ -45,10 +45,10 @@ func NewCache() *Cache {
 	}
 }
 
-// Buffer represents a compressed data buffer from the FSM
+// Buffer represents a protobuf-encoded unsBundle from the FSM
 // This is a placeholder until the actual FSM types are available
 type Buffer struct {
-	Payload   []byte // LZ4 compressed protobuf data
+	Payload   []byte // protobuf-encoded unsBundle
 	Timestamp int64  // timestamp from the logs
 }
 
@@ -169,20 +169,6 @@ func (c *Cache) ToUnsBundleProto() []byte {
 	}
 
 	return encoded
-}
-
-// Snapshot returns a deep copy of all cached event table entries
-func (c *Cache) Snapshot() map[string]*tbproto.EventTableEntry {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	// Create a deep copy to avoid data races
-	dup := make(map[string]*tbproto.EventTableEntry, len(c.eventMap))
-	for key, entry := range c.eventMap {
-		dup[key] = proto.Clone(entry).(*tbproto.EventTableEntry)
-	}
-
-	return dup
 }
 
 // GetKeys returns all the topic keys currently in the cache

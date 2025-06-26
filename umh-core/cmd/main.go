@@ -104,7 +104,7 @@ func main() {
 
 	// Start the topic browser cache updater independent of the backend connection (e.g., for HTTP endpoints)
 	// it updates the TopicBrowserCache based on the observed state of the topic browser service once per second
-	communicationState.StartTopicBrowserCacheUpdater(systemSnapshotManager, ctx)
+	communicationState.StartTopicBrowserCacheUpdater(systemSnapshotManager, ctx, configData.Agent.Simulator)
 
 	if configData.Agent.APIURL != "" && configData.Agent.AuthToken != "" {
 		enableBackendConnection(&configData, communicationState, controlLoop, communicationState.Logger)
