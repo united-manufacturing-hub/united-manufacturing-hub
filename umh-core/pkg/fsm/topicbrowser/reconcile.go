@@ -40,7 +40,7 @@ import (
 // This function is intended to be called repeatedly (e.g. in a periodic control loop).
 // Over multiple calls, it converges the actual state to the desired state. Transitions
 // that fail are retried in subsequent reconcile calls after a backoff period.
-func (i *Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
+func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
 	start := time.Now()
 	tbInstanceName := i.baseFSMInstance.GetID()
 	defer func() {
@@ -157,7 +157,7 @@ func (i *Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, s
 
 // reconcileExternalChanges checks if the ConnectionInstance service status has changed
 // externally (e.g., if someone manually stopped or started it, or if it crashed)
-func (i *Instance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
+func (i *TopicBrowserInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
@@ -180,7 +180,7 @@ func (i *Instance) reconcileExternalChanges(ctx context.Context, services servic
 // Any functions that fetch information are disallowed here and must be called in reconcileExternalChanges
 // and exist in ObservedState.
 // This is to ensure full testability of the FSM.
-func (i *Instance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider, currentTime time.Time, snapshot fsm.SystemSnapshot) (err error, reconciled bool) {
+func (i *TopicBrowserInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider, currentTime time.Time, snapshot fsm.SystemSnapshot) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".reconcileStateTransition", time.Since(start))
@@ -220,7 +220,7 @@ func (i *Instance) reconcileStateTransition(ctx context.Context, services servic
 }
 
 // reconcileOperationalStates handles states related to instance operations (starting/stopping)
-func (i *Instance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time) (err error, reconciled bool) {
+func (i *TopicBrowserInstance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".reconcileOperationalStates", time.Since(start))
@@ -240,7 +240,7 @@ func (i *Instance) reconcileOperationalStates(ctx context.Context, services serv
 
 // reconcileTransitionToActive handles transitions when the desired state is Active.
 // It deals with moving from various states to the Active state.
-func (i *Instance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (i *TopicBrowserInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
@@ -272,7 +272,7 @@ func (i *Instance) reconcileTransitionToActive(ctx context.Context, services ser
 }
 
 // reconcileStartingStates handles the various starting phase states when transitioning to Active.
-func (i *Instance) reconcileStartingStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (i *TopicBrowserInstance) reconcileStartingStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".reconcileStartingStates", time.Since(start))
@@ -304,7 +304,7 @@ func (i *Instance) reconcileStartingStates(ctx context.Context, services service
 }
 
 // reconcileRunningStates handles the various running states when transitioning to Active.
-func (i *Instance) reconcileRunningStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (i *TopicBrowserInstance) reconcileRunningStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".reconcileRunningStates", time.Since(start))
@@ -334,7 +334,7 @@ func (i *Instance) reconcileRunningStates(ctx context.Context, services servicer
 
 // reconcileTransitionToStopped handles transitions when the desired state is Stopped.
 // It deals with moving from any operational state to Stopping and then to Stopped.
-func (i *Instance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
+func (i *TopicBrowserInstance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".reconcileTransitionToStopped", time.Since(start))

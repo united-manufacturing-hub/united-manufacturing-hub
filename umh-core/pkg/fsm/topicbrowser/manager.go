@@ -69,7 +69,7 @@ func NewTopicBrowserManager(name string) *Manager {
 		},
 		// Compare Connection configs
 		func(instance public_fsm.FSMInstance, cfg config.TopicBrowserConfig) (bool, error) {
-			tbInstance, ok := instance.(*Instance)
+			tbInstance, ok := instance.(*TopicBrowserInstance)
 			if !ok {
 				return false, fmt.Errorf("instance is not a Topic Browser Instance")
 			}
@@ -77,7 +77,7 @@ func NewTopicBrowserManager(name string) *Manager {
 		},
 		// Set Connection config
 		func(instance public_fsm.FSMInstance, cfg config.TopicBrowserConfig) error {
-			tbInstance, ok := instance.(*Instance)
+			tbInstance, ok := instance.(*TopicBrowserInstance)
 			if !ok {
 				return fmt.Errorf("instance is not a Topic Browser Instance")
 			}
@@ -86,7 +86,7 @@ func NewTopicBrowserManager(name string) *Manager {
 		},
 		// Get expected max p95 execution time per instance
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
-			tbInstance, ok := instance.(*Instance)
+			tbInstance, ok := instance.(*TopicBrowserInstance)
 			if !ok {
 				return 0, fmt.Errorf("instance is not a Topic Browser Instance")
 			}

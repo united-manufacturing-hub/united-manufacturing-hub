@@ -100,10 +100,10 @@ func (o ObservedState) IsObservedState() {}
 // BenthosInstance implements the FSMInstance interface
 // If BenthosInstance does not implement the FSMInstance interface, this will
 // be detected at compile time
-var _ publicfsm.FSMInstance = (*Instance)(nil)
+var _ publicfsm.FSMInstance = (*TopicBrowserInstance)(nil)
 
-// Instance is a state-machine managed instance of a Topic Browser service
-type Instance struct {
+// TopicBrowserInstance is a state-machine managed instance of a Topic Browser service
+type TopicBrowserInstance struct {
 	baseFSMInstance *internalfsm.BaseFSMInstance
 
 	// ObservedState represents the observed state of the service
@@ -121,31 +121,31 @@ type Instance struct {
 }
 
 // GetLastObservedState returns the last known state of the instance
-func (i *Instance) GetLastObservedState() publicfsm.ObservedState {
+func (i *TopicBrowserInstance) GetLastObservedState() publicfsm.ObservedState {
 	return i.ObservedState
 }
 
 // SetService sets the Topic Browser service implementation
 // This is a testing-only utility to access the private field
-func (i *Instance) SetService(service topicbrowsersvc.ITopicBrowserService) {
+func (i *TopicBrowserInstance) SetService(service topicbrowsersvc.ITopicBrowserService) {
 	i.service = service
 }
 
 // GetConfig returns the ServiceConfig of the instance
 // This is a testing-only utility to access the private field
-func (i *Instance) GetConfig() topicbrowserserviceconfig.Config {
+func (i *TopicBrowserInstance) GetConfig() topicbrowserserviceconfig.Config {
 	return i.config
 }
 
 // GetLastError returns the last error of the instance
 // This is a testing-only utility to access the private baseFSMInstance field
-func (i *Instance) GetLastError() error {
+func (i *TopicBrowserInstance) GetLastError() error {
 	return i.baseFSMInstance.GetLastError()
 }
 
 // IsTransientStreakCounterMaxed returns whether the transient streak counter
 // has reached the maximum number of ticks, which means that the FSM is stuck in a state
 // and should be removed
-func (i *Instance) IsTransientStreakCounterMaxed() bool {
+func (i *TopicBrowserInstance) IsTransientStreakCounterMaxed() bool {
 	return i.baseFSMInstance.IsTransientStreakCounterMaxed()
 }

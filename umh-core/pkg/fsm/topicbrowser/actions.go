@@ -36,7 +36,7 @@ import (
 )
 
 // CreateInstance attempts to add the Topic Browser to the manager.
-func (i *Instance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (i *TopicBrowserInstance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	i.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding Topic Browser service %s to S6 manager ...", i.baseFSMInstance.GetID())
 
 	// Generate the benthos config from the topic browser config
@@ -61,7 +61,7 @@ func (i *Instance) CreateInstance(ctx context.Context, filesystemService filesys
 
 // RemoveInstance attempts to remove the DataflowComponent from the Benthos manager.
 // It requires the service to be stopped before removal.
-func (i *Instance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (i *TopicBrowserInstance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	i.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing Topic Browser service %s from Benthos manager ...", i.baseFSMInstance.GetID())
 
 	// Remove the initiateDataflowComponent from the Benthos manager
@@ -103,7 +103,7 @@ func (i *Instance) RemoveInstance(ctx context.Context, filesystemService filesys
 }
 
 // StartInstance attempts to start the topic browser by setting the desired state to running for the given instance
-func (i *Instance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (i *TopicBrowserInstance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	i.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting Topic Browser service %s ...", i.baseFSMInstance.GetID())
 
 	// Set the desired state to running for the given instance
@@ -118,7 +118,7 @@ func (i *Instance) StartInstance(ctx context.Context, filesystemService filesyst
 }
 
 // StopInstance attempts to stop the Topic Browser by setting the desired state to stopped for the given instance
-func (i *Instance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (i *TopicBrowserInstance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	i.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping Topic Browser service %s ...", i.baseFSMInstance.GetID())
 
 	// Set the desired state to stopped for the given instance
@@ -134,13 +134,13 @@ func (i *Instance) StopInstance(ctx context.Context, filesystemService filesyste
 
 // CheckForCreation checks if the Topic Browser service should be created
 // NOTE: check if we really need this or just set true locally
-func (i *Instance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+func (i *TopicBrowserInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
 	return true
 }
 
 // getServiceStatus gets the status of the Topic Browser service
 // its main purpose is to handle the edge cases where the service is not yet created or not yet running
-func (i *Instance) getServiceStatus(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (tbsvc.ServiceInfo, error) {
+func (i *TopicBrowserInstance) getServiceStatus(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (tbsvc.ServiceInfo, error) {
 	info, err := i.service.Status(ctx, services, i.baseFSMInstance.GetID(), snapshot)
 	if err != nil {
 		// If there's an error getting the service status, we need to distinguish between cases
@@ -168,7 +168,7 @@ func (i *Instance) getServiceStatus(ctx context.Context, services serviceregistr
 }
 
 // UpdateObservedStateOfInstance updates the observed state of the service
-func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
+func (i *TopicBrowserInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -228,7 +228,7 @@ func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services s
 }
 
 // isTopicBrowserBenthosRunning checks if the Topic Browser service is running
-func (i *Instance) isTopicBrowserBenthosRunning() bool {
+func (i *TopicBrowserInstance) isTopicBrowserBenthosRunning() bool {
 	switch i.ObservedState.ServiceInfo.BenthosFSMState {
 	// Consider Active , Degraded and Idle as running states
 	case benthosfsm.OperationalStateActive, benthosfsm.OperationalStateIdle, benthosfsm.OperationalStateDegraded:
@@ -239,7 +239,7 @@ func (i *Instance) isTopicBrowserBenthosRunning() bool {
 
 // isTopicBrowserHealthy checks if the Topic Browser service is healthy based on ServiceInfo
 // This leverages the existing service health analysis instead of reimplementing it
-func (i *Instance) isTopicBrowserHealthy() (bool, string) {
+func (i *TopicBrowserInstance) isTopicBrowserHealthy() (bool, string) {
 	// Use the service's existing health analysis
 	serviceInfo := i.ObservedState.ServiceInfo
 
@@ -263,13 +263,13 @@ func (i *Instance) isTopicBrowserHealthy() (bool, string) {
 }
 
 // IsTopicBrowserBenthosStopped checks if the Topic Browser service is stopped
-func (i *Instance) IsTopicBrowserBenthosStopped() bool {
+func (i *TopicBrowserInstance) IsTopicBrowserBenthosStopped() bool {
 	return i.ObservedState.ServiceInfo.BenthosFSMState == benthosfsm.OperationalStateStopped
 }
 
 // IsTopicBrowserDegraded determines if the Topic Browser should be considered degraded
 // This leverages the service's sophisticated cross-component analysis
-func (i *Instance) IsTopicBrowserDegraded() (isDegraded bool, reason string) {
+func (i *TopicBrowserInstance) IsTopicBrowserDegraded() (isDegraded bool, reason string) {
 	defer func() {
 		i.baseFSMInstance.GetLogger().Debugf("isTopicBrowserDegraded: %t, reason: %s", isDegraded, reason)
 	}()
@@ -297,7 +297,7 @@ func (i *Instance) IsTopicBrowserDegraded() (isDegraded bool, reason string) {
 }
 
 // shouldRecoverFromDegraded determines if the Topic Browser should recover from degraded state
-func (i *Instance) shouldRecoverFromDegraded() bool {
+func (i *TopicBrowserInstance) shouldRecoverFromDegraded() bool {
 	// If the service is now healthy and there are no status reasons indicating issues
 	degraded, _ := i.IsTopicBrowserDegraded()
 	return !degraded

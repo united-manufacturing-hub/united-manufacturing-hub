@@ -39,7 +39,7 @@ import (
 
 var _ = Describe("TopicBrowser FSM", func() {
 	var (
-		instance        *topicbrowser.Instance
+		instance        *topicbrowser.TopicBrowserInstance
 		mockService     *topicbrowsersvc.MockService
 		componentName   string
 		ctx             context.Context

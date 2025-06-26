@@ -33,7 +33,7 @@ import (
 func NewInstance(
 	s6BaseDir string,
 	config config.TopicBrowserConfig,
-) *Instance {
+) *TopicBrowserInstance {
 	cfg := internal_fsm.BaseFSMInstanceConfig{
 		ID:                           config.Name,
 		DesiredFSMState:              OperationalStateStopped,
@@ -97,7 +97,7 @@ func NewInstance(
 	logger := logger.For(config.Name)
 	backoffConfig := backoff.DefaultConfig(cfg.ID, logger)
 
-	instance := &Instance{
+	instance := &TopicBrowserInstance{
 		baseFSMInstance: internal_fsm.NewBaseFSMInstance(cfg, backoffConfig, logger),
 		service:         tbsvc.NewDefaultService(config.Name),
 		config:          config.ServiceConfig,
@@ -114,7 +114,7 @@ func NewInstance(
 // SetDesiredFSMState safely updates the desired state
 // But ensures that the desired state is a valid state and that it is also a reasonable state
 // e.g., nobody wants to have an instance in the "starting" state, that is just intermediate
-func (i *Instance) SetDesiredFSMState(state string) error {
+func (i *TopicBrowserInstance) SetDesiredFSMState(state string) error {
 	if state != OperationalStateStopped &&
 		state != OperationalStateActive {
 		return fmt.Errorf("invalid desired state: %s. valid states are %s and %s",
@@ -128,54 +128,54 @@ func (i *Instance) SetDesiredFSMState(state string) error {
 }
 
 // GetCurrentFSMState returns the current state of the FSM
-func (i *Instance) GetCurrentFSMState() string {
+func (i *TopicBrowserInstance) GetCurrentFSMState() string {
 	return i.baseFSMInstance.GetCurrentFSMState()
 }
 
 // GetDesiredFSMState returns the desired state of the FSM
-func (i *Instance) GetDesiredFSMState() string {
+func (i *TopicBrowserInstance) GetDesiredFSMState() string {
 	return i.baseFSMInstance.GetDesiredFSMState()
 }
 
 // Remove starts the removal process, it is idempotent and can be called multiple times
 // Note: it is only removed once IsRemoved returns true
-func (i *Instance) Remove(ctx context.Context) error {
+func (i *TopicBrowserInstance) Remove(ctx context.Context) error {
 	return i.baseFSMInstance.Remove(ctx)
 }
 
 // IsRemoved returns true if the instance has been removed
-func (i *Instance) IsRemoved() bool {
+func (i *TopicBrowserInstance) IsRemoved() bool {
 	return i.baseFSMInstance.IsRemoved()
 }
 
 // IsRemoving returns true if the instance is in the removing state
-func (i *Instance) IsRemoving() bool {
+func (i *TopicBrowserInstance) IsRemoving() bool {
 	return i.baseFSMInstance.IsRemoving()
 }
 
 // IsStopping returns true if the instance is in the stopping state
-func (i *Instance) IsStopping() bool {
+func (i *TopicBrowserInstance) IsStopping() bool {
 	return i.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopping
 }
 
 // IsStopped returns true if the instance is in the stopped state
-func (i *Instance) IsStopped() bool {
+func (i *TopicBrowserInstance) IsStopped() bool {
 	return i.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopped
 }
 
 // WantsToBeStopped returns true if the instance wants to be stopped
-func (i *Instance) WantsToBeStopped() bool {
+func (i *TopicBrowserInstance) WantsToBeStopped() bool {
 	return i.baseFSMInstance.GetDesiredFSMState() == OperationalStateStopped
 }
 
 // PrintState prints the current state of the FSM for debugging
-func (i *Instance) PrintState() {
+func (i *TopicBrowserInstance) PrintState() {
 	i.baseFSMInstance.GetLogger().Debugf("Current state: %s", i.baseFSMInstance.GetCurrentFSMState())
 	i.baseFSMInstance.GetLogger().Debugf("Desired state: %s", i.baseFSMInstance.GetDesiredFSMState())
 	i.baseFSMInstance.GetLogger().Debugf("Observed state: %+v", i.ObservedState)
 }
 
 // GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance
-func (i *Instance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
+func (i *TopicBrowserInstance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
 	return constants.TopicBrowserExpectedMaxP95ExecutionTimePerInstance
 }

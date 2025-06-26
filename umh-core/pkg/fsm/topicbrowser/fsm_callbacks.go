@@ -22,7 +22,7 @@ import (
 
 // registerCallbacks registers common callbacks for state transitions
 // These callbacks are executed synchronously and should not have any network calls or other operations that could fail
-func (instance *Instance) registerCallbacks() {
+func (instance *TopicBrowserInstance) registerCallbacks() {
 	// Basic operational state callbacks
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStarting, func(ctx context.Context, e *fsm.Event) {
 		instance.baseFSMInstance.GetLogger().Infof("Entering starting state for %s", instance.baseFSMInstance.GetID())

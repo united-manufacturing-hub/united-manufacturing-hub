@@ -34,7 +34,7 @@ func (s *ObservedStateSnapshot) IsObservedStateSnapshot() {
 }
 
 // CreateObservedStateSnapshot implements the fsm.ObservedStateConverter interface for the topic browser Instance
-func (i *Instance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
+func (i *TopicBrowserInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	// Create a deep copy of the observed state
 	snapshot := &ObservedStateSnapshot{}
 

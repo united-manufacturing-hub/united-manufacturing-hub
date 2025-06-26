@@ -115,7 +115,7 @@ func TransitionToTopicBrowserState(mockService *topicbrowsersvc.MockService, ser
 
 // SetupTopicBrowserInstance creates and configures a TopicBrowser instance for testing.
 // Returns the instance, the mock service, and the config used to create it.
-func SetupTopicBrowserInstance(serviceName string, desiredState string) (*topicbrowserfsm.Instance, *topicbrowsersvc.MockService, config.TopicBrowserConfig) {
+func SetupTopicBrowserInstance(serviceName string, desiredState string) (*topicbrowserfsm.TopicBrowserInstance, *topicbrowsersvc.MockService, config.TopicBrowserConfig) {
 	// Create test config
 	cfg := CreateTopicBrowserTestConfig(serviceName, desiredState)
 
@@ -147,7 +147,7 @@ func setUpMockTopicBrowserInstance(
 	cfg config.TopicBrowserConfig,
 	mockService *topicbrowsersvc.MockService,
 	mockSvcRegistry *serviceregistry.Registry,
-) *topicbrowserfsm.Instance {
+) *topicbrowserfsm.TopicBrowserInstance {
 	// Create the instance
 	instance := topicbrowserfsm.NewInstance("", cfg)
 
@@ -174,7 +174,7 @@ func setUpMockTopicBrowserInstance(
 //   - error: Any error that occurred during transition
 func TestTopicBrowserStateTransition(
 	ctx context.Context,
-	instance *topicbrowserfsm.Instance,
+	instance *topicbrowserfsm.TopicBrowserInstance,
 	mockService *topicbrowsersvc.MockService,
 	services serviceregistry.Provider,
 	serviceName string,
@@ -230,7 +230,7 @@ func TestTopicBrowserStateTransition(
 func VerifyTopicBrowserStableState(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
-	instance *topicbrowserfsm.Instance,
+	instance *topicbrowserfsm.TopicBrowserInstance,
 	mockService *topicbrowsersvc.MockService,
 	services serviceregistry.Provider,
 	serviceName string,
@@ -284,7 +284,7 @@ func CreateMockTopicBrowserInstance(
 	mockService topicbrowsersvc.ITopicBrowserService,
 	desiredState string,
 	services serviceregistry.Provider,
-) *topicbrowserfsm.Instance {
+) *topicbrowserfsm.TopicBrowserInstance {
 	cfg := CreateTopicBrowserTestConfig(serviceName, desiredState)
 	instance := topicbrowserfsm.NewInstance("", cfg)
 	instance.SetService(mockService)
@@ -309,7 +309,7 @@ func CreateMockTopicBrowserInstance(
 func StabilizeTopicBrowserInstance(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
-	instance *topicbrowserfsm.Instance,
+	instance *topicbrowserfsm.TopicBrowserInstance,
 	mockService *topicbrowsersvc.MockService,
 	services serviceregistry.Provider,
 	serviceName string,
@@ -354,7 +354,7 @@ func StabilizeTopicBrowserInstance(
 func WaitForTopicBrowserDesiredState(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
-	instance *topicbrowserfsm.Instance,
+	instance *topicbrowserfsm.TopicBrowserInstance,
 	services serviceregistry.Provider,
 	targetState string,
 	maxAttempts int,
@@ -400,7 +400,7 @@ func WaitForTopicBrowserDesiredState(
 func ReconcileTopicBrowserUntilError(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
-	instance *topicbrowserfsm.Instance,
+	instance *topicbrowserfsm.TopicBrowserInstance,
 	mockService *topicbrowsersvc.MockService,
 	services serviceregistry.Provider,
 	serviceName string,
