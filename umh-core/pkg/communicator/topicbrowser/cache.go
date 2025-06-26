@@ -18,8 +18,11 @@ import (
 	"sync"
 
 	tbproto "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models/topicbrowser/pb"
+	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
+	redpandafsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -52,14 +55,34 @@ type Buffer struct {
 	Timestamp int64  // timestamp from the logs
 }
 
+// Status represents the topic browser status
+type Status struct {
+	Buffer []*Buffer        // contains the ringbuffer sorted from newest to oldest
+	Logs   []s6svc.LogEntry // contain the structured s6 logs entries
+}
+
+// ServiceInfo represents the complete service information
+type ServiceInfo struct {
+	// benthos state information
+	BenthosObservedState benthosfsm.BenthosObservedState
+	BenthosFSMState      string
+
+	// redpanda state information
+	RedpandaObservedState redpandafsm.RedpandaObservedState
+	RedpandaFSMState      string
+
+	// topic browser status
+	Status Status
+	// processing activities
+	BenthosProcessing  bool // is benthos active
+	RedpandaProcessing bool // is redpanda active
+	InvalidMetrics     bool // if there is invalid metrics e.g. redpanda has no output but benthos has input
+	StatusReason       string
+}
+
 // ObservedState represents the FSM observed state structure
-// This is a placeholder until the actual FSM types are available
 type ObservedState struct {
-	ServiceInfo struct {
-		Status struct {
-			Buffer []*Buffer
-		}
-	}
+	ServiceInfo ServiceInfo
 }
 
 // Update processes new buffers from the topic browser FSM observed state

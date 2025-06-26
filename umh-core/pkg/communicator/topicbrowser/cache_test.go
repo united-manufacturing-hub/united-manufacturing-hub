@@ -21,6 +21,7 @@ import (
 
 	tbproto "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models/topicbrowser/pb"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
+	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
 var _ = Describe("Cache", func() {
@@ -321,16 +322,12 @@ func createMockUnsBundle(events map[string]int64, unsTopics map[string]string) [
 
 func createMockObservedState(buffers []*topicbrowser.Buffer) *topicbrowser.ObservedState {
 	return &topicbrowser.ObservedState{
-		ServiceInfo: struct {
-			Status struct {
-				Buffer []*topicbrowser.Buffer
-			}
-		}{
-			Status: struct {
-				Buffer []*topicbrowser.Buffer
-			}{
+		ServiceInfo: topicbrowser.ServiceInfo{
+			Status: topicbrowser.Status{
 				Buffer: buffers,
+				Logs:   []s6svc.LogEntry{}, // Initialize with empty slice
 			},
+			// Leave other fields as zero values
 		},
 	}
 }
