@@ -146,6 +146,9 @@ func (r *Resolver) buildTopicName(topicInfo *tbproto.TopicInfo) string {
 // This is used by the frontend to identify which topic an entry belongs to.
 // We use it over full topic names to reduce the amount of data we need to send to the frontend.
 //
+// NOTE: This function is copied from the benthos topic browser plugin to ensure
+// identical hash generation for compatibility across components.
+//
 // ✅ FIX: Uses null byte delimiters to prevent hash collisions between different segment combinations.
 // For example, ["ab","c"] vs ["a","bc"] would produce different hashes instead of identical ones.
 func (r *Resolver) hashUNSTableEntry(info *tbproto.TopicInfo) string {

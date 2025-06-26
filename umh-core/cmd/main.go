@@ -127,7 +127,7 @@ func main() {
 			TopicBrowserCache: communicationState.TopicBrowserCache,
 		}
 
-		// Start GraphQL server using the new streamlined implementation
+		// Start GraphQL server
 		var err error
 		graphqlServer, err = graphql.StartGraphQLServer(graphqlResolver, &configData.Agent.GraphQLConfig, log)
 		if err != nil {
