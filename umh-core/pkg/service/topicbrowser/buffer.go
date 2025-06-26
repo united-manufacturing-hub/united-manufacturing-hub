@@ -79,60 +79,6 @@ func (rb *Ringbuffer) Add(buf *Buffer) {
 	}
 }
 
-// Two pools: one for Buffer structs, one for byte slices large enough to
-// hold typical payloads (capacity grows on demand).
-var (
-	bufPool = sync.Pool{
-		New: func() any { return new(Buffer) },
-	}
-	bytePool = sync.Pool{
-		New: func() any { return make([]byte, 0) },
-	}
-)
-
-// Get the current Buffers from newest to oldest
-// to reduce load on GC call PutBuffers afterwards
-func (rb *Ringbuffer) GetBuffers() []*Buffer {
-	rb.mu.Lock()
-	defer rb.mu.Unlock()
-
-	snap := make([]*Buffer, 0, rb.count)
-	for i := 0; i < rb.count; i++ {
-		idx := (rb.writePos - 1 - i + len(rb.buf)) % len(rb.buf)
-		if b := rb.buf[idx]; b != nil {
-			snap = append(snap, b)
-		}
-	}
-
-	clones := make([]*Buffer, len(snap))
-
-	for i, src := range snap {
-		dst := bufPool.Get().(*Buffer)
-		dst.Timestamp = src.Timestamp
-
-		// Ensure capacity without reallocating every time.
-		b := bytePool.Get().([]byte)
-		if cap(b) < len(src.Payload) {
-			b = make([]byte, len(src.Payload))
-		}
-		b = b[:len(src.Payload)]
-		copy(b, src.Payload)
-
-		dst.Payload = b
-		clones[i] = dst
-	}
-	return clones
-}
-
-// PutBuffers allows callers to recycle clones obtained from CloneSlice.
-func PutBuffers(bs []*Buffer) {
-	for _, b := range bs {
-		bytePool.Put(b.Payload[:0]) // keep underlying array for reuse
-		b.Payload = nil
-		bufPool.Put(b)
-	}
-}
-
 // Get the current Buffers from newest to oldest
 // Allocates new memory before returning the buffer to exclude modified data afterwards.
 func (rb *Ringbuffer) Get() []*Buffer {
@@ -157,6 +103,68 @@ func (rb *Ringbuffer) Get() []*Buffer {
 	}
 
 	return out
+}
+
+// Two pools: one for Buffer structs, one for byte slices large enough to
+// hold typical payloads (capacity grows on demand).
+var (
+	bufPool = sync.Pool{
+		New: func() any { return new(Buffer) },
+	}
+	bytePool = sync.Pool{
+		New: func() any {
+			b := make([]byte, 0)
+			return &b
+		},
+	}
+)
+
+// Get the current Buffers from newest to oldest
+// to reduce load on GC call PutBuffers afterwards
+func (rb *Ringbuffer) GetBuffers() []*Buffer {
+	rb.mu.Lock()
+	defer rb.mu.Unlock()
+
+	snap := make([]*Buffer, 0, rb.count)
+	for i := 0; i < rb.count; i++ {
+		idx := (rb.writePos - 1 - i + len(rb.buf)) % len(rb.buf)
+		if b := rb.buf[idx]; b != nil {
+			snap = append(snap, b)
+		}
+	}
+
+	clones := make([]*Buffer, len(snap))
+
+	for i, src := range snap {
+		dst := bufPool.Get().(*Buffer)
+		dst.Timestamp = src.Timestamp
+
+		// Ensure capacity without reallocating every time.
+		bPtr := bytePool.Get().(*[]byte)
+		if cap(*bPtr) < len(src.Payload) {
+			*bPtr = make([]byte, len(src.Payload))
+		}
+		slice := (*bPtr)[:len(src.Payload)]
+		copy(slice, src.Payload)
+
+		dst.Payload = slice
+
+		clones[i] = dst
+	}
+	return clones
+}
+
+// PutBuffers allows callers to recycle clones obtained from CloneSlice.
+func PutBuffers(bs []*Buffer) {
+	for _, b := range bs {
+		if b.Payload != nil {
+			tmp := b.Payload[:0]
+			bytePool.Put(&tmp) // put pointer, not value
+		}
+
+		b.Payload = nil
+		bufPool.Put(b)
+	}
 }
 
 func (rb *Ringbuffer) Len() int {
