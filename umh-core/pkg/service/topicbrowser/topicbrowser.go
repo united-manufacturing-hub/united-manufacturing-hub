@@ -193,6 +193,22 @@ func (svc *Service) GenerateConfig(tbName string) (benthossvccfg.BenthosServiceC
 	}, nil
 }
 
+// GetConfig returns the current config of the topic browser
+func (svc *Service) GetConfig(ctx context.Context, filesystemService filesystem.Service, componentName string) (benthossvccfg.BenthosServiceConfig, error) {
+	if ctx.Err() != nil {
+		return benthossvccfg.BenthosServiceConfig{}, ctx.Err()
+	}
+
+	benthosName := svc.getBenthosName()
+
+	benthosConfig, err := svc.benthosService.GetConfig(ctx, filesystemService, benthosName)
+	if err != nil {
+		return benthossvccfg.BenthosServiceConfig{}, fmt.Errorf("failed to get benthos config: %w", err)
+	}
+
+	return benthosConfig, nil
+}
+
 // Status returns information about the connection health for the specified topic browser.
 func (svc *Service) Status(
 	ctx context.Context,
