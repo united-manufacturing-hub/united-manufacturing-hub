@@ -246,16 +246,14 @@ var _ = Describe("TopicBrowserService", func() {
 				{Content: constants.BLOCK_END_MARKER, Timestamp: time.Now()},
 			}
 
-			mockBenthosService.ServiceStates[benthosName].BenthosStatus.BenthosLogs = logs
-
-			// Now configure for transition to starting -> running
+			// Now configure for transition to starting -> active
 			ConfigureBenthosManagerForState(mockBenthosService, benthosName, benthosfsm.OperationalStateActive)
 
 			// Start it
 			err = statusService.Start(ctx, mockSvcRegistry.GetFileSystem(), tbName)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Wait for the instance to reach running state
+			// Wait for the instance to reach active state
 			newTick, err = WaitForBenthosManagerInstanceState(
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick, SnapshotTime: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)},
@@ -270,6 +268,9 @@ var _ = Describe("TopicBrowserService", func() {
 
 			mockBenthosService.ServiceStates[benthosName].BenthosStatus.BenthosMetrics.Metrics.Input.Received = 10
 			mockBenthosService.ServiceStates[benthosName].BenthosStatus.BenthosMetrics.Metrics.Output.Sent = 10
+
+			logs = logs
+			mockBenthosService.ServiceStates[benthosName].BenthosStatus.BenthosLogs = append(mockBenthosService.ServiceStates[benthosName].BenthosStatus.BenthosLogs, logs...)
 
 			// Reconcile once to ensure that serviceInfo is used to update the observed state
 			_, reconciled := statusService.ReconcileManager(ctx, mockSvcRegistry, tick)
@@ -310,6 +311,7 @@ var _ = Describe("TopicBrowserService", func() {
 			Expect(status.BenthosFSMState).To(Equal(benthosfsm.OperationalStateActive))
 			Expect(status.BenthosObservedState.ServiceInfo.S6ObservedState.ServiceInfo.Status).To(Equal(s6svc.ServiceUp))
 			// check the ringbuffer if logs appear
+			Expect(status.Status.Buffer).To(HaveLen(1))
 			Expect(status.Status.Buffer[0].Timestamp.UnixMilli()).To(Equal(int64(1750091514783)))
 			Expect(status.Status.Buffer[0].Payload).To(Equal([]byte("hello world")))
 		})
