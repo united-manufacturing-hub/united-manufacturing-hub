@@ -132,9 +132,10 @@ func (svc *Service) parseBlock(entries []s6svc.LogEntry) error {
 
 // decompressionBufferPool reuses decompression buffers.
 var decompressionBufferPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		// Start with 64KB buffer, will grow as needed
-		return make([]byte, 0, 64*1024)
+		b := make([]byte, 0, 64*1024)
+		return &b
 	},
 }
 
@@ -143,8 +144,8 @@ var decompressionBufferPool = sync.Pool{
 // It expects a *raw LZ4 block* (no header) and uses the same pool /
 // grow-once strategy you already tuned for protobuf bundles.
 func decompressBlock(src []byte) ([]byte, error) {
-	buf := decompressionBufferPool.Get().([]byte)
-	defer decompressionBufferPool.Put(buf[:0])
+	bufPtr := decompressionBufferPool.Get().(*[]byte)
+	buf := *bufPtr
 
 	need := len(src) * 4
 	if cap(buf) < need {
@@ -154,14 +155,25 @@ func decompressBlock(src []byte) ([]byte, error) {
 
 	n, err := lz4.UncompressBlock(src, buf)
 	if err == lz4.ErrInvalidSourceShortBuffer {
-		// single retry with an 8× buffer
 		buf = make([]byte, len(src)*8)
 		n, err = lz4.UncompressBlock(src, buf)
 	}
 	if err != nil {
+		// put the buffer back before returning the error
+		*bufPtr = buf[:0]
+		decompressionBufferPool.Put(bufPtr)
 		return nil, err
 	}
-	return buf[:n], nil
+
+	// copy the useful bytes into a fresh slice we own
+	out := make([]byte, n)
+	copy(out, buf[:n])
+
+	// zero-len the pooled buffer and return it
+	*bufPtr = buf[:0]
+	decompressionBufferPool.Put(bufPtr)
+
+	return out, nil
 }
 
 // decompressLZ4 recognises:
