@@ -49,8 +49,8 @@ var DefaultBenthosServiceConfig = BenthosServiceConfig{
 		},
 	},
 	Pipeline: map[string]any{
-		"processors": []map[string]any{
-			{
+		"processors": []interface{}{
+			map[string]any{
 				"topic_browser": map[string]any{},
 			},
 		},

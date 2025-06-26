@@ -226,8 +226,6 @@ func (i *TopicBrowserInstance) reconcileOperationalStates(ctx context.Context, s
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".reconcileOperationalStates", time.Since(start))
 	}()
 
-	i.baseFSMInstance.GetLogger().Debugf("reconciling operational states from state %s to state %s", currentState, desiredState)
-
 	switch desiredState {
 	case OperationalStateActive:
 		return i.reconcileTransitionToActive(ctx, services, currentState, currentTime)
@@ -245,8 +243,6 @@ func (i *TopicBrowserInstance) reconcileTransitionToActive(ctx context.Context, 
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
 	}()
-
-	i.baseFSMInstance.GetLogger().Debugf("reconciling transition to active from state %s", currentState)
 
 	switch {
 	// If we're stopped, we need to start first
@@ -278,8 +274,6 @@ func (i *TopicBrowserInstance) reconcileStartingStates(ctx context.Context, serv
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".reconcileStartingStates", time.Since(start))
 	}()
 
-	i.baseFSMInstance.GetLogger().Debugf("reconciling starting states from state %s", currentState)
-
 	switch currentState {
 	case OperationalStateStarting:
 		// 2. Is Benthos already up (race-condition where the service was started
@@ -309,8 +303,6 @@ func (i *TopicBrowserInstance) reconcileRunningStates(ctx context.Context, servi
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".reconcileRunningStates", time.Since(start))
 	}()
-
-	i.baseFSMInstance.GetLogger().Debugf("reconciling running states from state %s", currentState)
 
 	switch currentState {
 	case OperationalStateActive:
