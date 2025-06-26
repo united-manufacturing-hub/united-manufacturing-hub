@@ -170,7 +170,7 @@ func (svc *Service) GetConfig(ctx context.Context, filesystemService filesystem.
 // a benthos instants that reads data from uns, processes it to get into a
 // proper protobuf format and writes it to stdout using an additional timestamp.
 func (svc *Service) GenerateConfig(tbName string) (benthossvccfg.BenthosServiceConfig, error) {
-	return benthossvccfg.DefaultBenthosServiceConfig, nil
+	return benthossvccfg.DefaultTopicBrowserBenthosServiceConfig, nil
 }
 
 // Status returns information about the connection health for the specified topic browser.

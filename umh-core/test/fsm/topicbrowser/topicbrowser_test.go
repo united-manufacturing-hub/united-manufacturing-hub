@@ -15,7 +15,7 @@
 //go:build test
 // +build test
 
-package dataflowcomponent_test
+package topicbrowser_test
 
 import (
 	"context"

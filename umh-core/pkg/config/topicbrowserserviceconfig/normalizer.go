@@ -32,7 +32,7 @@ func (n *Normalizer) NormalizeConfig(cfg Config) Config {
 	normalized := cfg
 
 	if len(normalized.BenthosConfig.Input) == 0 || len(normalized.BenthosConfig.Pipeline) == 0 || len(normalized.BenthosConfig.Output) == 0 {
-		normalized.BenthosConfig = benthossvccfg.DefaultBenthosServiceConfig
+		normalized.BenthosConfig = benthossvccfg.DefaultTopicBrowserBenthosServiceConfig
 	}
 
 	return normalized

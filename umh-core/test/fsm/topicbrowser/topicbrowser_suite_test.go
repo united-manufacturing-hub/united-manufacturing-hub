@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dataflowcomponent_test
+package topicbrowser_test
 
 import (
 	"testing"
@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestDataflowComponent(t *testing.T) {
+func TestTopicBrowser(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "DataflowComponent Test Suite")
+	RunSpecs(t, "Topicbrowser FSM Suite")
 }

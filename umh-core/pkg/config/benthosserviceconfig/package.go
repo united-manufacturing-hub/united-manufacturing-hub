@@ -37,9 +37,9 @@ type BenthosServiceConfig struct {
 	LogLevel    string `yaml:"log_level,omitempty"`
 }
 
-// DefaultBenthosServiceConfig is the default Benthos service config for the topic browser
-// It is considered immutable and MUST NOT be modified at runtime.
-var DefaultBenthosServiceConfig = BenthosServiceConfig{
+// DefaultTopicBrowserBenthosServiceConfig is the default Benthos service config for the topic browser
+// It is considered immutable and MUST NOT be modified at runtime. (However Go does not support const for complex types)
+var DefaultTopicBrowserBenthosServiceConfig = BenthosServiceConfig{
 	Input: map[string]any{
 		"uns": map[string]any{
 			"umh_topic":      "umh.v1.*",
@@ -49,6 +49,7 @@ var DefaultBenthosServiceConfig = BenthosServiceConfig{
 		},
 	},
 	Pipeline: map[string]any{
+		// We need to use []interface{} here because the extractor for the comparator requires it to function correctly
 		"processors": []interface{}{
 			map[string]any{
 				"topic_browser": map[string]any{},
