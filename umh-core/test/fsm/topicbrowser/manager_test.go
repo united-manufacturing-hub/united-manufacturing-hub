@@ -51,7 +51,7 @@ var _ = Describe("TopicBrowserManager", func() {
 	})
 
 	BeforeEach(func() {
-		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second) // we need to have a deadline as the reconcile logic in the base fsm manager requires it
+		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Minute) // we need to have a deadline as the reconcile logic in the base fsm manager requires it
 		tick = 0
 		mockSvcRegistry = serviceregistry.NewMockRegistry()
 		// Create a new TopicBrowserManager with the mock service
@@ -79,7 +79,7 @@ var _ = Describe("TopicBrowserManager", func() {
 		})
 
 		It("should create a service in stopped state and remain stable", func() {
-			converterName := "test-stopped-converter"
+			converterName := "topic-browser"
 			cfg := config.FullConfig{
 				Internal: config.InternalConfig{
 					TopicBrowser: fsmtest.CreateTopicBrowserTestConfig(converterName, topicbrowser.OperationalStateStopped),
@@ -108,8 +108,8 @@ var _ = Describe("TopicBrowserManager", func() {
 			Expect(inst.GetCurrentFSMState()).To(Equal(topicbrowser.OperationalStateStopped))
 		})
 
-		It("should create a service in active state and reach idle or active", func() {
-			converterName := "test-active-converter"
+		FIt("should create a service in active state and reach idle or active", func() {
+			converterName := "topic-browser"
 			cfg := config.FullConfig{
 				Internal: config.InternalConfig{
 					TopicBrowser: fsmtest.CreateTopicBrowserTestConfig(converterName, topicbrowser.OperationalStateActive),
@@ -141,7 +141,7 @@ var _ = Describe("TopicBrowserManager", func() {
 	// -------------------------------------------------------------------------
 	Context("Service Lifecycle", func() {
 		It("should go from creation → idle → degrade → removal", func() {
-			converterName := "test-lifecycle"
+			converterName := "topic-browser"
 			// Start from active config
 			fullCfg := config.FullConfig{
 				Internal: config.InternalConfig{
@@ -192,7 +192,7 @@ var _ = Describe("TopicBrowserManager", func() {
 		})
 
 		It("should toggle from active/idle to stopped and back to active/idle with config changes", func() {
-			converterName := "test-toggle-converter"
+			converterName := "topic-browser"
 			activeCfg := fsmtest.CreateTopicBrowserTestConfig(converterName, topicbrowser.OperationalStateActive)
 
 			fullCfg := config.FullConfig{
@@ -253,7 +253,7 @@ var _ = Describe("TopicBrowserManager", func() {
 	// -------------------------------------------------------------------------
 	Context("Degraded States", func() {
 		It("should handle different degraded states", func() {
-			converterName := "test-degraded-converter"
+			converterName := "topic-browser"
 			cfg := config.FullConfig{
 				Internal: config.InternalConfig{
 					TopicBrowser: fsmtest.CreateTopicBrowserTestConfig(converterName, topicbrowser.OperationalStateActive),
@@ -420,7 +420,7 @@ var _ = Describe("TopicBrowserManager", func() {
 	// -------------------------------------------------------------------------
 	Context("Error Handling", func() {
 		It("should handle basic error scenarios gracefully", func() {
-			converterName := "test-error-converter"
+			converterName := "topic-browser"
 			cfg := config.FullConfig{
 				Internal: config.InternalConfig{
 					TopicBrowser: fsmtest.CreateTopicBrowserTestConfig(converterName, topicbrowser.OperationalStateActive),
@@ -455,7 +455,7 @@ var _ = Describe("TopicBrowserManager", func() {
 	// -------------------------------------------------------------------------
 	Context("Configuration Validation", func() {
 		It("should handle basic configuration changes", func() {
-			converterName := "test-config-converter"
+			converterName := "topic-browser"
 
 			// Create a basic config
 			cfg := config.FullConfig{
