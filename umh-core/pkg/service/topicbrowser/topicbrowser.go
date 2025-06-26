@@ -59,8 +59,6 @@ type ITopicBrowserService interface {
 	ServiceExists(ctx context.Context, services serviceregistry.Provider, tbName string) bool
 	// ReconcileManager synchronizes all connections on each tick.
 	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
-	// GetConfig returns the current config of the topic browser
-	GetConfig(ctx context.Context, filesystemService filesystem.Service, tbName string) (benthossvccfg.BenthosServiceConfig, error)
 }
 
 type Status struct {
@@ -194,22 +192,6 @@ func (svc *Service) GenerateConfig(tbName string) (benthossvccfg.BenthosServiceC
 		},
 		LogLevel: constants.DefaultBenthosLogLevel,
 	}, nil
-}
-
-// GetConfig returns the current config of the topic browser
-func (svc *Service) GetConfig(ctx context.Context, filesystemService filesystem.Service, componentName string) (benthossvccfg.BenthosServiceConfig, error) {
-	if ctx.Err() != nil {
-		return benthossvccfg.BenthosServiceConfig{}, ctx.Err()
-	}
-
-	benthosName := svc.getBenthosName()
-
-	benthosConfig, err := svc.benthosService.GetConfig(ctx, filesystemService, benthosName)
-	if err != nil {
-		return benthossvccfg.BenthosServiceConfig{}, fmt.Errorf("failed to get benthos config: %w", err)
-	}
-
-	return benthosConfig, nil
 }
 
 // Status returns information about the connection health for the specified topic browser.
