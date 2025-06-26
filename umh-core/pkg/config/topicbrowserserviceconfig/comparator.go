@@ -29,7 +29,8 @@ type Comparator struct {
 // NewComparator creates a new configuration comparator for Topic Browser
 func NewComparator() *Comparator {
 	return &Comparator{
-		normalizer: NewNormalizer(),
+		normalizer:              NewNormalizer(),
+		benthosConfigComparator: benthosserviceconfig.NewComparator(),
 	}
 }
 
