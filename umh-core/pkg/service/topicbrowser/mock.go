@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	rpsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
 	rpmonitor "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
+	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -35,6 +36,7 @@ import (
 type MockService struct {
 	// Tracks calls to methods
 	GenerateConfigCalled    bool
+	GetConfigCalled         bool
 	StatusCalled            bool
 	AddToManagerCalled      bool
 	UpdateInManagerCalled   bool
@@ -48,6 +50,8 @@ type MockService struct {
 	// Return values for each method
 	GenerateConfigResult       benthossvccfg.BenthosServiceConfig
 	GenerateConfigError        error
+	GetConfigResult            benthossvccfg.BenthosServiceConfig
+	GetConfigError             error
 	StatusResult               ServiceInfo
 	StatusError                error
 	AddToManagerError          error
@@ -81,6 +85,7 @@ type StateFlags struct {
 	RedpandaFSMState      string
 	HasProcessingActivity bool
 	HasBenthosOutput      bool
+	BenthosLogs           []s6svc.LogEntry
 }
 
 // NewMockService creates a new mock topic browser service
@@ -112,6 +117,7 @@ func (m *MockService) SetState(tbName string, flags StateFlags) {
 						},
 					},
 				},
+				BenthosLogs: flags.BenthosLogs,
 			},
 		},
 	}
@@ -167,6 +173,19 @@ func (m *MockService) GetState(tbName string) *StateFlags {
 func (m *MockService) GenerateConfig(tbName string) (benthossvccfg.BenthosServiceConfig, error) {
 	m.GenerateConfigCalled = true
 	return m.GenerateConfigResult, m.GenerateConfigError
+}
+
+// GetConfig mocks getting the topic browser configuration
+func (m *MockService) GetConfig(ctx context.Context, filesystemService filesystem.Service, tbName string) (benthossvccfg.BenthosServiceConfig, error) {
+	m.GetConfigCalled = true
+
+	// If error is set, return it
+	if m.GetConfigError != nil {
+		return benthossvccfg.BenthosServiceConfig{}, m.GetConfigError
+	}
+
+	// If a result is preset, return it
+	return m.GetConfigResult, nil
 }
 
 // Status mocks getting the status of a topic browser

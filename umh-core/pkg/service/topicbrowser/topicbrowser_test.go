@@ -45,7 +45,6 @@ var _ = Describe("TopicBrowserService", func() {
 	var (
 		service         *Service
 		mockBenthos     *benthossvc.MockBenthosService
-		mockS6          *s6svc.MockService
 		ctx             context.Context
 		tick            uint64
 		tbName          string
@@ -60,11 +59,10 @@ var _ = Describe("TopicBrowserService", func() {
 
 		// Set up mock benthos service
 		mockBenthos = benthossvc.NewMockBenthosService()
-		mockS6 = s6svc.NewMockService()
 
 		// Set up a real service with mocked dependencies
 		service = NewDefaultService(tbName,
-			WithService(mockBenthos, mockS6))
+			WithService(mockBenthos))
 		mockSvcRegistry = serviceregistry.NewMockRegistry()
 	})
 
@@ -159,6 +157,7 @@ var _ = Describe("TopicBrowserService", func() {
 			mockBenthosService *benthossvc.MockBenthosService
 			statusService      *Service
 			benthosName        string
+			logs               []s6svc.LogEntry
 		)
 
 		BeforeEach(func() {
@@ -194,7 +193,7 @@ var _ = Describe("TopicBrowserService", func() {
 			payload := []byte("hello world")
 			hexBlock := makeLZ4Hex(payload)
 
-			mockS6.GetLogsResult = []s6svc.LogEntry{
+			logs = []s6svc.LogEntry{
 				{Content: constants.BLOCK_START_MARKER, Timestamp: time.Now()},
 				{Content: hexBlock, Timestamp: time.Now()},
 				{Content: constants.DATA_END_MARKER, Timestamp: time.Now()},
@@ -204,7 +203,7 @@ var _ = Describe("TopicBrowserService", func() {
 
 			// Create service with our official mock benthos manager
 			statusService = NewDefaultService(tbName,
-				WithService(mockBenthosService, mockS6),
+				WithService(mockBenthosService),
 				WithManager(manager))
 
 			// Add the topic browser to the service
@@ -267,6 +266,7 @@ var _ = Describe("TopicBrowserService", func() {
 			Expect(err).NotTo(HaveOccurred())
 			tick = newTick
 
+			mockBenthosService.ServiceStates[benthosName].BenthosStatus.BenthosLogs = logs
 			mockBenthosService.ServiceStates[benthosName].BenthosStatus.BenthosMetrics.Metrics.Input.Received = 10
 			mockBenthosService.ServiceStates[benthosName].BenthosStatus.BenthosMetrics.Metrics.Output.Sent = 10
 
@@ -610,7 +610,7 @@ var _ = Describe("TopicBrowserService", func() {
 
 			// Create a service with our mocked manager
 			testService := NewDefaultService("test-error-service",
-				WithService(mockBenthosService, mockS6),
+				WithService(mockBenthosService),
 				WithManager(mockManager))
 
 			// Add a test component to have something to reconcile (just like in the other test)

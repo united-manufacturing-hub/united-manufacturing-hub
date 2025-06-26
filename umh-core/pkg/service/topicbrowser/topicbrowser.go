@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -40,6 +39,8 @@ import (
 type ITopicBrowserService interface {
 	// GenerateConfig generates a topic browser config
 	GenerateConfig(tbName string) (benthossvccfg.BenthosServiceConfig, error)
+	// GetConfig returns the actual DataFlowComponent config from the Benthos service
+	GetConfig(ctx context.Context, filesystemService filesystem.Service, tbName string) (benthossvccfg.BenthosServiceConfig, error)
 	// Status returns information about the topic browser health
 	Status(ctx context.Context, services serviceregistry.Provider, tbName string, snapshot fsm.SystemSnapshot) (ServiceInfo, error)
 	// AddToManager registers a new topic browser
@@ -95,8 +96,7 @@ type ServiceInfo struct {
 
 // Service implements ITopicBrowserService
 type Service struct {
-	logger    *zap.SugaredLogger
-	s6Service s6svc.Service
+	logger *zap.SugaredLogger
 
 	benthosManager *benthosfsm.BenthosManager
 	benthosService benthossvc.IBenthosService
@@ -109,10 +109,9 @@ type Service struct {
 // ServiceOption is a function that configures a Service.
 type ServiceOption func(*Service)
 
-func WithService(benthossvc benthossvc.IBenthosService, s6svc s6svc.Service) ServiceOption {
+func WithService(svc benthossvc.IBenthosService) ServiceOption {
 	return func(s *Service) {
-		s.benthosService = benthossvc
-		s.s6Service = s6svc
+		s.benthosService = svc
 	}
 }
 
@@ -128,7 +127,6 @@ func NewDefaultService(tbName string, opts ...ServiceOption) *Service {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentTopicBrowserService, tbName)
 	service := &Service{
 		logger:         logger.For(managerName),
-		s6Service:      s6svc.NewDefaultService(),
 		benthosManager: benthosfsm.NewBenthosManager(managerName),
 		benthosService: benthossvc.NewDefaultBenthosService(tbName),
 		benthosConfigs: []config.BenthosConfig{},
@@ -149,8 +147,23 @@ func (svc *Service) getName(tbName string) string {
 	return fmt.Sprintf("topicbrowser-%s", tbName)
 }
 
-func (svc *Service) getBenthosName() string {
-	return fmt.Sprintf("benthos-topicbrowser-%s", svc.tbName)
+// GetConfig returns the actual Benthos config from the Benthos service
+// Expects benthosName (e.g. "topicbrowser-myservice") as defined in the UMH config
+func (svc *Service) GetConfig(ctx context.Context, filesystemService filesystem.Service, tbName string) (benthossvccfg.BenthosServiceConfig, error) {
+	if ctx.Err() != nil {
+		return benthossvccfg.BenthosServiceConfig{}, ctx.Err()
+	}
+
+	benthosName := svc.getName(tbName)
+
+	// Get the Benthos config
+	benthosCfg, err := svc.benthosService.GetConfig(ctx, filesystemService, benthosName)
+	if err != nil {
+		return benthossvccfg.BenthosServiceConfig{}, fmt.Errorf("failed to get benthos config: %w", err)
+	}
+
+	// Convert Benthos config to Topic Browser config
+	return benthosCfg, nil
 }
 
 // GenerateConfig provides a fixed benthosserviceconfig to ensure deploying
@@ -246,11 +259,7 @@ func (svc *Service) Status(
 	redpandaFSMState := rpInst.CurrentState
 
 	// Get logs
-	s6ServicePath := filepath.Join(constants.S6BaseDir, svc.getBenthosName())
-	logs, err := svc.s6Service.GetLogs(ctx, s6ServicePath, services.GetFileSystem())
-	if err != nil {
-		return ServiceInfo{}, fmt.Errorf("failed to get logs: %w", err)
-	}
+	logs := benthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
 
 	if len(logs) == 0 {
 		return ServiceInfo{}, ErrServiceNoLogFile
