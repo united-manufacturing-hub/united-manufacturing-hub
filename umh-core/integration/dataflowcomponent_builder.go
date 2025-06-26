@@ -44,6 +44,12 @@ func NewDataFlowComponentBuilder() *DataFlowComponentBuilder {
 						DesiredFSMState: "stopped",
 					},
 				},
+				TopicBrowser: config.TopicBrowserConfig{
+					FSMInstanceConfig: config.FSMInstanceConfig{
+						Name:            "topic-browser",
+						DesiredFSMState: "stopped",
+					},
+				},
 			},
 		},
 		activeComponents: make(map[string]bool),
