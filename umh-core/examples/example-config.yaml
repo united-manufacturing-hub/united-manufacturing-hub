@@ -20,7 +20,7 @@ internal:
   redpanda:
     desiredState: stopped
   topicbrowser:
-    desiredState: active
+    desiredState: stopped
   services:
     - name: hello-world
       desiredState: running
