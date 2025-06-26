@@ -1,0 +1,3 @@
+# Ignore gqlgen auto-generated resolver file
+# We manage resolvers manually in resolver.go and resolver_impl.go
+schema.resolvers.go 
