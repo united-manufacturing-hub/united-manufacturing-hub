@@ -56,10 +56,17 @@ func SetupTopicBrowserServiceState(
 		mockService.States[serviceName] = &topicbrowsersvc.ServiceInfo{}
 	}
 
-	// Set the Benthos FSM state
+	// Set the FSM states
 	if flags.BenthosFSMState != "" {
 		mockService.States[serviceName].BenthosFSMState = flags.BenthosFSMState
 	}
+	if flags.RedpandaFSMState != "" {
+		mockService.States[serviceName].RedpandaFSMState = flags.RedpandaFSMState
+	}
+
+	// Set the processing activity flags that hasDataActivity() checks
+	mockService.States[serviceName].BenthosProcessing = flags.HasProcessingActivity && flags.HasBenthosOutput
+	mockService.States[serviceName].RedpandaProcessing = flags.HasProcessingActivity
 
 	// Store the service state flags directly
 	mockService.SetState(serviceName, flags)
@@ -84,7 +91,28 @@ func TransitionToTopicBrowserState(mockService *topicbrowsersvc.MockService, ser
 	case topicbrowserfsm.OperationalStateStarting:
 		SetupTopicBrowserServiceState(mockService, serviceName, topicbrowsersvc.StateFlags{
 			BenthosFSMState:       benthosfsmtype.OperationalStateStarting,
+			RedpandaFSMState:      redpandafsm.OperationalStateStopped,
+			HasProcessingActivity: false,
+			HasBenthosOutput:      false,
+		})
+	case topicbrowserfsm.OperationalStateStartingBenthos:
+		SetupTopicBrowserServiceState(mockService, serviceName, topicbrowsersvc.StateFlags{
+			BenthosFSMState:       benthosfsmtype.OperationalStateActive,
 			RedpandaFSMState:      redpandafsm.OperationalStateStarting,
+			HasProcessingActivity: false,
+			HasBenthosOutput:      false,
+		})
+	case topicbrowserfsm.OperationalStateStartingRedpanda:
+		SetupTopicBrowserServiceState(mockService, serviceName, topicbrowsersvc.StateFlags{
+			BenthosFSMState:       benthosfsmtype.OperationalStateActive,
+			RedpandaFSMState:      redpandafsm.OperationalStateActive,
+			HasProcessingActivity: false,
+			HasBenthosOutput:      false,
+		})
+	case topicbrowserfsm.OperationalStateIdle:
+		SetupTopicBrowserServiceState(mockService, serviceName, topicbrowsersvc.StateFlags{
+			BenthosFSMState:       benthosfsmtype.OperationalStateActive,
+			RedpandaFSMState:      redpandafsm.OperationalStateActive,
 			HasProcessingActivity: false,
 			HasBenthosOutput:      false,
 		})
@@ -95,10 +123,17 @@ func TransitionToTopicBrowserState(mockService *topicbrowsersvc.MockService, ser
 			HasProcessingActivity: true,
 			HasBenthosOutput:      true,
 		})
-	case topicbrowserfsm.OperationalStateDegraded:
+	case topicbrowserfsm.OperationalStateDegradedBenthos:
 		SetupTopicBrowserServiceState(mockService, serviceName, topicbrowsersvc.StateFlags{
 			BenthosFSMState:       benthosfsmtype.OperationalStateDegraded,
 			RedpandaFSMState:      redpandafsm.OperationalStateActive,
+			HasProcessingActivity: false,
+			HasBenthosOutput:      false,
+		})
+	case topicbrowserfsm.OperationalStateDegradedRedpanda:
+		SetupTopicBrowserServiceState(mockService, serviceName, topicbrowsersvc.StateFlags{
+			BenthosFSMState:       benthosfsmtype.OperationalStateActive,
+			RedpandaFSMState:      redpandafsm.OperationalStateDegraded,
 			HasProcessingActivity: false,
 			HasBenthosOutput:      false,
 		})

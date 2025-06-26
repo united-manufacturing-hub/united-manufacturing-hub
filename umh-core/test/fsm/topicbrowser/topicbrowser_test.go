@@ -25,7 +25,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	pkgfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	topicbrowser "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	topicbrowsersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/topicbrowser"
@@ -73,7 +72,7 @@ var _ = Describe("TopicBrowser FSM", func() {
 			tick, err = fsmtest.TestTopicBrowserStateTransition(
 				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateCreating,
-				dataflowcomponent.OperationalStateStopped, 5, tick)
+				topicbrowser.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.AddToManagerCalled).To(BeTrue())
 
@@ -107,7 +106,7 @@ var _ = Describe("TopicBrowser FSM", func() {
 			tick, err = fsmtest.TestTopicBrowserStateTransition(
 				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateCreating,
-				dataflowcomponent.OperationalStateStopped, 5, tick)
+				topicbrowser.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.AddToManagerCalled).To(BeTrue())
 
@@ -161,7 +160,7 @@ var _ = Describe("TopicBrowser FSM", func() {
 			tick, err = fsmtest.TestTopicBrowserStateTransition(
 				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateCreating,
-				dataflowcomponent.OperationalStateStopped, 5, tick)
+				topicbrowser.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.AddToManagerCalled).To(BeTrue())
 
@@ -189,7 +188,7 @@ var _ = Describe("TopicBrowser FSM", func() {
 			)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Execute transition: Active -> Degraded
+			// Execute transition: Active -> DegradedBenthos
 			tick, err = fsmtest.TestTopicBrowserStateTransition(
 				ctx,
 				instance,
@@ -197,20 +196,20 @@ var _ = Describe("TopicBrowser FSM", func() {
 				mockSvcRegistry,
 				componentName,
 				topicbrowser.OperationalStateActive,
-				topicbrowser.OperationalStateDegraded,
+				topicbrowser.OperationalStateDegradedBenthos,
 				5,
 				tick,
 			)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Execute transition: Active -> Idle
+			// Execute transition: DegradedBenthos -> Active
 			tick, err = fsmtest.TestTopicBrowserStateTransition(
 				ctx,
 				instance,
 				mockService,
 				mockSvcRegistry,
 				componentName,
-				topicbrowser.OperationalStateDegraded,
+				topicbrowser.OperationalStateDegradedBenthos,
 				topicbrowser.OperationalStateActive,
 				5,
 				tick,
@@ -235,7 +234,7 @@ var _ = Describe("TopicBrowser FSM", func() {
 			tick, err = fsmtest.TestTopicBrowserStateTransition(
 				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateCreating,
-				dataflowcomponent.OperationalStateStopped, 5, tick)
+				topicbrowser.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.AddToManagerCalled).To(BeTrue())
 
@@ -312,7 +311,7 @@ var _ = Describe("TopicBrowser FSM", func() {
 			tick, err = fsmtest.TestTopicBrowserStateTransition(
 				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateCreating,
-				dataflowcomponent.OperationalStateStopped, 5, tick)
+				topicbrowser.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.AddToManagerCalled).To(BeTrue())
 
@@ -340,7 +339,7 @@ var _ = Describe("TopicBrowser FSM", func() {
 			)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Execute transition: Active -> Degraded
+			// Execute transition: Active -> DegradedBenthos
 			tick, err = fsmtest.TestTopicBrowserStateTransition(
 				ctx,
 				instance,
@@ -348,7 +347,21 @@ var _ = Describe("TopicBrowser FSM", func() {
 				mockSvcRegistry,
 				componentName,
 				topicbrowser.OperationalStateActive,
-				topicbrowser.OperationalStateDegraded,
+				topicbrowser.OperationalStateDegradedBenthos,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Execute transition: DegradedBenthos -> Active
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx,
+				instance,
+				mockService,
+				mockSvcRegistry,
+				componentName,
+				topicbrowser.OperationalStateDegradedBenthos,
+				topicbrowser.OperationalStateActive,
 				5,
 				tick,
 			)
@@ -357,14 +370,14 @@ var _ = Describe("TopicBrowser FSM", func() {
 			// 3. Now set desired state to Stopped
 			Expect(instance.SetDesiredFSMState(topicbrowser.OperationalStateStopped)).To(Succeed())
 
-			// Execute transition: Degraded -> Stopping
+			// Execute transition: DegradedBenthos -> Stopping
 			tick, err = fsmtest.TestTopicBrowserStateTransition(
 				ctx,
 				instance,
 				mockService,
 				mockSvcRegistry,
 				componentName,
-				topicbrowser.OperationalStateDegraded,
+				topicbrowser.OperationalStateDegradedBenthos,
 				topicbrowser.OperationalStateStopping,
 				5,
 				tick,
@@ -407,7 +420,7 @@ var _ = Describe("TopicBrowser FSM", func() {
 			tick, err = fsmtest.TestTopicBrowserStateTransition(
 				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateCreating,
-				dataflowcomponent.OperationalStateStopped, 5, tick)
+				topicbrowser.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.AddToManagerCalled).To(BeTrue())
 
@@ -482,7 +495,7 @@ var _ = Describe("TopicBrowser FSM", func() {
 			tick, err = fsmtest.TestTopicBrowserStateTransition(
 				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateCreating,
-				dataflowcomponent.OperationalStateStopped, 5, tick)
+				topicbrowser.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.AddToManagerCalled).To(BeTrue())
 
@@ -533,23 +546,23 @@ var _ = Describe("TopicBrowser FSM", func() {
 			)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Execute transition: Active -> Degraded
+			// Execute transition: Active -> DegradedBenthos
 			fsmtest.TransitionToTopicBrowserState(mockService, componentName,
-				topicbrowser.OperationalStateDegraded)
+				topicbrowser.OperationalStateDegradedBenthos)
 
 			tick, err = fsmtest.TestTopicBrowserStateTransition(
 				ctx, instance, mockService, mockSvcRegistry, componentName,
 				topicbrowser.OperationalStateActive,
-				topicbrowser.OperationalStateDegraded,
+				topicbrowser.OperationalStateDegradedBenthos,
 				5, tick)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Can now get Active again
 
-			// Execute transition: Degraded -> Active
+			// Execute transition: DegradedBenthos -> Active
 			tick, err = fsmtest.TestTopicBrowserStateTransition(
 				ctx, instance, mockService, mockSvcRegistry, componentName,
-				topicbrowser.OperationalStateDegraded,
+				topicbrowser.OperationalStateDegradedBenthos,
 				topicbrowser.OperationalStateActive,
 				5, tick)
 			Expect(err).NotTo(HaveOccurred())
@@ -568,7 +581,7 @@ var _ = Describe("TopicBrowser FSM", func() {
 			tick, err = fsmtest.TestTopicBrowserStateTransition(
 				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateCreating,
-				dataflowcomponent.OperationalStateStopped, 5, tick)
+				topicbrowser.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.AddToManagerCalled).To(BeTrue())
 

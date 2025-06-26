@@ -28,6 +28,18 @@ func (instance *TopicBrowserInstance) registerCallbacks() {
 		instance.baseFSMInstance.GetLogger().Infof("Entering starting state for %s", instance.baseFSMInstance.GetID())
 	})
 
+	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStartingBenthos, func(ctx context.Context, e *fsm.Event) {
+		instance.baseFSMInstance.GetLogger().Infof("Entering starting benthos state for %s", instance.baseFSMInstance.GetID())
+	})
+
+	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStartingRedpanda, func(ctx context.Context, e *fsm.Event) {
+		instance.baseFSMInstance.GetLogger().Infof("Entering starting redpanda state for %s", instance.baseFSMInstance.GetID())
+	})
+
+	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateIdle, func(ctx context.Context, e *fsm.Event) {
+		instance.baseFSMInstance.GetLogger().Infof("Entering idle state for %s", instance.baseFSMInstance.GetID())
+	})
+
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStopping, func(ctx context.Context, e *fsm.Event) {
 		instance.baseFSMInstance.GetLogger().Infof("Entering stopping state for %s", instance.baseFSMInstance.GetID())
 	})
@@ -41,7 +53,11 @@ func (instance *TopicBrowserInstance) registerCallbacks() {
 		instance.baseFSMInstance.GetLogger().Infof("Entering active state for %s", instance.baseFSMInstance.GetID())
 	})
 
-	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateDegraded, func(ctx context.Context, e *fsm.Event) {
-		instance.baseFSMInstance.GetLogger().Warnf("Entering degraded state for %s", instance.baseFSMInstance.GetID())
+	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateDegradedBenthos, func(ctx context.Context, e *fsm.Event) {
+		instance.baseFSMInstance.GetLogger().Warnf("Entering degraded benthos state for %s", instance.baseFSMInstance.GetID())
+	})
+
+	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateDegradedRedpanda, func(ctx context.Context, e *fsm.Event) {
+		instance.baseFSMInstance.GetLogger().Warnf("Entering degraded redpanda state for %s", instance.baseFSMInstance.GetID())
 	})
 }
