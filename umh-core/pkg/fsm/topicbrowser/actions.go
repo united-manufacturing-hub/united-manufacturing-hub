@@ -206,14 +206,14 @@ func (i *TopicBrowserInstance) UpdateObservedStateOfInstance(ctx context.Context
 			i.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
 			return nil
 		} else {
-			return fmt.Errorf("failed to get observed DataflowComponent config: %w", err)
+			return fmt.Errorf("failed to get observed TopicBrowser config: %w", err)
 		}
 	}
 
 	if !topicbrowserserviceconfig.ConfigsEqual(i.config, i.ObservedState.ObservedServiceConfig) {
 		// Check if the service exists before attempting to update
 		if i.service.ServiceExists(ctx, services, i.baseFSMInstance.GetID()) {
-			i.baseFSMInstance.GetLogger().Debugf("Observed DataflowComponent config is different from desired config, updating Benthos configuration")
+			i.baseFSMInstance.GetLogger().Debugf("Observed TopicBrowser config is different from desired config, updating Benthos configuration")
 
 			diffStr := topicbrowserserviceconfig.ConfigDiff(i.config, i.ObservedState.ObservedServiceConfig)
 			i.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
@@ -221,7 +221,7 @@ func (i *TopicBrowserInstance) UpdateObservedStateOfInstance(ctx context.Context
 			// Update the config in the Benthos manager
 			err := i.service.UpdateInManager(ctx, services.GetFileSystem(), &i.ObservedState.ObservedServiceConfig.BenthosConfig, i.baseFSMInstance.GetID())
 			if err != nil {
-				return fmt.Errorf("failed to update DataflowComponent service configuration: %w", err)
+				return fmt.Errorf("failed to update TopicBrowser service configuration: %w", err)
 			}
 		} else {
 			i.baseFSMInstance.GetLogger().Debugf("Config differences detected but service does not exist yet, skipping update")

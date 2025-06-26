@@ -32,7 +32,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 )
 
-// Reconcile examines the ConnectionInstance and, in three steps:
+// Reconcile examines the TopicBrowserInstance and, in three steps:
 //  1. Check if a previous transition failed or if fetching external state failed; if so, verify whether the backoff has elapsed.
 //  2. Detect any external changes (e.g., a new configuration or external signals).
 //  3. Attempt the required state transition by sending the appropriate event.
@@ -103,7 +103,7 @@ func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.Syste
 			// s6 service not found in the path since TopicBrowser fsm is relying on BenthosFSM and Benthos in turn relies on S6 fsm
 			// Inorder for TopicBrowser fsm to start, benthosManager.Reconcile should be called and this is called at the end of the function
 			// So set the err to nil in this case
-			// An example error: "failed to update observed state: failed to get observed DataflowComponent config: failed to get benthos config: failed to get benthos config file for service benthos-dataflow-hello-world-dfc: service does not exist"
+			// An example error: "failed to update observed state: failed to get observed TopicBrowser config: failed to get benthos config: failed to get benthos config file for service benthos-topic-browser: service does not exist"
 
 			i.baseFSMInstance.SetError(err, snapshot.Tick)
 			i.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
@@ -144,8 +144,8 @@ func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.Syste
 		return nil, false
 	}
 
-	// If either Connection state or Nmap state was reconciled, we return reconciled so that nothing happens anymore in this tick
-	// nothing should happen as we might have already taken up some significant time of the avaialble time per tick, so better
+	// If the Topic Browser manager was reconciled, we return reconciled so that nothing happens anymore in this tick
+	// nothing should happen as we might have already taken up some significant time of the available time per tick, so better
 	// to be on the safe side and let the rest handle in another tick
 	reconciled = reconciled || managerReconciled
 
@@ -155,7 +155,7 @@ func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.Syste
 	return nil, reconciled
 }
 
-// reconcileExternalChanges checks if the ConnectionInstance service status has changed
+// reconcileExternalChanges checks if the TopicBrowserInstance service status has changed
 // externally (e.g., if someone manually stopped or started it, or if it crashed)
 func (i *TopicBrowserInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	start := time.Now()
