@@ -83,11 +83,12 @@ func (s *Server) Start(ctx context.Context) error {
 	srv := handler.New(schema)
 
 	// Add transports (replaces functionality from deprecated NewDefaultServer)
-	srv.AddTransport(&transport.Websocket{})
-	srv.AddTransport(&transport.Options{})
+	// GET: Useful for simple queries and introspection
 	srv.AddTransport(&transport.GET{})
+	// POST: Standard for GraphQL mutations/queries
 	srv.AddTransport(&transport.POST{})
-	srv.AddTransport(&transport.MultipartForm{})
+	// OPTIONS: Required for CORS preflight requests
+	srv.AddTransport(&transport.Options{})
 
 	// Add error handling and recovery
 	srv.SetRecoverFunc(func(ctx context.Context, err interface{}) error {
