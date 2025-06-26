@@ -121,6 +121,11 @@ func LoadConfigWithEnvOverrides(ctx context.Context, configManager *FileConfigMa
 					},
 				},
 			},
+			TopicBrowser: TopicBrowserConfig{
+				FSMInstanceConfig: FSMInstanceConfig{
+					DesiredFSMState: "active",
+				},
+			},
 		},
 	}
 
