@@ -544,7 +544,7 @@ test-benthos-monitor: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 # - Single:     { topic(topic: "uns.topic1") { topic } }
 #
 # TROUBLESHOOTING:
-# - If GraphQL server doesn't start, check logs: docker logs umh-core
+# - If GraphQL server doesn't start, check internal logs: /data/logs/umh-core/current
 # - Look for "Starting GraphQL server on port 8090" in logs
 # - Ensure ports 8090 and 8081 are not in use
 # - Container must have config.yaml with graphql.enabled=true
