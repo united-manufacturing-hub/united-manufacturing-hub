@@ -9,6 +9,7 @@ agent:
             - '*'
         debug: true
     releaseChannel: stable
+    simulator: true
     location:
         0: acme
         1: cologne

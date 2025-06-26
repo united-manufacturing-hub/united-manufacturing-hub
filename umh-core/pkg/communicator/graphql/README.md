@@ -29,7 +29,7 @@ graphQLServer, err := graphql.StartGraphQLServer(resolver, cfg.GraphQL, logger)
 ```go
 type GraphQLConfig struct {
     Enabled     bool     `yaml:"enabled" default:"false"`
-    Port        int      `yaml:"port" default:"8080"`
+    Port        int      `yaml:"port" default:"8090"`
     Debug       bool     `yaml:"debug" default:"false"`
     CORSOrigins []string `yaml:"corsOrigins" default:"[]"`
 }
@@ -108,14 +108,14 @@ input MetaExpr {
 
 ```bash
 # Query topics
-curl -X POST http://localhost:8080/graphql \
+curl -X POST http://localhost:8090/graphql \
   -H "Content-Type: application/json" \
   -d '{
     "query": "{ topics(limit: 5) { topic metadata { key value } } }"
   }'
 
 # Filter by text
-curl -X POST http://localhost:8080/graphql \
+curl -X POST http://localhost:8090/graphql \
   -H "Content-Type: application/json" \
   -d '{
     "query": "{ topics(filter: { text: \"temperature\" }) { topic } }"
@@ -124,7 +124,7 @@ curl -X POST http://localhost:8080/graphql \
 
 ### Using GraphiQL Playground
 
-When debug mode is enabled, visit `http://localhost:8080/` for the interactive GraphiQL playground.
+When debug mode is enabled, visit `http://localhost:8090/` for the interactive GraphiQL playground.
 
 ## Development & Testing
 

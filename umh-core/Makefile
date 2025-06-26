@@ -525,10 +525,11 @@ test-benthos-monitor: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 #
 # FEATURES:
 # - GraphQL server on port 8090 with Gin framework
-# - Real-time UNS topics from built-in simulator (updates every second)
+# - Real-time UNS topics from built-in simulator (enabled by default in example)
 # - GraphiQL Playground for interactive querying
 # - CORS enabled for web development
 # - No external dependencies required
+# - To disable simulator: set agent.simulator=false in config.yaml
 #
 # ENDPOINTS:
 # - http://localhost:8090/graphql    - GraphQL API endpoint
@@ -545,7 +546,8 @@ test-benthos-monitor: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 # - If GraphQL server doesn't start, check logs: docker logs umh-core
 # - Ensure ports 8090 and 8081 are not in use
 # - Container must have config.yaml with graphql.enabled=true
-# - Simulator data appears in logs with topic updates every second
+# - Example config has simulator=true for immediate demo data
+# - Set agent.simulator=false to disable simulator in production
 #
 # TECHNICAL NOTES:
 # - Built-in simulator generates realistic UNS topics with proper structure
@@ -556,32 +558,6 @@ test-benthos-monitor: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 test-graphql: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-graphql.yaml $(PWD)/data/config.yaml
-	@echo "=========================================="
-	@echo "🚀 Starting UMH Core with GraphQL API..."
-	@echo "=========================================="
-	@echo ""
-	@echo "📡 ENDPOINTS:"
-	@echo "   GraphQL API:        http://localhost:8090/graphql"
-	@echo "   GraphiQL Playground: http://localhost:8090/"
-	@echo "   Metrics:            http://localhost:8081/metrics"
-	@echo ""
-	@echo "🔧 FEATURES:"
-	@echo "   • Real-time UNS topics from built-in simulator"
-	@echo "   • Interactive GraphiQL Playground"
-	@echo "   • Topic filtering and pagination" 
-	@echo "   • Data updates every second automatically"
-	@echo ""
-	@echo "📋 SAMPLE QUERIES:"
-	@echo '   { topics { topic metadata { key value } } }'
-	@echo '   { topics(filter: {text: "topic1"}) { topic } }'
-	@echo '   { topics(limit: 3) { topic } }'
-	@echo ""
-	@echo "🐛 TROUBLESHOOTING:"
-	@echo "   • Check logs: docker logs umh-core"
-	@echo "   • Verify ports 8090/8081 are free"
-	@echo "   • Look for: 'Starting GraphQL server on port 8090'"
-	@echo ""
-	@echo "⏳ Starting container..."
 	docker run \
 		--name $(IMAGE_NAME) \
 		-v $(PWD)/data:/data \
