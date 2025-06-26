@@ -130,48 +130,6 @@ func (svc *Service) parseBlock(entries []s6svc.LogEntry) error {
 	return nil
 }
 
-// decompressLZ4 handles the three possible wire formats described above.
-//func decompressLZ4(compressed []byte) ([]byte, error) {
-//	// ----------------------------------------------------- frame ---------- //
-//	if bytes.HasPrefix(compressed, lz4FrameMagic) {
-//		r := lz4.NewReader(bytes.NewReader(compressed))
-//		b, err := io.ReadAll(r)
-//		if err != nil {
-//			return nil, fmt.Errorf("lz4 frame decompress: %w", err)
-//		}
-//		return b, nil
-//	}
-//
-//	// ------------------------------------------------- prefixed block ----- //
-//	if len(compressed) >= 4 {
-//		origLen := int(binary.LittleEndian.Uint32(compressed[:4]))
-//		if 0 < origLen && origLen <= 64<<20 /* 64 MiB sanity cap */ {
-//			dst := make([]byte, origLen)
-//			if n, err := lz4.UncompressBlock(compressed[4:], dst); err == nil && n == origLen {
-//				return dst, nil
-//			}
-//		}
-//	}
-//
-//	// We don’t know the original size.  Start with 4×compressed len (min 64 KiB)
-//	// and keep doubling until it succeeds or we hit the 64 MiB cap.
-//	const max = 64 << 20 // absolute upper bound for one message
-//	size := len(compressed)*4 + 64*1024
-//	for size <= max {
-//		dst := make([]byte, size)
-//		n, err := lz4.UncompressBlock(compressed, dst)
-//		switch {
-//		case err == nil:
-//			return dst[:n], nil
-//		case errors.Is(err, lz4.ErrInvalidSourceShortBuffer):
-//			size *= 2 // buffer too small; try again
-//		default:
-//			return nil, fmt.Errorf("lz4 legacy block decompress: %w", err)
-//		}
-//	}
-//	return nil, errors.New("lz4 legacy block decompress: size unknown (missing length prefix?)")
-//}
-
 // decompressionBufferPool reuses decompression buffers.
 var decompressionBufferPool = sync.Pool{
 	New: func() interface{} {
