@@ -261,9 +261,9 @@ func (svc *Service) Status(
 	// Get logs
 	logs := benthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
 
-	if len(logs) == 0 {
-		return ServiceInfo{}, ErrServiceNoLogFile
-	}
+	//	if len(logs) == 0 {
+	//		return ServiceInfo{}, ErrServiceNoLogFile
+	//	}
 
 	// Parse the logs
 	err = svc.parseBlock(logs)

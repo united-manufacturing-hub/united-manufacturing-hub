@@ -28,7 +28,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	rpsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
 	rpmonitor "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -85,7 +84,6 @@ type StateFlags struct {
 	RedpandaFSMState      string
 	HasProcessingActivity bool
 	HasBenthosOutput      bool
-	BenthosLogs           []s6svc.LogEntry
 }
 
 // NewMockService creates a new mock topic browser service
@@ -117,7 +115,6 @@ func (m *MockService) SetState(tbName string, flags StateFlags) {
 						},
 					},
 				},
-				BenthosLogs: flags.BenthosLogs,
 			},
 		},
 	}
