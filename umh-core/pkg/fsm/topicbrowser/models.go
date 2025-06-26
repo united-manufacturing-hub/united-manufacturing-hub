@@ -29,12 +29,20 @@ const (
 	// Starting phase states
 	// OperationalStateStarting is the state when s6 is starting the service
 	OperationalStateStarting = "starting"
+	// OperationalStateStartingBenthos is the state when s6 is starting benthos
+	OperationalStateStartingBenthos = "starting_benthos"
+	// OperationalStateStartingRedpanda is the state when s6 is starting redpanda
+	OperationalStateStartingRedpanda = "starting_redpanda"
 
 	// Running phase states
+	// OperationalStateIdle is the state when the service is running but not actively processing data
+	OperationalStateIdle = "idle"
 	// OperationalStateActive is the state when the service is running and actively processing data
 	OperationalStateActive = "active"
-	// OperationalStateDegraded is the state when the service is running but has encountered issues
-	OperationalStateDegraded = "degraded"
+	// OperationalStateDegradedBenthos is the state when the service is running but benthos has encountered issues
+	OperationalStateDegradedBenthos = "degraded_benthos"
+	// OperationalStateDegradedRedpanda is the state when the service is running but redpanda has encountered issues
+	OperationalStateDegradedRedpanda = "degraded_redpanda"
 
 	// OperationalStateStopping is the state when the service is in the process of stopping
 	OperationalStateStopping = "stopping"
@@ -48,9 +56,16 @@ const (
 	EventStop      = "stop"
 	EventStopDone  = "stop_done"
 
+	// Starting phase events
+	EventBenthosStarted  = "benthos_started"
+	EventRedpandaStarted = "redpanda_started"
+
 	// Running phase events
-	EventDegraded  = "degraded"
-	EventRecovered = "recovered"
+	EventDataReceived     = "data_received"
+	EventNoDataTimeout    = "no_data_timeout"
+	EventBenthosDegraded  = "benthos_degraded"
+	EventRedpandaDegraded = "redpanda_degraded"
+	EventRecovered        = "recovered"
 )
 
 // IsOperationalState returns whether the given state is a valid operational state
@@ -58,8 +73,12 @@ func IsOperationalState(state string) bool {
 	switch state {
 	case OperationalStateStopped,
 		OperationalStateStarting,
+		OperationalStateStartingBenthos,
+		OperationalStateStartingRedpanda,
+		OperationalStateIdle,
 		OperationalStateActive,
-		OperationalStateDegraded,
+		OperationalStateDegradedBenthos,
+		OperationalStateDegradedRedpanda,
 		OperationalStateStopping:
 		return true
 	}
@@ -69,7 +88,9 @@ func IsOperationalState(state string) bool {
 // IsStartingState returns whether the given state is a starting state
 func IsStartingState(state string) bool {
 	switch state {
-	case OperationalStateStarting:
+	case OperationalStateStarting,
+		OperationalStateStartingBenthos,
+		OperationalStateStartingRedpanda:
 		return true
 	}
 	return false
@@ -78,8 +99,10 @@ func IsStartingState(state string) bool {
 // IsRunningState returns whether the given state is a running state
 func IsRunningState(state string) bool {
 	switch state {
-	case OperationalStateActive,
-		OperationalStateDegraded:
+	case OperationalStateIdle,
+		OperationalStateActive,
+		OperationalStateDegradedBenthos,
+		OperationalStateDegradedRedpanda:
 		return true
 	}
 	return false

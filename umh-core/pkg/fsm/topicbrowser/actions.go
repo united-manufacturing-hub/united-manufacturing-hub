@@ -300,3 +300,37 @@ func (i *TopicBrowserInstance) shouldRecoverFromDegraded() bool {
 	degraded, _ := i.IsTopicBrowserDegraded()
 	return !degraded
 }
+
+// isBenthosRunning checks if the Benthos service is running
+func (i *TopicBrowserInstance) isBenthosRunning() bool {
+	switch i.ObservedState.ServiceInfo.BenthosFSMState {
+	case benthosfsm.OperationalStateActive, benthosfsm.OperationalStateIdle:
+		return true
+	}
+	return false
+}
+
+// isRedpandaRunning checks if the Redpanda service is running
+func (i *TopicBrowserInstance) isRedpandaRunning() bool {
+	switch i.ObservedState.ServiceInfo.RedpandaFSMState {
+	case rpfsm.OperationalStateActive, rpfsm.OperationalStateIdle:
+		return true
+	}
+	return false
+}
+
+// getRedpandaStatusReason returns the status reason for Redpanda
+func (i *TopicBrowserInstance) getRedpandaStatusReason() string {
+	// Since RedpandaStatus doesn't have a StatusReason field, we can use the FSM state
+	return string(i.ObservedState.ServiceInfo.RedpandaFSMState)
+}
+
+// shouldTransitionToIdle determines if the service should transition to idle state
+func (i *TopicBrowserInstance) shouldTransitionToIdle() bool {
+	return !i.hasDataActivity()
+}
+
+// hasDataActivity checks if there's ongoing data activity
+func (i *TopicBrowserInstance) hasDataActivity() bool {
+	return i.ObservedState.ServiceInfo.BenthosProcessing && i.ObservedState.ServiceInfo.RedpandaProcessing
+}

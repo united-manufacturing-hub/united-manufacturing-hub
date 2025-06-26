@@ -276,12 +276,10 @@ func (i *TopicBrowserInstance) reconcileStartingStates(ctx context.Context, serv
 
 	switch currentState {
 	case OperationalStateStarting:
-		// 2. Is Benthos already up (race-condition where the service was started
-		//    outside the FSM or recovered very quickly)?
-		//    ──► yes:  mark start successful (StartDone) and proceed.
-		if i.isTopicBrowserBenthosRunning() {
-			i.ObservedState.ServiceInfo.StatusReason = "started up"
-			return i.baseFSMInstance.SendEvent(ctx, EventStartDone), true
+		// Check if Benthos is healthy
+		if i.isBenthosRunning() {
+			i.ObservedState.ServiceInfo.StatusReason = "benthos started"
+			return i.baseFSMInstance.SendEvent(ctx, EventBenthosStarted), true
 		}
 
 		benthosStatusReason := i.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.StatusReason
@@ -289,9 +287,34 @@ func (i *TopicBrowserInstance) reconcileStartingStates(ctx context.Context, serv
 			benthosStatusReason = "not existing"
 		}
 
-		// 4. Otherwise remain in OperationalStateStarting and try again on next tick.
-		i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting - waiting for benthos to be up: %s", benthosStatusReason)
+		i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting - waiting for benthos: %s", benthosStatusReason)
 		return nil, false
+
+	case OperationalStateStartingBenthos:
+		// Check if Redpanda is healthy
+		if i.isRedpandaRunning() {
+			i.ObservedState.ServiceInfo.StatusReason = "redpanda started"
+			return i.baseFSMInstance.SendEvent(ctx, EventRedpandaStarted), true
+		}
+
+		redpandaStatusReason := i.getRedpandaStatusReason()
+		if redpandaStatusReason == "" {
+			redpandaStatusReason = "not existing"
+		}
+
+		i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting - waiting for redpanda: %s", redpandaStatusReason)
+		return nil, false
+
+	case OperationalStateStartingRedpanda:
+		// Both services are up, transition to idle
+		if healthy, _ := i.isTopicBrowserHealthy(); healthy {
+			i.ObservedState.ServiceInfo.StatusReason = "started up"
+			return i.baseFSMInstance.SendEvent(ctx, EventStartDone), true
+		}
+
+		i.ObservedState.ServiceInfo.StatusReason = "starting - finalizing startup"
+		return nil, false
+
 	default:
 		return fmt.Errorf("invalid starting state: %s", currentState), false
 	}
@@ -306,18 +329,52 @@ func (i *TopicBrowserInstance) reconcileRunningStates(ctx context.Context, servi
 
 	switch currentState {
 	case OperationalStateActive:
-		// If we're in Active, we need to check whether it is degraded
-		if degraded, reason := i.IsTopicBrowserDegraded(); degraded {
-			i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("degraded: %s", reason)
-			return i.baseFSMInstance.SendEvent(ctx, EventDegraded), true
+		// Check for specific degradation types
+		if !i.isBenthosRunning() {
+			i.ObservedState.ServiceInfo.StatusReason = "benthos degraded"
+			return i.baseFSMInstance.SendEvent(ctx, EventBenthosDegraded), true
+		}
+		if !i.isRedpandaRunning() {
+			i.ObservedState.ServiceInfo.StatusReason = "redpanda degraded"
+			return i.baseFSMInstance.SendEvent(ctx, EventRedpandaDegraded), true
+		}
+		// Check for idle transition
+		if i.shouldTransitionToIdle() {
+			i.ObservedState.ServiceInfo.StatusReason = "no data activity"
+			return i.baseFSMInstance.SendEvent(ctx, EventNoDataTimeout), true
 		}
 		return nil, false
-	case OperationalStateDegraded:
-		// If we're in Degraded, we need to check whether it is recovered
-		if recovered := i.shouldRecoverFromDegraded(); recovered {
-			i.ObservedState.ServiceInfo.StatusReason = ""
+	case OperationalStateIdle:
+		// Check for specific degradation types
+		if !i.isBenthosRunning() {
+			i.ObservedState.ServiceInfo.StatusReason = "benthos degraded"
+			return i.baseFSMInstance.SendEvent(ctx, EventBenthosDegraded), true
+		}
+		if !i.isRedpandaRunning() {
+			i.ObservedState.ServiceInfo.StatusReason = "redpanda degraded"
+			return i.baseFSMInstance.SendEvent(ctx, EventRedpandaDegraded), true
+		}
+		// Check for activity to transition back to active
+		if i.hasDataActivity() {
+			i.ObservedState.ServiceInfo.StatusReason = "data activity detected"
+			return i.baseFSMInstance.SendEvent(ctx, EventDataReceived), true
+		}
+		return nil, false
+	case OperationalStateDegradedBenthos:
+		// Check if benthos has recovered
+		if i.isBenthosRunning() {
+			i.ObservedState.ServiceInfo.StatusReason = "benthos recovered"
 			return i.baseFSMInstance.SendEvent(ctx, EventRecovered), true
 		}
+		i.ObservedState.ServiceInfo.StatusReason = "benthos degraded"
+		return nil, false
+	case OperationalStateDegradedRedpanda:
+		// Check if redpanda has recovered
+		if i.isRedpandaRunning() {
+			i.ObservedState.ServiceInfo.StatusReason = "redpanda recovered"
+			return i.baseFSMInstance.SendEvent(ctx, EventRecovered), true
+		}
+		i.ObservedState.ServiceInfo.StatusReason = "redpanda degraded"
 		return nil, false
 	default:
 		return fmt.Errorf("invalid running state: %s", currentState), false

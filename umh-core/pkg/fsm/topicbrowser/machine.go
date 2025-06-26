@@ -49,29 +49,69 @@ func NewInstance(
 				Dst:  OperationalStateStarting,
 			},
 
-			// starting -> active
+			// starting -> starting_benthos
+			{
+				Name: EventBenthosStarted,
+				Src:  []string{OperationalStateStarting},
+				Dst:  OperationalStateStartingBenthos,
+			},
+
+			// starting_benthos -> starting_redpanda
+			{
+				Name: EventRedpandaStarted,
+				Src:  []string{OperationalStateStartingBenthos},
+				Dst:  OperationalStateStartingRedpanda,
+			},
+
+			// starting_redpanda -> idle
 			{
 				Name: EventStartDone,
-				Src:  []string{OperationalStateStarting},
+				Src:  []string{OperationalStateStartingRedpanda},
+				Dst:  OperationalStateIdle,
+			},
+
+			// idle -> active (when data processing starts)
+			{
+				Name: EventDataReceived,
+				Src:  []string{OperationalStateIdle},
 				Dst:  OperationalStateActive,
 			},
 
-			//	active -> degraded
+			// active -> idle (when no data activity)
 			{
-				Name: EventDegraded,
-				Src: []string{
-					OperationalStateActive,
-				},
-				Dst: OperationalStateDegraded,
+				Name: EventNoDataTimeout,
+				Src:  []string{OperationalStateActive},
+				Dst:  OperationalStateIdle,
 			},
 
-			// degraded -> active
+			// idle/active -> degraded benthos
+			{
+				Name: EventBenthosDegraded,
+				Src: []string{
+					OperationalStateIdle,
+					OperationalStateActive,
+				},
+				Dst: OperationalStateDegradedBenthos,
+			},
+
+			// idle/active -> degraded redpanda
+			{
+				Name: EventRedpandaDegraded,
+				Src: []string{
+					OperationalStateIdle,
+					OperationalStateActive,
+				},
+				Dst: OperationalStateDegradedRedpanda,
+			},
+
+			// degraded -> idle (recovery)
 			{
 				Name: EventRecovered,
 				Src: []string{
-					OperationalStateDegraded,
+					OperationalStateDegradedBenthos,
+					OperationalStateDegradedRedpanda,
 				},
-				Dst: OperationalStateActive,
+				Dst: OperationalStateIdle,
 			},
 
 			// everywhere to stopping
@@ -79,8 +119,12 @@ func NewInstance(
 				Name: EventStop,
 				Src: []string{
 					OperationalStateStarting,
+					OperationalStateStartingBenthos,
+					OperationalStateStartingRedpanda,
+					OperationalStateIdle,
 					OperationalStateActive,
-					OperationalStateDegraded,
+					OperationalStateDegradedBenthos,
+					OperationalStateDegradedRedpanda,
 				},
 				Dst: OperationalStateStopping,
 			},
