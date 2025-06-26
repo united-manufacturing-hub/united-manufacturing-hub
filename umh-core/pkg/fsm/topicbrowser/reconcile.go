@@ -282,7 +282,22 @@ func (i *Instance) reconcileStartingStates(ctx context.Context, services service
 
 	switch currentState {
 	case OperationalStateStarting:
-		return i.baseFSMInstance.SendEvent(ctx, EventStartDone), true
+		// 2. Is Benthos already up (race-condition where the service was started
+		//    outside the FSM or recovered very quickly)?
+		//    ──► yes:  mark start successful (StartDone) and proceed.
+		if i.isTopicBrowserBenthosRunning() {
+			i.ObservedState.ServiceInfo.StatusReason = "started up"
+			return i.baseFSMInstance.SendEvent(ctx, EventStartDone), true
+		}
+
+		benthosStatusReason := i.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.StatusReason
+		if benthosStatusReason == "" {
+			benthosStatusReason = "not existing"
+		}
+
+		// 4. Otherwise remain in OperationalStateStarting and try again on next tick.
+		i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting - waiting for benthos to be up: %s", benthosStatusReason)
+		return nil, false
 	default:
 		return fmt.Errorf("invalid starting state: %s", currentState), false
 	}
@@ -300,7 +315,7 @@ func (i *Instance) reconcileRunningStates(ctx context.Context, services servicer
 	switch currentState {
 	case OperationalStateActive:
 		// If we're in Active, we need to check whether it is degraded
-		if degraded, reason := i.isTopicBrowserDegraded(); degraded {
+		if degraded, reason := i.IsTopicBrowserDegraded(); degraded {
 			i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("degraded: %s", reason)
 			return i.baseFSMInstance.SendEvent(ctx, EventDegraded), true
 		}
@@ -325,11 +340,20 @@ func (i *Instance) reconcileTransitionToStopped(ctx context.Context, services se
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".reconcileTransitionToStopped", time.Since(start))
 	}()
 
-	i.baseFSMInstance.GetLogger().Debugf("reconciling transition to stopped from state %s", currentState)
-
-	// If we're in any operational state except Stopped or Stopping, initiate stop
-	if currentState != OperationalStateStopped && currentState != OperationalStateStopping {
-		// Attempt to initiate a stop
+	switch currentState {
+	case OperationalStateStopped:
+		// Already stopped, nothing to do more
+		i.ObservedState.ServiceInfo.StatusReason = "stopped"
+		return nil, false
+	case OperationalStateStopping:
+		if i.IsTopicBrowserBenthosStopped() {
+			// Transition from Stopping to Stopped
+			i.ObservedState.ServiceInfo.StatusReason = "stopped"
+			return i.baseFSMInstance.SendEvent(ctx, EventStopDone), true
+		}
+		i.ObservedState.ServiceInfo.StatusReason = "stopping"
+		return nil, false
+	default:
 		if err := i.StopInstance(ctx, services.GetFileSystem()); err != nil {
 			return err, false
 		}
@@ -337,18 +361,4 @@ func (i *Instance) reconcileTransitionToStopped(ctx context.Context, services se
 		i.ObservedState.ServiceInfo.StatusReason = "stopping"
 		return i.baseFSMInstance.SendEvent(ctx, EventStop), true
 	}
-
-	// If already stopping, verify if the instance is completely stopped
-	isStopped, reason := i.isTopicBrowserStopped()
-	if currentState == OperationalStateStopping {
-		if !isStopped {
-			i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("stopping: %s", reason)
-			return nil, false
-		}
-		// Transition from Stopping to Stopped
-		i.ObservedState.ServiceInfo.StatusReason = ""
-		return i.baseFSMInstance.SendEvent(ctx, EventStopDone), true
-	}
-
-	return nil, false
 }

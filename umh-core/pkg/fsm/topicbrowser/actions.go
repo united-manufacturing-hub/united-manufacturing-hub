@@ -23,6 +23,8 @@ import (
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
+	rpfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	logger "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -55,30 +57,26 @@ func (i *Instance) CreateInstance(ctx context.Context, filesystemService filesys
 	return nil
 }
 
-// RemoveInstance is executed while the Topic Browser FSM sits in the *removing* state.
-func (i *Instance) RemoveInstance(
-	ctx context.Context,
-	filesystemService filesystem.Service,
-) error {
-	i.baseFSMInstance.GetLogger().
-		Infof("Removing Topic Browser service %s from S6 manager …",
-			i.baseFSMInstance.GetID())
+// RemoveInstance attempts to remove the DataflowComponent from the Benthos manager.
+// It requires the service to be stopped before removal.
+func (i *Instance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
+	i.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing Topic Browser service %s from Benthos manager ...", i.baseFSMInstance.GetID())
 
+	// Remove the initiateDataflowComponent from the Benthos manager
 	err := i.service.RemoveFromManager(ctx, filesystemService, i.baseFSMInstance.GetID())
-
 	switch {
 	// ---------------------------------------------------------------
 	// happy paths
 	// ---------------------------------------------------------------
 	case err == nil: // fully removed
 		i.baseFSMInstance.GetLogger().
-			Infof("Topic Browser service %s removed from S6 manager",
+			Debugf("Benthos service %s removed from S6 manager",
 				i.baseFSMInstance.GetID())
 		return nil
 
 	case errors.Is(err, tbsvc.ErrServiceNotExist):
 		i.baseFSMInstance.GetLogger().
-			Infof("Topic Browser service %s already removed from S6 manager",
+			Debugf("Benthos service %s already removed from S6 manager",
 				i.baseFSMInstance.GetID())
 		// idempotent: was already gone
 		return nil
@@ -88,18 +86,15 @@ func (i *Instance) RemoveInstance(
 	// ---------------------------------------------------------------
 	case errors.Is(err, standarderrors.ErrRemovalPending):
 		i.baseFSMInstance.GetLogger().
-			Infof("Topic Browser service %s removal still in progress",
+			Debugf("Benthos service %s removal still in progress",
 				i.baseFSMInstance.GetID())
-		// not an error from the FSM's perspective – just means "try again"
+		// not an error from the FSM’s perspective – just means “try again”
 		return err
 
 	// ---------------------------------------------------------------
 	// real error – escalate
 	// ---------------------------------------------------------------
 	default:
-		i.baseFSMInstance.GetLogger().
-			Errorf("failed to remove service %s: %s",
-				i.baseFSMInstance.GetID(), err)
 		return fmt.Errorf("failed to remove service %s: %w",
 			i.baseFSMInstance.GetID(), err)
 	}
@@ -215,35 +210,34 @@ func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services s
 	return nil
 }
 
+// isTopicBrowserBenthosRunning checks if the Topic Browser service is running
+func (i *Instance) isTopicBrowserBenthosRunning() bool {
+	switch i.ObservedState.ServiceInfo.BenthosFSMState {
+	// Consider Active , Degraded and Idle as running states
+	case benthosfsm.OperationalStateActive, benthosfsm.OperationalStateIdle, benthosfsm.OperationalStateDegraded:
+		return true
+	}
+	return false
+}
+
 // isTopicBrowserHealthy checks if the Topic Browser service is healthy based on ServiceInfo
 // This leverages the existing service health analysis instead of reimplementing it
 func (i *Instance) isTopicBrowserHealthy() (bool, string) {
 	// Use the service's existing health analysis
 	serviceInfo := i.ObservedState.ServiceInfo
 
-	// If there's a specific status reason indicating issues, it's not healthy
-	if serviceInfo.StatusReason != "" {
-		return false, "unknown status reason"
-	}
-
 	// Check if the underlying Benthos FSM is in a healthy state
-	if serviceInfo.BenthosFSMState != "active" {
+	if serviceInfo.BenthosFSMState != benthosfsm.OperationalStateActive && serviceInfo.BenthosFSMState != benthosfsm.OperationalStateIdle {
 		return false, "benthos fsm not active"
 	}
 
 	// Check if Redpanda FSM is in a healthy state
-	if serviceInfo.RedpandaFSMState != "active" {
+	if serviceInfo.RedpandaFSMState != rpfsm.OperationalStateActive && serviceInfo.RedpandaFSMState != rpfsm.OperationalStateIdle {
 		return false, "redpanda fsm not active"
 	}
 
-	// Additional basic health checks from Benthos observed state
-	benthosObservedState := serviceInfo.BenthosObservedState
-	if benthosObservedState.ServiceInfo.S6FSMState != "running" && benthosObservedState.ServiceInfo.S6FSMState != "active" {
-		return false, "benthos s6 fsm not running"
-	}
-
 	// Check Benthos health checks
-	healthCheck := benthosObservedState.ServiceInfo.BenthosStatus.HealthCheck
+	healthCheck := serviceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck
 	if !healthCheck.IsLive || !healthCheck.IsReady {
 		return false, "benthos health check not live or ready"
 	}
@@ -251,9 +245,14 @@ func (i *Instance) isTopicBrowserHealthy() (bool, string) {
 	return true, ""
 }
 
-// isTopicBrowserDegraded determines if the Topic Browser should be considered degraded
+// IsTopicBrowserBenthosStopped checks if the Topic Browser service is stopped
+func (i *Instance) IsTopicBrowserBenthosStopped() bool {
+	return i.ObservedState.ServiceInfo.BenthosFSMState == benthosfsm.OperationalStateStopped
+}
+
+// IsTopicBrowserDegraded determines if the Topic Browser should be considered degraded
 // This leverages the service's sophisticated cross-component analysis
-func (i *Instance) isTopicBrowserDegraded() (isDegraded bool, reason string) {
+func (i *Instance) IsTopicBrowserDegraded() (isDegraded bool, reason string) {
 	defer func() {
 		i.baseFSMInstance.GetLogger().Debugf("isTopicBrowserDegraded: %t, reason: %s", isDegraded, reason)
 	}()
@@ -292,6 +291,6 @@ func (i *Instance) isTopicBrowserStopped() (bool, string) {
 // shouldRecoverFromDegraded determines if the Topic Browser should recover from degraded state
 func (i *Instance) shouldRecoverFromDegraded() bool {
 	// If the service is now healthy and there are no status reasons indicating issues
-	degraded, _ := i.isTopicBrowserDegraded()
+	degraded, _ := i.IsTopicBrowserDegraded()
 	return !degraded
 }
