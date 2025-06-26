@@ -257,12 +257,6 @@ func (i *TopicBrowserInstance) isTopicBrowserHealthy() (bool, string) {
 		return false, "redpanda fsm not active"
 	}
 
-	// Check Benthos health checks
-	healthCheck := serviceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck
-	if !healthCheck.IsLive || !healthCheck.IsReady {
-		return false, "benthos health check not live or ready"
-	}
-
 	return true, ""
 }
 

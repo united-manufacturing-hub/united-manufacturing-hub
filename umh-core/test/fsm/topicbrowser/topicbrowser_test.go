@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	pkgfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
@@ -48,7 +49,7 @@ var _ = Describe("TopicBrowser FSM", func() {
 	)
 
 	BeforeEach(func() {
-		componentName = "test-topic-browser-fsm"
+		componentName = constants.TopicBrowserServiceName
 		ctx = context.Background()
 		tick = 0
 
@@ -188,7 +189,7 @@ var _ = Describe("TopicBrowser FSM", func() {
 			)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Execute transition: Idle -> Degraded
+			// Execute transition: Active -> Degraded
 			tick, err = fsmtest.TestTopicBrowserStateTransition(
 				ctx,
 				instance,
@@ -202,7 +203,7 @@ var _ = Describe("TopicBrowser FSM", func() {
 			)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Execute transition: Degraded -> Idle
+			// Execute transition: Active -> Idle
 			tick, err = fsmtest.TestTopicBrowserStateTransition(
 				ctx,
 				instance,
