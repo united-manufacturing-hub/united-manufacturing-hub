@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -224,10 +225,15 @@ func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
 			res.Logs = mapS6LogsToSlice(observedState.ServiceInfo.DataflowComponentWriteObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs, reqStartTime)
 		}
 	case models.TopicBrowserLogType:
-		// TODO: Implement topic browser logs
-		err := errors.New("topic-browser logs are not implemented yet")
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
-		return nil, nil, err
+		// TODO: This currently uses an empty observed state for testing purposes.
+		// This will need to be changed to retrieve the actual observed state from the system snapshot
+		// when the topic browser FSM is properly integrated.
+
+		// Create empty observed state for now
+		observedState := &topicbrowser.ObservedState{}
+
+		// Extract benthos logs from the observed state
+		res.Logs = mapS6LogsToSlice(observedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs, reqStartTime)
 	}
 
 	return res, nil, nil
