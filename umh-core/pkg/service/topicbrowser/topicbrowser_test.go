@@ -269,7 +269,6 @@ var _ = Describe("TopicBrowserService", func() {
 			mockBenthosService.ServiceStates[benthosName].BenthosStatus.BenthosMetrics.Metrics.Input.Received = 10
 			mockBenthosService.ServiceStates[benthosName].BenthosStatus.BenthosMetrics.Metrics.Output.Sent = 10
 
-			logs = logs
 			mockBenthosService.ServiceStates[benthosName].BenthosStatus.BenthosLogs = append(mockBenthosService.ServiceStates[benthosName].BenthosStatus.BenthosLogs, logs...)
 
 			// Reconcile once to ensure that serviceInfo is used to update the observed state
