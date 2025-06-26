@@ -10,13 +10,19 @@ model:
 resolver:
   filename: resolver.go
   type: Resolver
+  # Key change: Don't touch our custom implementations
+  layout: follow-schema
+  dir: .
 
-# Provide custom scalar implementations
+# Custom scalar mappings
 models:
   Time:
     model: github.com/99designs/gqlgen/graphql.Time
   JSON:
     model: github.com/99designs/gqlgen/graphql.Map
 
-# Skip generation for the resolver struct - we'll define it manually
+# Don't auto-bind everything - we control the structure
+autobind: []
+
+# Skip validation to allow our custom resolver structure
 skip_validation: true 
