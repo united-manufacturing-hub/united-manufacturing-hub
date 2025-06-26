@@ -48,7 +48,7 @@ func NewTopicBrowserManager(name string) *Manager {
 		// Extract the topic browser config from fullConfig
 		func(fullConfig config.FullConfig) ([]config.TopicBrowserConfig, error) {
 			tbConfig := fullConfig.Internal.TopicBrowser
-			// Force topic browser name to be "topicbrowser"
+			// Force topic browser name to be "topic-browser"
 			tbConfig.Name = constants.TopicBrowserServiceName
 			return []config.TopicBrowserConfig{tbConfig}, nil
 		},
