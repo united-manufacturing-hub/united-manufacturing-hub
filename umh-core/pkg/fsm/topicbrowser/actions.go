@@ -27,7 +27,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	rpfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
-	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	logger "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -295,15 +294,6 @@ func (i *Instance) IsTopicBrowserDegraded() (isDegraded bool, reason string) {
 	}
 
 	return false, "service appears healthy"
-}
-
-// isTopicBrowserStopped determines if the Topic Browser is stopped
-func (i *Instance) isTopicBrowserStopped() (bool, string) {
-	if i.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.S6FSMState == s6fsm.OperationalStateStopped {
-		return true, ""
-	}
-
-	return false, fmt.Sprintf("service is not in %s state", s6fsm.OperationalStateStopped)
 }
 
 // shouldRecoverFromDegraded determines if the Topic Browser should recover from degraded state
