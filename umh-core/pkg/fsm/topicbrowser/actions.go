@@ -161,7 +161,11 @@ func (i *TopicBrowserInstance) getServiceStatus(ctx context.Context, services se
 
 		// For other errors, log them and return
 		i.baseFSMInstance.GetLogger().Errorf("error updating observed state for %s: %s", i.baseFSMInstance.GetID(), err)
-		return tbsvc.ServiceInfo{}, err
+		infoWithFailedHealthChecks := info
+		infoWithFailedHealthChecks.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive = false
+		infoWithFailedHealthChecks.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady = false
+		// return the info with healthchecks failed
+		return infoWithFailedHealthChecks, err
 	}
 
 	return info, nil
