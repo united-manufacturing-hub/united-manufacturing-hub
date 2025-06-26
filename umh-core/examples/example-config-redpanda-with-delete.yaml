@@ -34,6 +34,7 @@ internal:
         # this corresponds to log_cleanup_policy (See also: https://docs.redpanda.com/current/manage/cluster-maintenance/compaction-settings/)
         # Options: "delete" (time/size-based deletion), "compact" (keep latest per key), "compact,delete" (both)
         # Using "delete" for traditional time-based retention
+        # Note: This is not our default (compact), but is used for manual testing.
         defaultTopicCleanupPolicy: "delete"
 
       resources:
