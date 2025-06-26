@@ -51,7 +51,7 @@ var _ = Describe("TopicBrowserManager", func() {
 	})
 
 	BeforeEach(func() {
-		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Minute) // we need to have a deadline as the reconcile logic in the base fsm manager requires it
+		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second) // we need to have a deadline as the reconcile logic in the base fsm manager requires it
 		tick = 0
 		mockSvcRegistry = serviceregistry.NewMockRegistry()
 		// Create a new TopicBrowserManager with the mock service

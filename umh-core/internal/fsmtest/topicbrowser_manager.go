@@ -21,7 +21,6 @@ import (
 	"context"
 	"fmt"
 
-	. "github.com/onsi/ginkgo/v2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	topicbrowsersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/topicbrowser"
@@ -86,10 +85,6 @@ func WaitForTopicBrowserManagerInstanceState(
 		instance, found := manager.GetInstance(fmt.Sprintf("%s-%s", topicBrowserInstancePrefix, instanceName))
 		if found && instance.GetCurrentFSMState() == expectedState {
 			return tick, nil
-		}
-		GinkgoT().Logf("instance %s didn't reach expected state: %s", instanceName, expectedState)
-		if instance != nil {
-			GinkgoT().Logf("current state: %s", instance.GetCurrentFSMState())
 		}
 	}
 
