@@ -25,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	pkgfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
+	redpandafsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	topicbrowser "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	topicbrowsersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/topicbrowser"
@@ -603,6 +604,425 @@ var _ = Describe("TopicBrowser FSM", func() {
 
 	})
 
+	Context("Error Handling", func() {
+		It("should handle S6 service not exist error correctly", func() {
+			var err error
+
+			// Setup to Creating state
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				fsm.LifecycleStateToBeCreated,
+				fsm.LifecycleStateCreating, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Force the exact error message from the logs with proper error wrapping
+			mockService.StatusError = fmt.Errorf("failed to get benthos config: failed to get benthos config file for service benthos-dataflow-%s: %w", componentName, s6.ErrServiceNotExist)
+
+			// Attempt to reconcile - this should not set an FSM error if errors are correctly identified
+			snapshot := pkgfsm.SystemSnapshot{Tick: tick}
+			err, _ = instance.Reconcile(ctx, snapshot, mockSvcRegistry)
+			Expect(err).To(BeNil()) // Should not propagate an error
+
+			// The instance should not have an error set
+			Expect(instance.GetLastError()).To(BeNil())
+
+			// Clean up the mock for other tests
+			mockService.StatusError = nil
+		})
+	})
+
+	// =========================================================================
+	//  DEGRADED AND RECOVERY SCENARIOS
+	// =========================================================================
+	Context("Degraded and Recovery Scenarios", func() {
+		It("should transition to DegradedBenthos when benthos becomes unavailable and recover when restored", func() {
+			var err error
+
+			// Phase 1: Establish Idle state
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				fsm.LifecycleStateToBeCreated,
+				fsm.LifecycleStateCreating, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			mockService.Existing[componentName] = true
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateStopped)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				fsm.LifecycleStateCreating,
+				topicbrowser.OperationalStateStopped, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(instance.SetDesiredFSMState(topicbrowser.OperationalStateActive)).To(Succeed())
+
+			// Progress through startup to Idle
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateStopped,
+				topicbrowser.OperationalStateStarting, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateStartingBenthos)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateStarting,
+				topicbrowser.OperationalStateStartingBenthos, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateStartingRedpanda)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateStartingBenthos,
+				topicbrowser.OperationalStateStartingRedpanda, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateIdle)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateStartingRedpanda,
+				topicbrowser.OperationalStateIdle, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Phase 2: Simulate benthos failure and recovery
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateDegradedBenthos)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateIdle,
+				topicbrowser.OperationalStateDegradedBenthos, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Restore benthos and verify recovery
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateIdle)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateDegradedBenthos,
+				topicbrowser.OperationalStateIdle, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should transition to DegradedRedpanda when Redpanda becomes unavailable and recover when restored", func() {
+			var err error
+
+			// Phase 1: Establish Idle state
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				fsm.LifecycleStateToBeCreated,
+				fsm.LifecycleStateCreating, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			mockService.Existing[componentName] = true
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateStopped)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				fsm.LifecycleStateCreating,
+				topicbrowser.OperationalStateStopped, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(instance.SetDesiredFSMState(topicbrowser.OperationalStateActive)).To(Succeed())
+
+			// Progress through startup to Idle
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateStopped,
+				topicbrowser.OperationalStateStarting, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateStartingBenthos)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateStarting,
+				topicbrowser.OperationalStateStartingBenthos, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateStartingRedpanda)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateStartingBenthos,
+				topicbrowser.OperationalStateStartingRedpanda, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateIdle)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateStartingRedpanda,
+				topicbrowser.OperationalStateIdle, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Phase 2: Simulate Redpanda failure and recovery
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateDegradedRedpanda)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateIdle,
+				topicbrowser.OperationalStateDegradedRedpanda, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Restore Redpanda and verify recovery
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateIdle)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateDegradedRedpanda,
+				topicbrowser.OperationalStateIdle, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should handle multiple degraded states and recover properly", func() {
+			var err error
+
+			// Phase 1: Establish Active state
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				fsm.LifecycleStateToBeCreated,
+				topicbrowser.OperationalStateActive, 15, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Phase 2: Test degraded benthos -> degraded redpanda transitions
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateDegradedBenthos)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateActive,
+				topicbrowser.OperationalStateDegradedBenthos, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Now also degrade redpanda (benthos still degraded)
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateDegradedRedpanda)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateDegradedBenthos,
+				topicbrowser.OperationalStateDegradedRedpanda, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Phase 3: Recover from all degraded states
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateIdle)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateDegradedRedpanda,
+				topicbrowser.OperationalStateIdle, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
+	// =========================================================================
+	//  STARTUP FAILURE SCENARIOS
+	// =========================================================================
+	Context("Startup Failure Scenarios", func() {
+		It("should handle benthos startup failures gracefully", func() {
+			var err error
+
+			// Phase 1: Progress to StartingBenthos state
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				fsm.LifecycleStateToBeCreated,
+				fsm.LifecycleStateCreating, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			mockService.Existing[componentName] = true
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateStopped)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				fsm.LifecycleStateCreating,
+				topicbrowser.OperationalStateStopped, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(instance.SetDesiredFSMState(topicbrowser.OperationalStateActive)).To(Succeed())
+
+			// Progress through startup sequence to StartingBenthos
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateStopped,
+				topicbrowser.OperationalStateStarting, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateStartingBenthos)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateStarting,
+				topicbrowser.OperationalStateStartingBenthos, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Phase 2: Simulate benthos startup failure - it should transition to degraded
+			// Configure benthos to fail startup
+			fsmtest.SetupTopicBrowserServiceState(mockService, componentName, topicbrowsersvc.StateFlags{
+				BenthosFSMState:       benthosfsm.OperationalStateStopped, // Benthos failed to start
+				RedpandaFSMState:      redpandafsm.OperationalStateActive, // Redpanda is OK
+				HasProcessingActivity: false,
+				HasBenthosOutput:      false,
+			})
+
+			// It should stay in StartingBenthos since benthos isn't ready
+			tick, err = fsmtest.VerifyTopicBrowserStableState(
+				ctx, pkgfsm.SystemSnapshot{Tick: tick}, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateStartingBenthos, 3)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Current state should remain starting since benthos is not ready
+			Expect(instance.GetCurrentFSMState()).To(Equal(topicbrowser.OperationalStateStartingBenthos))
+		})
+
+		It("should handle redpanda startup failures gracefully", func() {
+			var err error
+
+			// Phase 1: Progress to StartingRedpanda state
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				fsm.LifecycleStateToBeCreated,
+				fsm.LifecycleStateCreating, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			mockService.Existing[componentName] = true
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateStopped)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				fsm.LifecycleStateCreating,
+				topicbrowser.OperationalStateStopped, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(instance.SetDesiredFSMState(topicbrowser.OperationalStateActive)).To(Succeed())
+
+			// Progress through startup sequence to StartingRedpanda
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateStopped,
+				topicbrowser.OperationalStateStarting, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateStartingBenthos)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateStarting,
+				topicbrowser.OperationalStateStartingBenthos, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateStartingRedpanda)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateStartingBenthos,
+				topicbrowser.OperationalStateStartingRedpanda, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Phase 2: Simulate redpanda startup failure
+			// Configure redpanda to fail startup
+			fsmtest.SetupTopicBrowserServiceState(mockService, componentName, topicbrowsersvc.StateFlags{
+				BenthosFSMState:       benthosfsm.OperationalStateActive,   // Benthos is OK
+				RedpandaFSMState:      redpandafsm.OperationalStateStopped, // Redpanda failed to start
+				HasProcessingActivity: false,
+				HasBenthosOutput:      false,
+			})
+
+			// It should stay in StartingRedpanda since redpanda isn't ready
+			tick, err = fsmtest.VerifyTopicBrowserStableState(
+				ctx, pkgfsm.SystemSnapshot{Tick: tick}, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateStartingRedpanda, 3)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Current state should remain starting since redpanda is not ready
+			Expect(instance.GetCurrentFSMState()).To(Equal(topicbrowser.OperationalStateStartingRedpanda))
+		})
+	})
+
+	// =========================================================================
+	//  STATE STABILITY
+	// =========================================================================
+	Context("State Stability", func() {
+		It("should remain stable in Idle state when no activity occurs", func() {
+			var err error
+
+			// Set to active from stopped state
+			Expect(instance.SetDesiredFSMState(topicbrowser.OperationalStateActive)).To(Succeed())
+
+			// Phase 1: Establish Idle state
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				fsm.LifecycleStateToBeCreated,
+				topicbrowser.OperationalStateIdle, 15, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Phase 2: Verify stability over multiple reconcile cycles
+			tick, err = fsmtest.VerifyTopicBrowserStableState(
+				ctx, pkgfsm.SystemSnapshot{Tick: tick}, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateIdle, 5)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should remain stable in Active state when processing continues", func() {
+			var err error
+
+			// Set to active from stopped state
+			Expect(instance.SetDesiredFSMState(topicbrowser.OperationalStateActive)).To(Succeed())
+
+			// Phase 1: Establish Active state
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				fsm.LifecycleStateToBeCreated,
+				topicbrowser.OperationalStateIdle, 15, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateActive)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateIdle,
+				topicbrowser.OperationalStateActive, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Phase 2: Verify stability over multiple reconcile cycles
+			tick, err = fsmtest.VerifyTopicBrowserStableState(
+				ctx, pkgfsm.SystemSnapshot{Tick: tick}, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateActive, 5)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should remain stable in degraded states when issues persist", func() {
+			var err error
+
+			// Set to active from stopped state
+			Expect(instance.SetDesiredFSMState(topicbrowser.OperationalStateActive)).To(Succeed())
+
+			// Phase 1: Establish DegradedBenthos state
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				fsm.LifecycleStateToBeCreated,
+				topicbrowser.OperationalStateActive, 15, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateDegradedBenthos)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateActive,
+				topicbrowser.OperationalStateDegradedBenthos, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Phase 2: Verify stability in degraded state over multiple reconcile cycles
+			tick, err = fsmtest.VerifyTopicBrowserStableState(
+				ctx, pkgfsm.SystemSnapshot{Tick: tick}, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateDegradedBenthos, 5)
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
+	// =========================================================================
+	//  ERROR HANDLING
+	// =========================================================================
 	Context("Error Handling", func() {
 		It("should handle S6 service not exist error correctly", func() {
 			var err error
