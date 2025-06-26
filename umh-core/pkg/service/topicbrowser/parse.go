@@ -16,11 +16,14 @@ package topicbrowser
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pierrec/lz4/v4"
@@ -28,34 +31,7 @@ import (
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
-// parseBlock parses the logs, decompresses the payload and sets the timestamp
-// You will get a lz4 compressed, hex encoded logline from benthos. This then
-// has to get decoded and uncompressed, to write it into the ringbuffer.
-// The timestamp is received in ms.
-func (svc *Service) parseBlock(entries []s6svc.LogEntry) error {
-	hexBuf, epoch, err := extractRaw(entries)
-	if err != nil || len(hexBuf) == 0 {
-		return err
-	}
-
-	compressed := make([]byte, hex.DecodedLen(len(hexBuf)))
-	if _, err = hex.Decode(compressed, hexBuf); err != nil {
-		return err
-	}
-
-	r := lz4.NewReader(bytes.NewReader(compressed))
-	payload, err := io.ReadAll(r)
-	if err != nil {
-		return err
-	}
-
-	svc.ringbuffer.Add(&Buffer{
-		Payload:   payload,
-		Timestamp: time.UnixMilli(epoch),
-	})
-
-	return nil
-}
+var lz4FrameMagic = []byte{0x04, 0x22, 0x4d, 0x18}
 
 // / extractRaw searches log entries for a complete START‒END block and returns
 // the hex-encoded LZ4 payload plus its epoch-ms timestamp.
@@ -129,4 +105,127 @@ func extractRaw(entries []s6svc.LogEntry) (compressed []byte, epochMS int64, err
 	}
 
 	return raw, epochMS, nil
+}
+
+func (svc *Service) parseBlock(entries []s6svc.LogEntry) error {
+	hexBuf, epoch, err := extractRaw(entries)
+	if err != nil || len(hexBuf) == 0 {
+		return err // nil or extractor error
+	}
+
+	compressed := make([]byte, hex.DecodedLen(len(hexBuf)))
+	if _, err := hex.Decode(compressed, hexBuf); err != nil {
+		return fmt.Errorf("hex decode: %w", err)
+	}
+
+	payload, err := decompressLZ4(compressed)
+	if err != nil {
+		return err
+	}
+
+	svc.ringbuffer.Add(&Buffer{
+		Payload:   payload,
+		Timestamp: time.UnixMilli(epoch),
+	})
+	return nil
+}
+
+// decompressLZ4 handles the three possible wire formats described above.
+//func decompressLZ4(compressed []byte) ([]byte, error) {
+//	// ----------------------------------------------------- frame ---------- //
+//	if bytes.HasPrefix(compressed, lz4FrameMagic) {
+//		r := lz4.NewReader(bytes.NewReader(compressed))
+//		b, err := io.ReadAll(r)
+//		if err != nil {
+//			return nil, fmt.Errorf("lz4 frame decompress: %w", err)
+//		}
+//		return b, nil
+//	}
+//
+//	// ------------------------------------------------- prefixed block ----- //
+//	if len(compressed) >= 4 {
+//		origLen := int(binary.LittleEndian.Uint32(compressed[:4]))
+//		if 0 < origLen && origLen <= 64<<20 /* 64 MiB sanity cap */ {
+//			dst := make([]byte, origLen)
+//			if n, err := lz4.UncompressBlock(compressed[4:], dst); err == nil && n == origLen {
+//				return dst, nil
+//			}
+//		}
+//	}
+//
+//	// We don’t know the original size.  Start with 4×compressed len (min 64 KiB)
+//	// and keep doubling until it succeeds or we hit the 64 MiB cap.
+//	const max = 64 << 20 // absolute upper bound for one message
+//	size := len(compressed)*4 + 64*1024
+//	for size <= max {
+//		dst := make([]byte, size)
+//		n, err := lz4.UncompressBlock(compressed, dst)
+//		switch {
+//		case err == nil:
+//			return dst[:n], nil
+//		case errors.Is(err, lz4.ErrInvalidSourceShortBuffer):
+//			size *= 2 // buffer too small; try again
+//		default:
+//			return nil, fmt.Errorf("lz4 legacy block decompress: %w", err)
+//		}
+//	}
+//	return nil, errors.New("lz4 legacy block decompress: size unknown (missing length prefix?)")
+//}
+
+// decompressionBufferPool reuses decompression buffers.
+var decompressionBufferPool = sync.Pool{
+	New: func() interface{} {
+		// Start with 64KB buffer, will grow as needed
+		return make([]byte, 0, 64*1024)
+	},
+}
+
+// decompressBlock returns the raw, uncompressed bytes.
+//
+// It expects a *raw LZ4 block* (no header) and uses the same pool /
+// grow-once strategy you already tuned for protobuf bundles.
+func decompressBlock(src []byte) ([]byte, error) {
+	buf := decompressionBufferPool.Get().([]byte)
+	defer decompressionBufferPool.Put(buf[:0])
+
+	need := len(src) * 4
+	if cap(buf) < need {
+		buf = make([]byte, need)
+	}
+	buf = buf[:cap(buf)]
+
+	n, err := lz4.UncompressBlock(src, buf)
+	if err == lz4.ErrInvalidSourceShortBuffer {
+		// single retry with an 8× buffer
+		buf = make([]byte, len(src)*8)
+		n, err = lz4.UncompressBlock(src, buf)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return buf[:n], nil
+}
+
+// decompressLZ4 recognises:
+//   - LZ4 *frame*
+//   - Raw block with 4-byte length prefix
+//   - Raw block without prefix (legacy)   ← handled via decompressBlock
+func decompressLZ4(compressed []byte) ([]byte, error) {
+	// ── frame ────────────────────────────────────────────────────────────
+	if bytes.HasPrefix(compressed, lz4FrameMagic) {
+		r := lz4.NewReader(bytes.NewReader(compressed))
+		return io.ReadAll(r)
+	}
+
+	if len(compressed) >= 4 {
+		orig := int(binary.LittleEndian.Uint32(compressed[:4]))
+		if 0 < orig && orig <= 64<<20 {
+			dst := make([]byte, orig)
+			if n, err := lz4.UncompressBlock(compressed[4:], dst); err == nil && n == orig {
+				return dst, nil
+			}
+		}
+	}
+
+	return decompressBlock(compressed)
 }
