@@ -16,12 +16,14 @@ package topicbrowserserviceconfig
 
 import (
 	"fmt"
-	"strings"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 )
 
 // Comparator handles the comparison of Topic Browser configurations
 type Comparator struct {
-	normalizer *Normalizer
+	normalizer              *Normalizer
+	benthosConfigComparator *benthosserviceconfig.Comparator
 }
 
 // NewComparator creates a new configuration comparator for Topic Browser
@@ -45,26 +47,14 @@ func (c *Comparator) ConfigsEqual(desired, observed Config) (isEqual bool) {
 
 	// Since Config is currently empty, they are always equal
 	// When fields are added to Config, add comparison logic here
-	return normDesired == normObserved
+	return c.benthosConfigComparator.ConfigsEqual(normDesired.BenthosConfig, normObserved.BenthosConfig)
 }
 
 // ConfigDiff returns a human-readable string describing differences between configs
 func (c *Comparator) ConfigDiff(desired, observed Config) string {
-	var diff strings.Builder
-
 	// First normalize both configs
 	normDesired := c.normalizer.NormalizeConfig(desired)
 	normObserved := c.normalizer.NormalizeConfig(observed)
 
-	// Since Config is currently empty, check for structural differences
-	// When fields are added to Config, add specific field comparison logic here
-	if normDesired != normObserved {
-		diff.WriteString("Topic Browser configs differ\n")
-	}
-
-	if diff.Len() == 0 {
-		return "No significant differences"
-	}
-
-	return diff.String()
+	return c.benthosConfigComparator.ConfigDiff(normDesired.BenthosConfig, normObserved.BenthosConfig)
 }

@@ -18,9 +18,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/topicbrowserserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
@@ -39,6 +41,7 @@ func (i *Instance) CreateInstance(ctx context.Context, filesystemService filesys
 	i.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding Topic Browser service %s to S6 manager ...", i.baseFSMInstance.GetID())
 
 	// Generate the benthos config from the topic browser config
+	// Since it is static, we can just generate it here
 	benthosConfig, err := i.service.GenerateConfig(i.baseFSMInstance.GetID())
 	if err != nil {
 		return fmt.Errorf("failed to generate benthos config for Topic Browser service %s: %w", i.baseFSMInstance.GetID(), err)
@@ -187,8 +190,40 @@ func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services s
 	if desiredState == OperationalStateStopped && currentState == OperationalStateStopped {
 		return nil
 	}
+	// Fetch the actual Benthos config from the service
+	start = time.Now()
+	observedConfig, err := i.service.GetConfig(ctx, services.GetFileSystem(), i.baseFSMInstance.GetID())
+	metrics.ObserveReconcileTime(logger.ComponentDataFlowComponentInstance, i.baseFSMInstance.GetID()+".getConfig", time.Since(start))
+	if err == nil {
+		// Only update if we successfully got the config
+		i.ObservedState.ObservedServiceConfig.BenthosConfig = observedConfig
+	} else {
+		if strings.Contains(err.Error(), tbsvc.ErrServiceNotExist.Error()) {
+			// Log the error but don't fail - this might happen during creation when the config file doesn't exist yet
+			i.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
+			return nil
+		} else {
+			return fmt.Errorf("failed to get observed DataflowComponent config: %w", err)
+		}
+	}
 
-	// We do not check the observed vs the desired config here as the config is static and therefore cannot change
+	if !topicbrowserserviceconfig.ConfigsEqual(i.config, i.ObservedState.ObservedServiceConfig) {
+		// Check if the service exists before attempting to update
+		if i.service.ServiceExists(ctx, services, i.baseFSMInstance.GetID()) {
+			i.baseFSMInstance.GetLogger().Debugf("Observed DataflowComponent config is different from desired config, updating Benthos configuration")
+
+			diffStr := topicbrowserserviceconfig.ConfigDiff(i.config, i.ObservedState.ObservedServiceConfig)
+			i.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
+
+			// Update the config in the Benthos manager
+			err := i.service.UpdateInManager(ctx, services.GetFileSystem(), &i.ObservedState.ObservedServiceConfig.BenthosConfig, i.baseFSMInstance.GetID())
+			if err != nil {
+				return fmt.Errorf("failed to update DataflowComponent service configuration: %w", err)
+			}
+		} else {
+			i.baseFSMInstance.GetLogger().Debugf("Config differences detected but service does not exist yet, skipping update")
+		}
+	}
 
 	return nil
 }

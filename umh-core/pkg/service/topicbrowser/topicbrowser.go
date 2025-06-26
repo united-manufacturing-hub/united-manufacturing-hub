@@ -171,6 +171,7 @@ func (svc *Service) GetConfig(ctx context.Context, filesystemService filesystem.
 // GenerateConfig provides a fixed benthosserviceconfig to ensure deploying
 // a benthos instants that reads data from uns, processes it to get into a
 // proper protobuf format and writes it to stdout using an additional timestamp.
+// This function must return a static config, as the config is not expected to change
 func (svc *Service) GenerateConfig(tbName string) (benthossvccfg.BenthosServiceConfig, error) {
 	return benthossvccfg.BenthosServiceConfig{
 		Input: map[string]any{

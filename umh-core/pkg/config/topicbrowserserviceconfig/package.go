@@ -14,6 +14,8 @@
 
 package topicbrowserserviceconfig
 
+import benthossvccfg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
+
 var (
 	defaultGenerator  = NewGenerator()
 	defaultNormalizer = NewNormalizer()
@@ -24,6 +26,8 @@ var (
 type Config struct {
 	// to be filled
 	// If you add fields, make sure to update the ConfigsEqual and ConfigDiff functions
+
+	BenthosConfig benthossvccfg.BenthosServiceConfig
 }
 
 // Equal checks if two BenthosServiceConfigs are equal
