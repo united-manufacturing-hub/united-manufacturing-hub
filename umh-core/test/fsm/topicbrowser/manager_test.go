@@ -108,7 +108,7 @@ var _ = Describe("TopicBrowserManager", func() {
 			Expect(inst.GetCurrentFSMState()).To(Equal(topicbrowser.OperationalStateStopped))
 		})
 
-		FIt("should create a service in active state and reach idle or active", func() {
+		It("should create a service in active state and reach idle or active", func() {
 			converterName := "topic-browser"
 			cfg := config.FullConfig{
 				Internal: config.InternalConfig{
