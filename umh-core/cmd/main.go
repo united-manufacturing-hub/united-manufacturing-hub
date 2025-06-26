@@ -115,6 +115,8 @@ func main() {
 			configData.Agent.GraphQLConfig.Port = 8090
 		}
 		if len(configData.Agent.GraphQLConfig.CORSOrigins) == 0 {
+			// Allow all origins since GraphQL server is not exposed to the internet
+			// TODO: Restrict CORS origins if this service becomes externally accessible
 			configData.Agent.GraphQLConfig.CORSOrigins = []string{"*"}
 		}
 
@@ -122,10 +124,10 @@ func main() {
 		//
 		// TopicBrowserCache: Required for GraphQL to access the unified namespace data
 		// SnapshotManager: Required for GraphQL to access system configuration and state
-		graphqlResolver := &graphql.Resolver{
+		graphqlResolver := graphql.NewResolver(&graphql.ResolverDependencies{
 			SnapshotManager:   systemSnapshotManager,
 			TopicBrowserCache: communicationState.TopicBrowserCache,
-		}
+		})
 
 		// Start GraphQL server
 		var err error
