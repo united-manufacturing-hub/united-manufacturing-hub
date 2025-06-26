@@ -37,6 +37,10 @@ internal:
         # Note: This is not our default (compact), but is used for manual testing.
         defaultTopicCleanupPolicy: "delete"
 
+        # this corresponds to log_segment_ms (See also: https://docs.redpanda.com/current/manage/cluster-maintenance/disk-utilization/)
+        # Controls when Redpanda creates new log segments. Lower values create more frequent segments but allow for more granular retention
+        defaultTopicSegmentMs: 3600000 # 1 hour
+
       resources:
         # this corresponds to --smp from scylladb/seastar
         # See also:

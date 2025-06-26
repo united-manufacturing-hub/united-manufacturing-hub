@@ -75,6 +75,7 @@ var _ = Describe("Redpanda Service", func() {
 		config.Topic.DefaultTopicRetentionBytes = 1000000000
 		config.Topic.DefaultTopicCompressionAlgorithm = "snappy"
 		config.Topic.DefaultTopicCleanupPolicy = "compact"
+		config.Topic.DefaultTopicSegmentMs = 3600000
 		ctx, cancel = newTimeoutContext()
 		defer cancel()
 		err = service.AddRedpandaToS6Manager(ctx, config, mockSvcRegistry.GetFileSystem(), redpandaName)
@@ -97,6 +98,7 @@ var _ = Describe("Redpanda Service", func() {
 				cfg.Topic.DefaultTopicRetentionBytes = 1000000000
 				cfg.Topic.DefaultTopicCompressionAlgorithm = "snappy"
 				cfg.Topic.DefaultTopicCleanupPolicy = "compact"
+				cfg.Topic.DefaultTopicSegmentMs = 3600000
 
 				s6Config, err := service.GenerateS6ConfigForRedpanda(cfg, service.GetS6ServiceName(redpandaName))
 				Expect(err).NotTo(HaveOccurred())
@@ -107,6 +109,7 @@ var _ = Describe("Redpanda Service", func() {
 				Expect(yaml).To(ContainSubstring("retention_bytes: 1000000000"))
 				Expect(yaml).To(ContainSubstring("log_compression_type: \"snappy\""))
 				Expect(yaml).To(ContainSubstring("log_cleanup_policy: \"compact\""))
+				Expect(yaml).To(ContainSubstring("log_segment_ms: 3600000"))
 			})
 		})
 
@@ -147,6 +150,7 @@ var _ = Describe("Redpanda Service", func() {
 			initialConfig.Topic.DefaultTopicRetentionBytes = 1000000000
 			initialConfig.Topic.DefaultTopicCompressionAlgorithm = "snappy"
 			initialConfig.Topic.DefaultTopicCleanupPolicy = "compact"
+			initialConfig.Topic.DefaultTopicSegmentMs = 3600000
 
 			// Add the service with initial config
 			By("Adding the Redpanda service with initial config")
@@ -162,6 +166,7 @@ var _ = Describe("Redpanda Service", func() {
 			updatedConfig.Topic.DefaultTopicRetentionBytes = 2000000000
 			updatedConfig.Topic.DefaultTopicCompressionAlgorithm = "lz4"
 			updatedConfig.Topic.DefaultTopicCleanupPolicy = "delete"
+			updatedConfig.Topic.DefaultTopicSegmentMs = 604800000
 
 			// Update the service configuration
 			By("Updating the Redpanda service configuration")

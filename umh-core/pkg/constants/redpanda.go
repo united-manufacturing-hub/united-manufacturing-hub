@@ -61,4 +61,5 @@ const (
 	DefaultRedpandaTopicDefaultTopicRetentionBytes       = 0
 	DefaultRedpandaTopicDefaultTopicCompressionAlgorithm = "snappy"
 	DefaultRedpandaTopicDefaultTopicCleanupPolicy        = "compact"
+	DefaultRedpandaTopicDefaultTopicSegmentMs            = 3600000 // 1 hour in milliseconds
 )

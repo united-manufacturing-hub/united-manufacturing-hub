@@ -53,6 +53,10 @@ func (g *Generator) RenderConfig(cfg RedpandaServiceConfig) (string, error) {
 		cfg.Topic.DefaultTopicCleanupPolicy = constants.DefaultRedpandaTopicDefaultTopicCleanupPolicy
 	}
 
+	if cfg.Topic.DefaultTopicSegmentMs == 0 {
+		cfg.Topic.DefaultTopicSegmentMs = constants.DefaultRedpandaTopicDefaultTopicSegmentMs
+	}
+
 	if cfg.BaseDir == "" {
 		cfg.BaseDir = "/data"
 	}
@@ -116,6 +120,7 @@ redpanda:
   retention_bytes: {{if eq .Topic.DefaultTopicRetentionBytes 0}}null{{else}}{{.Topic.DefaultTopicRetentionBytes}}{{end}}
   log_compression_type: "{{.Topic.DefaultTopicCompressionAlgorithm}}"
   log_cleanup_policy: "{{.Topic.DefaultTopicCleanupPolicy}}"
+  log_segment_ms: {{.Topic.DefaultTopicSegmentMs}}
 
   # Set the default number of partitions for new topics
   default_topic_partitions: 1

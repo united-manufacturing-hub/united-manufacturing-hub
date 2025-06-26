@@ -364,6 +364,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 		Expect(config.Topic.DefaultTopicRetentionBytes).To(Equal(int64(0)))
 		Expect(config.Topic.DefaultTopicRetentionMs).To(Equal(int64(604800000)))
 		Expect(config.Topic.DefaultTopicCleanupPolicy).To(Equal("delete"))
+		Expect(config.Topic.DefaultTopicSegmentMs).To(Equal(int64(3600000)))
 	})
 
 	Describe("RedpandaMetricsState", func() {

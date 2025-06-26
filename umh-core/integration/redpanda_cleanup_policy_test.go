@@ -29,6 +29,7 @@ var _ = FDescribe("Redpanda Cleanup Policy Integration Test", Ordered, Label("in
 		testDuration      = 10 * time.Second
 		postRestartWait   = 5 * time.Second
 		compactionTime    = 30000 // 30 seconds in milliseconds
+		segmentTime       = 60000 // 1 minute in milliseconds (lowest value redpanda allows)
 	)
 
 	var lastOffset = -1
@@ -72,9 +73,10 @@ var _ = FDescribe("Redpanda Cleanup Policy Integration Test", Ordered, Label("in
 			return err == nil && newOffset != -1
 		}, 30*time.Second, 1*time.Second).Should(BeTrue(), "Messages should be produced initially")
 
-		By("Updating Redpanda configuration with new retention time")
+		By("Updating Redpanda configuration with new retention, segment time and cleanup policy")
 		builder.full.Internal.Redpanda.RedpandaServiceConfig.Topic.DefaultTopicRetentionMs = compactionTime
 		builder.full.Internal.Redpanda.RedpandaServiceConfig.Topic.DefaultTopicCleanupPolicy = "compact"
+		builder.full.Internal.Redpanda.RedpandaServiceConfig.Topic.DefaultTopicSegmentMs = segmentTime
 		cfg := builder.BuildYAML()
 		GinkgoWriter.Printf("Updated config: %s\n", cfg)
 		Expect(writeConfigFile(cfg, getContainerName())).To(Succeed())

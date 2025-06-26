@@ -52,4 +52,4 @@ internal:
         # - https://docs.redpanda.com/current/manage/kubernetes/k-manage-resources/#memory
         # By default Redpanda will use 4MB per partition, resulting in a theoretical maximum of 500 usable partitions per core
         # Setting this to lower then 2GB leads to startup issues!
-        memoryPerCoreInBytes: 2147483648 # 2GB
+        memoryPerCoreInBytes: 2147483648 # 2GB 
