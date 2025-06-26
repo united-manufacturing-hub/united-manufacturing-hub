@@ -196,7 +196,7 @@ func (i *TopicBrowserInstance) UpdateObservedStateOfInstance(ctx context.Context
 	// Fetch the actual Benthos config from the service
 	start = time.Now()
 	observedConfig, err := i.service.GetConfig(ctx, services.GetFileSystem(), i.baseFSMInstance.GetID())
-	metrics.ObserveReconcileTime(logger.ComponentDataFlowComponentInstance, i.baseFSMInstance.GetID()+".getConfig", time.Since(start))
+	metrics.ObserveReconcileTime(logger.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".getConfig", time.Since(start))
 	if err == nil {
 		// Only update if we successfully got the config
 		i.ObservedState.ObservedServiceConfig.BenthosConfig = observedConfig

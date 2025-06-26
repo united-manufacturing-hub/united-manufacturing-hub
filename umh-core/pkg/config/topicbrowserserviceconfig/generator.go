@@ -48,9 +48,6 @@ func (g *Generator) RenderConfig(cfg Config) (string, error) {
 // ConfigToMap converts a Config to a raw map for YAML generation
 func (g *Generator) ConfigToMap(cfg Config) map[string]any {
 	configMap := make(map[string]any)
-
-	// Add all sections
-
 	return configMap
 }
 

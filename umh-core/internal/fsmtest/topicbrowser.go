@@ -25,7 +25,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/topicbrowserserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsmtype "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
-	dataflowcomponentfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	redpandafsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	topicbrowsersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/topicbrowser"
@@ -75,35 +74,35 @@ func ConfigureTopicBrowserServiceConfig(mockService *topicbrowsersvc.MockService
 // TransitionToTopicBrowserState is a helper to configure a service for a given high-level state
 func TransitionToTopicBrowserState(mockService *topicbrowsersvc.MockService, serviceName string, state string) {
 	switch state {
-	case dataflowcomponentfsm.OperationalStateStopped:
+	case topicbrowserfsm.OperationalStateStopped:
 		SetupTopicBrowserServiceState(mockService, serviceName, topicbrowsersvc.StateFlags{
 			BenthosFSMState:       benthosfsmtype.OperationalStateStopped,
 			RedpandaFSMState:      redpandafsm.OperationalStateStopped,
 			HasProcessingActivity: false,
 			HasBenthosOutput:      false,
 		})
-	case dataflowcomponentfsm.OperationalStateStarting:
+	case topicbrowserfsm.OperationalStateStarting:
 		SetupTopicBrowserServiceState(mockService, serviceName, topicbrowsersvc.StateFlags{
 			BenthosFSMState:       benthosfsmtype.OperationalStateStarting,
 			RedpandaFSMState:      redpandafsm.OperationalStateStarting,
 			HasProcessingActivity: false,
 			HasBenthosOutput:      false,
 		})
-	case dataflowcomponentfsm.OperationalStateActive:
+	case topicbrowserfsm.OperationalStateActive:
 		SetupTopicBrowserServiceState(mockService, serviceName, topicbrowsersvc.StateFlags{
 			BenthosFSMState:       benthosfsmtype.OperationalStateActive,
 			RedpandaFSMState:      redpandafsm.OperationalStateActive,
 			HasProcessingActivity: true,
 			HasBenthosOutput:      true,
 		})
-	case dataflowcomponentfsm.OperationalStateDegraded:
+	case topicbrowserfsm.OperationalStateDegraded:
 		SetupTopicBrowserServiceState(mockService, serviceName, topicbrowsersvc.StateFlags{
 			BenthosFSMState:       benthosfsmtype.OperationalStateDegraded,
 			RedpandaFSMState:      redpandafsm.OperationalStateActive,
 			HasProcessingActivity: false,
 			HasBenthosOutput:      false,
 		})
-	case dataflowcomponentfsm.OperationalStateStopping:
+	case topicbrowserfsm.OperationalStateStopping:
 		SetupTopicBrowserServiceState(mockService, serviceName, topicbrowsersvc.StateFlags{
 			BenthosFSMState:       benthosfsmtype.OperationalStateStopping,
 			RedpandaFSMState:      redpandafsm.OperationalStateActive,
