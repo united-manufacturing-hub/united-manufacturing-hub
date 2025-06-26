@@ -65,11 +65,11 @@ GOLANG_VERSION = 1.24.4
 ALPINE_VERSION = 3.21
 NMAP_VERSION = 7.95-r1
 S6_OVERLAY_VERSION = 3.2.0.2
-BENTHOS_UMH_VERSION = 0.9.5
 REDPANDA_VERSION = 24.3.8
+## Benthos version is a tag or a sha-<commit hash> (e.g. 0.9.4 or sha-a51a685) to be used in the docker image
+BENTHOS_UMH_VERSION = 0.9.5
 BUF_VERSION = 1.55.1
 PROTOC_GEN_GO_VERSION = 1.36.6
-
 
 
 # Note: Redpanda allocates 2GB of memory per core.
@@ -107,8 +107,23 @@ download-docker-binaries:
 	@if [ ! -f .docker-cache/benthos/version ] || [ "$$(cat .docker-cache/benthos/version)" != "$(BENTHOS_UMH_VERSION)" ]; then \
 		rm -f .docker-cache/benthos/benthos-linux-*; \
 		echo "$(BENTHOS_UMH_VERSION)" > .docker-cache/benthos/version; \
-		wget -O .docker-cache/benthos/benthos-linux-amd64 "https://github.com/united-manufacturing-hub/benthos-umh/releases/download/v$(BENTHOS_UMH_VERSION)/benthos-linux-amd64"; \
-		wget -O .docker-cache/benthos/benthos-linux-arm64 "https://github.com/united-manufacturing-hub/benthos-umh/releases/download/v$(BENTHOS_UMH_VERSION)/benthos-linux-arm64"; \
+		echo "Extracting Benthos binary from Docker container for version $(BENTHOS_UMH_VERSION)..."; \
+		echo "Pulling ghcr.io/united-manufacturing-hub/benthos-umh:$(BENTHOS_UMH_VERSION) for amd64..."; \
+		docker pull --platform linux/amd64 ghcr.io/united-manufacturing-hub/benthos-umh:$(BENTHOS_UMH_VERSION); \
+		CONTAINER_AMD64=$$(docker create --platform linux/amd64 ghcr.io/united-manufacturing-hub/benthos-umh:$(BENTHOS_UMH_VERSION)); \
+		docker cp $$CONTAINER_AMD64:/benthos .docker-cache/benthos/benthos-linux-amd64; \
+		docker rm -v $$CONTAINER_AMD64; \
+		echo "Pulling ghcr.io/united-manufacturing-hub/benthos-umh:$(BENTHOS_UMH_VERSION) for arm64..."; \
+		docker pull --platform linux/arm64 ghcr.io/united-manufacturing-hub/benthos-umh:$(BENTHOS_UMH_VERSION); \
+		CONTAINER_ARM64=$$(docker create --platform linux/arm64 ghcr.io/united-manufacturing-hub/benthos-umh:$(BENTHOS_UMH_VERSION)); \
+		docker cp $$CONTAINER_ARM64:/benthos .docker-cache/benthos/benthos-linux-arm64; \
+		docker rm -v $$CONTAINER_ARM64; \
+		if [ ! -s .docker-cache/benthos/benthos-linux-amd64 ] || [ ! -s .docker-cache/benthos/benthos-linux-arm64 ]; then \
+			echo "Error: Extracted Benthos binaries are empty or missing"; \
+			rm -f .docker-cache/benthos/benthos-linux-amd64 .docker-cache/benthos/benthos-linux-arm64; \
+			rm -f .docker-cache/benthos/version; \
+			exit 1; \
+		fi; \
 	fi
 
 	@# Check and update Redpanda version
