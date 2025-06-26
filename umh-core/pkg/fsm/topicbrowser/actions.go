@@ -174,7 +174,7 @@ func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services s
 	start := time.Now()
 	info, err := i.getServiceStatus(ctx, services, snapshot)
 	if err != nil {
-		return err
+		return fmt.Errorf("error while getting service status: %w", err)
 	}
 	metrics.ObserveReconcileTime(logger.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
 	// Store the raw service info
@@ -188,24 +188,7 @@ func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services s
 		return nil
 	}
 
-	// Check if the service exists and if we need to update the configuration
-	if i.service.ServiceExists(ctx, services, i.baseFSMInstance.GetID()) {
-		// Generate the benthos config from the current topic browser config
-		benthosConfig, err := i.service.GenerateConfig(i.baseFSMInstance.GetID())
-		if err != nil {
-			return fmt.Errorf("failed to generate benthos config for Topic Browser service %s: %w", i.baseFSMInstance.GetID(), err)
-		}
-
-		// Update the config in the S6 manager
-		err = i.service.UpdateInManager(ctx, services.GetFileSystem(), &benthosConfig, constants.TopicBrowserServiceName)
-		if err != nil {
-			return fmt.Errorf("failed to update Topic Browser service configuration: %w", err)
-		}
-
-		i.baseFSMInstance.GetLogger().Debugf("Topic Browser service configuration updated")
-	} else {
-		i.baseFSMInstance.GetLogger().Debugf("Service does not exist yet, skipping configuration update")
-	}
+	// We do not check the observed vs the desired config here as the config is static and therefore cannot change
 
 	return nil
 }
