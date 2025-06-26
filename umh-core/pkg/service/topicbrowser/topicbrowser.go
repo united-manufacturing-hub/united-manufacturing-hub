@@ -169,29 +169,8 @@ func (svc *Service) GetConfig(ctx context.Context, filesystemService filesystem.
 // GenerateConfig provides a fixed benthosserviceconfig to ensure deploying
 // a benthos instants that reads data from uns, processes it to get into a
 // proper protobuf format and writes it to stdout using an additional timestamp.
-// This function must return a static config, as the config is not expected to change
 func (svc *Service) GenerateConfig(tbName string) (benthossvccfg.BenthosServiceConfig, error) {
-	return benthossvccfg.BenthosServiceConfig{
-		Input: map[string]any{
-			"uns": map[string]any{
-				"umh_topic":      "umh.v1.*",
-				"kafka_topic":    "umh.messages",
-				"broker_address": "localhost:9092",
-				"consumer_group": "topic-browser",
-			},
-		},
-		Pipeline: map[string]any{
-			"processors": []map[string]any{
-				{
-					"topic_browser": map[string]any{},
-				},
-			},
-		},
-		Output: map[string]any{
-			"stdout": map[string]any{},
-		},
-		LogLevel: constants.DefaultBenthosLogLevel,
-	}, nil
+	return benthossvccfg.DefaultBenthosServiceConfig, nil
 }
 
 // Status returns information about the connection health for the specified topic browser.

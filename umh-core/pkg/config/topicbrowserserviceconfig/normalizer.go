@@ -14,6 +14,10 @@
 
 package topicbrowserserviceconfig
 
+import (
+	benthossvccfg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
+)
+
 // Normalizer handles the normalization of Topic Browser configurations
 type Normalizer struct{}
 
@@ -24,5 +28,12 @@ func NewNormalizer() *Normalizer {
 
 // NormalizeConfig doesn't do anything, there is no normalization needed here
 func (n *Normalizer) NormalizeConfig(cfg Config) Config {
-	return cfg
+	// Our normalizer will setup a default if not set (just like redpanda)
+	normalized := cfg
+
+	if len(normalized.BenthosConfig.Input) == 0 || len(normalized.BenthosConfig.Pipeline) == 0 || len(normalized.BenthosConfig.Output) == 0 {
+		normalized.BenthosConfig = benthossvccfg.DefaultBenthosServiceConfig
+	}
+
+	return normalized
 }
