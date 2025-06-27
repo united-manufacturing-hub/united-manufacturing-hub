@@ -194,5 +194,6 @@ var _ = Describe("Redpanda Cleanup Policy Integration Test", Ordered, Label("int
 			return strings.Contains(segmentInfo, "LOCAL-SEGMENTS") && !strings.Contains(segmentInfo, "LOCAL-SEGMENTS  1")
 		}, 90*time.Second, 5*time.Second).Should(BeTrue(), "Segment should roll after segment.ms timeout")
 
+		// Note: We do not directly check for the compaction to happen, as it is not guaranteed to happen within a specific time/space constraint
 	})
 })
