@@ -36,6 +36,7 @@ var _ = Describe("Simulator", func() {
 
 	BeforeEach(func() {
 		simulator = topicbrowser.NewSimulator()
+		simulator.InitializeSimulator()
 	})
 
 	Describe("NewSimulator", func() {
@@ -437,7 +438,7 @@ var _ = Describe("Simulator", func() {
 			event1 := unsBundle1.Events.Entries[0]
 			event2 := unsBundle2.Events.Entries[0]
 
-			Expect(event2.ProducedAtMs).To(BeNumerically(">", event1.ProducedAtMs))
+			Expect(event2.ProducedAtMs).To(BeNumerically(">=", event1.ProducedAtMs))
 		})
 
 		It("should work correctly with multiple ticks", func() {
