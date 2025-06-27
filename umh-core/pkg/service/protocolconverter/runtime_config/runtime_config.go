@@ -142,6 +142,8 @@ func BuildRuntimeConfig(
 		}
 	}
 	locationPath := strings.Join(pathParts, ".")
+	// Strip trailing dots
+	locationPath = strings.TrimRight(locationPath, ".")
 
 	//----------------------------------------------------------------------
 	// 2. Assemble the **complete** variable bundle
