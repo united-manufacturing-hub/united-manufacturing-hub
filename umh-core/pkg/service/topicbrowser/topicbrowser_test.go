@@ -921,9 +921,7 @@ func makeLZ4Hex(payload []byte) string {
 	compBuf := make([]byte, bound)
 
 	n, err := lz4.CompressBlock(payload, compBuf, nil)
-	if err != nil {
-		panic("lz4 compress error: " + err.Error())
-	}
+	Expect(err).NotTo(HaveOccurred())
 	comp := compBuf[:n]
 
 	out := make([]byte, 4+len(comp))
