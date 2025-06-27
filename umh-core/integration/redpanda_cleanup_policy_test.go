@@ -113,7 +113,7 @@ var _ = Describe("Redpanda Cleanup Policy Integration Test", Ordered, Label("int
 
 		By("Verifying messages continue to be produced after config update")
 		failure := false
-		for i := 0; i < 0; i++ {
+		for i := 0; i < 3; i++ {
 			failure = false
 			startTime := time.Now()
 			for time.Since(startTime) < testDuration {
