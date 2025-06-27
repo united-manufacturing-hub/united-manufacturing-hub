@@ -238,12 +238,12 @@ func (i *TopicBrowserInstance) isTopicBrowserHealthy() (bool, string) {
 
 	// Check if the underlying Benthos FSM is in a healthy state
 	if serviceInfo.BenthosFSMState != benthosfsm.OperationalStateActive && serviceInfo.BenthosFSMState != benthosfsm.OperationalStateIdle {
-		return false, "benthos fsm not active"
+		return false, "benthos fsm not active or idle"
 	}
 
 	// Check if Redpanda FSM is in a healthy state
 	if serviceInfo.RedpandaFSMState != rpfsm.OperationalStateActive && serviceInfo.RedpandaFSMState != rpfsm.OperationalStateIdle {
-		return false, "redpanda fsm not active"
+		return false, "redpanda fsm not active or idle"
 	}
 
 	return true, ""
@@ -277,7 +277,19 @@ func (i *TopicBrowserInstance) IsTopicBrowserDegraded() (isDegraded bool, reason
 	// Check for restart events in S6 service
 	s6ObservedState := serviceInfo.BenthosObservedState.ServiceInfo.S6ObservedState
 	if len(s6ObservedState.ServiceInfo.ExitHistory) > 0 {
-		return true, fmt.Sprintf("service has %d restart events", len(s6ObservedState.ServiceInfo.ExitHistory))
+		// Check if those where recent (within the last hour)
+		var hasRecentRestart bool
+		var lastRestartTime time.Time
+		for _, exitEvent := range s6ObservedState.ServiceInfo.ExitHistory {
+			if exitEvent.Timestamp.After(time.Now().Add(-1 * time.Hour)) {
+				hasRecentRestart = true
+				lastRestartTime = exitEvent.Timestamp
+				break
+			}
+		}
+		if hasRecentRestart {
+			return true, fmt.Sprintf("service has %d restart events in the last hour, last restart at %s", len(s6ObservedState.ServiceInfo.ExitHistory), lastRestartTime)
+		}
 	}
 
 	return false, "service appears healthy"

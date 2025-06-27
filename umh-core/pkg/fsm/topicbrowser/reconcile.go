@@ -291,6 +291,12 @@ func (i *TopicBrowserInstance) reconcileStartingStates(ctx context.Context, serv
 		return nil, false
 
 	case OperationalStateStartingBenthos:
+		// First check if Benthos is still running (previous check still valid)
+		if !i.isBenthosRunning() {
+			i.ObservedState.ServiceInfo.StatusReason = "benthos degraded during startup"
+			return i.baseFSMInstance.SendEvent(ctx, EventBenthosDegraded), true
+		}
+
 		// Check if Redpanda is healthy
 		if i.isRedpandaRunning() {
 			i.ObservedState.ServiceInfo.StatusReason = "redpanda started"
@@ -306,6 +312,18 @@ func (i *TopicBrowserInstance) reconcileStartingStates(ctx context.Context, serv
 		return nil, false
 
 	case OperationalStateStartingRedpanda:
+		// First check if Benthos is still running (previous check still valid)
+		if !i.isBenthosRunning() {
+			i.ObservedState.ServiceInfo.StatusReason = "benthos degraded during startup"
+			return i.baseFSMInstance.SendEvent(ctx, EventBenthosDegraded), true
+		}
+
+		// Check if Redpanda is still running (previous check still valid)
+		if !i.isRedpandaRunning() {
+			i.ObservedState.ServiceInfo.StatusReason = "redpanda degraded during startup"
+			return i.baseFSMInstance.SendEvent(ctx, EventRedpandaDegraded), true
+		}
+
 		// Both services are up, transition to idle
 		if healthy, _ := i.isTopicBrowserHealthy(); healthy {
 			i.ObservedState.ServiceInfo.StatusReason = "started up"

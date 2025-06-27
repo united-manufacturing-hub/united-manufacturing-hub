@@ -84,20 +84,23 @@ func NewInstance(
 				Dst:  OperationalStateIdle,
 			},
 
-			// idle/active -> degraded benthos
+			// idle/active/starting states -> degraded benthos
 			{
 				Name: EventBenthosDegraded,
 				Src: []string{
+					OperationalStateStartingBenthos,
+					OperationalStateStartingRedpanda,
 					OperationalStateIdle,
 					OperationalStateActive,
 				},
 				Dst: OperationalStateDegradedBenthos,
 			},
 
-			// idle/active -> degraded redpanda
+			// idle/active/starting states -> degraded redpanda
 			{
 				Name: EventRedpandaDegraded,
 				Src: []string{
+					OperationalStateStartingRedpanda,
 					OperationalStateIdle,
 					OperationalStateActive,
 				},
