@@ -119,6 +119,22 @@ type ServiceInfo struct {
 	StatusReason       string
 }
 
+// CopyStatus is a go-deepcopy override for the Status field.
+//
+// go-deepcopy looks for a method with the signature
+//
+//	func (dst *T) Copy<FieldName>(src <FieldType>) error
+//
+// This method ensures that when ServiceInfo is deep copied, the nested Status
+// struct uses its own custom copy methods (CopyLogs and CopyBuffer) to perform
+// shallow copies instead of expensive deep copies.
+func (si *ServiceInfo) CopyStatus(src Status) error {
+	// Use the Status struct's own copy logic which handles Buffer and Logs efficiently
+	si.Status.Buffer = src.Buffer // Shallow copy (handled by Status.CopyBuffer)
+	si.Status.Logs = src.Logs     // Shallow copy (handled by Status.CopyLogs)
+	return nil
+}
+
 // Service implements ITopicBrowserService
 type Service struct {
 	logger *zap.SugaredLogger
