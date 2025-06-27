@@ -22,8 +22,8 @@ type Context struct {
 	// CopyBetweenPtrAndValue allow or not copying between pointers and values (default is `true`)
 	CopyBetweenPtrAndValue bool
 
-	// CopyBetweenStructFieldAndMethod allow or not copying between struct fields and methods (default is `true`)
-	CopyBetweenStructFieldAndMethod bool
+	// CopyViaCopyingMethod allow or not copying via destination type copying methods (default is `true`)
+	CopyViaCopyingMethod bool
 
 	// IgnoreNonCopyableTypes ignore non-copyable types (default is `false`)
 	IgnoreNonCopyableTypes bool
@@ -47,10 +47,18 @@ func CopyBetweenPtrAndValue(flag bool) Option {
 	}
 }
 
-// CopyBetweenStructFieldAndMethod config function for setting flag `CopyBetweenStructFieldAndMethod`
+// CopyBetweenStructFieldAndMethod config function for setting flag `CopyViaCopyingMethod`
+// Deprecated: use CopyViaCopyingMethod instead
 func CopyBetweenStructFieldAndMethod(flag bool) Option {
 	return func(ctx *Context) {
-		ctx.CopyBetweenStructFieldAndMethod = flag
+		ctx.CopyViaCopyingMethod = flag
+	}
+}
+
+// CopyViaCopyingMethod config function for setting flag `CopyViaCopyingMethod`
+func CopyViaCopyingMethod(flag bool) Option {
+	return func(ctx *Context) {
+		ctx.CopyViaCopyingMethod = flag
 	}
 }
 

@@ -49,4 +49,4 @@ The Redpanda data directory.
 
 ### HWID
 
-A unique identifier for that UMH-Core installation. Useful for troubleshooting.
+A unique identifier for that UMH Core installation. Useful for troubleshooting.

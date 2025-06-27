@@ -135,6 +135,8 @@ type TopicConfig struct {
 	DefaultTopicRetentionMs          int64
 	DefaultTopicRetentionBytes       int64
 	DefaultTopicCompressionAlgorithm string
+	DefaultTopicCleanupPolicy        string
+	DefaultTopicSegmentMs            int64
 }
 
 // RedpandaMetrics contains information about the metrics of the Redpanda service
@@ -287,7 +289,7 @@ func NewRedpandaMonitorService(redpandaName string, opts ...RedpandaMonitorServi
 
 // BLOCK_START_MARKER marks the begin of a new data block inside the logs.
 // Between it and MID_MARKER is the metrics data, between MID_MARKER and END_MARKER is the cluster config data.
-const BLOCK_START_MARKER = "BEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGIN"
+const BLOCK_START_MARKER = "BEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGIN"
 
 // METRICS_END_MARKER marks the end of the metrics data and the beginning of the cluster config data.
 const METRICS_END_MARKER = "METRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSEND"
@@ -392,7 +394,7 @@ var markerReplacer = strings.NewReplacer(
 )
 
 // stripMarkers returns a copy of b with every marker removed.
-// If you’re on Go ≥ 1.20 you can avoid the extra string-copy with
+// If you're on Go ≥ 1.20 you can avoid the extra string-copy with
 //
 //	unsafe.String and unsafe.Slice, but the plain version is often fast enough.
 func StripMarkers(b []byte) []byte {
@@ -937,10 +939,31 @@ func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigData
 		return nil, fmt.Errorf("failed to parse cluster config data: no log_compression_type found")
 	}
 
-	s.logger.Debugf("Cluster config [log_retention_ms: %d, retention_bytes: %d, log_compression_type: %s]",
+	if value, ok := redpandaConfig["log_cleanup_policy"]; ok {
+		if strValue, ok := value.(string); ok {
+			result.Topic.DefaultTopicCleanupPolicy = strValue
+		} else {
+			return nil, fmt.Errorf("failed to parse cluster config data: log_cleanup_policy is not a string")
+		}
+	} else {
+		return nil, fmt.Errorf("failed to parse cluster config data: no log_cleanup_policy found")
+	}
+
+	if value, ok := redpandaConfig["log_segment_ms"]; ok {
+		result.Topic.DefaultTopicSegmentMs, err = ParseRedpandaIntegerlikeValue(value)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse cluster config data: log_segment_ms is not a number: %w", err)
+		}
+	} else {
+		return nil, fmt.Errorf("failed to parse cluster config data: no log_segment_ms found")
+	}
+
+	s.logger.Debugf("Cluster config [log_retention_ms: %d, retention_bytes: %d, log_compression_type: %s, log_cleanup_policy: %s, log_segment_ms: %d]",
 		result.Topic.DefaultTopicRetentionMs,
 		result.Topic.DefaultTopicRetentionBytes,
-		result.Topic.DefaultTopicCompressionAlgorithm)
+		result.Topic.DefaultTopicCompressionAlgorithm,
+		result.Topic.DefaultTopicCleanupPolicy,
+		result.Topic.DefaultTopicSegmentMs)
 
 	return &result, nil
 }

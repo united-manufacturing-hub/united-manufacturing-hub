@@ -68,3 +68,5 @@ dataFlow:
 internal:
   redpanda:
     desiredState: stopped
+  topicbrowser:
+    desiredState: stopped

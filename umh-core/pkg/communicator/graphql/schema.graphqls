@@ -1,0 +1,61 @@
+# Copyright 2025 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+scalar Time      # RFC‑3339 via gqlgen
+scalar JSON      # map[string]interface{}
+
+enum ScalarType { NUMERIC STRING BOOLEAN }
+
+type MetadataKV { key: String!, value: String! }
+
+################  Event hierarchy  ################
+interface Event {
+  producedAt: Time!
+  headers:    [MetadataKV!]!
+}
+
+type TimeSeriesEvent implements Event {
+  producedAt: Time!
+  headers:    [MetadataKV!]!
+
+  sourceTs:   Time!
+  scalarType: ScalarType!
+  numericValue: Float
+  stringValue:  String
+  booleanValue: Boolean
+}
+
+type RelationalEvent implements Event {
+  producedAt: Time!
+  headers:    [MetadataKV!]!
+  json: JSON!
+}
+
+################  Topic & queries  ################
+type Topic {
+  topic:    String!            # full dot path
+  metadata: [MetadataKV!]!
+  lastEvent: Event
+}
+
+input MetaExpr { key: String!, eq: String }
+input TopicFilter {
+  text: String          # free‑text search in topic & metadata
+  meta: [MetaExpr!]
+}
+
+type Query {
+  topics(filter: TopicFilter, limit: Int = 100): [Topic!]!
+  topic(topic: String!): Topic
+} 

@@ -1,0 +1,252 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// ---------------------------------------------------------------------------
+//
+// Tag-Processor → FSM wire contracts
+// ----------------------------------
+// These messages are emitted by the Benthos **tag_processor** and consumed
+// exclusively by the finite-state-machine (FSM) that drives UMH-Core.  Once
+// inside the FSM the data is reshaped into other structs, and further hops
+// (Communicator → Front-End) use plain JSON, not this protobuf.
+//
+// Typical flow
+// ────────────
+//    ┌───────────┐   UnsBundle  (Block LZ4 + hex)   ┌─────────────┐
+//    │ tag_proc. │ ───────────────────────────►│   FSM       │
+//    └───────────┘                             └─────────────┘
+//      UnsBundle.events[*] : EventTableEntry         (~ring-100)
+//      UnsBundle.uns_map   : TopicInfo (complete state)
+//
+// ---------------------------------------------------------------------------
+
+syntax = "proto3";
+
+package umh.events;
+
+option go_package = "./;topic_browser_plugin";
+
+import "google/protobuf/wrappers.proto";
+
+// ---------- Topic info -------------------------------------------------------
+
+/**
+ * TopicInfo breaks one UNS topic into its hierarchy levels plus a few aids for
+ * downstream filtering.  The FSM stores each unique TopicInfo once and refers
+ * to it from many events via `uns_tree_id`, saving space.
+ */
+message TopicInfo {
+  // Physical ISA-95 (or custom) hierarchy; level0 must never be empty
+  string            level0             = 1;  // e.g. "corpA"
+  
+  // Dynamic location hierarchy (level1, level2, ... levelN)
+  repeated string   location_sublevels = 2;  // e.g. ["plant-1", "line-4", "pump-41"]
+
+  // Data contract that governs payload shape, e.g. "_historian"
+  string            data_contract      = 3;
+
+  // Optional non-physical grouping path (axis.x.position, diagnostics.*, …)
+  optional string   virtual_path       = 4;  // joined with '.' if present
+
+  // The final segment name (e.g., "temperature", "order_created")
+  string            name               = 5;
+
+  // Aggregated Kafka-header *metadata* for this topic.
+  // ───────────────────────────────────────────────────
+  // • Every time the tag_processor sees a Kafka header on this topic it stores
+  //   the *latest* value here, keyed by header name.
+  // • The map therefore holds "last known" values for headers such as
+  //   `unit`, `serial_number`, `plc_address`, …—anything a bridge, PLC or
+  //   stream-processor chose to add.
+  // • The front-end can search or facet by these keys without scanning live
+  //   event traffic; it only needs the TopicInfo cache.
+  // • This is *not* duplicated data: EventKafka.headers (inside EventTableEntry)
+  //   keeps the raw per-event headers for debugging, whereas this field is
+  //   a compact, topic-level index optimised for look-ups and UI filters.
+  map<string,string> metadata          = 6;
+}
+
+// TopicMap provides a fast lookup structure for topics using their UNS Tree ID as the key.
+// The UNS Tree ID is a hash of the TopicInfo fields, providing a compact unique identifier.
+message TopicMap {
+  // Key is the UNS Tree id, which is a hash over the TopicInfo entries.
+  // Using a hash instead of the full topic name reduces storage requirements while maintaining uniqueness.
+  map<string, TopicInfo> entries = 1;
+}
+
+//──────────────────────────── RAW KAFKA SNAPSHOT ────────────────────────────
+
+/** Copy of the Kafka message as the tag-processor received it. */
+message EventKafka {
+  map<string,string> headers = 1;
+  bytes              payload = 2;
+}
+
+//──────────────────────────── PAYLOAD ENUMS ─────────────────────────────────
+
+/**
+ * PayloadFormat discriminates between the two payload families for frontend convenience.
+ * This allows the UI to quickly determine payload type without inspecting the oneof structure.
+ * Similar to how ScalarType provides quick type information for time-series values.
+ *
+ * ▸ TIMESERIES … the classic "one tag, one value, one timestamp" sensor point  
+ * ▸ RELATIONAL  … a complete, self-contained JSON document (batch header,
+ *                 alarm object, recipe, …) that already belongs together
+ *
+ * Each event emitted by the tag-processor falls into **exactly one** payload
+ * family. Anything else is rejected at ingest-time; mixing formats on a single topic
+ * would break the "one-topic-one-shape" contract.
+ *
+ * See full rationale at: https://docs.umh.app/usage/unified-namespace/payload-formats
+ */
+enum PayloadFormat {
+  PAYLOAD_FORMAT_UNSPECIFIED = 0; // this should never happen, can only happen if it wasn't set --> message should be rejected
+  TIMESERIES = 1;   // one scalar value + timestamp (e.g. a float)
+  RELATIONAL  = 2;   // full JSON object (e.g. a JSON object)
+}
+
+/**
+ * For **TIMESERIES** payloads we also capture the scalar's *primitive* type.
+ * The Management Console uses this hint to pick a sensible default renderer:
+ *
+ *   NUMERIC  → plot on a line/area chart  
+ *   STRING   → show last value in a table or status badge  
+ *   BOOLEAN  → treat as STRING
+ *
+ * Storing the type here keeps the TimeSeriesPayload tiny and avoids costly
+ * JSON introspection on the front-end.
+ */
+enum ScalarType {            // applies only to Time-series
+  SCALAR_TYPE_UNSPECIFIED = 0; // this should never happen, can only happen if it wasn't set --> message should be rejected
+  NUMERIC                  = 1;
+  STRING                   = 2;
+  BOOLEAN                  = 3;
+}
+
+//──────────────────────────── PAYLOAD SHAPES ────────────────────────────────
+
+/**
+ * TimeSeriesPayload  ─ the canonical UMH "one-tag / one-value" shape
+ * ---------------------------------------------------------------
+ * • Holds exactly one scalar *and* the moment it was observed at the source.
+ * • `scalar_type` mirrors the ScalarType enum so the UI can decide quickly
+ *   whether the value should be plotted (numeric), shown as text (string) or
+ *   rendered as a state indicator (boolean).
+ * • `value` is a oneof containing standard protobuf wrapper types:
+ *       ▸ google.protobuf.DoubleValue   → NUMERIC  
+ *       ▸ google.protobuf.StringValue   → STRING  
+ *       ▸ google.protobuf.BoolValue     → BOOLEAN
+ * • `timestamp_ms` is the **source** timestamp (epoch-ms).  It describes when
+ *   the PLC / device generated the value, *not* when Kafka wrote the message.
+ *   The latter lives in `EventTableEntry.produced_at_ms` for debugging.
+ */
+message TimeSeriesPayload {
+  ScalarType               scalar_type  = 1;   // numeric / string / boolean (for frontend convenience)
+  oneof value {
+    google.protobuf.DoubleValue numeric_value = 2;   // NUMERIC values
+    google.protobuf.StringValue string_value  = 3;   // STRING values  
+    google.protobuf.BoolValue   boolean_value = 4;   // BOOLEAN values
+  }
+  int64                    timestamp_ms = 5;   // source time
+}
+
+/**
+ * RelationalPayload  ─ full JSON document shape
+ * ---------------------------------------------
+ * • Used when an event already bundles multiple related fields (order header,
+ *   batch summary, set-point list, …) that *belong together*.
+ * • Payload arrives as valid UTF-8 JSON bytes; no extra framing or base64.
+ * • Downstream processors are free to validate this blob against the data
+ *   contract referenced in TopicInfo.data_contract.
+ */
+message RelationalPayload {
+  bytes json = 1;                              // already UTF-8 JSON bytes
+}
+
+
+//──────────────────────────── EVENT ENTRY ───────────────────────────────────
+
+/**
+ * EventTableEntry – one *normalised* UNS event
+ * -------------------------------------------
+ * The tag-processor converts every raw Kafka record into exactly one of these
+ * entries and drops it into the ring-buffer that later becomes
+ * UnsBundle.events[*].
+ *
+ * Why the split?
+ *   • **TopicInfo** (in UnsBundle.uns_map) describes the *where* and *what* of
+ *     the signal and changes rarely.  
+ *   • **EventTableEntry** carries the *latest value* plus a few breadcrumbs
+ *     that make troubleshooting painless.
+ *
+ * Field-by-field rundown
+ * ──────────────────────
+ * uns_tree_id      – 64-bit xxHash of the TopicInfo.  Lets the Frontend join the
+ *                    payload back to its TopicInfo without repeating long
+ *                    strings in every row.
+ *
+ * payload_format   – PayloadFormat enum for frontend convenience. Allows UI to
+ *                    quickly determine if this is TIMESERIES or RELATIONAL data
+ *                    without inspecting the oneof payload structure.
+ *
+ * payload          – `oneof` branch holding either:
+ *                       ▸ TimeSeriesPayload  (scalar + timestamp_ms)  
+ *                       ▸ RelationalPayload  (full JSON document)
+ *
+ * raw_kafka_msg    – Exact copy of the message *before* the tag-processor
+ *                    touched it (headers + value only).  Included **solely**
+ *                    for deep debugging, packet captures, etc.  Normal runtime
+ *                    logic should ignore it.
+ *
+ * bridged_by       – Ordered list of Benthos instances the record traversed. 
+ *                    Helpful when chains of bridges reshape or forward the same topic multiple times to get the trace of the record.
+ *
+ * produced_at_ms   – Kafka's own timestamp (epoch-ms) when the record was
+ *                    written to the UNS.  Use this to spot buffering or
+ *                    network latency.  Do *not* confuse with
+ *                    TimeSeriesPayload.timestamp_ms, which is the **source**
+ *                    time inside the PLC/device.
+ */
+message EventTableEntry {
+  string                  uns_tree_id   = 1;   // xxHash over TopicInfo
+  PayloadFormat           payload_format = 2;   // TIMESERIES/RELATIONAL (frontend convenience)
+  // Fields 3,4 reserved for future metadata expansion
+  EventKafka              raw_kafka_msg = 5;   // headers + value, for debugging
+  repeated string         bridged_by  = 6;   // Benthos hops (oldest → newest)
+  uint64                  produced_at_ms = 7;  // Kafka write time, epoch-ms 
+  // Fields 8,9 reserved for future expansion
+  oneof payload {
+    TimeSeriesPayload     ts     = 10;
+    RelationalPayload     rel    = 11;
+  }
+}
+
+//──────────────────────────── EVENT BATCH ───────────────────────────────────
+
+// EventTable contains a batch of processed events.
+message EventTable {
+  repeated EventTableEntry entries = 1;
+}
+
+// ---------- UNS Bundle ----------------------------------------------------
+
+/**
+ * A single frame delivered to the FSM:
+ *    • `uns_map`  – the full TopicInfo map
+ *    • `events`   – matching EventTable entries
+ */
+message UnsBundle {
+  TopicMap uns_map  = 1; // Map of all topics if new or changed topics or a metadata was changed
+  EventTable events = 2; // Events associated with these topics
+}
+

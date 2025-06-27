@@ -38,6 +38,7 @@ const (
 	ComponentDataFlowCompManager      = "dataflow_component_manager"
 	ComponentConnectionManager        = "connection_manager"
 	ComponentProtocolConverterManager = "protocol_converter_manager"
+	ComponentTopicBrowserManager      = "topic_browser_manager"
 	// Instances
 	ComponentBaseFSMInstance           = "base_fsm_instance"
 	ComponentS6Instance                = "s6_instance"
@@ -50,6 +51,7 @@ const (
 	ComponentAgentMonitor              = "agent_monitor"
 	ComponentBenthosMonitor            = "benthos_monitor"
 	ComponentRedpandaMonitor           = "redpanda_monitor"
+	ComponentTopicBrowserInstance      = "topic_browser_instance"
 	// Services
 	ComponentS6Service         = "s6_service"
 	ComponentBenthosService    = "benthos_service"

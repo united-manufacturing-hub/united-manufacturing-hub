@@ -14,6 +14,8 @@
 
 package benthosserviceconfig
 
+import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+
 var (
 	defaultGenerator  = NewGenerator()
 	defaultNormalizer = NewNormalizer()
@@ -33,6 +35,31 @@ type BenthosServiceConfig struct {
 	// Advanced configuration
 	MetricsPort uint16 `yaml:"metrics_port"`
 	LogLevel    string `yaml:"log_level,omitempty"`
+}
+
+// DefaultTopicBrowserBenthosServiceConfig is the default Benthos service config for the topic browser
+// It is considered immutable and MUST NOT be modified at runtime. (However Go does not support const for complex types)
+var DefaultTopicBrowserBenthosServiceConfig = BenthosServiceConfig{
+	Input: map[string]any{
+		"uns": map[string]any{
+			"umh_topic":      "umh.v1.*",
+			"kafka_topic":    "umh.messages",
+			"broker_address": "localhost:9092",
+			"consumer_group": "topic-browser",
+		},
+	},
+	Pipeline: map[string]any{
+		// We need to use []interface{} here because the extractor for the comparator requires it to function correctly
+		"processors": []interface{}{
+			map[string]any{
+				"topic_browser": map[string]any{},
+			},
+		},
+	},
+	Output: map[string]any{
+		"stdout": map[string]any{},
+	},
+	LogLevel: constants.DefaultBenthosLogLevel,
 }
 
 // Equal checks if two BenthosServiceConfigs are equal

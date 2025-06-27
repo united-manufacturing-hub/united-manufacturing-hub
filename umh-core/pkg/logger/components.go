@@ -34,6 +34,7 @@ const (
 	ComponentNmapManager              = "NmapCompManager"
 	ComponentConnectionManager        = "ConnectionManager"
 	ComponentProtocolConverterManager = "ProtocolConverterManager"
+	ComponentTopicBrowserManager      = "TopicBrowserManager"
 
 	// FSM components
 	ComponentBaseFSM                   = "BaseFSM"
@@ -46,6 +47,7 @@ const (
 	ComponentDataFlowComponentInstance = "DFCInstance"
 	ComponentConnectionInstance        = "ConnectionInstance"
 	ComponentProtocolConverterInstance = "ProtocolConverterInstance"
+	ComponentTopicBrowserInstance      = "TopicBrowserInstance"
 
 	// Service components
 	ComponentS6Service                = "S6Service"
@@ -60,10 +62,11 @@ const (
 	ComponentConnectionService        = "ConnectionService"
 	ComponentProtocolConverterService = "ProtocolConverterService"
 	ComponentFilesystemService        = "FilesystemService"
+	ComponentTopicBrowserService      = "TopicBrowserService"
 	// Configuration
 	ComponentConfigManager = "ConfigManager"
 
-	//Agent
+	// Agent
 	AgentManagerComponentName  = "AgentManager"
 	AgentInstanceComponentName = "agent"
 

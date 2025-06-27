@@ -76,6 +76,12 @@ func (b *BenthosBuilder) AddGoldenBenthos() *BenthosBuilder {
 			DesiredFSMState: "stopped",
 		},
 	}
+	b.full.Internal.TopicBrowser = config.TopicBrowserConfig{
+		FSMInstanceConfig: config.FSMInstanceConfig{
+			Name:            "topic-browser",
+			DesiredFSMState: "stopped",
+		},
+	}
 	return b
 }
 

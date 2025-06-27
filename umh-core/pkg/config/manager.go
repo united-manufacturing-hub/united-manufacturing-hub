@@ -209,6 +209,11 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 		config.Internal.Redpanda.DesiredFSMState = configOverride.Internal.Redpanda.DesiredFSMState
 	}
 
+	// Enforce that topic browser has a desired state
+	if config.Internal.TopicBrowser.DesiredFSMState == "" {
+		config.Internal.TopicBrowser.DesiredFSMState = configOverride.Internal.TopicBrowser.DesiredFSMState
+	}
+
 	// Persist the updated config
 	if err := m.writeConfig(ctx, config); err != nil {
 		return FullConfig{}, fmt.Errorf("failed to write new config: %w", err)

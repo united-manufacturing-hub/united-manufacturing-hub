@@ -67,6 +67,12 @@ func (b *NmapBuilder) AddGoldenNmap() *NmapBuilder {
 			DesiredFSMState: "stopped",
 		},
 	}
+	b.full.Internal.TopicBrowser = config.TopicBrowserConfig{
+		FSMInstanceConfig: config.FSMInstanceConfig{
+			Name:            "topic-browser",
+			DesiredFSMState: "stopped",
+		},
+	}
 	return b
 }
 

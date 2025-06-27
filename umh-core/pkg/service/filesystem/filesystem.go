@@ -20,6 +20,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -71,6 +72,9 @@ type Service interface {
 
 	// Chown changes the owner and group of the named file
 	Chown(ctx context.Context, path string, user string, group string) error
+
+	// Glob is a wrapper around filepath.Glob that respects the context
+	Glob(ctx context.Context, pattern string) ([]string, error)
 }
 
 // DefaultService is the default implementation of FileSystemService
@@ -476,4 +480,35 @@ func (s *DefaultService) ExecuteCommand(ctx context.Context, name string, args .
 		return nil, fmt.Errorf("failed to execute command %s: %w", name, err)
 	}
 	return output, nil
+}
+
+// Glob is a wrapper around filepath.Glob that respects the context
+func (s *DefaultService) Glob(ctx context.Context, pattern string) ([]string, error) {
+	if err := s.checkContext(ctx); err != nil {
+		return nil, fmt.Errorf("failed to check context: %w", err)
+	}
+
+	// Create a channel for results
+	type result struct {
+		matches []string
+		err     error
+	}
+	resCh := make(chan result, 1)
+
+	// Run file operation in goroutine
+	go func() {
+		matches, err := filepath.Glob(pattern)
+		resCh <- result{matches, err}
+	}()
+
+	// Wait for either completion or context cancellation
+	select {
+	case res := <-resCh:
+		if res.err != nil {
+			return nil, fmt.Errorf("failed to glob pattern %s: %w", pattern, res.err)
+		}
+		return res.matches, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
