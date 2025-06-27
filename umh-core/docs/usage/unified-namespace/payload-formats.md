@@ -4,7 +4,7 @@ UMH Core recognizes **two** payload formats. Pick the one that matches your sens
 
 ### TLDR
 
-<table><thead><tr><th>Type</th><th width="260.609375">Typical content (must be a JSON object)</th><th>When to use it</th><th>Producer / Processor</th><th>Sink (example)</th></tr></thead><tbody><tr><td><strong>Time-series / Tags</strong></td><td><strong>Exactly two keys:</strong><br>• <code>timestamp_ms</code> – int / float without fraction<br>• <code>value</code> – scalar number, boolean <strong>or</strong> string<br>Max decoded size ≤ 1024 B</td><td>PLC &#x26; OT sensors streaming individual datapoints</td><td>Bridge + <code>tag_processor</code></td><td>TimescaleDB</td></tr><tr><td><strong>Relational / JSON</strong></td><td>One self-contained business record <strong>or</strong> multi-field snapshot (UMH Classic)<br>(any key set, as long as the root is an object)</td><td>Orders, batch headers, alarms, set-points <strong>or</strong> merged/aggregated time-series</td><td>Bridge + <code>nodered_js</code></td><td>PostgreSQL / REST</td></tr></tbody></table>
+<table><thead><tr><th>Type</th><th width="260.609375">Typical content (must be a JSON object)</th><th>When to use it</th><th>Producer / Processor</th><th>Sink (example)</th></tr></thead><tbody><tr><td><strong>Time-series / Tags</strong></td><td><strong>Exactly two keys:</strong><br>• <code>timestamp_ms</code> – int / float without fraction<br>• <code>value</code> – scalar number, boolean <strong>or</strong> string<br>Max decoded size ≤ 1MiB</td><td>PLC &#x26; OT sensors streaming individual datapoints</td><td>Bridge + <code>tag_processor</code></td><td>TimescaleDB</td></tr><tr><td><strong>Relational / JSON</strong></td><td>One self-contained business record <strong>or</strong> multi-field snapshot (UMH Classic)<br>(any key set, as long as the root is an object)</td><td>Orders, batch headers, alarms, set-points <strong>or</strong> merged/aggregated time-series</td><td>Bridge + <code>nodered_js</code></td><td>PostgreSQL / REST</td></tr></tbody></table>
 
 Arrays, primitives and raw binaries are rejected by the UNS Output Plugin – wrap them in a JSON object first if you need to transmit such data.
 
@@ -17,8 +17,8 @@ Arrays, primitives and raw binaries are rejected by the UNS Output Plugin – wr
 | Forbidden keys      | Any extra key (e.g. `temperature`)                              | —                            |
 | `timestamp_ms` type | Integer (signed/unsigned) or float **without** fraction         | _optional_                   |
 | `value` type        | <p>Scalar:<br>- number (float/int)<br>- boolean<br>- string</p> | _n/a_                        |
-| Illegal values      | `NaN`, `+Inf`, `-Inf`, payload > 1GiB-1                         | — (size limit still applies) |
-| Max payload size    | 1GiB-1 after JSON decoding                                      | 1GiB-1                       |
+| Illegal values      | `NaN`, `+Inf`, `-Inf`, payload > 1MiB                           | — (size limit still applies) |
+| Max payload size    | 1MiB after JSON decoding                                         | 1MiB                         |
 | Examples            | `{"timestamp_ms":1717083000000,"value":23.4}`                   | `{"order_id":42, ...}`       |
 
 ### Canonical Examples
