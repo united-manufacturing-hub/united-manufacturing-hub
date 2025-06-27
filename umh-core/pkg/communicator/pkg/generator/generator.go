@@ -115,8 +115,8 @@ func (s *StatusCollectorType) GenerateStatusMessage(isBootstrapped bool) *models
 		inst, ok := fsm.FindInstance(snapshot, constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
 		if !ok {
 			s.logger.Error("Topic browser instance not found")
-		} else if inst.LastObservedState == nil {
-			s.logger.Error("Topic browser instance has nil observed state")
+		} else if inst == nil || inst.LastObservedState == nil {
+			s.logger.Error("Topic browser instance has nil observed state or is nil")
 		} else {
 			obs := inst.LastObservedState.(*topicbrowserfsm.ObservedStateSnapshot)
 			topicBrowserData = GenerateTopicBrowser(s.topicBrowserCache, obs, isBootstrapped, s.logger)
