@@ -15,6 +15,7 @@
 package communication_state
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/subscriber"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/router"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -48,6 +50,10 @@ type CommunicationState struct {
 	ConfigManager         config.ConfigManager
 	ApiUrl                string
 	Logger                *zap.SugaredLogger
+	TopicBrowserCache     *topicbrowser.Cache
+	// TopicBrowserSimulator is used to access the simulated topic browser state if the agent is running in simulator mode
+	// it is accessed by the generator to generate the topic browser part of the status message
+	TopicBrowserSimulator *topicbrowser.Simulator
 }
 
 // NewCommunicationState creates a new CommunicationState with initialized mutex
@@ -61,6 +67,7 @@ func NewCommunicationState(
 	apiUrl string,
 	logger *zap.SugaredLogger,
 	insecureTLS bool,
+	topicBrowserCache *topicbrowser.Cache,
 ) *CommunicationState {
 	return &CommunicationState{
 		mu:                    &sync.RWMutex{},
@@ -74,6 +81,7 @@ func NewCommunicationState(
 		ApiUrl:                apiUrl,
 		Logger:                logger,
 		InsecureTLS:           insecureTLS,
+		TopicBrowserCache:     topicBrowserCache,
 	}
 }
 
@@ -145,6 +153,37 @@ func (c *CommunicationState) InitialiseAndStartRouter() {
 	c.Router.Start()
 }
 
+// StartTopicBrowserCacheUpdater starts the topic browser cache updater
+// it is used to update the topic browser cache with the observed state of the topic browser
+// it is also used to run the simulator if the agent is running in simulator mode
+func (c *CommunicationState) StartTopicBrowserCacheUpdater(systemSnapshotManager *fsm.SnapshotManager, ctx context.Context, runSimulator bool) {
+
+	c.TopicBrowserSimulator = topicbrowser.NewSimulator()
+
+	if runSimulator {
+		c.TopicBrowserSimulator.InitializeSimulator()
+	}
+
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		for {
+			select {
+			case <-ctx.Done():
+				ticker.Stop()
+				return
+			case <-ticker.C:
+				if runSimulator {
+					c.TopicBrowserSimulator.Tick()
+				}
+				err := c.TopicBrowserCache.Update(c.TopicBrowserSimulator.GetSimObservedState())
+				if err != nil {
+					sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to update topic browser cache: %w", err)
+				}
+			}
+		}
+	}()
+}
+
 // InitialiseAndStartSubscriberHandler creates a new subscriber handler and starts it
 // ttl is the time until a subscriber is considered dead (if no new subscriber message is received)
 // cull is the cycle time to remove dead subscribers
@@ -183,6 +222,8 @@ func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 		systemSnapshotManager,
 		configManager,
 		c.Logger,
+		c.TopicBrowserCache,
+		c.TopicBrowserSimulator,
 	)
 	if c.SubscriberHandler == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create subscriber handler")
