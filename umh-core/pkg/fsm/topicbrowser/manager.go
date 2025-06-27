@@ -15,6 +15,7 @@
 package topicbrowser
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 const (
@@ -73,7 +75,7 @@ func NewTopicBrowserManager(name string) *Manager {
 			if !ok {
 				return false, fmt.Errorf("instance is not a Topic Browser Instance")
 			}
-			return tbInstance.config.Equal(cfg.ServiceConfig), nil
+			return tbInstance.config.Equal(cfg.TopicBrowserServiceConfig), nil
 		},
 		// Set Connection config
 		func(instance public_fsm.FSMInstance, cfg config.TopicBrowserConfig) error {
@@ -81,7 +83,7 @@ func NewTopicBrowserManager(name string) *Manager {
 			if !ok {
 				return fmt.Errorf("instance is not a Topic Browser Instance")
 			}
-			tbInstance.config = cfg.ServiceConfig
+			tbInstance.config = cfg.TopicBrowserServiceConfig
 			return nil
 		},
 		// Get expected max p95 execution time per instance
@@ -97,6 +99,17 @@ func NewTopicBrowserManager(name string) *Manager {
 	return &Manager{
 		BaseFSMManager: baseManager,
 	}
+}
+
+func (m *Manager) Reconcile(ctx context.Context, snapshot public_fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool) {
+	start := time.Now()
+	defer func() {
+		duration := time.Since(start)
+		metrics.ObserveReconcileTime(logger.ComponentTopicBrowserManager, m.GetManagerName(), duration)
+	}()
+
+	// We do not need to manage ports for Topic Browser, therefore we can directly reconcile
+	return m.BaseFSMManager.Reconcile(ctx, snapshot, services)
 }
 
 // CreateSnapshot overrides the base CreateSnapshot to include ConnectionManager-specific information

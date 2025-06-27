@@ -38,7 +38,7 @@ func CreateTopicBrowserTestConfig(name string, desiredState string) config.Topic
 			Name:            name,
 			DesiredFSMState: desiredState,
 		},
-		ServiceConfig: topicbrowserserviceconfig.Config{},
+		TopicBrowserServiceConfig: topicbrowserserviceconfig.Config{},
 	}
 }
 

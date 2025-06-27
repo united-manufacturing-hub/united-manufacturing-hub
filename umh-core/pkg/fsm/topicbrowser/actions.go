@@ -23,7 +23,6 @@ import (
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/topicbrowserserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	rpfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
@@ -46,7 +45,7 @@ func (i *TopicBrowserInstance) CreateInstance(ctx context.Context, filesystemSer
 		return fmt.Errorf("failed to generate benthos config for Topic Browser service %s: %w", i.baseFSMInstance.GetID(), err)
 	}
 
-	err = i.service.AddToManager(ctx, filesystemService, &benthosConfig, constants.TopicBrowserServiceName)
+	err = i.service.AddToManager(ctx, filesystemService, &benthosConfig, i.baseFSMInstance.GetID())
 	if err != nil {
 		if err == tbsvc.ErrServiceAlreadyExists {
 			i.baseFSMInstance.GetLogger().Debugf("Topic Browser service %s already exists in S6 manager", i.baseFSMInstance.GetID())

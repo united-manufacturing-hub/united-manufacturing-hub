@@ -23,6 +23,7 @@ var (
 )
 
 // Config represents the configuration for a Topic Browser service
+// In the TopicBrowser we do not have any user configurable settings, therefore these packages are bare-bones
 type Config struct {
 	// to be filled
 	// If you add fields, make sure to update the ConfigsEqual and ConfigDiff functions
@@ -41,6 +42,7 @@ func RenderYAML(target string, port uint16) (string, error) {
 	cfg := Config{
 		// to be filled
 		// If you add fields, make sure to update the ConfigsEqual and ConfigDiff functions
+		// Also ensure to implement the ConfigToMap function, which is currently empty
 	}
 
 	// Use the generator to render the YAML

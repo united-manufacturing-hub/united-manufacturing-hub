@@ -199,7 +199,7 @@ type TopicBrowserConfig struct {
 	FSMInstanceConfig `yaml:",inline"`
 
 	// For the Connection service
-	ServiceConfig topicbrowserserviceconfig.Config `yaml:"serviceConfig,omitempty"`
+	TopicBrowserServiceConfig topicbrowserserviceconfig.Config `yaml:"serviceConfig,omitempty"`
 }
 
 // Clone creates a deep copy of FullConfig

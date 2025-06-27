@@ -59,11 +59,11 @@ func NewTopicBrowserManagerWithMockedServices(name string) (*Manager, *topicbrow
 			}
 
 			// Perform actual comparison - return true if configs are equal
-			configsEqual := topicBrowserInstance.GetConfig().Equal(cfg.ServiceConfig)
+			configsEqual := topicBrowserInstance.GetConfig().Equal(cfg.TopicBrowserServiceConfig)
 
 			// Only update config if configs are different (for mock service)
 			if !configsEqual {
-				topicBrowserInstance.config = cfg.ServiceConfig
+				topicBrowserInstance.config = cfg.TopicBrowserServiceConfig
 				// No need to update mock service config as TopicBrowser doesn't use it the same way
 			}
 
@@ -75,7 +75,7 @@ func NewTopicBrowserManagerWithMockedServices(name string) (*Manager, *topicbrow
 			if !ok {
 				return fmt.Errorf("instance is not a TopicBrowserInstance")
 			}
-			topicBrowserInstance.config = cfg.ServiceConfig
+			topicBrowserInstance.config = cfg.TopicBrowserServiceConfig
 			return nil
 		},
 		// Get expected max p95 execution time per instance

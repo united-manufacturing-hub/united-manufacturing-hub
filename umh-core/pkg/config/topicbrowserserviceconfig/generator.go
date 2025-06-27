@@ -20,6 +20,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// In the TopicBrowser we do not have any user configurable settings, therefore these packages are bare-bones
+
 // Generator handles the generation of Topic Browser YAML configurations
 type Generator struct{}
 

@@ -18,6 +18,8 @@ import (
 	benthossvccfg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 )
 
+// In the TopicBrowser we do not have any user configurable settings, therefore these packages are bare-bones
+
 // Normalizer handles the normalization of Topic Browser configurations
 type Normalizer struct{}
 

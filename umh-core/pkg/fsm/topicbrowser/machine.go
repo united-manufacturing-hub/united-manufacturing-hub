@@ -144,7 +144,7 @@ func NewInstance(
 	instance := &TopicBrowserInstance{
 		baseFSMInstance: internal_fsm.NewBaseFSMInstance(cfg, backoffConfig, logger),
 		service:         tbsvc.NewDefaultService(config.Name),
-		config:          config.ServiceConfig,
+		config:          config.TopicBrowserServiceConfig,
 		ObservedState:   ObservedState{},
 	}
 
