@@ -176,25 +176,25 @@ func (c *CommunicationState) StartTopicBrowserCacheUpdater(systemSnapshotManager
 			case <-ticker.C:
 				if runSimulator {
 					c.TopicBrowserSimulator.Tick()
-					// err := c.TopicBrowserCache.Update(c.TopicBrowserSimulator.GetSimObservedState())
-					// if err != nil {
-					// 	sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to update topic browser cache: %w", err)
-					// }
+					err := c.TopicBrowserCache.Update(c.TopicBrowserSimulator.GetSimObservedState())
+					if err != nil {
+						c.Logger.Errorf("Failed to update topic browser cache: %w", err)
+					}
 				} else {
 					// get observed state from system snapshot manager
 					tbInstance, ok := fsm.FindInstance(c.SystemSnapshotManager.GetDeepCopySnapshot(), constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
 					if !ok || tbInstance == nil {
-						sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Topic browser instance not found")
+						c.Logger.Error("Topic browser instance not found")
 						continue
 					}
 					tbObservedState, ok := tbInstance.LastObservedState.(*topicbrowserfsm.ObservedStateSnapshot)
 					if !ok || tbObservedState == nil {
-						sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Topic browser observed state not found")
+						c.Logger.Error("Topic browser observed state not found")
 						continue
 					}
 					err := c.TopicBrowserCache.Update(tbObservedState)
 					if err != nil {
-						sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to update topic browser cache: %w", err)
+						c.Logger.Errorf("Failed to update topic browser cache: %w", err)
 					}
 				}
 
