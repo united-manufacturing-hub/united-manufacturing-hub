@@ -1540,3 +1540,8 @@ func (bs *BufferedService) readFileIncrementally(absPath string, previousSize in
 func (bs *BufferedService) ReadFileRange(ctx context.Context, path string, from int64) ([]byte, int64, error) {
 	panic("not implemented")
 }
+
+// Glob is a wrapper around filepath.Glob that respects the context
+func (bs *BufferedService) Glob(ctx context.Context, pattern string) ([]string, error) {
+	panic("not implemented")
+}
