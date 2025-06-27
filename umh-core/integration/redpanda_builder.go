@@ -67,6 +67,12 @@ func (r *RedpandaBuilder) AddGoldenRedpanda() *RedpandaBuilder {
 	// Add to configuration
 	r.full.Internal.Redpanda = redpandaConfig
 	r.activeRedpanda["golden-redpanda"] = true
+	r.full.Internal.TopicBrowser = config.TopicBrowserConfig{
+		FSMInstanceConfig: config.FSMInstanceConfig{
+			Name:            "topic-browser",
+			DesiredFSMState: "stopped",
+		},
+	}
 	return r
 }
 

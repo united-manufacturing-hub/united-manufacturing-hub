@@ -76,6 +76,31 @@ func (st *Status) CopyLogs(src []s6svc.LogEntry) error {
 	return nil
 }
 
+// CopyBuffer is a go-deepcopy override for the Buffer field.
+//
+// go-deepcopy looks for a method with the signature
+//
+//	func (dst *T) Copy<FieldName>(src <FieldType>) error
+//
+// and, if present, calls it instead of performing its generic deep-copy logic.
+// By assigning the slice directly we make a **shallow copy**: the header is
+// duplicated but the underlying backing array is shared.
+//
+// Why this is safe:
+//
+//  1. The ringbuffer service returns a fresh []*Buffer on every call, never reusing
+//     or mutating a previously returned slice (see Ringbuffer.Get() method).
+//  2. Buffer is treated as immutable after the snapshot is taken.
+//
+// If either assumption changes, delete this method to fall back to the default
+// deep-copy (O(n) but safe for mutable slices).
+//
+// See also: https://github.com/tiendc/go-deepcopy?tab=readme-ov-file#copy-struct-fields-via-struct-methods
+func (st *Status) CopyBuffer(src []*Buffer) error {
+	st.Buffer = src
+	return nil
+}
+
 type ServiceInfo struct {
 	// benthos state information
 	BenthosObservedState benthosfsm.BenthosObservedState
@@ -170,27 +195,7 @@ func (svc *Service) GetConfig(ctx context.Context, filesystemService filesystem.
 // a benthos instants that reads data from uns, processes it to get into a
 // proper protobuf format and writes it to stdout using an additional timestamp.
 func (svc *Service) GenerateConfig(tbName string) (benthossvccfg.BenthosServiceConfig, error) {
-	return benthossvccfg.BenthosServiceConfig{
-		Input: map[string]any{
-			"uns": map[string]any{
-				"umh_topic":      "umh.v1.*",
-				"kafka_topic":    "umh.messages",
-				"broker_address": "localhost:9092",
-				"consumer_group": "topic-browser",
-			},
-		},
-		Pipeline: map[string]any{
-			"processors": []map[string]any{
-				{
-					"topic_browser": map[string]any{},
-				},
-			},
-		},
-		Output: map[string]any{
-			"stdout": map[string]any{},
-		},
-		LogLevel: constants.DefaultBenthosLogLevel,
-	}, nil
+	return benthossvccfg.DefaultTopicBrowserBenthosServiceConfig, nil
 }
 
 // Status returns information about the connection health for the specified topic browser.
