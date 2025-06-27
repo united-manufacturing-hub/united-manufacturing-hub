@@ -54,6 +54,7 @@ type AgentConfig struct {
 	CommunicatorConfig `yaml:"communicator,omitempty"`
 	ReleaseChannel     ReleaseChannel `yaml:"releaseChannel,omitempty"`
 	Location           map[int]string `yaml:"location,omitempty"`
+	Simulator          bool           `yaml:"simulator,omitempty"`
 }
 
 type CommunicatorConfig struct {

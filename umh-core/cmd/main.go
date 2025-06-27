@@ -24,6 +24,7 @@ import (
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
@@ -98,7 +99,12 @@ func main() {
 		configData.Agent.APIURL,
 		logger.For(logger.ComponentCommunicator),
 		configData.Agent.AllowInsecureTLS,
+		topicbrowser.NewCache(),
 	)
+
+	// Start the topic browser cache updater independent of the backend connection (e.g., for HTTP endpoints)
+	// it updates the TopicBrowserCache based on the observed state of the topic browser service once per second
+	communicationState.StartTopicBrowserCacheUpdater(systemSnapshotManager, ctx, configData.Agent.Simulator)
 
 	if configData.Agent.APIURL != "" && configData.Agent.AuthToken != "" {
 		enableBackendConnection(&configData, communicationState, controlLoop, communicationState.Logger)

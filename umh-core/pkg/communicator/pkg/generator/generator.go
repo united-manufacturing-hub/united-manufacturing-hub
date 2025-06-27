@@ -16,6 +16,7 @@ package generator
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -29,6 +30,8 @@ type StatusCollectorType struct {
 	systemSnapshotManager *fsm.SnapshotManager
 	logger                *zap.SugaredLogger
 	configManager         config.ConfigManager
+	topicBrowserCache     *topicbrowser.Cache
+	topicBrowserSimulator *topicbrowser.Simulator
 }
 
 func NewStatusCollector(
@@ -36,6 +39,8 @@ func NewStatusCollector(
 	systemSnapshotManager *fsm.SnapshotManager,
 	configManager config.ConfigManager,
 	logger *zap.SugaredLogger,
+	topicBrowserCache *topicbrowser.Cache,
+	topicBrowserSimulator *topicbrowser.Simulator,
 ) *StatusCollectorType {
 
 	collector := &StatusCollectorType{
@@ -43,12 +48,14 @@ func NewStatusCollector(
 		systemSnapshotManager: systemSnapshotManager,
 		logger:                logger,
 		configManager:         configManager,
+		topicBrowserCache:     topicBrowserCache,
+		topicBrowserSimulator: topicBrowserSimulator,
 	}
 
 	return collector
 }
 
-func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
+func (s *StatusCollectorType) GenerateStatusMessage(isBootstrapped bool) *models.StatusMessage {
 
 	// Step 1: Get the snapshot
 	snapshot := s.systemSnapshotManager.GetDeepCopySnapshot()
@@ -98,6 +105,9 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 		dfcData = append(dfcData, protocolConverterDfcs...)
 	}
 
+	// --- topic browser -------------------------------------------------------------
+	topicBrowserData := GenerateTopicBrowser(s.topicBrowserCache, s.topicBrowserSimulator.GetSimObservedState(), isBootstrapped, s.logger)
+
 	// Step 3: Create the status message
 	statusMessage := &models.StatusMessage{
 		Core: models.Core{
@@ -106,10 +116,10 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 				Latency:  &models.Latency{},
 				Location: agentData.Location,
 			},
-			Container:        containerData,
-			Dfcs:             dfcData,
-			Redpanda:         redpandaData,
-			UnifiedNamespace: models.UnifiedNamespace{},
+			Container:    containerData,
+			Dfcs:         dfcData,
+			Redpanda:     redpandaData,
+			TopicBrowser: *topicBrowserData,
 			Release: models.Release{
 				Health: &models.Health{
 					Message:       "",
