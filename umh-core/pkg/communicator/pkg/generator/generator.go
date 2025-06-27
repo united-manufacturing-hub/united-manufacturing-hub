@@ -109,14 +109,17 @@ func (s *StatusCollectorType) GenerateStatusMessage(isBootstrapped bool) *models
 	// --- topic browser -------------------------------------------------------------
 	topicBrowserData := &models.TopicBrowser{}
 
-	inst, ok := fsm.FindInstance(snapshot, constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
-	if !ok {
-
-		s.logger.Error("Topic browser instance not found")
-
+	if s.topicBrowserSimulator.GetSimulatorEnabled() {
+		topicBrowserData = GenerateTopicBrowser(s.topicBrowserCache, s.topicBrowserSimulator.GetSimObservedState(), isBootstrapped, s.logger)
 	} else {
-		obs := inst.LastObservedState.(*topicbrowserfsm.ObservedStateSnapshot)
-		topicBrowserData = GenerateTopicBrowser(s.topicBrowserCache, obs, isBootstrapped, s.logger)
+		inst, ok := fsm.FindInstance(snapshot, constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
+		if !ok {
+			s.logger.Error("Topic browser instance not found")
+
+		} else {
+			obs := inst.LastObservedState.(*topicbrowserfsm.ObservedStateSnapshot)
+			topicBrowserData = GenerateTopicBrowser(s.topicBrowserCache, obs, isBootstrapped, s.logger)
+		}
 	}
 
 	// Step 3: Create the status message

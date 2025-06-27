@@ -177,3 +177,8 @@ func (s *Simulator) Tick() {
 	s.ticker++
 	s.AddUnsBundleToSimObservedState(s.GenerateNewUnsBundle())
 }
+
+// getSimulatorEnabled returns true if the simulator is enabled
+func (s *Simulator) GetSimulatorEnabled() bool {
+	return s.simulatorEnabled
+}
