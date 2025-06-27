@@ -67,7 +67,7 @@ var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("i
 		builder := NewDataFlowComponentBuilder()
 		builder.full.Internal.Redpanda.DesiredFSMState = "active"
 		builder.full.Internal.Redpanda.Name = "redpanda"
-		builder.AddGeneratorDataFlowComponentToKafka("dfc-restart", fmt.Sprintf("%dms", 1000/messagesPerSecond), topicName)
+		builder.AddGeneratorDataFlowComponentToKafka("dfc-restart", fmt.Sprintf("%dms", 1000/messagesPerSecond), topicName, nil)
 		cfg := builder.BuildYAML()
 		Expect(writeConfigFile(cfg)).To(Succeed())
 		Expect(BuildAndRunContainer(cfg, DEFAULT_MEMORY, DEFAULT_CPUS)).To(Succeed())
