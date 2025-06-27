@@ -293,8 +293,8 @@ func (i *TopicBrowserInstance) reconcileStartingStates(ctx context.Context, serv
 	case OperationalStateStartingBenthos:
 		// First check if Benthos is still running (previous check still valid)
 		if !i.isBenthosRunning() {
-			i.ObservedState.ServiceInfo.StatusReason = "benthos degraded during startup"
-			return i.baseFSMInstance.SendEvent(ctx, EventBenthosDegraded), true
+			i.ObservedState.ServiceInfo.StatusReason = "benthos failed during startup - restarting"
+			return i.baseFSMInstance.SendEvent(ctx, EventStartupFailed), true
 		}
 
 		// Check if Redpanda is healthy
@@ -314,14 +314,14 @@ func (i *TopicBrowserInstance) reconcileStartingStates(ctx context.Context, serv
 	case OperationalStateStartingRedpanda:
 		// First check if Benthos is still running (previous check still valid)
 		if !i.isBenthosRunning() {
-			i.ObservedState.ServiceInfo.StatusReason = "benthos degraded during startup"
-			return i.baseFSMInstance.SendEvent(ctx, EventBenthosDegraded), true
+			i.ObservedState.ServiceInfo.StatusReason = "benthos failed during startup - restarting"
+			return i.baseFSMInstance.SendEvent(ctx, EventStartupFailed), true
 		}
 
 		// Check if Redpanda is still running (previous check still valid)
 		if !i.isRedpandaRunning() {
-			i.ObservedState.ServiceInfo.StatusReason = "redpanda degraded during startup"
-			return i.baseFSMInstance.SendEvent(ctx, EventRedpandaDegraded), true
+			i.ObservedState.ServiceInfo.StatusReason = "redpanda failed during startup - restarting"
+			return i.baseFSMInstance.SendEvent(ctx, EventStartupFailed), true
 		}
 
 		// Both services are up, transition to idle

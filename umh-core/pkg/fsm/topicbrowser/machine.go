@@ -84,27 +84,34 @@ func NewInstance(
 				Dst:  OperationalStateIdle,
 			},
 
-			// idle/active/starting states -> degraded benthos
+			// idle/active -> degraded benthos
 			{
 				Name: EventBenthosDegraded,
 				Src: []string{
-					OperationalStateStartingBenthos,
-					OperationalStateStartingRedpanda,
 					OperationalStateIdle,
 					OperationalStateActive,
 				},
 				Dst: OperationalStateDegradedBenthos,
 			},
 
-			// idle/active/starting states -> degraded redpanda
+			// idle/active -> degraded redpanda
 			{
 				Name: EventRedpandaDegraded,
 				Src: []string{
-					OperationalStateStartingRedpanda,
 					OperationalStateIdle,
 					OperationalStateActive,
 				},
 				Dst: OperationalStateDegradedRedpanda,
+			},
+
+			// starting states -> starting (restart startup on failure)
+			{
+				Name: EventStartupFailed,
+				Src: []string{
+					OperationalStateStartingBenthos,
+					OperationalStateStartingRedpanda,
+				},
+				Dst: OperationalStateStarting,
 			},
 
 			// degraded -> idle (recovery)

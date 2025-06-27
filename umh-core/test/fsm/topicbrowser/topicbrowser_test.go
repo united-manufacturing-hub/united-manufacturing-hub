@@ -618,6 +618,195 @@ var _ = Describe("TopicBrowser FSM", func() {
 	})
 
 	// =========================================================================
+	//  STARTUP FAILURE RECOVERY SCENARIOS
+	// =========================================================================
+	Context("Startup Failure Recovery Scenarios", func() {
+		It("should restart startup when benthos fails during StartingBenthos state", func() {
+			var err error
+
+			// Phase 1: Get to StartingBenthos state
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				fsm.LifecycleStateToBeCreated,
+				fsm.LifecycleStateCreating, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			mockService.Existing[componentName] = true
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateStopped)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				fsm.LifecycleStateCreating,
+				topicbrowser.OperationalStateStopped, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(instance.SetDesiredFSMState(topicbrowser.OperationalStateActive)).To(Succeed())
+
+			// Progress to StartingBenthos
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateStopped,
+				topicbrowser.OperationalStateStarting, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateStartingBenthos)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateStarting,
+				topicbrowser.OperationalStateStartingBenthos, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Phase 2: Simulate benthos failure during StartingBenthos state
+			// This should restart the startup sequence (go back to Starting)
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateStarting)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateStartingBenthos,
+				topicbrowser.OperationalStateStarting, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Phase 3: Continue normal startup after recovery
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateIdle)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateStarting,
+				topicbrowser.OperationalStateIdle, 10, tick)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should restart startup when benthos fails during StartingRedpanda state", func() {
+			var err error
+
+			// Phase 1: Get to StartingRedpanda state
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				fsm.LifecycleStateToBeCreated,
+				fsm.LifecycleStateCreating, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			mockService.Existing[componentName] = true
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateStopped)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				fsm.LifecycleStateCreating,
+				topicbrowser.OperationalStateStopped, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(instance.SetDesiredFSMState(topicbrowser.OperationalStateActive)).To(Succeed())
+
+			// Progress to StartingRedpanda
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateStopped,
+				topicbrowser.OperationalStateStarting, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateStartingBenthos)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateStarting,
+				topicbrowser.OperationalStateStartingBenthos, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateStartingRedpanda)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateStartingBenthos,
+				topicbrowser.OperationalStateStartingRedpanda, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Phase 2: Simulate benthos failure during StartingRedpanda state
+			// This should restart the startup sequence (go back to Starting)
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateStarting)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateStartingRedpanda,
+				topicbrowser.OperationalStateStarting, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Phase 3: Continue normal startup after recovery
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateIdle)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateStarting,
+				topicbrowser.OperationalStateIdle, 10, tick)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should restart startup when redpanda fails during StartingRedpanda state", func() {
+			var err error
+
+			// Phase 1: Get to StartingRedpanda state
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				fsm.LifecycleStateToBeCreated,
+				fsm.LifecycleStateCreating, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			mockService.Existing[componentName] = true
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateStopped)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				fsm.LifecycleStateCreating,
+				topicbrowser.OperationalStateStopped, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(instance.SetDesiredFSMState(topicbrowser.OperationalStateActive)).To(Succeed())
+
+			// Progress to StartingRedpanda
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateStopped,
+				topicbrowser.OperationalStateStarting, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateStartingBenthos)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateStarting,
+				topicbrowser.OperationalStateStartingBenthos, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateStartingRedpanda)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateStartingBenthos,
+				topicbrowser.OperationalStateStartingRedpanda, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Phase 2: Simulate redpanda failure during StartingRedpanda state
+			// This should restart the startup sequence (go back to Starting)
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateStarting)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateStartingRedpanda,
+				topicbrowser.OperationalStateStarting, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Phase 3: Continue normal startup after recovery
+			fsmtest.TransitionToTopicBrowserState(mockService, componentName, topicbrowser.OperationalStateIdle)
+
+			tick, err = fsmtest.TestTopicBrowserStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, componentName,
+				topicbrowser.OperationalStateStarting,
+				topicbrowser.OperationalStateIdle, 10, tick)
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
+	// =========================================================================
 	//  DEGRADED AND RECOVERY SCENARIOS
 	// =========================================================================
 	Context("Degraded and Recovery Scenarios", func() {
@@ -911,7 +1100,7 @@ var _ = Describe("TopicBrowser FSM", func() {
 			Expect(instance.GetCurrentFSMState()).To(Equal(topicbrowser.OperationalStateStartingBenthos))
 		})
 
-		It("should handle redpanda startup failures gracefully", func() {
+		It("should restart startup when redpanda fails during startup", func() {
 			var err error
 
 			// Phase 1: Progress to StartingRedpanda state
@@ -964,24 +1153,19 @@ var _ = Describe("TopicBrowser FSM", func() {
 				HasBenthosOutput:      false,
 			})
 
-			// Manually verify state stability without calling TransitionToTopicBrowserState
-			// which would overwrite our failure condition
+			// Verify we're in the right starting state
 			initialState := instance.GetCurrentFSMState()
 			Expect(initialState).To(Equal(topicbrowser.OperationalStateStartingRedpanda))
 
-			// Execute reconcile cycles and check state stability
-			for i := 0; i < 3; i++ {
-				_, _ = instance.Reconcile(ctx, pkgfsm.SystemSnapshot{Tick: tick}, mockSvcRegistry)
-				tick++
+			// Execute reconcile - should transition back to Starting due to failure
+			_, _ = instance.Reconcile(ctx, pkgfsm.SystemSnapshot{Tick: tick}, mockSvcRegistry)
+			tick++
 
-				currentState := instance.GetCurrentFSMState()
-				Expect(currentState).To(Equal(topicbrowser.OperationalStateStartingRedpanda),
-					fmt.Sprintf("state should remain %s during cycle %d/3, but got %s",
-						topicbrowser.OperationalStateStartingRedpanda, i+1, currentState))
-			}
-
-			// Current state should remain starting since redpanda is not ready
-			Expect(instance.GetCurrentFSMState()).To(Equal(topicbrowser.OperationalStateStartingRedpanda))
+			// Should now be back in Starting state to restart the sequence
+			currentState := instance.GetCurrentFSMState()
+			Expect(currentState).To(Equal(topicbrowser.OperationalStateStarting),
+				fmt.Sprintf("Expected transition to %s but got %s",
+					topicbrowser.OperationalStateStarting, currentState))
 		})
 	})
 

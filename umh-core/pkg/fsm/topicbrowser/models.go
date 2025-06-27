@@ -66,6 +66,9 @@ const (
 	EventBenthosDegraded  = "benthos_degraded"
 	EventRedpandaDegraded = "redpanda_degraded"
 	EventRecovered        = "recovered"
+
+	// Startup failure event
+	EventStartupFailed = "startup_failed"
 )
 
 // IsOperationalState returns whether the given state is a valid operational state
