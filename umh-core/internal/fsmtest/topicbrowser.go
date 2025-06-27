@@ -296,7 +296,7 @@ func VerifyTopicBrowserStableState(
 	return tick, nil
 }
 
-// ResetDataflowComponentInstanceError resets the error and backoff state of a DataflowComponentInstance.
+// ResetTopicBrowserInstanceError resets the error and backoff state of a TopicBrowserInstance.
 // This is useful in tests to clear error conditions.
 //
 // Parameters:
