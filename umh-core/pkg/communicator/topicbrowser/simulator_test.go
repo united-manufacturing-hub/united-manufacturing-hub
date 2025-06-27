@@ -27,6 +27,11 @@ import (
 )
 
 var _ = Describe("Simulator", func() {
+	const (
+		bufferLimit     = 100
+		testBundleCount = 102
+	)
+
 	var simulator *topicbrowser.Simulator
 
 	BeforeEach(func() {
@@ -183,13 +188,13 @@ var _ = Describe("Simulator", func() {
 
 		It("should limit buffer to 100 entries", func() {
 			// Add 102 bundles to test the limit
-			for i := 0; i < 102; i++ {
+			for i := 0; i < testBundleCount; i++ {
 				bundle := simulator.GenerateNewUnsBundle()
 				simulator.AddUnsBundleToSimObservedState(bundle)
 			}
 
 			state := simulator.GetSimObservedState()
-			Expect(len(state.ServiceInfo.Status.Buffer)).To(Equal(100))
+			Expect(len(state.ServiceInfo.Status.Buffer)).To(Equal(bufferLimit))
 		})
 
 		It("should remove oldest entries when buffer exceeds limit", func() {
@@ -198,7 +203,7 @@ var _ = Describe("Simulator", func() {
 			simulator.AddUnsBundleToSimObservedState(firstBundle)
 
 			// Fill up the buffer
-			for i := 0; i < 100; i++ {
+			for i := 0; i < bufferLimit; i++ {
 				bundle := simulator.GenerateNewUnsBundle()
 				simulator.AddUnsBundleToSimObservedState(bundle)
 			}
@@ -238,7 +243,7 @@ var _ = Describe("Simulator", func() {
 	Describe("GetSimObservedState", func() {
 		It("should return current observed state", func() {
 			// fill up the buffer
-			for i := 0; i < 100; i++ {
+			for i := 0; i < bufferLimit; i++ {
 				bundle := simulator.GenerateNewUnsBundle()
 				simulator.AddUnsBundleToSimObservedState(bundle)
 			}
@@ -246,7 +251,7 @@ var _ = Describe("Simulator", func() {
 			state := simulator.GetSimObservedState()
 			Expect(state).NotTo(BeNil())
 			Expect(state.ServiceInfo.Status.Buffer).NotTo(BeNil())
-			Expect(state.ServiceInfo.Status.Buffer).To(HaveLen(100))
+			Expect(state.ServiceInfo.Status.Buffer).To(HaveLen(bufferLimit))
 		})
 
 		It("should be thread-safe for concurrent reads", func() {
@@ -473,6 +478,19 @@ var _ = Describe("Simulator", func() {
 					Expect(exists).To(BeTrue(), "Event UnsTreeId should map to existing topic")
 				}
 			}
+		})
+	})
+
+	Describe("TestDecodeUnsBundle", func() {
+		It("should decode uns bundle", func() {
+
+			bundle := simulator.GenerateNewUnsBundle()
+
+			var unsBundle tbproto.UnsBundle
+			err := proto.Unmarshal(bundle, &unsBundle)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(unsBundle.UnsMap).NotTo(BeNil())
+			Expect(unsBundle.Events).NotTo(BeNil())
 		})
 	})
 })

@@ -39,9 +39,9 @@ const (
 // GenerateTopicBrowser is the main entry point for generating TopicBrowser content.
 // It implements the core business logic for topic browser cache management:
 //
-// The cache (topicbrowser.Cache) maintains exactly one event per topic to provide a snapshot
-// of all topics with their latest values. This cache is used to efficiently serve
-// new subscribers without overwhelming them with historical data.
+// The cache (topicbrowser.Cache) maintains exactly one event per topic to provide
+// the last known value for each topic. This cache is used to guarantee that new subscribers
+// get the last known value for each topic.
 //
 // Two subscriber types are handled differently:
 //
@@ -96,14 +96,42 @@ func GenerateTopicBrowser(cache *topicbrowser.Cache, obs *topicbrowser.ObservedS
 		}
 	}
 
+	// Determine threshold timestamp based on subscriber type
+	var thresholdTimestamp int64
 	if isBootstrapped {
-		// Existing subscriber: Get only pending bundles from observed state
-		return GenerateTbContent(cache, obs, logger)
+		// Existing subscriber: Get bundles newer than lastSentTimestamp
+		thresholdTimestamp = cache.GetLastSentTimestamp()
 	} else {
-		// New subscriber: Get the full cache PLUS any new bundles since cache was updated
-		// First get the content as if for an existing subscriber (new bundles since cache was updated)
-		tb := generateTbContentForNewSubscriber(cache, obs, logger)
-		return AddCachedBundleToTbContent(cache, tb)
+		// New subscriber: Get bundles newer than lastCachedTimestamp
+		thresholdTimestamp = cache.GetLastCachedTimestamp()
+	}
+
+	// Build bundles map
+	unsBundles := make(map[int][]byte)
+	startIndex := 0
+
+	// For new subscribers, add cached bundle at index 0 with complete topic coverage
+	if !isBootstrapped {
+		unsBundles[0] = GetCachedBundle(cache)
+		startIndex = 1
+	}
+
+	// Add incremental content starting at the appropriate index
+	incrementalBundles := getPendingBundlesFromObservedState(obs, thresholdTimestamp, logger)
+	for i, bundle := range incrementalBundles {
+		unsBundles[startIndex+i] = bundle
+	}
+
+	// Update the cache with the latest timestamp that was sent
+	latestTimestamp := getLatestTimestampFromObservedState(obs, thresholdTimestamp)
+	if latestTimestamp > 0 {
+		cache.SetLastSentTimestamp(latestTimestamp)
+	}
+
+	return &models.TopicBrowser{
+		Health:     &models.Health{},
+		TopicCount: cache.Size(),
+		UnsBundles: unsBundles,
 	}
 }
 
@@ -147,28 +175,29 @@ func validateAndLimitBundles(bundles [][]byte, logger *zap.SugaredLogger) [][]by
 	return bundles
 }
 
-// GenerateTbContent generates content for existing subscribers who are already bootstrapped.
+// GenerateTbContent generates incremental content for subscribers.
 //
-// BUSINESS LOGIC FOR EXISTING SUBSCRIBERS:
-// - Only send bundles that haven't been sent yet (pending bundles)
-// - Use lastSentTimestamp from cache to filter observed state buffer
+// BUSINESS LOGIC FOR SUBSCRIBERS:
+// - Only send bundles that are newer than the thresholdTimestamp
+// - For existing subscribers: thresholdTimestamp = lastSentTimestamp
+// - For new subscribers: thresholdTimestamp = lastCachedTimestamp
 // - Update lastSentTimestamp after processing to track what was sent
 //
-// This ensures existing subscribers receive only incremental updates,
+// This ensures subscribers receive only incremental updates based on their type,
 // preventing duplicate data and maintaining efficient real-time synchronization.
-func GenerateTbContent(cache *topicbrowser.Cache, obs *topicbrowser.ObservedState, logger *zap.SugaredLogger) *models.TopicBrowser {
+func GenerateTbContent(cache *topicbrowser.Cache, obs *topicbrowser.ObservedState, thresholdTimestamp int64, logger *zap.SugaredLogger) *models.TopicBrowser {
 	unsBundles := make(map[int][]byte)
 	var latestTimestamp int64
 
 	// Get only pending bundles from observed state
 	// These are bundles that arrived after the last sent timestamp
-	pendingBundles := getPendingBundlesFromObservedState(cache, obs, logger)
+	pendingBundles := getPendingBundlesFromObservedState(obs, thresholdTimestamp, logger)
 	for i, bundle := range pendingBundles {
 		unsBundles[i] = bundle
 	}
 
 	// Update the last sent timestamp with the latest from pending bundles
-	latestTimestamp = getLatestTimestampFromObservedState(obs, cache.GetLastSentTimestamp())
+	latestTimestamp = getLatestTimestampFromObservedState(obs, thresholdTimestamp)
 
 	// Update the cache with the latest timestamp that was sent
 	if latestTimestamp > 0 {
@@ -182,128 +211,38 @@ func GenerateTbContent(cache *topicbrowser.Cache, obs *topicbrowser.ObservedStat
 	}
 }
 
-// AddCachedBundleToTbContent adds the complete topicbrowser.Cache to existing subscriber content.
+// GetCachedBundle returns the complete topicbrowser.Cache as a bundle.
 //
 // BUSINESS LOGIC FOR NEW SUBSCRIBERS:
-// - The cached bundle (index 0) contains exactly one event per topic
+// - The cached bundle contains exactly one event per topic
 // - This provides new subscribers with the complete topic landscape immediately
-// - Any additional bundles (index 1+) are incremental updates since cache was updated
 //
-// This two-part approach ensures new subscribers get both:
-// 1. Complete topic coverage (from cache)
-// 2. Latest updates (from observed state since cache update)
-func AddCachedBundleToTbContent(cache *topicbrowser.Cache, tb *models.TopicBrowser) *models.TopicBrowser {
-
-	// Create new unsBundles map with cache bundle at index 0
-	newUnsBundles := make(map[int][]byte)
-
-	// Add the full cache at index 0
-	// This contains exactly one event per topic for complete topic coverage
-	newUnsBundles[0] = cache.ToUnsBundleProto()
-
-	// Shift existing bundles to start from index 1
-	// These are incremental updates since the cache was last updated
-	for i, bundle := range tb.UnsBundles {
-		newUnsBundles[i+1] = bundle
-	}
-
-	tb.UnsBundles = newUnsBundles
-	return tb
-}
-
-// generateTbContentForNewSubscriber generates incremental content for new subscribers.
-//
-// This function handles the "incremental updates" part for new subscribers:
-// - Gets bundles that arrived after the cache was last updated (lastCachedTimestamp)
-// - These bundles will be added to the cache bundle to provide complete coverage
-// - Updates lastSentTimestamp to track what was sent to the new subscriber
-//
-// Note: This is called before AddCachedBundleToTbContent, which adds the full cache.
-func generateTbContentForNewSubscriber(cache *topicbrowser.Cache, obs *topicbrowser.ObservedState, logger *zap.SugaredLogger) *models.TopicBrowser {
-	unsBundles := make(map[int][]byte)
-	var latestTimestamp int64
-
-	// Get new bundles that arrived after the cache was last updated
-	// These provide incremental updates on top of the cached snapshot
-	newBundles := getNewBundlesSinceLastCached(cache, obs, logger)
-	for i, bundle := range newBundles {
-		unsBundles[i] = bundle
-	}
-
-	// Update the last sent timestamp with the latest from new bundles
-	latestTimestamp = getLatestTimestampFromObservedState(obs, cache.GetLastCachedTimestamp())
-
-	// Update the cache with the latest timestamp that was sent
-	if latestTimestamp > 0 {
-		cache.SetLastSentTimestamp(latestTimestamp)
-	}
-
-	return &models.TopicBrowser{
-		Health:     &models.Health{},
-		TopicCount: cache.Size(),
-		UnsBundles: unsBundles,
-	}
+// This ensures new subscribers get complete topic coverage from the cache.
+func GetCachedBundle(cache *topicbrowser.Cache) []byte {
+	return cache.ToUnsBundleProto()
 }
 
 // getPendingBundlesFromObservedState retrieves bundles for existing subscribers.
 //
 // FILTERING LOGIC:
-// - Uses lastSentTimestamp to determine which bundles are still pending
-// - Only includes bundles with timestamp > lastSentTimestamp
-// - This ensures existing subscribers get only new data they haven't seen yet
+// - Uses thresholdTimestamp to determine which bundles are still pending
+// - Only includes bundles with timestamp > thresholdTimestamp
+// - This ensures subscribers get only new data they haven't seen yet
 //
-// This implements the incremental update strategy for existing subscribers.
-func getPendingBundlesFromObservedState(cache *topicbrowser.Cache, obs *topicbrowser.ObservedState, logger *zap.SugaredLogger) [][]byte {
+// This implements the incremental update strategy for both subscriber types.
+func getPendingBundlesFromObservedState(obs *topicbrowser.ObservedState, thresholdTimestamp int64, logger *zap.SugaredLogger) [][]byte {
 	var pendingBundles [][]byte
 
-	// Get the timestamp of the last bundle sent to subscribers
-	lastSentTimestamp := cache.GetLastSentTimestamp()
-
 	for _, buf := range obs.ServiceInfo.Status.Buffer {
-		// Only include buffers that are newer than the last sent timestamp
-		// This ensures we only send pending (unsent) bundles to existing subscribers
-		if buf.Timestamp > lastSentTimestamp {
+		// Only include buffers that are newer than the threshold timestamp
+		// This ensures we only send pending (unsent) bundles to subscribers
+		if buf.Timestamp > thresholdTimestamp {
 			pendingBundles = append(pendingBundles, buf.Payload)
 		}
 	}
 
 	// Apply bundle count protection
 	return validateAndLimitBundles(pendingBundles, logger)
-}
-
-// getNewBundlesSinceLastCached retrieves incremental bundles for new subscribers.
-//
-// FILTERING LOGIC:
-// - Uses lastCachedTimestamp to find bundles newer than the cache
-// - These bundles represent updates that occurred after the cache snapshot
-// - New subscribers need these in addition to the cache for complete coverage
-//
-// This ensures new subscribers get both the cache snapshot AND latest updates.
-func getNewBundlesSinceLastCached(cache *topicbrowser.Cache, obs *topicbrowser.ObservedState, logger *zap.SugaredLogger) [][]byte {
-	var newBundles [][]byte
-
-	// Get the timestamp when cache was last updated
-	lastCachedTimestamp := getLastCachedTimestamp(cache)
-
-	// Find buffers in observed state that are newer than the cache timestamp
-	// These represent incremental updates since the cache was created
-	for _, buf := range obs.ServiceInfo.Status.Buffer {
-		if buf.Timestamp > lastCachedTimestamp {
-			newBundles = append(newBundles, buf.Payload)
-		}
-	}
-
-	// Apply bundle count protection
-	return validateAndLimitBundles(newBundles, logger)
-}
-
-// getLastCachedTimestamp extracts the lastCachedTimestamp from the cache.
-//
-// The lastCachedTimestamp represents when the TbCache was last updated with
-// the "one event per topic" snapshot. This timestamp is used to identify
-// which bundles in the observed state are newer than the cached data.
-func getLastCachedTimestamp(cache *topicbrowser.Cache) int64 {
-	return cache.GetLastCachedTimestamp()
 }
 
 // getLatestTimestampFromObservedState finds the most recent timestamp in observed state.

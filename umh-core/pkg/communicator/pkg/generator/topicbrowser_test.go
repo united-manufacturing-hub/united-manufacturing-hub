@@ -372,14 +372,8 @@ func createMockUnsBundleBytes(events map[string]int64) []byte {
 
 func createMockObservedState(buffers []*topicbrowser.Buffer) *topicbrowser.ObservedState {
 	return &topicbrowser.ObservedState{
-		ServiceInfo: struct {
-			Status struct {
-				Buffer []*topicbrowser.Buffer
-			}
-		}{
-			Status: struct {
-				Buffer []*topicbrowser.Buffer
-			}{
+		ServiceInfo: topicbrowser.ServiceInfo{
+			Status: topicbrowser.Status{
 				Buffer: buffers,
 			},
 		},

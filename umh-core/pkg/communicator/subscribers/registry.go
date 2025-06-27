@@ -21,108 +21,99 @@ import (
 	"github.com/united-manufacturing-hub/expiremap/v2/pkg/expiremap"
 )
 
-// Meta tracks metadata for each subscriber, particularly for topic browser bootstrapping
-type Meta struct {
-	FirstSeen    time.Time // When the subscriber was first added
-	LastSeq      uint64    // Last topic browser sequence delivered
-	Bootstrapped bool      // Did we already send the backlog/full tree?
+// SubscriberData holds both the subscriber email and their bootstrapped state
+type SubscriberData struct {
+	Email        string
+	Bootstrapped bool
 }
 
-// Registry wraps expiremap and adds metadata tracking for subscribers
+// Registry manages subscribers and their bootstrapped state with automatic expiration
 type Registry struct {
-	subscribers *expiremap.ExpireMap[string, string]
-	meta        map[string]*Meta
+	subscribers *expiremap.ExpireMap[string, *SubscriberData]
 	mu          sync.RWMutex
 }
 
 // NewRegistry creates a new subscriber registry with the given TTL and cull interval
 func NewRegistry(cullInterval, ttl time.Duration) *Registry {
 	return &Registry{
-		subscribers: expiremap.NewEx[string, string](cullInterval, ttl),
-		meta:        make(map[string]*Meta),
+		subscribers: expiremap.NewEx[string, *SubscriberData](cullInterval, ttl),
 	}
 }
 
 // Add adds a subscriber to the registry. If the subscriber is new, it initializes
-// their metadata with Bootstraped=false so they receive the full topic tree (see umh-core/pkg/communicator/pkg/generator/topicbrowser.go for more details)
+// their bootstrapped state to false so they receive the full topic tree (see umh-core/pkg/communicator/pkg/generator/topicbrowser.go for more details)
 func (r *Registry) Add(email string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// Add to expiremap (this handles TTL and expiration)
-	r.subscribers.Set(email, email)
-
-	// Initialize metadata if this is a new subscriber
-	if _, exists := r.meta[email]; !exists {
-		r.meta[email] = &Meta{
-			FirstSeen:    time.Now(),
-			LastSeq:      0,
-			Bootstrapped: false,
-		}
-	} else {
-		// If the subscriber is not new, we need to update the metadata
-		r.meta[email].Bootstrapped = false
-	}
+	// Add to expiremap with combined data (this handles TTL and expiration)
+	r.subscribers.Set(email, &SubscriberData{
+		Email:        email,
+		Bootstrapped: false, // new or returning subscribers need the full tree
+	})
 }
 
 // List returns all active subscriber emails
 func (r *Registry) List() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
 	var subscribers []string
-	r.subscribers.Range(func(key string, value string) bool {
-		subscribers = append(subscribers, key)
+	r.subscribers.Range(func(key string, value *SubscriberData) bool {
+		subscribers = append(subscribers, value.Email)
 		return true
 	})
 	return subscribers
 }
 
-// Meta returns the metadata for a subscriber. Returns zero value if not found.
-func (r *Registry) Meta(email string) Meta {
+// IsBootstrapped returns whether a subscriber has been bootstrapped. Returns false if not found.
+func (r *Registry) IsBootstrapped(email string) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	if meta, exists := r.meta[email]; exists {
-		return *meta
+	data, exists := r.subscribers.Load(email)
+	if !exists {
+		return false
 	}
-	return Meta{}
+	return (*data).Bootstrapped
 }
 
-// ForEach iterates over all active subscribers and their metadata
-func (r *Registry) ForEach(fn func(email string, m *Meta)) {
+// ForEach iterates over all active subscribers and their bootstrapped state
+func (r *Registry) ForEach(fn func(email string, bootstrapped bool)) {
 	// Collect all subscriber data first to avoid holding locks during callback
-	type subscriberData struct {
-		email string
-		meta  *Meta
+	type subscriberInfo struct {
+		email        string
+		bootstrapped bool
 	}
 
-	var subscribers []subscriberData
+	var subscribers []subscriberInfo
 
 	r.mu.RLock()
-	r.subscribers.Range(func(key string, value string) bool {
-		if meta, exists := r.meta[key]; exists {
-			// Make a copy of the meta to avoid sharing memory
-			metaCopy := *meta
-			subscribers = append(subscribers, subscriberData{
-				email: key,
-				meta:  &metaCopy,
-			})
-		}
+	r.subscribers.Range(func(key string, value *SubscriberData) bool {
+		subscribers = append(subscribers, subscriberInfo{
+			email:        value.Email,
+			bootstrapped: value.Bootstrapped,
+		})
 		return true
 	})
 	r.mu.RUnlock()
 
 	// Now call callbacks without holding any locks
 	for _, sub := range subscribers {
-		fn(sub.email, sub.meta)
+		fn(sub.email, sub.bootstrapped)
 	}
 }
 
-// UpdateMeta updates the metadata for a subscriber
-func (r *Registry) UpdateMeta(email string, updateFn func(*Meta)) {
+// SetBootstrapped updates the bootstrapped state for a subscriber
+func (r *Registry) SetBootstrapped(email string, bootstrapped bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if meta, exists := r.meta[email]; exists {
-		updateFn(meta)
+	// Only set if the subscriber exists
+	if data, exists := r.subscribers.Load(email); exists {
+		(*data).Bootstrapped = bootstrapped
+		// Update the expiremap entry to refresh TTL
+		r.subscribers.Set(email, *data)
 	}
 }
 

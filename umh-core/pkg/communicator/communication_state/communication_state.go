@@ -23,7 +23,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/pull"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/push"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/subscriber"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/router"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
@@ -52,6 +51,8 @@ type CommunicationState struct {
 	ApiUrl                string
 	Logger                *zap.SugaredLogger
 	TopicBrowserCache     *topicbrowser.Cache
+	// TopicBrowserSimulator is used to access the simulated topic browser state if the agent is running in simulator mode
+	// it is accessed by the generator to generate the topic browser part of the status message
 	TopicBrowserSimulator *topicbrowser.Simulator
 }
 
@@ -152,19 +153,14 @@ func (c *CommunicationState) InitialiseAndStartRouter() {
 	c.Router.Start()
 }
 
-func (c *CommunicationState) StartTopicBrowserCacheUpdater(systemSnapshotManager *fsm.SnapshotManager, ctx context.Context) {
+// StartTopicBrowserCacheUpdater starts the topic browser cache updater
+// it is used to update the topic browser cache with the observed state of the topic browser
+// it is also used to run the simulator if the agent is running in simulator mode
+func (c *CommunicationState) StartTopicBrowserCacheUpdater(systemSnapshotManager *fsm.SnapshotManager, ctx context.Context, runSimulator bool) {
 
-	runSimulator := false
 	c.TopicBrowserSimulator = topicbrowser.NewSimulator()
 
-	ctxCfg, cncl := tools.Get1SecondContext()
-	defer cncl()
-	configCopy, err := c.ConfigManager.GetConfig(ctxCfg, 0)
-	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to get config: %w", err)
-	}
-	if configCopy.Agent.Simulator {
-		runSimulator = true
+	if runSimulator {
 		c.TopicBrowserSimulator.InitializeSimulator()
 	}
 
