@@ -86,7 +86,8 @@ func (s *Simulator) GenerateNewUnsBundle() []byte {
 			UnsTreeId: key,
 			Payload: &tbproto.EventTableEntry_Ts{
 				Ts: &tbproto.TimeSeriesPayload{
-					ScalarType: tbproto.ScalarType_NUMERIC,
+					ScalarType:  tbproto.ScalarType_NUMERIC,
+					TimestampMs: int64(time.Now().UnixMilli()),
 					Value: &tbproto.TimeSeriesPayload_NumericValue{
 						NumericValue: &wrapperspb.DoubleValue{
 							Value: rand.Float64() * 100,
@@ -94,7 +95,7 @@ func (s *Simulator) GenerateNewUnsBundle() []byte {
 					},
 				},
 			},
-			ProducedAtMs: uint64(s.ticker),
+			ProducedAtMs: uint64(time.Now().UnixMilli()),
 		}
 		entries = append(entries, data)
 	}
