@@ -178,7 +178,7 @@ func (c *CommunicationState) StartTopicBrowserCacheUpdater(systemSnapshotManager
 					c.TopicBrowserSimulator.Tick()
 					err := c.TopicBrowserCache.Update(c.TopicBrowserSimulator.GetSimObservedState())
 					if err != nil {
-						c.Logger.Errorf("Failed to update topic browser cache: %w", err)
+						c.Logger.Errorf("Failed to update topic browser cache: %v", err)
 					}
 				} else {
 					// get observed state from system snapshot manager
@@ -194,7 +194,7 @@ func (c *CommunicationState) StartTopicBrowserCacheUpdater(systemSnapshotManager
 					}
 					err := c.TopicBrowserCache.Update(tbObservedState)
 					if err != nil {
-						c.Logger.Errorf("Failed to update topic browser cache: %w", err)
+						c.Logger.Errorf("Failed to update topic browser cache: %v", err)
 					}
 				}
 
