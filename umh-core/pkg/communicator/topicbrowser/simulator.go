@@ -22,6 +22,8 @@ import (
 
 	"github.com/cespare/xxhash/v2"
 	tbproto "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models/topicbrowser/pb"
+	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
+	topicbrowserservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/topicbrowser"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -30,7 +32,7 @@ import (
 // The simulated observed state is used to generate the topic browser data for the status message.
 // It can be enabled via the config file (Agent.Simulator) and is disabled by default.
 type Simulator struct {
-	simObservedState   *ObservedState
+	simObservedState   *topicbrowserfsm.ObservedStateSnapshot
 	simObservedStateMu *sync.RWMutex
 	ticker             int
 	topics             map[string]*tbproto.TopicInfo
@@ -39,7 +41,7 @@ type Simulator struct {
 
 func NewSimulator() *Simulator {
 	s := &Simulator{
-		simObservedState:   &ObservedState{},
+		simObservedState:   &topicbrowserfsm.ObservedStateSnapshot{},
 		simObservedStateMu: &sync.RWMutex{},
 		ticker:             0,
 		simulatorEnabled:   false,
@@ -116,9 +118,9 @@ func (s *Simulator) GenerateNewUnsBundle() []byte {
 func (s *Simulator) AddUnsBundleToSimObservedState(bundle []byte) {
 	s.simObservedStateMu.Lock()
 	defer s.simObservedStateMu.Unlock()
-	s.simObservedState.ServiceInfo.Status.Buffer = append(s.simObservedState.ServiceInfo.Status.Buffer, &Buffer{
+	s.simObservedState.ServiceInfo.Status.Buffer = append(s.simObservedState.ServiceInfo.Status.Buffer, &topicbrowserservice.Buffer{
 		Payload:   bundle,
-		Timestamp: time.Now().Unix(),
+		Timestamp: time.Now(),
 	})
 	// limit the buffer to 100 entries and delete the oldest entry if the buffer is full
 	if len(s.simObservedState.ServiceInfo.Status.Buffer) > 100 {
@@ -126,7 +128,7 @@ func (s *Simulator) AddUnsBundleToSimObservedState(bundle []byte) {
 	}
 }
 
-func (s *Simulator) GetSimObservedState() *ObservedState {
+func (s *Simulator) GetSimObservedState() *topicbrowserfsm.ObservedStateSnapshot {
 	s.simObservedStateMu.RLock()
 	defer s.simObservedStateMu.RUnlock()
 	return s.simObservedState

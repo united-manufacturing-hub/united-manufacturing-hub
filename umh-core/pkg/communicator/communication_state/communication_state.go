@@ -27,7 +27,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/router"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
@@ -174,11 +176,28 @@ func (c *CommunicationState) StartTopicBrowserCacheUpdater(systemSnapshotManager
 			case <-ticker.C:
 				if runSimulator {
 					c.TopicBrowserSimulator.Tick()
+					// err := c.TopicBrowserCache.Update(c.TopicBrowserSimulator.GetSimObservedState())
+					// if err != nil {
+					// 	sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to update topic browser cache: %w", err)
+					// }
+				} else {
+					// get observed state from system snapshot manager
+					tbInstance, ok := fsm.FindInstance(c.SystemSnapshotManager.GetDeepCopySnapshot(), constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
+					if !ok || tbInstance == nil {
+						sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Topic browser instance not found")
+						continue
+					}
+					tbObservedState, ok := tbInstance.LastObservedState.(*topicbrowserfsm.ObservedStateSnapshot)
+					if !ok || tbObservedState == nil {
+						sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Topic browser observed state not found")
+						continue
+					}
+					err := c.TopicBrowserCache.Update(tbObservedState)
+					if err != nil {
+						sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to update topic browser cache: %w", err)
+					}
 				}
-				err := c.TopicBrowserCache.Update(c.TopicBrowserSimulator.GetSimObservedState())
-				if err != nil {
-					sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to update topic browser cache: %w", err)
-				}
+
 			}
 		}
 	}()

@@ -15,13 +15,17 @@
 package topicbrowser_test
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"google.golang.org/protobuf/proto"
 
 	tbproto "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models/topicbrowser/pb"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
+	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	topicbrowserservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/topicbrowser"
 )
 
 var _ = Describe("Cache", func() {
@@ -43,8 +47,8 @@ var _ = Describe("Cache", func() {
 			})
 
 			// Create observed state with first bundle
-			obs1 := createMockObservedState([]*topicbrowser.Buffer{
-				{Payload: bundle1, Timestamp: 1000},
+			obs1 := createMockObservedStateSnapshot([]*topicbrowserservice.Buffer{
+				{Payload: bundle1, Timestamp: time.UnixMilli(1000)},
 			})
 
 			// Update cache with first bundle
@@ -72,8 +76,8 @@ var _ = Describe("Cache", func() {
 			})
 
 			// Create observed state with second bundle
-			obs2 := createMockObservedState([]*topicbrowser.Buffer{
-				{Payload: bundle2, Timestamp: 2000},
+			obs2 := createMockObservedStateSnapshot([]*topicbrowserservice.Buffer{
+				{Payload: bundle2, Timestamp: time.UnixMilli(2000)},
 			})
 
 			// Update cache with second bundle
@@ -101,8 +105,8 @@ var _ = Describe("Cache", func() {
 			})
 
 			// Create observed state with initial bundle
-			obs1 := createMockObservedState([]*topicbrowser.Buffer{
-				{Payload: bundle1, Timestamp: 1000},
+			obs1 := createMockObservedStateSnapshot([]*topicbrowserservice.Buffer{
+				{Payload: bundle1, Timestamp: time.UnixMilli(1000)},
 			})
 
 			// Update cache
@@ -129,9 +133,9 @@ var _ = Describe("Cache", func() {
 			})
 
 			// Create observed state with both old (modified) and new bundles
-			obs2 := createMockObservedState([]*topicbrowser.Buffer{
-				{Payload: modifiedOldBundle, Timestamp: 500}, // Old timestamp - should be ignored
-				{Payload: newBundle, Timestamp: 2000},        // New timestamp - should be processed
+			obs2 := createMockObservedStateSnapshot([]*topicbrowserservice.Buffer{
+				{Payload: modifiedOldBundle, Timestamp: time.UnixMilli(500)}, // Old timestamp - should be ignored
+				{Payload: newBundle, Timestamp: time.UnixMilli(2000)},        // New timestamp - should be processed
 			})
 
 			// Update cache
@@ -158,8 +162,8 @@ var _ = Describe("Cache", func() {
 				"uns.topic2": "Topic 2 Info",
 			})
 
-			obs := createMockObservedState([]*topicbrowser.Buffer{
-				{Payload: bundle1, Timestamp: 1000},
+			obs := createMockObservedStateSnapshot([]*topicbrowserservice.Buffer{
+				{Payload: bundle1, Timestamp: time.UnixMilli(1000)},
 			})
 
 			err := cache.Update(obs)
@@ -204,8 +208,8 @@ var _ = Describe("Cache", func() {
 				"uns.topic3": "Topic 3",
 			})
 
-			obs1 := createMockObservedState([]*topicbrowser.Buffer{
-				{Payload: bundle1, Timestamp: 1200},
+			obs1 := createMockObservedStateSnapshot([]*topicbrowserservice.Buffer{
+				{Payload: bundle1, Timestamp: time.UnixMilli(1200)},
 			})
 
 			err := cache.Update(obs1)
@@ -222,8 +226,8 @@ var _ = Describe("Cache", func() {
 				"uns.topic4": "New Topic 4",
 			})
 
-			obs2 := createMockObservedState([]*topicbrowser.Buffer{
-				{Payload: bundle2, Timestamp: 1500},
+			obs2 := createMockObservedStateSnapshot([]*topicbrowserservice.Buffer{
+				{Payload: bundle2, Timestamp: time.UnixMilli(1500)},
 			})
 
 			err = cache.Update(obs2)
@@ -238,8 +242,8 @@ var _ = Describe("Cache", func() {
 				"uns.topic5": "Topic 5",
 			})
 
-			obs3 := createMockObservedState([]*topicbrowser.Buffer{
-				{Payload: bundle3, Timestamp: 2000},
+			obs3 := createMockObservedStateSnapshot([]*topicbrowserservice.Buffer{
+				{Payload: bundle3, Timestamp: time.UnixMilli(2000)},
 			})
 
 			err = cache.Update(obs3)
@@ -263,9 +267,9 @@ var _ = Describe("Cache", func() {
 
 		It("should handle invalid protobuf data gracefully", func() {
 			// Create observed state with invalid protobuf data
-			obs := createMockObservedState([]*topicbrowser.Buffer{
-				{Payload: []byte("invalid protobuf data"), Timestamp: 1000},
-				{Payload: []byte{0x00, 0xFF, 0xAA}, Timestamp: 1100}, // Invalid binary data
+			obs := createMockObservedStateSnapshot([]*topicbrowserservice.Buffer{
+				{Payload: []byte("invalid protobuf data"), Timestamp: time.UnixMilli(1000)},
+				{Payload: []byte{0x00, 0xFF, 0xAA}, Timestamp: time.UnixMilli(1100)}, // Invalid binary data
 			})
 
 			// Update should not fail even with invalid data
@@ -320,12 +324,12 @@ func createMockUnsBundle(events map[string]int64, unsTopics map[string]string) [
 	return encoded
 }
 
-func createMockObservedState(buffers []*topicbrowser.Buffer) *topicbrowser.ObservedState {
-	return &topicbrowser.ObservedState{
-		ServiceInfo: topicbrowser.ServiceInfo{
-			Status: topicbrowser.Status{
+func createMockObservedStateSnapshot(buffers []*topicbrowserservice.Buffer) *topicbrowserfsm.ObservedStateSnapshot {
+	return &topicbrowserfsm.ObservedStateSnapshot{
+		ServiceInfo: topicbrowserservice.ServiceInfo{
+			Status: topicbrowserservice.Status{
 				Buffer: buffers,
-				Logs:   []s6svc.LogEntry{}, // Initialize with empty slice
+				Logs:   []s6svc.LogEntry{}, // Initia	lize with empty slice
 			},
 			// Leave other fields as zero values
 		},

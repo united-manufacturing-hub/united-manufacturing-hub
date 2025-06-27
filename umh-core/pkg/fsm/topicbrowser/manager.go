@@ -36,6 +36,9 @@ type Manager struct {
 	*public_fsm.BaseFSMManager[config.TopicBrowserConfig]
 }
 
+// Ensure it satisfies fsm.ObservedStateSnapshot
+func (m *Manager) IsObservedStateSnapshot() {}
+
 // Snapshot extends the base ManagerSnapshot with Topic Browser specific information
 type Snapshot struct {
 	// Embed BaseManagerSnapshot to include its methods using composition

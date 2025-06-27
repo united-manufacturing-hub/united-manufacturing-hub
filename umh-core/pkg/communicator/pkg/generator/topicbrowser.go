@@ -16,8 +16,10 @@ package generator
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
+	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
@@ -54,7 +56,7 @@ const (
 //   - Get only pending bundles from observed state
 //   - Uses lastSentTimestamp to determine which bundles haven't been sent yet
 //   - This provides incremental updates to maintain real-time synchronization
-func GenerateTopicBrowser(cache *topicbrowser.Cache, obs *topicbrowser.ObservedState, isBootstrapped bool, logger *zap.SugaredLogger) *models.TopicBrowser {
+func GenerateTopicBrowser(cache *topicbrowser.Cache, obs *topicbrowserfsm.ObservedStateSnapshot, isBootstrapped bool, logger *zap.SugaredLogger) *models.TopicBrowser {
 	// Validate input parameters
 	if cache == nil || obs == nil {
 		return &models.TopicBrowser{
@@ -97,7 +99,7 @@ func GenerateTopicBrowser(cache *topicbrowser.Cache, obs *topicbrowser.ObservedS
 	}
 
 	// Determine threshold timestamp based on subscriber type
-	var thresholdTimestamp int64
+	var thresholdTimestamp time.Time
 	if isBootstrapped {
 		// Existing subscriber: Get bundles newer than lastSentTimestamp
 		thresholdTimestamp = cache.GetLastSentTimestamp()
@@ -124,7 +126,7 @@ func GenerateTopicBrowser(cache *topicbrowser.Cache, obs *topicbrowser.ObservedS
 
 	// Update the cache with the latest timestamp that was sent
 	latestTimestamp := getLatestTimestampFromObservedState(obs, thresholdTimestamp)
-	if latestTimestamp > 0 {
+	if !latestTimestamp.IsZero() {
 		cache.SetLastSentTimestamp(latestTimestamp)
 	}
 
@@ -145,7 +147,7 @@ func validateTopicCount(cache *topicbrowser.Cache) error {
 }
 
 // validateBufferSize ensures the observed state buffer doesn't exceed safe limits
-func validateBufferSize(obs *topicbrowser.ObservedState) error {
+func validateBufferSize(obs *topicbrowserfsm.ObservedStateSnapshot) error {
 	totalSize := int64(0)
 	for _, buf := range obs.ServiceInfo.Status.Buffer {
 		bundleSize := int64(len(buf.Payload))
@@ -185,9 +187,9 @@ func validateAndLimitBundles(bundles [][]byte, logger *zap.SugaredLogger) [][]by
 //
 // This ensures subscribers receive only incremental updates based on their type,
 // preventing duplicate data and maintaining efficient real-time synchronization.
-func GenerateTbContent(cache *topicbrowser.Cache, obs *topicbrowser.ObservedState, thresholdTimestamp int64, logger *zap.SugaredLogger) *models.TopicBrowser {
+func GenerateTbContent(cache *topicbrowser.Cache, obs *topicbrowserfsm.ObservedStateSnapshot, thresholdTimestamp time.Time, logger *zap.SugaredLogger) *models.TopicBrowser {
 	unsBundles := make(map[int][]byte)
-	var latestTimestamp int64
+	var latestTimestamp time.Time
 
 	// Get only pending bundles from observed state
 	// These are bundles that arrived after the last sent timestamp
@@ -200,7 +202,7 @@ func GenerateTbContent(cache *topicbrowser.Cache, obs *topicbrowser.ObservedStat
 	latestTimestamp = getLatestTimestampFromObservedState(obs, thresholdTimestamp)
 
 	// Update the cache with the latest timestamp that was sent
-	if latestTimestamp > 0 {
+	if !latestTimestamp.IsZero() {
 		cache.SetLastSentTimestamp(latestTimestamp)
 	}
 
@@ -230,13 +232,13 @@ func GetCachedBundle(cache *topicbrowser.Cache) []byte {
 // - This ensures subscribers get only new data they haven't seen yet
 //
 // This implements the incremental update strategy for both subscriber types.
-func getPendingBundlesFromObservedState(obs *topicbrowser.ObservedState, thresholdTimestamp int64, logger *zap.SugaredLogger) [][]byte {
+func getPendingBundlesFromObservedState(obs *topicbrowserfsm.ObservedStateSnapshot, thresholdTimestamp time.Time, logger *zap.SugaredLogger) [][]byte {
 	var pendingBundles [][]byte
 
 	for _, buf := range obs.ServiceInfo.Status.Buffer {
 		// Only include buffers that are newer than the threshold timestamp
 		// This ensures we only send pending (unsent) bundles to subscribers
-		if buf.Timestamp > thresholdTimestamp {
+		if buf.Timestamp.After(thresholdTimestamp) {
 			pendingBundles = append(pendingBundles, buf.Payload)
 		}
 	}
@@ -253,13 +255,13 @@ func getPendingBundlesFromObservedState(obs *topicbrowser.ObservedState, thresho
 // - Used to update lastSentTimestamp after processing bundles
 //
 // This enables proper tracking of what data has been sent to subscribers.
-func getLatestTimestampFromObservedState(obs *topicbrowser.ObservedState, thresholdTimestamp int64) int64 {
-	var latestTimestamp int64
+func getLatestTimestampFromObservedState(obs *topicbrowserfsm.ObservedStateSnapshot, thresholdTimestamp time.Time) time.Time {
+	var latestTimestamp time.Time
 
 	for _, buf := range obs.ServiceInfo.Status.Buffer {
 		// Find the latest timestamp that's newer than the threshold
 		// This helps track the most recent data that was processed
-		if buf.Timestamp > thresholdTimestamp && buf.Timestamp > latestTimestamp {
+		if buf.Timestamp.After(thresholdTimestamp) && buf.Timestamp.After(latestTimestamp) {
 			latestTimestamp = buf.Timestamp
 		}
 	}

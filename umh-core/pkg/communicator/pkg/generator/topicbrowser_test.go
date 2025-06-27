@@ -15,6 +15,8 @@
 package generator_test
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
@@ -23,18 +25,20 @@ import (
 	tbproto "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models/topicbrowser/pb"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/generator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
+	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
+	topicbrowserservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/topicbrowser"
 )
 
 var _ = Describe("TopicBrowser Generator", func() {
 	var (
 		cache  *topicbrowser.Cache
-		obs    *topicbrowser.ObservedState
+		obs    *topicbrowserfsm.ObservedStateSnapshot
 		logger *zap.SugaredLogger
 	)
 
 	BeforeEach(func() {
 		cache = topicbrowser.NewCache()
-		obs = createMockObservedState([]*topicbrowser.Buffer{})
+		obs = createMockObservedState([]*topicbrowserservice.Buffer{})
 		logger = zap.NewNop().Sugar()
 	})
 
@@ -45,16 +49,16 @@ var _ = Describe("TopicBrowser Generator", func() {
 				setupCacheWithMockData(cache, map[string]int64{
 					"topic1": 1000,
 					"topic2": 1100,
-				}, 1000)
+				}, time.UnixMilli(1000))
 
 				// Create observed state with buffers that are newer than lastSentTimestamp
-				obs = createMockObservedState([]*topicbrowser.Buffer{
-					{Payload: createMockUnsBundleBytes(map[string]int64{"topic3": 2000}), Timestamp: 2000},
-					{Payload: createMockUnsBundleBytes(map[string]int64{"topic4": 2100}), Timestamp: 2100},
+				obs = createMockObservedState([]*topicbrowserservice.Buffer{
+					{Payload: createMockUnsBundleBytes(map[string]int64{"topic3": 2000}), Timestamp: time.UnixMilli(2000)},
+					{Payload: createMockUnsBundleBytes(map[string]int64{"topic4": 2100}), Timestamp: time.UnixMilli(2100)},
 				})
 
 				// Set lastSentTimestamp to filter buffers
-				cache.SetLastSentTimestamp(1500)
+				cache.SetLastSentTimestamp(time.UnixMilli(1500).UTC())
 
 				// Act: Generate content for existing subscriber
 				result := generator.GenerateTopicBrowser(cache, obs, true, logger)
@@ -70,22 +74,22 @@ var _ = Describe("TopicBrowser Generator", func() {
 				Expect(result.UnsBundles).To(HaveKey(1))
 
 				// Verify lastSentTimestamp was updated
-				Expect(cache.GetLastSentTimestamp()).To(Equal(int64(2100)))
+				Expect(cache.GetLastSentTimestamp()).To(Equal(time.UnixMilli(2100).UTC()))
 			})
 
 			It("should return empty bundles when no pending data exists", func() {
 				// Setup: Create cache with data
 				setupCacheWithMockData(cache, map[string]int64{
 					"topic1": 1000,
-				}, 1000)
+				}, time.UnixMilli(1000))
 
 				// Create observed state with buffers that are older than lastSentTimestamp
-				obs = createMockObservedState([]*topicbrowser.Buffer{
-					{Payload: createMockUnsBundleBytes(map[string]int64{"topic1": 500}), Timestamp: 500},
+				obs = createMockObservedState([]*topicbrowserservice.Buffer{
+					{Payload: createMockUnsBundleBytes(map[string]int64{"topic1": 500}), Timestamp: time.UnixMilli(500)},
 				})
 
 				// Set lastSentTimestamp to a recent time
-				cache.SetLastSentTimestamp(2000)
+				cache.SetLastSentTimestamp(time.UnixMilli(2000).UTC())
 
 				// Act: Generate content for existing subscriber
 				result := generator.GenerateTopicBrowser(cache, obs, true, logger)
@@ -96,7 +100,7 @@ var _ = Describe("TopicBrowser Generator", func() {
 				Expect(result.TopicCount).To(Equal(1)) // Cache size unchanged
 
 				// lastSentTimestamp should remain unchanged since no new data
-				Expect(cache.GetLastSentTimestamp()).To(Equal(int64(2000)))
+				Expect(cache.GetLastSentTimestamp()).To(Equal(time.UnixMilli(2000).UTC()))
 			})
 		})
 
@@ -106,12 +110,12 @@ var _ = Describe("TopicBrowser Generator", func() {
 				setupCacheWithMockData(cache, map[string]int64{
 					"topic1": 1000,
 					"topic2": 1100,
-				}, 1000)
+				}, time.UnixMilli(1000))
 
 				// Create observed state with buffers newer than lastCachedTimestamp
-				obs = createMockObservedState([]*topicbrowser.Buffer{
-					{Payload: createMockUnsBundleBytes(map[string]int64{"topic3": 2000}), Timestamp: 2000},
-					{Payload: createMockUnsBundleBytes(map[string]int64{"topic4": 2100, "topic5": 2200}), Timestamp: 2100}, // add two new topics in one bundle
+				obs = createMockObservedState([]*topicbrowserservice.Buffer{
+					{Payload: createMockUnsBundleBytes(map[string]int64{"topic3": 2000}), Timestamp: time.UnixMilli(2000)},
+					{Payload: createMockUnsBundleBytes(map[string]int64{"topic4": 2100, "topic5": 2200}), Timestamp: time.UnixMilli(2100)}, // add two new topics in one bundle
 				})
 
 				// Act: Generate content for new subscriber
@@ -187,7 +191,7 @@ var _ = Describe("TopicBrowser Generator", func() {
 				Expect(cacheBundle.Events.Entries).To(HaveLen(2))
 
 				// Verify lastSentTimestamp was updated
-				Expect(cache.GetLastSentTimestamp()).To(Equal(int64(2100)))
+				Expect(cache.GetLastSentTimestamp()).To(Equal(time.UnixMilli(2100).UTC()))
 			})
 
 			It("should work correctly when no new bundles exist since cache", func() {
@@ -195,11 +199,11 @@ var _ = Describe("TopicBrowser Generator", func() {
 				setupCacheWithMockData(cache, map[string]int64{
 					"topic1": 1000,
 					"topic2": 1100,
-				}, 2000) // Recent cache timestamp
+				}, time.UnixMilli(2000)) // Recent cache timestamp
 
 				// Create observed state with only old buffers
-				obs = createMockObservedState([]*topicbrowser.Buffer{
-					{Payload: createMockUnsBundleBytes(map[string]int64{"topic1": 1500}), Timestamp: 1500},
+				obs = createMockObservedState([]*topicbrowserservice.Buffer{
+					{Payload: createMockUnsBundleBytes(map[string]int64{"topic1": 1500}), Timestamp: time.UnixMilli(1500)},
 				})
 
 				// Act: Generate content for new subscriber
@@ -221,8 +225,8 @@ var _ = Describe("TopicBrowser Generator", func() {
 			It("should handle empty cache correctly", func() {
 				// Use empty cache (no setup)
 				// Create observed state with some bundles
-				obs = createMockObservedState([]*topicbrowser.Buffer{
-					{Payload: createMockUnsBundleBytes(map[string]int64{"topic1": 1000}), Timestamp: 1000},
+				obs = createMockObservedState([]*topicbrowserservice.Buffer{
+					{Payload: createMockUnsBundleBytes(map[string]int64{"topic1": 1000}), Timestamp: time.UnixMilli(1000)},
 				})
 
 				// Act: Generate content for new subscriber
@@ -246,50 +250,50 @@ var _ = Describe("TopicBrowser Generator", func() {
 		Context("timestamp tracking behavior", func() {
 			It("should correctly track lastSentTimestamp for existing subscribers", func() {
 				// Setup cache
-				setupCacheWithMockData(cache, map[string]int64{"topic1": 1000}, 1000)
-				cache.SetLastSentTimestamp(1500)
+				setupCacheWithMockData(cache, map[string]int64{"topic1": 1000}, time.UnixMilli(1000))
+				cache.SetLastSentTimestamp(time.UnixMilli(1500).UTC())
 
 				// Create observed state with multiple timestamps
-				obs = createMockObservedState([]*topicbrowser.Buffer{
-					{Payload: createMockUnsBundleBytes(map[string]int64{"topic2": 2000}), Timestamp: 2000},
-					{Payload: createMockUnsBundleBytes(map[string]int64{"topic3": 1800}), Timestamp: 1800},
-					{Payload: createMockUnsBundleBytes(map[string]int64{"topic4": 2200}), Timestamp: 2200},
+				obs = createMockObservedState([]*topicbrowserservice.Buffer{
+					{Payload: createMockUnsBundleBytes(map[string]int64{"topic2": 2000}), Timestamp: time.UnixMilli(2000)},
+					{Payload: createMockUnsBundleBytes(map[string]int64{"topic3": 1800}), Timestamp: time.UnixMilli(1800)},
+					{Payload: createMockUnsBundleBytes(map[string]int64{"topic4": 2200}), Timestamp: time.UnixMilli(2200)},
 				})
 
 				// Act: Generate for existing subscriber
 				result := generator.GenerateTopicBrowser(cache, obs, true, logger)
 
 				// Assert: Should update to latest timestamp
-				Expect(result.UnsBundles).To(HaveLen(3))                    // All bundles are newer than lastSentTimestamp
-				Expect(cache.GetLastSentTimestamp()).To(Equal(int64(2200))) // Latest timestamp
+				Expect(result.UnsBundles).To(HaveLen(3))                                   // All bundles are newer than lastSentTimestamp
+				Expect(cache.GetLastSentTimestamp()).To(Equal(time.UnixMilli(2200).UTC())) // Latest timestamp
 			})
 
 			It("should correctly track lastSentTimestamp for new subscribers", func() {
 				// Setup cache with lastCachedTimestamp
-				setupCacheWithMockData(cache, map[string]int64{"topic1": 1000}, 1500)
+				setupCacheWithMockData(cache, map[string]int64{"topic1": 1000}, time.UnixMilli(1500))
 
 				// Create observed state with newer bundles
-				obs = createMockObservedState([]*topicbrowser.Buffer{
-					{Payload: createMockUnsBundleBytes(map[string]int64{"topic2": 2000}), Timestamp: 2000},
-					{Payload: createMockUnsBundleBytes(map[string]int64{"topic3": 2100}), Timestamp: 2100},
+				obs = createMockObservedState([]*topicbrowserservice.Buffer{
+					{Payload: createMockUnsBundleBytes(map[string]int64{"topic2": 2000}), Timestamp: time.UnixMilli(2000)},
+					{Payload: createMockUnsBundleBytes(map[string]int64{"topic3": 2100}), Timestamp: time.UnixMilli(2100)},
 				})
 
 				// Act: Generate for new subscriber
 				result := generator.GenerateTopicBrowser(cache, obs, false, logger)
 
 				// Assert: Should include cache + new bundles and update timestamp
-				Expect(result.UnsBundles).To(HaveLen(3))                    // Cache + 2 new
-				Expect(cache.GetLastSentTimestamp()).To(Equal(int64(2100))) // Latest from new bundles
+				Expect(result.UnsBundles).To(HaveLen(3))                                   // Cache + 2 new
+				Expect(cache.GetLastSentTimestamp()).To(Equal(time.UnixMilli(2100).UTC())) // Latest from new bundles
 			})
 		})
 
 		Context("edge cases", func() {
 			It("should handle empty observed state", func() {
 				// Setup cache with data
-				setupCacheWithMockData(cache, map[string]int64{"topic1": 1000}, 1000)
+				setupCacheWithMockData(cache, map[string]int64{"topic1": 1000}, time.UnixMilli(1000))
 
 				// Use empty observed state
-				obs = createMockObservedState([]*topicbrowser.Buffer{})
+				obs = createMockObservedState([]*topicbrowserservice.Buffer{})
 
 				// Test both scenarios
 				existingResult := generator.GenerateTopicBrowser(cache, obs, true, logger)
@@ -300,7 +304,7 @@ var _ = Describe("TopicBrowser Generator", func() {
 			})
 
 			It("should handle nil cache", func() {
-				obs = createMockObservedState([]*topicbrowser.Buffer{})
+				obs = createMockObservedState([]*topicbrowserservice.Buffer{})
 
 				Expect(func() {
 					generator.GenerateTopicBrowser(nil, obs, true, logger)
@@ -316,12 +320,12 @@ var _ = Describe("TopicBrowser Generator", func() {
 
 // Helper functions for creating mock data
 
-func setupCacheWithMockData(cache *topicbrowser.Cache, events map[string]int64, lastCachedTimestamp int64) {
+func setupCacheWithMockData(cache *topicbrowser.Cache, events map[string]int64, lastCachedTimestamp time.Time) {
 	// Create mock UnsBundle with the given events
 	bundleData := createMockUnsBundleBytes(events)
 
 	// Create observed state with this bundle
-	obs := createMockObservedState([]*topicbrowser.Buffer{
+	obs := createMockObservedState([]*topicbrowserservice.Buffer{
 		{Payload: bundleData, Timestamp: lastCachedTimestamp},
 	})
 
@@ -370,10 +374,10 @@ func createMockUnsBundleBytes(events map[string]int64) []byte {
 	return encoded
 }
 
-func createMockObservedState(buffers []*topicbrowser.Buffer) *topicbrowser.ObservedState {
-	return &topicbrowser.ObservedState{
-		ServiceInfo: topicbrowser.ServiceInfo{
-			Status: topicbrowser.Status{
+func createMockObservedState(buffers []*topicbrowserservice.Buffer) *topicbrowserfsm.ObservedStateSnapshot {
+	return &topicbrowserfsm.ObservedStateSnapshot{
+		ServiceInfo: topicbrowserservice.ServiceInfo{
+			Status: topicbrowserservice.Status{
 				Buffer: buffers,
 			},
 		},

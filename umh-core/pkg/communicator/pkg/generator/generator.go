@@ -20,6 +20,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
@@ -106,7 +107,17 @@ func (s *StatusCollectorType) GenerateStatusMessage(isBootstrapped bool) *models
 	}
 
 	// --- topic browser -------------------------------------------------------------
-	topicBrowserData := GenerateTopicBrowser(s.topicBrowserCache, s.topicBrowserSimulator.GetSimObservedState(), isBootstrapped, s.logger)
+	topicBrowserData := &models.TopicBrowser{}
+
+	inst, ok := fsm.FindInstance(snapshot, constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
+	if !ok {
+
+		s.logger.Error("Topic browser instance not found")
+
+	} else {
+		obs := inst.LastObservedState.(*topicbrowserfsm.ObservedStateSnapshot)
+		topicBrowserData = GenerateTopicBrowser(s.topicBrowserCache, obs, isBootstrapped, s.logger)
+	}
 
 	// Step 3: Create the status message
 	statusMessage := &models.StatusMessage{
