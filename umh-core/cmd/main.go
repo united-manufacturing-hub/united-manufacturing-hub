@@ -23,6 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/pprof"
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/graphql"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -105,6 +106,46 @@ func main() {
 	// Start the topic browser cache updater independent of the backend connection (e.g., for HTTP endpoints)
 	// it updates the TopicBrowserCache based on the observed state of the topic browser service once per second
 	communicationState.StartTopicBrowserCacheUpdater(systemSnapshotManager, ctx, configData.Agent.Simulator)
+
+	// Start the GraphQL server if enabled
+	var graphqlServer *graphql.Server
+	if configData.Agent.GraphQLConfig.Enabled {
+		// Set defaults for GraphQL config if not specified
+		if configData.Agent.GraphQLConfig.Port == 0 {
+			configData.Agent.GraphQLConfig.Port = 8090
+		}
+		if len(configData.Agent.GraphQLConfig.CORSOrigins) == 0 {
+			configData.Agent.GraphQLConfig.CORSOrigins = []string{"*"}
+		}
+
+		// Create GraphQL resolver with necessary dependencies
+		//
+		// TopicBrowserCache: Required for GraphQL to access the unified namespace data
+		// SnapshotManager: Required for GraphQL to access system configuration and state
+		graphqlResolver := &graphql.Resolver{
+			SnapshotManager:   systemSnapshotManager,
+			TopicBrowserCache: communicationState.TopicBrowserCache,
+		}
+
+		// Start GraphQL server
+		var err error
+		graphqlServer, err = graphql.StartGraphQLServer(graphqlResolver, &configData.Agent.GraphQLConfig, log)
+		if err != nil {
+			sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to start GraphQL server: %w", err)
+		}
+
+		defer func() {
+			if graphqlServer != nil {
+				shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
+				defer shutdownCancel()
+				if err := graphqlServer.Stop(shutdownCtx); err != nil {
+					sentry.ReportIssuef(sentry.IssueTypeError, log, "Failed to shutdown GraphQL server: %w", err)
+				}
+			}
+		}()
+	} else {
+		log.Info("GraphQL server disabled via configuration")
+	}
 
 	if configData.Agent.APIURL != "" && configData.Agent.AuthToken != "" {
 		enableBackendConnection(&configData, communicationState, controlLoop, communicationState.Logger)
