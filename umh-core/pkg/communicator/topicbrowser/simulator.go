@@ -46,7 +46,6 @@ func NewSimulator() *Simulator {
 		ticker:             0,
 		simulatorEnabled:   false,
 	}
-	s.InitializeSimulator()
 	return s
 }
 
