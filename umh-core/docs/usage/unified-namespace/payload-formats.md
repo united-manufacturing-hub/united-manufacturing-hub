@@ -17,8 +17,8 @@ Arrays, primitives and raw binaries are rejected by the UNS Output Plugin – wr
 | Forbidden keys      | Any extra key (e.g. `temperature`)                              | —                            |
 | `timestamp_ms` type | Integer (signed/unsigned) or float **without** fraction         | _optional_                   |
 | `value` type        | <p>Scalar:<br>- number (float/int)<br>- boolean<br>- string</p> | _n/a_                        |
-| Illegal values      | `NaN`, `+Inf`, `-Inf`, payload > 1024 B                         | — (size limit still applies) |
-| Max payload size    | 1024 bytes after JSON decoding                                  | 1024 bytes                   |
+| Illegal values      | `NaN`, `+Inf`, `-Inf`, payload > 1GiB-1                         | — (size limit still applies) |
+| Max payload size    | 1GiB-1 after JSON decoding                                      | 1GiB-1                       |
 | Examples            | `{"timestamp_ms":1717083000000,"value":23.4}`                   | `{"order_id":42, ...}`       |
 
 ### Canonical Examples
