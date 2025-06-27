@@ -183,7 +183,7 @@ var _ = Describe("Simulator", func() {
 
 			addedBuffer := newState.ServiceInfo.Status.Buffer[len(newState.ServiceInfo.Status.Buffer)-1]
 			Expect(addedBuffer.Payload).To(Equal(bundle))
-			Expect(addedBuffer.Timestamp).To(BeNumerically("~", time.Now().Unix(), 1))
+			Expect(addedBuffer.Timestamp.Unix()).To(BeNumerically("~", time.Now().Unix(), 1))
 		})
 
 		It("should limit buffer to 100 entries", func() {

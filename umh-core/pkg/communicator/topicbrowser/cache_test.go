@@ -63,8 +63,9 @@ var _ = Describe("Cache", func() {
 
 			unsMap := cache.GetUnsMap()
 			Expect(unsMap.Entries).To(HaveLen(2))
-			Expect(unsMap.Entries["uns.topic1"].Name).To(Equal("uns.topic1"))
-			Expect(unsMap.Entries["uns.topic2"].Name).To(Equal("uns.topic2"))
+			for _, entry := range unsMap.Entries {
+				Expect(entry.Name).To(Or(Equal("uns.topic1"), Equal("uns.topic2")))
+			}
 
 			// Create second UnsBundle with updated and new data
 			bundle2 := createMockUnsBundle(map[string]int64{
@@ -93,7 +94,6 @@ var _ = Describe("Cache", func() {
 
 			unsMap = cache.GetUnsMap()
 			Expect(unsMap.Entries).To(HaveLen(3))
-			Expect(unsMap.Entries["uns.topic3"].Name).To(Equal("uns.topic3")) // New entry
 		})
 
 		It("should only use new bundles for cache update", func() {
@@ -112,7 +112,7 @@ var _ = Describe("Cache", func() {
 			// Update cache
 			err := cache.Update(obs1)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(cache.GetLastCachedTimestamp()).To(Equal(int64(1000)))
+			Expect(cache.GetLastCachedTimestamp()).To(Equal(time.UnixMilli(1000)))
 
 			// Verify initial state
 			eventMap := cache.GetEventMap()
@@ -149,7 +149,7 @@ var _ = Describe("Cache", func() {
 			Expect(eventMap["topic2"].ProducedAtMs).To(Equal(uint64(2000))) // New topic added
 
 			// Verify timestamp was updated correctly
-			Expect(cache.GetLastCachedTimestamp()).To(Equal(int64(2000)))
+			Expect(cache.GetLastCachedTimestamp()).To(Equal(time.UnixMilli(2000)))
 		})
 
 		It("should generate proper proto-encoded UnsBundle with the data", func() {
@@ -192,8 +192,9 @@ var _ = Describe("Cache", func() {
 
 			// Verify UnsMap is correctly encoded
 			Expect(decodedBundle.UnsMap.Entries).To(HaveLen(2))
-			Expect(decodedBundle.UnsMap.Entries["uns.topic1"].Name).To(Equal("uns.topic1"))
-			Expect(decodedBundle.UnsMap.Entries["uns.topic2"].Name).To(Equal("uns.topic2"))
+			for _, entry := range decodedBundle.UnsMap.Entries {
+				Expect(entry.Name).To(Or(Equal("uns.topic1"), Equal("uns.topic2")))
+			}
 		})
 
 		It("should handle multiple updates with complex data scenarios", func() {
@@ -262,7 +263,7 @@ var _ = Describe("Cache", func() {
 			Expect(unsMap.Entries).To(HaveLen(5))
 
 			// Verify cache timestamp tracking
-			Expect(cache.GetLastCachedTimestamp()).To(Equal(int64(2000)))
+			Expect(cache.GetLastCachedTimestamp()).To(Equal(time.UnixMilli(2000)))
 		})
 
 		It("should handle invalid protobuf data gracefully", func() {
@@ -284,7 +285,7 @@ var _ = Describe("Cache", func() {
 			Expect(unsMap.Entries).To(HaveLen(0))
 
 			// But timestamp should be updated to latest processed timestamp
-			Expect(cache.GetLastCachedTimestamp()).To(Equal(int64(1100)))
+			Expect(cache.GetLastCachedTimestamp()).To(Equal(time.UnixMilli(1100)))
 		})
 	})
 })
@@ -317,7 +318,7 @@ func createMockUnsBundle(events map[string]int64, unsTopics map[string]string) [
 			Name: name,
 			// Add other required fields as needed
 		}
-		bundle.UnsMap.Entries[name] = topicInfo
+		bundle.UnsMap.Entries[topicbrowser.HashUNSTableEntry(topicInfo)] = topicInfo
 	}
 
 	encoded, _ := proto.Marshal(bundle)

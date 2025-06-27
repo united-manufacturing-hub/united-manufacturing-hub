@@ -58,7 +58,7 @@ var _ = Describe("TopicBrowser Generator", func() {
 				})
 
 				// Set lastSentTimestamp to filter buffers
-				cache.SetLastSentTimestamp(time.UnixMilli(1500).UTC())
+				cache.SetLastSentTimestamp(time.UnixMilli(1500))
 
 				// Act: Generate content for existing subscriber
 				result := generator.GenerateTopicBrowser(cache, obs, true, logger)
@@ -74,7 +74,7 @@ var _ = Describe("TopicBrowser Generator", func() {
 				Expect(result.UnsBundles).To(HaveKey(1))
 
 				// Verify lastSentTimestamp was updated
-				Expect(cache.GetLastSentTimestamp()).To(Equal(time.UnixMilli(2100).UTC()))
+				Expect(cache.GetLastSentTimestamp()).To(Equal(time.UnixMilli(2100)))
 			})
 
 			It("should return empty bundles when no pending data exists", func() {
@@ -89,7 +89,7 @@ var _ = Describe("TopicBrowser Generator", func() {
 				})
 
 				// Set lastSentTimestamp to a recent time
-				cache.SetLastSentTimestamp(time.UnixMilli(2000).UTC())
+				cache.SetLastSentTimestamp(time.UnixMilli(2000))
 
 				// Act: Generate content for existing subscriber
 				result := generator.GenerateTopicBrowser(cache, obs, true, logger)
@@ -100,7 +100,7 @@ var _ = Describe("TopicBrowser Generator", func() {
 				Expect(result.TopicCount).To(Equal(1)) // Cache size unchanged
 
 				// lastSentTimestamp should remain unchanged since no new data
-				Expect(cache.GetLastSentTimestamp()).To(Equal(time.UnixMilli(2000).UTC()))
+				Expect(cache.GetLastSentTimestamp()).To(Equal(time.UnixMilli(2000)))
 			})
 		})
 
@@ -191,7 +191,7 @@ var _ = Describe("TopicBrowser Generator", func() {
 				Expect(cacheBundle.Events.Entries).To(HaveLen(2))
 
 				// Verify lastSentTimestamp was updated
-				Expect(cache.GetLastSentTimestamp()).To(Equal(time.UnixMilli(2100).UTC()))
+				Expect(cache.GetLastSentTimestamp()).To(Equal(time.UnixMilli(2100)))
 			})
 
 			It("should work correctly when no new bundles exist since cache", func() {
@@ -251,7 +251,7 @@ var _ = Describe("TopicBrowser Generator", func() {
 			It("should correctly track lastSentTimestamp for existing subscribers", func() {
 				// Setup cache
 				setupCacheWithMockData(cache, map[string]int64{"topic1": 1000}, time.UnixMilli(1000))
-				cache.SetLastSentTimestamp(time.UnixMilli(1500).UTC())
+				cache.SetLastSentTimestamp(time.UnixMilli(1500))
 
 				// Create observed state with multiple timestamps
 				obs = createMockObservedState([]*topicbrowserservice.Buffer{
@@ -264,8 +264,8 @@ var _ = Describe("TopicBrowser Generator", func() {
 				result := generator.GenerateTopicBrowser(cache, obs, true, logger)
 
 				// Assert: Should update to latest timestamp
-				Expect(result.UnsBundles).To(HaveLen(3))                                   // All bundles are newer than lastSentTimestamp
-				Expect(cache.GetLastSentTimestamp()).To(Equal(time.UnixMilli(2200).UTC())) // Latest timestamp
+				Expect(result.UnsBundles).To(HaveLen(3))                             // All bundles are newer than lastSentTimestamp
+				Expect(cache.GetLastSentTimestamp()).To(Equal(time.UnixMilli(2200))) // Latest timestamp
 			})
 
 			It("should correctly track lastSentTimestamp for new subscribers", func() {
@@ -282,8 +282,8 @@ var _ = Describe("TopicBrowser Generator", func() {
 				result := generator.GenerateTopicBrowser(cache, obs, false, logger)
 
 				// Assert: Should include cache + new bundles and update timestamp
-				Expect(result.UnsBundles).To(HaveLen(3))                                   // Cache + 2 new
-				Expect(cache.GetLastSentTimestamp()).To(Equal(time.UnixMilli(2100).UTC())) // Latest from new bundles
+				Expect(result.UnsBundles).To(HaveLen(3))                             // Cache + 2 new
+				Expect(cache.GetLastSentTimestamp()).To(Equal(time.UnixMilli(2100))) // Latest from new bundles
 			})
 		})
 

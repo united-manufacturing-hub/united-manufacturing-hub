@@ -48,43 +48,6 @@ func NewCache() *Cache {
 	}
 }
 
-// // Buffer represents a protobuf-encoded unsBundle from the FSM
-// // This is a placeholder until the actual FSM types are available
-// type Buffer struct {
-// 	Payload   []byte    // protobuf-encoded unsBundle
-// 	Timestamp time.Time // timestamp from the logs
-// }
-
-// // Status represents the topic browser status
-// type Status struct {
-// 	Buffer []*Buffer        // contains the ringbuffer sorted from newest to oldest
-// 	Logs   []s6svc.LogEntry // contain the structured s6 logs entries
-// }
-
-// // ServiceInfo represents the complete service information
-// type ServiceInfo struct {
-// 	// benthos state information
-// 	BenthosObservedState benthosfsm.BenthosObservedState
-// 	BenthosFSMState      string
-
-// 	// redpanda state information
-// 	RedpandaObservedState redpandafsm.RedpandaObservedState
-// 	RedpandaFSMState      string
-
-// 	// topic browser status
-// 	Status Status
-// 	// processing activities
-// 	BenthosProcessing  bool // is benthos active
-// 	RedpandaProcessing bool // is redpanda active
-// 	InvalidMetrics     bool // if there is invalid metrics e.g. redpanda has no output but benthos has input
-// 	StatusReason       string
-// }
-
-// // ObservedState represents the FSM observed state structure
-// type ObservedState struct {
-// 	ServiceInfo ServiceInfo
-// }
-
 // Update processes new buffers from the topic browser FSM observed state
 func (c *Cache) Update(obs *topicbrowserfsm.ObservedStateSnapshot) error {
 	c.mu.Lock()
