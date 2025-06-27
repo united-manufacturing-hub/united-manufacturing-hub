@@ -135,7 +135,7 @@ func (c *Cache) ToUnsBundleProto() []byte {
 
 	// add the uns map to the uns bundle
 	for _, entry := range c.unsMap.Entries {
-		ub.UnsMap.Entries[entry.Name] = entry
+		ub.UnsMap.Entries[HashUNSTableEntry(entry)] = entry
 	}
 
 	// proto encode the uns bundle
