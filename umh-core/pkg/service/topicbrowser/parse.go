@@ -20,7 +20,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,10 +30,7 @@ import (
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
-// lz4 frame for decompression logic
-var lz4FrameMagic = []byte{0x04, 0x22, 0x4d, 0x18}
-
-// 10MiB - can be tweaked based on the output size of benthos
+// 10MiB
 const maxPayloadBytes = 10 << 20
 
 // / extractRaw searches log entries for a complete START‒END block and returns
@@ -185,16 +181,9 @@ func decompressBlock(src []byte) ([]byte, error) {
 }
 
 // decompressLZ4 recognises:
-//   - LZ4 *frame*
 //   - Raw block with 4-byte length prefix
 //   - Raw block without prefix (legacy)   ← handled via decompressBlock
 func decompressLZ4(compressed []byte) ([]byte, error) {
-	// ── frame ────────────────────────────────────────────────────────────
-	if bytes.HasPrefix(compressed, lz4FrameMagic) {
-		r := lz4.NewReader(bytes.NewReader(compressed))
-		return io.ReadAll(r)
-	}
-
 	if len(compressed) >= 4 {
 		orig := int(binary.LittleEndian.Uint32(compressed[:4]))
 		if 0 < orig && orig <= 64<<20 {

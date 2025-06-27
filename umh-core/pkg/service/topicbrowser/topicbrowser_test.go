@@ -15,8 +15,8 @@
 package topicbrowser
 
 import (
-	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -914,10 +914,21 @@ func WaitForBenthosManagerInstanceState(
 	return tick, fmt.Errorf("instance didn't reach expected state: %s", expectedState)
 }
 
+// should somehow match the function from benthos to lz4 compress the data
 func makeLZ4Hex(payload []byte) string {
-	var buf bytes.Buffer
-	w := lz4.NewWriter(&buf)
-	_, _ = w.Write(payload) // errors impossible in tests
-	_ = w.Close()
-	return hex.EncodeToString(buf.Bytes())
+	bound := lz4.CompressBlockBound(len(payload))
+
+	compBuf := make([]byte, bound)
+
+	n, err := lz4.CompressBlock(payload, compBuf, nil)
+	if err != nil {
+		panic("lz4 compress error: " + err.Error())
+	}
+	comp := compBuf[:n]
+
+	out := make([]byte, 4+len(comp))
+	binary.LittleEndian.PutUint32(out[:4], uint32(len(payload)))
+	copy(out[4:], comp)
+
+	return hex.EncodeToString(out)
 }
