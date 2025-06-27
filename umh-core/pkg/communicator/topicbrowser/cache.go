@@ -16,13 +16,13 @@ package topicbrowser
 
 import (
 	"sync"
+	"time"
 
 	tbproto "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models/topicbrowser/pb"
-	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
-	redpandafsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
+	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	topicbrowserservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/topicbrowser"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -32,8 +32,8 @@ type Cache struct {
 	mu                 sync.RWMutex
 	eventMap           map[string]*tbproto.EventTableEntry // key = UnsTreeId from events
 	unsMap             *tbproto.TopicMap
-	lastCacheTimestamp int64
-	lastSentTimestamp  int64
+	lastCacheTimestamp time.Time
+	lastSentTimestamp  time.Time
 }
 
 // NewCache creates a new topic browser cache
@@ -43,50 +43,13 @@ func NewCache() *Cache {
 		unsMap: &tbproto.TopicMap{
 			Entries: make(map[string]*tbproto.TopicInfo),
 		},
-		lastCacheTimestamp: 0,
-		lastSentTimestamp:  0,
+		lastCacheTimestamp: time.Time{},
+		lastSentTimestamp:  time.Time{},
 	}
 }
 
-// Buffer represents a protobuf-encoded unsBundle from the FSM
-// This is a placeholder until the actual FSM types are available
-type Buffer struct {
-	Payload   []byte // protobuf-encoded unsBundle
-	Timestamp int64  // timestamp from the logs
-}
-
-// Status represents the topic browser status
-type Status struct {
-	Buffer []*Buffer        // contains the ringbuffer sorted from newest to oldest
-	Logs   []s6svc.LogEntry // contain the structured s6 logs entries
-}
-
-// ServiceInfo represents the complete service information
-type ServiceInfo struct {
-	// benthos state information
-	BenthosObservedState benthosfsm.BenthosObservedState
-	BenthosFSMState      string
-
-	// redpanda state information
-	RedpandaObservedState redpandafsm.RedpandaObservedState
-	RedpandaFSMState      string
-
-	// topic browser status
-	Status Status
-	// processing activities
-	BenthosProcessing  bool // is benthos active
-	RedpandaProcessing bool // is redpanda active
-	InvalidMetrics     bool // if there is invalid metrics e.g. redpanda has no output but benthos has input
-	StatusReason       string
-}
-
-// ObservedState represents the FSM observed state structure
-type ObservedState struct {
-	ServiceInfo ServiceInfo
-}
-
 // Update processes new buffers from the topic browser FSM observed state
-func (c *Cache) Update(obs *ObservedState) error {
+func (c *Cache) Update(obs *topicbrowserfsm.ObservedStateSnapshot) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -94,11 +57,11 @@ func (c *Cache) Update(obs *ObservedState) error {
 	// the relevant buffers are the ones that have a timestamp greater than the last cache timestamp
 	// with this logic, we can avoid processing the same buffer multiple times becuase it will stay in the buffer for a while
 	latestProcessedTimestamp := c.lastCacheTimestamp
-	relevantBuffers := make([]*Buffer, 0)
+	relevantBuffers := make([]*topicbrowserservice.Buffer, 0)
 	for _, buf := range obs.ServiceInfo.Status.Buffer {
-		if buf.Timestamp > c.lastCacheTimestamp {
+		if buf.Timestamp.After(c.lastCacheTimestamp) {
 			relevantBuffers = append(relevantBuffers, buf)
-			if buf.Timestamp > latestProcessedTimestamp {
+			if buf.Timestamp.After(latestProcessedTimestamp) {
 				latestProcessedTimestamp = buf.Timestamp
 			}
 		}
@@ -138,7 +101,9 @@ func (c *Cache) Update(obs *ObservedState) error {
 
 		// upsert the uns map
 		for _, entry := range ub.UnsMap.Entries {
-			c.unsMap.Entries[entry.Name] = entry
+			// generate a hash from the entry by calling HashUNSTableEntry
+			hash := HashUNSTableEntry(entry)
+			c.unsMap.Entries[hash] = entry
 		}
 	}
 
@@ -170,7 +135,7 @@ func (c *Cache) ToUnsBundleProto() []byte {
 
 	// add the uns map to the uns bundle
 	for _, entry := range c.unsMap.Entries {
-		ub.UnsMap.Entries[entry.Name] = entry
+		ub.UnsMap.Entries[HashUNSTableEntry(entry)] = entry
 	}
 
 	// proto encode the uns bundle
@@ -214,21 +179,21 @@ func (c *Cache) Size() int {
 }
 
 // GetLastCachedTimestamp returns the timestamp of the last bundle processed into the cache
-func (c *Cache) GetLastCachedTimestamp() int64 {
+func (c *Cache) GetLastCachedTimestamp() time.Time {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.lastCacheTimestamp
 }
 
 // GetLastSentTimestamp returns the timestamp of the last bundle sent to subscribers
-func (c *Cache) GetLastSentTimestamp() int64 {
+func (c *Cache) GetLastSentTimestamp() time.Time {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.lastSentTimestamp
 }
 
 // SetLastSentTimestamp updates the timestamp of the last bundle sent to subscribers
-func (c *Cache) SetLastSentTimestamp(timestamp int64) {
+func (c *Cache) SetLastSentTimestamp(timestamp time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.lastSentTimestamp = timestamp
