@@ -53,8 +53,8 @@ UMH Core supports both **direct YAML editing** and **Management Console UI** for
 | `metricsPort`                   | `int`              | **9102**            | Exposes Prometheus metrics for the container.                                                  |
 | `location`                      | map `int → string` | –                   | Hierarchical location path (level0-4+) that identifies this gateway. **Level 0 (enterprise) is mandatory**. Can follow ISA-95, KKS, or any organizational naming standard. |
 | `communicator.apiUrl`           | `string`           | – (console-managed) | HTTPS endpoint of the Management Console.                                                      |
-| `communicator.authToken`        | `string`           | –                   | API Key issued by the console. Can be set via `AUTH_TOKEN` env-var.                        |
-| `communicator.allowInsecureTLS` | `bool`             | `false`             | Skip TLS verification [corporate-firewalls.md](../production/corporate-firewalls.md "mention") |
+| `communicator.authToken`        | `string`           | –                   | API Key issued by the console. Can be set via `AUTH_TOKEN` env-var.                            |
+| `communicator.allowInsecureTLS` | `bool`             | `false`             | Skip TLS verification [corporate-firewalls.md](../production/corporate-firewalls.md "mention"). Can be set via `ALLOW_INSECURE_TLS` env-var. |
 
 **Location levels**
 
