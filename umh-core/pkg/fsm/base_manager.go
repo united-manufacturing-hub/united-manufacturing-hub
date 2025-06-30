@@ -532,10 +532,9 @@ func (m *BaseFSMManager[C]) Reconcile(
 
 		nameCaptured := name
 		instanceCaptured := instance
-		expectedTimeCaptured := expectedMaxP95ExecutionTime
 
 		errorgroup.Go(func() error {
-			reconciled, shallBeRemoved, err := m.reconcileInstanceWithTimeout(ctx, instanceCaptured, services, nameCaptured, snapshot, expectedTimeCaptured)
+			reconciled, shallBeRemoved, err := m.reconcileInstanceWithTimeout(ctx, instanceCaptured, services, nameCaptured, snapshot, expectedMaxP95ExecutionTime)
 			if err != nil {
 				return err
 			}
