@@ -494,6 +494,8 @@ func (m *BaseFSMManager[C]) Reconcile(
 	instancesToRemove := make([]string, 0)
 	instancesToRemoveMutex := sync.Mutex{}
 
+	// Update the snapshot tick to the manager tick
+	snapshot.Tick = m.managerTick
 	for name, instance := range m.instances {
 		// If the ctx is already expired, we can skip adding new goroutines
 		if ctx.Err() != nil {
@@ -785,8 +787,6 @@ func (m *BaseFSMManager[C]) reconcileInstance(ctx context.Context, instance FSMI
 	defer instanceCancel()
 
 	// Pass manager-specific tick to instance.Reconcile
-	// Update the snapshot tick to the manager tick
-	snapshot.Tick = m.managerTick
 	err, reconciled := instance.Reconcile(instanceCtx, snapshot, services)
 	reconcileTime := time.Since(reconcileStart)
 	metrics.ObserveReconcileTime(metrics.ComponentBaseFSMManager, m.managerName+".instances."+name, reconcileTime)
