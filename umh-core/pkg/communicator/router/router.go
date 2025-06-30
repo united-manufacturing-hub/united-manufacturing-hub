@@ -110,7 +110,7 @@ func (r *Router) router() {
 }
 
 // handleSub handles the subscribe message
-// if the payload contains a "resubscribe" field, it will just "unexpire" the subscriber (reset the TTL)
+// if the payload contains a "resubscribed" field, it will just "unexpire" the subscriber (reset the TTL)
 // otherwise it will add the subscriber to the registry
 // this is an optimization to avoid sending a "new subscriber" message to the frontend when the user is already subscribed
 // (the new subscriber message generation is expensive because of proto.Marshal calls)
