@@ -41,6 +41,12 @@ func NewBuilder() *Builder {
 						DesiredFSMState: "stopped",
 					},
 				},
+				TopicBrowser: config.TopicBrowserConfig{
+					FSMInstanceConfig: config.FSMInstanceConfig{
+						Name:            "topic-browser",
+						DesiredFSMState: "stopped",
+					},
+				},
 			},
 		},
 	}

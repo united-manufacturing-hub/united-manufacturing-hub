@@ -1,6 +1,7 @@
 package deepcopy
 
 import (
+	"fmt"
 	"reflect"
 )
 
@@ -122,4 +123,22 @@ func (c *inlineCopier) Copy(dst, src reflect.Value) error {
 		return err
 	}
 	return cp.Copy(dst, src)
+}
+
+// methodCopier copier that calls a copying method
+type methodCopier struct {
+	dstMethod int
+}
+
+func (c *methodCopier) Copy(dst, src reflect.Value) (err error) {
+	dst = dst.Addr().Method(c.dstMethod)
+	errVal := dst.Call([]reflect.Value{src})[0]
+	if errVal.IsNil() {
+		return nil
+	}
+	err, ok := errVal.Interface().(error)
+	if !ok {
+		return fmt.Errorf("%w: copying method returned non-error value", ErrTypeInvalid)
+	}
+	return err
 }

@@ -197,6 +197,10 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 		config.Agent.ReleaseChannel = configOverride.Agent.ReleaseChannel
 	}
 
+	if configOverride.Agent.AllowInsecureTLS {
+		config.Agent.AllowInsecureTLS = configOverride.Agent.AllowInsecureTLS
+	}
+
 	if configOverride.Agent.Location != nil {
 		location := configOverride.Agent.Location
 		if location[0] != "" {
@@ -207,6 +211,11 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 	// Enforce that redpanda has a desired state
 	if config.Internal.Redpanda.DesiredFSMState == "" {
 		config.Internal.Redpanda.DesiredFSMState = configOverride.Internal.Redpanda.DesiredFSMState
+	}
+
+	// Enforce that topic browser has a desired state
+	if config.Internal.TopicBrowser.DesiredFSMState == "" {
+		config.Internal.TopicBrowser.DesiredFSMState = configOverride.Internal.TopicBrowser.DesiredFSMState
 	}
 
 	// Persist the updated config

@@ -56,6 +56,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
@@ -122,6 +123,7 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 		dataflowcomponent.NewDataflowComponentManager(constants.DefaultManagerName),
 		connection.NewConnectionManager(constants.DefaultManagerName),
 		protocolconverter.NewProtocolConverterManager(constants.DefaultManagerName),
+		topicbrowser.NewTopicBrowserManager(constants.DefaultManagerName),
 	}
 
 	// Create a starvation checker

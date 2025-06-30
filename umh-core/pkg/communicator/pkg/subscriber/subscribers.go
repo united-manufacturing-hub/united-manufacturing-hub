@@ -19,12 +19,13 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/push"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 
 	"github.com/google/uuid"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/generator"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/subscribers"
 
-	"github.com/united-manufacturing-hub/expiremap/v2/pkg/expiremap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -34,7 +35,7 @@ import (
 )
 
 type Handler struct {
-	subscribers                *expiremap.ExpireMap[string, string]
+	subscriberRegistry         *subscribers.Registry
 	dog                        watchdog.Iface
 	pusher                     *push.Pusher
 	instanceUUID               uuid.UUID
@@ -56,9 +57,11 @@ func NewHandler(
 	systemSnapshotManager *fsm.SnapshotManager,
 	configManager config.ConfigManager,
 	logger *zap.SugaredLogger,
+	topicBrowserCache *topicbrowser.Cache,
+	topicBrowserSimulator *topicbrowser.Simulator,
 ) *Handler {
 	s := &Handler{}
-	s.subscribers = expiremap.NewEx[string, string](cull, ttl)
+	s.subscriberRegistry = subscribers.NewRegistry(cull, ttl)
 	s.dog = dog
 	s.pusher = pusher
 	s.instanceUUID = instanceUUID
@@ -70,6 +73,8 @@ func NewHandler(
 		systemSnapshotManager,
 		configManager,
 		logger,
+		topicBrowserCache,
+		topicBrowserSimulator,
 	)
 
 	return s
@@ -79,17 +84,13 @@ func (s *Handler) StartNotifier() {
 	go s.notifySubscribers()
 }
 
-func (s *Handler) AddSubscriber(identifier string) {
-	s.subscribers.Set(identifier, identifier)
+func (s *Handler) AddOrRefreshSubscriber(identifier string, bootstrapped bool) {
+	s.subscriberRegistry.AddOrRefresh(identifier, bootstrapped)
 	s.dog.SetHasSubscribers(true)
 }
 
 func (s *Handler) GetSubscribers() []string {
-	var subscribers []string
-	s.subscribers.Range(func(key string, value string) bool {
-		subscribers = append(subscribers, key)
-		return true
-	})
+	subscribers := s.subscriberRegistry.List()
 	s.dog.SetHasSubscribers(len(subscribers) > 0)
 	return subscribers
 }
@@ -108,40 +109,55 @@ func (s *Handler) notifySubscribers() {
 }
 
 func (s *Handler) notify() {
-	s.dog.SetHasSubscribers(s.subscribers.Length() > 0)
-	if s.subscribers.Length() == 0 {
+	s.dog.SetHasSubscribers(s.subscriberRegistry.Length() > 0)
+	if s.subscriberRegistry.Length() == 0 {
 		return
 	}
 
 	ctx, cncl := tools.Get1SecondContext()
-	statusMessage := s.StatusCollector.GenerateStatusMessage()
-	if ctx.Err() != nil {
-		// It is expected that the first 1-2 times this might fail, due to the systems starting up
-		s.logger.Warnf("Failed to generate status message: %s", ctx.Err().Error())
-		return
-	}
-	if statusMessage == nil {
-		s.logger.Warnf("Failed to generate status message")
-		return
-	}
+	defer cncl()
 
 	notified := 0
-	s.subscribers.Range(func(key string, value string) bool {
+	baseStatusMessage := s.StatusCollector.GenerateStatusMessage(true)
+	s.subscriberRegistry.ForEach(func(email string, bootstrapped bool) {
+		// Generate personalized status message based on bootstrap state
+		statusMessage := baseStatusMessage
+		if !bootstrapped {
+			// If the subscriber is not bootstrapped, we need to generate a new status message
+			statusMessage = s.StatusCollector.GenerateStatusMessage(false)
+		}
+
+		if ctx.Err() != nil {
+			// It is expected that the first 1-2 times this might fail, due to the systems starting up
+			s.logger.Warnf("Failed to generate status message: %s", ctx.Err().Error())
+			return
+		}
+		if statusMessage == nil {
+			s.logger.Warnf("Failed to generate status message")
+			return
+		}
+
 		message, err := encoding.EncodeMessageFromUMHInstanceToUser(models.UMHMessageContent{
 			MessageType: models.Status,
 			Payload:     statusMessage,
 		})
 		if err != nil {
-			s.logger.Warnf("Failed to encrypt message for subscriber %s", key)
-			return true
+			s.logger.Warnf("Failed to encrypt message for subscriber %s", email)
+			return
 		}
+
 		s.pusher.Push(models.UMHMessage{
 			Content:      message,
-			Email:        key,
+			Email:        email,
 			InstanceUUID: s.instanceUUID,
 		})
+
+		// Mark subscriber as bootstrapped after first message
+		if !bootstrapped {
+			s.subscriberRegistry.SetBootstrapped(email, true)
+			s.logger.Debugf("Subscriber %s has been bootstrapped", email)
+		}
+
 		notified++
-		return true
 	})
-	cncl()
 }
