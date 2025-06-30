@@ -60,6 +60,7 @@ func NewHandler(
 	topicBrowserCache *topicbrowser.Cache,
 	topicBrowserSimulator *topicbrowser.Simulator,
 ) *Handler {
+	encoding.EnableNewEncoder()
 	s := &Handler{}
 	s.subscriberRegistry = subscribers.NewRegistry(cull, ttl)
 	s.dog = dog

@@ -1,0 +1,426 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package encoding_corev1
+
+import (
+	"bytes"
+	"context"
+	"encoding/base64"
+	"encoding/binary"
+	"encoding/json"
+	"io"
+	"strings"
+	"sync"
+	"unsafe"
+
+	"github.com/klauspost/compress/zstd"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/safejson"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	"go.uber.org/zap"
+)
+
+// Constants for buffer management
+const (
+	CompressionThreshold = 1024       // 1KB
+	MaxPooledBufferSize  = 256 * 1024 // 256KB max for all pools
+	DefaultBufferSize    = 4 * 1024   // 4KB default
+	Base64BufferSize     = 8 * 1024   // 8KB for base64 ops
+	CompressBufferSize   = 16 * 1024  // 16KB for compression
+	DecompressBufferSize = 32 * 1024  // 32KB for decompression
+	JSONBufferSize       = 4 * 1024   // 4KB for JSON operations
+)
+
+var (
+	// Encoder/decoder pools - optimized for speed
+	encoderPool = sync.Pool{
+		New: func() interface{} {
+			encoder, _ := zstd.NewWriter(nil,
+				zstd.WithEncoderLevel(zstd.SpeedFastest),
+				zstd.WithWindowSize(32*1024)) // Smaller window for faster encoding
+			return encoder
+		},
+	}
+
+	decoderPool = sync.Pool{
+		New: func() interface{} {
+			decoder, _ := zstd.NewReader(nil)
+			return decoder
+		},
+	}
+
+	// Buffer pools - store slices directly, not pointers
+	base64BufferPool = sync.Pool{
+		New: func() interface{} {
+			return make([]byte, 0, Base64BufferSize)
+		},
+	}
+
+	compressBufferPool = sync.Pool{
+		New: func() interface{} {
+			return bytes.NewBuffer(make([]byte, 0, CompressBufferSize))
+		},
+	}
+
+	decompressBufferPool = sync.Pool{
+		New: func() interface{} {
+			return bytes.NewBuffer(make([]byte, 0, DecompressBufferSize))
+		},
+	}
+
+	jsonBufferPool = sync.Pool{
+		New: func() interface{} {
+			return bytes.NewBuffer(make([]byte, 0, JSONBufferSize))
+		},
+	}
+)
+
+// Buffer management functions
+func getBase64Buffer() []byte {
+	return base64BufferPool.Get().([]byte)
+}
+
+func putBase64Buffer(buf []byte) {
+	if cap(buf) <= MaxPooledBufferSize {
+		base64BufferPool.Put(buf[:0])
+	}
+}
+
+func getCompressBuffer() *bytes.Buffer {
+	return compressBufferPool.Get().(*bytes.Buffer)
+}
+
+func putCompressBuffer(buf *bytes.Buffer) {
+	if cap(buf.Bytes()) <= MaxPooledBufferSize {
+		buf.Reset()
+		compressBufferPool.Put(buf)
+	}
+}
+
+func getDecompressBuffer() *bytes.Buffer {
+	return decompressBufferPool.Get().(*bytes.Buffer)
+}
+
+func putDecompressBuffer(buf *bytes.Buffer) {
+	if cap(buf.Bytes()) <= MaxPooledBufferSize {
+		buf.Reset()
+		decompressBufferPool.Put(buf)
+	}
+}
+
+func getJSONBuffer() *bytes.Buffer {
+	return jsonBufferPool.Get().(*bytes.Buffer)
+}
+
+func putJSONBuffer(buf *bytes.Buffer) {
+	if cap(buf.Bytes()) <= MaxPooledBufferSize {
+		buf.Reset()
+		jsonBufferPool.Put(buf)
+	}
+}
+
+// Optimized magic number check using unsafe for single memory read
+func isCompressed(data []byte) bool {
+	if len(data) < 4 {
+		return false
+	}
+	// Use binary package for portability (safer than unsafe)
+	return binary.LittleEndian.Uint32(data) == 0xFD2FB528
+}
+
+// Alternative unsafe version for maximum performance (use with caution)
+func isCompressedUnsafe(data []byte) bool {
+	if len(data) < 4 {
+		return false
+	}
+	return *(*uint32)(unsafe.Pointer(&data[0])) == 0xFD2FB528
+}
+
+// Compress compresses message if above threshold
+// Returns original slice for small messages (zero-copy)
+func Compress(message []byte) ([]byte, error) {
+	if len(message) < CompressionThreshold {
+		return message, nil // Zero-copy for small messages
+	}
+
+	encoder := encoderPool.Get().(*zstd.Encoder)
+	defer encoderPool.Put(encoder)
+
+	buf := getCompressBuffer()
+	defer putCompressBuffer(buf)
+
+	buf.Grow(len(message) / 2) // Estimate compressed size
+	encoder.Reset(buf)
+
+	if _, err := encoder.Write(message); err != nil {
+		return nil, err
+	}
+
+	if err := encoder.Close(); err != nil {
+		return nil, err
+	}
+
+	// Return copy of the compressed data
+	result := make([]byte, buf.Len())
+	copy(result, buf.Bytes())
+	return result, nil
+}
+
+// CompressWithContext adds cancellation support for large messages
+func CompressWithContext(ctx context.Context, message []byte) ([]byte, error) {
+	if len(message) < CompressionThreshold {
+		return message, nil
+	}
+
+	// Check context before expensive operation
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
+	return Compress(message)
+}
+
+// Decompress decompresses message if compressed
+func Decompress(message []byte) ([]byte, error) {
+	if !isCompressed(message) {
+		// Return copy to maintain consistent behavior
+		result := make([]byte, len(message))
+		copy(result, message)
+		return result, nil
+	}
+
+	decoder := decoderPool.Get().(*zstd.Decoder)
+	defer decoderPool.Put(decoder)
+
+	buf := getDecompressBuffer()
+	defer putDecompressBuffer(buf)
+
+	if err := decoder.Reset(bytes.NewReader(message)); err != nil {
+		return nil, err
+	}
+
+	if _, err := io.Copy(buf, decoder); err != nil {
+		return nil, err
+	}
+
+	// Return copy of decompressed data
+	result := make([]byte, buf.Len())
+	copy(result, buf.Bytes())
+	return result, nil
+}
+
+// Optimized base64 encoding using strings.Builder
+func encodeBase64(data []byte) string {
+	encodedLen := base64.StdEncoding.EncodedLen(len(data))
+
+	// Use strings.Builder for efficient string creation
+	var builder strings.Builder
+	builder.Grow(encodedLen)
+
+	buf := getBase64Buffer()
+	if cap(buf) < encodedLen {
+		buf = make([]byte, encodedLen)
+	} else {
+		buf = buf[:encodedLen]
+	}
+	defer putBase64Buffer(buf)
+
+	base64.StdEncoding.Encode(buf, data)
+	builder.Write(buf)
+	return builder.String()
+}
+
+// Optimized base64 decoding with buffer reuse
+func decodeBase64(data string) ([]byte, error) {
+	decodedLen := base64.StdEncoding.DecodedLen(len(data))
+
+	buf := getBase64Buffer()
+	if cap(buf) < decodedLen {
+		buf = make([]byte, decodedLen)
+	} else {
+		buf = buf[:decodedLen]
+	}
+	defer putBase64Buffer(buf)
+
+	n, err := base64.StdEncoding.Decode(buf, []byte(data))
+	if err != nil {
+		return nil, err
+	}
+
+	// Return exact size
+	result := make([]byte, n)
+	copy(result, buf[:n])
+	return result, nil
+}
+
+// Optimized JSON marshaling with buffer reuse
+func marshalJSON(v interface{}) ([]byte, error) {
+	buf := getJSONBuffer()
+	defer putJSONBuffer(buf)
+
+	encoder := json.NewEncoder(buf)
+	if err := encoder.Encode(v); err != nil {
+		return nil, err
+	}
+
+	// Remove trailing newline added by Encode
+	data := buf.Bytes()
+	if len(data) > 0 && data[len(data)-1] == '\n' {
+		data = data[:len(data)-1]
+	}
+
+	// Return copy
+	result := make([]byte, len(data))
+	copy(result, data)
+	return result, nil
+}
+
+// Core encoding functions
+func EncodeMessageFromUserToUMHInstance(UMHMessage models.UMHMessageContent) (string, error) {
+	messageBytes, err := safejson.Marshal(UMHMessage)
+	if err != nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to marshal UMHMessage: %v (%+v)", err, UMHMessage)
+		return "", err
+	}
+	return encodeBase64(messageBytes), nil
+}
+
+func EncodeMessageFromUMHInstanceToUser(UMHMessage models.UMHMessageContent) (string, error) {
+	messageBytes, err := safejson.Marshal(UMHMessage)
+	if err != nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to marshal UMHMessage: %v (%+v)", err, UMHMessage)
+		return "", err
+	}
+
+	// Compress if above threshold
+	if len(messageBytes) >= CompressionThreshold {
+		compressed, err := Compress(messageBytes)
+		if err != nil {
+			sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to compress message: %v", err)
+			return "", err
+		}
+		return encodeBase64(compressed), nil
+	}
+
+	return encodeBase64(messageBytes), nil
+}
+
+// Optimized decode with single function for both paths
+func decodeBase64AndUnmarshal(base64Message string) (models.UMHMessageContent, error) {
+	var UMHMessage models.UMHMessageContent
+
+	messageBytes, err := decodeBase64(base64Message)
+	if err != nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to decode base64 message: %v", err)
+		return UMHMessage, err
+	}
+
+	// Fast path for uncompressed data
+	if len(messageBytes) < 4 || !isCompressed(messageBytes) {
+		err = safejson.Unmarshal(messageBytes, &UMHMessage)
+		if err != nil {
+			sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to unmarshal UMHMessage: %v", err)
+		}
+		return UMHMessage, err
+	}
+
+	// Decompress and unmarshal
+	decompressedMessage, err := Decompress(messageBytes)
+	if err != nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to decompress message: %v", err)
+		return UMHMessage, err
+	}
+
+	err = safejson.Unmarshal(decompressedMessage, &UMHMessage)
+	if err != nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to unmarshal UMHMessage: %v", err)
+	}
+	return UMHMessage, err
+}
+
+func DecodeMessageFromUserToUMHInstance(base64Message string) (models.UMHMessageContent, error) {
+	return decodeBase64AndUnmarshal(base64Message)
+}
+
+func DecodeMessageFromUMHInstanceToUser(base64Message string) (models.UMHMessageContent, error) {
+	return decodeBase64AndUnmarshal(base64Message)
+}
+
+// Batch processing functions for amortizing setup costs
+func EncodeBatchMessages(messages []models.UMHMessageContent) ([]string, error) {
+	if len(messages) == 0 {
+		return nil, nil
+	}
+
+	results := make([]string, 0, len(messages))
+
+	// Reuse encoder across batch for large messages
+	encoder := encoderPool.Get().(*zstd.Encoder)
+	defer encoderPool.Put(encoder)
+
+	compressBuf := getCompressBuffer()
+	defer putCompressBuffer(compressBuf)
+
+	for _, msg := range messages {
+		messageBytes, err := safejson.Marshal(msg)
+		if err != nil {
+			sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to marshal UMHMessage: %v (%+v)", err, msg)
+			return nil, err
+		}
+
+		// Compress if needed using shared encoder
+		if len(messageBytes) >= CompressionThreshold {
+			compressBuf.Reset()
+			compressBuf.Grow(len(messageBytes) / 2)
+			encoder.Reset(compressBuf)
+
+			if _, err := encoder.Write(messageBytes); err != nil {
+				return nil, err
+			}
+			if err := encoder.Close(); err != nil {
+				return nil, err
+			}
+
+			// Create copy for this message
+			compressed := make([]byte, compressBuf.Len())
+			copy(compressed, compressBuf.Bytes())
+			results = append(results, encodeBase64(compressed))
+		} else {
+			results = append(results, encodeBase64(messageBytes))
+		}
+	}
+
+	return results, nil
+}
+
+// Statistics for monitoring performance
+type Stats struct {
+	CompressedMessages   int64
+	UncompressedMessages int64
+	TotalBytes           int64
+	CompressedBytes      int64
+}
+
+var globalStats Stats
+
+func GetStats() Stats {
+	return globalStats
+}
+
+func ResetStats() {
+	globalStats = Stats{}
+}
