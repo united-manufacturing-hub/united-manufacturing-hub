@@ -127,9 +127,6 @@ func (r *Router) handleSub(message *models.UMHMessage, messageContent models.UMH
 		// Try direct type assertion first
 		if payload, ok := messageContent.Payload.(models.SubscribeMessagePayload); ok {
 			subscribePayload = payload
-		} else {
-			r.routerLogger.Warnf("Warning: Could not assert payload to SubscribeMessagePayload or map[string]interface{}. Actual type: %T, Value: %v", messageContent.Payload, messageContent.Payload)
-			return
 		}
 	}
 
