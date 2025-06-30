@@ -21,6 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	topicbrowserservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/topicbrowser"
 	"go.uber.org/zap"
 )
 
@@ -130,8 +131,10 @@ func GenerateTopicBrowser(cache *topicbrowser.Cache, obs *topicbrowserfsm.Observ
 		cache.SetLastSentTimestamp(latestTimestamp)
 	}
 
+	health := generateTopicBrowserHealth(obs)
+
 	return &models.TopicBrowser{
-		Health:     &models.Health{},
+		Health:     health,
 		TopicCount: cache.Size(),
 		UnsBundles: unsBundles,
 	}
@@ -267,4 +270,68 @@ func getLatestTimestampFromObservedState(obs *topicbrowserfsm.ObservedStateSnaps
 	}
 
 	return latestTimestamp
+}
+
+// generateTopicBrowserHealth creates a health object from the topic browser observed state.
+// This follows the same pattern as other generators (redpanda, dfc, etc.) by extracting
+// health information from the observed state's status reason and processing flags.
+func generateTopicBrowserHealth(obs *topicbrowserfsm.ObservedStateSnapshot) *models.Health {
+	serviceInfo := obs.ServiceInfo
+
+	// Determine health category based on processing state and metrics validity
+	healthCat := getTopicBrowserHealthCategory(serviceInfo)
+
+	// Generate detailed status message
+	message := getTopicBrowserStatusMessage(serviceInfo)
+
+	return &models.Health{
+		Message:       message,
+		ObservedState: "running", // to be implemented (get from the instance)
+		DesiredState:  "running", // to be implemented (get from the instance)
+		Category:      healthCat,
+	}
+}
+
+// getTopicBrowserHealthCategory determines the health category based on service state
+func getTopicBrowserHealthCategory(serviceInfo topicbrowserservice.ServiceInfo) models.HealthCategory {
+	// Check for invalid metrics first (this indicates a problem)
+	if serviceInfo.InvalidMetrics {
+		return models.Degraded
+	}
+
+	// Check processing state
+	benthosActive := serviceInfo.BenthosProcessing
+	redpandaActive := serviceInfo.RedpandaProcessing
+
+	if benthosActive && redpandaActive {
+		return models.Active
+	} else if benthosActive || redpandaActive {
+		return models.Degraded
+	} else {
+		return models.Degraded
+	}
+}
+
+// getTopicBrowserStatusMessage generates a detailed status message for the topic browser
+func getTopicBrowserStatusMessage(serviceInfo topicbrowserservice.ServiceInfo) string {
+	// Use status reason if available and meaningful
+	if serviceInfo.StatusReason != "" {
+		return serviceInfo.StatusReason
+	}
+
+	// Generate message based on processing state
+	benthosActive := serviceInfo.BenthosProcessing
+	redpandaActive := serviceInfo.RedpandaProcessing
+
+	if serviceInfo.InvalidMetrics {
+		return "Topic browser has invalid metrics - data flow inconsistency detected"
+	} else if benthosActive && redpandaActive {
+		return "Topic browser is actively processing data from both Benthos and Redpanda"
+	} else if benthosActive {
+		return "Topic browser is processing data (Benthos active, Redpanda idle)"
+	} else if redpandaActive {
+		return "Topic browser is processing data (Redpanda active, Benthos idle)"
+	} else {
+		return "Topic browser is idle - no active data processing"
+	}
 }
