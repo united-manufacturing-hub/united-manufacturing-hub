@@ -112,8 +112,9 @@ func (r *Router) router() {
 // handleSub handles the subscribe message
 // if the payload contains a "resubscribed" field, it will just "unexpire" the subscriber (reset the TTL)
 // otherwise it will add the subscriber to the registry
-// this is an optimization to avoid sending a "new subscriber" message to the frontend when the user is already subscribed
-// (the new subscriber message generation is expensive because of proto.Marshal calls)
+// this is an optimization to avoid sending a "new subscriber" message, containing the cached uns data with at least
+// one event for every topic, to the frontend when the user is already subscribed
+// we should avoid unnecessary new subscriber message generation because of its high memory and cpu usage
 func (r *Router) handleSub(message *models.UMHMessage, messageContent models.UMHMessageContent, watcherUUID uuid.UUID) {
 	if r.subHandler == nil {
 		r.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
