@@ -84,8 +84,8 @@ func (s *Handler) StartNotifier() {
 	go s.notifySubscribers()
 }
 
-func (s *Handler) AddSubscriber(identifier string) {
-	s.subscriberRegistry.Add(identifier)
+func (s *Handler) AddOrRefreshSubscriber(identifier string, bootstrapped bool) {
+	s.subscriberRegistry.AddOrRefresh(identifier, bootstrapped)
 	s.dog.SetHasSubscribers(true)
 }
 
