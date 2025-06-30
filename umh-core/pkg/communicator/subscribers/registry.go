@@ -104,6 +104,22 @@ func (r *Registry) ForEach(fn func(email string, bootstrapped bool)) {
 	}
 }
 
+// HasNewSubscribers returns true if there are new subscribers since the last call
+func (r *Registry) HasNewSubscribers() bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	hasNew := false
+	r.subscribers.Range(func(key string, value *SubscriberData) bool {
+		if !value.Bootstrapped {
+			hasNew = true
+		}
+		return true
+	})
+
+	return hasNew
+}
+
 // SetBootstrapped updates the bootstrapped state for a subscriber
 func (r *Registry) SetBootstrapped(email string, bootstrapped bool) {
 	r.mu.Lock()
