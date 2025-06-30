@@ -96,7 +96,7 @@ func (r *Router) router() {
 			}
 			switch messageContent.MessageType {
 			case models.Subscribe:
-				r.handleSub(message, watcherUUID)
+				r.handleSub(message, messageContent, watcherUUID)
 			case models.Action:
 				r.handleAction(messageContent, message, watcherUUID)
 			default:
@@ -109,13 +109,35 @@ func (r *Router) router() {
 	}
 }
 
-func (r *Router) handleSub(message *models.UMHMessage, watcherUUID uuid.UUID) {
+// handleSub handles the subscribe message
+// if the payload contains a "resubscribe" field, it will just "unexpire" the subscriber (reset the TTL)
+// otherwise it will add the subscriber to the registry
+// this is an optimization to avoid sending a "new subscriber" message to the frontend when the user is already subscribed
+// (the new subscriber message generation is expensive because of proto.Marshal calls)
+func (r *Router) handleSub(message *models.UMHMessage, messageContent models.UMHMessageContent, watcherUUID uuid.UUID) {
 	if r.subHandler == nil {
 		r.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 		r.routerLogger.Warnf("Subscribe handler not yet initialized")
 		return
 	}
-	r.subHandler.AddSubscriber(message.Email)
+	resubscribe := false
+	if messageContent.Payload != nil {
+		payloadMap, ok := messageContent.Payload.(map[string]interface{})
+		if !ok {
+			r.routerLogger.Warnf("Warning: Could not assert payload to map[string]interface{}. Actual type: %T, Value: %v", messageContent.Payload, messageContent.Payload)
+			return
+		}
+		if resubscribeValue, exists := payloadMap["resubscribe"]; exists {
+			if resubscribeBool, ok := resubscribeValue.(bool); ok && resubscribeBool {
+				resubscribe = true
+			}
+		}
+	}
+	if resubscribe {
+		r.subHandler.UnexpireSubscriber(message.Email)
+	} else {
+		r.subHandler.AddSubscriber(message.Email)
+	}
 }
 
 func (r *Router) handleAction(messageContent models.UMHMessageContent, message *models.UMHMessage, watcherUUID uuid.UUID) {

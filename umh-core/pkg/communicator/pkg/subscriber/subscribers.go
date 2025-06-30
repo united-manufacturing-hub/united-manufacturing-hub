@@ -89,6 +89,10 @@ func (s *Handler) AddSubscriber(identifier string) {
 	s.dog.SetHasSubscribers(true)
 }
 
+func (s *Handler) UnexpireSubscriber(identifier string) {
+	s.subscriberRegistry.Unexpire(identifier)
+}
+
 func (s *Handler) GetSubscribers() []string {
 	subscribers := s.subscriberRegistry.List()
 	s.dog.SetHasSubscribers(len(subscribers) > 0)

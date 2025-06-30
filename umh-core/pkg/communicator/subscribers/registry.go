@@ -78,6 +78,23 @@ func (r *Registry) IsBootstrapped(email string) bool {
 	return (*data).Bootstrapped
 }
 
+// Unexpire resets the TTL for a subscriber by calling Set()
+func (r *Registry) Unexpire(email string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if data, exists := r.subscribers.Load(email); exists {
+		// Preserve existing bootstrapped state
+		r.subscribers.Set(email, *data)
+	} else {
+		// Create new subscriber if doesn't exist
+		r.subscribers.Set(email, &SubscriberData{
+			Email:        email,
+			Bootstrapped: false,
+		})
+	}
+}
+
 // ForEach iterates over all active subscribers and their bootstrapped state
 func (r *Registry) ForEach(fn func(email string, bootstrapped bool)) {
 	// Collect all subscriber data first to avoid holding locks during callback
