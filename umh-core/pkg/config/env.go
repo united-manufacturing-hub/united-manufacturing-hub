@@ -20,6 +20,7 @@ import (
 	"os"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
@@ -121,17 +122,22 @@ func LoadConfigWithEnvOverrides(ctx context.Context, configManager *FileConfigMa
 				},
 				RedpandaServiceConfig: redpandaserviceconfig.RedpandaServiceConfig{
 					Topic: redpandaserviceconfig.TopicConfig{
-						// 604800000 is 7 days in milliseconds
-						DefaultTopicRetentionMs: 604800000,
-						// 0 means no limit
-						DefaultTopicRetentionBytes:       0,
-						DefaultTopicCompressionAlgorithm: "snappy",
+						DefaultTopicRetentionMs:          constants.DefaultRedpandaTopicDefaultTopicRetentionMs,
+						DefaultTopicRetentionBytes:       constants.DefaultRedpandaTopicDefaultTopicRetentionBytes,
+						DefaultTopicCompressionAlgorithm: constants.DefaultRedpandaTopicDefaultTopicCompressionAlgorithm,
+						DefaultTopicCleanupPolicy:        constants.DefaultRedpandaTopicDefaultTopicCleanupPolicy,
+						DefaultTopicSegmentMs:            constants.DefaultRedpandaTopicDefaultTopicSegmentMs,
 					},
 					Resources: redpandaserviceconfig.ResourcesConfig{
 						MaxCores: 1,
 						// 2GB per core
 						MemoryPerCoreInBytes: 2147483648,
 					},
+				},
+			},
+			TopicBrowser: TopicBrowserConfig{
+				FSMInstanceConfig: FSMInstanceConfig{
+					DesiredFSMState: "stopped",
 				},
 			},
 		},

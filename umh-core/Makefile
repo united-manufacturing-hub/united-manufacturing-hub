@@ -67,7 +67,7 @@ NMAP_VERSION = 7.95-r1
 S6_OVERLAY_VERSION = 3.2.0.2
 REDPANDA_VERSION = 24.3.8
 ## Benthos version is a tag or a sha-<commit hash> (e.g. 0.9.4 or sha-a51a685) to be used in the docker image
-BENTHOS_UMH_VERSION = 0.9.5
+BENTHOS_UMH_VERSION = 0.9.6
 BUF_VERSION = 1.55.1
 PROTOC_GEN_GO_VERSION = 1.36.6
 
@@ -630,6 +630,7 @@ test-no-copy: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 		-p 4195:4195 \
 		-p 6060:6060 \
 		-p 40000:40000 \
+		-p 8090:8090 \
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)

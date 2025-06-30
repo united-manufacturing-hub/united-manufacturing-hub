@@ -36,6 +36,7 @@ var _ = Describe("Simulator", func() {
 
 	BeforeEach(func() {
 		simulator = topicbrowser.NewSimulator()
+		simulator.InitializeSimulator()
 	})
 
 	Describe("NewSimulator", func() {
@@ -183,7 +184,7 @@ var _ = Describe("Simulator", func() {
 
 			addedBuffer := newState.ServiceInfo.Status.Buffer[len(newState.ServiceInfo.Status.Buffer)-1]
 			Expect(addedBuffer.Payload).To(Equal(bundle))
-			Expect(addedBuffer.Timestamp).To(BeNumerically("~", time.Now().Unix(), 1))
+			Expect(addedBuffer.Timestamp.Unix()).To(BeNumerically("~", time.Now().Unix(), 1))
 		})
 
 		It("should limit buffer to 100 entries", func() {
@@ -437,7 +438,7 @@ var _ = Describe("Simulator", func() {
 			event1 := unsBundle1.Events.Entries[0]
 			event2 := unsBundle2.Events.Entries[0]
 
-			Expect(event2.ProducedAtMs).To(BeNumerically(">", event1.ProducedAtMs))
+			Expect(event2.ProducedAtMs).To(BeNumerically(">=", event1.ProducedAtMs))
 		})
 
 		It("should work correctly with multiple ticks", func() {

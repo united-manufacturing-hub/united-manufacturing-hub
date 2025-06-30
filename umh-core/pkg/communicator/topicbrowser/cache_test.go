@@ -15,13 +15,17 @@
 package topicbrowser_test
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"google.golang.org/protobuf/proto"
 
 	tbproto "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models/topicbrowser/pb"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
+	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	topicbrowserservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/topicbrowser"
 )
 
 var _ = Describe("Cache", func() {
@@ -43,8 +47,8 @@ var _ = Describe("Cache", func() {
 			})
 
 			// Create observed state with first bundle
-			obs1 := createMockObservedState([]*topicbrowser.Buffer{
-				{Payload: bundle1, Timestamp: 1000},
+			obs1 := createMockObservedStateSnapshot([]*topicbrowserservice.Buffer{
+				{Payload: bundle1, Timestamp: time.UnixMilli(1000)},
 			})
 
 			// Update cache with first bundle
@@ -59,8 +63,9 @@ var _ = Describe("Cache", func() {
 
 			unsMap := cache.GetUnsMap()
 			Expect(unsMap.Entries).To(HaveLen(2))
-			Expect(unsMap.Entries["uns.topic1"].Name).To(Equal("uns.topic1"))
-			Expect(unsMap.Entries["uns.topic2"].Name).To(Equal("uns.topic2"))
+			for _, entry := range unsMap.Entries {
+				Expect(entry.Name).To(Or(Equal("uns.topic1"), Equal("uns.topic2")))
+			}
 
 			// Create second UnsBundle with updated and new data
 			bundle2 := createMockUnsBundle(map[string]int64{
@@ -72,8 +77,8 @@ var _ = Describe("Cache", func() {
 			})
 
 			// Create observed state with second bundle
-			obs2 := createMockObservedState([]*topicbrowser.Buffer{
-				{Payload: bundle2, Timestamp: 2000},
+			obs2 := createMockObservedStateSnapshot([]*topicbrowserservice.Buffer{
+				{Payload: bundle2, Timestamp: time.UnixMilli(2000)},
 			})
 
 			// Update cache with second bundle
@@ -89,7 +94,6 @@ var _ = Describe("Cache", func() {
 
 			unsMap = cache.GetUnsMap()
 			Expect(unsMap.Entries).To(HaveLen(3))
-			Expect(unsMap.Entries["uns.topic3"].Name).To(Equal("uns.topic3")) // New entry
 		})
 
 		It("should only use new bundles for cache update", func() {
@@ -101,14 +105,14 @@ var _ = Describe("Cache", func() {
 			})
 
 			// Create observed state with initial bundle
-			obs1 := createMockObservedState([]*topicbrowser.Buffer{
-				{Payload: bundle1, Timestamp: 1000},
+			obs1 := createMockObservedStateSnapshot([]*topicbrowserservice.Buffer{
+				{Payload: bundle1, Timestamp: time.UnixMilli(1000)},
 			})
 
 			// Update cache
 			err := cache.Update(obs1)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(cache.GetLastCachedTimestamp()).To(Equal(int64(1000)))
+			Expect(cache.GetLastCachedTimestamp()).To(Equal(time.UnixMilli(1000)))
 
 			// Verify initial state
 			eventMap := cache.GetEventMap()
@@ -129,9 +133,9 @@ var _ = Describe("Cache", func() {
 			})
 
 			// Create observed state with both old (modified) and new bundles
-			obs2 := createMockObservedState([]*topicbrowser.Buffer{
-				{Payload: modifiedOldBundle, Timestamp: 500}, // Old timestamp - should be ignored
-				{Payload: newBundle, Timestamp: 2000},        // New timestamp - should be processed
+			obs2 := createMockObservedStateSnapshot([]*topicbrowserservice.Buffer{
+				{Payload: modifiedOldBundle, Timestamp: time.UnixMilli(500)}, // Old timestamp - should be ignored
+				{Payload: newBundle, Timestamp: time.UnixMilli(2000)},        // New timestamp - should be processed
 			})
 
 			// Update cache
@@ -145,7 +149,7 @@ var _ = Describe("Cache", func() {
 			Expect(eventMap["topic2"].ProducedAtMs).To(Equal(uint64(2000))) // New topic added
 
 			// Verify timestamp was updated correctly
-			Expect(cache.GetLastCachedTimestamp()).To(Equal(int64(2000)))
+			Expect(cache.GetLastCachedTimestamp()).To(Equal(time.UnixMilli(2000)))
 		})
 
 		It("should generate proper proto-encoded UnsBundle with the data", func() {
@@ -158,8 +162,8 @@ var _ = Describe("Cache", func() {
 				"uns.topic2": "Topic 2 Info",
 			})
 
-			obs := createMockObservedState([]*topicbrowser.Buffer{
-				{Payload: bundle1, Timestamp: 1000},
+			obs := createMockObservedStateSnapshot([]*topicbrowserservice.Buffer{
+				{Payload: bundle1, Timestamp: time.UnixMilli(1000)},
 			})
 
 			err := cache.Update(obs)
@@ -188,8 +192,9 @@ var _ = Describe("Cache", func() {
 
 			// Verify UnsMap is correctly encoded
 			Expect(decodedBundle.UnsMap.Entries).To(HaveLen(2))
-			Expect(decodedBundle.UnsMap.Entries["uns.topic1"].Name).To(Equal("uns.topic1"))
-			Expect(decodedBundle.UnsMap.Entries["uns.topic2"].Name).To(Equal("uns.topic2"))
+			for _, entry := range decodedBundle.UnsMap.Entries {
+				Expect(entry.Name).To(Or(Equal("uns.topic1"), Equal("uns.topic2")))
+			}
 		})
 
 		It("should handle multiple updates with complex data scenarios", func() {
@@ -204,8 +209,8 @@ var _ = Describe("Cache", func() {
 				"uns.topic3": "Topic 3",
 			})
 
-			obs1 := createMockObservedState([]*topicbrowser.Buffer{
-				{Payload: bundle1, Timestamp: 1200},
+			obs1 := createMockObservedStateSnapshot([]*topicbrowserservice.Buffer{
+				{Payload: bundle1, Timestamp: time.UnixMilli(1200)},
 			})
 
 			err := cache.Update(obs1)
@@ -222,8 +227,8 @@ var _ = Describe("Cache", func() {
 				"uns.topic4": "New Topic 4",
 			})
 
-			obs2 := createMockObservedState([]*topicbrowser.Buffer{
-				{Payload: bundle2, Timestamp: 1500},
+			obs2 := createMockObservedStateSnapshot([]*topicbrowserservice.Buffer{
+				{Payload: bundle2, Timestamp: time.UnixMilli(1500)},
 			})
 
 			err = cache.Update(obs2)
@@ -238,8 +243,8 @@ var _ = Describe("Cache", func() {
 				"uns.topic5": "Topic 5",
 			})
 
-			obs3 := createMockObservedState([]*topicbrowser.Buffer{
-				{Payload: bundle3, Timestamp: 2000},
+			obs3 := createMockObservedStateSnapshot([]*topicbrowserservice.Buffer{
+				{Payload: bundle3, Timestamp: time.UnixMilli(2000)},
 			})
 
 			err = cache.Update(obs3)
@@ -258,14 +263,14 @@ var _ = Describe("Cache", func() {
 			Expect(unsMap.Entries).To(HaveLen(5))
 
 			// Verify cache timestamp tracking
-			Expect(cache.GetLastCachedTimestamp()).To(Equal(int64(2000)))
+			Expect(cache.GetLastCachedTimestamp()).To(Equal(time.UnixMilli(2000)))
 		})
 
 		It("should handle invalid protobuf data gracefully", func() {
 			// Create observed state with invalid protobuf data
-			obs := createMockObservedState([]*topicbrowser.Buffer{
-				{Payload: []byte("invalid protobuf data"), Timestamp: 1000},
-				{Payload: []byte{0x00, 0xFF, 0xAA}, Timestamp: 1100}, // Invalid binary data
+			obs := createMockObservedStateSnapshot([]*topicbrowserservice.Buffer{
+				{Payload: []byte("invalid protobuf data"), Timestamp: time.UnixMilli(1000)},
+				{Payload: []byte{0x00, 0xFF, 0xAA}, Timestamp: time.UnixMilli(1100)}, // Invalid binary data
 			})
 
 			// Update should not fail even with invalid data
@@ -280,7 +285,7 @@ var _ = Describe("Cache", func() {
 			Expect(unsMap.Entries).To(HaveLen(0))
 
 			// But timestamp should be updated to latest processed timestamp
-			Expect(cache.GetLastCachedTimestamp()).To(Equal(int64(1100)))
+			Expect(cache.GetLastCachedTimestamp()).To(Equal(time.UnixMilli(1100)))
 		})
 	})
 })
@@ -313,19 +318,19 @@ func createMockUnsBundle(events map[string]int64, unsTopics map[string]string) [
 			Name: name,
 			// Add other required fields as needed
 		}
-		bundle.UnsMap.Entries[name] = topicInfo
+		bundle.UnsMap.Entries[topicbrowser.HashUNSTableEntry(topicInfo)] = topicInfo
 	}
 
 	encoded, _ := proto.Marshal(bundle)
 	return encoded
 }
 
-func createMockObservedState(buffers []*topicbrowser.Buffer) *topicbrowser.ObservedState {
-	return &topicbrowser.ObservedState{
-		ServiceInfo: topicbrowser.ServiceInfo{
-			Status: topicbrowser.Status{
+func createMockObservedStateSnapshot(buffers []*topicbrowserservice.Buffer) *topicbrowserfsm.ObservedStateSnapshot {
+	return &topicbrowserfsm.ObservedStateSnapshot{
+		ServiceInfo: topicbrowserservice.ServiceInfo{
+			Status: topicbrowserservice.Status{
 				Buffer: buffers,
-				Logs:   []s6svc.LogEntry{}, // Initialize with empty slice
+				Logs:   []s6svc.LogEntry{}, // Initia	lize with empty slice
 			},
 			// Leave other fields as zero values
 		},

@@ -18,6 +18,8 @@ agent:
 internal:
   redpanda:
     desiredState: stopped
+  topicbrowser:
+    desiredState: stopped
   connection:
     - name: hello-world
       desiredState: up
