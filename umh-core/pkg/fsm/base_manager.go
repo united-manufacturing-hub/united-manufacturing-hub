@@ -551,7 +551,19 @@ func (m *BaseFSMManager[C]) Reconcile(
 			return nil
 		})
 	}
-	err = errorgroup.Wait()
+
+	waitErrorChannel := make(chan error, 1)
+	go func() {
+		waitErrorChannel <- errorgroup.Wait()
+	}()
+
+	// Wait for either the error group to finish or the context to be done
+	select {
+	case wgErr := <-waitErrorChannel:
+		err = wgErr
+	case <-ctx.Done():
+		err = ctx.Err()
+	}
 
 	instancesToRemoveMutex.Lock()
 	for _, name := range instancesToRemove {
