@@ -300,7 +300,10 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeReady(ctx context.Co
 			stateMessage := Label("deploy", a.name) + "timeout reached. it did not start in time. removing"
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage,
 				a.outboundChannel, models.DeployDataFlowComponent)
-			err := a.configManager.AtomicDeleteDataflowcomponent(ctx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name))
+			// Create a fresh context for cleanup operation since the original ctx has timed out
+			cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+			defer cleanupCancel()
+			err := a.configManager.AtomicDeleteDataflowcomponent(cleanupCtx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name))
 			if err != nil {
 				a.actionLogger.Errorf("failed to remove dataflowcomponent %s: %v", a.name, err)
 				return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component '%s' failed to activate within timeout but could not be removed: %v. Please check system load and consider removing the component manually", a.name, err)
@@ -364,7 +367,10 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeReady(ctx context.Co
 					// as these errors require configuration changes to resolve.
 					if CheckBenthosLogLinesForConfigErrors(logs) {
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("deploy", a.name)+"configuration error detected. Removing component...", a.outboundChannel, models.DeployDataFlowComponent)
-						err := a.configManager.AtomicDeleteDataflowcomponent(ctx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name))
+						// Create a fresh context for cleanup operation since the original ctx may be expired or close to expiring
+						cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+						defer cleanupCancel()
+						err := a.configManager.AtomicDeleteDataflowcomponent(cleanupCtx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name))
 						if err != nil {
 							a.actionLogger.Errorf("failed to remove dataflowcomponent %s: %v", a.name, err)
 							return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' has invalid configuration but could not be removed: %v. Please check your logs and consider removing the component manually", a.name, err)

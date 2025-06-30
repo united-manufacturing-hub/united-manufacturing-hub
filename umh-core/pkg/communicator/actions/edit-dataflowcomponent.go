@@ -556,7 +556,10 @@ func (a *EditDataflowComponentAction) waitForComponentToBeReady(ctx context.Cont
 			stateMessage := Label("edit", a.name) + "timeout reached. it did not start in time. rolling back"
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage, a.outboundChannel, models.EditDataFlowComponent)
 
-			_, err := a.configManager.AtomicEditDataflowcomponent(ctx, a.newComponentUUID, a.oldConfig)
+			// Create a fresh context for rollback operation since the original ctx has timed out
+			rollbackCtx, rollbackCancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+			defer rollbackCancel()
+			_, err := a.configManager.AtomicEditDataflowcomponent(rollbackCtx, a.newComponentUUID, a.oldConfig)
 			if err != nil {
 				a.actionLogger.Errorf("failed to roll back dataflow component %s: %v", a.name, err)
 				return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component '%s' failed to activate within timeout and could not be rolled back: %v. Please check system load and consider manually restoring the previous configuration", a.name, err)
@@ -637,7 +640,10 @@ func (a *EditDataflowComponentAction) waitForComponentToBeReady(ctx context.Cont
 							if CheckBenthosLogLinesForConfigErrors(logs) {
 								SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("edit", a.name)+"configuration error detected. Rolling back...", a.outboundChannel, models.EditDataFlowComponent)
 
-								_, err := a.configManager.AtomicEditDataflowcomponent(ctx, a.newComponentUUID, a.oldConfig)
+								// Create a fresh context for rollback operation since the original ctx may be expired or close to expiring
+								rollbackCtx, rollbackCancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+								defer rollbackCancel()
+								_, err := a.configManager.AtomicEditDataflowcomponent(rollbackCtx, a.newComponentUUID, a.oldConfig)
 								if err != nil {
 									a.actionLogger.Errorf("failed to roll back dataflow component %s: %v", a.name, err)
 									return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' has invalid configuration but could not be rolled back: %v. Please check your logs and consider manually restoring the previous configuration", a.name, err)
