@@ -32,6 +32,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 // Rate limiting is implemented using manager-specific ticks (managerTick) instead of global ticks.
@@ -480,19 +481,32 @@ func (m *BaseFSMManager[C]) Reconcile(
 	}
 
 	// Reconcile instances
-	errorgroup, ctx := errgroup.WithContext(ctx)
+	// We do not use the returned ctx, as it cancles once any of the reconciles returns either an error or finishes (And the 2nd behaviour is undesired.)
+
+	errorgroup, _ := errgroup.WithContext(ctx)
+	hasAnyReconciles := false
 	for name, instance := range m.instances {
-		err, reconciled := m.reconcileInstance(ctx, instance, services, name, snapshot)
-		if err != nil {
-			return err, false
+		// If the ctx is already expired, we can skip adding new goroutines
+		if ctx.Err() != nil {
+			m.logger.Debugf("context expired, skipping reconciliation of instance %s", name)
+			break
 		}
-		if reconciled {
-			return nil, true
-		}
+
+		errorgroup.Go(func() error {
+			err, reconciled := m.reconcileInstance(ctx, instance, services, name, snapshot)
+			if err != nil {
+				return err
+			}
+			if reconciled {
+				hasAnyReconciles = true
+			}
+			return nil
+		})
 	}
+	err = errorgroup.Wait()
 
 	// Return nil if no errors occurred
-	return nil, false
+	return err, hasAnyReconciles
 }
 
 // GetLastObservedStates returns the last known states of all instances
