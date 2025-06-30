@@ -40,6 +40,7 @@ type DataflowComponentTopLevelPayload struct {
 	} `json:"meta"`
 	IgnoreHealthCheck bool        `json:"ignoreHealthCheck"`
 	Payload           interface{} `json:"payload"`
+	State             string      `json:"state"`
 }
 
 // ParseDataflowComponentTopLevel parses the top-level payload structure for dataflow components
@@ -321,11 +322,11 @@ func CreateBenthosConfigFromCDFCPayload(payload models.CDFCPayload, componentNam
 }
 
 // CreateDataFlowComponentConfig creates a DataFlowComponentConfig from a normalized BenthosConfig
-func CreateDataFlowComponentConfig(name string, benthosConfig dataflowcomponentserviceconfig.BenthosConfig) config.DataFlowComponentConfig {
+func CreateDataFlowComponentConfig(name string, state string, benthosConfig dataflowcomponentserviceconfig.BenthosConfig) config.DataFlowComponentConfig {
 	return config.DataFlowComponentConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            name,
-			DesiredFSMState: "active",
+			DesiredFSMState: state,
 		},
 		DataFlowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 			BenthosConfig: benthosConfig,

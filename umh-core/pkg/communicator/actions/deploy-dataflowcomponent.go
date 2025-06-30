@@ -136,7 +136,7 @@ func (a *DeployDataflowComponentAction) Parse(payload interface{}) error {
 	a.name = topLevel.Name
 	a.metaType = topLevel.Meta.Type
 	a.ignoreHealthCheck = topLevel.IgnoreHealthCheck
-  a.state = topLevel.State
+	a.state = topLevel.State
 	if a.state != dataflowcomponent.OperationalStateStopped && a.state != dataflowcomponent.OperationalStateActive {
 		return fmt.Errorf("invalid state: %s", a.state)
 	}
@@ -213,8 +213,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	}
 
 	// Create the DataFlowComponentConfig using shared function
-	dfc := CreateDataFlowComponentConfig(a.name, benthosConfig)
-
+	dfc := CreateDataFlowComponentConfig(a.name, a.state, benthosConfig)
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("deploy", a.name)+"adding to configuration", a.outboundChannel, models.DeployDataFlowComponent)
 	// Update the location in the configuration
