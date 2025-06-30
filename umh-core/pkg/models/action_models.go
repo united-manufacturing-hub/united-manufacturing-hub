@@ -107,6 +107,11 @@ type ActionMessagePayload struct {
 	ActionUUID    uuid.UUID   `json:"actionUUID"`
 }
 
+// SubscribeMessagePayload is the format for sending a message with type "subscribe".
+type SubscribeMessagePayload struct {
+	Resubscribed bool `json:"resubscribed,omitempty"`
+}
+
 // ActionType is a custom string type to ensure type safety for specifying different action types.
 type ActionType string
 
