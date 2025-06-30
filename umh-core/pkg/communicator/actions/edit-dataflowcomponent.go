@@ -200,9 +200,6 @@ func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
 		return fmt.Errorf("invalid UUID format: %v", err)
 	}
 
-	//set the new component UUID by the name
-	a.newComponentUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name)
-
 	// Store the meta type
 	a.metaType = topLevel.Meta.Type
 	if a.metaType == "" {
@@ -486,7 +483,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("edit", a.name)+"configuration updated; waiting to become ready", a.outboundChannel, models.EditDataFlowComponent)
 			errCode, err := a.waitForComponentToBeReady(ctx)
 			if err != nil {
-				errorMsg := Label("edit", a.name) + fmt.Sprintf("failed to wait for dataflow component to be active: %v", err)
+				errorMsg := Label("edit", a.name) + fmt.Sprintf("failed to wait for dataflow component to be ready: %v", err)
 				// waitForComponentToBeReady gives us the error code, which we then forward to the frontend using the SendActionReplyV2 function
 				// the error code is a string that can be used to identify the error reason
 				// the main reason for this is to allow the frontend to determine whether it should offer a retry option or not
@@ -527,7 +524,7 @@ func (a *EditDataflowComponentAction) GetComponentUUID() uuid.UUID {
 }
 
 // waitForComponentToBeReady polls the live FSM state until either
-//   - the component shows up **active** or equivalent with the *expected* configuration or
+//   - the component shows up in the **desired state** with the *expected* configuration or
 //   - the timeout hits (→ rollback except when ignoreHealthCheck).
 //
 // Concurrency note: The method never writes to `systemSnapshot`; the FSM runtime
@@ -539,7 +536,7 @@ func (a *EditDataflowComponentAction) GetComponentUUID() uuid.UUID {
 func (a *EditDataflowComponentAction) waitForComponentToBeReady(ctx context.Context) (string, error) {
 	// checks the system snapshot
 	// 1. waits for the component to appear in the system snapshot (relevant for changed name)
-	// 2. waits for the component to be active
+	// 2. waits for the component to reach the desired state
 	// 3. waits for the component to have the correct config
 	ticker := time.NewTicker(constants.ActionTickerTime)
 	defer ticker.Stop()
@@ -553,7 +550,7 @@ func (a *EditDataflowComponentAction) waitForComponentToBeReady(ctx context.Cont
 	for {
 		select {
 		case <-timeout:
-			stateMessage := Label("edit", a.name) + "timeout reached. it did not start in time. rolling back"
+			stateMessage := Label("edit", a.name) + "timeout reached. it did not reach the desired state in time. rolling back"
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage, a.outboundChannel, models.EditDataFlowComponent)
 
 			// Create a fresh context for rollback operation since the original ctx has timed out
@@ -562,9 +559,9 @@ func (a *EditDataflowComponentAction) waitForComponentToBeReady(ctx context.Cont
 			_, err := a.configManager.AtomicEditDataflowcomponent(rollbackCtx, a.newComponentUUID, a.oldConfig)
 			if err != nil {
 				a.actionLogger.Errorf("failed to roll back dataflow component %s: %v", a.name, err)
-				return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component '%s' failed to activate within timeout and could not be rolled back: %v. Please check system load and consider manually restoring the previous configuration", a.name, err)
+				return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component '%s' failed to reach desired state within timeout and could not be rolled back: %v. Please check system load and consider manually restoring the previous configuration", a.name, err)
 			}
-			return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component '%s' was rolled back to its previous configuration because it did not start within the timeout period. Please check system load or component configuration and try again", a.name)
+			return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component '%s' was rolled back to its previous configuration because it did not reach the desired state within the timeout period. Please check system load or component configuration and try again", a.name)
 
 		case <-ticker.C:
 			elapsed := time.Since(startTime)
