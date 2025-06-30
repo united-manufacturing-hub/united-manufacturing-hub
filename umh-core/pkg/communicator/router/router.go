@@ -120,20 +120,19 @@ func (r *Router) handleSub(message *models.UMHMessage, messageContent models.UMH
 		r.routerLogger.Warnf("Subscribe handler not yet initialized")
 		return
 	}
-	resubscribe := false
+
+	var subscribePayload models.SubscribeMessagePayload
 	if messageContent.Payload != nil {
-		payloadMap, ok := messageContent.Payload.(map[string]interface{})
-		if !ok {
-			r.routerLogger.Warnf("Warning: Could not assert payload to map[string]interface{}. Actual type: %T, Value: %v", messageContent.Payload, messageContent.Payload)
+		// Try direct type assertion first
+		if payload, ok := messageContent.Payload.(models.SubscribeMessagePayload); ok {
+			subscribePayload = payload
+		} else {
+			r.routerLogger.Warnf("Warning: Could not assert payload to SubscribeMessagePayload or map[string]interface{}. Actual type: %T, Value: %v", messageContent.Payload, messageContent.Payload)
 			return
 		}
-		if resubscribeValue, exists := payloadMap["resubscribed"]; exists {
-			if resubscribeBool, ok := resubscribeValue.(bool); ok && resubscribeBool {
-				resubscribe = true
-			}
-		}
 	}
-	if resubscribe {
+
+	if subscribePayload.Resubscribed {
 		r.subHandler.UnexpireSubscriber(message.Email)
 	} else {
 		r.subHandler.AddSubscriber(message.Email)
