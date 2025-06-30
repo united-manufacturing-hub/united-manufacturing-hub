@@ -20,6 +20,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"sync"
@@ -29,6 +30,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
+
+// lz4 frame for decompression logic
+var lz4Frame = []byte{0x04, 0x22, 0x4d, 0x18}
 
 // 10MiB
 const maxPayloadBytes = 10 << 20
@@ -184,6 +188,12 @@ func decompressBlock(src []byte) ([]byte, error) {
 //   - Raw block with 4-byte length prefix
 //   - Raw block without prefix (legacy)   ← handled via decompressBlock
 func decompressLZ4(compressed []byte) ([]byte, error) {
+	// frame check
+	if bytes.HasPrefix(compressed, lz4Frame) {
+		r := lz4.NewReader(bytes.NewReader(compressed))
+		return io.ReadAll(r)
+	}
+
 	if len(compressed) >= 4 {
 		orig := int(binary.LittleEndian.Uint32(compressed[:4]))
 		if 0 < orig && orig <= 64<<20 {
