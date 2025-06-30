@@ -151,17 +151,14 @@ func decompressBlock(src []byte) ([]byte, error) {
 	bufPtr := decompressionBufferPool.Get().(*[]byte)
 	buf := *bufPtr
 
-	need := len(src) * 4
+	// LZ4 guarantees that the decompressed size will be less than 255x the compressed size. (https://stackoverflow.com/questions/25740471/lz4-library-decompressed-data-upper-bound-size-estimation)
+	need := len(src) * 255
 	if cap(buf) < need {
 		buf = make([]byte, need)
 	}
 	buf = buf[:cap(buf)]
 
 	n, err := lz4.UncompressBlock(src, buf)
-	if err == lz4.ErrInvalidSourceShortBuffer {
-		buf = make([]byte, len(src)*8)
-		n, err = lz4.UncompressBlock(src, buf)
-	}
 	if err != nil {
 		// put the buffer back before returning the error
 		*bufPtr = buf[:0]

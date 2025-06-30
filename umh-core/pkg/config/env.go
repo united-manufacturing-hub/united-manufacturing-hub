@@ -17,6 +17,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -30,7 +31,7 @@ import (
 // persistent config files and runtime environment variables passed via docker -e flags.
 //
 // Order of precedence (highest to lowest):
-// 1. Environment variables (AUTH_TOKEN, API_URL, RELEASE_CHANNEL, LOCATION_*)
+// 1. Environment variables (AUTH_TOKEN, API_URL, RELEASE_CHANNEL, ALLOW_INSECURE_TLS, LOCATION_*)
 // 2. Existing config file values
 // 3. Default values
 //
@@ -38,7 +39,7 @@ import (
 // which is particularly useful for CI/CD pipelines, testing, and containerized deployments.
 // For example, in the Makefile:
 //
-//	docker run -e AUTH_TOKEN=xyz -e LOCATION_0=factory1 $(IMAGE_NAME):$(TAG)
+//	docker run -e AUTH_TOKEN=xyz -e LOCATION_0=factory1 -e ALLOW_INSECURE_TLS=true $(IMAGE_NAME):$(TAG)
 //
 // Detailed explanation of what happens:
 //
@@ -47,7 +48,7 @@ import (
 //   - If the file doesn't exist, a new config with default values is created
 //
 // 2. Environment variable processing:
-//   - Environment variables are collected: AUTH_TOKEN, API_URL, RELEASE_CHANNEL, LOCATION_0..6
+//   - Environment variables are collected: AUTH_TOKEN, API_URL, RELEASE_CHANNEL, ALLOW_INSECURE_TLS, LOCATION_0..6
 //   - Only non-empty variables will override existing config values
 //   - For example, if AUTH_TOKEN is set in the environment, it will replace any existing value
 //     in the config file
@@ -80,6 +81,18 @@ func LoadConfigWithEnvOverrides(ctx context.Context, configManager *FileConfigMa
 	releaseChannel, err := env.GetAsString("RELEASE_CHANNEL", false, "")
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to get RELEASE_CHANNEL: %w", err)
+	}
+
+	// For AllowInsecureTLS, we need to know if it was explicitly set, so we first check the raw env var
+	var allowInsecureTLS bool
+	var allowInsecureTLSSet bool
+	if allowInsecureTLSStr, exists := os.LookupEnv("ALLOW_INSECURE_TLS"); exists {
+		allowInsecureTLS, err = env.GetAsBool("ALLOW_INSECURE_TLS", false, false)
+		if err != nil {
+			sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to parse ALLOW_INSECURE_TLS=%q as boolean: %w. Existing config value will be kept to avoid accidental security regressions", allowInsecureTLSStr, err)
+		} else {
+			allowInsecureTLSSet = true
+		}
 	}
 
 	// Location values are numbered 0-6 and passed as LOCATION_0, LOCATION_1, etc.
@@ -128,6 +141,11 @@ func LoadConfigWithEnvOverrides(ctx context.Context, configManager *FileConfigMa
 				},
 			},
 		},
+	}
+
+	// Only set AllowInsecureTLS if it was explicitly provided as an environment variable
+	if allowInsecureTLSSet {
+		configOverride.Agent.AllowInsecureTLS = allowInsecureTLS
 	}
 
 	// Apply the environment overrides to the config
