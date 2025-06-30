@@ -92,7 +92,7 @@ func buildProtocolConverterAsDfc(
 				DesiredState:  "up", // Connection desired state is typically "up"
 				Category:      getHealthCategoryFromState(observed.ServiceInfo.ConnectionFSMState),
 			},
-			LastLatencyMs: 0.0, // TODO: Add actual latency data when available
+			LastLatencyMs: observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ServiceInfo.NmapStatus.LastScan.PortResult.LatencyMs,
 		}
 		connections = append(connections, connection)
 	}
