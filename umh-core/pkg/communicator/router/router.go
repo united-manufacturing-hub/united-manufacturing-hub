@@ -133,11 +133,7 @@ func (r *Router) handleSub(message *models.UMHMessage, messageContent models.UMH
 		}
 	}
 
-	if subscribePayload.Resubscribed {
-		r.subHandler.UnexpireSubscriber(message.Email)
-	} else {
-		r.subHandler.AddSubscriber(message.Email)
-	}
+	r.subHandler.AddOrRefreshSubscriber(message.Email, subscribePayload.Resubscribed)
 }
 
 func (r *Router) handleAction(messageContent models.UMHMessageContent, message *models.UMHMessage, watcherUUID uuid.UUID) {

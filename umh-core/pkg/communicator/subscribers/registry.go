@@ -40,17 +40,19 @@ func NewRegistry(cullInterval, ttl time.Duration) *Registry {
 	}
 }
 
-// Add adds a subscriber to the registry. If the subscriber is new, it initializes
-// their bootstrapped state to false so they receive the full topic tree (see umh-core/pkg/communicator/pkg/generator/topicbrowser.go for more details)
-func (r *Registry) Add(email string) {
+// AddOrRefresh ensures the subscriber exists and refreshes its TTL.
+// If it's new we start with Bootstrapped = false.
+func (r *Registry) AddOrRefresh(email string, bootstrapped bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// Add to expiremap with combined data (this handles TTL and expiration)
-	r.subscribers.Set(email, SubscriberData{
-		Email:        email,
-		Bootstrapped: false, // new or returning subscribers need the full tree
-	})
+	data, exists := r.subscribers.Load(email)
+	if !exists {
+		data = &SubscriberData{Email: email, Bootstrapped: bootstrapped}
+	} else {
+		data.Bootstrapped = bootstrapped
+	}
+	r.subscribers.Set(email, *data) // refresh TTL (or insert)
 }
 
 // List returns all active subscriber emails
@@ -76,23 +78,6 @@ func (r *Registry) IsBootstrapped(email string) bool {
 		return false
 	}
 	return data.Bootstrapped
-}
-
-// Unexpire resets the TTL for a subscriber by calling Set()
-func (r *Registry) Unexpire(email string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if data, exists := r.subscribers.Load(email); exists {
-		// Preserve existing bootstrapped state
-		r.subscribers.Set(email, *data)
-	} else {
-		// Create new subscriber if doesn't exist
-		r.subscribers.Set(email, SubscriberData{
-			Email:        email,
-			Bootstrapped: false,
-		})
-	}
 }
 
 // ForEach iterates over all active subscribers and their bootstrapped state

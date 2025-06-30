@@ -239,7 +239,7 @@ var _ = Describe("Subscribe and Receive Test", func() {
 
 			// If it's a subscribe message, add the subscriber
 			if decodedContent.MessageType == models.Subscribe {
-				subHandler.AddSubscriber(msg.Email)
+				subHandler.AddOrRefreshSubscriber(msg.Email, false)
 				GinkgoWriter.Printf("Added subscriber: %s\n", msg.Email)
 			}
 		}
