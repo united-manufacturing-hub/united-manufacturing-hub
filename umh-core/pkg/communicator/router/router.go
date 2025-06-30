@@ -127,7 +127,7 @@ func (r *Router) handleSub(message *models.UMHMessage, messageContent models.UMH
 			r.routerLogger.Warnf("Warning: Could not assert payload to map[string]interface{}. Actual type: %T, Value: %v", messageContent.Payload, messageContent.Payload)
 			return
 		}
-		if resubscribeValue, exists := payloadMap["resubscribe"]; exists {
+		if resubscribeValue, exists := payloadMap["resubscribed"]; exists {
 			if resubscribeBool, ok := resubscribeValue.(bool); ok && resubscribeBool {
 				resubscribe = true
 			}
