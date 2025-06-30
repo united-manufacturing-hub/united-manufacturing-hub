@@ -68,7 +68,7 @@ pre-commit:
     - name: fix-license-header
       glob: "**/*.go"
       run: |
-        docker run -it --rm -v $(pwd):/github/workspace apache/skywalking-eyes header fix
+        docker run -it --rm -v $(pwd):/github/workspace apache/skywalking-eyes header fix {staged_files}
         git update-index --again
 
         
