@@ -247,6 +247,35 @@ protocolConverter:
               uns: {}
 ```
 
+### GraphQL API - Topic Browser
+
+GraphQL API for querying Unified Namespace topics.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | `bool` | `true` | Enable GraphQL API |
+| `port` | `int` | `8090` | HTTP port for GraphQL endpoint |
+| `debug` | `bool` | `false` | Enable GraphiQL playground at `/` |
+| `corsOrigins` | `[]string` | `[]` | CORS origins (empty = allow all) |
+
+```yaml
+agent:
+  graphql:
+    enabled: true
+    port: 8090
+    debug: false
+    corsOrigins: 
+      - "http://localhost:3000"
+      - "https://your-app.com"
+```
+
+**Endpoints:**
+- **GraphQL API:** `POST /graphql`
+- **GraphiQL Playground:** `GET /` (debug mode only)
+- **CORS Preflight:** `OPTIONS /graphql`
+
+For complete API reference, see [Topic Browser GraphQL API](http-api/topic-browser-graphql.md).
+
 ### Internal - Built-In Services (expert)
 
 UMH Core injects this section automatically.
@@ -259,6 +288,8 @@ internal:
       defaultTopicRetentionMs: 604800000   # 7 days
       maxCores: 1
       memoryPerCoreInBytes: 2147483648
+  topicBrowser:
+    desiredState: active  # Topic Browser service (auto-enabled)
 ```
 
 > **Do not edit** unless instructed by UMH support; invalid settings can brick the stack.
