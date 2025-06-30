@@ -81,9 +81,9 @@ func (a *GetMetricsAction) Parse(payload interface{}) (err error) {
 func (a *GetMetricsAction) Validate() (err error) {
 	a.actionLogger.Info("Validating the payload")
 
-	allowedMetricTypes := []models.MetricResourceType{models.DFCMetricResourceType, models.RedpandaMetricResourceType}
+	allowedMetricTypes := []models.MetricResourceType{models.DFCMetricResourceType, models.RedpandaMetricResourceType, models.TopicBrowserMetricResourceType}
 	if !slices.Contains(allowedMetricTypes, a.payload.Type) {
-		return errors.New("metric type must be set and must be one of the following: dfc, redpanda")
+		return errors.New("metric type must be set and must be one of the following: dfc, redpanda, topic-browser")
 	}
 
 	if a.payload.Type == models.DFCMetricResourceType {
