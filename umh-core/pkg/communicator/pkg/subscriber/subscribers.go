@@ -60,7 +60,7 @@ func NewHandler(
 	topicBrowserCache *topicbrowser.Cache,
 	topicBrowserSimulator *topicbrowser.Simulator,
 ) *Handler {
-	encoding.EnableNewEncoder()
+	encoding.ChooseEncoder(encoding.EncodingCorev1)
 	s := &Handler{}
 	s.subscriberRegistry = subscribers.NewRegistry(cull, ttl)
 	s.dog = dog
@@ -120,6 +120,7 @@ func (s *Handler) notify() {
 
 	notified := 0
 	baseStatusMessage := s.StatusCollector.GenerateStatusMessage(true)
+
 	s.subscriberRegistry.ForEach(func(email string, bootstrapped bool) {
 		// Generate personalized status message based on bootstrap state
 		statusMessage := baseStatusMessage

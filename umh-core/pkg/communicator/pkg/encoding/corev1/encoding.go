@@ -19,11 +19,9 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/binary"
-	"encoding/json"
 	"io"
 	"strings"
 	"sync"
-	"unsafe"
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/safejson"
@@ -63,8 +61,9 @@ var (
 
 	// Buffer pools - store slices directly, not pointers
 	base64BufferPool = sync.Pool{
-		New: func() interface{} {
-			return make([]byte, 0, Base64BufferSize)
+		New: func() any {
+			b := make([]byte, 0, Base64BufferSize)
+			return &b
 		},
 	}
 
@@ -79,22 +78,17 @@ var (
 			return bytes.NewBuffer(make([]byte, 0, DecompressBufferSize))
 		},
 	}
-
-	jsonBufferPool = sync.Pool{
-		New: func() interface{} {
-			return bytes.NewBuffer(make([]byte, 0, JSONBufferSize))
-		},
-	}
 )
 
 // Buffer management functions
 func getBase64Buffer() []byte {
-	return base64BufferPool.Get().([]byte)
+	return *base64BufferPool.Get().(*[]byte)
 }
 
-func putBase64Buffer(buf []byte) {
-	if cap(buf) <= MaxPooledBufferSize {
-		base64BufferPool.Put(buf[:0])
+func putBase64Buffer(b []byte) {
+	if cap(b) <= MaxPooledBufferSize {
+		b = b[:0] // reset length
+		base64BufferPool.Put(&b)
 	}
 }
 
@@ -120,17 +114,6 @@ func putDecompressBuffer(buf *bytes.Buffer) {
 	}
 }
 
-func getJSONBuffer() *bytes.Buffer {
-	return jsonBufferPool.Get().(*bytes.Buffer)
-}
-
-func putJSONBuffer(buf *bytes.Buffer) {
-	if cap(buf.Bytes()) <= MaxPooledBufferSize {
-		buf.Reset()
-		jsonBufferPool.Put(buf)
-	}
-}
-
 // Optimized magic number check using unsafe for single memory read
 func isCompressed(data []byte) bool {
 	if len(data) < 4 {
@@ -138,14 +121,6 @@ func isCompressed(data []byte) bool {
 	}
 	// Use binary package for portability (safer than unsafe)
 	return binary.LittleEndian.Uint32(data) == 0xFD2FB528
-}
-
-// Alternative unsafe version for maximum performance (use with caution)
-func isCompressedUnsafe(data []byte) bool {
-	if len(data) < 4 {
-		return false
-	}
-	return *(*uint32)(unsafe.Pointer(&data[0])) == 0xFD2FB528
 }
 
 // Compress compresses message if above threshold
@@ -267,28 +242,6 @@ func decodeBase64(data string) ([]byte, error) {
 	return result, nil
 }
 
-// Optimized JSON marshaling with buffer reuse
-func marshalJSON(v interface{}) ([]byte, error) {
-	buf := getJSONBuffer()
-	defer putJSONBuffer(buf)
-
-	encoder := json.NewEncoder(buf)
-	if err := encoder.Encode(v); err != nil {
-		return nil, err
-	}
-
-	// Remove trailing newline added by Encode
-	data := buf.Bytes()
-	if len(data) > 0 && data[len(data)-1] == '\n' {
-		data = data[:len(data)-1]
-	}
-
-	// Return copy
-	result := make([]byte, len(data))
-	copy(result, data)
-	return result, nil
-}
-
 // Core encoding functions
 func EncodeMessageFromUserToUMHInstance(UMHMessage models.UMHMessageContent) (string, error) {
 	messageBytes, err := safejson.Marshal(UMHMessage)
@@ -358,69 +311,4 @@ func DecodeMessageFromUserToUMHInstance(base64Message string) (models.UMHMessage
 
 func DecodeMessageFromUMHInstanceToUser(base64Message string) (models.UMHMessageContent, error) {
 	return decodeBase64AndUnmarshal(base64Message)
-}
-
-// Batch processing functions for amortizing setup costs
-func EncodeBatchMessages(messages []models.UMHMessageContent) ([]string, error) {
-	if len(messages) == 0 {
-		return nil, nil
-	}
-
-	results := make([]string, 0, len(messages))
-
-	// Reuse encoder across batch for large messages
-	encoder := encoderPool.Get().(*zstd.Encoder)
-	defer encoderPool.Put(encoder)
-
-	compressBuf := getCompressBuffer()
-	defer putCompressBuffer(compressBuf)
-
-	for _, msg := range messages {
-		messageBytes, err := safejson.Marshal(msg)
-		if err != nil {
-			sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to marshal UMHMessage: %v (%+v)", err, msg)
-			return nil, err
-		}
-
-		// Compress if needed using shared encoder
-		if len(messageBytes) >= CompressionThreshold {
-			compressBuf.Reset()
-			compressBuf.Grow(len(messageBytes) / 2)
-			encoder.Reset(compressBuf)
-
-			if _, err := encoder.Write(messageBytes); err != nil {
-				return nil, err
-			}
-			if err := encoder.Close(); err != nil {
-				return nil, err
-			}
-
-			// Create copy for this message
-			compressed := make([]byte, compressBuf.Len())
-			copy(compressed, compressBuf.Bytes())
-			results = append(results, encodeBase64(compressed))
-		} else {
-			results = append(results, encodeBase64(messageBytes))
-		}
-	}
-
-	return results, nil
-}
-
-// Statistics for monitoring performance
-type Stats struct {
-	CompressedMessages   int64
-	UncompressedMessages int64
-	TotalBytes           int64
-	CompressedBytes      int64
-}
-
-var globalStats Stats
-
-func GetStats() Stats {
-	return globalStats
-}
-
-func ResetStats() {
-	globalStats = Stats{}
 }
