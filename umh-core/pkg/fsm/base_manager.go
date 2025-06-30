@@ -502,11 +502,40 @@ func (m *BaseFSMManager[C]) Reconcile(
 			m.logger.Debugf("context expired, skipping reconciliation of instance %s", name)
 			break
 		}
+
+		// Check time budget before spawning goroutine to prevent concurrent execution
+		// from exceeding the control loop's deadline
+		expectedMaxP95ExecutionTime, execTimeErr := m.getExpectedMaxP95ExecutionTimePerInstance(instance)
+		if execTimeErr != nil {
+			metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
+			return fmt.Errorf("failed to get expected max p95 execution time for instance %s: %w", name, execTimeErr), false
+		}
+
+		remaining, sufficient, timeErr := ctxutil.HasSufficientTime(ctx, expectedMaxP95ExecutionTime)
+		if timeErr != nil {
+			if errors.Is(timeErr, ctxutil.ErrNoDeadline) {
+				return fmt.Errorf("no deadline set in context"), false
+			}
+			// For any other error, log and abort reconciliation
+			metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
+			return fmt.Errorf("deadline check error for instance %s: %w", name, timeErr), false
+		}
+
+		if !sufficient {
+			m.logger.Warnf("not enough time left to reconcile instance %s (only %v remaining, needed %v), skipping",
+				name, remaining, expectedMaxP95ExecutionTime)
+			hasAnyReconcilesMutex.Lock()
+			hasAnyReconciles = true
+			hasAnyReconcilesMutex.Unlock()
+			continue // Skip this instance but continue with others (who might need less time)
+		}
+
 		nameCaptured := name
 		instanceCaptured := instance
+		expectedTimeCaptured := expectedMaxP95ExecutionTime
 
 		errorgroup.Go(func() error {
-			reconciled, shallBeRemoved, err := m.reconcileInstance(ctx, instanceCaptured, services, nameCaptured, snapshot)
+			reconciled, shallBeRemoved, err := m.reconcileInstanceWithTimeout(ctx, instanceCaptured, services, nameCaptured, snapshot, expectedTimeCaptured)
 			if err != nil {
 				return err
 			}
@@ -755,34 +784,11 @@ func (m *BaseFSMManager[C]) maybeEscalateRemoval(ctx context.Context, inst FSMIn
 	}
 }
 
-func (m *BaseFSMManager[C]) reconcileInstance(ctx context.Context, instance FSMInstance, services serviceregistry.Provider, name string, snapshot SystemSnapshot) (reconciled bool, shallBeRemoved bool, err error) {
+func (m *BaseFSMManager[C]) reconcileInstanceWithTimeout(ctx context.Context, instance FSMInstance, services serviceregistry.Provider, name string, snapshot SystemSnapshot, expectedMaxP95ExecutionTime time.Duration) (reconciled bool, shallBeRemoved bool, err error) {
 	reconcileStart := time.Now()
 
-	// Check whether we have enough time left to reconcile the instance
-	// This is another fallback to prevent high p99 spikes
-	// If maybe a couple of previous instances were slow, we don't want to
-	// have a ripple effect on the whole control loop
-	expectedMaxP95ExecutionTime, execTimeErr := m.getExpectedMaxP95ExecutionTimePerInstance(instance)
-	if execTimeErr != nil {
-		metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
-		return false, false, fmt.Errorf("failed to get expected max p95 execution time: %w", execTimeErr)
-	}
-	remaining, sufficient, timeErr := ctxutil.HasSufficientTime(ctx, expectedMaxP95ExecutionTime)
-	if timeErr != nil {
-		if errors.Is(timeErr, ctxutil.ErrNoDeadline) {
-			return false, false, fmt.Errorf("no deadline set in context")
-		}
-		// For any other error, log and abort reconciliation
-		metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
-		return false, false, fmt.Errorf("deadline check error: %w", timeErr)
-	}
-
-	if !sufficient {
-		m.logger.Warnf("not enough time left to reconcile instance %s (only %v remaining, needed %v), skipping",
-			name, remaining, expectedMaxP95ExecutionTime)
-		return true, false, nil // return true to indicate that we should not run another manager and instead should wait for the next tick
-	}
-
+	// Time budget check is now done upfront before goroutine creation
+	// This method assumes sufficient time has already been verified
 	instanceCtx, instanceCancel := context.WithTimeout(ctx, expectedMaxP95ExecutionTime)
 	defer instanceCancel()
 
