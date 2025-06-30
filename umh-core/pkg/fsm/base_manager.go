@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"runtime"
 	"time"
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
@@ -484,6 +485,8 @@ func (m *BaseFSMManager[C]) Reconcile(
 	// We do not use the returned ctx, as it cancles once any of the reconciles returns either an error or finishes (And the 2nd behaviour is undesired.)
 
 	errorgroup, _ := errgroup.WithContext(ctx)
+	// Limit the number of threads available, preventing CPU starvation for other system tasks
+	errorgroup.SetLimit(runtime.NumCPU())
 	hasAnyReconciles := false
 	for name, instance := range m.instances {
 		// If the ctx is already expired, we can skip adding new goroutines
