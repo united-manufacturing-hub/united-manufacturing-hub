@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"runtime"
+	"sync"
 	"time"
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
@@ -488,25 +489,45 @@ func (m *BaseFSMManager[C]) Reconcile(
 	// Limit the number of threads available, preventing CPU starvation for other system tasks
 	errorgroup.SetLimit(runtime.NumCPU())
 	hasAnyReconciles := false
+	hasAnyReconcilesMutex := sync.Mutex{}
+
+	instancesToRemove := make([]string, 0)
+	instancesToRemoveMutex := sync.Mutex{}
+
 	for name, instance := range m.instances {
 		// If the ctx is already expired, we can skip adding new goroutines
 		if ctx.Err() != nil {
 			m.logger.Debugf("context expired, skipping reconciliation of instance %s", name)
 			break
 		}
+		nameCaptured := name
+		instanceCaptured := instance
 
 		errorgroup.Go(func() error {
-			err, reconciled := m.reconcileInstance(ctx, instance, services, name, snapshot)
+			err, reconciled, shallBeRemoved := m.reconcileInstance(ctx, instanceCaptured, services, nameCaptured, snapshot)
 			if err != nil {
 				return err
 			}
 			if reconciled {
+				hasAnyReconcilesMutex.Lock()
 				hasAnyReconciles = true
+				hasAnyReconcilesMutex.Unlock()
+			}
+			if shallBeRemoved {
+				instancesToRemoveMutex.Lock()
+				instancesToRemove = append(instancesToRemove, nameCaptured)
+				instancesToRemoveMutex.Unlock()
 			}
 			return nil
 		})
 	}
 	err = errorgroup.Wait()
+
+	instancesToRemoveMutex.Lock()
+	for _, name := range instancesToRemove {
+		delete(m.instances, name)
+	}
+	instancesToRemoveMutex.Unlock()
 
 	// Return nil if no errors occurred
 	return err, hasAnyReconciles
@@ -732,7 +753,7 @@ func (m *BaseFSMManager[C]) maybeEscalateRemoval(ctx context.Context, inst FSMIn
 	}
 }
 
-func (m *BaseFSMManager[C]) reconcileInstance(ctx context.Context, instance FSMInstance, services serviceregistry.Provider, name string, snapshot SystemSnapshot) (error, bool) {
+func (m *BaseFSMManager[C]) reconcileInstance(ctx context.Context, instance FSMInstance, services serviceregistry.Provider, name string, snapshot SystemSnapshot) (error, bool, bool) {
 	reconcileStart := time.Now()
 
 	// Check whether we have enough time left to reconcile the instance
@@ -742,22 +763,22 @@ func (m *BaseFSMManager[C]) reconcileInstance(ctx context.Context, instance FSMI
 	expectedMaxP95ExecutionTime, err := m.getExpectedMaxP95ExecutionTimePerInstance(instance)
 	if err != nil {
 		metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
-		return fmt.Errorf("failed to get expected max p95 execution time: %w", err), false
+		return fmt.Errorf("failed to get expected max p95 execution time: %w", err), false, false
 	}
 	remaining, sufficient, err := ctxutil.HasSufficientTime(ctx, expectedMaxP95ExecutionTime)
 	if err != nil {
 		if errors.Is(err, ctxutil.ErrNoDeadline) {
-			return fmt.Errorf("no deadline set in context"), false
+			return fmt.Errorf("no deadline set in context"), false, false
 		}
 		// For any other error, log and abort reconciliation
 		metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
-		return fmt.Errorf("deadline check error: %w", err), false
+		return fmt.Errorf("deadline check error: %w", err), false, false
 	}
 
 	if !sufficient {
 		m.logger.Warnf("not enough time left to reconcile instance %s (only %v remaining, needed %v), skipping",
 			name, remaining, expectedMaxP95ExecutionTime)
-		return nil, true // return true to indicate that we should not run another manager and instead should wait for the next tick
+		return nil, true, false // return true to indicate that we should not run another manager and instead should wait for the next tick
 	}
 
 	instanceCtx, instanceCancel := context.WithTimeout(ctx, expectedMaxP95ExecutionTime)
@@ -785,8 +806,7 @@ func (m *BaseFSMManager[C]) reconcileInstance(ctx context.Context, instance FSMI
 				err,
 			)
 
-			delete(m.instances, name)
-			return nil, true
+			return nil, true, true
 		}
 		sentry.ReportFSMErrorf(
 			m.logger,
@@ -796,11 +816,11 @@ func (m *BaseFSMManager[C]) reconcileInstance(ctx context.Context, instance FSMI
 			"Error reconciling instance: %v",
 			err,
 		)
-		return fmt.Errorf("error reconciling instance: %w", err), false
+		return fmt.Errorf("error reconciling instance: %w", err), false, false
 	}
 
 	// Check if the instance has been stuck in a transient state for too long
 	m.maybeEscalateRemoval(ctx, instance, services)
 
-	return nil, reconciled
+	return nil, reconciled, false
 }
