@@ -29,14 +29,14 @@ type SubscriberData struct {
 
 // Registry manages subscribers and their bootstrapped state with automatic expiration
 type Registry struct {
-	subscribers *expiremap.ExpireMap[string, *SubscriberData]
+	subscribers *expiremap.ExpireMap[string, SubscriberData]
 	mu          sync.RWMutex
 }
 
 // NewRegistry creates a new subscriber registry with the given TTL and cull interval
 func NewRegistry(cullInterval, ttl time.Duration) *Registry {
 	return &Registry{
-		subscribers: expiremap.NewEx[string, *SubscriberData](cullInterval, ttl),
+		subscribers: expiremap.NewEx[string, SubscriberData](cullInterval, ttl),
 	}
 }
 
@@ -47,7 +47,7 @@ func (r *Registry) Add(email string) {
 	defer r.mu.Unlock()
 
 	// Add to expiremap with combined data (this handles TTL and expiration)
-	r.subscribers.Set(email, &SubscriberData{
+	r.subscribers.Set(email, SubscriberData{
 		Email:        email,
 		Bootstrapped: false, // new or returning subscribers need the full tree
 	})
@@ -59,7 +59,7 @@ func (r *Registry) List() []string {
 	defer r.mu.RUnlock()
 
 	var subscribers []string
-	r.subscribers.Range(func(key string, value *SubscriberData) bool {
+	r.subscribers.Range(func(key string, value SubscriberData) bool {
 		subscribers = append(subscribers, value.Email)
 		return true
 	})
@@ -75,7 +75,7 @@ func (r *Registry) IsBootstrapped(email string) bool {
 	if !exists {
 		return false
 	}
-	return (*data).Bootstrapped
+	return data.Bootstrapped
 }
 
 // Unexpire resets the TTL for a subscriber by calling Set()
@@ -88,7 +88,7 @@ func (r *Registry) Unexpire(email string) {
 		r.subscribers.Set(email, *data)
 	} else {
 		// Create new subscriber if doesn't exist
-		r.subscribers.Set(email, &SubscriberData{
+		r.subscribers.Set(email, SubscriberData{
 			Email:        email,
 			Bootstrapped: false,
 		})
@@ -106,7 +106,7 @@ func (r *Registry) ForEach(fn func(email string, bootstrapped bool)) {
 	var subscribers []subscriberInfo
 
 	r.mu.RLock()
-	r.subscribers.Range(func(key string, value *SubscriberData) bool {
+	r.subscribers.Range(func(key string, value SubscriberData) bool {
 		subscribers = append(subscribers, subscriberInfo{
 			email:        value.Email,
 			bootstrapped: value.Bootstrapped,
@@ -128,9 +128,10 @@ func (r *Registry) SetBootstrapped(email string, bootstrapped bool) {
 
 	// Only set if the subscriber exists
 	if data, exists := r.subscribers.Load(email); exists {
-		(*data).Bootstrapped = bootstrapped
+		updatedData := *data
+		updatedData.Bootstrapped = bootstrapped
 		// Update the expiremap entry to refresh TTL
-		r.subscribers.Set(email, *data)
+		r.subscribers.Set(email, updatedData)
 	}
 }
 
