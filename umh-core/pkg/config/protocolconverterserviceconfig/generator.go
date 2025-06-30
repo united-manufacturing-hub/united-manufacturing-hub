@@ -19,6 +19,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 	"gopkg.in/yaml.v3"
 )
 
@@ -32,8 +33,8 @@ func NewGenerator() *Generator {
 	return &Generator{}
 }
 
-// RenderConfig generates a ProtocolConverter YAML configuration from a ProtocolConverterServiceConfig
-func (g *Generator) RenderConfig(cfg ProtocolConverterServiceConfig) (string, error) {
+// RenderConfig generates a ProtocolConverter YAML configuration from a ProtocolConverterServiceConfigSpec
+func (g *Generator) RenderConfig(cfg ProtocolConverterServiceConfigSpec) (string, error) {
 
 	// Convert the config to a normalized map
 	configMap := g.configToMap(cfg)
@@ -51,42 +52,102 @@ func (g *Generator) RenderConfig(cfg ProtocolConverterServiceConfig) (string, er
 }
 
 // configToMap converts a DataFlowComponentServiceConfig to a raw map for YAML generation
-func (g *Generator) configToMap(cfg ProtocolConverterServiceConfig) map[string]any {
+func (g *Generator) configToMap(cfg ProtocolConverterServiceConfigSpec) map[string]any {
 	// use generator to create a valid dfcConfigMap & connectionConfigMap
 	dfcGenerator := dataflowcomponentserviceconfig.NewGenerator()
 	connectionGenerator := connectionserviceconfig.NewGenerator()
+	variableBundleGenerator := variables.NewGenerator()
 
-	dfcConfigMap := dfcGenerator.ConfigToMap(cfg.DataflowComponentServiceConfig)
-	connectionConfigMap := connectionGenerator.ConfigToMap(cfg.ConnectionServiceConfig)
+	// Get the template configs
+	dfcReadConfigMap := dfcGenerator.ConfigToMap(cfg.Config.DataflowComponentReadServiceConfig)
+	dfcWriteConfigMap := dfcGenerator.ConfigToMap(cfg.Config.DataflowComponentWriteServiceConfig)
+	// Convert template to runtime for config map generation
+	connRuntime, err := connectionserviceconfig.ConvertTemplateToRuntime(cfg.Config.ConnectionServiceConfig)
+	if err != nil {
+		// If conversion fails, use empty config to avoid breaking YAML generation
+		connRuntime = connectionserviceconfig.ConnectionServiceConfigRuntime{}
+	}
+	connectionConfigMap := connectionGenerator.ConfigToMap(connRuntime)
+	variableBundleConfigMap := variableBundleGenerator.ConfigToMap(cfg.Variables)
 
 	configMap := make(map[string]any)
 
-	// indent the config by 1
-	configMap["dataflowcomponent"] = dfcConfigMap
-	configMap["connection"] = connectionConfigMap
+	// Create the template structure
+	templateMap := make(map[string]any)
+	templateMap["connection"] = connectionConfigMap
+	templateMap["dataflowcomponent_read"] = dfcReadConfigMap
+	templateMap["dataflowcomponent_write"] = dfcWriteConfigMap
 
+	// Add template and variables to the root config
+	configMap["template"] = templateMap
+	configMap["variables"] = variableBundleConfigMap
+	configMap["location"] = cfg.Location
 	return configMap
 }
 
-// normalizeConfig does not need to adjust anything here
+// normalizeConfig normalizes the configuration by applying defaults and ensuring consistency
 func normalizeConfig(raw map[string]any) map[string]any {
 	normalized := make(map[string]any)
 
-	// extract and check the dfc config
-	dfcConfig, ok := raw["dataflowcomponent"].(map[string]any)
+	// Extract template and variables
+	template, ok := raw["template"].(map[string]any)
 	if !ok {
-		dfcConfig = raw
+		template = raw
 	}
 
-	// extract and check the connection config
-	connectionConfig, ok := raw["connection"].(map[string]any)
+	rawVariables, ok := raw["variables"].(map[string]any)
 	if !ok {
-		dfcConfig = raw
+		rawVariables = make(map[string]any)
 	}
 
-	normalizedDFCConfig := dataflowcomponentserviceconfig.NormalizeConfig(dfcConfig)
+	// Process location map correctly to ensure it's a proper map[string]string
+	// This handles converting location keys (like level numbers) to the correct format
+	locationMap := make(map[string]string)
+	if rawLocation, ok := raw["location"].(map[string]any); ok {
+		// Convert map[string]any to map[string]string
+		for k, v := range rawLocation {
+			// Use fmt.Sprint to convert any value type to string
+			// This handles all basic types (string, int, float, bool) with appropriate formatting
+			locationMap[k] = fmt.Sprint(v)
+		}
+	} else if typedLocation, ok := raw["location"].(map[string]string); ok {
+		// If already in the right format, just use it directly
+		locationMap = typedLocation
+	}
+
+	// Extract and normalize template components
+	dfcReadConfig, ok := template["dataflowcomponent_read"].(map[string]any)
+	if !ok {
+		dfcReadConfig = template
+	}
+
+	dfcWriteConfig, ok := template["dataflowcomponent_write"].(map[string]any)
+	if !ok {
+		dfcWriteConfig = template
+	}
+
+	connectionConfig, ok := template["connection"].(map[string]any)
+	if !ok {
+		connectionConfig = template
+	}
+
+	// Normalize each component
+	normalizedDFCReadConfig := dataflowcomponentserviceconfig.NormalizeConfig(dfcReadConfig)
+	normalizedDFCWriteConfig := dataflowcomponentserviceconfig.NormalizeConfig(dfcWriteConfig)
 	normalizedConnectionConfig := connectionserviceconfig.NormalizeConfig(connectionConfig)
-	normalized["dataflowcomponent"] = normalizedDFCConfig
-	normalized["connection"] = normalizedConnectionConfig
+
+	// Variables don't need normalization, they are just key-value pairs
+	normalizedVariables := variables.NormalizeConfig(rawVariables)
+
+	// Reconstruct the normalized template
+	normalizedTemplate := make(map[string]any)
+	normalizedTemplate["dataflowcomponent_read"] = normalizedDFCReadConfig
+	normalizedTemplate["dataflowcomponent_write"] = normalizedDFCWriteConfig
+	normalizedTemplate["connection"] = normalizedConnectionConfig
+
+	// Set the normalized template and variables
+	normalized["template"] = normalizedTemplate
+	normalized["variables"] = normalizedVariables
+	normalized["location"] = locationMap // Use our correctly processed location map
 	return normalized
 }

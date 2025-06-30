@@ -61,13 +61,66 @@ var _ = Describe("Redpanda YAML Generator", func() {
 					cfg := &RedpandaServiceConfig{}
 					cfg.Topic.DefaultTopicRetentionMs = 1000
 					cfg.Topic.DefaultTopicRetentionBytes = 1000
+					cfg.Topic.DefaultTopicCompressionAlgorithm = "lz4"
 					return cfg
 				}(),
 				expected: []string{
 					"retention_ms: 1000",
 					"retention_bytes: 1000",
+					"log_compression_type: \"lz4\"",
+				},
+			}),
+		Entry("should render default compression algorithm",
+			testCase{
+				config: func() *RedpandaServiceConfig {
+					cfg := &RedpandaServiceConfig{}
+					cfg.Topic.DefaultTopicRetentionMs = 1000
+					cfg.Topic.DefaultTopicRetentionBytes = 1000
+					return cfg
+				}(),
+				expected: []string{
+					"retention_ms: 1000",
+					"retention_bytes: 1000",
+					"log_compression_type: \"snappy\"",
 				},
 			}),
 	)
 
+	It("should generate valid YAML with custom compression", func() {
+		cfg := RedpandaServiceConfig{}
+		cfg.Topic.DefaultTopicRetentionMs = 1000
+		cfg.Topic.DefaultTopicRetentionBytes = 1000
+		cfg.Topic.DefaultTopicCompressionAlgorithm = "lz4"
+		cfg.Topic.DefaultTopicCleanupPolicy = "delete"
+		cfg.Topic.DefaultTopicSegmentMs = 604800000
+
+		generator := NewGenerator()
+		yaml, err := generator.RenderConfig(cfg)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(yaml).To(ContainSubstring("log_compression_type: \"lz4\""))
+		Expect(yaml).To(ContainSubstring("log_cleanup_policy: \"delete\""))
+		Expect(yaml).To(ContainSubstring("log_segment_ms: 604800000"))
+	})
+
+	It("should use default cleanup policy when empty", func() {
+		cfg := RedpandaServiceConfig{}
+		cfg.Topic.DefaultTopicRetentionMs = 1000
+		cfg.Topic.DefaultTopicRetentionBytes = 1000
+
+		generator := NewGenerator()
+		yaml, err := generator.RenderConfig(cfg)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(yaml).To(ContainSubstring("log_cleanup_policy: \"compact\""))
+	})
+
+	It("should use default segment ms when empty", func() {
+		cfg := RedpandaServiceConfig{}
+		cfg.Topic.DefaultTopicRetentionMs = 1000
+		cfg.Topic.DefaultTopicRetentionBytes = 1000
+
+		generator := NewGenerator()
+		yaml, err := generator.RenderConfig(cfg)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(yaml).To(ContainSubstring("log_segment_ms: 3600000"))
+	})
 })

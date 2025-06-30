@@ -19,4 +19,6 @@ agent:
 internal:
   redpanda:
     desiredState: stopped
+  topicbrowser:
+    desiredState: stopped
   services: []

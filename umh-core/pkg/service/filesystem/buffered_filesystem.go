@@ -110,6 +110,9 @@ func ReadDirectoryTree(ctx context.Context, service Service, root string) (*Dire
 	if err != nil {
 		return nil, fmt.Errorf("failed to walk directory tree: %w", err)
 	}
+	if rootInfo == nil {
+		return nil, fmt.Errorf("failed to walk directory tree: stat returned nil")
+	}
 	if !rootInfo.IsDir() {
 		return nil, fmt.Errorf("failed to walk directory tree: root is not a directory")
 	}
@@ -328,6 +331,9 @@ func (bs *BufferedService) Chown(ctx context.Context, path string, username stri
 		if err != nil {
 			return fmt.Errorf("failed to lookup user %s: %w", username, err)
 		}
+		if u == nil {
+			return fmt.Errorf("user lookup returned nil for user %s", username)
+		}
 		uid, _ = strconv.Atoi(u.Uid)
 	} else {
 		uid = st.uid // Keep existing
@@ -341,6 +347,9 @@ func (bs *BufferedService) Chown(ctx context.Context, path string, username stri
 		g, err := user.LookupGroup(groupname)
 		if err != nil {
 			return fmt.Errorf("failed to lookup group %s: %w", groupname, err)
+		}
+		if g == nil {
+			return fmt.Errorf("group lookup returned nil for group %s", groupname)
 		}
 		gid, _ = strconv.Atoi(g.Gid)
 	} else {
@@ -569,6 +578,9 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 				continue // Skip directories that don't exist
 			}
 			return fmt.Errorf("failed to stat directory %s: %w", dir, err)
+		}
+		if info == nil {
+			return fmt.Errorf("stat returned nil for directory: %s", dir)
 		}
 
 		if !info.IsDir() {
@@ -1526,5 +1538,10 @@ func (bs *BufferedService) readFileIncrementally(absPath string, previousSize in
 //   - chunk   – the data that was read (nil if nothing new)
 //   - newSize – the file size **after** the read (use it as next offset)
 func (bs *BufferedService) ReadFileRange(ctx context.Context, path string, from int64) ([]byte, int64, error) {
+	panic("not implemented")
+}
+
+// Glob is a wrapper around filepath.Glob that respects the context
+func (bs *BufferedService) Glob(ctx context.Context, pattern string) ([]string, error) {
 	panic("not implemented")
 }

@@ -649,7 +649,7 @@ func (s *BenthosService) AddBenthosToS6Manager(ctx context.Context, filesystemSe
 	s6FSMConfig := config.S6FSMConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            s6ServiceName,
-			DesiredFSMState: s6fsm.OperationalStateRunning,
+			DesiredFSMState: s6fsm.OperationalStateStopped,
 		},
 		S6ServiceConfig: s6Config,
 	}
@@ -662,7 +662,7 @@ func (s *BenthosService) AddBenthosToS6Manager(ctx context.Context, filesystemSe
 	benthosMonitorConfig := config.BenthosMonitorConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            s6ServiceName,
-			DesiredFSMState: benthos_monitor_fsm.OperationalStateActive,
+			DesiredFSMState: benthos_monitor_fsm.OperationalStateStopped,
 		},
 		MetricsPort: cfg.MetricsPort,
 	}

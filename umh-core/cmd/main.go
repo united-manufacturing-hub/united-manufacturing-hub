@@ -23,10 +23,13 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/pprof"
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/graphql"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -97,7 +100,52 @@ func main() {
 		configData.Agent.APIURL,
 		logger.For(logger.ComponentCommunicator),
 		configData.Agent.AllowInsecureTLS,
+		topicbrowser.NewCache(),
 	)
+
+	// Start the topic browser cache updater independent of the backend connection (e.g., for HTTP endpoints)
+	// it updates the TopicBrowserCache based on the observed state of the topic browser service once per second
+	communicationState.StartTopicBrowserCacheUpdater(systemSnapshotManager, ctx, configData.Agent.Simulator)
+
+	// Start the GraphQL server if enabled
+	var graphqlServer *graphql.Server
+	if configData.Agent.GraphQLConfig.Enabled {
+		// Set defaults for GraphQL config if not specified
+		if configData.Agent.GraphQLConfig.Port == 0 {
+			configData.Agent.GraphQLConfig.Port = 8090
+		}
+		if len(configData.Agent.GraphQLConfig.CORSOrigins) == 0 {
+			configData.Agent.GraphQLConfig.CORSOrigins = []string{"*"}
+		}
+
+		// Create GraphQL resolver with necessary dependencies
+		//
+		// TopicBrowserCache: Required for GraphQL to access the unified namespace data
+		// SnapshotManager: Required for GraphQL to access system configuration and state
+		graphqlResolver := &graphql.Resolver{
+			SnapshotManager:   systemSnapshotManager,
+			TopicBrowserCache: communicationState.TopicBrowserCache,
+		}
+
+		// Start GraphQL server
+		var err error
+		graphqlServer, err = graphql.StartGraphQLServer(graphqlResolver, &configData.Agent.GraphQLConfig, log)
+		if err != nil {
+			sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to start GraphQL server: %w", err)
+		}
+
+		defer func() {
+			if graphqlServer != nil {
+				shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
+				defer shutdownCancel()
+				if err := graphqlServer.Stop(shutdownCtx); err != nil {
+					sentry.ReportIssuef(sentry.IssueTypeError, log, "Failed to shutdown GraphQL server: %w", err)
+				}
+			}
+		}()
+	} else {
+		log.Info("GraphQL server disabled via configuration")
+	}
 
 	if configData.Agent.APIURL != "" && configData.Agent.AuthToken != "" {
 		enableBackendConnection(&configData, communicationState, controlLoop, communicationState.Logger)
@@ -106,7 +154,7 @@ func main() {
 	}
 
 	// Start the system snapshot logger
-	go SystemSnapshotLogger(ctx, controlLoop, systemSnapshotManager)
+	go SystemSnapshotLogger(ctx, controlLoop)
 
 	// Start the control loop
 	err = controlLoop.Execute(ctx)
@@ -120,7 +168,7 @@ func main() {
 
 // SystemSnapshotLogger logs the system snapshot every 5 seconds
 // It is an example on how to access the system snapshot and log it for communication with other components
-func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop, systemSnapshotManager *fsm.SnapshotManager) {
+func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
@@ -143,19 +191,59 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop,
 				continue
 			}
 
-			snap_logger.Infof("System snapshot at tick %d, managers: %d",
+			snap_logger.Infof("=== System Snapshot (Tick %d) - %d Managers ===",
 				snapshot.Tick, len(snapshot.Managers))
 
 			// Log manager information
 			for managerName, manager := range snapshot.Managers {
 				instances := manager.GetInstances()
-				snap_logger.Infof("Manager: %s, instances: %d, tick: %d",
-					managerName, len(instances), manager.GetManagerTick())
 
-				// Log instance information
-				for instanceName, instance := range instances {
-					snap_logger.Infof("Instance: %s, current state: %s, desired state: %s",
-						instanceName, instance.CurrentState, instance.DesiredState)
+				if len(instances) == 0 {
+					snap_logger.Infof("📁 %s (tick: %d) - No instances",
+						managerName, manager.GetManagerTick())
+				} else {
+					snap_logger.Infof("📁 %s (tick: %d) - %d instance(s):",
+						managerName, manager.GetManagerTick(), len(instances))
+
+					// Log instance information with indentation
+					for instanceName, instance := range instances {
+						statusReason := ""
+
+						// Extract StatusReason from LastObservedState based on manager type
+						if instance.LastObservedState != nil {
+							switch managerName {
+							case "DataFlowCompManagerCore":
+								if dfcSnapshot, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot); ok {
+									statusReason = dfcSnapshot.ServiceInfo.StatusReason
+								}
+							case "ProtocolConverterManagerCore":
+								if pcSnapshot, ok := instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot); ok {
+									statusReason = pcSnapshot.ServiceInfo.StatusReason
+								}
+							}
+						}
+
+						// Format state with emojis for better visibility
+						stateIcon := "⚠️"
+						switch instance.CurrentState {
+						case "active":
+							stateIcon = "✅"
+						case "stopped":
+							stateIcon = "⏹️"
+						case "idle":
+							stateIcon = "💤"
+						case "degraded":
+							stateIcon = "⚠️"
+						}
+
+						if statusReason != "" {
+							snap_logger.Infof("  └─ %s %s: %s → %s | %s",
+								stateIcon, instanceName, instance.CurrentState, instance.DesiredState, statusReason)
+						} else {
+							snap_logger.Infof("  └─ %s %s: %s → %s",
+								stateIcon, instanceName, instance.CurrentState, instance.DesiredState)
+						}
+					}
 				}
 			}
 		}
@@ -179,7 +267,9 @@ func enableBackendConnection(config *config.FullConfig, communicationState *comm
 			sentry.ReportIssuef(sentry.IssueTypeError, logger, "[v2.NewLogin] Failed to create login object")
 			return
 		}
+		communicationState.LoginResponseMu.Lock()
 		communicationState.LoginResponse = login
+		communicationState.LoginResponseMu.Unlock()
 		logger.Info("Backend connection enabled, login response: ", zap.Any("login_name", login.Name))
 
 		// Get the config manager from the control loop
@@ -189,6 +279,7 @@ func enableBackendConnection(config *config.FullConfig, communicationState *comm
 		communicationState.InitialiseAndStartPusher()
 		communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config, snapshotManager, configManager)
 		communicationState.InitialiseAndStartRouter()
+		communicationState.InitialiseReAuthHandler(config.Agent.AuthToken, config.Agent.AllowInsecureTLS)
 
 	}
 

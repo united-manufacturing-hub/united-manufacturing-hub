@@ -12,16 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # --- Build Stage ---
-FROM golang:1.24.2-alpine as build
-ARG S6_OVERLAY_VERSION=3.2.0.2
-ARG BENTHOS_UMH_VERSION=0.9.3-alpha.2
-ARG REDPANDA_VERSION=24.3.8
+ARG GOLANG_VERSION=MUST_BE_SET_BY_MAKEFILE
+ARG ALPINE_VERSION=MUST_BE_SET_BY_MAKEFILE
+ARG NMAP_VERSION=MUST_BE_SET_BY_MAKEFILE
+FROM golang:${GOLANG_VERSION}-alpine as build
+ARG S6_OVERLAY_VERSION=MUST_BE_SET_BY_MAKEFILE
+ARG BENTHOS_UMH_VERSION=MUST_BE_SET_BY_MAKEFILE
+ARG REDPANDA_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG DEBUG=false
 ARG PPROF=false
 WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub
 
 # Set app version with a default value - can be overridden at build time
-ARG APP_VERSION=0.0.0-dev
+ARG APP_VERSION=MUST_BE_SET_BY_MAKEFILE
 RUN apk add --no-cache gcc musl-dev
 # Copy go.mod first for better caching
 COPY ./go.mod ./umh-core/
@@ -63,13 +66,14 @@ COPY .docker-cache/redpanda/amd64/ /redpanda/amd64/
 COPY .docker-cache/redpanda/arm64/ /redpanda/arm64/
 
 # --- Downloader Stage (using cached files) ---
-FROM alpine:3.21 as downloader
+FROM alpine:${ALPINE_VERSION} as downloader
 RUN apk add --no-cache bash curl jq tzdata ca-certificates xz bc
 
-ARG S6_OVERLAY_VERSION=3.2.0.2
-ARG BENTHOS_UMH_VERSION=0.9.3-alpha.2
-ARG REDPANDA_VERSION=24.3.8
-ARG DLV_VERSION=1.24.2
+ARG S6_OVERLAY_VERSION=MUST_BE_SET_BY_MAKEFILE
+ARG BENTHOS_UMH_VERSION=MUST_BE_SET_BY_MAKEFILE
+ARG REDPANDA_VERSION=MUST_BE_SET_BY_MAKEFILE
+ARG NMAP_VERSION=MUST_BE_SET_BY_MAKEFILE
+ARG DLV_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG TARGETARCH=amd64
 
 # Copy cached files from cache stage
@@ -104,22 +108,28 @@ RUN case "${TARGETARCH}" in \
 COPY --from=cache /redpanda/${TARGETARCH}/ /opt/
 RUN chmod +x /opt/redpanda/bin/redpanda
 
+# Install nmap
+RUN apk add --no-cache nmap=${NMAP_VERSION}
+
 # Cleanup all the files we don't need
 RUN rm -rf /s6-overlay /benthos /redpanda 
 
 # --- Final Stage ---
-FROM alpine:3.21 as runner
+FROM alpine:${ALPINE_VERSION} as runner
 # Copy everything from the downloader stage
 COPY --from=downloader / /
 
 # Copy built application
 COPY --from=build /go/bin/umh-core /usr/local/bin/umh-core
 
+# Install coreutils (this allows date resolution beyond seconds)
+RUN apk add --no-cache coreutils
+
 # Handle DEBUG mode - install Go and Delve when DEBUG=true
 # Delve is a debugger for Go (https://github.com/go-delve/delve/)
 # We can use it for remote debugging of the UMH Core
 ARG DEBUG=false
-ARG DLV_VERSION=1.24.2
+ARG DLV_VERSION=MUST_BE_SET_BY_MAKEFILE
 RUN if [ "$DEBUG" = "true" ]; then \
     apk add --no-cache go && \ 
     go install github.com/go-delve/delve/cmd/dlv@${DLV_VERSION} && \
@@ -154,7 +164,7 @@ ENV S6_KEEP_ENV=1 \
     S6_SERVICES_READYTIME=50 \
     S6_SYNC_DISKS=1 \
     # Important: This needs to be T (ISO 8861) as our time parser expects this format
-    S6_LOGGING_SCRIPT="n20 s1000000 T"
+    S6_LOGGING_SCRIPT="n5 s100000000 T"
 VOLUME ["/data"]
 
 ENTRYPOINT ["/init"]

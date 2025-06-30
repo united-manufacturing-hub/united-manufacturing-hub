@@ -2,5 +2,7 @@
 *.test
 *.cover
 *.out
+*.diff
 
 .docker-cache
+.idea

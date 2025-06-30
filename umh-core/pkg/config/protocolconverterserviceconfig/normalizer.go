@@ -17,6 +17,7 @@ package protocolconverterserviceconfig
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 )
 
 // Normalizer handles the normalization of ProtocolConverter configurations
@@ -28,13 +29,28 @@ func NewNormalizer() *Normalizer {
 }
 
 // NormalizeConfig applies ProtocolConverter defaults to a structured config
-func (n *Normalizer) NormalizeConfig(cfg *ProtocolConverterServiceConfig) {
+func (n *Normalizer) NormalizeConfig(cfg ProtocolConverterServiceConfigSpec) ProtocolConverterServiceConfigSpec {
+
+	// create a shallow copy
+	normalized := cfg
 
 	// We need to first normalize the underlying DFCServiceConfig
 	dfcNormalizer := dataflowcomponentserviceconfig.NewNormalizer()
-	dfcNormalizer.NormalizeConfig(cfg.GetDFCServiceConfig())
+	normalized.Config.DataflowComponentReadServiceConfig = dfcNormalizer.NormalizeConfig(normalized.GetDFCReadServiceConfig())
+	normalized.Config.DataflowComponentWriteServiceConfig = dfcNormalizer.NormalizeConfig(normalized.GetDFCWriteServiceConfig())
 
 	// Then we  need to normalize the underlying ConnectionServiceConfig
 	connectionNormalizer := connectionserviceconfig.NewNormalizer()
-	connectionNormalizer.NormalizeConfig(*cfg.GetConnectionServiceConfig())
+	// If conversion fails, e.g., because the port is not a number, keep the original template config (graceful degradation during normalization)
+	if connRuntime, err := connectionserviceconfig.ConvertTemplateToRuntime(normalized.GetConnectionServiceConfig()); err == nil {
+		normalized.Config.ConnectionServiceConfig = connectionserviceconfig.ConvertRuntimeToTemplate(connectionNormalizer.NormalizeConfig(connRuntime))
+	}
+
+	// Then we need to normalize the variables
+	variablesNormalizer := variables.NewNormalizer()
+	normalized.Variables = variablesNormalizer.NormalizeConfig(normalized.Variables)
+
+	// no need to normalize the location
+
+	return normalized
 }

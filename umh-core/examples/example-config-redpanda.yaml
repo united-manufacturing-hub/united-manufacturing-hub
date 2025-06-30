@@ -16,6 +16,8 @@ agent:
   metricsPort: 8080
 
 internal:
+  topicbrowser:
+    desiredState: stopped
   redpanda:
     desiredState: active
     redpandaServiceConfig:
@@ -27,6 +29,18 @@ internal:
 
         # this corresponds to retention_bytes (See also: https://docs.redpanda.com/current/manage/cluster-maintenance/disk-utilization/)
         defaultTopicRetentionBytes: 0
+
+        # this corresponds to log_compression_type (See also: https://docs.redpanda.com/current/manage/cluster-maintenance/compression/)
+        defaultTopicCompressionAlgorithm: "snappy"
+
+        # this corresponds to log_cleanup_policy (See also: https://docs.redpanda.com/current/manage/cluster-maintenance/compaction-settings/)
+        # Options: "delete" (time/size-based deletion), "compact" (keep latest per key), "compact,delete" (both)
+        # Using "compact" ensures at least one message per key is retained
+        defaultTopicCleanupPolicy: "compact"
+
+        # this corresponds to log_segment_ms (See also: https://docs.redpanda.com/current/manage/cluster-maintenance/disk-utilization/)
+        # Controls when Redpanda creates new log segments. Lower values create more frequent segments but allow for more granular retention
+        defaultTopicSegmentMs: 3600000 # 1 hour
 
       resources:
         # this corresponds to --smp from scylladb/seastar

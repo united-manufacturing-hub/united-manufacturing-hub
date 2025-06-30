@@ -271,8 +271,8 @@ var _ = Describe("GetDataFlowComponent", func() {
 			component := response[testComponentUUID]
 			cdfcPayload, ok := component.Payload.(models.CommonDataFlowComponentCDFCPropertiesPayload)
 			Expect(ok).To(BeTrue(), "Payload should be a CommonDataFlowComponentCDFCPropertiesPayload")
-			Expect(cdfcPayload.CDFCProperties.Inputs.Type).To(Equal("benthos"))
-			Expect(cdfcPayload.CDFCProperties.Outputs.Type).To(Equal("benthos"))
+			Expect(cdfcPayload.CDFCProperties.Inputs.Type).To(Equal("kafka"))
+			Expect(cdfcPayload.CDFCProperties.Outputs.Type).To(Equal("kafka"))
 			Expect(cdfcPayload.CDFCProperties.Pipeline.Processors).NotTo(BeEmpty())
 
 			// Verify correct message sequence in outbound channel

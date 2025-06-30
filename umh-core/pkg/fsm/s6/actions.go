@@ -21,8 +21,9 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -155,7 +156,7 @@ func (s *S6Instance) CheckForCreation(ctx context.Context, filesystemService fil
 }
 
 // UpdateObservedStateOfInstance updates the observed state of the service
-func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error {
+func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -167,7 +168,7 @@ func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, services
 	if err != nil {
 		s.ObservedState.ServiceInfo.Status = s6service.ServiceUnknown
 
-		if s.baseFSMInstance.GetCurrentFSMState() == fsm.LifecycleStateCreating || s.baseFSMInstance.GetCurrentFSMState() == fsm.LifecycleStateToBeCreated {
+		if s.baseFSMInstance.GetCurrentFSMState() == internalfsm.LifecycleStateCreating || s.baseFSMInstance.GetCurrentFSMState() == internalfsm.LifecycleStateToBeCreated {
 			// If the service is being created, we don't want to count this as an error
 			return s6service.ErrServiceNotExist
 		}

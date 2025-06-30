@@ -55,3 +55,11 @@ const (
 	AdminAPIPort    = 9644
 	AdminAPITimeout = 25 * time.Millisecond
 )
+
+const (
+	DefaultRedpandaTopicDefaultTopicRetentionMs          = 604800000 // 7 days
+	DefaultRedpandaTopicDefaultTopicRetentionBytes       = 0
+	DefaultRedpandaTopicDefaultTopicCompressionAlgorithm = "snappy"
+	DefaultRedpandaTopicDefaultTopicCleanupPolicy        = "compact"
+	DefaultRedpandaTopicDefaultTopicSegmentMs            = 3600000 // 1 hour in milliseconds
+)

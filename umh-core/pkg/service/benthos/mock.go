@@ -213,7 +213,7 @@ func (m *MockBenthosService) IsBenthosConfigLoaded(serviceName string) bool {
 	return false
 }
 
-func (m *MockBenthosService) IsBenthosHealthchecksPassed(serviceName string) bool {
+func (m *MockBenthosService) IsBenthosHealthchecksPassed(serviceName string, currentTime time.Time) bool {
 	m.IsBenthosHealthchecksPassedCalled = true
 	if flags := m.GetServiceState(serviceName); flags != nil {
 		return flags.IsHealthchecksPassed
@@ -361,9 +361,8 @@ func (m *MockBenthosService) ReconcileManager(ctx context.Context, services serv
 // IsLogsFine mocks checking if the logs are fine
 func (m *MockBenthosService) IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) (bool, s6service.LogEntry) {
 	m.IsLogsFineCalled = true
-	// For testing purposes, we'll consider logs fine if they're empty or nil
-	// This can be enhanced based on testing needs
-	return len(logs) == 0, s6service.LogEntry{}
+	// For testing purposes, always return true
+	return true, s6service.LogEntry{}
 }
 
 // IsMetricsErrorFree mocks checking if metrics are error-free

@@ -15,6 +15,7 @@
 package communication_state
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -24,8 +25,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/subscriber"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/router"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
@@ -33,6 +37,7 @@ import (
 
 type CommunicationState struct {
 	LoginResponse         *v2.LoginResponse
+	LoginResponseMu       *sync.RWMutex
 	mu                    *sync.RWMutex
 	Watchdog              *watchdog.Watchdog
 	InboundChannel        chan *models.UMHMessage
@@ -47,6 +52,10 @@ type CommunicationState struct {
 	ConfigManager         config.ConfigManager
 	ApiUrl                string
 	Logger                *zap.SugaredLogger
+	TopicBrowserCache     *topicbrowser.Cache
+	// TopicBrowserSimulator is used to access the simulated topic browser state if the agent is running in simulator mode
+	// it is accessed by the generator to generate the topic browser part of the status message
+	TopicBrowserSimulator *topicbrowser.Simulator
 }
 
 // NewCommunicationState creates a new CommunicationState with initialized mutex
@@ -60,9 +69,11 @@ func NewCommunicationState(
 	apiUrl string,
 	logger *zap.SugaredLogger,
 	insecureTLS bool,
+	topicBrowserCache *topicbrowser.Cache,
 ) *CommunicationState {
 	return &CommunicationState{
 		mu:                    &sync.RWMutex{},
+		LoginResponseMu:       &sync.RWMutex{},
 		Watchdog:              watchdog,
 		InboundChannel:        inboundChannel,
 		OutboundChannel:       outboundChannel,
@@ -72,6 +83,7 @@ func NewCommunicationState(
 		ApiUrl:                apiUrl,
 		Logger:                logger,
 		InsecureTLS:           insecureTLS,
+		TopicBrowserCache:     topicBrowserCache,
 	}
 }
 
@@ -79,6 +91,8 @@ func NewCommunicationState(
 func (c *CommunicationState) InitialiseAndStartPuller() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.LoginResponseMu.RLock()
+	defer c.LoginResponseMu.RUnlock()
 	if c.LoginResponse == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "LoginResponse is nil, cannot start puller")
 		return
@@ -98,6 +112,8 @@ func (c *CommunicationState) InitialiseAndStartPuller() {
 func (c *CommunicationState) InitialiseAndStartPusher() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.LoginResponseMu.RLock()
+	defer c.LoginResponseMu.RUnlock()
 	if c.LoginResponse == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "LoginResponse is nil, cannot start pusher")
 		return
@@ -129,7 +145,9 @@ func (c *CommunicationState) InitialiseAndStartRouter() {
 	}
 
 	c.mu.Lock()
+	c.LoginResponseMu.RLock()
 	c.Router = router.NewRouter(c.Watchdog, c.InboundChannel, c.LoginResponse.UUID, c.OutboundChannel, c.ReleaseChannel, c.SubscriberHandler, c.SystemSnapshotManager, c.ConfigManager, c.Logger)
+	c.LoginResponseMu.RUnlock()
 	c.mu.Unlock()
 	if c.Router == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create router")
@@ -137,45 +155,130 @@ func (c *CommunicationState) InitialiseAndStartRouter() {
 	c.Router.Start()
 }
 
+// StartTopicBrowserCacheUpdater starts the topic browser cache updater
+// it is used to update the topic browser cache with the observed state of the topic browser
+// it is also used to run the simulator if the agent is running in simulator mode
+func (c *CommunicationState) StartTopicBrowserCacheUpdater(systemSnapshotManager *fsm.SnapshotManager, ctx context.Context, runSimulator bool) {
+
+	c.TopicBrowserSimulator = topicbrowser.NewSimulator()
+
+	if runSimulator {
+		c.TopicBrowserSimulator.InitializeSimulator()
+	}
+
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		for {
+			select {
+			case <-ctx.Done():
+				ticker.Stop()
+				return
+			case <-ticker.C:
+				if runSimulator {
+					c.TopicBrowserSimulator.Tick()
+					err := c.TopicBrowserCache.Update(c.TopicBrowserSimulator.GetSimObservedState())
+					if err != nil {
+						c.Logger.Errorf("Failed to update topic browser cache: %v", err)
+					}
+				} else {
+					// get observed state from system snapshot manager
+					tbInstance, ok := fsm.FindInstance(c.SystemSnapshotManager.GetDeepCopySnapshot(), constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
+					if !ok || tbInstance == nil {
+						c.Logger.Error("Topic browser instance not found")
+						continue
+					}
+					tbObservedState, ok := tbInstance.LastObservedState.(*topicbrowserfsm.ObservedStateSnapshot)
+					if !ok || tbObservedState == nil {
+						c.Logger.Error("Topic browser observed state not found")
+						continue
+					}
+					err := c.TopicBrowserCache.Update(tbObservedState)
+					if err != nil {
+						c.Logger.Errorf("Failed to update topic browser cache: %v", err)
+					}
+				}
+
+			}
+		}
+	}()
+}
+
 // InitialiseAndStartSubscriberHandler creates a new subscriber handler and starts it
 // ttl is the time until a subscriber is considered dead (if no new subscriber message is received)
 // cull is the cycle time to remove dead subscribers
-func (s *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Duration, cull time.Duration, config *config.FullConfig, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Duration, cull time.Duration, config *config.FullConfig, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.LoginResponseMu.RLock()
+	defer c.LoginResponseMu.RUnlock()
 
-	if s.Watchdog == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, s.Logger, "Watchdog is nil, cannot start subscriber handler")
+	if c.Watchdog == nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Watchdog is nil, cannot start subscriber handler")
 		return
 	}
 
-	if s.Pusher == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, s.Logger, "Pusher is nil, cannot start subscriber handler")
+	if c.Pusher == nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Pusher is nil, cannot start subscriber handler")
 		return
 	}
-	if s.LoginResponse == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, s.Logger, "LoginResponse is nil, cannot start subscriber handler")
+	if c.LoginResponse == nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "LoginResponse is nil, cannot start subscriber handler")
 		return
 	}
 	if config == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, s.Logger, "Config is nil, cannot start subscriber handler")
+		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Config is nil, cannot start subscriber handler")
 		return
 	}
 
-	s.SubscriberHandler = subscriber.NewHandler(
-		s.Watchdog,
-		s.Pusher,
-		s.LoginResponse.UUID,
+	c.SubscriberHandler = subscriber.NewHandler(
+		c.Watchdog,
+		c.Pusher,
+		c.LoginResponse.UUID,
 		ttl,
 		cull,
-		s.ReleaseChannel,
+		c.ReleaseChannel,
 		false, // disableHardwareStatusCheck
 		systemSnapshotManager,
 		configManager,
-		s.Logger,
+		c.Logger,
+		c.TopicBrowserCache,
+		c.TopicBrowserSimulator,
 	)
-	if s.SubscriberHandler == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, s.Logger, "Failed to create subscriber handler")
+	if c.SubscriberHandler == nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create subscriber handler")
 	}
-	s.SubscriberHandler.StartNotifier()
+	c.SubscriberHandler.StartNotifier()
+}
+
+func (c *CommunicationState) InitialiseReAuthHandler(authToken string, insecureTLS bool) {
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour)
+
+		// Register a watchdog with a timeout of 3 hours, allowing up to 3 ticks, before it fails.
+		watchUUID := c.Watchdog.RegisterHeartbeat("communicationstate-re-auth-handler", 0, uint64((3 * time.Hour).Seconds()), false)
+		for {
+			<-ticker.C
+			c.Logger.Debugf("Re-fetching login credentials")
+			credentials := v2.NewLogin(authToken, insecureTLS, c.ApiUrl, c.Logger)
+			if credentials == nil {
+				continue
+			}
+			c.Watchdog.ReportHeartbeatStatus(watchUUID, watchdog.HEARTBEAT_STATUS_OK)
+
+			c.mu.Lock()
+			c.LoginResponseMu.Lock()
+			c.LoginResponse = credentials
+
+			if c.Puller != nil {
+				c.Puller.UpdateJWT(c.LoginResponse.JWT)
+			}
+			if c.Pusher != nil {
+				c.Pusher.UpdateJWT(c.LoginResponse.JWT)
+			}
+			c.LoginResponseMu.Unlock()
+			c.mu.Unlock()
+		}
+
+		// The ticker will run for the lifetime of our program, therefore no cleanup is required.
+	}()
 }

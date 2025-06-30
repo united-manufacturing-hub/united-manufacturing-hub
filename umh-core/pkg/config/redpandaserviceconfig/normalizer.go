@@ -14,6 +14,8 @@
 
 package redpandaserviceconfig
 
+import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+
 // Normalizer handles the normalization of Redpanda configurations
 type Normalizer struct{}
 
@@ -24,15 +26,27 @@ func NewNormalizer() *Normalizer {
 
 // NormalizeConfig applies Redpanda defaults to a structured config
 func (n *Normalizer) NormalizeConfig(cfg RedpandaServiceConfig) RedpandaServiceConfig {
-	// Create a copy
+	// create a shallow copy
 	normalized := cfg
 
 	if normalized.Topic.DefaultTopicRetentionMs == 0 {
-		normalized.Topic.DefaultTopicRetentionMs = 604800000 // Redpanda by default sets this to 7 days when set to 0
+		normalized.Topic.DefaultTopicRetentionMs = constants.DefaultRedpandaTopicDefaultTopicRetentionMs
 	}
 
 	if normalized.Topic.DefaultTopicRetentionBytes == 0 {
-		normalized.Topic.DefaultTopicRetentionBytes = 0
+		normalized.Topic.DefaultTopicRetentionBytes = constants.DefaultRedpandaTopicDefaultTopicRetentionBytes
+	}
+
+	if normalized.Topic.DefaultTopicCompressionAlgorithm == "" {
+		normalized.Topic.DefaultTopicCompressionAlgorithm = constants.DefaultRedpandaTopicDefaultTopicCompressionAlgorithm
+	}
+
+	if normalized.Topic.DefaultTopicCleanupPolicy == "" {
+		normalized.Topic.DefaultTopicCleanupPolicy = constants.DefaultRedpandaTopicDefaultTopicCleanupPolicy
+	}
+
+	if normalized.Topic.DefaultTopicSegmentMs == 0 {
+		normalized.Topic.DefaultTopicSegmentMs = constants.DefaultRedpandaTopicDefaultTopicSegmentMs
 	}
 
 	if normalized.Resources.MaxCores == 0 {

@@ -21,13 +21,13 @@ import (
 )
 
 // GetBenthosServiceConfig converts the component config to a full BenthosServiceConfig
-func (c *DataflowComponentServiceConfig) GetBenthosServiceConfig() benthosserviceconfig.BenthosServiceConfig {
+func (c DataflowComponentServiceConfig) GetBenthosServiceConfig() benthosserviceconfig.BenthosServiceConfig {
 	return c.BenthosConfig.ToBenthosServiceConfig()
 }
 
 // ToBenthosServiceConfig converts the simplified BenthosConfig to a full BenthosServiceConfig
 // with default advanced configuration
-func (bc *BenthosConfig) ToBenthosServiceConfig() benthosserviceconfig.BenthosServiceConfig {
+func (bc BenthosConfig) ToBenthosServiceConfig() benthosserviceconfig.BenthosServiceConfig {
 	return benthosserviceconfig.BenthosServiceConfig{
 		Input:              bc.Input,
 		Pipeline:           bc.Pipeline,

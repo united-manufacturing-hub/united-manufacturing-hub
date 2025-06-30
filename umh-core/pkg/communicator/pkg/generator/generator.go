@@ -16,27 +16,14 @@ package generator
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
-)
-
-const (
-	// Manager name constants
-	// TODO: clean up these constants
-	containerManagerName         = logger.ComponentContainerManager + "_" + constants.DefaultManagerName
-	benthosManagerName           = logger.ComponentBenthosManager + "_" + constants.DefaultManagerName
-	agentManagerName             = logger.ComponentAgentManager + "_" + constants.DefaultManagerName
-	redpandaManagerName          = logger.ComponentRedpandaManager + constants.DefaultManagerName
-	dataflowcomponentManagerName = constants.DataflowcomponentManagerName
-	// Instance name constants
-	coreInstanceName     = "Core"
-	agentInstanceName    = "agent"
-	redpandaInstanceName = "redpanda"
 )
 
 type StatusCollectorType struct {
@@ -44,6 +31,8 @@ type StatusCollectorType struct {
 	systemSnapshotManager *fsm.SnapshotManager
 	logger                *zap.SugaredLogger
 	configManager         config.ConfigManager
+	topicBrowserCache     *topicbrowser.Cache
+	topicBrowserSimulator *topicbrowser.Simulator
 }
 
 func NewStatusCollector(
@@ -51,6 +40,8 @@ func NewStatusCollector(
 	systemSnapshotManager *fsm.SnapshotManager,
 	configManager config.ConfigManager,
 	logger *zap.SugaredLogger,
+	topicBrowserCache *topicbrowser.Cache,
+	topicBrowserSimulator *topicbrowser.Simulator,
 ) *StatusCollectorType {
 
 	collector := &StatusCollectorType{
@@ -58,12 +49,14 @@ func NewStatusCollector(
 		systemSnapshotManager: systemSnapshotManager,
 		logger:                logger,
 		configManager:         configManager,
+		topicBrowserCache:     topicBrowserCache,
+		topicBrowserSimulator: topicBrowserSimulator,
 	}
 
 	return collector
 }
 
-func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
+func (s *StatusCollectorType) GenerateStatusMessage(isBootstrapped bool) *models.StatusMessage {
 
 	// Step 1: Get the snapshot
 	snapshot := s.systemSnapshotManager.GetDeepCopySnapshot()
@@ -77,7 +70,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 
 	// --- container (only one instance) ---------------------------------------------------------
 	var containerData models.Container
-	contInst, ok := fsm.FindInstance(snapshot, containerManagerName, coreInstanceName)
+	contInst, ok := fsm.FindInstance(snapshot, constants.ContainerManagerName, constants.CoreInstanceName)
 	if ok {
 		containerData = ContainerFromSnapshot(contInst, s.logger)
 	}
@@ -87,14 +80,14 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 	var agentDataReleaseChannel string
 	var agentDataCurrentVersion string
 	var agentDataVersions []models.Version
-	agInst, ok := fsm.FindInstance(snapshot, agentManagerName, agentInstanceName)
+	agInst, ok := fsm.FindInstance(snapshot, constants.AgentManagerName, constants.AgentInstanceName)
 	if ok {
 		agentData, agentDataReleaseChannel, agentDataCurrentVersion, agentDataVersions = AgentFromSnapshot(agInst, s.logger)
 	}
 
 	// --- redpanda (only one instance) -------------------------------------------------------------
 	var redpandaData models.Redpanda
-	rpInst, ok := fsm.FindInstance(snapshot, redpandaManagerName, redpandaInstanceName)
+	rpInst, ok := fsm.FindInstance(snapshot, constants.RedpandaManagerName, constants.RedpandaInstanceName)
 	if ok {
 		redpandaData = RedpandaFromSnapshot(rpInst, s.logger)
 	}
@@ -106,6 +99,30 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 		dfcData = DfcsFromSnapshot(dfcMgr, s.logger)
 	}
 
+	// --- protocol converters (multiple instances) as DFCs --------------------------
+	protocolConverterMgr, ok := fsm.FindManager(snapshot, constants.ProtocolConverterManagerName)
+	if ok {
+		protocolConverterDfcs := ProtocolConvertersFromSnapshot(protocolConverterMgr, s.logger)
+		dfcData = append(dfcData, protocolConverterDfcs...)
+	}
+
+	// --- topic browser -------------------------------------------------------------
+	topicBrowserData := &models.TopicBrowser{}
+
+	if s.topicBrowserSimulator.GetSimulatorEnabled() {
+		topicBrowserData = GenerateTopicBrowser(s.topicBrowserCache, s.topicBrowserSimulator.GetSimObservedState(), isBootstrapped, s.logger)
+	} else {
+		inst, ok := fsm.FindInstance(snapshot, constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
+		if !ok {
+			s.logger.Error("Topic browser instance not found")
+		} else if inst == nil || inst.LastObservedState == nil {
+			s.logger.Error("Topic browser instance has nil observed state or is nil")
+		} else {
+			obs := inst.LastObservedState.(*topicbrowserfsm.ObservedStateSnapshot)
+			topicBrowserData = GenerateTopicBrowser(s.topicBrowserCache, obs, isBootstrapped, s.logger)
+		}
+	}
+
 	// Step 3: Create the status message
 	statusMessage := &models.StatusMessage{
 		Core: models.Core{
@@ -114,10 +131,10 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 				Latency:  &models.Latency{},
 				Location: agentData.Location,
 			},
-			Container:        containerData,
-			Dfcs:             dfcData,
-			Redpanda:         redpandaData,
-			UnifiedNamespace: models.UnifiedNamespace{},
+			Container:    containerData,
+			Dfcs:         dfcData,
+			Redpanda:     redpandaData,
+			TopicBrowser: *topicBrowserData,
 			Release: models.Release{
 				Health: &models.Health{
 					Message:       "",
@@ -134,11 +151,18 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 					"action-get-data-flow-component",
 					"action-delete-data-flow-component",
 					"action-edit-data-flow-component",
+					"action-deploy-protocol-converter",
 					"action-get-logs",
+					"action-get-config-file",
+					"action-set-config-file",
 					"action-get-data-flow-component-metrics",
+					"log-logs-suppression", // Prevents logging of GetLogs action results to avoid log flooding when UI auto-refreshes logs (see HandleActionMessage GetLogs suppression for details)
 					"core-health",
-					"log-logs-suppression",
 					"pause-dfc",
+					"action-get-metrics",
+					"action-delete-protocol-converter",
+					"action-edit-protocol-converter",
+					"protocol-converter-logs",
 				},
 			},
 		},

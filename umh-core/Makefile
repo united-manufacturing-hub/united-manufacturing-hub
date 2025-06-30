@@ -12,23 +12,65 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-.PHONY: build run clean test
+.PHONY: build run clean test help test-graphql
+
+# Show available commands and common usage patterns
+help: ## Display available make targets and usage information
+	@echo "🏭 UMH Core - Build & Test Commands"
+	@echo "=================================="
+	@echo ""
+	@echo "📊 QUICK START - GraphQL API Demo:"
+	@echo "   make test-graphql    # Start GraphQL server with simulator data (port 8090)"
+	@echo ""
+	@echo "🔨 BUILD COMMANDS:"
+	@echo "   make build          # Build Docker image"
+	@echo "   make build-debug    # Build with debug support"
+	@echo "   make build-pprof    # Build with profiling support"
+	@echo ""
+	@echo "🧪 TEST COMMANDS:"
+	@echo "   make test-graphql      # GraphQL API with real-time simulator data (recommended)"
+	@echo "   make test-dfc          # Data Flow Components"
+	@echo "   make test-redpanda     # Redpanda message broker"
+	@echo "   make test-connection   # Connection services"
+	@echo "   make test-debug        # Debug configuration"
+	@echo ""
+	@echo "🛠️  UTILITY COMMANDS:"
+	@echo "   make pod-shell      # Shell into running container"
+	@echo "   make stop-all-pods  # Stop all UMH Core containers"
+	@echo "   make dump-metrics   # Save metrics to file"
+	@echo "   make cleanup-all    # Clean all Docker resources"
+	@echo ""
+	@echo "💡 NOTES:"
+	@echo "   • All test commands run in Docker containers"
+	@echo "   • Containers auto-cleanup on restart"
+	@echo "   • Check 'docker logs umh-core' for troubleshooting"
+	@echo "   • GraphQL playground available at http://localhost:8090/"
+	@echo "   • Full GraphQL docs: pkg/communicator/graphql/README.md"
+	@echo ""
 
 IMAGE_NAME = umh-core
 TAG = latest
 
-GINKGO_VERSION = v2.23.3
-NILWAY_VERSION = latest
 # Default to the architecture of the host
 TARGETARCH := $(shell go env GOARCH)
 
-# Default values for build arguments
-S6_OVERLAY_VERSION = 3.2.0.2
-BENTHOS_UMH_VERSION = 0.9.3-alpha.2
-REDPANDA_VERSION = 24.3.8
+# Default values for go tools
+GINKGO_VERSION = v2.23.4
+NILWAY_VERSION = latest
+GOLANGCI_LINT_VERSION = v2.1.6
+DLV_VERSION = v1.25.0
 
-# Debug values
-DLV_VERSION = v1.24.2
+# Default values for build arguments
+GOLANG_VERSION = 1.24.4
+ALPINE_VERSION = 3.21
+NMAP_VERSION = 7.95-r1
+S6_OVERLAY_VERSION = 3.2.0.2
+REDPANDA_VERSION = 24.3.8
+## Benthos version is a tag or a sha-<commit hash> (e.g. 0.9.4 or sha-a51a685) to be used in the docker image
+BENTHOS_UMH_VERSION = 0.9.6
+BUF_VERSION = 1.55.1
+PROTOC_GEN_GO_VERSION = 1.36.6
+
 
 # Note: Redpanda allocates 2GB of memory per core.
 # Additionally 1.5GB (or 7% of the total memory, whichever is greater) are required to be available, after this allocation to make seastar happy.
@@ -45,7 +87,7 @@ install:
 	go install go.uber.org/nilaway/cmd/nilaway@$(NILWAY_VERSION)
 	go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
 	go install github.com/evilmartians/lefthook@latest
-	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.2
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 
 download-docker-binaries:
 	@mkdir -p .docker-cache/s6-overlay .docker-cache/benthos .docker-cache/redpanda
@@ -65,8 +107,23 @@ download-docker-binaries:
 	@if [ ! -f .docker-cache/benthos/version ] || [ "$$(cat .docker-cache/benthos/version)" != "$(BENTHOS_UMH_VERSION)" ]; then \
 		rm -f .docker-cache/benthos/benthos-linux-*; \
 		echo "$(BENTHOS_UMH_VERSION)" > .docker-cache/benthos/version; \
-		wget -O .docker-cache/benthos/benthos-linux-amd64 "https://github.com/united-manufacturing-hub/benthos-umh/releases/download/v$(BENTHOS_UMH_VERSION)/benthos-linux-amd64"; \
-		wget -O .docker-cache/benthos/benthos-linux-arm64 "https://github.com/united-manufacturing-hub/benthos-umh/releases/download/v$(BENTHOS_UMH_VERSION)/benthos-linux-arm64"; \
+		echo "Extracting Benthos binary from Docker container for version $(BENTHOS_UMH_VERSION)..."; \
+		echo "Pulling ghcr.io/united-manufacturing-hub/benthos-umh:$(BENTHOS_UMH_VERSION) for amd64..."; \
+		docker pull --platform linux/amd64 ghcr.io/united-manufacturing-hub/benthos-umh:$(BENTHOS_UMH_VERSION); \
+		CONTAINER_AMD64=$$(docker create --platform linux/amd64 ghcr.io/united-manufacturing-hub/benthos-umh:$(BENTHOS_UMH_VERSION)); \
+		docker cp $$CONTAINER_AMD64:/benthos .docker-cache/benthos/benthos-linux-amd64; \
+		docker rm -v $$CONTAINER_AMD64; \
+		echo "Pulling ghcr.io/united-manufacturing-hub/benthos-umh:$(BENTHOS_UMH_VERSION) for arm64..."; \
+		docker pull --platform linux/arm64 ghcr.io/united-manufacturing-hub/benthos-umh:$(BENTHOS_UMH_VERSION); \
+		CONTAINER_ARM64=$$(docker create --platform linux/arm64 ghcr.io/united-manufacturing-hub/benthos-umh:$(BENTHOS_UMH_VERSION)); \
+		docker cp $$CONTAINER_ARM64:/benthos .docker-cache/benthos/benthos-linux-arm64; \
+		docker rm -v $$CONTAINER_ARM64; \
+		if [ ! -s .docker-cache/benthos/benthos-linux-amd64 ] || [ ! -s .docker-cache/benthos/benthos-linux-arm64 ]; then \
+			echo "Error: Extracted Benthos binaries are empty or missing"; \
+			rm -f .docker-cache/benthos/benthos-linux-amd64 .docker-cache/benthos/benthos-linux-arm64; \
+			rm -f .docker-cache/benthos/version; \
+			exit 1; \
+		fi; \
 	fi
 
 	@# Check and update Redpanda version
@@ -124,9 +181,13 @@ download-docker-binaries:
 .PHONY: build build-pprof build-debug
 COMMON_ARGS = \
 	--platform linux/$(TARGETARCH) \
+	--build-arg GOLANG_VERSION=$(GOLANG_VERSION) \
+	--build-arg ALPINE_VERSION=$(ALPINE_VERSION) \
+	--build-arg NMAP_VERSION=$(NMAP_VERSION) \
 	--build-arg S6_OVERLAY_VERSION=$(S6_OVERLAY_VERSION) \
 	--build-arg BENTHOS_UMH_VERSION=$(BENTHOS_UMH_VERSION) \
 	--build-arg REDPANDA_VERSION=$(REDPANDA_VERSION) \
+	--build-arg DLV_VERSION=$(DLV_VERSION) \
 	--build-arg APP_VERSION=$(VERSION) \
 	--build-arg TARGETARCH=$(TARGETARCH)
 
@@ -138,9 +199,10 @@ endef
 
 build:
 build-pprof:       EXTRA_ARGS := --build-arg PPROF=true
-build-debug:       EXTRA_ARGS := --build-arg DLV_VERSION=$(DLV_VERSION) --build-arg DEBUG=true
+build-debug:       EXTRA_ARGS := --build-arg DEBUG=true
 
-build build-pprof build-debug:
+# Refresh cache and build docker binaries
+build build-pprof build-debug: build-protobuf download-docker-binaries
 	$(call DOCKER_BUILD)
 
 FLAVOR ?=                         # empty → normal build
@@ -180,7 +242,8 @@ lint:
 	golangci-lint run ./...
 
 nilaway:
-	nilaway -include-pkgs="github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core" -tags=test ./...
+	# See lefthook.yaml for more details
+	nilaway -exclude-pkgs="github.com/prometheus/prometheus/util/textparse,github.com/onsi/ginkgo/v2" -exclude-errors-in-files="integration/" ./...
 
 test: vet nilaway lint
 	go test -v -tags=test ./...
@@ -221,10 +284,10 @@ benchmark-s6-time:
 integration-test: stop-all-pods vet nilaway lint
 
 # Meta target to setup the environment for the tests
-pre-test: stop-all-pods vet nilaway lint
+pre-test: build-protobuf stop-all-pods vet nilaway lint
 
 # Meta target to setup the environment for the tests in CI environments
-pre-test-ci: vet nilaway lint
+pre-test-ci: vet lint
 
 integration-test: pre-test
 	ginkgo -r -v --tags=test --label-filter='integration' --fail-fast ./...
@@ -247,7 +310,38 @@ update-go-dependencies:
 	go mod tidy
 	go mod vendor
 
+# Print version variables for use in other scripts/tools
+print-versions:
+	@echo "GOLANG_VERSION=$(GOLANG_VERSION)"
+	@echo "ALPINE_VERSION=$(ALPINE_VERSION)"
+	@echo "NMAP_VERSION=$(NMAP_VERSION)"
+	@echo "S6_OVERLAY_VERSION=$(S6_OVERLAY_VERSION)"
+	@echo "BENTHOS_UMH_VERSION=$(BENTHOS_UMH_VERSION)"
+	@echo "REDPANDA_VERSION=$(REDPANDA_VERSION)"
+	@echo "DLV_VERSION=$(DLV_VERSION)"
 
+# Print the Go version
+## Used by go-analysis.yml
+print-golang-version:
+	@echo "$(GOLANG_VERSION)"
+
+## Install buf for protobuf generation
+install-buf:
+	@echo "Installing buf via Go..."
+	@go install github.com/bufbuild/buf/cmd/buf@v$(BUF_VERSION)
+	@echo "Buf installed via Go"
+
+## Generate go files from protobuf for topic browser
+build-protobuf: install-buf
+	@echo "Installing protobuf dependencies..."
+	@go install google.golang.org/protobuf/cmd/protoc-gen-go@v$(PROTOC_GEN_GO_VERSION)
+	@echo "Generating Go from protobuf..."
+	@mkdir -p pkg/communicator/models/topicbrowser/pb
+	@rm -f pkg/communicator/models/topicbrowser/pb/topic_browser_data.pb.go || true
+	buf generate \
+		--template='{"version":"v1","plugins":[{"plugin":"go","out":"pkg/communicator/models/topicbrowser/pb","opt":["paths=source_relative"]}]}' \
+		pkg/communicator/models/topicbrowser/proto
+	@echo "Go protobuf files generated successfully."
 
 ###############################################################################
 # choose build flavour                                                        #
@@ -392,6 +486,37 @@ test-dfc: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 		-e LOGGING_LEVEL=DEBUG \
 		$(IMAGE_NAME):$(TAG)
 
+
+test-protocolconverter: stop-and-remove-umh-core-latest $(BUILD_TARGET)
+	@mkdir -p $(PWD)/data
+	@cp $(PWD)/examples/example-config-protocolconverter.yaml $(PWD)/data/config.yaml
+	docker run \
+		--name $(IMAGE_NAME) \
+		-v $(PWD)/data:/data \
+		-p 8081:8080 \
+		-p 4195:4195 \
+		-p 6060:6060 \
+		-p 40000:40000 \
+		--memory $(MEMORY) \
+		--cpus $(CPUS) \
+		-e LOGGING_LEVEL=DEBUG \
+		$(IMAGE_NAME):$(TAG)
+
+test-connection: stop-and-remove-umh-core-latest $(BUILD_TARGET)
+	@mkdir -p $(PWD)/data
+	@cp $(PWD)/examples/example-config-connection.yaml $(PWD)/data/config.yaml
+	docker run \
+		--name $(IMAGE_NAME) \
+		-v $(PWD)/data:/data \
+		-p 8081:8080 \
+		-p 4195:4195 \
+		-p 6060:6060 \
+		-p 40000:40000 \
+		--memory $(MEMORY) \
+		--cpus $(CPUS) \
+		-e LOGGING_LEVEL=DEBUG \
+		$(IMAGE_NAME):$(TAG)
+
 test-benthos-monitor: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-benthos-monitor.yaml $(PWD)/data/config.yaml
@@ -405,6 +530,63 @@ test-benthos-monitor: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
 		ghcr.io/united-manufacturing-hub/united-manufacturing-hub/umh-core:staging
+
+# GraphQL API Demo: Complete GraphQL server with real-time simulator data
+# 
+# USAGE: cd umh-core && make test-graphql
+# 
+# This target starts UMH Core with GraphQL API enabled and built-in simulator providing real data.
+# Perfect for quick testing and development without requiring MQTT/Redis infrastructure.
+#
+# FEATURES:
+# - GraphQL server on port 8090 with Gin framework
+# - Real-time UNS topics from built-in simulator (enabled by default in example)
+# - GraphiQL Playground for interactive querying
+# - CORS enabled for web development
+# - No external dependencies required
+# - To disable simulator: set agent.simulator=false in config.yaml
+#
+# ENDPOINTS:
+# - http://localhost:8090/graphql    - GraphQL API endpoint
+# - http://localhost:8090/           - GraphiQL Playground (interactive UI)
+# - http://localhost:8081/metrics    - Prometheus metrics
+#
+# SAMPLE QUERIES:
+# - All topics: { topics { topic metadata { key value } } }
+# - With events: { topics { topic lastEvent { ... on TimeSeriesEvent { producedAt stringValue } } } }
+# - Filtered:   { topics(filter: {text: "topic1"}) { topic } }
+# - Limited:    { topics(limit: 3) { topic } }
+# - Single:     { topic(topic: "uns.topic1") { topic } }
+#
+# TROUBLESHOOTING:
+# - If GraphQL server doesn't start, check internal logs: /data/logs/umh-core/current
+# - Look for "Starting GraphQL server on port 8090" in logs
+# - Ensure ports 8090 and 8081 are not in use
+# - Container must have config.yaml with graphql.enabled=true
+# - Example config has simulator=true for immediate demo data
+# - Set agent.simulator=false to disable simulator in production
+#
+# TECHNICAL NOTES:
+# - Built-in simulator generates realistic UNS topics with proper structure
+# - Simulator automatically populates topic browser cache every second
+# - GraphQL schema supports both time series and relational events
+# - Server uses graceful shutdown with 3-second timeout
+# - See pkg/communicator/graphql/README.md for detailed documentation
+test-graphql: stop-and-remove-umh-core-latest $(BUILD_TARGET)
+	@mkdir -p $(PWD)/data
+	@cp $(PWD)/examples/example-config-graphql.yaml $(PWD)/data/config.yaml
+	docker run \
+		--name $(IMAGE_NAME) \
+		-v $(PWD)/data:/data \
+		-e LOGGING_LEVEL=DEBUG \
+		-p 8081:8080 \
+		-p 8090:8090 \
+		-p 4195:4195 \
+		-p 6060:6060 \
+		-p 40000:40000 \
+		--memory $(MEMORY) \
+		--cpus $(CPUS) \
+		$(IMAGE_NAME):$(TAG)
 
 test-debug: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 	@mkdir -p $(PWD)/data
@@ -420,6 +602,41 @@ test-debug: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 		--cpus $(CPUS) \
 		-e LOGGING_LEVEL=DEBUG \
 		$(IMAGE_NAME):$(TAG)
+
+# This run configuration allows easy start without overwriting the config.yaml
+test-no-copy: stop-and-remove-umh-core-latest $(BUILD_TARGET)
+	@mkdir -p $(PWD)/data
+	docker run \
+		--name $(IMAGE_NAME) \
+		-v $(PWD)/data:/data \
+		-e LOGGING_LEVEL=DEBUG \
+		-p 8081:8080 \
+		-p 4195:4195 \
+		-p 6060:6060 \
+		-p 40000:40000 \
+		-p 8090:8090 \
+		--memory $(MEMORY) \
+		--cpus $(CPUS) \
+		$(IMAGE_NAME):$(TAG)
+
+# This test runs the UMH Core instance with a proxy (on the host machine) to the backend.
+# On the host install mitmproxy (for example via brew install mitmproxy)
+# Then run mitmweb --listen-port 6060
+test-mitm: stop-and-remove-umh-core-latest $(BUILD_TARGET)
+	@mkdir -p $(PWD)/data
+	docker run \
+		--name $(IMAGE_NAME) \
+		-v $(PWD)/data:/data \
+		-e LOGGING_LEVEL=DEBUG \
+		-e HTTP_PROXY=http://host.docker.internal:6060 \
+		-e HTTPS_PROXY=https://host.docker.internal:6060 \
+		-p 8081:8080 \
+		-p 4195:4195 \
+		-p 40000:40000 \
+		--memory $(MEMORY) \
+		--cpus $(CPUS) \
+		$(IMAGE_NAME):$(TAG)
+
 
 pod-shell:
 	docker exec -it $(IMAGE_NAME) /bin/bash
@@ -463,3 +680,17 @@ build-push: build push-platform
 # Retrieve metrics from the UMH Core instance and save them to a file
 dump-metrics:
 	curl -s http://localhost:8081/metrics > metrics.txt
+
+run: 
+	@echo "Running $(IMAGE_NAME):$(TAG)"
+	docker rm -f $(IMAGE_NAME)
+	docker run \
+		--name $(IMAGE_NAME) \
+		-v $(PWD)/data:/data \
+		-p 8081:8080 \
+		-p 4195:4195 \
+		-p 6060:6060 \
+		-p 40000:40000 \
+		--memory $(MEMORY) \
+		--cpus $(CPUS) \
+		$(IMAGE_NAME):$(TAG)

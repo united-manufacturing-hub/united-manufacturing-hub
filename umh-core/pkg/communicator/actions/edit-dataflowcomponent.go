@@ -214,7 +214,7 @@ func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
 	// Handle different component types
 	switch a.metaType {
 	case "custom":
-		payload, err := parseCustomDataFlowComponent(topLevel.Payload)
+		payload, err := ParseCustomDataFlowComponent(topLevel.Payload)
 		if err != nil {
 			return err
 		}
@@ -684,5 +684,5 @@ func CompareSnapshotWithDesiredConfig(dfcSnapshot *dataflowcomponent.DataflowCom
 			Buffer:             observedConfig.Buffer,
 		},
 	}
-	return dataflowcomponentserviceconfig.NewComparator().ConfigsEqual(&observedConfigInDfcConfig, &desiredConfig.DataFlowComponentServiceConfig)
+	return dataflowcomponentserviceconfig.NewComparator().ConfigsEqual(observedConfigInDfcConfig, desiredConfig.DataFlowComponentServiceConfig)
 }

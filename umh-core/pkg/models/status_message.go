@@ -21,13 +21,13 @@ type StatusMessage struct {
 }
 
 type Core struct {
-	Health           *Health          `json:"health"`
-	Agent            Agent            `json:"agent"`
-	Container        Container        `json:"container"`
-	Dfcs             []Dfc            `json:"dfcs"`
-	Redpanda         Redpanda         `json:"redpanda"`
-	UnifiedNamespace UnifiedNamespace `json:"unifiedNamespace"`
-	Release          Release          `json:"release"`
+	Health       *Health      `json:"health"`
+	Agent        Agent        `json:"agent"`
+	Container    Container    `json:"container"`
+	Dfcs         []Dfc        `json:"dfcs"`
+	Redpanda     Redpanda     `json:"redpanda"`
+	TopicBrowser TopicBrowser `json:"topicBrowser"`
+	Release      Release      `json:"release"`
 }
 
 type Agent struct {
@@ -140,7 +140,8 @@ type Dfc struct {
 	// For 'data-bridge' type, this array always contains exactly two connections.
 	//
 	// For 'custom' type, this array is empty.
-	Connections []Connection `json:"connections,omitempty"` // Connection details based on DFC type
+	Connections   []Connection `json:"connections,omitempty"` // Connection details based on DFC type
+	IsInitialized bool         `json:"isInitialized"`         // Whether the DFC is initialized
 }
 
 type DfcMetrics struct {
@@ -168,9 +169,15 @@ type Redpanda struct {
 	AvgOutgoingThroughputPerMinuteInBytesSec float64 `json:"avgOutgoingThroughputPerMinuteInBytesSec"` // Outgoing bytes per second, averaged over a minute
 }
 
-type UnifiedNamespace struct {
-	EventsTable map[string]EventsTable `json:"eventsTable,omitempty"`
-	UnsTable    map[string]UnsTable    `json:"unsTable,omitempty"`
+type TopicBrowser struct {
+	Health     *Health `json:"health"`
+	TopicCount int     `json:"topicCount"`
+	// UnsBundles is a map because there might be the case that the topic browser service generated more than one uns bundle
+	// inbetween two runs of the status message generation. In this case, we need to send the uns bundles in the order they were generated
+	// to not lose any data. The order is maintained by the index of the map.
+	// The uns bundles are compressed protobuf data of protobuf type tbproto.UnsBundle.
+	// also, if we send the status message to a new subscriber, we want to send the cached uns bundle first and then the new uns bundles
+	UnsBundles map[int][]byte `json:"unsBundles"`
 }
 
 type EventsTable struct {

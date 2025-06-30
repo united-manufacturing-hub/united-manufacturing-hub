@@ -27,10 +27,7 @@ func NewComparator() *Comparator {
 
 // ConfigsEqual compares two DataFlowComponentConfigs for equality
 // by converting to BenthosServiceConfig and using the existing comparison utilities
-func (c *Comparator) ConfigsEqual(a, b *DataflowComponentServiceConfig) bool {
-	if a == nil || b == nil {
-		return false
-	}
+func (c *Comparator) ConfigsEqual(a, b DataflowComponentServiceConfig) bool {
 	benthosA := a.GetBenthosServiceConfig()
 	benthosB := b.GetBenthosServiceConfig()
 
@@ -39,10 +36,7 @@ func (c *Comparator) ConfigsEqual(a, b *DataflowComponentServiceConfig) bool {
 }
 
 // ConfigDiff returns a human-readable string describing differences between configs
-func (c *Comparator) ConfigDiff(a, b *DataflowComponentServiceConfig) string {
-	if a == nil || b == nil {
-		return "one or both configurations are nil"
-	}
+func (c *Comparator) ConfigDiff(a, b DataflowComponentServiceConfig) string {
 	benthosA := a.GetBenthosServiceConfig()
 	benthosB := b.GetBenthosServiceConfig()
 

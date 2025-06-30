@@ -16,6 +16,7 @@ package s6
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/binary"
 	"encoding/hex"
@@ -24,6 +25,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -135,12 +137,18 @@ type Service interface {
 //	offset – next byte to read on disk (monotonically increases until
 //	         rotation or truncation)
 //
-//	logs   – backing array that holds *at most* S6MaxLines entries.
-//	         Allocated once; after that, entries are overwritten in place.
-//	head   – index of the slot where the **next** entry will be written.
-//	         When head wraps from max-1 to 0, `full` is set to true.
-//	full   – true once the buffer has wrapped at least once; used to decide
-//	         how to linearise the ring when we copy it out.
+
+// logs   – backing array that holds *at most* S6MaxLines entries.
+//
+//	Allocated once; after that, entries are overwritten in place.
+//
+// head   – index of the slot where the **next** entry will be written.
+//
+//	When head wraps from max-1 to 0, `full` is set to true.
+//
+// full   – true once the buffer has wrapped at least once; used to decide
+//
+//	how to linearise the ring when we copy it out.
 type logState struct {
 	// mu guards every field in the struct (single-writer, multi-reader)
 	mu sync.Mutex
@@ -663,7 +671,7 @@ func (s *DefaultService) Status(ctx context.Context, servicePath string, fsServi
 		info.Status = ServiceDown
 		// Interpret wstat as a wait status.
 		// We convert to syscall.WaitStatus so that we can check if the process exited normally.
-		var ws = syscall.WaitStatus(wstat)
+		ws := syscall.WaitStatus(wstat)
 		if ws.Exited() {
 			info.ExitCode = ws.ExitStatus()
 		} else if ws.Signaled() {
@@ -699,7 +707,7 @@ func (s *DefaultService) Status(ctx context.Context, servicePath string, fsServi
 		return info, fmt.Errorf("failed to get exit history: %w", histErr)
 	}
 
-	//s.logger.Debugf("Status for S6 service %s: %+v", servicePath, info)
+	// s.logger.Debugf("Status for S6 service %s: %+v", servicePath, info)
 
 	return info, nil
 }
@@ -732,6 +740,9 @@ func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, f
 	data, err := fsService.ReadFile(ctx, dtallyFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read dtally file: %w", err)
+	}
+	if data == nil { // Empty history file
+		return nil, nil
 	}
 
 	// Verify that the file size is a multiple of the dtally record size.
@@ -772,7 +783,7 @@ func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, f
 		})
 	}
 
-	//s.logger.Debugf("Exit history for S6 service %s: %+v", superviseDir, history)
+	// s.logger.Debugf("Exit history for S6 service %s: %+v", superviseDir, history)
 	return history, nil
 }
 
@@ -1225,7 +1236,7 @@ func (s *DefaultService) GetS6ConfigFile(ctx context.Context, servicePath string
 
 // ForceRemove tears down an S6 long-run service **unconditionally**.
 //
-// It is the “nuclear option” the manager calls after several failed
+// It is the "nuclear option" the manager calls after several failed
 // graceful removals.  The function must therefore:
 //
 //   - **Be idempotent & non-blocking** – safe to invoke every 100 ms;
@@ -1356,7 +1367,27 @@ func (s *DefaultService) ForceRemove(
 	return nil
 }
 
-// GetLogs reads “just the new bytes” of the log file located at
+// appendToRingBuffer appends entries to the ring buffer, extracted from existing GetLogs logic.
+func (s *DefaultService) appendToRingBuffer(entries []LogEntry, st *logState) {
+	const max = constants.S6MaxLines
+
+	// Preallocate backing storage to full size once - it's recycled at runtime and never dropped
+	if st.logs == nil {
+		st.logs = make([]LogEntry, max) // len == max, cap == max
+		st.head = 0
+		st.full = false
+	}
+
+	for _, e := range entries {
+		st.logs[st.head] = e
+		st.head = (st.head + 1) % max
+		if !st.full && st.head == 0 {
+			st.full = true // wrapped around for the first time
+		}
+	}
+}
+
+// GetLogs reads "just the new bytes" of the log file located at
 //
 //	/data/logs/<service-name>/current
 //
@@ -1369,7 +1400,7 @@ func (s *DefaultService) ForceRemove(
 //
 // That cursor stores where we stopped reading the file last time
 // (`offset`) and a fixed-size **ring buffer** with the most recent
-// lines.  Because of the ring buffer, we never re-allocate or shift
+// lines. Because of the ring buffer, we never re-allocate or shift
 // memory when trimming to the last *N* lines.
 //
 // High-level flow
@@ -1379,33 +1410,51 @@ func (s *DefaultService) ForceRemove(
 //     • verify the service and the log file exist
 //     • fetch/create the cursor in `s.logCursors`
 //
-//  2. **Detect file rotation/truncation**
-//     If the inode changed or the file shrank, we reset the cursor
-//     and start reading from the beginning.
+//  2. **Detect file rotation/truncation (or first-time initialization)**
+//     If the inode changed or the file shrank, we:
+//     - Reset the ring buffer to start fresh (preserving backing array)
+//     - Find the most recent rotated file by TAI64N timestamp
+//     - Read any remaining data from that rotated file
+//     - Reset inode and offset for the new current file
 //
-//  3. **Read only the delta**
+//     **FIRST CALL scenario**: When called on a newly created current file,
+//     st.inode == 0, so we simply initialize it to the current file's inode.
+//
+//  3. **Read content from current file**
 //     `ReadFileRange(ctx, path, st.offset)` returns the bytes that
-//     appeared since the previous call.  The cursor’s `offset` is
+//     appeared since the previous call.  The cursor's `offset` is
 //     advanced whether or not anything changed.
 //
-//  4. **Ring-append the new entries**
+//     **FIRST CALL**: Reads entire file from beginning (st.offset == 0).
+//
+//  4. **Process rotated and current content separately**
+//     Both rotated file content (if any) and current file content are
+//     parsed and appended to the ring buffer in chronological order:
+//     rotated content first (older), then current content (newer).
+//
+//  5. **Ring-append the entries**
 //     Parsed log lines are appended to the ring.  Once the buffer
 //     is full (`len == cap`), we start overwriting from `head`,
-//     giving us an O(1) “keep the last N lines” strategy.
+//     giving us an O(1) "keep the last N lines" strategy.
 //
-//  5. **Copy-out**
+//     **FIRST CALL**: Ring buffer is allocated and populated with all entries.
+//
+//  6. **Copy-out**
 //     We linearise the ring into chronological order and copy it
 //     into a fresh slice so callers can never mutate our cache.
+//
+//     **FIRST CALL**: Simple copy since ring buffer hasn't wrapped yet.
 //
 // Performance guarantees
 // ──────────────────────
 //   - **At most one allocation per process** for the ring buffer.
-//   - Zero‐copy maintenance while the program runs.
-//   - Exactly one `memmove` per call (the final copy-out).
+//   - Zero‐copy maintenance while the program runs (except on rotation).
+//   - At most one additional allocation per rotation (for parsing entries).
+//   - One `memmove` operation per call for final copy-out.
 //   - Thread-safety via the `logState.mu` mutex.
 //
 // Errors are returned early and unwrapped where they occur so callers
-// see the root cause (e.g. “file disappeared”, “permission denied”).
+// see the root cause (e.g. "file disappeared", "permission denied").
 func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsService filesystem.Service) ([]LogEntry, error) {
 	start := time.Now()
 	defer func() {
@@ -1426,12 +1475,13 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 
 	// Get the log file from /data/logs/<service-name>/current
 	logFile := filepath.Join(constants.S6LogBaseDir, serviceName, "current")
-	exists, err = fsService.FileExists(ctx, logFile)
+	exists, err = fsService.PathExists(ctx, logFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check if log file exists: %w", err)
 	}
 	if !exists {
-		return nil, ErrLogFileNotFound
+		s.logger.Debugf("Log file %s does not exist, returning ErrLogFileNotFound", logFile)
+		return nil, fmt.Errorf("path: %s err :%w", logFile, ErrLogFileNotFound)
 	}
 
 	// ── 1. grab / create state ──────────────────────────────────────
@@ -1446,66 +1496,96 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	if err != nil {
 		return nil, err
 	}
+	if fi == nil {
+		return nil, fmt.Errorf("stat returned nil for log file: %s", logFile)
+	}
 	sys := fi.Sys().(*syscall.Stat_t) // on Linux / Alpine
 	size, ino := fi.Size(), sys.Ino
 
-	// rotated or truncated ⇒ reset cache
-	if st.inode != ino || st.offset > size {
-		st.inode, st.offset = ino, 0
+	// Check for rotation or truncation
+	var rotatedContent []byte
+	if st.inode != 0 && (st.inode != ino || st.offset > size) {
+		s.logger.Debugf("Detected rotation for log file %s (inode: %d->%d, offset: %d, size: %d)",
+			logFile, st.inode, ino, st.offset, size)
 
+		// Reset ring buffer on rotation
 		if st.logs == nil {
-			st.logs = make([]LogEntry, 0, constants.S6MaxLines)
-		} else {
-			st.logs = st.logs[:0] // reuse backing array
+			st.logs = make([]LogEntry, constants.S6MaxLines)
 		}
+		/*
+			Why the previous implementation used st.logs[:0]:
+				The old approach allocated with make([]LogEntry, 0, max) and used append(), so the slice would grow from length 0 to some length. On rotation, it needed to reset the length back to 0 with st.logs[:0] while keeping the capacity.
 
+			Why we don't need it now:
+				With our optimized approach:
+				We preallocate to full size: make([]LogEntry, max) - length is always max
+				We use direct indexing: st.logs[st.head] = e - no append operations
+				We track valid entries with st.head and st.full: The slice length never changes
+		*/
+
+		// Reset ring buffer state but keep the backing array
 		st.head = 0
 		st.full = false
+
+		// Find the most recent rotated file
+		logDir := filepath.Dir(logFile)
+		pattern := filepath.Join(logDir, "@*.s")
+		entries, err := fsService.Glob(ctx, pattern)
+		if err != nil {
+			s.logger.Debugf("Failed to read log directory %s: %v", logDir, err)
+			return nil, err
+		}
+		rotatedFile := s.findLatestRotatedFile(entries)
+		if rotatedFile != "" {
+			var err error
+			rotatedContent, _, err = fsService.ReadFileRange(ctx, rotatedFile, st.offset)
+			if err != nil {
+				s.logger.Warnf("Failed to read rotated file %s from offset %d: %v", rotatedFile, st.offset, err)
+			} else if len(rotatedContent) > 0 {
+				s.logger.Debugf("Read %d bytes from rotated file %s", len(rotatedContent), rotatedFile)
+			}
+		}
+
+		// Reset for new current file
+		st.inode, st.offset = ino, 0
+	} else if st.inode == 0 {
+		// First call - initialize inode
+		st.inode = ino
 	}
 
-	// ── 3. read only the new bytes ──────────────────────────────────
-	chunk, newSize, err := fsService.ReadFileRange(ctx, logFile, st.offset)
+	// ── 3. read new bytes from current file ─────────────────────────
+	currentContent, newSize, err := fsService.ReadFileRange(ctx, logFile, st.offset)
 	if err != nil {
 		return nil, err
 	}
-	st.offset = newSize // advance cursor even if chunk == nil
+	st.offset = newSize // advance cursor even if currentContent == nil
 
-	if len(chunk) != 0 {
-		entries, err := ParseLogsFromBytes(chunk)
+	// ── 4. combine rotated and current content into the ring buffer ──────────────────────
+	// The order of the content is important: rotated content is older, current content is newer.
+	// We want to keep the newest lines at the end of the ring buffer.
+
+	if len(rotatedContent) > 0 {
+		entries, err := ParseLogsFromBytes(rotatedContent)
 		if err != nil {
 			return nil, err
 		}
-
-		// --- Ring-buffer append ------------------------------------------
-		const max = constants.S6MaxLines
-
-		// allocate backing storage once, but with length 0 so the GC
-		// doesn't scan max empty structs before we actually need them
-		if st.logs == nil {
-			st.logs = make([]LogEntry, 0, max) // len == 0, cap == max
-		}
-
-		for _, e := range entries {
-			if len(st.logs) < max { // not full yet → grow
-				st.logs = append(st.logs, e)
-				st.head = len(st.logs) % max // head always points at the
-				// *next* write slot
-				if len(st.logs) == max {
-					st.full = true // will overwrite next round
-				}
-			} else { // full → true ring overwrite
-				st.logs[st.head] = e
-				st.head = (st.head + 1) % max // advance circular pointer
-			}
-		}
+		s.appendToRingBuffer(entries, st)
 	}
 
-	// ── 4. return *copy* so caller can’t mutate our cache ───────────
+	if len(currentContent) > 0 {
+		entries, err := ParseLogsFromBytes(currentContent)
+		if err != nil {
+			return nil, err
+		}
+		s.appendToRingBuffer(entries, st)
+	}
+
+	// ── 5. return *copy* so caller can't mutate our cache ───────────
 	var length int
 	if st.full {
 		length = constants.S6MaxLines
 	} else {
-		length = len(st.logs) // always the number of valid entries
+		length = st.head // number of valid entries written so far
 	}
 
 	out := make([]LogEntry, length)
@@ -1516,23 +1596,18 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	//
 	//	[head … max-1]  followed by  [0 … head-1]
 	if st.full {
-		// len(st.logs) == constants.S6MaxLines by construction
-		// (but add a defensive check to satisfy the linter)
-		if len(st.logs) == 0 {
-			return out, nil // should never happen, but safe
-		}
-
-		// copy the wrapped tail first
+		// Ring buffer has wrapped - linearize it
 		n := copy(out, st.logs[st.head:])
 		copy(out[n:], st.logs[:st.head])
 	} else {
-		copy(out, st.logs) // simple copy before first wrap
+		// Ring buffer hasn't wrapped yet - simple copy from beginning
+		copy(out, st.logs[:st.head])
 	}
 
 	return out, nil
 }
 
-// ParseLogsFromBytes is a zero-allocation* parser for an s6 “current”
+// ParseLogsFromBytes is a zero-allocation* parser for an s6 "current"
 // file.  It scans the buffer **once**, pre-allocates the result slice
 // and never calls strings.Split/Index, so the costly
 // runtime.growslice/strings.* nodes vanish from the profile.
@@ -1688,7 +1763,6 @@ func (s *DefaultService) EnsureSupervision(ctx context.Context, servicePath stri
 //   - Exit code 127: Command not found, returns ErrS6ProgramNotFound
 //   - Other exit codes: Returns a descriptive error with the exit code and output
 func (s *DefaultService) ExecuteS6Command(ctx context.Context, servicePath string, fsService filesystem.Service, name string, args ...string) (string, error) {
-
 	output, err := fsService.ExecuteCommand(ctx, name, args...)
 	if err != nil {
 		// Check exit codes using errors.As to handle wrapped errors
@@ -1716,4 +1790,27 @@ func (s *DefaultService) ExecuteS6Command(ctx context.Context, servicePath strin
 	}
 
 	return string(output), nil
+}
+
+// findLatestRotatedFile finds the most recently rotated file using slices.MaxFunc.
+//
+// S6 creates rotated files with TAI64N timestamps in their names (e.g., @400000006501234567890abc.s).
+// TAI64N timestamps are designed to be lexicographically sortable, so we can use string comparison
+// to find the chronologically latest file efficiently.
+//
+// This approach uses slices.MaxFunc which provides optimal performance:
+//   - O(n) time complexity with single pass through entries
+//   - Zero memory allocations
+//   - No intermediate sorting required
+//
+// Returns an empty string if no valid rotated files are found.
+func (s *DefaultService) findLatestRotatedFile(entries []string) string {
+	if len(entries) == 0 {
+		return ""
+	}
+
+	// Use slices.MaxFunc to find the latest file
+	latestFile := slices.MaxFunc(entries, cmp.Compare[string])
+
+	return latestFile
 }

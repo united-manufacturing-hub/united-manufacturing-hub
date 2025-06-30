@@ -28,6 +28,31 @@ var _ = Describe("Redpanda YAML Normalizer", func() {
 			normalizedConfig := normalizer.NormalizeConfig(config)
 			Expect(normalizedConfig.Topic.DefaultTopicRetentionMs).To(Equal(int64(604800000)))
 			Expect(normalizedConfig.Topic.DefaultTopicRetentionBytes).To(Equal(int64(0)))
+			Expect(normalizedConfig.Topic.DefaultTopicCompressionAlgorithm).To(Equal("snappy"))
+			Expect(normalizedConfig.Topic.DefaultTopicCleanupPolicy).To(Equal("compact"))
+			Expect(normalizedConfig.Topic.DefaultTopicSegmentMs).To(Equal(int64(3600000)))
+		})
+
+		It("should not override existing compression algorithm", func() {
+			config := RedpandaServiceConfig{}
+			config.Topic.DefaultTopicCompressionAlgorithm = "lz4"
+			normalizer := NewNormalizer()
+
+			normalizedConfig := normalizer.NormalizeConfig(config)
+			Expect(normalizedConfig.Topic.DefaultTopicCompressionAlgorithm).To(Equal("lz4"))
+		})
+
+		It("should preserve existing values", func() {
+			config := RedpandaServiceConfig{}
+			config.Topic.DefaultTopicCompressionAlgorithm = "lz4"
+			config.Topic.DefaultTopicCleanupPolicy = "delete"
+			config.Topic.DefaultTopicSegmentMs = 604800000
+			normalizer := NewNormalizer()
+
+			normalizedConfig := normalizer.NormalizeConfig(config)
+			Expect(normalizedConfig.Topic.DefaultTopicCompressionAlgorithm).To(Equal("lz4"))
+			Expect(normalizedConfig.Topic.DefaultTopicCleanupPolicy).To(Equal("delete"))
+			Expect(normalizedConfig.Topic.DefaultTopicSegmentMs).To(Equal(int64(604800000)))
 		})
 	})
 })

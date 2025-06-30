@@ -19,16 +19,25 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/topicbrowserserviceconfig"
 
 	"github.com/tiendc/go-deepcopy"
 )
 
 type FullConfig struct {
-	Agent    AgentConfig               `yaml:"agent"`              // Agent config, requires restart to take effect
-	DataFlow []DataFlowComponentConfig `yaml:"dataFlow,omitempty"` // DataFlow components to manage, can be updated while running
-	Internal InternalConfig            `yaml:"internal,omitempty"` // Internal config, not to be used by the user, only to be used for testing internal components
+	Agent             AgentConfig               `yaml:"agent"`                       // Agent config, requires restart to take effect
+	Templates         TemplatesConfig           `yaml:"templates,omitempty"`         // Templates section with enforced structure for protocol converters
+	DataFlow          []DataFlowComponentConfig `yaml:"dataFlow,omitempty"`          // DataFlow components to manage, can be updated while running
+	ProtocolConverter []ProtocolConverterConfig `yaml:"protocolConverter,omitempty"` // ProtocolConverter config, can be updated while runnnig
+	Internal          InternalConfig            `yaml:"internal,omitempty"`          // Internal config, not to be used by the user, only to be used for testing internal components
+}
+
+// TemplatesConfig defines the structure for the templates section
+type TemplatesConfig struct {
+	ProtocolConverter map[string]interface{} `yaml:"protocolConverter,omitempty"` // Array of protocol converter templates
 }
 
 type InternalConfig struct {
@@ -39,13 +48,16 @@ type InternalConfig struct {
 	BenthosMonitor  []BenthosMonitorConfig  `yaml:"benthosMonitor,omitempty"`  // BenthosMonitor config, can be updated while running
 	Connection      []ConnectionConfig      `yaml:"connection,omitempty"`      // Connection services to manage, can be updated while running
 	RedpandaMonitor []RedpandaMonitorConfig `yaml:"redpandaMonitor,omitempty"` // RedpandaMonitor config, can be updated while running
+	TopicBrowser    TopicBrowserConfig      `yaml:"topicbrowser,omitempty"`
 }
 
 type AgentConfig struct {
 	MetricsPort        int `yaml:"metricsPort"` // Port to expose metrics on
 	CommunicatorConfig `yaml:"communicator,omitempty"`
+	GraphQLConfig      GraphQLConfig  `yaml:"graphql,omitempty"` // GraphQL server configuration
 	ReleaseChannel     ReleaseChannel `yaml:"releaseChannel,omitempty"`
 	Location           map[int]string `yaml:"location,omitempty"`
+	Simulator          bool           `yaml:"simulator,omitempty"`
 }
 
 type CommunicatorConfig struct {
@@ -112,7 +124,33 @@ type DataFlowComponentConfig struct {
 	FSMInstanceConfig `yaml:",inline"`
 
 	DataFlowComponentServiceConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataFlowComponentConfig"`
+
+	// private marker – not (un)marshalled
+	// explanation see templating.go
+	hasAnchors bool `yaml:"-"`
 }
+
+// HasAnchors returns true if the DataFlowComponentConfig has anchors, see templating.go
+func (d *DataFlowComponentConfig) HasAnchors() bool { return d.hasAnchors }
+
+// ProtocolConverterConfig contains configuration for creating a ProtocolConverter
+type ProtocolConverterConfig struct {
+	// For the FSM
+	FSMInstanceConfig `yaml:",inline"`
+
+	ProtocolConverterServiceConfig protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec `yaml:"protocolConverterServiceConfig"`
+
+	// private marker – not (un)marshalled
+	// explanation see templating.go
+	hasAnchors bool   `yaml:"-"`
+	anchorName string `yaml:"-"`
+}
+
+// HasAnchors returns true if the ProtocolConverterConfig has anchors, see templating.go
+func (d *ProtocolConverterConfig) HasAnchors() bool { return d.hasAnchors }
+
+// AnchorName returns the anchor name of the ProtocolConverterConfig, see templating.go
+func (d *ProtocolConverterConfig) AnchorName() string { return d.anchorName }
 
 // NmapConfig contains configuration for creating a Nmap service
 type NmapConfig struct {
@@ -147,12 +185,31 @@ type ConnectionConfig struct {
 	ConnectionServiceConfig connectionserviceconfig.ConnectionServiceConfig `yaml:"connectionServiceConfig"`
 }
 
+type GraphQLConfig struct {
+	Enabled      bool     `yaml:"enabled"`                // Enable/disable GraphQL server
+	Port         int      `yaml:"port"`                   // Port to expose GraphQL on (default: 8090)
+	CORSOrigins  []string `yaml:"corsOrigins,omitempty"`  // CORS allowed origins (default: ["*"])
+	Debug        bool     `yaml:"debug,omitempty"`        // Enable GraphiQL playground and debug logging
+	AuthRequired bool     `yaml:"authRequired,omitempty"` // Require authentication (future use)
+}
+
+// TopicBrowserConfig contains configuration for creating a Topic Browser service
+type TopicBrowserConfig struct {
+	// For the FSM
+	FSMInstanceConfig `yaml:",inline"`
+
+	// For the Connection service
+	TopicBrowserServiceConfig topicbrowserserviceconfig.Config `yaml:"serviceConfig,omitempty"`
+}
+
 // Clone creates a deep copy of FullConfig
 func (c FullConfig) Clone() FullConfig {
 	clone := FullConfig{
-		Agent:    c.Agent,
-		DataFlow: make([]DataFlowComponentConfig, len(c.DataFlow)),
-		Internal: InternalConfig{},
+		Agent:             c.Agent,
+		DataFlow:          make([]DataFlowComponentConfig, len(c.DataFlow)),
+		ProtocolConverter: make([]ProtocolConverterConfig, len(c.ProtocolConverter)),
+		Templates:         TemplatesConfig{},
+		Internal:          InternalConfig{},
 	}
 	// deep copy the location map if it exists
 	if c.Agent.Location != nil {
@@ -166,6 +223,14 @@ func (c FullConfig) Clone() FullConfig {
 		return FullConfig{}
 	}
 	err = deepcopy.Copy(&clone.DataFlow, &c.DataFlow)
+	if err != nil {
+		return FullConfig{}
+	}
+	err = deepcopy.Copy(&clone.ProtocolConverter, &c.ProtocolConverter)
+	if err != nil {
+		return FullConfig{}
+	}
+	err = deepcopy.Copy(&clone.Templates, &c.Templates)
 	if err != nil {
 		return FullConfig{}
 	}

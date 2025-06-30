@@ -1,0 +1,55 @@
+# Copyright 2025 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+agent:
+  metricsPort: 8080
+
+internal:
+  redpanda:
+    desiredState: active
+    redpandaServiceConfig:
+      # Note: Any change in here, will result in a restart of the Redpanda service
+      topic:
+        # Note: The below settings only apply to newly created topics
+        # this corresponds to log_retention_ms (See also: https://docs.redpanda.com/current/manage/cluster-maintenance/disk-utilization/)
+        defaultTopicRetentionMs: 604800000
+
+        # this corresponds to retention_bytes (See also: https://docs.redpanda.com/current/manage/cluster-maintenance/disk-utilization/)
+        defaultTopicRetentionBytes: 0
+
+        # this corresponds to log_compression_type (See also: https://docs.redpanda.com/current/manage/cluster-maintenance/compression/)
+        defaultTopicCompressionAlgorithm: "snappy"
+
+        # this corresponds to log_cleanup_policy (See also: https://docs.redpanda.com/current/manage/cluster-maintenance/compaction-settings/)
+        # Options: "delete" (time/size-based deletion), "compact" (keep latest per key), "compact,delete" (both)
+        # Using "compact" ensures at least one message per key is retained
+        defaultTopicCleanupPolicy: "compact"
+
+        # this corresponds to log_segment_ms (See also: https://docs.redpanda.com/current/manage/cluster-maintenance/disk-utilization/)
+        # Controls when Redpanda creates new log segments. Lower values create more frequent segments but allow for more granular retention
+        defaultTopicSegmentMs: 3600000 # 1 hour
+
+      resources:
+        # this corresponds to --smp from scylladb/seastar
+        # See also:
+        # - https://docs.redpanda.com/current/manage/kubernetes/k-manage-resources/#cpu
+        # By default Redpanda will use 1 core per 1000 partitions
+        maxCores: 1
+
+        # this corresponds to --memory from scylladb/seastar
+        # See also:
+        # - https://docs.redpanda.com/current/manage/kubernetes/k-manage-resources/#memory
+        # By default Redpanda will use 4MB per partition, resulting in a theoretical maximum of 500 usable partitions per core
+        # Setting this to lower then 2GB leads to startup issues!
+        memoryPerCoreInBytes: 2147483648 # 2GB 

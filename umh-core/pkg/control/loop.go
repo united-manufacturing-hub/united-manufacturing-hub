@@ -53,8 +53,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
@@ -120,6 +122,8 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 		nmap.NewNmapManager(constants.DefaultManagerName),
 		dataflowcomponent.NewDataflowComponentManager(constants.DefaultManagerName),
 		connection.NewConnectionManager(constants.DefaultManagerName),
+		protocolconverter.NewProtocolConverterManager(constants.DefaultManagerName),
+		topicbrowser.NewTopicBrowserManager(constants.DefaultManagerName),
 	}
 
 	// Create a starvation checker
@@ -182,6 +186,16 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 
 			// Record metrics for the reconcile cycle
 			cycleTime := time.Since(start)
+
+			// If cycleTime is greater than tickerTime, log a warning
+			if cycleTime > c.tickerTime {
+				c.logger.Warnf("Control loop reconcile cycle time is greater then ticker time: %v", cycleTime)
+				// If cycleTime is greater than 2*tickerTime, log an error
+				if cycleTime > 2*c.tickerTime {
+					c.logger.Errorf("Control loop reconcile cycle time is greater then 2*ticker time: %v", cycleTime)
+				}
+			}
+
 			metrics.ObserveReconcileTime(metrics.ComponentControlLoop, "main", cycleTime)
 
 			// Handle errors differently based on type

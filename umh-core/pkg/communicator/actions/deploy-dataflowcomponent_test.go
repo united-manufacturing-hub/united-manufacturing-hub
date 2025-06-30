@@ -234,6 +234,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 			Expect(err.Error()).To(ContainSubstring("missing required field Name"))
 		})
 
+
 		It("should return error for missing meta type", func() {
 			// Payload with missing meta.type field
 			payload := map[string]interface{}{
