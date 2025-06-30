@@ -44,6 +44,12 @@ func NewDataFlowComponentBuilder() *DataFlowComponentBuilder {
 						DesiredFSMState: "stopped",
 					},
 				},
+				TopicBrowser: config.TopicBrowserConfig{
+					FSMInstanceConfig: config.FSMInstanceConfig{
+						Name:            "topic-browser",
+						DesiredFSMState: "stopped",
+					},
+				},
 			},
 		},
 		activeComponents: make(map[string]bool),
@@ -124,7 +130,7 @@ func (b *DataFlowComponentBuilder) AddGeneratorDataFlowComponent(name string, in
 }
 
 // AddGeneratorDataFlowComponentToKafka adds a DataFlowComponent that generates messages and sends to a Kafka topic
-func (b *DataFlowComponentBuilder) AddGeneratorDataFlowComponentToKafka(name string, interval string, topic string) *DataFlowComponentBuilder {
+func (b *DataFlowComponentBuilder) AddGeneratorDataFlowComponentToKafka(name string, interval string, topic string, key *string) *DataFlowComponentBuilder {
 	dataFlowConfig := config.DataFlowComponentConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            name,
@@ -150,6 +156,7 @@ func (b *DataFlowComponentBuilder) AddGeneratorDataFlowComponentToKafka(name str
 					"kafka": map[string]interface{}{
 						"addresses":     []string{"localhost:9092"},
 						"topic":         topic,
+						"key":           key,
 						"max_in_flight": 1000,
 						"client_id":     name,
 						"ack_replicas":  true,

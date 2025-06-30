@@ -1,0 +1,76 @@
+---
+description: Rules for synchronizing UMH Core documentation between gitbook-docs and staging branches
+globs: ["umh-core/docs/**/*.md"]
+alwaysApply: false
+---
+# UMH Core Documentation Sync Rules
+
+When working with UMH Core documentation:
+
+1. **Product Name**: Use "UMH Core" (not "UMH-Core") for the product name
+2. **Technical References**: Use "umh-core" (lowercase with hyphen) for:
+   - Container names
+   - API endpoints  
+   - File/directory names
+   - Technical identifiers
+
+3. **Spelling**: Use American English (e.g., "recognizes" not "recognises")
+
+4. **Heading Hierarchy**: Follow proper H1 → H2 → H3 progression
+
+5. **Consistency**: Maintain consistent terminology throughout all documentation files
+
+## Configuration Changes
+- Changes to `config.yaml` structure, new fields, or removed fields → update `umh-core/docs/reference/configuration-reference.md`
+- New environment variables or changed env vars → update config reference + `umh-core/docs/getting-started.md` if user-facing
+- Changes to internal config structures → update config reference with expert sections
+
+## State Machine & Health Monitoring  
+- New FSM states or state transitions → update `umh-core/docs/umh-core-vs-classic-faq.md` health tracking section
+- Changes to health check logic, metrics, or monitoring → update FAQ + any production monitoring docs
+- New or changed service states (active, idle, degraded, etc.) → update config reference + FAQ
+
+## Protocol & Data Flow Changes
+- New Benthos inputs/outputs/processors → update `umh-core/docs/usage/data-flows/` appropriate sections
+- New protocol support → update `umh-core/docs/usage/data-flows/bridges.md` + config reference examples
+- Changes to tag_processor or data transformation → update `umh-core/docs/usage/unified-namespace/payload-formats.md`
+- New bridge types or capabilities → update bridges documentation
+
+## Deployment & Installation
+- Changes to Docker container requirements, ports, volumes → update `umh-core/docs/getting-started.md`
+- New system requirements or dependencies → update getting started system requirements
+- Changes to startup process or initialization → update getting started + production guides
+
+## Architecture & Core Changes
+- Changes to embedded services (Redpanda, S6, etc.) → update `umh-core/docs/umh-core-vs-classic-faq.md`
+- New internal components or removed components → update FAQ architecture explanations
+- Changes to inter-service communication → update architecture docs
+
+## API & Integration Changes
+- New REST endpoints or API changes → update any API documentation sections
+- Changes to Management Console integration → update relevant UI vs YAML workflow docs
+- New authentication or security features → update production security docs
+
+## Performance & Scaling
+- Changes to resource requirements, limits, or optimization → update production sizing guides
+- New scaling capabilities or constraints → update production deployment docs
+
+## Breaking Changes Protocol
+For ANY breaking change:
+1. Update migration documentation if it exists
+2. Update FAQ with migration guidance  
+3. Update getting started if it affects new installations
+4. Add compatibility notes in appropriate sections
+
+## Documentation Location Map
+- Core architecture/design decisions → `umh-core-vs-classic-faq.md`
+- User-facing configuration → `reference/configuration-reference.md`  
+- Getting started/installation → `getting-started.md`
+- Data modeling/UNS → `usage/unified-namespace/`
+- Protocol integration → `usage/data-flows/`
+- Production deployment → `production/`
+
+## Enforcement
+When making code changes in umh-core, always ask: "What documentation would a user need to understand or use this change?" Then update those docs in the same commit.
+
+**No code change should be committed without corresponding documentation updates.**

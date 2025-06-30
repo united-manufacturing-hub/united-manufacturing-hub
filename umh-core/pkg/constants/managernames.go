@@ -25,9 +25,11 @@ const (
 	AgentManagerName             = logger.ComponentAgentManager + "_" + DefaultManagerName
 	RedpandaManagerName          = logger.ComponentRedpandaManager + DefaultManagerName
 	ProtocolConverterManagerName = logger.ComponentProtocolConverterManager + DefaultManagerName
+	TopicBrowserManagerName      = logger.ComponentTopicBrowserManager + DefaultManagerName
 
 	// Instance name constants
-	CoreInstanceName     = "Core"
-	RedpandaInstanceName = "redpanda"
-	AgentInstanceName    = "agent"
+	CoreInstanceName         = "Core"
+	RedpandaInstanceName     = "redpanda"
+	AgentInstanceName        = "agent"
+	TopicBrowserInstanceName = "topic-browser"
 )

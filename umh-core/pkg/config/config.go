@@ -22,6 +22,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/topicbrowserserviceconfig"
 
 	"github.com/tiendc/go-deepcopy"
 )
@@ -47,13 +48,16 @@ type InternalConfig struct {
 	BenthosMonitor  []BenthosMonitorConfig  `yaml:"benthosMonitor,omitempty"`  // BenthosMonitor config, can be updated while running
 	Connection      []ConnectionConfig      `yaml:"connection,omitempty"`      // Connection services to manage, can be updated while running
 	RedpandaMonitor []RedpandaMonitorConfig `yaml:"redpandaMonitor,omitempty"` // RedpandaMonitor config, can be updated while running
+	TopicBrowser    TopicBrowserConfig      `yaml:"topicbrowser,omitempty"`
 }
 
 type AgentConfig struct {
 	MetricsPort        int `yaml:"metricsPort"` // Port to expose metrics on
 	CommunicatorConfig `yaml:"communicator,omitempty"`
+	GraphQLConfig      GraphQLConfig  `yaml:"graphql,omitempty"` // GraphQL server configuration
 	ReleaseChannel     ReleaseChannel `yaml:"releaseChannel,omitempty"`
 	Location           map[int]string `yaml:"location,omitempty"`
+	Simulator          bool           `yaml:"simulator,omitempty"`
 }
 
 type CommunicatorConfig struct {
@@ -179,6 +183,23 @@ type ConnectionConfig struct {
 
 	// For the Connection service
 	ConnectionServiceConfig connectionserviceconfig.ConnectionServiceConfig `yaml:"connectionServiceConfig"`
+}
+
+type GraphQLConfig struct {
+	Enabled      bool     `yaml:"enabled"`                // Enable/disable GraphQL server
+	Port         int      `yaml:"port"`                   // Port to expose GraphQL on (default: 8090)
+	CORSOrigins  []string `yaml:"corsOrigins,omitempty"`  // CORS allowed origins (default: ["*"])
+	Debug        bool     `yaml:"debug,omitempty"`        // Enable GraphiQL playground and debug logging
+	AuthRequired bool     `yaml:"authRequired,omitempty"` // Require authentication (future use)
+}
+
+// TopicBrowserConfig contains configuration for creating a Topic Browser service
+type TopicBrowserConfig struct {
+	// For the FSM
+	FSMInstanceConfig `yaml:",inline"`
+
+	// For the Connection service
+	TopicBrowserServiceConfig topicbrowserserviceconfig.Config `yaml:"serviceConfig,omitempty"`
 }
 
 // Clone creates a deep copy of FullConfig

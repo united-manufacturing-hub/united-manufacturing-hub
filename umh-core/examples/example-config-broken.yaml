@@ -19,6 +19,8 @@ agent:
 internal:
   redpanda:
     desiredState: stopped
+  topicbrowser:
+    desiredState: stopped
   services:
     - name: hello-world
       desiredState: running
