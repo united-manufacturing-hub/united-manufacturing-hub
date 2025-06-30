@@ -245,7 +245,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	}
 
 	// return success message, but do not send it as this is done by the caller
-	successMsg := Label("deploy", a.name) + "component successfully deployed and activated"
+	successMsg := Label("deploy", a.name) + "component successfully deployed"
 
 	return successMsg, nil, nil
 }
