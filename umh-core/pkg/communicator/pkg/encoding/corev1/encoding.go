@@ -12,6 +12,57 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+/*
+	fl@Ferdinands-MBP  ~/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding   fix-subscriber-perf ✚  go test -bench=. -benchmem -count=1
+
+Running Suite: Encoding Suite - /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding
+==================================================================================================================
+Random Seed: 1751294110
+
+Will run 50 of 50 specs
+••••••••••••••••••••••••••••SSSSSSSSSSSSS•••••••••
+
+Ran 37 of 50 Specs in 1.129 seconds
+SUCCESS! -- 37 Passed | 0 Failed | 0 Pending | 13 Skipped
+goos: darwin
+goarch: arm64
+pkg: github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding
+cpu: Apple M3 Pro
+BenchmarkCompress_Small/CoreV1-11       352345944                3.447 ns/op           0 B/op          0 allocs/op
+BenchmarkCompress_Small/Old-11              6982            183759 ns/op         2345197 B/op         47 allocs/op
+BenchmarkCompress_Small/New-11          13459603                87.07 ns/op          512 B/op          1 allocs/op
+BenchmarkCompress_Large/New-11            432660              2830 ns/op            8552 B/op          3 allocs/op
+BenchmarkCompress_Large/CoreV1-11         572373              2196 ns/op             293 B/op          1 allocs/op
+BenchmarkCompress_Large/Old-11              6081            311774 ns/op         2360549 B/op         46 allocs/op
+BenchmarkEncodeMessage_Small/New-11      1951270               621.5 ns/op           473 B/op          6 allocs/op
+BenchmarkEncodeMessage_Small/CoreV1-11           2248347               521.4 ns/op           476 B/op          6 allocs/op
+BenchmarkEncodeMessage_Small/Old-11                 8265            266598 ns/op         2329666 B/op         41 allocs/op
+BenchmarkEncodeMessage_Medium/New-11               92636             17849 ns/op            7627 B/op          9 allocs/op
+BenchmarkEncodeMessage_Medium/CoreV1-11            96855             17283 ns/op            4390 B/op          7 allocs/op
+BenchmarkEncodeMessage_Medium/Old-11                2184            555867 ns/op         2360782 B/op         67 allocs/op
+BenchmarkEncodeMessage_Large/Old-11                   99          12376910 ns/op        74958978 B/op        265 allocs/op
+BenchmarkEncodeMessage_Large/New-11                   96          11824316 ns/op        50960655 B/op        320 allocs/op
+BenchmarkEncodeMessage_Large/CoreV1-11                85          12326302 ns/op        41586033 B/op        525 allocs/op
+BenchmarkDecodeMessage_Small/New-11              1691006               673.0 ns/op           873 B/op         18 allocs/op
+BenchmarkDecodeMessage_Small/CoreV1-11           1866796               640.5 ns/op           877 B/op         18 allocs/op
+BenchmarkDecodeMessage_Small/Old-11               142968              8504 ns/op            9602 B/op         57 allocs/op
+BenchmarkDecodeMessage_Large/New-11                  100          12348109 ns/op        30724751 B/op      60225 allocs/op
+BenchmarkDecodeMessage_Large/CoreV1-11               156           7374878 ns/op        29917919 B/op      60273 allocs/op
+BenchmarkDecodeMessage_Large/Old-11                  154           7419759 ns/op        46718624 B/op      60283 allocs/op
+BenchmarkRoundTrip_Small/New-11                   961563              1171 ns/op            1351 B/op         24 allocs/op
+BenchmarkRoundTrip_Small/CoreV1-11               1000000              1354 ns/op            1359 B/op         24 allocs/op
+BenchmarkRoundTrip_Small/Old-11                     4320            265954 ns/op         2343031 B/op        109 allocs/op
+BenchmarkRoundTrip_Large/New-11                       58          55770750 ns/op        93864056 B/op      60618 allocs/op
+BenchmarkRoundTrip_Large/CoreV1-11                    19          75884425 ns/op        68731705 B/op      60804 allocs/op
+BenchmarkRoundTrip_Large/Old-11                       19         102594044 ns/op        126040372 B/op     60545 allocs/op
+BenchmarkConcurrent/New-11                         58198             26870 ns/op           23882 B/op        194 allocs/op
+BenchmarkConcurrent/CoreV1-11                      51619             27985 ns/op           20440 B/op        192 allocs/op
+BenchmarkConcurrent/Old-11                          3698           1307224 ns/op         2401425 B/op        282 allocs/op
+BenchmarkMemoryIntensive/New-11                        1        6218905834 ns/op        3001158496 B/op  3025512 allocs/op
+BenchmarkMemoryIntensive/CoreV1-11                     1        2659947542 ns/op        2612558176 B/op  3035389 allocs/op
+BenchmarkMemoryIntensive/Old-11                        1        1737257500 ns/op        5658473776 B/op  3029752 allocs/op
+PASS
+*/
 package encoding_corev1
 
 import (
