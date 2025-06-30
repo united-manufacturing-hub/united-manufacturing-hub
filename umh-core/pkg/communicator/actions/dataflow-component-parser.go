@@ -516,3 +516,10 @@ func ValidateProtocolConverterName(name string) error {
 	}
 	return nil
 }
+
+func ValidateDataFlowComponentState(state string) error {
+	if state != dataflowcomponent.OperationalStateStopped && state != dataflowcomponent.OperationalStateActive {
+		return fmt.Errorf("invalid state: %s", state)
+	}
+	return nil
+}

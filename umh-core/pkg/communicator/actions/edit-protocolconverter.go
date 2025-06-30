@@ -277,7 +277,7 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 		}
 
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-			"Protocol converter successfully updated and activated", a.outboundChannel, models.EditProtocolConverter)
+			"Protocol converter successfully updated", a.outboundChannel, models.EditProtocolConverter)
 	}
 
 	newUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name)

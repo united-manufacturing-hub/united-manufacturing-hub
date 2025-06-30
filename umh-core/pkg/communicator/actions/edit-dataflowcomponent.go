@@ -188,8 +188,8 @@ func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
 	}
 
 	a.state = topLevel.State
-	if a.state != dataflowcomponent.OperationalStateStopped && a.state != dataflowcomponent.OperationalStateActive {
-		return fmt.Errorf("invalid state: %s", a.state)
+	if err := ValidateDataFlowComponentState(a.state); err != nil {
+		return err
 	}
 
 	//set the new component UUID by the name
@@ -434,9 +434,6 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 		benthosPipeline["processors"] = processors
 	}
 
-	// get the desired state
-	desiredState := a.state
-
 	// Create the Benthos service config
 	benthosConfig := benthosserviceconfig.BenthosServiceConfig{
 		Input:              benthosInput,
@@ -454,7 +451,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 	dfc := config.DataFlowComponentConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            a.name,
-			DesiredFSMState: desiredState,
+			DesiredFSMState: a.state,
 		},
 		DataFlowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 			BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
@@ -556,7 +553,7 @@ func (a *EditDataflowComponentAction) waitForComponentToBeReady(ctx context.Cont
 	for {
 		select {
 		case <-timeout:
-			stateMessage := Label("edit", a.name) + "timeout reached. it did not become active in time. rolling back"
+			stateMessage := Label("edit", a.name) + "timeout reached. it did not start in time. rolling back"
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage, a.outboundChannel, models.EditDataFlowComponent)
 
 			_, err := a.configManager.AtomicEditDataflowcomponent(ctx, a.newComponentUUID, a.oldConfig)
@@ -564,7 +561,7 @@ func (a *EditDataflowComponentAction) waitForComponentToBeReady(ctx context.Cont
 				a.actionLogger.Errorf("failed to roll back dataflow component %s: %v", a.name, err)
 				return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component '%s' failed to activate within timeout and could not be rolled back: %v. Please check system load and consider manually restoring the previous configuration", a.name, err)
 			}
-			return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component '%s' was rolled back to its previous configuration because it did not become active within the timeout period. Please check system load or component configuration and try again", a.name)
+			return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component '%s' was rolled back to its previous configuration because it did not start within the timeout period. Please check system load or component configuration and try again", a.name)
 
 		case <-ticker.C:
 			elapsed := time.Since(startTime)

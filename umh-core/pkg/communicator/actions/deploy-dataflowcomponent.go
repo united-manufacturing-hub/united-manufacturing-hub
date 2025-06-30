@@ -137,8 +137,8 @@ func (a *DeployDataflowComponentAction) Parse(payload interface{}) error {
 	a.metaType = topLevel.Meta.Type
 	a.ignoreHealthCheck = topLevel.IgnoreHealthCheck
 	a.state = topLevel.State
-	if a.state != dataflowcomponent.OperationalStateStopped && a.state != dataflowcomponent.OperationalStateActive {
-		return fmt.Errorf("invalid state: %s", a.state)
+	if err := ValidateDataFlowComponentState(a.state); err != nil {
+		return err
 	}
 
 	// Handle different component types
@@ -297,7 +297,7 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeReady(ctx context.Co
 
 		select {
 		case <-timeout:
-			stateMessage := Label("deploy", a.name) + "timeout reached. it did not become active in time. removing"
+			stateMessage := Label("deploy", a.name) + "timeout reached. it did not start in time. removing"
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage,
 				a.outboundChannel, models.DeployDataFlowComponent)
 			err := a.configManager.AtomicDeleteDataflowcomponent(ctx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name))
@@ -305,7 +305,7 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeReady(ctx context.Co
 				a.actionLogger.Errorf("failed to remove dataflowcomponent %s: %v", a.name, err)
 				return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component '%s' failed to activate within timeout but could not be removed: %v. Please check system load and consider removing the component manually", a.name, err)
 			}
-			return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component '%s' was removed because it did not become active within the timeout period. Please check system load or component configuration and try again", a.name)
+			return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component '%s' was removed because it did not start within the timeout period. Please check system load or component configuration and try again", a.name)
 
 		case <-ticker.C:
 
