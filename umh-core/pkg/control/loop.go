@@ -65,6 +65,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/starvationchecker"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 // ControlLoop is the central orchestration component of the UMH Core.
@@ -324,16 +325,50 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	var executedManagers []string
 	executedManagersMutex := sync.RWMutex{}
 
+	// Track if any managers were reconciled
+	hasAnyReconciles := false
+	hasAnyReconcilesMutex := sync.Mutex{}
+
+	errorgroup, _ := errgroup.WithContext(ctx)
 	for _, manager := range c.managers {
-		reconciled, err := c.reconcileManager(ctx, manager, &executedManagers, &executedManagersMutex, newSnapshot)
-		if err != nil {
-			return fmt.Errorf("manager reconciliation failed: %w", err)
-		}
-		if reconciled {
-			// Create a snapshot after any successful reconciliation
-			c.updateSystemSnapshot(ctx, cfg)
+		capturedManager := manager
+
+		errorgroup.Go(func() error {
+
+			reconciled, err := c.reconcileManager(ctx, capturedManager, &executedManagers, &executedManagersMutex, newSnapshot)
+			if err != nil {
+				return err
+			}
+			if reconciled {
+				hasAnyReconcilesMutex.Lock()
+				hasAnyReconciles = true
+				hasAnyReconcilesMutex.Unlock()
+			}
 			return nil
-		}
+		})
+	}
+	waitErrorChannel := make(chan error, 1)
+	go func() {
+		waitErrorChannel <- errorgroup.Wait()
+	}()
+
+	select {
+	case wgErr := <-waitErrorChannel:
+		err = wgErr
+	case <-ctx.Done():
+		err = ctx.Err()
+	}
+
+	// If any managers were reconciled, create a snapshot
+	if hasAnyReconciles {
+		// Create a snapshot after any successful reconciliation
+		c.updateSystemSnapshot(ctx, cfg)
+		return nil
+	}
+
+	// If there was an error during any of the managers, return it
+	if err != nil {
+		return err
 	}
 
 	if c.starvationChecker != nil {
