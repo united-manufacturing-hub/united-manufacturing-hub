@@ -26,7 +26,7 @@ const (
 
 const (
 	// TopicBrowserUpdateObservedStateTimeout is the timeout for updating the observed state
-	TopicBrowserUpdateObservedStateTimeout = 5 * time.Millisecond
+	TopicBrowserUpdateObservedStateTimeout = 15 * time.Millisecond
 )
 const (
 	// BLOCK_START_MARKER marks the begin of a new data/general block inside the logs.

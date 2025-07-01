@@ -230,6 +230,12 @@ func (svc *Service) Status(
 		return ServiceInfo{}, ctx.Err()
 	}
 
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return ServiceInfo{}, fmt.Errorf("context deadline not set")
+	}
+	logger.For(logger.ComponentTopicBrowserService).Info("context time left for Status (topic browser)", "timeLeft", time.Until(deadline).Milliseconds())
+
 	benthosName := svc.getName(tbName)
 
 	// First, check if the service exists in the Benthos manager
@@ -284,13 +290,17 @@ func (svc *Service) Status(
 
 	// Parse the logs and decompress it via lz4, afterwards the data gets written
 	// into the ringbuffer
+	startParse := time.Now()
 	err = svc.parseBlock(logs)
 	if err != nil {
 		return ServiceInfo{}, fmt.Errorf("failed to parse block from logs: %w", err)
 	}
+	logger.For(logger.ComponentTopicBrowserService).Info("Status (topic browser) parseBlock finished in", "time", time.Since(startParse).Milliseconds())
 
 	// check for invalidMetrics from benthos and redpanda
 	statusReason, invalidMetrics := svc.checkMetrics(redpandaObservedState, benthosObservedState)
+
+	logger.For(logger.ComponentTopicBrowserService).Info("Status (topic browser) finished", "timeLeft", time.Until(deadline).Milliseconds())
 
 	// no direct reference
 	return ServiceInfo{

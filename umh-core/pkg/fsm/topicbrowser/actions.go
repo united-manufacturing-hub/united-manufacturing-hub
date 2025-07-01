@@ -194,6 +194,11 @@ func (i *TopicBrowserInstance) UpdateObservedStateOfInstance(ctx context.Context
 	}
 	// Fetch the actual Benthos config from the service
 	start = time.Now()
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return fmt.Errorf("context deadline not set")
+	}
+	logger.For(logger.ComponentTopicBrowserInstance).Info("context time left for getConfig (topic browser)", "timeLeft", time.Until(deadline).Milliseconds())
 	observedConfig, err := i.service.GetConfig(ctx, services.GetFileSystem(), i.baseFSMInstance.GetID())
 	metrics.ObserveReconcileTime(logger.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".getConfig", time.Since(start))
 	if err == nil {
