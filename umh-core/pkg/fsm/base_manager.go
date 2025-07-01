@@ -483,8 +483,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 	}
 
 	// <factor>% ctx to ensure we finish in time.
-	// 01.Jul.2025 (Ferdinand): Using a factor below 0.9 will result in integration test failures
-	const factor = 0.90
+	const factor = 0.95
 	deadline, ok := ctx.Deadline()
 	if !ok {
 		return ctx.Err(), false
