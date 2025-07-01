@@ -319,7 +319,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	const factor = 0.95
 	deadline, ok := ctx.Deadline()
 	if !ok {
-		return ctx.Err()
+		return ctxutil.ErrNoDeadline
 	}
 	remainingTime := time.Until(deadline)
 	timeToAdd := time.Duration(float64(remainingTime) * factor)
