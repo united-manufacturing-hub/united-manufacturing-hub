@@ -482,21 +482,23 @@ func (m *BaseFSMManager[C]) Reconcile(
 		delete(m.instances, instanceName)
 	}
 
-	// 80% ctx to ensure we finish in time.
+	// <factor>% ctx to ensure we finish in time.
+	// 01.Jul.2025 (Ferdinand): Using a factor below 0.9 will result in integration test failures
+	const factor = 0.90
 	deadline, ok := ctx.Deadline()
 	if !ok {
 		return ctx.Err(), false
 	}
 	remainingTime := time.Until(deadline)
-	eightyPercentTime := time.Duration(float64(remainingTime) * 0.8)
-	newDeadline := time.Now().Add(eightyPercentTime)
-	eightyPercentCtx, cancel := context.WithDeadline(ctx, newDeadline)
+	timeToAdd := time.Duration(float64(remainingTime) * factor)
+	newDeadline := time.Now().Add(timeToAdd)
+	innerCtx, cancel := context.WithDeadline(ctx, newDeadline)
 	defer cancel()
 
 	// Reconcile instances
 	// We do not use the returned ctx, as it cancles once any of the reconciles returns either an error or finishes (And the 2nd behaviour is undesired.)
 
-	errorgroup, _ := errgroup.WithContext(eightyPercentCtx)
+	errorgroup, _ := errgroup.WithContext(innerCtx)
 	// Limit the number of threads available, preventing CPU starvation for other system tasks
 	errorgroup.SetLimit(runtime.NumCPU())
 	hasAnyReconciles := false
@@ -509,7 +511,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 	snapshot.Tick = m.managerTick
 	for name, instance := range m.instances {
 		// If the ctx is already expired, we can skip adding new goroutines
-		if eightyPercentCtx.Err() != nil {
+		if innerCtx.Err() != nil {
 			m.logger.Debugf("context expired, skipping reconciliation of instance %s", name)
 			break
 		}
@@ -522,7 +524,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 			return fmt.Errorf("failed to get expected max p95 execution time for instance %s: %w", name, execTimeErr), false
 		}
 
-		remaining, sufficient, timeErr := ctxutil.HasSufficientTime(eightyPercentCtx, expectedMaxP95ExecutionTime)
+		remaining, sufficient, timeErr := ctxutil.HasSufficientTime(innerCtx, expectedMaxP95ExecutionTime)
 		if timeErr != nil {
 			if errors.Is(timeErr, ctxutil.ErrNoDeadline) {
 				return fmt.Errorf("no deadline set in context"), false
@@ -545,7 +547,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 		instanceCaptured := instance
 
 		errorgroup.Go(func() error {
-			reconciled, shallBeRemoved, err := m.reconcileInstanceWithTimeout(eightyPercentCtx, instanceCaptured, services, nameCaptured, snapshot, expectedMaxP95ExecutionTime)
+			reconciled, shallBeRemoved, err := m.reconcileInstanceWithTimeout(innerCtx, instanceCaptured, services, nameCaptured, snapshot, expectedMaxP95ExecutionTime)
 			if err != nil {
 				return err
 			}
@@ -572,8 +574,8 @@ func (m *BaseFSMManager[C]) Reconcile(
 	select {
 	case wgErr := <-waitErrorChannel:
 		err = wgErr
-	case <-eightyPercentCtx.Done():
-		err = eightyPercentCtx.Err()
+	case <-innerCtx.Done():
+		err = innerCtx.Err()
 	}
 
 	instancesToRemoveMutex.Lock()
