@@ -607,6 +607,22 @@ test-debug: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 		-e LOGGING_LEVEL=DEBUG \
 		$(IMAGE_NAME):$(TAG)
 
+test-allow-insecure-tls: stop-and-remove-umh-core-latest $(BUILD_TARGET)
+	@mkdir -p $(PWD)/data
+	@cp $(PWD)/examples/example-config-empty.yaml $(PWD)/data/config.yaml
+	docker run \
+		--name $(IMAGE_NAME) \
+		-v $(PWD)/data:/data \
+		-p 8081:8080 \
+		-p 4195:4195 \
+		-p 6060:6060 \
+		-p 40000:40000 \
+		--memory $(MEMORY) \
+		--cpus $(CPUS) \
+		-e LOGGING_LEVEL=DEBUG \
+		-e ALLOW_INSECURE_TLS=true \
+		$(IMAGE_NAME):$(TAG)
+
 # This run configuration allows easy start without overwriting the config.yaml
 test-no-copy: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 	@mkdir -p $(PWD)/data
