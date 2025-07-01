@@ -315,6 +315,18 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 		}
 	}
 
+	// <factor>% ctx to ensure we finish in time.
+	const factor = 0.95
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return ctx.Err()
+	}
+	remainingTime := time.Until(deadline)
+	timeToAdd := time.Duration(float64(remainingTime) * factor)
+	newDeadline := time.Now().Add(timeToAdd)
+	innerCtx, cancel := context.WithDeadline(ctx, newDeadline)
+	defer cancel()
+
 	// 5) Reconcile each manager with the current tick count and passing in the newSnapshot
 	// Reset manager times for this reconciliation cycle
 	c.managerTimesMutex.Lock()
@@ -329,12 +341,12 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	hasAnyReconciles := false
 	hasAnyReconcilesMutex := sync.Mutex{}
 
-	errorgroup, _ := errgroup.WithContext(ctx)
+	errorgroup, _ := errgroup.WithContext(innerCtx)
 	for _, manager := range c.managers {
 		capturedManager := manager
 
 		errorgroup.Go(func() error {
-			reconciled, err := c.reconcileManager(ctx, capturedManager, &executedManagers, &executedManagersMutex, newSnapshot)
+			reconciled, err := c.reconcileManager(innerCtx, capturedManager, &executedManagers, &executedManagersMutex, newSnapshot)
 			if err != nil {
 				return err
 			}
