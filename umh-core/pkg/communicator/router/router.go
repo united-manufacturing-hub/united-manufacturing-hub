@@ -122,7 +122,9 @@ func (r *Router) handleSub(message *models.UMHMessage, messageContent models.UMH
 		return
 	}
 
-	var subscribePayload models.SubscribeMessagePayload
+	subscribePayload := models.SubscribeMessagePayload{
+		Resubscribed: false,
+	}
 	if messageContent.Payload != nil {
 		payloadMap, ok := messageContent.Payload.(map[string]interface{})
 		if !ok {
