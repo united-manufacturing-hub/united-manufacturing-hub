@@ -118,17 +118,18 @@ func (svc *Service) parseBlock(entries []s6svc.LogEntry) error {
 		return fmt.Errorf("hex decode: %w", err)
 	}
 
-	payload, err := decompressLZ4(compressed)
-	if err != nil {
-		return err
-	}
+	/*
+		payload, err := decompressLZ4(compressed)
+		if err != nil {
+			return err
+		}
 
-	if len(payload) > maxPayloadBytes {
-		return fmt.Errorf("payload %d bytes exceed max %d limit", len(payload), maxPayloadBytes)
-	}
+		if len(payload) > maxPayloadBytes {
+			return fmt.Errorf("payload %d bytes exceed max %d limit", len(payload), maxPayloadBytes)
+		}*/
 
 	svc.ringbuffer.Add(&Buffer{
-		Payload:   payload,
+		Payload:   compressed,
 		Timestamp: time.UnixMilli(epoch),
 	})
 	return nil
