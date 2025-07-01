@@ -281,6 +281,10 @@ benchmark-s6-time:
 	@echo "Running S6 time benchmarks..."
 	cd pkg/service/s6 && go test -bench=. -benchmem
 
+benchmark-encoding:
+	@echo "Running encoding benchmarks..."
+	cd pkg/communicator/pkg/encoding && go test -bench=. -benchmem -benchtime=10s -count=1
+
 integration-test: stop-all-pods vet nilaway lint
 
 # Meta target to setup the environment for the tests

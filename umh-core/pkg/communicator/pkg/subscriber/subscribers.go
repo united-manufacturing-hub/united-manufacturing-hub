@@ -31,6 +31,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
 )
 
@@ -60,6 +61,7 @@ func NewHandler(
 	topicBrowserCache *topicbrowser.Cache,
 	topicBrowserSimulator *topicbrowser.Simulator,
 ) *Handler {
+	encoding.ChooseEncoder(encoding.EncodingCorev1)
 	s := &Handler{}
 	s.subscriberRegistry = subscribers.NewRegistry(cull, ttl)
 	s.dog = dog
@@ -119,31 +121,42 @@ func (s *Handler) notify() {
 
 	notified := 0
 	baseStatusMessage := s.StatusCollector.GenerateStatusMessage(true)
-	s.subscriberRegistry.ForEach(func(email string, bootstrapped bool) {
-		// Generate personalized status message based on bootstrap state
-		statusMessage := baseStatusMessage
-		if !bootstrapped {
-			// If the subscriber is not bootstrapped, we need to generate a new status message
-			statusMessage = s.StatusCollector.GenerateStatusMessage(false)
-		}
+	encodedBaseStatusMessage, err := encoding.EncodeMessageFromUMHInstanceToUser(models.UMHMessageContent{
+		MessageType: models.Status,
+		Payload:     baseStatusMessage,
+	})
+	if err != nil {
+		s.logger.Warnf("Failed to encode base status message: %s", err.Error())
+		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "Failed to encode base status message: %s", err.Error())
+		return
+	}
 
+	var encodedNewSubscriberMessage string
+	if s.subscriberRegistry.HasNewSubscribers() {
+		newSubscriberMessage := s.StatusCollector.GenerateStatusMessage(false)
+		encodedNewSubscriberMessage, err = encoding.EncodeMessageFromUMHInstanceToUser(models.UMHMessageContent{
+			MessageType: models.Status,
+			Payload:     newSubscriberMessage,
+		})
+		if err != nil {
+			s.logger.Warnf("Failed to encode new subscriber message: %s", err.Error())
+			sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "Failed to encode new subscriber message: %s", err.Error())
+			return
+		}
+	}
+
+	s.subscriberRegistry.ForEach(func(email string, bootstrapped bool) {
 		if ctx.Err() != nil {
 			// It is expected that the first 1-2 times this might fail, due to the systems starting up
 			s.logger.Warnf("Failed to generate status message: %s", ctx.Err().Error())
 			return
 		}
-		if statusMessage == nil {
-			s.logger.Warnf("Failed to generate status message")
-			return
-		}
 
-		message, err := encoding.EncodeMessageFromUMHInstanceToUser(models.UMHMessageContent{
-			MessageType: models.Status,
-			Payload:     statusMessage,
-		})
-		if err != nil {
-			s.logger.Warnf("Failed to encrypt message for subscriber %s", email)
-			return
+		var message string
+		if bootstrapped {
+			message = encodedBaseStatusMessage
+		} else {
+			message = encodedNewSubscriberMessage
 		}
 
 		s.pusher.Push(models.UMHMessage{
