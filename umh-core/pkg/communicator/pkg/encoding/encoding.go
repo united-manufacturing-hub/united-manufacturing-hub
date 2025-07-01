@@ -36,11 +36,6 @@ const (
 
 func ChooseEncoder(encoding Encoding) {
 	switch encoding {
-	case EncodingOld:
-		encodeMessageFromUserToUMHInstance = encoding_old.EncodeMessageFromUserToUMHInstance
-		encodeMessageFromUMHInstanceToUser = encoding_old.EncodeMessageFromUMHInstanceToUser
-		decodeMessageFromUserToUMHInstance = encoding_old.DecodeMessageFromUserToUMHInstance
-		decodeMessageFromUMHInstanceToUser = encoding_old.DecodeMessageFromUMHInstanceToUser
 	case EncodingNew:
 		encodeMessageFromUserToUMHInstance = encoding_new.EncodeMessageFromUserToUMHInstance
 		encodeMessageFromUMHInstanceToUser = encoding_new.EncodeMessageFromUMHInstanceToUser
@@ -51,6 +46,12 @@ func ChooseEncoder(encoding Encoding) {
 		encodeMessageFromUMHInstanceToUser = encoding_corev1.EncodeMessageFromUMHInstanceToUser
 		decodeMessageFromUserToUMHInstance = encoding_corev1.DecodeMessageFromUserToUMHInstance
 		decodeMessageFromUMHInstanceToUser = encoding_corev1.DecodeMessageFromUMHInstanceToUser
+	default:
+		// Default to old encoding
+		encodeMessageFromUserToUMHInstance = encoding_old.EncodeMessageFromUserToUMHInstance
+		encodeMessageFromUMHInstanceToUser = encoding_old.EncodeMessageFromUMHInstanceToUser
+		decodeMessageFromUserToUMHInstance = encoding_old.DecodeMessageFromUserToUMHInstance
+		decodeMessageFromUMHInstanceToUser = encoding_old.DecodeMessageFromUMHInstanceToUser
 	}
 }
 

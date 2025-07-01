@@ -31,6 +31,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
 )
 
@@ -126,6 +127,8 @@ func (s *Handler) notify() {
 	})
 	if err != nil {
 		s.logger.Warnf("Failed to encode base status message: %s", err.Error())
+		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "Failed to encode base status message: %s", err.Error())
+		return
 	}
 
 	var encodedNewSubscriberMessage string
@@ -137,6 +140,8 @@ func (s *Handler) notify() {
 		})
 		if err != nil {
 			s.logger.Warnf("Failed to encode new subscriber message: %s", err.Error())
+			sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "Failed to encode new subscriber message: %s", err.Error())
+			return
 		}
 	}
 

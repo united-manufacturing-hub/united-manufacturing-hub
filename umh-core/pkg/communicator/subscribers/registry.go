@@ -115,6 +115,7 @@ func (r *Registry) HasNewSubscribers() bool {
 	r.subscribers.Range(func(key string, value SubscriberData) bool {
 		if !value.Bootstrapped {
 			hasNew = true
+			return false // Stop iteration early when non-bootstrapped subscriber is found
 		}
 		return true
 	})

@@ -132,14 +132,14 @@ var (
 )
 
 // Buffer management functions
-func getBase64Buffer() []byte {
-	return *base64BufferPool.Get().(*[]byte)
+func getBase64Buffer() *[]byte {
+	return base64BufferPool.Get().(*[]byte)
 }
 
-func putBase64Buffer(b []byte) {
-	if cap(b) <= MaxPooledBufferSize {
-		b = b[:0] // reset length
-		base64BufferPool.Put(&b)
+func putBase64Buffer(b *[]byte) {
+	if cap(*b) <= MaxPooledBufferSize {
+		*b = (*b)[:0] // reset length
+		base64BufferPool.Put(b)
 	}
 }
 
@@ -258,15 +258,15 @@ func encodeBase64(data []byte) string {
 	builder.Grow(encodedLen)
 
 	buf := getBase64Buffer()
-	if cap(buf) < encodedLen {
-		buf = make([]byte, encodedLen)
+	if cap(*buf) < encodedLen {
+		*buf = make([]byte, encodedLen)
 	} else {
-		buf = buf[:encodedLen]
+		*buf = (*buf)[:encodedLen]
 	}
 	defer putBase64Buffer(buf)
 
-	base64.StdEncoding.Encode(buf, data)
-	builder.Write(buf)
+	base64.StdEncoding.Encode(*buf, data)
+	builder.Write(*buf)
 	return builder.String()
 }
 
@@ -275,21 +275,21 @@ func decodeBase64(data string) ([]byte, error) {
 	decodedLen := base64.StdEncoding.DecodedLen(len(data))
 
 	buf := getBase64Buffer()
-	if cap(buf) < decodedLen {
-		buf = make([]byte, decodedLen)
+	if cap(*buf) < decodedLen {
+		*buf = make([]byte, decodedLen)
 	} else {
-		buf = buf[:decodedLen]
+		*buf = (*buf)[:decodedLen]
 	}
 	defer putBase64Buffer(buf)
 
-	n, err := base64.StdEncoding.Decode(buf, []byte(data))
+	n, err := base64.StdEncoding.Decode(*buf, []byte(data))
 	if err != nil {
 		return nil, err
 	}
 
 	// Return exact size
 	result := make([]byte, n)
-	copy(result, buf[:n])
+	copy(result, (*buf)[:n])
 	return result, nil
 }
 
