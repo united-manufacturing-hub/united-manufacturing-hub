@@ -334,7 +334,6 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 		capturedManager := manager
 
 		errorgroup.Go(func() error {
-
 			reconciled, err := c.reconcileManager(ctx, capturedManager, &executedManagers, &executedManagersMutex, newSnapshot)
 			if err != nil {
 				return err
@@ -360,6 +359,8 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	}
 
 	// If any managers were reconciled, create a snapshot
+	hasAnyReconcilesMutex.Lock()
+	defer hasAnyReconcilesMutex.Unlock()
 	if hasAnyReconciles {
 		// Create a snapshot after any successful reconciliation
 		c.updateSystemSnapshot(ctx, cfg)
