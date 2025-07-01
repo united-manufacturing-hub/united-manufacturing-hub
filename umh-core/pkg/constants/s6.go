@@ -32,6 +32,18 @@ const (
 	S6UpdateObservedStateTimeout = time.Millisecond * 3
 	S6RemoveTimeout              = time.Millisecond * 3
 	S6MaxLines                   = 10000
+
+	// S6FileReadTimeBuffer is the minimum time buffer required before attempting to read a file chunk
+	// This is half of DefaultTickerTime to ensure graceful early exit from file operations
+	// WHY HALF: Provides safety margin to complete current chunk + cleanup before context deadline
+	// BUSINESS LOGIC: Prevents timeout failures by returning partial success instead of total failure
+	S6FileReadTimeBuffer = DefaultTickerTime / 2
+
+	// S6FileReadChunkSize is the buffer size used for reading files in chunks
+	// Set to 1MB for optimal I/O performance while maintaining memory efficiency
+	// WHY 1MB: Balance between I/O throughput (fewer syscalls) and memory usage (bounded allocation)
+	// PERFORMANCE: Large enough to amortize syscall overhead, small enough to avoid memory pressure
+	S6FileReadChunkSize = 1024 * 1024
 )
 
 const (
