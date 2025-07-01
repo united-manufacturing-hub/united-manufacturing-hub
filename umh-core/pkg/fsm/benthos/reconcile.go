@@ -310,18 +310,21 @@ func (b *BenthosInstance) reconcileStartingStates(ctx context.Context, services 
 		// If the S6 is not running, go back to starting
 		running, reason := b.IsBenthosS6Running()
 		if !running {
+			b.baseFSMInstance.GetLogger().Debugf("IsBenthosS6Running: %s", reason)
 			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("start failed: %s", reason)
 			return b.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
 
 		loaded, reason := b.IsBenthosConfigLoaded()
 		if !loaded {
+			b.baseFSMInstance.GetLogger().Debugf("IsBenthosConfigLoaded: %s", reason)
 			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("start failed: %s", reason)
 			return b.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
 
 		passed, reason := b.IsBenthosHealthchecksPassed(currentTick)
 		if !passed {
+			b.baseFSMInstance.GetLogger().Debugf("IsBenthosHealthchecksPassed: %s", reason)
 			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("start failed: %s", reason)
 			return b.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
@@ -329,6 +332,7 @@ func (b *BenthosInstance) reconcileStartingStates(ctx context.Context, services 
 		// Check if service has been running stably for some time
 		running, reason = b.IsBenthosRunningForSomeTimeWithoutErrors(currentTime, constants.BenthosLogWindow)
 		if !running {
+			b.baseFSMInstance.GetLogger().Debugf("IsBenthosRunningForSomeTimeWithoutErrors: %s", reason)
 			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("waiting for service to remain running: %s", reason)
 			return nil, false
 		}

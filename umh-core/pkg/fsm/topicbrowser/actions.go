@@ -302,6 +302,7 @@ func (i *TopicBrowserInstance) IsTopicBrowserDegraded() (isDegraded bool, reason
 
 // isBenthosRunning checks if the Benthos service is running
 func (i *TopicBrowserInstance) isBenthosRunning() bool {
+	i.baseFSMInstance.GetLogger().Debugf("isBenthosRunning: %s", i.ObservedState.ServiceInfo.BenthosFSMState)
 	switch i.ObservedState.ServiceInfo.BenthosFSMState {
 	case benthosfsm.OperationalStateActive, benthosfsm.OperationalStateIdle:
 		return true
@@ -311,6 +312,7 @@ func (i *TopicBrowserInstance) isBenthosRunning() bool {
 
 // isRedpandaRunning checks if the Redpanda service is running
 func (i *TopicBrowserInstance) isRedpandaRunning() bool {
+	i.baseFSMInstance.GetLogger().Debugf("isRedpandaRunning: %s", i.ObservedState.ServiceInfo.RedpandaFSMState)
 	switch i.ObservedState.ServiceInfo.RedpandaFSMState {
 	case rpfsm.OperationalStateActive, rpfsm.OperationalStateIdle:
 		return true
