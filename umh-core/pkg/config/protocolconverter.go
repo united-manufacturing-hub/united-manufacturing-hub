@@ -161,32 +161,11 @@ func (m *FileConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 		}
 	}
 
-	// If it's a child (TemplateRef is non-empty and not a root), validate that the template reference exists
-	if !newIsRoot && pc.ProtocolConverterServiceConfig.TemplateRef != "" {
-		templateRef := pc.ProtocolConverterServiceConfig.TemplateRef
-		rootExists := false
-
-		// Scan existing protocol converters to find a root with matching name
-		// Note: we check the updated slice which may include renamed roots
-		for i, inst := range config.ProtocolConverter {
-			// Skip the instance being edited since it's not committed yet
-			if i == targetIndex {
-				continue
-			}
-			if inst.Name == templateRef && inst.ProtocolConverterServiceConfig.TemplateRef == inst.Name {
-				rootExists = true
-				break
-			}
-		}
-
-		// Also check if the new instance itself becomes the root for this template
-		if pc.Name == templateRef && newIsRoot {
-			rootExists = true
-		}
-
-		if !rootExists {
-			return ProtocolConverterConfig{}, fmt.Errorf("template %q not found for child %s", templateRef, pc.Name)
-		}
+	// If it's a child (TemplateRef is non-empty and not a root), reject the edit
+	if !oldIsRoot && pc.ProtocolConverterServiceConfig.TemplateRef != "" {
+		return ProtocolConverterConfig{},
+			fmt.Errorf("cannot edit child %q; it is not a root. Edit the root instead: %q",
+				oldConfig.Name, oldConfig.ProtocolConverterServiceConfig.TemplateRef)
 	}
 
 	// Commit the edit
