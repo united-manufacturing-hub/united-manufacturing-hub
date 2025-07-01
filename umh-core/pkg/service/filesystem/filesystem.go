@@ -285,7 +285,7 @@ func (s *DefaultService) ReadFileRange(
 		}
 
 		// FINAL RESULT: buf contains only actual file data, newSize = next read offset
-		logger.For(logger.ComponentFilesystemService).Info("ReadFileRange: returning final result", "path: ", path, "from: ", from, "newSize: ", from+int64(len(buf)))
+		logger.For(logger.ComponentFilesystemService).Infof("ReadFileRange: returning final result, path: %s, from: %d, newSize: %d", path, from, from+int64(len(buf)))
 		resCh <- result{buf, from + int64(len(buf)), nil}
 	}()
 
