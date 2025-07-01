@@ -486,7 +486,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 	const factor = 0.95
 	deadline, ok := ctx.Deadline()
 	if !ok {
-		return ctx.Err(), false
+		return ctxutil.ErrNoDeadline, false
 	}
 	remainingTime := time.Until(deadline)
 	timeToAdd := time.Duration(float64(remainingTime) * factor)
