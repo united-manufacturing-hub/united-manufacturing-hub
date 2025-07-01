@@ -325,7 +325,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	executedManagersMutex := sync.RWMutex{}
 
 	for _, manager := range c.managers {
-		reconciled, err := c.reconcileManager(ctx, manager, cfg, &executedManagers, &executedManagersMutex, newSnapshot)
+		reconciled, err := c.reconcileManager(ctx, manager, &executedManagers, &executedManagersMutex, newSnapshot)
 		if err != nil {
 			return fmt.Errorf("manager reconciliation failed: %w", err)
 		}
@@ -446,7 +446,7 @@ func (c *ControlLoop) logManagerTimes(remaining time.Duration, executedManagers 
 	c.logger.Warnf("Total time: %v", totalTime)
 }
 
-func (c *ControlLoop) reconcileManager(ctx context.Context, manager fsm.FSMManager[any], cfg config.FullConfig, executedManagers *[]string, executedManagersMutex *sync.RWMutex, newSnapshot fsm.SystemSnapshot) (bool, error) {
+func (c *ControlLoop) reconcileManager(ctx context.Context, manager fsm.FSMManager[any], executedManagers *[]string, executedManagersMutex *sync.RWMutex, newSnapshot fsm.SystemSnapshot) (bool, error) {
 	managerName := manager.GetManagerName()
 	executedManagersMutex.Lock()
 	*executedManagers = append(*executedManagers, managerName)
