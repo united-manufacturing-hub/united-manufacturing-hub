@@ -45,6 +45,10 @@ const (
 
 	// number of control‑loop ticks a manager stays in cooldown
 	CoolDownTicks = 5
+
+	// factor is the factor by which we reduce the remaining time for the inner control loop.
+	// This is used to ensure that we finish in time.
+	LoopControlLoopTimeFactor = 0.95
 )
 
 // FilesAndDirectoriesToIgnore is a list of files and directories that we will not read.

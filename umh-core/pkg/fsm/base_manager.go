@@ -483,13 +483,12 @@ func (m *BaseFSMManager[C]) Reconcile(
 	}
 
 	// <factor>% ctx to ensure we finish in time.
-	const factor = 0.95
 	deadline, ok := ctx.Deadline()
 	if !ok {
 		return ctxutil.ErrNoDeadline, false
 	}
 	remainingTime := time.Until(deadline)
-	timeToAdd := time.Duration(float64(remainingTime) * factor)
+	timeToAdd := time.Duration(float64(remainingTime) * constants.BaseManagerControlLoopTimeFactor)
 	newDeadline := time.Now().Add(timeToAdd)
 	innerCtx, cancel := context.WithDeadline(ctx, newDeadline)
 	defer cancel()

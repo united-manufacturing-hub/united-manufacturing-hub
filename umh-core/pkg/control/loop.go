@@ -316,13 +316,12 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	}
 
 	// <factor>% ctx to ensure we finish in time.
-	const factor = 0.95
 	deadline, ok := ctx.Deadline()
 	if !ok {
 		return ctxutil.ErrNoDeadline
 	}
 	remainingTime := time.Until(deadline)
-	timeToAdd := time.Duration(float64(remainingTime) * factor)
+	timeToAdd := time.Duration(float64(remainingTime) * constants.LoopControlLoopTimeFactor)
 	newDeadline := time.Now().Add(timeToAdd)
 	innerCtx, cancel := context.WithDeadline(ctx, newDeadline)
 	defer cancel()
