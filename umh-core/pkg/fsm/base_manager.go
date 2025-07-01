@@ -487,8 +487,10 @@ func (m *BaseFSMManager[C]) Reconcile(
 	if !ok {
 		return ctx.Err(), false
 	}
-	deadline = deadline.Add(-time.Duration(float64(time.Until(deadline))*0.8) / 100)
-	eightyPercentCtx, cancel := context.WithDeadline(ctx, deadline)
+	remainingTime := time.Until(deadline)
+	eightyPercentTime := time.Duration(float64(remainingTime) * 0.8)
+	newDeadline := time.Now().Add(eightyPercentTime)
+	eightyPercentCtx, cancel := context.WithDeadline(ctx, newDeadline)
 	defer cancel()
 
 	// Reconcile instances
