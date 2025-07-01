@@ -25,7 +25,7 @@ const (
 )
 
 const (
-	BenthosUpdateObservedStateTimeout = time.Millisecond * 5
+	BenthosUpdateObservedStateTimeout = time.Millisecond * 15
 )
 
 const (

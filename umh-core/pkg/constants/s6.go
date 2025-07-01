@@ -37,7 +37,7 @@ const (
 	// This is half of DefaultTickerTime to ensure graceful early exit from file operations
 	// WHY HALF: Provides safety margin to complete current chunk + cleanup before context deadline
 	// BUSINESS LOGIC: Prevents timeout failures by returning partial success instead of total failure
-	S6FileReadTimeBuffer = DefaultTickerTime / 2
+	S6FileReadTimeBuffer = time.Millisecond * 1
 
 	// S6FileReadChunkSize is the buffer size used for reading files in chunks
 	// Set to 1MB for optimal I/O performance while maintaining memory efficiency

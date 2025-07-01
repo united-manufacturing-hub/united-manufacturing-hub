@@ -235,7 +235,12 @@ func (s *DefaultService) ReadFileRange(
 
 		// CONTEXT-AWARE TIMING: Check remaining time before each chunk to avoid timeout failures
 		// If less than timeBuffer remains, gracefully exit with partial data instead of timing out
-		timeBuffer := constants.S6FileReadTimeBuffer
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			resCh <- result{nil, 0, fmt.Errorf("context deadline not set")}
+			return
+		}
+		timeBuffer := time.Until(deadline) / 2
 
 		// MEMORY PREALLOCATION: Pre-allocate capacity but start with zero length
 		// This avoids repeated allocations during append() while not wasting memory
@@ -253,6 +258,7 @@ func (s *DefaultService) ReadFileRange(
 			if deadline, ok := ctx.Deadline(); ok {
 				if remaining := time.Until(deadline); remaining < timeBuffer {
 					// NEWSIZE CALCULATION: from + bytes_read = next offset to read from
+					logger.For(logger.ComponentFilesystemService).Info("ReadFileRange: returning partial data due to context deadline", "path", path, "from", from, "newSize", from+int64(len(buf)), "remainingMs", remaining.Milliseconds())
 					resCh <- result{buf, from + int64(len(buf)), nil}
 					return
 				}
@@ -279,6 +285,7 @@ func (s *DefaultService) ReadFileRange(
 		}
 
 		// FINAL RESULT: buf contains only actual file data, newSize = next read offset
+		logger.For(logger.ComponentFilesystemService).Info("ReadFileRange: returning final result", "path: ", path, "from: ", from, "newSize: ", from+int64(len(buf)))
 		resCh <- result{buf, from + int64(len(buf)), nil}
 	}()
 
