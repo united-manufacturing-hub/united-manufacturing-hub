@@ -366,8 +366,8 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	select {
 	case wgErr := <-waitErrorChannel:
 		err = wgErr
-	case <-ctx.Done():
-		err = ctx.Err()
+	case <-innerCtx.Done():
+		err = innerCtx.Err()
 	}
 
 	// If any managers were reconciled, create a snapshot
