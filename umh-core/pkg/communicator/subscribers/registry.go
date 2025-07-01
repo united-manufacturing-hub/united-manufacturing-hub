@@ -112,7 +112,7 @@ func (r *Registry) HasNewSubscribers() bool {
 	defer r.mu.RUnlock()
 
 	hasNew := false
-	r.subscribers.Range(func(key string, value *SubscriberData) bool {
+	r.subscribers.Range(func(key string, value SubscriberData) bool {
 		if !value.Bootstrapped {
 			hasNew = true
 		}
