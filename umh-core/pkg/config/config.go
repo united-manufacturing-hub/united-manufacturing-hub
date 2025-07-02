@@ -49,8 +49,8 @@ type DataModelsConfig struct {
 }
 
 type Field struct {
-	Type   string `yaml:"type,omitempty"`   // type of the field
-	_Model string `yaml:"_model,omitempty"` // this is a special field that is used to reference another data model to be used as a type for this field
+	Type     string `yaml:"type,omitempty"`   // type of the field
+	ModelRef string `yaml:"_model,omitempty"` // this is a special field that is used to reference another data model to be used as a type for this field
 }
 
 type InternalConfig struct {
