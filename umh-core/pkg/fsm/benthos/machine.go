@@ -169,7 +169,10 @@ func (b *BenthosInstance) WantsToBeStopped() bool {
 func (b *BenthosInstance) PrintState() {
 	b.baseFSMInstance.GetLogger().Debugf("Current state: %s", b.baseFSMInstance.GetCurrentFSMState())
 	b.baseFSMInstance.GetLogger().Debugf("Desired state: %s", b.baseFSMInstance.GetDesiredFSMState())
-	b.baseFSMInstance.GetLogger().Debugf("Observed state: %+v", b.ObservedState)
+	b.baseFSMInstance.GetLogger().Debugf("Service status: %s, Health: Ready=%t Live=%t",
+		b.ObservedState.ServiceInfo.BenthosStatus.StatusReason,
+		b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady,
+		b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive)
 }
 
 // GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance

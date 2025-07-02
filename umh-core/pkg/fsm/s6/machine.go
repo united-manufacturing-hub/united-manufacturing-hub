@@ -130,8 +130,10 @@ func (s *S6Instance) WantsToBeStopped() bool {
 	return s.baseFSMInstance.GetDesiredFSMState() == OperationalStateStopped
 }
 
+// PrintState prints the current state of the FSM for debugging
 func (s *S6Instance) PrintState() {
 	s.baseFSMInstance.GetLogger().Debugf("Current state: %s", s.baseFSMInstance.GetCurrentFSMState())
 	s.baseFSMInstance.GetLogger().Debugf("Desired state: %s", s.baseFSMInstance.GetDesiredFSMState())
-	s.baseFSMInstance.GetLogger().Debugf("Observed state: %+v", s.ObservedState)
+	s.baseFSMInstance.GetLogger().Debugf("Service path: %s, Status: %s",
+		s.servicePath, s.ObservedState.ServiceInfo.Status)
 }

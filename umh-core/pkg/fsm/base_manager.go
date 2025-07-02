@@ -489,6 +489,8 @@ func (m *BaseFSMManager[C]) Reconcile(
 	}
 	remainingTime := time.Until(deadline)
 	timeToAdd := time.Duration(float64(remainingTime) * constants.BaseManagerControlLoopTimeFactor)
+	m.logger.Debugf("[TIME-BUDGET] Manager %s: original=%v, factor=%.2f, allocated=%v",
+		m.managerName, remainingTime, constants.BaseManagerControlLoopTimeFactor, timeToAdd)
 	newDeadline := time.Now().Add(timeToAdd)
 	innerCtx, cancel := context.WithDeadline(ctx, newDeadline)
 	defer cancel()
@@ -531,6 +533,9 @@ func (m *BaseFSMManager[C]) Reconcile(
 			metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
 			return fmt.Errorf("deadline check error for instance %s: %w", name, timeErr), false
 		}
+
+		m.logger.Debugf("[TIME-BUDGET] Instance %s: remaining=%v, needed=%v, sufficient=%t",
+			name, remaining, expectedMaxP95ExecutionTime, sufficient)
 
 		if !sufficient {
 			m.logger.Warnf("not enough time left to reconcile instance %s (only %v remaining, needed %v), skipping",
