@@ -53,7 +53,7 @@ type DataModelVersion struct {
 }
 
 type Field struct {
-	PayloadType string  `yaml:"payloadType,omitempty"` // paylaod data type (string or number)
+	PayloadType string  `yaml:"payloadType,omitempty"` // payload data type (string or number)
 	Type        string  `yaml:"type,omitempty"`        // type of the field (timeseries only for now)
 	ModelRef    string  `yaml:"_model,omitempty"`      // this is a special field that is used to reference another data model to be used as a type for this field
 	Subfields   []Field `yaml:"subfields,omitempty"`   // subfields of the field (allow recursive definition of fields)
