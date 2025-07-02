@@ -85,13 +85,6 @@ func (m *FileConfigManager) AtomicEditDataModel(ctx context.Context, name string
 		return fmt.Errorf("failed to get config: %w", err)
 	}
 
-	// check for duplicate name before edit
-	for _, dmc := range config.DataModels {
-		if dmc.Name == name {
-			return fmt.Errorf("another data model with name %q already exists – choose a unique name", name)
-		}
-	}
-
 	targetIndex := -1
 	// find the data model to edit
 	for i, dmc := range config.DataModels {
