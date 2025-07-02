@@ -199,6 +199,8 @@ const (
 	AddDataModel ActionType = "add-datamodel"
 	// DeleteDataModel represents the action type for deleting a data model
 	DeleteDataModel ActionType = "delete-datamodel"
+	// EditDataModel represents the action type for editing a data model
+	EditDataModel ActionType = "edit-datamodel"
 )
 
 // TestNetworkConnectionPayload contains the necessary fields for executing a TestNetworkConnection action.
@@ -630,6 +632,13 @@ type AddDataModelPayload struct {
 // DeleteDataModelPayload contains the necessary fields for executing a DeleteDataModel action.
 type DeleteDataModelPayload struct {
 	Name string `json:"name" binding:"required"` // Name of the data model to delete
+}
+
+// EditDataModelPayload contains the necessary fields for executing an EditDataModel action.
+type EditDataModelPayload struct {
+	Name        string           `json:"name" binding:"required"`      // Name of the data model to edit
+	Description string           `json:"description,omitempty"`        // Description of the new data model version
+	Structure   map[string]Field `json:"structure" binding:"required"` // Structure of the new data model version (fields)
 }
 
 // Deprecated: Use GetMetricsRequest instead.
