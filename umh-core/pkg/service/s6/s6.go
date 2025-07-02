@@ -288,6 +288,32 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 		return fmt.Errorf("failed to write log run script: %w", err)
 	}
 
+	// Even with -u flag, s6-svwait still needs to subscribe to events to detect state changes
+	// Ensure the event directory allows access for the main service (running as nobody)
+	eventDir := filepath.Join(logServicePath, "event")
+	if err := fsService.EnsureDirectory(ctx, eventDir); err != nil {
+		return fmt.Errorf("failed to create event directory: %w", err)
+	}
+
+	// Set permissions to allow nobody user to subscribe to events (0755)
+	if err := fsService.Chmod(ctx, eventDir, 0755); err != nil {
+		s.logger.Warnf("Failed to set event directory permissions for %s: %v", eventDir, err)
+	}
+
+	// Also ensure the supervise directory allows access for event subscription
+	superviseDir := filepath.Join(logServicePath, "supervise")
+	if err := fsService.EnsureDirectory(ctx, superviseDir); err != nil {
+		return fmt.Errorf("failed to create supervise directory: %w", err)
+	}
+
+	// Set permissions to allow nobody user to access supervise directory (0755)
+	if err := fsService.Chmod(ctx, superviseDir, 0755); err != nil {
+		s.logger.Warnf("Failed to set supervise directory permissions for %s: %v", superviseDir, err)
+	}
+
+	// Note: s6-svwait runs as root in run script to access supervise/control pipe,
+	// then privileges are dropped to nobody only for the actual service execution
+
 	// Notification is now handled by EnsureSupervision
 	// We don't call s6-svscanctl here anymore to avoid duplicating the logic
 
@@ -305,10 +331,12 @@ func (s *DefaultService) createS6RunScript(ctx context.Context, servicePath stri
 		Command     []string
 		Env         map[string]string
 		MemoryLimit int64
+		ServicePath string
 	}{
 		Command:     command,
 		Env:         env,
 		MemoryLimit: memoryLimit,
+		ServicePath: servicePath,
 	}
 
 	// Parse and execute the template

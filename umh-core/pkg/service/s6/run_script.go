@@ -37,7 +37,11 @@ export {{ $key }} {{ $value }}
 s6-softlimit -m {{ .MemoryLimit }}
 {{- end }}
 
-# Drop privileges
+# Wait for log service to be up before starting to prevent race condition
+# Run s6-svwait as root since it needs access to supervise/control pipe
+foreground { s6-svwait -u {{ .ServicePath }}/log }
+
+# Drop privileges for the actual service
 s6-setuidgid nobody 
 
 # Keep stderr and stdout separate but both visible in logs
@@ -73,14 +77,14 @@ func getLogRunScript(config s6serviceconfig.S6ServiceConfig, logDir string) (str
 	}
 	logutilServiceCmd = fmt.Sprintf("logutil-service %s", logDir)
 
-	// Create log run script
+	// Create log run script with readiness notification to prevent race condition
 	logRunContent := fmt.Sprintf(`#!/command/execlineb -P
 fdmove -c 2 1
 foreground { mkdir -p %s }
 foreground { chown -R nobody:nobody %s }
+
 %s
-%s
-`, logDir, logDir, logutilEnv, logutilServiceCmd)
+%s`, logDir, logDir, logutilEnv, logutilServiceCmd)
 
 	return logRunContent, nil
 }
