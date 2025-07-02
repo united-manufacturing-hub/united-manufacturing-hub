@@ -30,6 +30,7 @@ import (
 type FullConfig struct {
 	Agent             AgentConfig               `yaml:"agent"`                       // Agent config, requires restart to take effect
 	Templates         TemplatesConfig           `yaml:"templates,omitempty"`         // Templates section with enforced structure for protocol converters
+	DataModels        []DataModelsConfig        `yaml:"dataModels,omitempty"`        // DataModels section with enforced structure for data models
 	DataFlow          []DataFlowComponentConfig `yaml:"dataFlow,omitempty"`          // DataFlow components to manage, can be updated while running
 	ProtocolConverter []ProtocolConverterConfig `yaml:"protocolConverter,omitempty"` // ProtocolConverter config, can be updated while runnnig
 	Internal          InternalConfig            `yaml:"internal,omitempty"`          // Internal config, not to be used by the user, only to be used for testing internal components
@@ -38,6 +39,18 @@ type FullConfig struct {
 // TemplatesConfig defines the structure for the templates section
 type TemplatesConfig struct {
 	ProtocolConverter map[string]interface{} `yaml:"protocolConverter,omitempty"` // Array of protocol converter templates
+}
+
+type DataModelsConfig struct {
+	Name        string           `yaml:"name"`                  // name of the data model
+	Version     string           `yaml:"version"`               // version of the data model (v1, v2, etc.)
+	Description string           `yaml:"description,omitempty"` // description of the data model
+	Structure   map[string]Field `yaml:"structure"`             // structure of the data model (fields)
+}
+
+type Field struct {
+	Type   string `yaml:"type,omitempty"`   // type of the field
+	_Model string `yaml:"_model,omitempty"` // this is a special field that is used to reference another data model to be used as a type for this field
 }
 
 type InternalConfig struct {
