@@ -25,7 +25,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	benthos_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
@@ -88,27 +87,17 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 		return nil, false
 	}
 
-	// Step 2: Detect external changes.
-	if err := b.reconcileExternalChanges(ctx, services, snapshot); err != nil {
-		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
-		if !errors.Is(err, benthos_service.ErrServiceNotExist) {
+	// Step 2: Try to read service status every tick (but continue even if it fails)
+	if extErr := b.reconcileExternalChanges(ctx, services, snapshot); extErr != nil {
+		// Log the error but always continue reconciling - we need ReconcileManager to run
+		// to restore child services after restart, even if we can't read their status yet
+		b.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", extErr)
 
-			if errors.Is(err, context.DeadlineExceeded) {
-				// Healthchecks occasionally take longer (sometimes up to 70ms),
-				// resulting in context.DeadlineExceeded errors. In this case, we want to
-				// mark the reconciliation as complete for this tick since we've likely
-				// already consumed significant time. We return reconciled=true to prevent
-				// further reconciliation attempts in the current tick.
-				return nil, true // We don't want to return an error here, as this can happen in normal operations
-			}
-
-			b.baseFSMInstance.SetError(err, snapshot.Tick)
-			b.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
-			return nil, false // We don't want to return an error here, because we want to continue reconciling
+		// For timeout errors, mark as reconciled to prevent further attempts this tick
+		if errors.Is(extErr, context.DeadlineExceeded) {
+			return nil, true
 		}
-
-		//nolint:ineffassign
-		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
+		// For all other errors, just continue reconciling without setting backoff
 	}
 
 	// Step 3: Attempt to reconcile the state.

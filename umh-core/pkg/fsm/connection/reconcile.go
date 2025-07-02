@@ -24,7 +24,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	connectionsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 
@@ -92,25 +91,17 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 		return nil, false
 	}
 
-	// Step 2: Detect external changes.
+	// Step 2: Try to read child status every tick (but continue even if it fails)
 	if err = c.reconcileExternalChanges(ctx, services, snapshot); err != nil {
-		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
-		if !errors.Is(err, connectionsvc.ErrServiceNotExist) {
+		// Log the error but always continue reconciling - we need ReconcileManager to run
+		// to restore child services after restart, even if we can't read their status yet
+		c.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)
 
-			if errors.Is(err, context.DeadlineExceeded) {
-				// Healthchecks occasionally take longer (sometimes up to 70ms),
-				// resulting in context.DeadlineExceeded errors. In this case, we want to
-				// mark the reconciliation as complete for this tick since we've likely
-				// already consumed significant time. We return reconciled=true to prevent
-				// further reconciliation attempts in the current tick.
-				return nil, true // We don't want to return an error here, as this can happen in normal operations
-			}
-			c.baseFSMInstance.SetError(err, snapshot.Tick)
-			c.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
-			return nil, false // We don't want to return an error here, because we want to continue reconciling
+		// For timeout errors, mark as reconciled to prevent further attempts this tick
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, true
 		}
-
-		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
+		// For all other errors, just continue reconciling without setting backoff
 	}
 
 	// Step 3: Attempt to reconcile the state.
@@ -127,15 +118,14 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
-	// Reconcile the benthosManager
+	// Reconcile the nmap Manager
 	nmapErr, nmapReconciled := c.service.ReconcileManager(ctx, services, snapshot.Tick)
 	if nmapErr != nil {
 		c.baseFSMInstance.SetError(nmapErr, snapshot.Tick)
 		c.baseFSMInstance.GetLogger().Errorf("error reconciling nmapManager: %s", nmapErr)
 		return nil, false
 	}
-
-	// If either Connection state or Nmap state was reconciled, we return reconciled so that nothing happens anymore in this tick
+	// If either Connection state or nmap manager state was reconciled, we return reconciled so that nothing happens anymore in this tick
 	// nothing should happen as we might have already taken up some significant time of the avaialble time per tick, so better
 	// to be on the safe side and let the rest handle in another tick
 	reconciled = reconciled || nmapReconciled
