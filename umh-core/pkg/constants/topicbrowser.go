@@ -21,7 +21,7 @@ const (
 )
 
 const (
-	TopicBrowserExpectedMaxP95ExecutionTimePerInstance = TopicBrowserUpdateObservedStateTimeout + time.Millisecond*40 // needs to be higher than S6ExpectedMaxP95ExecutionTimePerInstance
+	TopicBrowserExpectedMaxP95ExecutionTimePerInstance = TopicBrowserUpdateObservedStateTimeout + time.Millisecond*35 // needs to be higher than S6ExpectedMaxP95ExecutionTimePerInstance
 )
 
 const (
