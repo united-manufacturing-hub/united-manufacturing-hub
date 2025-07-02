@@ -197,6 +197,8 @@ const (
 	SetConfigFile ActionType = "set-config-file"
 	// AddDataModel represents the action type for adding a data model
 	AddDataModel ActionType = "add-datamodel"
+	// DeleteDataModel represents the action type for deleting a data model
+	DeleteDataModel ActionType = "delete-datamodel"
 )
 
 // TestNetworkConnectionPayload contains the necessary fields for executing a TestNetworkConnection action.
@@ -623,6 +625,11 @@ type AddDataModelPayload struct {
 	Name        string           `json:"name" binding:"required"`      // Name of the data model
 	Description string           `json:"description,omitempty"`        // Description of the data model version
 	Structure   map[string]Field `json:"structure" binding:"required"` // Structure of the data model (fields)
+}
+
+// DeleteDataModelPayload contains the necessary fields for executing a DeleteDataModel action.
+type DeleteDataModelPayload struct {
+	Name string `json:"name" binding:"required"` // Name of the data model to delete
 }
 
 // Deprecated: Use GetMetricsRequest instead.
