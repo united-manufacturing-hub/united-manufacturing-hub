@@ -1,0 +1,433 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package actions_test
+
+import (
+	"errors"
+	"time"
+
+	"github.com/google/uuid"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+)
+
+var _ = Describe("EditDataModelAction", func() {
+	var (
+		action          *actions.EditDataModelAction
+		mockConfigMgr   *config.MockConfigManager
+		outboundChannel chan *models.UMHMessage
+		userEmail       string
+		actionUUID      uuid.UUID
+		instanceUUID    uuid.UUID
+	)
+
+	BeforeEach(func() {
+		userEmail = "test@example.com"
+		actionUUID = uuid.New()
+		instanceUUID = uuid.New()
+		mockConfigMgr = config.NewMockConfigManager()
+		outboundChannel = make(chan *models.UMHMessage, 10)
+
+		action = actions.NewEditDataModelAction(
+			userEmail,
+			actionUUID,
+			instanceUUID,
+			outboundChannel,
+			mockConfigMgr,
+		)
+	})
+
+	AfterEach(func() {
+		close(outboundChannel)
+	})
+
+	Describe("NewEditDataModelAction", func() {
+		It("should create a new action with correct fields", func() {
+			Expect(action).ToNot(BeNil())
+			// Note: getUserEmail() and getUuid() are private methods, so we can't test them directly
+			// We test their functionality indirectly through Execute() which uses them
+		})
+	})
+
+	Describe("Parse", func() {
+		Context("with valid payload", func() {
+			It("should parse successfully", func() {
+				payload := models.EditDataModelPayload{
+					Name:        "test-model",
+					Description: "Updated test data model",
+					Structure: map[string]models.Field{
+						"field1": {
+							PayloadType: "string",
+							Type:        "required",
+						},
+						"newField": {
+							PayloadType: "number",
+							Type:        "optional",
+						},
+					},
+				}
+
+				err := action.Parse(structToMap(payload))
+
+				Expect(err).ToNot(HaveOccurred())
+				parsedPayload := action.GetParsedPayload()
+				Expect(parsedPayload.Name).To(Equal("test-model"))
+				Expect(parsedPayload.Description).To(Equal("Updated test data model"))
+				Expect(parsedPayload.Structure).To(HaveLen(2))
+			})
+		})
+
+		Context("with invalid payload type", func() {
+			It("should return error", func() {
+				invalidPayload := "not a valid payload"
+
+				err := action.Parse(invalidPayload)
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to parse payload"))
+			})
+		})
+
+		Context("with nil payload", func() {
+			It("should return error", func() {
+				err := action.Parse(nil)
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to parse payload"))
+			})
+		})
+	})
+
+	Describe("Validate", func() {
+		Context("with valid payload", func() {
+			BeforeEach(func() {
+				payload := models.EditDataModelPayload{
+					Name:        "test-model",
+					Description: "Updated test data model",
+					Structure: map[string]models.Field{
+						"field1": {
+							PayloadType: "string",
+							Type:        "required",
+						},
+					},
+				}
+				err := action.Parse(structToMap(payload))
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("should validate successfully", func() {
+				err := action.Validate()
+				Expect(err).ToNot(HaveOccurred())
+			})
+		})
+
+		Context("with missing name", func() {
+			BeforeEach(func() {
+				payload := models.EditDataModelPayload{
+					Name:        "",
+					Description: "Updated test data model",
+					Structure: map[string]models.Field{
+						"field1": {
+							PayloadType: "string",
+							Type:        "required",
+						},
+					},
+				}
+				err := action.Parse(structToMap(payload))
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("should return validation error", func() {
+				err := action.Validate()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(Equal("missing required field Name"))
+			})
+		})
+
+		Context("with empty structure", func() {
+			BeforeEach(func() {
+				payload := models.EditDataModelPayload{
+					Name:        "test-model",
+					Description: "Updated test data model",
+					Structure:   map[string]models.Field{},
+				}
+				err := action.Parse(structToMap(payload))
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("should return validation error", func() {
+				err := action.Validate()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(Equal("missing required field Structure"))
+			})
+		})
+
+		Context("with nil structure", func() {
+			BeforeEach(func() {
+				payload := models.EditDataModelPayload{
+					Name:        "test-model",
+					Description: "Updated test data model",
+					Structure:   nil,
+				}
+				err := action.Parse(structToMap(payload))
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("should return validation error", func() {
+				err := action.Validate()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(Equal("missing required field Structure"))
+			})
+		})
+	})
+
+	Describe("Execute", func() {
+		Context("with successful configuration update", func() {
+			BeforeEach(func() {
+				payload := models.EditDataModelPayload{
+					Name:        "existing-model",
+					Description: "Updated version of existing model",
+					Structure: map[string]models.Field{
+						"updatedField": {
+							PayloadType: "string",
+							Type:        "required",
+						},
+						"newField": {
+							PayloadType: "number",
+							Type:        "optional",
+						},
+						"nested": {
+							PayloadType: "object",
+							Type:        "optional",
+							Subfields: map[string]models.Field{
+								"subfield1": {
+									PayloadType: "boolean",
+									Type:        "required",
+								},
+							},
+						},
+					},
+				}
+				err := action.Parse(structToMap(payload))
+				Expect(err).ToNot(HaveOccurred())
+
+				// Set up mock config with existing data model
+				existingConfig := config.FullConfig{
+					DataModels: []config.DataModelsConfig{
+						{
+							Name: "existing-model",
+							Versions: map[uint64]config.DataModelVersion{
+								1: {
+									Description: "Original version",
+									Structure: map[string]config.Field{
+										"originalField": {
+											PayloadType: "string",
+											Type:        "required",
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+				mockConfigMgr.WithConfig(existingConfig)
+			})
+
+			It("should execute successfully", func() {
+				response, metadata, err := action.Execute()
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(metadata).To(BeNil())
+				Expect(response).ToNot(BeNil())
+
+				responseMap, ok := response.(map[string]interface{})
+				Expect(ok).To(BeTrue())
+				Expect(responseMap["name"]).To(Equal("existing-model"))
+				Expect(responseMap["description"]).To(Equal("Updated version of existing model"))
+				Expect(responseMap["version"]).To(BeNumerically(">", 1)) // Should be a higher version
+				Expect(responseMap["structure"]).ToNot(BeNil())
+
+				// Verify config manager was called
+				Expect(mockConfigMgr.AtomicEditDataModelCalled).To(BeTrue())
+			})
+
+			It("should send correct action replies to outbound channel", func() {
+				go func() {
+					defer GinkgoRecover()
+					_, _, _ = action.Execute()
+				}()
+
+				// Should receive multiple messages
+				var messages []*models.UMHMessage
+				Eventually(func() int {
+					select {
+					case msg := <-outboundChannel:
+						messages = append(messages, msg)
+					case <-time.After(100 * time.Millisecond):
+						// Timeout to prevent hanging
+					}
+					return len(messages)
+				}, "1s").Should(BeNumerically(">=", 2))
+
+				// Verify we received some messages
+				Expect(len(messages)).To(BeNumerically(">", 0))
+			})
+		})
+
+		Context("with configuration manager error", func() {
+			BeforeEach(func() {
+				payload := models.EditDataModelPayload{
+					Name:        "failing-model",
+					Description: "This will fail",
+					Structure: map[string]models.Field{
+						"field1": {
+							PayloadType: "string",
+							Type:        "required",
+						},
+					},
+				}
+				err := action.Parse(structToMap(payload))
+				Expect(err).ToNot(HaveOccurred())
+
+				// Configure mock to return error
+				mockConfigMgr.WithAtomicEditDataModelError(errors.New("mock edit error"))
+			})
+
+			It("should return error", func() {
+				response, metadata, err := action.Execute()
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("Failed to edit data model"))
+				Expect(response).To(BeNil())
+				Expect(metadata).To(BeNil())
+
+				// Verify config manager was called
+				Expect(mockConfigMgr.AtomicEditDataModelCalled).To(BeTrue())
+			})
+		})
+	})
+
+	Describe("GetParsedPayload", func() {
+		It("should return empty payload before parsing", func() {
+			payload := action.GetParsedPayload()
+			Expect(payload.Name).To(BeEmpty())
+			Expect(payload.Description).To(BeEmpty())
+			Expect(payload.Structure).To(BeNil())
+		})
+
+		It("should return parsed payload after parsing", func() {
+			originalPayload := models.EditDataModelPayload{
+				Name:        "test-model",
+				Description: "Test description",
+				Structure: map[string]models.Field{
+					"field1": {
+						PayloadType: "string",
+						Type:        "required",
+					},
+				},
+			}
+
+			err := action.Parse(structToMap(originalPayload))
+			Expect(err).ToNot(HaveOccurred())
+
+			parsedPayload := action.GetParsedPayload()
+			Expect(parsedPayload.Name).To(Equal("test-model"))
+			Expect(parsedPayload.Description).To(Equal("Test description"))
+			Expect(parsedPayload.Structure).To(HaveLen(1))
+		})
+	})
+
+	Describe("Integration with different field types", func() {
+		It("should handle editing model with complex nested structures", func() {
+			payload := models.EditDataModelPayload{
+				Name:        "complex-model",
+				Description: "Updated complex data model with new nested fields",
+				Structure: map[string]models.Field{
+					"simple_string": {
+						PayloadType: "string",
+						Type:        "required",
+					},
+					"updated_number": {
+						PayloadType: "number",
+						Type:        "optional",
+					},
+					"new_referenced_model": {
+						PayloadType: "object",
+						Type:        "required",
+						ModelRef:    "another-external-model",
+					},
+					"updated_nested_object": {
+						PayloadType: "object",
+						Type:        "optional",
+						Subfields: map[string]models.Field{
+							"updated_nested_string": {
+								PayloadType: "string",
+								Type:        "required",
+							},
+							"new_deeply_nested": {
+								PayloadType: "object",
+								Type:        "optional",
+								Subfields: map[string]models.Field{
+									"new_deep_field": {
+										PayloadType: "array",
+										Type:        "required",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			err := action.Parse(structToMap(payload))
+			Expect(err).ToNot(HaveOccurred())
+
+			err = action.Validate()
+			Expect(err).ToNot(HaveOccurred())
+
+			// Set up mock config with existing data model
+			existingConfig := config.FullConfig{
+				DataModels: []config.DataModelsConfig{
+					{
+						Name: "complex-model",
+						Versions: map[uint64]config.DataModelVersion{
+							1: {
+								Description: "Original complex model",
+								Structure: map[string]config.Field{
+									"oldField": {
+										PayloadType: "string",
+										Type:        "required",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			mockConfigMgr.WithConfig(existingConfig)
+
+			response, metadata, err := action.Execute()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(response).ToNot(BeNil())
+			Expect(metadata).To(BeNil())
+
+			// Verify config manager was called
+			Expect(mockConfigMgr.AtomicEditDataModelCalled).To(BeTrue())
+		})
+	})
+})
