@@ -101,8 +101,20 @@ func (m *FileConfigManager) AtomicEditDataModel(ctx context.Context, name string
 	// get the current data model
 	currentDataModel := config.DataModels[targetIndex]
 
+	// Find the highest version number to ensure we don't overwrite existing versions
+	maxVersion := 0
+	for versionKey := range currentDataModel.Versions {
+		if len(versionKey) > 1 && versionKey[0] == 'v' {
+			var versionNum int
+			if n, err := fmt.Sscanf(versionKey, "v%d", &versionNum); err == nil && n == 1 && versionNum > maxVersion {
+				maxVersion = versionNum
+			}
+		}
+	}
+
 	// append the new version to the data model (naming: v1, v2, etc.)
-	currentDataModel.Versions[fmt.Sprintf("v%d", len(currentDataModel.Versions)+1)] = dmVersion
+	nextVersion := maxVersion + 1
+	currentDataModel.Versions[fmt.Sprintf("v%d", nextVersion)] = dmVersion
 
 	// edit the data model in the config
 	config.DataModels[targetIndex] = currentDataModel
