@@ -630,8 +630,8 @@ func (m *MockConfigManager) AtomicAddDataModel(ctx context.Context, name string,
 	// add the data model to the config
 	config.DataModels = append(config.DataModels, DataModelsConfig{
 		Name: name,
-		Versions: map[string]DataModelVersion{
-			"v1": dmVersion,
+		Versions: map[uint64]DataModelVersion{
+			1: dmVersion,
 		},
 	})
 
@@ -677,20 +677,16 @@ func (m *MockConfigManager) AtomicEditDataModel(ctx context.Context, name string
 	currentDataModel := config.DataModels[targetIndex]
 
 	// Find the highest version number to ensure we don't overwrite existing versions
-	var maxVersion = 0
+	var maxVersion uint64 = 0
 	for versionKey := range currentDataModel.Versions {
-		if strings.HasPrefix(versionKey, "v") {
-			if versionNum, err := strconv.Atoi(versionKey[1:]); err == nil {
-				if versionNum > maxVersion {
-					maxVersion = versionNum
-				}
-			}
+		if versionKey > maxVersion {
+			maxVersion = versionKey
 		}
 	}
 
 	// append the new version to the data model
 	nextVersion := maxVersion + 1
-	currentDataModel.Versions[fmt.Sprintf("v%d", nextVersion)] = dmVersion
+	currentDataModel.Versions[nextVersion] = dmVersion
 
 	// edit the data model in the config
 	config.DataModels[targetIndex] = currentDataModel
