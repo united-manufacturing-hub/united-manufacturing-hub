@@ -19,7 +19,10 @@ import (
 	"fmt"
 )
 
-func (m *FileConfigManager) AtomicAddDataModel(ctx context.Context, dm DataModelsConfig) error {
+// AtomicAddDataModel adds a new data model to the config
+// the data model is added with the given name and version
+// the version is appended to the data model and the config is written back to the file
+func (m *FileConfigManager) AtomicAddDataModel(ctx context.Context, name string, dmVersion DataModelVersion) error {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to lock config file: %w", err)
@@ -34,13 +37,18 @@ func (m *FileConfigManager) AtomicAddDataModel(ctx context.Context, dm DataModel
 
 	// check for duplicate name before add
 	for _, dmc := range config.DataModels {
-		if dmc.Name == dm.Name {
-			return fmt.Errorf("another data model with name %q already exists – choose a unique name", dm.Name)
+		if dmc.Name == name {
+			return fmt.Errorf("another data model with name %q already exists – choose a unique name", name)
 		}
 	}
 
 	// add the data model to the config
-	config.DataModels = append(config.DataModels, dm)
+	config.DataModels = append(config.DataModels, DataModelsConfig{
+		Name: name,
+		Versions: map[string]DataModelVersion{
+			"v1": dmVersion,
+		},
+	})
 
 	// write the config back to the file
 	err = m.writeConfig(ctx, config)
@@ -51,17 +59,20 @@ func (m *FileConfigManager) AtomicAddDataModel(ctx context.Context, dm DataModel
 	return nil
 }
 
-func (m *FileConfigManagerWithBackoff) AtomicAddDataModel(ctx context.Context, dm DataModelsConfig) error {
+func (m *FileConfigManagerWithBackoff) AtomicAddDataModel(ctx context.Context, name string, dmVersion DataModelVersion) error {
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
-	return m.configManager.AtomicAddDataModel(ctx, dm)
+	return m.configManager.AtomicAddDataModel(ctx, name, dmVersion)
 }
 
-func (m *FileConfigManager) AtomicEditDataModel(ctx context.Context, dm DataModelsConfig) error {
+// AtomicEditDataModel edits (append-only) the data model with the given name and appends the new version
+// the version is appended to the data model and the config is written back to the file
+// we do not allow, editing existing versions, as this would break the data contract
+func (m *FileConfigManager) AtomicEditDataModel(ctx context.Context, name string, dmVersion DataModelVersion) error {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to lock config file: %w", err)
@@ -76,26 +87,32 @@ func (m *FileConfigManager) AtomicEditDataModel(ctx context.Context, dm DataMode
 
 	// check for duplicate name before edit
 	for _, dmc := range config.DataModels {
-		if dmc.Name == dm.Name {
-			return fmt.Errorf("another data model with name %q already exists – choose a unique name", dm.Name)
+		if dmc.Name == name {
+			return fmt.Errorf("another data model with name %q already exists – choose a unique name", name)
 		}
 	}
 
 	targetIndex := -1
 	// find the data model to edit
 	for i, dmc := range config.DataModels {
-		if dmc.Name == dm.Name {
+		if dmc.Name == name {
 			targetIndex = i
 			break
 		}
 	}
 
 	if targetIndex == -1 {
-		return fmt.Errorf("data model with name %q not found", dm.Name)
+		return fmt.Errorf("data model with name %q not found", name)
 	}
 
+	// get the current data model
+	currentDataModel := config.DataModels[targetIndex]
+
+	// append the new version to the data model (naming: v1, v2, etc.)
+	currentDataModel.Versions[fmt.Sprintf("v%d", len(currentDataModel.Versions)+1)] = dmVersion
+
 	// edit the data model in the config
-	config.DataModels[targetIndex] = dm
+	config.DataModels[targetIndex] = currentDataModel
 
 	// write the config back to the file
 	err = m.writeConfig(ctx, config)
@@ -106,14 +123,14 @@ func (m *FileConfigManager) AtomicEditDataModel(ctx context.Context, dm DataMode
 	return nil
 }
 
-func (m *FileConfigManagerWithBackoff) AtomicEditDataModel(ctx context.Context, dm DataModelsConfig) error {
+func (m *FileConfigManagerWithBackoff) AtomicEditDataModel(ctx context.Context, name string, dmVersion DataModelVersion) error {
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
-	return m.configManager.AtomicEditDataModel(ctx, dm)
+	return m.configManager.AtomicEditDataModel(ctx, name, dmVersion)
 }
 
 func (m *FileConfigManager) AtomicDeleteDataModel(ctx context.Context, name string) error {

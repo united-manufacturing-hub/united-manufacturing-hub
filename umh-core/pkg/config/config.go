@@ -41,16 +41,22 @@ type TemplatesConfig struct {
 	ProtocolConverter map[string]interface{} `yaml:"protocolConverter,omitempty"` // Array of protocol converter templates
 }
 
+// DataModelsConfig defines the structure for the data models section
 type DataModelsConfig struct {
-	Name        string           `yaml:"name"`                  // name of the data model
-	Version     string           `yaml:"version"`               // version of the data model (v1, v2, etc.)
+	Name     string                      `yaml:"name"`    // name of the data model
+	Versions map[string]DataModelVersion `yaml:"version"` // version of the data model (v1, v2, etc.)
+}
+
+type DataModelVersion struct {
 	Description string           `yaml:"description,omitempty"` // description of the data model
 	Structure   map[string]Field `yaml:"structure"`             // structure of the data model (fields)
 }
 
 type Field struct {
-	Type     string `yaml:"type,omitempty"`   // type of the field
-	ModelRef string `yaml:"_model,omitempty"` // this is a special field that is used to reference another data model to be used as a type for this field
+	PayloadType string  `yaml:"payloadType,omitempty"` // paylaod data type (string or number)
+	Type        string  `yaml:"type,omitempty"`        // type of the field (timeseries only for now)
+	ModelRef    string  `yaml:"_model,omitempty"`      // this is a special field that is used to reference another data model to be used as a type for this field
+	Subfields   []Field `yaml:"subfields,omitempty"`   // subfields of the field (allow recursive definition of fields)
 }
 
 type InternalConfig struct {
