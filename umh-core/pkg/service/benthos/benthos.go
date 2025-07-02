@@ -1046,12 +1046,35 @@ func (s *BenthosService) ServiceExists(ctx context.Context, filesystemService fi
 	s6ServiceName := s.GetS6ServiceName(benthosName)
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
 
+	// First check if the s6 service directory exists on filesystem
 	exists, err := s.s6Service.ServiceExists(ctx, s6ServicePath, filesystemService)
 	if err != nil {
 		return false
 	}
 
-	return exists
+	// If s6 service doesn't exist, return false
+	if !exists {
+		return false
+	}
+
+	// Now check if the benthos instance is registered in the FSM manager
+	// This prevents orphaned s6 services from being considered as "existing"
+	// after umh-core restarts
+	for _, s6Config := range s.s6ServiceConfigs {
+		if s6Config.Name == s6ServiceName {
+			return true
+		}
+	}
+
+	// Also check benthos monitor configs
+	for _, monitorConfig := range s.benthosMonitorConfigs {
+		if monitorConfig.Name == s6ServiceName {
+			return true
+		}
+	}
+
+	// S6 service exists on filesystem but not in FSM - likely orphaned after restart
+	return false
 }
 
 // ForceRemoveBenthos removes a Benthos instance from the S6 manager

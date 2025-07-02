@@ -567,12 +567,28 @@ func (s *NmapService) ServiceExists(ctx context.Context, filesystemService files
 	s6ServiceName := s.getS6ServiceName(nmapName)
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
 
+	// First check if the s6 service directory exists on filesystem
 	exists, err := s.s6Service.ServiceExists(ctx, s6ServicePath, filesystemService)
 	if err != nil {
 		return false
 	}
 
-	return exists
+	// If s6 service doesn't exist, return false
+	if !exists {
+		return false
+	}
+
+	// Now check if the nmap instance is registered in the FSM manager
+	// This prevents orphaned s6 services from being considered as "existing"
+	// after umh-core restarts
+	for _, s6Config := range s.s6ServiceConfigs {
+		if s6Config.Name == s6ServiceName {
+			return true
+		}
+	}
+
+	// S6 service exists on filesystem but not in FSM - likely orphaned after restart
+	return false
 }
 
 // ForceRemoveNmap removes a Nmap instance from the S6 manager
