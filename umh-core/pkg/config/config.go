@@ -48,7 +48,7 @@ type DataModelsConfig struct {
 }
 
 type DataModelVersion struct {
-	Description string           `yaml:"description,omitempty"` // description of the data model
+	Description string           `yaml:"description,omitempty"` // description of the data model version
 	Structure   map[string]Field `yaml:"structure"`             // structure of the data model (fields)
 }
 
@@ -225,6 +225,7 @@ type TopicBrowserConfig struct {
 func (c FullConfig) Clone() FullConfig {
 	clone := FullConfig{
 		Agent:             c.Agent,
+		DataModels:        make([]DataModelsConfig, len(c.DataModels)),
 		DataFlow:          make([]DataFlowComponentConfig, len(c.DataFlow)),
 		ProtocolConverter: make([]ProtocolConverterConfig, len(c.ProtocolConverter)),
 		Templates:         TemplatesConfig{},
@@ -238,6 +239,10 @@ func (c FullConfig) Clone() FullConfig {
 		}
 	}
 	err := deepcopy.Copy(&clone.Agent, &c.Agent)
+	if err != nil {
+		return FullConfig{}
+	}
+	err = deepcopy.Copy(&clone.DataModels, &c.DataModels)
 	if err != nil {
 		return FullConfig{}
 	}
