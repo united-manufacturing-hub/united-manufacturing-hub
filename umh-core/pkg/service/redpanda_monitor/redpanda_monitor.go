@@ -1323,26 +1323,12 @@ func (s *RedpandaMonitorService) ServiceExists(ctx context.Context, filesystemSe
 		return false
 	}
 
-	// First check if the s6 service directory exists on filesystem
 	exists, err := s.s6Service.ServiceExists(ctx, filepath.Join(constants.S6BaseDir, s.GetS6ServiceName()), filesystemService)
 	if err != nil {
 		return false
 	}
 
-	// If s6 service doesn't exist, return false
-	if !exists {
-		return false
-	}
-
-	// Now check if the redpanda monitor instance is registered in the FSM manager
-	// This prevents orphaned s6 services from being considered as "existing"
-	// after umh-core restarts
-	if s.s6ServiceConfig != nil {
-		return true
-	}
-
-	// S6 service exists on filesystem but not in FSM - likely orphaned after restart
-	return false
+	return exists
 }
 
 // ForceRemoveRedpandaMonitor removes a Redpanda monitor from the S6 manager

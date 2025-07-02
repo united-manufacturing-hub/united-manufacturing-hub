@@ -562,9 +562,6 @@ func (svc *Service) ReconcileManager(
 
 // ServiceExists checks if a service with the given name exists.
 // Used by the FSM to determine appropriate transitions.
-// This delegates to benthos ServiceExists which now checks both:
-// 1) s6 filesystem existence (process running)
-// 2) FSM manager registration (prevents orphaned services after restart)
 func (svc *Service) ServiceExists(
 	ctx context.Context,
 	services serviceregistry.Provider,

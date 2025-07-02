@@ -950,36 +950,13 @@ func (s *RedpandaService) ServiceExists(ctx context.Context, filesystemService f
 	s6ServiceName := s.GetS6ServiceName(benthosName)
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
 
-	// First check if the s6 service directory exists on filesystem
 	exists, err := s.s6Service.ServiceExists(ctx, s6ServicePath, filesystemService)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "Error checking if service exists for %s: %v", s6ServiceName, err)
 		return false
 	}
 
-	// If s6 service doesn't exist, return false
-	if !exists {
-		return false
-	}
-
-	// Now check if the redpanda instance is registered in the FSM manager
-	// This prevents orphaned s6 services from being considered as "existing"
-	// after umh-core restarts
-	for _, s6Config := range s.s6ServiceConfigs {
-		if s6Config.Name == s6ServiceName {
-			return true
-		}
-	}
-
-	// Also check redpanda monitor configs
-	for _, monitorConfig := range s.redpandaMonitorConfigs {
-		if monitorConfig.Name == s6ServiceName {
-			return true
-		}
-	}
-
-	// S6 service exists on filesystem but not in FSM - likely orphaned after restart
-	return false
+	return exists
 }
 
 // ForceRemoveRedpanda removes a Redpanda instance from the S6 manager
