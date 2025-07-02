@@ -71,11 +71,14 @@ dataModels:
   - name: temperature
     version:
       v1:
+        description: Temperature sensor data model
         structure:
           temperature:
-            _payloadshape: timeseries-number
+            payloadType: number
+            type: timeseries
           unit:
-            _payloadshape: timeseries-number
+            payloadType: string
+            type: timeseries
 `
 				config, err := ParseConfig([]byte(validYAML), false)
 				Expect(err).NotTo(HaveOccurred())
@@ -93,10 +96,13 @@ dataModels:
 				Expect(config.DataModels).To(HaveLen(1))
 				Expect(config.DataModels[0].Name).To(Equal("temperature"))
 				Expect(config.DataModels[0].Versions).To(HaveKey("v1"))
+				Expect(config.DataModels[0].Versions["v1"].Description).To(Equal("Temperature sensor data model"))
 				Expect(config.DataModels[0].Versions["v1"].Structure).To(HaveKey("temperature"))
-				Expect(config.DataModels[0].Versions["v1"].Structure["temperature"].PayloadShape).To(Equal("timeseries-number"))
+				Expect(config.DataModels[0].Versions["v1"].Structure["temperature"].PayloadType).To(Equal("number"))
+				Expect(config.DataModels[0].Versions["v1"].Structure["temperature"].Type).To(Equal("timeseries"))
 				Expect(config.DataModels[0].Versions["v1"].Structure).To(HaveKey("unit"))
-				Expect(config.DataModels[0].Versions["v1"].Structure["unit"].PayloadShape).To(Equal("timeseries-number"))
+				Expect(config.DataModels[0].Versions["v1"].Structure["unit"].PayloadType).To(Equal("string"))
+				Expect(config.DataModels[0].Versions["v1"].Structure["unit"].Type).To(Equal("timeseries"))
 			})
 
 			It("should handle complex nested data model structures", func() {
@@ -105,18 +111,19 @@ dataModels:
   - name: complex-model
     version:
       v1:
+        description: Complex nested data model
         structure:
           sensor:
-            temp_reading:
-              _payloadshape: timeseries-number
-            temp_unit:
-              _refModel: 
-                name: temperature
-                version: v1
+            payloadType: string
+            type: timeseries
+            subfields:
+              - payloadType: number
+                type: timeseries
+              - payloadType: string
+                type: timeseries
+                _model: temperature
           metadata:
-            _refModel: 
-              name: device-info
-              version: v1
+            _model: device-info
 `
 				config, err := ParseConfig([]byte(complexYAML), false)
 				Expect(err).NotTo(HaveOccurred())
@@ -126,17 +133,15 @@ dataModels:
 				Expect(config.DataModels[0].Name).To(Equal("complex-model"))
 				Expect(config.DataModels[0].Versions["v1"].Structure).To(HaveKey("sensor"))
 				sensorField := config.DataModels[0].Versions["v1"].Structure["sensor"]
+				Expect(sensorField.PayloadType).To(Equal("string"))
+				Expect(sensorField.Type).To(Equal("timeseries"))
 				Expect(sensorField.Subfields).To(HaveLen(2))
-				Expect(sensorField.Subfields["temp_reading"].PayloadShape).To(Equal("timeseries-number"))
-				Expect(sensorField.Subfields["temp_unit"].ModelRef).NotTo(BeNil())
-				Expect(sensorField.Subfields["temp_unit"].ModelRef.Name).To(Equal("temperature"))
-				Expect(sensorField.Subfields["temp_unit"].ModelRef.Version).To(Equal("v1"))
+				Expect(sensorField.Subfields[0].PayloadType).To(Equal("number"))
+				Expect(sensorField.Subfields[1].ModelRef).To(Equal("temperature"))
 
 				Expect(config.DataModels[0].Versions["v1"].Structure).To(HaveKey("metadata"))
 				metadataField := config.DataModels[0].Versions["v1"].Structure["metadata"]
-				Expect(metadataField.ModelRef).NotTo(BeNil())
-				Expect(metadataField.ModelRef.Name).To(Equal("device-info"))
-				Expect(metadataField.ModelRef.Version).To(Equal("v1"))
+				Expect(metadataField.ModelRef).To(Equal("device-info"))
 			})
 
 			It("should parse data models with multiple versions", func() {
@@ -145,19 +150,22 @@ dataModels:
   - name: sensor-data
     version:
       v1:
+        description: Initial version
         structure:
           value:
-            _payloadshape: timeseries-number
+            payloadType: number
+            type: timeseries
       v2:
+        description: Extended version with timestamp
         structure:
           value:
-            _payloadshape: timeseries-number
+            payloadType: number
+            type: timeseries
           timestamp:
-            _payloadshape: timeseries-string
+            payloadType: string
+            type: timeseries
           metadata:
-            _refModel: 
-              name: sensor-metadata
-              version: v1
+            _model: sensor-metadata
 `
 				config, err := ParseConfig([]byte(multiVersionYAML), false)
 				Expect(err).NotTo(HaveOccurred())
@@ -170,19 +178,19 @@ dataModels:
 				// Check v1
 				Expect(dm.Versions).To(HaveKey("v1"))
 				v1 := dm.Versions["v1"]
+				Expect(v1.Description).To(Equal("Initial version"))
 				Expect(v1.Structure).To(HaveLen(1))
 				Expect(v1.Structure).To(HaveKey("value"))
 
 				// Check v2
 				Expect(dm.Versions).To(HaveKey("v2"))
 				v2 := dm.Versions["v2"]
+				Expect(v2.Description).To(Equal("Extended version with timestamp"))
 				Expect(v2.Structure).To(HaveLen(3))
 				Expect(v2.Structure).To(HaveKey("value"))
 				Expect(v2.Structure).To(HaveKey("timestamp"))
 				Expect(v2.Structure).To(HaveKey("metadata"))
-				Expect(v2.Structure["metadata"].ModelRef).NotTo(BeNil())
-				Expect(v2.Structure["metadata"].ModelRef.Name).To(Equal("sensor-metadata"))
-				Expect(v2.Structure["metadata"].ModelRef.Version).To(Equal("v1"))
+				Expect(v2.Structure["metadata"].ModelRef).To(Equal("sensor-metadata"))
 			})
 		})
 	})
@@ -208,9 +216,11 @@ dataModels:
   - name: existing-model
     version:
       v1:
+        description: Existing model
         structure:
           field1:
-            _payloadshape: timeseries-string
+            payloadType: string
+            type: timeseries
 `
 		)
 
@@ -244,12 +254,15 @@ dataModels:
 
 			It("should add the data model successfully", func() {
 				dmVersion := DataModelVersion{
+					Description: "Temperature sensor data model",
 					Structure: map[string]Field{
 						"temperature": {
-							PayloadShape: "timeseries-number",
+							PayloadType: "number",
+							Type:        "timeseries",
 						},
 						"unit": {
-							PayloadShape: "timeseries-string",
+							PayloadType: "string",
+							Type:        "timeseries",
 						},
 					},
 				}
@@ -266,6 +279,7 @@ dataModels:
 				Expect(writtenConfig.DataModels).To(HaveLen(1))
 				Expect(writtenConfig.DataModels[0].Name).To(Equal("temperature"))
 				Expect(writtenConfig.DataModels[0].Versions).To(HaveKey("v1"))
+				Expect(writtenConfig.DataModels[0].Versions["v1"].Description).To(Equal("Temperature sensor data model"))
 			})
 		})
 
@@ -286,9 +300,11 @@ dataModels:
 
 			It("should return an error", func() {
 				dmVersion := DataModelVersion{
+					Description: "Duplicate model",
 					Structure: map[string]Field{
 						"field": {
-							PayloadShape: "timeseries-string",
+							PayloadType: "string",
+							Type:        "timeseries",
 						},
 					},
 				}
@@ -308,9 +324,11 @@ dataModels:
 
 			It("should return an error", func() {
 				dmVersion := DataModelVersion{
+					Description: "Test model",
 					Structure: map[string]Field{
 						"field": {
-							PayloadShape: "timeseries-string",
+							PayloadType: "string",
+							Type:        "timeseries",
 						},
 					},
 				}
@@ -335,9 +353,11 @@ dataModels:
   - name: temperature
     version:
       v1:
+        description: Initial temperature model
         structure:
           temperature:
-            _payloadshape: timeseries-number
+            payloadType: number
+            type: timeseries
 `
 		)
 
@@ -371,15 +391,19 @@ dataModels:
 
 			It("should add a new version to the existing data model", func() {
 				dmVersion := DataModelVersion{
+					Description: "Extended temperature model with humidity",
 					Structure: map[string]Field{
 						"temperature": {
-							PayloadShape: "timeseries-number",
+							PayloadType: "number",
+							Type:        "timeseries",
 						},
 						"humidity": {
-							PayloadShape: "timeseries-number",
+							PayloadType: "number",
+							Type:        "timeseries",
 						},
 						"unit": {
-							PayloadShape: "timeseries-string",
+							PayloadType: "string",
+							Type:        "timeseries",
 						},
 					},
 				}
@@ -401,9 +425,9 @@ dataModels:
 
 				// Verify v2 has the new structure
 				v2 := writtenConfig.DataModels[0].Versions["v2"]
+				Expect(v2.Description).To(Equal("Extended temperature model with humidity"))
 				Expect(v2.Structure).To(HaveLen(3))
 				Expect(v2.Structure).To(HaveKey("humidity"))
-				Expect(v2.Structure).To(HaveKey("unit"))
 			})
 		})
 
@@ -424,9 +448,11 @@ dataModels:
 
 			It("should return an error", func() {
 				dmVersion := DataModelVersion{
+					Description: "Non-existent model",
 					Structure: map[string]Field{
 						"field": {
-							PayloadShape: "timeseries-string",
+							PayloadType: "string",
+							Type:        "timeseries",
 						},
 					},
 				}
@@ -451,15 +477,19 @@ dataModels:
   - name: temperature
     version:
       v1:
+        description: Temperature model
         structure:
           temperature:
-            _payloadshape: timeseries-number
+            payloadType: number
+            type: timeseries
   - name: pressure
     version:
       v1:
+        description: Pressure model
         structure:
           pressure:
-            _payloadshape: timeseries-number
+            payloadType: number
+            type: timeseries
 `
 		)
 

@@ -48,7 +48,7 @@ type DataModelsConfig struct {
 }
 
 type DataModelVersion struct {
-	Description string           `yaml:"description,omitempty"` // description of the data model
+	Description string           `yaml:"description,omitempty"` // description of the data model version
 	Structure   map[string]Field `yaml:"structure"`             // structure of the data model (fields)
 }
 
