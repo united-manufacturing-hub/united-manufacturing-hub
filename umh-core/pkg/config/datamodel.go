@@ -45,8 +45,8 @@ func (m *FileConfigManager) AtomicAddDataModel(ctx context.Context, name string,
 	// add the data model to the config
 	config.DataModels = append(config.DataModels, DataModelsConfig{
 		Name: name,
-		Versions: map[string]DataModelVersion{
-			"v1": dmVersion,
+		Versions: map[uint64]DataModelVersion{
+			1: dmVersion,
 		},
 	})
 
@@ -102,19 +102,16 @@ func (m *FileConfigManager) AtomicEditDataModel(ctx context.Context, name string
 	currentDataModel := config.DataModels[targetIndex]
 
 	// Find the highest version number to ensure we don't overwrite existing versions
-	maxVersion := 0
+	var maxVersion uint64 = 0
 	for versionKey := range currentDataModel.Versions {
-		if len(versionKey) > 1 && versionKey[0] == 'v' {
-			var versionNum int
-			if n, err := fmt.Sscanf(versionKey, "v%d", &versionNum); err == nil && n == 1 && versionNum > maxVersion {
-				maxVersion = versionNum
-			}
+		if versionKey > maxVersion {
+			maxVersion = versionKey
 		}
 	}
 
-	// append the new version to the data model (naming: v1, v2, etc.)
+	// append the new version to the data model
 	nextVersion := maxVersion + 1
-	currentDataModel.Versions[fmt.Sprintf("v%d", nextVersion)] = dmVersion
+	currentDataModel.Versions[nextVersion] = dmVersion
 
 	// edit the data model in the config
 	config.DataModels[targetIndex] = currentDataModel

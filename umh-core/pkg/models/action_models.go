@@ -195,6 +195,8 @@ const (
 	GetConfigFile ActionType = "get-config-file"
 	// SetConfigFile represents the action type for updating the configuration file
 	SetConfigFile ActionType = "set-config-file"
+	// AddDataModel represents the action type for adding a data model
+	AddDataModel ActionType = "add-datamodel"
 )
 
 // TestNetworkConnectionPayload contains the necessary fields for executing a TestNetworkConnection action.
@@ -600,6 +602,13 @@ type SetConfigFileResponse struct {
 	Content          string `json:"content"`
 	LastModifiedTime string `json:"lastModifiedTime"`
 	Success          bool   `json:"success"`
+}
+
+// AddDataModelPayload contains the necessary fields for executing an AddDataModel action.
+type AddDataModelPayload struct {
+	Name        string                 `json:"name" binding:"required"`      // Name of the data model
+	Description string                 `json:"description,omitempty"`        // Description of the data model version
+	Structure   map[string]interface{} `json:"structure" binding:"required"` // Structure of the data model (fields)
 }
 
 // Deprecated: Use GetMetricsRequest instead.

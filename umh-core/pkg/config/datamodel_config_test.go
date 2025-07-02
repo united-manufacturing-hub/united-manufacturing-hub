@@ -70,7 +70,7 @@ agent:
 dataModels:
   - name: temperature
     version:
-      v1:
+      1:
         description: Temperature sensor data model
         structure:
           temperature:
@@ -95,14 +95,14 @@ dataModels:
 				// Test data models parsing
 				Expect(config.DataModels).To(HaveLen(1))
 				Expect(config.DataModels[0].Name).To(Equal("temperature"))
-				Expect(config.DataModels[0].Versions).To(HaveKey("v1"))
-				Expect(config.DataModels[0].Versions["v1"].Description).To(Equal("Temperature sensor data model"))
-				Expect(config.DataModels[0].Versions["v1"].Structure).To(HaveKey("temperature"))
-				Expect(config.DataModels[0].Versions["v1"].Structure["temperature"].PayloadType).To(Equal("number"))
-				Expect(config.DataModels[0].Versions["v1"].Structure["temperature"].Type).To(Equal("timeseries"))
-				Expect(config.DataModels[0].Versions["v1"].Structure).To(HaveKey("unit"))
-				Expect(config.DataModels[0].Versions["v1"].Structure["unit"].PayloadType).To(Equal("string"))
-				Expect(config.DataModels[0].Versions["v1"].Structure["unit"].Type).To(Equal("timeseries"))
+				Expect(config.DataModels[0].Versions).To(HaveKey(uint64(1)))
+				Expect(config.DataModels[0].Versions[1].Description).To(Equal("Temperature sensor data model"))
+				Expect(config.DataModels[0].Versions[1].Structure).To(HaveKey("temperature"))
+				Expect(config.DataModels[0].Versions[1].Structure["temperature"].PayloadType).To(Equal("number"))
+				Expect(config.DataModels[0].Versions[1].Structure["temperature"].Type).To(Equal("timeseries"))
+				Expect(config.DataModels[0].Versions[1].Structure).To(HaveKey("unit"))
+				Expect(config.DataModels[0].Versions[1].Structure["unit"].PayloadType).To(Equal("string"))
+				Expect(config.DataModels[0].Versions[1].Structure["unit"].Type).To(Equal("timeseries"))
 			})
 
 			It("should handle complex nested data model structures", func() {
@@ -110,7 +110,7 @@ dataModels:
 dataModels:
   - name: complex-model
     version:
-      v1:
+      1:
         description: Complex nested data model
         structure:
           sensor:
@@ -131,16 +131,16 @@ dataModels:
 				// Test complex data model parsing
 				Expect(config.DataModels).To(HaveLen(1))
 				Expect(config.DataModels[0].Name).To(Equal("complex-model"))
-				Expect(config.DataModels[0].Versions["v1"].Structure).To(HaveKey("sensor"))
-				sensorField := config.DataModels[0].Versions["v1"].Structure["sensor"]
+				Expect(config.DataModels[0].Versions[1].Structure).To(HaveKey("sensor"))
+				sensorField := config.DataModels[0].Versions[1].Structure["sensor"]
 				Expect(sensorField.PayloadType).To(Equal("string"))
 				Expect(sensorField.Type).To(Equal("timeseries"))
 				Expect(sensorField.Subfields).To(HaveLen(2))
 				Expect(sensorField.Subfields[0].PayloadType).To(Equal("number"))
 				Expect(sensorField.Subfields[1].ModelRef).To(Equal("temperature"))
 
-				Expect(config.DataModels[0].Versions["v1"].Structure).To(HaveKey("metadata"))
-				metadataField := config.DataModels[0].Versions["v1"].Structure["metadata"]
+				Expect(config.DataModels[0].Versions[1].Structure).To(HaveKey("metadata"))
+				metadataField := config.DataModels[0].Versions[1].Structure["metadata"]
 				Expect(metadataField.ModelRef).To(Equal("device-info"))
 			})
 
@@ -149,13 +149,13 @@ dataModels:
 dataModels:
   - name: sensor-data
     version:
-      v1:
+      1:
         description: Initial version
         structure:
           value:
             payloadType: number
             type: timeseries
-      v2:
+      2:
         description: Extended version with timestamp
         structure:
           value:
@@ -176,15 +176,15 @@ dataModels:
 				Expect(dm.Versions).To(HaveLen(2))
 
 				// Check v1
-				Expect(dm.Versions).To(HaveKey("v1"))
-				v1 := dm.Versions["v1"]
+				Expect(dm.Versions).To(HaveKey(uint64(1)))
+				v1 := dm.Versions[uint64(1)]
 				Expect(v1.Description).To(Equal("Initial version"))
 				Expect(v1.Structure).To(HaveLen(1))
 				Expect(v1.Structure).To(HaveKey("value"))
 
 				// Check v2
-				Expect(dm.Versions).To(HaveKey("v2"))
-				v2 := dm.Versions["v2"]
+				Expect(dm.Versions).To(HaveKey(uint64(2)))
+				v2 := dm.Versions[uint64(2)]
 				Expect(v2.Description).To(Equal("Extended version with timestamp"))
 				Expect(v2.Structure).To(HaveLen(3))
 				Expect(v2.Structure).To(HaveKey("value"))
@@ -215,7 +215,7 @@ agent:
 dataModels:
   - name: existing-model
     version:
-      v1:
+      1:
         description: Existing model
         structure:
           field1:
@@ -278,8 +278,8 @@ dataModels:
 				Expect(err).NotTo(HaveOccurred())
 				Expect(writtenConfig.DataModels).To(HaveLen(1))
 				Expect(writtenConfig.DataModels[0].Name).To(Equal("temperature"))
-				Expect(writtenConfig.DataModels[0].Versions).To(HaveKey("v1"))
-				Expect(writtenConfig.DataModels[0].Versions["v1"].Description).To(Equal("Temperature sensor data model"))
+				Expect(writtenConfig.DataModels[0].Versions).To(HaveKey(uint64(1)))
+				Expect(writtenConfig.DataModels[0].Versions[uint64(1)].Description).To(Equal("Temperature sensor data model"))
 			})
 		})
 
@@ -352,7 +352,7 @@ agent:
 dataModels:
   - name: temperature
     version:
-      v1:
+      1:
         description: Initial temperature model
         structure:
           temperature:
@@ -420,14 +420,15 @@ dataModels:
 				Expect(writtenConfig.DataModels).To(HaveLen(1))
 				Expect(writtenConfig.DataModels[0].Name).To(Equal("temperature"))
 				Expect(writtenConfig.DataModels[0].Versions).To(HaveLen(2))
-				Expect(writtenConfig.DataModels[0].Versions).To(HaveKey("v1"))
-				Expect(writtenConfig.DataModels[0].Versions).To(HaveKey("v2"))
+				Expect(writtenConfig.DataModels[0].Versions).To(HaveKey(uint64(1)))
+				Expect(writtenConfig.DataModels[0].Versions).To(HaveKey(uint64(2)))
 
 				// Verify v2 has the new structure
-				v2 := writtenConfig.DataModels[0].Versions["v2"]
+				v2 := writtenConfig.DataModels[0].Versions[uint64(2)]
 				Expect(v2.Description).To(Equal("Extended temperature model with humidity"))
 				Expect(v2.Structure).To(HaveLen(3))
 				Expect(v2.Structure).To(HaveKey("humidity"))
+				Expect(v2.Structure).To(HaveKey("unit"))
 			})
 		})
 
@@ -476,7 +477,7 @@ agent:
 dataModels:
   - name: temperature
     version:
-      v1:
+      1:
         description: Temperature model
         structure:
           temperature:
@@ -484,7 +485,7 @@ dataModels:
             type: timeseries
   - name: pressure
     version:
-      v1:
+      1:
         description: Pressure model
         structure:
           pressure:
