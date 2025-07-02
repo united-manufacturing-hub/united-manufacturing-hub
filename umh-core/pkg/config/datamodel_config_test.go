@@ -117,9 +117,11 @@ dataModels:
             payloadType: string
             type: timeseries
             subfields:
-              - payloadType: number
+              temp_reading:
+                payloadType: number
                 type: timeseries
-              - payloadType: string
+              temp_unit:
+                payloadType: string
                 type: timeseries
                 _model: temperature
           metadata:
@@ -136,8 +138,8 @@ dataModels:
 				Expect(sensorField.PayloadType).To(Equal("string"))
 				Expect(sensorField.Type).To(Equal("timeseries"))
 				Expect(sensorField.Subfields).To(HaveLen(2))
-				Expect(sensorField.Subfields[0].PayloadType).To(Equal("number"))
-				Expect(sensorField.Subfields[1].ModelRef).To(Equal("temperature"))
+				Expect(sensorField.Subfields["temp_reading"].PayloadType).To(Equal("number"))
+				Expect(sensorField.Subfields["temp_unit"].ModelRef).To(Equal("temperature"))
 
 				Expect(config.DataModels[0].Versions[1].Structure).To(HaveKey("metadata"))
 				metadataField := config.DataModels[0].Versions[1].Structure["metadata"]
