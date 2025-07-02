@@ -604,11 +604,25 @@ type SetConfigFileResponse struct {
 	Success          bool   `json:"success"`
 }
 
+// DataModelVersion represents a version of a data model for action payloads
+type DataModelVersion struct {
+	Description string           `json:"description,omitempty"` // description of the data model version
+	Structure   map[string]Field `json:"structure"`             // structure of the data model (fields)
+}
+
+// Field represents a field in a data model structure for action payloads
+type Field struct {
+	PayloadType string           `json:"payloadType,omitempty"` // payload data type (string or number)
+	Type        string           `json:"type,omitempty"`        // type of the field (timeseries only for now)
+	ModelRef    string           `json:"_model,omitempty"`      // this is a special field that is used to reference another data model to be used as a type for this field
+	Subfields   map[string]Field `json:"subfields,omitempty"`   // subfields of the field (allow recursive definition of fields)
+}
+
 // AddDataModelPayload contains the necessary fields for executing an AddDataModel action.
 type AddDataModelPayload struct {
-	Name        string                 `json:"name" binding:"required"`      // Name of the data model
-	Description string                 `json:"description,omitempty"`        // Description of the data model version
-	Structure   map[string]interface{} `json:"structure" binding:"required"` // Structure of the data model (fields)
+	Name        string           `json:"name" binding:"required"`      // Name of the data model
+	Description string           `json:"description,omitempty"`        // Description of the data model version
+	Structure   map[string]Field `json:"structure" binding:"required"` // Structure of the data model (fields)
 }
 
 // Deprecated: Use GetMetricsRequest instead.
