@@ -41,6 +41,7 @@ func structToEncodedMapForEdit(v interface{}) map[string]interface{} {
 
 	return map[string]interface{}{
 		"encodedStructure": encodedStructure,
+		"description":      payload.Description,
 		"name":             payload.Name,
 	}
 }
