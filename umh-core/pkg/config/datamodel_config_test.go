@@ -74,11 +74,9 @@ dataModels:
         description: Temperature sensor data model
         structure:
           temperature:
-            payloadType: number
-            _type: timeseries
+            _type: timeseries-number
           unit:
-            payloadType: string
-            _type: timeseries
+            _type: timeseries-number
 `
 				config, err := ParseConfig([]byte(validYAML), false)
 				Expect(err).NotTo(HaveOccurred())
@@ -98,10 +96,8 @@ dataModels:
 				Expect(config.DataModels[0].Versions).To(HaveKey("v1"))
 				Expect(config.DataModels[0].Versions["v1"].Description).To(Equal("Temperature sensor data model"))
 				Expect(config.DataModels[0].Versions["v1"].Structure).To(HaveKey("temperature"))
-				Expect(config.DataModels[0].Versions["v1"].Structure["temperature"].PayloadType).To(Equal("number"))
-				Expect(config.DataModels[0].Versions["v1"].Structure["temperature"].Type).To(Equal("timeseries"))
+				Expect(config.DataModels[0].Versions["v1"].Structure["temperature"].Type).To(Equal("timeseries-number"))
 				Expect(config.DataModels[0].Versions["v1"].Structure).To(HaveKey("unit"))
-				Expect(config.DataModels[0].Versions["v1"].Structure["unit"].PayloadType).To(Equal("string"))
 				Expect(config.DataModels[0].Versions["v1"].Structure["unit"].Type).To(Equal("timeseries"))
 			})
 
@@ -117,11 +113,9 @@ dataModels:
             payloadType: string
             _type: timeseries
             temp_reading:
-              payloadType: number
-              _type: timeseries
+              _type: timeseries-number
             temp_unit:
-              payloadType: string
-              _type: timeseries
+              _type: timeseries-string
               _refModel: temperature
           metadata:
             _refModel: device-info
@@ -134,10 +128,9 @@ dataModels:
 				Expect(config.DataModels[0].Name).To(Equal("complex-model"))
 				Expect(config.DataModels[0].Versions["v1"].Structure).To(HaveKey("sensor"))
 				sensorField := config.DataModels[0].Versions["v1"].Structure["sensor"]
-				Expect(sensorField.PayloadType).To(Equal("string"))
-				Expect(sensorField.Type).To(Equal("timeseries"))
+				Expect(sensorField.Type).To(Equal("timeseries-string"))
 				Expect(sensorField.Subfields).To(HaveLen(2))
-				Expect(sensorField.Subfields["temp_reading"].PayloadType).To(Equal("number"))
+				Expect(sensorField.Subfields["temp_reading"].Type).To(Equal("timeseries-number"))
 				Expect(sensorField.Subfields["temp_unit"].ModelRef).To(Equal("temperature"))
 
 				Expect(config.DataModels[0].Versions["v1"].Structure).To(HaveKey("metadata"))
@@ -154,16 +147,14 @@ dataModels:
         description: Initial version
         structure:
           value:
-            payloadType: number
-            _type: timeseries
+            _type: timeseries-number
       v2:
         description: Extended version with timestamp
         structure:
           value:
-            payloadType: number
-            _type: timeseries
+            _type: timeseries-number
           timestamp:
-            payloadType: string
+            _type: timeseries-string
             _type: timeseries
           metadata:
             _refModel: sensor-metadata
@@ -220,8 +211,7 @@ dataModels:
         description: Existing model
         structure:
           field1:
-            payloadType: string
-            _type: timeseries
+            _type: timeseries-string
 `
 		)
 
@@ -258,12 +248,10 @@ dataModels:
 					Description: "Temperature sensor data model",
 					Structure: map[string]Field{
 						"temperature": {
-							PayloadType: "number",
-							Type:        "timeseries",
+							Type: "timeseries-number",
 						},
 						"unit": {
-							PayloadType: "string",
-							Type:        "timeseries",
+							Type: "timeseries-string",
 						},
 					},
 				}
@@ -304,8 +292,7 @@ dataModels:
 					Description: "Duplicate model",
 					Structure: map[string]Field{
 						"field": {
-							PayloadType: "string",
-							Type:        "timeseries",
+							Type: "timeseries-string",
 						},
 					},
 				}
@@ -328,8 +315,7 @@ dataModels:
 					Description: "Test model",
 					Structure: map[string]Field{
 						"field": {
-							PayloadType: "string",
-							Type:        "timeseries",
+							Type: "timeseries-string",
 						},
 					},
 				}
@@ -357,8 +343,7 @@ dataModels:
         description: Initial temperature model
         structure:
           temperature:
-            payloadType: number
-            _type: timeseries
+            _type: timeseries-number
 `
 		)
 
@@ -395,16 +380,13 @@ dataModels:
 					Description: "Extended temperature model with humidity",
 					Structure: map[string]Field{
 						"temperature": {
-							PayloadType: "number",
-							Type:        "timeseries",
+							Type: "timeseries-number",
 						},
 						"humidity": {
-							PayloadType: "number",
-							Type:        "timeseries",
+							Type: "timeseries-number",
 						},
 						"unit": {
-							PayloadType: "string",
-							Type:        "timeseries",
+							Type: "timeseries-string",
 						},
 					},
 				}
@@ -453,8 +435,7 @@ dataModels:
 					Description: "Non-existent model",
 					Structure: map[string]Field{
 						"field": {
-							PayloadType: "string",
-							Type:        "timeseries",
+							Type: "timeseries-string",
 						},
 					},
 				}
@@ -482,16 +463,14 @@ dataModels:
         description: Temperature model
         structure:
           temperature:
-            payloadType: number
-            _type: timeseries
+            _type: timeseries-number
   - name: pressure
     version:
       v1:
         description: Pressure model
         structure:
           pressure:
-            payloadType: number
-            _type: timeseries
+            _type: timeseries-number
 `
 		)
 
