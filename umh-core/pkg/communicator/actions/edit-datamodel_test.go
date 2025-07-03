@@ -15,6 +15,7 @@
 package actions_test
 
 import (
+	"encoding/base64"
 	"errors"
 	"time"
 
@@ -24,7 +25,25 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"gopkg.in/yaml.v3"
 )
+
+// Helper function for edit datamodel action that needs base64 encoding
+func structToEncodedMapForEdit(v interface{}) map[string]interface{} {
+	payload := v.(models.EditDataModelPayload)
+
+	// Marshal the DataModelVersion to YAML
+	yamlData, err := yaml.Marshal(payload.DataModelVersion)
+	Expect(err).ToNot(HaveOccurred())
+
+	// Base64 encode the YAML
+	encodedDataModelVersion := base64.StdEncoding.EncodeToString(yamlData)
+
+	return map[string]interface{}{
+		"encodedDataModelVersion": encodedDataModelVersion,
+		"name":                    payload.Name,
+	}
+}
 
 var _ = Describe("EditDataModelAction", func() {
 	var (
@@ -68,25 +87,27 @@ var _ = Describe("EditDataModelAction", func() {
 		Context("with valid payload", func() {
 			It("should parse successfully", func() {
 				payload := models.EditDataModelPayload{
-					Name:        "test-model",
-					Description: "Updated test data model",
-					Structure: map[string]models.Field{
-						"field1": {
-							Type: "timeseries-string",
-						},
-						"newField": {
-							Type: "timeseries-number",
+					Name: "test-model",
+					DataModelVersion: models.DataModelVersion{
+						Description: "Updated test data model",
+						Structure: map[string]models.Field{
+							"field1": {
+								Type: "timeseries-string",
+							},
+							"newField": {
+								Type: "timeseries-number",
+							},
 						},
 					},
 				}
 
-				err := action.Parse(structToMap(payload))
+				err := action.Parse(structToEncodedMapForEdit(payload))
 
 				Expect(err).ToNot(HaveOccurred())
 				parsedPayload := action.GetParsedPayload()
 				Expect(parsedPayload.Name).To(Equal("test-model"))
-				Expect(parsedPayload.Description).To(Equal("Updated test data model"))
-				Expect(parsedPayload.Structure).To(HaveLen(2))
+				Expect(parsedPayload.DataModelVersion.Description).To(Equal("Updated test data model"))
+				Expect(parsedPayload.DataModelVersion.Structure).To(HaveLen(2))
 			})
 		})
 
@@ -115,15 +136,17 @@ var _ = Describe("EditDataModelAction", func() {
 		Context("with valid payload", func() {
 			BeforeEach(func() {
 				payload := models.EditDataModelPayload{
-					Name:        "test-model",
-					Description: "Updated test data model",
-					Structure: map[string]models.Field{
-						"field1": {
-							Type: "timeseries-string",
+					Name: "test-model",
+					DataModelVersion: models.DataModelVersion{
+						Description: "Updated test data model",
+						Structure: map[string]models.Field{
+							"field1": {
+								Type: "timeseries-string",
+							},
 						},
 					},
 				}
-				err := action.Parse(structToMap(payload))
+				err := action.Parse(structToEncodedMapForEdit(payload))
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -136,15 +159,17 @@ var _ = Describe("EditDataModelAction", func() {
 		Context("with missing name", func() {
 			BeforeEach(func() {
 				payload := models.EditDataModelPayload{
-					Name:        "",
-					Description: "Updated test data model",
-					Structure: map[string]models.Field{
-						"field1": {
-							Type: "timeseries-string",
+
+					DataModelVersion: models.DataModelVersion{
+						Description: "Updated test data model",
+						Structure: map[string]models.Field{
+							"field1": {
+								Type: "timeseries-string",
+							},
 						},
 					},
 				}
-				err := action.Parse(structToMap(payload))
+				err := action.Parse(structToEncodedMapForEdit(payload))
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -158,11 +183,13 @@ var _ = Describe("EditDataModelAction", func() {
 		Context("with empty structure", func() {
 			BeforeEach(func() {
 				payload := models.EditDataModelPayload{
-					Name:        "test-model",
-					Description: "Updated test data model",
-					Structure:   map[string]models.Field{},
+					Name: "test-model",
+					DataModelVersion: models.DataModelVersion{
+						Description: "Updated test data model",
+						Structure:   map[string]models.Field{},
+					},
 				}
-				err := action.Parse(structToMap(payload))
+				err := action.Parse(structToEncodedMapForEdit(payload))
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -176,11 +203,13 @@ var _ = Describe("EditDataModelAction", func() {
 		Context("with nil structure", func() {
 			BeforeEach(func() {
 				payload := models.EditDataModelPayload{
-					Name:        "test-model",
-					Description: "Updated test data model",
-					Structure:   nil,
+					Name: "test-model",
+					DataModelVersion: models.DataModelVersion{
+						Description: "Updated test data model",
+						Structure:   nil,
+					},
 				}
-				err := action.Parse(structToMap(payload))
+				err := action.Parse(structToEncodedMapForEdit(payload))
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -196,26 +225,28 @@ var _ = Describe("EditDataModelAction", func() {
 		Context("with successful configuration update", func() {
 			BeforeEach(func() {
 				payload := models.EditDataModelPayload{
-					Name:        "existing-model",
-					Description: "Updated version of existing model",
-					Structure: map[string]models.Field{
-						"updatedField": {
-							Type: "timeseries-string",
-						},
-						"newField": {
-							Type: "timeseries-number",
-						},
-						"nested": {
-							Type: "timeseries-object",
-							Subfields: map[string]models.Field{
-								"subfield1": {
-									Type: "timeseries-boolean",
+					Name: "existing-model",
+					DataModelVersion: models.DataModelVersion{
+						Description: "Updated version of existing model",
+						Structure: map[string]models.Field{
+							"updatedField": {
+								Type: "timeseries-string",
+							},
+							"newField": {
+								Type: "timeseries-number",
+							},
+							"nested": {
+								Type: "timeseries-object",
+								Subfields: map[string]models.Field{
+									"subfield1": {
+										Type: "timeseries-boolean",
+									},
 								},
 							},
 						},
 					},
 				}
-				err := action.Parse(structToMap(payload))
+				err := action.Parse(structToEncodedMapForEdit(payload))
 				Expect(err).ToNot(HaveOccurred())
 
 				// Set up mock config with existing data model
@@ -283,15 +314,17 @@ var _ = Describe("EditDataModelAction", func() {
 		Context("with configuration manager error", func() {
 			BeforeEach(func() {
 				payload := models.EditDataModelPayload{
-					Name:        "failing-model",
-					Description: "This will fail",
-					Structure: map[string]models.Field{
-						"field1": {
-							Type: "timeseries-string",
+					Name: "failing-model",
+					DataModelVersion: models.DataModelVersion{
+						Description: "This will fail",
+						Structure: map[string]models.Field{
+							"field1": {
+								Type: "timeseries-string",
+							},
 						},
 					},
 				}
-				err := action.Parse(structToMap(payload))
+				err := action.Parse(structToEncodedMapForEdit(payload))
 				Expect(err).ToNot(HaveOccurred())
 
 				// Configure mock to return error
@@ -316,58 +349,62 @@ var _ = Describe("EditDataModelAction", func() {
 		It("should return empty payload before parsing", func() {
 			payload := action.GetParsedPayload()
 			Expect(payload.Name).To(BeEmpty())
-			Expect(payload.Description).To(BeEmpty())
-			Expect(payload.Structure).To(BeNil())
+			Expect(payload.DataModelVersion.Description).To(BeEmpty())
+			Expect(payload.DataModelVersion.Structure).To(BeNil())
 		})
 
 		It("should return parsed payload after parsing", func() {
 			originalPayload := models.EditDataModelPayload{
-				Name:        "test-model",
-				Description: "Test description",
-				Structure: map[string]models.Field{
-					"field1": {
-						Type: "timeseries-string",
+				Name: "test-model",
+				DataModelVersion: models.DataModelVersion{
+					Description: "Test description",
+					Structure: map[string]models.Field{
+						"field1": {
+							Type: "timeseries-string",
+						},
 					},
 				},
 			}
 
-			err := action.Parse(structToMap(originalPayload))
+			err := action.Parse(structToEncodedMapForEdit(originalPayload))
 			Expect(err).ToNot(HaveOccurred())
 
 			parsedPayload := action.GetParsedPayload()
 			Expect(parsedPayload.Name).To(Equal("test-model"))
-			Expect(parsedPayload.Description).To(Equal("Test description"))
-			Expect(parsedPayload.Structure).To(HaveLen(1))
+			Expect(parsedPayload.DataModelVersion.Description).To(Equal("Test description"))
+			Expect(parsedPayload.DataModelVersion.Structure).To(HaveLen(1))
 		})
 	})
 
 	Describe("Integration with different field types", func() {
 		It("should handle editing model with complex nested structures", func() {
 			payload := models.EditDataModelPayload{
-				Name:        "complex-model",
-				Description: "Updated complex data model with new nested fields",
-				Structure: map[string]models.Field{
-					"simple_string": {
-						Type: "timeseries-string",
-					},
-					"updated_number": {
-						Type: "timeseries-number",
-					},
-					"new_referenced_model": {
-						Type:     "timeseries-object",
-						ModelRef: "another-external-model",
-					},
-					"updated_nested_object": {
-						Type: "timeseries-object",
-						Subfields: map[string]models.Field{
-							"updated_nested_string": {
-								Type: "timeseries-string",
-							},
-							"new_deeply_nested": {
-								Type: "timeseries-object",
-								Subfields: map[string]models.Field{
-									"new_deep_field": {
-										Type: "timeseries-array",
+				Name: "complex-model",
+				DataModelVersion: models.DataModelVersion{
+					Description: "Updated complex data model with new nested fields",
+					Structure: map[string]models.Field{
+						"simple_string": {
+							Type: "timeseries-string",
+						},
+						"updated_number": {
+							Type: "timeseries-number",
+						},
+						"new_referenced_model": {
+							Type:     "timeseries-object",
+							ModelRef: "another-external-model",
+						},
+						"updated_nested_object": {
+							Type: "timeseries-object",
+							Subfields: map[string]models.Field{
+								"updated_nested_string": {
+									Type: "timeseries-string",
+								},
+								"new_deeply_nested": {
+									Type: "timeseries-object",
+									Subfields: map[string]models.Field{
+										"new_deep_field": {
+											Type: "timeseries-array",
+										},
 									},
 								},
 							},
@@ -376,7 +413,7 @@ var _ = Describe("EditDataModelAction", func() {
 				},
 			}
 
-			err := action.Parse(structToMap(payload))
+			err := action.Parse(structToEncodedMapForEdit(payload))
 			Expect(err).ToNot(HaveOccurred())
 
 			err = action.Validate()
