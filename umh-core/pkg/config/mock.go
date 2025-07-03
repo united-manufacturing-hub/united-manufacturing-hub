@@ -18,6 +18,8 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -628,8 +630,8 @@ func (m *MockConfigManager) AtomicAddDataModel(ctx context.Context, name string,
 	// add the data model to the config
 	config.DataModels = append(config.DataModels, DataModelsConfig{
 		Name: name,
-		Versions: map[uint64]DataModelVersion{
-			1: dmVersion,
+		Versions: map[string]DataModelVersion{
+			"v1": dmVersion,
 		},
 	})
 
@@ -675,16 +677,20 @@ func (m *MockConfigManager) AtomicEditDataModel(ctx context.Context, name string
 	currentDataModel := config.DataModels[targetIndex]
 
 	// Find the highest version number to ensure we don't overwrite existing versions
-	var maxVersion uint64 = 0
+	var maxVersion int = 0
 	for versionKey := range currentDataModel.Versions {
-		if versionKey > maxVersion {
-			maxVersion = versionKey
+		if strings.HasPrefix(versionKey, "v") {
+			if versionNum, err := strconv.Atoi(versionKey[1:]); err == nil {
+				if versionNum > maxVersion {
+					maxVersion = versionNum
+				}
+			}
 		}
 	}
 
 	// append the new version to the data model
 	nextVersion := maxVersion + 1
-	currentDataModel.Versions[nextVersion] = dmVersion
+	currentDataModel.Versions[fmt.Sprintf("v%d", nextVersion)] = dmVersion
 
 	// edit the data model in the config
 	config.DataModels[targetIndex] = currentDataModel

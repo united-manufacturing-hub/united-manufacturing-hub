@@ -45,7 +45,7 @@ type TemplatesConfig struct {
 type DataModelsConfig struct {
 	Name        string                      `yaml:"name"`                  // name of the data model
 	Description string                      `yaml:"description,omitempty"` // description of the data model
-	Versions    map[uint64]DataModelVersion `yaml:"version"`               // version of the data model (1, 2, etc.)
+	Versions    map[string]DataModelVersion `yaml:"version"`               // version of the data model (1, 2, etc.)
 }
 
 type DataModelVersion struct {
