@@ -53,10 +53,6 @@ type DataModelVersion struct {
 	Structure   map[string]Field `yaml:"structure"`             // structure of the data model (fields)
 }
 
-type DataModelVersionRoot struct {
-	Structure map[string]Field `yaml:"structure"` // structure of the data model (fields)
-}
-
 type Field struct {
 	Description string           `yaml:"_description,omitempty"` // description of the field
 	Type        string           `yaml:"_type,omitempty"`        // type of the field (timeseries only for now)
