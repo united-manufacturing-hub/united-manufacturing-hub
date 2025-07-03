@@ -99,6 +99,11 @@ func (m *MockConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	return m.Config, m.ConfigError
 }
 
+// GetDataModels returns the data models from the mock config
+func (m *MockConfigManager) GetDataModels() []DataModelsConfig {
+	return m.Config.DataModels
+}
+
 // GetFileSystemService returns the mock filesystem service
 func (m *MockConfigManager) GetFileSystemService() filesystem.Service {
 	return m.MockFileSystem
