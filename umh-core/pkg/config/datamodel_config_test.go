@@ -98,7 +98,7 @@ dataModels:
 				Expect(config.DataModels[0].Versions["v1"].Structure).To(HaveKey("temperature"))
 				Expect(config.DataModels[0].Versions["v1"].Structure["temperature"].Type).To(Equal("timeseries-number"))
 				Expect(config.DataModels[0].Versions["v1"].Structure).To(HaveKey("unit"))
-				Expect(config.DataModels[0].Versions["v1"].Structure["unit"].Type).To(Equal("timeseries"))
+				Expect(config.DataModels[0].Versions["v1"].Structure["unit"].Type).To(Equal("timeseries-number"))
 			})
 
 			It("should handle complex nested data model structures", func() {
@@ -110,12 +110,9 @@ dataModels:
         description: Complex nested data model
         structure:
           sensor:
-            payloadType: string
-            _type: timeseries
             temp_reading:
               _type: timeseries-number
             temp_unit:
-              _type: timeseries-string
               _refModel: temperature
           metadata:
             _refModel: device-info
@@ -128,7 +125,6 @@ dataModels:
 				Expect(config.DataModels[0].Name).To(Equal("complex-model"))
 				Expect(config.DataModels[0].Versions["v1"].Structure).To(HaveKey("sensor"))
 				sensorField := config.DataModels[0].Versions["v1"].Structure["sensor"]
-				Expect(sensorField.Type).To(Equal("timeseries-string"))
 				Expect(sensorField.Subfields).To(HaveLen(2))
 				Expect(sensorField.Subfields["temp_reading"].Type).To(Equal("timeseries-number"))
 				Expect(sensorField.Subfields["temp_unit"].ModelRef).To(Equal("temperature"))
@@ -155,7 +151,6 @@ dataModels:
             _type: timeseries-number
           timestamp:
             _type: timeseries-string
-            _type: timeseries
           metadata:
             _refModel: sensor-metadata
 `
