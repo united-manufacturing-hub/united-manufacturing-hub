@@ -608,13 +608,15 @@ type SetConfigFileResponse struct {
 	Success          bool   `json:"success"`
 }
 
-// DataModelVersion represents a version of a data model for action payloads
 type DataModelVersion struct {
-	Description string           `json:"description,omitempty"` // description of the data model version
-	Structure   map[string]Field `json:"structure"`             // structure of the data model (fields)
+	Description string           `yaml:"description,omitempty"` // description of the data model version
+	Structure   map[string]Field `yaml:"structure"`             // structure of the data model (fields)
 }
 
-// Field represents a field in a data model structure for action payloads
+type DataModelVersionRoot struct {
+	Structure map[string]Field `yaml:"structure"` // structure of the data model (fields)
+}
+
 type Field struct {
 	Description string           `yaml:"_description,omitempty"` // description of the field
 	Type        string           `yaml:"_type,omitempty"`        // type of the field (timeseries only for now)
@@ -625,9 +627,9 @@ type Field struct {
 
 // AddDataModelPayload contains the necessary fields for executing an AddDataModel action.
 type AddDataModelPayload struct {
-	Name        string           `json:"name" binding:"required"`      // Name of the data model
-	Description string           `json:"description,omitempty"`        // Description of the data model version
-	Structure   map[string]Field `json:"structure" binding:"required"` // Structure of the data model (fields)
+	Name                    string           `json:"name" binding:"required"`                    // Name of the data model
+	EncodedDataModelVersion string           `json:"encodedDataModelVersion" binding:"required"` // Data model version
+	DataModelVersion        DataModelVersion `json:"-"`                                          // Data model version (not used in the action, but filled by the action)
 }
 
 // DeleteDataModelPayload contains the necessary fields for executing a DeleteDataModel action.
@@ -637,9 +639,9 @@ type DeleteDataModelPayload struct {
 
 // EditDataModelPayload contains the necessary fields for executing an EditDataModel action.
 type EditDataModelPayload struct {
-	Name        string           `json:"name" binding:"required"`      // Name of the data model to edit
-	Description string           `json:"description,omitempty"`        // Description of the new data model version
-	Structure   map[string]Field `json:"structure" binding:"required"` // Structure of the new data model version (fields)
+	Name                    string           `json:"name" binding:"required"`                    // Name of the data model to edit
+	EncodedDataModelVersion string           `json:"encodedDataModelVersion" binding:"required"` // Data model version
+	DataModelVersion        DataModelVersion `json:"-"`                                          // Data model version (not used in the action, but filled by the action)
 }
 
 // Deprecated: Use GetMetricsRequest instead.

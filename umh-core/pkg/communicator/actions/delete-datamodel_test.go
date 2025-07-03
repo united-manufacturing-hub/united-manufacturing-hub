@@ -15,6 +15,7 @@
 package actions_test
 
 import (
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -25,6 +26,18 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
+
+// Helper function for delete action that doesn't need base64 encoding
+func structToMap(v interface{}) map[string]interface{} {
+	data, err := json.Marshal(v)
+	Expect(err).ToNot(HaveOccurred())
+
+	var result map[string]interface{}
+	err = json.Unmarshal(data, &result)
+	Expect(err).ToNot(HaveOccurred())
+
+	return result
+}
 
 var _ = Describe("DeleteDataModelAction", func() {
 	var (
