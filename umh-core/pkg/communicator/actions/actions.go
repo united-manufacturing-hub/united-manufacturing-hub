@@ -193,6 +193,8 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 		action = NewDeleteDataModelAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager)
 	case models.EditDataModel:
 		action = NewEditDataModelAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager)
+	case models.GetDataModel:
+		action = NewGetDataModelAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager)
 
 	default:
 		log.Errorf("Unknown action type: %s", payload.ActionType)
