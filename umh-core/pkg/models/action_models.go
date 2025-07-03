@@ -201,6 +201,8 @@ const (
 	DeleteDataModel ActionType = "delete-datamodel"
 	// EditDataModel represents the action type for editing a data model
 	EditDataModel ActionType = "edit-datamodel"
+	// GetDataModel represents the action type for retrieving a data model
+	GetDataModel ActionType = "get-datamodel"
 )
 
 // TestNetworkConnectionPayload contains the necessary fields for executing a TestNetworkConnection action.
@@ -640,6 +642,25 @@ type EditDataModelPayload struct {
 	Description      string           `json:"description,omitempty"`               // Description of the data model
 	EncodedStructure string           `json:"encodedStructure" binding:"required"` // Encoded structure of the data model
 	Structure        map[string]Field `json:"-"`                                   // Data model version (not used in the action, but filled by the action)
+}
+
+// GetDataModelPayload contains the necessary fields for executing a GetDataModel action.
+type GetDataModelPayload struct {
+	Name string `json:"name" binding:"required"` // Name of the data model to retrieve
+}
+
+// GetDataModelVersion represents a version of a data model with base64-encoded structure
+type GetDataModelVersion struct {
+	Description      string           `json:"description,omitempty"` // Description of the data model version
+	EncodedStructure string           `json:"encodedStructure"`      // Base64-encoded structure of the data model version
+	Structure        map[string]Field `json:"-"`                     // Data model version structure (not sent in response, but used internally)
+}
+
+// GetDataModelResponse contains the response for a GetDataModel action.
+type GetDataModelResponse struct {
+	Name        string                         `json:"name"`                  // Name of the data model
+	Description string                         `json:"description,omitempty"` // Description of the data model
+	Versions    map[string]GetDataModelVersion `json:"versions"`              // All versions of the data model
 }
 
 // Deprecated: Use GetMetricsRequest instead.
