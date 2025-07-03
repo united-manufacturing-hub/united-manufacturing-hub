@@ -32,6 +32,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -141,8 +143,12 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 			if dmc.Name == a.payload.Name {
 				var maxVersion uint64 = 0
 				for versionKey := range dmc.Versions {
-					if versionKey > maxVersion {
-						maxVersion = versionKey
+					if strings.HasPrefix(versionKey, "v") {
+						if versionNum, err := strconv.Atoi(versionKey[1:]); err == nil {
+							if uint64(versionNum) > maxVersion {
+								maxVersion = uint64(versionNum)
+							}
+						}
 					}
 				}
 				newVersion = maxVersion
@@ -175,10 +181,11 @@ func (a *EditDataModelAction) convertModelsFieldsToConfigFields(modelsFields map
 
 	for key, modelsField := range modelsFields {
 		configFields[key] = config.Field{
-			PayloadType: modelsField.PayloadType,
 			Type:        modelsField.Type,
 			ModelRef:    modelsField.ModelRef,
 			Subfields:   a.convertModelsFieldsToConfigFields(modelsField.Subfields),
+			Description: modelsField.Description,
+			Unit:        modelsField.Unit,
 		}
 	}
 

@@ -616,10 +616,11 @@ type DataModelVersion struct {
 
 // Field represents a field in a data model structure for action payloads
 type Field struct {
-	PayloadType string           `json:"payloadType,omitempty"` // payload data type (string or number)
-	Type        string           `json:"type,omitempty"`        // type of the field (timeseries only for now)
-	ModelRef    string           `json:"_model,omitempty"`      // this is a special field that is used to reference another data model to be used as a type for this field
-	Subfields   map[string]Field `json:"subfields,omitempty"`   // subfields of the field (allow recursive definition of fields)
+	Description string           `yaml:"_description,omitempty"` // description of the field
+	Type        string           `yaml:"_type,omitempty"`        // type of the field (timeseries only for now)
+	Unit        string           `yaml:"_unit,omitempty"`        // unit of the field (only for timeseries-number)
+	ModelRef    string           `yaml:"_refModel,omitempty"`    // this is a special field that is used to reference another data model to be used as a type for this field
+	Subfields   map[string]Field `yaml:",inline"`                // subfields of the field (allow recursive definition of fields)
 }
 
 // AddDataModelPayload contains the necessary fields for executing an AddDataModel action.

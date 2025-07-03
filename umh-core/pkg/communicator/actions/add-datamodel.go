@@ -144,10 +144,11 @@ func (a *AddDataModelAction) convertModelsFieldsToConfigFields(modelsFields map[
 
 	for key, modelsField := range modelsFields {
 		configFields[key] = config.Field{
-			PayloadType: modelsField.PayloadType,
 			Type:        modelsField.Type,
 			ModelRef:    modelsField.ModelRef,
 			Subfields:   a.convertModelsFieldsToConfigFields(modelsField.Subfields),
+			Description: modelsField.Description,
+			Unit:        modelsField.Unit,
 		}
 	}
 
