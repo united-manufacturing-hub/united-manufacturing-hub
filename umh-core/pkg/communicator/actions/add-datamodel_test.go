@@ -33,15 +33,15 @@ func structToEncodedMap(v interface{}) map[string]interface{} {
 	payload := v.(models.AddDataModelPayload)
 
 	// Marshal the DataModelVersion to YAML
-	yamlData, err := yaml.Marshal(payload.DataModelVersion)
+	yamlData, err := yaml.Marshal(payload.Structure)
 	Expect(err).ToNot(HaveOccurred())
 
 	// Base64 encode the YAML
-	encodedDataModelVersion := base64.StdEncoding.EncodeToString(yamlData)
+	encodedStructure := base64.StdEncoding.EncodeToString(yamlData)
 
 	return map[string]interface{}{
-		"encodedDataModelVersion": encodedDataModelVersion,
-		"name":                    payload.Name,
+		"encodedStructure": encodedStructure,
+		"name":             payload.Name,
 	}
 }
 
@@ -87,13 +87,11 @@ var _ = Describe("AddDataModelAction", func() {
 		Context("with valid payload", func() {
 			It("should parse successfully", func() {
 				payload := models.AddDataModelPayload{
-					Name: "test-model",
-					DataModelVersion: models.DataModelVersion{
-						Description: "Test data model",
-						Structure: map[string]models.Field{
-							"field1": {
-								Type: "timeseries-string",
-							},
+					Name:        "test-model",
+					Description: "Test data model",
+					Structure: map[string]models.Field{
+						"field1": {
+							Type: "timeseries-string",
 						},
 					},
 				}
@@ -103,8 +101,8 @@ var _ = Describe("AddDataModelAction", func() {
 				Expect(err).ToNot(HaveOccurred())
 				parsedPayload := action.GetParsedPayload()
 				Expect(parsedPayload.Name).To(Equal("test-model"))
-				Expect(parsedPayload.DataModelVersion.Description).To(Equal("Test data model"))
-				Expect(parsedPayload.DataModelVersion.Structure).To(HaveLen(1))
+				Expect(parsedPayload.Description).To(Equal("Test data model"))
+				Expect(parsedPayload.Structure).To(HaveLen(1))
 			})
 		})
 
@@ -133,13 +131,11 @@ var _ = Describe("AddDataModelAction", func() {
 		Context("with valid payload", func() {
 			BeforeEach(func() {
 				payload := models.AddDataModelPayload{
-					Name: "test-model",
-					DataModelVersion: models.DataModelVersion{
-						Description: "Test data model",
-						Structure: map[string]models.Field{
-							"field1": {
-								Type: "timeseries-string",
-							},
+					Name:        "test-model",
+					Description: "Test data model",
+					Structure: map[string]models.Field{
+						"field1": {
+							Type: "timeseries-string",
 						},
 					},
 				}
@@ -156,13 +152,11 @@ var _ = Describe("AddDataModelAction", func() {
 		Context("with missing name", func() {
 			BeforeEach(func() {
 				payload := models.AddDataModelPayload{
-					Name: "",
-					DataModelVersion: models.DataModelVersion{
-						Description: "Test data model",
-						Structure: map[string]models.Field{
-							"field1": {
-								Type: "timeseries-string",
-							},
+					Name:        "",
+					Description: "Test data model",
+					Structure: map[string]models.Field{
+						"field1": {
+							Type: "timeseries-string",
 						},
 					},
 				}
@@ -180,11 +174,9 @@ var _ = Describe("AddDataModelAction", func() {
 		Context("with empty structure", func() {
 			BeforeEach(func() {
 				payload := models.AddDataModelPayload{
-					Name: "test-model",
-					DataModelVersion: models.DataModelVersion{
-						Description: "Test data model",
-						Structure:   map[string]models.Field{},
-					},
+					Name:        "test-model",
+					Description: "Test data model",
+					Structure:   map[string]models.Field{},
 				}
 				err := action.Parse(structToEncodedMap(payload))
 				Expect(err).ToNot(HaveOccurred())
@@ -200,11 +192,9 @@ var _ = Describe("AddDataModelAction", func() {
 		Context("with nil structure", func() {
 			BeforeEach(func() {
 				payload := models.AddDataModelPayload{
-					Name: "test-model",
-					DataModelVersion: models.DataModelVersion{
-						Description: "Test data model",
-						Structure:   nil,
-					},
+					Name:        "test-model",
+					Description: "Test data model",
+					Structure:   nil,
 				}
 				err := action.Parse(structToEncodedMap(payload))
 				Expect(err).ToNot(HaveOccurred())
@@ -222,18 +212,16 @@ var _ = Describe("AddDataModelAction", func() {
 		Context("with successful configuration update", func() {
 			BeforeEach(func() {
 				payload := models.AddDataModelPayload{
-					Name: "test-model",
-					DataModelVersion: models.DataModelVersion{
-						Description: "Test data model",
-						Structure: map[string]models.Field{
-							"field1": {
-								Type: "timeseries-string",
-							},
-							"nested": {
-								Subfields: map[string]models.Field{
-									"subfield1": {
-										Type: "timeseries-number",
-									},
+					Name:        "test-model",
+					Description: "Test data model",
+					Structure: map[string]models.Field{
+						"field1": {
+							Type: "timeseries-string",
+						},
+						"nested": {
+							Subfields: map[string]models.Field{
+								"subfield1": {
+									Type: "timeseries-number",
 								},
 							},
 						},
@@ -290,8 +278,8 @@ var _ = Describe("AddDataModelAction", func() {
 		It("should return empty payload before parsing", func() {
 			payload := action.GetParsedPayload()
 			Expect(payload.Name).To(BeEmpty())
-			Expect(payload.DataModelVersion.Description).To(BeEmpty())
-			Expect(payload.DataModelVersion.Structure).To(BeNil())
+			Expect(payload.Description).To(BeEmpty())
+			Expect(payload.Structure).To(BeNil())
 		})
 
 	})
@@ -299,30 +287,28 @@ var _ = Describe("AddDataModelAction", func() {
 	Describe("Integration with different field types", func() {
 		It("should handle complex nested structures", func() {
 			payload := models.AddDataModelPayload{
-				Name: "complex-model",
-				DataModelVersion: models.DataModelVersion{
-					Description: "Complex data model with nested fields",
-					Structure: map[string]models.Field{
-						"simple_string": {
-							Type: "timeseries-string",
-						},
-						"simple_number": {
-							Type: "timeseries-number",
-						},
-						"referenced_model": {
-							ModelRef: "external-model",
-						},
-						"nested_object": {
-							Type: "timeseries-object",
-							Subfields: map[string]models.Field{
-								"nested_string": {
-									Type: "timeseries-string",
-								},
-								"deeply_nested": {
-									Subfields: map[string]models.Field{
-										"deep_field": {
-											Type: "timeseries-boolean",
-										},
+				Name:        "complex-model",
+				Description: "Complex data model with nested fields",
+				Structure: map[string]models.Field{
+					"simple_string": {
+						Type: "timeseries-string",
+					},
+					"simple_number": {
+						Type: "timeseries-number",
+					},
+					"referenced_model": {
+						ModelRef: "external-model",
+					},
+					"nested_object": {
+						Type: "timeseries-object",
+						Subfields: map[string]models.Field{
+							"nested_string": {
+								Type: "timeseries-string",
+							},
+							"deeply_nested": {
+								Subfields: map[string]models.Field{
+									"deep_field": {
+										Type: "timeseries-boolean",
 									},
 								},
 							},
