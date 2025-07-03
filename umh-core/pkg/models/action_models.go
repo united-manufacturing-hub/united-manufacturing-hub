@@ -623,9 +623,10 @@ type Field struct {
 
 // AddDataModelPayload contains the necessary fields for executing an AddDataModel action.
 type AddDataModelPayload struct {
-	Name                    string           `json:"name" binding:"required"`                    // Name of the data model
-	EncodedDataModelVersion string           `json:"encodedDataModelVersion" binding:"required"` // Data model version
-	DataModelVersion        DataModelVersion `json:"-"`                                          // Data model version (not used in the action, but filled by the action)
+	Name             string           `json:"name" binding:"required"`             // Name of the data model
+	Description      string           `json:"description,omitempty"`               // Description of the data model
+	EncodedStructure string           `json:"encodedStructure" binding:"required"` // Encoded structure of the data model
+	Structure        map[string]Field `json:"-"`                                   // Data model version (not used in the action, but filled by the action)
 }
 
 // DeleteDataModelPayload contains the necessary fields for executing a DeleteDataModel action.
@@ -635,9 +636,10 @@ type DeleteDataModelPayload struct {
 
 // EditDataModelPayload contains the necessary fields for executing an EditDataModel action.
 type EditDataModelPayload struct {
-	Name                    string           `json:"name" binding:"required"`                    // Name of the data model to edit
-	EncodedDataModelVersion string           `json:"encodedDataModelVersion" binding:"required"` // Data model version
-	DataModelVersion        DataModelVersion `json:"-"`                                          // Data model version (not used in the action, but filled by the action)
+	Name             string           `json:"name" binding:"required"`             // Name of the data model to edit
+	Description      string           `json:"description,omitempty"`               // Description of the data model
+	EncodedStructure string           `json:"encodedStructure" binding:"required"` // Encoded structure of the data model
+	Structure        map[string]Field `json:"-"`                                   // Data model version (not used in the action, but filled by the action)
 }
 
 // Deprecated: Use GetMetricsRequest instead.

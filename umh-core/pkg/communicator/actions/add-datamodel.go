@@ -80,20 +80,20 @@ func (a *AddDataModelAction) Parse(payload interface{}) error {
 	}
 
 	a.payload = parsedPayload
-	decodedDataModelVersion, err := base64.StdEncoding.DecodeString(a.payload.EncodedDataModelVersion)
+	decodedStructure, err := base64.StdEncoding.DecodeString(a.payload.EncodedStructure)
 	if err != nil {
 		return fmt.Errorf("failed to decode data model version: %v", err)
 	}
 
-	var dataModelVersion models.DataModelVersion
-	err = yaml.Unmarshal(decodedDataModelVersion, &dataModelVersion)
+	var structure map[string]models.Field
+	err = yaml.Unmarshal(decodedStructure, &structure)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal data model version: %v", err)
 	}
-	a.payload.DataModelVersion = dataModelVersion
+	a.payload.Structure = structure
 
 	a.actionLogger.Debugf("Parsed AddDataModel action payload: name=%s, description=%s",
-		a.payload.Name, a.payload.DataModelVersion.Description)
+		a.payload.Name, a.payload.Description)
 
 	return nil
 }
@@ -105,7 +105,7 @@ func (a *AddDataModelAction) Validate() error {
 		return errors.New("missing required field Name")
 	}
 
-	if len(a.payload.DataModelVersion.Structure) == 0 {
+	if len(a.payload.Structure) == 0 {
 		return errors.New("missing required field Structure")
 	}
 
@@ -122,8 +122,8 @@ func (a *AddDataModelAction) Execute() (interface{}, map[string]interface{}, err
 
 	// Convert models types to config types
 	dmVersion := config.DataModelVersion{
-		Description: a.payload.DataModelVersion.Description,
-		Structure:   a.convertModelsFieldsToConfigFields(a.payload.DataModelVersion.Structure),
+		Description: a.payload.Description,
+		Structure:   a.convertModelsFieldsToConfigFields(a.payload.Structure),
 	}
 
 	// Add to configuration
@@ -144,8 +144,8 @@ func (a *AddDataModelAction) Execute() (interface{}, map[string]interface{}, err
 	// Create response with the data model information
 	response := map[string]interface{}{
 		"name":        a.payload.Name,
-		"description": a.payload.DataModelVersion.Description,
-		"structure":   a.payload.DataModelVersion.Structure,
+		"description": a.payload.Description,
+		"structure":   a.payload.Structure,
 		"version":     1, // First version is always 1
 	}
 
