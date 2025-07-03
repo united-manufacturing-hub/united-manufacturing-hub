@@ -15,6 +15,10 @@
 package generator
 
 import (
+	"crypto/sha256"
+	"fmt"
+	"strconv"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -92,6 +96,43 @@ func (s *StatusCollectorType) GenerateStatusMessage(isBootstrapped bool) *models
 		redpandaData = RedpandaFromSnapshot(rpInst, s.logger)
 	}
 
+	// --- data models (multiple instances, extracted from the config directly) -------------------------------------------------------------
+	dataModels := s.configManager.GetDataModels()
+	dataModelData := make([]models.DataModel, len(dataModels))
+	for i, dataModel := range dataModels {
+		// Extract the latest version from the versions map
+		latestVersion := ""
+		if len(dataModel.Versions) > 0 {
+			// Find the highest version number
+			highestVersion := 0
+			for versionKey := range dataModel.Versions {
+				if len(versionKey) > 1 && versionKey[0] == 'v' {
+					if versionNum := parseVersionNumber(versionKey); versionNum > highestVersion {
+						highestVersion = versionNum
+						latestVersion = versionKey
+					}
+				}
+			}
+			// If no versioned keys found, use the first available key
+			if latestVersion == "" {
+				for versionKey := range dataModel.Versions {
+					latestVersion = versionKey
+					break
+				}
+			}
+		}
+
+		// Generate a simple hash from the structure (placeholder implementation)
+		hash := generateDataModelHash(dataModel)
+
+		dataModelData[i] = models.DataModel{
+			Name:          dataModel.Name,
+			Description:   dataModel.Description,
+			LatestVersion: latestVersion,
+			Hash:          hash,
+		}
+	}
+
 	// --- dfc (multiple instances) ----------------------	---------------------------------------
 	var dfcData []models.Dfc
 	dfcMgr, ok := fsm.FindManager(snapshot, constants.DataflowcomponentManagerName)
@@ -135,6 +176,7 @@ func (s *StatusCollectorType) GenerateStatusMessage(isBootstrapped bool) *models
 			Dfcs:         dfcData,
 			Redpanda:     redpandaData,
 			TopicBrowser: *topicBrowserData,
+			DataModels:   dataModelData,
 			Release: models.Release{
 				Health: &models.Health{
 					Message:       "",
@@ -179,4 +221,32 @@ func (s *StatusCollectorType) GenerateStatusMessage(isBootstrapped bool) *models
 	)
 
 	return statusMessage
+}
+
+// parseVersionNumber parses a version string (e.g., "v1", "v2") to an integer
+func parseVersionNumber(versionStr string) int {
+	versionNum, err := strconv.Atoi(versionStr[1:])
+	if err != nil {
+		return 0
+	}
+	return versionNum
+}
+
+// generateDataModelHash generates a simple hash from the data model structure
+func generateDataModelHash(dataModel config.DataModelsConfig) string {
+	if len(dataModel.Versions) == 0 {
+		return ""
+	}
+
+	// Create a hash from the data model name and version count
+	h := sha256.New()
+	h.Write([]byte(dataModel.Name))
+	h.Write([]byte(fmt.Sprintf("%d", len(dataModel.Versions))))
+
+	// Add version keys to the hash for consistency
+	for versionKey := range dataModel.Versions {
+		h.Write([]byte(versionKey))
+	}
+
+	return fmt.Sprintf("%x", h.Sum(nil))[:16] // Return first 16 characters
 }
