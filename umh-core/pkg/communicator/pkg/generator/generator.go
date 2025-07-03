@@ -241,7 +241,7 @@ func generateDataModelHash(dataModel config.DataModelsConfig) string {
 	// Create a hash from the data model name and version count
 	h := sha256.New()
 	h.Write([]byte(dataModel.Name))
-	h.Write([]byte(fmt.Sprintf("%d", len(dataModel.Versions))))
+	fmt.Fprintf(h, "%d", len(dataModel.Versions))
 
 	// Add version keys to the hash for consistency
 	for versionKey := range dataModel.Versions {
