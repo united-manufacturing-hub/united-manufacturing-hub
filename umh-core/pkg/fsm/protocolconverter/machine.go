@@ -190,7 +190,11 @@ func (d *ProtocolConverterInstance) IsStopped() bool {
 func (d *ProtocolConverterInstance) PrintState() {
 	d.baseFSMInstance.GetLogger().Debugf("Current state: %s", d.baseFSMInstance.GetCurrentFSMState())
 	d.baseFSMInstance.GetLogger().Debugf("Desired state: %s", d.baseFSMInstance.GetDesiredFSMState())
-	d.baseFSMInstance.GetLogger().Debugf("Observed state: %+v", d.ObservedState)
+	d.baseFSMInstance.GetLogger().Debugf("Connection: %s, Read DFC: %s, Write DFC: %s, Status: %s",
+		d.ObservedState.ServiceInfo.ConnectionFSMState,
+		d.ObservedState.ServiceInfo.DataflowComponentReadFSMState,
+		d.ObservedState.ServiceInfo.DataflowComponentWriteFSMState,
+		d.ObservedState.ServiceInfo.StatusReason)
 }
 
 // GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance
