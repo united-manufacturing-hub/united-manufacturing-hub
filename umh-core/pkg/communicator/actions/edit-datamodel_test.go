@@ -72,12 +72,10 @@ var _ = Describe("EditDataModelAction", func() {
 					Description: "Updated test data model",
 					Structure: map[string]models.Field{
 						"field1": {
-							PayloadType: "string",
-							Type:        "required",
+							Type: "timeseries-string",
 						},
 						"newField": {
-							PayloadType: "number",
-							Type:        "optional",
+							Type: "timeseries-number",
 						},
 					},
 				}
@@ -121,8 +119,7 @@ var _ = Describe("EditDataModelAction", func() {
 					Description: "Updated test data model",
 					Structure: map[string]models.Field{
 						"field1": {
-							PayloadType: "string",
-							Type:        "required",
+							Type: "timeseries-string",
 						},
 					},
 				}
@@ -143,8 +140,7 @@ var _ = Describe("EditDataModelAction", func() {
 					Description: "Updated test data model",
 					Structure: map[string]models.Field{
 						"field1": {
-							PayloadType: "string",
-							Type:        "required",
+							Type: "timeseries-string",
 						},
 					},
 				}
@@ -204,20 +200,16 @@ var _ = Describe("EditDataModelAction", func() {
 					Description: "Updated version of existing model",
 					Structure: map[string]models.Field{
 						"updatedField": {
-							PayloadType: "string",
-							Type:        "required",
+							Type: "timeseries-string",
 						},
 						"newField": {
-							PayloadType: "number",
-							Type:        "optional",
+							Type: "timeseries-number",
 						},
 						"nested": {
-							PayloadType: "object",
-							Type:        "optional",
+							Type: "timeseries-object",
 							Subfields: map[string]models.Field{
 								"subfield1": {
-									PayloadType: "boolean",
-									Type:        "required",
+									Type: "timeseries-boolean",
 								},
 							},
 						},
@@ -231,13 +223,12 @@ var _ = Describe("EditDataModelAction", func() {
 					DataModels: []config.DataModelsConfig{
 						{
 							Name: "existing-model",
-							Versions: map[uint64]config.DataModelVersion{
-								1: {
+							Versions: map[string]config.DataModelVersion{
+								"v1": {
 									Description: "Original version",
 									Structure: map[string]config.Field{
 										"originalField": {
-											PayloadType: "string",
-											Type:        "required",
+											Type: "timeseries-string",
 										},
 									},
 								},
@@ -296,8 +287,7 @@ var _ = Describe("EditDataModelAction", func() {
 					Description: "This will fail",
 					Structure: map[string]models.Field{
 						"field1": {
-							PayloadType: "string",
-							Type:        "required",
+							Type: "timeseries-string",
 						},
 					},
 				}
@@ -336,8 +326,7 @@ var _ = Describe("EditDataModelAction", func() {
 				Description: "Test description",
 				Structure: map[string]models.Field{
 					"field1": {
-						PayloadType: "string",
-						Type:        "required",
+						Type: "timeseries-string",
 					},
 				},
 			}
@@ -359,33 +348,26 @@ var _ = Describe("EditDataModelAction", func() {
 				Description: "Updated complex data model with new nested fields",
 				Structure: map[string]models.Field{
 					"simple_string": {
-						PayloadType: "string",
-						Type:        "required",
+						Type: "timeseries-string",
 					},
 					"updated_number": {
-						PayloadType: "number",
-						Type:        "optional",
+						Type: "timeseries-number",
 					},
 					"new_referenced_model": {
-						PayloadType: "object",
-						Type:        "required",
-						ModelRef:    "another-external-model",
+						Type:     "timeseries-object",
+						ModelRef: "another-external-model",
 					},
 					"updated_nested_object": {
-						PayloadType: "object",
-						Type:        "optional",
+						Type: "timeseries-object",
 						Subfields: map[string]models.Field{
 							"updated_nested_string": {
-								PayloadType: "string",
-								Type:        "required",
+								Type: "timeseries-string",
 							},
 							"new_deeply_nested": {
-								PayloadType: "object",
-								Type:        "optional",
+								Type: "timeseries-object",
 								Subfields: map[string]models.Field{
 									"new_deep_field": {
-										PayloadType: "array",
-										Type:        "required",
+										Type: "timeseries-array",
 									},
 								},
 							},
@@ -405,13 +387,12 @@ var _ = Describe("EditDataModelAction", func() {
 				DataModels: []config.DataModelsConfig{
 					{
 						Name: "complex-model",
-						Versions: map[uint64]config.DataModelVersion{
-							1: {
+						Versions: map[string]config.DataModelVersion{
+							"v1": {
 								Description: "Original complex model",
 								Structure: map[string]config.Field{
 									"oldField": {
-										PayloadType: "string",
-										Type:        "required",
+										Type: "timeseries-string",
 									},
 								},
 							},

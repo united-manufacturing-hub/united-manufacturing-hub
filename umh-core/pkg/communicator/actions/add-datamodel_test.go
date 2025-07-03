@@ -85,8 +85,7 @@ var _ = Describe("AddDataModelAction", func() {
 					Description: "Test data model",
 					Structure: map[string]models.Field{
 						"field1": {
-							PayloadType: "string",
-							Type:        "required",
+							Type: "timeseries-string",
 						},
 					},
 				}
@@ -130,8 +129,7 @@ var _ = Describe("AddDataModelAction", func() {
 					Description: "Test data model",
 					Structure: map[string]models.Field{
 						"field1": {
-							PayloadType: "string",
-							Type:        "required",
+							Type: "timeseries-string",
 						},
 					},
 				}
@@ -152,8 +150,7 @@ var _ = Describe("AddDataModelAction", func() {
 					Description: "Test data model",
 					Structure: map[string]models.Field{
 						"field1": {
-							PayloadType: "string",
-							Type:        "required",
+							Type: "timeseries-string",
 						},
 					},
 				}
@@ -213,16 +210,12 @@ var _ = Describe("AddDataModelAction", func() {
 					Description: "Test data model",
 					Structure: map[string]models.Field{
 						"field1": {
-							PayloadType: "string",
-							Type:        "required",
+							Type: "timeseries-string",
 						},
 						"nested": {
-							PayloadType: "object",
-							Type:        "optional",
 							Subfields: map[string]models.Field{
 								"subfield1": {
-									PayloadType: "number",
-									Type:        "required",
+									Type: "timeseries-number",
 								},
 							},
 						},
@@ -292,33 +285,24 @@ var _ = Describe("AddDataModelAction", func() {
 				Description: "Complex data model with nested fields",
 				Structure: map[string]models.Field{
 					"simple_string": {
-						PayloadType: "string",
-						Type:        "required",
+						Type: "timeseries-string",
 					},
 					"simple_number": {
-						PayloadType: "number",
-						Type:        "optional",
+						Type: "timeseries-number",
 					},
 					"referenced_model": {
-						PayloadType: "object",
-						Type:        "required",
-						ModelRef:    "external-model",
+						ModelRef: "external-model",
 					},
 					"nested_object": {
-						PayloadType: "object",
-						Type:        "optional",
+						Type: "timeseries-object",
 						Subfields: map[string]models.Field{
 							"nested_string": {
-								PayloadType: "string",
-								Type:        "required",
+								Type: "timeseries-string",
 							},
 							"deeply_nested": {
-								PayloadType: "object",
-								Type:        "optional",
 								Subfields: map[string]models.Field{
 									"deep_field": {
-										PayloadType: "boolean",
-										Type:        "required",
+										Type: "timeseries-boolean",
 									},
 								},
 							},

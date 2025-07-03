@@ -48,13 +48,12 @@ var _ = Describe("DeleteDataModelAction", func() {
 			DataModels: []config.DataModelsConfig{
 				{
 					Name: "test-model",
-					Versions: map[uint64]config.DataModelVersion{
-						1: {
+					Versions: map[string]config.DataModelVersion{
+						"v1": {
 							Description: "Test data model",
 							Structure: map[string]config.Field{
 								"field1": {
-									PayloadType: "string",
-									Type:        "required",
+									Type: "timeseries-string",
 								},
 							},
 						},
@@ -62,13 +61,12 @@ var _ = Describe("DeleteDataModelAction", func() {
 				},
 				{
 					Name: "another-model",
-					Versions: map[uint64]config.DataModelVersion{
-						1: {
+					Versions: map[string]config.DataModelVersion{
+						"v1": {
 							Description: "Another test data model",
 							Structure: map[string]config.Field{
 								"field2": {
-									PayloadType: "number",
-									Type:        "optional",
+									Type: "timeseries-number",
 								},
 							},
 						},
