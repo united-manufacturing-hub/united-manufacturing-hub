@@ -114,6 +114,14 @@ func (s *Handler) notify() {
 		return
 	}
 
+	// Update Topic Browser cache before generating status messages (Phase 2 architectural improvement)
+	// This consolidates the cache update logic into the single notification ticker
+	err := s.StatusCollector.UpdateTopicBrowserCache()
+	if err != nil {
+		s.logger.Warnf("Failed to update topic browser cache: %v", err)
+		// Continue with status generation even if cache update fails
+	}
+
 	ctx, cncl := tools.Get1SecondContext()
 	defer cncl()
 

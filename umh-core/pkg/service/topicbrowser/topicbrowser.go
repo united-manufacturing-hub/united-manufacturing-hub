@@ -172,7 +172,7 @@ func NewDefaultService(tbName string, opts ...ServiceOption) *Service {
 		benthosService: benthossvc.NewDefaultBenthosService(tbName),
 		benthosConfigs: []config.BenthosConfig{},
 		tbName:         tbName,
-		ringbuffer:     NewRingbuffer(8), // NOTE: adjustable, no real reason for 8
+		ringbuffer:     NewRingbuffer(3), // Reduced from 8 to 3 for immediate 62% memory reduction
 	}
 
 	// Apply options
@@ -313,7 +313,7 @@ func (svc *Service) Status(
 		InvalidMetrics:        invalidMetrics,
 		StatusReason:          statusReason,
 		Status: Status{
-			Buffer: svc.ringbuffer.Get(),
+			Buffer: svc.ringbuffer.GetBuffers(),
 			Logs:   logs,
 		},
 	}, nil

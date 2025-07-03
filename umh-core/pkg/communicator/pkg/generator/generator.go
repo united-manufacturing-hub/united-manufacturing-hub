@@ -23,6 +23,7 @@ import (
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	topicbrowserservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/topicbrowser"
 	"go.uber.org/zap"
 )
 
@@ -54,6 +55,49 @@ func NewStatusCollector(
 	}
 
 	return collector
+}
+
+// UpdateTopicBrowserCache updates the topic browser cache with the latest observed state
+// This consolidates the cache update logic into the status generation pipeline
+// eliminating the redundant ticker (architectural improvement from Phase 2)
+// and implements proper sync.Pool lifecycle (Phase 3 optimization)
+func (s *StatusCollectorType) UpdateTopicBrowserCache() error {
+	if s.topicBrowserSimulator.GetSimulatorEnabled() {
+		s.topicBrowserSimulator.Tick()
+		obs := s.topicBrowserSimulator.GetSimObservedState()
+		err := s.topicBrowserCache.Update(obs)
+		if err != nil {
+			s.logger.Errorf("Failed to update topic browser cache (simulator): %v", err)
+			return err
+		}
+		// Note: Simulator doesn't use pooled objects, so no PutBuffers() needed
+	} else {
+		// get observed state from system snapshot manager
+		snapshot := s.systemSnapshotManager.GetDeepCopySnapshot()
+		tbInstance, ok := fsm.FindInstance(snapshot, constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
+		if !ok || tbInstance == nil {
+			// Not an error, just not ready yet
+			return nil
+		}
+		tbObservedState, ok := tbInstance.LastObservedState.(*topicbrowserfsm.ObservedStateSnapshot)
+		if !ok || tbObservedState == nil {
+			// Not an error, just not ready yet
+			return nil
+		}
+		err := s.topicBrowserCache.Update(tbObservedState)
+		if err != nil {
+			s.logger.Errorf("Failed to update topic browser cache (FSM): %v", err)
+			return err
+		}
+
+		// Phase 3: Return pooled objects to sync.Pool after processing
+		// The shallow copy system ensures tbObservedState.ServiceInfo.Status.Buffer
+		// contains the same pooled objects returned from GetBuffers()
+		if len(tbObservedState.ServiceInfo.Status.Buffer) > 0 {
+			topicbrowserservice.PutBuffers(tbObservedState.ServiceInfo.Status.Buffer)
+		}
+	}
+	return nil
 }
 
 func (s *StatusCollectorType) GenerateStatusMessage(isBootstrapped bool) *models.StatusMessage {
