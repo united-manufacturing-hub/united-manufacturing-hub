@@ -75,10 +75,10 @@ dataModels:
         structure:
           temperature:
             payloadType: number
-            type: timeseries
+            _type: timeseries
           unit:
             payloadType: string
-            type: timeseries
+            _type: timeseries
 `
 				config, err := ParseConfig([]byte(validYAML), false)
 				Expect(err).NotTo(HaveOccurred())
@@ -115,17 +115,16 @@ dataModels:
         structure:
           sensor:
             payloadType: string
-            type: timeseries
-            subfields:
-              temp_reading:
-                payloadType: number
-                type: timeseries
-              temp_unit:
-                payloadType: string
-                type: timeseries
-                _model: temperature
+            _type: timeseries
+            temp_reading:
+              payloadType: number
+              _type: timeseries
+            temp_unit:
+              payloadType: string
+              _type: timeseries
+              _refModel: temperature
           metadata:
-            _model: device-info
+            _refModel: device-info
 `
 				config, err := ParseConfig([]byte(complexYAML), false)
 				Expect(err).NotTo(HaveOccurred())
@@ -156,18 +155,18 @@ dataModels:
         structure:
           value:
             payloadType: number
-            type: timeseries
+            _type: timeseries
       2:
         description: Extended version with timestamp
         structure:
           value:
             payloadType: number
-            type: timeseries
+            _type: timeseries
           timestamp:
             payloadType: string
-            type: timeseries
+            _type: timeseries
           metadata:
-            _model: sensor-metadata
+            _refModel: sensor-metadata
 `
 				config, err := ParseConfig([]byte(multiVersionYAML), false)
 				Expect(err).NotTo(HaveOccurred())
@@ -222,7 +221,7 @@ dataModels:
         structure:
           field1:
             payloadType: string
-            type: timeseries
+            _type: timeseries
 `
 		)
 
@@ -359,7 +358,7 @@ dataModels:
         structure:
           temperature:
             payloadType: number
-            type: timeseries
+            _type: timeseries
 `
 		)
 
@@ -484,7 +483,7 @@ dataModels:
         structure:
           temperature:
             payloadType: number
-            type: timeseries
+            _type: timeseries
   - name: pressure
     version:
       1:
@@ -492,7 +491,7 @@ dataModels:
         structure:
           pressure:
             payloadType: number
-            type: timeseries
+            _type: timeseries
 `
 		)
 
