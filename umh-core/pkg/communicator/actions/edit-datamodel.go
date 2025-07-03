@@ -112,6 +112,17 @@ func (a *EditDataModelAction) Validate() error {
 		return errors.New("missing required field Structure")
 	}
 
+	// Validate data model structure
+	validationErrors := models.ValidateDataModelStructure(a.payload.Structure)
+	if len(validationErrors) > 0 {
+		// Build error message with all validation errors
+		errorMsg := "data model structure validation failed:"
+		for _, validationError := range validationErrors {
+			errorMsg += fmt.Sprintf("\n  - %s", validationError.Error())
+		}
+		return errors.New(errorMsg)
+	}
+
 	return nil
 }
 
