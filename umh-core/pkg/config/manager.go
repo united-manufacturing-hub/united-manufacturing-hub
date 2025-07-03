@@ -60,6 +60,8 @@ var (
 type ConfigManager interface {
 	// GetConfig returns the current config
 	GetConfig(ctx context.Context, tick uint64) (FullConfig, error)
+	// GetDataModels returns the data models from the config
+	GetDataModels() []DataModelsConfig
 	// GetFileSystemService returns the filesystem service
 	GetFileSystemService() filesystem.Service
 	// AtomicSetLocation sets the location in the config atomically
@@ -367,6 +369,18 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	return config, nil
 }
 
+// GetDataModels returns the data models from the config
+func (m *FileConfigManager) GetDataModels() []DataModelsConfig {
+	// Get the current config using a zero tick (no backoff considerations)
+	config, err := m.GetConfig(context.Background(), 0)
+	if err != nil {
+		m.logger.Warnf("Failed to get config for data models: %v", err)
+		return []DataModelsConfig{}
+	}
+
+	return config.DataModels
+}
+
 // FileConfigManagerWithBackoff wraps a FileConfigManager and implements backoff for GetConfig errors
 type FileConfigManagerWithBackoff struct {
 	// The wrapped file config manager
@@ -553,6 +567,11 @@ func (m *FileConfigManagerWithBackoff) GetConfig(ctx context.Context, tick uint6
 	// Reset backoff state on successful operation
 	m.backoffManager.Reset()
 	return config, nil
+}
+
+// GetDataModels delegates to the underlying FileConfigManager
+func (m *FileConfigManagerWithBackoff) GetDataModels() []DataModelsConfig {
+	return m.configManager.GetDataModels()
 }
 
 // Reset forcefully resets the config manager's state, including permanent failure status

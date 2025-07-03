@@ -15,6 +15,12 @@
 package generator
 
 import (
+	"crypto/sha256"
+	"fmt"
+	"hash"
+	"sort"
+	"strconv"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -92,6 +98,43 @@ func (s *StatusCollectorType) GenerateStatusMessage(isBootstrapped bool) *models
 		redpandaData = RedpandaFromSnapshot(rpInst, s.logger)
 	}
 
+	// --- data models (multiple instances, extracted from the config directly) -------------------------------------------------------------
+	dataModels := s.configManager.GetDataModels()
+	dataModelData := make([]models.DataModel, len(dataModels))
+	for i, dataModel := range dataModels {
+		// Extract the latest version from the versions map
+		latestVersion := ""
+		if len(dataModel.Versions) > 0 {
+			// Find the highest version number
+			highestVersion := 0
+			for versionKey := range dataModel.Versions {
+				if len(versionKey) > 1 && versionKey[0] == 'v' {
+					if versionNum := parseVersionNumber(versionKey); versionNum > highestVersion {
+						highestVersion = versionNum
+						latestVersion = versionKey
+					}
+				}
+			}
+			// If no versioned keys found, use the first available key
+			if latestVersion == "" {
+				for versionKey := range dataModel.Versions {
+					latestVersion = versionKey
+					break
+				}
+			}
+		}
+
+		// Generate a simple hash from the structure (placeholder implementation)
+		hash := generateDataModelHash(dataModel)
+
+		dataModelData[i] = models.DataModel{
+			Name:          dataModel.Name,
+			Description:   dataModel.Description,
+			LatestVersion: latestVersion,
+			Hash:          hash,
+		}
+	}
+
 	// --- dfc (multiple instances) ----------------------	---------------------------------------
 	var dfcData []models.Dfc
 	dfcMgr, ok := fsm.FindManager(snapshot, constants.DataflowcomponentManagerName)
@@ -135,6 +178,7 @@ func (s *StatusCollectorType) GenerateStatusMessage(isBootstrapped bool) *models
 			Dfcs:         dfcData,
 			Redpanda:     redpandaData,
 			TopicBrowser: *topicBrowserData,
+			DataModels:   dataModelData,
 			Release: models.Release{
 				Health: &models.Health{
 					Message:       "",
@@ -179,4 +223,70 @@ func (s *StatusCollectorType) GenerateStatusMessage(isBootstrapped bool) *models
 	)
 
 	return statusMessage
+}
+
+// parseVersionNumber parses a version string (e.g., "v1", "v2") to an integer
+func parseVersionNumber(versionStr string) int {
+	versionNum, err := strconv.Atoi(versionStr[1:])
+	if err != nil {
+		return 0
+	}
+	return versionNum
+}
+
+// generateDataModelHash generates a simple hash from the data model structure
+func generateDataModelHash(dataModel config.DataModelsConfig) string {
+	if len(dataModel.Versions) == 0 {
+		return ""
+	}
+
+	// Create a hash from the data model name and version content
+	h := sha256.New()
+	h.Write([]byte(dataModel.Name))
+
+	// Sort version keys for deterministic hashing
+	versionKeys := make([]string, 0, len(dataModel.Versions))
+	for versionKey := range dataModel.Versions {
+		versionKeys = append(versionKeys, versionKey)
+	}
+	sort.Strings(versionKeys)
+
+	// Add each version and its content to the hash
+	for _, versionKey := range versionKeys {
+		version := dataModel.Versions[versionKey]
+		h.Write([]byte(versionKey))
+		h.Write([]byte(version.Description))
+
+		// Hash the structure content
+		hashStructure(h, version.Structure)
+	}
+
+	return fmt.Sprintf("%x", h.Sum(nil))[:16] // Return first 16 characters
+}
+
+// hashStructure recursively hashes the structure map
+func hashStructure(h hash.Hash, structure map[string]config.Field) {
+	if len(structure) == 0 {
+		return
+	}
+
+	// Sort field keys for deterministic hashing
+	fieldKeys := make([]string, 0, len(structure))
+	for fieldKey := range structure {
+		fieldKeys = append(fieldKeys, fieldKey)
+	}
+	sort.Strings(fieldKeys)
+
+	// Hash each field and its content
+	for _, fieldKey := range fieldKeys {
+		field := structure[fieldKey]
+		h.Write([]byte(fieldKey))
+		h.Write([]byte(field.Description))
+		h.Write([]byte(field.Type))
+		h.Write([]byte(field.Unit))
+		h.Write([]byte(field.ModelRef))
+
+		// Recursively hash subfields
+		hashStructure(h, field.Subfields)
+	}
 }
