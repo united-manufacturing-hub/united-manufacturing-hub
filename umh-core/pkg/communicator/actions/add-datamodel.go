@@ -30,6 +30,7 @@ package actions
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 
@@ -39,6 +40,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
+	"gopkg.in/yaml.v3"
 )
 
 // AddDataModelAction implements the Action interface for adding a new Data Model.
@@ -78,8 +80,20 @@ func (a *AddDataModelAction) Parse(payload interface{}) error {
 	}
 
 	a.payload = parsedPayload
+	decodedDataModelVersion, err := base64.StdEncoding.DecodeString(a.payload.EncodedDataModelVersion)
+	if err != nil {
+		return fmt.Errorf("failed to decode data model version: %v", err)
+	}
+
+	var dataModelVersion models.DataModelVersion
+	err = yaml.Unmarshal(decodedDataModelVersion, &dataModelVersion)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal data model version: %v", err)
+	}
+	a.payload.DataModelVersion = dataModelVersion
+
 	a.actionLogger.Debugf("Parsed AddDataModel action payload: name=%s, description=%s",
-		a.payload.Name, a.payload.Description)
+		a.payload.Name, a.payload.DataModelVersion.Description)
 
 	return nil
 }
@@ -91,7 +105,7 @@ func (a *AddDataModelAction) Validate() error {
 		return errors.New("missing required field Name")
 	}
 
-	if len(a.payload.Structure) == 0 {
+	if len(a.payload.DataModelVersion.Structure) == 0 {
 		return errors.New("missing required field Structure")
 	}
 
@@ -108,8 +122,8 @@ func (a *AddDataModelAction) Execute() (interface{}, map[string]interface{}, err
 
 	// Convert models types to config types
 	dmVersion := config.DataModelVersion{
-		Description: a.payload.Description,
-		Structure:   a.convertModelsFieldsToConfigFields(a.payload.Structure),
+		Description: a.payload.DataModelVersion.Description,
+		Structure:   a.convertModelsFieldsToConfigFields(a.payload.DataModelVersion.Structure),
 	}
 
 	// Add to configuration
@@ -130,8 +144,8 @@ func (a *AddDataModelAction) Execute() (interface{}, map[string]interface{}, err
 	// Create response with the data model information
 	response := map[string]interface{}{
 		"name":        a.payload.Name,
-		"description": a.payload.Description,
-		"structure":   a.payload.Structure,
+		"description": a.payload.DataModelVersion.Description,
+		"structure":   a.payload.DataModelVersion.Structure,
 		"version":     1, // First version is always 1
 	}
 
