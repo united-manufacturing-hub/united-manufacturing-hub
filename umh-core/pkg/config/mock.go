@@ -677,7 +677,7 @@ func (m *MockConfigManager) AtomicEditDataModel(ctx context.Context, name string
 	currentDataModel := config.DataModels[targetIndex]
 
 	// Find the highest version number to ensure we don't overwrite existing versions
-	var maxVersion int = 0
+	var maxVersion = 0
 	for versionKey := range currentDataModel.Versions {
 		if strings.HasPrefix(versionKey, "v") {
 			if versionNum, err := strconv.Atoi(versionKey[1:]); err == nil {
