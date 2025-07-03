@@ -58,7 +58,6 @@ type DataModelVersionRoot struct {
 }
 
 type Field struct {
-	PayloadType string           `yaml:"payloadType,omitempty"`  // payload data type (string or number)
 	Description string           `yaml:"_description,omitempty"` // description of the field
 	Type        string           `yaml:"_type,omitempty"`        // type of the field (timeseries only for now)
 	Unit        string           `yaml:"_unit,omitempty"`        // unit of the field (only for timeseries-number)
