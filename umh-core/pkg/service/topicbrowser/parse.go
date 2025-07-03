@@ -15,7 +15,6 @@
 package topicbrowser
 
 import (
-	"bytes"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -29,9 +28,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
-
-// 10MiB
-const maxPayloadBytes = 10 << 20
 
 // / extractRaw searches log entries for a complete START‒END block and returns
 // the hex-encoded LZ4 payload plus its epoch-ms timestamp.
@@ -81,11 +77,35 @@ func extractRaw(entries []s6svc.LogEntry) (compressed []byte, epochMS int64, err
 		return nil, 0, nil // head not written yet
 	}
 
-	var buf bytes.Buffer
-	for _, entry := range entries[startIndex+1 : dataEndIndex] {
-		buf.WriteString(strings.TrimSpace(entry.Content))
+	// Use pooled buffer with pre-allocation to avoid repeated growth
+	bufPtr := parseBufferPool.Get().(*[]byte)
+	buf := *bufPtr
+
+	// Reset buffer and estimate needed capacity based on log entries
+	buf = buf[:0]
+	entryCount := dataEndIndex - startIndex - 1
+	// Based on pprof: ~174MB hex for 87MB compressed, so ~2MB per entry for large payloads
+	// For safety, use 3MB per entry estimate when more than 10 entries
+	estimatedSize := entryCount * 3 << 20 // 3MB per entry
+	if entryCount <= 10 {
+		estimatedSize = entryCount * 1024 * 512 // 512KB per entry for smaller payloads
 	}
-	raw := buf.Bytes()
+	if cap(buf) < estimatedSize {
+		buf = make([]byte, 0, estimatedSize)
+	}
+
+	for _, entry := range entries[startIndex+1 : dataEndIndex] {
+		trimmed := strings.TrimSpace(entry.Content)
+		buf = append(buf, trimmed...)
+	}
+
+	// Copy to owned slice since we're returning it
+	raw := make([]byte, len(buf))
+	copy(raw, buf)
+
+	// Return buffer to pool
+	*bufPtr = buf[:0]
+	parseBufferPool.Put(bufPtr)
 
 	tsLine := ""
 	for _, entry := range entries[dataEndIndex+1 : blockEndIndex] {
@@ -140,6 +160,16 @@ var decompressionBufferPool = sync.Pool{
 	New: func() any {
 		// Start with 64KB buffer, will grow as needed
 		b := make([]byte, 0, 64<<10)
+		return &b
+	},
+}
+
+// parseBufferPool reuses buffers for hex data parsing to avoid bytes.Buffer growth
+// Based on pprof analysis: typical hex strings are ~174MB, so start with 200MB capacity
+var parseBufferPool = sync.Pool{
+	New: func() any {
+		// Start with 200MB buffer for hex parsing - pprof shows ~174MB hex strings
+		b := make([]byte, 0, 200<<20)
 		return &b
 	},
 }
