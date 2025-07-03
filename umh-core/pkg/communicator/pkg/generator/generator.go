@@ -17,6 +17,8 @@ package generator
 import (
 	"crypto/sha256"
 	"fmt"
+	"hash"
+	"sort"
 	"strconv"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
@@ -238,15 +240,53 @@ func generateDataModelHash(dataModel config.DataModelsConfig) string {
 		return ""
 	}
 
-	// Create a hash from the data model name and version count
+	// Create a hash from the data model name and version content
 	h := sha256.New()
 	h.Write([]byte(dataModel.Name))
-	fmt.Fprintf(h, "%d", len(dataModel.Versions))
 
-	// Add version keys to the hash for consistency
+	// Sort version keys for deterministic hashing
+	versionKeys := make([]string, 0, len(dataModel.Versions))
 	for versionKey := range dataModel.Versions {
+		versionKeys = append(versionKeys, versionKey)
+	}
+	sort.Strings(versionKeys)
+
+	// Add each version and its content to the hash
+	for _, versionKey := range versionKeys {
+		version := dataModel.Versions[versionKey]
 		h.Write([]byte(versionKey))
+		h.Write([]byte(version.Description))
+
+		// Hash the structure content
+		hashStructure(h, version.Structure)
 	}
 
 	return fmt.Sprintf("%x", h.Sum(nil))[:16] // Return first 16 characters
+}
+
+// hashStructure recursively hashes the structure map
+func hashStructure(h hash.Hash, structure map[string]config.Field) {
+	if len(structure) == 0 {
+		return
+	}
+
+	// Sort field keys for deterministic hashing
+	fieldKeys := make([]string, 0, len(structure))
+	for fieldKey := range structure {
+		fieldKeys = append(fieldKeys, fieldKey)
+	}
+	sort.Strings(fieldKeys)
+
+	// Hash each field and its content
+	for _, fieldKey := range fieldKeys {
+		field := structure[fieldKey]
+		h.Write([]byte(fieldKey))
+		h.Write([]byte(field.Description))
+		h.Write([]byte(field.Type))
+		h.Write([]byte(field.Unit))
+		h.Write([]byte(field.ModelRef))
+
+		// Recursively hash subfields
+		hashStructure(h, field.Subfields)
+	}
 }
