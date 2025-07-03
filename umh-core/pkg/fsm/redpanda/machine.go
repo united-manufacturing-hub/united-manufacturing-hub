@@ -157,10 +157,7 @@ func (r *RedpandaInstance) WantsToBeStopped() bool {
 func (r *RedpandaInstance) PrintState() {
 	r.baseFSMInstance.GetLogger().Debugf("Current state: %s", r.baseFSMInstance.GetCurrentFSMState())
 	r.baseFSMInstance.GetLogger().Debugf("Desired state: %s", r.baseFSMInstance.GetDesiredFSMState())
-	r.baseFSMInstance.GetLogger().Debugf("Service status: %s, Health: Ready=%t Live=%t",
-		r.PreviousObservedState.ServiceInfo.StatusReason,
-		r.PreviousObservedState.ServiceInfo.RedpandaStatus.HealthCheck.IsReady,
-		r.PreviousObservedState.ServiceInfo.RedpandaStatus.HealthCheck.IsLive)
+	r.baseFSMInstance.GetLogger().Debugf("Observed state: %+v", r.PreviousObservedState)
 }
 
 // TODO: Add Redpanda-specific health check methods

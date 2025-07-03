@@ -322,8 +322,6 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	}
 	remainingTime := time.Until(deadline)
 	timeToAdd := time.Duration(float64(remainingTime) * constants.LoopControlLoopTimeFactor)
-	c.logger.Debugf("[TIME-BUDGET] Control loop: original=%v, factor=%.2f, allocated=%v",
-		remainingTime, constants.LoopControlLoopTimeFactor, timeToAdd)
 	newDeadline := time.Now().Add(timeToAdd)
 	innerCtx, cancel := context.WithDeadline(ctx, newDeadline)
 	defer cancel()
@@ -518,9 +516,6 @@ func (c *ControlLoop) reconcileManager(ctx context.Context, manager fsm.FSMManag
 		// Any other unexpected error
 		return false, fmt.Errorf("deadline check error: %w", err)
 	}
-
-	c.logger.Debugf("[TIME-BUDGET] Manager %s: remaining=%v, needed=%v, sufficient=%t",
-		managerName, remaining, constants.DefaultMinimumRemainingTimePerManager, sufficient)
 
 	// If sufficient is true but err is nil, we're good to proceed
 	if !sufficient {
