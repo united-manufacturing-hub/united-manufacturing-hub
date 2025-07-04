@@ -636,13 +636,11 @@ var _ = Describe("EditDataModelAction", func() {
 						},
 					},
 					"updated_nested_object": {
-						Type: "timeseries-object",
 						Subfields: map[string]models.Field{
 							"updated_nested_string": {
 								Type: "timeseries-string",
 							},
 							"new_deeply_nested": {
-								Type: "timeseries-object",
 								Subfields: map[string]models.Field{
 									"new_deep_field": {
 										Type: "timeseries-array",

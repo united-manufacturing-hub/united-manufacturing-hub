@@ -78,7 +78,7 @@ var _ = Describe("Validator", func() {
 				},
 			}
 
-			err := validator.ValidateDataModel(ctx, dataModel)
+			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(BeNil())
 		})
 
@@ -91,7 +91,7 @@ var _ = Describe("Validator", func() {
 				},
 			}
 
-			err := validator.ValidateDataModel(ctx, dataModel)
+			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(BeNil())
 		})
 
@@ -105,7 +105,7 @@ var _ = Describe("Validator", func() {
 				},
 			}
 
-			err := validator.ValidateDataModel(ctx, dataModel)
+			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(BeNil())
 		})
 
@@ -119,7 +119,7 @@ var _ = Describe("Validator", func() {
 				},
 			}
 
-			err := validator.ValidateDataModel(ctx, dataModel)
+			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(BeNil())
 		})
 
@@ -132,7 +132,7 @@ var _ = Describe("Validator", func() {
 				},
 			}
 
-			err := validator.ValidateDataModel(ctx, dataModel)
+			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(BeNil())
 		})
 
@@ -149,11 +149,11 @@ var _ = Describe("Validator", func() {
 				},
 			}
 
-			err := validator.ValidateDataModel(ctx, dataModel)
+			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(BeNil())
 		})
 
-		It("should validate a non-leaf node with _type (folder nodes can have _type)", func() {
+		It("should fail validation for a non-leaf node with _type", func() {
 			dataModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
 					"parent": {
@@ -167,8 +167,74 @@ var _ = Describe("Validator", func() {
 				},
 			}
 
-			err := validator.ValidateDataModel(ctx, dataModel)
-			Expect(err).To(BeNil())
+			err := validator.ValidateStructureOnly(ctx, dataModel)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("non-leaf nodes (folders) cannot have _type"))
+			Expect(err.Error()).To(ContainSubstring("parent"))
+		})
+
+		It("should fail validation for a non-leaf node with _description", func() {
+			dataModel := config.DataModelVersion{
+				Structure: map[string]config.Field{
+					"parent": {
+						Description: "This is a folder description",
+						Subfields: map[string]config.Field{
+							"child": {
+								Type: "timeseries-number",
+							},
+						},
+					},
+				},
+			}
+
+			err := validator.ValidateStructureOnly(ctx, dataModel)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("non-leaf nodes (folders) cannot have _description"))
+			Expect(err.Error()).To(ContainSubstring("parent"))
+		})
+
+		It("should fail validation for a non-leaf node with _unit", func() {
+			dataModel := config.DataModelVersion{
+				Structure: map[string]config.Field{
+					"parent": {
+						Unit: "kg",
+						Subfields: map[string]config.Field{
+							"child": {
+								Type: "timeseries-number",
+							},
+						},
+					},
+				},
+			}
+
+			err := validator.ValidateStructureOnly(ctx, dataModel)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("non-leaf nodes (folders) cannot have _unit"))
+			Expect(err.Error()).To(ContainSubstring("parent"))
+		})
+
+		It("should fail validation for a non-leaf node with multiple forbidden fields", func() {
+			dataModel := config.DataModelVersion{
+				Structure: map[string]config.Field{
+					"parent": {
+						Type:        "timeseries-object",
+						Description: "This is a folder description",
+						Unit:        "kg",
+						Subfields: map[string]config.Field{
+							"child": {
+								Type: "timeseries-number",
+							},
+						},
+					},
+				},
+			}
+
+			err := validator.ValidateStructureOnly(ctx, dataModel)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("non-leaf nodes (folders) cannot have _type"))
+			Expect(err.Error()).To(ContainSubstring("non-leaf nodes (folders) cannot have _description"))
+			Expect(err.Error()).To(ContainSubstring("non-leaf nodes (folders) cannot have _unit"))
+			Expect(err.Error()).To(ContainSubstring("parent"))
 		})
 
 		It("should fail validation for a leaf node with neither _type nor _refModel", func() {
@@ -180,7 +246,7 @@ var _ = Describe("Validator", func() {
 				},
 			}
 
-			err := validator.ValidateDataModel(ctx, dataModel)
+			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("leaf nodes must contain _type"))
 			Expect(err.Error()).To(ContainSubstring("invalid"))
@@ -196,7 +262,7 @@ var _ = Describe("Validator", func() {
 				},
 			}
 
-			err := validator.ValidateDataModel(ctx, dataModel)
+			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("field cannot have both _type and _refModel"))
 			Expect(err.Error()).To(ContainSubstring("conflicted"))
@@ -216,7 +282,7 @@ var _ = Describe("Validator", func() {
 				},
 			}
 
-			err := validator.ValidateDataModel(ctx, dataModel)
+			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("field cannot have both subfields and _refModel"))
 			Expect(err.Error()).To(ContainSubstring("invalidParent"))
@@ -231,7 +297,7 @@ var _ = Describe("Validator", func() {
 				},
 			}
 
-			err := validator.ValidateDataModel(ctx, dataModel)
+			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("_refModel must contain exactly one ':'"))
 		})
@@ -245,7 +311,7 @@ var _ = Describe("Validator", func() {
 				},
 			}
 
-			err := validator.ValidateDataModel(ctx, dataModel)
+			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("_refModel must contain exactly one ':'"))
 		})
@@ -259,7 +325,7 @@ var _ = Describe("Validator", func() {
 				},
 			}
 
-			err := validator.ValidateDataModel(ctx, dataModel)
+			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("_refModel must have a version specified after ':'"))
 		})
@@ -273,7 +339,7 @@ var _ = Describe("Validator", func() {
 				},
 			}
 
-			err := validator.ValidateDataModel(ctx, dataModel)
+			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("version 'invalidversion' does not match pattern"))
 		})
@@ -288,7 +354,7 @@ var _ = Describe("Validator", func() {
 				},
 			}
 
-			err := validator.ValidateDataModel(ctx, dataModel)
+			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("subModel nodes should ONLY contain _refModel"))
 		})
@@ -310,7 +376,7 @@ var _ = Describe("Validator", func() {
 				},
 			}
 
-			err := validator.ValidateDataModel(ctx, dataModel)
+			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(BeNil())
 		})
 
@@ -331,7 +397,7 @@ var _ = Describe("Validator", func() {
 				},
 			}
 
-			err := validator.ValidateDataModel(ctx, dataModel)
+			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("level1.level2.invalidLeaf"))
 		})
@@ -341,8 +407,28 @@ var _ = Describe("Validator", func() {
 				Structure: map[string]config.Field{},
 			}
 
-			err := validator.ValidateDataModel(ctx, dataModel)
+			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(BeNil())
+		})
+	})
+
+	Context("ValidateStructureOnly", func() {
+		It("should respect context cancellation", func() {
+			// Create a cancelled context
+			cancelledCtx, cancel := context.WithCancel(context.Background())
+			cancel() // Cancel immediately
+
+			dataModel := config.DataModelVersion{
+				Structure: map[string]config.Field{
+					"simple": {
+						Type: "timeseries-number",
+					},
+				},
+			}
+
+			err := validator.ValidateStructureOnly(cancelledCtx, dataModel)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("context canceled"))
 		})
 	})
 })
