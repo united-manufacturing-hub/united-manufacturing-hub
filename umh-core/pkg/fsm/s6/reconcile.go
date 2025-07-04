@@ -25,7 +25,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
@@ -90,17 +89,17 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 		return nil, false
 	}
 
-	// Step 2: Detect external changes.
+	// Step 2: Try to read service status every tick (but continue even if it fails)
 	if err := s.reconcileExternalChanges(ctx, services, snapshot); err != nil {
-		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
-		if !errors.Is(err, s6service.ErrServiceNotExist) {
-			s.baseFSMInstance.SetError(err, snapshot.Tick)
-			s.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
-			return nil, false // We don't want to return an error here, because we want to continue reconciling
-		}
+		// Log the error but always continue reconciling - we need reconcileStateTransition to run
+		// to restore services after restart, even if we can't read their status yet
+		s.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)
 
-		//nolint:ineffassign
-		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
+		// For timeout errors, mark as reconciled to prevent further attempts this tick
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, true
+		}
+		// For all other errors, just continue reconciling without setting backoff
 	}
 
 	// Step 3: Attempt to reconcile the state.

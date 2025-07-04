@@ -15,7 +15,6 @@
 package communication_state
 
 import (
-	"context"
 	"sync"
 	"time"
 
@@ -155,52 +154,46 @@ func (c *CommunicationState) InitialiseAndStartRouter() {
 	c.Router.Start()
 }
 
-// StartTopicBrowserCacheUpdater starts the topic browser cache updater
-// it is used to update the topic browser cache with the observed state of the topic browser
-// it is also used to run the simulator if the agent is running in simulator mode
-func (c *CommunicationState) StartTopicBrowserCacheUpdater(systemSnapshotManager *fsm.SnapshotManager, ctx context.Context, runSimulator bool) {
-
+// InitializeTopicBrowserSimulator initializes the topic browser simulator
+// The cache update logic has been moved to the subscriber notification pipeline
+// to eliminate the redundant ticker (architectural improvement)
+func (c *CommunicationState) InitializeTopicBrowserSimulator(runSimulator bool) {
 	c.TopicBrowserSimulator = topicbrowser.NewSimulator()
 
 	if runSimulator {
 		c.TopicBrowserSimulator.InitializeSimulator()
 	}
+}
 
-	go func() {
-		ticker := time.NewTicker(1 * time.Second)
-		for {
-			select {
-			case <-ctx.Done():
-				ticker.Stop()
-				return
-			case <-ticker.C:
-				if runSimulator {
-					c.TopicBrowserSimulator.Tick()
-					err := c.TopicBrowserCache.Update(c.TopicBrowserSimulator.GetSimObservedState())
-					if err != nil {
-						c.Logger.Errorf("Failed to update topic browser cache: %v", err)
-					}
-				} else {
-					// get observed state from system snapshot manager
-					tbInstance, ok := fsm.FindInstance(c.SystemSnapshotManager.GetDeepCopySnapshot(), constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
-					if !ok || tbInstance == nil {
-						c.Logger.Error("Topic browser instance not found")
-						continue
-					}
-					tbObservedState, ok := tbInstance.LastObservedState.(*topicbrowserfsm.ObservedStateSnapshot)
-					if !ok || tbObservedState == nil {
-						c.Logger.Error("Topic browser observed state not found")
-						continue
-					}
-					err := c.TopicBrowserCache.Update(tbObservedState)
-					if err != nil {
-						c.Logger.Errorf("Failed to update topic browser cache: %v", err)
-					}
-				}
-
-			}
+// UpdateTopicBrowserCache updates the topic browser cache with the latest observed state
+// This is called from the subscriber notification pipeline to consolidate the ticker logic
+func (c *CommunicationState) UpdateTopicBrowserCache(runSimulator bool) error {
+	if runSimulator {
+		c.TopicBrowserSimulator.Tick()
+		err := c.TopicBrowserCache.Update(c.TopicBrowserSimulator.GetSimObservedState())
+		if err != nil {
+			c.Logger.Errorf("Failed to update topic browser cache: %v", err)
+			return err
 		}
-	}()
+	} else {
+		// get observed state from system snapshot manager
+		tbInstance, ok := fsm.FindInstance(c.SystemSnapshotManager.GetDeepCopySnapshot(), constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
+		if !ok || tbInstance == nil {
+			c.Logger.Error("Topic browser instance not found")
+			return nil // Not an error, just not ready yet
+		}
+		tbObservedState, ok := tbInstance.LastObservedState.(*topicbrowserfsm.ObservedStateSnapshot)
+		if !ok || tbObservedState == nil {
+			c.Logger.Error("Topic browser observed state not found")
+			return nil // Not an error, just not ready yet
+		}
+		err := c.TopicBrowserCache.Update(tbObservedState)
+		if err != nil {
+			c.Logger.Errorf("Failed to update topic browser cache: %v", err)
+			return err
+		}
+	}
+	return nil
 }
 
 // InitialiseAndStartSubscriberHandler creates a new subscriber handler and starts it

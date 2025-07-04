@@ -198,6 +198,41 @@ func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, services
 		s.ObservedState.LastStateChange = time.Now().Unix()
 	}
 
+	// Check service health (only if service exists and is in a stable state)
+	// Health checking should only happen when service is not being created or removed
+	if s.baseFSMInstance.GetCurrentFSMState() != internalfsm.LifecycleStateCreating &&
+		s.baseFSMInstance.GetCurrentFSMState() != internalfsm.LifecycleStateToBeCreated &&
+		s.baseFSMInstance.GetCurrentFSMState() != internalfsm.LifecycleStateRemoving &&
+		s.baseFSMInstance.GetCurrentFSMState() != internalfsm.LifecycleStateRemoved {
+
+		// Use tri-state health checking that separates observation from action
+		healthStatus, err := s.service.(*s6service.DefaultService).CheckHealth(ctx, s.servicePath, services.GetFileSystem())
+		if err != nil {
+			s.baseFSMInstance.GetLogger().Debugf("Health check I/O error for service %s: %v", s.baseFSMInstance.GetID(), err)
+			// Don't trigger removal for I/O errors - just log and continue
+		} else {
+			switch healthStatus {
+			case s6service.HealthOK:
+				// Service is healthy, continue normally
+				s.baseFSMInstance.GetLogger().Debugf("Service %s health check: OK", s.baseFSMInstance.GetID())
+
+			case s6service.HealthUnknown:
+				// Probe failed (I/O error, timeout) - don't trigger removal, just log
+				s.baseFSMInstance.GetLogger().Debugf("Service %s health check: Unknown (will retry next tick)", s.baseFSMInstance.GetID())
+
+			case s6service.HealthBad:
+				// Service is definitely broken - trigger removal
+				s.baseFSMInstance.GetLogger().Warnf("Service %s health check: Bad (triggering recreation)", s.baseFSMInstance.GetID())
+				err := s.baseFSMInstance.Remove(ctx)
+				if err != nil {
+					s.baseFSMInstance.GetLogger().Errorf("error removing unhealthy S6 instance %s: %v", s.baseFSMInstance.GetID(), err)
+					return err
+				}
+				return nil
+			}
+		}
+	}
+
 	// Fetch the actual service config from s6
 	config, err := s.service.GetConfig(ctx, s.servicePath, services.GetFileSystem())
 	if err != nil {

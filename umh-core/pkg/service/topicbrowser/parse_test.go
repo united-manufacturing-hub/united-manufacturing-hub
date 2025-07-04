@@ -137,6 +137,37 @@ var _ = Describe("extractRaw / parseBlock", func() {
 			Expect(string(got.Payload)).To(ContainSubstring("umh_topic"))
 		})
 	})
+
+	Context("duplicate block processing prevention", func() {
+		It("does not process the same block multiple times", func() {
+			logs := buildLogs(true, string(compressed), epochMS)
+
+			// First call should process the block
+			Expect(service.parseBlock(logs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(1))
+
+			// Second call with same logs should not add another block
+			Expect(service.parseBlock(logs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(1)) // Still only 1 block
+
+			// Third call should also not add another block
+			Expect(service.parseBlock(logs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(1)) // Still only 1 block
+		})
+
+		It("processes new blocks when they appear", func() {
+			logs1 := buildLogs(true, string(compressed), epochMS)
+			logs2 := append(logs1, buildLogs(true, string(compressed), epochMS+1000)...)
+
+			// Process first block
+			Expect(service.parseBlock(logs1)).To(Succeed())
+			Expect(rb.Len()).To(Equal(1))
+
+			// Process with both blocks - should add the second block
+			Expect(service.parseBlock(logs2)).To(Succeed())
+			Expect(rb.Len()).To(Equal(2))
+		})
+	})
 })
 
 // buildLogs creates a synthetic Benthos log block for tests.  It wraps the

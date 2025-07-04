@@ -24,8 +24,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
-	topicbrowsersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 
@@ -61,7 +59,7 @@ func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.Syste
 	// Step 1: If there's a lastError, see if we've waited enough.
 	if i.baseFSMInstance.ShouldSkipReconcileBecauseOfError(snapshot.Tick) {
 		err := i.baseFSMInstance.GetBackoffError(snapshot.Tick)
-		i.baseFSMInstance.GetLogger().Debugf("Skipping reconcile for Topic Browser pipeline %s: %v", tbInstanceName, err)
+		i.baseFSMInstance.GetLogger().Debugf("Skipping reconcile for TopicBrowser pipeline %s: %v", tbInstanceName, err)
 
 		// if it is a permanent error, start the removal process and reset the error (so that we can reconcile towards a stopped / removed state)
 		if backoff.IsPermanentFailureError(err) {
@@ -74,13 +72,10 @@ func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.Syste
 				func() bool {
 					// Determine if we're already in a shutdown state where normal removal isn't possible
 					// and force removal is required
-					return i.IsRemoved() || i.IsRemoving() || i.IsStopping() || i.IsStopped() || i.WantsToBeStopped()
+					return i.IsRemoved() || i.IsRemoving() || i.IsStopping() || i.IsStopped()
 				},
 				func(ctx context.Context) error {
 					// Normal removal through state transition
-					// Use Remove() instead of RemoveInstance() to ensure proper FSM state management.
-					// Remove() triggers FSM state transitions via baseFSMInstance.Remove(),
-					// while RemoveInstance() bypasses FSM and directly performs file operations.
 					return i.Remove(ctx)
 				},
 				func(ctx context.Context) error {
@@ -94,32 +89,17 @@ func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.Syste
 		return nil, false
 	}
 
-	// Step 2: Detect external changes.
+	// Step 2: Try to read child status every tick (but continue even if it fails)
 	if err = i.reconcileExternalChanges(ctx, services, snapshot); err != nil {
-		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
-		if !errors.Is(err, topicbrowsersvc.ErrServiceNotExist) && !errors.Is(err, s6.ErrServiceNotExist) {
-			// Consider a special case for TopicBrowser FSM here
-			// While creating for the first time, reconcileExternalChanges function will throw an error such as
-			// s6 service not found in the path since TopicBrowser fsm is relying on BenthosFSM and Benthos in turn relies on S6 fsm
-			// Inorder for TopicBrowser fsm to start, benthosManager.Reconcile should be called and this is called at the end of the function
-			// So set the err to nil in this case
-			// An example error: "failed to update observed state: failed to get observed TopicBrowser config: failed to get benthos config: failed to get benthos config file for service benthos-topic-browser: service does not exist"
+		// Log the error but always continue reconciling - we need ReconcileManager to run
+		// to restore child services after restart, even if we can't read their status yet
+		i.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)
 
-			i.baseFSMInstance.SetError(err, snapshot.Tick)
-			i.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
-
-			if errors.Is(err, context.DeadlineExceeded) {
-				// Healthchecks occasionally take longer (sometimes up to 70ms),
-				// resulting in context.DeadlineExceeded errors. In this case, we want to
-				// mark the reconciliation as complete for this tick since we've likely
-				// already consumed significant time. We return reconciled=true to prevent
-				// further reconciliation attempts in the current tick.
-				return nil, true // We don't want to return an error here, as this can happen in normal operations
-			}
-			return nil, false // We don't want to return an error here, because we want to continue reconciling
+		// For timeout errors, mark as reconciled to prevent further attempts this tick
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, true
 		}
-
-		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
+		// For all other errors, just continue reconciling without setting backoff
 	}
 
 	// Step 3: Attempt to reconcile the state.
@@ -136,16 +116,15 @@ func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.Syste
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
-	// Reconcile the underlying Manager
+	// Reconcile the Topic Browser manager
 	managerErr, managerReconciled := i.service.ReconcileManager(ctx, services, snapshot.Tick)
 	if managerErr != nil {
 		i.baseFSMInstance.SetError(managerErr, snapshot.Tick)
 		i.baseFSMInstance.GetLogger().Errorf("error reconciling Topic Browser manager: %s", managerErr)
 		return nil, false
 	}
-
-	// If the Topic Browser manager was reconciled, we return reconciled so that nothing happens anymore in this tick
-	// nothing should happen as we might have already taken up some significant time of the available time per tick, so better
+	// If either TopicBrowser state or manager state was reconciled, we return reconciled so that nothing happens anymore in this tick
+	// nothing should happen as we might have already taken up some significant time of the avaialble time per tick, so better
 	// to be on the safe side and let the rest handle in another tick
 	reconciled = reconciled || managerReconciled
 

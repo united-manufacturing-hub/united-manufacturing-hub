@@ -1243,6 +1243,68 @@ func (bs *BufferedService) RemoveAll(ctx context.Context, path string) error {
 	return nil
 }
 
+// Rename renames (moves) a file or directory from oldPath to newPath in-memory.
+// This operation is atomic on the same filesystem mount when synced to disk.
+func (bs *BufferedService) Rename(ctx context.Context, oldPath, newPath string) error {
+	bs.mu.Lock()
+	defer bs.mu.Unlock()
+
+	// Check permissions - need write permission on both parent directories
+	if bs.verifyPermissions {
+		oldParentDir := filepath.Dir(oldPath)
+		newParentDir := filepath.Dir(newPath)
+
+		if err := bs.checkDirectoryWritePermission(oldParentDir); err != nil {
+			return fmt.Errorf("permission check failed for source: %w", err)
+		}
+		if err := bs.checkDirectoryWritePermission(newParentDir); err != nil {
+			return fmt.Errorf("permission check failed for destination: %w", err)
+		}
+	}
+
+	// Check if source exists
+	sourceState, sourceExists := bs.files[oldPath]
+	if !sourceExists {
+		return os.ErrNotExist
+	}
+
+	// Check if destination already exists
+	if _, destExists := bs.files[newPath]; destExists {
+		return fmt.Errorf("destination already exists: %s", newPath)
+	}
+
+	// Move all files that start with oldPath to newPath
+	filesToMove := make(map[string]fileState)
+	for path, state := range bs.files {
+		if path == oldPath || hasPrefix(path, oldPath+string(os.PathSeparator)) {
+			// Calculate new path
+			newSubPath := strings.Replace(path, oldPath, newPath, 1)
+			filesToMove[newSubPath] = state
+			delete(bs.files, path)
+		}
+	}
+
+	// Add moved files to new locations
+	for newPath, state := range filesToMove {
+		bs.files[newPath] = state
+	}
+
+	// Mark changes for disk sync
+	// Remove old path
+	bs.changed[oldPath] = fileChange{removed: true, wasDir: sourceState.isDir}
+
+	// Add new paths
+	for newPath, state := range filesToMove {
+		bs.changed[newPath] = fileChange{
+			content: state.content,
+			perm:    state.fileMode,
+			removed: false,
+		}
+	}
+
+	return nil
+}
+
 // Stat returns an os.FileInfo-like object if it is in the in-memory map. Otherwise os.ErrNotExist.
 func (bs *BufferedService) Stat(ctx context.Context, path string) (os.FileInfo, error) {
 	bs.mu.Lock()
@@ -1534,7 +1596,7 @@ func (bs *BufferedService) readFileIncrementally(absPath string, previousSize in
 	return append(previousContent, newContent...), nil
 }
 
-// ReadFileRange reads the file starting at byte offset “from” and returns:
+// ReadFileRange reads the file starting at byte offset "from" and returns:
 //   - chunk   – the data that was read (nil if nothing new)
 //   - newSize – the file size **after** the read (use it as next offset)
 func (bs *BufferedService) ReadFileRange(ctx context.Context, path string, from int64) ([]byte, int64, error) {

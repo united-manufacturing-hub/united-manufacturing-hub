@@ -194,6 +194,11 @@ func (i *TopicBrowserInstance) UpdateObservedStateOfInstance(ctx context.Context
 	}
 	// Fetch the actual Benthos config from the service
 	start = time.Now()
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return fmt.Errorf("context deadline not set")
+	}
+	logger.For(logger.ComponentTopicBrowserInstance).Info("context time left for getConfig (topic browser)", "timeLeft", time.Until(deadline).Milliseconds())
 	observedConfig, err := i.service.GetConfig(ctx, services.GetFileSystem(), i.baseFSMInstance.GetID())
 	metrics.ObserveReconcileTime(logger.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".getConfig", time.Since(start))
 	if err == nil {
@@ -297,6 +302,7 @@ func (i *TopicBrowserInstance) IsTopicBrowserDegraded() (isDegraded bool, reason
 
 // isBenthosRunning checks if the Benthos service is running
 func (i *TopicBrowserInstance) isBenthosRunning() bool {
+	i.baseFSMInstance.GetLogger().Debugf("isBenthosRunning: %s", i.ObservedState.ServiceInfo.BenthosFSMState)
 	switch i.ObservedState.ServiceInfo.BenthosFSMState {
 	case benthosfsm.OperationalStateActive, benthosfsm.OperationalStateIdle:
 		return true
@@ -306,6 +312,7 @@ func (i *TopicBrowserInstance) isBenthosRunning() bool {
 
 // isRedpandaRunning checks if the Redpanda service is running
 func (i *TopicBrowserInstance) isRedpandaRunning() bool {
+	i.baseFSMInstance.GetLogger().Debugf("isRedpandaRunning: %s", i.ObservedState.ServiceInfo.RedpandaFSMState)
 	switch i.ObservedState.ServiceInfo.RedpandaFSMState {
 	case rpfsm.OperationalStateActive, rpfsm.OperationalStateIdle:
 		return true
