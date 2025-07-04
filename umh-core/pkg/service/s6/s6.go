@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -182,7 +183,11 @@ func NewDefaultService() Service {
 	}
 }
 
-// Create creates the S6 service with specific configuration
+// Create creates the S6 service with specific configuration using simplified 3-path approach:
+// 1. Directory doesn't exist → create it fresh
+// 2. Directory exists + same config → do nothing (success)
+// 3. Directory exists + different config → remove and recreate
+// 4. Directory exists but unhealthy → remove and recreate
 func (s *DefaultService) Create(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, fsService filesystem.Service) error {
 	start := time.Now()
 	defer func() {
@@ -191,205 +196,43 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 
 	s.logger.Debugf("Creating S6 service %s", servicePath)
 
-	// Create service directory if it doesn't exist
-	if err := fsService.EnsureDirectory(ctx, servicePath); err != nil {
-		return fmt.Errorf("failed to create service directory: %w", err)
-	}
-
-	// Create down file to prevent automatic startup
-	downFilePath := filepath.Join(servicePath, "down")
-	exists, err := fsService.FileExists(ctx, downFilePath)
+	// 1. Directory doesn't exist → create it fresh
+	exists, err := fsService.PathExists(ctx, servicePath)
 	if err != nil {
-		return fmt.Errorf("failed to check if down file exists: %w", err)
+		return fmt.Errorf("failed to check if service path exists: %w", err)
 	}
 	if !exists {
-		err := fsService.WriteFile(ctx, downFilePath, []byte{}, 0644)
-		if err != nil {
-			return fmt.Errorf("failed to create down file: %w", err)
+		s.logger.Debugf("Service %s doesn't exist, creating fresh", servicePath)
+		return s.createFresh(ctx, servicePath, config, fsService)
+	}
+
+	// 2. Directory exists but is unhealthy → remove and recreate
+	if !s.IsHealthyService(ctx, servicePath, fsService) {
+		s.logger.Debugf("Service %s is unhealthy, removing and recreating", servicePath)
+		if err := s.ForceRemove(ctx, servicePath, fsService); err != nil {
+			return fmt.Errorf("failed to remove unhealthy service: %w", err)
 		}
+		return s.createFresh(ctx, servicePath, config, fsService)
 	}
 
-	// Create type file (required for s6-rc)
-	typeFile := filepath.Join(servicePath, "type")
-	exists, err = fsService.FileExists(ctx, typeFile)
+	// 3. Directory exists and is healthy → check config
+	currentConfig, err := s.GetConfig(ctx, servicePath, fsService)
 	if err != nil {
-		return fmt.Errorf("failed to check if type file exists: %w", err)
-	}
-	if !exists {
-		err := fsService.WriteFile(ctx, typeFile, []byte("longrun"), 0644)
-		if err != nil {
-			return fmt.Errorf("failed to create type file: %w", err)
-		}
+		return fmt.Errorf("failed to get current config: %w", err)
 	}
 
-	// s6-supervise requires a run script to function properly
-	if len(config.Command) > 0 {
-		if err := s.createS6RunScript(ctx, servicePath, fsService, config.Command, config.Env, config.MemoryLimit); err != nil {
-			return fmt.Errorf("failed to create S6 run script: %w", err)
-		}
-	} else {
-		return fmt.Errorf("no command specified for service %s", servicePath)
-	}
-
-	// Create any config files specified
-	if err := s.createS6ConfigFiles(ctx, servicePath, fsService, config.ConfigFiles); err != nil {
-		return fmt.Errorf("failed to create S6 config files: %w", err)
-	}
-
-	// There is no need to register the service in user/contents.d,
-	// as s6-overlay expects a static service configuration defined at container build time.
-	// S6-overlay works in two phases:
-	// 1. At container build time: Services are defined in /etc/s6-overlay/s6-rc.d/
-	//    (including the special "user" bundle that lists services to start)
-	// 2. At container startup: S6-overlay copies these definitions to /run/service/ and supervises them
-	//
-	// Attempting to modify /run/service/user/contents.d at runtime will cause errors because:
-	// - S6-overlay treats "user" as a special directory and tries to supervise it
-	// - This causes the "s6-supervise user: warning: unable to spawn ./run (waiting 60 seconds)" error
-	// - S6-overlay won't recognize services added after container initialization
-	//
-	// For dynamic services, it's better to:
-	// 1. Create services in their own directories under /run/service/
-	// 2. Use s6-svscanctl to notify s6 about the new service
-
-	// Create a dependency on base services to prevent race conditions
-	dependenciesDPath := filepath.Join(servicePath, "dependencies.d")
-	if err := fsService.EnsureDirectory(ctx, dependenciesDPath); err != nil {
-		return fmt.Errorf("failed to create dependencies.d directory: %w", err)
-	}
-
-	baseDepFile := filepath.Join(dependenciesDPath, "base")
-	err = fsService.WriteFile(ctx, baseDepFile, []byte{}, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to create base dependency file: %w", err)
-	}
-
-	// Create log service directory and run script
-	serviceName := filepath.Base(servicePath)
-	logDir := filepath.Join(constants.S6LogBaseDir, serviceName)
-	logServicePath := filepath.Join(servicePath, "log")
-
-	// Create log service directory
-	if err := fsService.EnsureDirectory(ctx, logServicePath); err != nil {
-		return fmt.Errorf("failed to create log service directory: %w", err)
-	}
-
-	// Create logutil-service command line, see also https://skarnet.org/software/s6/s6-log.html
-	// logutil-service is a wrapper around s6_log and reads from the S6_LOGGING_SCRIPT environment variable
-	// We overwrite the default S6_LOGGING_SCRIPT with our own if config.LogFilesize is set
-	logRunContent, err := getLogRunScript(config, logDir)
-	if err != nil {
-		return fmt.Errorf("failed to get log run script: %w", err)
-	}
-
-	// Create log run script
-	logRunPath := filepath.Join(logServicePath, "run")
-	if err := fsService.WriteFile(ctx, logRunPath, []byte(logRunContent), 0755); err != nil {
-		return fmt.Errorf("failed to write log run script: %w", err)
-	}
-
-	// Even with -u flag, s6-svwait still needs to subscribe to events to detect state changes
-	// Ensure the event directory allows access for the main service (running as nobody)
-	eventDir := filepath.Join(logServicePath, "event")
-	if err := fsService.EnsureDirectory(ctx, eventDir); err != nil {
-		return fmt.Errorf("failed to create event directory: %w", err)
-	}
-
-	// Set permissions to allow nobody user to subscribe to events (0755)
-	if err := fsService.Chmod(ctx, eventDir, 0755); err != nil {
-		s.logger.Warnf("Failed to set event directory permissions for %s: %v", eventDir, err)
-	}
-
-	// Also ensure the supervise directory allows access for event subscription
-	superviseDir := filepath.Join(logServicePath, "supervise")
-	if err := fsService.EnsureDirectory(ctx, superviseDir); err != nil {
-		return fmt.Errorf("failed to create supervise directory: %w", err)
-	}
-
-	// Set permissions to allow nobody user to access supervise directory (0755)
-	if err := fsService.Chmod(ctx, superviseDir, 0755); err != nil {
-		s.logger.Warnf("Failed to set supervise directory permissions for %s: %v", superviseDir, err)
-	}
-
-	// Note: s6-svwait runs as root in run script to access supervise/control pipe,
-	// then privileges are dropped to nobody only for the actual service execution
-
-	// Notification is now handled by EnsureSupervision
-	// We don't call s6-svscanctl here anymore to avoid duplicating the logic
-
-	s.logger.Debugf("S6 service %s created with logging to %s", servicePath, logDir)
-
-	return nil
-}
-
-// createRunScript creates a run script for the service
-func (s *DefaultService) createS6RunScript(ctx context.Context, servicePath string, fsService filesystem.Service, command []string, env map[string]string, memoryLimit int64) error {
-	runScript := filepath.Join(servicePath, "run")
-
-	// Create template data
-	data := struct {
-		Command     []string
-		Env         map[string]string
-		MemoryLimit int64
-		ServicePath string
-	}{
-		Command:     command,
-		Env:         env,
-		MemoryLimit: memoryLimit,
-		ServicePath: servicePath,
-	}
-
-	// Parse and execute the template
-	tmpl, err := template.New("runscript").Parse(runScriptTemplate)
-	if err != nil {
-		return fmt.Errorf("failed to parse run script template: %w", err)
-	}
-
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		return fmt.Errorf("failed to execute run script template: %w", err)
-	}
-
-	// Write the templated content directly to the file
-	if err := fsService.WriteFile(ctx, runScript, buf.Bytes(), 0644); err != nil {
-		return fmt.Errorf("failed to write run script: %w", err)
-	}
-
-	// Make run script executable
-	if err := fsService.Chmod(ctx, runScript, 0755); err != nil {
-		return fmt.Errorf("failed to make run script executable: %w", err)
-	}
-
-	return nil
-}
-
-// createConfigFiles creates config files needed by the service
-func (s *DefaultService) createS6ConfigFiles(ctx context.Context, servicePath string, fsService filesystem.Service, configFiles map[string]string) error {
-	if len(configFiles) == 0 {
+	// 4. Same config → do nothing (success)
+	if currentConfig.Equal(config) {
+		s.logger.Debugf("Service %s config unchanged, nothing to do", servicePath)
 		return nil
 	}
 
-	configPath := filepath.Join(servicePath, "config")
-
-	for path, content := range configFiles {
-		// If path is relative, make it relative to service directory
-		if !filepath.IsAbs(path) {
-			path = filepath.Join(configPath, path)
-		}
-
-		// Create directory if it doesn't exist
-		dir := filepath.Dir(path)
-		if err := fsService.EnsureDirectory(ctx, dir); err != nil {
-			return fmt.Errorf("failed to create directory for config file: %w", err)
-		}
-
-		// Create and write the file
-		if err := fsService.WriteFile(ctx, path, []byte(content), 0644); err != nil {
-			return fmt.Errorf("failed to write to config file %s: %w", path, err)
-		}
+	// 5. Different config → remove and recreate
+	s.logger.Debugf("Service %s config changed, removing and recreating", servicePath)
+	if err := s.Remove(ctx, servicePath, fsService); err != nil {
+		return fmt.Errorf("failed to remove service for recreation: %w", err)
 	}
-
-	return nil
+	return s.createFresh(ctx, servicePath, config, fsService)
 }
 
 // Remove deletes every artefact that `Create` produced:
@@ -1841,4 +1684,306 @@ func (s *DefaultService) findLatestRotatedFile(entries []string) string {
 	latestFile := slices.MaxFunc(entries, cmp.Compare[string])
 
 	return latestFile
+}
+
+// isHealthyService determines if a service directory is complete and healthy
+// This function checks for all required files and the sentinel file to ensure
+// the service was created atomically and is not in a corrupted state.
+func (s *DefaultService) IsHealthyService(ctx context.Context, servicePath string, fsService filesystem.Service) bool {
+	// Check required files exist
+	requiredFiles := []string{
+		filepath.Join(servicePath, "run"),
+		filepath.Join(servicePath, "log", "run"),
+		filepath.Join(servicePath, ".complete"), // sentinel file
+		filepath.Join(servicePath, "type"),
+	}
+
+	for _, file := range requiredFiles {
+		if exists, _ := fsService.FileExists(ctx, file); !exists {
+			s.logger.Debugf("Health check failed: missing required file %s", file)
+			return false
+		}
+	}
+
+	// Check supervise directories exist (optional - S6 creates them)
+	// If they exist, both main and log supervise dirs should be present
+	superviseMain := filepath.Join(servicePath, "supervise")
+	superviseLog := filepath.Join(servicePath, "log", "supervise")
+
+	if exists, _ := fsService.PathExists(ctx, superviseMain); exists {
+		if exists, _ := fsService.PathExists(ctx, superviseLog); !exists {
+			s.logger.Debugf("Health check failed: main supervise exists but log supervise missing")
+			return false
+		}
+	}
+
+	return true
+}
+
+// generateUniqueID creates a unique identifier for temp directories
+// Uses crypto/rand for strong uniqueness to avoid collisions
+func generateUniqueID() string {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		// Fallback to timestamp-based ID if crypto/rand fails
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b)
+}
+
+// createFresh creates a service in a temporary directory and atomically moves it to the final location
+// This ensures no partial service directories are ever visible to S6
+func (s *DefaultService) createFresh(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, fsService filesystem.Service) error {
+	s.logger.Debugf("Creating fresh service %s", servicePath)
+
+	// Generate unique temp directory
+	tempDir := filepath.Join(constants.S6BaseDir, ".new-"+generateUniqueID())
+
+	// Ensure cleanup on failure
+	defer func() {
+		if exists, _ := fsService.PathExists(ctx, tempDir); exists {
+			if err := fsService.RemoveAll(ctx, tempDir); err != nil {
+				s.logger.Warnf("Failed to clean up temp directory %s: %v", tempDir, err)
+			}
+		}
+	}()
+
+	// Create all files in temp directory
+	if err := s.createServiceInTemp(ctx, tempDir, servicePath, config, fsService); err != nil {
+		return fmt.Errorf("failed to create service in temp directory: %w", err)
+	}
+
+	// Add sentinel file for atomic completion detection
+	sentinelPath := filepath.Join(tempDir, ".complete")
+	if err := fsService.WriteFile(ctx, sentinelPath, []byte("ok"), 0644); err != nil {
+		return fmt.Errorf("failed to create sentinel file: %w", err)
+	}
+
+	// Check if target already exists and remove it if needed
+	if exists, _ := fsService.PathExists(ctx, servicePath); exists {
+		if err := fsService.RemoveAll(ctx, servicePath); err != nil {
+			return fmt.Errorf("failed to remove existing service directory: %w", err)
+		}
+	}
+
+	// Copy temp directory contents to final location
+	// Since filesystem.Service doesn't have Rename, we'll implement this differently
+	if err := s.copyServiceDirectory(ctx, tempDir, servicePath, fsService); err != nil {
+		return fmt.Errorf("failed to atomically create service: %w", err)
+	}
+
+	// Notify S6 scanner
+	_, err := s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svscanctl", "-a", constants.S6BaseDir)
+	if err != nil {
+		return fmt.Errorf("failed to notify S6 scanner: %w", err)
+	}
+
+	s.logger.Debugf("Successfully created fresh service %s", servicePath)
+	return nil
+}
+
+// createServiceInTemp creates the complete service structure in a temporary directory
+// This is the same logic as the original Create method but writes to a temp location
+func (s *DefaultService) createServiceInTemp(ctx context.Context, tempDir string, finalServicePath string, config s6serviceconfig.S6ServiceConfig, fsService filesystem.Service) error {
+	// Create temp service directory
+	if err := fsService.EnsureDirectory(ctx, tempDir); err != nil {
+		return fmt.Errorf("failed to create temp service directory: %w", err)
+	}
+
+	// Create down file to prevent automatic startup
+	downFilePath := filepath.Join(tempDir, "down")
+	if err := fsService.WriteFile(ctx, downFilePath, []byte{}, 0644); err != nil {
+		return fmt.Errorf("failed to create down file: %w", err)
+	}
+
+	// Create type file (required for s6-rc)
+	typeFile := filepath.Join(tempDir, "type")
+	if err := fsService.WriteFile(ctx, typeFile, []byte("longrun"), 0644); err != nil {
+		return fmt.Errorf("failed to create type file: %w", err)
+	}
+
+	// Create run script
+	if len(config.Command) > 0 {
+		if err := s.createS6RunScriptInTemp(ctx, tempDir, finalServicePath, fsService, config.Command, config.Env, config.MemoryLimit); err != nil {
+			return fmt.Errorf("failed to create S6 run script: %w", err)
+		}
+	} else {
+		return fmt.Errorf("no command specified for service %s", tempDir)
+	}
+
+	// Create any config files specified
+	if err := s.createS6ConfigFiles(ctx, tempDir, fsService, config.ConfigFiles); err != nil {
+		return fmt.Errorf("failed to create S6 config files: %w", err)
+	}
+
+	// Create a dependency on base services to prevent race conditions
+	dependenciesDPath := filepath.Join(tempDir, "dependencies.d")
+	if err := fsService.EnsureDirectory(ctx, dependenciesDPath); err != nil {
+		return fmt.Errorf("failed to create dependencies.d directory: %w", err)
+	}
+
+	baseDepFile := filepath.Join(dependenciesDPath, "base")
+	if err := fsService.WriteFile(ctx, baseDepFile, []byte{}, 0644); err != nil {
+		return fmt.Errorf("failed to create base dependency file: %w", err)
+	}
+
+	// Create log service directory and run script
+	serviceName := filepath.Base(finalServicePath)
+	logDir := filepath.Join(constants.S6LogBaseDir, serviceName)
+	logServicePath := filepath.Join(tempDir, "log")
+
+	// Create log service directory
+	if err := fsService.EnsureDirectory(ctx, logServicePath); err != nil {
+		return fmt.Errorf("failed to create log service directory: %w", err)
+	}
+
+	// Create log run script
+	logRunContent, err := getLogRunScript(config, logDir)
+	if err != nil {
+		return fmt.Errorf("failed to get log run script: %w", err)
+	}
+
+	logRunPath := filepath.Join(logServicePath, "run")
+	if err := fsService.WriteFile(ctx, logRunPath, []byte(logRunContent), 0755); err != nil {
+		return fmt.Errorf("failed to write log run script: %w", err)
+	}
+
+	// Create event directory for the log service
+	eventDir := filepath.Join(logServicePath, "event")
+	if err := fsService.EnsureDirectory(ctx, eventDir); err != nil {
+		return fmt.Errorf("failed to create event directory: %w", err)
+	}
+
+	// Set permissions to allow nobody user to subscribe to events (0755)
+	if err := fsService.Chmod(ctx, eventDir, 0755); err != nil {
+		s.logger.Warnf("Failed to set event directory permissions for %s: %v", eventDir, err)
+	}
+
+	// Create supervise directory for the log service
+	superviseDir := filepath.Join(logServicePath, "supervise")
+	if err := fsService.EnsureDirectory(ctx, superviseDir); err != nil {
+		return fmt.Errorf("failed to create supervise directory: %w", err)
+	}
+
+	// Set permissions to allow nobody user to access supervise directory (0755)
+	if err := fsService.Chmod(ctx, superviseDir, 0755); err != nil {
+		s.logger.Warnf("Failed to set supervise directory permissions for %s: %v", superviseDir, err)
+	}
+
+	return nil
+}
+
+// createS6RunScriptInTemp creates a run script for the service in temp directory
+func (s *DefaultService) createS6RunScriptInTemp(ctx context.Context, tempDir string, finalServicePath string, fsService filesystem.Service, command []string, env map[string]string, memoryLimit int64) error {
+	runScript := filepath.Join(tempDir, "run")
+
+	// Create template data - use the final service path for template
+	data := struct {
+		Command     []string
+		Env         map[string]string
+		MemoryLimit int64
+		ServicePath string
+	}{
+		Command:     command,
+		Env:         env,
+		MemoryLimit: memoryLimit,
+		ServicePath: finalServicePath, // Use final path for s6-svwait
+	}
+
+	// Parse and execute the template
+	tmpl, err := template.New("runscript").Parse(runScriptTemplate)
+	if err != nil {
+		return fmt.Errorf("failed to parse run script template: %w", err)
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return fmt.Errorf("failed to execute run script template: %w", err)
+	}
+
+	// Write the templated content directly to the file
+	if err := fsService.WriteFile(ctx, runScript, buf.Bytes(), 0644); err != nil {
+		return fmt.Errorf("failed to write run script: %w", err)
+	}
+
+	// Make run script executable
+	if err := fsService.Chmod(ctx, runScript, 0755); err != nil {
+		return fmt.Errorf("failed to make run script executable: %w", err)
+	}
+
+	return nil
+}
+
+// copyServiceDirectory recursively copies a directory tree from src to dst
+// This provides atomic-like behavior by fully creating the destination before S6 can see it
+func (s *DefaultService) copyServiceDirectory(ctx context.Context, src, dst string, fsService filesystem.Service) error {
+	// Create destination directory
+	if err := fsService.EnsureDirectory(ctx, dst); err != nil {
+		return fmt.Errorf("failed to create destination directory: %w", err)
+	}
+
+	// Read source directory
+	entries, err := fsService.ReadDir(ctx, src)
+	if err != nil {
+		return fmt.Errorf("failed to read source directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+
+		if entry.IsDir() {
+			// Recursively copy subdirectory
+			if err := s.copyServiceDirectory(ctx, srcPath, dstPath, fsService); err != nil {
+				return fmt.Errorf("failed to copy subdirectory %s: %w", entry.Name(), err)
+			}
+		} else {
+			// Copy file
+			content, err := fsService.ReadFile(ctx, srcPath)
+			if err != nil {
+				return fmt.Errorf("failed to read file %s: %w", srcPath, err)
+			}
+
+			// Get file info to preserve permissions
+			info, err := fsService.Stat(ctx, srcPath)
+			if err != nil {
+				return fmt.Errorf("failed to stat file %s: %w", srcPath, err)
+			}
+
+			if err := fsService.WriteFile(ctx, dstPath, content, info.Mode()); err != nil {
+				return fmt.Errorf("failed to write file %s: %w", dstPath, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// createS6ConfigFiles creates config files needed by the service
+func (s *DefaultService) createS6ConfigFiles(ctx context.Context, servicePath string, fsService filesystem.Service, configFiles map[string]string) error {
+	if len(configFiles) == 0 {
+		return nil
+	}
+
+	configPath := filepath.Join(servicePath, "config")
+
+	for path, content := range configFiles {
+		// If path is relative, make it relative to service directory
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(configPath, path)
+		}
+
+		// Create directory if it doesn't exist
+		dir := filepath.Dir(path)
+		if err := fsService.EnsureDirectory(ctx, dir); err != nil {
+			return fmt.Errorf("failed to create directory for config file: %w", err)
+		}
+
+		// Create and write the file
+		if err := fsService.WriteFile(ctx, path, []byte(content), 0644); err != nil {
+			return fmt.Errorf("failed to write to config file %s: %w", path, err)
+		}
+	}
+
+	return nil
 }

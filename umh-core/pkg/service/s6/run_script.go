@@ -76,6 +76,8 @@ func getLogRunScript(config s6serviceconfig.S6ServiceConfig, logDir string) (str
 		logutilEnv = fmt.Sprintf("export S6_LOGGING_SCRIPT \"n%d s%d T\"", 20, config.LogFilesize)
 	}
 	logutilServiceCmd = fmt.Sprintf("logutil-service %s", logDir)
+	// Redirect stdout and stderr to /dev/null to prevent binary monitoring output leakage
+	// logutilServiceCmd = fmt.Sprintf("logutil-service %s >/dev/null 2>&1", logDir)
 
 	// Create log run script with readiness notification to prevent race condition
 	logRunContent := fmt.Sprintf(`#!/command/execlineb -P

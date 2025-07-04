@@ -198,6 +198,24 @@ func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, services
 		s.ObservedState.LastStateChange = time.Now().Unix()
 	}
 
+	// Check service health (only if service exists and is in a stable state)
+	// Health checking should only happen when service is not being created or removed
+	if s.baseFSMInstance.GetCurrentFSMState() != internalfsm.LifecycleStateCreating &&
+		s.baseFSMInstance.GetCurrentFSMState() != internalfsm.LifecycleStateToBeCreated &&
+		s.baseFSMInstance.GetCurrentFSMState() != internalfsm.LifecycleStateRemoving &&
+		s.baseFSMInstance.GetCurrentFSMState() != internalfsm.LifecycleStateRemoved {
+		// Service exists, check if it's healthy using the service's health check method
+		if !s.service.(*s6service.DefaultService).IsHealthyService(ctx, s.servicePath, services.GetFileSystem()) {
+			s.baseFSMInstance.GetLogger().Warnf("Service %s failed S6 health check, triggering recreation", s.baseFSMInstance.GetID())
+			err := s.baseFSMInstance.Remove(ctx)
+			if err != nil {
+				s.baseFSMInstance.GetLogger().Errorf("error removing unhealthy S6 instance %s: %v", s.baseFSMInstance.GetID(), err)
+				return err
+			}
+			return nil
+		}
+	}
+
 	// Fetch the actual service config from s6
 	config, err := s.service.GetConfig(ctx, s.servicePath, services.GetFileSystem())
 	if err != nil {
