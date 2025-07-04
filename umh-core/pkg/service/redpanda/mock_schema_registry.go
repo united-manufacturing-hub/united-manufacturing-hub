@@ -88,7 +88,7 @@ func (m *MockSchemaRegistry) AddSchema(subject string, schema string) {
 func (m *MockSchemaRegistry) AddTestSchemas() {
 	// Add some test schemas based on the expected naming convention
 	testSchemas := map[string]string{
-		"pump_v1_timeseries-number": `{
+		"_pump_v1_timeseries-number": `{
 			"type": "record",
 			"name": "pump_v1_timeseries_number",
 			"fields": [
@@ -96,7 +96,7 @@ func (m *MockSchemaRegistry) AddTestSchemas() {
 				{"name": "timestamp", "type": "long"}
 			]
 		}`,
-		"pump_v1_timeseries-string": `{
+		"_pump_v1_timeseries-string": `{
 			"type": "record",
 			"name": "pump_v1_timeseries_string",
 			"fields": [
@@ -104,15 +104,15 @@ func (m *MockSchemaRegistry) AddTestSchemas() {
 				{"name": "timestamp", "type": "long"}
 			]
 		}`,
-		"pump_v1_timeseries-bool": `{
+		"_pump_v1_timeseries-boolean": `{
 			"type": "record",
-			"name": "pump_v1_timeseries_bool",
+			"name": "pump_v1_timeseries_boolean",
 			"fields": [
 				{"name": "value", "type": "boolean"},
 				{"name": "timestamp", "type": "long"}
 			]
 		}`,
-		"motor_v2_timeseries-number": `{
+		"_motor_v2_timeseries-number": `{
 			"type": "record",
 			"name": "motor_v2_timeseries_number",
 			"fields": [
@@ -120,9 +120,9 @@ func (m *MockSchemaRegistry) AddTestSchemas() {
 				{"name": "timestamp", "type": "long"}
 			]
 		}`,
-		"orphaned_v1_timeseries-bool": `{
+		"_orphaned_v1_timeseries-boolean": `{
 			"type": "record",
-			"name": "orphaned_v1_timeseries_bool",
+			"name": "orphaned_v1_timeseries_boolean",
 			"fields": [
 				{"name": "value", "type": "boolean"},
 				{"name": "timestamp", "type": "long"}
@@ -152,7 +152,9 @@ func (m *MockSchemaRegistry) handleGetSubjects(w http.ResponseWriter, r *http.Re
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(subjects)
+	if err := json.NewEncoder(w).Encode(subjects); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
 }
 
 func (m *MockSchemaRegistry) handleSubjectOperations(w http.ResponseWriter, r *http.Request) {
@@ -200,7 +202,9 @@ func (m *MockSchemaRegistry) handleGetSubjectVersions(w http.ResponseWriter, r *
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(versions)
+	if err := json.NewEncoder(w).Encode(versions); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
 }
 
 func (m *MockSchemaRegistry) handleRegisterSchema(w http.ResponseWriter, r *http.Request, subjectPath string) {
@@ -223,7 +227,12 @@ func (m *MockSchemaRegistry) handleRegisterSchema(w http.ResponseWriter, r *http
 
 	// Return the schema ID
 	m.mu.RLock()
-	schemas := m.subjects[subject]
+	schemas, exists := m.subjects[subject]
+	if !exists || len(schemas) == 0 {
+		m.mu.RUnlock()
+		http.Error(w, "Subject not found", http.StatusNotFound)
+		return
+	}
 	latestSchema := schemas[len(schemas)-1]
 	m.mu.RUnlock()
 
@@ -232,7 +241,9 @@ func (m *MockSchemaRegistry) handleRegisterSchema(w http.ResponseWriter, r *http
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
 }
 
 func (m *MockSchemaRegistry) handleGetSchemaByID(w http.ResponseWriter, r *http.Request) {

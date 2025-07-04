@@ -25,10 +25,10 @@ import (
 // BenchmarkParseSchemaName benchmarks the schema name parsing function
 func BenchmarkParseSchemaName(b *testing.B) {
 	testCases := []string{
-		"pump_v1_timeseries-number",
-		"motor_v2_timeseries-string",
-		"sensor_v10_timeseries-bool",
-		"complex_name_v99_timeseries-number",
+		"_pump_v1_timeseries-number",
+		"_motor_v2_timeseries-string",
+		"_sensor_v10_timeseries-boolean",
+		"_complex_name_v99_timeseries-number",
 		"invalid_format",
 		"pump_v1",
 	}
@@ -45,7 +45,7 @@ func BenchmarkParseSchemaName(b *testing.B) {
 
 // BenchmarkParseSchemaNameSingle benchmarks parsing a single schema name
 func BenchmarkParseSchemaNameSingle(b *testing.B) {
-	schemaName := "pump_v1_timeseries-number"
+	schemaName := "_pump_v1_timeseries-number"
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -138,7 +138,7 @@ func createBenchmarkDataModels() map[string]config.DataModelsConfig {
 							Type: "timeseries-string",
 						},
 						"active": {
-							Type: "timeseries-bool",
+							Type: "timeseries-boolean",
 						},
 						"metadata": {
 							Subfields: map[string]config.Field{
@@ -216,11 +216,14 @@ func createLargeBenchmarkDataModels() map[string]config.DataModelsConfig {
 			// Each version has 10 fields of different types
 			for f := 0; f < 10; f++ {
 				fieldName := fmt.Sprintf("field_%d", f)
-				fieldType := "timeseries-number"
-				if f%3 == 1 {
+				var fieldType string
+				switch f % 3 {
+				case 0:
+					fieldType = "timeseries-number"
+				case 1:
 					fieldType = "timeseries-string"
-				} else if f%3 == 2 {
-					fieldType = "timeseries-bool"
+				case 2:
+					fieldType = "timeseries-boolean"
 				}
 
 				structure[fieldName] = config.Field{Type: fieldType}
@@ -241,7 +244,7 @@ func createLargeBenchmarkDataModels() map[string]config.DataModelsConfig {
 func createBenchmarkRegistrySchemas() []SchemaSubject {
 	return []SchemaSubject{
 		{
-			Subject:            "pump_v1_timeseries-number",
+			Subject:            "_pump_v1_timeseries-number",
 			Name:               "pump",
 			Version:            "v1",
 			DataModelType:      "timeseries",
@@ -249,7 +252,7 @@ func createBenchmarkRegistrySchemas() []SchemaSubject {
 			ParsedSuccessfully: true,
 		},
 		{
-			Subject:            "pump_v1_timeseries-string",
+			Subject:            "_pump_v1_timeseries-string",
 			Name:               "pump",
 			Version:            "v1",
 			DataModelType:      "timeseries",
@@ -257,15 +260,15 @@ func createBenchmarkRegistrySchemas() []SchemaSubject {
 			ParsedSuccessfully: true,
 		},
 		{
-			Subject:            "pump_v1_timeseries-bool",
+			Subject:            "_pump_v1_timeseries-boolean",
 			Name:               "pump",
 			Version:            "v1",
 			DataModelType:      "timeseries",
-			DataType:           "bool",
+			DataType:           "boolean",
 			ParsedSuccessfully: true,
 		},
 		{
-			Subject:            "motor_v1_timeseries-number",
+			Subject:            "_motor_v1_timeseries-number",
 			Name:               "motor",
 			Version:            "v1",
 			DataModelType:      "timeseries",
@@ -273,15 +276,15 @@ func createBenchmarkRegistrySchemas() []SchemaSubject {
 			ParsedSuccessfully: true,
 		},
 		{
-			Subject:            "motor_v1_timeseries-bool",
+			Subject:            "_motor_v1_timeseries-boolean",
 			Name:               "motor",
 			Version:            "v1",
 			DataModelType:      "timeseries",
-			DataType:           "bool",
+			DataType:           "boolean",
 			ParsedSuccessfully: true,
 		},
 		{
-			Subject:            "sensor_v1_timeseries-number",
+			Subject:            "_sensor_v1_timeseries-number",
 			Name:               "sensor",
 			Version:            "v1",
 			DataModelType:      "timeseries",
@@ -289,7 +292,7 @@ func createBenchmarkRegistrySchemas() []SchemaSubject {
 			ParsedSuccessfully: true,
 		},
 		{
-			Subject:            "sensor_v1_timeseries-string",
+			Subject:            "_sensor_v1_timeseries-string",
 			Name:               "sensor",
 			Version:            "v1",
 			DataModelType:      "timeseries",
@@ -297,11 +300,11 @@ func createBenchmarkRegistrySchemas() []SchemaSubject {
 			ParsedSuccessfully: true,
 		},
 		{
-			Subject:            "orphaned_v1_timeseries-bool",
+			Subject:            "_orphaned_v1_timeseries-boolean",
 			Name:               "orphaned",
 			Version:            "v1",
 			DataModelType:      "timeseries",
-			DataType:           "bool",
+			DataType:           "boolean",
 			ParsedSuccessfully: true,
 		},
 	}

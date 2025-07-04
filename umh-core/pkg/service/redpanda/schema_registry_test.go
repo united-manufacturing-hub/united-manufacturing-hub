@@ -202,7 +202,7 @@ var _ = Describe("Schema Registry", func() {
 									Type: "timeseries-string",
 								},
 								"active": {
-									Type: "timeseries-bool",
+									Type: "timeseries-boolean",
 								},
 								"metadata": {
 									Subfields: map[string]config.Field{
@@ -239,7 +239,7 @@ var _ = Describe("Schema Registry", func() {
 
 			expected := []string{
 				"motor_v2_timeseries-number", // motor has number fields
-				"pump_v1_timeseries-bool",    // pump has bool field
+				"pump_v1_timeseries-boolean", // pump has boolean field
 				"pump_v1_timeseries-number",  // pump has number fields
 				"pump_v1_timeseries-string",  // pump has string field
 			}
@@ -272,11 +272,11 @@ var _ = Describe("Schema Registry", func() {
 					ParsedSuccessfully: true,
 				},
 				{
-					Subject:            "orphaned_v1_timeseries-bool",
+					Subject:            "orphaned_v1_timeseries-boolean",
 					Name:               "orphaned",
 					Version:            "v1",
 					DataModelType:      "timeseries",
-					DataType:           "bool",
+					DataType:           "boolean",
 					ParsedSuccessfully: true,
 				},
 			}
@@ -285,10 +285,10 @@ var _ = Describe("Schema Registry", func() {
 
 			// Set up the comparison result
 			expectedMapping := &DataModelSchemaMapping{
-				MissingInRegistry:  []string{"pump_v1_timeseries-bool"},
-				OrphanedInRegistry: []string{"orphaned_v1_timeseries-bool"},
-				ExpectedSchemas:    []string{"pump_v1_timeseries-number", "pump_v1_timeseries-string", "pump_v1_timeseries-bool"},
-				RegistrySchemas:    []string{"pump_v1_timeseries-number", "pump_v1_timeseries-string", "orphaned_v1_timeseries-bool"},
+				MissingInRegistry:  []string{"pump_v1_timeseries-boolean"},
+				OrphanedInRegistry: []string{"orphaned_v1_timeseries-boolean"},
+				ExpectedSchemas:    []string{"pump_v1_timeseries-number", "pump_v1_timeseries-string", "pump_v1_timeseries-boolean"},
+				RegistrySchemas:    []string{"pump_v1_timeseries-number", "pump_v1_timeseries-string", "orphaned_v1_timeseries-boolean"},
 			}
 			mockRedpandaService.CompareDataModelsWithRegistryResult = expectedMapping
 			mockRedpandaService.CompareDataModelsWithRegistryError = nil
@@ -307,7 +307,7 @@ var _ = Describe("Schema Registry", func() {
 									Type: "timeseries-string",
 								},
 								"active": {
-									Type: "timeseries-bool",
+									Type: "timeseries-boolean",
 								},
 							},
 						},
@@ -328,7 +328,7 @@ var _ = Describe("Schema Registry", func() {
 			Expect(result.ExpectedSchemas).To(ContainElements(
 				"pump_v1_timeseries-number",
 				"pump_v1_timeseries-string",
-				"pump_v1_timeseries-bool",
+				"pump_v1_timeseries-boolean",
 			))
 
 			// Check registry schemas
@@ -336,16 +336,16 @@ var _ = Describe("Schema Registry", func() {
 			Expect(result.RegistrySchemas).To(ContainElements(
 				"pump_v1_timeseries-number",
 				"pump_v1_timeseries-string",
-				"orphaned_v1_timeseries-bool",
+				"orphaned_v1_timeseries-boolean",
 			))
 
 			// Check missing schemas (expected but not in registry)
 			Expect(len(result.MissingInRegistry)).To(Equal(1))
-			Expect(result.MissingInRegistry).To(ContainElement("pump_v1_timeseries-bool"))
+			Expect(result.MissingInRegistry).To(ContainElement("pump_v1_timeseries-boolean"))
 
 			// Check orphaned schemas (in registry but not expected)
 			Expect(len(result.OrphanedInRegistry)).To(Equal(1))
-			Expect(result.OrphanedInRegistry).To(ContainElement("orphaned_v1_timeseries-bool"))
+			Expect(result.OrphanedInRegistry).To(ContainElement("orphaned_v1_timeseries-boolean"))
 		})
 	})
 })

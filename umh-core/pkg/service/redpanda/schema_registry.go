@@ -42,9 +42,12 @@ type SchemaSubject struct {
 }
 
 // parseSchemaName parses a schema name into its components
-// Expected format: <Name>_<Version>_<DataModelType>-<DataType>
-// Example: "pump_v1_timeseries-number"
+// Expected format: _<Name>_<Version>_<DataModelType>-<DataType> (leading underscore from translation)
+// Example: "_pump_v1_timeseries-number"
 func parseSchemaName(schemaName string) (name, version, dataModelType, dataType string, success bool) {
+	// Skip leading underscore if present (from translation code)
+	schemaName = strings.TrimPrefix(schemaName, "_")
+
 	// Find first underscore
 	firstUnderscore := strings.IndexByte(schemaName, '_')
 	if firstUnderscore == -1 || firstUnderscore == 0 {
@@ -206,8 +209,8 @@ func collectTimeseriesDataTypes(structure map[string]config.Field, dataTypes map
 			dataTypes["number"] = true
 		case "timeseries-string":
 			dataTypes["string"] = true
-		case "timeseries-bool":
-			dataTypes["bool"] = true
+		case "timeseries-boolean":
+			dataTypes["boolean"] = true
 		}
 
 		// Recursively process subfields
