@@ -359,4 +359,9 @@ func (s *S6Instance) logConfigDifferences(desired, observed s6serviceconfig.S6Se
 	if desired.MemoryLimit != observed.MemoryLimit {
 		s.baseFSMInstance.GetLogger().Infof("Memory limit - want: %d, is: %d", desired.MemoryLimit, observed.MemoryLimit)
 	}
+
+	// Log filesize differences
+	if desired.LogFilesize != observed.LogFilesize {
+		s.baseFSMInstance.GetLogger().Infof("Log filesize - want: %d, is: %d", desired.LogFilesize, observed.LogFilesize)
+	}
 }

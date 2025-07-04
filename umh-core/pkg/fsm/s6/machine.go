@@ -48,6 +48,7 @@ func NewS6Instance(
 			{Name: EventStop, Src: []string{OperationalStateRunning, OperationalStateStarting}, Dst: OperationalStateStopping},
 			{Name: EventStopDone, Src: []string{OperationalStateStopping}, Dst: OperationalStateStopped},
 		},
+		MaxTicksToRemainInTransientState: 20, // 20 ticks = 20 * 100ms = 2s
 	}
 
 	logger := logger.For(config.Name)
