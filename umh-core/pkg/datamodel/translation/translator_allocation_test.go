@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -314,7 +315,7 @@ func BenchmarkStringIndexByte(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		colonIndex := fmt.Sprintf("strings.IndexByte(%s, ':')", modelRef) // This will allocate
+		colonIndex := strings.IndexByte(modelRef, ':')
 		_ = colonIndex
 	}
 }
