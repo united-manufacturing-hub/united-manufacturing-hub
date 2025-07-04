@@ -87,6 +87,10 @@ type Service interface {
 
 	// Glob is a wrapper around filepath.Glob that respects the context
 	Glob(ctx context.Context, pattern string) ([]string, error)
+
+	// Rename renames (moves) a file or directory from oldPath to newPath.
+	// This operation is atomic on the same filesystem mount.
+	Rename(ctx context.Context, oldPath, newPath string) error
 }
 
 // DefaultService is the default implementation of FileSystemService
@@ -258,7 +262,6 @@ func (s *DefaultService) ReadFileRange(
 			if deadline, ok := ctx.Deadline(); ok {
 				if remaining := time.Until(deadline); remaining < timeBuffer {
 					// NEWSIZE CALCULATION: from + bytes_read = next offset to read from
-					logger.For(logger.ComponentFilesystemService).Info("ReadFileRange: returning partial data due to context deadline", "path", path, "from", from, "newSize", from+int64(len(buf)), "remainingMs", remaining.Milliseconds())
 					resCh <- result{buf, from + int64(len(buf)), nil}
 					return
 				}
@@ -285,7 +288,6 @@ func (s *DefaultService) ReadFileRange(
 		}
 
 		// FINAL RESULT: buf contains only actual file data, newSize = next read offset
-		logger.For(logger.ComponentFilesystemService).Infof("ReadFileRange: returning final result, path: %s, from: %d, newSize: %d", path, from, from+int64(len(buf)))
 		resCh <- result{buf, from + int64(len(buf)), nil}
 	}()
 
@@ -581,5 +583,32 @@ func (s *DefaultService) Glob(ctx context.Context, pattern string) ([]string, er
 		return res.matches, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
+	}
+}
+
+// Rename renames (moves) a file or directory from oldPath to newPath.
+// This operation is atomic on the same filesystem mount.
+func (s *DefaultService) Rename(ctx context.Context, oldPath, newPath string) error {
+	if err := s.checkContext(ctx); err != nil {
+		return fmt.Errorf("failed to check context: %w", err)
+	}
+
+	// Create a channel for results
+	errCh := make(chan error, 1)
+
+	// Run file operation in goroutine
+	go func() {
+		errCh <- os.Rename(oldPath, newPath)
+	}()
+
+	// Wait for either completion or context cancellation
+	select {
+	case err := <-errCh:
+		if err != nil {
+			return fmt.Errorf("failed to rename file %s to %s: %w", oldPath, newPath, err)
+		}
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }

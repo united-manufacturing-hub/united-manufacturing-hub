@@ -44,6 +44,7 @@ type MockFileSystem struct {
 	ExecuteCommandFunc  func(ctx context.Context, name string, args ...string) ([]byte, error)
 	ChownFunc           func(ctx context.Context, path string, user string, group string) error
 	GlobFunc            func(ctx context.Context, pattern string) ([]string, error)
+	RenameFunc          func(ctx context.Context, oldPath, newPath string) error
 	mutex               sync.Mutex
 }
 
@@ -138,7 +139,7 @@ func (m *MockFileSystem) ReadFile(ctx context.Context, path string) ([]byte, err
 	return []byte("mock content"), nil
 }
 
-// ReadFileRange reads the file starting at byte offset “from” and returns:
+// ReadFileRange reads the file starting at byte offset "from" and returns:
 //   - chunk   – the data that was read (nil if nothing new)
 //   - newSize – the file size **after** the read (use it as next offset)
 func (m *MockFileSystem) ReadFileRange(ctx context.Context, path string, from int64) ([]byte, int64, error) {
@@ -169,6 +170,29 @@ func (m *MockFileSystem) Glob(ctx context.Context, pattern string) ([]string, er
 		return m.GlobFunc(ctx, pattern)
 	}
 	panic("not implemented")
+}
+
+// Rename renames (moves) a file or directory from oldPath to newPath
+func (m *MockFileSystem) Rename(ctx context.Context, oldPath, newPath string) error {
+	if m.RenameFunc != nil {
+		return m.RenameFunc(ctx, oldPath, newPath)
+	}
+
+	shouldFail, delay := m.simulateRandomBehavior("Rename:" + oldPath + ":" + newPath)
+
+	if delay > 0 {
+		select {
+		case <-time.After(delay):
+			// Delay completed
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	if shouldFail {
+		return errors.New("simulated failure in Rename")
+	}
+	return nil
 }
 
 // WriteFile writes data to a file respecting the context
@@ -530,6 +554,12 @@ func (m *MockFileSystem) WithExecuteCommandFunc(fn func(ctx context.Context, nam
 // WithGlobFunc sets a custom implementation for Glob
 func (m *MockFileSystem) WithGlobFunc(fn func(ctx context.Context, pattern string) ([]string, error)) *MockFileSystem {
 	m.GlobFunc = fn
+	return m
+}
+
+// WithRenameFunc sets a custom implementation for Rename
+func (m *MockFileSystem) WithRenameFunc(fn func(ctx context.Context, oldPath, newPath string) error) *MockFileSystem {
+	m.RenameFunc = fn
 	return m
 }
 
