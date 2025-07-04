@@ -124,7 +124,11 @@ func (a *EditDataModelAction) Validate() error {
 		Structure:   configStructure,
 	}
 
-	if err := validator.ValidateDataModel(context.Background(), dmVersion); err != nil {
+	// Create context with timeout for validation
+	validationCtx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	defer cancel()
+
+	if err := validator.ValidateStructureOnly(validationCtx, dmVersion); err != nil {
 		return fmt.Errorf("data model structure validation failed: %v", err)
 	}
 
@@ -208,13 +212,22 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 
 // convertModelsFieldsToConfigFields converts models.Field map to config.Field map
 func (a *EditDataModelAction) convertModelsFieldsToConfigFields(modelsFields map[string]models.Field) map[string]config.Field {
+	if modelsFields == nil {
+		return nil
+	}
+
 	configFields := make(map[string]config.Field)
 
 	for key, modelsField := range modelsFields {
+		var subfields map[string]config.Field
+		if modelsField.Subfields != nil {
+			subfields = a.convertModelsFieldsToConfigFields(modelsField.Subfields)
+		}
+
 		configFields[key] = config.Field{
 			Type:        modelsField.Type,
 			ModelRef:    modelsField.ModelRef,
-			Subfields:   a.convertModelsFieldsToConfigFields(modelsField.Subfields),
+			Subfields:   subfields,
 			Description: modelsField.Description,
 			Unit:        modelsField.Unit,
 		}

@@ -529,7 +529,6 @@ var _ = Describe("AddDataModelAction", func() {
 						ModelRef: "external-model:v1",
 					},
 					"nested_object": {
-						Type: "timeseries-object",
 						Subfields: map[string]models.Field{
 							"nested_string": {
 								Type: "timeseries-string",
