@@ -255,9 +255,11 @@ func (m *MockSchemaRegistry) handleGetSchemaByID(w http.ResponseWriter, r *http.
 	// In a real implementation, we'd parse the ID from the URL
 	// For now, just return a generic response
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"schema": `{"type": "string"}`,
-	})
+	}); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
 }
 
 func (m *MockSchemaRegistry) handleConfig(w http.ResponseWriter, r *http.Request) {
@@ -272,7 +274,9 @@ func (m *MockSchemaRegistry) handleConfig(w http.ResponseWriter, r *http.Request
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(config)
+	if err := json.NewEncoder(w).Encode(config); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
 }
 
 func (m *MockSchemaRegistry) handleSubjectConfig(w http.ResponseWriter, r *http.Request) {
@@ -287,7 +291,9 @@ func (m *MockSchemaRegistry) handleSubjectConfig(w http.ResponseWriter, r *http.
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(config)
+	if err := json.NewEncoder(w).Encode(config); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
 }
 
 // TestWithMockSchemaRegistry is a helper function for running tests with a mock schema registry
