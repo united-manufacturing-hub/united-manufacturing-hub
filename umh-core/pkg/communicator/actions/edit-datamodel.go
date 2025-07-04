@@ -33,14 +33,15 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"strconv"
 	"strings"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel/validation"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
@@ -124,7 +125,7 @@ func (a *EditDataModelAction) Validate() error {
 	}
 
 	// Validate data model structure using our new validator
-	validator := datamodel.NewValidator()
+	validator := validation.NewValidator()
 
 	// Convert models structure to config structure for validation
 	configStructure := a.convertModelsFieldsToConfigFields(a.payload.Structure)

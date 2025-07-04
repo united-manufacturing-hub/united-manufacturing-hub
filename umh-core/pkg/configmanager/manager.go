@@ -26,7 +26,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel/validation"
 
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
@@ -138,7 +138,7 @@ type FileConfigManager struct {
 	cacheRawConfig string
 
 	// data models validator
-	dataModelsValidator *datamodel.Validator
+	dataModelsValidator *validation.Validator
 }
 
 // NewFileConfigManager creates a new FileConfigManager
@@ -155,7 +155,7 @@ func NewFileConfigManager() *FileConfigManager {
 		logger:              logger,
 		mutexAtomicUpdate:   *ctxmutex.NewCtxMutex(),
 		mutexReadOrWrite:    *ctxrwmutex.NewCtxRWMutex(),
-		dataModelsValidator: datamodel.NewValidator(),
+		dataModelsValidator: validation.NewValidator(),
 	}
 }
 
