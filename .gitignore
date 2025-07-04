@@ -6,3 +6,6 @@
 
 .docker-cache
 .idea
+
+# .DS_Store from macos
+.DS_Store
