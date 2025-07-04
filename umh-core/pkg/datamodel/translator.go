@@ -100,12 +100,39 @@ func NewTranslator() *Translator {
 	}
 }
 
+// normalizeModelName strips leading underscores from model names
+// Users sometimes mistakenly include the underscore prefix that's used in schema naming
+func (t *Translator) normalizeModelName(modelName string) string {
+	// Strip leading underscores
+	for len(modelName) > 0 && modelName[0] == '_' {
+		modelName = modelName[1:]
+	}
+	return modelName
+}
+
+// normalizeVersion adds "v" prefix to version if it's missing
+// Users sometimes forget the "v" prefix (e.g., "1" instead of "v1")
+func (t *Translator) normalizeVersion(version string) string {
+	// If version is empty, return as-is (will be caught by validation elsewhere)
+	if version == "" {
+		return version
+	}
+
+	// If version already starts with "v", return as-is
+	if strings.HasPrefix(version, "v") {
+		return version
+	}
+
+	// Add "v" prefix
+	return "v" + version
+}
+
 // TranslateToJSONSchema translates a data model to JSON schemas grouped by type
 // Parameters:
 // - ctx: context for cancellation
 // - dataModel: the data model to translate
-// - modelName: name of the model (for schema naming)
-// - version: version of the model (for schema naming)
+// - modelName: name of the model (for schema naming) - leading underscores will be stripped
+// - version: version of the model (for schema naming) - "v" prefix will be added if missing
 // - allDataModels: map of all available data models for reference resolution
 // Returns slice of SchemaOutput, each containing a schema name and JSON content
 func (t *Translator) TranslateToJSONSchema(ctx context.Context, dataModel config.DataModelVersion, modelName string, version string, allDataModels map[string]config.DataModelsConfig) ([]SchemaOutput, error) {
@@ -115,6 +142,10 @@ func (t *Translator) TranslateToJSONSchema(ctx context.Context, dataModel config
 		return nil, ctx.Err()
 	default:
 	}
+
+	// Normalize inputs to handle common user mistakes
+	modelName = t.normalizeModelName(modelName)
+	version = t.normalizeVersion(version)
 
 	// Step 1: Collect all leaf paths with their types
 	paths, err := t.collectAllLeafPaths(ctx, dataModel.Structure, allDataModels, make(map[string]bool), "")
