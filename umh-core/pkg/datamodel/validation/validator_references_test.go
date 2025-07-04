@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package datamodel_test
+package validation_test
 
 import (
 	"context"
@@ -22,17 +22,17 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel/validation"
 )
 
-var _ = Describe("Validator References", func() {
+var _ = Describe("Validator - References", func() {
 	var (
-		validator *datamodel.Validator
+		validator *validation.Validator
 		ctx       context.Context
 	)
 
 	BeforeEach(func() {
-		validator = datamodel.NewValidator()
+		validator = validation.NewValidator()
 		ctx = context.Background()
 	})
 
