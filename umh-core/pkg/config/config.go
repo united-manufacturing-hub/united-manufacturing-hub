@@ -22,6 +22,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/streamprocessorserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/topicbrowserserviceconfig"
 
 	"github.com/tiendc/go-deepcopy"
@@ -177,6 +178,12 @@ type ProtocolConverterConfig struct {
 	// explanation see templating.go
 	hasAnchors bool   `yaml:"-"`
 	anchorName string `yaml:"-"`
+}
+
+type StreamProcessorConfig struct {
+	FSMInstanceConfig `yaml:",inline"`
+
+	StreamProcessorServiceConfig streamprocessorserviceconfig.ConfigSpec `yaml:"streamProcessorServiceConfig"`
 }
 
 // HasAnchors returns true if the ProtocolConverterConfig has anchors, see templating.go
