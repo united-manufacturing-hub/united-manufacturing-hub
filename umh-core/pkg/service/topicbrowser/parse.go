@@ -81,15 +81,24 @@ func extractRaw(entries []s6svc.LogEntry) (compressed []byte, epochMS int64, err
 	bufPtr := parseBufferPool.Get().(*[]byte)
 	buf := *bufPtr
 
-	// Reset buffer and estimate needed capacity based on log entries
+	// Reset buffer and estimate needed capacity based on S6 log line limits
 	buf = buf[:0]
 	entryCount := dataEndIndex - startIndex - 1
-	// Based on pprof: ~174MB hex for 87MB compressed, so ~2MB per entry for large payloads
-	// For safety, use 3MB per entry estimate when more than 10 entries
-	estimatedSize := entryCount * 3 << 20 // 3MB per entry
-	if entryCount <= 10 {
-		estimatedSize = entryCount * 1024 * 512 // 512KB per entry for smaller payloads
-	}
+
+	// S6 Log Line Limit Analysis:
+	// - S6 default max line length: 8,192 bytes + 1 overhead = 8,193 characters
+	// - Benthos protobuf logs get truncated to exactly 8,193 hex characters per line
+	// - Buffer stores raw hex strings (1 byte per character in Go)
+	// - After hex decoding: hex strings reduce to ~50% (8,193 hex chars → ~4,096 bytes binary)
+	// - Required buffer size: entryCount * 8,193 bytes for hex strings
+	//
+	// Previous estimation used 3MB per entry (740x overallocation!)
+	// Actual needs: ~8KB per entry for S6-truncated hex strings
+	const s6LineLimit = 8192
+	const s6Overhead = 1
+	const safetyBuffer = 64
+	estimatedSize := entryCount * (s6LineLimit + s6Overhead + safetyBuffer) // ~8.2KB per entry
+
 	if cap(buf) < estimatedSize {
 		buf = make([]byte, 0, estimatedSize)
 	}
@@ -165,11 +174,13 @@ var decompressionBufferPool = sync.Pool{
 }
 
 // parseBufferPool reuses buffers for hex data parsing to avoid bytes.Buffer growth
-// Based on pprof analysis: typical hex strings are ~174MB, so start with 200MB capacity
+// Based on S6 line limit analysis: typical entries are ~8KB each (8,193 hex chars)
+// Start with reasonable size for common cases, will grow as needed
 var parseBufferPool = sync.Pool{
 	New: func() any {
-		// Start with 200MB buffer for hex parsing - pprof shows ~174MB hex strings
-		b := make([]byte, 0, 200<<20)
+		// Start with 64KB buffer for hex parsing - handles ~8 typical S6-truncated entries
+		// Will grow automatically for larger batches
+		b := make([]byte, 0, 64<<10)
 		return &b
 	},
 }
