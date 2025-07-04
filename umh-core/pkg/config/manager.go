@@ -76,6 +76,12 @@ type ConfigManager interface {
 	AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc ProtocolConverterConfig) (ProtocolConverterConfig, error)
 	// AtomicDeleteProtocolConverter deletes a protocol converter from the config atomically
 	AtomicDeleteProtocolConverter(ctx context.Context, componentUUID uuid.UUID) error
+	// AtomicAddDataModel adds a data model to the config atomically
+	AtomicAddDataModel(ctx context.Context, name string, dmVersion DataModelVersion) error
+	// AtomicEditDataModel edits (append-only) a data model by adding a new version
+	AtomicEditDataModel(ctx context.Context, name string, dmVersion DataModelVersion) error
+	// AtomicDeleteDataModel deletes a data model from the config atomically
+	AtomicDeleteDataModel(ctx context.Context, name string) error
 	// GetConfigAsString returns the current config as a string
 	// This function is used in the get-config-file action to retrieve the raw config file
 	// without any yaml parsing applied. This allows to display yaml anchors and change them

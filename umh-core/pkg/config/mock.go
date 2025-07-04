@@ -18,6 +18,8 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -39,6 +41,9 @@ type MockConfigManager struct {
 	AtomicAddProtocolConverterCalled    bool
 	AtomicEditProtocolConverterCalled   bool
 	AtomicDeleteProtocolConverterCalled bool
+	AtomicAddDataModelCalled            bool
+	AtomicEditDataModelCalled           bool
+	AtomicDeleteDataModelCalled         bool
 	Config                              FullConfig
 	ConfigError                         error
 	AddDataflowcomponentError           error
@@ -47,6 +52,9 @@ type MockConfigManager struct {
 	AtomicAddProtocolConverterError     error
 	AtomicEditProtocolConverterError    error
 	AtomicDeleteProtocolConverterError  error
+	AtomicAddDataModelError             error
+	AtomicEditDataModelError            error
+	AtomicDeleteDataModelError          error
 	ConfigAsString                      string
 	GetConfigAsStringError              error
 	GetConfigAsStringCalled             bool
@@ -188,6 +196,24 @@ func (m *MockConfigManager) WithAtomicDeleteProtocolConverterError(err error) *M
 	return m
 }
 
+// WithAtomicAddDataModelError configures the mock to return the given error when AtomicAddDataModel is called
+func (m *MockConfigManager) WithAtomicAddDataModelError(err error) *MockConfigManager {
+	m.AtomicAddDataModelError = err
+	return m
+}
+
+// WithAtomicEditDataModelError configures the mock to return the given error when AtomicEditDataModel is called
+func (m *MockConfigManager) WithAtomicEditDataModelError(err error) *MockConfigManager {
+	m.AtomicEditDataModelError = err
+	return m
+}
+
+// WithAtomicDeleteDataModelError configures the mock to return the given error when AtomicDeleteDataModel is called
+func (m *MockConfigManager) WithAtomicDeleteDataModelError(err error) *MockConfigManager {
+	m.AtomicDeleteDataModelError = err
+	return m
+}
+
 // ResetCalls clears the called flags for testing multiple calls
 func (m *MockConfigManager) ResetCalls() {
 	m.mutexReadOrWrite.Lock()
@@ -199,6 +225,9 @@ func (m *MockConfigManager) ResetCalls() {
 	m.AtomicAddProtocolConverterCalled = false
 	m.AtomicEditProtocolConverterCalled = false
 	m.AtomicDeleteProtocolConverterCalled = false
+	m.AtomicAddDataModelCalled = false
+	m.AtomicEditDataModelCalled = false
+	m.AtomicDeleteDataModelCalled = false
 }
 
 // atomic set location
@@ -565,6 +594,147 @@ func (m *MockConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 
 	// Update config with filtered converters
 	config.ProtocolConverter = filteredConverters
+
+	// write the config
+	if err := m.writeConfig(ctx, config); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
+}
+
+// AtomicAddDataModel implements the ConfigManager interface
+func (m *MockConfigManager) AtomicAddDataModel(ctx context.Context, name string, dmVersion DataModelVersion) error {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	m.AtomicAddDataModelCalled = true
+
+	if m.AtomicAddDataModelError != nil {
+		return m.AtomicAddDataModelError
+	}
+
+	// get the current config
+	config, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
+	}
+
+	// check for duplicate name before add
+	for _, dmc := range config.DataModels {
+		if dmc.Name == name {
+			return fmt.Errorf("another data model with name %q already exists – choose a unique name", name)
+		}
+	}
+
+	// add the data model to the config
+	config.DataModels = append(config.DataModels, DataModelsConfig{
+		Name: name,
+		Versions: map[string]DataModelVersion{
+			"v1": dmVersion,
+		},
+	})
+
+	// write the config
+	if err := m.writeConfig(ctx, config); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
+}
+
+// AtomicEditDataModel implements the ConfigManager interface
+func (m *MockConfigManager) AtomicEditDataModel(ctx context.Context, name string, dmVersion DataModelVersion) error {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	m.AtomicEditDataModelCalled = true
+
+	if m.AtomicEditDataModelError != nil {
+		return m.AtomicEditDataModelError
+	}
+
+	// get the current config
+	config, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
+	}
+
+	targetIndex := -1
+	// find the data model to edit
+	for i, dmc := range config.DataModels {
+		if dmc.Name == name {
+			targetIndex = i
+			break
+		}
+	}
+
+	if targetIndex == -1 {
+		return fmt.Errorf("data model with name %q not found", name)
+	}
+
+	// get the current data model
+	currentDataModel := config.DataModels[targetIndex]
+
+	// Find the highest version number to ensure we don't overwrite existing versions
+	var maxVersion = 0
+	for versionKey := range currentDataModel.Versions {
+		if strings.HasPrefix(versionKey, "v") {
+			if versionNum, err := strconv.Atoi(versionKey[1:]); err == nil {
+				if versionNum > maxVersion {
+					maxVersion = versionNum
+				}
+			}
+		}
+	}
+
+	// append the new version to the data model
+	nextVersion := maxVersion + 1
+	currentDataModel.Versions[fmt.Sprintf("v%d", nextVersion)] = dmVersion
+
+	// edit the data model in the config
+	config.DataModels[targetIndex] = currentDataModel
+
+	// write the config
+	if err := m.writeConfig(ctx, config); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
+}
+
+// AtomicDeleteDataModel implements the ConfigManager interface
+func (m *MockConfigManager) AtomicDeleteDataModel(ctx context.Context, name string) error {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	m.AtomicDeleteDataModelCalled = true
+
+	if m.AtomicDeleteDataModelError != nil {
+		return m.AtomicDeleteDataModelError
+	}
+
+	// get the current config
+	config, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
+	}
+
+	// find the data model to delete
+	targetIndex := -1
+	for i, dmc := range config.DataModels {
+		if dmc.Name == name {
+			targetIndex = i
+			break
+		}
+	}
+
+	if targetIndex == -1 {
+		return fmt.Errorf("data model with name %q not found", name)
+	}
+
+	// delete the data model from the config
+	config.DataModels = append(config.DataModels[:targetIndex], config.DataModels[targetIndex+1:]...)
 
 	// write the config
 	if err := m.writeConfig(ctx, config); err != nil {
