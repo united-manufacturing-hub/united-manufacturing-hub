@@ -38,6 +38,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"time"
 
 	"github.com/tiendc/go-deepcopy"
@@ -80,7 +81,7 @@ import (
 type ControlLoop struct {
 	tickerTime        time.Duration
 	managers          []fsm.FSMManager[any]
-	configManager     config.ConfigManager
+	configManager     configmanager.ConfigManager
 	logger            *zap.SugaredLogger
 	starvationChecker *starvationchecker.StarvationChecker
 	currentTick       uint64
@@ -98,7 +99,7 @@ type ControlLoop struct {
 //
 // The control loop runs at a fixed interval (defaultTickerTime) and orchestrates
 // all components according to the configuration.
-func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
+func NewControlLoop(configManager configmanager.ConfigManager) *ControlLoop {
 	// Get a component-specific logger
 	log := logger.For(logger.ComponentControlLoop)
 	if log == nil {
@@ -422,7 +423,7 @@ func (c *ControlLoop) GetSystemSnapshot() *fsm.SystemSnapshot {
 
 // GetConfigManager returns the config manager
 // This can be used by components that need direct access to the current configuration
-func (c *ControlLoop) GetConfigManager() config.ConfigManager {
+func (c *ControlLoop) GetConfigManager() configmanager.ConfigManager {
 	return c.configManager
 }
 

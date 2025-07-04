@@ -16,13 +16,13 @@ package actions_test
 
 import (
 	"encoding/base64"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"time"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"gopkg.in/yaml.v3"
 )
@@ -49,7 +49,7 @@ func structToEncodedMap(v interface{}) map[string]interface{} {
 var _ = Describe("AddDataModelAction", func() {
 	var (
 		action          *actions.AddDataModelAction
-		mockConfigMgr   *config.MockConfigManager
+		mockConfigMgr   *configmanager.MockConfigManager
 		outboundChannel chan *models.UMHMessage
 		userEmail       string
 		actionUUID      uuid.UUID
@@ -60,7 +60,7 @@ var _ = Describe("AddDataModelAction", func() {
 		userEmail = "test@example.com"
 		actionUUID = uuid.New()
 		instanceUUID = uuid.New()
-		mockConfigMgr = config.NewMockConfigManager()
+		mockConfigMgr = configmanager.NewMockConfigManager()
 		outboundChannel = make(chan *models.UMHMessage, 10)
 
 		action = actions.NewAddDataModelAction(

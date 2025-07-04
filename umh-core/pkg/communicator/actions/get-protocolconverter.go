@@ -49,10 +49,10 @@ package actions
 
 import (
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"strconv"
 
 	"github.com/google/uuid"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -80,7 +80,7 @@ type GetProtocolConverterAction struct {
 
 	// ─── Plumbing ────────────────────────────────────────────────────────────
 	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager // currently unused but kept for symmetry
+	configManager   configmanager.ConfigManager // currently unused but kept for symmetry
 
 	// ─── Runtime observation ────────────────────────────────────────────────
 	systemSnapshotManager *fsm.SnapshotManager
@@ -96,7 +96,7 @@ type GetProtocolConverterAction struct {
 // This constructor is primarily used for testing to enable dependency injection, though it can be used
 // in production code as well. It initializes the action with the necessary fields but doesn't
 // populate the payload field which must be done via Parse.
-func NewGetProtocolConverterAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshotManager *fsm.SnapshotManager) *GetProtocolConverterAction {
+func NewGetProtocolConverterAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager configmanager.ConfigManager, systemSnapshotManager *fsm.SnapshotManager) *GetProtocolConverterAction {
 	return &GetProtocolConverterAction{
 		userEmail:             userEmail,
 		actionUUID:            actionUUID,

@@ -37,6 +37,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"time"
 
 	"github.com/google/uuid"
@@ -62,7 +63,7 @@ type DeployProtocolConverterAction struct {
 	instanceUUID uuid.UUID
 
 	outboundChannel       chan *models.UMHMessage
-	configManager         config.ConfigManager
+	configManager         configmanager.ConfigManager
 	systemSnapshotManager *fsm.SnapshotManager // Snapshot Manager holds the latest system snapshot
 
 	// Parsed request payload (only populated after Parse)
@@ -72,7 +73,7 @@ type DeployProtocolConverterAction struct {
 }
 
 // NewDeployProtocolConverterAction returns an un-parsed action instance.
-func NewDeployProtocolConverterAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshotManager *fsm.SnapshotManager) *DeployProtocolConverterAction {
+func NewDeployProtocolConverterAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager configmanager.ConfigManager, systemSnapshotManager *fsm.SnapshotManager) *DeployProtocolConverterAction {
 	return &DeployProtocolConverterAction{
 		userEmail:             userEmail,
 		actionUUID:            actionUUID,

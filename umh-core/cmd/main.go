@@ -17,6 +17,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"os"
 	"time"
 
@@ -58,7 +59,7 @@ func main() {
 	defer cancel()
 
 	// Load the config
-	configManager, err := config.NewFileConfigManagerWithBackoff()
+	configManager, err := configmanager.NewFileConfigManagerWithBackoff()
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to create config manager: %w", err)
 		os.Exit(1)
@@ -67,7 +68,7 @@ func main() {
 	// Load or create configuration with environment variable overrides
 	// This loads the config file if it exists, applies any environment variables as overrides,
 	// and persists the result back to the config file. See detailed docs in config.LoadConfigWithEnvOverrides.
-	configData, err := config.LoadConfigWithEnvOverrides(ctx, configManager, log)
+	configData, err := configmanager.LoadConfigWithEnvOverrides(ctx, configManager, log)
 
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to load config: %w", err)

@@ -16,6 +16,7 @@ package communication_state
 
 import (
 	"context"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"sync"
 	"time"
 
@@ -49,7 +50,7 @@ type CommunicationState struct {
 	Router                *router.Router
 	ReleaseChannel        config.ReleaseChannel
 	SystemSnapshotManager *fsm.SnapshotManager
-	ConfigManager         config.ConfigManager
+	ConfigManager         configmanager.ConfigManager
 	ApiUrl                string
 	Logger                *zap.SugaredLogger
 	TopicBrowserCache     *topicbrowser.Cache
@@ -65,7 +66,7 @@ func NewCommunicationState(
 	outboundChannel chan *models.UMHMessage,
 	releaseChannel config.ReleaseChannel,
 	systemSnapshotManager *fsm.SnapshotManager,
-	configManager config.ConfigManager,
+	configManager configmanager.ConfigManager,
 	apiUrl string,
 	logger *zap.SugaredLogger,
 	insecureTLS bool,
@@ -206,7 +207,7 @@ func (c *CommunicationState) StartTopicBrowserCacheUpdater(systemSnapshotManager
 // InitialiseAndStartSubscriberHandler creates a new subscriber handler and starts it
 // ttl is the time until a subscriber is considered dead (if no new subscriber message is received)
 // cull is the cycle time to remove dead subscribers
-func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Duration, cull time.Duration, config *config.FullConfig, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager) {
+func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Duration, cull time.Duration, config *config.FullConfig, systemSnapshotManager *fsm.SnapshotManager, configManager configmanager.ConfigManager) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.LoginResponseMu.RLock()

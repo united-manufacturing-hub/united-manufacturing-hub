@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package config
+package configmanager
 
 import (
 	"context"
 	"errors"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"os"
 	"time"
 
@@ -239,9 +240,9 @@ dataModels:
 			})
 
 			It("should add the data model successfully", func() {
-				dmVersion := DataModelVersion{
+				dmVersion := config.DataModelVersion{
 					Description: "Temperature sensor data model",
-					Structure: map[string]Field{
+					Structure: map[string]config.Field{
 						"temperature": {
 							Type: "timeseries-number",
 						},
@@ -283,9 +284,9 @@ dataModels:
 			})
 
 			It("should return an error", func() {
-				dmVersion := DataModelVersion{
+				dmVersion := config.DataModelVersion{
 					Description: "Duplicate model",
-					Structure: map[string]Field{
+					Structure: map[string]config.Field{
 						"field": {
 							Type: "timeseries-string",
 						},
@@ -306,9 +307,9 @@ dataModels:
 			})
 
 			It("should return an error", func() {
-				dmVersion := DataModelVersion{
+				dmVersion := config.DataModelVersion{
 					Description: "Test model",
-					Structure: map[string]Field{
+					Structure: map[string]config.Field{
 						"field": {
 							Type: "timeseries-string",
 						},
@@ -371,9 +372,9 @@ dataModels:
 			})
 
 			It("should add a new version to the existing data model", func() {
-				dmVersion := DataModelVersion{
+				dmVersion := config.DataModelVersion{
 					Description: "Extended temperature model with humidity",
-					Structure: map[string]Field{
+					Structure: map[string]config.Field{
 						"temperature": {
 							Type: "timeseries-number",
 						},
@@ -426,9 +427,9 @@ dataModels:
 			})
 
 			It("should return an error", func() {
-				dmVersion := DataModelVersion{
+				dmVersion := config.DataModelVersion{
 					Description: "Non-existent model",
-					Structure: map[string]Field{
+					Structure: map[string]config.Field{
 						"field": {
 							Type: "timeseries-string",
 						},

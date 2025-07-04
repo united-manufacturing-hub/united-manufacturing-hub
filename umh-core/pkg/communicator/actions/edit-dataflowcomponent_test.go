@@ -16,6 +16,7 @@ package actions_test
 
 import (
 	"errors"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"time"
 
 	"github.com/google/uuid"
@@ -39,7 +40,7 @@ var _ = Describe("EditDataflowComponent", func() {
 		actionUUID      uuid.UUID
 		instanceUUID    uuid.UUID
 		outboundChannel chan *models.UMHMessage
-		mockConfig      *config.MockConfigManager
+		mockConfig      *configmanager.MockConfigManager
 		componentName   string
 		componentUUID   uuid.UUID
 		stateMocker     *actions.StateMocker
@@ -97,7 +98,7 @@ var _ = Describe("EditDataflowComponent", func() {
 			},
 		}
 
-		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)
+		mockConfig = configmanager.NewMockConfigManager().WithConfig(initialConfig)
 
 		// Startup the state mocker and get the mock snapshot
 		stateMocker = actions.NewStateMocker(mockConfig)

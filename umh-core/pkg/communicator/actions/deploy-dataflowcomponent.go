@@ -61,11 +61,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"slices"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -88,7 +88,7 @@ type DeployDataflowComponentAction struct {
 
 	outboundChannel chan *models.UMHMessage // channel used to send progress events back to the UI
 
-	configManager config.ConfigManager // abstraction over the central configuration store
+	configManager configmanager.ConfigManager // abstraction over the central configuration store
 
 	// Parsed request payload (only populated after Parse)
 	payload  models.CDFCPayload
@@ -105,7 +105,7 @@ type DeployDataflowComponentAction struct {
 // NewDeployDataflowComponentAction returns an *un-parsed* action instance.
 // Primarily used for dependency injection in unit tests – caller still needs to
 // invoke Parse & Validate before Execute.
-func NewDeployDataflowComponentAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshotManager *fsm.SnapshotManager) *DeployDataflowComponentAction {
+func NewDeployDataflowComponentAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager configmanager.ConfigManager, systemSnapshotManager *fsm.SnapshotManager) *DeployDataflowComponentAction {
 	return &DeployDataflowComponentAction{
 		userEmail:             userEmail,
 		actionUUID:            actionUUID,

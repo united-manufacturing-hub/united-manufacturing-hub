@@ -17,6 +17,7 @@ package actions_test
 import (
 	"context"
 	"errors"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"time"
 
 	"github.com/google/uuid"
@@ -40,7 +41,7 @@ var _ = Describe("EditInstance", func() {
 		actionUUID      uuid.UUID
 		instanceUUID    uuid.UUID
 		outboundChannel chan *models.UMHMessage
-		mockConfig      *config.MockConfigManager
+		mockConfig      *configmanager.MockConfigManager
 		snapshotManager *fsm.SnapshotManager
 	)
 
@@ -73,7 +74,7 @@ var _ = Describe("EditInstance", func() {
 			},
 		}
 
-		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)
+		mockConfig = configmanager.NewMockConfigManager().WithConfig(initialConfig)
 		snapshotManager := fsm.NewSnapshotManager()
 		action = actions.NewEditInstanceAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, snapshotManager)
 	})
@@ -332,7 +333,7 @@ var _ = Describe("EditInstance", func() {
 // It wraps the standard MockConfigManager but forces writeConfig calls to fail,
 // allowing tests to verify proper error handling when persistence operations fail.
 type writeFailingMockConfigManager struct {
-	mockConfigManager *config.MockConfigManager
+	mockConfigManager *configmanager.MockConfigManager
 }
 
 // GetFileSystemService is never called in the mock but only here to implement the ConfigManager interface

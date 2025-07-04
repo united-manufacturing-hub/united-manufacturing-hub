@@ -15,6 +15,7 @@
 package subscriber
 
 import (
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/push"
@@ -43,7 +44,7 @@ type Handler struct {
 	StatusCollector            *generator.StatusCollectorType
 	disableHardwareStatusCheck bool // nolint:unused // will be used in the future
 	systemSnapshotManager      *fsm.SnapshotManager
-	configManager              config.ConfigManager
+	configManager              configmanager.ConfigManager
 	logger                     *zap.SugaredLogger
 }
 
@@ -56,7 +57,7 @@ func NewHandler(
 	releaseChannel config.ReleaseChannel,
 	disableHardwareStatusCheck bool,
 	systemSnapshotManager *fsm.SnapshotManager,
-	configManager config.ConfigManager,
+	configManager configmanager.ConfigManager,
 	logger *zap.SugaredLogger,
 	topicBrowserCache *topicbrowser.Cache,
 	topicBrowserSimulator *topicbrowser.Simulator,

@@ -17,6 +17,7 @@ package actions_test
 import (
 	"context"
 	"errors"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"os"
 	"time"
 
@@ -24,7 +25,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
@@ -36,7 +36,7 @@ var _ = Describe("SetConfigFile", func() {
 		actionUUID       uuid.UUID
 		instanceUUID     uuid.UUID
 		outboundChannel  chan *models.UMHMessage
-		mockConfig       *config.MockConfigManager
+		mockConfig       *configmanager.MockConfigManager
 		snapshotManager  *fsm.SnapshotManager
 		configContent    string
 		lastModifiedTime string
@@ -62,10 +62,10 @@ var _ = Describe("SetConfigFile", func() {
 		fixedTime := time.Date(2023, 5, 15, 10, 30, 0, 0, time.UTC)
 		lastModifiedTime = fixedTime.Format(time.RFC3339)
 
-		mockConfig = config.NewMockConfigManager()
+		mockConfig = configmanager.NewMockConfigManager()
 
 		mockConfig.MockFileSystem.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
-			if path == config.DefaultConfigPath {
+			if path == configmanager.DefaultConfigPath {
 				return []byte(configContent), nil
 			}
 			return nil, errors.New("file not found")

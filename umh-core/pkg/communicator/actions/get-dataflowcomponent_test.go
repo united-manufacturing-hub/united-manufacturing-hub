@@ -15,6 +15,7 @@
 package actions_test
 
 import (
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"reflect"
 	"time"
 
@@ -41,7 +42,7 @@ var _ = Describe("GetDataFlowComponent", func() {
 		actionUUID      uuid.UUID
 		instanceUUID    uuid.UUID
 		outboundChannel chan *models.UMHMessage
-		mockConfig      *config.MockConfigManager
+		mockConfig      *configmanager.MockConfigManager
 	)
 
 	// Setup before each test
@@ -139,7 +140,7 @@ var _ = Describe("GetDataFlowComponent", func() {
 			},
 		}
 
-		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)
+		mockConfig = configmanager.NewMockConfigManager().WithConfig(initialConfig)
 
 		// Startup the state mocker and get the mock snapshot
 		stateMocker := actions.NewStateMocker(mockConfig)

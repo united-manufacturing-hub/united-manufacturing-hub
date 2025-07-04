@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"math/rand"
 	"sync/atomic"
 	"time"
@@ -94,7 +95,7 @@ var _ = Describe("ControlLoop", func() {
 	var (
 		controlLoop     *ControlLoop
 		mockManager     *fsm.MockFSMManager
-		mockConfig      *config.MockConfigManager
+		mockConfig      *configmanager.MockConfigManager
 		mockSvcRegistry *serviceregistry.Registry
 		ctx             context.Context
 		cancel          context.CancelFunc
@@ -103,7 +104,7 @@ var _ = Describe("ControlLoop", func() {
 
 	BeforeEach(func() {
 		mockManager = fsm.NewMockFSMManager()
-		mockConfig = config.NewMockConfigManager()
+		mockConfig = configmanager.NewMockConfigManager()
 		mockSvcRegistry = serviceregistry.NewMockRegistry()
 
 		// Set up a context with timeout
@@ -198,7 +199,7 @@ var _ = Describe("ControlLoop", func() {
 	Describe("Execute", func() {
 		It("should call Reconcile repeatedly until context is cancelled", func() {
 			// Create a tracking config manager that we can use to monitor calls
-			trackingConfig := config.NewMockConfigManager().WithConfig(config.FullConfig{})
+			trackingConfig := configmanager.NewMockConfigManager().WithConfig(config.FullConfig{})
 			starvationChecker := starvationchecker.NewStarvationChecker(constants.StarvationThreshold)
 
 			// We'll create a new control loop specifically for this test
@@ -275,7 +276,7 @@ var _ = Describe("ControlLoop", func() {
 
 		It("should continue execution if Reconcile returns a context timeout error", func() {
 			// Set up a mock with context deadline exceeded error
-			timeoutConfig := config.NewMockConfigManager()
+			timeoutConfig := configmanager.NewMockConfigManager()
 			timeoutConfig.WithConfigError(context.DeadlineExceeded)
 
 			// Track calls to verify the loop continues
@@ -395,7 +396,7 @@ var _ = Describe("ControlLoop", func() {
 					WithDelayRange(30 * time.Millisecond)
 
 				// Set up a config manager that uses the mock file system
-				fileConfigManager := config.NewFileConfigManager()
+				fileConfigManager := configmanager.NewFileConfigManager()
 				fileConfigManager.WithFileSystemService(mockFS)
 
 				// Replace the control loop's config manager

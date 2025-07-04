@@ -17,6 +17,7 @@ package actions_test
 import (
 	"encoding/base64"
 	"errors"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
@@ -37,7 +38,7 @@ func createGetDataModelPayload(name string) map[string]interface{} {
 var _ = Describe("GetDataModelAction", func() {
 	var (
 		action             *actions.GetDataModelAction
-		mockConfigManager  *config.MockConfigManager
+		mockConfigManager  *configmanager.MockConfigManager
 		outboundChannel    chan *models.UMHMessage
 		userEmail          string
 		actionUUID         uuid.UUID
@@ -47,7 +48,7 @@ var _ = Describe("GetDataModelAction", func() {
 	)
 
 	BeforeEach(func() {
-		mockConfigManager = config.NewMockConfigManager()
+		mockConfigManager = configmanager.NewMockConfigManager()
 		outboundChannel = make(chan *models.UMHMessage, 10) // Buffer to prevent blocking
 		userEmail = "test@example.com"
 		actionUUID = uuid.New()
@@ -244,7 +245,7 @@ var _ = Describe("GetDataModelAction", func() {
 
 		Context("with config manager error", func() {
 			BeforeEach(func() {
-				mockConfigManager = config.NewMockConfigManager().WithConfigError(errors.New("config error"))
+				mockConfigManager = configmanager.NewMockConfigManager().WithConfigError(errors.New("config error"))
 				action = actions.NewGetDataModelAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfigManager)
 				payload := createGetDataModelPayload("test-model")
 				err := action.Parse(payload)

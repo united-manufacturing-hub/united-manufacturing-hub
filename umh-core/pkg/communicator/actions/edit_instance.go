@@ -18,9 +18,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 
 	"github.com/google/uuid"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -36,7 +36,7 @@ type EditInstanceAction struct {
 	instanceUUID          uuid.UUID
 	outboundChannel       chan *models.UMHMessage
 	location              *models.EditInstanceLocationModel
-	configManager         config.ConfigManager
+	configManager         configmanager.ConfigManager
 	actionLogger          *zap.SugaredLogger
 	systemSnapshotManager *fsm.SnapshotManager
 }
@@ -45,7 +45,7 @@ type EditInstanceAction struct {
 // This constructor is primarily used for testing purposes to enable dependency injection.
 // It initializes the action with the necessary fields but doesn't populate the location field
 // which must be done via Parse or SetLocation.
-func NewEditInstanceAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshotManager *fsm.SnapshotManager) *EditInstanceAction {
+func NewEditInstanceAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager configmanager.ConfigManager, systemSnapshotManager *fsm.SnapshotManager) *EditInstanceAction {
 	return &EditInstanceAction{
 		userEmail:             userEmail,
 		actionUUID:            actionUUID,

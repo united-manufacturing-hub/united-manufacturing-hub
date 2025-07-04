@@ -15,6 +15,7 @@
 package router
 
 import (
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"sync"
 	"time"
 
@@ -41,7 +42,7 @@ type Router struct {
 	clientConnectionsLock sync.RWMutex
 	subHandler            *subscriber.Handler
 	systemSnapshotManager *fsm.SnapshotManager
-	configManager         config.ConfigManager
+	configManager         configmanager.ConfigManager
 	actionLogger          *zap.SugaredLogger
 	routerLogger          *zap.SugaredLogger
 }
@@ -58,7 +59,7 @@ func NewRouter(dog watchdog.Iface,
 	releaseChannel config.ReleaseChannel,
 	subHandler *subscriber.Handler,
 	systemSnapshotManager *fsm.SnapshotManager,
-	configManager config.ConfigManager,
+	configManager configmanager.ConfigManager,
 	logger *zap.SugaredLogger,
 ) *Router {
 	return &Router{

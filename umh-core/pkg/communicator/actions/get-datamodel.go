@@ -33,6 +33,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -51,7 +52,7 @@ type GetDataModelAction struct {
 	instanceUUID uuid.UUID
 
 	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager
+	configManager   configmanager.ConfigManager
 
 	// Parsed request payload (only populated after Parse)
 	payload models.GetDataModelPayload
@@ -60,7 +61,7 @@ type GetDataModelAction struct {
 }
 
 // NewGetDataModelAction returns an un-parsed action instance.
-func NewGetDataModelAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager) *GetDataModelAction {
+func NewGetDataModelAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager configmanager.ConfigManager) *GetDataModelAction {
 	return &GetDataModelAction{
 		userEmail:       userEmail,
 		actionUUID:      actionUUID,

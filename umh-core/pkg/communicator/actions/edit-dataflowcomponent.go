@@ -76,6 +76,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"slices"
 	"time"
 
@@ -111,7 +112,7 @@ type EditDataflowComponentAction struct {
 
 	outboundChannel chan *models.UMHMessage // channel used to send progress events back to the UI
 
-	configManager config.ConfigManager // abstraction over the central configuration store
+	configManager configmanager.ConfigManager // abstraction over the central configuration store
 
 	// Parsed request payload (only populated after Parse)
 	payload  models.CDFCPayload
@@ -137,7 +138,7 @@ type EditDataflowComponentAction struct {
 // NewEditDataflowComponentAction returns an *un‑parsed* action instance.  The
 // method exists mainly to support dependency injection in unit tests – caller
 // still needs to invoke Parse & Validate before Execute.
-func NewEditDataflowComponentAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshotManager *fsm.SnapshotManager) *EditDataflowComponentAction {
+func NewEditDataflowComponentAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager configmanager.ConfigManager, systemSnapshotManager *fsm.SnapshotManager) *EditDataflowComponentAction {
 	return &EditDataflowComponentAction{
 		userEmail:             userEmail,
 		actionUUID:            actionUUID,

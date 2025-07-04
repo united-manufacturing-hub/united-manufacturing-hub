@@ -24,6 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	connectionfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
@@ -48,7 +49,7 @@ var _ = Describe("GetProtocolConverter", func() {
 		actionUUID      uuid.UUID
 		instanceUUID    uuid.UUID
 		outboundChannel chan *models.UMHMessage
-		mockConfig      *config.MockConfigManager
+		mockConfig      *configmanager.MockConfigManager
 		snapshotManager *fsm.SnapshotManager
 	)
 
@@ -61,7 +62,7 @@ var _ = Describe("GetProtocolConverter", func() {
 		outboundChannel = make(chan *models.UMHMessage, 10) // Buffer to prevent blocking
 
 		// Create mock config - we don't need real config for this test
-		mockConfig = config.NewMockConfigManager()
+		mockConfig = configmanager.NewMockConfigManager()
 		snapshotManager = fsm.NewSnapshotManager()
 
 		action = actions.NewGetProtocolConverterAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, snapshotManager)
