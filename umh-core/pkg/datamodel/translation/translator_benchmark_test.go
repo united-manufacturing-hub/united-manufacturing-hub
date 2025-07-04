@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package datamodel_test
+package translation_test
 
 import (
 	"context"
@@ -20,12 +20,12 @@ import (
 	"testing"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel/translation"
 )
 
 // BenchmarkTranslatorSimple benchmarks translation of simple schemas
 func BenchmarkTranslatorSimple(b *testing.B) {
-	translator := datamodel.NewTranslator()
+	translator := translation.NewTranslator()
 	ctx := context.Background()
 
 	// Simple schema with 3 fields of different types
@@ -63,7 +63,7 @@ func BenchmarkTranslatorSimple(b *testing.B) {
 
 // BenchmarkTranslatorComplexNested benchmarks translation of complex nested structures
 func BenchmarkTranslatorComplexNested(b *testing.B) {
-	translator := datamodel.NewTranslator()
+	translator := translation.NewTranslator()
 	ctx := context.Background()
 
 	// Complex nested structure similar to validator's complex test
@@ -203,7 +203,7 @@ func BenchmarkTranslatorComplexNested(b *testing.B) {
 
 // BenchmarkTranslatorWithReferences benchmarks translation with model references
 func BenchmarkTranslatorWithReferences(b *testing.B) {
-	translator := datamodel.NewTranslator()
+	translator := translation.NewTranslator()
 	ctx := context.Background()
 
 	// Create a sensor model
@@ -271,7 +271,7 @@ func BenchmarkTranslatorWithReferences(b *testing.B) {
 
 // BenchmarkTranslatorDeepChain benchmarks translation with deep reference chains
 func BenchmarkTranslatorDeepChain(b *testing.B) {
-	translator := datamodel.NewTranslator()
+	translator := translation.NewTranslator()
 	ctx := context.Background()
 
 	// Create a chain of 10 models that reference each other
@@ -339,7 +339,7 @@ func BenchmarkTranslatorDeepChain(b *testing.B) {
 
 // BenchmarkTranslatorLargeSchema benchmarks translation of large schemas
 func BenchmarkTranslatorLargeSchema(b *testing.B) {
-	translator := datamodel.NewTranslator()
+	translator := translation.NewTranslator()
 	ctx := context.Background()
 
 	// Create a large schema with 200+ fields
@@ -414,7 +414,7 @@ func BenchmarkTranslatorLargeSchema(b *testing.B) {
 
 // BenchmarkTranslatorMixedTypes benchmarks translation with mixed type scenarios
 func BenchmarkTranslatorMixedTypes(b *testing.B) {
-	translator := datamodel.NewTranslator()
+	translator := translation.NewTranslator()
 	ctx := context.Background()
 
 	// Create a mixed scenario with references and direct fields
@@ -536,7 +536,7 @@ func BenchmarkTranslatorMixedTypes(b *testing.B) {
 
 // BenchmarkTranslatorWideChain benchmarks translation with wide reference chains (breadth vs depth)
 func BenchmarkTranslatorWideChain(b *testing.B) {
-	translator := datamodel.NewTranslator()
+	translator := translation.NewTranslator()
 	ctx := context.Background()
 
 	// Create a leaf model

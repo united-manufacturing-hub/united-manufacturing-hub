@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package datamodel_test
+package validation_test
 
 import (
 	"context"
@@ -20,12 +20,12 @@ import (
 	"testing"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel/validation"
 )
 
 // BenchmarkValidateStructureOnly_Simple benchmarks simple data model validation
 func BenchmarkValidateStructureOnly_Simple(b *testing.B) {
-	validator := datamodel.NewValidator()
+	validator := validation.NewValidator()
 	ctx := context.Background()
 
 	// Simple data model with just a few fields
@@ -59,7 +59,7 @@ func BenchmarkValidateStructureOnly_Simple(b *testing.B) {
 
 // BenchmarkValidateStructureOnly_Complex benchmarks complex nested data model validation
 func BenchmarkValidateStructureOnly_Complex(b *testing.B) {
-	validator := datamodel.NewValidator()
+	validator := validation.NewValidator()
 	ctx := context.Background()
 
 	// Complex data model with nested structures
@@ -166,7 +166,7 @@ func BenchmarkValidateStructureOnly_Complex(b *testing.B) {
 
 // BenchmarkValidateStructureOnly_WithReferences benchmarks validation with references
 func BenchmarkValidateStructureOnly_WithReferences(b *testing.B) {
-	validator := datamodel.NewValidator()
+	validator := validation.NewValidator()
 	ctx := context.Background()
 
 	// Data model with references
@@ -206,7 +206,7 @@ func BenchmarkValidateStructureOnly_WithReferences(b *testing.B) {
 
 // BenchmarkValidateWithReferences benchmarks full reference validation
 func BenchmarkValidateWithReferences(b *testing.B) {
-	validator := datamodel.NewValidator()
+	validator := validation.NewValidator()
 	ctx := context.Background()
 
 	// Create a set of reference models
@@ -283,7 +283,7 @@ func BenchmarkValidateWithReferences(b *testing.B) {
 
 // BenchmarkValidateWithReferences_Deep benchmarks deep reference chains
 func BenchmarkValidateWithReferences_Deep(b *testing.B) {
-	validator := datamodel.NewValidator()
+	validator := validation.NewValidator()
 	ctx := context.Background()
 
 	// Create a deep chain of references (5 levels deep)
@@ -363,7 +363,7 @@ func BenchmarkValidateWithReferences_Deep(b *testing.B) {
 
 // BenchmarkValidateStructureOnly_Large benchmarks validation of very large schemas
 func BenchmarkValidateStructureOnly_Large(b *testing.B) {
-	validator := datamodel.NewValidator()
+	validator := validation.NewValidator()
 	ctx := context.Background()
 
 	// Generate a large data model with many fields
@@ -412,7 +412,7 @@ func BenchmarkValidatorCreation(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		validator := datamodel.NewValidator()
+		validator := validation.NewValidator()
 		_ = validator // Prevent optimization
 	}
 }
