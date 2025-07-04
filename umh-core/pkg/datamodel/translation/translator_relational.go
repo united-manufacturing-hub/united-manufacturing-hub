@@ -38,8 +38,9 @@ func (r *RelationalTranslator) TranslateToSchema(ctx context.Context, paths []Pa
 	default:
 	}
 
-	// Generate schema name: _<modelName>-<version>-relational-<subType>
-	schemaName := fmt.Sprintf("_%s-%s-relational-%s", modelName, version, subType)
+	// Generate schema name: _<modelName>_<version>_relational-<subType>
+	// This matches the benthos-umh consumption pattern
+	schemaName := fmt.Sprintf("_%s_%s_relational-%s", modelName, version, subType)
 
 	// Stub implementation - returns a placeholder schema
 	// TODO: Implement actual relational schema generation logic

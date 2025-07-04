@@ -125,14 +125,14 @@ var _ = Describe("Translator", func() {
 			for _, schema := range schemas {
 				schemaNames[schema.Name] = true
 			}
-			Expect(schemaNames).To(HaveKey("_pump-v1-number"))
-			Expect(schemaNames).To(HaveKey("_pump-v1-string"))
-			Expect(schemaNames).To(HaveKey("_pump-v1-boolean"))
+			Expect(schemaNames).To(HaveKey("_pump_v1_timeseries-number"))
+			Expect(schemaNames).To(HaveKey("_pump_v1_timeseries-string"))
+			Expect(schemaNames).To(HaveKey("_pump_v1_timeseries-boolean"))
 
 			// Verify schema content for number type
 			var numberSchema *translation.SchemaOutput
 			for _, schema := range schemas {
-				if schema.Name == "_pump-v1-number" {
+				if schema.Name == "_pump_v1_timeseries-number" {
 					numberSchema = &schema
 					break
 				}
@@ -202,7 +202,7 @@ var _ = Describe("Translator", func() {
 			// Find the number schema
 			var numberSchema *translation.SchemaOutput
 			for _, schema := range schemas {
-				if schema.Name == "_pump-v1-number" {
+				if schema.Name == "_pump_v1_timeseries-number" {
 					numberSchema = &schema
 					break
 				}
@@ -274,7 +274,7 @@ var _ = Describe("Translator", func() {
 			// Find the number schema
 			var numberSchema *translation.SchemaOutput
 			for _, schema := range schemas {
-				if schema.Name == "_pump-v1-number" {
+				if schema.Name == "_pump_v1_timeseries-number" {
 					numberSchema = &schema
 					break
 				}
@@ -452,7 +452,7 @@ var _ = Describe("Translator", func() {
 			Expect(schemas).To(HaveLen(1))
 
 			schema := schemas[0]
-			Expect(schema.Name).To(Equal("_warehouse-v1-relational-table"))
+			Expect(schema.Name).To(Equal("_warehouse_v1_relational-table"))
 			Expect(schema.Schema).To(ContainSubstring("Relational schema generation not yet implemented"))
 		})
 	})
@@ -504,19 +504,19 @@ var _ = Describe("Translator", func() {
 			schemas, err := translator.TranslateToJSONSchema(ctx, dataModel, "_pump", "v1", make(map[string]config.DataModelsConfig))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(schemas).To(HaveLen(1))
-			Expect(schemas[0].Name).To(Equal("_pump-v1-number")) // Should be normalized to "pump"
+			Expect(schemas[0].Name).To(Equal("_pump_v1_timeseries-number")) // Should be normalized to "pump"
 
 			// Test with multiple underscores
 			schemas, err = translator.TranslateToJSONSchema(ctx, dataModel, "___pump", "v1", make(map[string]config.DataModelsConfig))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(schemas).To(HaveLen(1))
-			Expect(schemas[0].Name).To(Equal("_pump-v1-number")) // Should be normalized to "pump"
+			Expect(schemas[0].Name).To(Equal("_pump_v1_timeseries-number")) // Should be normalized to "pump"
 
 			// Test with no underscore (should remain unchanged)
 			schemas, err = translator.TranslateToJSONSchema(ctx, dataModel, "pump", "v1", make(map[string]config.DataModelsConfig))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(schemas).To(HaveLen(1))
-			Expect(schemas[0].Name).To(Equal("_pump-v1-number")) // Should remain "pump"
+			Expect(schemas[0].Name).To(Equal("_pump_v1_timeseries-number")) // Should remain "pump"
 		})
 
 		It("should normalize versions by adding 'v' prefix if missing", func() {
@@ -533,19 +533,19 @@ var _ = Describe("Translator", func() {
 			schemas, err := translator.TranslateToJSONSchema(ctx, dataModel, "pump", "1", make(map[string]config.DataModelsConfig))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(schemas).To(HaveLen(1))
-			Expect(schemas[0].Name).To(Equal("_pump-v1-number")) // Should be normalized to "v1"
+			Expect(schemas[0].Name).To(Equal("_pump_v1_timeseries-number")) // Should be normalized to "v1"
 
 			// Test with existing "v" prefix (should remain unchanged)
 			schemas, err = translator.TranslateToJSONSchema(ctx, dataModel, "pump", "v1", make(map[string]config.DataModelsConfig))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(schemas).To(HaveLen(1))
-			Expect(schemas[0].Name).To(Equal("_pump-v1-number")) // Should remain "v1"
+			Expect(schemas[0].Name).To(Equal("_pump_v1_timeseries-number")) // Should remain "v1"
 
 			// Test with numeric version
 			schemas, err = translator.TranslateToJSONSchema(ctx, dataModel, "pump", "2", make(map[string]config.DataModelsConfig))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(schemas).To(HaveLen(1))
-			Expect(schemas[0].Name).To(Equal("_pump-v2-number")) // Should be normalized to "v2"
+			Expect(schemas[0].Name).To(Equal("_pump_v2_timeseries-number")) // Should be normalized to "v2"
 		})
 
 		It("should handle both normalizations together", func() {
@@ -572,8 +572,8 @@ var _ = Describe("Translator", func() {
 			for _, schema := range schemas {
 				schemaNames[schema.Name] = true
 			}
-			Expect(schemaNames).To(HaveKey("_pump-v1-number"))
-			Expect(schemaNames).To(HaveKey("_pump-v1-string"))
+			Expect(schemaNames).To(HaveKey("_pump_v1_timeseries-number"))
+			Expect(schemaNames).To(HaveKey("_pump_v1_timeseries-string"))
 		})
 
 		It("should handle empty version gracefully", func() {
@@ -590,7 +590,7 @@ var _ = Describe("Translator", func() {
 			schemas, err := translator.TranslateToJSONSchema(ctx, dataModel, "pump", "", make(map[string]config.DataModelsConfig))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(schemas).To(HaveLen(1))
-			Expect(schemas[0].Name).To(Equal("_pump--number")) // Empty version should remain empty
+			Expect(schemas[0].Name).To(Equal("_pump__timeseries-number")) // Empty version should remain empty
 		})
 
 		It("should handle version normalization with various formats", func() {
@@ -622,7 +622,7 @@ var _ = Describe("Translator", func() {
 				schemas, err := translator.TranslateToJSONSchema(ctx, dataModel, "pump", tc.input, make(map[string]config.DataModelsConfig))
 				Expect(err).ToNot(HaveOccurred())
 				Expect(schemas).To(HaveLen(1))
-				expectedName := "_pump-" + tc.expected + "-number"
+				expectedName := "_pump_" + tc.expected + "_timeseries-number"
 				Expect(schemas[0].Name).To(Equal(expectedName), "Input version '%s' should normalize to '%s'", tc.input, tc.expected)
 			}
 		})

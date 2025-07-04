@@ -44,8 +44,9 @@ func (t *TimeseriesTranslator) TranslateToSchema(ctx context.Context, paths []Pa
 		return SchemaOutput{}, fmt.Errorf("unsupported timeseries subtype: %s", subType)
 	}
 
-	// Generate schema name: _<modelName>-<version>-<jsonType>
-	schemaName := fmt.Sprintf("_%s-%s-%s", modelName, version, jsonType)
+	// Generate schema name: _<modelName>_<version>_timeseries-<jsonType>
+	// This matches the benthos-umh consumption pattern
+	schemaName := fmt.Sprintf("_%s_%s_timeseries-%s", modelName, version, jsonType)
 
 	// Extract and sort paths for consistent output
 	// Pre-allocate with exact capacity to avoid reallocations
