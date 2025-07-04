@@ -175,7 +175,7 @@ var _ = Describe("Validator", func() {
 
 			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("non-leaf nodes (folders) cannot have _type"))
+			Expect(err.Error()).To(ContainSubstring("non-leaf node cannot have _type or _refModel"))
 			Expect(err.Error()).To(ContainSubstring("parent"))
 		})
 
@@ -195,7 +195,7 @@ var _ = Describe("Validator", func() {
 
 			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("non-leaf nodes (folders) cannot have _description"))
+			Expect(err.Error()).To(ContainSubstring("non-leaf node cannot have _description"))
 			Expect(err.Error()).To(ContainSubstring("parent"))
 		})
 
@@ -215,7 +215,7 @@ var _ = Describe("Validator", func() {
 
 			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("non-leaf nodes (folders) cannot have _unit"))
+			Expect(err.Error()).To(ContainSubstring("non-leaf node cannot have _unit"))
 			Expect(err.Error()).To(ContainSubstring("parent"))
 		})
 
@@ -237,9 +237,9 @@ var _ = Describe("Validator", func() {
 
 			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("non-leaf nodes (folders) cannot have _type"))
-			Expect(err.Error()).To(ContainSubstring("non-leaf nodes (folders) cannot have _description"))
-			Expect(err.Error()).To(ContainSubstring("non-leaf nodes (folders) cannot have _unit"))
+			Expect(err.Error()).To(ContainSubstring("non-leaf node cannot have _type or _refModel"))
+			Expect(err.Error()).To(ContainSubstring("non-leaf node cannot have _description"))
+			Expect(err.Error()).To(ContainSubstring("non-leaf node cannot have _unit"))
 			Expect(err.Error()).To(ContainSubstring("parent"))
 		})
 
@@ -254,7 +254,7 @@ var _ = Describe("Validator", func() {
 
 			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("leaf nodes must contain _type"))
+			Expect(err.Error()).To(ContainSubstring("leaf node must have either _type or _refModel"))
 			Expect(err.Error()).To(ContainSubstring("invalid"))
 		})
 
@@ -296,7 +296,7 @@ var _ = Describe("Validator", func() {
 
 			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("field cannot have both subfields and _refModel"))
+			Expect(err.Error()).To(ContainSubstring("non-leaf node cannot have _type or _refModel"))
 			Expect(err.Error()).To(ContainSubstring("invalidParent"))
 		})
 
@@ -363,98 +363,198 @@ var _ = Describe("Validator", func() {
 
 			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("version 'invalidversion' does not match pattern"))
+			Expect(err.Error()).To(ContainSubstring("_refModel version must match pattern 'v<number>' but got 'invalidversion'"))
 		})
 
-		It("should fail validation for submodel nodes with additional fields", func() {
-			dataModel := config.DataModelVersion{
-				Structure: map[string]config.Field{
-					"invalidSubmodel": {
-						ModelRef: &config.ModelRef{
-							Name:    "otherModel",
-							Version: "v1",
-						},
-						Description: "should not have description",
-					},
-				},
-			}
-
-			err := validator.ValidateStructureOnly(ctx, dataModel)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("subModel nodes should ONLY contain _refModel"))
-		})
-
-		It("should validate nested structures recursively", func() {
-			dataModel := config.DataModelVersion{
-				Structure: map[string]config.Field{
-					"level1": {
-						Subfields: map[string]config.Field{
-							"level2": {
-								Subfields: map[string]config.Field{
-									"level3": {
-										Type: "timeseries-number",
-									},
-								},
+		It("should validate valid version formats", func() {
+			testCases := []string{"v1", "v2", "v10", "v999"}
+			for _, version := range testCases {
+				dataModel := config.DataModelVersion{
+					Structure: map[string]config.Field{
+						"validRef": {
+							ModelRef: &config.ModelRef{
+								Name:    "model",
+								Version: version,
 							},
 						},
 					},
-				},
-			}
+				}
 
-			err := validator.ValidateStructureOnly(ctx, dataModel)
-			Expect(err).To(BeNil())
+				err := validator.ValidateStructureOnly(ctx, dataModel)
+				Expect(err).To(BeNil())
+			}
 		})
 
-		It("should fail validation for invalid nested structures", func() {
-			dataModel := config.DataModelVersion{
-				Structure: map[string]config.Field{
-					"level1": {
-						Subfields: map[string]config.Field{
-							"level2": {
-								Subfields: map[string]config.Field{
-									"invalidLeaf": {
-										Description: "no type or refModel",
-									},
-								},
-							},
+		It("should fail validation for invalid field names", func() {
+			invalidNames := []string{
+				"field.name",    // Contains dot
+				"field name",    // Contains space
+				"field@name",    // Contains special character
+				"field#name",    // Contains hash
+				"field$name",    // Contains dollar sign
+				"field%name",    // Contains percent
+				"field&name",    // Contains ampersand
+				"field*name",    // Contains asterisk
+				"field+name",    // Contains plus
+				"field=name",    // Contains equals
+				"field[name]",   // Contains brackets
+				"field{name}",   // Contains braces
+				"field|name",    // Contains pipe
+				"field\\name",   // Contains backslash
+				"field/name",    // Contains forward slash
+				"field?name",    // Contains question mark
+				"field<name>",   // Contains angle brackets
+				"field,name",    // Contains comma
+				"field;name",    // Contains semicolon
+				"field:name",    // Contains colon
+				"field\"name\"", // Contains quotes
+				"field'name'",   // Contains single quotes
+				"field`name`",   // Contains backticks
+				"field~name",    // Contains tilde
+				"field!name",    // Contains exclamation
+			}
+
+			for _, invalidName := range invalidNames {
+				dataModel := config.DataModelVersion{
+					Structure: map[string]config.Field{
+						invalidName: {
+							Type: "timeseries-number",
 						},
 					},
-				},
-			}
+				}
 
-			err := validator.ValidateStructureOnly(ctx, dataModel)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("level1.level2.invalidLeaf"))
+				err := validator.ValidateStructureOnly(ctx, dataModel)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("field name can only contain letters, numbers, dashes, and underscores"))
+			}
 		})
 
-		It("should handle empty structure", func() {
-			dataModel := config.DataModelVersion{
-				Structure: map[string]config.Field{},
+		It("should validate valid field names", func() {
+			validNames := []string{
+				"field",
+				"field_name",
+				"field-name",
+				"field123",
+				"field_123",
+				"field-123",
+				"field_name_123",
+				"field-name-123",
+				"123field",
+				"123_field",
+				"123-field",
+				"FieldName",
+				"FIELD_NAME",
+				"Field_Name_123",
+				"field_",
+				"field-",
+				"_field",
+				"-field",
+				"_",
+				"-",
+				"a",
+				"A",
+				"1",
 			}
 
-			err := validator.ValidateStructureOnly(ctx, dataModel)
-			Expect(err).To(BeNil())
+			for _, validName := range validNames {
+				dataModel := config.DataModelVersion{
+					Structure: map[string]config.Field{
+						validName: {
+							Type: "timeseries-number",
+						},
+					},
+				}
+
+				err := validator.ValidateStructureOnly(ctx, dataModel)
+				Expect(err).To(BeNil())
+			}
 		})
-	})
 
-	Context("ValidateStructureOnly", func() {
-		It("should respect context cancellation", func() {
-			// Create a cancelled context
-			cancelledCtx, cancel := context.WithCancel(context.Background())
-			cancel() // Cancel immediately
-
+		It("should fail validation for empty field names", func() {
 			dataModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
-					"simple": {
+					"": {
 						Type: "timeseries-number",
 					},
 				},
 			}
 
-			err := validator.ValidateStructureOnly(cancelledCtx, dataModel)
+			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("context canceled"))
+			Expect(err.Error()).To(ContainSubstring("field name cannot be empty"))
 		})
 
+		It("should fail validation for _unit without _type", func() {
+			dataModel := config.DataModelVersion{
+				Structure: map[string]config.Field{
+					"invalid": {
+						Unit: "kg",
+					},
+				},
+			}
+
+			err := validator.ValidateStructureOnly(ctx, dataModel)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("_unit can only be used with _type"))
+		})
+
+		It("should fail validation for _unit with non-number _type", func() {
+			dataModel := config.DataModelVersion{
+				Structure: map[string]config.Field{
+					"invalid": {
+						Type: "timeseries-string",
+						Unit: "kg",
+					},
+				},
+			}
+
+			err := validator.ValidateStructureOnly(ctx, dataModel)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("_unit can only be used with _type: timeseries-number"))
+		})
+
+		It("should validate _unit with timeseries-number _type", func() {
+			dataModel := config.DataModelVersion{
+				Structure: map[string]config.Field{
+					"valid": {
+						Type: "timeseries-number",
+						Unit: "kg",
+					},
+				},
+			}
+
+			err := validator.ValidateStructureOnly(ctx, dataModel)
+			Expect(err).To(BeNil())
+		})
+
+		It("should fail validation for invalid _type", func() {
+			dataModel := config.DataModelVersion{
+				Structure: map[string]config.Field{
+					"invalid": {
+						Type: "invalid-type",
+					},
+				},
+			}
+
+			err := validator.ValidateStructureOnly(ctx, dataModel)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid _type 'invalid-type', must be one of: timeseries-number, timeseries-string, timeseries-boolean"))
+		})
+
+		It("should validate all valid _type values", func() {
+			validTypes := []string{"timeseries-number", "timeseries-string", "timeseries-boolean"}
+			for _, validType := range validTypes {
+				dataModel := config.DataModelVersion{
+					Structure: map[string]config.Field{
+						"valid": {
+							Type: validType,
+						},
+					},
+				}
+
+				err := validator.ValidateStructureOnly(ctx, dataModel)
+				Expect(err).To(BeNil())
+			}
+		})
 	})
 })

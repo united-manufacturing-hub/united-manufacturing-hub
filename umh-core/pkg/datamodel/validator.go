@@ -258,27 +258,19 @@ func (v *Validator) validateRefModelFormat(modelRef *config.ModelRef, path strin
 		if !versionRegex.MatchString(modelRef.Version) {
 			*errors = append(*errors, ValidationError{
 				Path:    path,
-				Message: fmt.Sprintf("version '%s' does not match pattern ^v\\d+$", modelRef.Version),
+				Message: fmt.Sprintf("_refModel version must match pattern 'v<number>' but got '%s'", modelRef.Version),
 			})
-		} else {
-			// Check that version starts at v1, not v0
-			if modelRef.Version == "v0" {
-				*errors = append(*errors, ValidationError{
-					Path:    path,
-					Message: "version must start at v1, v0 is not allowed",
-				})
-			}
 		}
 	}
 }
 
-// validateFieldCombinations validates invalid field combinations
+// validateFieldCombinations validates field combinations (leaf/non-leaf rules)
 func (v *Validator) validateFieldCombinations(field config.Field, path string, errors *[]ValidationError) {
 	hasType := field.Type != ""
 	hasRefModel := field.ModelRef != nil
 	hasSubfields := len(field.Subfields) > 0
 
-	// Cannot have both _type and _refModel
+	// Check for invalid combinations
 	if hasType && hasRefModel {
 		*errors = append(*errors, ValidationError{
 			Path:    path,
@@ -286,90 +278,123 @@ func (v *Validator) validateFieldCombinations(field config.Field, path string, e
 		})
 	}
 
-	// Cannot have both subfields and _refModel
-	if hasSubfields && hasRefModel {
+	if hasSubfields && (hasType || hasRefModel) {
 		*errors = append(*errors, ValidationError{
 			Path:    path,
-			Message: "field cannot have both subfields and _refModel",
+			Message: "non-leaf node cannot have _type or _refModel",
+		})
+	}
+
+	if hasSubfields && field.Description != "" {
+		*errors = append(*errors, ValidationError{
+			Path:    path,
+			Message: "non-leaf node cannot have _description",
+		})
+	}
+
+	if hasSubfields && field.Unit != "" {
+		*errors = append(*errors, ValidationError{
+			Path:    path,
+			Message: "non-leaf node cannot have _unit",
 		})
 	}
 }
 
-// isLeafNode determines if a field is a leaf node (has no subfields)
-// A field is considered a leaf node only if subfields is nil
-// An empty subfields map (len = 0 but not nil) is considered a non-leaf node
+// isLeafNode determines if a field is a leaf node
 func (v *Validator) isLeafNode(field config.Field) bool {
-	return field.Subfields == nil
+	return len(field.Subfields) == 0
 }
 
 // validateLeafNode validates a leaf node
 func (v *Validator) validateLeafNode(field config.Field, path string, errors *[]ValidationError) {
 	hasType := field.Type != ""
 	hasRefModel := field.ModelRef != nil
-	hasDescription := field.Description != ""
-	hasUnit := field.Unit != ""
 
-	// Determine leaf node type
-	if hasRefModel && !hasType {
-		// SubModel node: ONLY contain _refModel
-		if hasDescription || hasUnit {
-			*errors = append(*errors, ValidationError{
-				Path:    path,
-				Message: "subModel nodes should ONLY contain _refModel",
-			})
-		}
-		return
-	}
-
-	if hasType && !hasRefModel {
-		// Regular leaf node with _type
-		return
-	}
-
-	// If neither _type nor _refModel is present
+	// A leaf node must have either _type or _refModel
 	if !hasType && !hasRefModel {
 		*errors = append(*errors, ValidationError{
 			Path:    path,
-			Message: "leaf nodes must contain _type",
+			Message: "leaf node must have either _type or _refModel",
+		})
+	}
+
+	// If it has _type, validate it
+	if hasType {
+		v.validateTypeField(field.Type, path, errors)
+	}
+
+	// If it has _unit, make sure it also has _type
+	if field.Unit != "" && !hasType {
+		*errors = append(*errors, ValidationError{
+			Path:    path,
+			Message: "_unit can only be used with _type",
+		})
+	}
+
+	// If it has _type timeseries-number, it can optionally have _unit
+	if hasType && field.Type == "timeseries-number" {
+		// _unit is optional for timeseries-number, so no validation needed
+	}
+
+	// If it has _type other than timeseries-number, it should not have _unit
+	if hasType && field.Type != "timeseries-number" && field.Unit != "" {
+		*errors = append(*errors, ValidationError{
+			Path:    path,
+			Message: "_unit can only be used with _type: timeseries-number",
+		})
+	}
+}
+
+// validateTypeField validates the _type field
+func (v *Validator) validateTypeField(fieldType string, path string, errors *[]ValidationError) {
+	switch fieldType {
+	case "timeseries-number", "timeseries-string", "timeseries-boolean":
+		// Valid types
+	default:
+		*errors = append(*errors, ValidationError{
+			Path:    path,
+			Message: fmt.Sprintf("invalid _type '%s', must be one of: timeseries-number, timeseries-string, timeseries-boolean", fieldType),
 		})
 	}
 }
 
 // validateNonLeafNode validates a non-leaf node
 func (v *Validator) validateNonLeafNode(ctx context.Context, field config.Field, path string, errors *[]ValidationError) {
-	// Non-leaf nodes (folders) should not have _type, _description, or _unit
-	if field.Type != "" {
+	// Check if context is cancelled before processing subfields
+	select {
+	case <-ctx.Done():
 		*errors = append(*errors, ValidationError{
 			Path:    path,
-			Message: "non-leaf nodes (folders) cannot have _type",
+			Message: "validation cancelled: " + safeContextError(ctx),
+		})
+		return
+	default:
+	}
+
+	// A non-leaf node must have subfields
+	if len(field.Subfields) == 0 {
+		*errors = append(*errors, ValidationError{
+			Path:    path,
+			Message: "non-leaf node must have subfields",
 		})
 	}
 
-	if field.Description != "" {
-		*errors = append(*errors, ValidationError{
-			Path:    path,
-			Message: "non-leaf nodes (folders) cannot have _description",
-		})
-	}
-
-	if field.Unit != "" {
-		*errors = append(*errors, ValidationError{
-			Path:    path,
-			Message: "non-leaf nodes (folders) cannot have _unit",
-		})
-	}
-
-	// For non-leaf nodes, recursively validate subfields
+	// Recursively validate subfields
 	v.validateStructure(ctx, field.Subfields, path, errors)
 }
 
-// validateReferences recursively validates all _refModel references in a data model
+// validateReferences validates all references in a data model
 func (v *Validator) validateReferences(ctx context.Context, dataModel config.DataModelVersion, allDataModels map[string]config.DataModelsConfig, visitedModels map[string]bool, depth int) error {
-	// Check if context is cancelled before starting reference validation
+	// Check if context is cancelled before processing references
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
 	default:
+	}
+
+	// Prevent infinite recursion by limiting depth
+	if depth > 10 {
+		return fmt.Errorf("maximum reference depth exceeded (10 levels)")
 	}
 
 	// Pre-allocate error slice with reasonable capacity to avoid growth allocations
@@ -404,7 +429,7 @@ func (v *Validator) validateStructureReferences(ctx context.Context, structure m
 	}
 
 	for fieldName, field := range structure {
-		// Build path efficiently once - use simple concatenation for single segment
+		// Build path efficiently once
 		var currentPath string
 		if path == "" {
 			currentPath = fieldName
@@ -417,14 +442,14 @@ func (v *Validator) validateStructureReferences(ctx context.Context, structure m
 			v.validateSingleReference(ctx, field.ModelRef, currentPath, allDataModels, visitedModels, depth, errors)
 		}
 
-		// Recursively check subfields
-		if field.Subfields != nil {
+		// Recursively validate subfields
+		if len(field.Subfields) > 0 {
 			v.validateStructureReferences(ctx, field.Subfields, allDataModels, visitedModels, depth, currentPath, errors)
 		}
 	}
 }
 
-// validateSingleReference validates a single _refModel reference
+// validateSingleReference validates a single reference
 func (v *Validator) validateSingleReference(ctx context.Context, modelRef *config.ModelRef, path string, allDataModels map[string]config.DataModelsConfig, visitedModels map[string]bool, depth int, errors *[]ValidationError) {
 	// Check if context is cancelled before processing this reference
 	select {
@@ -437,57 +462,38 @@ func (v *Validator) validateSingleReference(ctx context.Context, modelRef *confi
 	default:
 	}
 
-	// Safety check: limit recursion depth to 10 levels
-	if depth >= 10 {
-		*errors = append(*errors, ValidationError{
-			Path:    path,
-			Message: "reference validation depth limit exceeded (10 levels) - possible deep nesting or circular reference",
-		})
-		return
-	}
-
-	// Get the model name and version from the struct
-	modelName := modelRef.Name
-	version := modelRef.Version
-
-	// Check for circular reference
-	referenceKey := modelName + ":" + version
-	if visitedModels[referenceKey] {
-		*errors = append(*errors, ValidationError{
-			Path:    path,
-			Message: fmt.Sprintf("circular reference detected: %s", referenceKey),
-		})
-		return
-	}
-
 	// Check if the referenced model exists
-	referencedModel, exists := allDataModels[modelName]
+	referencedModel, exists := allDataModels[modelRef.Name]
 	if !exists {
 		*errors = append(*errors, ValidationError{
 			Path:    path,
-			Message: fmt.Sprintf("referenced model '%s' does not exist", modelName),
+			Message: fmt.Sprintf("referenced model '%s' does not exist", modelRef.Name),
 		})
 		return
 	}
 
 	// Check if the referenced version exists
-	referencedVersion, versionExists := referencedModel.Versions[version]
+	referencedVersion, versionExists := referencedModel.Versions[modelRef.Version]
 	if !versionExists {
 		*errors = append(*errors, ValidationError{
 			Path:    path,
-			Message: fmt.Sprintf("referenced model '%s' version '%s' does not exist", modelName, version),
+			Message: fmt.Sprintf("referenced model '%s' does not have version '%s'", modelRef.Name, modelRef.Version),
 		})
 		return
 	}
 
-	// Mark this model as visited to detect cycles
-	visitedModels[referenceKey] = true
+	// Check for circular reference
+	modelKey := modelRef.Name + ":" + modelRef.Version
+	if visitedModels[modelKey] {
+		*errors = append(*errors, ValidationError{
+			Path:    path,
+			Message: fmt.Sprintf("circular reference detected: %s", modelKey),
+		})
+		return
+	}
 
-	// Recursively validate the referenced model (increment depth here)
-	// Build path efficiently for reference validation - simple concatenation for single segment
-	refPath := path + "." + referenceKey
-	v.validateStructureReferences(ctx, referencedVersion.Structure, allDataModels, visitedModels, depth+1, refPath, errors)
-
-	// Unmark this model after validation (backtrack)
-	delete(visitedModels, referenceKey)
+	// Mark as visited and validate the referenced model
+	visitedModels[modelKey] = true
+	v.validateStructureReferences(ctx, referencedVersion.Structure, allDataModels, visitedModels, depth+1, path, errors)
+	delete(visitedModels, modelKey) // Clean up after validation
 }
