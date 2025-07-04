@@ -48,6 +48,7 @@ func (t *TimeseriesTranslator) TranslateToSchema(ctx context.Context, paths []Pa
 	schemaName := fmt.Sprintf("_%s-%s-%s", modelName, version, jsonType)
 
 	// Extract and sort paths for consistent output
+	// Pre-allocate with exact capacity to avoid reallocations
 	pathStrings := make([]string, len(paths))
 	for i, path := range paths {
 		pathStrings[i] = path.Path
