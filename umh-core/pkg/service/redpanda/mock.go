@@ -34,39 +34,45 @@ import (
 // MockRedpandaService is a mock implementation of the IRedpandaService interface for testing
 type MockRedpandaService struct {
 	// Tracks calls to methods
-	GenerateS6ConfigForRedpandaCalled bool
-	GetConfigCalled                   bool
-	StatusCalled                      bool
-	AddRedpandaToS6ManagerCalled      bool
-	UpdateRedpandaInS6ManagerCalled   bool
-	RemoveRedpandaFromS6ManagerCalled bool
-	StartRedpandaCalled               bool
-	StopRedpandaCalled                bool
-	ReconcileManagerCalled            bool
-	IsLogsFineCalled                  bool
-	IsMetricsErrorFreeCalled          bool
-	HasProcessingActivityCalled       bool
-	ServiceExistsCalled               bool
-	ForceRemoveRedpandaCalled         bool
-	UpdateRedpandaClusterConfigCalled bool
+	GenerateS6ConfigForRedpandaCalled   bool
+	GetConfigCalled                     bool
+	StatusCalled                        bool
+	AddRedpandaToS6ManagerCalled        bool
+	UpdateRedpandaInS6ManagerCalled     bool
+	RemoveRedpandaFromS6ManagerCalled   bool
+	StartRedpandaCalled                 bool
+	StopRedpandaCalled                  bool
+	ReconcileManagerCalled              bool
+	IsLogsFineCalled                    bool
+	IsMetricsErrorFreeCalled            bool
+	HasProcessingActivityCalled         bool
+	ServiceExistsCalled                 bool
+	ForceRemoveRedpandaCalled           bool
+	UpdateRedpandaClusterConfigCalled   bool
+	GetAllSchemasCalled                 bool
+	CompareDataModelsWithRegistryCalled bool
 
 	// Return values for each method
-	GenerateS6ConfigForRedpandaResult s6serviceconfig.S6ServiceConfig
-	GenerateS6ConfigForRedpandaError  error
-	GetConfigResult                   redpandaserviceconfig.RedpandaServiceConfig
-	GetConfigError                    error
-	StatusResult                      ServiceInfo
-	StatusError                       error
-	AddRedpandaToS6ManagerError       error
-	UpdateRedpandaInS6ManagerError    error
-	RemoveRedpandaFromS6ManagerError  error
-	StartRedpandaError                error
-	StopRedpandaError                 error
-	ReconcileManagerError             error
-	ReconcileManagerReconciled        bool
-	ServiceExistsResult               bool
-	ForceRemoveRedpandaError          error
-	UpdateRedpandaClusterConfigError  error
+	GenerateS6ConfigForRedpandaResult   s6serviceconfig.S6ServiceConfig
+	GenerateS6ConfigForRedpandaError    error
+	GetConfigResult                     redpandaserviceconfig.RedpandaServiceConfig
+	GetConfigError                      error
+	StatusResult                        ServiceInfo
+	StatusError                         error
+	AddRedpandaToS6ManagerError         error
+	UpdateRedpandaInS6ManagerError      error
+	RemoveRedpandaFromS6ManagerError    error
+	StartRedpandaError                  error
+	StopRedpandaError                   error
+	ReconcileManagerError               error
+	ReconcileManagerReconciled          bool
+	ServiceExistsResult                 bool
+	ForceRemoveRedpandaError            error
+	UpdateRedpandaClusterConfigError    error
+	GetAllSchemasResult                 []SchemaSubject
+	GetAllSchemasError                  error
+	CompareDataModelsWithRegistryResult *DataModelSchemaMapping
+	CompareDataModelsWithRegistryError  error
 	// For more complex testing scenarios
 	ServiceState      *ServiceInfo
 	ServiceExistsFlag bool
@@ -368,4 +374,22 @@ func (m *MockRedpandaService) ForceRemoveRedpanda(ctx context.Context, filesyste
 func (m *MockRedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpandaName string, configUpdates map[string]interface{}) error {
 	m.UpdateRedpandaClusterConfigCalled = true
 	return m.UpdateRedpandaClusterConfigError
+}
+
+// GetAllSchemas returns the pre-configured mock result
+func (m *MockRedpandaService) GetAllSchemas(ctx context.Context) ([]SchemaSubject, error) {
+	m.GetAllSchemasCalled = true
+	if m.GetAllSchemasError != nil {
+		return nil, m.GetAllSchemasError
+	}
+	return m.GetAllSchemasResult, nil
+}
+
+// CompareDataModelsWithRegistry returns the pre-configured mock result
+func (m *MockRedpandaService) CompareDataModelsWithRegistry(ctx context.Context, dataModels map[string]config.DataModelsConfig) (*DataModelSchemaMapping, error) {
+	m.CompareDataModelsWithRegistryCalled = true
+	if m.CompareDataModelsWithRegistryError != nil {
+		return nil, m.CompareDataModelsWithRegistryError
+	}
+	return m.CompareDataModelsWithRegistryResult, nil
 }

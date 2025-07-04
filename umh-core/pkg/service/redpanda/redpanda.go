@@ -46,6 +46,17 @@ import (
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
+// HealthCheck contains information about the health of the Redpanda service
+// https://docs.redpanda.com/redpanda-connect/guides/monitoring/
+type HealthCheck struct {
+	// IsLive is true if the Redpanda service is live
+	IsLive bool
+	// IsReady is true if the Redpanda service is ready to process data
+	IsReady bool
+	// Version contains the version of the Redpanda service
+	Version string
+}
+
 // IRedpandaService is the interface for managing Redpanda
 type IRedpandaService interface {
 	// GenerateS6ConfigForRedpanda generates a S6 config for a given redpanda instance
@@ -91,6 +102,10 @@ type IRedpandaService interface {
 	//   ok     – true when activity is detected, false otherwise.
 	//   reason – empty when ok is true; otherwise a brief throughput summary.
 	HasProcessingActivity(status RedpandaStatus) (bool, string)
+	// GetAllSchemas fetches all schemas from the Redpanda Schema Registry
+	GetAllSchemas(ctx context.Context) ([]SchemaSubject, error)
+	// CompareDataModelsWithRegistry compares our datamodels against registry schemas
+	CompareDataModelsWithRegistry(ctx context.Context, dataModels map[string]config.DataModelsConfig) (*DataModelSchemaMapping, error)
 	// UpdateRedpandaClusterConfig updates the cluster config of a Redpanda service by sending a PUT request to the Redpanda API
 	UpdateRedpandaClusterConfig(ctx context.Context, redpandaName string, configUpdates map[string]interface{}) error
 }
@@ -155,17 +170,6 @@ type RedpandaStatus struct {
 func (rs *RedpandaStatus) CopyLogs(src []s6service.LogEntry) error {
 	rs.Logs = src
 	return nil
-}
-
-// HealthCheck contains information about the health of the Redpanda service
-// https://docs.redpanda.com/redpanda-connect/guides/monitoring/
-type HealthCheck struct {
-	// IsLive is true if the Redpanda service is live
-	IsLive bool
-	// IsReady is true if the Redpanda service is ready to process data
-	IsReady bool
-	// Version contains the version of the Redpanda service
-	Version string
 }
 
 // RedpandaService is the default implementation of the IRedpandaService interface
