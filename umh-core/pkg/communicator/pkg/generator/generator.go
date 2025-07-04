@@ -23,7 +23,6 @@ import (
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
-	topicbrowserservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/topicbrowser"
 	"go.uber.org/zap"
 )
 
@@ -90,12 +89,8 @@ func (s *StatusCollectorType) UpdateTopicBrowserCache() error {
 			return err
 		}
 
-		// Phase 3: Return pooled objects to sync.Pool after processing
-		// The shallow copy system ensures tbObservedState.ServiceInfo.Status.Buffer
-		// contains the same pooled objects returned from GetBuffers()
-		if len(tbObservedState.ServiceInfo.Status.Buffer) > 0 {
-			topicbrowserservice.PutBuffers(tbObservedState.ServiceInfo.Status.Buffer)
-		}
+		// Note: No PutBuffers() call needed since GetBuffers() returns shared references
+		// instead of pooled copies. This eliminates the expensive copying overhead.
 	}
 	return nil
 }

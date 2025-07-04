@@ -271,14 +271,14 @@ func (svc *Service) parseBlock(entries []s6svc.LogEntry) error {
 	}
 
 	// Decompress the data before storing in ring buffer
-	payload, err := decompressLZ4(compressed)
-	if err != nil {
-		return err
-	}
+	//payload, err := decompressLZ4(compressed)
+	//if err != nil {
+	//	return err
+	//}
 
 	// Add decompressed data to ring buffer
 	svc.ringbuffer.Add(&Buffer{
-		Payload:   payload, // Store decompressed data
+		Payload:   compressed, // Store decompressed data
 		Timestamp: time.UnixMilli(epoch),
 	})
 

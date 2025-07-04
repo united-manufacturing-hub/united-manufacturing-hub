@@ -52,6 +52,8 @@ func NewCache() *Cache {
 func (c *Cache) Update(obs *topicbrowserfsm.ObservedStateSnapshot) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	log := logger.For(logger.ComponentCommunicator)
+	log.Infof("Updating topic browser cache with %d buffers", len(obs.ServiceInfo.Status.Buffer))
 
 	// determine the relevant buffer elements (UnsBundles) to process
 	// the relevant buffers are the ones that have a timestamp greater than the last cache timestamp
@@ -74,7 +76,6 @@ func (c *Cache) Update(obs *topicbrowserfsm.ObservedStateSnapshot) error {
 		var ub tbproto.UnsBundle
 		if err := proto.Unmarshal(buf.Payload, &ub); err != nil {
 			// Log the unmarshal error with context and report to Sentry
-			log := logger.For(logger.ComponentCommunicator)
 			log.Errorf("Failed to unmarshal protobuf data in topic browser cache: %v", err)
 
 			context := map[string]interface{}{

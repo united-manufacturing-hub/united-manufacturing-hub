@@ -119,39 +119,30 @@ var (
 	}
 )
 
-// Get the current Buffers from newest to oldest
-// to reduce load on GC call PutBuffers afterwards
+// GetBuffers returns the current Buffers from newest to oldest with shared references.
+//
+// PERFORMANCE: This method returns shared references to avoid expensive copying of
+// large compressed protobuf payloads. Each Buffer.Payload points to memory allocated
+// once in parseBlock() and never modified afterwards.
+//
+// SAFETY: Buffer objects are immutable after creation. Ring buffer overwrites only
+// change pointer slots, never modify existing Buffer objects. This makes reference
+// sharing safe.
+//
+// Do NOT call PutBuffers() on the returned buffers - they are shared references,
+// not pooled copies.
 func (rb *Ringbuffer) GetBuffers() []*Buffer {
 	rb.mu.Lock()
 	defer rb.mu.Unlock()
 
-	snap := make([]*Buffer, 0, rb.count)
+	result := make([]*Buffer, 0, rb.count)
 	for i := 0; i < rb.count; i++ {
 		idx := (rb.writePos - 1 - i + len(rb.buf)) % len(rb.buf)
 		if b := rb.buf[idx]; b != nil {
-			snap = append(snap, b)
+			result = append(result, b) // Share the reference, no copying
 		}
 	}
-
-	clones := make([]*Buffer, len(snap))
-
-	for i, src := range snap {
-		dst := bufPool.Get().(*Buffer)
-		dst.Timestamp = src.Timestamp
-
-		// Ensure capacity without reallocating every time.
-		bPtr := bytePool.Get().(*[]byte)
-		if cap(*bPtr) < len(src.Payload) {
-			*bPtr = make([]byte, len(src.Payload))
-		}
-		slice := (*bPtr)[:len(src.Payload)]
-		copy(slice, src.Payload)
-
-		dst.Payload = slice
-
-		clones[i] = dst
-	}
-	return clones
+	return result
 }
 
 // PutBuffers allows callers to recycle clones obtained from CloneSlice.
@@ -172,4 +163,30 @@ func (rb *Ringbuffer) Len() int {
 	defer rb.mu.Unlock()
 	n := rb.count
 	return n
+}
+
+// GetBuffersWithCopy returns the current Buffers from newest to oldest with deep copies.
+//
+// Use this method only when you need to modify the returned buffers. For read-only
+// access, use GetBuffers() which is much faster as it avoids copying large payloads.
+//
+// Call PutBuffers() afterwards to recycle the copied buffers and reduce GC load.
+func (rb *Ringbuffer) GetBuffersWithCopy() []*Buffer {
+	rb.mu.Lock()
+	defer rb.mu.Unlock()
+
+	result := make([]*Buffer, 0, rb.count)
+	for i := 0; i < rb.count; i++ {
+		idx := (rb.writePos - 1 - i + len(rb.buf)) % len(rb.buf)
+		if b := rb.buf[idx]; b != nil {
+			// clone for new allocated memory
+			clone := &Buffer{Timestamp: b.Timestamp}
+			if b.Payload != nil {
+				clone.Payload = make([]byte, len(b.Payload))
+				copy(clone.Payload, b.Payload)
+			}
+			result = append(result, clone)
+		}
+	}
+	return result
 }
