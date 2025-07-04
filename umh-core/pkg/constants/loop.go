@@ -48,7 +48,7 @@ const (
 
 	// factor is the factor by which we reduce the remaining time for the inner control loop.
 	// This is used to ensure that we finish in time.
-	LoopControlLoopTimeFactor = 0.95
+	LoopControlLoopTimeFactor = 0.80
 )
 
 // FilesAndDirectoriesToIgnore is a list of files and directories that we will not read.
