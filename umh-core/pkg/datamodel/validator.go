@@ -166,19 +166,6 @@ func (v *Validator) validateFieldNameWithPath(fieldName string, currentPath stri
 	}
 }
 
-// validateFieldName validates field names according to naming rules
-func (v *Validator) validateFieldName(fieldName string, path string, errors *[]ValidationError) {
-	// Build path efficiently - use simple concatenation for single segment
-	var currentPath string
-	if path == "" {
-		currentPath = fieldName
-	} else {
-		currentPath = path + "." + fieldName
-	}
-
-	v.validateFieldNameWithPath(fieldName, currentPath, errors)
-}
-
 // validateField validates a single field according to the rules
 func (v *Validator) validateField(ctx context.Context, field config.Field, path string, errors *[]ValidationError) {
 	// Check if context is cancelled before processing this field
