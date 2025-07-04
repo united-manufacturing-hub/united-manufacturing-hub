@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package datamodel_test
+package translation_test
 
 import (
 	"context"
@@ -22,7 +22,7 @@ import (
 	"testing"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel/translation"
 )
 
 // BenchmarkPathConstruction benchmarks just the path building logic
@@ -77,10 +77,10 @@ func BenchmarkSliceGrowth(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		var paths []datamodel.PathInfo
+		var paths []translation.PathInfo
 		// Simulate collecting 25 paths (like complex nested scenario)
 		for j := 0; j < 25; j++ {
-			paths = append(paths, datamodel.PathInfo{
+			paths = append(paths, translation.PathInfo{
 				Path:      fmt.Sprintf("field%d", j),
 				ValueType: "timeseries-number",
 			})
@@ -96,9 +96,9 @@ func BenchmarkSliceGrowthPreallocated(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		// Pre-allocate with reasonable capacity
-		paths := make([]datamodel.PathInfo, 0, 32)
+		paths := make([]translation.PathInfo, 0, 32)
 		for j := 0; j < 25; j++ {
-			paths = append(paths, datamodel.PathInfo{
+			paths = append(paths, translation.PathInfo{
 				Path:      fmt.Sprintf("field%d", j),
 				ValueType: "timeseries-number",
 			})
@@ -110,7 +110,7 @@ func BenchmarkSliceGrowthPreallocated(b *testing.B) {
 // BenchmarkTypeGrouping benchmarks the path grouping logic
 func BenchmarkTypeGrouping(b *testing.B) {
 	// Create paths to group
-	paths := make([]datamodel.PathInfo, 50)
+	paths := make([]translation.PathInfo, 50)
 	for i := 0; i < 50; i++ {
 		var valueType string
 		switch i % 3 {
@@ -121,7 +121,7 @@ func BenchmarkTypeGrouping(b *testing.B) {
 		case 2:
 			valueType = "timeseries-boolean"
 		}
-		paths[i] = datamodel.PathInfo{
+		paths[i] = translation.PathInfo{
 			Path:      fmt.Sprintf("field%d", i),
 			ValueType: valueType,
 		}
@@ -132,7 +132,7 @@ func BenchmarkTypeGrouping(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		// Manual grouping to simulate the translator's logic
-		groups := make(map[string][]datamodel.PathInfo)
+		groups := make(map[string][]translation.PathInfo)
 		for _, path := range paths {
 			groups[path.ValueType] = append(groups[path.ValueType], path)
 		}
@@ -359,12 +359,12 @@ func BenchmarkCollectPathsOnly(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		// Manual path collection to simulate the translator's logic
-		var paths []datamodel.PathInfo
+		var paths []translation.PathInfo
 
 		// Collect paths manually
 		for fieldName, field := range structure {
 			if field.Type != "" {
-				paths = append(paths, datamodel.PathInfo{
+				paths = append(paths, translation.PathInfo{
 					Path:      fieldName,
 					ValueType: field.Type,
 				})
@@ -372,7 +372,7 @@ func BenchmarkCollectPathsOnly(b *testing.B) {
 			if field.Subfields != nil {
 				for subFieldName, subField := range field.Subfields {
 					if subField.Type != "" {
-						paths = append(paths, datamodel.PathInfo{
+						paths = append(paths, translation.PathInfo{
 							Path:      fieldName + "." + subFieldName,
 							ValueType: subField.Type,
 						})
@@ -394,7 +394,7 @@ func BenchmarkCollectPathsOnly(b *testing.B) {
 
 // BenchmarkTranslateOnlyNumbers benchmarks translation with only number types
 func BenchmarkTranslateOnlyNumbers(b *testing.B) {
-	translator := datamodel.NewTranslator()
+	translator := translation.NewTranslator()
 	ctx := context.Background()
 
 	// Create structure with only number fields to isolate type-specific costs
@@ -427,7 +427,7 @@ func BenchmarkTranslateOnlyNumbers(b *testing.B) {
 
 // BenchmarkTranslateMixedTypes benchmarks the overhead of multiple type handling
 func BenchmarkTranslateMixedTypes(b *testing.B) {
-	translator := datamodel.NewTranslator()
+	translator := translation.NewTranslator()
 	ctx := context.Background()
 
 	// Create structure with mixed types to see grouping overhead

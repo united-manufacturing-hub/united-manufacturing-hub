@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package datamodel_test
+package translation_test
 
 import (
 	"context"
@@ -23,17 +23,17 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel/translation"
 )
 
 var _ = Describe("Translator", func() {
 	var (
-		translator *datamodel.Translator
+		translator *translation.Translator
 		ctx        context.Context
 	)
 
 	BeforeEach(func() {
-		translator = datamodel.NewTranslator()
+		translator = translation.NewTranslator()
 		ctx = context.Background()
 	})
 
@@ -41,28 +41,28 @@ var _ = Describe("Translator", func() {
 		It("should parse valid type strings correctly", func() {
 			tests := []struct {
 				input    string
-				expected datamodel.TypeInfo
+				expected translation.TypeInfo
 			}{
 				{
 					input: "timeseries-number",
-					expected: datamodel.TypeInfo{
-						Category: datamodel.TypeCategoryTimeseries,
+					expected: translation.TypeInfo{
+						Category: translation.TypeCategoryTimeseries,
 						SubType:  "number",
 						FullType: "timeseries-number",
 					},
 				},
 				{
 					input: "timeseries-string",
-					expected: datamodel.TypeInfo{
-						Category: datamodel.TypeCategoryTimeseries,
+					expected: translation.TypeInfo{
+						Category: translation.TypeCategoryTimeseries,
 						SubType:  "string",
 						FullType: "timeseries-string",
 					},
 				},
 				{
 					input: "relational-table",
-					expected: datamodel.TypeInfo{
-						Category: datamodel.TypeCategoryRelational,
+					expected: translation.TypeInfo{
+						Category: translation.TypeCategoryRelational,
 						SubType:  "table",
 						FullType: "relational-table",
 					},
@@ -70,12 +70,13 @@ var _ = Describe("Translator", func() {
 			}
 
 			for _, test := range tests {
-				result := datamodel.ParseTypeInfo(test.input)
+				result, err := translation.ParseTypeInfo(test.input)
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(Equal(test.expected))
 			}
 		})
 
-		It("should return empty TypeInfo for invalid type strings", func() {
+		It("should return error for invalid type strings", func() {
 			tests := []string{
 				"invalidtype",     // No dash
 				"",                // Empty string
@@ -85,8 +86,9 @@ var _ = Describe("Translator", func() {
 			}
 
 			for _, test := range tests {
-				result := datamodel.ParseTypeInfo(test)
-				Expect(result).To(Equal(datamodel.TypeInfo{}))
+				result, err := translation.ParseTypeInfo(test)
+				Expect(err).To(HaveOccurred())
+				Expect(result).To(Equal(translation.TypeInfo{}))
 			}
 		})
 	})
@@ -128,7 +130,7 @@ var _ = Describe("Translator", func() {
 			Expect(schemaNames).To(HaveKey("_pump-v1-boolean"))
 
 			// Verify schema content for number type
-			var numberSchema *datamodel.SchemaOutput
+			var numberSchema *translation.SchemaOutput
 			for _, schema := range schemas {
 				if schema.Name == "_pump-v1-number" {
 					numberSchema = &schema
@@ -198,7 +200,7 @@ var _ = Describe("Translator", func() {
 			Expect(schemas).To(HaveLen(2)) // number, string
 
 			// Find the number schema
-			var numberSchema *datamodel.SchemaOutput
+			var numberSchema *translation.SchemaOutput
 			for _, schema := range schemas {
 				if schema.Name == "_pump-v1-number" {
 					numberSchema = &schema
@@ -270,7 +272,7 @@ var _ = Describe("Translator", func() {
 			Expect(schemas).To(HaveLen(2)) // number, string
 
 			// Find the number schema
-			var numberSchema *datamodel.SchemaOutput
+			var numberSchema *translation.SchemaOutput
 			for _, schema := range schemas {
 				if schema.Name == "_pump-v1-number" {
 					numberSchema = &schema
@@ -484,6 +486,145 @@ var _ = Describe("Translator", func() {
 			_, err := translator.TranslateToJSONSchema(ctx, dataModel, "test", "v1", make(map[string]config.DataModelsConfig))
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("unsupported timeseries subtype: unsupported"))
+		})
+	})
+
+	Describe("Input normalization", func() {
+		It("should normalize model names by stripping leading underscores", func() {
+			dataModel := config.DataModelVersion{
+				Structure: map[string]config.Field{
+					"temperature": {
+						Type:        "timeseries-number",
+						Description: "Temperature reading",
+					},
+				},
+			}
+
+			// Test with single underscore
+			schemas, err := translator.TranslateToJSONSchema(ctx, dataModel, "_pump", "v1", make(map[string]config.DataModelsConfig))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(schemas).To(HaveLen(1))
+			Expect(schemas[0].Name).To(Equal("_pump-v1-number")) // Should be normalized to "pump"
+
+			// Test with multiple underscores
+			schemas, err = translator.TranslateToJSONSchema(ctx, dataModel, "___pump", "v1", make(map[string]config.DataModelsConfig))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(schemas).To(HaveLen(1))
+			Expect(schemas[0].Name).To(Equal("_pump-v1-number")) // Should be normalized to "pump"
+
+			// Test with no underscore (should remain unchanged)
+			schemas, err = translator.TranslateToJSONSchema(ctx, dataModel, "pump", "v1", make(map[string]config.DataModelsConfig))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(schemas).To(HaveLen(1))
+			Expect(schemas[0].Name).To(Equal("_pump-v1-number")) // Should remain "pump"
+		})
+
+		It("should normalize versions by adding 'v' prefix if missing", func() {
+			dataModel := config.DataModelVersion{
+				Structure: map[string]config.Field{
+					"temperature": {
+						Type:        "timeseries-number",
+						Description: "Temperature reading",
+					},
+				},
+			}
+
+			// Test with missing "v" prefix
+			schemas, err := translator.TranslateToJSONSchema(ctx, dataModel, "pump", "1", make(map[string]config.DataModelsConfig))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(schemas).To(HaveLen(1))
+			Expect(schemas[0].Name).To(Equal("_pump-v1-number")) // Should be normalized to "v1"
+
+			// Test with existing "v" prefix (should remain unchanged)
+			schemas, err = translator.TranslateToJSONSchema(ctx, dataModel, "pump", "v1", make(map[string]config.DataModelsConfig))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(schemas).To(HaveLen(1))
+			Expect(schemas[0].Name).To(Equal("_pump-v1-number")) // Should remain "v1"
+
+			// Test with numeric version
+			schemas, err = translator.TranslateToJSONSchema(ctx, dataModel, "pump", "2", make(map[string]config.DataModelsConfig))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(schemas).To(HaveLen(1))
+			Expect(schemas[0].Name).To(Equal("_pump-v2-number")) // Should be normalized to "v2"
+		})
+
+		It("should handle both normalizations together", func() {
+			dataModel := config.DataModelVersion{
+				Structure: map[string]config.Field{
+					"temperature": {
+						Type:        "timeseries-number",
+						Description: "Temperature reading",
+					},
+					"status": {
+						Type:        "timeseries-string",
+						Description: "Status string",
+					},
+				},
+			}
+
+			// Test with both underscore prefix and missing "v"
+			schemas, err := translator.TranslateToJSONSchema(ctx, dataModel, "_pump", "1", make(map[string]config.DataModelsConfig))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(schemas).To(HaveLen(2)) // number and string schemas
+
+			// Check that both schemas have correct normalized names
+			schemaNames := make(map[string]bool)
+			for _, schema := range schemas {
+				schemaNames[schema.Name] = true
+			}
+			Expect(schemaNames).To(HaveKey("_pump-v1-number"))
+			Expect(schemaNames).To(HaveKey("_pump-v1-string"))
+		})
+
+		It("should handle empty version gracefully", func() {
+			dataModel := config.DataModelVersion{
+				Structure: map[string]config.Field{
+					"temperature": {
+						Type:        "timeseries-number",
+						Description: "Temperature reading",
+					},
+				},
+			}
+
+			// Test with empty version (should remain empty, not add "v")
+			schemas, err := translator.TranslateToJSONSchema(ctx, dataModel, "pump", "", make(map[string]config.DataModelsConfig))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(schemas).To(HaveLen(1))
+			Expect(schemas[0].Name).To(Equal("_pump--number")) // Empty version should remain empty
+		})
+
+		It("should handle version normalization with various formats", func() {
+			dataModel := config.DataModelVersion{
+				Structure: map[string]config.Field{
+					"temperature": {
+						Type:        "timeseries-number",
+						Description: "Temperature reading",
+					},
+				},
+			}
+
+			// Test various version formats
+			testCases := []struct {
+				input    string
+				expected string
+			}{
+				{"1", "v1"},
+				{"2", "v2"},
+				{"10", "v10"},
+				{"v1", "v1"},
+				{"v2", "v2"},
+				{"v10", "v10"},
+				{"1.0", "v1.0"},
+				{"v1.0", "v1.0"},
+			}
+
+			for _, tc := range testCases {
+				schemas, err := translator.TranslateToJSONSchema(ctx, dataModel, "pump", tc.input, make(map[string]config.DataModelsConfig))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(schemas).To(HaveLen(1))
+				expectedName := "_pump-" + tc.expected + "-number"
+				Expect(schemas[0].Name).To(Equal(expectedName), "Input version '%s' should normalize to '%s'", tc.input, tc.expected)
+			}
 		})
 	})
 })

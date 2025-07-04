@@ -40,7 +40,7 @@
 //	if err != nil {
 //	    // Handle validation or reference errors
 //	}
-package datamodel
+package validation
 
 import (
 	"context"
