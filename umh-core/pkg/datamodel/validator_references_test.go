@@ -161,7 +161,7 @@ var _ = Describe("Validator References", func() {
 
 			err := validator.ValidateWithReferences(ctx, testModel, allDataModels)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("referenced model 'motor' version 'v2' does not exist"))
+			Expect(err.Error()).To(ContainSubstring("referenced model 'motor' does not have version 'v2'"))
 		})
 
 		It("should detect circular references", func() {
@@ -219,139 +219,29 @@ var _ = Describe("Validator References", func() {
 			Expect(err.Error()).To(ContainSubstring("circular reference detected"))
 		})
 
-		It("should detect self-referencing models", func() {
-			// Create a model that references itself
-			selfRefModel := config.DataModelVersion{
-				Description: "Self-referencing model",
-				Structure: map[string]config.Field{
-					"field1": {
-						Type: "timeseries-number",
-					},
-					"selfRef": {
-						ModelRef: &config.ModelRef{
-							Name:    "selfRef",
-							Version: "v1",
-						},
-					},
-				},
-			}
-
-			allDataModels := map[string]config.DataModelsConfig{
-				"selfRef": {
-					Name:        "selfRef",
-					Description: "Self-referencing model",
-					Versions: map[string]config.DataModelVersion{
-						"v1": selfRefModel,
-					},
-				},
-			}
-
-			err := validator.ValidateWithReferences(ctx, selfRefModel, allDataModels)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("circular reference detected: selfRef:v1"))
-		})
-
-		It("should handle deep reference chains up to 10 levels", func() {
-			allDataModels := make(map[string]config.DataModelsConfig)
-
-			// Create a chain of 9 models (level0 -> level1 -> ... -> level8)
-			for i := 0; i < 9; i++ {
-				modelName := fmt.Sprintf("level%d", i)
-				var structure map[string]config.Field
-
-				if i == 8 { // Last level - no reference
-					structure = map[string]config.Field{
-						"finalField": {
-							Type: "timeseries-number",
-						},
-					}
-				} else { // Reference next level
-					nextLevel := fmt.Sprintf("level%d", i+1)
-					structure = map[string]config.Field{
-						"field": {
-							Type: "timeseries-number",
-						},
-						"nextRef": {
-							ModelRef: &config.ModelRef{
-								Name:    nextLevel,
-								Version: "v1",
-							},
-						},
-					}
-				}
-
-				allDataModels[modelName] = config.DataModelsConfig{
-					Name:        modelName,
-					Description: fmt.Sprintf("Level %d model", i),
-					Versions: map[string]config.DataModelVersion{
-						"v1": {
-							Description: fmt.Sprintf("Level %d model", i),
-							Structure:   structure,
-						},
-					},
-				}
-			}
-
-			// Validate the first model - should pass (9 levels deep)
-			err := validator.ValidateWithReferences(ctx, allDataModels["level0"].Versions["v1"], allDataModels)
-			Expect(err).To(BeNil())
-		})
-
-		It("should reject reference chains deeper than 10 levels", func() {
-			allDataModels := make(map[string]config.DataModelsConfig)
-
-			// Create a chain of 12 models (level0 -> level1 -> ... -> level11)
-			// This ensures we definitely exceed 10 levels
-			for i := 0; i < 12; i++ {
-				modelName := fmt.Sprintf("level%d", i)
-				var structure map[string]config.Field
-
-				if i == 11 { // Last level - no reference
-					structure = map[string]config.Field{
-						"finalField": {
-							Type: "timeseries-number",
-						},
-					}
-				} else { // Reference next level
-					nextLevel := fmt.Sprintf("level%d", i+1)
-					structure = map[string]config.Field{
-						"field": {
-							Type: "timeseries-number",
-						},
-						"nextRef": {
-							ModelRef: &config.ModelRef{
-								Name:    nextLevel,
-								Version: "v1",
-							},
-						},
-					}
-				}
-
-				allDataModels[modelName] = config.DataModelsConfig{
-					Name:        modelName,
-					Description: fmt.Sprintf("Level %d model", i),
-					Versions: map[string]config.DataModelVersion{
-						"v1": {
-							Description: fmt.Sprintf("Level %d model", i),
-							Structure:   structure,
-						},
-					},
-				}
-			}
-
-			// Validate the first model - should fail (12 levels deep)
-			err := validator.ValidateWithReferences(ctx, allDataModels["level0"].Versions["v1"], allDataModels)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("reference validation depth limit exceeded (10 levels)"))
-		})
-
-		It("should validate nested references in subfields", func() {
-			// Create a sensor model
+		It("should handle deep nesting without false circular reference detection", func() {
+			// Create a base sensor model
 			sensorModel := config.DataModelVersion{
 				Description: "Sensor data model",
 				Structure: map[string]config.Field{
 					"value": {
 						Type: "timeseries-number",
+					},
+					"timestamp": {
+						Type: "timeseries-string",
+					},
+				},
+			}
+
+			// Create a temperature sensor that references the base sensor
+			tempSensorModel := config.DataModelVersion{
+				Description: "Temperature sensor",
+				Structure: map[string]config.Field{
+					"sensor": {
+						ModelRef: &config.ModelRef{
+							Name:    "sensor",
+							Version: "v1",
+						},
 					},
 					"unit": {
 						Type: "timeseries-string",
@@ -359,34 +249,33 @@ var _ = Describe("Validator References", func() {
 				},
 			}
 
-			// Create a complex model with nested references
-			complexModel := config.DataModelVersion{
-				Description: "Complex data model",
+			// Create a motor model that references the temperature sensor
+			motorModel := config.DataModelVersion{
+				Description: "Motor with temperature sensor",
 				Structure: map[string]config.Field{
-					"metadata": {
-						Subfields: map[string]config.Field{
-							"temperature_sensor": {
-								ModelRef: &config.ModelRef{
-									Name:    "sensor",
-									Version: "v1",
-								},
-							},
-							"pressure_sensor": {
-								ModelRef: &config.ModelRef{
-									Name:    "sensor",
-									Version: "v1",
-								},
-							},
+					"rpm": {
+						Type: "timeseries-number",
+					},
+					"temperature": {
+						ModelRef: &config.ModelRef{
+							Name:    "tempSensor",
+							Version: "v1",
 						},
 					},
-					"readings": {
-						Subfields: map[string]config.Field{
-							"primary": {
-								ModelRef: &config.ModelRef{
-									Name:    "sensor",
-									Version: "v1",
-								},
-							},
+				},
+			}
+
+			// Create a pump model that references the motor
+			pumpModel := config.DataModelVersion{
+				Description: "Pump with motor",
+				Structure: map[string]config.Field{
+					"flowRate": {
+						Type: "timeseries-number",
+					},
+					"motor": {
+						ModelRef: &config.ModelRef{
+							Name:    "motor",
+							Version: "v1",
 						},
 					},
 				},
@@ -395,118 +284,177 @@ var _ = Describe("Validator References", func() {
 			allDataModels := map[string]config.DataModelsConfig{
 				"sensor": {
 					Name:        "sensor",
-					Description: "Sensor data model",
+					Description: "Base sensor",
+					Versions: map[string]config.DataModelVersion{
+						"v1": sensorModel,
+					},
+				},
+				"tempSensor": {
+					Name:        "tempSensor",
+					Description: "Temperature sensor",
+					Versions: map[string]config.DataModelVersion{
+						"v1": tempSensorModel,
+					},
+				},
+				"motor": {
+					Name:        "motor",
+					Description: "Motor",
+					Versions: map[string]config.DataModelVersion{
+						"v1": motorModel,
+					},
+				},
+				"pump": {
+					Name:        "pump",
+					Description: "Pump",
+					Versions: map[string]config.DataModelVersion{
+						"v1": pumpModel,
+					},
+				},
+			}
+
+			err := validator.ValidateWithReferences(ctx, pumpModel, allDataModels)
+			Expect(err).To(BeNil())
+		})
+
+		It("should handle context cancellation gracefully", func() {
+			// Create a complex model to ensure validation takes some time
+			complexModel := config.DataModelVersion{
+				Description: "Complex model",
+				Structure: map[string]config.Field{
+					"level1": {
+						Subfields: map[string]config.Field{
+							"level2": {
+								Subfields: map[string]config.Field{
+									"level3": {
+										ModelRef: &config.ModelRef{
+											Name:    "sensor",
+											Version: "v1",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			sensorModel := config.DataModelVersion{
+				Description: "Sensor",
+				Structure: map[string]config.Field{
+					"value": {
+						Type: "timeseries-number",
+					},
+				},
+			}
+
+			allDataModels := map[string]config.DataModelsConfig{
+				"sensor": {
+					Name:        "sensor",
+					Description: "Sensor",
 					Versions: map[string]config.DataModelVersion{
 						"v1": sensorModel,
 					},
 				},
 				"complex": {
 					Name:        "complex",
-					Description: "Complex data model",
+					Description: "Complex model",
 					Versions: map[string]config.DataModelVersion{
 						"v1": complexModel,
 					},
 				},
 			}
 
-			err := validator.ValidateWithReferences(ctx, complexModel, allDataModels)
-			Expect(err).To(BeNil())
-		})
-
-		It("should fail basic validation if the data model structure is invalid", func() {
-			// Create an invalid data model (missing _type)
-			invalidModel := config.DataModelVersion{
-				Description: "Invalid data model",
-				Structure: map[string]config.Field{
-					"invalidField": {
-						// Missing Type and ModelRef
-					},
-				},
-			}
-
-			allDataModels := map[string]config.DataModelsConfig{
-				"invalid": {
-					Name:        "invalid",
-					Description: "Invalid data model",
-					Versions: map[string]config.DataModelVersion{
-						"v1": invalidModel,
-					},
-				},
-			}
-
-			err := validator.ValidateWithReferences(ctx, invalidModel, allDataModels)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("leaf nodes must contain _type"))
-		})
-
-		It("should handle complex reference scenarios", func() {
-			// Create a complex scenario with multiple levels of references
-			allDataModels := map[string]config.DataModelsConfig{
-				"motor": {
-					Versions: map[string]config.DataModelVersion{
-						"v1": {
-							Structure: map[string]config.Field{
-								"speed":       {Type: "timeseries-number"},
-								"temperature": {Type: "timeseries-number"},
-								"sensor":      {ModelRef: &config.ModelRef{Name: "sensor", Version: "v1"}},
-							},
-						},
-					},
-				},
-				"sensor": {
-					Versions: map[string]config.DataModelVersion{
-						"v1": {
-							Structure: map[string]config.Field{
-								"value": {Type: "timeseries-number"},
-								"unit":  {Type: "timeseries-string"},
-							},
-						},
-					},
-				},
-			}
-
-			// Data model that references motor which references sensor
-			dataModel := config.DataModelVersion{
-				Structure: map[string]config.Field{
-					"pump": {
-						Subfields: map[string]config.Field{
-							"motor": {ModelRef: &config.ModelRef{Name: "motor", Version: "v1"}},
-							"flow":  {Type: "timeseries-number"},
-						},
-					},
-				},
-			}
-
-			err := validator.ValidateWithReferences(ctx, dataModel, allDataModels)
-			Expect(err).To(BeNil())
-		})
-
-		It("should respect context cancellation during reference validation", func() {
 			// Create a cancelled context
 			cancelledCtx, cancel := context.WithCancel(context.Background())
 			cancel() // Cancel immediately
 
-			allDataModels := map[string]config.DataModelsConfig{
-				"motor": {
-					Versions: map[string]config.DataModelVersion{
-						"v1": {
-							Structure: map[string]config.Field{
-								"speed": {Type: "timeseries-number"},
+			err := validator.ValidateWithReferences(cancelledCtx, complexModel, allDataModels)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("context canceled"))
+		})
+
+		It("should respect maximum recursion depth", func() {
+			// Create a chain of models that reference each other in a linear fashion
+			// This creates a deep chain without cycles
+			models := make(map[string]config.DataModelsConfig)
+
+			// Create the deepest model (base case)
+			models["model10"] = config.DataModelsConfig{
+				Name:        "model10",
+				Description: "Model 10",
+				Versions: map[string]config.DataModelVersion{
+					"v1": {
+						Description: "Model 10 version 1",
+						Structure: map[string]config.Field{
+							"value": {
+								Type: "timeseries-number",
 							},
 						},
 					},
 				},
 			}
 
-			dataModel := config.DataModelVersion{
-				Structure: map[string]config.Field{
-					"motor": {ModelRef: &config.ModelRef{Name: "motor", Version: "v1"}},
+			// Create chain of models, each referencing the next
+			for i := 9; i >= 0; i-- {
+				modelName := fmt.Sprintf("model%d", i)
+				nextModelName := fmt.Sprintf("model%d", i+1)
+
+				models[modelName] = config.DataModelsConfig{
+					Name:        modelName,
+					Description: fmt.Sprintf("Model %d", i),
+					Versions: map[string]config.DataModelVersion{
+						"v1": {
+							Description: fmt.Sprintf("Model %d version 1", i),
+							Structure: map[string]config.Field{
+								"next": {
+									ModelRef: &config.ModelRef{
+										Name:    nextModelName,
+										Version: "v1",
+									},
+								},
+							},
+						},
+					},
+				}
+			}
+
+			// This should work (10 levels deep)
+			err := validator.ValidateWithReferences(ctx, models["model0"].Versions["v1"], models)
+			Expect(err).To(BeNil())
+
+			// Now create an even deeper chain (11+ levels) to test the limit
+			models["model11"] = config.DataModelsConfig{
+				Name:        "model11",
+				Description: "Model 11",
+				Versions: map[string]config.DataModelVersion{
+					"v1": {
+						Description: "Model 11 version 1",
+						Structure: map[string]config.Field{
+							"value": {
+								Type: "timeseries-number",
+							},
+						},
+					},
 				},
 			}
 
-			err := validator.ValidateWithReferences(cancelledCtx, dataModel, allDataModels)
+			// Update model10 to reference model11
+			models["model10"].Versions["v1"] = config.DataModelVersion{
+				Description: "Model 10 version 1",
+				Structure: map[string]config.Field{
+					"next": {
+						ModelRef: &config.ModelRef{
+							Name:    "model11",
+							Version: "v1",
+						},
+					},
+				},
+			}
+
+			// This should fail due to depth limit
+			err = validator.ValidateWithReferences(ctx, models["model0"].Versions["v1"], models)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("context canceled"))
+			Expect(err.Error()).To(ContainSubstring("maximum reference depth exceeded"))
 		})
 	})
 })

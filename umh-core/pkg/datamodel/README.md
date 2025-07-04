@@ -94,4 +94,4 @@ The validator is optimized for minimal memory usage:
 - ✅ **Error reporting**: Detailed validation feedback with precise paths
 - ✅ **Thread safe**: Stateless validator can be used concurrently
 
-See `PERFORMANCE.md` for detailed benchmark results and optimization details. 
+See `PERFORMANCE.md` for detailed benchmark results and optimization details.
