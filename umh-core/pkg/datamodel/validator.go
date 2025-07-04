@@ -23,10 +23,21 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 )
 
+// Pre-compiled regex for version validation to avoid repeated compilation
+var versionRegex = regexp.MustCompile(`^v\d+$`)
+
 type Validator struct{}
 
 func NewValidator() *Validator {
 	return &Validator{}
+}
+
+// safeContextError safely extracts an error message from context error, handling nil cases
+func safeContextError(ctx context.Context) string {
+	if err := ctx.Err(); err != nil {
+		return err.Error()
+	}
+	return "context cancelled"
 }
 
 // ValidationError represents a validation error with a path and message
@@ -77,16 +88,19 @@ func (v *Validator) validateDataModel(ctx context.Context, dataModel config.Data
 	default:
 	}
 
-	var errors []ValidationError
+	// Pre-allocate error slice with reasonable capacity to avoid growth allocations
+	errors := make([]ValidationError, 0, 8)
 	v.validateStructure(ctx, dataModel.Structure, "", &errors)
 
 	if len(errors) > 0 {
-		// Build error message with all validation errors
-		errorMsg := "data model structure validation failed:"
+		// Build error message with all validation errors using strings.Builder
+		var errorMsg strings.Builder
+		errorMsg.WriteString("data model structure validation failed:")
 		for _, validationError := range errors {
-			errorMsg += fmt.Sprintf("\n  - %s", validationError.Error())
+			errorMsg.WriteString("\n  - ")
+			errorMsg.WriteString(validationError.Error())
 		}
-		return fmt.Errorf("%s", errorMsg)
+		return fmt.Errorf("%s", errorMsg.String())
 	}
 
 	return nil
@@ -99,32 +113,30 @@ func (v *Validator) validateStructure(ctx context.Context, structure map[string]
 	case <-ctx.Done():
 		*errors = append(*errors, ValidationError{
 			Path:    path,
-			Message: "validation cancelled: " + ctx.Err().Error(),
+			Message: "validation cancelled: " + safeContextError(ctx),
 		})
 		return
 	default:
 	}
 
 	for fieldName, field := range structure {
-		// Validate field name first
-		v.validateFieldName(fieldName, path, errors)
-
-		currentPath := fieldName
-		if path != "" {
+		// Build path efficiently once - use simple concatenation for single segment
+		var currentPath string
+		if path == "" {
+			currentPath = fieldName
+		} else {
 			currentPath = path + "." + fieldName
 		}
+
+		// Validate field name first - pass the constructed path to avoid rebuilding
+		v.validateFieldNameWithPath(fieldName, currentPath, errors)
 
 		v.validateField(ctx, field, currentPath, errors)
 	}
 }
 
-// validateFieldName validates field names according to naming rules
-func (v *Validator) validateFieldName(fieldName string, path string, errors *[]ValidationError) {
-	currentPath := fieldName
-	if path != "" {
-		currentPath = path + "." + fieldName
-	}
-
+// validateFieldNameWithPath validates field names with pre-constructed path
+func (v *Validator) validateFieldNameWithPath(fieldName string, currentPath string, errors *[]ValidationError) {
 	// Check for empty field names
 	if fieldName == "" {
 		*errors = append(*errors, ValidationError{
@@ -144,7 +156,7 @@ func (v *Validator) validateFieldName(fieldName string, path string, errors *[]V
 
 	// Check for valid characters: letters, numbers, dashes, and underscores only
 	for _, r := range fieldName {
-		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_') {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '-' && r != '_' {
 			*errors = append(*errors, ValidationError{
 				Path:    currentPath,
 				Message: "field name can only contain letters, numbers, dashes, and underscores",
@@ -154,6 +166,19 @@ func (v *Validator) validateFieldName(fieldName string, path string, errors *[]V
 	}
 }
 
+// validateFieldName validates field names according to naming rules
+func (v *Validator) validateFieldName(fieldName string, path string, errors *[]ValidationError) {
+	// Build path efficiently - use simple concatenation for single segment
+	var currentPath string
+	if path == "" {
+		currentPath = fieldName
+	} else {
+		currentPath = path + "." + fieldName
+	}
+
+	v.validateFieldNameWithPath(fieldName, currentPath, errors)
+}
+
 // validateField validates a single field according to the rules
 func (v *Validator) validateField(ctx context.Context, field config.Field, path string, errors *[]ValidationError) {
 	// Check if context is cancelled before processing this field
@@ -161,7 +186,7 @@ func (v *Validator) validateField(ctx context.Context, field config.Field, path 
 	case <-ctx.Done():
 		*errors = append(*errors, ValidationError{
 			Path:    path,
-			Message: "validation cancelled: " + ctx.Err().Error(),
+			Message: "validation cancelled: " + safeContextError(ctx),
 		})
 		return
 	default:
@@ -196,42 +221,44 @@ func (v *Validator) validateRefModelFormat(modelRef string, path string, errors 
 		return
 	}
 
-	// Check if version is specified and valid
-	parts := strings.Split(modelRef, ":")
-	if len(parts) == 2 {
-		modelName := parts[0]
-		version := parts[1]
+	// Find the colon position to avoid creating a slice
+	colonIndex := strings.IndexByte(modelRef, ':')
+	if colonIndex == -1 {
+		// This shouldn't happen given the count check above, but be safe
+		return
+	}
 
-		// Check for empty model name
-		if modelName == "" {
+	modelName := modelRef[:colonIndex]
+	version := modelRef[colonIndex+1:]
+
+	// Check for empty model name
+	if modelName == "" {
+		*errors = append(*errors, ValidationError{
+			Path:    path,
+			Message: "_refModel must have a model name specified before ':'",
+		})
+	}
+
+	// Check for empty version
+	if version == "" {
+		*errors = append(*errors, ValidationError{
+			Path:    path,
+			Message: "_refModel must have a version specified after ':'",
+		})
+	} else {
+		// Validate version pattern ^v\d+$ using pre-compiled regex
+		if !versionRegex.MatchString(version) {
 			*errors = append(*errors, ValidationError{
 				Path:    path,
-				Message: "_refModel must have a model name specified before ':'",
-			})
-		}
-
-		// Check for empty version
-		if version == "" {
-			*errors = append(*errors, ValidationError{
-				Path:    path,
-				Message: "_refModel must have a version specified after ':'",
+				Message: fmt.Sprintf("version '%s' does not match pattern ^v\\d+$", version),
 			})
 		} else {
-			// Validate version pattern ^v\d+$
-			versionRegex := regexp.MustCompile(`^v\d+$`)
-			if !versionRegex.MatchString(version) {
+			// Check that version starts at v1, not v0
+			if version == "v0" {
 				*errors = append(*errors, ValidationError{
 					Path:    path,
-					Message: fmt.Sprintf("version '%s' does not match pattern ^v\\d+$", version),
+					Message: "version must start at v1, v0 is not allowed",
 				})
-			} else {
-				// Check that version starts at v1, not v0
-				if version == "v0" {
-					*errors = append(*errors, ValidationError{
-						Path:    path,
-						Message: "version must start at v1, v0 is not allowed",
-					})
-				}
 			}
 		}
 	}
@@ -337,16 +364,19 @@ func (v *Validator) validateReferences(ctx context.Context, dataModel config.Dat
 	default:
 	}
 
-	var errors []ValidationError
+	// Pre-allocate error slice with reasonable capacity to avoid growth allocations
+	errors := make([]ValidationError, 0, 8)
 	v.validateStructureReferences(ctx, dataModel.Structure, allDataModels, visitedModels, depth, "", &errors)
 
 	if len(errors) > 0 {
-		// Build error message with all validation errors
-		errorMsg := "data model reference validation failed:"
+		// Build error message with all validation errors using strings.Builder
+		var errorMsg strings.Builder
+		errorMsg.WriteString("data model reference validation failed:")
 		for _, validationError := range errors {
-			errorMsg += fmt.Sprintf("\n  - %s", validationError.Error())
+			errorMsg.WriteString("\n  - ")
+			errorMsg.WriteString(validationError.Error())
 		}
-		return fmt.Errorf("%s", errorMsg)
+		return fmt.Errorf("%s", errorMsg.String())
 	}
 
 	return nil
@@ -359,15 +389,18 @@ func (v *Validator) validateStructureReferences(ctx context.Context, structure m
 	case <-ctx.Done():
 		*errors = append(*errors, ValidationError{
 			Path:    path,
-			Message: "validation cancelled: " + ctx.Err().Error(),
+			Message: "validation cancelled: " + safeContextError(ctx),
 		})
 		return
 	default:
 	}
 
 	for fieldName, field := range structure {
-		currentPath := fieldName
-		if path != "" {
+		// Build path efficiently once - use simple concatenation for single segment
+		var currentPath string
+		if path == "" {
+			currentPath = fieldName
+		} else {
 			currentPath = path + "." + fieldName
 		}
 
@@ -390,7 +423,7 @@ func (v *Validator) validateSingleReference(ctx context.Context, modelRef string
 	case <-ctx.Done():
 		*errors = append(*errors, ValidationError{
 			Path:    path,
-			Message: "validation cancelled: " + ctx.Err().Error(),
+			Message: "validation cancelled: " + safeContextError(ctx),
 		})
 		return
 	default:
@@ -405,9 +438,9 @@ func (v *Validator) validateSingleReference(ctx context.Context, modelRef string
 		return
 	}
 
-	// Parse the model reference
-	parts := strings.Split(modelRef, ":")
-	if len(parts) != 2 {
+	// Parse the model reference efficiently
+	colonIndex := strings.IndexByte(modelRef, ':')
+	if colonIndex == -1 {
 		// This should already be caught by basic validation, but let's be safe
 		*errors = append(*errors, ValidationError{
 			Path:    path,
@@ -416,8 +449,8 @@ func (v *Validator) validateSingleReference(ctx context.Context, modelRef string
 		return
 	}
 
-	modelName := parts[0]
-	version := parts[1]
+	modelName := modelRef[:colonIndex]
+	version := modelRef[colonIndex+1:]
 
 	// Check for circular reference
 	referenceKey := modelName + ":" + version
@@ -453,7 +486,9 @@ func (v *Validator) validateSingleReference(ctx context.Context, modelRef string
 	visitedModels[referenceKey] = true
 
 	// Recursively validate the referenced model (increment depth here)
-	v.validateStructureReferences(ctx, referencedVersion.Structure, allDataModels, visitedModels, depth+1, path+"."+referenceKey, errors)
+	// Build path efficiently for reference validation - simple concatenation for single segment
+	refPath := path + "." + referenceKey
+	v.validateStructureReferences(ctx, referencedVersion.Structure, allDataModels, visitedModels, depth+1, refPath, errors)
 
 	// Unmark this model after validation (backtrack)
 	delete(visitedModels, referenceKey)
