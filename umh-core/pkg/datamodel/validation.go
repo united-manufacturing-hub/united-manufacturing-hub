@@ -56,3 +56,13 @@ func ValidateWithReferences(ctx context.Context, dataModel config.DataModelVersi
 	validator := NewValidator()
 	return validator.ValidateWithReferences(ctx, dataModel, allDataModels)
 }
+
+func ValidateWithReferencesArray(ctx context.Context, dataModel config.DataModelVersion, allDataModels []config.DataModelsConfig) error {
+	// Build a map of all data models
+	allDataModelsMap := make(map[string]config.DataModelsConfig)
+	for _, dmc := range allDataModels {
+		allDataModelsMap[dmc.Name] = dmc
+	}
+
+	return ValidateWithReferences(ctx, dataModel, allDataModelsMap)
+}

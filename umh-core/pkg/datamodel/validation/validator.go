@@ -120,6 +120,23 @@ func (v *Validator) ValidateWithReferences(ctx context.Context, dataModel config
 	return v.validateReferences(ctx, dataModel, allDataModels, visitedModels, 0)
 }
 
+// ValidateWithReferencesArray validates a data model and all its references from an array of data models
+// It converts the array to a map and calls ValidateWithReferences
+// Parameters:
+// - ctx: context for cancellation
+// - dataModel: the data model to validate
+// - allDataModels: array of all available data models for reference resolution
+// Returns error if validation fails or circular references are detected
+func (v *Validator) ValidateWithReferencesArray(ctx context.Context, dataModel config.DataModelVersion, allDataModels []config.DataModelsConfig) error {
+	// Build a map of all data models
+	allDataModelsMap := make(map[string]config.DataModelsConfig)
+	for _, dmc := range allDataModels {
+		allDataModelsMap[dmc.Name] = dmc
+	}
+
+	return v.ValidateWithReferences(ctx, dataModel, allDataModelsMap)
+}
+
 // validateDataModel validates a data model version (private method)
 func (v *Validator) validateDataModel(ctx context.Context, dataModel config.DataModelVersion) error {
 	// Check if context is cancelled before starting validation

@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel"
 
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
@@ -135,6 +136,9 @@ type FileConfigManager struct {
 	cacheModTime   time.Time         // mtime of last successfully parsed file
 	cacheConfig    config.FullConfig // struct obtained from that file
 	cacheRawConfig string
+
+	// data models validator
+	dataModelsValidator *datamodel.Validator
 }
 
 // NewFileConfigManager creates a new FileConfigManager
@@ -146,11 +150,12 @@ func NewFileConfigManager() *FileConfigManager {
 	logger := logger.For(logger.ComponentConfigManager)
 
 	return &FileConfigManager{
-		configPath:        configPath,
-		fsService:         filesystem.NewDefaultService(),
-		logger:            logger,
-		mutexAtomicUpdate: *ctxmutex.NewCtxMutex(),
-		mutexReadOrWrite:  *ctxrwmutex.NewCtxRWMutex(),
+		configPath:          configPath,
+		fsService:           filesystem.NewDefaultService(),
+		logger:              logger,
+		mutexAtomicUpdate:   *ctxmutex.NewCtxMutex(),
+		mutexReadOrWrite:    *ctxrwmutex.NewCtxRWMutex(),
+		dataModelsValidator: datamodel.NewValidator(),
 	}
 }
 
@@ -359,6 +364,19 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (config.
 	if cfg.Agent.ReleaseChannel != config.ReleaseChannelNightly && cfg.Agent.ReleaseChannel != config.ReleaseChannelStable && cfg.Agent.ReleaseChannel != config.ReleaseChannelEnterprise {
 		m.logger.Warnf("config file has invalid release channel: %s", cfg.Agent.ReleaseChannel)
 		cfg.Agent.ReleaseChannel = "n/a"
+	}
+
+	// Validate that the data models are valid
+	for _, dmc := range cfg.DataModels {
+		// Find the latest version of the data model to validate
+		var latestVersion config.DataModelVersion
+		for _, version := range dmc.Versions {
+			latestVersion = version
+			break // Use the first version found
+		}
+		if err := m.dataModelsValidator.ValidateWithReferencesArray(ctx, latestVersion, cfg.DataModels); err != nil {
+			return config.FullConfig{}, fmt.Errorf("data model %s is invalid: %w", dmc.Name, err)
+		}
 	}
 
 	// update all cache fields atomically in a single critical section
