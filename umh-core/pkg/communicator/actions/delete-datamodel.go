@@ -31,9 +31,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 
 	"github.com/google/uuid"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -48,7 +48,7 @@ type DeleteDataModelAction struct {
 	instanceUUID uuid.UUID
 
 	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager
+	configManager   configmanager.ConfigManager
 
 	// Parsed request payload (only populated after Parse)
 	payload models.DeleteDataModelPayload
@@ -57,7 +57,7 @@ type DeleteDataModelAction struct {
 }
 
 // NewDeleteDataModelAction returns an un-parsed action instance.
-func NewDeleteDataModelAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager) *DeleteDataModelAction {
+func NewDeleteDataModelAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager configmanager.ConfigManager) *DeleteDataModelAction {
 	return &DeleteDataModelAction{
 		userEmail:       userEmail,
 		actionUUID:      actionUUID,

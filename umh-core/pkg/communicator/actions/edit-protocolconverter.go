@@ -33,6 +33,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"maps"
 	"strconv"
 	"time"
@@ -85,7 +86,7 @@ type EditProtocolConverterAction struct {
 	instanceUUID uuid.UUID
 
 	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager
+	configManager   configmanager.ConfigManager
 
 	// Parsed request payload (only populated after Parse)
 	protocolConverterUUID uuid.UUID
@@ -111,7 +112,7 @@ type EditProtocolConverterAction struct {
 }
 
 // NewEditProtocolConverterAction returns an un-parsed action instance.
-func NewEditProtocolConverterAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshotManager *fsm.SnapshotManager) *EditProtocolConverterAction {
+func NewEditProtocolConverterAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager configmanager.ConfigManager, systemSnapshotManager *fsm.SnapshotManager) *EditProtocolConverterAction {
 	return &EditProtocolConverterAction{
 		userEmail:             userEmail,
 		actionUUID:            actionUUID,

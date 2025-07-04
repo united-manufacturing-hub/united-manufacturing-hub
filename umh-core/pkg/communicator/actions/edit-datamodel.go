@@ -33,6 +33,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"strconv"
 	"strings"
 
@@ -54,7 +55,7 @@ type EditDataModelAction struct {
 	instanceUUID uuid.UUID
 
 	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager
+	configManager   configmanager.ConfigManager
 
 	// Parsed request payload (only populated after Parse)
 	payload models.EditDataModelPayload
@@ -67,7 +68,7 @@ type EditDataModelAction struct {
 }
 
 // NewEditDataModelAction returns an un-parsed action instance.
-func NewEditDataModelAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager) *EditDataModelAction {
+func NewEditDataModelAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager configmanager.ConfigManager) *EditDataModelAction {
 	// Create shared context with timeout for the entire action lifecycle
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 

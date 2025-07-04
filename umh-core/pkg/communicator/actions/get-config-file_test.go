@@ -17,13 +17,13 @@ package actions_test
 import (
 	"context"
 	"errors"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"time"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
@@ -35,7 +35,7 @@ var _ = Describe("GetConfigFile", func() {
 		actionUUID      uuid.UUID
 		instanceUUID    uuid.UUID
 		outboundChannel chan *models.UMHMessage
-		mockConfig      *config.MockConfigManager
+		mockConfig      *configmanager.MockConfigManager
 		snapshotManager *fsm.SnapshotManager
 		configContent   string
 	)
@@ -59,12 +59,12 @@ var _ = Describe("GetConfigFile", func() {
 		}`
 
 		// Create mock config manager
-		mockConfig = config.NewMockConfigManager()
+		mockConfig = configmanager.NewMockConfigManager()
 		mockConfig.WithConfigAsString(configContent)
 
 		// Setup mock filesystem with a config file
 		mockConfig.MockFileSystem.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
-			if path == config.DefaultConfigPath {
+			if path == configmanager.DefaultConfigPath {
 				return []byte(configContent), nil
 			}
 			return nil, errors.New("file not found")
@@ -186,7 +186,7 @@ internal:
 `
 			mockConfig.WithConfigAsString(yamlWithAnchors)
 			mockConfig.MockFileSystem.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
-				if path == config.DefaultConfigPath {
+				if path == configmanager.DefaultConfigPath {
 					return []byte(yamlWithAnchors), nil
 				}
 				return nil, errors.New("file not found")

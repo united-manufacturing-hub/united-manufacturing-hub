@@ -17,12 +17,12 @@ package actions
 import (
 	"context"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"time"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -37,7 +37,7 @@ type GetConfigFileAction struct {
 
 	// ─── Plumbing ────────────────────────────────────────────────────────────
 	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager
+	configManager   configmanager.ConfigManager
 
 	// ─── Runtime observation ────────────────────────────────────────────────
 	systemSnapshotManager *fsm.SnapshotManager
@@ -47,7 +47,7 @@ type GetConfigFileAction struct {
 }
 
 // NewGetConfigFileAction creates a new GetConfigFileAction with the provided parameters.
-func NewGetConfigFileAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager) *GetConfigFileAction {
+func NewGetConfigFileAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, systemSnapshotManager *fsm.SnapshotManager, configManager configmanager.ConfigManager) *GetConfigFileAction {
 	return &GetConfigFileAction{
 		userEmail:             userEmail,
 		actionUUID:            actionUUID,
@@ -84,7 +84,7 @@ func (a *GetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 	defer cancel()
 
 	// Use the default config path from the config manager
-	configPath := config.DefaultConfigPath
+	configPath := configmanager.DefaultConfigPath
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		fmt.Sprintf("Reading config file from %s", configPath), a.outboundChannel, models.GetConfigFile)

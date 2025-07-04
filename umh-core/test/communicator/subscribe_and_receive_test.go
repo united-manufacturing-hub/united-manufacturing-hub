@@ -17,6 +17,7 @@ package communicator
 import (
 	"context"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"sync"
 	"time"
 
@@ -187,7 +188,7 @@ var _ = Describe("Subscribe and Receive Test", func() {
 			config.ReleaseChannel("stable"),
 			false,
 			systemSnapshotManager,
-			config.NewMockConfigManager(),
+			configmanager.NewMockConfigManager(),
 			logger.For(logger.ComponentCommunicator),
 			topicbrowser.NewCache(),
 			topicbrowser.NewSimulator(),

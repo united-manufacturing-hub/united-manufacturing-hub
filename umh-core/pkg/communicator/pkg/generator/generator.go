@@ -17,6 +17,7 @@ package generator
 import (
 	"crypto/sha256"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"hash"
 	"sort"
 	"strconv"
@@ -36,7 +37,7 @@ type StatusCollectorType struct {
 	dog                   watchdog.Iface
 	systemSnapshotManager *fsm.SnapshotManager
 	logger                *zap.SugaredLogger
-	configManager         config.ConfigManager
+	configManager         configmanager.ConfigManager
 	topicBrowserCache     *topicbrowser.Cache
 	topicBrowserSimulator *topicbrowser.Simulator
 }
@@ -44,7 +45,7 @@ type StatusCollectorType struct {
 func NewStatusCollector(
 	dog watchdog.Iface,
 	systemSnapshotManager *fsm.SnapshotManager,
-	configManager config.ConfigManager,
+	configManager configmanager.ConfigManager,
 	logger *zap.SugaredLogger,
 	topicBrowserCache *topicbrowser.Cache,
 	topicBrowserSimulator *topicbrowser.Simulator,

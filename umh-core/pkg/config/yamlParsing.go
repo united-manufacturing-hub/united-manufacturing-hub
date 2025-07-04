@@ -22,9 +22,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// convertYamlToSpec processes protocol converter configs to resolve templateRef fields
+// ConvertYamlToSpec processes protocol converter configs to resolve templateRef fields
 // This translates between the "unrendered" config (with templateRef) and "rendered" config (with actual template content)
-func convertYamlToSpec(config FullConfig) (FullConfig, error) {
+func ConvertYamlToSpec(config FullConfig) (FullConfig, error) {
 	// Create a copy to avoid mutating the original
 	processedConfig := config.Clone()
 
@@ -100,7 +100,7 @@ func convertYamlToSpec(config FullConfig) (FullConfig, error) {
 //
 // In short: **Spec is expanded, YAML is compressed – with an escape hatch for
 // stand-alone converters.**
-func convertSpecToYaml(spec FullConfig) (FullConfig, error) {
+func ConvertSpecToYaml(spec FullConfig) (FullConfig, error) {
 	//------------------------------------
 	// 1) start with a deep copy
 	//------------------------------------

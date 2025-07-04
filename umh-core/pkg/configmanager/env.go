@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package config
+package configmanager
 
 import (
 	"context"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"os"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
@@ -66,7 +67,7 @@ import (
 //     c) Default values (for any unspecified fields)
 //
 // Important: This function has side effects! It modifies the config file on disk.
-func LoadConfigWithEnvOverrides(ctx context.Context, configManager *FileConfigManagerWithBackoff, log *zap.SugaredLogger) (FullConfig, error) {
+func LoadConfigWithEnvOverrides(ctx context.Context, configManager *FileConfigManagerWithBackoff, log *zap.SugaredLogger) (config.FullConfig, error) {
 	// Collect environment variables that can override config values
 	authToken, err := env.GetAsString("AUTH_TOKEN", false, "")
 	if err != nil {
@@ -106,18 +107,18 @@ func LoadConfigWithEnvOverrides(ctx context.Context, configManager *FileConfigMa
 	}
 
 	// Build the config override structure from environment variables
-	configOverride := FullConfig{
-		Agent: AgentConfig{
-			CommunicatorConfig: CommunicatorConfig{
+	configOverride := config.FullConfig{
+		Agent: config.AgentConfig{
+			CommunicatorConfig: config.CommunicatorConfig{
 				APIURL:    apiURL,
 				AuthToken: authToken,
 			},
-			ReleaseChannel: ReleaseChannel(releaseChannel),
+			ReleaseChannel: config.ReleaseChannel(releaseChannel),
 			Location:       locations,
 		},
-		Internal: InternalConfig{
-			Redpanda: RedpandaConfig{
-				FSMInstanceConfig: FSMInstanceConfig{
+		Internal: config.InternalConfig{
+			Redpanda: config.RedpandaConfig{
+				FSMInstanceConfig: config.FSMInstanceConfig{
 					DesiredFSMState: "active", // Default desired state for Redpanda
 				},
 				RedpandaServiceConfig: redpandaserviceconfig.RedpandaServiceConfig{
@@ -135,8 +136,8 @@ func LoadConfigWithEnvOverrides(ctx context.Context, configManager *FileConfigMa
 					},
 				},
 			},
-			TopicBrowser: TopicBrowserConfig{
-				FSMInstanceConfig: FSMInstanceConfig{
+			TopicBrowser: config.TopicBrowserConfig{
+				FSMInstanceConfig: config.FSMInstanceConfig{
 					DesiredFSMState: "stopped",
 				},
 			},
@@ -151,7 +152,7 @@ func LoadConfigWithEnvOverrides(ctx context.Context, configManager *FileConfigMa
 	// Apply the environment overrides to the config
 	configData, err := configManager.GetConfigWithOverwritesOrCreateNew(ctx, configOverride)
 	if err != nil {
-		return FullConfig{}, fmt.Errorf("failed to load config with environment overrides: %w", err)
+		return config.FullConfig{}, fmt.Errorf("failed to load config with environment overrides: %w", err)
 	}
 
 	return configData, nil

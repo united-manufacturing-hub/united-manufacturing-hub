@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package config
+package configmanager
 
 import (
 	"context"
@@ -22,6 +22,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
@@ -44,7 +46,7 @@ type MockConfigManager struct {
 	AtomicAddDataModelCalled            bool
 	AtomicEditDataModelCalled           bool
 	AtomicDeleteDataModelCalled         bool
-	Config                              FullConfig
+	Config                              config.FullConfig
 	ConfigError                         error
 	AddDataflowcomponentError           error
 	DeleteDataflowcomponentError        error
@@ -75,12 +77,12 @@ func NewMockConfigManager() *MockConfigManager {
 }
 
 // GetDataFlowConfig returns the DataFlow component configurations
-func (m *MockConfigManager) GetDataFlowConfig() []DataFlowComponentConfig {
+func (m *MockConfigManager) GetDataFlowConfig() []config.DataFlowComponentConfig {
 	return m.Config.DataFlow
 }
 
 // GetConfig implements the ConfigManager interface
-func (m *MockConfigManager) GetConfig(ctx context.Context, tick uint64) (FullConfig, error) {
+func (m *MockConfigManager) GetConfig(ctx context.Context, tick uint64) (config.FullConfig, error) {
 	m.mutexReadOrWrite.Lock()
 	defer m.mutexReadOrWrite.Unlock()
 	m.GetConfigCalled = true
@@ -90,7 +92,7 @@ func (m *MockConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 		case <-time.After(m.ConfigDelay):
 			// Delay completed
 		case <-ctx.Done():
-			return FullConfig{}, ctx.Err()
+			return config.FullConfig{}, ctx.Err()
 		}
 	}
 
@@ -98,7 +100,7 @@ func (m *MockConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 }
 
 // GetDataModels returns the data models from the mock config
-func (m *MockConfigManager) GetDataModels() []DataModelsConfig {
+func (m *MockConfigManager) GetDataModels() []config.DataModelsConfig {
 	return m.Config.DataModels
 }
 
@@ -109,7 +111,7 @@ func (m *MockConfigManager) GetFileSystemService() filesystem.Service {
 
 // WriteConfig implements the ConfigManager interface
 // all the functions that call MockConfigManager.writeConfig must hold the mutexReadAndWrite mutex
-func (m *MockConfigManager) writeConfig(ctx context.Context, cfg FullConfig) error {
+func (m *MockConfigManager) writeConfig(ctx context.Context, cfg config.FullConfig) error {
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -122,7 +124,7 @@ func (m *MockConfigManager) writeConfig(ctx context.Context, cfg FullConfig) err
 	}
 
 	// Convert spec to YAML using the same logic as the real implementation
-	yamlConfig, err := convertSpecToYaml(cfg)
+	yamlConfig, err := config.ConvertSpecToYaml(cfg)
 	if err != nil {
 		return fmt.Errorf("failed to convert spec to yaml: %w", err)
 	}
@@ -148,7 +150,7 @@ func (m *MockConfigManager) writeConfig(ctx context.Context, cfg FullConfig) err
 }
 
 // WithConfig configures the mock to return the given config
-func (m *MockConfigManager) WithConfig(cfg FullConfig) *MockConfigManager {
+func (m *MockConfigManager) WithConfig(cfg config.FullConfig) *MockConfigManager {
 	m.Config = cfg
 	return m
 }
@@ -241,28 +243,28 @@ func (m *MockConfigManager) AtomicSetLocation(ctx context.Context, location mode
 	defer m.mutexReadAndWrite.Unlock()
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	cfg, err := m.GetConfig(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
 
-	config.Agent.Location = make(map[int]string)
-	config.Agent.Location[0] = location.Enterprise
+	cfg.Agent.Location = make(map[int]string)
+	cfg.Agent.Location[0] = location.Enterprise
 	if location.Site != nil {
-		config.Agent.Location[1] = *location.Site
+		cfg.Agent.Location[1] = *location.Site
 	}
 	if location.Area != nil {
-		config.Agent.Location[2] = *location.Area
+		cfg.Agent.Location[2] = *location.Area
 	}
 	if location.Line != nil {
-		config.Agent.Location[3] = *location.Line
+		cfg.Agent.Location[3] = *location.Line
 	}
 	if location.WorkCell != nil {
-		config.Agent.Location[4] = *location.WorkCell
+		cfg.Agent.Location[4] = *location.WorkCell
 	}
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	if err := m.writeConfig(ctx, cfg); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
@@ -270,7 +272,7 @@ func (m *MockConfigManager) AtomicSetLocation(ctx context.Context, location mode
 }
 
 // atomic add dataflowcomponent
-func (m *MockConfigManager) AtomicAddDataflowcomponent(ctx context.Context, dfc DataFlowComponentConfig) error {
+func (m *MockConfigManager) AtomicAddDataflowcomponent(ctx context.Context, dfc config.DataFlowComponentConfig) error {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
 
@@ -281,16 +283,16 @@ func (m *MockConfigManager) AtomicAddDataflowcomponent(ctx context.Context, dfc 
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	cfg, err := m.GetConfig(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
 
 	// edit the config
-	config.DataFlow = append(config.DataFlow, dfc)
+	cfg.DataFlow = append(cfg.DataFlow, dfc)
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	if err := m.writeConfig(ctx, cfg); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
@@ -309,16 +311,16 @@ func (m *MockConfigManager) AtomicDeleteDataflowcomponent(ctx context.Context, c
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	cfg, err := m.GetConfig(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
 
 	// Find and remove the component with matching UUID
 	found := false
-	filteredComponents := make([]DataFlowComponentConfig, 0, len(config.DataFlow))
+	filteredComponents := make([]config.DataFlowComponentConfig, 0, len(cfg.DataFlow))
 
-	for _, component := range config.DataFlow {
+	for _, component := range cfg.DataFlow {
 		componentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
 		if componentID != componentUUID {
 			filteredComponents = append(filteredComponents, component)
@@ -332,10 +334,10 @@ func (m *MockConfigManager) AtomicDeleteDataflowcomponent(ctx context.Context, c
 	}
 
 	// Update config with filtered components
-	config.DataFlow = filteredComponents
+	cfg.DataFlow = filteredComponents
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	if err := m.writeConfig(ctx, cfg); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
@@ -343,50 +345,50 @@ func (m *MockConfigManager) AtomicDeleteDataflowcomponent(ctx context.Context, c
 }
 
 // AtomicEditDataflowcomponent implements the ConfigManager interface
-func (m *MockConfigManager) AtomicEditDataflowcomponent(ctx context.Context, componentUUID uuid.UUID, dfc DataFlowComponentConfig) (DataFlowComponentConfig, error) {
+func (m *MockConfigManager) AtomicEditDataflowcomponent(ctx context.Context, componentUUID uuid.UUID, dfc config.DataFlowComponentConfig) (config.DataFlowComponentConfig, error) {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
 
 	m.EditDataflowcomponentCalled = true
 
 	if m.EditDataflowcomponentError != nil {
-		return DataFlowComponentConfig{}, m.EditDataflowcomponentError
+		return config.DataFlowComponentConfig{}, m.EditDataflowcomponentError
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	cfg, err := m.GetConfig(ctx, 0)
 	if err != nil {
-		return DataFlowComponentConfig{}, fmt.Errorf("failed to get config: %w", err)
+		return config.DataFlowComponentConfig{}, fmt.Errorf("failed to get config: %w", err)
 	}
 
 	// Find the component with matching UUID
 	found := false
-	var oldConfig DataFlowComponentConfig
-	for i, component := range config.DataFlow {
+	var oldConfig config.DataFlowComponentConfig
+	for i, component := range cfg.DataFlow {
 		componentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
 		if componentID == componentUUID {
 			// Found the component to edit, update it
 			oldConfig = component
-			config.DataFlow[i] = dfc
+			cfg.DataFlow[i] = dfc
 			found = true
 			break
 		}
 	}
 
 	if !found {
-		return DataFlowComponentConfig{}, fmt.Errorf("dataflow component with UUID %s not found", componentUUID)
+		return config.DataFlowComponentConfig{}, fmt.Errorf("dataflow component with UUID %s not found", componentUUID)
 	}
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
-		return DataFlowComponentConfig{}, fmt.Errorf("failed to write config: %w", err)
+	if err := m.writeConfig(ctx, cfg); err != nil {
+		return config.DataFlowComponentConfig{}, fmt.Errorf("failed to write config: %w", err)
 	}
 
 	return oldConfig, nil
 }
 
 // AtomicAddProtocolConverter implements the ConfigManager interface
-func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc ProtocolConverterConfig) error {
+func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc config.ProtocolConverterConfig) error {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
 
@@ -397,13 +399,13 @@ func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	cfg, err := m.GetConfig(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
 
 	// check for duplicate name before add
-	for _, cmp := range config.ProtocolConverter {
+	for _, cmp := range cfg.ProtocolConverter {
 		if cmp.Name == pc.Name {
 			return fmt.Errorf("another protocol converter with name %q already exists – choose a unique name", pc.Name)
 		}
@@ -415,7 +417,7 @@ func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 		rootExists := false
 
 		// Scan existing protocol converters to find a root with matching name
-		for _, existing := range config.ProtocolConverter {
+		for _, existing := range cfg.ProtocolConverter {
 			if existing.Name == templateRef && existing.ProtocolConverterServiceConfig.TemplateRef == existing.Name {
 				rootExists = true
 				break
@@ -428,10 +430,10 @@ func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 	}
 
 	// Add the protocol converter - let convertSpecToYAML handle template generation
-	config.ProtocolConverter = append(config.ProtocolConverter, pc)
+	cfg.ProtocolConverter = append(cfg.ProtocolConverter, pc)
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	if err := m.writeConfig(ctx, cfg); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
@@ -439,42 +441,42 @@ func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 }
 
 // AtomicEditProtocolConverter implements the ConfigManager interface
-func (m *MockConfigManager) AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc ProtocolConverterConfig) (ProtocolConverterConfig, error) {
+func (m *MockConfigManager) AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc config.ProtocolConverterConfig) (config.ProtocolConverterConfig, error) {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
 
 	m.AtomicEditProtocolConverterCalled = true
 
 	if m.AtomicEditProtocolConverterError != nil {
-		return ProtocolConverterConfig{}, m.AtomicEditProtocolConverterError
+		return config.ProtocolConverterConfig{}, m.AtomicEditProtocolConverterError
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	cfg, err := m.GetConfig(ctx, 0)
 	if err != nil {
-		return ProtocolConverterConfig{}, fmt.Errorf("failed to get config: %w", err)
+		return config.ProtocolConverterConfig{}, fmt.Errorf("failed to get config: %w", err)
 	}
 
 	// Find target index via GenerateUUIDFromName(Name) == componentUUID
 	targetIndex := -1
-	var oldConfig ProtocolConverterConfig
-	for i, component := range config.ProtocolConverter {
+	var oldConfig config.ProtocolConverterConfig
+	for i, component := range cfg.ProtocolConverter {
 		curComponentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
 		if curComponentID == componentUUID {
 			targetIndex = i
-			oldConfig = config.ProtocolConverter[i]
+			oldConfig = cfg.ProtocolConverter[i]
 			break
 		}
 	}
 
 	if targetIndex == -1 {
-		return ProtocolConverterConfig{}, fmt.Errorf("protocol converter with UUID %s not found", componentUUID)
+		return config.ProtocolConverterConfig{}, fmt.Errorf("protocol converter with UUID %s not found", componentUUID)
 	}
 
 	// Duplicate-name check (exclude the edited one)
-	for i, cmp := range config.ProtocolConverter {
+	for i, cmp := range cfg.ProtocolConverter {
 		if i != targetIndex && cmp.Name == pc.Name {
-			return ProtocolConverterConfig{}, fmt.Errorf("another protocol converter with name %q already exists – choose a unique name", pc.Name)
+			return config.ProtocolConverterConfig{}, fmt.Errorf("another protocol converter with name %q already exists – choose a unique name", pc.Name)
 		}
 	}
 
@@ -486,10 +488,10 @@ func (m *MockConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 	// Handle root rename - propagate to children
 	if oldIsRoot && newIsRoot && oldConfig.Name != pc.Name {
 		// Update all children that reference the old root name
-		for i, inst := range config.ProtocolConverter {
+		for i, inst := range cfg.ProtocolConverter {
 			if i != targetIndex && inst.ProtocolConverterServiceConfig.TemplateRef == oldConfig.Name {
 				inst.ProtocolConverterServiceConfig.TemplateRef = pc.Name
-				config.ProtocolConverter[i] = inst
+				cfg.ProtocolConverter[i] = inst
 			}
 		}
 	}
@@ -501,7 +503,7 @@ func (m *MockConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 
 		// Scan existing protocol converters to find a root with matching name
 		// Note: we check the updated slice which may include renamed roots
-		for i, inst := range config.ProtocolConverter {
+		for i, inst := range cfg.ProtocolConverter {
 			// Skip the instance being edited since it's not committed yet
 			if i == targetIndex {
 				continue
@@ -518,16 +520,16 @@ func (m *MockConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 		}
 
 		if !rootExists {
-			return ProtocolConverterConfig{}, fmt.Errorf("template %q not found for child %s", templateRef, pc.Name)
+			return config.ProtocolConverterConfig{}, fmt.Errorf("template %q not found for child %s", templateRef, pc.Name)
 		}
 	}
 
 	// Commit the edit
-	config.ProtocolConverter[targetIndex] = pc
+	cfg.ProtocolConverter[targetIndex] = pc
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
-		return ProtocolConverterConfig{}, fmt.Errorf("failed to write config: %w", err)
+	if err := m.writeConfig(ctx, cfg); err != nil {
+		return config.ProtocolConverterConfig{}, fmt.Errorf("failed to write config: %w", err)
 	}
 
 	return oldConfig, nil
@@ -545,15 +547,15 @@ func (m *MockConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	cfg, err := m.GetConfig(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
 
 	// Find the target protocol converter by UUID
 	targetIndex := -1
-	var targetConverter ProtocolConverterConfig
-	for i, converter := range config.ProtocolConverter {
+	var targetConverter config.ProtocolConverterConfig
+	for i, converter := range cfg.ProtocolConverter {
 		converterID := dataflowcomponentserviceconfig.GenerateUUIDFromName(converter.Name)
 		if converterID == componentUUID {
 			targetIndex = i
@@ -573,7 +575,7 @@ func (m *MockConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 	// If it's a root, check for dependent children
 	if isRoot {
 		childCount := 0
-		for i, converter := range config.ProtocolConverter {
+		for i, converter := range cfg.ProtocolConverter {
 			// Skip the target itself
 			if i == targetIndex {
 				continue
@@ -590,18 +592,18 @@ func (m *MockConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 	}
 
 	// Build new slice omitting the target
-	filteredConverters := make([]ProtocolConverterConfig, 0, len(config.ProtocolConverter)-1)
-	for i, converter := range config.ProtocolConverter {
+	filteredConverters := make([]config.ProtocolConverterConfig, 0, len(cfg.ProtocolConverter)-1)
+	for i, converter := range cfg.ProtocolConverter {
 		if i != targetIndex {
 			filteredConverters = append(filteredConverters, converter)
 		}
 	}
 
 	// Update config with filtered converters
-	config.ProtocolConverter = filteredConverters
+	cfg.ProtocolConverter = filteredConverters
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	if err := m.writeConfig(ctx, cfg); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
@@ -609,7 +611,7 @@ func (m *MockConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 }
 
 // AtomicAddDataModel implements the ConfigManager interface
-func (m *MockConfigManager) AtomicAddDataModel(ctx context.Context, name string, dmVersion DataModelVersion) error {
+func (m *MockConfigManager) AtomicAddDataModel(ctx context.Context, name string, dmVersion config.DataModelVersion) error {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
 
@@ -620,28 +622,28 @@ func (m *MockConfigManager) AtomicAddDataModel(ctx context.Context, name string,
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	cfg, err := m.GetConfig(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
 
 	// check for duplicate name before add
-	for _, dmc := range config.DataModels {
+	for _, dmc := range cfg.DataModels {
 		if dmc.Name == name {
 			return fmt.Errorf("another data model with name %q already exists – choose a unique name", name)
 		}
 	}
 
 	// add the data model to the config
-	config.DataModels = append(config.DataModels, DataModelsConfig{
+	cfg.DataModels = append(cfg.DataModels, config.DataModelsConfig{
 		Name: name,
-		Versions: map[string]DataModelVersion{
+		Versions: map[string]config.DataModelVersion{
 			"v1": dmVersion,
 		},
 	})
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	if err := m.writeConfig(ctx, cfg); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
@@ -649,7 +651,7 @@ func (m *MockConfigManager) AtomicAddDataModel(ctx context.Context, name string,
 }
 
 // AtomicEditDataModel implements the ConfigManager interface
-func (m *MockConfigManager) AtomicEditDataModel(ctx context.Context, name string, dmVersion DataModelVersion) error {
+func (m *MockConfigManager) AtomicEditDataModel(ctx context.Context, name string, dmVersion config.DataModelVersion) error {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
 
@@ -660,14 +662,14 @@ func (m *MockConfigManager) AtomicEditDataModel(ctx context.Context, name string
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	cfg, err := m.GetConfig(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
 
 	targetIndex := -1
 	// find the data model to edit
-	for i, dmc := range config.DataModels {
+	for i, dmc := range cfg.DataModels {
 		if dmc.Name == name {
 			targetIndex = i
 			break
@@ -679,7 +681,7 @@ func (m *MockConfigManager) AtomicEditDataModel(ctx context.Context, name string
 	}
 
 	// get the current data model
-	currentDataModel := config.DataModels[targetIndex]
+	currentDataModel := cfg.DataModels[targetIndex]
 
 	// Find the highest version number to ensure we don't overwrite existing versions
 	var maxVersion = 0
@@ -698,10 +700,10 @@ func (m *MockConfigManager) AtomicEditDataModel(ctx context.Context, name string
 	currentDataModel.Versions[fmt.Sprintf("v%d", nextVersion)] = dmVersion
 
 	// edit the data model in the config
-	config.DataModels[targetIndex] = currentDataModel
+	cfg.DataModels[targetIndex] = currentDataModel
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	if err := m.writeConfig(ctx, cfg); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
@@ -720,14 +722,14 @@ func (m *MockConfigManager) AtomicDeleteDataModel(ctx context.Context, name stri
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	cfg, err := m.GetConfig(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
 
 	// find the data model to delete
 	targetIndex := -1
-	for i, dmc := range config.DataModels {
+	for i, dmc := range cfg.DataModels {
 		if dmc.Name == name {
 			targetIndex = i
 			break
@@ -739,10 +741,10 @@ func (m *MockConfigManager) AtomicDeleteDataModel(ctx context.Context, name stri
 	}
 
 	// delete the data model from the config
-	config.DataModels = append(config.DataModels[:targetIndex], config.DataModels[targetIndex+1:]...)
+	cfg.DataModels = append(cfg.DataModels[:targetIndex], cfg.DataModels[targetIndex+1:]...)
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	if err := m.writeConfig(ctx, cfg); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 

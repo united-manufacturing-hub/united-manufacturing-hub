@@ -37,10 +37,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -62,8 +62,8 @@ type DeleteProtocolConverterAction struct {
 	instanceUUID uuid.UUID // ID of the UMH instance we operate on
 
 	// ─── Plumbing ────────────────────────────────────────────────────────────
-	outboundChannel chan *models.UMHMessage // channel for progress events
-	configManager   config.ConfigManager    // abstraction over config store
+	outboundChannel chan *models.UMHMessage     // channel for progress events
+	configManager   configmanager.ConfigManager // abstraction over config store
 
 	// ─── Runtime observation ────────────────────────────────────────────────
 	systemSnapshotManager *fsm.SnapshotManager
@@ -78,7 +78,7 @@ type DeleteProtocolConverterAction struct {
 // NewDeleteProtocolConverterAction returns an *empty* action instance prepared
 // for unit tests or real execution.  The caller still needs to Parse and
 // Validate before calling Execute.
-func NewDeleteProtocolConverterAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshotManager *fsm.SnapshotManager) *DeleteProtocolConverterAction {
+func NewDeleteProtocolConverterAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager configmanager.ConfigManager, systemSnapshotManager *fsm.SnapshotManager) *DeleteProtocolConverterAction {
 	return &DeleteProtocolConverterAction{
 		userEmail:             userEmail,
 		actionUUID:            actionUUID,

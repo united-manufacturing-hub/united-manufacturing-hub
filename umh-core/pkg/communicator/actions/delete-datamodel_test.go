@@ -17,6 +17,7 @@ package actions_test
 import (
 	"encoding/json"
 	"errors"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"time"
 
 	"github.com/google/uuid"
@@ -42,7 +43,7 @@ func structToMap(v interface{}) map[string]interface{} {
 var _ = Describe("DeleteDataModelAction", func() {
 	var (
 		action          *actions.DeleteDataModelAction
-		mockConfigMgr   *config.MockConfigManager
+		mockConfigMgr   *configmanager.MockConfigManager
 		outboundChannel chan *models.UMHMessage
 		userEmail       string
 		actionUUID      uuid.UUID
@@ -53,7 +54,7 @@ var _ = Describe("DeleteDataModelAction", func() {
 		userEmail = "test@example.com"
 		actionUUID = uuid.New()
 		instanceUUID = uuid.New()
-		mockConfigMgr = config.NewMockConfigManager()
+		mockConfigMgr = configmanager.NewMockConfigManager()
 		outboundChannel = make(chan *models.UMHMessage, 10)
 
 		// Setup mock config with some existing data models
