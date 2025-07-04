@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -145,6 +146,10 @@ type Service struct {
 
 	tbName     string // normally a service can handle multiple instances, the service monitor here is different and can only handle one instance
 	ringbuffer *Ringbuffer
+
+	// Block processing tracking
+	lastProcessedBlockEndIndex int
+	processingMutex            sync.RWMutex
 }
 
 // ServiceOption is a function that configures a Service.
@@ -167,12 +172,13 @@ func WithManager(mgr *benthosfsm.BenthosManager) ServiceOption {
 func NewDefaultService(tbName string, opts ...ServiceOption) *Service {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentTopicBrowserService, tbName)
 	service := &Service{
-		logger:         logger.For(managerName),
-		benthosManager: benthosfsm.NewBenthosManager(managerName),
-		benthosService: benthossvc.NewDefaultBenthosService(tbName),
-		benthosConfigs: []config.BenthosConfig{},
-		tbName:         tbName,
-		ringbuffer:     NewRingbuffer(3), // Reduced from 8 to 3 for immediate 62% memory reduction
+		logger:                     logger.For(managerName),
+		benthosManager:             benthosfsm.NewBenthosManager(managerName),
+		benthosService:             benthossvc.NewDefaultBenthosService(tbName),
+		benthosConfigs:             []config.BenthosConfig{},
+		tbName:                     tbName,
+		ringbuffer:                 NewRingbuffer(3), // Reduced from 8 to 3 for immediate 62% memory reduction
+		lastProcessedBlockEndIndex: -1,               // Start from beginning
 	}
 
 	// Apply options
@@ -636,4 +642,11 @@ func (svc *Service) redpandaProcessingActivity(observedState rpfsm.RedpandaObser
 		return true
 	}
 	return false
+}
+
+// ResetBlockProcessing resets the block processing state (useful for testing or restart scenarios)
+func (svc *Service) ResetBlockProcessing() {
+	svc.processingMutex.Lock()
+	defer svc.processingMutex.Unlock()
+	svc.lastProcessedBlockEndIndex = -1
 }
