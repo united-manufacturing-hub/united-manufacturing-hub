@@ -5,22 +5,29 @@ High-performance validation and translation for UMH data models with comprehensi
 ## Quick Start
 
 ```go
-import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel"
+import (
+    "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel/validation"
+    "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel/translation"
+)
+
+// Create components
+validator := validation.NewValidator()
+translator := translation.NewTranslator()
 
 // Validate a data model structure
-err := datamodel.ValidateStructureOnly(ctx, dataModel)
+err := validator.ValidateStructureOnly(ctx, dataModel)
 if err != nil {
     // Handle validation errors
 }
 
 // Validate with references to other models
-err := datamodel.ValidateWithReferences(ctx, dataModel, allDataModels)
+err := validator.ValidateWithReferences(ctx, dataModel, allDataModels)
 if err != nil {
     // Handle validation or reference errors
 }
 
 // Translate to JSON schemas
-schemas, err := datamodel.TranslateToJSONSchema(ctx, dataModel, "pump", "v1", allModels)
+schemas, err := translator.TranslateToJSONSchema(ctx, dataModel, "pump", "v1", allModels)
 if err != nil {
     // Handle translation errors
 }
@@ -48,11 +55,8 @@ if err != nil {
 
 ```go
 // Simple structure validation (no reference checking)
-validator := datamodel.NewValidator()
+validator := validation.NewValidator()
 err := validator.ValidateStructureOnly(ctx, dataModel)
-
-// Or use the convenience function
-err := datamodel.ValidateStructureOnly(ctx, dataModel)
 ```
 
 **When to use**: During data model creation/editing when you don't need to verify referenced models exist.
@@ -61,7 +65,7 @@ err := datamodel.ValidateStructureOnly(ctx, dataModel)
 
 ```go
 // Complete validation including reference checking
-err := datamodel.ValidateWithReferences(ctx, dataModel, allDataModels)
+err := validator.ValidateWithReferences(ctx, dataModel, allDataModels)
 ```
 
 **When to use**: Before deploying or using data models in production.
@@ -70,7 +74,7 @@ err := datamodel.ValidateWithReferences(ctx, dataModel, allDataModels)
 
 ```go
 // Translate to JSON schemas grouped by type
-schemas, err := datamodel.TranslateToJSONSchema(ctx, dataModel, "pump", "v1", allModels)
+schemas, err := translator.TranslateToJSONSchema(ctx, dataModel, "pump", "v1", allModels)
 
 // Result: Multiple schemas like "_pump-v1-number", "_pump-v1-string", etc.
 for _, schema := range schemas {
@@ -80,32 +84,15 @@ for _, schema := range schemas {
 
 **When to use**: Converting UMH data models to standard JSON schemas for external systems.
 
-### 4. Advanced Usage with Sub-packages
-
-```go
-import (
-    "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel/validation"
-    "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel/translation"
-)
-
-// Direct access to validation
-validator := validation.NewValidator()
-err := validator.ValidateStructureOnly(ctx, dataModel)
-
-// Direct access to translation
-translator := translation.NewTranslator()
-schemas, err := translator.TranslateToJSONSchema(ctx, dataModel, "pump", "v1", allModels)
-```
-
 ## 🔧 Input Normalization
 
 The translator automatically handles common user mistakes:
 
 ```go
 // These all produce the same result:
-schemas1, _ := datamodel.TranslateToJSONSchema(ctx, dataModel, "pump", "v1", allModels)
-schemas2, _ := datamodel.TranslateToJSONSchema(ctx, dataModel, "_pump", "1", allModels)   // Auto-corrected
-schemas3, _ := datamodel.TranslateToJSONSchema(ctx, dataModel, "___pump", "v1", allModels) // Auto-corrected
+schemas1, _ := translator.TranslateToJSONSchema(ctx, dataModel, "pump", "v1", allModels)
+schemas2, _ := translator.TranslateToJSONSchema(ctx, dataModel, "_pump", "1", allModels)   // Auto-corrected
+schemas3, _ := translator.TranslateToJSONSchema(ctx, dataModel, "___pump", "v1", allModels) // Auto-corrected
 
 // All generate: "_pump-v1-number", "_pump-v1-string", etc.
 ```
@@ -123,7 +110,7 @@ Always use context for timeout and cancellation:
 ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 defer cancel()
 
-err := datamodel.ValidateStructureOnly(ctx, dataModel)
+err := validator.ValidateStructureOnly(ctx, dataModel)
 if err == context.DeadlineExceeded {
     // Handle timeout
 }
@@ -143,7 +130,7 @@ if err == context.DeadlineExceeded {
 Both validation and translation provide detailed error messages:
 
 ```go
-err := datamodel.ValidateStructureOnly(ctx, dataModel)
+err := validator.ValidateStructureOnly(ctx, dataModel)
 if err != nil {
     // Error includes precise path: "pump.motor.sensor.temperature"
     fmt.Printf("Validation failed: %v\n", err)
@@ -235,19 +222,23 @@ pumpModel := config.DataModelVersion{
 
 ### Complete Validation Pipeline
 ```go
-func validateAndTranslate(ctx context.Context, dataModel config.DataModelVersion, modelName, version string, allModels map[string]config.DataModelsConfig) ([]datamodel.SchemaOutput, error) {
+func validateAndTranslate(ctx context.Context, dataModel config.DataModelVersion, modelName, version string, allModels map[string]config.DataModelsConfig) ([]translation.SchemaOutput, error) {
+    // Create components
+    validator := validation.NewValidator()
+    translator := translation.NewTranslator()
+    
     // Step 1: Validate structure
-    if err := datamodel.ValidateStructureOnly(ctx, dataModel); err != nil {
+    if err := validator.ValidateStructureOnly(ctx, dataModel); err != nil {
         return nil, fmt.Errorf("structure validation failed: %w", err)
     }
     
     // Step 2: Validate references
-    if err := datamodel.ValidateWithReferences(ctx, dataModel, allModels); err != nil {
+    if err := validator.ValidateWithReferences(ctx, dataModel, allModels); err != nil {
         return nil, fmt.Errorf("reference validation failed: %w", err)
     }
     
     // Step 3: Translate to JSON schemas
-    schemas, err := datamodel.TranslateToJSONSchema(ctx, dataModel, modelName, version, allModels)
+    schemas, err := translator.TranslateToJSONSchema(ctx, dataModel, modelName, version, allModels)
     if err != nil {
         return nil, fmt.Errorf("translation failed: %w", err)
     }
@@ -262,9 +253,8 @@ The package is organized into focused sub-packages:
 
 - **`validation/`** - High-performance data model validation
 - **`translation/`** - JSON schema generation with type separation
-- **Public facades** - Top-level convenience APIs for backward compatibility
 
-This design provides clean separation of concerns while maintaining ease of use for common scenarios.
+This design provides clean separation of concerns with direct access to each component's functionality.
 
 ---
 

@@ -18,15 +18,12 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 )
 
-// Translation-specific constants for space-ready deployment
+// Translation-specific constants
 const (
-	// Maximum translation timeout to prevent hanging in space
-	MAX_TRANSLATION_TIMEOUT = 30 * time.Second
 	// Maximum number of schemas generated per translation (sanity check)
 	MAX_SCHEMAS_PER_TRANSLATION = 100
 )
@@ -47,7 +44,6 @@ type TypeInfo struct {
 }
 
 // ParseTypeInfo parses a field type string into structured information
-// SPACE-READY: Returns error for robust error handling
 func ParseTypeInfo(fieldType string) (TypeInfo, error) {
 	if fieldType == "" {
 		return TypeInfo{}, fmt.Errorf("field type cannot be empty")
@@ -101,7 +97,7 @@ type TypeTranslator interface {
 // multiple goroutines. It translates data model structures into JSON schemas
 // grouped by type category and subtype.
 //
-// SPACE-READY ASSUMPTIONS:
+// Assumptions:
 // - Input has been validated by the validator
 // - Field names, structures, and references are valid
 // - Recursion depth is already controlled by validator
@@ -122,11 +118,8 @@ func NewTranslator() *Translator {
 // normalizeModelName strips leading underscores from model names
 // Users sometimes mistakenly include the underscore prefix that's used in schema naming
 func (t *Translator) normalizeModelName(modelName string) string {
-	// Strip leading underscores
-	for len(modelName) > 0 && modelName[0] == '_' {
-		modelName = modelName[1:]
-	}
-	return modelName
+	// Strip leading underscores using stdlib function
+	return strings.TrimLeft(modelName, "_")
 }
 
 // normalizeVersion adds "v" prefix to version if it's missing
@@ -154,29 +147,7 @@ func (t *Translator) normalizeVersion(version string) string {
 // - version: version of the model (for schema naming) - "v" prefix will be added if missing
 // - allDataModels: map of all available data models for reference resolution (MUST be pre-validated)
 // Returns slice of SchemaOutput, each containing a schema name and JSON content
-//
-// SPACE-READY: Assumes input is pre-validated, focuses on translation robustness
 func (t *Translator) TranslateToJSONSchema(ctx context.Context, dataModel config.DataModelVersion, modelName string, version string, allDataModels map[string]config.DataModelsConfig) ([]SchemaOutput, error) {
-	// SPACE-READY: Add timeout protection to prevent hanging
-	ctx, cancel := context.WithTimeout(ctx, MAX_TRANSLATION_TIMEOUT)
-	defer cancel()
-
-	// SPACE-READY: Panic recovery for mission-critical deployment
-	defer func() {
-		if r := recover(); r != nil {
-			// Log the panic but don't crash the probe
-			// In a real space deployment, this would be logged to telemetry
-			fmt.Printf("CRITICAL: Panic recovered in TranslateToJSONSchema: %v", r)
-		}
-	}()
-
-	// Check if context is cancelled before starting translation
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
-	}
-
 	// Normalize inputs to handle common user mistakes
 	modelName = t.normalizeModelName(modelName)
 	version = t.normalizeVersion(version)
@@ -187,7 +158,7 @@ func (t *Translator) TranslateToJSONSchema(ctx context.Context, dataModel config
 		return nil, fmt.Errorf("failed to collect leaf paths: %w", err)
 	}
 
-	// SPACE-READY: Sanity check - ensure we have paths to translate
+	// Sanity check - ensure we have paths to translate
 	if len(paths) == 0 {
 		return nil, fmt.Errorf("no valid paths found in data model")
 	}
@@ -195,7 +166,7 @@ func (t *Translator) TranslateToJSONSchema(ctx context.Context, dataModel config
 	// Step 2: Group paths by type category and subtype
 	groupedPaths := t.groupPathsByType(paths)
 
-	// SPACE-READY: Sanity check - prevent generating too many schemas
+	// Sanity check - prevent generating too many schemas
 	if len(groupedPaths) > MAX_SCHEMAS_PER_TRANSLATION {
 		return nil, fmt.Errorf("too many schema types (max %d)", MAX_SCHEMAS_PER_TRANSLATION)
 	}
@@ -205,7 +176,6 @@ func (t *Translator) TranslateToJSONSchema(ctx context.Context, dataModel config
 	allSchemas := make([]SchemaOutput, 0, len(groupedPaths))
 
 	for typeKey, typePaths := range groupedPaths {
-		// SPACE-READY: Handle ParseTypeInfo error
 		typeInfo, err := ParseTypeInfo(typeKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse type %s: %w", typeKey, err)
@@ -230,7 +200,9 @@ func (t *Translator) TranslateToJSONSchema(ctx context.Context, dataModel config
 // groupPathsByType groups paths by their full type string
 func (t *Translator) groupPathsByType(paths []PathInfo) map[string][]PathInfo {
 	// Pre-allocate map with estimated capacity (typically 3-4 types: number, string, boolean, etc.)
-	groups := make(map[string][]PathInfo, 4)
+	// Use min to avoid over-allocation for small path sets
+	estimatedTypes := min(len(paths), 4)
+	groups := make(map[string][]PathInfo, estimatedTypes)
 	for _, path := range paths {
 		groups[path.ValueType] = append(groups[path.ValueType], path)
 	}
@@ -238,7 +210,6 @@ func (t *Translator) groupPathsByType(paths []PathInfo) map[string][]PathInfo {
 }
 
 // collectAllLeafPaths recursively collects all leaf field paths with their types
-// SPACE-READY: Assumes input is pre-validated, focuses on translation robustness
 func (t *Translator) collectAllLeafPaths(ctx context.Context, structure map[string]config.Field, allDataModels map[string]config.DataModelsConfig, visitedModels map[string]bool, currentPath string) ([]PathInfo, error) {
 	// Check if context is cancelled before processing this level
 	select {
@@ -249,7 +220,7 @@ func (t *Translator) collectAllLeafPaths(ctx context.Context, structure map[stri
 
 	// Pre-allocate with estimated capacity based on structure size
 	// Most fields are either leaf nodes or have a few subfields, so this is a reasonable estimate
-	estimatedCapacity := len(structure) * 2 // Conservative estimate for nested structures
+	estimatedCapacity := max(len(structure)*2, 4) // Conservative estimate with minimum of 4
 	paths := make([]PathInfo, 0, estimatedCapacity)
 
 	for fieldName, field := range structure {
@@ -295,7 +266,6 @@ func (t *Translator) collectAllLeafPaths(ctx context.Context, structure map[stri
 }
 
 // resolveReference resolves a _refModel reference and returns its leaf paths
-// SPACE-READY: Assumes references are pre-validated, focuses on translation robustness
 func (t *Translator) resolveReference(ctx context.Context, modelRef string, allDataModels map[string]config.DataModelsConfig, visitedModels map[string]bool, prefixPath string) ([]PathInfo, error) {
 	// Check if context is cancelled before processing this reference
 	select {
@@ -316,7 +286,7 @@ func (t *Translator) resolveReference(ctx context.Context, modelRef string, allD
 	modelName := modelRef[:colonIndex]
 	version := modelRef[colonIndex+1:]
 
-	// Check for circular reference (should be caught by validator, but double-check for safety)
+	// Check for circular reference
 	referenceKey := modelName + ":" + version
 	if visitedModels[referenceKey] {
 		return nil, TranslationError{
@@ -325,7 +295,7 @@ func (t *Translator) resolveReference(ctx context.Context, modelRef string, allD
 		}
 	}
 
-	// Check if the referenced model exists (should be validated, but check for safety)
+	// Get the referenced model
 	referencedModel, exists := allDataModels[modelName]
 	if !exists {
 		return nil, TranslationError{
@@ -334,7 +304,7 @@ func (t *Translator) resolveReference(ctx context.Context, modelRef string, allD
 		}
 	}
 
-	// Check if the referenced version exists (should be validated, but check for safety)
+	// Get the referenced version
 	referencedVersion, versionExists := referencedModel.Versions[version]
 	if !versionExists {
 		return nil, TranslationError{

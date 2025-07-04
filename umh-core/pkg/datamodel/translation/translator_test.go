@@ -411,7 +411,7 @@ var _ = Describe("Translator", func() {
 
 			_, err := translator.TranslateToJSONSchema(cancelledCtx, dataModel, "pump", "v1", make(map[string]config.DataModelsConfig))
 			Expect(err).To(HaveOccurred())
-			Expect(err).To(Equal(context.Canceled))
+			Expect(err.Error()).To(ContainSubstring("context canceled"))
 		})
 
 		It("should respect context timeout", func() {
@@ -432,7 +432,7 @@ var _ = Describe("Translator", func() {
 
 			_, err := translator.TranslateToJSONSchema(timeoutCtx, dataModel, "pump", "v1", make(map[string]config.DataModelsConfig))
 			Expect(err).To(HaveOccurred())
-			Expect(err).To(Equal(context.DeadlineExceeded))
+			Expect(err.Error()).To(ContainSubstring("context deadline exceeded"))
 		})
 	})
 

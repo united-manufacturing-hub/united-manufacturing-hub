@@ -18,7 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 )
 
 // TimeseriesTranslator handles translation of timeseries data model fields to JSON schemas
@@ -52,7 +52,7 @@ func (t *TimeseriesTranslator) TranslateToSchema(ctx context.Context, paths []Pa
 	for i, path := range paths {
 		pathStrings[i] = path.Path
 	}
-	sort.Strings(pathStrings)
+	slices.Sort(pathStrings)
 
 	// Generate the JSON schema
 	schema, err := t.generateTimeseriesSchema(jsonType, pathStrings)

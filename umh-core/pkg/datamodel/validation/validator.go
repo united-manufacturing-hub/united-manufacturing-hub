@@ -458,10 +458,11 @@ func (v *Validator) validateSingleReference(ctx context.Context, modelRef string
 	}
 
 	// Safety check: limit recursion depth to 10 levels
-	if depth >= 10 {
+	const maxDepth = 10
+	if depth >= maxDepth {
 		*errors = append(*errors, ValidationError{
 			Path:    path,
-			Message: "reference validation depth limit exceeded (10 levels) - possible deep nesting or circular reference",
+			Message: fmt.Sprintf("reference validation depth limit exceeded (%d levels) - possible deep nesting or circular reference", maxDepth),
 		})
 		return
 	}
