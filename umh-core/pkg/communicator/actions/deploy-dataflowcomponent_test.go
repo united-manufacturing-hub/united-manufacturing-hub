@@ -94,6 +94,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state":             "active",
 				"ignoreHealthCheck": false,
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
@@ -129,6 +130,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state":             "active",
 				"ignoreHealthCheck": false,
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
@@ -169,6 +171,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state":             "active",
 				"ignoreHealthCheck": false,
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
@@ -210,6 +213,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						"inputs": map[string]interface{}{
@@ -237,6 +241,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "unsupported-type",
 				},
+				"state":   "active",
 				"payload": map[string]interface{}{},
 			}
 
@@ -253,6 +258,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state":   "active",
 				"payload": map[string]interface{}{
 					// Missing customDataFlowComponent
 				},
@@ -271,6 +277,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						// Missing inputs
@@ -303,6 +310,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						"inputs": map[string]interface{}{
@@ -337,6 +345,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 				"payload": map[string]interface{}{
 					// Direct inputs without customDataFlowComponent wrapper
 					"inputs": map[string]interface{}{
@@ -373,6 +382,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state":             "active",
 				"ignoreHealthCheck": false,
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
@@ -413,6 +423,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state":             "active",
 				"ignoreHealthCheck": false,
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
@@ -516,6 +527,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state":             "active",
 				"ignoreHealthCheck": false,
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
@@ -578,6 +590,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state":             "active",
 				"ignoreHealthCheck": false,
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
@@ -638,6 +651,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state":             "active",
 				"ignoreHealthCheck": false,
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
@@ -705,6 +719,76 @@ buffer:
 			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.RateLimitResources[0]["label"]).To(Equal("limiter"))
 			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.Buffer).To(HaveLen(1))
 			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.Buffer["memory"]).To(Equal(map[string]interface{}{}))
+		})
+
+		It("should deploy dataflow component with initial state 'stopped'", func() {
+			// Setup - parse payload with state set to stopped
+			payload := map[string]interface{}{
+				"name": "stopped-component",
+				"meta": map[string]interface{}{
+					"type": "custom",
+				},
+				"state":             "stopped", // Setting the initial state to stopped
+				"ignoreHealthCheck": true,      // We need this since we're explicitly not starting it
+				"payload": map[string]interface{}{
+					"customDataFlowComponent": map[string]interface{}{
+						"inputs": map[string]interface{}{
+							"type": "yaml",
+							"data": "type: http_server\nhttp_server:\n  path: /input\n  port: 8000",
+						},
+						"outputs": map[string]interface{}{
+							"type": "yaml",
+							"data": "type: stdout",
+						},
+						"pipeline": map[string]interface{}{
+							"processors": map[string]interface{}{
+								"0": map[string]interface{}{
+									"type": "yaml",
+									"data": "type: mapping\nprocs: []",
+								},
+							},
+						},
+					},
+				},
+			}
+
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Reset tracking for this test
+			mockConfig.ResetCalls()
+
+			// Start the state mocker
+			err = stateMocker.Start()
+			Expect(err).NotTo(HaveOccurred())
+
+			// Execute the action
+			result, metadata, err := action.Execute()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(ContainSubstring("success"))
+			Expect(metadata).To(BeNil())
+
+			// Stop the state mocker
+			stateMocker.Stop()
+
+			// Verify AtomicAddDataflowcomponent was called
+			Expect(mockConfig.AddDataflowcomponentCalled).To(BeTrue())
+
+			// Verify the component was added with correct configuration and state
+			Expect(mockConfig.Config.DataFlow).To(HaveLen(1))
+			Expect(mockConfig.Config.DataFlow[0].Name).To(Equal("stopped-component"))
+
+			// This is the key assertion - verify the component is configured with stopped state
+			Expect(mockConfig.Config.DataFlow[0].DesiredFSMState).To(Equal("stopped"))
+
+			// Verify component structure
+			inputConfig := mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.Input
+			Expect(inputConfig["type"]).To(Equal("http_server"))
+
+			httpServerConfig, ok := inputConfig["http_server"].(map[string]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(httpServerConfig["path"]).To(Equal("/input"))
+			Expect(httpServerConfig["port"]).To(Equal(int(8000)))
 		})
 	})
 })

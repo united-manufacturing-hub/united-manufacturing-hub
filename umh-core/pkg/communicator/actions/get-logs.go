@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -224,10 +225,21 @@ func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
 			res.Logs = mapS6LogsToSlice(observedState.ServiceInfo.DataflowComponentWriteObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs, reqStartTime)
 		}
 	case models.TopicBrowserLogType:
-		// TODO: Implement topic browser logs
-		err := errors.New("topic-browser logs are not implemented yet")
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
-		return nil, nil, err
+		tbInstance, ok := fsm.FindInstance(systemSnapshot, constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
+		if !ok || tbInstance == nil {
+			err := logsRetrievalError(fmt.Errorf("topic browser instance not found"), logType)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
+			return nil, nil, err
+		}
+
+		observedState, ok := tbInstance.LastObservedState.(*topicbrowser.ObservedStateSnapshot)
+		if !ok || observedState == nil {
+			err := logsRetrievalError(fmt.Errorf("invalid observed state type for topic browser instance %s", tbInstance.ID), logType)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
+			return nil, nil, err
+		}
+
+		res.Logs = mapS6LogsToSlice(observedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs, reqStartTime)
 	}
 
 	return res, nil, nil

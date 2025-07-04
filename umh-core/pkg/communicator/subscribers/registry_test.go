@@ -43,18 +43,94 @@ var _ = Describe("Registry", func() {
 		})
 	})
 
-	Describe("Add", func() {
+	Describe("AddOrRefresh", func() {
 		Context("when adding a new subscriber", func() {
 			It("should add the subscriber and initialize bootstrapped state to false", func() {
 				email := "test@example.com"
 
-				registry.Add(email)
+				registry.AddOrRefresh(email, false)
 
 				Expect(registry.Length()).To(Equal(1))
 
 				// Check that bootstrapped state is initialized correctly
 				bootstrapped := registry.IsBootstrapped(email)
 				Expect(bootstrapped).To(BeFalse())
+			})
+
+			It("should add the subscriber and initialize bootstrapped state to true", func() {
+				email := "test@example.com"
+
+				registry.AddOrRefresh(email, true)
+
+				Expect(registry.Length()).To(Equal(1))
+
+				// Check that bootstrapped state is initialized correctly
+				bootstrapped := registry.IsBootstrapped(email)
+				Expect(bootstrapped).To(BeTrue())
+			})
+		})
+
+		Context("when refreshing an existing subscriber", func() {
+			It("should update the bootstrapped state from false to true", func() {
+				email := "test@example.com"
+
+				// Add subscriber with bootstrapped=false
+				registry.AddOrRefresh(email, false)
+
+				// Verify initial state
+				bootstrapped := registry.IsBootstrapped(email)
+				Expect(bootstrapped).To(BeFalse())
+
+				// Refresh with bootstrapped=true
+				registry.AddOrRefresh(email, true)
+
+				// Should still have only one subscriber
+				Expect(registry.Length()).To(Equal(1))
+
+				// Check that bootstrapped flag is updated
+				bootstrapped = registry.IsBootstrapped(email)
+				Expect(bootstrapped).To(BeTrue())
+			})
+
+			It("should update the bootstrapped state from true to false", func() {
+				email := "test@example.com"
+
+				// Add subscriber with bootstrapped=true
+				registry.AddOrRefresh(email, true)
+
+				// Verify initial state
+				bootstrapped := registry.IsBootstrapped(email)
+				Expect(bootstrapped).To(BeTrue())
+
+				// Refresh with bootstrapped=false
+				registry.AddOrRefresh(email, false)
+
+				// Should still have only one subscriber
+				Expect(registry.Length()).To(Equal(1))
+
+				// Check that bootstrapped flag is updated
+				bootstrapped = registry.IsBootstrapped(email)
+				Expect(bootstrapped).To(BeFalse())
+			})
+
+			It("should refresh TTL when called on existing subscriber", func() {
+				email := "test@example.com"
+
+				// Add subscriber
+				registry.AddOrRefresh(email, true)
+
+				// Wait for most of the TTL to pass
+				time.Sleep(ttl - 50*time.Millisecond)
+
+				// Refresh the subscriber
+				registry.AddOrRefresh(email, true)
+
+				// Wait for the original TTL to have passed
+				time.Sleep(75 * time.Millisecond)
+
+				// Subscriber should still be active because TTL was refreshed
+				Expect(registry.Length()).To(Equal(1))
+				Expect(registry.IsBootstrapped(email)).To(BeTrue())
 			})
 		})
 
@@ -63,7 +139,7 @@ var _ = Describe("Registry", func() {
 				email := "test@example.com"
 
 				// Add subscriber first time
-				registry.Add(email)
+				registry.AddOrRefresh(email, false)
 
 				// Set subscriber as bootstrapped
 				registry.SetBootstrapped(email, true)
@@ -73,7 +149,7 @@ var _ = Describe("Registry", func() {
 				Expect(bootstrapped).To(BeTrue())
 
 				// Add the same subscriber again
-				registry.Add(email)
+				registry.AddOrRefresh(email, false)
 
 				// Should still have only one subscriber
 				Expect(registry.Length()).To(Equal(1))
@@ -89,7 +165,7 @@ var _ = Describe("Registry", func() {
 				emails := []string{"user1@example.com", "user2@example.com", "user3@example.com"}
 
 				for _, email := range emails {
-					registry.Add(email)
+					registry.AddOrRefresh(email, false)
 				}
 
 				Expect(registry.Length()).To(Equal(3))
@@ -99,6 +175,40 @@ var _ = Describe("Registry", func() {
 					bootstrapped := registry.IsBootstrapped(email)
 					Expect(bootstrapped).To(BeFalse())
 				}
+			})
+
+			It("should handle multiple subscribers with different bootstrapped states", func() {
+				email1 := "user1@example.com"
+				email2 := "user2@example.com"
+				email3 := "user3@example.com"
+
+				registry.AddOrRefresh(email1, false)
+				registry.AddOrRefresh(email2, true)
+				registry.AddOrRefresh(email3, false)
+
+				Expect(registry.Length()).To(Equal(3))
+
+				// Verify each subscriber has correct bootstrapped state
+				Expect(registry.IsBootstrapped(email1)).To(BeFalse())
+				Expect(registry.IsBootstrapped(email2)).To(BeTrue())
+				Expect(registry.IsBootstrapped(email3)).To(BeFalse())
+			})
+		})
+
+		Context("when handling resubscription scenarios", func() {
+			It("should properly handle a subscriber that was previously bootstrapped", func() {
+				email := "test@example.com"
+
+				// Add subscriber as non-bootstrapped (new subscriber)
+				registry.AddOrRefresh(email, false)
+				Expect(registry.IsBootstrapped(email)).To(BeFalse())
+
+				// Simulate resubscription where subscriber was previously bootstrapped
+				registry.AddOrRefresh(email, true)
+				Expect(registry.IsBootstrapped(email)).To(BeTrue())
+
+				// Ensure subscriber count remains the same
+				Expect(registry.Length()).To(Equal(1))
 			})
 		})
 	})
@@ -116,7 +226,7 @@ var _ = Describe("Registry", func() {
 				emails := []string{"user1@example.com", "user2@example.com", "user3@example.com"}
 
 				for _, email := range emails {
-					registry.Add(email)
+					registry.AddOrRefresh(email, false)
 				}
 
 				result := registry.List()
@@ -128,7 +238,7 @@ var _ = Describe("Registry", func() {
 		Context("when subscribers expire", func() {
 			It("should not include expired subscribers in the list", func() {
 				email := "test@example.com"
-				registry.Add(email)
+				registry.AddOrRefresh(email, false)
 
 				Expect(registry.List()).To(ContainElement(email))
 
@@ -145,7 +255,7 @@ var _ = Describe("Registry", func() {
 		Context("when subscriber exists", func() {
 			It("should return the correct bootstrapped state", func() {
 				email := "test@example.com"
-				registry.Add(email)
+				registry.AddOrRefresh(email, false)
 
 				// Initially should be false
 				bootstrapped := registry.IsBootstrapped(email)
@@ -184,7 +294,7 @@ var _ = Describe("Registry", func() {
 				emails := []string{"user1@example.com", "user2@example.com", "user3@example.com"}
 
 				for _, email := range emails {
-					registry.Add(email)
+					registry.AddOrRefresh(email, false)
 				}
 
 				var receivedEmails []string
@@ -211,8 +321,8 @@ var _ = Describe("Registry", func() {
 				email1 := "user1@example.com"
 				email2 := "user2@example.com"
 
-				registry.Add(email1)
-				registry.Add(email2)
+				registry.AddOrRefresh(email1, false)
+				registry.AddOrRefresh(email2, false)
 
 				// Set different bootstrapped states
 				registry.SetBootstrapped(email1, true)
@@ -235,7 +345,7 @@ var _ = Describe("Registry", func() {
 		Context("when subscriber exists", func() {
 			It("should update the bootstrapped state", func() {
 				email := "test@example.com"
-				registry.Add(email)
+				registry.AddOrRefresh(email, false)
 
 				// Initially should be false
 				bootstrapped := registry.IsBootstrapped(email)
@@ -282,7 +392,7 @@ var _ = Describe("Registry", func() {
 				emails := []string{"user1@example.com", "user2@example.com", "user3@example.com"}
 
 				for i, email := range emails {
-					registry.Add(email)
+					registry.AddOrRefresh(email, false)
 					Expect(registry.Length()).To(Equal(i + 1))
 				}
 			})
@@ -291,7 +401,7 @@ var _ = Describe("Registry", func() {
 		Context("when subscribers expire", func() {
 			It("should return the correct count after expiration", func() {
 				email := "test@example.com"
-				registry.Add(email)
+				registry.AddOrRefresh(email, false)
 
 				Expect(registry.Length()).To(Equal(1))
 
@@ -307,7 +417,7 @@ var _ = Describe("Registry", func() {
 		Context("when bootstrapped state expires", func() {
 			It("should also expire the bootstrapped state along with subscriber", func() {
 				email := "test@example.com"
-				registry.Add(email)
+				registry.AddOrRefresh(email, false)
 				registry.SetBootstrapped(email, true)
 
 				// Verify both subscriber and bootstrapped state exist
@@ -326,14 +436,14 @@ var _ = Describe("Registry", func() {
 		Context("when re-adding expired subscriber", func() {
 			It("should reset bootstrapped state to false", func() {
 				email := "test@example.com"
-				registry.Add(email)
+				registry.AddOrRefresh(email, false)
 				registry.SetBootstrapped(email, true)
 
 				// Wait for expiration
 				time.Sleep(ttl + cullInterval + 50*time.Millisecond)
 
 				// Re-add the subscriber
-				registry.Add(email)
+				registry.AddOrRefresh(email, false)
 
 				// Should be back but not bootstrapped
 				Expect(registry.Length()).To(Equal(1))
@@ -352,7 +462,7 @@ var _ = Describe("Registry", func() {
 			// Goroutine 1: Adding subscribers
 			go func() {
 				for i := 0; i < 100; i++ {
-					registry.Add(email)
+					registry.AddOrRefresh(email, false)
 				}
 				done <- true
 			}()

@@ -338,6 +338,20 @@ func (r *RedpandaInstance) reconcileRunningStates(ctx context.Context, services 
 			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("recovering: %s", reason)
 			return r.baseFSMInstance.SendEvent(ctx, EventRecovered), true
 		}
+
+		// CRITICAL FIX: If degraded because S6 is not running, attempt to restart it
+		s6Running, _ := r.IsRedpandaS6Running()
+		if !s6Running {
+			r.baseFSMInstance.GetLogger().Debugf("S6 service stopped while in degraded state, attempting to restart")
+			err := r.StartInstance(ctx, services.GetFileSystem())
+			if err != nil {
+				r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("degraded: failed to restart service: %v", err)
+				return err, false
+			}
+			r.PreviousObservedState.ServiceInfo.StatusReason = "degraded: restarting service"
+			return nil, false // Don't transition yet, wait for restart to take effect
+		}
+
 		r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("degraded: %s", reason)
 		return nil, false
 	default:

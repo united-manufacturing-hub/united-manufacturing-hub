@@ -158,6 +158,7 @@ func (s *StatusCollectorType) GenerateStatusMessage(isBootstrapped bool) *models
 					"action-get-data-flow-component-metrics",
 					"log-logs-suppression", // Prevents logging of GetLogs action results to avoid log flooding when UI auto-refreshes logs (see HandleActionMessage GetLogs suppression for details)
 					"core-health",
+					"pause-dfc",
 					"action-get-metrics",
 					"action-delete-protocol-converter",
 					"action-edit-protocol-converter",
