@@ -52,8 +52,9 @@ const (
 )
 
 const (
-	AdminAPIPort    = 9644
-	AdminAPITimeout = 25 * time.Millisecond
+	AdminAPIPort       = 9644
+	AdminAPITimeout    = 25 * time.Millisecond
+	SchemaRegistryPort = 8081
 )
 
 const (

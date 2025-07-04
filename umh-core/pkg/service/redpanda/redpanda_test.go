@@ -593,4 +593,5 @@ var _ = Describe("Redpanda Service", func() {
 			Expect(err).To(MatchError(mockError))
 		})
 	})
+
 })
