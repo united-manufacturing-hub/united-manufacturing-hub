@@ -121,7 +121,11 @@ func (a *AddDataModelAction) Validate() error {
 		Structure:   configStructure,
 	}
 
-	if err := validator.ValidateDataModel(context.Background(), dmVersion); err != nil {
+	// Create context with timeout for validation
+	validationCtx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	defer cancel()
+
+	if err := validator.ValidateStructureOnly(validationCtx, dmVersion); err != nil {
 		return fmt.Errorf("data model structure validation failed: %v", err)
 	}
 
