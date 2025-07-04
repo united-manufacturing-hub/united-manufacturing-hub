@@ -60,10 +60,17 @@ type EditDataModelAction struct {
 	payload models.EditDataModelPayload
 
 	actionLogger *zap.SugaredLogger
+
+	// Shared context for the entire action lifecycle (validate + execute)
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 // NewEditDataModelAction returns an un-parsed action instance.
 func NewEditDataModelAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager) *EditDataModelAction {
+	// Create shared context with timeout for the entire action lifecycle
+	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+
 	return &EditDataModelAction{
 		userEmail:       userEmail,
 		actionUUID:      actionUUID,
@@ -71,6 +78,8 @@ func NewEditDataModelAction(userEmail string, actionUUID uuid.UUID, instanceUUID
 		outboundChannel: outboundChannel,
 		configManager:   configManager,
 		actionLogger:    logger.For(logger.ComponentCommunicator),
+		ctx:             ctx,
+		cancel:          cancel,
 	}
 }
 
@@ -124,11 +133,8 @@ func (a *EditDataModelAction) Validate() error {
 		Structure:   configStructure,
 	}
 
-	// Create context with timeout for validation
-	validationCtx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
-	defer cancel()
-
-	if err := validator.ValidateStructureOnly(validationCtx, dmVersion); err != nil {
+	// Use shared context for validation
+	if err := validator.ValidateStructureOnly(a.ctx, dmVersion); err != nil {
 		return fmt.Errorf("data model structure validation failed: %v", err)
 	}
 
@@ -137,6 +143,9 @@ func (a *EditDataModelAction) Validate() error {
 
 // Execute implements the Action interface by creating a new version of the data model configuration.
 func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, error) {
+	// Ensure context is cleaned up when action completes
+	defer a.cancel()
+
 	a.actionLogger.Info("Executing EditDataModel action")
 
 	// Send confirmation that action is starting
@@ -148,14 +157,11 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 		Structure: a.convertModelsFieldsToConfigFields(a.payload.Structure),
 	}
 
-	// Edit configuration (adds new version)
-	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
-	defer cancel()
-
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		"Adding new version to data model configuration...", a.outboundChannel, models.EditDataModel)
 
-	err := a.configManager.AtomicEditDataModel(ctx, a.payload.Name, dmVersion)
+	// Use shared context for execution
+	err := a.configManager.AtomicEditDataModel(a.ctx, a.payload.Name, dmVersion)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to edit data model: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -164,7 +170,7 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 	}
 
 	// Get the updated configuration to determine the new version number
-	config, err := a.configManager.GetConfig(ctx, 0)
+	config, err := a.configManager.GetConfig(a.ctx, 0)
 	if err != nil {
 		a.actionLogger.Warnf("Failed to get config to determine new version number: %v", err)
 		// Continue with execution, just use a placeholder version
