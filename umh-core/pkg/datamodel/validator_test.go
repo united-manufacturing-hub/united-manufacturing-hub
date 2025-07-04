@@ -153,6 +153,24 @@ var _ = Describe("Validator", func() {
 			Expect(err).To(BeNil())
 		})
 
+		It("should validate a non-leaf node with _type (folder nodes can have _type)", func() {
+			dataModel := config.DataModelVersion{
+				Structure: map[string]config.Field{
+					"parent": {
+						Type: "timeseries-object",
+						Subfields: map[string]config.Field{
+							"child": {
+								Type: "timeseries-number",
+							},
+						},
+					},
+				},
+			}
+
+			err := validator.ValidateDataModel(ctx, dataModel)
+			Expect(err).To(BeNil())
+		})
+
 		It("should fail validation for a leaf node with neither _type nor _refModel", func() {
 			dataModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
@@ -164,7 +182,7 @@ var _ = Describe("Validator", func() {
 
 			err := validator.ValidateDataModel(ctx, dataModel)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("leaf node"))
+			Expect(err.Error()).To(ContainSubstring("leaf nodes must contain _type"))
 			Expect(err.Error()).To(ContainSubstring("invalid"))
 		})
 
@@ -180,15 +198,15 @@ var _ = Describe("Validator", func() {
 
 			err := validator.ValidateDataModel(ctx, dataModel)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("both _type and _refModel"))
+			Expect(err.Error()).To(ContainSubstring("field cannot have both _type and _refModel"))
 			Expect(err.Error()).To(ContainSubstring("conflicted"))
 		})
 
-		It("should fail validation for a non-leaf node with _type", func() {
+		It("should fail validation for a field with both subfields and _refModel", func() {
 			dataModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
 					"invalidParent": {
-						Type: "timeseries-number",
+						ModelRef: "otherModel:v1",
 						Subfields: map[string]config.Field{
 							"child": {
 								Type: "timeseries-number",
@@ -200,48 +218,79 @@ var _ = Describe("Validator", func() {
 
 			err := validator.ValidateDataModel(ctx, dataModel)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("non-leaf node"))
+			Expect(err.Error()).To(ContainSubstring("field cannot have both subfields and _refModel"))
 			Expect(err.Error()).To(ContainSubstring("invalidParent"))
 		})
 
-		It("should fail validation for a non-leaf node with _description", func() {
+		It("should fail validation for invalid _refModel format - no colon", func() {
 			dataModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
-					"invalidParent": {
+					"invalidRef": {
+						ModelRef: "invalidformat",
+					},
+				},
+			}
+
+			err := validator.ValidateDataModel(ctx, dataModel)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("_refModel must contain exactly one ':'"))
+		})
+
+		It("should fail validation for invalid _refModel format - multiple colons", func() {
+			dataModel := config.DataModelVersion{
+				Structure: map[string]config.Field{
+					"invalidRef": {
+						ModelRef: "model:v1:extra",
+					},
+				},
+			}
+
+			err := validator.ValidateDataModel(ctx, dataModel)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("_refModel must contain exactly one ':'"))
+		})
+
+		It("should fail validation for invalid _refModel format - empty version", func() {
+			dataModel := config.DataModelVersion{
+				Structure: map[string]config.Field{
+					"invalidRef": {
+						ModelRef: "model:",
+					},
+				},
+			}
+
+			err := validator.ValidateDataModel(ctx, dataModel)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("_refModel must have a version specified after ':'"))
+		})
+
+		It("should fail validation for invalid version format", func() {
+			dataModel := config.DataModelVersion{
+				Structure: map[string]config.Field{
+					"invalidRef": {
+						ModelRef: "model:invalidversion",
+					},
+				},
+			}
+
+			err := validator.ValidateDataModel(ctx, dataModel)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("version 'invalidversion' does not match pattern"))
+		})
+
+		It("should fail validation for submodel nodes with additional fields", func() {
+			dataModel := config.DataModelVersion{
+				Structure: map[string]config.Field{
+					"invalidSubmodel": {
+						ModelRef:    "otherModel:v1",
 						Description: "should not have description",
-						Subfields: map[string]config.Field{
-							"child": {
-								Type: "timeseries-number",
-							},
-						},
 					},
 				},
 			}
 
 			err := validator.ValidateDataModel(ctx, dataModel)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("non-leaf node"))
-			Expect(err.Error()).To(ContainSubstring("invalidParent"))
-		})
-
-		It("should fail validation for a non-leaf node with _unit", func() {
-			dataModel := config.DataModelVersion{
-				Structure: map[string]config.Field{
-					"invalidParent": {
-						Unit: "kg",
-						Subfields: map[string]config.Field{
-							"child": {
-								Type: "timeseries-number",
-							},
-						},
-					},
-				},
-			}
-
-			err := validator.ValidateDataModel(ctx, dataModel)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("non-leaf node"))
-			Expect(err.Error()).To(ContainSubstring("invalidParent"))
+			Expect(err.Error()).To(ContainSubstring("subModel nodes should ONLY contain _refModel"))
 		})
 
 		It("should validate nested structures recursively", func() {

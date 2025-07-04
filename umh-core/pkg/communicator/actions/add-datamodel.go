@@ -37,6 +37,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
@@ -109,15 +110,19 @@ func (a *AddDataModelAction) Validate() error {
 		return errors.New("missing required field Structure")
 	}
 
-	// Validate data model structure
-	validationErrors := models.ValidateDataModelStructure(a.payload.Structure)
-	if len(validationErrors) > 0 {
-		// Build error message with all validation errors
-		errorMsg := "data model structure validation failed:"
-		for _, validationError := range validationErrors {
-			errorMsg += fmt.Sprintf("\n  - %s", validationError.Error())
-		}
-		return errors.New(errorMsg)
+	// Validate data model structure using our new validator
+	validator := datamodel.NewValidator()
+
+	// Convert models structure to config structure for validation
+	configStructure := a.convertModelsFieldsToConfigFields(a.payload.Structure)
+
+	dmVersion := config.DataModelVersion{
+		Description: a.payload.Description,
+		Structure:   configStructure,
+	}
+
+	if err := validator.ValidateDataModel(context.Background(), dmVersion); err != nil {
+		return fmt.Errorf("data model structure validation failed: %v", err)
 	}
 
 	return nil
@@ -165,6 +170,10 @@ func (a *AddDataModelAction) Execute() (interface{}, map[string]interface{}, err
 
 // convertModelsFieldsToConfigFields converts models.Field map to config.Field map
 func (a *AddDataModelAction) convertModelsFieldsToConfigFields(modelsFields map[string]models.Field) map[string]config.Field {
+	if modelsFields == nil {
+		return nil
+	}
+
 	configFields := make(map[string]config.Field)
 
 	for key, modelsField := range modelsFields {
@@ -176,10 +185,15 @@ func (a *AddDataModelAction) convertModelsFieldsToConfigFields(modelsFields map[
 			}
 		}
 
+		var subfields map[string]config.Field
+		if modelsField.Subfields != nil {
+			subfields = a.convertModelsFieldsToConfigFields(modelsField.Subfields)
+		}
+
 		configFields[key] = config.Field{
 			Type:        modelsField.Type,
 			ModelRef:    configModelRef,
-			Subfields:   a.convertModelsFieldsToConfigFields(modelsField.Subfields),
+			Subfields:   subfields,
 			Description: modelsField.Description,
 			Unit:        modelsField.Unit,
 		}
