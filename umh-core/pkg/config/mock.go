@@ -44,6 +44,7 @@ type MockConfigManager struct {
 	AtomicAddDataModelCalled            bool
 	AtomicEditDataModelCalled           bool
 	AtomicDeleteDataModelCalled         bool
+	AtomicAddDataContractCalled         bool
 	Config                              FullConfig
 	ConfigError                         error
 	AddDataflowcomponentError           error
@@ -55,6 +56,7 @@ type MockConfigManager struct {
 	AtomicAddDataModelError             error
 	AtomicEditDataModelError            error
 	AtomicDeleteDataModelError          error
+	AtomicAddDataContractError          error
 	ConfigAsString                      string
 	GetConfigAsStringError              error
 	GetConfigAsStringCalled             bool
@@ -214,6 +216,12 @@ func (m *MockConfigManager) WithAtomicDeleteDataModelError(err error) *MockConfi
 	return m
 }
 
+// WithAtomicAddDataContractError configures the mock to return the given error when AtomicAddDataContract is called
+func (m *MockConfigManager) WithAtomicAddDataContractError(err error) *MockConfigManager {
+	m.AtomicAddDataContractError = err
+	return m
+}
+
 // ResetCalls clears the called flags for testing multiple calls
 func (m *MockConfigManager) ResetCalls() {
 	m.mutexReadOrWrite.Lock()
@@ -228,6 +236,7 @@ func (m *MockConfigManager) ResetCalls() {
 	m.AtomicAddDataModelCalled = false
 	m.AtomicEditDataModelCalled = false
 	m.AtomicDeleteDataModelCalled = false
+	m.AtomicAddDataContractCalled = false
 }
 
 // atomic set location
@@ -735,6 +744,41 @@ func (m *MockConfigManager) AtomicDeleteDataModel(ctx context.Context, name stri
 
 	// delete the data model from the config
 	config.DataModels = append(config.DataModels[:targetIndex], config.DataModels[targetIndex+1:]...)
+
+	// write the config
+	if err := m.writeConfig(ctx, config); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
+}
+
+// AtomicAddDataContract implements the ConfigManager interface
+func (m *MockConfigManager) AtomicAddDataContract(ctx context.Context, dataContract DataContractsConfig) error {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	m.AtomicAddDataContractCalled = true
+
+	if m.AtomicAddDataContractError != nil {
+		return m.AtomicAddDataContractError
+	}
+
+	// get the current config
+	config, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
+	}
+
+	// check for duplicate name before add
+	for _, dcc := range config.DataContracts {
+		if dcc.Name == dataContract.Name {
+			return fmt.Errorf("another data contract with name %q already exists – choose a unique name", dataContract.Name)
+		}
+	}
+
+	// add the data contract to the config
+	config.DataContracts = append(config.DataContracts, dataContract)
 
 	// write the config
 	if err := m.writeConfig(ctx, config); err != nil {

@@ -563,3 +563,21 @@ func (w *writeFailingMockConfigManager) AtomicDeleteDataModel(ctx context.Contex
 
 	return nil
 }
+
+// AtomicAddDataContract implements the required interface method but ensures the write fails
+func (w *writeFailingMockConfigManager) AtomicAddDataContract(ctx context.Context, dataContract config.DataContractsConfig) error {
+	// Get the current config
+	configData, err := w.GetConfig(ctx, 0)
+	if err != nil {
+		return err
+	}
+
+	// do not add anything
+
+	// Write config (will fail with this mock)
+	if err := w.writeConfig(ctx, configData); err != nil {
+		return err
+	}
+
+	return nil
+}
