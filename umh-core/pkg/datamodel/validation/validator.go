@@ -341,11 +341,6 @@ func (v *Validator) validateLeafNode(field config.Field, path string, errors *[]
 		})
 	}
 
-	// If it has _type timeseries-number, it can optionally have _unit
-	if hasType && field.Type == "timeseries-number" {
-		// _unit is optional for timeseries-number, so no validation needed
-	}
-
 	// If it has _type other than timeseries-number, it should not have _unit
 	if hasType && field.Type != "timeseries-number" && field.Unit != "" {
 		*errors = append(*errors, ValidationError{
