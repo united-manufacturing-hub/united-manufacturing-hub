@@ -23,9 +23,7 @@ datamodels:
 
 ## Payload Shapes
 
-Payload shapes define the JSON schema for field values. They provide reusable templates for common data structures in industrial systems. For complete documentation on available payload shapes, their structure, and usage examples, see:
-
-**[Payload Shapes](payload-shapes.md)**
+Payload shapes define the JSON schema for field values. They provide reusable templates for common data structures in industrial systems. For complete documentation on available payload shapes, their structure, and usage examples, see [Payload Shapes](payload-shapes.md)
 
 Common payload shapes include:
 - `timeseries-number`: For numeric sensor data
@@ -110,6 +108,8 @@ datamodels:
             _payloadshape: timeseries-number
           rpm:
             _payloadshape: timeseries-number
+          temperature:
+            _payloadshape: timeseries-number
 
 # Usage in Pump model
 datamodels:
@@ -154,8 +154,8 @@ datamodels:
             _payloadshape: timeseries-number
           rpm:
             _payloadshape: timeseries-number
-          status:
-            _payloadshape: timeseries-string
+          temperature:
+            _payloadshape: timeseries-number
 
   pump:
     description: "Pump with motor and diagnostics"
@@ -211,6 +211,16 @@ datamodels:
             _payloadshape: timeseries-string
             _constraints: 
               allowed: ["running", "stopped", "fault"]
+          
+          # ✅ Valid - combined example
+          z-axis:
+            _payloadshape: timeseries-number
+            _meta: # Not to be implemented in MVP
+              description: "Z-axis position measurement"
+              unit: "m/s"
+            _constraints: # Not to be implemented in MVP
+              max: 100
+              min: 0
 ```
 
 ### Invalid Usage (Non-Leaf Nodes)

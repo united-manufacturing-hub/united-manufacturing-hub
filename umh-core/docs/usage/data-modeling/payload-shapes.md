@@ -84,26 +84,6 @@ payloadshapes:
 - Error messages
 - Operator notes
 
-## Custom Payload Shapes
-
-You can define custom payload shapes for specific use cases:
-
-```yaml
-payloadshapes:
-  vibration-analysis:
-    fields:
-      timestamp_ms:
-        _type: number
-      frequency_hz:
-        _type: number
-      amplitude:
-        _type: number
-      phase_degrees:
-        _type: number
-      equipment_id:
-        _type: string
-```
-
 ## Usage in Data Models
 
 Payload shapes are referenced in data models using the `_payloadshape:` property:
@@ -119,8 +99,6 @@ datamodels:
             _payloadshape: timeseries-number
           status:
             _payloadshape: timeseries-string
-          vibration:
-            _payloadshape: vibration-analysis
 ```
 
 ## Type System
@@ -131,23 +109,6 @@ The `_type:` field (used within payload shapes) can reference:
 - `number`: Numeric values (integers, floats)
 - `string`: Text values
 - `boolean`: True/false values
-- `array`: Lists of values
-
-### Payload Shape References
-- `_type:` can also reference other payload shapes
-- Enables composition and reusability
-
-```yaml
-payloadshapes:
-  composite-measurement:
-    fields:
-      primary:
-        _type: timeseries-number
-      secondary:
-        _type: timeseries-string
-      metadata:
-        _type: string
-```
 
 ## Relational Payload Shapes
 
@@ -177,7 +138,6 @@ payloadshapes:
 
 ### Naming Convention
 - **Use hyphenated names**: `timeseries-number`, `batch-report`
-- **Be descriptive**: `vibration-analysis` vs. `measurement`
 - **Include data type**: `timeseries-number` vs. just `timeseries`
 
 ### Design Principles
@@ -191,14 +151,6 @@ payloadshapes:
 - **Use consistent naming**: `timestamp_ms` not `time` or `ts`
 - **Include required metadata**: Timestamp fields for time-series data
 
-## Validation and Schema Registry
-
-All payload shapes are automatically registered in the Redpanda Schema Registry, providing:
-
-- **Runtime validation**: Messages validated against payload shape schemas
-- **Type safety**: Ensures data consistency across the system
-- **Schema evolution**: Controlled versioning for payload shapes
-- **Cross-system compatibility**: Shared schema definitions
 
 ## Related Documentation
 
