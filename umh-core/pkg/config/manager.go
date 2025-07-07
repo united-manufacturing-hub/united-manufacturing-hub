@@ -82,6 +82,8 @@ type ConfigManager interface {
 	AtomicEditDataModel(ctx context.Context, name string, dmVersion DataModelVersion) error
 	// AtomicDeleteDataModel deletes a data model from the config atomically
 	AtomicDeleteDataModel(ctx context.Context, name string) error
+	// AtomicAddDataContract adds a data contract to the config atomically
+	AtomicAddDataContract(ctx context.Context, dataContract DataContractsConfig) error
 	// GetConfigAsString returns the current config as a string
 	// This function is used in the get-config-file action to retrieve the raw config file
 	// without any yaml parsing applied. This allows to display yaml anchors and change them
