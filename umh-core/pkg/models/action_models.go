@@ -615,11 +615,17 @@ type DataModelVersion struct {
 	Structure   map[string]Field `yaml:"structure"`             // structure of the data model (fields)
 }
 
+// ModelRef represents a reference to another data model
+type ModelRef struct {
+	Name    string `yaml:"name"`    // name of the referenced data model
+	Version string `yaml:"version"` // version of the referenced data model
+}
+
 type Field struct {
 	Description string           `yaml:"_description,omitempty"` // description of the field
 	Type        string           `yaml:"_type,omitempty"`        // type of the field (timeseries only for now)
 	Unit        string           `yaml:"_unit,omitempty"`        // unit of the field (only for timeseries-number)
-	ModelRef    string           `yaml:"_refModel,omitempty"`    // this is a special field that is used to reference another data model to be used as a type for this field
+	ModelRef    *ModelRef        `yaml:"_refModel,omitempty"`    // this is a special field that is used to reference another data model to be used as a type for this field
 	Subfields   map[string]Field `yaml:",inline"`                // subfields of the field (allow recursive definition of fields)
 }
 

@@ -284,7 +284,12 @@ func hashStructure(h hash.Hash, structure map[string]config.Field) {
 		h.Write([]byte(field.Description))
 		h.Write([]byte(field.Type))
 		h.Write([]byte(field.Unit))
-		h.Write([]byte(field.ModelRef))
+
+		// Handle ModelRef which is now a struct pointer
+		if field.ModelRef != nil {
+			h.Write([]byte(field.ModelRef.Name))
+			h.Write([]byte(field.ModelRef.Version))
+		}
 
 		// Recursively hash subfields
 		hashStructure(h, field.Subfields)

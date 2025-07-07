@@ -206,9 +206,17 @@ func (a *EditDataModelAction) convertModelsFieldsToConfigFields(modelsFields map
 	configFields := make(map[string]config.Field)
 
 	for key, modelsField := range modelsFields {
+		var configModelRef *config.ModelRef
+		if modelsField.ModelRef != nil {
+			configModelRef = &config.ModelRef{
+				Name:    modelsField.ModelRef.Name,
+				Version: modelsField.ModelRef.Version,
+			}
+		}
+
 		configFields[key] = config.Field{
 			Type:        modelsField.Type,
-			ModelRef:    modelsField.ModelRef,
+			ModelRef:    configModelRef,
 			Subfields:   a.convertModelsFieldsToConfigFields(modelsField.Subfields),
 			Description: modelsField.Description,
 			Unit:        modelsField.Unit,
