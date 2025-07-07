@@ -17,16 +17,41 @@ package redpanda
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 )
 
-// MockSchemaRegistry represents a mock schema registry server for testing
+// MockSchemaRegistry simulates a Redpanda Schema Registry for testing
 type MockSchemaRegistry struct {
-	server   *httptest.Server
-	subjects map[string][]MockSchema
-	mu       sync.RWMutex
+	// subjects stores the schema subjects by subject name
+	subjects map[string]MockSubject
+	// mutex protects concurrent access to subjects
+	mutex sync.RWMutex
+	// basePort is the port the mock registry is running on
+	basePort int
+	// server is the HTTP server
+	server *httptest.Server
+	// deleteHistory tracks deleted subjects for testing
+	deleteHistory []string
+	// registrationHistory tracks registered subjects for testing
+	registrationHistory []MockSubject
+}
+
+// MockSubject represents a schema subject in the mock registry
+type MockSubject struct {
+	// Name is the subject name
+	Name string
+	// Schema is the schema content
+	Schema string
+	// SchemaType is the type of schema (JSON, AVRO, etc.)
+	SchemaType string
+	// ID is the schema ID
+	ID int
+	// Version is the schema version
+	Version int
 }
 
 // MockSchema represents a schema in the mock registry
@@ -40,7 +65,7 @@ type MockSchema struct {
 // NewMockSchemaRegistry creates a new mock schema registry server
 func NewMockSchemaRegistry() *MockSchemaRegistry {
 	mock := &MockSchemaRegistry{
-		subjects: make(map[string][]MockSchema),
+		subjects: make(map[string]MockSubject),
 	}
 
 	// Set up the HTTP server
@@ -67,21 +92,26 @@ func (m *MockSchemaRegistry) Close() {
 
 // AddSchema adds a schema to the mock registry
 func (m *MockSchemaRegistry) AddSchema(subject string, schema string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 
-	schemas := m.subjects[subject]
-	id := len(schemas) + 1
-	version := len(schemas) + 1
-
-	newSchema := MockSchema{
-		ID:      id,
-		Version: version,
-		Schema:  schema,
-		Subject: subject,
+	// Get current schema if it exists to determine new ID
+	var newID int
+	if existingSchema, exists := m.subjects[subject]; exists {
+		newID = existingSchema.ID + 1
+	} else {
+		newID = len(m.subjects) + 1
 	}
 
-	m.subjects[subject] = append(schemas, newSchema)
+	newSubject := MockSubject{
+		Name:       subject,
+		Schema:     schema,
+		SchemaType: "JSON", // Default to JSON
+		ID:         newID,
+		Version:    1, // Always version 1 for simplicity
+	}
+
+	m.subjects[subject] = newSubject
 }
 
 // AddTestSchemas adds some test schemas for common testing scenarios
@@ -143,8 +173,8 @@ func (m *MockSchemaRegistry) handleGetSubjects(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
 
 	var subjects []string
 	for subject := range m.subjects {
@@ -186,20 +216,17 @@ func (m *MockSchemaRegistry) handleGetSubjectVersions(w http.ResponseWriter, r *
 		subject = subjectPath[:idx]
 	}
 
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
 
-	schemas, exists := m.subjects[subject]
+	schema, exists := m.subjects[subject]
 	if !exists {
 		http.Error(w, "Subject not found", http.StatusNotFound)
 		return
 	}
 
-	// Return versions list
-	var versions []int
-	for _, schema := range schemas {
-		versions = append(versions, schema.Version)
-	}
+	// Return versions list (always just version 1 for simplicity)
+	versions := []int{schema.Version}
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(versions); err != nil {
@@ -226,18 +253,17 @@ func (m *MockSchemaRegistry) handleRegisterSchema(w http.ResponseWriter, r *http
 	m.AddSchema(subject, req.Schema)
 
 	// Return the schema ID
-	m.mu.RLock()
-	schemas, exists := m.subjects[subject]
-	if !exists || len(schemas) == 0 {
-		m.mu.RUnlock()
+	m.mutex.RLock()
+	schema, exists := m.subjects[subject]
+	if !exists {
+		m.mutex.RUnlock()
 		http.Error(w, "Subject not found", http.StatusNotFound)
 		return
 	}
-	latestSchema := schemas[len(schemas)-1]
-	m.mu.RUnlock()
+	m.mutex.RUnlock()
 
 	response := map[string]interface{}{
-		"id": latestSchema.ID,
+		"id": schema.ID,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -313,4 +339,200 @@ func TestWithMockSchemaRegistry(ctx context.Context, testFunc func(registryURL s
 // GetMockSchemaRegistryURL returns the URL of a mock schema registry for testing
 func GetMockSchemaRegistryURL(mockRegistry *MockSchemaRegistry) string {
 	return mockRegistry.URL()
+}
+
+func (m *MockSchemaRegistry) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	// CORS headers
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	// Handle preflight requests
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	switch r.Method {
+	case "GET":
+		m.handleGet(w, r)
+	case "POST":
+		m.handlePost(w, r)
+	case "DELETE":
+		m.handleDelete(w, r)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		if err := json.NewEncoder(w).Encode(map[string]string{"error": "method not allowed"}); err != nil {
+			fmt.Printf("Failed to encode error response: %v\n", err)
+		}
+	}
+}
+
+// handleGet handles GET requests (existing functionality)
+func (m *MockSchemaRegistry) handleGet(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/subjects" {
+		// Return list of subjects
+		subjects := make([]string, 0, len(m.subjects))
+		for name := range m.subjects {
+			subjects = append(subjects, name)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(subjects); err != nil {
+			fmt.Printf("Failed to encode subjects response: %v\n", err)
+		}
+		return
+	}
+
+	// Handle other GET requests (not implemented for this testing)
+	w.WriteHeader(http.StatusNotFound)
+	if err := json.NewEncoder(w).Encode(map[string]string{"error": "not found"}); err != nil {
+		fmt.Printf("Failed to encode error response: %v\n", err)
+	}
+}
+
+// handlePost handles POST requests for registering schemas
+func (m *MockSchemaRegistry) handlePost(w http.ResponseWriter, r *http.Request) {
+	// Parse URL path: /subjects/{subject}/versions
+	path := strings.TrimPrefix(r.URL.Path, "/subjects/")
+	if !strings.HasSuffix(path, "/versions") {
+		w.WriteHeader(http.StatusNotFound)
+		if err := json.NewEncoder(w).Encode(map[string]string{"error": "invalid path"}); err != nil {
+			fmt.Printf("Failed to encode error response: %v\n", err)
+		}
+		return
+	}
+
+	subjectName := strings.TrimSuffix(path, "/versions")
+	if subjectName == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		if err := json.NewEncoder(w).Encode(map[string]string{"error": "subject name required"}); err != nil {
+			fmt.Printf("Failed to encode error response: %v\n", err)
+		}
+		return
+	}
+
+	// Parse request body
+	var req SchemaRegistrationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		if err := json.NewEncoder(w).Encode(map[string]string{"error": "invalid request body"}); err != nil {
+			fmt.Printf("Failed to encode error response: %v\n", err)
+		}
+		return
+	}
+
+	// Generate new ID
+	newID := len(m.subjects) + 1
+	for _, subject := range m.subjects {
+		if subject.ID >= newID {
+			newID = subject.ID + 1
+		}
+	}
+
+	// Create new subject
+	newSubject := MockSubject{
+		Name:       subjectName,
+		Schema:     req.Schema,
+		SchemaType: req.SchemaType,
+		ID:         newID,
+		Version:    1, // Always version 1 for simplicity
+	}
+
+	// Store the subject
+	m.subjects[subjectName] = newSubject
+
+	// Track registration history
+	m.registrationHistory = append(m.registrationHistory, newSubject)
+
+	// Return success response
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(SchemaRegistrationResponse{ID: newID}); err != nil {
+		fmt.Printf("Failed to encode registration response: %v\n", err)
+	}
+}
+
+// handleDelete handles DELETE requests for removing schemas
+func (m *MockSchemaRegistry) handleDelete(w http.ResponseWriter, r *http.Request) {
+	// Parse URL path: /subjects/{subject}
+	path := strings.TrimPrefix(r.URL.Path, "/subjects/")
+	if path == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		if err := json.NewEncoder(w).Encode(map[string]string{"error": "subject name required"}); err != nil {
+			fmt.Printf("Failed to encode error response: %v\n", err)
+		}
+		return
+	}
+
+	subjectName := path
+
+	// Check if subject exists
+	subject, exists := m.subjects[subjectName]
+	if !exists {
+		w.WriteHeader(http.StatusNotFound)
+		if err := json.NewEncoder(w).Encode(map[string]string{"error": "subject not found"}); err != nil {
+			fmt.Printf("Failed to encode error response: %v\n", err)
+		}
+		return
+	}
+
+	// Delete the subject
+	delete(m.subjects, subjectName)
+
+	// Track deletion history
+	m.deleteHistory = append(m.deleteHistory, subjectName)
+
+	// Return success response with deleted versions
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode([]int{subject.Version}); err != nil {
+		fmt.Printf("Failed to encode deletion response: %v\n", err)
+	}
+}
+
+// GetDeleteHistory returns the history of deleted subjects
+func (m *MockSchemaRegistry) GetDeleteHistory() []string {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	// Return a copy to prevent data races
+	history := make([]string, len(m.deleteHistory))
+	copy(history, m.deleteHistory)
+	return history
+}
+
+// GetRegistrationHistory returns the history of registered subjects
+func (m *MockSchemaRegistry) GetRegistrationHistory() []MockSubject {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	// Return a copy to prevent data races
+	history := make([]MockSubject, len(m.registrationHistory))
+	copy(history, m.registrationHistory)
+	return history
+}
+
+// ClearHistory clears the deletion and registration history
+func (m *MockSchemaRegistry) ClearHistory() {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	m.deleteHistory = nil
+	m.registrationHistory = nil
+}
+
+// GetSubjects returns a copy of all subjects
+func (m *MockSchemaRegistry) GetSubjects() map[string]MockSubject {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	// Return a copy to prevent data races
+	subjects := make(map[string]MockSubject)
+	for name, subject := range m.subjects {
+		subjects[name] = subject
+	}
+	return subjects
 }

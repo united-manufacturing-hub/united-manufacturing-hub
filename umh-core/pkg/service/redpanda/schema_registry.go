@@ -15,6 +15,7 @@
 package redpanda
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -24,7 +25,59 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel/translation"
 )
+
+// SchemaSyncState represents the current state of schema synchronization
+type SchemaSyncState int
+
+const (
+	// SchemaSyncStateInitial represents the initial state before synchronization starts
+	SchemaSyncStateInitial SchemaSyncState = iota
+	// SchemaSyncStateFetching represents the state where schemas are being fetched from registry
+	SchemaSyncStateFetching
+	// SchemaSyncStateComparing represents the state where fetched schemas are being compared with local datamodels
+	SchemaSyncStateComparing
+	// SchemaSyncStateDeletingOrphaned represents the state where orphaned schemas are being deleted
+	SchemaSyncStateDeletingOrphaned
+	// SchemaSyncStateRegistering represents the state where new schemas are being registered
+	SchemaSyncStateRegistering
+)
+
+// SchemaSyncCache contains the cached state for multi-tick schema synchronization
+type SchemaSyncCache struct {
+	// State tracks the current synchronization state
+	State SchemaSyncState
+	// RegistrySchemas contains the raw schemas fetched from registry (cached from fetch phase)
+	RegistrySchemas []SchemaSubject
+	// PendingDeletions contains schema names that need to be deleted (orphaned schemas)
+	PendingDeletions []string
+	// PendingRegistrations contains schemas that need to be registered
+	PendingRegistrations []JSONSchemaRegistration
+	// ComparisonResult contains the results of comparing datamodels with registry
+	ComparisonResult *DataModelSchemaMapping
+}
+
+// JSONSchemaRegistration represents a schema ready to be registered in the registry
+type JSONSchemaRegistration struct {
+	// SubjectName is the name of the subject for the schema (e.g., "_pump_v1_timeseries-number")
+	SubjectName string
+	// Schema is the JSON schema content
+	Schema string
+	// SchemaType is the type of schema (JSON, AVRO, PROTOBUF)
+	SchemaType string
+}
+
+// SchemaRegistrationRequest represents the request body for registering a schema
+type SchemaRegistrationRequest struct {
+	Schema     string `json:"schema"`
+	SchemaType string `json:"schemaType,omitempty"`
+}
+
+// SchemaRegistrationResponse represents the response from registering a schema
+type SchemaRegistrationResponse struct {
+	ID int `json:"id"`
+}
 
 // SchemaSubject represents a schema subject with its parsed details
 type SchemaSubject struct {
@@ -139,6 +192,136 @@ func (s *RedpandaService) GetAllSchemas(ctx context.Context) ([]SchemaSubject, e
 	}
 
 	return schemas, nil
+}
+
+// DeleteSchemaFromRegistry deletes a schema subject from the registry
+func (s *RedpandaService) DeleteSchemaFromRegistry(ctx context.Context, subjectName string) error {
+	if s.httpClient == nil {
+		return fmt.Errorf("http client not initialized")
+	}
+
+	// Create DELETE request to remove the subject
+	deleteReq, err := http.NewRequestWithContext(ctx, http.MethodDelete,
+		fmt.Sprintf("http://127.0.0.1:%d/subjects/%s", constants.SchemaRegistryPort, subjectName), nil)
+	if err != nil {
+		return fmt.Errorf("failed to create delete request: %w", err)
+	}
+
+	deleteResp, err := s.httpClient.Do(deleteReq)
+	if err != nil {
+		if strings.Contains(err.Error(), "connection refused") {
+			// Schema Registry not ready, ignore
+			return nil
+		}
+		return fmt.Errorf("failed to delete schema %s: %w", subjectName, err)
+	}
+	if deleteResp == nil {
+		return fmt.Errorf("received nil response from delete request")
+	}
+	defer func() {
+		_ = deleteResp.Body.Close()
+	}()
+
+	// Success status codes for delete: 200 OK
+	if deleteResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(deleteResp.Body)
+		return fmt.Errorf("failed to delete schema %s, status: %d, response: %s",
+			subjectName, deleteResp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// RegisterSchemaInRegistry registers a new schema in the registry
+func (s *RedpandaService) RegisterSchemaInRegistry(ctx context.Context, registration JSONSchemaRegistration) (*SchemaRegistrationResponse, error) {
+	if s.httpClient == nil {
+		return nil, fmt.Errorf("http client not initialized")
+	}
+
+	// Create the request body
+	requestBody := SchemaRegistrationRequest{
+		Schema:     registration.Schema,
+		SchemaType: registration.SchemaType,
+	}
+
+	// Convert to JSON
+	jsonBody, err := json.Marshal(requestBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request body: %w", err)
+	}
+
+	// Create POST request
+	postReq, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		fmt.Sprintf("http://127.0.0.1:%d/subjects/%s/versions", constants.SchemaRegistryPort, registration.SubjectName),
+		bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create post request: %w", err)
+	}
+
+	postReq.Header.Set("Content-Type", "application/vnd.schemaregistry.v1+json")
+
+	postResp, err := s.httpClient.Do(postReq)
+	if err != nil {
+		if strings.Contains(err.Error(), "connection refused") {
+			// Schema Registry not ready, ignore
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to register schema %s: %w", registration.SubjectName, err)
+	}
+	if postResp == nil {
+		return nil, fmt.Errorf("received nil response from post request")
+	}
+	defer func() {
+		_ = postResp.Body.Close()
+	}()
+
+	// Success status codes for post: 200 OK
+	if postResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(postResp.Body)
+		return nil, fmt.Errorf("failed to register schema %s, status: %d, response: %s",
+			registration.SubjectName, postResp.StatusCode, string(body))
+	}
+
+	// Parse response
+	responseBody, err := io.ReadAll(postResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	var response SchemaRegistrationResponse
+	if err := json.Unmarshal(responseBody, &response); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return &response, nil
+}
+
+// GenerateJSONSchemasFromDataModels converts UMH datamodels to JSON schemas ready for registry
+func (s *RedpandaService) GenerateJSONSchemasFromDataModels(ctx context.Context, dataModels map[string]config.DataModelsConfig) ([]JSONSchemaRegistration, error) {
+	translator := translation.NewTranslator()
+	var allRegistrations []JSONSchemaRegistration
+
+	for modelName, dataModel := range dataModels {
+		for versionKey, version := range dataModel.Versions {
+			// Generate schemas for this datamodel version
+			schemas, err := translator.TranslateToJSONSchema(ctx, version, modelName, versionKey, dataModels)
+			if err != nil {
+				return nil, fmt.Errorf("failed to translate datamodel %s version %s: %w", modelName, versionKey, err)
+			}
+
+			// Convert translation output to registry format
+			for _, schema := range schemas {
+				registration := JSONSchemaRegistration{
+					SubjectName: schema.Name,
+					Schema:      schema.Schema,
+					SchemaType:  "JSON",
+				}
+				allRegistrations = append(allRegistrations, registration)
+			}
+		}
+	}
+
+	return allRegistrations, nil
 }
 
 // DataModelSchemaMapping represents the mapping between datamodels and expected schemas

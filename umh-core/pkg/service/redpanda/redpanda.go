@@ -185,6 +185,9 @@ type RedpandaService struct {
 
 	redpandaMonitorManager *redpanda_monitor_fsm.RedpandaMonitorManager
 	redpandaMonitorConfigs []config.RedpandaMonitorConfig
+
+	// Schema synchronization cache for multi-tick processing
+	schemaSyncCache *SchemaSyncCache
 }
 
 // RedpandaServiceOption is a function that modifies a RedpandaService
@@ -1194,4 +1197,248 @@ func anyToString(input any) (result string, err error) {
 	default:
 		return result, fmt.Errorf("cannot convert %T to string", input)
 	}
+}
+
+// SynchronizeSchemas handles multi-tick schema synchronization with the registry
+// This is called on every tick to progressively sync schemas following the workflow:
+// Tick 1: Fetch all schemas from registry & save information
+// Tick 2: Check differences & save information
+// Tick 3-N: Process differences one by one (with time-awareness)
+// Tick N+1: Reset state and begin again
+func (s *RedpandaService) SynchronizeSchemas(ctx context.Context, dataModels map[string]config.DataModelsConfig) error {
+	// If we have no cached state, start with fetching
+	if s.schemaSyncCache == nil {
+		return s.startSchemaFetching(ctx)
+	}
+
+	// Continue with the existing synchronization based on current state
+	switch s.schemaSyncCache.State {
+	case SchemaSyncStateFetching:
+		return s.continueSchemaFetching(ctx)
+	case SchemaSyncStateComparing:
+		return s.continueSchemaComparison(ctx, dataModels)
+	case SchemaSyncStateDeletingOrphaned:
+		return s.continueOrphanedDeletion(ctx)
+	case SchemaSyncStateRegistering:
+		return s.continueSchemaRegistration(ctx)
+	default:
+		// Invalid state - reset and try again next tick
+		s.schemaSyncCache = nil
+		return nil
+	}
+}
+
+// startSchemaFetching initiates the schema fetching process (Tick 1)
+func (s *RedpandaService) startSchemaFetching(ctx context.Context) error {
+	// Initialize cache with fetching state
+	s.schemaSyncCache = &SchemaSyncCache{
+		State: SchemaSyncStateFetching,
+	}
+	return s.continueSchemaFetching(ctx)
+}
+
+// continueSchemaFetching handles the schema fetching phase (Tick 1)
+func (s *RedpandaService) continueSchemaFetching(ctx context.Context) error {
+	// Check if context is still valid
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	// Fetch all schemas from registry
+	registrySchemas, err := s.GetAllSchemas(ctx)
+	if err != nil {
+		// If fetching fails, reset cache and try again next tick
+		s.schemaSyncCache = nil
+		return nil
+	}
+
+	// Save fetched schemas and transition to comparing state
+	s.schemaSyncCache.RegistrySchemas = registrySchemas
+	s.schemaSyncCache.State = SchemaSyncStateComparing
+
+	return nil
+}
+
+// continueSchemaComparison handles the schema comparison phase (Tick 2)
+func (s *RedpandaService) continueSchemaComparison(ctx context.Context, dataModels map[string]config.DataModelsConfig) error {
+	// Use cached registry schemas for comparison
+	registrySchemas := s.schemaSyncCache.RegistrySchemas
+
+	// Generate expected schema names from our datamodels
+	expectedSchemas := GenerateExpectedSchemaNames(dataModels)
+
+	// Convert registry schemas to string slice for easier comparison
+	registrySchemaNames := make([]string, len(registrySchemas))
+	for i, schema := range registrySchemas {
+		registrySchemaNames[i] = schema.Subject
+	}
+
+	// Find missing schemas (expected but not in registry)
+	var missingInRegistry []string
+	registrySchemaSet := make(map[string]bool)
+	for _, schema := range registrySchemaNames {
+		registrySchemaSet[schema] = true
+	}
+
+	for _, expected := range expectedSchemas {
+		if !registrySchemaSet[expected] {
+			missingInRegistry = append(missingInRegistry, expected)
+		}
+	}
+
+	// Find orphaned schemas (in registry but not expected)
+	var orphanedInRegistry []string
+	expectedSchemaSet := make(map[string]bool)
+	for _, expected := range expectedSchemas {
+		expectedSchemaSet[expected] = true
+	}
+
+	for _, registry := range registrySchemaNames {
+		if !expectedSchemaSet[registry] {
+			orphanedInRegistry = append(orphanedInRegistry, registry)
+		}
+	}
+
+	// Create comparison result
+	comparisonResult := &DataModelSchemaMapping{
+		MissingInRegistry:  missingInRegistry,
+		OrphanedInRegistry: orphanedInRegistry,
+		ExpectedSchemas:    expectedSchemas,
+		RegistrySchemas:    registrySchemaNames,
+	}
+
+	// Save comparison result
+	s.schemaSyncCache.ComparisonResult = comparisonResult
+
+	// If there are no differences, we're done - reset cache
+	if len(comparisonResult.MissingInRegistry) == 0 && len(comparisonResult.OrphanedInRegistry) == 0 {
+		s.schemaSyncCache = nil
+		return nil
+	}
+
+	// If there are differences, start processing them
+	// First, delete orphaned schemas if any exist
+	if len(comparisonResult.OrphanedInRegistry) > 0 {
+		s.schemaSyncCache.State = SchemaSyncStateDeletingOrphaned
+		s.schemaSyncCache.PendingDeletions = comparisonResult.OrphanedInRegistry
+		return s.continueOrphanedDeletion(ctx)
+	}
+
+	// No orphaned schemas, go straight to registration
+	return s.startSchemaRegistration(ctx, dataModels, comparisonResult)
+}
+
+// continueOrphanedDeletion continues deleting orphaned schemas
+// Processes multiple deletions per tick if time allows
+func (s *RedpandaService) continueOrphanedDeletion(ctx context.Context) error {
+	// Process deletions while we have pending ones and time available
+	for len(s.schemaSyncCache.PendingDeletions) > 0 {
+		// Check if context is still valid
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		// Delete one schema
+		schemaToDelete := s.schemaSyncCache.PendingDeletions[0]
+		s.schemaSyncCache.PendingDeletions = s.schemaSyncCache.PendingDeletions[1:]
+
+		// Attempt to delete the schema
+		if err := s.DeleteSchemaFromRegistry(ctx, schemaToDelete); err != nil {
+			// If deletion fails, reset cache and try again later
+			s.schemaSyncCache = nil
+			return nil
+		}
+
+		// If we have more deletions but context is getting close to deadline,
+		// stop here and continue next tick
+		if len(s.schemaSyncCache.PendingDeletions) > 0 && ctx.Err() != nil {
+			return nil
+		}
+	}
+
+	// All deletions complete, move to registration phase
+	return s.startSchemaRegistration(ctx, nil, s.schemaSyncCache.ComparisonResult)
+}
+
+// startSchemaRegistration starts the schema registration phase
+func (s *RedpandaService) startSchemaRegistration(ctx context.Context, dataModels map[string]config.DataModelsConfig, mapping *DataModelSchemaMapping) error {
+	// If we don't have missing schemas, we're done
+	if len(mapping.MissingInRegistry) == 0 {
+		s.schemaSyncCache = nil
+		return nil
+	}
+
+	// Generate JSON schemas for the missing schemas
+	// We need to extract the dataModels from the cache or parameter
+	var targetDataModels map[string]config.DataModelsConfig
+	if dataModels != nil {
+		targetDataModels = dataModels
+	} else {
+		// If dataModels is nil, we can't proceed - reset cache and try next tick
+		s.schemaSyncCache = nil
+		return nil
+	}
+
+	// Generate all JSON schemas needed
+	allRegistrations, err := s.GenerateJSONSchemasFromDataModels(ctx, targetDataModels)
+	if err != nil {
+		// If generation fails, reset cache and try again later
+		s.schemaSyncCache = nil
+		return nil
+	}
+
+	// Filter to only the schemas we need (those missing in registry)
+	missingSet := make(map[string]bool)
+	for _, missing := range mapping.MissingInRegistry {
+		missingSet[missing] = true
+	}
+
+	var pendingRegistrations []JSONSchemaRegistration
+	for _, registration := range allRegistrations {
+		if missingSet[registration.SubjectName] {
+			pendingRegistrations = append(pendingRegistrations, registration)
+		}
+	}
+
+	// Set up the registration phase
+	s.schemaSyncCache = &SchemaSyncCache{
+		State:                SchemaSyncStateRegistering,
+		PendingRegistrations: pendingRegistrations,
+		ComparisonResult:     mapping,
+	}
+
+	return s.continueSchemaRegistration(ctx)
+}
+
+// continueSchemaRegistration continues registering schemas
+// Processes multiple registrations per tick if time allows
+func (s *RedpandaService) continueSchemaRegistration(ctx context.Context) error {
+	// Process registrations while we have pending ones and time available
+	for len(s.schemaSyncCache.PendingRegistrations) > 0 {
+		// Check if context is still valid
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		// Register one schema
+		registration := s.schemaSyncCache.PendingRegistrations[0]
+		s.schemaSyncCache.PendingRegistrations = s.schemaSyncCache.PendingRegistrations[1:]
+
+		// Attempt to register the schema
+		if _, err := s.RegisterSchemaInRegistry(ctx, registration); err != nil {
+			// If registration fails, reset cache and try again later
+			s.schemaSyncCache = nil
+			return nil
+		}
+
+		// If we have more registrations but context is getting close to deadline,
+		// stop here and continue next tick
+		if len(s.schemaSyncCache.PendingRegistrations) > 0 && ctx.Err() != nil {
+			return nil
+		}
+	}
+
+	// All registrations complete, clear cache and reset to start over
+	s.schemaSyncCache = nil
+	return nil
 }
