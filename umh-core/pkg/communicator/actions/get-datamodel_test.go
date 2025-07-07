@@ -59,24 +59,19 @@ var _ = Describe("GetDataModelAction", func() {
 			Description: "Test data model description",
 			Versions: map[string]config.DataModelVersion{
 				"v1": {
-					Description: "Version 1",
 					Structure: map[string]config.Field{
 						"field1": {
-							Type:        "timeseries-string",
-							Description: "First field",
+							PayloadShape: "timeseries-string",
 						},
 					},
 				},
 				"v2": {
-					Description: "Version 2",
 					Structure: map[string]config.Field{
 						"field1": {
-							Type:        "timeseries-string",
-							Description: "First field updated",
+							PayloadShape: "timeseries-string",
 						},
 						"field2": {
-							Type: "timeseries-number",
-							Unit: "celsius",
+							PayloadShape: "timeseries-number",
 						},
 					},
 				},
@@ -176,13 +171,11 @@ var _ = Describe("GetDataModelAction", func() {
 				response, ok := result.(models.GetDataModelResponse)
 				Expect(ok).To(BeTrue())
 				Expect(response.Name).To(Equal("test-model"))
-				Expect(response.Description).To(Equal("Test data model description"))
 				Expect(response.Versions).To(HaveLen(2))
 
 				// Check version 1
 				v1, exists := response.Versions["v1"]
 				Expect(exists).To(BeTrue())
-				Expect(v1.Description).To(Equal("Version 1"))
 				Expect(v1.EncodedStructure).ToNot(BeEmpty())
 
 				// Decode and verify structure for v1
@@ -192,12 +185,11 @@ var _ = Describe("GetDataModelAction", func() {
 				err = yaml.Unmarshal(decodedV1, &structureV1)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(structureV1).To(HaveKey("field1"))
-				Expect(structureV1["field1"].Type).To(Equal("timeseries-string"))
+				Expect(structureV1["field1"].PayloadShape).To(Equal("timeseries-string"))
 
 				// Check version 2
 				v2, exists := response.Versions["v2"]
 				Expect(exists).To(BeTrue())
-				Expect(v2.Description).To(Equal("Version 2"))
 				Expect(v2.EncodedStructure).ToNot(BeEmpty())
 
 				// Decode and verify structure for v2
@@ -208,7 +200,6 @@ var _ = Describe("GetDataModelAction", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(structureV2).To(HaveKey("field1"))
 				Expect(structureV2).To(HaveKey("field2"))
-				Expect(structureV2["field2"].Unit).To(Equal("celsius"))
 			})
 
 			It("should send appropriate action replies", func() {
@@ -273,25 +264,21 @@ var _ = Describe("GetDataModelAction", func() {
 					Description: "Complex data model with nested structures",
 					Versions: map[string]config.DataModelVersion{
 						"v1": {
-							Description: "Complex version",
 							Structure: map[string]config.Field{
 								"level1": {
-									Description: "Level 1 field",
 									Subfields: map[string]config.Field{
 										"level2": {
-											Type:        "timeseries-number",
-											Description: "Level 2 field",
-											Unit:        "meters",
+											PayloadShape: "timeseries-number",
 											Subfields: map[string]config.Field{
 												"level3": {
-													Type: "timeseries-string",
+													PayloadShape: "timeseries-string",
 												},
 											},
 										},
 									},
 								},
 								"simple": {
-									Type: "timeseries-string",
+									PayloadShape: "timeseries-string",
 								},
 							},
 						},
@@ -332,7 +319,6 @@ var _ = Describe("GetDataModelAction", func() {
 				Expect(structure).To(HaveKey("simple"))
 				Expect(structure["level1"].Subfields).To(HaveKey("level2"))
 				Expect(structure["level1"].Subfields["level2"].Subfields).To(HaveKey("level3"))
-				Expect(structure["level1"].Subfields["level2"].Unit).To(Equal("meters"))
 			})
 		})
 	})

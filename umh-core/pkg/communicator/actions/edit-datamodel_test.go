@@ -92,10 +92,10 @@ var _ = Describe("EditDataModelAction", func() {
 					Description: "Updated test data model",
 					Structure: map[string]models.Field{
 						"field1": {
-							Type: "timeseries-string",
+							PayloadShape: "timeseries-string",
 						},
 						"newField": {
-							Type: "timeseries-number",
+							PayloadShape: "timeseries-number",
 						},
 					},
 				}
@@ -139,7 +139,7 @@ var _ = Describe("EditDataModelAction", func() {
 					Description: "Updated test data model",
 					Structure: map[string]models.Field{
 						"field1": {
-							Type: "timeseries-string",
+							PayloadShape: "timeseries-string",
 						},
 					},
 				}
@@ -159,7 +159,7 @@ var _ = Describe("EditDataModelAction", func() {
 					Description: "Updated test data model",
 					Structure: map[string]models.Field{
 						"field1": {
-							Type: "timeseries-string",
+							PayloadShape: "timeseries-string",
 						},
 					},
 				}
@@ -217,12 +217,12 @@ var _ = Describe("EditDataModelAction", func() {
 					Description: "Updated test data model",
 					Structure: map[string]models.Field{
 						"leaf_field": {
-							Type: "timeseries-string",
+							PayloadShape: "timeseries-string",
 						},
 						"folder_field": {
 							Subfields: map[string]models.Field{
 								"nested_leaf": {
-									Type: "timeseries-number",
+									PayloadShape: "timeseries-number",
 								},
 							},
 						},
@@ -244,228 +244,223 @@ var _ = Describe("EditDataModelAction", func() {
 			})
 		})
 
-		Context("with invalid _refModel format", func() {
-			It("should fail with no version", func() {
-				payload := models.EditDataModelPayload{
-					Name:        "test-model",
-					Description: "Updated test data model",
-					Structure: map[string]models.Field{
-						"invalid_ref": {
-							ModelRef: &models.ModelRef{
-								Name: "external-model-v1",
-							},
-						},
-					},
-				}
-				err := action.Parse(structToEncodedMapForEdit(payload))
-				Expect(err).ToNot(HaveOccurred())
+		// TODO: add those test cases when the validator comes back
+		// Context("with invalid _refModel format", func() {
+		// 	It("should fail with no version", func() {
+		// 		payload := models.EditDataModelPayload{
+		// 			Name:        "test-model",
+		// 			Description: "Updated test data model",
+		// 			Structure: map[string]models.Field{
+		// 				"invalid_ref": {
+		// 					ModelRef: &models.ModelRef{
+		// 						Name: "external-model-v1",
+		// 					},
+		// 				},
+		// 			},
+		// 		}
+		// 		err := action.Parse(structToEncodedMapForEdit(payload))
+		// 		Expect(err).ToNot(HaveOccurred())
 
-				err = action.Validate()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("_refModel must have a version specified"))
-			})
+		// 		err = action.Validate()
+		// 		Expect(err).To(HaveOccurred())
+		// 		Expect(err.Error()).To(ContainSubstring("_refModel must have a version specified"))
+		// 	})
 
-			It("should fail with no version in complex name", func() {
-				payload := models.EditDataModelPayload{
-					Name:        "test-model",
-					Description: "Updated test data model",
-					Structure: map[string]models.Field{
-						"invalid_ref": {
-							ModelRef: &models.ModelRef{
-								Name: "external:model:v1",
-							},
-						},
-					},
-				}
-				err := action.Parse(structToEncodedMapForEdit(payload))
-				Expect(err).ToNot(HaveOccurred())
+		// 	It("should fail with no version in complex name", func() {
+		// 		payload := models.EditDataModelPayload{
+		// 			Name:        "test-model",
+		// 			Description: "Updated test data model",
+		// 			Structure: map[string]models.Field{
+		// 				"invalid_ref": {
+		// 					ModelRef: &models.ModelRef{
+		// 						Name: "external:model:v1",
+		// 					},
+		// 				},
+		// 			},
+		// 		}
+		// 		err := action.Parse(structToEncodedMapForEdit(payload))
+		// 		Expect(err).ToNot(HaveOccurred())
 
-				err = action.Validate()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("_refModel must have a version specified"))
-			})
+		// 		err = action.Validate()
+		// 		Expect(err).To(HaveOccurred())
+		// 		Expect(err.Error()).To(ContainSubstring("_refModel must have a version specified"))
+		// 	})
 
-			It("should fail with empty version", func() {
-				payload := models.EditDataModelPayload{
-					Name:        "test-model",
-					Description: "Updated test data model",
-					Structure: map[string]models.Field{
-						"invalid_ref": {
-							ModelRef: &models.ModelRef{
-								Name: "external-model",
-							},
-						},
-					},
-				}
-				err := action.Parse(structToEncodedMapForEdit(payload))
-				Expect(err).ToNot(HaveOccurred())
+		// 	It("should fail with empty version", func() {
+		// 		payload := models.EditDataModelPayload{
+		// 			Name:        "test-model",
+		// 			Description: "Updated test data model",
+		// 			Structure: map[string]models.Field{
+		// 				"invalid_ref": {
+		// 					ModelRef: &models.ModelRef{
+		// 						Name: "external-model",
+		// 					},
+		// 				},
+		// 			},
+		// 		}
+		// 		err := action.Parse(structToEncodedMapForEdit(payload))
+		// 		Expect(err).ToNot(HaveOccurred())
 
-				err = action.Validate()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("_refModel must have a version specified"))
-			})
-		})
+		// 		err = action.Validate()
+		// 		Expect(err).To(HaveOccurred())
+		// 		Expect(err.Error()).To(ContainSubstring("_refModel must have a version specified"))
+		// 	})
+		// })
 
-		Context("with invalid version format", func() {
-			It("should fail with version not matching v\\d+", func() {
-				payload := models.EditDataModelPayload{
-					Name:        "test-model",
-					Description: "Updated test data model",
-					Structure: map[string]models.Field{
-						"invalid_version": {
-							ModelRef: &models.ModelRef{
-								Name:    "external-model",
-								Version: "version1",
-							},
-						},
-					},
-				}
-				err := action.Parse(structToEncodedMapForEdit(payload))
-				Expect(err).ToNot(HaveOccurred())
+		// Context("with invalid version format", func() {
+		// 	It("should fail with version not matching v\\d+", func() {
+		// 		payload := models.EditDataModelPayload{
+		// 			Name:        "test-model",
+		// 			Description: "Updated test data model",
+		// 			Structure: map[string]models.Field{
+		// 				"invalid_version": {
+		// 					ModelRef: &models.ModelRef{
+		// 						Name:    "external-model",
+		// 						Version: "version1",
+		// 					},
+		// 				},
+		// 			},
+		// 		}
+		// 		err := action.Parse(structToEncodedMapForEdit(payload))
+		// 		Expect(err).ToNot(HaveOccurred())
 
-				err = action.Validate()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("does not match pattern ^v\\d+$"))
-			})
-		})
+		// 		err = action.Validate()
+		// 		Expect(err).To(HaveOccurred())
+		// 		Expect(err.Error()).To(ContainSubstring("does not match pattern ^v\\d+$"))
+		// 	})
+		// })
 
-		Context("with invalid field combinations", func() {
-			It("should fail when field has both _type and _refModel", func() {
-				payload := models.EditDataModelPayload{
-					Name:        "test-model",
-					Description: "Updated test data model",
-					Structure: map[string]models.Field{
-						"invalid_field": {
-							Type: "timeseries-string",
-							ModelRef: &models.ModelRef{
-								Name:    "external-model",
-								Version: "v1",
-							},
-						},
-					},
-				}
-				err := action.Parse(structToEncodedMapForEdit(payload))
-				Expect(err).ToNot(HaveOccurred())
+		// Context("with invalid field combinations", func() {
+		// 	It("should fail when field has both _type and _refModel", func() {
+		// 		payload := models.EditDataModelPayload{
+		// 			Name:        "test-model",
+		// 			Description: "Updated test data model",
+		// 			Structure: map[string]models.Field{
+		// 				"invalid_field": {
+		// 					PayloadShape: "timeseries-string",
+		// 					ModelRef: &models.ModelRef{
+		// 						Name:    "external-model",
+		// 						Version: "v1",
+		// 					},
+		// 				},
+		// 			},
+		// 		}
+		// 		err := action.Parse(structToEncodedMapForEdit(payload))
+		// 		Expect(err).ToNot(HaveOccurred())
 
-				err = action.Validate()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("field cannot have both _type and _refModel"))
-			})
+		// 		err = action.Validate()
+		// 		Expect(err).To(HaveOccurred())
+		// 		Expect(err.Error()).To(ContainSubstring("field cannot have both _type and _refModel"))
+		// 	})
 
-			It("should fail when field has both subfields and _refModel", func() {
-				payload := models.EditDataModelPayload{
-					Name:        "test-model",
-					Description: "Updated test data model",
-					Structure: map[string]models.Field{
-						"invalid_field": {
-							ModelRef: &models.ModelRef{
-								Name:    "external-model",
-								Version: "v1",
-							},
-							Subfields: map[string]models.Field{
-								"nested": {
-									Type: "timeseries-string",
-								},
-							},
-						},
-					},
-				}
-				err := action.Parse(structToEncodedMapForEdit(payload))
-				Expect(err).ToNot(HaveOccurred())
+		// 	It("should fail when field has both subfields and _refModel", func() {
+		// 		payload := models.EditDataModelPayload{
+		// 			Name:        "test-model",
+		// 			Description: "Updated test data model",
+		// 			Structure: map[string]models.Field{
+		// 				"invalid_field": {
+		// 					ModelRef: &models.ModelRef{
+		// 						Name:    "external-model",
+		// 						Version: "v1",
+		// 					},
+		// 					Subfields: map[string]models.Field{
+		// 						"nested": {
+		// 							PayloadShape: "timeseries-string",
+		// 						},
+		// 					},
+		// 				},
+		// 			},
+		// 		}
+		// 		err := action.Parse(structToEncodedMapForEdit(payload))
+		// 		Expect(err).ToNot(HaveOccurred())
 
-				err = action.Validate()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("field cannot have both subfields and _refModel"))
-			})
-		})
+		// 		err = action.Validate()
+		// 		Expect(err).To(HaveOccurred())
+		// 		Expect(err.Error()).To(ContainSubstring("field cannot have both subfields and _refModel"))
+		// 	})
+		// })
 
-		Context("with invalid leaf nodes", func() {
-			It("should fail when leaf node has no _type", func() {
-				payload := models.EditDataModelPayload{
-					Name:        "test-model",
-					Description: "Updated test data model",
-					Structure: map[string]models.Field{
-						"invalid_leaf": {
-							Description: "Missing type",
-						},
-					},
-				}
-				err := action.Parse(structToEncodedMapForEdit(payload))
-				Expect(err).ToNot(HaveOccurred())
+		// Context("with invalid leaf nodes", func() {
+		// 	It("should fail when leaf node has no _type", func() {
+		// 		payload := models.EditDataModelPayload{
+		// 			Name:        "test-model",
+		// 			Description: "Updated test data model",
+		// 			Structure: map[string]models.Field{
+		// 				"invalid_leaf": {},
+		// 			},
+		// 		}
+		// 		err := action.Parse(structToEncodedMapForEdit(payload))
+		// 		Expect(err).ToNot(HaveOccurred())
 
-				err = action.Validate()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("leaf nodes must contain _type"))
-			})
-		})
+		// 		err = action.Validate()
+		// 		Expect(err).To(HaveOccurred())
+		// 		Expect(err.Error()).To(ContainSubstring("leaf nodes must contain _type"))
+		// 	})
+		// })
 
-		Context("with invalid submodel nodes", func() {
-			It("should fail when submodel node has additional fields besides _refModel", func() {
-				payload := models.EditDataModelPayload{
-					Name:        "test-model",
-					Description: "Updated test data model",
-					Structure: map[string]models.Field{
-						"invalid_submodel": {
-							ModelRef: &models.ModelRef{
-								Name:    "external-model",
-								Version: "v1",
-							},
-							Description: "Should not have description",
-							Unit:        "kg",
-						},
-					},
-				}
-				err := action.Parse(structToEncodedMapForEdit(payload))
-				Expect(err).ToNot(HaveOccurred())
+		// Context("with invalid submodel nodes", func() {
+		// 	It("should fail when submodel node has additional fields besides _refModel", func() {
+		// 		payload := models.EditDataModelPayload{
+		// 			Name:        "test-model",
+		// 			Description: "Updated test data model",
+		// 			Structure: map[string]models.Field{
+		// 				"invalid_submodel": {
+		// 					ModelRef: &models.ModelRef{
+		// 						Name:    "external-model",
+		// 						Version: "v1",
+		// 					},
+		// 				},
+		// 			},
+		// 		}
+		// 		err := action.Parse(structToEncodedMapForEdit(payload))
+		// 		Expect(err).ToNot(HaveOccurred())
 
-				err = action.Validate()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("subModel nodes should ONLY contain _refModel"))
-			})
-		})
+		// 		err = action.Validate()
+		// 		Expect(err).To(HaveOccurred())
+		// 		Expect(err.Error()).To(ContainSubstring("subModel nodes should ONLY contain _refModel"))
+		// 	})
+		// })
 
-		Context("with multiple validation errors", func() {
-			It("should return all validation errors", func() {
-				payload := models.EditDataModelPayload{
-					Name:        "test-model",
-					Description: "Updated test data model",
-					Structure: map[string]models.Field{
-						"invalid_ref1": {
-							ModelRef: &models.ModelRef{
-								Name: "external-model-no-colon",
-							},
-						},
-						"invalid_ref2": {
-							ModelRef: &models.ModelRef{
-								Name:    "external-model",
-								Version: "version1",
-							},
-						},
-						"invalid_leaf": {
-							Description: "Missing type",
-						},
-						"invalid_combination": {
-							Type: "timeseries-string",
-							ModelRef: &models.ModelRef{
-								Name:    "external-model",
-								Version: "v1",
-							},
-						},
-					},
-				}
-				err := action.Parse(structToEncodedMapForEdit(payload))
-				Expect(err).ToNot(HaveOccurred())
+		// Context("with multiple validation errors", func() {
+		// 	It("should return all validation errors", func() {
+		// 		payload := models.EditDataModelPayload{
+		// 			Name:        "test-model",
+		// 			Description: "Updated test data model",
+		// 			Structure: map[string]models.Field{
+		// 				"invalid_ref1": {
+		// 					ModelRef: &models.ModelRef{
+		// 						Name: "external-model-no-colon",
+		// 					},
+		// 				},
+		// 				"invalid_ref2": {
+		// 					ModelRef: &models.ModelRef{
+		// 						Name:    "external-model",
+		// 						Version: "version1",
+		// 					},
+		// 				},
+		// 				"invalid_leaf": {},
+		// 				"invalid_combination": {
+		// 					PayloadShape: "timeseries-string",
+		// 					ModelRef: &models.ModelRef{
+		// 						Name:    "external-model",
+		// 						Version: "v1",
+		// 					},
+		// 				},
+		// 			},
+		// 		}
+		// 		err := action.Parse(structToEncodedMapForEdit(payload))
+		// 		Expect(err).ToNot(HaveOccurred())
 
-				err = action.Validate()
-				Expect(err).To(HaveOccurred())
-				errorMsg := err.Error()
-				Expect(errorMsg).To(ContainSubstring("data model structure validation failed:"))
-				Expect(errorMsg).To(ContainSubstring("_refModel must have a version specified"))
-				Expect(errorMsg).To(ContainSubstring("does not match pattern ^v\\d+$"))
-				Expect(errorMsg).To(ContainSubstring("leaf nodes must contain _type"))
-				Expect(errorMsg).To(ContainSubstring("field cannot have both _type and _refModel"))
-			})
-		})
+		// 		err = action.Validate()
+		// 		Expect(err).To(HaveOccurred())
+		// 		errorMsg := err.Error()
+		// 		Expect(errorMsg).To(ContainSubstring("data model structure validation failed:"))
+		// 		Expect(errorMsg).To(ContainSubstring("_refModel must have a version specified"))
+		// 		Expect(errorMsg).To(ContainSubstring("does not match pattern ^v\\d+$"))
+		// 		Expect(errorMsg).To(ContainSubstring("leaf nodes must contain _type"))
+		// 		Expect(errorMsg).To(ContainSubstring("field cannot have both _type and _refModel"))
+		// 	})
+		// })
 	})
 
 	Describe("Execute", func() {
@@ -476,16 +471,16 @@ var _ = Describe("EditDataModelAction", func() {
 					Description: "Updated version of existing model",
 					Structure: map[string]models.Field{
 						"updatedField": {
-							Type: "timeseries-string",
+							PayloadShape: "timeseries-string",
 						},
 						"newField": {
-							Type: "timeseries-number",
+							PayloadShape: "timeseries-number",
 						},
 						"nested": {
-							Type: "timeseries-object",
+							PayloadShape: "timeseries-object",
 							Subfields: map[string]models.Field{
 								"subfield1": {
-									Type: "timeseries-boolean",
+									PayloadShape: "timeseries-boolean",
 								},
 							},
 						},
@@ -501,10 +496,9 @@ var _ = Describe("EditDataModelAction", func() {
 							Name: "existing-model",
 							Versions: map[string]config.DataModelVersion{
 								"v1": {
-									Description: "Original version",
 									Structure: map[string]config.Field{
 										"originalField": {
-											Type: "timeseries-string",
+											PayloadShape: "timeseries-string",
 										},
 									},
 								},
@@ -563,7 +557,7 @@ var _ = Describe("EditDataModelAction", func() {
 					Description: "This will fail",
 					Structure: map[string]models.Field{
 						"field1": {
-							Type: "timeseries-string",
+							PayloadShape: "timeseries-string",
 						},
 					},
 				}
@@ -602,7 +596,7 @@ var _ = Describe("EditDataModelAction", func() {
 				Description: "Test description",
 				Structure: map[string]models.Field{
 					"field1": {
-						Type: "timeseries-string",
+						PayloadShape: "timeseries-string",
 					},
 				},
 			}
@@ -624,10 +618,10 @@ var _ = Describe("EditDataModelAction", func() {
 				Description: "Updated complex data model with new nested fields",
 				Structure: map[string]models.Field{
 					"simple_string": {
-						Type: "timeseries-string",
+						PayloadShape: "timeseries-string",
 					},
 					"updated_number": {
-						Type: "timeseries-number",
+						PayloadShape: "timeseries-number",
 					},
 					"new_referenced_model": {
 						ModelRef: &models.ModelRef{
@@ -636,16 +630,16 @@ var _ = Describe("EditDataModelAction", func() {
 						},
 					},
 					"updated_nested_object": {
-						Type: "timeseries-object",
+						PayloadShape: "timeseries-object",
 						Subfields: map[string]models.Field{
 							"updated_nested_string": {
-								Type: "timeseries-string",
+								PayloadShape: "timeseries-string",
 							},
 							"new_deeply_nested": {
-								Type: "timeseries-object",
+								PayloadShape: "timeseries-object",
 								Subfields: map[string]models.Field{
 									"new_deep_field": {
-										Type: "timeseries-array",
+										PayloadShape: "timeseries-array",
 									},
 								},
 							},
@@ -667,10 +661,9 @@ var _ = Describe("EditDataModelAction", func() {
 						Name: "complex-model",
 						Versions: map[string]config.DataModelVersion{
 							"v1": {
-								Description: "Original complex model",
 								Structure: map[string]config.Field{
 									"oldField": {
-										Type: "timeseries-string",
+										PayloadShape: "timeseries-string",
 									},
 								},
 							},

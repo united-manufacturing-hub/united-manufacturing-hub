@@ -255,7 +255,6 @@ func generateDataModelHash(dataModel config.DataModelsConfig) string {
 	for _, versionKey := range versionKeys {
 		version := dataModel.Versions[versionKey]
 		h.Write([]byte(versionKey))
-		h.Write([]byte(version.Description))
 
 		// Hash the structure content
 		hashStructure(h, version.Structure)
@@ -281,9 +280,7 @@ func hashStructure(h hash.Hash, structure map[string]config.Field) {
 	for _, fieldKey := range fieldKeys {
 		field := structure[fieldKey]
 		h.Write([]byte(fieldKey))
-		h.Write([]byte(field.Description))
-		h.Write([]byte(field.Type))
-		h.Write([]byte(field.Unit))
+		h.Write([]byte(field.PayloadShape))
 
 		// Handle ModelRef which is now a struct pointer
 		if field.ModelRef != nil {

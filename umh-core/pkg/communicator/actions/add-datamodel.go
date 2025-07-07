@@ -109,17 +109,6 @@ func (a *AddDataModelAction) Validate() error {
 		return errors.New("missing required field Structure")
 	}
 
-	// Validate data model structure
-	validationErrors := models.ValidateDataModelStructure(a.payload.Structure)
-	if len(validationErrors) > 0 {
-		// Build error message with all validation errors
-		errorMsg := "data model structure validation failed:"
-		for _, validationError := range validationErrors {
-			errorMsg += fmt.Sprintf("\n  - %s", validationError.Error())
-		}
-		return errors.New(errorMsg)
-	}
-
 	return nil
 }
 
@@ -133,8 +122,7 @@ func (a *AddDataModelAction) Execute() (interface{}, map[string]interface{}, err
 
 	// Convert models types to config types
 	dmVersion := config.DataModelVersion{
-		Description: a.payload.Description,
-		Structure:   a.convertModelsFieldsToConfigFields(a.payload.Structure),
+		Structure: a.convertModelsFieldsToConfigFields(a.payload.Structure),
 	}
 
 	// Add to configuration
@@ -177,11 +165,9 @@ func (a *AddDataModelAction) convertModelsFieldsToConfigFields(modelsFields map[
 		}
 
 		configFields[key] = config.Field{
-			Type:        modelsField.Type,
-			ModelRef:    configModelRef,
-			Subfields:   a.convertModelsFieldsToConfigFields(modelsField.Subfields),
-			Description: modelsField.Description,
-			Unit:        modelsField.Unit,
+			PayloadShape: modelsField.PayloadShape,
+			ModelRef:     configModelRef,
+			Subfields:    a.convertModelsFieldsToConfigFields(modelsField.Subfields),
 		}
 	}
 

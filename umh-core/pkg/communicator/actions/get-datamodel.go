@@ -153,7 +153,6 @@ func (a *GetDataModelAction) Execute() (interface{}, map[string]interface{}, err
 		encodedStructure := base64.StdEncoding.EncodeToString(yamlData)
 
 		responseVersions[versionKey] = models.GetDataModelVersion{
-			Description:      versionData.Description,
 			EncodedStructure: encodedStructure,
 			Structure:        modelsStructure,
 		}
@@ -183,11 +182,9 @@ func (a *GetDataModelAction) convertConfigFieldsToModelsFields(configFields map[
 		}
 
 		modelsFields[key] = models.Field{
-			Type:        configField.Type,
-			ModelRef:    modelsModelRef,
-			Subfields:   a.convertConfigFieldsToModelsFields(configField.Subfields),
-			Description: configField.Description,
-			Unit:        configField.Unit,
+			PayloadShape: configField.PayloadShape,
+			ModelRef:     modelsModelRef,
+			Subfields:    a.convertConfigFieldsToModelsFields(configField.Subfields),
 		}
 	}
 
