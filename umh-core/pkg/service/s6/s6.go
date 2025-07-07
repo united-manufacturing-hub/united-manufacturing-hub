@@ -1312,7 +1312,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 		return nil, fmt.Errorf("failed to check if log file exists: %w", err)
 	}
 	if !exists {
-		s.logger.Debugf("Log file %s does not exist, returning ErrLogFileNotFound", logFile)
+		//s.logger.Debugf("Log file %s does not exist, returning ErrLogFileNotFound", logFile)
 		return nil, fmt.Errorf("path: %s err :%w", logFile, ErrLogFileNotFound)
 	}
 

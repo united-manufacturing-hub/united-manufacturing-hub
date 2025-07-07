@@ -175,7 +175,7 @@ var _ = Describe("Ringbuffer", func() {
 
 			snapshot := rb.GetSnapshot()
 			Expect(snapshot.LastSequenceNum).To(Equal(uint64(3)))
-			Expect(snapshot.Count).To(Equal(3))
+			Expect(len(snapshot.Items)).To(Equal(3))
 
 			// Verify sequence numbers are assigned correctly
 			Expect(buf1.SequenceNum).To(Equal(uint64(1)))
@@ -196,7 +196,7 @@ var _ = Describe("Ringbuffer", func() {
 
 			snapshot := rb.GetSnapshot()
 			Expect(snapshot.LastSequenceNum).To(Equal(uint64(3)))
-			Expect(snapshot.Count).To(Equal(2)) // Buffer capacity
+			Expect(len(snapshot.Items)).To(Equal(2)) // Buffer capacity
 
 			// Only buf2 and buf3 should remain
 			Expect(len(snapshot.Items)).To(Equal(2))
@@ -214,8 +214,6 @@ var _ = Describe("Ringbuffer", func() {
 
 			snapshot := rb.GetSnapshot()
 
-			Expect(snapshot.WritePos).To(Equal(2))
-			Expect(snapshot.Count).To(Equal(2))
 			Expect(snapshot.LastSequenceNum).To(Equal(uint64(2)))
 			Expect(len(snapshot.Items)).To(Equal(2))
 

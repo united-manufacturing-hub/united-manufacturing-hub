@@ -43,6 +43,7 @@ type Handler struct {
 	disableHardwareStatusCheck bool // nolint:unused // will be used in the future
 	systemSnapshotManager      *fsm.SnapshotManager
 	configManager              config.ConfigManager
+	topicBrowserCommunicator   *topicbrowser.TopicBrowserCommunicator
 	logger                     *zap.SugaredLogger
 }
 
@@ -57,8 +58,7 @@ func NewHandler(
 	systemSnapshotManager *fsm.SnapshotManager,
 	configManager config.ConfigManager,
 	logger *zap.SugaredLogger,
-	topicBrowserCache *topicbrowser.Cache,
-	topicBrowserSimulator *topicbrowser.Simulator,
+	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator,
 ) *Handler {
 	s := &Handler{}
 	s.subscriberRegistry = subscribers.NewRegistry(cull, ttl)
@@ -67,14 +67,14 @@ func NewHandler(
 	s.instanceUUID = instanceUUID
 	s.systemSnapshotManager = systemSnapshotManager
 	s.configManager = configManager
+	s.topicBrowserCommunicator = topicBrowserCommunicator
 	s.logger = logger
 	s.StatusCollector = generator.NewStatusCollector(
 		dog,
 		systemSnapshotManager,
 		configManager,
 		logger,
-		topicBrowserCache,
-		topicBrowserSimulator,
+		topicBrowserCommunicator,
 	)
 
 	return s
@@ -127,6 +127,7 @@ func (s *Handler) notify() {
 
 	notified := 0
 	baseStatusMessage := s.StatusCollector.GenerateStatusMessage(true)
+
 	s.subscriberRegistry.ForEach(func(email string, bootstrapped bool) {
 		// Generate personalized status message based on bootstrap state
 		statusMessage := baseStatusMessage
@@ -168,4 +169,9 @@ func (s *Handler) notify() {
 
 		notified++
 	})
+
+	// Mark data as sent for tracking purposes
+	if notified > 0 && s.topicBrowserCommunicator != nil {
+		s.topicBrowserCommunicator.MarkDataAsSent(time.Now())
+	}
 }

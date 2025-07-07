@@ -149,8 +149,8 @@ var _ = Describe("extractRaw / parseBlock", func() {
 		})
 
 		It("processes new blocks when they appear", func() {
-			logs1 := buildLogs(true, string(compressed), epochMS)
-			logs2 := append(logs1, buildLogs(true, string(compressed), epochMS+1000)...)
+			logs1 := buildLogsWithTimestamps(true, string(compressed), epochMS)
+			logs2 := append(logs1, buildLogsWithTimestamps(true, string(compressed), epochMS+1000)...)
 
 			// Process first block
 			Expect(service.parseBlock(logs1)).To(Succeed())
@@ -159,6 +159,178 @@ var _ = Describe("extractRaw / parseBlock", func() {
 			// Process with both blocks - should add the second block
 			Expect(service.parseBlock(logs2)).To(Succeed())
 			Expect(rb.Len()).To(Equal(2))
+		})
+	})
+
+	Context("timestamp-based tracking", func() {
+		It("processes from beginning when lastProcessedTimestamp is zero", func() {
+			// Ensure service starts with zero timestamp
+			service.ResetBlockProcessing()
+			Expect(service.lastProcessedTimestamp.IsZero()).To(BeTrue())
+
+			logs := buildLogsWithTimestamps(true, string(compressed), epochMS)
+
+			Expect(service.parseBlock(logs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(1))
+
+			// Verify the timestamp was updated
+			Expect(service.lastProcessedTimestamp).To(Equal(time.UnixMilli(epochMS)))
+		})
+
+		It("only processes blocks with timestamps after lastProcessedTimestamp", func() {
+			baseTime := time.UnixMilli(1735732800000) // 2025-01-01T12:00:00.000Z
+
+			// Create logs with different timestamps
+			logs1 := buildLogsWithTimestamps(true, string(compressed), baseTime.UnixMilli())
+			logs2 := buildLogsWithTimestamps(true, string(compressed), baseTime.Add(5*time.Minute).UnixMilli())
+			logs3 := buildLogsWithTimestamps(true, string(compressed), baseTime.Add(10*time.Minute).UnixMilli())
+
+			allLogs := append(append(logs1, logs2...), logs3...)
+
+			// Process first block
+			service.ResetBlockProcessing()
+			Expect(service.parseBlock(logs1)).To(Succeed())
+			Expect(rb.Len()).To(Equal(1))
+			Expect(service.lastProcessedTimestamp).To(Equal(baseTime))
+
+			// Process all logs - should find and process the next unprocessed block (logs2)
+			Expect(service.parseBlock(allLogs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(2)) // 1 original + 1 new
+			Expect(service.lastProcessedTimestamp).To(Equal(baseTime.Add(5 * time.Minute)))
+
+			// Process again to get the third block (logs3)
+			Expect(service.parseBlock(allLogs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(3)) // 1 original + 2 new
+			Expect(service.lastProcessedTimestamp).To(Equal(baseTime.Add(10 * time.Minute)))
+		})
+
+		It("handles ring buffer wrap scenario correctly", func() {
+			baseTime := time.UnixMilli(1735732800000) // 2025-01-01T12:00:00.000Z
+
+			// Simulate processing many blocks to reach ring buffer capacity
+			service.ResetBlockProcessing()
+
+			// Process first batch of logs
+			logs1 := buildLogsWithTimestamps(true, string(compressed), baseTime.UnixMilli())
+			logs2 := buildLogsWithTimestamps(true, string(compressed), baseTime.Add(5*time.Minute).UnixMilli())
+			firstBatch := append(logs1, logs2...)
+
+			Expect(service.parseBlock(firstBatch)).To(Succeed())
+			Expect(rb.Len()).To(Equal(1)) // Only processes one block per call
+			Expect(service.lastProcessedTimestamp).To(Equal(baseTime))
+
+			// Process again to get the second block
+			Expect(service.parseBlock(firstBatch)).To(Succeed())
+			Expect(rb.Len()).To(Equal(2))
+			Expect(service.lastProcessedTimestamp).To(Equal(baseTime.Add(5 * time.Minute)))
+
+			// Now simulate ring buffer wrap by creating new logs that would appear
+			// in a wrapped ring buffer but with newer timestamps
+			logs3 := buildLogsWithTimestamps(true, string(compressed), baseTime.Add(15*time.Minute).UnixMilli())
+			logs4 := buildLogsWithTimestamps(true, string(compressed), baseTime.Add(20*time.Minute).UnixMilli())
+
+			// Create a "wrapped" scenario where the log entries are in a different order
+			// but the timestamp-based search should still find the correct entries
+			wrappedLogs := append(append(logs3, logs4...), firstBatch...)
+
+			Expect(service.parseBlock(wrappedLogs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(3)) // First new block processed
+			Expect(service.lastProcessedTimestamp).To(Equal(baseTime.Add(15 * time.Minute)))
+
+			// Process again to get the fourth block
+			Expect(service.parseBlock(wrappedLogs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(4)) // Should have processed both new blocks
+			Expect(service.lastProcessedTimestamp).To(Equal(baseTime.Add(20 * time.Minute)))
+		})
+
+		It("handles duplicate timestamps correctly", func() {
+			baseTime := time.UnixMilli(1735732800000) // 2025-01-01T12:00:00.000Z
+
+			// Create two blocks with the same timestamp but different content
+			logs1 := buildLogsWithTimestamps(true, string(compressed), baseTime.UnixMilli())
+			logs2 := buildLogsWithTimestamps(true, "deadbeef", baseTime.UnixMilli())
+
+			allLogs := append(logs1, logs2...)
+
+			service.ResetBlockProcessing()
+			Expect(service.parseBlock(allLogs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(1)) // First block processed
+
+			// Process again - since second block has same timestamp, it won't be processed
+			Expect(service.parseBlock(allLogs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(1)) // Still only one block (timestamp-based tracking prevents duplicate timestamps)
+		})
+
+		It("skips processing when no newer entries exist", func() {
+			baseTime := time.UnixMilli(1735732800000) // 2025-01-01T12:00:00.000Z
+
+			// Process initial block
+			logs := buildLogsWithTimestamps(true, string(compressed), baseTime.UnixMilli())
+			service.ResetBlockProcessing()
+			Expect(service.parseBlock(logs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(1))
+
+			// Process same logs again - should not add anything
+			Expect(service.parseBlock(logs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(1)) // No new blocks added
+
+			// Add an older block - should not be processed
+			olderLogs := buildLogsWithTimestamps(true, string(compressed), baseTime.Add(-5*time.Minute).UnixMilli())
+			allLogsWithOlder := append(olderLogs, logs...)
+
+			Expect(service.parseBlock(allLogsWithOlder)).To(Succeed())
+			Expect(rb.Len()).To(Equal(1)) // Still no new blocks added
+		})
+
+		It("handles S6 ring buffer wrap at 10k entries correctly", func() {
+			// This test simulates the exact scenario that was failing:
+			// S6 ring buffer reaches 10,000 entries and wraps, but topic browser
+			// can still find new blocks using timestamp-based tracking
+
+			baseTime := time.UnixMilli(1735732800000) // 2025-01-01T12:00:00.000Z
+			service.ResetBlockProcessing()
+
+			// Simulate having processed many entries before reaching the wrap point
+			// Set lastProcessedTimestamp to a specific time
+			service.lastProcessedTimestamp = baseTime.Add(60 * time.Minute)
+
+			// Create a log slice that simulates a wrapped S6 ring buffer
+			// In a real scenario, this would be 10,000 entries, but we'll use fewer for testing
+			var wrappedLogs []s6svc.LogEntry
+
+			// Add some "old" entries that were from earlier processing (before wrap)
+			for i := 0; i < 5; i++ {
+				oldTime := baseTime.Add(time.Duration(i*10) * time.Minute)
+				wrappedLogs = append(wrappedLogs, buildLogsWithTimestamps(true, string(compressed), oldTime.UnixMilli())...)
+			}
+
+			// Add some entries that were processed right before the wrap
+			alreadyProcessedTime := baseTime.Add(55 * time.Minute)
+			wrappedLogs = append(wrappedLogs, buildLogsWithTimestamps(true, string(compressed), alreadyProcessedTime.UnixMilli())...)
+
+			// Add NEW entries that appeared after the wrap and should be processed
+			newTime1 := baseTime.Add(65 * time.Minute) // 5 minutes after lastProcessedTimestamp
+			newTime2 := baseTime.Add(70 * time.Minute) // 10 minutes after lastProcessedTimestamp
+			wrappedLogs = append(wrappedLogs, buildLogsWithTimestamps(true, string(compressed), newTime1.UnixMilli())...)
+			wrappedLogs = append(wrappedLogs, buildLogsWithTimestamps(true, string(compressed), newTime2.UnixMilli())...)
+
+			// Process the wrapped log buffer - should find first new block
+			Expect(service.parseBlock(wrappedLogs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(1)) // First new block processed
+
+			// Process again to get the second new block
+			Expect(service.parseBlock(wrappedLogs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(2)) // Both new blocks processed
+
+			// Verify that the service tracked the latest timestamp
+			Expect(service.lastProcessedTimestamp).To(Equal(newTime2))
+
+			// Verify the blocks in the ring buffer have the correct timestamps
+			snapshot := rb.GetSnapshot()
+			Expect(snapshot.Items).To(HaveLen(2))
+			// The actual order depends on which block was found first by the search algorithm
+			timestamps := []time.Time{snapshot.Items[0].Timestamp, snapshot.Items[1].Timestamp}
+			Expect(timestamps).To(ContainElements(newTime1, newTime2))
 		})
 	})
 })
@@ -177,5 +349,23 @@ func buildLogs(includeTimestamp bool, dataLine string, epochMS int64) []s6svc.Lo
 		logs = append(logs, s6svc.LogEntry{Content: strconv.FormatInt(epochMS, 10)})
 	}
 	logs = append(logs, s6svc.LogEntry{Content: constants.BLOCK_END_MARKER})
+	return logs
+}
+
+// buildLogsWithTimestamps creates a synthetic Benthos log block for tests with explicit timestamps.
+// It wraps the supplied hex-encoded data line between BLOCK_START / DATA_END / BLOCK_END
+// markers and sets the given timestamp on all log entries. This is useful for testing
+// timestamp-based processing logic.
+func buildLogsWithTimestamps(includeTimestamp bool, dataLine string, epochMS int64) []s6svc.LogEntry {
+	timestamp := time.UnixMilli(epochMS)
+	logs := []s6svc.LogEntry{
+		{Content: constants.BLOCK_START_MARKER, Timestamp: timestamp},
+		{Content: dataLine, Timestamp: timestamp},
+		{Content: constants.DATA_END_MARKER, Timestamp: timestamp},
+	}
+	if includeTimestamp {
+		logs = append(logs, s6svc.LogEntry{Content: strconv.FormatInt(epochMS, 10), Timestamp: timestamp})
+	}
+	logs = append(logs, s6svc.LogEntry{Content: constants.BLOCK_END_MARKER, Timestamp: timestamp})
 	return logs
 }

@@ -15,6 +15,7 @@
 package topicbrowser
 
 import (
+	"bytes"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -22,6 +23,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -55,7 +57,31 @@ const (
 	parseBufferInitialSize = 64 << 10 // 64KB
 )
 
-// extractNextBlock scans entries starting at searchStart and returns the raw
+// Pre-compiled byte markers for efficient searching
+var (
+	blockStartMarkerBytes = []byte(constants.BLOCK_START_MARKER)
+	dataEndMarkerBytes    = []byte(constants.DATA_END_MARKER)
+	blockEndMarkerBytes   = []byte(constants.BLOCK_END_MARKER)
+)
+
+// maxMarkerLineLength is the maximum expected length of lines containing markers
+// Hex payload lines are ~8KB, marker lines are tiny (~50 bytes max)
+const maxMarkerLineLength = 100
+
+// containsMarker efficiently checks if content contains the given marker using byte operations
+func containsMarker(content string, marker []byte) bool {
+	// Fast path: if line is too long, it can't contain a marker
+	if len(content) > maxMarkerLineLength {
+		return false
+	}
+
+	// Use unsafe conversion to avoid string->[]byte allocation
+	// This is safe because we're only reading from the bytes, not modifying them
+	contentBytes := unsafe.Slice(unsafe.StringData(content), len(content))
+	return bytes.Contains(contentBytes, marker)
+}
+
+// extractNextBlock scans entries starting after lastProcessedTimestamp and returns the raw
 // hex payload, its timestamp (epoch ms), and index of the ENDENDEND line.
 //
 // Expected layout:
@@ -68,57 +94,94 @@ const (
 //
 // Returned raw slice is **caller‑owned** – the function copies it out of the
 // pooled buffer before returning.
-func extractNextBlock(entries []s6svc.LogEntry, lastProcessedIndex int) ([]byte, int64, int, error) {
-	// Handle the case where lastProcessedIndex is <= 0 (either -1 from proper initialization or 0 from default)
-	// Start searching from the beginning in this case
-	searchStart := lastProcessedIndex + 1
-	if lastProcessedIndex <= 0 {
-		searchStart = 0
-	}
+func extractNextBlock(entries []s6svc.LogEntry, lastProcessedTimestamp time.Time) ([]byte, int64, int, error) {
+	// Find the first complete block with timestamp > lastProcessedTimestamp
+	// If lastProcessedTimestamp is zero (initial state), start from beginning
+	searchStart := 0
 
 	if searchStart >= len(entries) {
-		return nil, 0, lastProcessedIndex, nil // No new entries
+		return nil, 0, len(entries) - 1, nil // No new entries
 	}
 
-	var (
-		blockEndIndex = -1
-		dataEndIndex  = -1
-		startIndex    = -1
-	)
+	// Search for complete blocks and check their timestamps
+	for searchStart < len(entries) {
+		var (
+			blockEndIndex = -1
+			dataEndIndex  = -1
+			startIndex    = -1
+		)
 
-	// Search FORWARD from searchStart for the first complete block
-	for i := searchStart; i < len(entries); i++ {
-		if strings.Contains(entries[i].Content, constants.BLOCK_START_MARKER) {
-			startIndex = i
-			break
+		// Search FORWARD from searchStart for the first complete block
+		for i := searchStart; i < len(entries); i++ {
+			if containsMarker(entries[i].Content, blockStartMarkerBytes) {
+				startIndex = i
+				break
+			}
 		}
-	}
-	if startIndex == -1 {
-		return nil, 0, lastProcessedIndex, nil // No new block start found
-	}
-
-	// Find DATA_END_MARKER after the start
-	for i := startIndex + 1; i < len(entries); i++ {
-		if strings.Contains(entries[i].Content, constants.DATA_END_MARKER) {
-			dataEndIndex = i
-			break
+		if startIndex == -1 {
+			return nil, 0, len(entries) - 1, nil // No new block start found
 		}
-	}
-	if dataEndIndex == -1 {
-		return nil, 0, lastProcessedIndex, nil // Incomplete block
-	}
 
-	// Find BLOCK_END_MARKER after the data end
-	for i := dataEndIndex + 1; i < len(entries); i++ {
-		if strings.Contains(entries[i].Content, constants.BLOCK_END_MARKER) {
-			blockEndIndex = i
-			break
+		// Find DATA_END_MARKER after the start
+		for i := startIndex + 1; i < len(entries); i++ {
+			if containsMarker(entries[i].Content, dataEndMarkerBytes) {
+				dataEndIndex = i
+				break
+			}
 		}
-	}
-	if blockEndIndex == -1 {
-		return nil, 0, lastProcessedIndex, nil // Incomplete block
+		if dataEndIndex == -1 {
+			return nil, 0, len(entries) - 1, nil // Incomplete block
+		}
+
+		// Find BLOCK_END_MARKER after the data end
+		for i := dataEndIndex + 1; i < len(entries); i++ {
+			if containsMarker(entries[i].Content, blockEndMarkerBytes) {
+				blockEndIndex = i
+				break
+			}
+		}
+		if blockEndIndex == -1 {
+			return nil, 0, len(entries) - 1, nil // Incomplete block
+		}
+
+		// Extract timestamp from this block
+		tsLine := ""
+		for _, entry := range entries[dataEndIndex+1 : blockEndIndex] {
+			s := strings.TrimSpace(entry.Content)
+			if s != "" {
+				tsLine = s
+				break
+			}
+		}
+		if tsLine == "" {
+			return nil, 0, len(entries) - 1, errors.New("timestamp line is missing between block markers")
+		}
+
+		epochMS, err := strconv.ParseInt(tsLine, 10, 64)
+		if err != nil {
+			// Move past this malformed block and continue searching
+			searchStart = blockEndIndex + 1
+			continue
+		}
+
+		blockTimestamp := time.UnixMilli(epochMS)
+
+		// Check if this block should be processed
+		if lastProcessedTimestamp.IsZero() || blockTimestamp.After(lastProcessedTimestamp) {
+			// Found a block that should be processed - extract it
+			return extractBlockData(entries, startIndex, dataEndIndex, blockEndIndex, epochMS)
+		}
+
+		// This block is too old, continue searching
+		searchStart = blockEndIndex + 1
 	}
 
+	// No unprocessed blocks found
+	return nil, 0, len(entries) - 1, nil
+}
+
+// extractBlockData extracts the hex payload from a complete block
+func extractBlockData(entries []s6svc.LogEntry, startIndex, dataEndIndex, blockEndIndex int, epochMS int64) ([]byte, int64, int, error) {
 	// Extract hex payload using parseBufferPool (see memory management docs above)
 	bufPtr := parseBufferPool.Get().(*[]byte)
 	buf := *bufPtr
@@ -153,24 +216,6 @@ func extractNextBlock(entries []s6svc.LogEntry, lastProcessedIndex int) ([]byte,
 	*bufPtr = buf[:0]
 	parseBufferPool.Put(bufPtr)
 
-	// Extract timestamp - use TrimSpace to avoid corrupting hex data
-	tsLine := ""
-	for _, entry := range entries[dataEndIndex+1 : blockEndIndex] {
-		s := strings.TrimSpace(entry.Content)
-		if s != "" {
-			tsLine = s
-			break
-		}
-	}
-	if tsLine == "" {
-		return nil, 0, lastProcessedIndex, errors.New("timestamp line is missing between block markers")
-	}
-
-	epochMS, err := strconv.ParseInt(tsLine, 10, 64)
-	if err != nil {
-		return nil, 0, lastProcessedIndex, fmt.Errorf("failed to parse timestamp: %w", err)
-	}
-
 	return raw, epochMS, blockEndIndex, nil
 }
 
@@ -189,10 +234,9 @@ func (svc *Service) parseBlock(entries []s6svc.LogEntry) error {
 	defer svc.processingMutex.Unlock()
 
 	// Try to extract the next unprocessed block
-	hexBuf, epoch, newBlockEndIndex, err := extractNextBlock(entries, svc.lastProcessedBlockEndIndex)
+	hexBuf, epoch, _, err := extractNextBlock(entries, svc.lastProcessedTimestamp)
 	if err != nil {
-		// Always advance index even on error to prevent infinite loop on corrupt blocks
-		svc.lastProcessedBlockEndIndex = newBlockEndIndex
+		// Error occurred, but we don't need to advance index anymore with timestamp-based tracking
 		return err
 	}
 
@@ -213,9 +257,8 @@ func (svc *Service) parseBlock(entries []s6svc.LogEntry) error {
 	}
 
 	if _, err := hex.Decode(item.Payload, hexBuf); err != nil {
-		// Always advance index even on decode error to prevent infinite loop
-		svc.lastProcessedBlockEndIndex = newBlockEndIndex
-		bufferItemPool.Put(item) // Return to pool on error
+		// Return to pool on error
+		bufferItemPool.Put(item)
 		return fmt.Errorf("hex decode: %w", err)
 	}
 
@@ -241,7 +284,6 @@ func (svc *Service) parseBlock(entries []s6svc.LogEntry) error {
 	}
 
 	// Update tracking - only after successful processing
-	svc.lastProcessedBlockEndIndex = newBlockEndIndex
 	svc.lastProcessedTimestamp = item.Timestamp
 
 	return nil

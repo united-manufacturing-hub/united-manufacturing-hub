@@ -237,7 +237,6 @@ func (s *DefaultService) CheckArtifactsHealth(ctx context.Context, artifacts *Se
 	}
 
 	// All checks passed
-	s.logger.Debugf("Health check: service %s is healthy", artifacts.ServiceDir)
 	return HealthOK, nil
 }
 

@@ -148,9 +148,8 @@ type Service struct {
 	ringbuffer *Ringbuffer
 
 	// Block processing tracking
-	lastProcessedBlockEndIndex int
-	lastProcessedTimestamp     time.Time
-	processingMutex            sync.RWMutex
+	lastProcessedTimestamp time.Time
+	processingMutex        sync.RWMutex
 }
 
 // ServiceOption is a function that configures a Service.
@@ -173,13 +172,13 @@ func WithManager(mgr *benthosfsm.BenthosManager) ServiceOption {
 func NewDefaultService(tbName string, opts ...ServiceOption) *Service {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentTopicBrowserService, tbName)
 	service := &Service{
-		logger:                     logger.For(managerName),
-		benthosManager:             benthosfsm.NewBenthosManager(managerName),
-		benthosService:             benthossvc.NewDefaultBenthosService(tbName),
-		benthosConfigs:             []config.BenthosConfig{},
-		tbName:                     tbName,
-		ringbuffer:                 NewRingbuffer(3), // Reduced from 8 to 3 for immediate 62% memory reduction
-		lastProcessedBlockEndIndex: -1,               // Start from beginning
+		logger:                 logger.For(managerName),
+		benthosManager:         benthosfsm.NewBenthosManager(managerName),
+		benthosService:         benthossvc.NewDefaultBenthosService(tbName),
+		benthosConfigs:         []config.BenthosConfig{},
+		tbName:                 tbName,
+		ringbuffer:             NewRingbufferWithDefaultCapacity(),
+		lastProcessedTimestamp: time.Time{}, // Start from beginning
 	}
 
 	// Apply options
@@ -291,10 +290,13 @@ func (svc *Service) Status(
 
 	// Parse the logs and hex-decode it, afterwards the data gets written
 	// into the ringbuffer
+	svc.logger.Debugf("parsing block from logs: %d", len(logs))
 	err = svc.parseBlock(logs)
 	if err != nil {
+		svc.logger.Errorf("failed to parse block from logs: %v", err)
 		return ServiceInfo{}, fmt.Errorf("failed to parse block from logs: %w", err)
 	}
+	svc.logger.Debugf("parsed block from logs")
 
 	// check for invalidMetrics from benthos and redpanda
 	statusReason, invalidMetrics := svc.checkMetrics(redpandaObservedState, benthosObservedState)
@@ -649,6 +651,5 @@ func (svc *Service) redpandaProcessingActivity(observedState rpfsm.RedpandaObser
 func (svc *Service) ResetBlockProcessing() {
 	svc.processingMutex.Lock()
 	defer svc.processingMutex.Unlock()
-	svc.lastProcessedBlockEndIndex = -1
 	svc.lastProcessedTimestamp = time.Time{}
 }

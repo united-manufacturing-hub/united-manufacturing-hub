@@ -49,6 +49,10 @@ const (
 	// factor is the factor by which we reduce the remaining time for the inner control loop.
 	// This is used to ensure that we finish in time.
 	LoopControlLoopTimeFactor = 0.80
+
+	// RingBufferCapacity is the fixed capacity for all ring buffers in the system.
+	// Reduced from 8 to 3 for immediate 62% memory reduction while maintaining sufficient buffering.
+	RingBufferCapacity = 3
 )
 
 // FilesAndDirectoriesToIgnore is a list of files and directories that we will not read.

@@ -49,6 +49,8 @@ import (
 	"math"
 	"sync"
 	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 )
 
 // BufferItem is an immutable unit stored in the ring buffer.
@@ -69,15 +71,18 @@ type Ringbuffer struct {
 
 // RingBufferSnapshot provides a consistent view of the ring buffer state
 type RingBufferSnapshot struct {
-	WritePos        int           // Current write position
-	Count           int           // Number of elements in buffer
 	LastSequenceNum uint64        // Latest sequence number
 	Items           []*BufferItem // Current buffer contents, newest-to-oldest
 }
 
+// NewRingbufferWithDefaultCapacity creates a ring buffer with the standard production capacity
+func NewRingbufferWithDefaultCapacity() *Ringbuffer {
+	return NewRingbuffer(constants.RingBufferCapacity)
+}
+
 func NewRingbuffer(capacity uint64) *Ringbuffer {
 	const (
-		defaultCap = 8
+		defaultCap = constants.RingBufferCapacity
 		maxCap     = uint64(math.MaxInt64)
 	)
 
@@ -135,6 +140,11 @@ func (rb *Ringbuffer) Len() int {
 	return n
 }
 
+// Cap returns the fixed capacity of the ring buffer
+func (rb *Ringbuffer) Cap() int {
+	return len(rb.buf)
+}
+
 // GetSnapshot returns a consistent snapshot of the ring buffer state
 // This is the primary interface for consumers to get ring buffer data
 func (rb *Ringbuffer) GetSnapshot() RingBufferSnapshot {
@@ -142,8 +152,6 @@ func (rb *Ringbuffer) GetSnapshot() RingBufferSnapshot {
 	defer rb.mu.Unlock()
 
 	return RingBufferSnapshot{
-		WritePos:        rb.writePos,
-		Count:           rb.count,
 		LastSequenceNum: rb.sequenceNum,
 		Items:           rb.getBuffersInternal(),
 	}

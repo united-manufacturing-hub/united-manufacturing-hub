@@ -214,7 +214,6 @@ func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, services
 			switch healthStatus {
 			case s6service.HealthOK:
 				// Service is healthy, continue normally
-				s.baseFSMInstance.GetLogger().Debugf("Service %s health check: OK", s.baseFSMInstance.GetID())
 
 			case s6service.HealthUnknown:
 				// Probe failed (I/O error, timeout) - don't trigger removal, just log
