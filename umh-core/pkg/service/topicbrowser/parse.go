@@ -15,7 +15,6 @@
 package topicbrowser
 
 import (
-	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -24,13 +23,51 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pierrec/lz4/v4"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
-// extractNextBlock searches for the next complete block after lastProcessedIndex
-// Returns: hexPayload, epochMS, newBlockEndIndex, error
+// Parsing utilities for Benthos‑UMH log blocks.
+//
+// Memory notes: see package documentation for the full ownership model.
+// ─ parseBufferPool supplies ephemeral byte slices.
+// ─ Decoded data is stored in BufferItems obtained from bufferItemPool.
+
+// s6 log limits (bytes, before hex decoding)
+const (
+	// s6LineLimit is the maximum number of characters S6 allows in a single log line
+	// This is the default S6 configuration limit before truncation occurs
+	s6LineLimit = 8192
+
+	// s6Overhead represents additional characters S6 adds to each log line
+	// This accounts for line terminators and other S6-specific formatting
+	s6Overhead = 1
+
+	// safetyBuffer provides extra buffer space beyond the calculated minimum
+	// This prevents buffer reallocation in edge cases and accounts for
+	// minor variations in actual log line lengths
+	safetyBuffer = 64
+
+	// parseBufferInitialSize is the starting capacity for hex parsing buffers
+	// Calculation: ~8 typical S6-truncated entries × 8,193 bytes per entry = 64KB
+	// This handles most common batch sizes without reallocation while avoiding
+	// excessive memory usage for small batches
+	parseBufferInitialSize = 64 << 10 // 64KB
+)
+
+// extractNextBlock scans entries starting at searchStart and returns the raw
+// hex payload, its timestamp (epoch ms), and index of the ENDENDEND line.
+//
+// Expected layout:
+//
+//	STARTSTARTSTART
+//	<hex …>
+//	ENDDATAENDDATAENDDATA
+//	<epoch‑ms>
+//	ENDENDEND
+//
+// Returned raw slice is **caller‑owned** – the function copies it out of the
+// pooled buffer before returning.
 func extractNextBlock(entries []s6svc.LogEntry, lastProcessedIndex int) ([]byte, int64, int, error) {
 	// Handle the case where lastProcessedIndex is <= 0 (either -1 from proper initialization or 0 from default)
 	// Start searching from the beginning in this case
@@ -82,7 +119,7 @@ func extractNextBlock(entries []s6svc.LogEntry, lastProcessedIndex int) ([]byte,
 		return nil, 0, lastProcessedIndex, nil // Incomplete block
 	}
 
-	// Extract hex payload using the same logic as before
+	// Extract hex payload using parseBufferPool (see memory management docs above)
 	bufPtr := parseBufferPool.Get().(*[]byte)
 	buf := *bufPtr
 
@@ -90,24 +127,19 @@ func extractNextBlock(entries []s6svc.LogEntry, lastProcessedIndex int) ([]byte,
 	buf = buf[:0]
 	entryCount := dataEndIndex - startIndex - 1
 
-	// S6 Log Line Limit Analysis:
-	// - S6 default max line length: 8,192 bytes + 1 overhead = 8,193 characters
-	// - Benthos protobuf logs get truncated to exactly 8,193 hex characters per line
+	// Buffer size estimation based on S6 log line limits:
+	// - Benthos protobuf logs get truncated to exactly (s6LineLimit + s6Overhead) hex characters per line
 	// - Buffer stores raw hex strings (1 byte per character in Go)
 	// - After hex decoding: hex strings reduce to ~50% (8,193 hex chars → ~4,096 bytes binary)
-	// - Required buffer size: entryCount * 8,193 bytes for hex strings
-	//
-	// Previous estimation used 3MB per entry (740x overallocation!)
-	// Actual needs: ~8KB per entry for S6-truncated hex strings
-	const s6LineLimit = 8192
-	const s6Overhead = 1
-	const safetyBuffer = 64
+	// - Required buffer size: entryCount * (s6LineLimit + s6Overhead + safetyBuffer) bytes for hex strings
 	estimatedSize := entryCount * (s6LineLimit + s6Overhead + safetyBuffer) // ~8.2KB per entry
 
 	if cap(buf) < estimatedSize {
 		buf = make([]byte, 0, estimatedSize)
 	}
 
+	// Concatenate hex data from all lines between start and data-end markers
+	// TrimSpace removes newlines, spaces, and other whitespace from each line
 	for _, entry := range entries[startIndex+1 : dataEndIndex] {
 		trimmed := strings.TrimSpace(entry.Content)
 		buf = append(buf, trimmed...)
@@ -121,10 +153,10 @@ func extractNextBlock(entries []s6svc.LogEntry, lastProcessedIndex int) ([]byte,
 	*bufPtr = buf[:0]
 	parseBufferPool.Put(bufPtr)
 
-	// Extract timestamp
+	// Extract timestamp - use TrimSpace to avoid corrupting hex data
 	tsLine := ""
 	for _, entry := range entries[dataEndIndex+1 : blockEndIndex] {
-		s := strings.ToLower(entry.Content)
+		s := strings.TrimSpace(entry.Content)
 		if s != "" {
 			tsLine = s
 			break
@@ -142,113 +174,16 @@ func extractNextBlock(entries []s6svc.LogEntry, lastProcessedIndex int) ([]byte,
 	return raw, epochMS, blockEndIndex, nil
 }
 
-// / extractRaw searches log entries for a complete START‒END block and returns
-// the hex-encoded LZ4 payload plus its epoch-ms timestamp.
-// An unfinished block yields (nil, 0, nil); a finished-but-malformed block
-// (e.g., missing or unparsable timestamp) propagates a descriptive error./
+// parseBlock pulls the next unprocessed block, decodes it, and appends the
+// resulting BufferItem to the ring buffer.
 //
-// Logs will come in this format:
-// STARTSTARTSTART
-// <hex-encoded LZ4>
-// ENDDATAENDDATAENDDATA
-// 1750091514783
-// ENDENDENDEND
-func extractRaw(entries []s6svc.LogEntry) (compressed []byte, epochMS int64, err error) {
-	var (
-		blockEndIndex = -1
-		dataEndIndex  = -1
-		startIndex    = -1
-	)
-
-	for i := len(entries) - 1; i >= 0; i-- {
-		if strings.Contains(entries[i].Content, constants.BLOCK_END_MARKER) {
-			blockEndIndex = i
-			break
-		}
-	}
-	if blockEndIndex == -1 {
-		return nil, 0, nil // no finished block yet
-	}
-
-	for i := blockEndIndex - 1; i >= 0; i-- {
-		if strings.Contains(entries[i].Content, constants.DATA_END_MARKER) {
-			dataEndIndex = i
-			break
-		}
-	}
-	if dataEndIndex == -1 {
-		return nil, 0, nil // tail not written yet
-	}
-
-	for i := dataEndIndex - 1; i >= 0; i-- {
-		if strings.Contains(entries[i].Content, constants.BLOCK_START_MARKER) {
-			startIndex = i
-			break
-		}
-	}
-	if startIndex == -1 {
-		return nil, 0, nil // head not written yet
-	}
-
-	// Use pooled buffer with pre-allocation to avoid repeated growth
-	bufPtr := parseBufferPool.Get().(*[]byte)
-	buf := *bufPtr
-
-	// Reset buffer and estimate needed capacity based on S6 log line limits
-	buf = buf[:0]
-	entryCount := dataEndIndex - startIndex - 1
-
-	// S6 Log Line Limit Analysis:
-	// - S6 default max line length: 8,192 bytes + 1 overhead = 8,193 characters
-	// - Benthos protobuf logs get truncated to exactly 8,193 hex characters per line
-	// - Buffer stores raw hex strings (1 byte per character in Go)
-	// - After hex decoding: hex strings reduce to ~50% (8,193 hex chars → ~4,096 bytes binary)
-	// - Required buffer size: entryCount * 8,193 bytes for hex strings
-	//
-	// Previous estimation used 3MB per entry (740x overallocation!)
-	// Actual needs: ~8KB per entry for S6-truncated hex strings
-	const s6LineLimit = 8192
-	const s6Overhead = 1
-	const safetyBuffer = 64
-	estimatedSize := entryCount * (s6LineLimit + s6Overhead + safetyBuffer) // ~8.2KB per entry
-
-	if cap(buf) < estimatedSize {
-		buf = make([]byte, 0, estimatedSize)
-	}
-
-	for _, entry := range entries[startIndex+1 : dataEndIndex] {
-		trimmed := strings.TrimSpace(entry.Content)
-		buf = append(buf, trimmed...)
-	}
-
-	// Copy to owned slice since we're returning it
-	raw := make([]byte, len(buf))
-	copy(raw, buf)
-
-	// Return buffer to pool
-	*bufPtr = buf[:0]
-	parseBufferPool.Put(bufPtr)
-
-	tsLine := ""
-	for _, entry := range entries[dataEndIndex+1 : blockEndIndex] {
-		s := strings.ToLower(entry.Content)
-		if s != "" {
-			tsLine = s
-			break
-		}
-	}
-	if tsLine == "" {
-		return nil, 0, errors.New("timestamp line is missing between block markers")
-	}
-
-	epochMS, err = strconv.ParseInt(tsLine, 10, 64)
-	if err != nil {
-		return nil, 0, fmt.Errorf("failed to parse timestamp: %w", err)
-	}
-
-	return raw, epochMS, nil
-}
-
+// ─ Concurrency ─
+// Serialised by svc.processingMutex; ring‑buffer mutation is thread‑safe.
+//
+// ─ Memory ─
+// ▸ Uses bufferItemPool for the struct.
+// ▸ payload is written in‑place, no extra copy.
+// ▸ On error the item is returned to the pool immediately.
 func (svc *Service) parseBlock(entries []s6svc.LogEntry) error {
 	svc.processingMutex.Lock()
 	defer svc.processingMutex.Unlock()
@@ -256,7 +191,9 @@ func (svc *Service) parseBlock(entries []s6svc.LogEntry) error {
 	// Try to extract the next unprocessed block
 	hexBuf, epoch, newBlockEndIndex, err := extractNextBlock(entries, svc.lastProcessedBlockEndIndex)
 	if err != nil {
-		return err // Return errors for broken blocks to maintain backward compatibility
+		// Always advance index even on error to prevent infinite loop on corrupt blocks
+		svc.lastProcessedBlockEndIndex = newBlockEndIndex
+		return err
 	}
 
 	// No new blocks available
@@ -264,98 +201,57 @@ func (svc *Service) parseBlock(entries []s6svc.LogEntry) error {
 		return nil
 	}
 
-	// Process the block
-	compressed := make([]byte, hex.DecodedLen(len(hexBuf)))
-	if _, err := hex.Decode(compressed, hexBuf); err != nil {
+	// Get pooled BufferItem (ownership transfer pattern - see docs above)
+	item := bufferItemPool.Get().(*BufferItem)
+
+	// Decode hex directly into BufferItem payload
+	payloadSize := hex.DecodedLen(len(hexBuf))
+	if cap(item.Payload) < payloadSize {
+		item.Payload = make([]byte, payloadSize)
+	} else {
+		item.Payload = item.Payload[:payloadSize]
+	}
+
+	if _, err := hex.Decode(item.Payload, hexBuf); err != nil {
+		// Always advance index even on decode error to prevent infinite loop
+		svc.lastProcessedBlockEndIndex = newBlockEndIndex
+		bufferItemPool.Put(item) // Return to pool on error
 		return fmt.Errorf("hex decode: %w", err)
 	}
 
-	// Decompress the data before storing in ring buffer
-	//payload, err := decompressLZ4(compressed)
-	//if err != nil {
-	//	return err
-	//}
+	// Set timestamp and transfer ownership to ring buffer
+	item.Timestamp = time.UnixMilli(epoch)
+	svc.ringbuffer.Add(item)
 
-	// Add decompressed data to ring buffer
-	svc.ringbuffer.Add(&Buffer{
-		Payload:   compressed, // Store decompressed data
-		Timestamp: time.UnixMilli(epoch),
-	})
+	// Calculate time since last timestamp for debugging
+	var timeSinceLastStr string
+	if svc.lastProcessedTimestamp.IsZero() {
+		timeSinceLastStr = "first block"
+	} else {
+		timeSinceLast := item.Timestamp.Sub(svc.lastProcessedTimestamp)
+		timeSinceLastStr = fmt.Sprintf("%.2fs since last timestamp", timeSinceLast.Seconds())
+	}
+
+	// Debug logging with timestamp, sequence number, and timing information
+	if svc.logger != nil {
+		svc.logger.Debugf("found block with timestamp %s (%s), giving it sequence number %d, and added to ring buffer",
+			item.Timestamp.Format(time.RFC3339),
+			timeSinceLastStr,
+			item.SequenceNum)
+	}
 
 	// Update tracking - only after successful processing
 	svc.lastProcessedBlockEndIndex = newBlockEndIndex
+	svc.lastProcessedTimestamp = item.Timestamp
 
 	return nil
 }
 
-// decompressionBufferPool reuses decompression buffers.
-var decompressionBufferPool = sync.Pool{
-	New: func() any {
-		// Start with 64KB buffer, will grow as needed
-		b := make([]byte, 0, 64<<10)
-		return &b
-	},
-}
-
-// parseBufferPool reuses buffers for hex data parsing to avoid bytes.Buffer growth
-// Based on S6 line limit analysis: typical entries are ~8KB each (8,193 hex chars)
-// Start with reasonable size for common cases, will grow as needed
+// parseBufferPool reuses buffers for hex data concatenation.
+// See memory management documentation above for usage patterns.
 var parseBufferPool = sync.Pool{
 	New: func() any {
-		// Start with 64KB buffer for hex parsing - handles ~8 typical S6-truncated entries
-		// Will grow automatically for larger batches
-		b := make([]byte, 0, 64<<10)
+		b := make([]byte, 0, parseBufferInitialSize)
 		return &b
 	},
-}
-
-// decompressBlock returns the raw, uncompressed bytes.
-//
-// It expects a *raw LZ4 block* (no header) and uses the same pool /
-// grow-once strategy you already tuned for protobuf bundles.
-func decompressBlock(src []byte) ([]byte, error) {
-	bufPtr := decompressionBufferPool.Get().(*[]byte)
-	buf := *bufPtr
-
-	// LZ4 guarantees that the decompressed size will be less than 255x the compressed size. (https://stackoverflow.com/questions/25740471/lz4-library-decompressed-data-upper-bound-size-estimation)
-	need := len(src) * 255
-	if cap(buf) < need {
-		buf = make([]byte, need)
-	}
-	buf = buf[:cap(buf)]
-
-	n, err := lz4.UncompressBlock(src, buf)
-	if err != nil {
-		// put the buffer back before returning the error
-		*bufPtr = buf[:0]
-		decompressionBufferPool.Put(bufPtr)
-		return nil, err
-	}
-
-	// copy the useful bytes into a fresh slice we own
-	out := make([]byte, n)
-	copy(out, buf[:n])
-
-	// zero-len the pooled buffer and return it
-	*bufPtr = buf[:0]
-	decompressionBufferPool.Put(bufPtr)
-
-	return out, nil
-}
-
-// decompressLZ4 recognises:
-//   - Raw block with 4-byte length prefix
-//   - Raw block without prefix (legacy)   ← handled via decompressBlock
-func decompressLZ4(compressed []byte) ([]byte, error) {
-	if len(compressed) >= 4 {
-		orig := int(binary.LittleEndian.Uint32(compressed[:4]))
-		if 0 < orig && orig <= 64<<20 {
-			dst := make([]byte, orig)
-			if n, err := lz4.UncompressBlock(compressed[4:], dst); err == nil && n == orig {
-				return dst, nil
-			}
-		}
-	}
-
-	return decompressBlock(compressed)
 }

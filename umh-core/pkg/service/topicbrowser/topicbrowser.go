@@ -63,8 +63,8 @@ type ITopicBrowserService interface {
 }
 
 type Status struct {
-	Buffer []*Buffer        // contains the ringbuffer sorted from newest to oldest
-	Logs   []s6svc.LogEntry // contain the structured s6 logs entries
+	BufferSnapshot RingBufferSnapshot // structured ring buffer snapshot with sequence tracking
+	Logs           []s6svc.LogEntry   // contain the structured s6 logs entries
 }
 
 // CopyLogs is a go-deepcopy override for the Logs field.
@@ -77,7 +77,7 @@ func (st *Status) CopyLogs(src []s6svc.LogEntry) error {
 	return nil
 }
 
-// CopyBuffer is a go-deepcopy override for the Buffer field.
+// CopyBufferSnapshot is a go-deepcopy override for the BufferSnapshot field.
 //
 // go-deepcopy looks for a method with the signature
 //
@@ -97,8 +97,8 @@ func (st *Status) CopyLogs(src []s6svc.LogEntry) error {
 // deep-copy (O(n) but safe for mutable slices).
 //
 // See also: https://github.com/tiendc/go-deepcopy?tab=readme-ov-file#copy-struct-fields-via-struct-methods
-func (st *Status) CopyBuffer(src []*Buffer) error {
-	st.Buffer = src
+func (st *Status) CopyBufferSnapshot(src RingBufferSnapshot) error {
+	st.BufferSnapshot = src
 	return nil
 }
 
@@ -131,8 +131,8 @@ type ServiceInfo struct {
 // shallow copies instead of expensive deep copies.
 func (si *ServiceInfo) CopyStatus(src Status) error {
 	// Use the Status struct's own copy logic which handles Buffer and Logs efficiently
-	si.Status.Buffer = src.Buffer // Shallow copy (handled by Status.CopyBuffer)
-	si.Status.Logs = src.Logs     // Shallow copy (handled by Status.CopyLogs)
+	si.Status.BufferSnapshot = src.BufferSnapshot // Shallow copy (handled by Status.CopyBuffer)
+	si.Status.Logs = src.Logs                     // Shallow copy (handled by Status.CopyLogs)
 	return nil
 }
 
@@ -149,6 +149,7 @@ type Service struct {
 
 	// Block processing tracking
 	lastProcessedBlockEndIndex int
+	lastProcessedTimestamp     time.Time
 	processingMutex            sync.RWMutex
 }
 
@@ -288,7 +289,7 @@ func (svc *Service) Status(
 	// Get logs
 	logs := benthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
 
-	// Parse the logs and decompress it via lz4, afterwards the data gets written
+	// Parse the logs and hex-decode it, afterwards the data gets written
 	// into the ringbuffer
 	err = svc.parseBlock(logs)
 	if err != nil {
@@ -309,8 +310,8 @@ func (svc *Service) Status(
 		InvalidMetrics:        invalidMetrics,
 		StatusReason:          statusReason,
 		Status: Status{
-			Buffer: svc.ringbuffer.GetBuffers(),
-			Logs:   logs,
+			BufferSnapshot: svc.ringbuffer.GetSnapshot(),
+			Logs:           logs,
 		},
 	}, nil
 }
@@ -649,4 +650,5 @@ func (svc *Service) ResetBlockProcessing() {
 	svc.processingMutex.Lock()
 	defer svc.processingMutex.Unlock()
 	svc.lastProcessedBlockEndIndex = -1
+	svc.lastProcessedTimestamp = time.Time{}
 }
