@@ -239,6 +239,7 @@ func (c FullConfig) Clone() FullConfig {
 	clone := FullConfig{
 		Agent:             c.Agent,
 		DataModels:        make([]DataModelsConfig, len(c.DataModels)),
+		DataContracts:     make([]DataContractsConfig, len(c.DataContracts)),
 		DataFlow:          make([]DataFlowComponentConfig, len(c.DataFlow)),
 		ProtocolConverter: make([]ProtocolConverterConfig, len(c.ProtocolConverter)),
 		Templates:         TemplatesConfig{},
@@ -256,6 +257,10 @@ func (c FullConfig) Clone() FullConfig {
 		return FullConfig{}
 	}
 	err = deepcopy.Copy(&clone.DataModels, &c.DataModels)
+	if err != nil {
+		return FullConfig{}
+	}
+	err = deepcopy.Copy(&clone.DataContracts, &c.DataContracts)
 	if err != nil {
 		return FullConfig{}
 	}
