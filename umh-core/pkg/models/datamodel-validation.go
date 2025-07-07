@@ -17,7 +17,6 @@ package models
 import (
 	"fmt"
 	"regexp"
-	"strings"
 )
 
 // ValidationError represents a validation error with a path and message
@@ -31,8 +30,8 @@ func (e ValidationError) Error() string {
 }
 
 // ValidateDataModelStructure validates a data model structure based on the specified criteria:
-// 1. _refModel contains exactly one ':'
-// 2. _refModel has a version specified (format: model:version)
+// 1. _refModel has a valid name and version
+// 2. _refModel has a version specified (format: model:version becomes name and version fields)
 // 3. Leaf nodes DO NOT contain _refModel and DO contain _type
 // 4. Folder nodes do not contain _type, _description, _unit, or _refModel
 // 5. SubModel nodes ONLY contain _refModel
@@ -53,37 +52,32 @@ func validateField(path string, field Field, versionRegex *regexp.Regexp) []Vali
 
 	// Determine node type
 	hasSubfields := len(field.Subfields) > 0
-	hasModelRef := field.ModelRef != ""
+	hasModelRef := field.ModelRef != nil
 	hasType := field.Type != ""
 	hasDescription := field.Description != ""
 	hasUnit := field.Unit != ""
 
 	// Validate _refModel format if present
 	if hasModelRef {
-		// Check if _refModel contains exactly one ':'
-		colonCount := strings.Count(field.ModelRef, ":")
-		if colonCount != 1 {
+		// Check if name is provided
+		if field.ModelRef.Name == "" {
 			errors = append(errors, ValidationError{
 				Path:    path,
-				Message: fmt.Sprintf("_refModel must contain exactly one ':' but found %d", colonCount),
+				Message: "_refModel must have a name specified",
 			})
-		} else {
-			// Check if version is specified and valid
-			parts := strings.Split(field.ModelRef, ":")
-			if len(parts) == 2 {
-				version := parts[1]
-				if version == "" {
-					errors = append(errors, ValidationError{
-						Path:    path,
-						Message: "_refModel must have a version specified after ':'",
-					})
-				} else if !versionRegex.MatchString(version) {
-					errors = append(errors, ValidationError{
-						Path:    path,
-						Message: fmt.Sprintf("version '%s' does not match pattern ^v\\d+$", version),
-					})
-				}
-			}
+		}
+
+		// Check if version is provided and valid
+		if field.ModelRef.Version == "" {
+			errors = append(errors, ValidationError{
+				Path:    path,
+				Message: "_refModel must have a version specified",
+			})
+		} else if !versionRegex.MatchString(field.ModelRef.Version) {
+			errors = append(errors, ValidationError{
+				Path:    path,
+				Message: fmt.Sprintf("version '%s' does not match pattern ^v\\d+$", field.ModelRef.Version),
+			})
 		}
 	}
 

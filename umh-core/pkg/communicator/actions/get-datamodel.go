@@ -174,9 +174,17 @@ func (a *GetDataModelAction) convertConfigFieldsToModelsFields(configFields map[
 	modelsFields := make(map[string]models.Field)
 
 	for key, configField := range configFields {
+		var modelsModelRef *models.ModelRef
+		if configField.ModelRef != nil {
+			modelsModelRef = &models.ModelRef{
+				Name:    configField.ModelRef.Name,
+				Version: configField.ModelRef.Version,
+			}
+		}
+
 		modelsFields[key] = models.Field{
 			Type:        configField.Type,
-			ModelRef:    configField.ModelRef,
+			ModelRef:    modelsModelRef,
 			Subfields:   a.convertConfigFieldsToModelsFields(configField.Subfields),
 			Description: configField.Description,
 			Unit:        configField.Unit,

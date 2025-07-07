@@ -227,7 +227,10 @@ var _ = Describe("EditDataModelAction", func() {
 							},
 						},
 						"submodel_field": {
-							ModelRef: "external-model:v1",
+							ModelRef: &models.ModelRef{
+								Name:    "external-model",
+								Version: "v1",
+							},
 						},
 					},
 				}
@@ -242,13 +245,15 @@ var _ = Describe("EditDataModelAction", func() {
 		})
 
 		Context("with invalid _refModel format", func() {
-			It("should fail with no colon", func() {
+			It("should fail with no version", func() {
 				payload := models.EditDataModelPayload{
 					Name:        "test-model",
 					Description: "Updated test data model",
 					Structure: map[string]models.Field{
 						"invalid_ref": {
-							ModelRef: "external-model-v1",
+							ModelRef: &models.ModelRef{
+								Name: "external-model-v1",
+							},
 						},
 					},
 				}
@@ -257,16 +262,18 @@ var _ = Describe("EditDataModelAction", func() {
 
 				err = action.Validate()
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("_refModel must contain exactly one ':'"))
+				Expect(err.Error()).To(ContainSubstring("_refModel must have a version specified"))
 			})
 
-			It("should fail with multiple colons", func() {
+			It("should fail with no version in complex name", func() {
 				payload := models.EditDataModelPayload{
 					Name:        "test-model",
 					Description: "Updated test data model",
 					Structure: map[string]models.Field{
 						"invalid_ref": {
-							ModelRef: "external:model:v1",
+							ModelRef: &models.ModelRef{
+								Name: "external:model:v1",
+							},
 						},
 					},
 				}
@@ -275,7 +282,7 @@ var _ = Describe("EditDataModelAction", func() {
 
 				err = action.Validate()
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("_refModel must contain exactly one ':'"))
+				Expect(err.Error()).To(ContainSubstring("_refModel must have a version specified"))
 			})
 
 			It("should fail with empty version", func() {
@@ -284,7 +291,9 @@ var _ = Describe("EditDataModelAction", func() {
 					Description: "Updated test data model",
 					Structure: map[string]models.Field{
 						"invalid_ref": {
-							ModelRef: "external-model:",
+							ModelRef: &models.ModelRef{
+								Name: "external-model",
+							},
 						},
 					},
 				}
@@ -304,7 +313,10 @@ var _ = Describe("EditDataModelAction", func() {
 					Description: "Updated test data model",
 					Structure: map[string]models.Field{
 						"invalid_version": {
-							ModelRef: "external-model:version1",
+							ModelRef: &models.ModelRef{
+								Name:    "external-model",
+								Version: "version1",
+							},
 						},
 					},
 				}
@@ -324,8 +336,11 @@ var _ = Describe("EditDataModelAction", func() {
 					Description: "Updated test data model",
 					Structure: map[string]models.Field{
 						"invalid_field": {
-							Type:     "timeseries-string",
-							ModelRef: "external-model:v1",
+							Type: "timeseries-string",
+							ModelRef: &models.ModelRef{
+								Name:    "external-model",
+								Version: "v1",
+							},
 						},
 					},
 				}
@@ -343,7 +358,10 @@ var _ = Describe("EditDataModelAction", func() {
 					Description: "Updated test data model",
 					Structure: map[string]models.Field{
 						"invalid_field": {
-							ModelRef: "external-model:v1",
+							ModelRef: &models.ModelRef{
+								Name:    "external-model",
+								Version: "v1",
+							},
 							Subfields: map[string]models.Field{
 								"nested": {
 									Type: "timeseries-string",
@@ -388,7 +406,10 @@ var _ = Describe("EditDataModelAction", func() {
 					Description: "Updated test data model",
 					Structure: map[string]models.Field{
 						"invalid_submodel": {
-							ModelRef:    "external-model:v1",
+							ModelRef: &models.ModelRef{
+								Name:    "external-model",
+								Version: "v1",
+							},
 							Description: "Should not have description",
 							Unit:        "kg",
 						},
@@ -410,17 +431,25 @@ var _ = Describe("EditDataModelAction", func() {
 					Description: "Updated test data model",
 					Structure: map[string]models.Field{
 						"invalid_ref1": {
-							ModelRef: "external-model-no-colon",
+							ModelRef: &models.ModelRef{
+								Name: "external-model-no-colon",
+							},
 						},
 						"invalid_ref2": {
-							ModelRef: "external-model:version1",
+							ModelRef: &models.ModelRef{
+								Name:    "external-model",
+								Version: "version1",
+							},
 						},
 						"invalid_leaf": {
 							Description: "Missing type",
 						},
 						"invalid_combination": {
-							Type:     "timeseries-string",
-							ModelRef: "external-model:v1",
+							Type: "timeseries-string",
+							ModelRef: &models.ModelRef{
+								Name:    "external-model",
+								Version: "v1",
+							},
 						},
 					},
 				}
@@ -431,7 +460,7 @@ var _ = Describe("EditDataModelAction", func() {
 				Expect(err).To(HaveOccurred())
 				errorMsg := err.Error()
 				Expect(errorMsg).To(ContainSubstring("data model structure validation failed:"))
-				Expect(errorMsg).To(ContainSubstring("_refModel must contain exactly one ':'"))
+				Expect(errorMsg).To(ContainSubstring("_refModel must have a version specified"))
 				Expect(errorMsg).To(ContainSubstring("does not match pattern ^v\\d+$"))
 				Expect(errorMsg).To(ContainSubstring("leaf nodes must contain _type"))
 				Expect(errorMsg).To(ContainSubstring("field cannot have both _type and _refModel"))
@@ -601,7 +630,10 @@ var _ = Describe("EditDataModelAction", func() {
 						Type: "timeseries-number",
 					},
 					"new_referenced_model": {
-						ModelRef: "another-external-model:v1",
+						ModelRef: &models.ModelRef{
+							Name:    "another-external-model",
+							Version: "v1",
+						},
 					},
 					"updated_nested_object": {
 						Type: "timeseries-object",
