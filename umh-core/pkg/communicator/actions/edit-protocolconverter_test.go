@@ -17,6 +17,7 @@ package actions_test
 import (
 	"context"
 	"errors"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
@@ -38,7 +39,7 @@ var _ = Describe("EditProtocolConverter", func() {
 		actionUUID      uuid.UUID
 		instanceUUID    uuid.UUID
 		outboundChannel chan *models.UMHMessage
-		mockConfig      *config.MockConfigManager
+		mockConfig      *configmanager.MockConfigManager
 		stateMocker     *actions.StateMocker
 		messages        []*models.UMHMessage
 		pcName          string
@@ -103,7 +104,7 @@ var _ = Describe("EditProtocolConverter", func() {
 			},
 		}
 
-		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)
+		mockConfig = configmanager.NewMockConfigManager().WithConfig(initialConfig)
 
 		// Setup the state mocker and get the mock snapshot
 		stateMocker = actions.NewStateMocker(mockConfig)

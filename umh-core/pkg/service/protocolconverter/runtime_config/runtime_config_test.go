@@ -16,12 +16,12 @@ package runtime_config_test
 
 import (
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"os"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter/runtime_config"
@@ -45,7 +45,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 		Expect(err).NotTo(HaveOccurred(), "Failed to read example config file")
 
 		// Use the config manager's parseConfig function to properly handle templates and anchors
-		fullConfig, err := config.ParseConfig(data, true) // Allow unknown fields for template handling
+		fullConfig, err := configmanager.ParseConfig(data, true) // Allow unknown fields for template handling
 		Expect(err).NotTo(HaveOccurred(), "Failed to parse example config")
 
 		// Extract the first protocol converter (temperature-sensor-pc)

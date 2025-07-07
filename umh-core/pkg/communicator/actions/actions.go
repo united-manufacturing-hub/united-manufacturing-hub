@@ -16,6 +16,7 @@ package actions
 
 import (
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
@@ -58,7 +59,7 @@ type Action interface {
 //
 // After execution, it handles sending the success reply if the action completed successfully.
 // Error handling for each step is done within this function.
-func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePayload, sender string, outboundChannel chan *models.UMHMessage, releaseChannel config.ReleaseChannel, dog watchdog.Iface, traceID uuid.UUID, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager) {
+func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePayload, sender string, outboundChannel chan *models.UMHMessage, releaseChannel config.ReleaseChannel, dog watchdog.Iface, traceID uuid.UUID, systemSnapshotManager *fsm.SnapshotManager, configManager configmanager.ConfigManager) {
 	log := logger.For(logger.ComponentCommunicator)
 
 	// Start a new transaction for this action

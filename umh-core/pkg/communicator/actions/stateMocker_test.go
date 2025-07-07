@@ -22,6 +22,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
@@ -33,13 +34,13 @@ var _ = Describe("StateMocker", func() {
 	var (
 		stateMocker   *actions.StateMocker
 		cfg           *config.FullConfig
-		configManager *config.MockConfigManager
+		configManager *configmanager.MockConfigManager
 		testConfig    dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 	)
 
 	BeforeEach(func() {
 		cfg = &config.FullConfig{}
-		configManager = config.NewMockConfigManager()
+		configManager = configmanager.NewMockConfigManager()
 		stateMocker = actions.NewStateMocker(configManager)
 		testConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 			BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{

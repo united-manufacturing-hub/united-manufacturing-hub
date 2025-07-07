@@ -50,6 +50,7 @@ package actions
 
 import (
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"slices"
 
 	"github.com/google/uuid"
@@ -80,7 +81,7 @@ type GetDataFlowComponentAction struct {
 
 	// ─── Plumbing ────────────────────────────────────────────────────────────
 	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager // currently unused but kept for symmetry
+	configManager   configmanager.ConfigManager // currently unused but kept for symmetry
 
 	// ─── Runtime observation ────────────────────────────────────────────────
 	systemSnapshotManager *fsm.SnapshotManager
@@ -96,7 +97,7 @@ type GetDataFlowComponentAction struct {
 // This constructor is primarily used for testing to enable dependency injection, though it can be used
 // in production code as well. It initializes the action with the necessary fields but doesn't
 // populate the payload field which must be done via Parse.
-func NewGetDataFlowComponentAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshotManager *fsm.SnapshotManager) *GetDataFlowComponentAction {
+func NewGetDataFlowComponentAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager configmanager.ConfigManager, systemSnapshotManager *fsm.SnapshotManager) *GetDataFlowComponentAction {
 	return &GetDataFlowComponentAction{
 		userEmail:             userEmail,
 		actionUUID:            actionUUID,

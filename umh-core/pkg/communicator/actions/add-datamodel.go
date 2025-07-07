@@ -33,6 +33,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -52,7 +53,7 @@ type AddDataModelAction struct {
 	instanceUUID uuid.UUID
 
 	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager
+	configManager   configmanager.ConfigManager
 
 	// Parsed request payload (only populated after Parse)
 	payload models.AddDataModelPayload
@@ -65,7 +66,7 @@ type AddDataModelAction struct {
 }
 
 // NewAddDataModelAction returns an un-parsed action instance.
-func NewAddDataModelAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager) *AddDataModelAction {
+func NewAddDataModelAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager configmanager.ConfigManager) *AddDataModelAction {
 	// Create shared context with timeout for the entire action lifecycle
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 

@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package config
+package configmanager
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	config2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"os"
 	"path/filepath"
 	"time"
@@ -265,14 +266,14 @@ agent:
 			It("should handle empty input", func() {
 				config, err := ParseConfig([]byte{}, false)
 				Expect(err).To(HaveOccurred())
-				Expect(config).To(Equal(FullConfig{}))
+				Expect(config).To(Equal(config2.FullConfig{}))
 			})
 
 			It("should handle empty but valid YAML", func() {
 				emptyYAML := "---\n"
 				config, err := ParseConfig([]byte(emptyYAML), false)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(config).To(Equal(FullConfig{}))
+				Expect(config).To(Equal(config2.FullConfig{}))
 			})
 
 			It("should return error for malformed YAML", func() {
@@ -434,7 +435,7 @@ internal:
 				Expect(config.Templates.ProtocolConverter).To(BeEmpty())
 
 				// Find the temperature-sensor-pc that uses the template
-				var tempSensorPC *ProtocolConverterConfig
+				var tempSensorPC *config2.ProtocolConverterConfig
 				for _, pc := range config.ProtocolConverter {
 					if pc.Name == "temperature-sensor-pc" {
 						tempSensorPC = &pc
@@ -475,7 +476,7 @@ internal:
 				Expect(writtenConfig.Agent.Location).To(HaveKeyWithValue(1, "line-4"))
 
 				// Verify the protocol converters are preserved
-				var writtenTempSensorPC *ProtocolConverterConfig
+				var writtenTempSensorPC *config2.ProtocolConverterConfig
 				for _, pc := range writtenConfig.ProtocolConverter {
 					if pc.Name == "temperature-sensor-pc" {
 						writtenTempSensorPC = &pc

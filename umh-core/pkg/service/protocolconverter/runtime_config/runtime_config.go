@@ -16,12 +16,12 @@ package runtime_config
 
 import (
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 )

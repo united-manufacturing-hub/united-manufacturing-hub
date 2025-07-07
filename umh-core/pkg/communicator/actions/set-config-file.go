@@ -18,13 +18,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"time"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -39,7 +39,7 @@ type SetConfigFileAction struct {
 
 	// ─── Plumbing ────────────────────────────────────────────────────────────
 	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager
+	configManager   configmanager.ConfigManager
 
 	// ─── Runtime observation ────────────────────────────────────────────────
 	systemSnapshotManager *fsm.SnapshotManager
@@ -52,7 +52,7 @@ type SetConfigFileAction struct {
 }
 
 // NewSetConfigFileAction creates a new SetConfigFileAction with the provided parameters.
-func NewSetConfigFileAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager) *SetConfigFileAction {
+func NewSetConfigFileAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, systemSnapshotManager *fsm.SnapshotManager, configManager configmanager.ConfigManager) *SetConfigFileAction {
 	return &SetConfigFileAction{
 		userEmail:             userEmail,
 		actionUUID:            actionUUID,
@@ -113,7 +113,7 @@ func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 	defer cancel()
 
 	// Use the default config path from the config manager
-	configPath := config.DefaultConfigPath
+	configPath := configmanager.DefaultConfigPath
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		fmt.Sprintf("Updating config file at %s", configPath), a.outboundChannel, models.SetConfigFile)

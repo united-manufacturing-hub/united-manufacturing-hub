@@ -17,6 +17,7 @@ package actions_test
 import (
 	"encoding/base64"
 	"errors"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"time"
 
 	"github.com/google/uuid"
@@ -49,7 +50,7 @@ func structToEncodedMapForEdit(v interface{}) map[string]interface{} {
 var _ = Describe("EditDataModelAction", func() {
 	var (
 		action          *actions.EditDataModelAction
-		mockConfigMgr   *config.MockConfigManager
+		mockConfigMgr   *configmanager.MockConfigManager
 		outboundChannel chan *models.UMHMessage
 		userEmail       string
 		actionUUID      uuid.UUID
@@ -60,7 +61,7 @@ var _ = Describe("EditDataModelAction", func() {
 		userEmail = "test@example.com"
 		actionUUID = uuid.New()
 		instanceUUID = uuid.New()
-		mockConfigMgr = config.NewMockConfigManager()
+		mockConfigMgr = configmanager.NewMockConfigManager()
 		outboundChannel = make(chan *models.UMHMessage, 10)
 
 		action = actions.NewEditDataModelAction(

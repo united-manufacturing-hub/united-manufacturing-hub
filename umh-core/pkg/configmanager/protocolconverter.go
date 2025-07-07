@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package config
+package configmanager
 
 import (
 	"context"
 	"fmt"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
@@ -32,7 +34,7 @@ import (
 // Fails if:
 // - Another converter with the same name already exists
 // - Adding a child converter but the referenced template doesn't exist
-func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc ProtocolConverterConfig) error {
+func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc config.ProtocolConverterConfig) error {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to lock config file: %w", err)
@@ -40,13 +42,13 @@ func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 	defer m.mutexAtomicUpdate.Unlock()
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	cfg, err := m.GetConfig(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
 
 	// check for duplicate name before add
-	for _, cmp := range config.ProtocolConverter {
+	for _, cmp := range cfg.ProtocolConverter {
 		if cmp.Name == pc.Name {
 			return fmt.Errorf("another protocol converter with name %q already exists – choose a unique name", pc.Name)
 		}
@@ -58,7 +60,7 @@ func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 		rootExists := false
 
 		// Scan existing protocol converters to find a root with matching name
-		for _, existing := range config.ProtocolConverter {
+		for _, existing := range cfg.ProtocolConverter {
 			if existing.Name == templateRef && existing.ProtocolConverterServiceConfig.TemplateRef == existing.Name {
 				rootExists = true
 				break
@@ -71,10 +73,10 @@ func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 	}
 
 	// Add the protocol converter - let convertSpecToYAML handle template generation
-	config.ProtocolConverter = append(config.ProtocolConverter, pc)
+	cfg.ProtocolConverter = append(cfg.ProtocolConverter, pc)
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	if err := m.writeConfig(ctx, cfg); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
@@ -82,7 +84,7 @@ func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 }
 
 // AtomicAddProtocolConverter delegates to the underlying FileConfigManager
-func (m *FileConfigManagerWithBackoff) AtomicAddProtocolConverter(ctx context.Context, pc ProtocolConverterConfig) error {
+func (m *FileConfigManagerWithBackoff) AtomicAddProtocolConverter(ctx context.Context, pc config.ProtocolConverterConfig) error {
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
@@ -108,40 +110,40 @@ func (m *FileConfigManagerWithBackoff) AtomicAddProtocolConverter(ctx context.Co
 // - Converter with given UUID doesn't exist
 // - New name conflicts with another converter (excluding the one being edited)
 // - Child converter references a non-existent template
-func (m *FileConfigManager) AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc ProtocolConverterConfig) (ProtocolConverterConfig, error) {
+func (m *FileConfigManager) AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc config.ProtocolConverterConfig) (config.ProtocolConverterConfig, error) {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
-		return ProtocolConverterConfig{}, fmt.Errorf("failed to lock config file: %w", err)
+		return config.ProtocolConverterConfig{}, fmt.Errorf("failed to lock config file: %w", err)
 	}
 	defer m.mutexAtomicUpdate.Unlock()
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	cfg, err := m.GetConfig(ctx, 0)
 	if err != nil {
-		return ProtocolConverterConfig{}, fmt.Errorf("failed to get config: %w", err)
+		return config.ProtocolConverterConfig{}, fmt.Errorf("failed to get config: %w", err)
 	}
 
 	// Find target index via GenerateUUIDFromName(Name) == componentUUID
 	// the index is used later to update the config
 	targetIndex := -1
-	var oldConfig ProtocolConverterConfig
-	for i, component := range config.ProtocolConverter {
+	var oldConfig config.ProtocolConverterConfig
+	for i, component := range cfg.ProtocolConverter {
 		curComponentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
 		if curComponentID == componentUUID {
 			targetIndex = i
-			oldConfig = config.ProtocolConverter[i]
+			oldConfig = cfg.ProtocolConverter[i]
 			break
 		}
 	}
 
 	if targetIndex == -1 {
-		return ProtocolConverterConfig{}, fmt.Errorf("protocol converter with UUID %s not found", componentUUID)
+		return config.ProtocolConverterConfig{}, fmt.Errorf("protocol converter with UUID %s not found", componentUUID)
 	}
 
 	// Duplicate-name check (exclude the edited one)
-	for i, cmp := range config.ProtocolConverter {
+	for i, cmp := range cfg.ProtocolConverter {
 		if i != targetIndex && cmp.Name == pc.Name {
-			return ProtocolConverterConfig{}, fmt.Errorf("another protocol converter with name %q already exists – choose a unique name", pc.Name)
+			return config.ProtocolConverterConfig{}, fmt.Errorf("another protocol converter with name %q already exists – choose a unique name", pc.Name)
 		}
 	}
 
@@ -153,27 +155,27 @@ func (m *FileConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 	// Handle root rename - propagate to children
 	if oldIsRoot && newIsRoot && oldConfig.Name != pc.Name {
 		// Update all children that reference the old root name
-		for i, inst := range config.ProtocolConverter {
+		for i, inst := range cfg.ProtocolConverter {
 			if i != targetIndex && inst.ProtocolConverterServiceConfig.TemplateRef == oldConfig.Name {
 				inst.ProtocolConverterServiceConfig.TemplateRef = pc.Name
-				config.ProtocolConverter[i] = inst
+				cfg.ProtocolConverter[i] = inst
 			}
 		}
 	}
 
 	// If it's a child (TemplateRef is non-empty and not a root), reject the edit
 	if !oldIsRoot && pc.ProtocolConverterServiceConfig.TemplateRef != "" {
-		return ProtocolConverterConfig{},
+		return config.ProtocolConverterConfig{},
 			fmt.Errorf("cannot edit child %q; it is not a root. Edit the root instead: %q",
 				oldConfig.Name, oldConfig.ProtocolConverterServiceConfig.TemplateRef)
 	}
 
 	// Commit the edit
-	config.ProtocolConverter[targetIndex] = pc
+	cfg.ProtocolConverter[targetIndex] = pc
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
-		return ProtocolConverterConfig{}, fmt.Errorf("failed to write config: %w", err)
+	if err := m.writeConfig(ctx, cfg); err != nil {
+		return config.ProtocolConverterConfig{}, fmt.Errorf("failed to write config: %w", err)
 	}
 
 	return oldConfig, nil
@@ -202,15 +204,15 @@ func (m *FileConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 	defer m.mutexAtomicUpdate.Unlock()
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	cfg, err := m.GetConfig(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
 
 	// Find the target protocol converter by UUID
 	targetIndex := -1
-	var targetConverter ProtocolConverterConfig
-	for i, converter := range config.ProtocolConverter {
+	var targetConverter config.ProtocolConverterConfig
+	for i, converter := range cfg.ProtocolConverter {
 		converterID := dataflowcomponentserviceconfig.GenerateUUIDFromName(converter.Name)
 		if converterID == componentUUID {
 			targetIndex = i
@@ -230,7 +232,7 @@ func (m *FileConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 	// If it's a root, check for dependent children
 	if isRoot {
 		childCount := 0
-		for i, converter := range config.ProtocolConverter {
+		for i, converter := range cfg.ProtocolConverter {
 			// Skip the target itself
 			if i == targetIndex {
 				continue
@@ -247,18 +249,18 @@ func (m *FileConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 	}
 
 	// Build new slice omitting the target
-	filteredConverters := make([]ProtocolConverterConfig, 0, len(config.ProtocolConverter)-1)
-	for i, converter := range config.ProtocolConverter {
+	filteredConverters := make([]config.ProtocolConverterConfig, 0, len(cfg.ProtocolConverter)-1)
+	for i, converter := range cfg.ProtocolConverter {
 		if i != targetIndex {
 			filteredConverters = append(filteredConverters, converter)
 		}
 	}
 
 	// Update config with filtered converters
-	config.ProtocolConverter = filteredConverters
+	cfg.ProtocolConverter = filteredConverters
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	if err := m.writeConfig(ctx, cfg); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
@@ -266,10 +268,10 @@ func (m *FileConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 }
 
 // AtomicEditProtocolConverter delegates to the underlying FileConfigManager
-func (m *FileConfigManagerWithBackoff) AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc ProtocolConverterConfig) (ProtocolConverterConfig, error) {
+func (m *FileConfigManagerWithBackoff) AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc config.ProtocolConverterConfig) (config.ProtocolConverterConfig, error) {
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
-		return ProtocolConverterConfig{}, ctx.Err()
+		return config.ProtocolConverterConfig{}, ctx.Err()
 	}
 
 	return m.configManager.AtomicEditProtocolConverter(ctx, componentUUID, pc)

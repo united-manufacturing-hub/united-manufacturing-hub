@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package config
+package configmanager
 
 import (
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"reflect"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
@@ -24,9 +25,9 @@ import (
 
 // convertYamlToSpec processes protocol converter configs to resolve templateRef fields
 // This translates between the "unrendered" config (with templateRef) and "rendered" config (with actual template content)
-func convertYamlToSpec(config FullConfig) (FullConfig, error) {
+func convertYamlToSpec(cfg config.FullConfig) (config.FullConfig, error) {
 	// Create a copy to avoid mutating the original
-	processedConfig := config.Clone()
+	processedConfig := cfg.Clone()
 
 	// Build a map of available protocol converter templates for quick lookup
 	templateMap := make(map[string]protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate)
@@ -36,12 +37,12 @@ func convertYamlToSpec(config FullConfig) (FullConfig, error) {
 		// Convert the template content to the proper structure
 		templateBytes, err := yaml.Marshal(templateContent)
 		if err != nil {
-			return FullConfig{}, fmt.Errorf("failed to marshal template %s: %w", templateName, err)
+			return config.FullConfig{}, fmt.Errorf("failed to marshal template %s: %w", templateName, err)
 		}
 
 		var template protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate
 		if err := yaml.Unmarshal(templateBytes, &template); err != nil {
-			return FullConfig{}, fmt.Errorf("failed to unmarshal template %s: %w", templateName, err)
+			return config.FullConfig{}, fmt.Errorf("failed to unmarshal template %s: %w", templateName, err)
 		}
 
 		templateMap[templateName] = template
@@ -55,7 +56,7 @@ func convertYamlToSpec(config FullConfig) (FullConfig, error) {
 			templateName := pc.ProtocolConverterServiceConfig.TemplateRef
 			template, exists := templateMap[templateName]
 			if !exists {
-				return FullConfig{}, fmt.Errorf("template reference %q not found for protocol converter %s", templateName, pc.Name)
+				return config.FullConfig{}, fmt.Errorf("template reference %q not found for protocol converter %s", templateName, pc.Name)
 			}
 
 			// Create a new spec with the resolved template
@@ -69,7 +70,7 @@ func convertYamlToSpec(config FullConfig) (FullConfig, error) {
 	}
 
 	// remove the templates from the config
-	processedConfig.Templates = TemplatesConfig{}
+	processedConfig.Templates = config.TemplatesConfig{}
 
 	return processedConfig, nil
 }
@@ -100,7 +101,7 @@ func convertYamlToSpec(config FullConfig) (FullConfig, error) {
 //
 // In short: **Spec is expanded, YAML is compressed – with an escape hatch for
 // stand-alone converters.**
-func convertSpecToYaml(spec FullConfig) (FullConfig, error) {
+func convertSpecToYaml(spec config.FullConfig) (config.FullConfig, error) {
 	//------------------------------------
 	// 1) start with a deep copy
 	//------------------------------------
@@ -148,7 +149,7 @@ func convertSpecToYaml(spec FullConfig) (FullConfig, error) {
 			if prev, dup := tplMap[tr]; dup {
 				// second root with same name ⇒ must be byte-identical
 				if !reflect.DeepEqual(prev, pc.ProtocolConverterServiceConfig.Config) {
-					return FullConfig{}, fmt.Errorf(
+					return config.FullConfig{}, fmt.Errorf(
 						"duplicate root %q with different Config blocks", tr)
 				}
 			} else {
@@ -194,7 +195,7 @@ func convertSpecToYaml(spec FullConfig) (FullConfig, error) {
 	// in that case we abort with an error instead of writing a broken file.
 	for ref := range pendingRefs {
 		if _, ok := tplMap[ref]; !ok {
-			return FullConfig{}, fmt.Errorf(
+			return config.FullConfig{}, fmt.Errorf(
 				"protocol converter references unknown template %q", ref)
 		}
 	}

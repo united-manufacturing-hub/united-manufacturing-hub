@@ -16,6 +16,7 @@ package actions_test
 
 import (
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/configmanager"
 	"time"
 
 	"github.com/google/uuid"
@@ -173,7 +174,7 @@ var _ = Describe("GetLogsAction", func() {
 			},
 		})
 
-		mockConfig := config.NewMockConfigManager().WithConfig(config.FullConfig{})
+		mockConfig := configmanager.NewMockConfigManager().WithConfig(config.FullConfig{})
 		action = actions.NewGetLogsAction(userEmail, actionUUID, instanceUUID, outboundChannel, snapshotManager, mockConfig)
 	})
 
