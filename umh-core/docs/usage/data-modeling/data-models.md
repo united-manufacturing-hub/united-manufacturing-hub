@@ -22,38 +22,31 @@ Data models support three types of structural elements:
 
 ### Fields
 
-Fields represent actual data points and always contain a `type:` specification:
+Fields represent actual data points and always contain a `_type:` specification:
 
 ```yaml
 pressure:
-  type: timeseries
-  constraints:
-    unit: kPa
-    min: 0
-    max: 1000
+  _type: timeseries-number
 ```
 
 **Field Properties:**
-- `type`: Payload shape (see [Payload Shapes](#payload-shapes))
-- `constraints`: Optional validation rules (unit, min, max, allowed values)
+
+- `_type`: Payload shape (see [Payload Shapes](#payload-shapes))
 
 ### Folders
 
-Folders organize related fields without containing data themselves. They have no `type:` or `_model:` properties:
+Folders organize related fields without containing data themselves. They have no `_type:` or `_refModel:` properties:
 
 ```yaml
 diagnostics:
   vibration:
-    type: timeseries
-    constraints:
-      unit: "mm/s"
+    _type: timeseries-number
   temperature:
-    type: timeseries
-    constraints:
-      unit: "°C"
+    _type: timeseries-number
 ```
 
 Folders create hierarchical organization in your UNS topics:
+
 ```
 umh.v1.corpA.plant-A.line-4.pump41._pump.diagnostics.vibration
 umh.v1.corpA.plant-A.line-4.pump41._pump.diagnostics.temperature
@@ -61,11 +54,13 @@ umh.v1.corpA.plant-A.line-4.pump41._pump.diagnostics.temperature
 
 ### Sub-Models
 
-Sub-models enable composition by referencing other data models. They contain a `_model:` property:
+Sub-models enable composition by referencing other data models. They contain a `_refModel:` property:
 
 ```yaml
 motor:
-  _model: Motor:v1
+  _refModel:
+    name: Motor
+    version: v1
 ```
 
 This includes all fields from the referenced model:
@@ -77,13 +72,9 @@ datamodels:
     version: v1
     structure:
       current:
-        type: timeseries
-        constraints:
-          unit: A
+        _type: timeseries-number
       rpm:
-        type: timeseries
-        constraints:
-          unit: rpm
+        _type: timeseries-number
 
 # Usage in Pump model
 datamodels:
@@ -91,9 +82,11 @@ datamodels:
     version: v1
     structure:
       pressure:
-        type: timeseries
+        _type: timeseries-number
       motor:
-        _model: Motor:v1  # Includes current and rpm fields
+        _refModel:
+          name: Motor
+          version: v1  # Includes current and rpm fields
 ```
 
 ## Payload Shapes
@@ -121,6 +114,7 @@ payloadshapes:
 ```
 
 **Example payload:**
+
 ```json
 {
   "value": 42.5,
@@ -180,11 +174,7 @@ datamodels:
     version: v1
     structure:
       value:
-        type: timeseries
-        constraints:
-          unit: "°C"
-          min: -40
-          max: 200
+        _type: timeseries-number
 ```
 
 ### Complex Model with Sub-Models
@@ -195,116 +185,67 @@ datamodels:
     version: v1
     structure:
       current:
-        type: timeseries
-        constraints:
-          unit: A
+        _type: timeseries-number
       rpm:
-        type: timeseries
-        constraints:
-          unit: rpm
+        _type: timeseries-number
       status:
-        type: timeseries
-        constraints:
-          allowed: ["running", "stopped", "fault"]
+        _type: timeseries-string
 
   - name: Pump
     version: v1
     structure:
       pressure:
-        type: timeseries
-        constraints:
-          unit: kPa
-          min: 0
+        _type: timeseries-number
       temperature:
-        type: timeseries
-        constraints:
-          unit: "°C"
+        _type: timeseries-number
       running:
-        type: timeseries
-        constraints:
-          allowed: [true, false]
+        _type: timeseries-boolean
       diagnostics:
         vibration:
-          type: timeseries
-          constraints:
-            unit: "mm/s"
+          _type: timeseries-number
         wear_level:
-          type: timeseries
-          constraints:
-            unit: "%"
-            min: 0
-            max: 100
+          _type: timeseries-number
       motor:
-        _model: Motor:v1
+        _refModel:
+          name: Motor
+          version: v1
       total_power:
-        type: timeseries
-        constraints:
-          unit: kW
+        _type: timeseries-number
       serial_number:
-        type: timeseries  # Static metadata
-```
-
-## Validation Rules
-
-Data models support various constraint types:
-
-### Numeric Constraints
-```yaml
-temperature:
-  type: timeseries
-  constraints:
-    unit: "°C"
-    min: -40
-    max: 200
-```
-
-### Enumerated Values
-```yaml
-status:
-  type: timeseries
-  constraints:
-    allowed: ["running", "stopped", "fault"]
-```
-
-### Boolean Constraints
-```yaml
-running:
-  type: timeseries
-  constraints:
-    allowed: [true, false]
-```
-
-### Units and Metadata
-```yaml
-pressure:
-  type: timeseries
-  constraints:
-    unit: kPa
-    description: "System pressure measurement"
+        _type: timeseries-string
 ```
 
 ## Best Practices
 
 ### Model Organization
+
 - **Keep models focused**: Each model should represent a single logical entity
 - **Use sub-models for reusability**: Common components like motors, sensors
 - **Version models explicitly**: Always specify version numbers
 - **Use descriptive naming**: Clear, self-documenting field names
 
 ### Field Naming
+
 - **Use snake_case**: `total_power`, not `totalPower` or `Total-Power`
 - **Be specific**: `temperature_inlet` vs. just `temperature`
 - **Include units in names when helpful**: `temperature_c`, `pressure_kpa`
 
+### Field Configuration
+
+- **Always specify \_type**: Every field must have a payload shape
+
 ### Folder Structure
+
 - **Group related fields**: All diagnostics under `diagnostics/`
 - **Avoid deep nesting**: Keep hierarchy manageable (2-3 levels max)
 - **Use logical grouping**: By function, not by data source
 
 ### Sub-Model Usage
+
 - **Create reusable components**: Common equipment types
 - **Version sub-models independently**: Allow evolution of components
 - **Document dependencies**: Clear which models depend on others
+- **Use object syntax**: `_refModel:` with `name:` and `version:` properties
 
 ## Schema Registry Integration
 
@@ -318,4 +259,4 @@ All data models are automatically registered in the Redpanda Schema Registry at 
 
 - [Data Contracts](data-contracts.md) - Binding models to storage and processing
 - [Stream Processors](stream-processors.md) - Implementing model instances
-- [Payload Formats](../unified-namespace/payload-formats.md) - UNS payload structure 
+- [Payload Formats](../unified-namespace/payload-formats.md) - UNS payload structure
