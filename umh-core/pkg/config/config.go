@@ -53,10 +53,6 @@ type DataModelVersion struct {
 	Structure   map[string]Field `yaml:"structure"`             // structure of the data model (fields)
 }
 
-type DataModelVersionRoot struct {
-	Structure map[string]Field `yaml:"structure"` // structure of the data model (fields)
-}
-
 // ModelRef represents a reference to another data model
 type ModelRef struct {
 	Name    string `yaml:"name"`    // name of the referenced data model
