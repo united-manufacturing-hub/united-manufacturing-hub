@@ -10,11 +10,26 @@ Data models are stored in the `datamodels:` configuration section and define the
 
 ```yaml
 datamodels:
-  - name: ModelName
-    version: v1
-    structure:
-      # Field and folder definitions
+  pump:
+    description: "pump from vendor ABC"
+    versions:
+      v1:
+        root:
+          count:
+            _payloadshape: timeseries-number
+          serialNumber:
+            _payloadshape: timeseries-string
 ```
+
+## Payload Shapes
+
+Payload shapes define the JSON schema for field values. They provide reusable templates for common data structures in industrial systems. For complete documentation on available payload shapes, their structure, and usage examples, see:
+
+**[Payload Shapes](payload-shapes.md)**
+
+Common payload shapes include:
+- `timeseries-number`: For numeric sensor data
+- `timeseries-string`: For textual data and status values
 
 ## Structure Elements
 
@@ -22,35 +37,46 @@ Data models support three types of structural elements:
 
 ### Fields
 
-Fields represent actual data points and always contain a `type:` specification:
+Fields represent actual data points and contain a `_payloadshape:` specification:
 
 ```yaml
 pressure:
-  type: timeseries
-  constraints:
-    unit: kPa
+  _payloadshape: timeseries-number
+```
+
+> 🚧 **Roadmap Item** - Enhanced field metadata and constraints:
+
+```yaml
+pressure:
+  _payloadshape: timeseries-number
+  _meta: 
+    description: "System pressure measurement"
+    unit: "kPa"
+  _constraints: 
     min: 0
     max: 1000
 ```
 
 **Field Properties:**
-- `type`: Payload shape (see [Payload Shapes](#payload-shapes))
-- `constraints`: Optional validation rules (unit, min, max, allowed values)
+- `_payloadshape`: Reference to a payload shape definition
+
+> 🚧 **Roadmap Item** - Enhanced field metadata and constraints (only on leaf nodes):
+
+- `_meta`: Optional metadata (description, units) - Not to be implemented in MVP
+- `_constraints`: Optional validation rules - Not to be implemented in MVP
+
+**Note:** Leaf nodes are fields that contain `_payloadshape` and represent actual data points, not organizational folders or sub-model references.
 
 ### Folders
 
-Folders organize related fields without containing data themselves. They have no `type:` or `_model:` properties:
+Folders organize related fields without containing data themselves. They have no `_payloadshape:`, `_refModel:`, or `_meta:` properties:
 
 ```yaml
 diagnostics:
   vibration:
-    type: timeseries
-    constraints:
-      unit: "mm/s"
+    _payloadshape: timeseries-number
   temperature:
-    type: timeseries
-    constraints:
-      unit: "°C"
+    _payloadshape: timeseries-number
 ```
 
 Folders create hierarchical organization in your UNS topics:
@@ -61,113 +87,43 @@ umh.v1.corpA.plant-A.line-4.pump41._pump.diagnostics.temperature
 
 ### Sub-Models
 
-Sub-models enable composition by referencing other data models. They contain a `_model:` property:
+Sub-models enable composition by referencing other data models. They contain a `_refModel:` property:
 
 ```yaml
 motor:
-  _model: Motor:v1
+  _refModel:
+    name: motor
+    version: v1
 ```
 
 This includes all fields from the referenced model:
 
 ```yaml
-# Motor:v1 definition
+# Motor model definition
 datamodels:
-  - name: Motor
-    version: v1
-    structure:
-      current:
-        type: timeseries
-        constraints:
-          unit: A
-      rpm:
-        type: timeseries
-        constraints:
-          unit: rpm
+  motor:
+    description: "Standard motor model"
+    versions:
+      v1:
+        root:
+          current:
+            _payloadshape: timeseries-number
+          rpm:
+            _payloadshape: timeseries-number
 
 # Usage in Pump model
 datamodels:
-  - name: Pump
-    version: v1
-    structure:
-      pressure:
-        type: timeseries
-      motor:
-        _model: Motor:v1  # Includes current and rpm fields
-```
-
-## Payload Shapes
-
-Payload shapes define the JSON schema for field values. UMH Core includes built-in shapes:
-
-### Timeseries (Default)
-
-The default payload shape for sensor data:
-
-```yaml
-# Schema definition
-payloadshapes:
-  - name: timeseries
-    version: v1
-    jsonschema: |
-      {
-        "type": "object",
-        "properties": {
-          "value": {"type": ["number", "string", "boolean"]},
-          "timestamp_ms": {"type": "integer"}
-        },
-        "required": ["value", "timestamp_ms"]
-      }
-```
-
-**Example payload:**
-```json
-{
-  "value": 42.5,
-  "timestamp_ms": 1733904005123
-}
-```
-
-### Binary Blob
-
-For file data or binary content:
-
-```yaml
-payloadshapes:
-  - name: blob
-    version: v1
-    jsonschema: |
-      {
-        "type": "string",
-        "contentEncoding": "base64"
-      }
-```
-
-### Custom Payload Shapes
-
-You can define custom shapes for complex data:
-
-```yaml
-payloadshapes:
-  - name: batch_report
-    version: v1
-    jsonschema: |
-      {
-        "type": "object",
-        "properties": {
-          "batch_id": {"type": "string"},
-          "start_time": {"type": "integer"},
-          "end_time": {"type": "integer"},
-          "quality_metrics": {
-            "type": "object",
-            "properties": {
-              "yield": {"type": "number"},
-              "defect_rate": {"type": "number"}
-            }
-          }
-        },
-        "required": ["batch_id", "start_time"]
-      }
+  pump:
+    description: "Pump with motor sub-model"
+    versions:
+      v1:
+        root:
+          pressure:
+            _payloadshape: timeseries-number
+          motor:
+            _refModel:
+              name: motor
+              version: v1
 ```
 
 ## Complete Examples
@@ -176,110 +132,135 @@ payloadshapes:
 
 ```yaml
 datamodels:
-  - name: Temperature
-    version: v1
-    structure:
-      value:
-        type: timeseries
-        constraints:
-          unit: "°C"
-          min: -40
-          max: 200
+  temperature:
+    description: "Temperature sensor model"
+    versions:
+      v1:
+        root:
+          value:
+            _payloadshape: timeseries-number
 ```
 
 ### Complex Model with Sub-Models
 
 ```yaml
 datamodels:
-  - name: Motor
-    version: v1
-    structure:
-      current:
-        type: timeseries
-        constraints:
-          unit: A
-      rpm:
-        type: timeseries
-        constraints:
-          unit: rpm
-      status:
-        type: timeseries
-        constraints:
-          allowed: ["running", "stopped", "fault"]
+  motor:
+    description: "Standard motor model"
+    versions:
+      v1:
+        root:
+          current:
+            _payloadshape: timeseries-number
+          rpm:
+            _payloadshape: timeseries-number
+          status:
+            _payloadshape: timeseries-string
 
-  - name: Pump
-    version: v1
-    structure:
-      pressure:
-        type: timeseries
-        constraints:
-          unit: kPa
-          min: 0
-      temperature:
-        type: timeseries
-        constraints:
-          unit: "°C"
-      running:
-        type: timeseries
-        constraints:
-          allowed: [true, false]
-      diagnostics:
-        vibration:
-          type: timeseries
-          constraints:
-            unit: "mm/s"
-        wear_level:
-          type: timeseries
-          constraints:
-            unit: "%"
-            min: 0
-            max: 100
-      motor:
-        _model: Motor:v1
-      total_power:
-        type: timeseries
-        constraints:
-          unit: kW
-      serial_number:
-        type: timeseries  # Static metadata
+  pump:
+    description: "Pump with motor and diagnostics"
+    versions:
+      v1:
+        root:
+          pressure:
+            _payloadshape: timeseries-number
+          temperature:
+            _payloadshape: timeseries-number
+          running:
+            _payloadshape: timeseries-string
+          diagnostics:
+            vibration:
+              _payloadshape: timeseries-number
+            wear_level:
+              _payloadshape: timeseries-number
+          motor:
+            _refModel:
+              name: motor
+              version: v1
+          total_power:
+            _payloadshape: timeseries-number
+          serial_number:
+            _payloadshape: timeseries-string
 ```
 
-## Validation Rules
+## Metadata and Constraints
 
-Data models support various constraint types:
+> 🚧 **Roadmap Item** - Enhanced field metadata and validation rules (only on leaf nodes):
 
-### Numeric Constraints
+**Important:** `_meta` and `_constraints` properties can only be applied to leaf nodes - fields that contain `_payloadshape` and represent actual data points. They cannot be applied to folder nodes or sub-model references.
+
+### Valid Usage (Leaf Nodes)
+```yaml
+datamodels:
+  pump:
+    versions:
+      v1:
+        root:
+          # ✅ Valid - _meta on leaf node
+          pressure:
+            _payloadshape: timeseries-number
+            _meta: 
+              description: "System pressure measurement"
+              unit: "kPa"
+            _constraints: 
+              min: 0
+              max: 1000
+          
+          # ✅ Valid - _constraints on leaf node
+          status:
+            _payloadshape: timeseries-string
+            _constraints: 
+              allowed: ["running", "stopped", "fault"]
+```
+
+### Invalid Usage (Non-Leaf Nodes)
+```yaml
+datamodels:
+  pump:
+    versions:
+      v1:
+        root:
+          # ❌ Invalid - _meta on folder node
+          diagnostics:
+            _meta: # This is NOT allowed
+              description: "Diagnostic data"
+            vibration:
+              _payloadshape: timeseries-number
+          
+          # ❌ Invalid - _meta on sub-model reference
+          motor:
+            _refModel:
+              name: motor
+              version: v1
+            _meta: # This is NOT allowed
+              description: "Motor component"
+```
+
+### Constraint Types
+
+#### Numeric Constraints
 ```yaml
 temperature:
-  type: timeseries
-  constraints:
-    unit: "°C"
+  _payloadshape: timeseries-number
+  _constraints: 
     min: -40
     max: 200
 ```
 
-### Enumerated Values
+#### Enumerated Values
 ```yaml
 status:
-  type: timeseries
-  constraints:
+  _payloadshape: timeseries-string
+  _constraints: 
     allowed: ["running", "stopped", "fault"]
 ```
 
-### Boolean Constraints
-```yaml
-running:
-  type: timeseries
-  constraints:
-    allowed: [true, false]
-```
-
-### Units and Metadata
+#### Units and Metadata
 ```yaml
 pressure:
-  type: timeseries
-  constraints:
-    unit: kPa
+  _payloadshape: timeseries-number
+  _meta: 
+    unit: "kPa"
     description: "System pressure measurement"
 ```
 
@@ -292,9 +273,9 @@ pressure:
 - **Use descriptive naming**: Clear, self-documenting field names
 
 ### Field Naming
-- **Use snake_case**: `total_power`, not `totalPower` or `Total-Power`
-- **Be specific**: `temperature_inlet` vs. just `temperature`
-- **Include units in names when helpful**: `temperature_c`, `pressure_kpa`
+- **Use camelCase**: `totalPower`, `serialNumber`
+- **Be specific**: `temperatureInlet` vs. just `temperature`
+- **Use clear references**: `_payloadshape` for payload shape
 
 ### Folder Structure
 - **Group related fields**: All diagnostics under `diagnostics/`
@@ -304,7 +285,7 @@ pressure:
 ### Sub-Model Usage
 - **Create reusable components**: Common equipment types
 - **Version sub-models independently**: Allow evolution of components
-- **Document dependencies**: Clear which models depend on others
+- **Use clear references**: `_refModel` with explicit name and version
 
 ## Schema Registry Integration
 
@@ -316,6 +297,7 @@ All data models are automatically registered in the Redpanda Schema Registry at 
 
 ## Related Documentation
 
+- [Payload Shapes](payload-shapes.md) - Reusable JSON schemas for field values
 - [Data Contracts](data-contracts.md) - Binding models to storage and processing
 - [Stream Processors](stream-processors.md) - Implementing model instances
 - [Payload Formats](../unified-namespace/payload-formats.md) - UNS payload structure 
