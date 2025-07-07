@@ -31,6 +31,7 @@ type FullConfig struct {
 	Agent             AgentConfig               `yaml:"agent"`                       // Agent config, requires restart to take effect
 	Templates         TemplatesConfig           `yaml:"templates,omitempty"`         // Templates section with enforced structure for protocol converters
 	DataModels        []DataModelsConfig        `yaml:"dataModels,omitempty"`        // DataModels section with enforced structure for data models
+	DataContracts     []DataContractsConfig     `yaml:"dataContracts,omitempty"`     // DataContracts section with enforced structure for data contracts
 	DataFlow          []DataFlowComponentConfig `yaml:"dataFlow,omitempty"`          // DataFlow components to manage, can be updated while running
 	ProtocolConverter []ProtocolConverterConfig `yaml:"protocolConverter,omitempty"` // ProtocolConverter config, can be updated while runnnig
 	Internal          InternalConfig            `yaml:"internal,omitempty"`          // Internal config, not to be used by the user, only to be used for testing internal components
@@ -46,6 +47,13 @@ type DataModelsConfig struct {
 	Name        string                      `yaml:"name"`                  // name of the data model
 	Description string                      `yaml:"description,omitempty"` // description of the data model
 	Versions    map[string]DataModelVersion `yaml:"version"`               // version of the data model (1, 2, etc.)
+}
+
+// DataContractsConfig defines the structure for the data contracts section
+type DataContractsConfig struct {
+	Name         string                   `yaml:"name"`                    // name of the data contract
+	Model        ModelRef                 `yaml:"model"`                   // reference to the data model
+	DefaultSinks []map[string]interface{} `yaml:"default_sinks,omitempty"` // placeholder for default sinks configuration
 }
 
 type DataModelVersion struct {
