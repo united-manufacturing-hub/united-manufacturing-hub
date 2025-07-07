@@ -32,6 +32,7 @@ type FullConfig struct {
 	Templates         TemplatesConfig           `yaml:"templates,omitempty"`         // Templates section with enforced structure for protocol converters
 	DataModels        []DataModelsConfig        `yaml:"dataModels,omitempty"`        // DataModels section with enforced structure for data models
 	DataContracts     []DataContractsConfig     `yaml:"dataContracts,omitempty"`     // DataContracts section with enforced structure for data contracts
+	DataContracts     []DataContractsConfig     `yaml:"dataContracts,omitempty"`     // DataContracts section with enforced structure for data contracts
 	DataFlow          []DataFlowComponentConfig `yaml:"dataFlow,omitempty"`          // DataFlow components to manage, can be updated while running
 	ProtocolConverter []ProtocolConverterConfig `yaml:"protocolConverter,omitempty"` // ProtocolConverter config, can be updated while runnnig
 	Internal          InternalConfig            `yaml:"internal,omitempty"`          // Internal config, not to be used by the user, only to be used for testing internal components
@@ -52,7 +53,7 @@ type DataModelsConfig struct {
 // DataContractsConfig defines the structure for the data contracts section
 type DataContractsConfig struct {
 	Name         string                   `yaml:"name"`                    // name of the data contract
-	Model        *ModelRef                `yaml:"model,omitempty"`         // reference to the data model
+	Model        ModelRef                 `yaml:"model"`                   // reference to the data model
 	DefaultSinks []map[string]interface{} `yaml:"default_sinks,omitempty"` // placeholder for default sinks configuration
 }
 
