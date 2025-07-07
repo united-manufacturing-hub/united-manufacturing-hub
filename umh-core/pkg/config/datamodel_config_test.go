@@ -113,9 +113,13 @@ dataModels:
             temp_reading:
               _type: timeseries-number
             temp_unit:
-              _refModel: temperature
+              _refModel: 
+                name: temperature
+                version: v1
           metadata:
-            _refModel: device-info
+            _refModel: 
+              name: device-info
+              version: v1
 `
 				config, err := ParseConfig([]byte(complexYAML), false)
 				Expect(err).NotTo(HaveOccurred())
@@ -127,11 +131,15 @@ dataModels:
 				sensorField := config.DataModels[0].Versions["v1"].Structure["sensor"]
 				Expect(sensorField.Subfields).To(HaveLen(2))
 				Expect(sensorField.Subfields["temp_reading"].Type).To(Equal("timeseries-number"))
-				Expect(sensorField.Subfields["temp_unit"].ModelRef).To(Equal("temperature"))
+				Expect(sensorField.Subfields["temp_unit"].ModelRef).NotTo(BeNil())
+				Expect(sensorField.Subfields["temp_unit"].ModelRef.Name).To(Equal("temperature"))
+				Expect(sensorField.Subfields["temp_unit"].ModelRef.Version).To(Equal("v1"))
 
 				Expect(config.DataModels[0].Versions["v1"].Structure).To(HaveKey("metadata"))
 				metadataField := config.DataModels[0].Versions["v1"].Structure["metadata"]
-				Expect(metadataField.ModelRef).To(Equal("device-info"))
+				Expect(metadataField.ModelRef).NotTo(BeNil())
+				Expect(metadataField.ModelRef.Name).To(Equal("device-info"))
+				Expect(metadataField.ModelRef.Version).To(Equal("v1"))
 			})
 
 			It("should parse data models with multiple versions", func() {
@@ -152,7 +160,9 @@ dataModels:
           timestamp:
             _type: timeseries-string
           metadata:
-            _refModel: sensor-metadata
+            _refModel: 
+              name: sensor-metadata
+              version: v1
 `
 				config, err := ParseConfig([]byte(multiVersionYAML), false)
 				Expect(err).NotTo(HaveOccurred())
@@ -177,7 +187,9 @@ dataModels:
 				Expect(v2.Structure).To(HaveKey("value"))
 				Expect(v2.Structure).To(HaveKey("timestamp"))
 				Expect(v2.Structure).To(HaveKey("metadata"))
-				Expect(v2.Structure["metadata"].ModelRef).To(Equal("sensor-metadata"))
+				Expect(v2.Structure["metadata"].ModelRef).NotTo(BeNil())
+				Expect(v2.Structure["metadata"].ModelRef.Name).To(Equal("sensor-metadata"))
+				Expect(v2.Structure["metadata"].ModelRef.Version).To(Equal("v1"))
 			})
 		})
 	})
