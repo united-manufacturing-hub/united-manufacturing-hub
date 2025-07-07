@@ -323,7 +323,7 @@ var _ = Describe("AddDataModelAction", func() {
 
 				err = action.Validate()
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("does not match pattern ^v\\d+$"))
+				Expect(err.Error()).To(ContainSubstring("_refModel version must match pattern 'v<number>' but got 'version1'"))
 			})
 		})
 
@@ -373,7 +373,7 @@ var _ = Describe("AddDataModelAction", func() {
 
 				err = action.Validate()
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("field cannot have both subfields and _refModel"))
+				Expect(err.Error()).To(ContainSubstring("non-leaf node cannot have _type or _refModel"))
 			})
 		})
 
@@ -459,7 +459,7 @@ var _ = Describe("AddDataModelAction", func() {
 				errorMsg := err.Error()
 				Expect(errorMsg).To(ContainSubstring("data model structure validation failed:"))
 				Expect(errorMsg).To(ContainSubstring("_refModel must have a version specified"))
-				Expect(errorMsg).To(ContainSubstring("does not match pattern ^v\\d+$"))
+				Expect(errorMsg).To(ContainSubstring("_refModel version must match pattern 'v<number>' but got 'version1'"))
 				Expect(errorMsg).To(ContainSubstring("leaf nodes must contain _type"))
 				Expect(errorMsg).To(ContainSubstring("field cannot have both _type and _refModel"))
 			})
