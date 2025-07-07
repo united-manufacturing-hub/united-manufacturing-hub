@@ -18,10 +18,10 @@ streamprocessors:
   - name: processor_name
     contract: _contract_name:v1
     location:
-      level0: enterprise
-      level1: site
-      level2: area
-      level3: asset
+      0: enterprise
+      1: site
+      2: area
+      3: asset
     sources:
       var1: "umh.v1.path.to.raw.data"
     mapping:
@@ -52,11 +52,11 @@ Stream processors define their position in the hierarchical organization (common
 
 ```yaml
 location:
-  level0: corpA        # Enterprise (mandatory)
-  level1: plant-A      # Site/Region (optional)
-  level2: line-4       # Area/Zone (optional)
-  level3: pump41       # Work Unit (optional)
-  level4: motor        # Work Center (optional)
+  0: corpA        # Enterprise (mandatory)
+  1: plant-A      # Site/Region (optional)
+  2: line-4       # Area/Zone (optional)
+  3: pump41       # Work Unit (optional)
+  4: motor        # Work Center (optional)
 ```
 
 This creates UNS topics like:
@@ -97,29 +97,33 @@ Transform Fahrenheit readings to Celsius:
 ```yaml
 # Data model (from data-models.md)
 datamodels:
-  - name: Temperature
-    version: v1
-    structure:
-      temperature_in_c:
-        type: timeseries
+  temperature:
+    description: "Temperature sensor model"
+    versions:
+      v1:
+        root:
+          temperature_in_c:
+            _payloadshape: timeseries-number
 
 # Data contract (from data-contracts.md)  
 datacontracts:
   - name: _temperature
-    version: v1
-    model: Temperature:v1
-    sinks:
-      timescaledb: true
+    model:
+      name: temperature
+      version: v1
+    default_bridges:
+      - type: timescaledb
+        retention_in_days: 365
 
 # Stream processor implementation
 streamprocessors:
   - name: furnaceTemp_sp
     contract: _temperature:v1
     location:
-      level0: corpA
-      level1: plant-A
-      level2: line-4
-      level3: furnace1
+      0: corpA
+      1: plant-A
+      2: line-4
+      3: furnace1
     sources:
       tF: "umh.v1.corpA.plant-A.line-4.furnace1._raw.temperature_F"
     mapping:
@@ -141,10 +145,10 @@ streamprocessors:
   - name: pump41_sp
     contract: _pump:v1
     location:
-      level0: corpA
-      level1: plant-A
-      level2: line-4
-      level3: pump41
+      0: corpA
+      1: plant-A
+      2: line-4
+      3: pump41
     sources:
       p: "umh.v1.corpA.plant-A.line-4.pump41.deviceX._raw.press"
       tF: "umh.v1.corpA.plant-A.line-4.pump41.deviceX._raw.tempF"

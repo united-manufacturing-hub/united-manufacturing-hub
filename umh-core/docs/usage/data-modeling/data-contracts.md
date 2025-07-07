@@ -11,11 +11,12 @@ Data contracts are stored in the `datacontracts:` configuration section and refe
 ```yaml
 datacontracts:
   - name: contract_name
-    version: v1
-    model: ModelName:v1
-    sinks:
-      timescaledb: true
-    retention_days: 365
+    model:
+      name: modelname
+      version: v1
+    default_bridges:
+      - type: timescaledb
+        retention_in_days: 365
 ```
 
 ## Core Properties
@@ -24,15 +25,15 @@ datacontracts:
 
 ```yaml
 datacontracts:
-  - name: _temperature
-    version: v1
-    model: Temperature:v1
+  - name: _temperature_v1
+    model:
+      name: temperature
+      version: v1
 ```
 
 **Naming Convention:**
 - Contract names start with underscore (`_temperature`, `_pump`)
-- Versions follow semantic versioning (`v1`, `v2`, etc.)
-- Model references include version (`Temperature:v1`)
+- Model references include name and version (`name: temperature, version: v1`)
 
 ### Model Binding
 
@@ -41,30 +42,32 @@ Each contract binds to exactly one data model version:
 ```yaml
 datacontracts:
   - name: _pump
-    version: v1
-    model: Pump:v1  # Specific model version
+    model:
+      name: pump
+      version: v1  # Specific model version
 ```
 
 This binding is immutable - to change the model, create a new contract version.
 
-### Data Sinks
+### Data Bridges
 
 Contracts specify where data gets stored and processed:
 
 ```yaml
 datacontracts:
   - name: _temperature
-    version: v1
-    model: Temperature:v1
-    sinks:
-      timescaledb: true
-      custom_analytics: false
-      cloud_storage: true
+    model:
+      name: temperature
+      version: v1
+    default_bridges:
+      - type: timescaledb
+        retention_in_days: 365
+      - type: cloud_storage
 ```
 
-**Available Sinks:**
+**Available Bridge Types:**
 - `timescaledb`: Automatic TimescaleDB hypertable creation
-- `custom_dfc`: Custom data flow configurations
+- `umh-api-sync`: Sync to higher-level UNS
 - `cloud_storage`: S3-compatible storage
 - `analytics_pipeline`: Stream analytics processing
 
@@ -75,11 +78,12 @@ Define how long data is kept:
 ```yaml
 datacontracts:
   - name: _historian
-    version: v1
-    model: HistorianData:v1
-    sinks:
-      timescaledb: true
-    retention_days: 2555  # ~7 years
+    model:
+      name: historiandata
+      version: v1
+    default_bridges:
+      - type: timescaledb
+        retention_in_days: 2555  # ~7 years
 ```
 
 ## Complete Examples
@@ -88,123 +92,82 @@ datacontracts:
 
 ```yaml
 datamodels:
-  - name: Temperature
-    version: v1
-    structure:
-      temperature_in_c:
-        type: timeseries
-        constraints:
-          unit: "°C"
+  temperature:
+    description: "Temperature sensor model"
+    versions:
+      v1:
+        root:
+          temperature_in_c:
+            _payloadshape: timeseries-number
 
 datacontracts:
   - name: _temperature
-    version: v1
-    model: Temperature:v1
-    sinks:
-      timescaledb: true
-    retention_days: 365
+    model:
+      name: temperature
+      version: v1
+    default_bridges:
+      - type: timescaledb
+        retention_in_days: 365
 ```
 
 ### Complex Pump Contract
 
 ```yaml
 datamodels:
-  - name: Motor
-    version: v1
-    structure:
-      current:
-        type: timeseries
-      rpm:
-        type: timeseries
+  motor:
+    description: "Standard motor model"
+    versions:
+      v1:
+        root:
+          current:
+            _payloadshape: timeseries-number
+          rpm:
+            _payloadshape: timeseries-number
+          temperature:
+            _payloadshape: timeseries-number
 
-  - name: Pump
-    version: v1
-    structure:
-      pressure:
-        type: timeseries
-        constraints:
-          unit: kPa
-          min: 0
-      temperature:
-        type: timeseries
-        constraints:
-          unit: "°C"
-      running:
-        type: timeseries
-        constraints:
-          allowed: [true, false]
-      diagnostics:
-        vibration:
-          type: timeseries
-          constraints:
-            unit: "mm/s"
-      motor:
-        _model: Motor:v1
-      total_power:
-        type: timeseries
-        constraints:
-          unit: kW
-      serial_number:
-        type: timeseries
+  pump:
+    description: "Pump with motor and diagnostics"
+    versions:
+      v1:
+        root:
+          pressure:
+            _payloadshape: timeseries-number
+          temperature:
+            _payloadshape: timeseries-number
+          running:
+            _payloadshape: timeseries-string
+          diagnostics:
+            vibration:
+              _payloadshape: timeseries-number
+          motor:
+            _refModel:
+              name: motor
+              version: v1
+          total_power:
+            _payloadshape: timeseries-number
+          serial_number:
+            _payloadshape: timeseries-string
 
 datacontracts:
   - name: _pump
-    version: v1
-    model: Pump:v1
-    sinks:
-      timescaledb: true
-      analytics_pipeline: true
-    retention_days: 1825  # 5 years
+    model:
+      name: pump
+      version: v1
+    default_bridges:
+      - type: timescaledb
+        retention_in_days: 1825  # 5 years
+      - type: analytics_pipeline
 ```
 
 ## Generated Database Schema
 
-When a contract with TimescaleDB sink is deployed, UMH automatically creates:
-
-### Hypertable Structure
-
-For the `_pump:v1` contract:
-
-```sql
--- Auto-generated hypertable: pump_v1
-CREATE TABLE pump_v1 (
-    time TIMESTAMPTZ NOT NULL,
-    location JSONB NOT NULL,
-    
-    -- Top-level fields
-    pressure DOUBLE PRECISION,
-    temperature DOUBLE PRECISION,
-    running BOOLEAN,
-    total_power DOUBLE PRECISION,
-    serial_number TEXT,
-    
-    -- Sub-model fields (flattened)
-    motor_current DOUBLE PRECISION,
-    motor_rpm DOUBLE PRECISION,
-    
-    -- Folder fields (flattened with path)
-    diagnostics_vibration DOUBLE PRECISION
-);
-
--- Hypertable conversion
-SELECT create_hypertable('pump_v1', 'time');
-
--- Indexes for location-based queries
-CREATE INDEX idx_pump_v1_location ON pump_v1 USING GIN (location);
-```
-
-### Location Structure
-
-The `location` field stores ISA-95 hierarchy:
-
-```json
-{
-  "level0": "corpA",
-  "level1": "plant-A", 
-  "level2": "line-4",
-  "level3": "pump41"
-}
-```
+> 🚧 **Roadmap Item** - Automatic database schema generation from data contracts and models is under design. This will include:
+> - Auto-generated TimescaleDB hypertables based on data models
+> - Field type mapping from payload shapes to database columns
+> - Automatic indexing for location-based queries
+> - Sub-model field flattening strategies
+> - Location hierarchy storage format
 
 ## Contract Evolution
 
@@ -216,20 +179,23 @@ Contracts support controlled evolution:
 # Version 1
 datacontracts:
   - name: _pump
-    version: v1
-    model: Pump:v1
-    sinks:
-      timescaledb: true
+    model:
+      name: pump
+      version: v1
+    default_bridges:
+      - type: timescaledb
+        retention_in_days: 365
 
 # Version 2 - Extended retention
 datacontracts:
-  - name: _pump
-    version: v2
-    model: Pump:v2  # Updated model
-    sinks:
-      timescaledb: true
-      analytics_pipeline: true  # New sink
-    retention_days: 2555  # Extended retention
+  - name: _pump_v2
+    model:
+      name: pump
+      version: v2  # Updated model
+    default_bridges:
+      - type: timescaledb
+        retention_in_days: 2555  # Extended retention
+      - type: analytics_pipeline  # New bridge
 ```
 
 ### Backward Compatibility
@@ -239,13 +205,14 @@ datacontracts:
 - Database schemas adapt automatically for new fields
 - No downtime required for contract updates
 
-## Sink Configuration Details
+## Bridge Configuration Details
 
-### TimescaleDB Sink
+### TimescaleDB Bridge
 
 ```yaml
-sinks:
-  timescaledb: true
+default_bridges:
+  - type: timescaledb
+    retention_in_days: 365
 ```
 
 **Behavior:**
@@ -254,13 +221,13 @@ sinks:
 - Creates location indexes for ISA-95 queries
 - Handles sub-model field flattening automatically
 
-### Custom Data Flow Sink
+### UMH API Sync Bridge
 
 ```yaml
-sinks:
-  custom_dfc:
-    endpoint: "https://analytics.company.com/api/pump-data"
-    auth_token: "${DFC_AUTH_TOKEN}"
+default_bridges:
+  - type: umh-api-sync
+    remote: "10.13.37.50:80"
+    auth_token: "${API_AUTH_TOKEN}"
     batch_size: 1000
 ```
 
@@ -270,11 +237,11 @@ sinks:
 - Configurable retry policies
 - Schema validation before transmission
 
-### Cloud Storage Sink
+### Cloud Storage Bridge
 
 ```yaml
-sinks:
-  cloud_storage:
+default_bridges:
+  - type: cloud_storage
     bucket: "industrial-data-lake"
     prefix: "pump-data/{year}/{month}/{day}/"
     format: "parquet"
@@ -318,7 +285,7 @@ Payload: {"value": 42.5, "timestamp_ms": 1733904005123}
 - **Single responsibility**: One contract per logical entity type
 - **Semantic naming**: Use descriptive, underscore-prefixed names
 - **Version explicitly**: Always specify model and contract versions
-- **Plan for growth**: Consider future sink requirements
+- **Plan for growth**: Consider future bridge requirements
 
 ### Retention Planning
 
@@ -326,11 +293,11 @@ Payload: {"value": 42.5, "timestamp_ms": 1733904005123}
 - **Consider storage costs**: Balance retention vs. storage expenses
 - **Plan for archival**: Design archival strategies for historical data
 
-### Sink Selection
+### Bridge Selection
 
 - **TimescaleDB for time-series**: Optimal for sensor data and analytics
 - **Cloud storage for archives**: Long-term, cost-effective storage
-- **Custom DFC for integration**: External system connectivity
+- **UMH API Sync for integration**: Higher-level UNS connectivity
 
 ### Schema Evolution
 
@@ -347,16 +314,16 @@ streamprocessors:
   - name: pump41_sp
     contract: _pump:v1  # References this contract
     location:
-      level0: corpA
-      level1: plant-A
-      level2: line-4
-      level3: pump41
+      0: corpA
+      1: plant-A
+      2: line-4
+      3: pump41
     # ... mapping configuration
 ```
 
 The stream processor:
 1. Validates output against the contract's model schema
-2. Routes data to configured sinks
+2. Routes data to configured bridges
 3. Applies retention policies automatically
 4. Enforces location hierarchy requirements
 
