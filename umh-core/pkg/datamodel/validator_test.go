@@ -60,7 +60,10 @@ var _ = Describe("Validator", func() {
 						},
 					},
 					"motor": {
-						ModelRef: "motor:v1",
+						ModelRef: &config.ModelRef{
+							Name:    "motor",
+							Version: "v1",
+						},
 					},
 					"acceleration": {
 						Subfields: map[string]config.Field{
@@ -127,7 +130,10 @@ var _ = Describe("Validator", func() {
 			dataModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
 					"referenced": {
-						ModelRef: "otherModel:v1",
+						ModelRef: &config.ModelRef{
+							Name:    "otherModel",
+							Version: "v1",
+						},
 					},
 				},
 			}
@@ -256,8 +262,11 @@ var _ = Describe("Validator", func() {
 			dataModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
 					"conflicted": {
-						Type:     "timeseries-number",
-						ModelRef: "otherModel:v1",
+						Type: "timeseries-number",
+						ModelRef: &config.ModelRef{
+							Name:    "otherModel",
+							Version: "v1",
+						},
 					},
 				},
 			}
@@ -272,7 +281,10 @@ var _ = Describe("Validator", func() {
 			dataModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
 					"invalidParent": {
-						ModelRef: "otherModel:v1",
+						ModelRef: &config.ModelRef{
+							Name:    "otherModel",
+							Version: "v1",
+						},
 						Subfields: map[string]config.Field{
 							"child": {
 								Type: "timeseries-number",
@@ -288,53 +300,63 @@ var _ = Describe("Validator", func() {
 			Expect(err.Error()).To(ContainSubstring("invalidParent"))
 		})
 
-		It("should fail validation for invalid _refModel format - no colon", func() {
+		It("should fail validation for invalid _refModel format - no name", func() {
 			dataModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
 					"invalidRef": {
-						ModelRef: "invalidformat",
+						ModelRef: &config.ModelRef{
+							Version: "v1",
+						},
 					},
 				},
 			}
 
 			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("_refModel must contain exactly one ':'"))
+			Expect(err.Error()).To(ContainSubstring("_refModel must have a model name specified"))
 		})
 
-		It("should fail validation for invalid _refModel format - multiple colons", func() {
+		It("should fail validation for invalid _refModel format - no version", func() {
 			dataModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
 					"invalidRef": {
-						ModelRef: "model:v1:extra",
+						ModelRef: &config.ModelRef{
+							Name: "model",
+						},
 					},
 				},
 			}
 
 			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("_refModel must contain exactly one ':'"))
+			Expect(err.Error()).To(ContainSubstring("_refModel must have a version specified"))
 		})
 
 		It("should fail validation for invalid _refModel format - empty version", func() {
 			dataModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
 					"invalidRef": {
-						ModelRef: "model:",
+						ModelRef: &config.ModelRef{
+							Name:    "model",
+							Version: "",
+						},
 					},
 				},
 			}
 
 			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("_refModel must have a version specified after ':'"))
+			Expect(err.Error()).To(ContainSubstring("_refModel must have a version specified"))
 		})
 
 		It("should fail validation for invalid version format", func() {
 			dataModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
 					"invalidRef": {
-						ModelRef: "model:invalidversion",
+						ModelRef: &config.ModelRef{
+							Name:    "model",
+							Version: "invalidversion",
+						},
 					},
 				},
 			}
@@ -348,7 +370,10 @@ var _ = Describe("Validator", func() {
 			dataModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
 					"invalidSubmodel": {
-						ModelRef:    "otherModel:v1",
+						ModelRef: &config.ModelRef{
+							Name:    "otherModel",
+							Version: "v1",
+						},
 						Description: "should not have description",
 					},
 				},

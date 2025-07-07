@@ -62,7 +62,10 @@ var _ = Describe("Validator References", func() {
 						Unit: "l/min",
 					},
 					"motor": {
-						ModelRef: "motor:v1",
+						ModelRef: &config.ModelRef{
+							Name:    "motor",
+							Version: "v1",
+						},
 					},
 				},
 			}
@@ -90,11 +93,14 @@ var _ = Describe("Validator References", func() {
 		})
 
 		It("should fail when referencing a non-existent model", func() {
-			pumpModel := config.DataModelVersion{
-				Description: "Pump data model",
+			testModel := config.DataModelVersion{
+				Description: "Test model with non-existent reference",
 				Structure: map[string]config.Field{
 					"motor": {
-						ModelRef: "nonexistent:v1",
+						ModelRef: &config.ModelRef{
+							Name:    "nonexistent",
+							Version: "v1",
+						},
 					},
 				},
 			}
@@ -104,12 +110,12 @@ var _ = Describe("Validator References", func() {
 					Name:        "pump",
 					Description: "Pump data model",
 					Versions: map[string]config.DataModelVersion{
-						"v1": pumpModel,
+						"v1": testModel,
 					},
 				},
 			}
 
-			err := validator.ValidateWithReferences(ctx, pumpModel, allDataModels)
+			err := validator.ValidateWithReferences(ctx, testModel, allDataModels)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("referenced model 'nonexistent' does not exist"))
 		})
@@ -124,11 +130,14 @@ var _ = Describe("Validator References", func() {
 				},
 			}
 
-			pumpModel := config.DataModelVersion{
-				Description: "Pump data model",
+			testModel := config.DataModelVersion{
+				Description: "Test model with non-existent version",
 				Structure: map[string]config.Field{
 					"motor": {
-						ModelRef: "motor:v2", // v2 doesn't exist
+						ModelRef: &config.ModelRef{
+							Name:    "motor",
+							Version: "v2", // v2 doesn't exist
+						},
 					},
 				},
 			}
@@ -145,12 +154,12 @@ var _ = Describe("Validator References", func() {
 					Name:        "pump",
 					Description: "Pump data model",
 					Versions: map[string]config.DataModelVersion{
-						"v1": pumpModel,
+						"v1": testModel,
 					},
 				},
 			}
 
-			err := validator.ValidateWithReferences(ctx, pumpModel, allDataModels)
+			err := validator.ValidateWithReferences(ctx, testModel, allDataModels)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("referenced model 'motor' version 'v2' does not exist"))
 		})
@@ -164,7 +173,10 @@ var _ = Describe("Validator References", func() {
 						Type: "timeseries-number",
 					},
 					"refToB": {
-						ModelRef: "modelB:v1",
+						ModelRef: &config.ModelRef{
+							Name:    "modelB",
+							Version: "v1",
+						},
 					},
 				},
 			}
@@ -177,7 +189,10 @@ var _ = Describe("Validator References", func() {
 						Type: "timeseries-string",
 					},
 					"refToA": {
-						ModelRef: "modelA:v1",
+						ModelRef: &config.ModelRef{
+							Name:    "modelA",
+							Version: "v1",
+						},
 					},
 				},
 			}
@@ -213,7 +228,10 @@ var _ = Describe("Validator References", func() {
 						Type: "timeseries-number",
 					},
 					"selfRef": {
-						ModelRef: "selfRef:v1",
+						ModelRef: &config.ModelRef{
+							Name:    "selfRef",
+							Version: "v1",
+						},
 					},
 				},
 			}
@@ -254,7 +272,10 @@ var _ = Describe("Validator References", func() {
 							Type: "timeseries-number",
 						},
 						"nextRef": {
-							ModelRef: nextLevel + ":v1",
+							ModelRef: &config.ModelRef{
+								Name:    nextLevel,
+								Version: "v1",
+							},
 						},
 					}
 				}
@@ -298,7 +319,10 @@ var _ = Describe("Validator References", func() {
 							Type: "timeseries-number",
 						},
 						"nextRef": {
-							ModelRef: nextLevel + ":v1",
+							ModelRef: &config.ModelRef{
+								Name:    nextLevel,
+								Version: "v1",
+							},
 						},
 					}
 				}
@@ -342,17 +366,26 @@ var _ = Describe("Validator References", func() {
 					"metadata": {
 						Subfields: map[string]config.Field{
 							"temperature_sensor": {
-								ModelRef: "sensor:v1",
+								ModelRef: &config.ModelRef{
+									Name:    "sensor",
+									Version: "v1",
+								},
 							},
 							"pressure_sensor": {
-								ModelRef: "sensor:v1",
+								ModelRef: &config.ModelRef{
+									Name:    "sensor",
+									Version: "v1",
+								},
 							},
 						},
 					},
 					"readings": {
 						Subfields: map[string]config.Field{
 							"primary": {
-								ModelRef: "sensor:v1",
+								ModelRef: &config.ModelRef{
+									Name:    "sensor",
+									Version: "v1",
+								},
 							},
 						},
 					},
@@ -415,7 +448,7 @@ var _ = Describe("Validator References", func() {
 							Structure: map[string]config.Field{
 								"speed":       {Type: "timeseries-number"},
 								"temperature": {Type: "timeseries-number"},
-								"sensor":      {ModelRef: "sensor:v1"},
+								"sensor":      {ModelRef: &config.ModelRef{Name: "sensor", Version: "v1"}},
 							},
 						},
 					},
@@ -437,7 +470,7 @@ var _ = Describe("Validator References", func() {
 				Structure: map[string]config.Field{
 					"pump": {
 						Subfields: map[string]config.Field{
-							"motor": {ModelRef: "motor:v1"},
+							"motor": {ModelRef: &config.ModelRef{Name: "motor", Version: "v1"}},
 							"flow":  {Type: "timeseries-number"},
 						},
 					},
@@ -467,7 +500,7 @@ var _ = Describe("Validator References", func() {
 
 			dataModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
-					"motor": {ModelRef: "motor:v1"},
+					"motor": {ModelRef: &config.ModelRef{Name: "motor", Version: "v1"}},
 				},
 			}
 
