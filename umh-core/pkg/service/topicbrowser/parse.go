@@ -17,7 +17,6 @@ package topicbrowser
 import (
 	"bytes"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -154,7 +153,9 @@ func extractNextBlock(entries []s6svc.LogEntry, lastProcessedTimestamp time.Time
 			}
 		}
 		if tsLine == "" {
-			return nil, 0, len(entries) - 1, errors.New("timestamp line is missing between block markers")
+			// Skip this malformed block and continue searching
+			searchStart = blockEndIndex + 1
+			continue
 		}
 
 		epochMS, err := strconv.ParseInt(tsLine, 10, 64)
@@ -259,7 +260,19 @@ func (svc *Service) parseBlock(entries []s6svc.LogEntry) error {
 	if _, err := hex.Decode(item.Payload, hexBuf); err != nil {
 		// Return to pool on error
 		bufferItemPool.Put(item)
-		return fmt.Errorf("hex decode: %w", err)
+
+		// Skip this malformed block and continue processing
+		// Update timestamp so we don't get stuck on this bad block
+		blockTimestamp := time.UnixMilli(epoch)
+		svc.lastProcessedTimestamp = blockTimestamp
+
+		// Log the error for debugging but don't fail
+		if svc.logger != nil {
+			svc.logger.Warnf("skipping malformed block with timestamp %s due to hex decode error: %v",
+				blockTimestamp.Format(time.RFC3339), err)
+		}
+
+		return nil // Continue processing next block
 	}
 
 	// Set timestamp and transfer ownership to ring buffer

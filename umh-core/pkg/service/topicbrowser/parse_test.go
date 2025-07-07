@@ -89,23 +89,54 @@ var _ = Describe("extractRaw / parseBlock", func() {
 	})
 
 	Context("missing timestamp line", func() {
-		It("fails with a clear error", func() {
+		It("skips block with missing timestamp and continues processing", func() {
 			logs := buildLogs(false, string(compressed), epochMS)
 
+			// Should succeed by skipping the bad block
 			err := service.parseBlock(logs)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("timestamp line is missing"))
-			Expect(rb.Len()).To(Equal(0))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(rb.Len()).To(Equal(0)) // Block was skipped, nothing added
 		})
 	})
 
 	Context("corrupt hex data", func() {
-		It("propagates the hex decode error", func() {
+		It("skips block with corrupt hex and continues processing", func() {
 			logs := buildLogs(true, "not-hex-bytes", epochMS)
 
+			// Should succeed by skipping the bad block
 			err := service.parseBlock(logs)
-			Expect(err).To(HaveOccurred())
-			Expect(rb.Len()).To(Equal(0))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(rb.Len()).To(Equal(0)) // Block was skipped, nothing added
+		})
+	})
+
+	Context("resilient processing", func() {
+		It("continues processing good blocks after skipping bad ones", func() {
+			baseTime := time.UnixMilli(1735732800000) // 2025-01-01T12:00:00.000Z
+
+			// Create mixed logs: good block, bad block, good block
+			goodLogs1 := buildLogsWithTimestamps(true, string(compressed), baseTime.UnixMilli())
+			badLogs := buildLogsWithTimestamps(true, "invalid-hex", baseTime.Add(5*time.Minute).UnixMilli())
+			goodLogs2 := buildLogsWithTimestamps(true, string(compressed), baseTime.Add(10*time.Minute).UnixMilli())
+
+			allLogs := append(append(goodLogs1, badLogs...), goodLogs2...)
+
+			service.ResetBlockProcessing()
+
+			// Process first good block
+			Expect(service.parseBlock(allLogs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(1)) // First block processed
+			Expect(service.lastProcessedTimestamp).To(Equal(baseTime))
+
+			// Process bad block - should be skipped
+			Expect(service.parseBlock(allLogs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(1))                                                   // Still only one block, bad block skipped
+			Expect(service.lastProcessedTimestamp).To(Equal(baseTime.Add(5 * time.Minute))) // Timestamp advanced
+
+			// Process second good block
+			Expect(service.parseBlock(allLogs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(2)) // Second good block processed
+			Expect(service.lastProcessedTimestamp).To(Equal(baseTime.Add(10 * time.Minute)))
 		})
 	})
 
