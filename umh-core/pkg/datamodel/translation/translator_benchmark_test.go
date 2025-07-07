@@ -230,16 +230,28 @@ func BenchmarkTranslatorWithReferences(b *testing.B) {
 		Description: "Pump with sensors",
 		Structure: map[string]config.Field{
 			"temperatureSensor": {
-				ModelRef: "sensor:v1",
+				ModelRef: &config.ModelRef{
+					Name:    "sensor",
+					Version: "v1",
+				},
 			},
 			"pressureSensor": {
-				ModelRef: "sensor:v1",
+				ModelRef: &config.ModelRef{
+					Name:    "sensor",
+					Version: "v1",
+				},
 			},
 			"flowSensor": {
-				ModelRef: "sensor:v1",
+				ModelRef: &config.ModelRef{
+					Name:    "sensor",
+					Version: "v1",
+				},
 			},
 			"vibrationSensor": {
-				ModelRef: "sensor:v1",
+				ModelRef: &config.ModelRef{
+					Name:    "sensor",
+					Version: "v1",
+				},
 			},
 			"status": {
 				Type:        "timeseries-string",
@@ -303,7 +315,10 @@ func BenchmarkTranslatorDeepChain(b *testing.B) {
 			nextLevel := fmt.Sprintf("level%d", level+1)
 			structure = map[string]config.Field{
 				"nested": {
-					ModelRef: fmt.Sprintf("%s:v1", nextLevel),
+					ModelRef: &config.ModelRef{
+						Name:    nextLevel,
+						Version: "v1",
+					},
 				},
 				fmt.Sprintf("localValue%d", level): {
 					Type:        "timeseries-number",
@@ -470,10 +485,16 @@ func BenchmarkTranslatorMixedTypes(b *testing.B) {
 			"zone1": {
 				Subfields: map[string]config.Field{
 					"sensor1": {
-						ModelRef: "sensor:v1",
+						ModelRef: &config.ModelRef{
+							Name:    "sensor",
+							Version: "v1",
+						},
 					},
 					"sensor2": {
-						ModelRef: "sensor:v1",
+						ModelRef: &config.ModelRef{
+							Name:    "sensor",
+							Version: "v1",
+						},
 					},
 					"zoneStatus": {
 						Type:        "timeseries-string",
@@ -484,10 +505,16 @@ func BenchmarkTranslatorMixedTypes(b *testing.B) {
 			"zone2": {
 				Subfields: map[string]config.Field{
 					"sensor3": {
-						ModelRef: "sensor:v1",
+						ModelRef: &config.ModelRef{
+							Name:    "sensor",
+							Version: "v1",
+						},
 					},
 					"sensor4": {
-						ModelRef: "sensor:v1",
+						ModelRef: &config.ModelRef{
+							Name:    "sensor",
+							Version: "v1",
+						},
 					},
 					"zoneStatus": {
 						Type:        "timeseries-string",
@@ -559,7 +586,10 @@ func BenchmarkTranslatorWideChain(b *testing.B) {
 	for i := 0; i < 20; i++ {
 		fieldName := fmt.Sprintf("leaf%d", i)
 		rootStructure[fieldName] = config.Field{
-			ModelRef: "leaf:v1",
+			ModelRef: &config.ModelRef{
+				Name:    "leaf",
+				Version: "v1",
+			},
 		}
 	}
 

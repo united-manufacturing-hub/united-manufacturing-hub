@@ -240,7 +240,7 @@ func (t *Translator) collectAllLeafPaths(ctx context.Context, structure map[stri
 		}
 
 		// Check if this field has a reference
-		if field.ModelRef != "" {
+		if field.ModelRef != nil {
 			refPaths, err := t.resolveReference(ctx, field.ModelRef, allDataModels, visitedModels, fieldPath)
 			if err != nil {
 				return nil, err
@@ -266,7 +266,7 @@ func (t *Translator) collectAllLeafPaths(ctx context.Context, structure map[stri
 }
 
 // resolveReference resolves a _refModel reference and returns its leaf paths
-func (t *Translator) resolveReference(ctx context.Context, modelRef string, allDataModels map[string]config.DataModelsConfig, visitedModels map[string]bool, prefixPath string) ([]PathInfo, error) {
+func (t *Translator) resolveReference(ctx context.Context, modelRef *config.ModelRef, allDataModels map[string]config.DataModelsConfig, visitedModels map[string]bool, prefixPath string) ([]PathInfo, error) {
 	// Check if context is cancelled before processing this reference
 	select {
 	case <-ctx.Done():
@@ -274,17 +274,8 @@ func (t *Translator) resolveReference(ctx context.Context, modelRef string, allD
 	default:
 	}
 
-	// Parse the model reference (format already validated by validator)
-	colonIndex := strings.IndexByte(modelRef, ':')
-	if colonIndex == -1 {
-		return nil, TranslationError{
-			Path:    prefixPath,
-			Message: fmt.Sprintf("invalid _refModel format: %s", modelRef),
-		}
-	}
-
-	modelName := modelRef[:colonIndex]
-	version := modelRef[colonIndex+1:]
+	modelName := modelRef.Name
+	version := modelRef.Version
 
 	// Check for circular reference
 	referenceKey := modelName + ":" + version

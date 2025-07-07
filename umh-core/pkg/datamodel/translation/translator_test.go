@@ -252,7 +252,10 @@ var _ = Describe("Translator", func() {
 						Unit:        "°C",
 					},
 					"motor": {
-						ModelRef: "motor:v1",
+						ModelRef: &config.ModelRef{
+							Name:    "motor",
+							Version: "v1",
+						},
 					},
 				},
 			}
@@ -301,7 +304,10 @@ var _ = Describe("Translator", func() {
 			dataModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
 					"motor": {
-						ModelRef: "nonexistent:v1",
+						ModelRef: &config.ModelRef{
+							Name:    "nonexistent",
+							Version: "v1",
+						},
 					},
 				},
 			}
@@ -323,7 +329,10 @@ var _ = Describe("Translator", func() {
 			dataModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
 					"motor": {
-						ModelRef: "motor:v2", // v2 doesn't exist
+						ModelRef: &config.ModelRef{
+							Name:    "motor",
+							Version: "v2",
+						}, // v2 doesn't exist
 					},
 				},
 			}
@@ -347,7 +356,10 @@ var _ = Describe("Translator", func() {
 			pumpModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
 					"motor": {
-						ModelRef: "motor:v1",
+						ModelRef: &config.ModelRef{
+							Name:    "motor",
+							Version: "v1",
+						},
 					},
 				},
 			}
@@ -355,7 +367,10 @@ var _ = Describe("Translator", func() {
 			motorModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
 					"pump": {
-						ModelRef: "pump:v1",
+						ModelRef: &config.ModelRef{
+							Name:    "pump",
+							Version: "v1",
+						},
 					},
 				},
 			}
@@ -384,7 +399,10 @@ var _ = Describe("Translator", func() {
 			dataModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
 					"motor": {
-						ModelRef: "invalid-format", // Missing colon
+						ModelRef: &config.ModelRef{
+							Name:    "invalid-format",
+							Version: "", // Missing version
+						},
 					},
 				},
 			}
