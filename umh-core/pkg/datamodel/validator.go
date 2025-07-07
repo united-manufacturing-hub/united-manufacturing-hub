@@ -221,7 +221,7 @@ func (v *Validator) validateField(ctx context.Context, field config.Field, path 
 	}
 
 	// First, validate _refModel format if present
-	if field.ModelRef != "" {
+	if field.ModelRef != nil {
 		v.validateRefModelFormat(field.ModelRef, path, errors)
 	}
 
@@ -238,51 +238,31 @@ func (v *Validator) validateField(ctx context.Context, field config.Field, path 
 }
 
 // validateRefModelFormat validates the _refModel field format
-func (v *Validator) validateRefModelFormat(modelRef string, path string, errors *[]ValidationError) {
-	// Check if _refModel contains exactly one ':'
-	colonCount := strings.Count(modelRef, ":")
-	if colonCount != 1 {
-		*errors = append(*errors, ValidationError{
-			Path:    path,
-			Message: fmt.Sprintf("_refModel must contain exactly one ':' but found %d", colonCount),
-		})
-		return
-	}
-
-	// Find the colon position to avoid creating a slice
-	colonIndex := strings.IndexByte(modelRef, ':')
-	if colonIndex == -1 {
-		// This shouldn't happen given the count check above, but be safe
-		return
-	}
-
-	modelName := modelRef[:colonIndex]
-	version := modelRef[colonIndex+1:]
-
+func (v *Validator) validateRefModelFormat(modelRef *config.ModelRef, path string, errors *[]ValidationError) {
 	// Check for empty model name
-	if modelName == "" {
+	if modelRef.Name == "" {
 		*errors = append(*errors, ValidationError{
 			Path:    path,
-			Message: "_refModel must have a model name specified before ':'",
+			Message: "_refModel must have a model name specified",
 		})
 	}
 
 	// Check for empty version
-	if version == "" {
+	if modelRef.Version == "" {
 		*errors = append(*errors, ValidationError{
 			Path:    path,
-			Message: "_refModel must have a version specified after ':'",
+			Message: "_refModel must have a version specified",
 		})
 	} else {
 		// Validate version pattern ^v\d+$ using pre-compiled regex
-		if !versionRegex.MatchString(version) {
+		if !versionRegex.MatchString(modelRef.Version) {
 			*errors = append(*errors, ValidationError{
 				Path:    path,
-				Message: fmt.Sprintf("version '%s' does not match pattern ^v\\d+$", version),
+				Message: fmt.Sprintf("version '%s' does not match pattern ^v\\d+$", modelRef.Version),
 			})
 		} else {
 			// Check that version starts at v1, not v0
-			if version == "v0" {
+			if modelRef.Version == "v0" {
 				*errors = append(*errors, ValidationError{
 					Path:    path,
 					Message: "version must start at v1, v0 is not allowed",
@@ -295,7 +275,7 @@ func (v *Validator) validateRefModelFormat(modelRef string, path string, errors 
 // validateFieldCombinations validates invalid field combinations
 func (v *Validator) validateFieldCombinations(field config.Field, path string, errors *[]ValidationError) {
 	hasType := field.Type != ""
-	hasRefModel := field.ModelRef != ""
+	hasRefModel := field.ModelRef != nil
 	hasSubfields := len(field.Subfields) > 0
 
 	// Cannot have both _type and _refModel
@@ -325,7 +305,7 @@ func (v *Validator) isLeafNode(field config.Field) bool {
 // validateLeafNode validates a leaf node
 func (v *Validator) validateLeafNode(field config.Field, path string, errors *[]ValidationError) {
 	hasType := field.Type != ""
-	hasRefModel := field.ModelRef != ""
+	hasRefModel := field.ModelRef != nil
 	hasDescription := field.Description != ""
 	hasUnit := field.Unit != ""
 
@@ -433,7 +413,7 @@ func (v *Validator) validateStructureReferences(ctx context.Context, structure m
 		}
 
 		// Check if this field has a reference
-		if field.ModelRef != "" {
+		if field.ModelRef != nil {
 			v.validateSingleReference(ctx, field.ModelRef, currentPath, allDataModels, visitedModels, depth, errors)
 		}
 
@@ -445,7 +425,7 @@ func (v *Validator) validateStructureReferences(ctx context.Context, structure m
 }
 
 // validateSingleReference validates a single _refModel reference
-func (v *Validator) validateSingleReference(ctx context.Context, modelRef string, path string, allDataModels map[string]config.DataModelsConfig, visitedModels map[string]bool, depth int, errors *[]ValidationError) {
+func (v *Validator) validateSingleReference(ctx context.Context, modelRef *config.ModelRef, path string, allDataModels map[string]config.DataModelsConfig, visitedModels map[string]bool, depth int, errors *[]ValidationError) {
 	// Check if context is cancelled before processing this reference
 	select {
 	case <-ctx.Done():
@@ -466,19 +446,9 @@ func (v *Validator) validateSingleReference(ctx context.Context, modelRef string
 		return
 	}
 
-	// Parse the model reference efficiently
-	colonIndex := strings.IndexByte(modelRef, ':')
-	if colonIndex == -1 {
-		// This should already be caught by basic validation, but let's be safe
-		*errors = append(*errors, ValidationError{
-			Path:    path,
-			Message: fmt.Sprintf("invalid _refModel format: %s", modelRef),
-		})
-		return
-	}
-
-	modelName := modelRef[:colonIndex]
-	version := modelRef[colonIndex+1:]
+	// Get the model name and version from the struct
+	modelName := modelRef.Name
+	version := modelRef.Version
 
 	// Check for circular reference
 	referenceKey := modelName + ":" + version

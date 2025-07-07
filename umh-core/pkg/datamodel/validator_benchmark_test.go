@@ -174,10 +174,16 @@ func BenchmarkValidateStructureOnly_WithReferences(b *testing.B) {
 		Description: "Model with references",
 		Structure: map[string]config.Field{
 			"motor": {
-				ModelRef: "motor:v1",
+				ModelRef: &config.ModelRef{
+					Name:    "motor",
+					Version: "v1",
+				},
 			},
 			"sensor": {
-				ModelRef: "sensor:v1",
+				ModelRef: &config.ModelRef{
+					Name:    "sensor",
+					Version: "v1",
+				},
 			},
 			"pump": {
 				Subfields: map[string]config.Field{
@@ -186,7 +192,10 @@ func BenchmarkValidateStructureOnly_WithReferences(b *testing.B) {
 						Unit: "L/min",
 					},
 					"controller": {
-						ModelRef: "controller:v1",
+						ModelRef: &config.ModelRef{
+							Name:    "controller",
+							Version: "v1",
+						},
 					},
 				},
 			},
@@ -251,10 +260,16 @@ func BenchmarkValidateWithReferences(b *testing.B) {
 		Description: "Model with references",
 		Structure: map[string]config.Field{
 			"motor": {
-				ModelRef: "motor:v1",
+				ModelRef: &config.ModelRef{
+					Name:    "motor",
+					Version: "v1",
+				},
 			},
 			"sensor": {
-				ModelRef: "sensor:v1",
+				ModelRef: &config.ModelRef{
+					Name:    "sensor",
+					Version: "v1",
+				},
 			},
 			"pump": {
 				Subfields: map[string]config.Field{
@@ -263,7 +278,10 @@ func BenchmarkValidateWithReferences(b *testing.B) {
 						Unit: "L/min",
 					},
 					"controller": {
-						ModelRef: "controller:v1",
+						ModelRef: &config.ModelRef{
+							Name:    "controller",
+							Version: "v1",
+						},
 					},
 				},
 			},
@@ -293,7 +311,12 @@ func BenchmarkValidateWithReferences_Deep(b *testing.B) {
 				"v1": {
 					Structure: map[string]config.Field{
 						"data": {Type: "timeseries-number"},
-						"next": {ModelRef: "level2:v1"},
+						"next": {
+							ModelRef: &config.ModelRef{
+								Name:    "level2",
+								Version: "v1",
+							},
+						},
 					},
 				},
 			},
@@ -303,7 +326,12 @@ func BenchmarkValidateWithReferences_Deep(b *testing.B) {
 				"v1": {
 					Structure: map[string]config.Field{
 						"data": {Type: "timeseries-number"},
-						"next": {ModelRef: "level3:v1"},
+						"next": {
+							ModelRef: &config.ModelRef{
+								Name:    "level3",
+								Version: "v1",
+							},
+						},
 					},
 				},
 			},
@@ -313,7 +341,12 @@ func BenchmarkValidateWithReferences_Deep(b *testing.B) {
 				"v1": {
 					Structure: map[string]config.Field{
 						"data": {Type: "timeseries-number"},
-						"next": {ModelRef: "level4:v1"},
+						"next": {
+							ModelRef: &config.ModelRef{
+								Name:    "level4",
+								Version: "v1",
+							},
+						},
 					},
 				},
 			},
@@ -323,7 +356,12 @@ func BenchmarkValidateWithReferences_Deep(b *testing.B) {
 				"v1": {
 					Structure: map[string]config.Field{
 						"data": {Type: "timeseries-number"},
-						"next": {ModelRef: "level5:v1"},
+						"next": {
+							ModelRef: &config.ModelRef{
+								Name:    "level5",
+								Version: "v1",
+							},
+						},
 					},
 				},
 			},
@@ -345,7 +383,10 @@ func BenchmarkValidateWithReferences_Deep(b *testing.B) {
 		Description: "Deep reference chain",
 		Structure: map[string]config.Field{
 			"root": {
-				ModelRef: "level1:v1",
+				ModelRef: &config.ModelRef{
+					Name:    "level1",
+					Version: "v1",
+				},
 			},
 		},
 	}

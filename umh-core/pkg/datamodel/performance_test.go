@@ -151,15 +151,15 @@ func TestPerformanceTargetWithReferences(t *testing.T) {
 	validator := datamodel.NewValidator()
 	ctx := context.Background()
 
-	// Create reference models
+	// Create a high-performance scenario with references
 	allDataModels := map[string]config.DataModelsConfig{
 		"motor": {
 			Versions: map[string]config.DataModelVersion{
 				"v1": {
 					Structure: map[string]config.Field{
-						"speed":       {Type: "timeseries-number", Unit: "rpm"},
-						"temperature": {Type: "timeseries-number", Unit: "°C"},
-						"current":     {Type: "timeseries-number", Unit: "A"},
+						"speed":       {Type: "timeseries-number"},
+						"temperature": {Type: "timeseries-number"},
+						"current":     {Type: "timeseries-number"},
 					},
 				},
 			},
@@ -168,34 +168,68 @@ func TestPerformanceTargetWithReferences(t *testing.T) {
 			Versions: map[string]config.DataModelVersion{
 				"v1": {
 					Structure: map[string]config.Field{
-						"value": {Type: "timeseries-number"},
-						"unit":  {Type: "timeseries-string"},
+						"value":     {Type: "timeseries-number"},
+						"unit":      {Type: "timeseries-string"},
+						"timestamp": {Type: "timeseries-string"},
+					},
+				},
+			},
+		},
+		"controller": {
+			Versions: map[string]config.DataModelVersion{
+				"v1": {
+					Structure: map[string]config.Field{
+						"setpoint": {Type: "timeseries-number"},
+						"output":   {Type: "timeseries-number"},
+						"mode":     {Type: "timeseries-string"},
 					},
 				},
 			},
 		},
 	}
 
-	// Main data model with references
-	dataModel := config.DataModelVersion{
-		Description: "Industrial system with references",
+	// Test data model with various field types
+	testModel := config.DataModelVersion{
+		Description: "Performance test model",
 		Structure: map[string]config.Field{
-			"motor": {
-				ModelRef: "motor:v1",
-			},
-			"sensors": {
+			"production": {
 				Subfields: map[string]config.Field{
-					"temperature": {
-						ModelRef: "sensor:v1",
+					"motor": {
+						ModelRef: &config.ModelRef{
+							Name:    "motor",
+							Version: "v1",
+						},
 					},
-					"pressure": {
-						ModelRef: "sensor:v1",
+					"sensors": {
+						Subfields: map[string]config.Field{
+							"temperature": {
+								ModelRef: &config.ModelRef{
+									Name:    "sensor",
+									Version: "v1",
+								},
+							},
+							"pressure": {
+								ModelRef: &config.ModelRef{
+									Name:    "sensor",
+									Version: "v1",
+								},
+							},
+						},
+					},
+					"controller": {
+						ModelRef: &config.ModelRef{
+							Name:    "controller",
+							Version: "v1",
+						},
 					},
 				},
 			},
-			"flow": {
-				Type: "timeseries-number",
-				Unit: "L/min",
+			"metadata": {
+				Subfields: map[string]config.Field{
+					"machine_id": {Type: "timeseries-string"},
+					"location":   {Type: "timeseries-string"},
+					"operator":   {Type: "timeseries-string"},
+				},
 			},
 		},
 	}
@@ -206,7 +240,7 @@ func TestPerformanceTargetWithReferences(t *testing.T) {
 	count := 0
 
 	for time.Now().Before(deadline) {
-		err := validator.ValidateWithReferences(ctx, dataModel, allDataModels)
+		err := validator.ValidateWithReferences(ctx, testModel, allDataModels)
 		if err != nil {
 			t.Fatalf("Reference validation failed: %v", err)
 		}
