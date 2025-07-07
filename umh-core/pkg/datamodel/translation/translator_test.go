@@ -395,13 +395,13 @@ var _ = Describe("Translator", func() {
 			Expect(err.Error()).To(ContainSubstring("circular reference detected"))
 		})
 
-		It("should handle invalid _refModel format", func() {
+		It("should handle invalid _refModel with empty version", func() {
 			dataModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
 					"motor": {
 						ModelRef: &config.ModelRef{
-							Name:    "invalid-format",
-							Version: "", // Missing version
+							Name:    "motor",
+							Version: "", // Empty version
 						},
 					},
 				},
@@ -409,7 +409,7 @@ var _ = Describe("Translator", func() {
 
 			_, err := translator.TranslateToJSONSchema(ctx, dataModel, "pump", "v1", make(map[string]config.DataModelsConfig))
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("invalid _refModel format"))
+			Expect(err.Error()).To(ContainSubstring("referenced model 'motor' does not exist"))
 		})
 	})
 

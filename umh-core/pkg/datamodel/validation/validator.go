@@ -318,6 +318,16 @@ func (v *Validator) validateLeafNode(field config.Field, path string, errors *[]
 		})
 	}
 
+	// Special case: subModel nodes (have _refModel but no _type) should ONLY contain _refModel
+	if hasRefModel && !hasType {
+		if field.Description != "" || field.Unit != "" {
+			*errors = append(*errors, ValidationError{
+				Path:    path,
+				Message: "subModel nodes should ONLY contain _refModel",
+			})
+		}
+	}
+
 	// If it has _type, validate it
 	if hasType {
 		v.validateTypeField(field.Type, path, errors)
@@ -426,6 +436,15 @@ func (v *Validator) validateStructureReferences(ctx context.Context, structure m
 		})
 		return
 	default:
+	}
+
+	// Check depth limit
+	if depth > 10 {
+		*errors = append(*errors, ValidationError{
+			Path:    path,
+			Message: "maximum reference depth exceeded (10 levels)",
+		})
+		return
 	}
 
 	for fieldName, field := range structure {
