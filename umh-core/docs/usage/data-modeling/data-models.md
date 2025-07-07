@@ -297,14 +297,6 @@ pressure:
 - **Version sub-models independently**: Allow evolution of components
 - **Use clear references**: `_refModel` with explicit name and version
 
-## Schema Registry Integration
-
-All data models are automatically registered in the Redpanda Schema Registry at boot time, enabling:
-
-- **Runtime validation**: Messages are validated against schemas
-- **Schema evolution**: Controlled versioning and compatibility
-- **Cross-system consistency**: Shared schema definitions
-
 ## Related Documentation
 
 - [Payload Shapes](payload-shapes.md) - Reusable JSON schemas for field values

@@ -79,16 +79,15 @@ datacontracts:
 ```yaml
 streamprocessors:
   - name: furnaceTemp_sp
-    contract: _temperature:v1
+    _templateRef: "temperature_template"
     location:
       0: corpA
       1: plant-A
       2: line-4
       3: furnace1
-    sources:
-      tF: "umh.v1.corpA.plant-A.line-4.furnace1._raw.temperature_F"
-    mapping:
-      temperature_in_c: "(tF - 32) * 5 / 9"
+    variables:
+      temp_sensor: "temperature_F"
+      sn: "SN-F1-001"
 ```
 
 ### 5. Structured Output

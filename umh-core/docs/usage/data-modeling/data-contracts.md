@@ -270,11 +270,11 @@ The UNS output plugin enforces contract compliance:
 
 ```yaml
 # Invalid message - rejected
-Topic: umh.v1.corpA.plant-A.line-4.pump41._pump.invalid_field
-Reason: Field 'invalid_field' not defined in Pump:v1 model
+Topic: umh.v1.corpA.plant-A.line-4.pump41._pump_v1.invalid_field
+Reason: Field 'invalid_field' not defined in _pump model, version v1
 
 # Valid message - accepted
-Topic: umh.v1.corpA.plant-A.line-4.pump41._pump.pressure
+Topic: umh.v1.corpA.plant-A.line-4.pump41._pump_v1.pressure
 Payload: {"value": 42.5, "timestamp_ms": 1733904005123}
 ```
 
@@ -305,27 +305,30 @@ Payload: {"value": 42.5, "timestamp_ms": 1733904005123}
 - **Test compatibility**: Validate schema evolution before deployment
 - **Document changes**: Maintain clear change logs
 
-## Integration with Stream Processors
+## Relationship to Stream Processors
 
-Data contracts are consumed by stream processors:
+**Stream processors do NOT use data contracts directly.** Instead, stream processors use templates that reference data models directly:
 
 ```yaml
-streamprocessors:
+# Template references model directly, not contract
+templates:
+  streamProcessors:
+    pump_template:
+      model:
+        name: pump      # Direct model reference
+        version: v1
+      sources: {...}
+      mapping: {...}
+
+# Stream processor uses template
+streamProcessors:
   - name: pump41_sp
-    contract: _pump:v1  # References this contract
-    location:
-      0: corpA
-      1: plant-A
-      2: line-4
-      3: pump41
-    # ... mapping configuration
+    _templateRef: "pump_template"
+    location: {...}
+    variables: {...}
 ```
 
-The stream processor:
-1. Validates output against the contract's model schema
-2. Routes data to configured bridges
-3. Applies retention policies automatically
-4. Enforces location hierarchy requirements
+**Data contracts are separate** - they define storage bridges and retention policies for data models. Stream processors work with models directly through templates, but **if a data contract exists for the same model**, the stream processor's output will be automatically validated against that contract and routed to the contract's configured bridges.
 
 ## Related Documentation
 
