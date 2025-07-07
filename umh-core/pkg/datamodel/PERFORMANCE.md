@@ -8,12 +8,12 @@ The UMH Core data model validator has been extensively optimized to exceed perfo
 
 | Scenario | Target | Actual | Improvement | Memory per Op | Allocations per Op |
 |----------|--------|--------|-------------|---------------|-------------------|
-| Simple schemas | 1,000/sec | **9.3M/sec** | **9,300x** | 256 B | 1 |
-| Complex nested | 1,000/sec | **846K/sec** | **846x** | 712 B | 20 |
-| With references | 1,000/sec | **2.5M/sec** | **2,500x** | 288 B | 3 |
-| Full validation | 1,000/sec | **817K/sec** | **817x** | 984 B | 21 |
-| Deep chains | 1,000/sec | **858K/sec** | **858x** | 1,392 B | 22 |
-| Large schemas | 1,000/sec | **128K/sec** | **128x** | 2,656 B | 101 |
+| Simple schemas | 1,000/sec | **9.39M/sec** | **9,389x** | 256 B | 1 |
+| Complex nested | 1,000/sec | **980K/sec** | **980x** | 712 B | 20 |
+| With references | 1,000/sec | **2.88M/sec** | **2,878x** | 288 B | 3 |
+| Full validation | 1,000/sec | **904K/sec** | **904x** | 984 B | 21 |
+| Deep chains | 1,000/sec | **1.00M/sec** | **1,000x** | 1,392 B | 22 |
+| Large schemas | 1,000/sec | **154K/sec** | **154x** | 2,656 B | 101 |
 
 ## Optimization Journey
 
@@ -73,10 +73,10 @@ errors := make([]ValidationError, 0, 8)
 - **Full validation**: 258K/sec, 8,591 B/op, 141 allocs/op
 
 ### After All Optimizations
-- **Simple**: 9.3M/sec, 256 B/op, 1 allocs/op
-- **Complex**: 846K/sec, 712 B/op, 20 allocs/op (**+12% speed, -22% memory, -47% allocs**)
-- **With references**: 2.5M/sec, 288 B/op, 3 allocs/op (**+688% speed, -96% memory, -98% allocs**)
-- **Full validation**: 817K/sec, 984 B/op, 21 allocs/op (**+217% speed, -89% memory, -85% allocs**)
+- **Simple**: 9.39M/sec, 256 B/op, 1 allocs/op
+- **Complex**: 980K/sec, 712 B/op, 20 allocs/op (**+30% speed, -22% memory, -47% allocs**)
+- **With references**: 2.88M/sec, 288 B/op, 3 allocs/op (**+808% speed, -96% memory, -98% allocs**)
+- **Full validation**: 904K/sec, 984 B/op, 21 allocs/op (**+250% speed, -89% memory, -85% allocs**)
 
 ## Memory Efficiency Analysis
 
@@ -97,9 +97,9 @@ errors := make([]ValidationError, 0, 8)
 ## Real-World Performance
 
 ### Industrial Use Cases
-- **Pump data model**: 22 fields, 3 levels deep → **846K schemas/sec**
-- **Motor reference model**: 5 references, 2 levels → **2.5M schemas/sec**  
-- **Large factory model**: 200+ fields → **128K schemas/sec**
+- **Pump data model**: 22 fields, 3 levels deep → **980K schemas/sec**
+- **Motor reference model**: 5 references, 2 levels → **2.88M schemas/sec**  
+- **Large factory model**: 200+ fields → **154K schemas/sec**
 
 ### Memory Usage Patterns
 - **Peak memory**: <3KB for largest schemas
@@ -132,9 +132,9 @@ The validator supports context cancellation with minimal overhead:
 ## Conclusion
 
 The optimized validator **significantly exceeds** the 1,000 schemas/second target:
-- **Minimum performance**: 128x target (large schemas)
-- **Typical performance**: 800-2,500x target (industrial models)  
-- **Maximum performance**: 9,300x target (simple schemas)
+- **Minimum performance**: 154x target (large schemas)
+- **Typical performance**: 900-2,900x target (industrial models)  
+- **Maximum performance**: 9,389x target (simple schemas)
 
 **Memory efficiency** is excellent:
 - Minimal allocations for all scenarios
