@@ -30,6 +30,7 @@ import (
 type FullConfig struct {
 	Agent             AgentConfig               `yaml:"agent"`                       // Agent config, requires restart to take effect
 	Templates         TemplatesConfig           `yaml:"templates,omitempty"`         // Templates section with enforced structure for protocol converters
+	DataModels        []DataModelsConfig        `yaml:"dataModels,omitempty"`        // DataModels section with enforced structure for data models
 	DataFlow          []DataFlowComponentConfig `yaml:"dataFlow,omitempty"`          // DataFlow components to manage, can be updated while running
 	ProtocolConverter []ProtocolConverterConfig `yaml:"protocolConverter,omitempty"` // ProtocolConverter config, can be updated while runnnig
 	Internal          InternalConfig            `yaml:"internal,omitempty"`          // Internal config, not to be used by the user, only to be used for testing internal components
@@ -38,6 +39,29 @@ type FullConfig struct {
 // TemplatesConfig defines the structure for the templates section
 type TemplatesConfig struct {
 	ProtocolConverter map[string]interface{} `yaml:"protocolConverter,omitempty"` // Array of protocol converter templates
+}
+
+// DataModelsConfig defines the structure for the data models section
+type DataModelsConfig struct {
+	Name        string                      `yaml:"name"`                  // name of the data model
+	Description string                      `yaml:"description,omitempty"` // description of the data model
+	Versions    map[string]DataModelVersion `yaml:"version"`               // version of the data model (1, 2, etc.)
+}
+
+type DataModelVersion struct {
+	Structure map[string]Field `yaml:"structure"` // structure of the data model (fields)
+}
+
+// ModelRef represents a reference to another data model
+type ModelRef struct {
+	Name    string `yaml:"name"`    // name of the referenced data model
+	Version string `yaml:"version"` // version of the referenced data model
+}
+
+type Field struct {
+	PayloadShape string           `yaml:"_payloadshape,omitempty"` // type of the field (timeseries only for now)
+	ModelRef     *ModelRef        `yaml:"_refModel,omitempty"`     // this is a special field that is used to reference another data model to be used as a type for this field
+	Subfields    map[string]Field `yaml:",inline"`                 // subfields of the field (allow recursive definition of fields)
 }
 
 type InternalConfig struct {
@@ -206,6 +230,7 @@ type TopicBrowserConfig struct {
 func (c FullConfig) Clone() FullConfig {
 	clone := FullConfig{
 		Agent:             c.Agent,
+		DataModels:        make([]DataModelsConfig, len(c.DataModels)),
 		DataFlow:          make([]DataFlowComponentConfig, len(c.DataFlow)),
 		ProtocolConverter: make([]ProtocolConverterConfig, len(c.ProtocolConverter)),
 		Templates:         TemplatesConfig{},
@@ -219,6 +244,10 @@ func (c FullConfig) Clone() FullConfig {
 		}
 	}
 	err := deepcopy.Copy(&clone.Agent, &c.Agent)
+	if err != nil {
+		return FullConfig{}
+	}
+	err = deepcopy.Copy(&clone.DataModels, &c.DataModels)
 	if err != nil {
 		return FullConfig{}
 	}
