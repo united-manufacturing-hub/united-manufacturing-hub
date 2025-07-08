@@ -643,3 +643,10 @@ func (svc *Service) redpandaProcessingActivity(observedState rpfsm.RedpandaObser
 	}
 	return false
 }
+
+// ResetBlockProcessing resets the block processing state (useful for testing or restart scenarios)
+func (svc *Service) ResetBlockProcessing() {
+	svc.processingMutex.Lock()
+	defer svc.processingMutex.Unlock()
+	svc.lastProcessedTimestamp = time.Time{}
+}
