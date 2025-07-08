@@ -16,6 +16,7 @@ package actions_test
 
 import (
 	"encoding/base64"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -498,8 +499,18 @@ var _ = Describe("AddDataModelAction", func() {
 				Expect(responseMap["version"]).To(Equal(1))
 				Expect(responseMap["structure"]).ToNot(BeNil())
 
-				// Verify config manager was called
+				// Verify data contract was included in response
+				dataContract, exists := responseMap["dataContract"]
+				Expect(exists).To(BeTrue())
+				dataContractMap, ok := dataContract.(map[string]interface{})
+				Expect(ok).To(BeTrue())
+				Expect(dataContractMap["name"]).To(Equal("_test-model_v1"))
+				Expect(dataContractMap["model"]).To(Equal("test-model:v1"))
+				Expect(dataContractMap["status"]).To(Equal("created"))
+
+				// Verify config manager was called for both data model and data contract
 				Expect(mockConfigMgr.AtomicAddDataModelCalled).To(BeTrue())
+				Expect(mockConfigMgr.AtomicAddDataContractCalled).To(BeTrue())
 			})
 
 			It("should send correct action replies to outbound channel", func() {
@@ -522,6 +533,52 @@ var _ = Describe("AddDataModelAction", func() {
 
 				// Verify we received some messages (exact structure depends on UMHMessage)
 				Expect(len(messages)).To(BeNumerically(">", 0))
+			})
+		})
+
+		Context("when data contract creation fails", func() {
+			BeforeEach(func() {
+				payload := models.AddDataModelPayload{
+					Name:        "test-model",
+					Description: "Test data model",
+					Structure: map[string]models.Field{
+						"field1": {
+							PayloadShape: "timeseries-string",
+						},
+					},
+				}
+				err := action.Parse(structToEncodedMap(payload))
+				Expect(err).ToNot(HaveOccurred())
+
+				// Configure mock to fail data contract creation
+				mockConfigMgr.WithAtomicAddDataContractError(errors.New("data contract creation failed"))
+			})
+
+			It("should still succeed but indicate data contract creation failed", func() {
+				response, metadata, err := action.Execute()
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(metadata).To(BeNil())
+				Expect(response).ToNot(BeNil())
+
+				responseMap, ok := response.(map[string]interface{})
+				Expect(ok).To(BeTrue())
+				Expect(responseMap["name"]).To(Equal("test-model"))
+				Expect(responseMap["description"]).To(Equal("Test data model"))
+				Expect(responseMap["version"]).To(Equal(1))
+
+				// Verify data contract was included in response with failed status
+				dataContract, exists := responseMap["dataContract"]
+				Expect(exists).To(BeTrue())
+				dataContractMap, ok := dataContract.(map[string]interface{})
+				Expect(ok).To(BeTrue())
+				Expect(dataContractMap["name"]).To(Equal("_test-model_v1"))
+				Expect(dataContractMap["model"]).To(Equal("test-model:v1"))
+				Expect(dataContractMap["status"]).To(Equal("failed"))
+
+				// Verify config manager was called for both operations
+				Expect(mockConfigMgr.AtomicAddDataModelCalled).To(BeTrue())
+				Expect(mockConfigMgr.AtomicAddDataContractCalled).To(BeTrue())
 			})
 		})
 
@@ -584,8 +641,20 @@ var _ = Describe("AddDataModelAction", func() {
 			Expect(response).ToNot(BeNil())
 			Expect(metadata).To(BeNil())
 
-			// Verify config manager was called
+			// Verify data contract was created for complex model
+			responseMap, ok := response.(map[string]interface{})
+			Expect(ok).To(BeTrue())
+			dataContract, exists := responseMap["dataContract"]
+			Expect(exists).To(BeTrue())
+			dataContractMap, ok := dataContract.(map[string]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(dataContractMap["name"]).To(Equal("_complex-model_v1"))
+			Expect(dataContractMap["model"]).To(Equal("complex-model:v1"))
+			Expect(dataContractMap["status"]).To(Equal("created"))
+
+			// Verify config manager was called for both operations
 			Expect(mockConfigMgr.AtomicAddDataModelCalled).To(BeTrue())
+			Expect(mockConfigMgr.AtomicAddDataContractCalled).To(BeTrue())
 		})
 	})
 })

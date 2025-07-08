@@ -24,6 +24,8 @@
 //
 // The action creates a new version of an existing data model configuration,
 // incrementing the version number and preserving backward compatibility.
+// Additionally, it automatically creates a corresponding data contract for the
+// new version with the naming pattern _{modelName}_{version}.
 // -----------------------------------------------------------------------------
 
 package actions
@@ -144,7 +146,7 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 	}
 
 	// Get the updated configuration to determine the new version number
-	config, err := a.configManager.GetConfig(ctx, 0)
+	fullConfig, err := a.configManager.GetConfig(ctx, 0)
 	if err != nil {
 		a.actionLogger.Warnf("Failed to get config to determine new version number: %v", err)
 		// Continue with execution, just use a placeholder version
@@ -153,7 +155,7 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 	// Find the new version number
 	newVersion := uint64(0)
 	if err == nil {
-		for _, dmc := range config.DataModels {
+		for _, dmc := range fullConfig.DataModels {
 			if dmc.Name == a.payload.Name {
 				var maxVersion uint64 = 0
 				for versionKey := range dmc.Versions {
@@ -178,12 +180,48 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
+	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+		"Creating data contract for new data model version...", a.outboundChannel, models.EditDataModel)
+
+	// Automatically create a data contract for the new version of the data model
+	versionStr := fmt.Sprintf("v%d", newVersion)
+	dataContractName := fmt.Sprintf("_%s_%s", a.payload.Name, versionStr) // Include version in contract name
+	dataContract := config.DataContractsConfig{
+		Name: dataContractName,
+		Model: &config.ModelRef{
+			Name:    a.payload.Name,
+			Version: versionStr,
+		},
+	}
+
+	dataContractErr := a.configManager.AtomicAddDataContract(ctx, dataContract)
+	if dataContractErr != nil {
+		// Log the error but don't fail the entire operation since the data model was successfully edited
+		a.actionLogger.Warnf("Failed to automatically create data contract for data model %s version %s: %v", a.payload.Name, versionStr, dataContractErr)
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+			fmt.Sprintf("Data model edited successfully, but failed to create data contract: %v", dataContractErr), a.outboundChannel, models.EditDataModel)
+	} else {
+		a.actionLogger.Infof("Successfully created data contract %s for data model %s version %s", dataContractName, a.payload.Name, versionStr)
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+			"Data contract created successfully", a.outboundChannel, models.EditDataModel)
+	}
+
 	// Create response with the data model information
 	response := map[string]interface{}{
 		"name":        a.payload.Name,
 		"description": a.payload.Description,
 		"structure":   a.payload.Structure,
 		"version":     newVersion,
+		"dataContract": map[string]interface{}{
+			"name":  dataContractName,
+			"model": fmt.Sprintf("%s:%s", a.payload.Name, versionStr),
+			"status": func() string {
+				if dataContractErr != nil {
+					return "failed"
+				}
+				return "created"
+			}(),
+		},
 	}
 
 	return response, nil, nil
