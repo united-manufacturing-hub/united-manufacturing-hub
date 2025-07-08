@@ -145,7 +145,6 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 		starvationChecker: starvationChecker,
 		snapshotManager:   snapshotManager,
 		managerTimes:      make(map[string]time.Duration),
-		managerTimesMutex: sync.RWMutex{},
 		services:          servicesRegistry,
 	}
 }

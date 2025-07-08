@@ -89,7 +89,7 @@ func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string
 	createdFiles, err := s.createS6FilesInTemp(ctx, artifacts.TempDir, servicePath, config, fsService)
 	if err != nil {
 		cleanupTemp()
-		return nil, fmt.Errorf("failed to create service files: %w", err)
+		return nil, fmt.Errorf("failed to create service in temp directory: %w", err)
 	}
 
 	// Add .complete sentinel file for atomic completion detection

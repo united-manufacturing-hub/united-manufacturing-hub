@@ -130,8 +130,8 @@ type ServiceInfo struct {
 // struct uses its own custom copy methods (CopyLogs and CopyBuffer) to perform
 // shallow copies instead of expensive deep copies.
 func (si *ServiceInfo) CopyStatus(src Status) error {
-	// Use the Status struct's own copy logic which handles BufferSnapshot and Logs efficiently
-	si.Status.BufferSnapshot = src.BufferSnapshot // Shallow copy (handled by Status.CopyBufferSnapshot)
+	// Use the Status struct's own copy logic which handles Buffer and Logs efficiently
+	si.Status.BufferSnapshot = src.BufferSnapshot // Shallow copy (handled by Status.CopyBuffer)
 	si.Status.Logs = src.Logs                     // Shallow copy (handled by Status.CopyLogs)
 	return nil
 }
@@ -288,12 +288,15 @@ func (svc *Service) Status(
 	// Get logs
 	logs := benthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
 
-	// Parse the logs and decompress it via lz4, afterwards the data gets written
+	// Parse the logs and hex-decode it, afterwards the data gets written
 	// into the ringbuffer
+	svc.logger.Debugf("parsing block from logs: %d", len(logs))
 	err = svc.parseBlock(logs)
 	if err != nil {
+		svc.logger.Errorf("failed to parse block from logs: %v", err)
 		return ServiceInfo{}, fmt.Errorf("failed to parse block from logs: %w", err)
 	}
+	svc.logger.Debugf("parsed block from logs")
 
 	// check for invalidMetrics from benthos and redpanda
 	statusReason, invalidMetrics := svc.checkMetrics(redpandaObservedState, benthosObservedState)

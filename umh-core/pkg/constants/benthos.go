@@ -65,7 +65,7 @@ const (
 	//   live=true, ready=true   ← connection succeeds
 	//   live=true, ready=false  ← broker drops a socket a few ms later
 	//
-	// Our FSM used to consume IsReady verbatim, so a 1-frame "true" was enough to
+	// Our FSM used to consume IsReady verbatim, so a 1-frame “true” was enough to
 	// advance the state machine.
 	//
 	// Change this constant if you need a different stability window.

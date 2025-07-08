@@ -310,18 +310,21 @@ func (b *BenthosInstance) reconcileStartingStates(ctx context.Context, services 
 		// If the S6 is not running, go back to starting
 		running, reason := b.IsBenthosS6Running()
 		if !running {
+			b.baseFSMInstance.GetLogger().Debugf("IsBenthosS6Running: %s", reason)
 			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("start failed: %s", reason)
 			return b.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
 
 		loaded, reason := b.IsBenthosConfigLoaded()
 		if !loaded {
+			b.baseFSMInstance.GetLogger().Debugf("IsBenthosConfigLoaded: %s", reason)
 			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("start failed: %s", reason)
 			return b.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
 
 		passed, reason := b.IsBenthosHealthchecksPassed(currentTick)
 		if !passed {
+			b.baseFSMInstance.GetLogger().Debugf("IsBenthosHealthchecksPassed: %s", reason)
 			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("start failed: %s", reason)
 			return b.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
@@ -329,6 +332,7 @@ func (b *BenthosInstance) reconcileStartingStates(ctx context.Context, services 
 		// Check if service has been running stably for some time
 		running, reason = b.IsBenthosRunningForSomeTimeWithoutErrors(currentTime, constants.BenthosLogWindow)
 		if !running {
+			b.baseFSMInstance.GetLogger().Debugf("IsBenthosRunningForSomeTimeWithoutErrors: %s", reason)
 			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("waiting for service to remain running: %s", reason)
 			return nil, false
 		}
@@ -380,20 +384,6 @@ func (b *BenthosInstance) reconcileRunningStates(ctx context.Context, services s
 			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("recovering: %s", reason)
 			return b.baseFSMInstance.SendEvent(ctx, EventRecovered), true
 		}
-
-		// CRITICAL FIX: If degraded because S6 is not running, attempt to restart it
-		s6Running, _ := b.IsBenthosS6Running()
-		if !s6Running {
-			b.baseFSMInstance.GetLogger().Debugf("S6 service stopped while in degraded state, attempting to restart")
-			err := b.StartInstance(ctx, services.GetFileSystem())
-			if err != nil {
-				b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("degraded: failed to restart service: %v", err)
-				return err, false
-			}
-			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = "degraded: restarting service"
-			return nil, false // Don't transition yet, wait for restart to take effect
-		}
-
 		b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("degraded: %s", reason)
 		return nil, false
 	default:

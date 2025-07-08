@@ -36,8 +36,8 @@ const (
 	// happening on the same future tick.
 	//
 	// Example (with the defaults below):
-	//   • create "A" on tick 100  →  next add allowed earliest at tick 100+15±25%
-	//   • update "B" on tick 105  →  next update allowed earliest at tick 105+15±25%
+	//   • create “A” on tick 100  →  next add allowed earliest at tick 100+15±25%
+	//   • update “B” on tick 105  →  next update allowed earliest at tick 105+15±25%
 	//   • normal per‑tick reconciliation is **not** affected – only the *rate‑limited*
 	//     operations below respect the barrier.
 	//
@@ -56,11 +56,11 @@ const (
 	//     [ base * (1‑j) , base * (1+j) ]
 	// where j == JitterFraction.
 	//
-	//   j = 0    →  no jitter, always exactly `base` ticks
-	//   j = 0.25 →  ±25 % spread (default): base * 0.75  …  base * 1.25
-	//   j = 1    →  full 0 … 2*base range (rarely useful)
+	//   j = 0    →  no jitter, always exactly `base` ticks
+	//   j = 0.25 →  ±25 % spread (default): base * 0.75  …  base * 1.25
+	//   j = 1    →  full 0 … 2*base range (rarely useful)
 	//
-	// A small jitter is enough to avoid "thundering herd" effects while keeping
+	// A small jitter is enough to avoid “thundering herd” effects while keeping
 	// the expected delay equal to `base`.  Make sure `math/rand.Seed` is called
 	// once at program start so runs do not share the same pseudo‑random sequence.
 	JitterFraction = 0.25
