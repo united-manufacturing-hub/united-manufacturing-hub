@@ -36,7 +36,7 @@ Payload-Shape → Data-Model → Data-Contract → Stream-Processor
 
 | Layer | Purpose | Example |
 |-------|---------|---------|
-| **[Payload-Shape](data-models.md#payload-shapes)** | Canonical schema fragment (timeseries default) | `timeseries`, `blob` |
+| **[Payload-Shape](payload-shapes.md)** | Canonical schema fragment (timeseries default) | `timeseries`, `blob` |
 | **[Data-Model](data-models.md)** | Reusable class; tree of fields, folders, sub-models | `Motor`, `Pump`, `Temperature` |
 | **[Data-Contract](data-contracts.md)** | Binds model version; decides retention & sinks | `_temperature`, `_pump` |
 | **[Stream-Processor](stream-processors.md)** | Runtime pipeline for model instances | `furnaceTemp_sp`, `pump41_sp` |
