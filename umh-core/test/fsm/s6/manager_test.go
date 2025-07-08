@@ -610,13 +610,10 @@ var _ = Describe("S6Manager", func() {
 			permanentErrorMsg := backoff.PermanentFailureError + ": critical configuration error"
 			mockService.GetConfigError = fmt.Errorf("%s", permanentErrorMsg)
 
-			// Run several reconciliations to allow the error to be detected and handled
-			nextTick, err = fsmtest.RunMultipleReconciliations(ctx, manager, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: serviceConfig}}, Tick: tick}, mockSvcRegistry, 5)
+			// Wait for the instance to be removed due to permanent error
+			nextTick, err = fsmtest.WaitForManagerInstanceRemoval(ctx, manager, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: serviceConfig}}, Tick: tick}, mockSvcRegistry, serviceName, 30)
 			tick = nextTick
-
-			// Verify the instance has been removed due to permanent error
-			_, exists = manager.GetInstance(serviceName)
-			Expect(exists).To(BeFalse(), "Instance should be removed after permanent error")
+			Expect(err).NotTo(HaveOccurred(), "Instance should be removed after permanent error")
 		})
 	})
 
@@ -765,14 +762,10 @@ var _ = Describe("S6Manager", func() {
 			permanentErrorMsg := backoff.PermanentFailureError + ": critical configuration error"
 			mockService.GetConfigError = fmt.Errorf("%s", permanentErrorMsg)
 
-			// Run reconciliation multiple times to allow error handling
-			nextTick, err = fsmtest.RunMultipleReconciliations(ctx, manager, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: multiServiceConfig}}, Tick: tick}, mockSvcRegistry,
-				5)
+			// Wait for the failing service to be removed due to permanent error
+			nextTick, err = fsmtest.WaitForManagerInstanceRemoval(ctx, manager, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: multiServiceConfig}}, Tick: tick}, mockSvcRegistry, failingServiceName, 30)
 			tick = nextTick
-
-			// Verify failing service is removed
-			_, exists = manager.GetInstance(failingServiceName)
-			Expect(exists).To(BeFalse(), "Failing service should have been removed")
+			Expect(err).NotTo(HaveOccurred(), "Failing service should have been removed")
 
 			// Verify stable service still exists and is in correct state
 			stableInstance, exists := manager.GetInstance(stableServiceName)
