@@ -33,6 +33,7 @@ var _ = Describe("Cache", func() {
 
 	BeforeEach(func() {
 		cache = topicbrowser.NewCache()
+		mockSequenceCounter = 0 // Reset sequence counter for each test
 	})
 
 	Describe("Cache Update and Data Management", func() {
@@ -47,12 +48,12 @@ var _ = Describe("Cache", func() {
 			})
 
 			// Create observed state with first bundle
-			obs1 := createMockObservedStateSnapshot([]*topicbrowserservice.Buffer{
+			obs1 := createMockObservedStateSnapshot([]*topicbrowserservice.BufferItem{
 				{Payload: bundle1, Timestamp: time.UnixMilli(1000)},
 			})
 
 			// Update cache with first bundle
-			err := cache.Update(obs1)
+			_, err := cache.ProcessIncrementalUpdates(obs1)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Verify first update
@@ -77,12 +78,12 @@ var _ = Describe("Cache", func() {
 			})
 
 			// Create observed state with second bundle
-			obs2 := createMockObservedStateSnapshot([]*topicbrowserservice.Buffer{
+			obs2 := createMockObservedStateSnapshot([]*topicbrowserservice.BufferItem{
 				{Payload: bundle2, Timestamp: time.UnixMilli(2000)},
 			})
 
 			// Update cache with second bundle
-			err = cache.Update(obs2)
+			_, err = cache.ProcessIncrementalUpdates(obs2)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Verify graceful upsert
@@ -105,12 +106,12 @@ var _ = Describe("Cache", func() {
 			})
 
 			// Create observed state with initial bundle
-			obs1 := createMockObservedStateSnapshot([]*topicbrowserservice.Buffer{
+			obs1 := createMockObservedStateSnapshot([]*topicbrowserservice.BufferItem{
 				{Payload: bundle1, Timestamp: time.UnixMilli(1000)},
 			})
 
 			// Update cache
-			err := cache.Update(obs1)
+			_, err := cache.ProcessIncrementalUpdates(obs1)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(cache.GetLastCachedTimestamp()).To(Equal(time.UnixMilli(1000)))
 
@@ -133,13 +134,13 @@ var _ = Describe("Cache", func() {
 			})
 
 			// Create observed state with both old (modified) and new bundles
-			obs2 := createMockObservedStateSnapshot([]*topicbrowserservice.Buffer{
+			obs2 := createMockObservedStateSnapshot([]*topicbrowserservice.BufferItem{
 				{Payload: modifiedOldBundle, Timestamp: time.UnixMilli(500)}, // Old timestamp - should be ignored
 				{Payload: newBundle, Timestamp: time.UnixMilli(2000)},        // New timestamp - should be processed
 			})
 
 			// Update cache
-			err = cache.Update(obs2)
+			_, err = cache.ProcessIncrementalUpdates(obs2)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Verify that only new bundle was processed
@@ -162,11 +163,11 @@ var _ = Describe("Cache", func() {
 				"uns.topic2": "Topic 2 Info",
 			})
 
-			obs := createMockObservedStateSnapshot([]*topicbrowserservice.Buffer{
+			obs := createMockObservedStateSnapshot([]*topicbrowserservice.BufferItem{
 				{Payload: bundle1, Timestamp: time.UnixMilli(1000)},
 			})
 
-			err := cache.Update(obs)
+			_, err := cache.ProcessIncrementalUpdates(obs)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Generate proto-encoded bundle
@@ -209,11 +210,11 @@ var _ = Describe("Cache", func() {
 				"uns.topic3": "Topic 3",
 			})
 
-			obs1 := createMockObservedStateSnapshot([]*topicbrowserservice.Buffer{
+			obs1 := createMockObservedStateSnapshot([]*topicbrowserservice.BufferItem{
 				{Payload: bundle1, Timestamp: time.UnixMilli(1200)},
 			})
 
-			err := cache.Update(obs1)
+			_, err := cache.ProcessIncrementalUpdates(obs1)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Second update: Mix of older and newer data
@@ -227,11 +228,11 @@ var _ = Describe("Cache", func() {
 				"uns.topic4": "New Topic 4",
 			})
 
-			obs2 := createMockObservedStateSnapshot([]*topicbrowserservice.Buffer{
+			obs2 := createMockObservedStateSnapshot([]*topicbrowserservice.BufferItem{
 				{Payload: bundle2, Timestamp: time.UnixMilli(1500)},
 			})
 
-			err = cache.Update(obs2)
+			_, err = cache.ProcessIncrementalUpdates(obs2)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Third update: All new data
@@ -243,11 +244,11 @@ var _ = Describe("Cache", func() {
 				"uns.topic5": "Topic 5",
 			})
 
-			obs3 := createMockObservedStateSnapshot([]*topicbrowserservice.Buffer{
+			obs3 := createMockObservedStateSnapshot([]*topicbrowserservice.BufferItem{
 				{Payload: bundle3, Timestamp: time.UnixMilli(2000)},
 			})
 
-			err = cache.Update(obs3)
+			_, err = cache.ProcessIncrementalUpdates(obs3)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Verify final state
@@ -268,13 +269,13 @@ var _ = Describe("Cache", func() {
 
 		It("should handle invalid protobuf data gracefully", func() {
 			// Create observed state with invalid protobuf data
-			obs := createMockObservedStateSnapshot([]*topicbrowserservice.Buffer{
+			obs := createMockObservedStateSnapshot([]*topicbrowserservice.BufferItem{
 				{Payload: []byte("invalid protobuf data"), Timestamp: time.UnixMilli(1000)},
 				{Payload: []byte{0x00, 0xFF, 0xAA}, Timestamp: time.UnixMilli(1100)}, // Invalid binary data
 			})
 
 			// Update should not fail even with invalid data
-			err := cache.Update(obs)
+			_, err := cache.ProcessIncrementalUpdates(obs)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Cache should remain empty since no valid data was processed
@@ -287,10 +288,14 @@ var _ = Describe("Cache", func() {
 			// But timestamp should be updated to latest processed timestamp
 			Expect(cache.GetLastCachedTimestamp()).To(Equal(time.UnixMilli(1100)))
 		})
+
 	})
 })
 
 // Helper functions for creating mock data
+
+// Global sequence counter for test mock buffers
+var mockSequenceCounter uint64
 
 func createMockUnsBundle(events map[string]int64, unsTopics map[string]string) []byte {
 	bundle := &tbproto.UnsBundle{
@@ -325,12 +330,28 @@ func createMockUnsBundle(events map[string]int64, unsTopics map[string]string) [
 	return encoded
 }
 
-func createMockObservedStateSnapshot(buffers []*topicbrowserservice.Buffer) *topicbrowserfsm.ObservedStateSnapshot {
+func createMockObservedStateSnapshot(buffers []*topicbrowserservice.BufferItem) *topicbrowserfsm.ObservedStateSnapshot {
+	// Assign sequence numbers to buffers that don't have them
+	var maxSeq uint64
+	for _, buf := range buffers {
+		if buf.SequenceNum == 0 {
+			mockSequenceCounter++
+			buf.SequenceNum = mockSequenceCounter
+		}
+		if buf.SequenceNum > maxSeq {
+			maxSeq = buf.SequenceNum
+		}
+	}
+
 	return &topicbrowserfsm.ObservedStateSnapshot{
 		ServiceInfo: topicbrowserservice.ServiceInfo{
 			Status: topicbrowserservice.Status{
-				Buffer: buffers,
-				Logs:   []s6svc.LogEntry{}, // Initia	lize with empty slice
+				BufferSnapshot: topicbrowserservice.RingBufferSnapshot{
+					Items: buffers,
+
+					LastSequenceNum: maxSeq,
+				},
+				Logs: []s6svc.LogEntry{}, // Initialize with empty slice
 			},
 			// Leave other fields as zero values
 		},

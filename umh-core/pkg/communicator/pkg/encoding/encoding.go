@@ -18,6 +18,7 @@ import (
 	encoding_new "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding/new"
 	encoding_old "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding/old"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"go.uber.org/zap"
 )
 
 var encodeMessageFromUserToUMHInstance func(UMHMessage models.UMHMessageContent) (string, error) = encoding_old.EncodeMessageFromUserToUMHInstance
@@ -25,27 +26,12 @@ var encodeMessageFromUMHInstanceToUser func(UMHMessage models.UMHMessageContent)
 var decodeMessageFromUserToUMHInstance func(base64Message string) (models.UMHMessageContent, error) = encoding_old.DecodeMessageFromUserToUMHInstance
 var decodeMessageFromUMHInstanceToUser func(base64Message string) (models.UMHMessageContent, error) = encoding_old.DecodeMessageFromUMHInstanceToUser
 
-type Encoding string
-
-const (
-	EncodingOld Encoding = "old"
-	EncodingNew Encoding = "new"
-)
-
-func ChooseEncoder(encoding Encoding) {
-	switch encoding {
-	case EncodingNew:
-		encodeMessageFromUserToUMHInstance = encoding_new.EncodeMessageFromUserToUMHInstance
-		encodeMessageFromUMHInstanceToUser = encoding_new.EncodeMessageFromUMHInstanceToUser
-		decodeMessageFromUserToUMHInstance = encoding_new.DecodeMessageFromUserToUMHInstance
-		decodeMessageFromUMHInstanceToUser = encoding_new.DecodeMessageFromUMHInstanceToUser
-	default:
-		// Default to old encoding
-		encodeMessageFromUserToUMHInstance = encoding_old.EncodeMessageFromUserToUMHInstance
-		encodeMessageFromUMHInstanceToUser = encoding_old.EncodeMessageFromUMHInstanceToUser
-		decodeMessageFromUserToUMHInstance = encoding_old.DecodeMessageFromUserToUMHInstance
-		decodeMessageFromUMHInstanceToUser = encoding_old.DecodeMessageFromUMHInstanceToUser
-	}
+func EnableNewEncoder() {
+	zap.S().Info("Enabling new encoder")
+	encodeMessageFromUserToUMHInstance = encoding_new.EncodeMessageFromUserToUMHInstance
+	encodeMessageFromUMHInstanceToUser = encoding_new.EncodeMessageFromUMHInstanceToUser
+	decodeMessageFromUserToUMHInstance = encoding_new.DecodeMessageFromUserToUMHInstance
+	decodeMessageFromUMHInstanceToUser = encoding_new.DecodeMessageFromUMHInstanceToUser
 }
 
 func EncodeMessageFromUserToUMHInstance(UMHMessage models.UMHMessageContent) (string, error) {
