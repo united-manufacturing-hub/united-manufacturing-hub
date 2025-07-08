@@ -57,8 +57,22 @@ var _ = Describe("Redpanda Service", func() {
 	)
 
 	BeforeEach(func() {
-		service = NewDefaultRedpandaService("redpanda")
+		// Set up mock schema registry server for real network calls
+		mockSchemaRegistry := NewMockSchemaRegistry()
+		mockSchemaRegistry.SetupTestSchemas()
+
+		schemaRegistry := NewSchemaRegistry()
+		overrideSchemaRegistryAddress(schemaRegistry, mockSchemaRegistry.URL())
+
+		service = NewDefaultRedpandaService("redpanda",
+			WithSchemaRegistryManager(schemaRegistry),
+		)
 		tick = 0
+
+		// Clean up mock server after each test
+		DeferCleanup(func() {
+			mockSchemaRegistry.Close()
+		})
 		mockSvcRegistry = serviceregistry.NewMockRegistry()
 		redpandaName = "redpanda"
 		// Cleanup the data directory
@@ -130,9 +144,23 @@ var _ = Describe("Redpanda Service", func() {
 
 		BeforeEach(func() {
 			mockS6Service = s6service.NewMockService()
+
+			// Set up mock schema registry server for real network calls
+			mockSchemaRegistry := NewMockSchemaRegistry()
+			mockSchemaRegistry.SetupTestSchemas()
+
+			schemaRegistry := NewSchemaRegistry()
+			overrideSchemaRegistryAddress(schemaRegistry, mockSchemaRegistry.URL())
+
 			service = NewDefaultRedpandaService("redpanda",
 				WithS6Service(mockS6Service),
+				WithSchemaRegistryManager(schemaRegistry),
 			)
+
+			// Clean up mock server after each test
+			DeferCleanup(func() {
+				mockSchemaRegistry.Close()
+			})
 		})
 
 		It("should handle configuration updates", func() {
@@ -229,7 +257,21 @@ var _ = Describe("Redpanda Service", func() {
 		var service *RedpandaService
 
 		BeforeEach(func() {
-			service = NewDefaultRedpandaService("redpanda")
+			// Set up mock schema registry server for real network calls
+			mockSchemaRegistry := NewMockSchemaRegistry()
+			mockSchemaRegistry.SetupTestSchemas()
+
+			schemaRegistry := NewSchemaRegistry()
+			overrideSchemaRegistryAddress(schemaRegistry, mockSchemaRegistry.URL())
+
+			service = NewDefaultRedpandaService("redpanda",
+				WithSchemaRegistryManager(schemaRegistry),
+			)
+
+			// Clean up mock server after each test
+			DeferCleanup(func() {
+				mockSchemaRegistry.Close()
+			})
 		})
 
 		Context("IsMetricsErrorFree", func() {
@@ -352,7 +394,9 @@ var _ = Describe("Redpanda Service", func() {
 		)
 
 		BeforeEach(func() {
-			service = NewDefaultRedpandaService("redpanda")
+			service = NewDefaultRedpandaService("redpanda",
+				WithSchemaRegistryManager(NewNoOpSchemaRegistry()),
+			)
 			currentTime = time.Now()
 			logWindow = 5 * time.Minute
 		})
@@ -556,7 +600,23 @@ var _ = Describe("Redpanda Service", func() {
 		BeforeEach(func() {
 			mockS6Service = s6service.NewMockService()
 			mockFS = filesystem.NewMockFileSystem()
-			service = NewDefaultRedpandaService("redpanda", WithS6Service(mockS6Service))
+
+			// Set up mock schema registry server for real network calls
+			mockSchemaRegistry := NewMockSchemaRegistry()
+			mockSchemaRegistry.SetupTestSchemas()
+
+			schemaRegistry := NewSchemaRegistry()
+			overrideSchemaRegistryAddress(schemaRegistry, mockSchemaRegistry.URL())
+
+			service = NewDefaultRedpandaService("redpanda",
+				WithS6Service(mockS6Service),
+				WithSchemaRegistryManager(schemaRegistry),
+			)
+
+			// Clean up mock server after each test
+			DeferCleanup(func() {
+				mockSchemaRegistry.Close()
+			})
 		})
 
 		It("should call S6 ForceRemove with the correct service path", func() {

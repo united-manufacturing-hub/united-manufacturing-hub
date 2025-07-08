@@ -15,6 +15,7 @@
 package redpanda
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -37,6 +38,9 @@ type MockSchemaVersion struct {
 	Subject string `json:"subject"`
 }
 
+// NoOpSchemaRegistry is a mock implementation that does nothing
+type NoOpSchemaRegistry struct{}
+
 // NewMockSchemaRegistry creates a new mock schema registry server
 func NewMockSchemaRegistry() *MockSchemaRegistry {
 	mock := &MockSchemaRegistry{
@@ -50,6 +54,11 @@ func NewMockSchemaRegistry() *MockSchemaRegistry {
 
 	mock.server = httptest.NewServer(mux)
 	return mock
+}
+
+// NewNoOpSchemaRegistry creates a new no-op schema registry for testing
+func NewNoOpSchemaRegistry() *NoOpSchemaRegistry {
+	return &NoOpSchemaRegistry{}
 }
 
 // URL returns the base URL of the mock server
@@ -111,7 +120,10 @@ func (m *MockSchemaRegistry) handleSubjects(w http.ResponseWriter, r *http.Reque
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(subjects)
+	if err := json.NewEncoder(w).Encode(subjects); err != nil {
+		http.Error(w, "Failed to encode subjects", http.StatusInternalServerError)
+		return
+	}
 }
 
 // handleSubjectVersions handles requests to /subjects/{subject}/versions/{version}
@@ -162,7 +174,10 @@ func (m *MockSchemaRegistry) handleSubjectVersions(w http.ResponseWriter, r *htt
 
 	// Return the schema version (Redpanda format)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(schema)
+	if err := json.NewEncoder(w).Encode(schema); err != nil {
+		http.Error(w, "Failed to encode schema", http.StatusInternalServerError)
+		return
+	}
 }
 
 // handleLatestVersion handles requests for the latest version of a subject
@@ -189,7 +204,10 @@ func (m *MockSchemaRegistry) handleLatestVersion(w http.ResponseWriter, subject 
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(latestSchema)
+	if err := json.NewEncoder(w).Encode(latestSchema); err != nil {
+		http.Error(w, "Failed to encode latest schema", http.StatusInternalServerError)
+		return
+	}
 }
 
 // SetupTestSchemas adds common test schemas to the mock registry
@@ -398,4 +416,9 @@ func (m *MockSchemaRegistry) GetVersionsForSubject(subject string) []int {
 		}
 	}
 	return versions
+}
+
+// Reconcile always returns success without doing anything
+func (n *NoOpSchemaRegistry) Reconcile(ctx context.Context) (err error, reconciled bool) {
+	return nil, false
 }

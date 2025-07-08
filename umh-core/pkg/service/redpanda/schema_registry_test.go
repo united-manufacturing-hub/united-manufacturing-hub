@@ -1,0 +1,272 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package redpanda
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+)
+
+var _ = Describe("SchemaRegistry", func() {
+	var (
+		mockRegistry *MockSchemaRegistry
+		registry     *SchemaRegistry
+		ctx          context.Context
+		cancel       context.CancelFunc
+	)
+
+	BeforeEach(func() {
+		mockRegistry = NewMockSchemaRegistry()
+		mockRegistry.SetupTestSchemas()
+
+		registry = NewSchemaRegistry()
+
+		ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	})
+
+	AfterEach(func() {
+		if cancel != nil {
+			cancel()
+		}
+		if mockRegistry != nil {
+			mockRegistry.Close()
+		}
+	})
+
+	Describe("NewSchemaRegistry", func() {
+		It("should create a new schema registry with correct initial state", func() {
+			sr := NewSchemaRegistry()
+
+			Expect(sr).NotTo(BeNil())
+			Expect(sr.currentPhase).To(Equal(SchemaRegistryPhaseLookup))
+			Expect(sr.subjects).To(Equal([]string{}))
+			Expect(sr.httpClient).NotTo(BeNil())
+		})
+	})
+
+	Describe("Reconcile", func() {
+		Context("when in lookup phase", func() {
+			BeforeEach(func() {
+				registry.currentPhase = SchemaRegistryPhaseLookup
+				// Override the address for testing by modifying the registry's lookup behavior
+				overrideSchemaRegistryAddress(registry, mockRegistry.URL())
+			})
+
+			It("should successfully retrieve subjects and transition to compare phase", func() {
+				err, reconciled := registry.Reconcile(ctx)
+
+				Expect(err).NotTo(HaveOccurred())
+				Expect(reconciled).To(BeTrue())
+				Expect(registry.currentPhase).To(Equal(SchemaRegistryPhaseCompare))
+
+				// Check that subjects were retrieved
+				Expect(registry.subjects).To(ContainElements(
+					"_sensor_data_v1_timeseries-number",
+					"_sensor_data_v2_timeseries-number",
+					"_pump_data_v1_timeseries-number",
+					"_pump_data_v1_timeseries-string",
+					"_motor_controller_v3_timeseries-number",
+					"_motor_controller_v3_timeseries-string",
+					"_string_data_v1_timeseries-string",
+				))
+			})
+
+			It("should handle empty subject list", func() {
+				// Create a new empty mock registry
+				emptyMockRegistry := NewMockSchemaRegistry()
+				defer emptyMockRegistry.Close()
+
+				overrideSchemaRegistryAddress(registry, emptyMockRegistry.URL())
+
+				err, reconciled := registry.Reconcile(ctx)
+
+				Expect(err).NotTo(HaveOccurred())
+				Expect(reconciled).To(BeTrue())
+				Expect(registry.currentPhase).To(Equal(SchemaRegistryPhaseCompare))
+				Expect(registry.subjects).To(HaveLen(0))
+			})
+
+			It("should fail when context has insufficient time", func() {
+				// Create a context with less than MinimumLookupTime
+				shortCtx, shortCancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+				defer shortCancel()
+
+				err, reconciled := registry.Reconcile(shortCtx)
+
+				Expect(err).To(HaveOccurred())
+				Expect(reconciled).To(BeFalse())
+				Expect(err.Error()).To(ContainSubstring("insufficient time remaining in context"))
+				Expect(registry.currentPhase).To(Equal(SchemaRegistryPhaseLookup)) // Should not transition
+			})
+
+			It("should handle network errors gracefully", func() {
+				mockRegistry.SimulateNetworkError(true)
+
+				err, reconciled := registry.Reconcile(ctx)
+
+				Expect(err).To(HaveOccurred())
+				Expect(reconciled).To(BeFalse())
+				Expect(registry.currentPhase).To(Equal(SchemaRegistryPhaseLookup)) // Should not transition
+			})
+
+			It("should handle context cancellation", func() {
+				// Cancel the context before making the request
+				cancel()
+
+				err, reconciled := registry.Reconcile(ctx)
+
+				Expect(err).To(HaveOccurred())
+				Expect(reconciled).To(BeFalse())
+				Expect(registry.currentPhase).To(Equal(SchemaRegistryPhaseLookup)) // Should not transition
+			})
+		})
+
+		Context("when in compare phase", func() {
+			BeforeEach(func() {
+				registry.currentPhase = SchemaRegistryPhaseCompare
+			})
+
+			It("should return not reconciled (placeholder implementation)", func() {
+				err, reconciled := registry.Reconcile(ctx)
+
+				Expect(err).NotTo(HaveOccurred())
+				Expect(reconciled).To(BeFalse())
+			})
+		})
+
+		Context("when in apply phase", func() {
+			BeforeEach(func() {
+				registry.currentPhase = SchemaRegistryPhaseApply
+			})
+
+			It("should return not reconciled (placeholder implementation)", func() {
+				err, reconciled := registry.Reconcile(ctx)
+
+				Expect(err).NotTo(HaveOccurred())
+				Expect(reconciled).To(BeFalse())
+			})
+		})
+
+		Context("when in unknown phase", func() {
+			BeforeEach(func() {
+				registry.currentPhase = SchemaRegistryPhase("unknown")
+			})
+
+			It("should return an error for unknown phase", func() {
+				err, reconciled := registry.Reconcile(ctx)
+
+				Expect(err).To(HaveOccurred())
+				Expect(reconciled).To(BeFalse())
+				Expect(err.Error()).To(ContainSubstring("unknown phase: unknown"))
+			})
+		})
+	})
+
+	Describe("lookup method", func() {
+		BeforeEach(func() {
+			overrideSchemaRegistryAddress(registry, mockRegistry.URL())
+		})
+
+		It("should check context deadline before making request", func() {
+			// Create context with slightly more than MinimumLookupTime - should work
+			exactCtx, exactCancel := context.WithTimeout(context.Background(), MinimumLookupTime+5*time.Millisecond)
+			defer exactCancel()
+
+			err, reconciled := registry.lookup(exactCtx)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(reconciled).To(BeTrue())
+		})
+
+		It("should fail when context deadline is too close", func() {
+			// Create context with less than MinimumLookupTime
+			tooShortCtx, tooShortCancel := context.WithTimeout(context.Background(), MinimumLookupTime-1*time.Millisecond)
+			defer tooShortCancel()
+
+			err, reconciled := registry.lookup(tooShortCtx)
+
+			Expect(err).To(HaveOccurred())
+			Expect(reconciled).To(BeFalse())
+			Expect(err.Error()).To(ContainSubstring("insufficient time remaining"))
+		})
+
+		It("should work with context without deadline", func() {
+			ctxNoDeadline := context.Background()
+
+			err, reconciled := registry.lookup(ctxNoDeadline)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(reconciled).To(BeTrue())
+		})
+
+		It("should handle HTTP errors properly", func() {
+			mockRegistry.SimulateNetworkError(true)
+
+			err, reconciled := registry.lookup(ctx)
+
+			Expect(err).To(HaveOccurred())
+			Expect(reconciled).To(BeFalse())
+			Expect(err.Error()).To(ContainSubstring("schema registry returned status 500"))
+		})
+	})
+})
+
+// Helper function to override the schema registry address for testing
+func overrideSchemaRegistryAddress(registry *SchemaRegistry, mockURL string) {
+	// We need to modify the behavior of the lookup method to use our mock URL
+	// Since we can't easily override the constant, we'll modify the http client
+	// to use a custom transport that rewrites the URL
+
+	originalTransport := registry.httpClient.Transport
+	if originalTransport == nil {
+		originalTransport = &MockTransport{mockURL: mockURL}
+	} else {
+		originalTransport = &MockTransport{
+			mockURL:   mockURL,
+			transport: originalTransport,
+		}
+	}
+	registry.httpClient.Transport = originalTransport
+}
+
+// MockTransport wraps the default transport and redirects requests to our mock server
+type MockTransport struct {
+	mockURL   string
+	transport http.RoundTripper
+}
+
+func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	// Replace the host and scheme with our mock server
+	if strings.Contains(req.URL.Host, "localhost:8081") {
+		mockURL, err := url.Parse(m.mockURL)
+		if err != nil || mockURL == nil {
+			return nil, fmt.Errorf("failed to parse mock URL: %v", err)
+		}
+		req.URL.Scheme = mockURL.Scheme
+		req.URL.Host = mockURL.Host
+	}
+
+	if m.transport != nil {
+		return m.transport.RoundTrip(req)
+	}
+	return http.DefaultTransport.RoundTrip(req)
+}

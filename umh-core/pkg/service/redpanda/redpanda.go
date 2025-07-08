@@ -182,7 +182,7 @@ type RedpandaService struct {
 	redpandaMonitorManager *redpanda_monitor_fsm.RedpandaMonitorManager
 	redpandaMonitorConfigs []config.RedpandaMonitorConfig
 
-	schemaRegistryManager *SchemaRegistry
+	schemaRegistryManager ISchemaRegistry
 }
 
 // RedpandaServiceOption is a function that modifies a RedpandaService
@@ -221,6 +221,13 @@ func WithBaseDir(baseDir string) RedpandaServiceOption {
 func WithMonitorManager(monitorManager *redpanda_monitor_fsm.RedpandaMonitorManager) RedpandaServiceOption {
 	return func(s *RedpandaService) {
 		s.redpandaMonitorManager = monitorManager
+	}
+}
+
+// WithSchemaRegistryManager sets a custom schema registry manager for the RedpandaService
+func WithSchemaRegistryManager(schemaRegistryManager ISchemaRegistry) RedpandaServiceOption {
+	return func(s *RedpandaService) {
+		s.schemaRegistryManager = schemaRegistryManager
 	}
 }
 

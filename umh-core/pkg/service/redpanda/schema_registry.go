@@ -22,6 +22,11 @@ import (
 	"time"
 )
 
+// ISchemaRegistry defines the interface for schema registry operations
+type ISchemaRegistry interface {
+	Reconcile(ctx context.Context) (err error, reconciled bool)
+}
+
 type SchemaRegistry struct {
 	currentPhase SchemaRegistryPhase
 	httpClient   http.Client
@@ -63,7 +68,11 @@ func (s *SchemaRegistry) Reconcile(ctx context.Context) (err error, reconciled b
 func (s *SchemaRegistry) lookup(ctx context.Context) (err error, reconciled bool) {
 	// Check if context has enough time remaining
 	if deadline, ok := ctx.Deadline(); ok {
-		if time.Until(deadline) < MinimumLookupTime {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return fmt.Errorf("context deadline already passed"), false
+		}
+		if remaining < MinimumLookupTime {
 			return fmt.Errorf("insufficient time remaining in context (< %v)", MinimumLookupTime), false
 		}
 	}
@@ -79,7 +88,14 @@ func (s *SchemaRegistry) lookup(ctx context.Context) (err error, reconciled bool
 	if err != nil {
 		return err, false
 	}
-	defer resp.Body.Close()
+	if resp == nil {
+		return fmt.Errorf("received nil response from schema registry"), false
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			fmt.Printf("Warning: Failed to close schema registry response body: %v\n", closeErr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("schema registry returned status %d", resp.StatusCode), false
