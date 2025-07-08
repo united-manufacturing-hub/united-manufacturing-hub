@@ -155,7 +155,7 @@ templates:
         temp: "${{ .location_path }}._raw.${{ .sensor_name }}"
       mapping:
         dynamic:
-          temperature_in_c: "(temp - 32) * 5 / 9"
+          temperatureInC: "(temp - 32) * 5 / 9"
         static:
           sensor_id: "${{ .sensor_id }}"
           location: "${{ .location_description }}"
@@ -230,7 +230,7 @@ datamodels:
     versions:
       v1:
         structure:
-          temperature_in_c:
+          temperatureInC:
             _payloadshape: timeseries-number
 
 datacontracts:
@@ -252,7 +252,7 @@ templates:
         temp: "${{ .location_path }}._raw.${{ .temp_sensor }}"
       mapping:
         dynamic:
-          temperature_in_c: "(temp - 32) * 5 / 9"
+          temperatureInC: "(temp - 32) * 5 / 9"
         static:
           sensorId: "${{ .sn }}"
 
@@ -270,7 +270,7 @@ streamprocessors:
 ```
 
 **Result:**
-- **UNS Topic**: `umh.v1.corpA.plant-A.line-4.furnace1._temperature_v1.temperature_in_c`
+- **UNS Topic**: `umh.v1.corpA.plant-A.line-4.furnace1._temperature_v1.temperatureInC`
 - **Payload**: `{"value": 815.6, "timestamp_ms": 1733904005123}`
 - **Database**: Auto-created hypertable `temperature_v1`
 

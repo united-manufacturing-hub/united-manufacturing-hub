@@ -109,7 +109,7 @@ datamodels:
     versions:
       v1:
         structure:
-          temperature_in_c:
+          temperatureInC:
             _payloadshape: timeseries-number
 
 datacontracts:

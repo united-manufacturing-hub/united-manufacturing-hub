@@ -266,7 +266,7 @@ pipeline:
   processors:
     - mapping: |
         # Structured contracts have specific field names
-        root.temperature_celsius = this.temperature_in_c
+        root.temperature_celsius = this.temperatureInC
         root.timestamp = this.timestamp_ms
         # Additional metadata from data model constraints
         root.unit = "°C"

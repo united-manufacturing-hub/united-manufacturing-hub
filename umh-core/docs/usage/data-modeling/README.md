@@ -59,7 +59,7 @@ datamodels:
     versions:
       v1:
         structure:
-          temperature_in_c:
+          temperatureInC:
             _payloadshape: timeseries-number
 ```
 
@@ -92,7 +92,7 @@ streamprocessors:
 
 ### 5. Structured Output
 ```
-Topic: umh.v1.corpA.plant-A.line-4.furnace1._temperature.temperature_in_c
+Topic: umh.v1.corpA.plant-A.line-4.furnace1._temperature.temperatureInC
 Payload: { "value": 815.6, "timestamp_ms": 1733904005123 }
 Database: Auto-created TimescaleDB hypertable
 ```
