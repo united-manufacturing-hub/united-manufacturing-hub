@@ -41,7 +41,7 @@ Each contract binds to exactly one data model version:
 
 ```yaml
 datacontracts:
-  - name: _pump
+  - name: _pump_v1
     model:
       name: pump
       version: v1  # Specific model version
@@ -55,7 +55,7 @@ Contracts specify where data gets stored and processed:
 
 ```yaml
 datacontracts:
-  - name: _temperature
+  - name: _temperature_v1
     model:
       name: temperature
       version: v1
@@ -77,7 +77,7 @@ Define how long data is kept:
 
 ```yaml
 datacontracts:
-  - name: _historian
+  - name: _historian_v1
     model:
       name: historiandata
       version: v1
@@ -101,7 +101,7 @@ datamodels:
             _payloadshape: timeseries-number
 
 datacontracts:
-  - name: _temperature
+  - name: _temperature_v1
     model:
       name: temperature
       version: v1
@@ -150,7 +150,7 @@ datamodels:
             _payloadshape: timeseries-string
 
 datacontracts:
-  - name: _pump
+  - name: _pump_v1
     model:
       name: pump
       version: v1
@@ -178,7 +178,7 @@ Contracts support controlled evolution:
 ```yaml
 # Version 1
 datacontracts:
-  - name: _pump
+  - name: _pump_v1
     model:
       name: pump
       version: v1

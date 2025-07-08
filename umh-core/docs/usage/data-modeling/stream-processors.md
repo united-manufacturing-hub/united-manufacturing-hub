@@ -125,7 +125,7 @@ datamodels:
 
 # Data contract (from data-contracts.md)  
 datacontracts:
-  - name: _temperature
+  - name: _temperature_v1
     model:
       name: temperature
       version: v1
