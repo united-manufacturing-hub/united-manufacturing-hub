@@ -21,12 +21,12 @@ const (
 )
 
 const (
-	TopicBrowserExpectedMaxP95ExecutionTimePerInstance = TopicBrowserUpdateObservedStateTimeout + time.Millisecond*40 // needs to be higher than S6ExpectedMaxP95ExecutionTimePerInstance
+	TopicBrowserExpectedMaxP95ExecutionTimePerInstance = TopicBrowserUpdateObservedStateTimeout + time.Millisecond*35 // needs to be higher than S6ExpectedMaxP95ExecutionTimePerInstance
 )
 
 const (
 	// TopicBrowserUpdateObservedStateTimeout is the timeout for updating the observed state
-	TopicBrowserUpdateObservedStateTimeout = 5 * time.Millisecond
+	TopicBrowserUpdateObservedStateTimeout = 15 * time.Millisecond
 )
 const (
 	// BLOCK_START_MARKER marks the begin of a new data/general block inside the logs.

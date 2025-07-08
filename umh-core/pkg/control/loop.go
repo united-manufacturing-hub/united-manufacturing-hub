@@ -38,6 +38,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/tiendc/go-deepcopy"
@@ -64,6 +65,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/starvationchecker"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 // ControlLoop is the central orchestration component of the UMH Core.
@@ -86,6 +88,7 @@ type ControlLoop struct {
 	currentTick       uint64
 	snapshotManager   *fsm.SnapshotManager
 	managerTimes      map[string]time.Duration // Tracks execution time for each manager
+	managerTimesMutex sync.RWMutex
 	services          *serviceregistry.Registry
 }
 
@@ -142,6 +145,7 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 		starvationChecker: starvationChecker,
 		snapshotManager:   snapshotManager,
 		managerTimes:      make(map[string]time.Duration),
+		managerTimesMutex: sync.RWMutex{},
 		services:          servicesRegistry,
 	}
 }
@@ -312,55 +316,72 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 		}
 	}
 
+	// <factor>% ctx to ensure we finish in time.
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return ctxutil.ErrNoDeadline
+	}
+	remainingTime := time.Until(deadline)
+	timeToAdd := time.Duration(float64(remainingTime) * constants.LoopControlLoopTimeFactor)
+	newDeadline := time.Now().Add(timeToAdd)
+	innerCtx, cancel := context.WithDeadline(ctx, newDeadline)
+	defer cancel()
+
 	// 5) Reconcile each manager with the current tick count and passing in the newSnapshot
 	// Reset manager times for this reconciliation cycle
+	c.managerTimesMutex.Lock()
 	c.managerTimes = make(map[string]time.Duration)
+	c.managerTimesMutex.Unlock()
 
 	// Track executed managers for logging purposes
 	var executedManagers []string
+	executedManagersMutex := sync.RWMutex{}
 
+	// Track if any managers were reconciled
+	hasAnyReconciles := false
+	hasAnyReconcilesMutex := sync.Mutex{}
+
+	errorgroup, _ := errgroup.WithContext(innerCtx)
 	for _, manager := range c.managers {
-		managerName := manager.GetManagerName()
-		executedManagers = append(executedManagers, managerName)
+		capturedManager := manager
 
-		// Check if we have enough time to reconcile the manager
-		remaining, sufficient, err := ctxutil.HasSufficientTime(ctx, constants.DefaultMinimumRemainingTimePerManager)
-		if err != nil {
-			if errors.Is(err, ctxutil.ErrNoDeadline) {
-				return fmt.Errorf("context has no deadline")
+		errorgroup.Go(func() error {
+			reconciled, err := c.reconcileManager(innerCtx, capturedManager, &executedManagers, &executedManagersMutex, newSnapshot)
+			if err != nil {
+				return err
 			}
-			// For ErrInsufficientTime, skip reconciliation
-			if errors.Is(err, ctxutil.ErrInsufficientTime) {
-				c.logManagerTimes(remaining, executedManagers)
-				return nil
+			if reconciled {
+				hasAnyReconcilesMutex.Lock()
+				hasAnyReconciles = true
+				hasAnyReconcilesMutex.Unlock()
 			}
-			// Any other unexpected error
-			return fmt.Errorf("deadline check error: %w", err)
-		}
-
-		// If sufficient is true but err is nil, we're good to proceed
-		if !sufficient {
-			c.logManagerTimes(remaining, executedManagers)
 			return nil
-		}
+		})
+	}
+	waitErrorChannel := make(chan error, 1)
+	go func() {
+		waitErrorChannel <- errorgroup.Wait()
+	}()
 
-		// Record manager execution time
-		managerStart := time.Now()
-		err, reconciled := manager.Reconcile(ctx, newSnapshot, c.services)
-		executionTime := time.Since(managerStart)
-		c.managerTimes[managerName] = executionTime
+	select {
+	case wgErr := <-waitErrorChannel:
+		err = wgErr
+	case <-innerCtx.Done():
+		err = innerCtx.Err()
+	}
 
-		if err != nil {
-			metrics.IncErrorCount(metrics.ComponentControlLoop, managerName)
-			return fmt.Errorf("manager %s reconciliation failed: %w", managerName, err)
-		}
+	// If any managers were reconciled, create a snapshot
+	hasAnyReconcilesMutex.Lock()
+	defer hasAnyReconcilesMutex.Unlock()
+	if hasAnyReconciles {
+		// Create a snapshot after any successful reconciliation
+		c.updateSystemSnapshot(ctx, cfg)
+		return nil
+	}
 
-		// If the manager was reconciled, skip the reconcilation of the next managers
-		if reconciled {
-			// Create a snapshot after any successful reconciliation
-			c.updateSystemSnapshot(ctx, cfg)
-			return nil
-		}
+	// If there was an error during any of the managers, return it
+	if err != nil {
+		return err
 	}
 
 	if c.starvationChecker != nil {
@@ -457,14 +478,67 @@ func (c *ControlLoop) logManagerTimes(remaining time.Duration, executedManagers 
 	var totalTime time.Duration
 
 	for _, managerName := range executedManagers {
+		c.managerTimesMutex.RLock()
 		if execTime, ok := c.managerTimes[managerName]; ok {
 			totalTime += execTime
 		}
+		c.managerTimesMutex.RUnlock()
 	}
 
 	c.logger.Warnf("Skipping reconcile cycle due to remaining time: %v", remaining)
 	for _, managerName := range executedManagers {
+		c.managerTimesMutex.RLock()
 		c.logger.Warnf("Manager %s took %v", managerName, c.managerTimes[managerName])
+		c.managerTimesMutex.RUnlock()
 	}
 	c.logger.Warnf("Total time: %v", totalTime)
+}
+
+func (c *ControlLoop) reconcileManager(ctx context.Context, manager fsm.FSMManager[any], executedManagers *[]string, executedManagersMutex *sync.RWMutex, newSnapshot fsm.SystemSnapshot) (bool, error) {
+	managerName := manager.GetManagerName()
+	executedManagersMutex.Lock()
+	*executedManagers = append(*executedManagers, managerName)
+	executedManagersMutex.Unlock()
+
+	// Check if we have enough time to reconcile the manager
+	remaining, sufficient, err := ctxutil.HasSufficientTime(ctx, constants.DefaultMinimumRemainingTimePerManager)
+	if err != nil {
+		if errors.Is(err, ctxutil.ErrNoDeadline) {
+			return false, fmt.Errorf("context has no deadline")
+		}
+		// For ErrInsufficientTime, skip reconciliation
+		if errors.Is(err, ctxutil.ErrInsufficientTime) {
+
+			executedManagersMutex.RLock()
+			c.logManagerTimes(remaining, *executedManagers)
+			executedManagersMutex.RUnlock()
+			return false, nil
+		}
+		// Any other unexpected error
+		return false, fmt.Errorf("deadline check error: %w", err)
+	}
+
+	// If sufficient is true but err is nil, we're good to proceed
+	if !sufficient {
+		executedManagersMutex.RLock()
+		c.logManagerTimes(remaining, *executedManagers)
+		executedManagersMutex.RUnlock()
+		return false, nil
+	}
+
+	// Record manager execution time
+	managerStart := time.Now()
+	err, reconciled := manager.Reconcile(ctx, newSnapshot, c.services)
+	executionTime := time.Since(managerStart)
+
+	c.managerTimesMutex.Lock()
+	c.managerTimes[managerName] = executionTime
+	c.managerTimesMutex.Unlock()
+
+	if err != nil {
+		metrics.IncErrorCount(metrics.ComponentControlLoop, managerName)
+		return false, fmt.Errorf("manager %s reconciliation failed: %w", managerName, err)
+	}
+
+	return reconciled, nil
 }
