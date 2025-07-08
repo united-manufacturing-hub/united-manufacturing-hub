@@ -395,6 +395,7 @@ var _ = Describe("EditDataModelAction", func() {
 								Name:    "external-model",
 								Version: "v1",
 							},
+							PayloadShape: "timeseries-string", // This makes it invalid - submodel nodes should ONLY contain _refModel
 						},
 					},
 				}

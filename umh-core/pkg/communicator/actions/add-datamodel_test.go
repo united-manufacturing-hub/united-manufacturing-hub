@@ -88,7 +88,8 @@ var _ = Describe("AddDataModelAction", func() {
 		Context("with valid payload", func() {
 			It("should parse successfully", func() {
 				payload := models.AddDataModelPayload{
-					Name: "test-model",
+					Description: "Test data model",
+					Name:        "test-model",
 					Structure: map[string]models.Field{
 						"field1": {
 							PayloadShape: "timeseries-string",
