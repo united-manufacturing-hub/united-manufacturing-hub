@@ -267,15 +267,54 @@ func (m *BaseFSMManager[C]) GetNextStateTick() uint64 {
 // Performance metrics are collected for each phase of reconciliation,
 // enabling fine-grained monitoring of system behavior.
 //
+// Reconcile ensures that all instances are moving toward their desired state using parallel execution.
+// This method implements the core FSM manager reconciliation loop with concurrent instance processing.
+//
+// PARALLEL EXECUTION DESIGN:
+//   - Uses errgroup.WithContext for coordinated parallel execution of all instances
+//   - Limits concurrent goroutines to runtime.NumCPU() to prevent CPU starvation
+//   - Thread-safe coordination using mutexes for shared state updates
+//   - Time budget validation before spawning goroutines to prevent deadline violations
+//   - Graceful handling of context cancellation during parallel execution
+//
+// TIME BUDGET MANAGEMENT:
+//   - Creates inner context with BaseManagerControlLoopTimeFactor (95%) of available time
+//   - Reserves 5% for error aggregation, cleanup, and instance removal operations
+//   - Pre-validates execution time budget using getExpectedMaxP95ExecutionTimePerInstance
+//   - Skips instances without sufficient time rather than causing timeout failures
+//
+// CONCURRENT SAFETY GUARANTEES:
+//   - hasAnyReconcilesMutex protects the reconciliation status flag
+//   - instancesToRemoveMutex guards the instance removal list
+//   - Instance map operations are serialized after parallel execution completes
+//   - Error collection and aggregation through errgroup pattern
+//
+// OPERATIONAL BEHAVIOR:
+//   - Continues processing other instances even if individual instances fail
+//   - Logs warnings for instances skipped due to insufficient time
+//   - Maintains rate limiting through manager tick scheduling
+//   - Supports graceful shutdown through context cancellation
+//
+// ERROR HANDLING:
+//   - Timeout scenarios handled with context cancellation
+//   - Individual instance errors aggregated through errgroup
+//   - Metrics collection for error rates and timing violations
+//   - Detailed logging for debugging parallel execution issues
+//
+// PERFORMANCE CONSIDERATIONS:
+//   - Parallel execution reduces overall reconciliation time
+//   - CPU-bound operations limited to prevent system overload
+//   - I/O operations optimized through shared filesystem service
+//   - Memory usage controlled through goroutine limits
+//
 // Parameters:
 //   - ctx: Context for cancellation and timeouts
-//   - config: The full configuration to reconcile against
-//   - tick: Current tick count for rate limiting operations
+//   - snapshot: System snapshot containing current configuration and state
+//   - services: Service registry provider for accessing system services
 //
 // Returns:
-//   - error: Any error encountered during reconciliation
-//   - bool: True if a change was made, indicating the control loop should not
-//     run another manager and instead should wait for the next tick
+//   - error: Any error encountered during reconciliation, nil if all succeeded
+//   - bool: True if any instance performed reconciliation work
 func (m *BaseFSMManager[C]) Reconcile(
 	ctx context.Context,
 	snapshot SystemSnapshot,

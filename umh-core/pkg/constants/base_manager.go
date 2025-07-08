@@ -15,8 +15,19 @@
 package constants
 
 const (
-
-	// factor is the factor by which we reduce the remaining time for the inner control loop.
-	// This is used to ensure that we finish in time.
+	// BaseManagerControlLoopTimeFactor reserves safety time for FSM manager cleanup operations.
+	//
+	// WHY: Prevents timeout failures during FSM manager reconciliation by ensuring adequate
+	// time remains for cleanup operations, error handling, and state persistence after
+	// instance reconciliation completes.
+	//
+	// BUSINESS LOGIC: If set too low, FSM managers may timeout during cleanup, potentially
+	// leaving instances in inconsistent states. If set too high, reduces available time
+	// for actual reconciliation work, impacting system responsiveness.
+	//
+	// CALCULATION EXAMPLE: With 100ms manager deadline and 0.95 factor:
+	//   - Available work time: 100ms * 0.95 = 95ms
+	//   - Reserved cleanup time: 100ms - 95ms = 5ms
+	//   - Cleanup buffer: 5% of total deadline
 	BaseManagerControlLoopTimeFactor = 0.95
 )

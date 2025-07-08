@@ -46,12 +46,24 @@ const (
 	// number of control‑loop ticks a manager stays in cooldown
 	CoolDownTicks = 5
 
-	// factor is the factor by which we reduce the remaining time for the inner control loop.
-	// This is used to ensure that we finish in time.
+	// LoopControlLoopTimeFactor allocates time budget for parallel manager execution within control loop.
+	//
+	// WHY: Reserves 20% of control loop time for error aggregation, cleanup operations, and system
+	// snapshot creation after parallel manager execution completes. Prevents timeout failures
+	// in the main control loop when individual managers consume their full allocated time.
+	//
+	// BUSINESS LOGIC: If set too low, parallel execution may not have sufficient time for all
+	// managers to complete, reducing system throughput. If set too high, insufficient time
+	// remains for error handling and snapshot creation, risking control loop timeout failures.
+	//
+	// PARALLEL EXECUTION CONTEXT: With parallel execution, multiple managers run concurrently
+	// but still need coordination time for:
+	//   - Error collection and aggregation from errgroup
+	//   - Mutex-protected state updates and logging
+	//   - System snapshot generation and persistence
+	//   - Cleanup and context cancellation propagation
 	LoopControlLoopTimeFactor = 0.80
 
-	// RingBufferCapacity is the fixed capacity for all ring buffers in the system.
-	// Reduced from 8 to 3 for immediate 62% memory reduction while maintaining sufficient buffering.
 	RingBufferCapacity = 3
 )
 
