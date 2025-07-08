@@ -85,27 +85,34 @@ func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string
 		}
 	}
 
-	// Create all files directly in target location since we don't have Rename
-	createdFiles, err := s.createS6FilesInTemp(ctx, servicePath, servicePath, config, fsService)
+	// Create all files in temp directory first
+	createdFiles, err := s.createS6FilesInTemp(ctx, artifacts.TempDir, servicePath, config, fsService)
 	if err != nil {
 		cleanupTemp()
 		return nil, fmt.Errorf("failed to create service files: %w", err)
 	}
 
 	// Add .complete sentinel file for atomic completion detection
-	sentinelPath := filepath.Join(servicePath, ".complete")
+	sentinelPath := filepath.Join(artifacts.TempDir, ".complete")
 	if err := fsService.WriteFile(ctx, sentinelPath, []byte("ok"), 0644); err != nil {
+		cleanupTemp()
 		return nil, fmt.Errorf("failed to create sentinel file: %w", err)
 	}
 	createdFiles = append(createdFiles, ".complete")
 
-	// Store the created files in artifacts
+	// Atomically rename temp directory to final location
+	if err := fsService.Rename(ctx, artifacts.TempDir, servicePath); err != nil {
+		cleanupTemp()
+		return nil, fmt.Errorf("failed to atomically create service: %w", err)
+	}
+
+	// Store the created files in artifacts (now in final location)
 	artifacts.CreatedFiles = make([]string, len(createdFiles))
 	for i, file := range createdFiles {
 		artifacts.CreatedFiles[i] = filepath.Join(servicePath, file)
 	}
 
-	// No temp directory to cleanup since we created directly in target
+	// Clear temp directory since rename succeeded
 	artifacts.TempDir = ""
 
 	// Notify S6 scanner of new service
