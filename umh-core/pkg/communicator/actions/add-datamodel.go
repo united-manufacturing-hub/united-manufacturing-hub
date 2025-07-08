@@ -132,7 +132,7 @@ func (a *AddDataModelAction) Execute() (interface{}, map[string]interface{}, err
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		"Adding data model to configuration...", a.outboundChannel, models.AddDataModel)
 
-	err := a.configManager.AtomicAddDataModel(ctx, a.payload.Name, dmVersion)
+	err := a.configManager.AtomicAddDataModel(ctx, a.payload.Name, dmVersion, a.payload.Description)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to add data model: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
