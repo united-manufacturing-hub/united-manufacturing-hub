@@ -76,6 +76,37 @@ func DataModelsFromConfig(ctx context.Context, configManager config.ConfigManage
 	return dataModelData, nil
 }
 
+// DataContractsFromConfig extracts data contracts from the configuration and converts them to status message format
+func DataContractsFromConfig(ctx context.Context, configManager config.ConfigManager, logger *zap.SugaredLogger) ([]models.DataContract, error) {
+
+	fullConfig, err := configManager.GetConfig(ctx, 0)
+	if err != nil {
+		logger.Warnf("Failed to get config for data contracts: %v", err)
+		return []models.DataContract{}, err
+	}
+
+	dataContracts := fullConfig.DataContracts
+	dataContractData := make([]models.DataContract, len(dataContracts))
+
+	for i, dataContract := range dataContracts {
+		var dataModelRef models.DataContractRef
+		if dataContract.Model != nil {
+			dataModelRef = models.DataContractRef{
+				Name:    dataContract.Model.Name,
+				Version: dataContract.Model.Version,
+			}
+		}
+
+		dataContractData[i] = models.DataContract{
+			Name:      dataContract.Name,
+			DataModel: dataModelRef,
+			Flows:     0, // Set to 0 for now (TODO: add flows)
+		}
+	}
+
+	return dataContractData, nil
+}
+
 // parseVersionNumber parses a version string (e.g., "v1", "v2") to an integer
 func parseVersionNumber(versionStr string) int {
 	versionNum, err := strconv.Atoi(versionStr[1:])

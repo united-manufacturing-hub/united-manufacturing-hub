@@ -101,6 +101,13 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 		return &models.StatusMessage{} // Return empty status message on error
 	}
 
+	// --- data contracts (multiple instances, extracted from the config directly) -------------------------------------------------------------
+	dataContractData, err := DataContractsFromConfig(ctx, s.configManager, s.logger)
+	if err != nil {
+		s.logger.Warnf("Failed to get data contracts from config: %v", err)
+		return &models.StatusMessage{} // Return empty status message on error
+	}
+
 	// --- dfc (multiple instances) ----------------------	---------------------------------------
 	var dfcData []models.Dfc
 	dfcMgr, ok := fsm.FindManager(snapshot, constants.DataflowcomponentManagerName)
@@ -140,11 +147,12 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 				Latency:  &models.Latency{},
 				Location: agentData.Location,
 			},
-			Container:    containerData,
-			Dfcs:         dfcData,
-			Redpanda:     redpandaData,
-			TopicBrowser: *topicBrowserData,
-			DataModels:   dataModelData,
+			Container:     containerData,
+			Dfcs:          dfcData,
+			Redpanda:      redpandaData,
+			TopicBrowser:  *topicBrowserData,
+			DataModels:    dataModelData,
+			DataContracts: dataContractData,
 			Release: models.Release{
 				Health: &models.Health{
 					Message:       "",
