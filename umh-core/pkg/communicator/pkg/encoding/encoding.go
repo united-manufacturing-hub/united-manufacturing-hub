@@ -15,7 +15,6 @@
 package encoding
 
 import (
-	encoding_corev1 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding/corev1"
 	encoding_new "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding/new"
 	encoding_old "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding/old"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -29,9 +28,8 @@ var decodeMessageFromUMHInstanceToUser func(base64Message string) (models.UMHMes
 type Encoding string
 
 const (
-	EncodingOld    Encoding = "old"
-	EncodingNew    Encoding = "new"
-	EncodingCorev1 Encoding = "corev1"
+	EncodingOld Encoding = "old"
+	EncodingNew Encoding = "new"
 )
 
 func ChooseEncoder(encoding Encoding) {
@@ -41,11 +39,6 @@ func ChooseEncoder(encoding Encoding) {
 		encodeMessageFromUMHInstanceToUser = encoding_new.EncodeMessageFromUMHInstanceToUser
 		decodeMessageFromUserToUMHInstance = encoding_new.DecodeMessageFromUserToUMHInstance
 		decodeMessageFromUMHInstanceToUser = encoding_new.DecodeMessageFromUMHInstanceToUser
-	case EncodingCorev1:
-		encodeMessageFromUserToUMHInstance = encoding_corev1.EncodeMessageFromUserToUMHInstance
-		encodeMessageFromUMHInstanceToUser = encoding_corev1.EncodeMessageFromUMHInstanceToUser
-		decodeMessageFromUserToUMHInstance = encoding_corev1.DecodeMessageFromUserToUMHInstance
-		decodeMessageFromUMHInstanceToUser = encoding_corev1.DecodeMessageFromUMHInstanceToUser
 	default:
 		// Default to old encoding
 		encodeMessageFromUserToUMHInstance = encoding_old.EncodeMessageFromUserToUMHInstance

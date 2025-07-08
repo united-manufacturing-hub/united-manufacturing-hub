@@ -61,7 +61,7 @@ func NewHandler(
 	topicBrowserCache *topicbrowser.Cache,
 	topicBrowserSimulator *topicbrowser.Simulator,
 ) *Handler {
-	encoding.ChooseEncoder(encoding.EncodingCorev1)
+	encoding.ChooseEncoder(encoding.EncodingOld)
 	s := &Handler{}
 	s.subscriberRegistry = subscribers.NewRegistry(cull, ttl)
 	s.dog = dog
