@@ -89,7 +89,29 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 		return nil, false
 	}
 
-	// Step 2: Detect external changes.
+	/// Step 2: Try to read service status every tick (but continue even if it fails)
+	//
+	// DESIGN DECISION: Allowing **Reconcile** to continue when *Update‑Observed‑State* fails
+	//
+	// The following logic implements a critical deadlock prevention mechanism. Here's the reasoning:
+	//
+	// | Stage                            | Key question                                                                                                                                                                                                                                 | Reasoning that led to the final rule                                                                                                                                                                                                                                               |
+	// | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+	// | **1 — Problem surfaced**         | *After a cold restart* `Status()` throws **`ErrServiceNotExist`** on the very first tick because the child FSM is not yet re‑registered. The error is treated as fatal → the back‑off decorator suspends the instance → no further progress. | We saw an **ordering flaw** (read before write). Re‑ordering fixed the root cause but raised a new one: during normal startup there is still a brief window where the service exists in the manager yet `Status()` can fail (e.g. metrics side‑car not up, log files not created). |
+	// | **2 — Goal statement**           | *Controller must keep driving the FSM even if the very first status poll fails.*                                                                                                                                                             | If the service is in the middle of "creating → starting", we should **retry next tick** instead of pausing via back‑off; otherwise we dead‑lock again.                                                                                                                             |
+	// | **3 — Classification of errors** | Which errors are *harmless transients* and which are *real faults*?                                                                                                                                                                          | *Harmless* → `ErrServiceNotExist`, `ErrBenthosMonitorNotRunning`, `ErrLastObservedStateNil` – they simply mean "child not ready yet". *Real* → anything else (file I/O, YAML parse, context timeout). Only the real ones should trigger the back‑off / error state.             |
+	// | **4 — Control‑flow change**      | How to keep the "three‑phase" structure but avoid early exit?                                                                                                                                                                                | 1. **ReconcileManager first** (creates/updates children). 2. Call `reconcileExternalChanges`; **swallow** harmless errors (log/debug, but don't `SetError`). 3. Run `reconcileStateTransition`; let it evaluate predicates that don't rely on missing data yet.              |
+	// | **5 — Safety check**             | Could this hide real production issues?                                                                                                                                                                                                      | No. As soon as the monitor/metrics/logs are available, `Status()` will succeed and its data drive the FSM. If a child never becomes ready, later predicates (health‑check, time‑outs) push the parent FSM into *degraded* → operator alert.                                        |
+	// | **6 — Implementation rule**      | **"Reconcile may keep running even when Update‑Observed‑State returns a *transient* error.  Only escalate non‑transient errors."**                                                                                                           | *In code:* We log the error but continue reconciling. For timeout errors specifically, we mark as reconciled to prevent further attempts this tick. For all other errors, we continue without setting backoff.                                                                     |
+	// | **7 — Outcome**                  | *Cold restart scenario* now proceeds: child is registered (tick 1), status succeeds by tick 2‑3, FSM leaves *creating* → *starting* → *idle*. Observed‑state snapshot is continuously retried until valid.                                   |                                                                                                                                                                                                                                                                                    |
+	//
+	// **Summary for the implementation team:**
+	// * **Do not** treat *every* failure of `UpdateObservedState` as fatal.
+	// * **Whitelist** transient creation‑phase errors; log them and let the FSM keep reconciling.
+	// * Back‑off / error state should be reserved for genuine faults that won't heal by simply retrying in the next tick.
+	//
+	// This single rule, combined with "children first", breaks the restart dead‑loop while still recording real problems.
+	//
 	if err = s.reconcileExternalChanges(ctx, services, snapshot); err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			// Context deadline exceeded should be retried with backoff, not ignored
