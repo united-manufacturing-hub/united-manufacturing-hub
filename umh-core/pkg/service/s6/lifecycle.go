@@ -371,7 +371,6 @@ func (s *DefaultService) createS6RunScript(ctx context.Context, servicePath stri
 	if err := fsService.WriteFile(ctx, runScript, buf.Bytes(), 0755); err != nil {
 		return fmt.Errorf("failed to write run script: %w", err)
 	}
-
 	return nil
 }
 
