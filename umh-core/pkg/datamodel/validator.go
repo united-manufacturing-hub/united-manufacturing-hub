@@ -95,8 +95,8 @@ func (e ValidationError) Error() string {
 // It applies the following rules:
 // - Field names can only contain letters, numbers, dashes, and underscores
 // - A node can either be a leaf node or a non-leaf node
-// - A leaf node must have either _type or _refModel (but not both)
-// - A non-leaf node (folder) can only have subfields, no _type, _description, or _unit
+// - A leaf node must have either _payloadshape or _refModel (but not both)
+// - A non-leaf node (folder) can only have subfields, no _payloadshape, _description, or _unit
 // - _refModel format and version validation
 func (v *Validator) ValidateStructureOnly(ctx context.Context, dataModel config.DataModelVersion) error {
 	return v.validateDataModel(ctx, dataModel)
@@ -274,15 +274,15 @@ func (v *Validator) validateRefModelFormat(modelRef *config.ModelRef, path strin
 
 // validateFieldCombinations validates invalid field combinations
 func (v *Validator) validateFieldCombinations(field config.Field, path string, errors *[]ValidationError) {
-	hasType := field.PayloadShape != ""
+	hasPayloadShape := field.PayloadShape != ""
 	hasRefModel := field.ModelRef != nil
 	hasSubfields := len(field.Subfields) > 0
 
-	// Cannot have both _type and _refModel
-	if hasType && hasRefModel {
+	// Cannot have both _payloadshape and _refModel
+	if hasPayloadShape && hasRefModel {
 		*errors = append(*errors, ValidationError{
 			Path:    path,
-			Message: "field cannot have both _type and _refModel",
+			Message: "field cannot have both _payloadshape and _refModel",
 		})
 	}
 
@@ -304,36 +304,36 @@ func (v *Validator) isLeafNode(field config.Field) bool {
 
 // validateLeafNode validates a leaf node
 func (v *Validator) validateLeafNode(field config.Field, path string, errors *[]ValidationError) {
-	hasType := field.PayloadShape != ""
+	hasPayloadShape := field.PayloadShape != ""
 	hasRefModel := field.ModelRef != nil
 
 	// Determine leaf node type
-	if hasRefModel && !hasType {
+	if hasRefModel && !hasPayloadShape {
 		// SubModel node: ONLY contain _refModel
 		return
 	}
 
-	if hasType && !hasRefModel {
-		// Regular leaf node with _type
+	if hasPayloadShape && !hasRefModel {
+		// Regular leaf node with _payloadshape
 		return
 	}
 
-	// If neither _type nor _refModel is present
-	if !hasType && !hasRefModel {
+	// If neither _payloadshape nor _refModel is present
+	if !hasPayloadShape && !hasRefModel {
 		*errors = append(*errors, ValidationError{
 			Path:    path,
-			Message: "leaf nodes must contain _type",
+			Message: "leaf nodes must contain _payloadshape",
 		})
 	}
 }
 
 // validateNonLeafNode validates a non-leaf node
 func (v *Validator) validateNonLeafNode(ctx context.Context, field config.Field, path string, errors *[]ValidationError) {
-	// Non-leaf nodes (folders) should not have _type
+	// Non-leaf nodes (folders) should not have _payloadshape
 	if field.PayloadShape != "" {
 		*errors = append(*errors, ValidationError{
 			Path:    path,
-			Message: "non-leaf nodes (folders) cannot have _type",
+			Message: "non-leaf nodes (folders) cannot have _payloadshape",
 		})
 	}
 
