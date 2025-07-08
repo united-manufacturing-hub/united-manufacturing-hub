@@ -610,7 +610,6 @@ type SetConfigFileResponse struct {
 	Success          bool   `json:"success"`
 }
 
-
 type DataModelVersion struct {
 	Structure map[string]Field `yaml:"structure"` // structure of the data model (fields)
 }
@@ -665,13 +664,6 @@ type GetDataModelResponse struct {
 	Name        string                         `json:"name"`                  // Name of the data model
 	Description string                         `json:"description,omitempty"` // Description of the data model
 	Versions    map[string]GetDataModelVersion `json:"versions"`              // All versions of the data model
-
-// AddDataModelPayload contains the necessary fields for executing an AddDataModel action.
-type AddDataModelPayload struct {
-	Name        string                 `json:"name" binding:"required"`      // Name of the data model
-	Description string                 `json:"description,omitempty"`        // Description of the data model version
-	Structure   map[string]interface{} `json:"structure" binding:"required"` // Structure of the data model (fields)
-
 }
 
 // Deprecated: Use GetMetricsRequest instead.
