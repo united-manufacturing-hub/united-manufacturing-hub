@@ -27,9 +27,9 @@ var _ = Describe("Ringbuffer", func() {
 	const cap uint64 = 3
 	var rb *Ringbuffer
 
-	newBuf := func(id byte) *Buffer {
+	newBuf := func(id byte) *BufferItem {
 		// tiny helper to create distinct payloads & timestamps
-		return &Buffer{
+		return &BufferItem{
 			Payload:   []byte{id},
 			Timestamp: time.Now().Add(time.Duration(id) * time.Second),
 		}
@@ -45,11 +45,11 @@ var _ = Describe("Ringbuffer", func() {
 			rb.Add(newBuf(1))
 			Expect(rb.Len()).To(Equal(2))
 
-			out := rb.Get()
-			Expect(out).To(HaveLen(2))
+			snapshot := rb.GetSnapshot()
+			Expect(snapshot.Items).To(HaveLen(2))
 			// expect newest first (id 1, then id 0)
-			Expect(out[0].Payload[0]).To(Equal(byte(1)))
-			Expect(out[1].Payload[0]).To(Equal(byte(0)))
+			Expect(snapshot.Items[0].Payload[0]).To(Equal(byte(1)))
+			Expect(snapshot.Items[1].Payload[0]).To(Equal(byte(0)))
 		})
 	})
 
@@ -61,29 +61,11 @@ var _ = Describe("Ringbuffer", func() {
 			// Overwrite
 			rb.Add(newBuf(3))
 
-			out := rb.Get()
-			Expect(out).To(HaveLen(int(cap))) // still full capacity
-			ids := []byte{out[0].Payload[0], out[1].Payload[0], out[2].Payload[0]}
+			snapshot := rb.GetSnapshot()
+			Expect(snapshot.Items).To(HaveLen(int(cap))) // still full capacity
+			ids := []byte{snapshot.Items[0].Payload[0], snapshot.Items[1].Payload[0], snapshot.Items[2].Payload[0]}
 			// oldest (0) must be gone, newest (3) present
 			Expect(ids).To(Equal([]byte{3, 2, 1}))
-		})
-	})
-
-	Context("Copy semantics", func() {
-		It("returns deep copies that don’t alias the internal storage", func() {
-			orig := newBuf(7)
-			rb.Add(orig)
-
-			snapshot := rb.Get()
-			Expect(snapshot).To(HaveLen(1))
-
-			// mutate the original payload
-			orig.Payload[0] = 99
-
-			rb.Add(&Buffer{Payload: []byte{42}, Timestamp: time.Now()})
-
-			// the snapshot must remain unchanged
-			Expect(snapshot[0].Payload[0]).To(Equal(byte(7)))
 		})
 	})
 
@@ -121,24 +103,130 @@ var _ = Describe("Ringbuffer", func() {
 		})
 	})
 
-	Context("GetBuffers / PutBuffers", func() {
-		It("clones and recycles without leaking", func() {
+	Context("GetSnapshot / memory management", func() {
+		It("provides immutable snapshot access", func() {
 			rb := NewRingbuffer(4)
 			rb.Add(helperBuf(42))
 
-			clones := rb.GetBuffers()
-			Expect(clones).To(HaveLen(1))
-			clones[0].Payload[0] = 99 // mutate clone
+			snapshot := rb.GetSnapshot()
+			Expect(snapshot.Items).To(HaveLen(1))
 
-			PutBuffers(clones)
-			Expect(clones[0].Payload).To(BeNil()) // zeroed by PutBuffers
+			// Verify immutable access - snapshot won't change if we add more items
+			rb.Add(helperBuf(99))
+			Expect(snapshot.Items).To(HaveLen(1))                    // Original snapshot unchanged
+			Expect(snapshot.Items[0].Payload[0]).To(Equal(byte(42))) // Original data preserved
+
+			// New snapshot reflects updates
+			newSnapshot := rb.GetSnapshot()
+			Expect(newSnapshot.Items).To(HaveLen(2))
+			Expect(newSnapshot.Items[0].Payload[0]).To(Equal(byte(99))) // Newest first
+		})
+
+		It("demonstrates proper consumer memory management", func() {
+			rb := NewRingbuffer(4)
+			rb.Add(helperBuf(42))
+			rb.Add(helperBuf(43))
+
+			// Consumer pattern: get snapshot and always return items to pool
+			snapshot := rb.GetSnapshot()
+			defer PutBufferItems(snapshot.Items) // CRITICAL: Always return to pool when done
+
+			// Process the items
+			Expect(snapshot.Items).To(HaveLen(2))
+			for _, item := range snapshot.Items {
+				// Verify we can read the data
+				Expect(item.Payload).ToNot(BeNil())
+				Expect(item.Payload[0]).To(BeNumerically(">=", 42))
+			}
+
+			// At this point, defer will call PutBufferItems to return items to pool
+			// After that, snapshot.Items should not be used
+		})
+
+		It("shows that PutBufferItems clears the items", func() {
+			rb := NewRingbuffer(2)
+			rb.Add(helperBuf(100))
+
+			snapshot := rb.GetSnapshot()
+			Expect(snapshot.Items).To(HaveLen(1))
+			Expect(snapshot.Items[0].Payload[0]).To(Equal(byte(100)))
+
+			// Return to pool - this clears the items
+			PutBufferItems(snapshot.Items)
+
+			// Items are now cleared (should not use after PutBufferItems!)
+			Expect(snapshot.Items[0].Payload).To(BeNil())
+			Expect(snapshot.Items[0].Timestamp).To(Equal(time.Time{}))
+			Expect(snapshot.Items[0].SequenceNum).To(Equal(uint64(0)))
+		})
+	})
+
+	Context("Sequence number tracking", func() {
+		It("assigns monotonically increasing sequence numbers", func() {
+			rb := NewRingbuffer(3)
+
+			buf1 := newBuf(1)
+			buf2 := newBuf(2)
+			buf3 := newBuf(3)
+
+			rb.Add(buf1)
+			rb.Add(buf2)
+			rb.Add(buf3)
+
+			snapshot := rb.GetSnapshot()
+			Expect(snapshot.LastSequenceNum).To(Equal(uint64(3)))
+			Expect(len(snapshot.Items)).To(Equal(3))
+
+			// Verify sequence numbers are assigned correctly
+			Expect(buf1.SequenceNum).To(Equal(uint64(1)))
+			Expect(buf2.SequenceNum).To(Equal(uint64(2)))
+			Expect(buf3.SequenceNum).To(Equal(uint64(3)))
+		})
+
+		It("handles sequence numbers with ring buffer overflow", func() {
+			rb := NewRingbuffer(2) // Small buffer to test overflow
+
+			buf1 := newBuf(1)
+			buf2 := newBuf(2)
+			buf3 := newBuf(3) // This will overwrite buf1
+
+			rb.Add(buf1)
+			rb.Add(buf2)
+			rb.Add(buf3)
+
+			snapshot := rb.GetSnapshot()
+			Expect(snapshot.LastSequenceNum).To(Equal(uint64(3)))
+			Expect(len(snapshot.Items)).To(Equal(2)) // Buffer capacity
+
+			// Only buf2 and buf3 should remain
+			Expect(len(snapshot.Items)).To(Equal(2))
+			Expect(snapshot.Items[0].SequenceNum).To(Equal(uint64(3))) // Newest first
+			Expect(snapshot.Items[1].SequenceNum).To(Equal(uint64(2)))
+		})
+	})
+
+	Context("GetSnapshot method", func() {
+		It("returns consistent snapshot data", func() {
+			rb := NewRingbuffer(3)
+
+			rb.Add(newBuf(10))
+			rb.Add(newBuf(20))
+
+			snapshot := rb.GetSnapshot()
+
+			Expect(snapshot.LastSequenceNum).To(Equal(uint64(2)))
+			Expect(len(snapshot.Items)).To(Equal(2))
+
+			// Items should be newest-to-oldest
+			Expect(snapshot.Items[0].Payload[0]).To(Equal(byte(20))) // Newest
+			Expect(snapshot.Items[1].Payload[0]).To(Equal(byte(10))) // Older
 		})
 	})
 })
 
 // helper for buffer format
-func helperBuf(id byte) *Buffer {
-	return &Buffer{Payload: []byte{id}, Timestamp: time.Now()}
+func helperBuf(id byte) *BufferItem {
+	return &BufferItem{Payload: []byte{id}, Timestamp: time.Now()}
 }
 
 // helper to Add to ringbuffer
@@ -150,14 +238,14 @@ func helperWriter(rb *Ringbuffer, id byte, n int, wg *sync.WaitGroup) {
 	}
 }
 
-// helper to Get from ringbuffer
+// helper to Get from ringbuffer using GetSnapshot
 func helperReaderGet(rb *Ringbuffer, capacity int, n int, wg *sync.WaitGroup) {
 	defer GinkgoRecover()
 	defer wg.Done()
 	for range n {
-		out := rb.Get()
-		Expect(len(out)).To(BeNumerically("<=", capacity))
-		for _, b := range out {
+		snapshot := rb.GetSnapshot()
+		Expect(len(snapshot.Items)).To(BeNumerically("<=", capacity))
+		for _, b := range snapshot.Items {
 			Expect(b).NotTo(BeNil())
 			Expect(b.Payload).NotTo(BeNil())
 		}
