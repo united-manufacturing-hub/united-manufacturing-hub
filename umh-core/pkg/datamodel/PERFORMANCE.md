@@ -8,22 +8,22 @@ The UMH Core data model package provides both validation and translation with hi
 
 | Scenario | Target | Actual | Improvement | Memory per Op | Allocations per Op |
 |----------|--------|--------|-------------|---------------|-------------------|
-| Simple schemas | 1,000/sec | **9.39M/sec** | **9,389x** | 256 B | 1 |
-| Complex nested | 1,000/sec | **980K/sec** | **980x** | 712 B | 20 |
-| With references | 1,000/sec | **2.88M/sec** | **2,878x** | 288 B | 3 |
-| Full validation | 1,000/sec | **904K/sec** | **904x** | 984 B | 21 |
-| Deep chains | 1,000/sec | **1.00M/sec** | **1,000x** | 1,392 B | 22 |
-| Large schemas | 1,000/sec | **154K/sec** | **154x** | 2,656 B | 101 |
+| Simple schemas | 1,000/sec | **7.7M/sec** | **7,700x** | 256 B | 1 |
+| Complex nested | 1,000/sec | **833K/sec** | **833x** | 712 B | 20 |
+| With references | 1,000/sec | **2.68M/sec** | **2,680x** | 288 B | 3 |
+| Full validation | 1,000/sec | **794K/sec** | **794x** | 984 B | 21 |
+| Deep chains | 1,000/sec | **494K/sec** | **494x** | 1,392 B | 22 |
+| Large schemas | 1,000/sec | **120K/sec** | **120x** | 2,656 B | 101 |
 
 ### Translator Performance: Actual Results
 
 | Scenario | Performance | Latency | Memory per Op | Allocations per Op |
 |----------|-------------|---------|---------------|-------------------|
-| Simple translation | **499K/sec** | **2.3µs** | 6,900 B | 65 |
-| Complex nested | **187K/sec** | **7.4µs** | 11,826 B | 134 |
-| With references | **212K/sec** | **6.0µs** | 9,724 B | 109 |
-| Multiple payload shapes | **272K/sec** | **4.1µs** | 8,405 B | 90 |
-| Large translation | **15K/sec** | **78µs** | 92,462 B | 1,234 |
+| Simple translation | **400K/sec** | **2.5µs** | 6,932 B | 62 |
+| Complex nested | **153K/sec** | **6.5µs** | 11,594 B | 122 |
+| With references | **197K/sec** | **5.1µs** | 9,788 B | 103 |
+| Multiple payload shapes | **266K/sec** | **3.8µs** | 8,405 B | 84 |
+| Large translation | **13K/sec** | **76µs** | 91,625 B | 1,060 |
 | Translator creation | **>1B/sec** | **<1ns** | 0 B | 0 |
 
 ## Translator Performance Analysis
@@ -44,7 +44,7 @@ Translation memory usage scales with model complexity:
 - **Simple models** (3 fields): ~7KB per translation
 - **Complex models** (25+ fields): ~12KB per translation  
 - **Large models** (200+ fields): ~92KB per translation
-- **Reference models**: Additional ~3KB per referenced model
+- **Reference models**: Additional ~10KB per referenced model
 
 ### Translation Bottlenecks
 
@@ -64,9 +64,9 @@ The translator includes robust protection against infinite loops:
 ### Real-World Translation Performance
 
 Industrial use cases demonstrate excellent performance:
-- **Pump data model**: 3 fields → **499K translations/sec**
-- **Motor with sensors**: 25+ nested fields → **187K translations/sec**
-- **Factory system**: 200+ fields → **15K translations/sec**
+- **Pump data model**: 3 fields → **400K translations/sec**
+- **Motor with sensors**: 25+ nested fields → **153K translations/sec**
+- **Factory system**: 200+ fields → **13K translations/sec**
 
 Translation performance is suitable for:
 - **Real-time schema generation**: >100K schemas/sec for typical models
@@ -191,15 +191,15 @@ The validator supports context cancellation with minimal overhead:
 
 ### Validator Performance
 The optimized validator **significantly exceeds** the 1,000 schemas/second target:
-- **Minimum performance**: 154x target (large schemas)
-- **Typical performance**: 900-2,900x target (industrial models)  
-- **Maximum performance**: 9,389x target (simple schemas)
+- **Minimum performance**: 120x target (large schemas)
+- **Typical performance**: 494-2,680x target (industrial models)  
+- **Maximum performance**: 7,700x target (simple schemas)
 
 ### Translator Performance
 The translator provides **high-performance** schema translation suitable for production use:
-- **Simple models**: 499K translations/sec (real-time capable)
-- **Industrial models**: 187K-272K translations/sec (excellent throughput)
-- **Large models**: 15K translations/sec (suitable for batch processing)
+- **Simple models**: 400K translations/sec (real-time capable)
+- **Industrial models**: 153K-266K translations/sec (excellent throughput)
+- **Large models**: 13K translations/sec (suitable for batch processing)
 
 ### Overall Performance Characteristics
 

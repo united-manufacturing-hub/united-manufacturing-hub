@@ -8,10 +8,10 @@ This package provides high-performance validation and translation for UMH data m
 
 The validator is **extensively optimized** and exceeds performance targets by significant margins:
 
-- **Simple schemas**: 9.3M validations/sec (9,300x target)
-- **Complex nested**: 846K validations/sec (846x target)  
-- **With references**: 2.5M validations/sec (2,500x target)
-- **Full validation**: 817K validations/sec (817x target)
+- **Simple schemas**: 7.7M validations/sec (7,700x target)
+- **Complex nested**: 833K validations/sec (833x target)  
+- **With references**: 2.68M validations/sec (2,680x target)
+- **Full validation**: 794K validations/sec (794x target)
 
 Memory usage is minimal with essential overhead only for error reporting and path tracking.
 
@@ -19,11 +19,11 @@ Memory usage is minimal with essential overhead only for error reporting and pat
 
 The translator provides **high-performance** data model to JSON Schema conversion:
 
-- **Simple models**: 499K translations/sec (2.3µs per translation)
-- **Complex nested**: 187K translations/sec (7.4µs per translation)
-- **With references**: 212K translations/sec (6.0µs per translation)  
-- **Multiple payload shapes**: 272K translations/sec (4.1µs per translation)
-- **Large models**: 15K translations/sec (78µs per translation)
+- **Simple models**: 400K translations/sec (2.5µs per translation)
+- **Complex nested**: 153K translations/sec (6.5µs per translation)
+- **With references**: 197K translations/sec (5.1µs per translation)  
+- **Multiple payload shapes**: 266K translations/sec (3.8µs per translation)
+- **Large models**: 13K translations/sec (76µs per translation)
 
 The translator combines validation and JSON Schema generation in a single pass for maximum efficiency.
 
@@ -42,7 +42,7 @@ Validates a data model's structure without checking references to other models.
 
 **Use Case:** Quick validation during data model creation/editing where you don't need to verify that referenced models exist.
 
-**Performance:** 846K-9.3M validations/sec depending on complexity.
+**Performance:** 833K-7.7M validations/sec depending on complexity.
 
 ### `ValidateWithReferences(ctx, dataModel, allDataModels)`
 
@@ -56,7 +56,7 @@ Validates a data model and all its references recursively.
 
 **Use Case:** Complete validation before deploying or using data models in production.
 
-**Performance:** 817K-2.5M validations/sec depending on reference complexity.
+**Performance:** 794K-2.68M validations/sec depending on reference complexity.
 
 ### `TranslateDataModel(ctx, contractName, version, dataModel, payloadShapes, modelReferences)`
 
@@ -82,7 +82,7 @@ Translates a UMH data model into JSON Schema format compatible with Schema Regis
 
 **Use Case:** Converting validated data models to JSON schemas for benthos-umh UNS output plugin and Schema Registry integration.
 
-**Performance:** 15K-499K translations/sec depending on model complexity.
+**Performance:** 13K-400K translations/sec depending on model complexity.
 
 ## Context Support
 
@@ -159,7 +159,7 @@ The validator is optimized for minimal memory usage:
 ## Production Readiness
 
 ### Validator
-- ✅ **High performance**: Exceeds targets by 128-9,300x
+- ✅ **High performance**: Exceeds targets by 120-7,700x
 - ✅ **Context cancellation**: Graceful timeout and cancellation handling
 - ✅ **Memory efficient**: Minimal overhead with predictable scaling
 - ✅ **Comprehensive testing**: Extensive test coverage including edge cases
@@ -167,7 +167,7 @@ The validator is optimized for minimal memory usage:
 - ✅ **Thread safe**: Stateless validator can be used concurrently
 
 ### Translator
-- ✅ **High performance**: 15K-499K translations/sec depending on complexity
+- ✅ **High performance**: 13K-400K translations/sec depending on complexity
 - ✅ **Context cancellation**: Graceful timeout and cancellation handling
 - ✅ **Circular reference protection**: Prevents infinite loops with depth limits
 - ✅ **Schema Registry compatibility**: Direct integration with benthos-umh UNS output
