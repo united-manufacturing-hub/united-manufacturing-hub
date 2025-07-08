@@ -1340,24 +1340,12 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 		s.logger.Debugf("Detected rotation for log file %s (inode: %d->%d, offset: %d, size: %d)",
 			logFile, st.inode, ino, st.offset, size)
 
-		// Reset ring buffer on rotation
+		// Ensure ring buffer is initialized but preserve existing entries
 		if st.logs == nil {
 			st.logs = make([]LogEntry, constants.S6MaxLines)
 		}
-		/*
-			Why the previous implementation used st.logs[:0]:
-				The old approach allocated with make([]LogEntry, 0, max) and used append(), so the slice would grow from length 0 to some length. On rotation, it needed to reset the length back to 0 with st.logs[:0] while keeping the capacity.
-
-			Why we don't need it now:
-				With our optimized approach:
-				We preallocate to full size: make([]LogEntry, max) - length is always max
-				We use direct indexing: st.logs[st.head] = e - no append operations
-				We track valid entries with st.head and st.full: The slice length never changes
-		*/
-
-		// Reset ring buffer state but keep the backing array
-		st.head = 0
-		st.full = false
+		// NOTE: We do NOT reset st.head or st.full here to preserve existing entries
+		// The ring buffer will naturally handle new entries being appended
 
 		// Find the most recent rotated file
 		logDir := filepath.Dir(logFile)
@@ -1378,7 +1366,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 			}
 		}
 
-		// Reset for new current file
+		// Reset only the file tracking for new current file
 		st.inode, st.offset = ino, 0
 	} else if st.inode == 0 {
 		// First call - initialize inode
