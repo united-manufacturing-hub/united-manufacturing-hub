@@ -30,7 +30,7 @@ const (
 )
 const (
 	// RedpandaExpectedMaxP95ExecutionTimePerInstance represents the maximum expected time for a Redpanda instance
-	// to update its observed state. We reserve 50ms of buffer time to ensure the total execution time stays
+	// to update its observed state. We reserve 30ms of buffer time to ensure the total execution time stays
 	// under the alerting threshold. The system has a 100ms max ticker time with an 80% (80ms) alerting threshold.
 	// By setting this to RedpandaUpdateObservedStateTimeout + 30ms, we ensure that Redpanda operations
 	// complete with enough margin to avoid triggering alerts during normal operation.
