@@ -1,0 +1,48 @@
+318253e73|fix: improve S6 rotation handling and test coverage|2025-07-08
+c51dfa423|feat: add resilient error handling to skip malformed blocks|2025-07-07
+7eda35af9|perf: optimize Topic Browser string searching for 48x performance improvement|2025-07-07
+c780d3804|fix(topicbrowser): implement Priority 1 fixes and consolidate documentation|2025-07-07
+af8ad8d54|reduced memory management even more|2025-07-04
+ba73f5651|feat(s6): Fix S6 service lifecycle management and log service startup|2025-07-04
+bc3e007cf|Implement block processing prevention and enhance buffer management in Topic Browser|2025-07-04
+3be6f3a41|Reduce LoopControlLoopTimeFactor to 0.80 for better cancellation buffer|2025-07-04
+15bd1cd7b|Fix multiple s6-supervise processes issue|2025-07-04
+298e2b912|Fix S6 binary blob pollution in Docker logs|2025-07-04
+e8b293696|fix: optimize buffer allocation based on S6 line limit analysis|2025-07-04
+bf7285eff|Implement simplified S6 service logging plan|2025-07-04
+ca593cfcb|Complete observed state debug cleanup for remaining FSMs|2025-07-04
+fb25b77bb|feat: Phase 4 - Buffer pool optimization for Topic Browser hex parsing|2025-07-03
+ab7df54a5|feat: optimize Topic Browser memory usage - 73% reduction achieved|2025-07-03
+8edc25d1b|Revert "debug: enhance FSM debugging and logging"|2025-07-03
+53b701bec|refactor: replace verbose debug logs with useful status info|2025-07-03
+a5872ef0a|fix: resolve FSM restart deadlock with resilient error handling|2025-07-02
+01656da53|debug: enhance FSM debugging and logging|2025-07-02
+4da1072c6|perf: optimize FSM timing constants|2025-07-02
+a5ddcfbe9|Revert "fix: prevent ServiceExists race condition after umh-core restart"|2025-07-02
+841b14d19|fix: prevent ServiceExists race condition after umh-core restart|2025-07-02
+109a0d224|fix: prevent s6 race condition where service output bypasses logging|2025-07-02
+73cc85953|dbg logs|2025-07-01
+229c98e51|test: no encode|2025-07-01
+b5b6a13e6|save|2025-07-01
+e87b4b98c|fix: printf|2025-07-01
+a6fc27694|save|2025-07-01
+93aef1ccc|topic-browser-opti|2025-07-01
+35672280a|fix: Use constant|2025-07-01
+97b8143ec|fix: ErrNoDeadline|2025-07-01
+623464060|fix: return ErrNoDeadline|2025-07-01
+52a195872|fix: use correct ctx|2025-07-01
+201eb77ee|95%|2025-07-01
+3d81c8151|90%|2025-07-01
+b2a7215a5|fix: math|2025-07-01
+24116c4de|feat: 80% ctx for inner reconcile|2025-07-01
+22678b89a|feat: also use inner for loop|2025-07-01
+c2135a187|fix: sync|2025-07-01
+4269d2fa3|feat: parallel manager|2025-07-01
+be10eda42|save|2025-07-01
+8b39e553b|feat: prep mutex|2025-07-01
+2acc7d9ce|[ENG-3079] reject child PC editing via UI (#2118)|2025-07-01
+64d401b1f|[ENG-1242] Pause DFC (#2053)|2025-07-01
+e9b3672fb|95%|2025-07-01
+da57dcc3e|90%|2025-07-01
+421c9692b|fix: math|2025-07-01
+fe2f28df9|feat: 80% ctx for inner reconcile|2025-07-01
