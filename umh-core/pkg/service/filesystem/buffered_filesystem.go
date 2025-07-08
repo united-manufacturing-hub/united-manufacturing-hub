@@ -1565,7 +1565,7 @@ func (bs *BufferedService) Rename(ctx context.Context, oldPath, newPath string) 
 	// Check if destination already exists
 	if _, exists := bs.files[newPath]; exists {
 		// Check if destination is marked as removed
-		if chg, inChg := bs.changed[newPath]; !(inChg && chg.removed) {
+		if chg, inChg := bs.changed[newPath]; !inChg || !chg.removed {
 			return fmt.Errorf("destination path already exists: %s", newPath)
 		}
 	}
