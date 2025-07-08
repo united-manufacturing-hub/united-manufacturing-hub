@@ -451,7 +451,8 @@ var _ = Describe("AddDataModelAction", func() {
 		Context("with successful configuration update", func() {
 			BeforeEach(func() {
 				payload := models.AddDataModelPayload{
-					Name: "test-model",
+					Name:        "test-model",
+					Description: "Test data model",
 					Structure: map[string]models.Field{
 						"field1": {
 							PayloadShape: "timeseries-string",
@@ -540,7 +541,6 @@ var _ = Describe("AddDataModelAction", func() {
 						},
 					},
 					"nested_object": {
-						PayloadShape: "timeseries-object",
 						Subfields: map[string]models.Field{
 							"nested_string": {
 								PayloadShape: "timeseries-string",

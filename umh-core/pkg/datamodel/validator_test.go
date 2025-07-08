@@ -95,32 +95,6 @@ var _ = Describe("Validator", func() {
 			Expect(err).To(BeNil())
 		})
 
-		It("should validate a leaf node with _type and _description", func() {
-			dataModel := config.DataModelVersion{
-				Structure: map[string]config.Field{
-					"described": {
-						PayloadShape: "timeseries-number",
-					},
-				},
-			}
-
-			err := validator.ValidateStructureOnly(ctx, dataModel)
-			Expect(err).To(BeNil())
-		})
-
-		It("should validate a leaf node with _type and _unit", func() {
-			dataModel := config.DataModelVersion{
-				Structure: map[string]config.Field{
-					"measured": {
-						PayloadShape: "timeseries-number",
-					},
-				},
-			}
-
-			err := validator.ValidateStructureOnly(ctx, dataModel)
-			Expect(err).To(BeNil())
-		})
-
 		It("should validate a leaf node with _refModel", func() {
 			dataModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
@@ -171,67 +145,6 @@ var _ = Describe("Validator", func() {
 			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("non-leaf nodes (folders) cannot have _type"))
-			Expect(err.Error()).To(ContainSubstring("parent"))
-		})
-
-		It("should fail validation for a non-leaf node with _description", func() {
-			dataModel := config.DataModelVersion{
-				Structure: map[string]config.Field{
-					"parent": {
-						Subfields: map[string]config.Field{
-							"child": {
-								PayloadShape: "timeseries-number",
-							},
-						},
-					},
-				},
-			}
-
-			err := validator.ValidateStructureOnly(ctx, dataModel)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("non-leaf nodes (folders) cannot have _description"))
-			Expect(err.Error()).To(ContainSubstring("parent"))
-		})
-
-		It("should fail validation for a non-leaf node with _unit", func() {
-			dataModel := config.DataModelVersion{
-				Structure: map[string]config.Field{
-					"parent": {
-
-						Subfields: map[string]config.Field{
-							"child": {
-								PayloadShape: "timeseries-number",
-							},
-						},
-					},
-				},
-			}
-
-			err := validator.ValidateStructureOnly(ctx, dataModel)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("non-leaf nodes (folders) cannot have _unit"))
-			Expect(err.Error()).To(ContainSubstring("parent"))
-		})
-
-		It("should fail validation for a non-leaf node with multiple forbidden fields", func() {
-			dataModel := config.DataModelVersion{
-				Structure: map[string]config.Field{
-					"parent": {
-						PayloadShape: "timeseries-object",
-						Subfields: map[string]config.Field{
-							"child": {
-								PayloadShape: "timeseries-number",
-							},
-						},
-					},
-				},
-			}
-
-			err := validator.ValidateStructureOnly(ctx, dataModel)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("non-leaf nodes (folders) cannot have _type"))
-			Expect(err.Error()).To(ContainSubstring("non-leaf nodes (folders) cannot have _description"))
-			Expect(err.Error()).To(ContainSubstring("non-leaf nodes (folders) cannot have _unit"))
 			Expect(err.Error()).To(ContainSubstring("parent"))
 		})
 
@@ -354,23 +267,6 @@ var _ = Describe("Validator", func() {
 			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("version 'invalidversion' does not match pattern"))
-		})
-
-		It("should fail validation for submodel nodes with additional fields", func() {
-			dataModel := config.DataModelVersion{
-				Structure: map[string]config.Field{
-					"invalidSubmodel": {
-						ModelRef: &config.ModelRef{
-							Name:    "otherModel",
-							Version: "v1",
-						},
-					},
-				},
-			}
-
-			err := validator.ValidateStructureOnly(ctx, dataModel)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("subModel nodes should ONLY contain _refModel"))
 		})
 
 		It("should validate nested structures recursively", func() {

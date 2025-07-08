@@ -395,7 +395,7 @@ var _ = Describe("EditDataModelAction", func() {
 								Name:    "external-model",
 								Version: "v1",
 							},
-							PayloadShape: "timeseries-string", // This makes it invalid - submodel nodes should ONLY contain _refModel
+							PayloadShape: "timeseries-string", // This makes it invalid - cannot have both _type and _refModel
 						},
 					},
 				}
@@ -404,7 +404,7 @@ var _ = Describe("EditDataModelAction", func() {
 
 				err = action.Validate()
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("subModel nodes should ONLY contain _refModel"))
+				Expect(err.Error()).To(ContainSubstring("field cannot have both _type and _refModel"))
 			})
 		})
 
@@ -453,7 +453,8 @@ var _ = Describe("EditDataModelAction", func() {
 		Context("with successful configuration update", func() {
 			BeforeEach(func() {
 				payload := models.EditDataModelPayload{
-					Name: "existing-model",
+					Name:        "existing-model",
+					Description: "Updated version of existing model",
 					Structure: map[string]models.Field{
 						"updatedField": {
 							PayloadShape: "timeseries-string",
@@ -576,7 +577,8 @@ var _ = Describe("EditDataModelAction", func() {
 
 		It("should return parsed payload after parsing", func() {
 			originalPayload := models.EditDataModelPayload{
-				Name: "test-model",
+				Name:        "test-model",
+				Description: "Test description",
 				Structure: map[string]models.Field{
 					"field1": {
 						PayloadShape: "timeseries-string",
@@ -612,13 +614,11 @@ var _ = Describe("EditDataModelAction", func() {
 						},
 					},
 					"updated_nested_object": {
-						PayloadShape: "timeseries-object",
 						Subfields: map[string]models.Field{
 							"updated_nested_string": {
 								PayloadShape: "timeseries-string",
 							},
 							"new_deeply_nested": {
-								PayloadShape: "timeseries-object",
 								Subfields: map[string]models.Field{
 									"new_deep_field": {
 										PayloadShape: "timeseries-array",
