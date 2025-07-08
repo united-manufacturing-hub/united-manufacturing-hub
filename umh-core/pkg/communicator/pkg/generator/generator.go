@@ -15,6 +15,7 @@
 package generator
 
 import (
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"hash"
@@ -62,7 +63,7 @@ func NewStatusCollector(
 	return collector
 }
 
-func (s *StatusCollectorType) GenerateStatusMessage(isBootstrapped bool) *models.StatusMessage {
+func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBootstrapped bool) *models.StatusMessage {
 
 	// Step 1: Get the snapshot
 	snapshot := s.systemSnapshotManager.GetDeepCopySnapshot()
@@ -99,7 +100,7 @@ func (s *StatusCollectorType) GenerateStatusMessage(isBootstrapped bool) *models
 	}
 
 	// --- data models (multiple instances, extracted from the config directly) -------------------------------------------------------------
-	dataModels := s.configManager.GetDataModels()
+	dataModels := s.configManager.GetDataModels(ctx)
 	dataModelData := make([]models.DataModel, len(dataModels))
 	for i, dataModel := range dataModels {
 		// Extract the latest version from the versions map

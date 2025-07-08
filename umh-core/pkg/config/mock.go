@@ -100,7 +100,7 @@ func (m *MockConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 }
 
 // GetDataModels returns the data models from the mock config
-func (m *MockConfigManager) GetDataModels() []DataModelsConfig {
+func (m *MockConfigManager) GetDataModels(ctx context.Context) []DataModelsConfig {
 	return m.Config.DataModels
 }
 
