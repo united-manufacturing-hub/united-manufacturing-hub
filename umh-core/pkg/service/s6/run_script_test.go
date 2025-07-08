@@ -106,10 +106,12 @@ var _ = Describe("S6 Run Script", func() {
 				Command     []string
 				Env         map[string]string
 				MemoryLimit int64
+				ServicePath string
 			}{
 				Command:     originalConfig.Command,
 				Env:         originalConfig.Env,
 				MemoryLimit: originalConfig.MemoryLimit,
+				ServicePath: servicePath,
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -205,10 +207,12 @@ var _ = Describe("S6 Run Script", func() {
 				Command     []string
 				Env         map[string]string
 				MemoryLimit int64
+				ServicePath string
 			}{
 				Command:     originalConfig.Command,
 				Env:         originalConfig.Env,
 				MemoryLimit: originalConfig.MemoryLimit,
+				ServicePath: servicePath,
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -290,10 +294,12 @@ var _ = Describe("S6 Run Script", func() {
 				Command     []string
 				Env         map[string]string
 				MemoryLimit int64
+				ServicePath string
 			}{
 				Command:     complexConfig.Command,
 				Env:         complexConfig.Env,
 				MemoryLimit: complexConfig.MemoryLimit,
+				ServicePath: servicePath,
 			})
 			Expect(err).NotTo(HaveOccurred())
 
