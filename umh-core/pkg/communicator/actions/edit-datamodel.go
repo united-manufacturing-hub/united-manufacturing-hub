@@ -129,8 +129,7 @@ func (a *EditDataModelAction) Validate() error {
 	configStructure := a.convertModelsFieldsToConfigFields(a.payload.Structure)
 
 	dmVersion := config.DataModelVersion{
-		Description: a.payload.Description,
-		Structure:   configStructure,
+		Structure: configStructure,
 	}
 
 	// Use shared context for validation

@@ -126,8 +126,7 @@ func (a *AddDataModelAction) Validate() error {
 	configStructure := a.convertModelsFieldsToConfigFields(a.payload.Structure)
 
 	dmVersion := config.DataModelVersion{
-		Description: a.payload.Description,
-		Structure:   configStructure,
+		Structure: configStructure,
 	}
 
 	// Use shared context for validation
@@ -200,11 +199,9 @@ func (a *AddDataModelAction) convertModelsFieldsToConfigFields(modelsFields map[
 		}
 
 		configFields[key] = config.Field{
-			Type:        modelsField.Type,
-			ModelRef:    configModelRef,
-			Subfields:   subfields,
-			Description: modelsField.Description,
-			Unit:        modelsField.Unit,
+			PayloadShape: modelsField.PayloadShape,
+			ModelRef:     configModelRef,
+			Subfields:    subfields,
 		}
 	}
 

@@ -39,23 +39,20 @@ var _ = Describe("Validator", func() {
 		It("should validate a valid data model with the sample structure", func() {
 			// Sample data model from the user
 			dataModel := config.DataModelVersion{
-				Description: "pump from vendor ABC",
 				Structure: map[string]config.Field{
 					"count": {
-						Type: "timeseries-number",
+						PayloadShape: "timeseries-number",
 					},
 					"vibration": {
 						Subfields: map[string]config.Field{
 							"x-axis": {
-								Type:        "timeseries-number",
-								Description: "whatever",
+								PayloadShape: "timeseries-number",
 							},
 							"y-axis": {
-								Type: "timeseries-number",
-								Unit: "mm/s",
+								PayloadShape: "timeseries-number",
 							},
 							"z-axis": {
-								Type: "timeseries-number",
+								PayloadShape: "timeseries-number",
 							},
 						},
 					},
@@ -68,15 +65,15 @@ var _ = Describe("Validator", func() {
 					"acceleration": {
 						Subfields: map[string]config.Field{
 							"x": {
-								Type: "timeseries-number",
+								PayloadShape: "timeseries-number",
 							},
 							"y": {
-								Type: "timeseries-number",
+								PayloadShape: "timeseries-number",
 							},
 						},
 					},
 					"serialNumber": {
-						Type: "timeseries-string",
+						PayloadShape: "timeseries-string",
 					},
 				},
 			}
@@ -89,7 +86,7 @@ var _ = Describe("Validator", func() {
 			dataModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
 					"simple": {
-						Type: "timeseries-number",
+						PayloadShape: "timeseries-number",
 					},
 				},
 			}
@@ -102,8 +99,7 @@ var _ = Describe("Validator", func() {
 			dataModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
 					"described": {
-						Type:        "timeseries-number",
-						Description: "A described field",
+						PayloadShape: "timeseries-number",
 					},
 				},
 			}
@@ -116,8 +112,7 @@ var _ = Describe("Validator", func() {
 			dataModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
 					"measured": {
-						Type: "timeseries-number",
-						Unit: "kg",
+						PayloadShape: "timeseries-number",
 					},
 				},
 			}
@@ -148,7 +143,7 @@ var _ = Describe("Validator", func() {
 					"parent": {
 						Subfields: map[string]config.Field{
 							"child": {
-								Type: "timeseries-number",
+								PayloadShape: "timeseries-number",
 							},
 						},
 					},
@@ -163,10 +158,10 @@ var _ = Describe("Validator", func() {
 			dataModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
 					"parent": {
-						Type: "timeseries-object",
+						PayloadShape: "timeseries-object",
 						Subfields: map[string]config.Field{
 							"child": {
-								Type: "timeseries-number",
+								PayloadShape: "timeseries-number",
 							},
 						},
 					},
@@ -183,10 +178,9 @@ var _ = Describe("Validator", func() {
 			dataModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
 					"parent": {
-						Description: "This is a folder description",
 						Subfields: map[string]config.Field{
 							"child": {
-								Type: "timeseries-number",
+								PayloadShape: "timeseries-number",
 							},
 						},
 					},
@@ -203,10 +197,10 @@ var _ = Describe("Validator", func() {
 			dataModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
 					"parent": {
-						Unit: "kg",
+
 						Subfields: map[string]config.Field{
 							"child": {
-								Type: "timeseries-number",
+								PayloadShape: "timeseries-number",
 							},
 						},
 					},
@@ -223,12 +217,10 @@ var _ = Describe("Validator", func() {
 			dataModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
 					"parent": {
-						Type:        "timeseries-object",
-						Description: "This is a folder description",
-						Unit:        "kg",
+						PayloadShape: "timeseries-object",
 						Subfields: map[string]config.Field{
 							"child": {
-								Type: "timeseries-number",
+								PayloadShape: "timeseries-number",
 							},
 						},
 					},
@@ -246,9 +238,7 @@ var _ = Describe("Validator", func() {
 		It("should fail validation for a leaf node with neither _type nor _refModel", func() {
 			dataModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
-					"invalid": {
-						Description: "has description but no type or refModel",
-					},
+					"invalid": {},
 				},
 			}
 
@@ -262,7 +252,7 @@ var _ = Describe("Validator", func() {
 			dataModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
 					"conflicted": {
-						Type: "timeseries-number",
+						PayloadShape: "timeseries-number",
 						ModelRef: &config.ModelRef{
 							Name:    "otherModel",
 							Version: "v1",
@@ -287,7 +277,7 @@ var _ = Describe("Validator", func() {
 						},
 						Subfields: map[string]config.Field{
 							"child": {
-								Type: "timeseries-number",
+								PayloadShape: "timeseries-number",
 							},
 						},
 					},
@@ -374,7 +364,6 @@ var _ = Describe("Validator", func() {
 							Name:    "otherModel",
 							Version: "v1",
 						},
-						Description: "should not have description",
 					},
 				},
 			}
@@ -392,7 +381,7 @@ var _ = Describe("Validator", func() {
 							"level2": {
 								Subfields: map[string]config.Field{
 									"level3": {
-										Type: "timeseries-number",
+										PayloadShape: "timeseries-number",
 									},
 								},
 							},
@@ -412,9 +401,7 @@ var _ = Describe("Validator", func() {
 						Subfields: map[string]config.Field{
 							"level2": {
 								Subfields: map[string]config.Field{
-									"invalidLeaf": {
-										Description: "no type or refModel",
-									},
+									"invalidLeaf": {},
 								},
 							},
 						},
@@ -446,7 +433,7 @@ var _ = Describe("Validator", func() {
 			dataModel := config.DataModelVersion{
 				Structure: map[string]config.Field{
 					"simple": {
-						Type: "timeseries-number",
+						PayloadShape: "timeseries-number",
 					},
 				},
 			}

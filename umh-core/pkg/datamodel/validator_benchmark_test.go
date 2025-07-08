@@ -30,18 +30,15 @@ func BenchmarkValidateStructureOnly_Simple(b *testing.B) {
 
 	// Simple data model with just a few fields
 	dataModel := config.DataModelVersion{
-		Description: "Simple benchmark model",
 		Structure: map[string]config.Field{
 			"temperature": {
-				Type: "timeseries-number",
-				Unit: "°C",
+				PayloadShape: "timeseries-number",
 			},
 			"pressure": {
-				Type: "timeseries-number",
-				Unit: "bar",
+				PayloadShape: "timeseries-number",
 			},
 			"status": {
-				Type: "timeseries-string",
+				PayloadShape: "timeseries-string",
 			},
 		},
 	}
@@ -64,51 +61,42 @@ func BenchmarkValidateStructureOnly_Complex(b *testing.B) {
 
 	// Complex data model with nested structures
 	dataModel := config.DataModelVersion{
-		Description: "Complex benchmark model",
 		Structure: map[string]config.Field{
 			"pump": {
 				Subfields: map[string]config.Field{
 					"motor": {
 						Subfields: map[string]config.Field{
 							"speed": {
-								Type: "timeseries-number",
-								Unit: "rpm",
+								PayloadShape: "timeseries-number",
 							},
 							"temperature": {
-								Type: "timeseries-number",
-								Unit: "°C",
+								PayloadShape: "timeseries-number",
 							},
 							"vibration": {
 								Subfields: map[string]config.Field{
 									"x-axis": {
-										Type: "timeseries-number",
-										Unit: "mm/s",
+										PayloadShape: "timeseries-number",
 									},
 									"y-axis": {
-										Type: "timeseries-number",
-										Unit: "mm/s",
+										PayloadShape: "timeseries-number",
 									},
 									"z-axis": {
-										Type: "timeseries-number",
-										Unit: "mm/s",
+										PayloadShape: "timeseries-number",
 									},
 								},
 							},
 						},
 					},
 					"flow": {
-						Type: "timeseries-number",
-						Unit: "L/min",
+						PayloadShape: "timeseries-number",
 					},
 					"pressure": {
 						Subfields: map[string]config.Field{
 							"inlet": {
-								Type: "timeseries-number",
-								Unit: "bar",
+								PayloadShape: "timeseries-number",
 							},
 							"outlet": {
-								Type: "timeseries-number",
-								Unit: "bar",
+								PayloadShape: "timeseries-number",
 							},
 						},
 					},
@@ -119,34 +107,31 @@ func BenchmarkValidateStructureOnly_Complex(b *testing.B) {
 					"temperature": {
 						Subfields: map[string]config.Field{
 							"ambient": {
-								Type: "timeseries-number",
-								Unit: "°C",
+								PayloadShape: "timeseries-number",
 							},
 							"fluid": {
-								Type: "timeseries-number",
-								Unit: "°C",
+								PayloadShape: "timeseries-number",
 							},
 						},
 					},
 					"level": {
-						Type: "timeseries-number",
-						Unit: "mm",
+						PayloadShape: "timeseries-number",
 					},
 				},
 			},
 			"metadata": {
 				Subfields: map[string]config.Field{
 					"serialNumber": {
-						Type: "timeseries-string",
+						PayloadShape: "timeseries-string",
 					},
 					"manufacturer": {
-						Type: "timeseries-string",
+						PayloadShape: "timeseries-string",
 					},
 					"model": {
-						Type: "timeseries-string",
+						PayloadShape: "timeseries-string",
 					},
 					"installationDate": {
-						Type: "timeseries-string",
+						PayloadShape: "timeseries-string",
 					},
 				},
 			},
@@ -171,7 +156,6 @@ func BenchmarkValidateStructureOnly_WithReferences(b *testing.B) {
 
 	// Data model with references
 	dataModel := config.DataModelVersion{
-		Description: "Model with references",
 		Structure: map[string]config.Field{
 			"motor": {
 				ModelRef: &config.ModelRef{
@@ -188,8 +172,7 @@ func BenchmarkValidateStructureOnly_WithReferences(b *testing.B) {
 			"pump": {
 				Subfields: map[string]config.Field{
 					"flow": {
-						Type: "timeseries-number",
-						Unit: "L/min",
+						PayloadShape: "timeseries-number",
 					},
 					"controller": {
 						ModelRef: &config.ModelRef{
@@ -224,9 +207,9 @@ func BenchmarkValidateWithReferences(b *testing.B) {
 			Versions: map[string]config.DataModelVersion{
 				"v1": {
 					Structure: map[string]config.Field{
-						"speed":       {Type: "timeseries-number", Unit: "rpm"},
-						"temperature": {Type: "timeseries-number", Unit: "°C"},
-						"current":     {Type: "timeseries-number", Unit: "A"},
+						"speed":       {PayloadShape: "timeseries-number"},
+						"temperature": {PayloadShape: "timeseries-number"},
+						"current":     {PayloadShape: "timeseries-number"},
 					},
 				},
 			},
@@ -235,9 +218,9 @@ func BenchmarkValidateWithReferences(b *testing.B) {
 			Versions: map[string]config.DataModelVersion{
 				"v1": {
 					Structure: map[string]config.Field{
-						"value":     {Type: "timeseries-number"},
-						"unit":      {Type: "timeseries-string"},
-						"timestamp": {Type: "timeseries-string"},
+						"value":     {PayloadShape: "timeseries-number"},
+						"unit":      {PayloadShape: "timeseries-string"},
+						"timestamp": {PayloadShape: "timeseries-string"},
 					},
 				},
 			},
@@ -246,9 +229,9 @@ func BenchmarkValidateWithReferences(b *testing.B) {
 			Versions: map[string]config.DataModelVersion{
 				"v1": {
 					Structure: map[string]config.Field{
-						"setpoint": {Type: "timeseries-number"},
-						"output":   {Type: "timeseries-number"},
-						"mode":     {Type: "timeseries-string"},
+						"setpoint": {PayloadShape: "timeseries-number"},
+						"output":   {PayloadShape: "timeseries-number"},
+						"mode":     {PayloadShape: "timeseries-string"},
 					},
 				},
 			},
@@ -257,7 +240,6 @@ func BenchmarkValidateWithReferences(b *testing.B) {
 
 	// Main data model that references others
 	dataModel := config.DataModelVersion{
-		Description: "Model with references",
 		Structure: map[string]config.Field{
 			"motor": {
 				ModelRef: &config.ModelRef{
@@ -274,8 +256,7 @@ func BenchmarkValidateWithReferences(b *testing.B) {
 			"pump": {
 				Subfields: map[string]config.Field{
 					"flow": {
-						Type: "timeseries-number",
-						Unit: "L/min",
+						PayloadShape: "timeseries-number",
 					},
 					"controller": {
 						ModelRef: &config.ModelRef{
@@ -310,7 +291,7 @@ func BenchmarkValidateWithReferences_Deep(b *testing.B) {
 			Versions: map[string]config.DataModelVersion{
 				"v1": {
 					Structure: map[string]config.Field{
-						"data": {Type: "timeseries-number"},
+						"data": {PayloadShape: "timeseries-number"},
 						"next": {
 							ModelRef: &config.ModelRef{
 								Name:    "level2",
@@ -325,7 +306,7 @@ func BenchmarkValidateWithReferences_Deep(b *testing.B) {
 			Versions: map[string]config.DataModelVersion{
 				"v1": {
 					Structure: map[string]config.Field{
-						"data": {Type: "timeseries-number"},
+						"data": {PayloadShape: "timeseries-number"},
 						"next": {
 							ModelRef: &config.ModelRef{
 								Name:    "level3",
@@ -340,7 +321,7 @@ func BenchmarkValidateWithReferences_Deep(b *testing.B) {
 			Versions: map[string]config.DataModelVersion{
 				"v1": {
 					Structure: map[string]config.Field{
-						"data": {Type: "timeseries-number"},
+						"data": {PayloadShape: "timeseries-number"},
 						"next": {
 							ModelRef: &config.ModelRef{
 								Name:    "level4",
@@ -355,7 +336,7 @@ func BenchmarkValidateWithReferences_Deep(b *testing.B) {
 			Versions: map[string]config.DataModelVersion{
 				"v1": {
 					Structure: map[string]config.Field{
-						"data": {Type: "timeseries-number"},
+						"data": {PayloadShape: "timeseries-number"},
 						"next": {
 							ModelRef: &config.ModelRef{
 								Name:    "level5",
@@ -370,8 +351,8 @@ func BenchmarkValidateWithReferences_Deep(b *testing.B) {
 			Versions: map[string]config.DataModelVersion{
 				"v1": {
 					Structure: map[string]config.Field{
-						"data":  {Type: "timeseries-number"},
-						"final": {Type: "timeseries-string"},
+						"data":  {PayloadShape: "timeseries-number"},
+						"final": {PayloadShape: "timeseries-string"},
 					},
 				},
 			},
@@ -380,7 +361,6 @@ func BenchmarkValidateWithReferences_Deep(b *testing.B) {
 
 	// Main data model that starts the chain
 	dataModel := config.DataModelVersion{
-		Description: "Deep reference chain",
 		Structure: map[string]config.Field{
 			"root": {
 				ModelRef: &config.ModelRef{
@@ -413,8 +393,7 @@ func BenchmarkValidateStructureOnly_Large(b *testing.B) {
 	// Add 100 simple fields
 	for i := 0; i < 100; i++ {
 		structure[fmt.Sprintf("field_%d", i)] = config.Field{
-			Type: "timeseries-number",
-			Unit: "unit",
+			PayloadShape: "timeseries-number",
 		}
 	}
 
@@ -423,7 +402,7 @@ func BenchmarkValidateStructureOnly_Large(b *testing.B) {
 		subfields := make(map[string]config.Field)
 		for j := 0; j < 10; j++ {
 			subfields[fmt.Sprintf("subfield_%d", j)] = config.Field{
-				Type: "timeseries-number",
+				PayloadShape: "timeseries-number",
 			}
 		}
 		structure[fmt.Sprintf("nested_%d", i)] = config.Field{
@@ -432,8 +411,7 @@ func BenchmarkValidateStructureOnly_Large(b *testing.B) {
 	}
 
 	dataModel := config.DataModelVersion{
-		Description: "Large benchmark model",
-		Structure:   structure,
+		Structure: structure,
 	}
 
 	b.ResetTimer()

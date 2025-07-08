@@ -30,59 +30,48 @@ func TestPerformanceTarget(t *testing.T) {
 
 	// Create a realistic industrial data model
 	dataModel := config.DataModelVersion{
-		Description: "Industrial pump data model",
 		Structure: map[string]config.Field{
 			"pump": {
 				Subfields: map[string]config.Field{
 					"motor": {
 						Subfields: map[string]config.Field{
 							"speed": {
-								Type: "timeseries-number",
-								Unit: "rpm",
+								PayloadShape: "timeseries-number",
 							},
 							"temperature": {
-								Type: "timeseries-number",
-								Unit: "°C",
+								PayloadShape: "timeseries-number",
 							},
 							"current": {
-								Type: "timeseries-number",
-								Unit: "A",
+								PayloadShape: "timeseries-number",
 							},
 							"voltage": {
-								Type: "timeseries-number",
-								Unit: "V",
+								PayloadShape: "timeseries-number",
 							},
 						},
 					},
 					"flow": {
-						Type: "timeseries-number",
-						Unit: "L/min",
+						PayloadShape: "timeseries-number",
 					},
 					"pressure": {
 						Subfields: map[string]config.Field{
 							"inlet": {
-								Type: "timeseries-number",
-								Unit: "bar",
+								PayloadShape: "timeseries-number",
 							},
 							"outlet": {
-								Type: "timeseries-number",
-								Unit: "bar",
+								PayloadShape: "timeseries-number",
 							},
 						},
 					},
 					"vibration": {
 						Subfields: map[string]config.Field{
 							"x": {
-								Type: "timeseries-number",
-								Unit: "mm/s",
+								PayloadShape: "timeseries-number",
 							},
 							"y": {
-								Type: "timeseries-number",
-								Unit: "mm/s",
+								PayloadShape: "timeseries-number",
 							},
 							"z": {
-								Type: "timeseries-number",
-								Unit: "mm/s",
+								PayloadShape: "timeseries-number",
 							},
 						},
 					},
@@ -91,28 +80,26 @@ func TestPerformanceTarget(t *testing.T) {
 			"sensors": {
 				Subfields: map[string]config.Field{
 					"temperature": {
-						Type: "timeseries-number",
-						Unit: "°C",
+						PayloadShape: "timeseries-number",
 					},
 					"level": {
-						Type: "timeseries-number",
-						Unit: "mm",
+						PayloadShape: "timeseries-number",
 					},
 					"ph": {
-						Type: "timeseries-number",
+						PayloadShape: "timeseries-number",
 					},
 				},
 			},
 			"metadata": {
 				Subfields: map[string]config.Field{
 					"serialNumber": {
-						Type: "timeseries-string",
+						PayloadShape: "timeseries-string",
 					},
 					"manufacturer": {
-						Type: "timeseries-string",
+						PayloadShape: "timeseries-string",
 					},
 					"model": {
-						Type: "timeseries-string",
+						PayloadShape: "timeseries-string",
 					},
 				},
 			},
@@ -157,9 +144,9 @@ func TestPerformanceTargetWithReferences(t *testing.T) {
 			Versions: map[string]config.DataModelVersion{
 				"v1": {
 					Structure: map[string]config.Field{
-						"speed":       {Type: "timeseries-number"},
-						"temperature": {Type: "timeseries-number"},
-						"current":     {Type: "timeseries-number"},
+						"speed":       {PayloadShape: "timeseries-number"},
+						"temperature": {PayloadShape: "timeseries-number"},
+						"current":     {PayloadShape: "timeseries-number"},
 					},
 				},
 			},
@@ -168,9 +155,9 @@ func TestPerformanceTargetWithReferences(t *testing.T) {
 			Versions: map[string]config.DataModelVersion{
 				"v1": {
 					Structure: map[string]config.Field{
-						"value":     {Type: "timeseries-number"},
-						"unit":      {Type: "timeseries-string"},
-						"timestamp": {Type: "timeseries-string"},
+						"value":     {PayloadShape: "timeseries-number"},
+						"unit":      {PayloadShape: "timeseries-string"},
+						"timestamp": {PayloadShape: "timeseries-string"},
 					},
 				},
 			},
@@ -179,9 +166,9 @@ func TestPerformanceTargetWithReferences(t *testing.T) {
 			Versions: map[string]config.DataModelVersion{
 				"v1": {
 					Structure: map[string]config.Field{
-						"setpoint": {Type: "timeseries-number"},
-						"output":   {Type: "timeseries-number"},
-						"mode":     {Type: "timeseries-string"},
+						"setpoint": {PayloadShape: "timeseries-number"},
+						"output":   {PayloadShape: "timeseries-number"},
+						"mode":     {PayloadShape: "timeseries-string"},
 					},
 				},
 			},
@@ -190,7 +177,6 @@ func TestPerformanceTargetWithReferences(t *testing.T) {
 
 	// Test data model with various field types
 	testModel := config.DataModelVersion{
-		Description: "Performance test model",
 		Structure: map[string]config.Field{
 			"production": {
 				Subfields: map[string]config.Field{
@@ -226,9 +212,9 @@ func TestPerformanceTargetWithReferences(t *testing.T) {
 			},
 			"metadata": {
 				Subfields: map[string]config.Field{
-					"machine_id": {Type: "timeseries-string"},
-					"location":   {Type: "timeseries-string"},
-					"operator":   {Type: "timeseries-string"},
+					"machine_id": {PayloadShape: "timeseries-string"},
+					"location":   {PayloadShape: "timeseries-string"},
+					"operator":   {PayloadShape: "timeseries-string"},
 				},
 			},
 		},
@@ -268,29 +254,28 @@ func TestMemoryUsage(t *testing.T) {
 
 	// Create a moderately complex data model
 	dataModel := config.DataModelVersion{
-		Description: "Memory usage test model",
 		Structure: map[string]config.Field{
 			"equipment": {
 				Subfields: map[string]config.Field{
 					"motor": {
 						Subfields: map[string]config.Field{
-							"speed":       {Type: "timeseries-number", Unit: "rpm"},
-							"temperature": {Type: "timeseries-number", Unit: "°C"},
+							"speed":       {PayloadShape: "timeseries-number"},
+							"temperature": {PayloadShape: "timeseries-number"},
 							"vibration": {
 								Subfields: map[string]config.Field{
-									"x": {Type: "timeseries-number", Unit: "mm/s"},
-									"y": {Type: "timeseries-number", Unit: "mm/s"},
-									"z": {Type: "timeseries-number", Unit: "mm/s"},
+									"x": {PayloadShape: "timeseries-number"},
+									"y": {PayloadShape: "timeseries-number"},
+									"z": {PayloadShape: "timeseries-number"},
 								},
 							},
 						},
 					},
 					"sensors": {
 						Subfields: map[string]config.Field{
-							"temp1":    {Type: "timeseries-number", Unit: "°C"},
-							"temp2":    {Type: "timeseries-number", Unit: "°C"},
-							"pressure": {Type: "timeseries-number", Unit: "bar"},
-							"flow":     {Type: "timeseries-number", Unit: "L/min"},
+							"temp1":    {PayloadShape: "timeseries-number"},
+							"temp2":    {PayloadShape: "timeseries-number"},
+							"pressure": {PayloadShape: "timeseries-number"},
+							"flow":     {PayloadShape: "timeseries-number"},
 						},
 					},
 				},

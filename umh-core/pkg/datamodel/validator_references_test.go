@@ -40,26 +40,21 @@ var _ = Describe("Validator References", func() {
 		It("should validate a data model with valid references", func() {
 			// Create a motor model
 			motorModel := config.DataModelVersion{
-				Description: "Motor data model",
 				Structure: map[string]config.Field{
 					"rpm": {
-						Type: "timeseries-number",
-						Unit: "rpm",
+						PayloadShape: "timeseries-number",
 					},
 					"temperature": {
-						Type: "timeseries-number",
-						Unit: "celsius",
+						PayloadShape: "timeseries-number",
 					},
 				},
 			}
 
 			// Create a pump model that references the motor
 			pumpModel := config.DataModelVersion{
-				Description: "Pump data model",
 				Structure: map[string]config.Field{
 					"flowRate": {
-						Type: "timeseries-number",
-						Unit: "l/min",
+						PayloadShape: "timeseries-number",
 					},
 					"motor": {
 						ModelRef: &config.ModelRef{
@@ -73,15 +68,13 @@ var _ = Describe("Validator References", func() {
 			// Create the data models map
 			allDataModels := map[string]config.DataModelsConfig{
 				"motor": {
-					Name:        "motor",
-					Description: "Motor data model",
+					Name: "motor",
 					Versions: map[string]config.DataModelVersion{
 						"v1": motorModel,
 					},
 				},
 				"pump": {
-					Name:        "pump",
-					Description: "Pump data model",
+					Name: "pump",
 					Versions: map[string]config.DataModelVersion{
 						"v1": pumpModel,
 					},
@@ -94,7 +87,6 @@ var _ = Describe("Validator References", func() {
 
 		It("should fail when referencing a non-existent model", func() {
 			testModel := config.DataModelVersion{
-				Description: "Test model with non-existent reference",
 				Structure: map[string]config.Field{
 					"motor": {
 						ModelRef: &config.ModelRef{
@@ -107,8 +99,7 @@ var _ = Describe("Validator References", func() {
 
 			allDataModels := map[string]config.DataModelsConfig{
 				"pump": {
-					Name:        "pump",
-					Description: "Pump data model",
+					Name: "pump",
 					Versions: map[string]config.DataModelVersion{
 						"v1": testModel,
 					},
@@ -122,16 +113,14 @@ var _ = Describe("Validator References", func() {
 
 		It("should fail when referencing a non-existent version", func() {
 			motorModel := config.DataModelVersion{
-				Description: "Motor data model",
 				Structure: map[string]config.Field{
 					"rpm": {
-						Type: "timeseries-number",
+						PayloadShape: "timeseries-number",
 					},
 				},
 			}
 
 			testModel := config.DataModelVersion{
-				Description: "Test model with non-existent version",
 				Structure: map[string]config.Field{
 					"motor": {
 						ModelRef: &config.ModelRef{
@@ -144,15 +133,13 @@ var _ = Describe("Validator References", func() {
 
 			allDataModels := map[string]config.DataModelsConfig{
 				"motor": {
-					Name:        "motor",
-					Description: "Motor data model",
+					Name: "motor",
 					Versions: map[string]config.DataModelVersion{
 						"v1": motorModel,
 					},
 				},
 				"pump": {
-					Name:        "pump",
-					Description: "Pump data model",
+					Name: "pump",
 					Versions: map[string]config.DataModelVersion{
 						"v1": testModel,
 					},
@@ -167,10 +154,9 @@ var _ = Describe("Validator References", func() {
 		It("should detect circular references", func() {
 			// Create model A that references model B
 			modelA := config.DataModelVersion{
-				Description: "Model A",
 				Structure: map[string]config.Field{
 					"fieldA": {
-						Type: "timeseries-number",
+						PayloadShape: "timeseries-number",
 					},
 					"refToB": {
 						ModelRef: &config.ModelRef{
@@ -183,10 +169,9 @@ var _ = Describe("Validator References", func() {
 
 			// Create model B that references model A (circular)
 			modelB := config.DataModelVersion{
-				Description: "Model B",
 				Structure: map[string]config.Field{
 					"fieldB": {
-						Type: "timeseries-string",
+						PayloadShape: "timeseries-string",
 					},
 					"refToA": {
 						ModelRef: &config.ModelRef{
@@ -199,15 +184,13 @@ var _ = Describe("Validator References", func() {
 
 			allDataModels := map[string]config.DataModelsConfig{
 				"modelA": {
-					Name:        "modelA",
-					Description: "Model A",
+					Name: "modelA",
 					Versions: map[string]config.DataModelVersion{
 						"v1": modelA,
 					},
 				},
 				"modelB": {
-					Name:        "modelB",
-					Description: "Model B",
+					Name: "modelB",
 					Versions: map[string]config.DataModelVersion{
 						"v1": modelB,
 					},
@@ -222,10 +205,9 @@ var _ = Describe("Validator References", func() {
 		It("should detect self-referencing models", func() {
 			// Create a model that references itself
 			selfRefModel := config.DataModelVersion{
-				Description: "Self-referencing model",
 				Structure: map[string]config.Field{
 					"field1": {
-						Type: "timeseries-number",
+						PayloadShape: "timeseries-number",
 					},
 					"selfRef": {
 						ModelRef: &config.ModelRef{
@@ -238,8 +220,7 @@ var _ = Describe("Validator References", func() {
 
 			allDataModels := map[string]config.DataModelsConfig{
 				"selfRef": {
-					Name:        "selfRef",
-					Description: "Self-referencing model",
+					Name: "selfRef",
 					Versions: map[string]config.DataModelVersion{
 						"v1": selfRefModel,
 					},
@@ -262,14 +243,14 @@ var _ = Describe("Validator References", func() {
 				if i == 8 { // Last level - no reference
 					structure = map[string]config.Field{
 						"finalField": {
-							Type: "timeseries-number",
+							PayloadShape: "timeseries-number",
 						},
 					}
 				} else { // Reference next level
 					nextLevel := fmt.Sprintf("level%d", i+1)
 					structure = map[string]config.Field{
 						"field": {
-							Type: "timeseries-number",
+							PayloadShape: "timeseries-number",
 						},
 						"nextRef": {
 							ModelRef: &config.ModelRef{
@@ -281,12 +262,10 @@ var _ = Describe("Validator References", func() {
 				}
 
 				allDataModels[modelName] = config.DataModelsConfig{
-					Name:        modelName,
-					Description: fmt.Sprintf("Level %d model", i),
+					Name: modelName,
 					Versions: map[string]config.DataModelVersion{
 						"v1": {
-							Description: fmt.Sprintf("Level %d model", i),
-							Structure:   structure,
+							Structure: structure,
 						},
 					},
 				}
@@ -309,14 +288,14 @@ var _ = Describe("Validator References", func() {
 				if i == 11 { // Last level - no reference
 					structure = map[string]config.Field{
 						"finalField": {
-							Type: "timeseries-number",
+							PayloadShape: "timeseries-number",
 						},
 					}
 				} else { // Reference next level
 					nextLevel := fmt.Sprintf("level%d", i+1)
 					structure = map[string]config.Field{
 						"field": {
-							Type: "timeseries-number",
+							PayloadShape: "timeseries-number",
 						},
 						"nextRef": {
 							ModelRef: &config.ModelRef{
@@ -328,12 +307,10 @@ var _ = Describe("Validator References", func() {
 				}
 
 				allDataModels[modelName] = config.DataModelsConfig{
-					Name:        modelName,
-					Description: fmt.Sprintf("Level %d model", i),
+					Name: modelName,
 					Versions: map[string]config.DataModelVersion{
 						"v1": {
-							Description: fmt.Sprintf("Level %d model", i),
-							Structure:   structure,
+							Structure: structure,
 						},
 					},
 				}
@@ -348,20 +325,18 @@ var _ = Describe("Validator References", func() {
 		It("should validate nested references in subfields", func() {
 			// Create a sensor model
 			sensorModel := config.DataModelVersion{
-				Description: "Sensor data model",
 				Structure: map[string]config.Field{
 					"value": {
-						Type: "timeseries-number",
+						PayloadShape: "timeseries-number",
 					},
 					"unit": {
-						Type: "timeseries-string",
+						PayloadShape: "timeseries-string",
 					},
 				},
 			}
 
 			// Create a complex model with nested references
 			complexModel := config.DataModelVersion{
-				Description: "Complex data model",
 				Structure: map[string]config.Field{
 					"metadata": {
 						Subfields: map[string]config.Field{
@@ -394,15 +369,13 @@ var _ = Describe("Validator References", func() {
 
 			allDataModels := map[string]config.DataModelsConfig{
 				"sensor": {
-					Name:        "sensor",
-					Description: "Sensor data model",
+					Name: "sensor",
 					Versions: map[string]config.DataModelVersion{
 						"v1": sensorModel,
 					},
 				},
 				"complex": {
-					Name:        "complex",
-					Description: "Complex data model",
+					Name: "complex",
 					Versions: map[string]config.DataModelVersion{
 						"v1": complexModel,
 					},
@@ -416,7 +389,6 @@ var _ = Describe("Validator References", func() {
 		It("should fail basic validation if the data model structure is invalid", func() {
 			// Create an invalid data model (missing _type)
 			invalidModel := config.DataModelVersion{
-				Description: "Invalid data model",
 				Structure: map[string]config.Field{
 					"invalidField": {
 						// Missing Type and ModelRef
@@ -426,8 +398,7 @@ var _ = Describe("Validator References", func() {
 
 			allDataModels := map[string]config.DataModelsConfig{
 				"invalid": {
-					Name:        "invalid",
-					Description: "Invalid data model",
+					Name: "invalid",
 					Versions: map[string]config.DataModelVersion{
 						"v1": invalidModel,
 					},
@@ -446,8 +417,8 @@ var _ = Describe("Validator References", func() {
 					Versions: map[string]config.DataModelVersion{
 						"v1": {
 							Structure: map[string]config.Field{
-								"speed":       {Type: "timeseries-number"},
-								"temperature": {Type: "timeseries-number"},
+								"speed":       {PayloadShape: "timeseries-number"},
+								"temperature": {PayloadShape: "timeseries-number"},
 								"sensor":      {ModelRef: &config.ModelRef{Name: "sensor", Version: "v1"}},
 							},
 						},
@@ -457,8 +428,8 @@ var _ = Describe("Validator References", func() {
 					Versions: map[string]config.DataModelVersion{
 						"v1": {
 							Structure: map[string]config.Field{
-								"value": {Type: "timeseries-number"},
-								"unit":  {Type: "timeseries-string"},
+								"value": {PayloadShape: "timeseries-number"},
+								"unit":  {PayloadShape: "timeseries-string"},
 							},
 						},
 					},
@@ -471,7 +442,7 @@ var _ = Describe("Validator References", func() {
 					"pump": {
 						Subfields: map[string]config.Field{
 							"motor": {ModelRef: &config.ModelRef{Name: "motor", Version: "v1"}},
-							"flow":  {Type: "timeseries-number"},
+							"flow":  {PayloadShape: "timeseries-number"},
 						},
 					},
 				},
@@ -491,7 +462,7 @@ var _ = Describe("Validator References", func() {
 					Versions: map[string]config.DataModelVersion{
 						"v1": {
 							Structure: map[string]config.Field{
-								"speed": {Type: "timeseries-number"},
+								"speed": {PayloadShape: "timeseries-number"},
 							},
 						},
 					},

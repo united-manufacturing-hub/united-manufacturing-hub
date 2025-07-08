@@ -274,7 +274,7 @@ func (v *Validator) validateRefModelFormat(modelRef *config.ModelRef, path strin
 
 // validateFieldCombinations validates invalid field combinations
 func (v *Validator) validateFieldCombinations(field config.Field, path string, errors *[]ValidationError) {
-	hasType := field.Type != ""
+	hasType := field.PayloadShape != ""
 	hasRefModel := field.ModelRef != nil
 	hasSubfields := len(field.Subfields) > 0
 
@@ -304,20 +304,12 @@ func (v *Validator) isLeafNode(field config.Field) bool {
 
 // validateLeafNode validates a leaf node
 func (v *Validator) validateLeafNode(field config.Field, path string, errors *[]ValidationError) {
-	hasType := field.Type != ""
+	hasType := field.PayloadShape != ""
 	hasRefModel := field.ModelRef != nil
-	hasDescription := field.Description != ""
-	hasUnit := field.Unit != ""
 
 	// Determine leaf node type
 	if hasRefModel && !hasType {
 		// SubModel node: ONLY contain _refModel
-		if hasDescription || hasUnit {
-			*errors = append(*errors, ValidationError{
-				Path:    path,
-				Message: "subModel nodes should ONLY contain _refModel",
-			})
-		}
 		return
 	}
 
@@ -337,25 +329,11 @@ func (v *Validator) validateLeafNode(field config.Field, path string, errors *[]
 
 // validateNonLeafNode validates a non-leaf node
 func (v *Validator) validateNonLeafNode(ctx context.Context, field config.Field, path string, errors *[]ValidationError) {
-	// Non-leaf nodes (folders) should not have _type, _description, or _unit
-	if field.Type != "" {
+	// Non-leaf nodes (folders) should not have _type
+	if field.PayloadShape != "" {
 		*errors = append(*errors, ValidationError{
 			Path:    path,
 			Message: "non-leaf nodes (folders) cannot have _type",
-		})
-	}
-
-	if field.Description != "" {
-		*errors = append(*errors, ValidationError{
-			Path:    path,
-			Message: "non-leaf nodes (folders) cannot have _description",
-		})
-	}
-
-	if field.Unit != "" {
-		*errors = append(*errors, ValidationError{
-			Path:    path,
-			Message: "non-leaf nodes (folders) cannot have _unit",
 		})
 	}
 
