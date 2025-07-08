@@ -51,9 +51,9 @@ type DataModelsConfig struct {
 
 // DataContractsConfig defines the structure for the data contracts section
 type DataContractsConfig struct {
-	Name         string                   `yaml:"name"`                    // name of the data contract
-	Model        *ModelRef                `yaml:"model,omitempty"`         // reference to the data model
-	DefaultSinks []map[string]interface{} `yaml:"default_sinks,omitempty"` // placeholder for default sinks configuration
+	Name           string                   `yaml:"name"`                      // name of the data contract
+	Model          *ModelRef                `yaml:"model,omitempty"`           // reference to the data model
+	DefaultBridges []map[string]interface{} `yaml:"default_bridges,omitempty"` // placeholder for default bridges configuration
 }
 
 type DataModelVersion struct {
