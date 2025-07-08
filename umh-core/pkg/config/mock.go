@@ -618,7 +618,7 @@ func (m *MockConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 }
 
 // AtomicAddDataModel implements the ConfigManager interface
-func (m *MockConfigManager) AtomicAddDataModel(ctx context.Context, name string, dmVersion DataModelVersion) error {
+func (m *MockConfigManager) AtomicAddDataModel(ctx context.Context, name string, dmVersion DataModelVersion, description string) error {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
 
@@ -643,7 +643,8 @@ func (m *MockConfigManager) AtomicAddDataModel(ctx context.Context, name string,
 
 	// add the data model to the config
 	config.DataModels = append(config.DataModels, DataModelsConfig{
-		Name: name,
+		Name:        name,
+		Description: description,
 		Versions: map[string]DataModelVersion{
 			"v1": dmVersion,
 		},
@@ -658,7 +659,7 @@ func (m *MockConfigManager) AtomicAddDataModel(ctx context.Context, name string,
 }
 
 // AtomicEditDataModel implements the ConfigManager interface
-func (m *MockConfigManager) AtomicEditDataModel(ctx context.Context, name string, dmVersion DataModelVersion) error {
+func (m *MockConfigManager) AtomicEditDataModel(ctx context.Context, name string, dmVersion DataModelVersion, description string) error {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
 
@@ -705,6 +706,9 @@ func (m *MockConfigManager) AtomicEditDataModel(ctx context.Context, name string
 	// append the new version to the data model
 	nextVersion := maxVersion + 1
 	currentDataModel.Versions[fmt.Sprintf("v%d", nextVersion)] = dmVersion
+
+	// update the description
+	currentDataModel.Description = description
 
 	// edit the data model in the config
 	config.DataModels[targetIndex] = currentDataModel

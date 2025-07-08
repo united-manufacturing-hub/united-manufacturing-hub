@@ -159,8 +159,7 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		"Adding new version to data model configuration...", a.outboundChannel, models.EditDataModel)
 
-	// Use shared context for execution
-	err := a.configManager.AtomicEditDataModel(a.ctx, a.payload.Name, dmVersion)
+	err := a.configManager.AtomicEditDataModel(a.ctx, a.payload.Name, dmVersion, a.payload.Description)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to edit data model: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
