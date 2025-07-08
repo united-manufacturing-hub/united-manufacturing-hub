@@ -36,8 +36,8 @@ type JSONSchema map[string]interface{}
 // SchemaTranslationResult contains the result of translating a data model to JSON schemas
 type SchemaTranslationResult struct {
 	// Schemas maps schema registry subject names to JSON schemas
-	// Subject format: {contract_name}_v{version}_{payload_shape}
-	// Example: "_pump_data_v1_timeseries-number"
+	// Subject format: {contract_name}_{version}-{payload_shape}
+	// Example: "_pump_v1-timeseries-number"
 	Schemas map[string]JSONSchema
 
 	// PayloadShapeUsage maps payload shapes to the virtual paths that use them
@@ -472,18 +472,20 @@ func (t *Translator) convertTypeToJSONSchema(umhType string) (string, error) {
 }
 
 // generateSubjectName creates a Schema Registry subject name from contract, version, and payload shape
-// Format: {contract_name}_v{version}_{payload_shape}
-// Example: "_pump_data_v1_timeseries-number"
+// Format: {contract_name}_{version}-{payload_shape}
+// Example: "_pump_v1-timeseries-number"
 func generateSubjectName(contractName, version, payloadShape string) string {
 	// Ensure contract name starts with underscore
 	if !strings.HasPrefix(contractName, "_") {
 		contractName = "_" + contractName
 	}
 
-	// Remove 'v' prefix from version if present
-	versionSuffix := strings.TrimPrefix(version, "v")
+	// Ensure version has 'v' prefix
+	if !strings.HasPrefix(version, "v") {
+		version = "v" + version
+	}
 
-	return fmt.Sprintf("%s_v%s_%s", contractName, versionSuffix, payloadShape)
+	return fmt.Sprintf("%s_%s-%s", contractName, version, payloadShape)
 }
 
 // GetSchemaAsJSON returns a JSON schema as a JSON byte array

@@ -181,6 +181,8 @@ type RedpandaService struct {
 
 	redpandaMonitorManager *redpanda_monitor_fsm.RedpandaMonitorManager
 	redpandaMonitorConfigs []config.RedpandaMonitorConfig
+
+	schemaRegistryManager *SchemaRegistry
 }
 
 // RedpandaServiceOption is a function that modifies a RedpandaService
@@ -233,6 +235,7 @@ func NewDefaultRedpandaService(redpandaName string, opts ...RedpandaServiceOptio
 		httpClient:             httpclient.NewDefaultHTTPClient(),
 		baseDir:                constants.DefaultRedpandaBaseDir,
 		redpandaMonitorManager: redpanda_monitor_fsm.NewRedpandaMonitorManager(redpandaName),
+		schemaRegistryManager:  NewSchemaRegistry(),
 	}
 
 	// Apply options
@@ -873,8 +876,13 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, services service
 		return fmt.Errorf("failed to reconcile redpanda monitor: %w", monitorErr), false
 	}
 
+	schemaRegistryErr, schemaRegistryReconciled := s.schemaRegistryManager.Reconcile(ctx)
+	if schemaRegistryErr != nil {
+		return fmt.Errorf("failed to reconcile schema registry: %w", schemaRegistryErr), false
+	}
+
 	// If either was reconciled, indicate that reconciliation occurred
-	return nil, s6Reconciled || monitorReconciled
+	return nil, s6Reconciled || monitorReconciled || schemaRegistryReconciled
 }
 
 // IsLogsFine reports true when recent Redpanda logs (within logWindow) contain
