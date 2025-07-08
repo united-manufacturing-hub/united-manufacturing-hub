@@ -58,7 +58,7 @@ datamodels:
     description: "Temperature sensor model"
     versions:
       v1:
-        root:
+        structure:
           temperature_in_c:
             _payloadshape: timeseries-number
 ```

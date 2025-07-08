@@ -34,7 +34,7 @@ datamodels:
     description: "Pump with motor sub-model"
     versions:
       v1:
-        root:
+        structure:
           pressure:
             _payloadshape: timeseries-number
           motor:
@@ -65,7 +65,7 @@ templates:
           pressure: "press"
           temperature: "(temp-32)*5/9"
         static:
-          serial_number: "${{ .sn }}"
+          serialNumber: "${{ .sn }}"
 
 streamprocessors:
   - name: pump41_sp
@@ -206,7 +206,7 @@ Template variables resolved at deployment time:
 ```yaml
 mapping:
   static:
-    serial_number: "${{ .sn }}"
+    serialNumber: "${{ .sn }}"
     firmware_version: "${{ .firmware_ver }}"
     installation_date: "${{ .install_date }}"
 ```
@@ -229,7 +229,7 @@ datamodels:
     description: "Temperature sensor model"
     versions:
       v1:
-        root:
+        structure:
           temperature_in_c:
             _payloadshape: timeseries-number
 
@@ -254,7 +254,7 @@ templates:
         dynamic:
           temperature_in_c: "(temp - 32) * 5 / 9"
         static:
-          sensor_id: "${{ .sn }}"
+          sensorId: "${{ .sn }}"
 
 streamprocessors:
   - name: furnaceTemp_sp
@@ -282,7 +282,7 @@ datamodels:
     description: "Standard motor model"
     versions:
       v1:
-        root:
+        structure:
           current:
             _payloadshape: timeseries-number
           rpm:
@@ -294,23 +294,36 @@ datamodels:
     description: "Pump with motor and diagnostics"
     versions:
       v1:
-        root:
+        structure:
           pressure:
             _payloadshape: timeseries-number
           temperature:
             _payloadshape: timeseries-number
           running:
             _payloadshape: timeseries-string
-          diagnostics:
-            vibration:
+          vibration:
+            x-axis:
               _payloadshape: timeseries-number
+            y-axis:
+              _payloadshape: timeseries-number
+            z-axis:
+              _payloadshape: timeseries-number
+              _meta: # 🚧 **Roadmap Item**
+                description: "Z-axis vibration measurement"
+                unit: "m/s"
+              _constraints: # 🚧 **Roadmap Item**
+                max: 100
+                min: 0
           motor:
             _refModel:
               name: motor
               version: v1
-          total_power:
-            _payloadshape: timeseries-number
-          serial_number:
+          acceleration:
+            x:
+              _payloadshape: timeseries-number
+            y:
+              _payloadshape: timeseries-number
+          serialNumber:
             _payloadshape: timeseries-string
 
 datacontracts:
@@ -350,7 +363,7 @@ templates:
             rpm: "rpm"
           total_power: "l1 + l2"
         static:
-          serial_number: "${{ .sn }}"
+          serialNumber: "${{ .sn }}"
 
 streamprocessors:
   - name: pump41_sp

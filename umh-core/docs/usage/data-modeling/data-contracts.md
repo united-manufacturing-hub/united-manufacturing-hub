@@ -71,6 +71,18 @@ datacontracts:
 - `cloud_storage`: S3-compatible storage
 - `analytics_pipeline`: Stream analytics processing
 
+**Bridge Configuration Details:**
+```yaml
+default_bridges:        # 🚧 **Roadmap Item**
+  - type: timescaledb   # create a default bridge that will store it to timescaledb 
+    host:
+    port:
+    credentials:
+    retention_in_days: 365
+  - type: umh-api-sync
+    remote: 10.13.37.50:80   # create a default bridge, that will send it to a higher level UNS on that IP
+```
+
 ### Retention Policies
 
 Define how long data is kept:
@@ -96,7 +108,7 @@ datamodels:
     description: "Temperature sensor model"
     versions:
       v1:
-        root:
+        structure:
           temperature_in_c:
             _payloadshape: timeseries-number
 
@@ -118,7 +130,7 @@ datamodels:
     description: "Standard motor model"
     versions:
       v1:
-        root:
+        structure:
           current:
             _payloadshape: timeseries-number
           rpm:
@@ -130,23 +142,36 @@ datamodels:
     description: "Pump with motor and diagnostics"
     versions:
       v1:
-        root:
+        structure:
           pressure:
             _payloadshape: timeseries-number
           temperature:
             _payloadshape: timeseries-number
           running:
             _payloadshape: timeseries-string
-          diagnostics:
-            vibration:
+          vibration:
+            x-axis:
               _payloadshape: timeseries-number
+            y-axis:
+              _payloadshape: timeseries-number
+            z-axis:
+              _payloadshape: timeseries-number
+              _meta: # 🚧 **Roadmap Item**
+                description: "Z-axis vibration measurement"
+                unit: "m/s"
+              _constraints: # 🚧 **Roadmap Item**
+                max: 100
+                min: 0
           motor:
             _refModel:
               name: motor
               version: v1
-          total_power:
-            _payloadshape: timeseries-number
-          serial_number:
+          acceleration:
+            x:
+              _payloadshape: timeseries-number
+            y:
+              _payloadshape: timeseries-number
+          serialNumber:
             _payloadshape: timeseries-string
 
 datacontracts:
@@ -158,6 +183,17 @@ datacontracts:
       - type: timescaledb
         retention_in_days: 1825  # 5 years
       - type: analytics_pipeline
+  - name: _historian
+    # no model = no enforcement
+    default_bridges: # 🚧 **Roadmap Item**
+      - type: timescaledb   # create a default bridge that will store it to timescaledb 
+        host:
+        port:
+        credentials:
+        retention_in_days: 365
+  - name: _raw
+    # no model
+    # no bridge
 ```
 
 ## Generated Database Schema

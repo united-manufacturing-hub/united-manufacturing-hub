@@ -14,7 +14,7 @@ datamodels:
     description: "pump from vendor ABC"
     versions:
       v1:
-        root:
+        structure:
           count:
             _payloadshape: timeseries-number
           serialNumber:
@@ -60,8 +60,8 @@ pressure:
 
 > 🚧 **Roadmap Item** - Enhanced field metadata and constraints (only on leaf nodes):
 
-- `_meta`: Optional metadata (description, units) - Not to be implemented in MVP
-- `_constraints`: Optional validation rules - Not to be implemented in MVP
+- `_meta`: Optional metadata (description, units) - 🚧 **Roadmap Item**
+- `_constraints`: Optional validation rules - 🚧 **Roadmap Item**
 
 **Note:** Leaf nodes are fields that contain `_payloadshape` and represent actual data points, not organizational folders or sub-model references.
 
@@ -103,7 +103,7 @@ datamodels:
     description: "Standard motor model"
     versions:
       v1:
-        root:
+        structure:
           current:
             _payloadshape: timeseries-number
           rpm:
@@ -117,7 +117,7 @@ datamodels:
     description: "Pump with motor sub-model"
     versions:
       v1:
-        root:
+        structure:
           pressure:
             _payloadshape: timeseries-number
           motor:
@@ -136,7 +136,7 @@ datamodels:
     description: "Temperature sensor model"
     versions:
       v1:
-        root:
+        structure:
           value:
             _payloadshape: timeseries-number
 ```
@@ -149,7 +149,7 @@ datamodels:
     description: "Standard motor model"
     versions:
       v1:
-        root:
+        structure:
           current:
             _payloadshape: timeseries-number
           rpm:
@@ -161,26 +161,69 @@ datamodels:
     description: "Pump with motor and diagnostics"
     versions:
       v1:
-        root:
+        structure:
           pressure:
             _payloadshape: timeseries-number
           temperature:
             _payloadshape: timeseries-number
           running:
             _payloadshape: timeseries-string
-          diagnostics:
-            vibration:
+          vibration:
+            x-axis:
               _payloadshape: timeseries-number
-            wear_level:
+            y-axis:
               _payloadshape: timeseries-number
+            z-axis:
+              _payloadshape: timeseries-number
+              _meta: # 🚧 **Roadmap Item**
+                description: "Z-axis vibration measurement"
+                unit: "m/s"
+              _constraints: # 🚧 **Roadmap Item**
+                max: 100
+                min: 0
           motor:
             _refModel:
               name: motor
               version: v1
-          total_power:
-            _payloadshape: timeseries-number
-          serial_number:
+          acceleration:
+            x:
+              _payloadshape: timeseries-number
+            y:
+              _payloadshape: timeseries-number
+          serialNumber:
             _payloadshape: timeseries-string
+
+  mitarbeiter:
+    description: "irgendwas relational"
+    versions:
+      v1:
+        structure:
+          meldePerson:
+            _payloadshape: relational-meldePerson
+          setzeStatus:
+            _payloadshape: relational-setzeStatus
+          aendereStatus:
+            _payloadshape: relational-aendereStatus
+
+  motor-base:
+    description: "basic motor component"
+    versions:
+      v1:
+        structure:
+          current:
+            _payloadshape: timeseries-number
+          rpm:
+            _payloadshape: timeseries-number
+
+  motor:
+    description: "some motor"
+    versions:
+      v1:
+        structure:
+          engine:
+            _refModel: 
+              name: motor-base
+              version: v1
 ```
 
 ## Metadata and Constraints
@@ -195,7 +238,7 @@ datamodels:
   pump:
     versions:
       v1:
-        root:
+        structure:
           # ✅ Valid - _meta on leaf node
           pressure:
             _payloadshape: timeseries-number
@@ -215,12 +258,12 @@ datamodels:
           # ✅ Valid - combined example
           z-axis:
             _payloadshape: timeseries-number
-            _meta: # Not to be implemented in MVP
+            _meta: # 🚧 **Roadmap Item**
               description: "Z-axis position measurement"
               unit: "m/s"
-            _constraints: # Not to be implemented in MVP
-              max: 100
-              min: 0
+            _constraints: # 🚧 **Roadmap Item**
+            max: 100
+            min: 0
 ```
 
 ### Invalid Usage (Non-Leaf Nodes)
@@ -229,7 +272,7 @@ datamodels:
   pump:
     versions:
       v1:
-        root:
+        structure:
           # ❌ Invalid - _meta on folder node
           diagnostics:
             _meta: # This is NOT allowed

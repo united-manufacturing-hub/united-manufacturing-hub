@@ -94,7 +94,7 @@ datamodels:
     description: "Pump with various measurements"
     versions:
       v1:
-        root:
+        structure:
           pressure:
             _payloadshape: timeseries-number
           status:
@@ -116,22 +116,30 @@ The `_type:` field (used within payload shapes) can reference:
 
 ```yaml
 payloadshapes:
-  relational-employee:
+  relational-meldePerson:
     fields:
-      employee_id:
+      perso_no:
         _type: string
-      first_name:
-        _type: string
-      last_name:
-        _type: string
-      department:
-        _type: string
-      health_metrics:
+      gesundheit:
         pulse:
           value:
             _type: number
-          measured_at:
+          messaured_at:
             _type: number
+  relational-setzeStatus:
+    fields:
+      status:
+        _type: string
+      timestamp:
+        _type: number
+  relational-aendereStatus:
+    fields:
+      old_status:
+        _type: string
+      new_status:
+        _type: string
+      changed_at:
+        _type: number
 ```
 
 ## Best Practices

@@ -18,32 +18,39 @@ Stream processors bridge the gap between raw industrial data and structured busi
 # Template definition
 templates:
   streamProcessors:
-    pump_template:
+    motor_template:
       model:
         name: pump
         version: v1
-      sources:
+      sources:               # alias → raw topic
         press: "${{ .location_path }}._raw.${{ .abc }}"
         tF: "${{ .location_path }}._raw.tempF"
         r: "${{ .location_path }}._raw.run"
-      mapping:
+      mapping:               # field → JS / constant / alias
         dynamic:
           pressure: "press"
-          temperature: "(tF-32)*5/9"
+          temperature: "(tF-32)*5/9" # 🚧 **Roadmap Item** - JS expressions 
           running: "r"
+          motor:
+            rpm: "press"
         static:
           serialNumber: "${{ .sn }}"
 
-# Stream processor instance
+# Stream processor instances
 streamprocessors:
-  - name: pump_assembly
-    _templateRef: "pump_template"
+  - name: motor_assembly
+    _templateRef: "motor_template"
     location:
       0: corpA
       1: plant-A
     variables:
       abc: "assembly"
       sn: "SN-P42-008"
+  - name: motor_qualitycheck
+    _templateRef: "motor_template"
+    variables:
+      abc: "qualitycheck"
+      sn: "SN-P42-213"
 ```
 
 ## Key Concepts
@@ -103,7 +110,7 @@ mapping:
   pressure: "press"                    # Direct pass-through
   temperature: "(temp - 32) * 5 / 9"  # Fahrenheit to Celsius
   total_power: "power1 + power2"      # Derived calculation
-  serial_number: "'SN-P41-007'"       # Static metadata
+  serialNumber: "'SN-P41-007'"       # Static metadata
 ```
 
 ## Simple Example
@@ -119,7 +126,7 @@ datamodels:
     description: "Temperature sensor model"
     versions:
       v1:
-        root:
+        structure:
           temperature_in_c:
             _payloadshape: timeseries-number
 
