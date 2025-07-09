@@ -488,5 +488,114 @@ internal:
 				Expect(writtenTempSensorPC.ProtocolConverterServiceConfig.Variables.User).To(HaveKeyWithValue("PORT", "4840"))
 			})
 		})
+
+		Context("with templated stream processor example", func() {
+			It("should read, parse, and write the config preserving data models, contracts, and templates", func() {
+				// Read the original example file
+				originalData, err := fsService.ReadFile(ctx, "../../examples/example-config-streamprocessor-templated.yaml")
+				Expect(err).NotTo(HaveOccurred())
+
+				// Parse the config with anchor extraction enabled
+				config, err := ParseConfig(originalData, true)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Verify we have the expected structure
+				Expect(config.StreamProcessor).To(HaveLen(3))
+				Expect(config.PayloadShapes).To(HaveLen(3))
+				Expect(config.DataModels).To(HaveLen(2))
+				Expect(config.DataContracts).To(HaveLen(1))
+				Expect(config.Templates.StreamProcessor).To(BeEmpty())
+
+				// Verify payload shapes
+				Expect(config.PayloadShapes).To(HaveKey("timeseries-number"))
+				Expect(config.PayloadShapes).To(HaveKey("timeseries-string"))
+				Expect(config.PayloadShapes).To(HaveKey("vibration-data"))
+
+				// Verify data models
+				pumpModel := config.DataModels[0]
+				if pumpModel.Name != "pump" {
+					pumpModel = config.DataModels[1]
+				}
+				Expect(pumpModel.Name).To(Equal("pump"))
+				Expect(pumpModel.Description).To(Equal("pump from vendor ABC"))
+				Expect(pumpModel.Versions).To(HaveKey("v1"))
+
+				// Verify data contracts
+				Expect(config.DataContracts[0].Name).To(Equal("pump-contract"))
+				Expect(config.DataContracts[0].Model.Name).To(Equal("pump"))
+				Expect(config.DataContracts[0].Model.Version).To(Equal("v1"))
+
+				// Find the pump-processor-1 that uses the template
+				var pumpProcessor1 *StreamProcessorConfig
+				for _, sp := range config.StreamProcessor {
+					if sp.Name == "pump-processor-1" {
+						pumpProcessor1 = &sp
+						break
+					}
+				}
+				Expect(pumpProcessor1).NotTo(BeNil())
+				Expect(pumpProcessor1.DesiredFSMState).To(Equal("active"))
+				Expect(pumpProcessor1.StreamProcessorServiceConfig.TemplateRef).To(Equal("pump-processor"))
+
+				// Write the config using the config manager
+				configManager.WithFileSystemService(mockFS)
+
+				// Set up mock filesystem for writing
+				var writtenData []byte
+				mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
+					return nil
+				})
+				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+					writtenData = data
+					return nil
+				})
+				mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+					return mockFS.NewMockFileInfo("config.yaml", int64(len(writtenData)), 0644, time.Now(), false), nil
+				})
+
+				// Write the config
+				err = configManager.writeConfig(ctx, config)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(writtenData).NotTo(BeEmpty())
+
+				// Parse the written data to verify it's still valid
+				writtenConfig, err := ParseConfig(writtenData, true)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Verify the structure is preserved
+				Expect(writtenConfig.StreamProcessor).To(HaveLen(3))
+				Expect(writtenConfig.PayloadShapes).To(HaveLen(3))
+				Expect(writtenConfig.DataModels).To(HaveLen(2))
+				Expect(writtenConfig.DataContracts).To(HaveLen(1))
+				Expect(writtenConfig.Agent.Location).To(HaveKeyWithValue(0, "factory-A"))
+				Expect(writtenConfig.Agent.Location).To(HaveKeyWithValue(1, "line-1"))
+
+				// Verify the stream processors are preserved
+				var writtenPumpProcessor1 *StreamProcessorConfig
+				for _, sp := range writtenConfig.StreamProcessor {
+					if sp.Name == "pump-processor-1" {
+						writtenPumpProcessor1 = &sp
+						break
+					}
+				}
+				Expect(writtenPumpProcessor1).NotTo(BeNil())
+				Expect(writtenPumpProcessor1.DesiredFSMState).To(Equal("active"))
+				Expect(writtenPumpProcessor1.StreamProcessorServiceConfig.Variables.User).To(HaveKeyWithValue("SERIAL_NUMBER", "ABC-12345"))
+				Expect(writtenPumpProcessor1.StreamProcessorServiceConfig.Location).To(HaveKeyWithValue("2", "station-7"))
+				Expect(writtenPumpProcessor1.StreamProcessorServiceConfig.Location).To(HaveKeyWithValue("3", "pump-001"))
+
+				// Verify the inline config stream processor
+				var directProcessor *StreamProcessorConfig
+				for _, sp := range writtenConfig.StreamProcessor {
+					if sp.Name == "motor-direct-processor" {
+						directProcessor = &sp
+						break
+					}
+				}
+				Expect(directProcessor).NotTo(BeNil())
+				Expect(directProcessor.StreamProcessorServiceConfig.Config.Model.Name).To(Equal("motor"))
+				Expect(directProcessor.StreamProcessorServiceConfig.Variables.User).To(HaveKeyWithValue("STATUS", "operational"))
+			})
+		})
 	})
 })

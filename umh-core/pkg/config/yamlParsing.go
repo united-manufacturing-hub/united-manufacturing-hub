@@ -278,11 +278,12 @@ func convertSpecToYaml(spec FullConfig) (FullConfig, error) {
 	}
 
 	//------------------------------------
-	// 5) orphan-ref validation (children → root)
+	// 5) orphan-ref validation and cleanup (children → root)
 	//------------------------------------
 	// If a reference is missing it means a child points to a
-	// non-existent template, which would leave the YAML in an invalid state;
-	// in that case we abort with an error instead of writing a broken file.
+	// non-existent template. For protocol converters, this is an error.
+	// For stream processors, we convert them to inline configs to handle
+	// the external template pattern.
 	for ref := range protocolConverterPendingRefs {
 		if _, ok := protocolConverterTplMap[ref]; !ok {
 			return FullConfig{}, fmt.Errorf(
@@ -290,10 +291,25 @@ func convertSpecToYaml(spec FullConfig) (FullConfig, error) {
 		}
 	}
 
+	// For stream processors with orphaned references, convert to inline configs
+	orphanedStreamProcessorRefs := make(map[string]struct{})
 	for ref := range streamProcessorPendingRefs {
 		if _, ok := streamProcessorTplMap[ref]; !ok {
-			return FullConfig{}, fmt.Errorf(
-				"stream processor references unknown template %q", ref)
+			orphanedStreamProcessorRefs[ref] = struct{}{}
+		}
+	}
+
+	// Convert orphaned stream processor references to inline configs
+	if len(orphanedStreamProcessorRefs) > 0 {
+		for i, sp := range clone.StreamProcessor {
+			if sp.StreamProcessorServiceConfig.TemplateRef != "" {
+				if _, isOrphaned := orphanedStreamProcessorRefs[sp.StreamProcessorServiceConfig.TemplateRef]; isOrphaned {
+					// Clear the template reference since it points to an external template
+					// The config should already be expanded inline from convertYamlToSpec
+					sp.StreamProcessorServiceConfig.TemplateRef = ""
+					clone.StreamProcessor[i] = sp
+				}
+			}
 		}
 	}
 

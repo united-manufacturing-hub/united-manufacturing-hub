@@ -1,0 +1,171 @@
+# Copyright 2025 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# ------------------------------------------------------------------------------------------------
+# !!!! This config is used in unit tests, please do not change it without updating the tests !!!!
+# ------------------------------------------------------------------------------------------------
+
+# ---------- Payload Shapes ---------- #
+payloadShapes:
+  timeseries-number:
+    fields:
+      timestamp_ms:
+        _type: number
+      value:
+        _type: number
+  timeseries-string:
+    fields:
+      timestamp_ms:
+        _type: number
+      value:
+        _type: string
+  vibration-data:
+    description: "3-axis vibration measurement"
+    fields:
+      timestamp_ms:
+        _type: number
+      x_axis:
+        _type: number
+      y_axis:
+        _type: number
+      z_axis:
+        _type: number
+
+# ---------- Data Models ---------- #
+dataModels:
+  - name: pump
+    description: "pump from vendor ABC"
+    version:
+      v1:
+        structure:
+          count:
+            _payloadshape: timeseries-number
+          vibration:
+            x-axis:
+              _payloadshape: timeseries-number
+            y-axis:
+              _payloadshape: timeseries-number
+            z-axis:
+              _payloadshape: timeseries-number
+          motor:
+            _refModel:
+              name: motor
+              version: v1
+          serialNumber:
+            _payloadshape: timeseries-string
+
+  - name: motor
+    description: "electric motor model"
+    version:
+      v1:
+        structure:
+          speed:
+            _payloadshape: timeseries-number
+          current:
+            _payloadshape: timeseries-number
+          temperature:
+            _payloadshape: timeseries-number
+          status:
+            _payloadshape: timeseries-string
+
+# ---------- Data Contracts ---------- #
+dataContracts:
+  - name: pump-contract
+    model:
+      name: pump
+      version: v1
+    default_bridges:
+      - type: kafka_to_postgresql
+        config:
+          topic: "{{ .location_path }}/pump"
+
+# ---------- Templates ---------- #
+templates:
+  streamProcessor:
+    pump-processor:
+      model:
+        name: pump
+        version: v1
+      sources:
+        vibration_sensor: "ia/{{ .location_path }}/vibration"
+        count_sensor: "ia/{{ .location_path }}/count"
+        motor_data: "ia/{{ .location_path }}/motor"
+      mapping:
+        static:
+          serialNumber: "{{ .SERIAL_NUMBER }}"
+        dynamic:
+          count: "vibration_sensor.value"
+          vibration:
+            x-axis: "vibration_sensor.x_axis"
+            y-axis: "vibration_sensor.y_axis"
+            z-axis: "vibration_sensor.z_axis"
+          motor:
+            speed: "motor_data.speed"
+            current: "motor_data.current"
+            temperature: "motor_data.temperature"
+            status: "motor_data.status"
+
+# ---------- Agent-wide settings ---------- #
+agent:
+  metricsPort: 8080
+  location:
+    0: "factory-A"
+    1: "line-1"
+
+# ---------- Stream Processors ---------- #
+streamProcessor:
+  # ────────────────────────────────────────────────────────────────
+  - name: pump-processor-1
+    desiredState: active
+    streamProcessorServiceConfig:
+      location:
+        2: "station-7"
+        3: "pump-001"
+      templateRef: "pump-processor"
+      variables:
+        SERIAL_NUMBER: "ABC-12345"
+
+  - name: pump-processor-2
+    desiredState: active
+    streamProcessorServiceConfig:
+      location:
+        2: "station-8"
+        3: "pump-002"
+      templateRef: "pump-processor"
+      variables:
+        SERIAL_NUMBER: "ABC-67890"
+
+  # ────────────────────────────────────────────────────────────────
+  - name: motor-direct-processor
+    desiredState: active
+    # No templateRef - inline config
+    streamProcessorServiceConfig:
+      config:
+        model:
+          name: motor
+          version: v1
+        sources:
+          motor_telemetry: "ia/{{ .location_path }}/motor/telemetry"
+        mapping:
+          static:
+            status: "{{ .STATUS }}"
+          dynamic:
+            speed: "motor_telemetry.speed"
+            current: "motor_telemetry.current"
+            temperature: "motor_telemetry.temperature"
+      variables:
+        STATUS: "operational"
+      location:
+        2: "station-9"
+        3: "motor-direct" 

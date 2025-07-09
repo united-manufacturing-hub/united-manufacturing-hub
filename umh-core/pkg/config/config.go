@@ -278,6 +278,7 @@ func (c FullConfig) Clone() FullConfig {
 		DataContracts:     make([]DataContractsConfig, len(c.DataContracts)),
 		DataFlow:          make([]DataFlowComponentConfig, len(c.DataFlow)),
 		ProtocolConverter: make([]ProtocolConverterConfig, len(c.ProtocolConverter)),
+		StreamProcessor:   make([]StreamProcessorConfig, len(c.StreamProcessor)),
 		Templates:         TemplatesConfig{},
 		Internal:          InternalConfig{},
 	}
@@ -309,6 +310,10 @@ func (c FullConfig) Clone() FullConfig {
 		return FullConfig{}
 	}
 	err = deepcopy.Copy(&clone.ProtocolConverter, &c.ProtocolConverter)
+	if err != nil {
+		return FullConfig{}
+	}
+	err = deepcopy.Copy(&clone.StreamProcessor, &c.StreamProcessor)
 	if err != nil {
 		return FullConfig{}
 	}
