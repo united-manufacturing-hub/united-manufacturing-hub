@@ -398,27 +398,34 @@ func (s *SchemaRegistry) removeUnknown(ctx context.Context) (err error, changePh
 		}
 	}()
 
-	// Handle success cases: HTTP 200, 204 (successful deletion)
-	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusNoContent {
-		// Successful deletion - continue to cleanup
-	} else if resp.StatusCode == http.StatusNotFound {
+	// Handle HTTP response status codes
+	switch resp.StatusCode {
+	case http.StatusOK, http.StatusNoContent:
+		// HTTP 200, 204 - successful deletion
+
+	case http.StatusNotFound:
 		// HTTP 404 - subject already gone, treat as success
-	} else if resp.StatusCode >= 400 && resp.StatusCode < 500 {
-		// Parse custom error codes for client errors
-		respBody, readErr := io.ReadAll(resp.Body)
-		if readErr == nil {
-			var errorResp map[string]interface{}
-			if json.Unmarshal(respBody, &errorResp) == nil {
-				if errorCode, ok := errorResp["error_code"].(float64); ok {
-					switch int(errorCode) {
-					case 40401: // Subject not found
-						// Already gone, treat as success
-					case 40406: // Already soft-deleted
-						// Already deleted, treat as success
-					case 42206: // Schema has references
-						return fmt.Errorf("cannot delete subject %s: schema has references (error 42206)", string(subjectToRemove)), false
-					default:
-						return fmt.Errorf("delete subject %s failed with custom error %d", string(subjectToRemove), int(errorCode)), false
+
+	default:
+		// Handle client errors with custom error code parsing
+		if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+			respBody, readErr := io.ReadAll(resp.Body)
+			if readErr == nil {
+				var errorResp map[string]interface{}
+				if json.Unmarshal(respBody, &errorResp) == nil {
+					if errorCode, ok := errorResp["error_code"].(float64); ok {
+						switch int(errorCode) {
+						case 40401: // Subject not found
+							// Already gone, treat as success
+						case 40406: // Already soft-deleted
+							// Already deleted, treat as success
+						case 42206: // Schema has references
+							return fmt.Errorf("cannot delete subject %s: schema has references (error 42206)", string(subjectToRemove)), false
+						default:
+							return fmt.Errorf("delete subject %s failed with custom error %d", string(subjectToRemove), int(errorCode)), false
+						}
+					} else {
+						return fmt.Errorf("delete subject %s returned client error status %d", string(subjectToRemove), resp.StatusCode), false
 					}
 				} else {
 					return fmt.Errorf("delete subject %s returned client error status %d", string(subjectToRemove), resp.StatusCode), false
@@ -427,11 +434,9 @@ func (s *SchemaRegistry) removeUnknown(ctx context.Context) (err error, changePh
 				return fmt.Errorf("delete subject %s returned client error status %d", string(subjectToRemove), resp.StatusCode), false
 			}
 		} else {
-			return fmt.Errorf("delete subject %s returned client error status %d", string(subjectToRemove), resp.StatusCode), false
+			// Server errors and other cases - transient failure
+			return fmt.Errorf("delete subject %s returned status %d", string(subjectToRemove), resp.StatusCode), false
 		}
-	} else {
-		// Server errors and other cases - transient failure
-		return fmt.Errorf("delete subject %s returned status %d", string(subjectToRemove), resp.StatusCode), false
 	}
 
 	// Remove from tracking map
@@ -500,39 +505,47 @@ func (s *SchemaRegistry) addNew(ctx context.Context) (err error, changePhase boo
 		}
 	}()
 
-	// Handle success cases
-	if resp.StatusCode == http.StatusCreated {
+	// Handle HTTP response status codes
+	switch resp.StatusCode {
+	case http.StatusCreated:
 		// HTTP 201 - new schema registered successfully
-	} else if resp.StatusCode == http.StatusOK {
+
+	case http.StatusOK:
 		// HTTP 200 - schema updated or already exists
-	} else if resp.StatusCode == http.StatusConflict {
+
+	case http.StatusConflict:
 		// HTTP 409 - schema already exists with same definition, treat as success
-	} else if resp.StatusCode >= 400 && resp.StatusCode < 500 {
-		// Client errors - parse custom error codes if available
-		respBody, readErr := io.ReadAll(resp.Body)
-		if readErr == nil {
-			var errorResp map[string]interface{}
-			if json.Unmarshal(respBody, &errorResp) == nil {
-				if errorCode, ok := errorResp["error_code"].(float64); ok {
-					return fmt.Errorf("add subject %s failed with custom error %d: %s", string(subjectToAdd), int(errorCode), errorResp["message"]), false
+
+	default:
+		// Handle client errors with custom error code parsing
+		if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+			respBody, readErr := io.ReadAll(resp.Body)
+			if readErr == nil {
+				var errorResp map[string]interface{}
+				if json.Unmarshal(respBody, &errorResp) == nil {
+					if errorCode, ok := errorResp["error_code"].(float64); ok {
+						return fmt.Errorf("add subject %s failed with custom error %d: %s", string(subjectToAdd), int(errorCode), errorResp["message"]), false
+					}
 				}
 			}
-		}
-		// Generic client error handling
-		if resp.StatusCode == http.StatusBadRequest {
-			return fmt.Errorf("add subject %s failed: bad request (400)", string(subjectToAdd)), false
-		} else if resp.StatusCode == http.StatusUnauthorized {
-			return fmt.Errorf("add subject %s failed: unauthorized (401)", string(subjectToAdd)), false
-		} else if resp.StatusCode == http.StatusForbidden {
-			return fmt.Errorf("add subject %s failed: forbidden (403)", string(subjectToAdd)), false
-		} else if resp.StatusCode == http.StatusUnprocessableEntity {
-			return fmt.Errorf("add subject %s failed: schema validation error (422)", string(subjectToAdd)), false
+
+			// Generic client error handling by status code
+			switch resp.StatusCode {
+			case http.StatusBadRequest:
+				return fmt.Errorf("add subject %s failed: bad request (400)", string(subjectToAdd)), false
+			case http.StatusUnauthorized:
+				return fmt.Errorf("add subject %s failed: unauthorized (401)", string(subjectToAdd)), false
+			case http.StatusForbidden:
+				return fmt.Errorf("add subject %s failed: forbidden (403)", string(subjectToAdd)), false
+			case http.StatusUnprocessableEntity:
+				return fmt.Errorf("add subject %s failed: schema validation error (422)", string(subjectToAdd)), false
+			default:
+				return fmt.Errorf("add subject %s failed with client error status %d", string(subjectToAdd), resp.StatusCode), false
+			}
 		} else {
-			return fmt.Errorf("add subject %s failed with client error status %d", string(subjectToAdd), resp.StatusCode), false
+			// Server errors and other cases - transient failure
+			return fmt.Errorf("add subject %s returned status %d", string(subjectToAdd), resp.StatusCode), false
 		}
-	} else {
-		// Server errors and other cases - transient failure
-		return fmt.Errorf("add subject %s returned status %d", string(subjectToAdd), resp.StatusCode), false
 	}
 
 	// Remove from tracking map
