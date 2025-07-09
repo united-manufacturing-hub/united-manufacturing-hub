@@ -90,11 +90,11 @@ const (
 
 // Context timeout requirements per phase
 const (
-    MinimumLookupTime      = 20 * time.Millisecond   // HTTP GET /subjects
-    MinimumDecodeTime      = 5 * time.Millisecond    // JSON parsing
-    MinimumCompareTime     = 10 * time.Millisecond   // Map operations
-    MinimumRemoveTime      = 50 * time.Millisecond   // HTTP DELETE
-    MinimumAddTime         = 100 * time.Millisecond  // HTTP POST with schema
+    MinimumLookupTime      = 10 * time.Millisecond  // HTTP GET /subjects (local)
+    MinimumDecodeTime      = 1 * time.Millisecond   // JSON parsing (fast)
+    MinimumCompareTime     = 1 * time.Millisecond   // Map operations (instant)
+    MinimumRemoveTime      = 10 * time.Millisecond  // HTTP DELETE (local)
+    MinimumAddTime         = 15 * time.Millisecond  // HTTP POST with schema (local, slightly larger payload)
 )
 ```
 
@@ -143,10 +143,25 @@ func (s *SchemaRegistry) GetMetrics() SchemaRegistryMetrics {
 - **`reconciled = true`**: Made actual changes to schema registry (DELETE/POST succeeded)
 
 ### Error Handling
+Based on comprehensive Redpanda Schema Registry error code analysis:
+
 - **Lookup errors**: Only HTTP 200 is success, all others are transient failures
-- **Remove errors**: HTTP 200 and 404 are success (404 = already gone)
-- **Add errors**: HTTP 200, 201, and 409 are success (409 = already exists)
+- **Remove errors**: Complex handling required:
+  - **Success**: HTTP 200, 204 (successful deletion)
+  - **Already gone**: HTTP 404, custom error 40401 (subject not found), 40406 (already soft-deleted)
+  - **Blocked**: Custom error 42206 (schema has references) - treat as transient failure
+  - **Auth/Perms**: HTTP 401, 403 - treat as transient failure
+  - **Other**: All other codes are transient failures
+- **Add errors**: Success cases:
+  - **Created**: HTTP 201 (new schema registered)
+  - **Exists**: HTTP 409 (schema already exists with same definition)
+  - **Updated**: HTTP 200 (version updated)
+- **Add failures**: Treat as transient:
+  - **Client errors**: HTTP 400 (bad request), 422 (validation failed)
+  - **Auth/Perms**: HTTP 401, 403
+  - **Other**: All other codes
 - **Context timeout**: Return error early, preserve state for next attempt
+- **Custom error parsing**: Parse JSON response for `error_code` field when HTTP status indicates error
 
 ## Phase Implementation Details
 
@@ -348,8 +363,39 @@ func (s *SchemaRegistry) removeUnknown(ctx context.Context) (err error, reconcil
     }
     defer resp.Body.Close()
     
-    // HTTP 200 and 404 are both considered success (404 = already gone)
-    if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
+    // Handle success cases: HTTP 200, 204 (successful deletion)
+    if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusNoContent {
+        // Successful deletion
+    } else if resp.StatusCode == http.StatusNotFound {
+        // HTTP 404 - subject already gone, treat as success
+    } else if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+        // Parse custom error codes for client errors
+        respBody, readErr := io.ReadAll(resp.Body)
+        if readErr == nil {
+            var errorResp map[string]interface{}
+            if json.Unmarshal(respBody, &errorResp) == nil {
+                if errorCode, ok := errorResp["error_code"].(float64); ok {
+                    switch int(errorCode) {
+                    case 40401: // Subject not found
+                        // Already gone, treat as success
+                    case 40406: // Already soft-deleted  
+                        // Already deleted, treat as success
+                    case 42206: // Schema has references
+                        return fmt.Errorf("cannot delete subject %s: schema has references (error 42206)", string(subjectToRemove)), false
+                    default:
+                        return fmt.Errorf("delete subject %s failed with custom error %d", string(subjectToRemove), int(errorCode)), false
+                    }
+                } else {
+                    return fmt.Errorf("delete subject %s returned client error status %d", string(subjectToRemove), resp.StatusCode), false
+                }
+            } else {
+                return fmt.Errorf("delete subject %s returned client error status %d", string(subjectToRemove), resp.StatusCode), false
+            }
+        } else {
+            return fmt.Errorf("delete subject %s returned client error status %d", string(subjectToRemove), resp.StatusCode), false
+        }
+    } else {
+        // Server errors and other cases - transient failure
         return fmt.Errorf("delete subject %s returned status %d", string(subjectToRemove), resp.StatusCode), false
     }
     
@@ -424,8 +470,38 @@ func (s *SchemaRegistry) addNew(ctx context.Context) (err error, reconciled bool
     }
     defer resp.Body.Close()
     
-    // HTTP 200, 201, and 409 are considered success (409 = already exists with same schema)
-    if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusConflict {
+    // Handle success cases
+    if resp.StatusCode == http.StatusCreated {
+        // HTTP 201 - new schema registered successfully
+    } else if resp.StatusCode == http.StatusOK {
+        // HTTP 200 - schema updated or already exists
+    } else if resp.StatusCode == http.StatusConflict {
+        // HTTP 409 - schema already exists with same definition, treat as success
+    } else if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+        // Client errors - parse custom error codes if available
+        respBody, readErr := io.ReadAll(resp.Body)
+        if readErr == nil {
+            var errorResp map[string]interface{}
+            if json.Unmarshal(respBody, &errorResp) == nil {
+                if errorCode, ok := errorResp["error_code"].(float64); ok {
+                    return fmt.Errorf("add subject %s failed with custom error %d: %s", string(subjectToAdd), int(errorCode), errorResp["message"]), false
+                }
+            }
+        }
+        // Generic client error handling
+        if resp.StatusCode == http.StatusBadRequest {
+            return fmt.Errorf("add subject %s failed: bad request (400)", string(subjectToAdd)), false
+        } else if resp.StatusCode == http.StatusUnauthorized {
+            return fmt.Errorf("add subject %s failed: unauthorized (401)", string(subjectToAdd)), false
+        } else if resp.StatusCode == http.StatusForbidden {
+            return fmt.Errorf("add subject %s failed: forbidden (403)", string(subjectToAdd)), false
+        } else if resp.StatusCode == http.StatusUnprocessableEntity {
+            return fmt.Errorf("add subject %s failed: schema validation error (422)", string(subjectToAdd)), false
+        } else {
+            return fmt.Errorf("add subject %s failed with client error status %d", string(subjectToAdd), resp.StatusCode), false
+        }
+    } else {
+        // Server errors and other cases - transient failure
         return fmt.Errorf("add subject %s returned status %d", string(subjectToAdd), resp.StatusCode), false
     }
     
@@ -449,13 +525,15 @@ func (s *SchemaRegistry) addNew(ctx context.Context) (err error, reconciled bool
 
 ## Constructor and Configuration
 
-### Constructor Options
+### Constructor Design
+The constructor creates a purely generic schema registry without any hardcoded schemas:
+
 ```go
-func NewSchemaRegistry(expectedSubjects map[SubjectName]JSONSchemaDefinition) *SchemaRegistry {
+// Single constructor - purely generic infrastructure
+func NewSchemaRegistry() *SchemaRegistry {
     return &SchemaRegistry{
         currentPhase:                SchemaRegistryPhaseLookup,
         httpClient:                  http.Client{},
-        expectedSubjects:            expectedSubjects,
         missingInRegistry:           make(map[SubjectName]JSONSchemaDefinition),
         inRegistryButUnknownLocally: make(map[SubjectName]bool),
         totalReconciliations:        0,
@@ -465,42 +543,26 @@ func NewSchemaRegistry(expectedSubjects map[SubjectName]JSONSchemaDefinition) *S
         lastError:                   "",
     }
 }
-
-// Alternative: Configuration-driven constructor
-func NewSchemaRegistryFromConfig(config SchemaRegistryConfig) *SchemaRegistry {
-    expectedSubjects := make(map[SubjectName]JSONSchemaDefinition)
-    for subject, schema := range config.ExpectedSchemas {
-        expectedSubjects[SubjectName(subject)] = JSONSchemaDefinition(schema)
-    }
-    return NewSchemaRegistry(expectedSubjects)
-}
 ```
 
-### Expected Subjects Source
-For initial implementation, use embedded defaults:
+### Schema Configuration
+Schemas are provided dynamically at reconcile time by the caller:
+
 ```go
-var DefaultExpectedSchemas = map[SubjectName]JSONSchemaDefinition{
-    SubjectName("sensor-value"): JSONSchemaDefinition(`{
-        "type": "object",
-        "properties": {
-            "timestamp": {"type": "string", "format": "date-time"},
-            "value": {"type": "number"},
-            "unit": {"type": "string"}
-        },
-        "required": ["timestamp", "value"]
-    }`),
-    SubjectName("machine-state"): JSONSchemaDefinition(`{
-        "type": "object", 
-        "properties": {
-            "machineId": {"type": "string"},
-            "state": {"type": "string", "enum": ["running", "stopped", "maintenance"]},
-            "timestamp": {"type": "string", "format": "date-time"}
-        },
-        "required": ["machineId", "state", "timestamp"]
-    }`),
-    // ... more JSON schemas
+// Caller provides schemas when reconciling
+expectedSchemas := map[SubjectName]JSONSchemaDefinition{
+    SubjectName("sensor-value"): JSONSchemaDefinition(`{"type": "object", ...}`),
+    SubjectName("machine-state"): JSONSchemaDefinition(`{"type": "object", ...}`),
 }
+err := registry.Reconcile(ctx, expectedSchemas)
 ```
+
+### Design Benefits
+1. **Pure Infrastructure**: No business logic embedded in infrastructure
+2. **Dynamic Configuration**: Schemas come from configuration files, services, or runtime decisions
+3. **Reusable Component**: Can be used in any context with any schemas
+4. **Proper Separation**: Business schemas belong in business layer, not infrastructure layer
+5. **Testing Flexibility**: Easy to test with different schema sets
 
 ## Test Strategy
 
@@ -513,9 +575,16 @@ Extend existing mock to handle new endpoints:
 ### Test Categories
 1. **Phase Transition Tests**: Verify correct phase flow
 2. **Context Timeout Tests**: Each phase handles insufficient time
-3. **Error Handling Tests**: Network failures, malformed responses
+3. **Error Handling Tests**: 
+   - Network failures, malformed responses
+   - **Standard HTTP errors**: 400, 401, 403, 404, 422, 5xx
+   - **Custom error codes**: 40401, 40403, 40406, 42206
+   - **Success scenarios**: 200, 201, 204, 409
+   - **Error response parsing**: JSON error format handling
 4. **Reconciliation Logic Tests**: Proper `reconciled` return values
 5. **End-to-End Tests**: Complete cycles with add/remove operations
+6. **Schema Reference Tests**: Handling of 42206 (schema has references) errors
+7. **Soft Deletion Tests**: Handling of 40406 (already soft-deleted) scenarios
 
 ### Test Data Structure
 ```go
@@ -527,104 +596,75 @@ type TestScenario struct {
     ExpectedChanges     []SubjectName                          // Which subjects added/removed
     ExpectedReconciled  []bool                                 // reconciled value per phase
 }
+
+type ErrorTestScenario struct {
+    Name                string
+    Phase              SchemaRegistryPhase
+    HTTPStatusCode     int
+    CustomErrorCode    int                                     // For custom Redpanda errors
+    ErrorMessage       string
+    ExpectedHandling   string                                  // "success", "transient_failure", "permanent_failure"
+    ExpectedReconciled bool
+}
 ```
 
-## Implementation Steps
-
-### Step 1: Update Data Structures
-- Add type aliases for improved type safety (`SubjectName`, `JSONSchemaDefinition`)
-- Extend SchemaRegistry struct with concurrency protection and metrics
-- Add new phase constants
-- Update ISchemaRegistry interface to include GetMetrics() method
-- Use typed maps for better compile-time safety
-
-### Step 2: Write Comprehensive Tests
-- Phase transition tests
-- Context timeout handling
-- Add/remove operation tests
-- Mock registry extensions
-
-### Step 3: Implement Phases
-- Update existing lookup to store raw bytes
-- Implement decode phase
-- Implement compare phase
-- Implement removeUnknown phase
-- Implement addNew phase
-
-### Step 4: Integration
-- Update Reconcile method routing
-- Test end-to-end scenarios
-- Performance validation
-
-## Error Scenarios & Recovery
-
-### HTTP Response Handling
-- **Lookup**: Only HTTP 200 is success - all other codes are transient failures
-- **Remove**: HTTP 200 and 404 are success (404 means subject already deleted)
-- **Add**: HTTP 200, 201, and 409 are success (409 means schema already exists)
-- All other HTTP codes are treated as transient failures and retried
-
-### Context Timeouts
-- Each phase checks remaining time before operations
-- Return error immediately if insufficient time
-- State preserved for next reconciliation attempt
-
-### Network Failures
-- HTTP timeouts, connection refused, etc.
-- Return error, retry in next reconciliation
-- No state corruption
-
-### Schema Validation
-- Incoming schemas from configuration are already validated - no additional checks needed
-- Registry schemas that don't match expected schemas are marked for removal
-- No circuit breaker needed - worst case is wasting a few reconciliation cycles
-
-### Partial Completion
-- If remove/add operations partially complete, maps track remaining work
-- Next reconciliation continues from where left off
-- No duplicate operations
-
-### Concurrency Safety
-- All public methods (Reconcile, GetMetrics) are protected by mutex
-- Internal methods are private to prevent external concurrent access
-- Single-threaded execution within reconciliation phases
-
-## Performance Considerations
-
-### Memory Management
-- Clear rawSubjectsData after decode to free memory
-- Use maps for O(1) lookups in compare phase
-- HTTP client reuse for efficiency
-
-### Network Efficiency
-- Process one schema at a time (atomic operations)
-- Context-aware timeouts prevent hanging
-- Simple retry logic without circuit breakers
-
-### Reconciliation Frequency
-- Only return `reconciled=true` for actual changes
-- Reduces unnecessary reconciliation calls
-- Analysis phases are fast (return quickly)
-
-### Observability
-- **Metrics**: GetMetrics() function provides current state and counters
-- **Logging**: Use standard logger for errors and debug information
-- **Concurrency**: Mutex protection ensures thread-safe access to metrics
-
-## Future Enhancements
-
-### Configuration Management
-- Dynamic schema configuration updates
-- Hot-reload capabilities from external sources
-- Schema definition validation improvements
-
-### Enhanced Observability
-- Detailed phase transition metrics
-- Performance timing per operation
-- Enhanced error categorization and reporting
-- Integration with monitoring systems
-
-### Operational Improvements
-- Graceful shutdown handling
-- Health check endpoints
-- Configuration validation at startup 
+### Example Error Test Scenarios
+```go
+var errorTestScenarios = []ErrorTestScenario{
+    {
+        Name:               "DELETE: Subject already gone (404)",
+        Phase:              SchemaRegistryPhaseRemoveUnknown,
+        HTTPStatusCode:     404,
+        ExpectedHandling:   "success",
+        ExpectedReconciled: true,
+    },
+    {
+        Name:               "DELETE: Subject not found (40401)",
+        Phase:              SchemaRegistryPhaseRemoveUnknown,
+        HTTPStatusCode:     404,
+        CustomErrorCode:    40401,
+        ErrorMessage:       "Subject 'test-subject' not found.",
+        ExpectedHandling:   "success",
+        ExpectedReconciled: true,
+    },
+    {
+        Name:               "DELETE: Already soft-deleted (40406)",
+        Phase:              SchemaRegistryPhaseRemoveUnknown,
+        HTTPStatusCode:     422,
+        CustomErrorCode:    40406,
+        ErrorMessage:       "Subject 'test-subject' Version 1 was soft deleted.",
+        ExpectedHandling:   "success",
+        ExpectedReconciled: true,
+    },
+    {
+        Name:               "DELETE: Schema has references (42206)",
+        Phase:              SchemaRegistryPhaseRemoveUnknown,
+        HTTPStatusCode:     422,
+        CustomErrorCode:    42206,
+        ErrorMessage:       "One or more references exist to the schema",
+        ExpectedHandling:   "transient_failure",
+        ExpectedReconciled: false,
+    },
+    {
+        Name:               "POST: Schema created (201)",
+        Phase:              SchemaRegistryPhaseAddNew,
+        HTTPStatusCode:     201,
+        ExpectedHandling:   "success",
+        ExpectedReconciled: true,
+    },
+    {
+        Name:               "POST: Schema already exists (409)",
+        Phase:              SchemaRegistryPhaseAddNew,
+        HTTPStatusCode:     409,
+        ExpectedHandling:   "success",
+        ExpectedReconciled: true,
+    },
+    {
+        Name:               "POST: Validation failed (422)",
+        Phase:              SchemaRegistryPhaseAddNew,
+        HTTPStatusCode:     422,
+        ExpectedHandling:   "transient_failure",
+        ExpectedReconciled: false,
+    },
+}
+```

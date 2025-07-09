@@ -26,6 +26,39 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+// SampleSchemas provides sample schemas for testing purposes
+func SampleSchemas() map[SubjectName]JSONSchemaDefinition {
+	return map[SubjectName]JSONSchemaDefinition{
+		SubjectName("sensor-value"): JSONSchemaDefinition(`{
+			"type": "object",
+			"properties": {
+				"timestamp": {"type": "string", "format": "date-time"},
+				"value": {"type": "number"},
+				"unit": {"type": "string"}
+			},
+			"required": ["timestamp", "value"]
+		}`),
+		SubjectName("machine-state"): JSONSchemaDefinition(`{
+			"type": "object",
+			"properties": {
+				"machineId": {"type": "string"},
+				"state": {"type": "string", "enum": ["running", "stopped", "maintenance"]},
+				"timestamp": {"type": "string", "format": "date-time"}
+			},
+			"required": ["machineId", "state", "timestamp"]
+		}`),
+		SubjectName("production-count"): JSONSchemaDefinition(`{
+			"type": "object",
+			"properties": {
+				"count": {"type": "integer", "minimum": 0},
+				"timestamp": {"type": "string", "format": "date-time"},
+				"productId": {"type": "string"}
+			},
+			"required": ["count", "timestamp"]
+		}`),
+	}
+}
+
 var _ = Describe("SchemaRegistry", func() {
 	var (
 		mockRegistry *MockSchemaRegistry
@@ -58,7 +91,6 @@ var _ = Describe("SchemaRegistry", func() {
 
 			Expect(sr).NotTo(BeNil())
 			Expect(sr.currentPhase).To(Equal(SchemaRegistryPhaseLookup))
-			Expect(sr.subjects).To(Equal([]string{}))
 			Expect(sr.httpClient).NotTo(BeNil())
 		})
 	})
@@ -72,21 +104,20 @@ var _ = Describe("SchemaRegistry", func() {
 			})
 
 			It("should successfully retrieve subjects and transition to compare phase", func() {
-				err, reconciled := registry.Reconcile(ctx)
+				err := registry.Reconcile(ctx, SampleSchemas())
 
 				Expect(err).NotTo(HaveOccurred())
-				Expect(reconciled).To(BeTrue())
 				Expect(registry.currentPhase).To(Equal(SchemaRegistryPhaseCompare))
 
 				// Check that subjects were retrieved
-				Expect(registry.subjects).To(ContainElements(
-					"_sensor_data_v1_timeseries-number",
-					"_sensor_data_v2_timeseries-number",
-					"_pump_data_v1_timeseries-number",
-					"_pump_data_v1_timeseries-string",
-					"_motor_controller_v3_timeseries-number",
-					"_motor_controller_v3_timeseries-string",
-					"_string_data_v1_timeseries-string",
+				Expect(registry.registrySubjects).To(ContainElements(
+					SubjectName("_sensor_data_v1_timeseries-number"),
+					SubjectName("_sensor_data_v2_timeseries-number"),
+					SubjectName("_pump_data_v1_timeseries-number"),
+					SubjectName("_pump_data_v1_timeseries-string"),
+					SubjectName("_motor_controller_v3_timeseries-number"),
+					SubjectName("_motor_controller_v3_timeseries-string"),
+					SubjectName("_string_data_v1_timeseries-string"),
 				))
 			})
 
@@ -97,12 +128,11 @@ var _ = Describe("SchemaRegistry", func() {
 
 				overrideSchemaRegistryAddress(registry, emptyMockRegistry.URL())
 
-				err, reconciled := registry.Reconcile(ctx)
+				err := registry.Reconcile(ctx, SampleSchemas())
 
 				Expect(err).NotTo(HaveOccurred())
-				Expect(reconciled).To(BeTrue())
 				Expect(registry.currentPhase).To(Equal(SchemaRegistryPhaseCompare))
-				Expect(registry.subjects).To(HaveLen(0))
+				Expect(registry.registrySubjects).To(HaveLen(0))
 			})
 
 			It("should fail when context has insufficient time", func() {
@@ -110,10 +140,9 @@ var _ = Describe("SchemaRegistry", func() {
 				shortCtx, shortCancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 				defer shortCancel()
 
-				err, reconciled := registry.Reconcile(shortCtx)
+				err := registry.Reconcile(shortCtx, SampleSchemas())
 
 				Expect(err).To(HaveOccurred())
-				Expect(reconciled).To(BeFalse())
 				Expect(err.Error()).To(ContainSubstring("insufficient time remaining in context"))
 				Expect(registry.currentPhase).To(Equal(SchemaRegistryPhaseLookup)) // Should not transition
 			})
@@ -121,10 +150,9 @@ var _ = Describe("SchemaRegistry", func() {
 			It("should handle network errors gracefully", func() {
 				mockRegistry.SimulateNetworkError(true)
 
-				err, reconciled := registry.Reconcile(ctx)
+				err := registry.Reconcile(ctx, SampleSchemas())
 
 				Expect(err).To(HaveOccurred())
-				Expect(reconciled).To(BeFalse())
 				Expect(registry.currentPhase).To(Equal(SchemaRegistryPhaseLookup)) // Should not transition
 			})
 
@@ -132,10 +160,9 @@ var _ = Describe("SchemaRegistry", func() {
 				// Cancel the context before making the request
 				cancel()
 
-				err, reconciled := registry.Reconcile(ctx)
+				err := registry.Reconcile(ctx, SampleSchemas())
 
 				Expect(err).To(HaveOccurred())
-				Expect(reconciled).To(BeFalse())
 				Expect(registry.currentPhase).To(Equal(SchemaRegistryPhaseLookup)) // Should not transition
 			})
 		})
@@ -145,24 +172,22 @@ var _ = Describe("SchemaRegistry", func() {
 				registry.currentPhase = SchemaRegistryPhaseCompare
 			})
 
-			It("should return not reconciled (placeholder implementation)", func() {
-				err, reconciled := registry.Reconcile(ctx)
+			It("should complete comparison and return success", func() {
+				err := registry.Reconcile(ctx, SampleSchemas())
 
 				Expect(err).NotTo(HaveOccurred())
-				Expect(reconciled).To(BeFalse())
 			})
 		})
 
-		Context("when in apply phase", func() {
+		Context("when in add new phase", func() {
 			BeforeEach(func() {
-				registry.currentPhase = SchemaRegistryPhaseApply
+				registry.currentPhase = SchemaRegistryPhaseAddNew
 			})
 
-			It("should return not reconciled (placeholder implementation)", func() {
-				err, reconciled := registry.Reconcile(ctx)
+			It("should complete add operation and return success", func() {
+				err := registry.Reconcile(ctx, SampleSchemas())
 
 				Expect(err).NotTo(HaveOccurred())
-				Expect(reconciled).To(BeFalse())
 			})
 		})
 
@@ -172,10 +197,9 @@ var _ = Describe("SchemaRegistry", func() {
 			})
 
 			It("should return an error for unknown phase", func() {
-				err, reconciled := registry.Reconcile(ctx)
+				err := registry.Reconcile(ctx, SampleSchemas())
 
 				Expect(err).To(HaveOccurred())
-				Expect(reconciled).To(BeFalse())
 				Expect(err.Error()).To(ContainSubstring("unknown phase: unknown"))
 			})
 		})
@@ -191,10 +215,10 @@ var _ = Describe("SchemaRegistry", func() {
 			exactCtx, exactCancel := context.WithTimeout(context.Background(), MinimumLookupTime+5*time.Millisecond)
 			defer exactCancel()
 
-			err, reconciled := registry.lookup(exactCtx)
+			err, changePhase := registry.lookup(exactCtx)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(reconciled).To(BeTrue())
+			Expect(changePhase).To(BeTrue()) // lookup should advance to next phase
 		})
 
 		It("should fail when context deadline is too close", func() {
@@ -202,30 +226,30 @@ var _ = Describe("SchemaRegistry", func() {
 			tooShortCtx, tooShortCancel := context.WithTimeout(context.Background(), MinimumLookupTime-1*time.Millisecond)
 			defer tooShortCancel()
 
-			err, reconciled := registry.lookup(tooShortCtx)
+			err, changePhase := registry.lookup(tooShortCtx)
 
 			Expect(err).To(HaveOccurred())
-			Expect(reconciled).To(BeFalse())
+			Expect(changePhase).To(BeFalse()) // On error, should not change phase
 			Expect(err.Error()).To(ContainSubstring("insufficient time remaining"))
 		})
 
 		It("should work with context without deadline", func() {
 			ctxNoDeadline := context.Background()
 
-			err, reconciled := registry.lookup(ctxNoDeadline)
+			err, changePhase := registry.lookup(ctxNoDeadline)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(reconciled).To(BeTrue())
+			Expect(changePhase).To(BeTrue()) // should advance to next phase
 		})
 
 		It("should handle HTTP errors properly", func() {
 			mockRegistry.SimulateNetworkError(true)
 
-			err, reconciled := registry.lookup(ctx)
+			err, changePhase := registry.lookup(ctx)
 
 			Expect(err).To(HaveOccurred())
-			Expect(reconciled).To(BeFalse())
-			Expect(err.Error()).To(ContainSubstring("schema registry returned status 500"))
+			Expect(changePhase).To(BeFalse()) // On error, should not change phase
+			Expect(err.Error()).To(ContainSubstring("schema registry lookup failed with status 500"))
 		})
 	})
 })

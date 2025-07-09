@@ -883,13 +883,15 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, services service
 		return fmt.Errorf("failed to reconcile redpanda monitor: %w", monitorErr), false
 	}
 
-	schemaRegistryErr, schemaRegistryReconciled := s.schemaRegistryManager.Reconcile(ctx)
+	// TODO: Get expected schemas from configuration or services provider
+	expectedSchemas := make(map[SubjectName]JSONSchemaDefinition)
+	schemaRegistryErr := s.schemaRegistryManager.Reconcile(ctx, expectedSchemas)
 	if schemaRegistryErr != nil {
 		return fmt.Errorf("failed to reconcile schema registry: %w", schemaRegistryErr), false
 	}
 
 	// If either was reconciled, indicate that reconciliation occurred
-	return nil, s6Reconciled || monitorReconciled || schemaRegistryReconciled
+	return nil, s6Reconciled || monitorReconciled
 }
 
 // IsLogsFine reports true when recent Redpanda logs (within logWindow) contain

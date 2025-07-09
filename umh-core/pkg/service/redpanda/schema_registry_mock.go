@@ -50,7 +50,7 @@ func NewMockSchemaRegistry() *MockSchemaRegistry {
 	// Create HTTP server with Redpanda-compatible API
 	mux := http.NewServeMux()
 	mux.HandleFunc("/subjects", mock.handleSubjects)
-	mux.HandleFunc("/subjects/", mock.handleSubjectVersions)
+	mux.HandleFunc("/subjects/", mock.handleSubjectOperations)
 
 	mock.server = httptest.NewServer(mux)
 	return mock
@@ -126,23 +126,126 @@ func (m *MockSchemaRegistry) handleSubjects(w http.ResponseWriter, r *http.Reque
 	}
 }
 
-// handleSubjectVersions handles requests to /subjects/{subject}/versions/{version}
-func (m *MockSchemaRegistry) handleSubjectVersions(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Parse the URL path: /subjects/{subject}/versions/{version}
+// handleSubjectOperations handles all operations under /subjects/{subject}/...
+func (m *MockSchemaRegistry) handleSubjectOperations(w http.ResponseWriter, r *http.Request) {
+	// Parse the URL path: /subjects/{subject} or /subjects/{subject}/versions
 	path := strings.TrimPrefix(r.URL.Path, "/subjects/")
 	parts := strings.Split(path, "/")
 
-	if len(parts) < 3 || parts[1] != "versions" {
+	if len(parts) == 0 || parts[0] == "" {
 		http.Error(w, "Invalid path", http.StatusBadRequest)
 		return
 	}
 
 	subject := parts[0]
+
+	switch r.Method {
+	case http.MethodDelete:
+		// DELETE /subjects/{subject}
+		if len(parts) == 1 {
+			m.handleDeleteSubject(w, r, subject)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	case http.MethodPost:
+		// POST /subjects/{subject}/versions
+		if len(parts) == 2 && parts[1] == "versions" {
+			m.handlePostSubjectVersion(w, r, subject)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	case http.MethodGet:
+		// GET /subjects/{subject}/versions/{version}
+		m.handleGetSubjectVersions(w, r, subject, parts)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// handleDeleteSubject handles DELETE /subjects/{subject}
+func (m *MockSchemaRegistry) handleDeleteSubject(w http.ResponseWriter, r *http.Request, subject string) {
+	// Check if subject exists
+	if _, exists := m.schemas[subject]; !exists {
+		// Return custom error format for subject not found
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(fmt.Sprintf(`{"error_code":40401,"message":"Subject '%s' not found."}`, subject)))
+		return
+	}
+
+	// Delete the entire subject
+	delete(m.schemas, subject)
+
+	// Return success with version list (what Redpanda returns)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`[1]`)) // Mock version list
+}
+
+// handlePostSubjectVersion handles POST /subjects/{subject}/versions
+func (m *MockSchemaRegistry) handlePostSubjectVersion(w http.ResponseWriter, r *http.Request, subject string) {
+	// Parse JSON body
+	var req struct {
+		Schema     string `json:"schema"`
+		SchemaType string `json:"schemaType"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error_code":42201,"message":"Invalid JSON"}`))
+		return
+	}
+
+	// Check if schema already exists (simulate conflict detection)
+	if versions, exists := m.schemas[subject]; exists {
+		for _, schema := range versions {
+			if schema.Schema == req.Schema {
+				// Schema already exists, return 409 Conflict
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusConflict)
+				w.Write([]byte(fmt.Sprintf(`{"id":%d}`, schema.ID)))
+				return
+			}
+		}
+	}
+
+	// Add new schema version
+	version := 1
+	if versions, exists := m.schemas[subject]; exists {
+		// Find next version number
+		for v := range versions {
+			if v >= version {
+				version = v + 1
+			}
+		}
+	} else {
+		m.schemas[subject] = make(map[int]*MockSchemaVersion)
+	}
+
+	// Generate unique ID
+	id := len(m.schemas)*1000 + version
+
+	m.schemas[subject][version] = &MockSchemaVersion{
+		ID:      id,
+		Version: version,
+		Schema:  req.Schema,
+		Subject: subject,
+	}
+
+	// Return success with schema ID
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	w.Write([]byte(fmt.Sprintf(`{"id":%d}`, id)))
+}
+
+// handleGetSubjectVersions handles GET /subjects/{subject}/versions/{version}
+func (m *MockSchemaRegistry) handleGetSubjectVersions(w http.ResponseWriter, r *http.Request, subject string, parts []string) {
+	if len(parts) < 3 || parts[1] != "versions" {
+		http.Error(w, "Invalid path", http.StatusBadRequest)
+		return
+	}
+
 	versionStr := parts[2]
 
 	// Handle "latest" version request
@@ -393,7 +496,7 @@ func (m *MockSchemaRegistry) SimulateNetworkError(enable bool) {
 		// Restore normal handlers
 		mux := http.NewServeMux()
 		mux.HandleFunc("/subjects", m.handleSubjects)
-		mux.HandleFunc("/subjects/", m.handleSubjectVersions)
+		mux.HandleFunc("/subjects/", m.handleSubjectOperations)
 		m.server.Config.Handler = mux
 	}
 }
@@ -418,7 +521,10 @@ func (m *MockSchemaRegistry) GetVersionsForSubject(subject string) []int {
 	return versions
 }
 
-// Reconcile always returns success without doing anything
-func (n *NoOpSchemaRegistry) Reconcile(ctx context.Context) (err error, reconciled bool) {
-	return nil, false
+func (n *NoOpSchemaRegistry) Reconcile(ctx context.Context, expectedSubjects map[SubjectName]JSONSchemaDefinition) error {
+	return nil
+}
+
+func (n *NoOpSchemaRegistry) GetMetrics() SchemaRegistryMetrics {
+	return SchemaRegistryMetrics{}
 }
