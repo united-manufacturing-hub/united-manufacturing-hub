@@ -126,7 +126,7 @@ agent:
 # ---------- Stream Processors ---------- #
 streamProcessor:
   # ────────────────────────────────────────────────────────────────
-  - name: pump-processor-1
+  - name: pump-processor
     desiredState: active
     streamProcessorServiceConfig:
       location:

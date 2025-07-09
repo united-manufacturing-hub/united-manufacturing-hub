@@ -528,7 +528,7 @@ internal:
 				// Find the pump-processor-1 that uses the template
 				var pumpProcessor1 *StreamProcessorConfig
 				for _, sp := range config.StreamProcessor {
-					if sp.Name == "pump-processor-1" {
+					if sp.Name == "pump-processor" {
 						pumpProcessor1 = &sp
 						break
 					}
@@ -573,7 +573,7 @@ internal:
 				// Verify the stream processors are preserved
 				var writtenPumpProcessor1 *StreamProcessorConfig
 				for _, sp := range writtenConfig.StreamProcessor {
-					if sp.Name == "pump-processor-1" {
+					if sp.Name == "pump-processor" {
 						writtenPumpProcessor1 = &sp
 						break
 					}
