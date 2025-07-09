@@ -159,7 +159,7 @@ func verifySchemaViaHTTP(subject SubjectName, expectedSchema JSONSchemaDefinitio
 	return nil
 }
 
-var _ = Describe("Real Redpanda Integration Tests", Ordered, func() {
+var _ = Describe("Real Redpanda Integration Tests", Ordered, Label("integration"), func() {
 
 	var registry *SchemaRegistry
 
