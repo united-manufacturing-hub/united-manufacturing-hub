@@ -105,7 +105,7 @@ templates:
         static:
           serialNumber: "{{ .SERIAL_NUMBER }}"
         dynamic:
-          count: "vibration_sensor.value"
+          count: "count_sensor.value"
           vibration:
             x-axis: "vibration_sensor.x_axis"
             y-axis: "vibration_sensor.y_axis"

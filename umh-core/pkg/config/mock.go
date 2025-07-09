@@ -581,36 +581,35 @@ func (m *MockConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 		return fmt.Errorf("failed to get config: %w", err)
 	}
 
-	// Find and mark instances to delete
-	var filteredProtocolConverters []ProtocolConverterConfig
-	var deletedName string
-
-	found := false
-	for _, component := range config.ProtocolConverter {
+	// Find the component to delete
+	var targetComponent *ProtocolConverterConfig
+	targetIndex := -1
+	for i, component := range config.ProtocolConverter {
 		componentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
 		if componentID == componentUUID {
-			deletedName = component.Name
-			found = true
-			// Don't include this component in filtered list
-		} else {
-			filteredProtocolConverters = append(filteredProtocolConverters, component)
+			targetComponent = &component
+			targetIndex = i
+			break
 		}
 	}
 
-	if !found {
+	if targetComponent == nil {
 		return fmt.Errorf("protocol converter with UUID %s not found", componentUUID)
 	}
 
-	// Also remove child instances that referenced the deleted component
-	var finalProtocolConverters []ProtocolConverterConfig
-	for _, component := range filteredProtocolConverters {
-		if component.ProtocolConverterServiceConfig.TemplateRef != deletedName {
-			finalProtocolConverters = append(finalProtocolConverters, component)
+	// Check if this is a root component (TemplateRef == Name) that has dependent children
+	isRoot := targetComponent.ProtocolConverterServiceConfig.TemplateRef == targetComponent.Name
+	if isRoot {
+		// Check for dependent children
+		for _, component := range config.ProtocolConverter {
+			if component.ProtocolConverterServiceConfig.TemplateRef == targetComponent.Name && component.Name != targetComponent.Name {
+				return fmt.Errorf("cannot delete template %q: it has dependent child instances", targetComponent.Name)
+			}
 		}
 	}
 
-	// Update config with filtered components
-	config.ProtocolConverter = finalProtocolConverters
+	// Remove the component (no cascading deletion)
+	config.ProtocolConverter = append(config.ProtocolConverter[:targetIndex], config.ProtocolConverter[targetIndex+1:]...)
 
 	// write the config
 	if err := m.writeConfig(ctx, config); err != nil {
@@ -777,33 +776,34 @@ func (m *MockConfigManager) AtomicDeleteStreamProcessor(ctx context.Context, nam
 		return fmt.Errorf("failed to get config: %w", err)
 	}
 
-	// Find and mark instances to delete
-	var filteredStreamProcessors []StreamProcessorConfig
-
-	found := false
-	for _, component := range config.StreamProcessor {
+	// Find the component to delete
+	var targetComponent *StreamProcessorConfig
+	targetIndex := -1
+	for i, component := range config.StreamProcessor {
 		if component.Name == name {
-			found = true
-			// Don't include this component in filtered list
-		} else {
-			filteredStreamProcessors = append(filteredStreamProcessors, component)
+			targetComponent = &component
+			targetIndex = i
+			break
 		}
 	}
 
-	if !found {
+	if targetComponent == nil {
 		return fmt.Errorf("stream processor with name %s not found", name)
 	}
 
-	// Also remove child instances that referenced the deleted component
-	var finalStreamProcessors []StreamProcessorConfig
-	for _, component := range filteredStreamProcessors {
-		if component.StreamProcessorServiceConfig.TemplateRef != name {
-			finalStreamProcessors = append(finalStreamProcessors, component)
+	// Check if this is a root component (TemplateRef == Name) that has dependent children
+	isRoot := targetComponent.StreamProcessorServiceConfig.TemplateRef == targetComponent.Name
+	if isRoot {
+		// Check for dependent children
+		for _, component := range config.StreamProcessor {
+			if component.StreamProcessorServiceConfig.TemplateRef == targetComponent.Name && component.Name != targetComponent.Name {
+				return fmt.Errorf("cannot delete template %q: it has dependent child instances", targetComponent.Name)
+			}
 		}
 	}
 
-	// Update config with filtered components
-	config.StreamProcessor = finalStreamProcessors
+	// Remove the component (no cascading deletion)
+	config.StreamProcessor = append(config.StreamProcessor[:targetIndex], config.StreamProcessor[targetIndex+1:]...)
 
 	// write the config
 	if err := m.writeConfig(ctx, config); err != nil {
