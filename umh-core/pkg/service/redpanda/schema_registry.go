@@ -30,6 +30,8 @@
 //
 // Each phase is designed for fault tolerance with proper timeout handling,
 // error classification, and incremental progress to enable recovery after failures.
+//
+// The process is split allowing our long running process to be split over multiple reconciliation cycles.
 
 package redpanda
 

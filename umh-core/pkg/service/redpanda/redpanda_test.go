@@ -24,6 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -46,6 +47,15 @@ func getTmpDir() string {
 // newTimeoutContext creates a context with a 30-second timeout
 func newTimeoutContext() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), 30*time.Second)
+}
+
+// createTestSnapshot creates a test SystemSnapshot with the given tick value
+func createTestSnapshot(tick uint64) fsm.SystemSnapshot {
+	return fsm.SystemSnapshot{
+		Tick:         tick,
+		SnapshotTime: time.Now(),
+		Managers:     make(map[string]fsm.ManagerSnapshot),
+	}
 }
 
 var _ = Describe("Redpanda Service", func() {
@@ -98,7 +108,8 @@ var _ = Describe("Redpanda Service", func() {
 		// Reconcile the S6 manager
 		ctx, cancel = newTimeoutContext()
 		defer cancel()
-		err, _ = service.ReconcileManager(ctx, mockSvcRegistry, tick)
+		snapshot := createTestSnapshot(tick)
+		err, _ = service.ReconcileManager(ctx, mockSvcRegistry, snapshot)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -203,7 +214,8 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Reconcile to apply changes
 			By("Reconciling the manager to apply configuration changes")
-			err, _ = mockRedpandaService.ReconcileManager(ctx, mockSvcRegistry, 0)
+			snapshot := createTestSnapshot(0)
+			err, _ = mockRedpandaService.ReconcileManager(ctx, mockSvcRegistry, snapshot)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the configuration was updated in the S6 manager
