@@ -121,11 +121,7 @@ func ConfigDiff(desired, observed StreamProcessorServiceConfigSpec) string {
 // but FSMs work with runtime types. When we need to compare or diff runtime configs,
 // we must first convert them back to template format to reuse existing logic.
 func convertRuntimeToTemplate(runtime StreamProcessorServiceConfigRuntime) StreamProcessorServiceConfigTemplate {
-	return StreamProcessorServiceConfigTemplate{
-		Model:   runtime.Model,
-		Sources: runtime.Sources,
-		Mapping: runtime.Mapping,
-	}
+	return StreamProcessorServiceConfigTemplate(runtime)
 }
 
 // ConfigsEqualRuntime is a package-level function for comparing runtime configurations

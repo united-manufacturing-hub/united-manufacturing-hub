@@ -115,7 +115,7 @@ func (m *FileConfigManager) AtomicEditStreamProcessor(ctx context.Context, sp St
 
 	// find the stream processor by name
 	var oldStreamProcessor *StreamProcessorConfig
-	var index int = -1
+	var index = -1
 	for i, cmp := range config.StreamProcessor {
 		if cmp.Name == sp.Name {
 			oldStreamProcessor = &cmp
@@ -183,7 +183,7 @@ func (m *FileConfigManager) AtomicDeleteStreamProcessor(ctx context.Context, nam
 
 	// find the stream processor by name
 	var streamProcessorToDelete *StreamProcessorConfig
-	var index int = -1
+	var index = -1
 	for i, cmp := range config.StreamProcessor {
 		if cmp.Name == name {
 			streamProcessorToDelete = &cmp
