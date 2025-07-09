@@ -80,6 +80,7 @@ func NewRedpandaInstance(
 		baseFSMInstance:       internal_fsm.NewBaseFSMInstance(cfg, backoffConfig, logger),
 		service:               redpanda_service.NewDefaultRedpandaService(config.Name),
 		config:                config.RedpandaServiceConfig,
+		schemaRegistry:        redpanda_service.NewSchemaRegistry(),
 		PreviousObservedState: RedpandaObservedState{},
 	}
 

@@ -22,7 +22,15 @@ import (
 	"time"
 
 	"github.com/testcontainers/testcontainers-go/modules/redpanda"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 )
+
+// emptySchemaRegistryConfig returns empty configuration for schema registry reconciliation
+// This is used in benchmarks where we want to test the reconciliation performance
+// without the overhead of data model translation
+func emptySchemaRegistryConfig() ([]config.DataModelsConfig, []config.DataContractsConfig, map[string]config.PayloadShape) {
+	return []config.DataModelsConfig{}, []config.DataContractsConfig{}, make(map[string]config.PayloadShape)
+}
 
 // BenchmarkSchemaRegistry provides comprehensive performance benchmarks for schema registry operations
 func BenchmarkSchemaRegistry(b *testing.B) {
@@ -50,7 +58,8 @@ func BenchmarkSchemaRegistry(b *testing.B) {
 
 	// Wait for registry to be ready
 	for i := 0; i < 30; i++ {
-		if err := registry.Reconcile(ctx, map[SubjectName]JSONSchemaDefinition{}); err == nil {
+		dataModels, dataContracts, payloadShapes := emptySchemaRegistryConfig()
+		if err := registry.Reconcile(ctx, dataModels, dataContracts, payloadShapes); err == nil {
 			break
 		}
 		time.Sleep(1 * time.Second)
@@ -124,7 +133,8 @@ func performWarmup(b *testing.B, registry *SchemaRegistry) {
 	b.Logf("Warmup Phase 1: HTTP connection establishment")
 	for i := 0; i < 10; i++ {
 		warmupCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		_ = registry.Reconcile(warmupCtx, emptySchemas)
+		dataModels, dataContracts, payloadShapes := emptySchemaRegistryConfig()
+		_ = registry.Reconcile(warmupCtx, dataModels, dataContracts, payloadShapes)
 		cancel()
 	}
 
@@ -676,7 +686,10 @@ func reconcileUntilComplete(ctx context.Context, registry *SchemaRegistry, schem
 		default:
 		}
 
-		err := registry.Reconcile(ctx, schemas)
+		// Convert old-style schemas to new configuration format
+		// This is a temporary compatibility layer for benchmarks
+		dataModels, dataContracts, payloadShapes := emptySchemaRegistryConfig()
+		err := registry.Reconcile(ctx, dataModels, dataContracts, payloadShapes)
 		if err != nil {
 			return err
 		}

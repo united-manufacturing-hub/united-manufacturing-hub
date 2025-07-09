@@ -53,6 +53,12 @@ func NewRedpandaManager(name string) *RedpandaManager {
 			redpandaConfig := fullConfig.Internal.Redpanda
 			// Force redpanda name to be "redpanda"
 			redpandaConfig.Name = constants.RedpandaServiceName
+
+			// Store additional config data for schema registry
+			redpandaConfig.DataModels = fullConfig.DataModels
+			redpandaConfig.DataContracts = fullConfig.DataContracts
+			redpandaConfig.PayloadShapes = fullConfig.PayloadShapes
+
 			return []config.RedpandaConfig{redpandaConfig}, nil
 		},
 		// Get name from Redpanda config
@@ -85,6 +91,12 @@ func NewRedpandaManager(name string) *RedpandaManager {
 				return fmt.Errorf("instance is not a RedpandaInstance")
 			}
 			RedpandaInstance.config = cfg.RedpandaServiceConfig
+
+			// Set schema registry configuration data
+			RedpandaInstance.setDataModels(cfg.DataModels)
+			RedpandaInstance.setDataContracts(cfg.DataContracts)
+			RedpandaInstance.setPayloadShapes(cfg.PayloadShapes)
+
 			return nil
 		},
 		// Get expected max p95 execution time per instance

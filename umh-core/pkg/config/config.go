@@ -207,6 +207,11 @@ type RedpandaConfig struct {
 
 	// For the Redpanda service
 	RedpandaServiceConfig redpandaserviceconfig.RedpandaServiceConfig `yaml:"redpandaServiceConfig,omitempty"`
+
+	// For the Schema Registry (not marshalled to YAML as these come from the top-level config)
+	DataModels    []DataModelsConfig      `yaml:"-"`
+	DataContracts []DataContractsConfig   `yaml:"-"`
+	PayloadShapes map[string]PayloadShape `yaml:"-"`
 }
 
 // ConnectionConfig contains configuration for creating a Connection service

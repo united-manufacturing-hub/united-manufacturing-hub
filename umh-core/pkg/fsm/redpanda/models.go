@@ -21,6 +21,7 @@ import (
 
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	redpandasvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
 )
 
@@ -127,6 +128,14 @@ type RedpandaInstance struct {
 	// config contains all the configuration for this service
 	config redpandaserviceconfig.RedpandaServiceConfig
 
+	// schemaRegistry manages JSON schema registration for data models and contracts
+	schemaRegistry redpandasvc.ISchemaRegistry
+
+	// Schema registry configuration data
+	dataModels    []config.DataModelsConfig
+	dataContracts []config.DataContractsConfig
+	payloadShapes map[string]config.PayloadShape
+
 	// transitionToRunningTime tracks when we first transitioned to a running state
 	// This is used to ignore errors that occurred before we were fully running
 	transitionToRunningTime time.Time
@@ -154,4 +163,30 @@ func (r *RedpandaInstance) GetConfig() redpandaserviceconfig.RedpandaServiceConf
 // and should be removed
 func (r *RedpandaInstance) IsTransientStreakCounterMaxed() bool {
 	return r.baseFSMInstance.IsTransientStreakCounterMaxed()
+}
+
+// Getter methods for schema registry configuration
+func (r *RedpandaInstance) getDataModels() []config.DataModelsConfig {
+	return r.dataModels
+}
+
+func (r *RedpandaInstance) getDataContracts() []config.DataContractsConfig {
+	return r.dataContracts
+}
+
+func (r *RedpandaInstance) getPayloadShapes() map[string]config.PayloadShape {
+	return r.payloadShapes
+}
+
+// Setter methods for schema registry configuration (called by RedpandaManager)
+func (r *RedpandaInstance) setDataModels(dataModels []config.DataModelsConfig) {
+	r.dataModels = dataModels
+}
+
+func (r *RedpandaInstance) setDataContracts(dataContracts []config.DataContractsConfig) {
+	r.dataContracts = dataContracts
+}
+
+func (r *RedpandaInstance) setPayloadShapes(payloadShapes map[string]config.PayloadShape) {
+	r.payloadShapes = payloadShapes
 }

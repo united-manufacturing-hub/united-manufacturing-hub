@@ -22,6 +22,8 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 )
 
 // MockSchemaRegistry simulates Redpanda's Schema Registry for testing
@@ -526,7 +528,7 @@ func (m *MockSchemaRegistry) GetVersionsForSubject(subject string) []int {
 	return versions
 }
 
-func (n *NoOpSchemaRegistry) Reconcile(ctx context.Context, expectedSubjects map[SubjectName]JSONSchemaDefinition) error {
+func (n *NoOpSchemaRegistry) Reconcile(ctx context.Context, dataModels []config.DataModelsConfig, dataContracts []config.DataContractsConfig, payloadShapes map[string]config.PayloadShape) error {
 	return nil
 }
 

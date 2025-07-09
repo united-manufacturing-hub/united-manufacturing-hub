@@ -884,8 +884,12 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, services service
 	}
 
 	// TODO: Get expected schemas from configuration or services provider
-	expectedSchemas := make(map[SubjectName]JSONSchemaDefinition)
-	schemaRegistryErr := s.schemaRegistryManager.Reconcile(ctx, expectedSchemas)
+	// For now, use empty configuration - schema registry reconciliation will be handled by RedpandaInstance
+	emptyDataModels := []config.DataModelsConfig{}
+	emptyDataContracts := []config.DataContractsConfig{}
+	emptyPayloadShapes := make(map[string]config.PayloadShape)
+
+	schemaRegistryErr := s.schemaRegistryManager.Reconcile(ctx, emptyDataModels, emptyDataContracts, emptyPayloadShapes)
 	if schemaRegistryErr != nil {
 		return fmt.Errorf("failed to reconcile schema registry: %w", schemaRegistryErr), false
 	}

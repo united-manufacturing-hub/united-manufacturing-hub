@@ -43,6 +43,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel"
 )
 
 // SubjectName represents a schema subject identifier in the registry.
@@ -121,10 +124,10 @@ func (u *urlBuilder) subjectVersionsURL(subject SubjectName) string {
 //		// Handle reconciliation error
 //	}
 type ISchemaRegistry interface {
-	// Reconcile ensures the registry contains exactly the expected schemas.
-	// It adds missing schemas and removes unexpected ones through a multi-phase process.
+	// Reconcile ensures the registry contains exactly the schemas derived from data models and contracts.
+	// It translates data models to JSON schemas and adds missing schemas while removing unexpected ones.
 	// Returns error if reconciliation fails; use backoff for transient failures.
-	Reconcile(ctx context.Context, expectedSubjects map[SubjectName]JSONSchemaDefinition) error
+	Reconcile(ctx context.Context, dataModels []config.DataModelsConfig, dataContracts []config.DataContractsConfig, payloadShapes map[string]config.PayloadShape) error
 
 	// GetMetrics returns current operational metrics for monitoring and alerting.
 	// All metrics are atomic and thread-safe. Use for health checks and dashboards.
@@ -163,6 +166,9 @@ type SchemaRegistry struct {
 	// Core state
 	currentPhase SchemaRegistryPhase
 	httpClient   http.Client
+
+	// Translation
+	translator *datamodel.Translator
 
 	// Phase-specific data
 	rawSubjectsData  []byte        // Raw HTTP response from lookup
@@ -259,6 +265,7 @@ func NewSchemaRegistry(opts ...func(*SchemaRegistry)) *SchemaRegistry {
 				DisableCompression:  false,            // Enable gzip compression
 			},
 		},
+		translator:                  datamodel.NewTranslator(),
 		missingInRegistry:           make(map[SubjectName]JSONSchemaDefinition),
 		inRegistryButUnknownLocally: make(map[SubjectName]bool),
 		totalReconciliations:        0,
@@ -289,21 +296,30 @@ func WithSchemaRegistryAddress(address string) func(*SchemaRegistry) {
 	}
 }
 
-// Reconcile ensures the schema registry contains exactly the expected schemas.
-// It synchronizes the registry state by adding missing schemas and removing unexpected ones.
-// The operation follows a multi-phase process with proper error handling and context support.
+// Reconcile ensures the schema registry contains exactly the schemas derived from data models and contracts.
+// It translates data models to JSON schemas and synchronizes the registry state by adding missing schemas
+// and removing unexpected ones. The operation follows a multi-phase process with proper error handling and context support.
 //
 // Parameters:
 //   - ctx: Context for cancellation and timeout control (required)
-//   - expectedSubjects: Map of subject names to their JSON schema definitions
+//   - dataModels: Array of data model configurations to translate
+//   - dataContracts: Array of data contract configurations that reference data models
+//   - payloadShapes: Map of payload shape definitions (auto-injected defaults if empty)
+//
+// Translation process:
+//   - For each data contract, finds the referenced data model and version
+//   - Translates the data model structure to JSON Schema format using the datamodel package
+//   - Generates Schema Registry subject names in format: {contract_name}_{version}-{payload_shape}
+//   - Groups schemas by payload shape for efficient registry organization
 //
 // Behavior:
-//   - Adds schemas that exist in expectedSubjects but not in registry
-//   - Removes schemas that exist in registry but not in expectedSubjects
+//   - Adds schemas that exist in translated contracts but not in registry
+//   - Removes schemas that exist in registry but not in translated contracts
 //   - Processes operations atomically (one schema per call)
 //   - Updates internal metrics for monitoring
 //
 // Error conditions:
+//   - Translation failures: Invalid data model structure, missing model references
 //   - Network failures: HTTP errors, connection timeouts
 //   - Schema validation: Invalid JSON schema format
 //   - Registry conflicts: Concurrent modifications
@@ -319,18 +335,30 @@ func WithSchemaRegistryAddress(address string) func(*SchemaRegistry) {
 //	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 //	defer cancel()
 //
-//	schemas := map[SubjectName]JSONSchemaDefinition{
-//		"user-events": `{"type": "object", "properties": {"id": {"type": "string"}}}`,
-//		"system-logs": `{"type": "object", "properties": {"level": {"type": "string"}}}`,
+//	dataModels := []config.DataModelsConfig{
+//		{
+//			Name: "pump_data",
+//			Versions: map[string]config.DataModelVersion{
+//				"v1": {
+//					Structure: map[string]config.Field{
+//						"temperature": {PayloadShape: "timeseries-number"},
+//					},
+//				},
+//			},
+//		},
 //	}
 //
-//	if err := registry.Reconcile(ctx, schemas); err != nil {
-//		if errors.Is(err, context.DeadlineExceeded) {
-//			// Handle timeout
-//		}
-//		// Handle other errors
+//	dataContracts := []config.DataContractsConfig{
+//		{
+//			Name: "_pump_sensor",
+//			Model: &config.ModelRef{Name: "pump_data", Version: "v1"},
+//		},
 //	}
-func (s *SchemaRegistry) Reconcile(ctx context.Context, expectedSubjects map[SubjectName]JSONSchemaDefinition) error {
+//
+//	if err := registry.Reconcile(ctx, dataModels, dataContracts, payloadShapes); err != nil {
+//		// Handle reconciliation error
+//	}
+func (s *SchemaRegistry) Reconcile(ctx context.Context, dataModels []config.DataModelsConfig, dataContracts []config.DataContractsConfig, payloadShapes map[string]config.PayloadShape) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -348,8 +376,106 @@ func (s *SchemaRegistry) Reconcile(ctx context.Context, expectedSubjects map[Sub
 		}
 	}()
 
+	// Translate data models and contracts to expected schemas
+	expectedSubjects, err := s.translateToSchemas(ctx, dataModels, dataContracts, payloadShapes)
+	if err != nil {
+		return fmt.Errorf("failed to translate data models to schemas: %w", err)
+	}
+
+	// Use existing reconciliation logic with translated schemas
 	err, _ = s.reconcileInternal(ctx, expectedSubjects)
 	return err
+}
+
+// translateToSchemas converts data models and contracts to Schema Registry subject format.
+// This method handles the translation from UMH data model configurations to JSON schemas
+// that can be registered in the Schema Registry for benthos-umh UNS output validation.
+//
+// Translation process:
+//  1. Build a map of all available data models for reference resolution
+//  2. For each data contract, find the referenced data model and version
+//  3. Use the datamodel.Translator to convert the model structure to JSON schemas
+//  4. Extract the generated schemas and convert subject names to SubjectName type
+//  5. Aggregate all schemas from all contracts into a single map
+//
+// Error handling:
+//   - Missing model references: Contract references non-existent model or version
+//   - Translation failures: Invalid model structure, circular references, context cancellation
+//   - Empty contracts: Returns empty map (valid case for cleanup-only reconciliation)
+//
+// Performance characteristics:
+//   - Leverages high-performance datamodel.Translator (13K-400K translations/sec)
+//   - Builds model reference map once and reuses for all contracts
+//   - Pre-allocates result map based on contract count for efficiency
+//
+// Returns:
+//   - Map of SubjectName to JSONSchemaDefinition for use by existing reconciliation logic
+//   - Error if translation fails or model references are invalid
+func (s *SchemaRegistry) translateToSchemas(ctx context.Context, dataModels []config.DataModelsConfig, dataContracts []config.DataContractsConfig, payloadShapes map[string]config.PayloadShape) (map[SubjectName]JSONSchemaDefinition, error) {
+	// Build map of all available data models for reference resolution
+	allDataModels := make(map[string]config.DataModelsConfig, len(dataModels))
+	for _, model := range dataModels {
+		allDataModels[model.Name] = model
+	}
+
+	// Pre-allocate result map based on contract count (estimate 2-3 schemas per contract)
+	expectedSubjects := make(map[SubjectName]JSONSchemaDefinition, len(dataContracts)*3)
+
+	// Translate each data contract to schemas
+	for _, contract := range dataContracts {
+		// Check context cancellation during translation loop
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
+		// Skip contracts without model references (invalid but non-fatal)
+		if contract.Model == nil {
+			continue
+		}
+
+		// Find the referenced data model
+		referencedModel, exists := allDataModels[contract.Model.Name]
+		if !exists {
+			return nil, fmt.Errorf("data contract '%s' references unknown model '%s'", contract.Name, contract.Model.Name)
+		}
+
+		// Find the referenced version
+		modelVersion, versionExists := referencedModel.Versions[contract.Model.Version]
+		if !versionExists {
+			return nil, fmt.Errorf("data contract '%s' references unknown version '%s' of model '%s'", contract.Name, contract.Model.Version, contract.Model.Name)
+		}
+
+		// Translate the data model to JSON schemas
+		result, err := s.translator.TranslateDataModel(
+			ctx,
+			contract.Name,
+			contract.Model.Version,
+			modelVersion,
+			payloadShapes,
+			allDataModels,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to translate data contract '%s': %w", contract.Name, err)
+		}
+		if result == nil {
+			return nil, fmt.Errorf("translator returned nil result for data contract '%s'", contract.Name)
+		}
+
+		// Add all generated schemas to the result map
+		for subjectName, schema := range result.Schemas {
+			// Convert schema to JSON string for registry format
+			schemaBytes, err := json.Marshal(schema)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal schema for subject '%s': %w", subjectName, err)
+			}
+
+			expectedSubjects[SubjectName(subjectName)] = JSONSchemaDefinition(string(schemaBytes))
+		}
+	}
+
+	return expectedSubjects, nil
 }
 
 // getNextPhase calculates the next phase based on current phase and whether to change phase.

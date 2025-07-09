@@ -419,6 +419,28 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 		}
 	}
 
+	// Reconcile schema registry when Redpanda is running
+	// This ensures that JSON schemas derived from DataModels and DataContracts are synchronized with the registry
+	if IsRunningState(currentState) && IsRunningState(desiredState) {
+		// Get the configuration data from the RedpandaInstance
+		// These are set by the RedpandaManager during configuration extraction
+		dataModels := r.getDataModels()
+		dataContracts := r.getDataContracts()
+		payloadShapes := r.getPayloadShapes()
+
+		// Only reconcile if we have data models or contracts to process
+		if len(dataModels) > 0 || len(dataContracts) > 0 {
+			r.baseFSMInstance.GetLogger().Debugf("Reconciling schema registry with %d data models and %d data contracts", len(dataModels), len(dataContracts))
+
+			err := r.schemaRegistry.Reconcile(ctx, dataModels, dataContracts, payloadShapes)
+			if err != nil {
+				return fmt.Errorf("failed to reconcile schema registry: %w", err)
+			}
+
+			r.baseFSMInstance.GetLogger().Debugf("Schema registry reconciliation completed successfully")
+		}
+	}
+
 	return nil
 }
 
