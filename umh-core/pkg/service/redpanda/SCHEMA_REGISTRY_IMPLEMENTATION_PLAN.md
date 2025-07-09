@@ -33,11 +33,27 @@ This document outlines the complete implementation plan for the schema registry 
 type SubjectName string
 type JSONSchemaDefinition string
 type SchemaRegistryPhase string
+
+// Metrics for observability
+type SchemaRegistryMetrics struct {
+    CurrentPhase            SchemaRegistryPhase
+    TotalReconciliations    int64
+    SuccessfulOperations    int64
+    FailedOperations        int64
+    SubjectsToAdd          int
+    SubjectsToRemove       int
+    LastOperationTime      time.Time
+    LastError              string
+}
 ```
 
 ### Core SchemaRegistry Struct
 ```go
 type SchemaRegistry struct {
+    // Concurrency protection
+    mu sync.RWMutex
+    
+    // Core state
     currentPhase SchemaRegistryPhase
     httpClient   http.Client
     
@@ -52,8 +68,13 @@ type SchemaRegistry struct {
     missingInRegistry map[SubjectName]JSONSchemaDefinition         // Subject -> schema (we have, registry doesn't)
     inRegistryButUnknownLocally map[SubjectName]bool               // Registry has, we don't expect
     
-    // Operation tracking
+    // Operation tracking and metrics
     currentOperationSubject SubjectName                            // Which subject being processed
+    totalReconciliations    int64
+    successfulOperations    int64
+    failedOperations        int64
+    lastOperationTime       time.Time
+    lastError               string
 }
 ```
 
@@ -79,14 +100,53 @@ const (
 
 ## Reconciliation Semantics
 
+### Concurrency Safety
+```go
+func (s *SchemaRegistry) Reconcile(ctx context.Context) (err error, reconciled bool) {
+    s.mu.Lock()
+    defer s.mu.Unlock()
+    
+    s.totalReconciliations++
+    defer func() {
+        s.lastOperationTime = time.Now()
+        if err != nil {
+            s.failedOperations++
+            s.lastError = err.Error()
+        } else if reconciled {
+            s.successfulOperations++
+            s.lastError = ""
+        }
+    }()
+    
+    return s.reconcileInternal(ctx)
+}
+
+func (s *SchemaRegistry) GetMetrics() SchemaRegistryMetrics {
+    s.mu.RLock()
+    defer s.mu.RUnlock()
+    
+    return SchemaRegistryMetrics{
+        CurrentPhase:         s.currentPhase,
+        TotalReconciliations: s.totalReconciliations,
+        SuccessfulOperations: s.successfulOperations,
+        FailedOperations:     s.failedOperations,
+        SubjectsToAdd:       len(s.missingInRegistry),
+        SubjectsToRemove:    len(s.inRegistryButUnknownLocally),
+        LastOperationTime:   s.lastOperationTime,
+        LastError:           s.lastError,
+    }
+}
+```
+
 ### Return Values
 - **`reconciled = false`**: Made internal progress, no external changes
 - **`reconciled = true`**: Made actual changes to schema registry (DELETE/POST succeeded)
 
 ### Error Handling
-- **Transient errors**: Return error, retry in next reconciliation
+- **Lookup errors**: Only HTTP 200 is success, all others are transient failures
+- **Remove errors**: HTTP 200 and 404 are success (404 = already gone)
+- **Add errors**: HTTP 200, 201, and 409 are success (409 = already exists)
 - **Context timeout**: Return error early, preserve state for next attempt
-- **Permanent errors**: Log and continue (consider marking as processed)
 
 ## Phase Implementation Details
 
@@ -95,6 +155,23 @@ const (
 
 **Implementation**:
 ```go
+func (s *SchemaRegistry) reconcileInternal(ctx context.Context) (err error, reconciled bool) {
+    switch s.currentPhase {
+    case SchemaRegistryPhaseLookup:
+        return s.lookup(ctx)
+    case SchemaRegistryPhaseDecode:
+        return s.decode(ctx)
+    case SchemaRegistryPhaseCompare:
+        return s.compare(ctx)
+    case SchemaRegistryPhaseRemoveUnknown:
+        return s.removeUnknown(ctx)
+    case SchemaRegistryPhaseAddNew:
+        return s.addNew(ctx)
+    default:
+        return fmt.Errorf("unknown phase: %s", s.currentPhase), false
+    }
+}
+
 func (s *SchemaRegistry) lookup(ctx context.Context) (err error, reconciled bool) {
     // Check context has >= MinimumLookupTime
     if deadline, ok := ctx.Deadline(); ok {
@@ -106,7 +183,24 @@ func (s *SchemaRegistry) lookup(ctx context.Context) (err error, reconciled bool
     // HTTP GET /subjects
     url := fmt.Sprintf("http://%s/subjects", SchemaRegistryAddress)
     req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-    // ... handle request
+    if err != nil {
+        return err, false
+    }
+    
+    resp, err := s.httpClient.Do(req)
+    if err != nil {
+        return err, false
+    }
+    defer func() {
+        if closeErr := resp.Body.Close(); closeErr != nil {
+            // Log warning but don't fail the operation
+        }
+    }()
+    
+    // Only HTTP 200 is considered success - all others are transient failures
+    if resp.StatusCode != http.StatusOK {
+        return fmt.Errorf("schema registry lookup failed with status %d", resp.StatusCode), false
+    }
     
     // Store raw response bytes
     s.rawSubjectsData, err = io.ReadAll(resp.Body)
@@ -254,7 +348,8 @@ func (s *SchemaRegistry) removeUnknown(ctx context.Context) (err error, reconcil
     }
     defer resp.Body.Close()
     
-    if resp.StatusCode != http.StatusOK {
+    // HTTP 200 and 404 are both considered success (404 = already gone)
+    if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
         return fmt.Errorf("delete subject %s returned status %d", string(subjectToRemove), resp.StatusCode), false
     }
     
@@ -329,7 +424,8 @@ func (s *SchemaRegistry) addNew(ctx context.Context) (err error, reconciled bool
     }
     defer resp.Body.Close()
     
-    if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+    // HTTP 200, 201, and 409 are considered success (409 = already exists with same schema)
+    if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusConflict {
         return fmt.Errorf("add subject %s returned status %d", string(subjectToAdd), resp.StatusCode), false
     }
     
@@ -362,6 +458,11 @@ func NewSchemaRegistry(expectedSubjects map[SubjectName]JSONSchemaDefinition) *S
         expectedSubjects:            expectedSubjects,
         missingInRegistry:           make(map[SubjectName]JSONSchemaDefinition),
         inRegistryButUnknownLocally: make(map[SubjectName]bool),
+        totalReconciliations:        0,
+        successfulOperations:        0,
+        failedOperations:            0,
+        lastOperationTime:           time.Time{},
+        lastError:                   "",
     }
 }
 
@@ -432,8 +533,9 @@ type TestScenario struct {
 
 ### Step 1: Update Data Structures
 - Add type aliases for improved type safety (`SubjectName`, `JSONSchemaDefinition`)
-- Extend SchemaRegistry struct with new fields  
+- Extend SchemaRegistry struct with concurrency protection and metrics
 - Add new phase constants
+- Update ISchemaRegistry interface to include GetMetrics() method
 - Use typed maps for better compile-time safety
 
 ### Step 2: Write Comprehensive Tests
@@ -456,6 +558,12 @@ type TestScenario struct {
 
 ## Error Scenarios & Recovery
 
+### HTTP Response Handling
+- **Lookup**: Only HTTP 200 is success - all other codes are transient failures
+- **Remove**: HTTP 200 and 404 are success (404 means subject already deleted)
+- **Add**: HTTP 200, 201, and 409 are success (409 means schema already exists)
+- All other HTTP codes are treated as transient failures and retried
+
 ### Context Timeouts
 - Each phase checks remaining time before operations
 - Return error immediately if insufficient time
@@ -466,52 +574,57 @@ type TestScenario struct {
 - Return error, retry in next reconciliation
 - No state corruption
 
-### Malformed Responses
-- JSON decode failures
-- Unexpected HTTP status codes
-- Log errors, return failure
+### Schema Validation
+- Incoming schemas from configuration are already validated - no additional checks needed
+- Registry schemas that don't match expected schemas are marked for removal
+- No circuit breaker needed - worst case is wasting a few reconciliation cycles
 
 ### Partial Completion
 - If remove/add operations partially complete, maps track remaining work
 - Next reconciliation continues from where left off
 - No duplicate operations
 
+### Concurrency Safety
+- All public methods (Reconcile, GetMetrics) are protected by mutex
+- Internal methods are private to prevent external concurrent access
+- Single-threaded execution within reconciliation phases
+
 ## Performance Considerations
 
 ### Memory Management
-- Clear rawSubjectsData after decode
+- Clear rawSubjectsData after decode to free memory
 - Use maps for O(1) lookups in compare phase
-- Limit expected subjects to reasonable size
+- HTTP client reuse for efficiency
 
 ### Network Efficiency
 - Process one schema at a time (atomic operations)
 - Context-aware timeouts prevent hanging
-- HTTP client reuse
+- Simple retry logic without circuit breakers
 
 ### Reconciliation Frequency
 - Only return `reconciled=true` for actual changes
 - Reduces unnecessary reconciliation calls
 - Analysis phases are fast (return quickly)
 
+### Observability
+- **Metrics**: GetMetrics() function provides current state and counters
+- **Logging**: Use standard logger for errors and debug information
+- **Concurrency**: Mutex protection ensures thread-safe access to metrics
+
 ## Future Enhancements
-
-### Schema Versioning
-- Track and handle schema version evolution
-- Compatibility checking before updates
-- Rollback capabilities
-
-### Batch Operations
-- Add support for batch schema operations
-- Reduce HTTP request overhead
-- Maintain atomicity per schema
 
 ### Configuration Management
 - Dynamic schema configuration updates
-- Hot-reload capabilities
-- Validation of schema definitions
+- Hot-reload capabilities from external sources
+- Schema definition validation improvements
 
-### Monitoring & Observability
-- Metrics for phase transitions
-- Schema operation counters
-- Error rate tracking
-- Performance metrics per phase 
+### Enhanced Observability
+- Detailed phase transition metrics
+- Performance timing per operation
+- Enhanced error categorization and reporting
+- Integration with monitoring systems
+
+### Operational Improvements
+- Graceful shutdown handling
+- Health check endpoints
+- Configuration validation at startup 
