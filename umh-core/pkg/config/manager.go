@@ -76,6 +76,12 @@ type ConfigManager interface {
 	AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc ProtocolConverterConfig) (ProtocolConverterConfig, error)
 	// AtomicDeleteProtocolConverter deletes a protocol converter from the config atomically
 	AtomicDeleteProtocolConverter(ctx context.Context, componentUUID uuid.UUID) error
+	// AtomicAddStreamProcessor adds a stream processor to the config atomically
+	AtomicAddStreamProcessor(ctx context.Context, sp StreamProcessorConfig) error
+	// AtomicEditStreamProcessor edits a stream processor in the config atomically
+	AtomicEditStreamProcessor(ctx context.Context, sp StreamProcessorConfig) error
+	// AtomicDeleteStreamProcessor deletes a stream processor from the config atomically
+	AtomicDeleteStreamProcessor(ctx context.Context, name string) error
 	// AtomicAddDataModel adds a data model to the config atomically
 	AtomicAddDataModel(ctx context.Context, name string, dmVersion DataModelVersion, description string) error
 	// AtomicEditDataModel edits (append-only) a data model by adding a new version
