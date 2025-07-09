@@ -79,6 +79,18 @@ func BenchmarkSchemaRegistry(b *testing.B) {
 	b.Run("ConcurrentReconciliation", func(b *testing.B) {
 		benchmarkConcurrentReconciliation(b, registry)
 	})
+
+	b.Run("AddOnly", func(b *testing.B) {
+		benchmarkAddOnly(b, registry)
+	})
+
+	b.Run("RemoveOnly", func(b *testing.B) {
+		benchmarkRemoveOnly(b, registry)
+	})
+
+	b.Run("MixedOperations", func(b *testing.B) {
+		benchmarkMixedOperations(b, registry)
+	})
 }
 
 // performWarmup ensures stable performance measurements by priming the system
@@ -356,6 +368,164 @@ func benchmarkConcurrentReconciliation(b *testing.B, registry *SchemaRegistry) {
 			cancel()
 		}
 	})
+}
+
+// benchmarkAddOnly measures performance when only adding schemas (empty registry → populated)
+func benchmarkAddOnly(b *testing.B, registry *SchemaRegistry) {
+	// Pre-generate schemas for adding
+	schemasToAdd := generateSchemas(20, "add-only")
+
+	// Warmup: ensure we start with a clean registry
+	for i := 0; i < 3; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		_ = reconcileUntilComplete(ctx, registry, map[SubjectName]JSONSchemaDefinition{})
+		cancel()
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// Start with empty registry
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		_ = reconcileUntilComplete(ctx, registry, map[SubjectName]JSONSchemaDefinition{})
+		cancel()
+
+		// Measure adding schemas
+		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+		start := time.Now()
+		err := reconcileUntilComplete(ctx, registry, schemasToAdd)
+		duration := time.Since(start)
+
+		if err != nil {
+			b.Fatalf("Add-only reconciliation failed: %v", err)
+		}
+
+		b.ReportMetric(float64(duration.Nanoseconds()), "ns/add-only")
+		b.ReportMetric(float64(len(schemasToAdd)), "schemas/added")
+		b.ReportMetric(float64(duration.Nanoseconds())/float64(len(schemasToAdd)), "ns/schema-add")
+
+		cancel()
+	}
+}
+
+// benchmarkRemoveOnly measures performance when only removing schemas (populated registry → empty)
+func benchmarkRemoveOnly(b *testing.B, registry *SchemaRegistry) {
+	// Pre-generate schemas for setup
+	schemasToRemove := generateSchemas(20, "remove-only")
+
+	// Warmup: practice the remove-only pattern
+	for i := 0; i < 3; i++ {
+		// Setup schemas
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		_ = reconcileUntilComplete(ctx, registry, schemasToRemove)
+		cancel()
+
+		// Remove all schemas
+		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+		_ = reconcileUntilComplete(ctx, registry, map[SubjectName]JSONSchemaDefinition{})
+		cancel()
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// Setup: populate registry with schemas
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		err := reconcileUntilComplete(ctx, registry, schemasToRemove)
+		if err != nil {
+			b.Fatalf("Failed to setup schemas for removal: %v", err)
+		}
+		cancel()
+
+		// Measure removing all schemas
+		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+		start := time.Now()
+		err = reconcileUntilComplete(ctx, registry, map[SubjectName]JSONSchemaDefinition{})
+		duration := time.Since(start)
+
+		if err != nil {
+			b.Fatalf("Remove-only reconciliation failed: %v", err)
+		}
+
+		b.ReportMetric(float64(duration.Nanoseconds()), "ns/remove-only")
+		b.ReportMetric(float64(len(schemasToRemove)), "schemas/removed")
+		b.ReportMetric(float64(duration.Nanoseconds())/float64(len(schemasToRemove)), "ns/schema-remove")
+
+		cancel()
+	}
+}
+
+// benchmarkMixedOperations measures performance when both adding and removing schemas
+func benchmarkMixedOperations(b *testing.B, registry *SchemaRegistry) {
+	// Pre-generate schemas for mixed operations
+	baseSchemas := generateSchemas(20, "mixed-base")
+
+	// Pre-generate all mixed operation scenarios
+	const maxIterations = 10000
+	preGeneratedMixedSchemas := make([]map[SubjectName]JSONSchemaDefinition, maxIterations)
+
+	for i := 0; i < maxIterations; i++ {
+		mixedSchemas := make(map[SubjectName]JSONSchemaDefinition)
+
+		// Keep first 10 from base (remove 10)
+		j := 0
+		for subject, schema := range baseSchemas {
+			if j >= 10 {
+				break
+			}
+			mixedSchemas[subject] = schema
+			j++
+		}
+
+		// Add 10 new schemas
+		newSchemas := generateSchemas(10, fmt.Sprintf("mixed-new-%d", i))
+		for subject, schema := range newSchemas {
+			mixedSchemas[subject] = schema
+		}
+
+		preGeneratedMixedSchemas[i] = mixedSchemas
+	}
+
+	// Warmup: practice mixed operations
+	for i := 0; i < 3; i++ {
+		// Setup base schemas
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		_ = reconcileUntilComplete(ctx, registry, baseSchemas)
+		cancel()
+
+		// Perform mixed operation
+		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+		_ = reconcileUntilComplete(ctx, registry, preGeneratedMixedSchemas[i])
+		cancel()
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// Setup: start with base schemas
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		err := reconcileUntilComplete(ctx, registry, baseSchemas)
+		if err != nil {
+			b.Fatalf("Failed to setup base schemas: %v", err)
+		}
+		cancel()
+
+		// Measure mixed operation (remove 10, add 10)
+		mixedSchemas := preGeneratedMixedSchemas[i%maxIterations]
+
+		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+		start := time.Now()
+		err = reconcileUntilComplete(ctx, registry, mixedSchemas)
+		duration := time.Since(start)
+
+		if err != nil {
+			b.Fatalf("Mixed operations reconciliation failed: %v", err)
+		}
+
+		b.ReportMetric(float64(duration.Nanoseconds()), "ns/mixed-ops")
+		b.ReportMetric(10.0, "schemas/removed")
+		b.ReportMetric(10.0, "schemas/added")
+		b.ReportMetric(float64(duration.Nanoseconds())/20.0, "ns/schema-mixed")
+
+		cancel()
+	}
 }
 
 // Benchmark-specific warmup functions
