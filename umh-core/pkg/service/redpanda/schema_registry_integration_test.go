@@ -16,7 +16,9 @@ package redpanda
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -67,6 +69,73 @@ func startRedpandaContainer() error {
 
 	redpandaContainer = container
 	redpandaSchemaRegistryURL = schemaRegistryURL
+
+	return nil
+}
+
+// fetchSchemaViaHTTP retrieves a schema from the registry via HTTP GET
+// Returns the schema definition if found, or an error if not found or malformed
+func fetchSchemaViaHTTP(subject SubjectName) (JSONSchemaDefinition, error) {
+	// Get the latest version of the schema
+	url := fmt.Sprintf("%s/subjects/%s/versions/latest", redpandaSchemaRegistryURL, string(subject))
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch schema for subject %s: %w", subject, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return "", fmt.Errorf("subject %s not found in registry", subject)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("unexpected status %d when fetching subject %s", resp.StatusCode, subject)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body for subject %s: %w", subject, err)
+	}
+
+	// Parse the response to extract the schema
+	var response struct {
+		Schema string `json:"schema"`
+	}
+
+	if err := json.Unmarshal(body, &response); err != nil {
+		return "", fmt.Errorf("failed to parse response for subject %s: %w", subject, err)
+	}
+
+	return JSONSchemaDefinition(response.Schema), nil
+}
+
+// verifySchemaViaHTTP fetches a schema via HTTP and compares it to the expected definition
+func verifySchemaViaHTTP(subject SubjectName, expectedSchema JSONSchemaDefinition) error {
+	fetchedSchema, err := fetchSchemaViaHTTP(subject)
+	if err != nil {
+		return err
+	}
+
+	// Parse both schemas to compare them structurally (ignoring whitespace differences)
+	var expectedParsed, fetchedParsed interface{}
+
+	if err := json.Unmarshal([]byte(expectedSchema), &expectedParsed); err != nil {
+		return fmt.Errorf("failed to parse expected schema for %s: %w", subject, err)
+	}
+
+	if err := json.Unmarshal([]byte(fetchedSchema), &fetchedParsed); err != nil {
+		return fmt.Errorf("failed to parse fetched schema for %s: %w", subject, err)
+	}
+
+	// Convert back to JSON with consistent formatting for comparison
+	expectedNormalized, _ := json.Marshal(expectedParsed)
+	fetchedNormalized, _ := json.Marshal(fetchedParsed)
+
+	if string(expectedNormalized) != string(fetchedNormalized) {
+		return fmt.Errorf("schema mismatch for subject %s:\nExpected: %s\nFetched: %s",
+			subject, string(expectedNormalized), string(fetchedNormalized))
+	}
 
 	return nil
 }
@@ -247,6 +316,61 @@ var _ = Describe("Real Redpanda Integration Tests", Ordered, func() {
 					metrics.SubjectsToRemove == 0 &&
 					metrics.SuccessfulOperations >= 1
 			}, 15*time.Second, 500*time.Millisecond).Should(BeTrue())
+		})
+
+		It("should reconcile schemas and make them retrievable via HTTP", func() {
+			expectedSchemas := map[SubjectName]JSONSchemaDefinition{
+				"http-verify-1": JSONSchemaDefinition(`{
+					"type": "object",
+					"properties": {
+						"deviceId": {"type": "string"},
+						"temperature": {"type": "number", "minimum": -50, "maximum": 100},
+						"humidity": {"type": "number", "minimum": 0, "maximum": 100},
+						"timestamp": {"type": "string", "format": "date-time"}
+					},
+					"required": ["deviceId", "temperature", "timestamp"]
+				}`),
+				"http-verify-2": JSONSchemaDefinition(`{
+					"type": "object",
+					"properties": {
+						"orderId": {"type": "string"},
+						"customerId": {"type": "string"},
+						"items": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"properties": {
+									"productId": {"type": "string"},
+									"quantity": {"type": "integer", "minimum": 1}
+								},
+								"required": ["productId", "quantity"]
+							}
+						},
+						"total": {"type": "number", "minimum": 0}
+					},
+					"required": ["orderId", "customerId", "items", "total"]
+				}`),
+			}
+
+			// First, reconcile the schemas
+			Eventually(func() bool {
+				err := registry.Reconcile(ctx, expectedSchemas)
+				if err != nil {
+					return false
+				}
+				metrics := registry.GetMetrics()
+				return metrics.SubjectsToAdd == 0 &&
+					metrics.SubjectsToRemove == 0 &&
+					metrics.SuccessfulOperations >= 1
+			}, 15*time.Second, 500*time.Millisecond).Should(BeTrue())
+
+			// Then verify each schema is retrievable via HTTP
+			for subject, expectedSchema := range expectedSchemas {
+				Eventually(func() error {
+					return verifySchemaViaHTTP(subject, expectedSchema)
+				}, 10*time.Second, 500*time.Millisecond).Should(Succeed(),
+					fmt.Sprintf("Schema verification failed for subject %s", subject))
+			}
 		})
 	})
 

@@ -22,248 +22,14 @@
 // # Architecture Overview
 //
 // The reconciliation process follows a 5-phase cycle:
-//   1. Lookup: Fetch current registry state via HTTP GET /subjects
-//   2. Decode: Parse JSON response into typed Go structures
-//   3. Compare: Analyze differences and build work queues for actions
-//   4. RemoveUnknown: Delete unexpected schemas (one at a time)
-//   5. AddNew: Add missing schemas (one at a time)
+//  1. Lookup: Fetch current registry state via HTTP GET /subjects
+//  2. Decode: Parse JSON response into typed Go structures
+//  3. Compare: Analyze differences and build work queues for actions
+//  4. RemoveUnknown: Delete unexpected schemas (one at a time)
+//  5. AddNew: Add missing schemas (one at a time)
 //
 // Each phase is designed for fault tolerance with proper timeout handling,
 // error classification, and incremental progress to enable recovery after failures.
-//
-// # Basic Usage
-//
-// Create a schema registry and perform reconciliation:
-//
-//	package main
-//
-//	import (
-//		"context"
-//		"log"
-//		"time"
-//
-//		"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
-//	)
-//
-//	func main() {
-//		// Create registry instance
-//		registry := redpanda.NewSchemaRegistry()
-//
-//		// Define expected schemas
-//		expectedSchemas := map[redpanda.SubjectName]redpanda.JSONSchemaDefinition{
-//			"sensor-data": `{
-//				"type": "object",
-//				"properties": {
-//					"timestamp": {"type": "string", "format": "date-time"},
-//					"value": {"type": "number"},
-//					"unit": {"type": "string"}
-//				},
-//				"required": ["timestamp", "value"]
-//			}`,
-//			"machine-state": `{
-//				"type": "object",
-//				"properties": {
-//					"machineId": {"type": "string"},
-//					"state": {"type": "string", "enum": ["running", "stopped", "maintenance"]},
-//					"timestamp": {"type": "string", "format": "date-time"}
-//				},
-//				"required": ["machineId", "state", "timestamp"]
-//			}`,
-//		}
-//
-//		// Configure timeout for operation (recommended: 30s for production)
-//		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-//		defer cancel()
-//
-//		// Perform reconciliation
-//		if err := registry.Reconcile(ctx, expectedSchemas); err != nil {
-//			log.Fatalf("Schema reconciliation failed: %v", err)
-//		}
-//
-//		// Monitor reconciliation metrics
-//		metrics := registry.GetMetrics()
-//		log.Printf("Reconciliation complete: %+v", metrics)
-//	}
-//
-// # Production Deployment
-//
-// ## Configuration
-//
-// The schema registry connects to localhost:8081 by default. For production deployment:
-//
-//	// Override the default address (modify SchemaRegistryAddress constant)
-//	// Recommended: Use environment variables or configuration files
-//
-//	// Example production configuration:
-//	const SchemaRegistryAddress = "schema-registry.production.local:8081"
-//
-// ## Timeout Configuration
-//
-// Configure timeouts based on your network environment:
-//   - Local deployment: Use default timeouts (10-15ms per operation)
-//   - Network deployment: Increase timeouts proportionally to network latency
-//   - Production: Recommend 30-60 second total reconciliation timeout
-//
-// ## Error Handling and Recovery
-//
-// Reconciliation errors are classified as:
-//   - Transient: Network failures, temporary registry unavailability, resource conflicts
-//   - Configuration: Invalid schemas, missing permissions, registry configuration issues
-//   - Permanent: Authentication failures, malformed requests
-//
-// # Security Considerations
-//
-// ## Network Security
-//   - Schema registry should be deployed in a trusted network environment
-//   - Use TLS encryption for schema registry communication in production
-//   - Implement proper firewall rules to restrict access to schema registry ports
-//
-// ## Authentication and Authorization
-//   - Configure schema registry with appropriate authentication mechanisms
-//   - Ensure service accounts have minimal required permissions (read subjects, create/delete schemas)
-//   - Regular audit of schema registry access logs
-//
-// ## Schema Validation
-//   - All schemas are validated as proper JSON before registration
-//   - Schema definitions should be validated against your data contracts
-//   - Implement schema review processes for production environments
-//
-// ## Threat Model
-//   - Network interception: Use TLS and secure networks
-//   - Unauthorized schema modification: Implement proper RBAC
-//   - Schema injection: Validate all schema definitions before reconciliation
-//   - Resource exhaustion: Monitor schema count and size limits
-//
-// # Performance Characteristics
-//
-// ## Operation Timing
-//   - Lookup phase: ~10ms for local registry, ~100ms for network registry
-//   - Decode phase: ~1ms for typical response sizes (<1MB)
-//   - Compare phase: ~1ms for typical schema counts (<1000 subjects)
-//   - Remove/Add phases: ~10-15ms per operation for local registry
-//
-// ## Scalability Limits
-//   - Recommended maximum: 1000 schemas per reconciliation cycle
-//   - Memory usage: ~1MB per 1000 schemas during reconciliation
-//   - Network bandwidth: ~1KB per schema for typical JSON schema sizes
-//
-// ## Performance Monitoring
-//
-// Monitor these metrics for operational health:
-//
-//	metrics := registry.GetMetrics()
-//
-//	// Key performance indicators:
-//	totalTime := time.Since(metrics.LastOperationTime)
-//	successRate := float64(metrics.SuccessfulOperations) / float64(metrics.TotalReconciliations)
-//
-//	// Alert thresholds (recommended):
-//	if successRate < 0.95 {
-//		// Alert: High failure rate
-//	}
-//	if totalTime > 60*time.Second {
-//		// Alert: Reconciliation taking too long
-//	}
-//	if metrics.SubjectsToAdd > 100 {
-//		// Alert: Large number of schemas pending addition
-//	}
-//
-// # Monitoring and Alerting
-//
-// ## Essential Metrics
-//   - TotalReconciliations: Total number of reconciliation attempts
-//   - SuccessfulOperations: Number of successful reconciliations
-//   - FailedOperations: Number of failed reconciliations
-//   - CurrentPhase: Current reconciliation phase (for stuck detection)
-//   - SubjectsToAdd/Remove: Pending work queue sizes
-//   - LastError: Most recent error message for debugging
-//
-// ## Recommended Alert Conditions
-//   - Success rate < 95% over 5 minutes
-//   - Reconciliation stuck in same phase > 5 minutes
-//   - Failed operations > 10 in 1 minute
-//   - Large pending work queues (>50 subjects)
-//
-// ## Health Check Implementation
-//
-//	func healthCheck(registry *redpanda.SchemaRegistry) error {
-//		metrics := registry.GetMetrics()
-//
-//		// Check if reconciliation is making progress
-//		if time.Since(metrics.LastOperationTime) > 5*time.Minute {
-//			return fmt.Errorf("no reconciliation activity for %v", time.Since(metrics.LastOperationTime))
-//		}
-//
-//		// Check error rate
-//		if metrics.TotalReconciliations > 10 {
-//			errorRate := float64(metrics.FailedOperations) / float64(metrics.TotalReconciliations)
-//			if errorRate > 0.1 {
-//				return fmt.Errorf("high error rate: %.2f%%, last error: %s", errorRate*100, metrics.LastError)
-//			}
-//		}
-//
-//		return nil
-//	}
-//
-// # Troubleshooting
-//
-// ## Common Issues and Solutions
-//
-// ### "context deadline already passed"
-//   - Cause: Insufficient timeout for operation
-//   - Solution: Increase context timeout, check network latency to schema registry
-//
-// ### "schema registry lookup failed with status 503"
-//   - Cause: Schema registry temporarily unavailable
-//   - Solution: Implement retry logic with exponential backoff
-//
-// ### "cannot delete subject X: schema has references (error 42206)"
-//   - Cause: Schema is referenced by other schemas or consumers
-//   - Solution: Remove dependent schemas first, or coordinate with consumers
-//
-// ### "add subject X failed: schema validation error (422)"
-//   - Cause: Invalid JSON schema definition
-//   - Solution: Validate schema syntax, check against JSON Schema specification
-//
-// ### Reconciliation stuck in same phase
-//   - Cause: Persistent error condition or resource contention
-//   - Solution: Check LastError in metrics, restart reconciliation process
-//
-// ## Emergency Procedures
-//
-// ### Reset Reconciliation State
-//   - Create new SchemaRegistry instance to reset internal state
-//   - Review and validate expected schemas before retrying
-//   - Check schema registry health and accessibility
-//
-// ### Manual Schema Management
-//   - Use schema registry REST API directly for emergency operations
-//   - Document any manual changes for audit trail
-//   - Restore automated reconciliation after manual intervention
-//
-// # Thread Safety
-//
-// The SchemaRegistry type is safe for concurrent use. All public methods use
-// appropriate locking to prevent data races. However, reconciliation should
-// typically be performed by a single goroutine to avoid conflicting operations.
-//
-// Concurrent access patterns:
-//   - Multiple goroutines can safely call GetMetrics()
-//   - Only one goroutine should call Reconcile() at a time
-//   - Creating multiple SchemaRegistry instances is safe and recommended for isolation
-//
-// # Testing and Validation
-//
-// For testing environments, use the provided mock registry:
-//
-//	import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
-//
-//	// Create mock for testing
-//	mockRegistry := redpanda.NewMockSchemaRegistry()
-//	defer mockRegistry.Close()
-//
-//	// Use mock.URL() to configure test registry address
-//	// Add test schemas with mockRegistry.AddSchema()
 
 package redpanda
 
@@ -274,6 +40,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -305,6 +72,39 @@ type SchemaRegistryMetrics struct {
 	SubjectsToRemove     int
 	LastOperationTime    time.Time
 	LastError            string
+}
+
+// urlBuilder provides optimized URL construction to avoid repeated allocations
+type urlBuilder struct {
+	baseURL string
+	buf     strings.Builder
+}
+
+// subjectsURL builds the /subjects endpoint URL
+func (u *urlBuilder) subjectsURL() string {
+	u.buf.Reset()
+	u.buf.WriteString(u.baseURL)
+	u.buf.WriteString("/subjects")
+	return u.buf.String()
+}
+
+// subjectURL builds the /subjects/{subject} endpoint URL
+func (u *urlBuilder) subjectURL(subject SubjectName) string {
+	u.buf.Reset()
+	u.buf.WriteString(u.baseURL)
+	u.buf.WriteString("/subjects/")
+	u.buf.WriteString(string(subject))
+	return u.buf.String()
+}
+
+// subjectVersionsURL builds the /subjects/{subject}/versions endpoint URL
+func (u *urlBuilder) subjectVersionsURL(subject SubjectName) string {
+	u.buf.Reset()
+	u.buf.WriteString(u.baseURL)
+	u.buf.WriteString("/subjects/")
+	u.buf.WriteString(string(subject))
+	u.buf.WriteString("/versions")
+	return u.buf.String()
 }
 
 // ISchemaRegistry defines the interface for schema registry operations.
@@ -380,6 +180,9 @@ type SchemaRegistry struct {
 	lastOperationTime       time.Time
 	lastError               string
 	schemaRegistryAddress   string
+
+	// Performance optimizations
+	urlBuilder urlBuilder // Reused for URL construction to avoid allocations
 }
 
 // Schema registry reconciliation phases
@@ -403,19 +206,19 @@ const (
 // Context timeout requirements per phase for performance monitoring and SLA compliance
 const (
 	// MinimumLookupTime is the minimum context timeout for HTTP GET /subjects operations
-	MinimumLookupTime = 10 * time.Millisecond // HTTP GET /subjects (local)
+	MinimumLookupTime = 25 * time.Millisecond // HTTP GET /subjects (accounts for container networking variations)
 
 	// MinimumDecodeTime is the minimum context timeout for JSON parsing operations
-	MinimumDecodeTime = 1 * time.Millisecond // JSON parsing (fast)
+	MinimumDecodeTime = 5 * time.Millisecond // JSON parsing (accounts for slower CPUs and GC pauses)
 
 	// MinimumCompareTime is the minimum context timeout for map comparison operations
-	MinimumCompareTime = 1 * time.Millisecond // Map operations (instant)
+	MinimumCompareTime = 5 * time.Millisecond // Map operations (accounts for slower CPUs and large schema sets)
 
 	// MinimumRemoveTime is the minimum context timeout for HTTP DELETE operations
-	MinimumRemoveTime = 10 * time.Millisecond // HTTP DELETE (local)
+	MinimumRemoveTime = 30 * time.Millisecond // HTTP DELETE (accounts for registry processing time)
 
 	// MinimumAddTime is the minimum context timeout for HTTP POST operations with schema payload
-	MinimumAddTime = 15 * time.Millisecond // HTTP POST with schema (local, slightly larger payload)
+	MinimumAddTime = 35 * time.Millisecond // HTTP POST with schema (accounts for validation and larger payloads)
 )
 
 // DefaultSchemaRegistryAddress is the default address for the Redpanda Schema Registry HTTP API.
@@ -429,7 +232,7 @@ const DefaultSchemaRegistryAddress = "http://localhost:8081"
 //
 // Default configuration:
 //   - Registry address: localhost:8081
-//   - HTTP client: Default with system timeout
+//   - HTTP client: Optimized with connection pooling and timeouts
 //   - Phase: lookup (ready for first reconciliation)
 //   - Metrics: Zero-initialized counters
 //
@@ -446,8 +249,16 @@ const DefaultSchemaRegistryAddress = "http://localhost:8081"
 //	}
 func NewSchemaRegistry(opts ...func(*SchemaRegistry)) *SchemaRegistry {
 	registry := &SchemaRegistry{
-		currentPhase:                SchemaRegistryPhaseLookup,
-		httpClient:                  http.Client{},
+		currentPhase: SchemaRegistryPhaseLookup,
+		httpClient: http.Client{
+			Timeout: 30 * time.Second,
+			Transport: &http.Transport{
+				MaxIdleConns:        10,               // Connection pool size
+				MaxIdleConnsPerHost: 5,                // Connections per registry host
+				IdleConnTimeout:     90 * time.Second, // Keep connections alive
+				DisableCompression:  false,            // Enable gzip compression
+			},
+		},
 		missingInRegistry:           make(map[SubjectName]JSONSchemaDefinition),
 		inRegistryButUnknownLocally: make(map[SubjectName]bool),
 		totalReconciliations:        0,
@@ -456,10 +267,13 @@ func NewSchemaRegistry(opts ...func(*SchemaRegistry)) *SchemaRegistry {
 		lastOperationTime:           time.Time{},
 		lastError:                   "",
 		schemaRegistryAddress:       DefaultSchemaRegistryAddress,
+		urlBuilder:                  urlBuilder{baseURL: DefaultSchemaRegistryAddress},
 	}
 	for _, opt := range opts {
 		opt(registry)
 	}
+	// Update urlBuilder baseURL in case it was changed by options
+	registry.urlBuilder.baseURL = registry.schemaRegistryAddress
 	return registry
 }
 
@@ -745,7 +559,7 @@ func (s *SchemaRegistry) lookup(ctx context.Context) (err error, changePhase boo
 		}
 	}
 
-	url := fmt.Sprintf("%s/subjects", s.schemaRegistryAddress)
+	url := s.urlBuilder.subjectsURL()
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -936,7 +750,7 @@ func (s *SchemaRegistry) removeUnknown(ctx context.Context) (err error, changePh
 	s.currentOperationSubject = subjectToRemove
 
 	// HTTP DELETE /subjects/{subject}
-	url := fmt.Sprintf("%s/subjects/%s", s.schemaRegistryAddress, string(subjectToRemove))
+	url := s.urlBuilder.subjectURL(subjectToRemove)
 	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {
 		return err, false
@@ -958,7 +772,7 @@ func (s *SchemaRegistry) removeUnknown(ctx context.Context) (err error, changePh
 	// Handle HTTP response status codes
 	switch resp.StatusCode {
 	case http.StatusOK, http.StatusNoContent:
-		// HTTP 200, 204 - successful deletion
+		// HTTP 200, 204 - successful deletion, no need to read body
 
 	case http.StatusNotFound:
 		// HTTP 404 - subject already gone, treat as success
@@ -1074,7 +888,7 @@ func (s *SchemaRegistry) addNew(ctx context.Context) (err error, changePhase boo
 	}
 
 	// HTTP POST /subjects/{subject}/versions
-	url := fmt.Sprintf("%s/subjects/%s/versions", s.schemaRegistryAddress, string(subjectToAdd))
+	url := s.urlBuilder.subjectVersionsURL(subjectToAdd)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(payloadBytes))
 	if err != nil {
 		return err, false
@@ -1097,10 +911,10 @@ func (s *SchemaRegistry) addNew(ctx context.Context) (err error, changePhase boo
 	// Handle HTTP response status codes
 	switch resp.StatusCode {
 	case http.StatusCreated:
-		// HTTP 201 - new schema registered successfully
+		// HTTP 201 - new schema registered successfully, no need to read body
 
 	case http.StatusOK:
-		// HTTP 200 - schema updated or already exists
+		// HTTP 200 - schema updated or already exists, no need to read body
 
 	case http.StatusConflict:
 		// HTTP 409 - schema already exists with same definition, treat as success
