@@ -26,7 +26,7 @@ const (
 	// Time budget percentages for parallel execution
 	// These percentages are applied to whatever context time budget is available,
 	// naturally creating a hierarchy without hardcoded absolute timeouts
-	ControlLoopReservePercent  = 0.25 // 10% overhead for control loop coordination
+	ControlLoopReservePercent  = 0.25 // 25% overhead for control loop coordination
 	ManagerReservePercent      = 0.05 // 5% overhead per manager execution
 	UpdateObservedStatePercent = 0.80 // 80% of manager time for I/O operations (parsing logs, health checks, metrics)
 	// Remaining 20% automatically goes to reconciliation logic (FSM transitions, event sending)
@@ -54,6 +54,11 @@ const (
 // CreateSubContext applies a percentage to the parent context's remaining time.
 // This enables hierarchical time budgets where each level respects its parent's constraints.
 func CreateSubContext(parentCtx context.Context, percentage float64) (context.Context, context.CancelFunc) {
+	if percentage < 0 || percentage > 1.0 {
+		// Invalid percentage, return parent context to avoid breaking the chain
+		return parentCtx, func() {}
+	}
+
 	deadline, ok := parentCtx.Deadline()
 	if !ok {
 		// No deadline to split - return parent context
