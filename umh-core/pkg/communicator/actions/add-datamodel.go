@@ -41,6 +41,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
@@ -61,10 +62,17 @@ type AddDataModelAction struct {
 	payload models.AddDataModelPayload
 
 	actionLogger *zap.SugaredLogger
+
+	// Shared context for the entire action lifecycle (validate + execute)
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 // NewAddDataModelAction returns an un-parsed action instance.
 func NewAddDataModelAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager) *AddDataModelAction {
+	// Create shared context with timeout for the entire action lifecycle
+	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+
 	return &AddDataModelAction{
 		userEmail:       userEmail,
 		actionUUID:      actionUUID,
@@ -72,6 +80,8 @@ func NewAddDataModelAction(userEmail string, actionUUID uuid.UUID, instanceUUID 
 		outboundChannel: outboundChannel,
 		configManager:   configManager,
 		actionLogger:    logger.For(logger.ComponentCommunicator),
+		ctx:             ctx,
+		cancel:          cancel,
 	}
 }
 
@@ -113,11 +123,29 @@ func (a *AddDataModelAction) Validate() error {
 		return errors.New("missing required field Structure")
 	}
 
+	// Validate data model structure using our new validator
+	validator := datamodel.NewValidator()
+
+	// Convert models structure to config structure for validation
+	configStructure := a.convertModelsFieldsToConfigFields(a.payload.Structure)
+
+	dmVersion := config.DataModelVersion{
+		Structure: configStructure,
+	}
+
+	// Use shared context for validation
+	if err := validator.ValidateStructureOnly(a.ctx, dmVersion); err != nil {
+		return fmt.Errorf("data model structure validation failed: %v", err)
+	}
+
 	return nil
 }
 
 // Execute implements the Action interface by creating the data model configuration.
 func (a *AddDataModelAction) Execute() (interface{}, map[string]interface{}, error) {
+	// Ensure context is cleaned up when action completes
+	defer a.cancel()
+
 	a.actionLogger.Info("Executing AddDataModel action")
 
 	// Send confirmation that action is starting
@@ -129,14 +157,11 @@ func (a *AddDataModelAction) Execute() (interface{}, map[string]interface{}, err
 		Structure: a.convertModelsFieldsToConfigFields(a.payload.Structure),
 	}
 
-	// Add to configuration
-	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
-	defer cancel()
-
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		"Adding data model to configuration...", a.outboundChannel, models.AddDataModel)
 
-	err := a.configManager.AtomicAddDataModel(ctx, a.payload.Name, dmVersion, a.payload.Description)
+	// Use shared context for execution
+	err := a.configManager.AtomicAddDataModel(a.ctx, a.payload.Name, dmVersion, a.payload.Description)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to add data model: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -157,7 +182,7 @@ func (a *AddDataModelAction) Execute() (interface{}, map[string]interface{}, err
 		},
 	}
 
-	dataContractErr := a.configManager.AtomicAddDataContract(ctx, dataContract)
+	dataContractErr := a.configManager.AtomicAddDataContract(a.ctx, dataContract)
 	if dataContractErr != nil {
 		// Log the error but don't fail the entire operation since the data model was successfully added
 		a.actionLogger.Warnf("Failed to automatically create data contract for data model %s: %v", a.payload.Name, dataContractErr)
@@ -192,6 +217,10 @@ func (a *AddDataModelAction) Execute() (interface{}, map[string]interface{}, err
 
 // convertModelsFieldsToConfigFields converts models.Field map to config.Field map
 func (a *AddDataModelAction) convertModelsFieldsToConfigFields(modelsFields map[string]models.Field) map[string]config.Field {
+	if modelsFields == nil {
+		return nil
+	}
+
 	configFields := make(map[string]config.Field)
 
 	for key, modelsField := range modelsFields {
@@ -203,10 +232,15 @@ func (a *AddDataModelAction) convertModelsFieldsToConfigFields(modelsFields map[
 			}
 		}
 
+		var subfields map[string]config.Field
+		if modelsField.Subfields != nil {
+			subfields = a.convertModelsFieldsToConfigFields(modelsField.Subfields)
+		}
+
 		configFields[key] = config.Field{
 			PayloadShape: modelsField.PayloadShape,
 			ModelRef:     configModelRef,
-			Subfields:    a.convertModelsFieldsToConfigFields(modelsField.Subfields),
+			Subfields:    subfields,
 		}
 	}
 
