@@ -56,6 +56,9 @@ func startRedpandaContainer() error {
 	if err != nil {
 		return fmt.Errorf("failed to start Redpanda container: %w", err)
 	}
+	if container == nil {
+		return fmt.Errorf("received nil container from redpanda.Run")
+	}
 
 	// Get the schema registry URL
 	schemaRegistryURL, err := container.SchemaRegistryAddress(ctx)
@@ -83,7 +86,15 @@ func fetchSchemaViaHTTP(subject SubjectName) (JSONSchemaDefinition, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch schema for subject %s: %w", subject, err)
 	}
-	defer resp.Body.Close()
+	if resp == nil {
+		return "", fmt.Errorf("received nil response for subject %s", subject)
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			// Log error but don't fail the function for close errors
+			fmt.Printf("Warning: Failed to close response body for subject %s: %v\n", subject, closeErr)
+		}
+	}()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return "", fmt.Errorf("subject %s not found in registry", subject)
@@ -157,8 +168,14 @@ var _ = Describe("Real Redpanda Integration Tests", Ordered, func() {
 				if err != nil {
 					return false
 				}
+				if resp == nil {
+					return false
+				}
 				if resp.Body != nil {
-					resp.Body.Close()
+					if closeErr := resp.Body.Close(); closeErr != nil {
+						// Log but don't fail for close errors
+						fmt.Printf("Warning: Failed to close response body: %v\n", closeErr)
+					}
 				}
 				return resp.StatusCode == 200
 			}, 30*time.Second, 1*time.Second).Should(BeTrue())

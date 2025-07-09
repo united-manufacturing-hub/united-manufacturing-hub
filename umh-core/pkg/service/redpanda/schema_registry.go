@@ -525,9 +525,8 @@ func (s *SchemaRegistry) reconcileInternal(ctx context.Context, expectedSubjects
 			}
 
 			continue // Continue to next phase
-		} else {
-			// No phase change requested, continue while we have more time
 		}
+		// No phase change requested, continue while we have more time
 	}
 }
 

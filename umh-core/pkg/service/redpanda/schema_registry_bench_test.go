@@ -32,6 +32,9 @@ func BenchmarkSchemaRegistry(b *testing.B) {
 	if err != nil {
 		b.Fatalf("Failed to start Redpanda container: %v", err)
 	}
+	if container == nil {
+		b.Fatalf("Received nil container from redpanda.Run")
+	}
 	defer func() {
 		if err := container.Terminate(ctx); err != nil {
 			b.Logf("Failed to terminate container: %v", err)
