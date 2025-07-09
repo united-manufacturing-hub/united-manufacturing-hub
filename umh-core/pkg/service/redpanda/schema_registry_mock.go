@@ -106,6 +106,11 @@ func (m *MockSchemaRegistry) GetSchema(subject string, version int) *MockSchemaV
 	return nil
 }
 
+// ClearSchemas removes all schemas from the mock registry
+func (m *MockSchemaRegistry) ClearSchemas() {
+	m.schemas = make(map[string]map[int]*MockSchemaVersion)
+}
+
 // handleSubjects handles GET /subjects - returns all available subjects
 func (m *MockSchemaRegistry) handleSubjects(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

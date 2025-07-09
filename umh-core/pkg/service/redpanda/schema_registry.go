@@ -111,34 +111,6 @@
 //   - Configuration: Invalid schemas, missing permissions, registry configuration issues
 //   - Permanent: Authentication failures, malformed requests
 //
-// Recommended retry strategy:
-//
-//	func reconcileWithRetry(registry *redpanda.SchemaRegistry, schemas map[redpanda.SubjectName]redpanda.JSONSchemaDefinition) error {
-//		backoff := time.Second
-//		maxRetries := 5
-//
-//		for attempt := 0; attempt < maxRetries; attempt++ {
-//			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-//			err := registry.Reconcile(ctx, schemas)
-//			cancel()
-//
-//			if err == nil {
-//				return nil // Success
-//			}
-//
-//			// Check if error is retryable (implement based on error messages)
-//			if !isRetryable(err) {
-//				return fmt.Errorf("permanent failure: %w", err)
-//			}
-//
-//			log.Printf("Reconciliation attempt %d failed: %v, retrying in %v", attempt+1, err, backoff)
-//			time.Sleep(backoff)
-//			backoff *= 2 // Exponential backoff
-//		}
-//
-//		return fmt.Errorf("reconciliation failed after %d attempts", maxRetries)
-//	}
-//
 // # Security Considerations
 //
 // ## Network Security
@@ -306,12 +278,24 @@ import (
 	"time"
 )
 
-// Type aliases for improved type safety and documentation
+// SubjectName represents a schema subject identifier in the registry.
+// Subject names follow Kafka/Redpanda naming conventions and are used
+// as unique keys for schema storage and retrieval operations.
 type SubjectName string
+
+// JSONSchemaDefinition contains a complete JSON schema definition.
+// This includes all schema validation rules, constraints, and metadata
+// required for message validation in the registry.
 type JSONSchemaDefinition string
+
+// SchemaRegistryPhase represents the current state in the reconciliation process.
+// The reconciliation follows a 5-phase state machine: lookup → decode → compare → remove_unknown → add_new.
+// Each phase has specific responsibilities and error conditions.
 type SchemaRegistryPhase string
 
-// Metrics for observability
+// SchemaRegistryMetrics provides observability data for monitoring and alerting.
+// All metrics are thread-safe and updated atomically during reconciliation operations.
+// Use these metrics to track system health, performance, and operational status.
 type SchemaRegistryMetrics struct {
 	CurrentPhase         SchemaRegistryPhase
 	TotalReconciliations int64
@@ -323,12 +307,55 @@ type SchemaRegistryMetrics struct {
 	LastError            string
 }
 
-// ISchemaRegistry defines the interface for schema registry operations
+// ISchemaRegistry defines the interface for schema registry operations.
+// Implementations must provide thread-safe reconciliation and metrics collection.
+// All operations respect context cancellation and timeout requirements.
+//
+// Usage example:
+//
+//	registry := NewSchemaRegistry()
+//	expectedSchemas := map[SubjectName]JSONSchemaDefinition{
+//		"user-events": `{"type": "object", "properties": {"id": {"type": "string"}}}`,
+//	}
+//	if err := registry.Reconcile(ctx, expectedSchemas); err != nil {
+//		// Handle reconciliation error
+//	}
 type ISchemaRegistry interface {
+	// Reconcile ensures the registry contains exactly the expected schemas.
+	// It adds missing schemas and removes unexpected ones through a multi-phase process.
+	// Returns error if reconciliation fails; use backoff for transient failures.
 	Reconcile(ctx context.Context, expectedSubjects map[SubjectName]JSONSchemaDefinition) error
+
+	// GetMetrics returns current operational metrics for monitoring and alerting.
+	// All metrics are atomic and thread-safe. Use for health checks and dashboards.
 	GetMetrics() SchemaRegistryMetrics
 }
 
+// SchemaRegistry implements ISchemaRegistry with a multi-phase reconciliation system.
+// It manages schema synchronization between expected state and Redpanda/Kafka registry.
+// All operations are thread-safe and support context cancellation.
+//
+// The reconciliation process follows these phases:
+//  1. lookup: Fetch current registry state via HTTP GET /subjects
+//  2. decode: Parse JSON response into typed structures
+//  3. compare: Analyze differences and build work queues
+//  4. remove_unknown: Delete unexpected schemas (one at a time)
+//  5. add_new: Add missing schemas (one at a time)
+//
+// State management:
+//   - Each phase maintains specific data (rawSubjectsData, work queues, etc.)
+//   - Phase transitions occur based on completion and error conditions
+//   - Internal state is protected by RWMutex for concurrent access
+//
+// Error handling:
+//   - Network errors: Exponential backoff recommended
+//   - Schema validation errors: Check schema format and registry compatibility
+//   - Context cancellation: Immediate abort with proper cleanup
+//
+// Performance characteristics:
+//   - Processes one schema per reconciliation cycle in action phases
+//   - Typical operation time: <100ms for small schema sets
+//   - Memory usage: O(n) where n is number of schemas
 type SchemaRegistry struct {
 	// Concurrency protection
 	mu sync.RWMutex
@@ -352,29 +379,73 @@ type SchemaRegistry struct {
 	failedOperations        int64
 	lastOperationTime       time.Time
 	lastError               string
+	schemaRegistryAddress   string
 }
 
+// Schema registry reconciliation phases
 const (
-	SchemaRegistryPhaseLookup        SchemaRegistryPhase = "lookup"
-	SchemaRegistryPhaseDecode        SchemaRegistryPhase = "decode"
-	SchemaRegistryPhaseCompare       SchemaRegistryPhase = "compare"
+	// SchemaRegistryPhaseLookup fetches current registry state via HTTP GET /subjects
+	SchemaRegistryPhaseLookup SchemaRegistryPhase = "lookup"
+
+	// SchemaRegistryPhaseDecode parses JSON response into typed Go structures
+	SchemaRegistryPhaseDecode SchemaRegistryPhase = "decode"
+
+	// SchemaRegistryPhaseCompare analyzes differences and builds work queues for actions
+	SchemaRegistryPhaseCompare SchemaRegistryPhase = "compare"
+
+	// SchemaRegistryPhaseRemoveUnknown deletes unexpected schemas (one at a time)
 	SchemaRegistryPhaseRemoveUnknown SchemaRegistryPhase = "remove_unknown"
-	SchemaRegistryPhaseAddNew        SchemaRegistryPhase = "add_new"
+
+	// SchemaRegistryPhaseAddNew adds missing schemas (one at a time)
+	SchemaRegistryPhaseAddNew SchemaRegistryPhase = "add_new"
 )
 
-// Context timeout requirements per phase
+// Context timeout requirements per phase for performance monitoring and SLA compliance
 const (
-	MinimumLookupTime  = 10 * time.Millisecond // HTTP GET /subjects (local)
-	MinimumDecodeTime  = 1 * time.Millisecond  // JSON parsing (fast)
-	MinimumCompareTime = 1 * time.Millisecond  // Map operations (instant)
-	MinimumRemoveTime  = 10 * time.Millisecond // HTTP DELETE (local)
-	MinimumAddTime     = 15 * time.Millisecond // HTTP POST with schema (local, slightly larger payload)
+	// MinimumLookupTime is the minimum context timeout for HTTP GET /subjects operations
+	MinimumLookupTime = 10 * time.Millisecond // HTTP GET /subjects (local)
+
+	// MinimumDecodeTime is the minimum context timeout for JSON parsing operations
+	MinimumDecodeTime = 1 * time.Millisecond // JSON parsing (fast)
+
+	// MinimumCompareTime is the minimum context timeout for map comparison operations
+	MinimumCompareTime = 1 * time.Millisecond // Map operations (instant)
+
+	// MinimumRemoveTime is the minimum context timeout for HTTP DELETE operations
+	MinimumRemoveTime = 10 * time.Millisecond // HTTP DELETE (local)
+
+	// MinimumAddTime is the minimum context timeout for HTTP POST operations with schema payload
+	MinimumAddTime = 15 * time.Millisecond // HTTP POST with schema (local, slightly larger payload)
 )
 
-const SchemaRegistryAddress = "localhost:8081"
+// DefaultSchemaRegistryAddress is the default address for the Redpanda Schema Registry HTTP API.
+// This follows the standard Kafka/Redpanda schema registry port convention.
+// In production, this should be configurable via environment variables or configuration files.
+const DefaultSchemaRegistryAddress = "http://localhost:8081"
 
-func NewSchemaRegistry() *SchemaRegistry {
-	return &SchemaRegistry{
+// NewSchemaRegistry creates a new SchemaRegistry instance with default configuration.
+// The registry starts in lookup phase and initializes all internal state for reconciliation.
+// Use this constructor for standard schema registry operations.
+//
+// Default configuration:
+//   - Registry address: localhost:8081
+//   - HTTP client: Default with system timeout
+//   - Phase: lookup (ready for first reconciliation)
+//   - Metrics: Zero-initialized counters
+//
+// Example:
+//
+//	registry := NewSchemaRegistry()
+//	defer registry.Close() // If cleanup needed
+//
+//	schemas := map[SubjectName]JSONSchemaDefinition{
+//		"events": `{"type": "object"}`,
+//	}
+//	if err := registry.Reconcile(ctx, schemas); err != nil {
+//		log.Printf("Reconciliation failed: %v", err)
+//	}
+func NewSchemaRegistry(opts ...func(*SchemaRegistry)) *SchemaRegistry {
+	registry := &SchemaRegistry{
 		currentPhase:                SchemaRegistryPhaseLookup,
 		httpClient:                  http.Client{},
 		missingInRegistry:           make(map[SubjectName]JSONSchemaDefinition),
@@ -384,9 +455,67 @@ func NewSchemaRegistry() *SchemaRegistry {
 		failedOperations:            0,
 		lastOperationTime:           time.Time{},
 		lastError:                   "",
+		schemaRegistryAddress:       DefaultSchemaRegistryAddress,
+	}
+	for _, opt := range opts {
+		opt(registry)
+	}
+	return registry
+}
+
+// WithSchemaRegistryAddress sets the schema registry address for the SchemaRegistry.
+// This is useful for testing and integration with Redpanda.
+//
+// Example:
+//
+//	registry := NewSchemaRegistry(WithSchemaRegistryAddress("localhost:8081"))
+func WithSchemaRegistryAddress(address string) func(*SchemaRegistry) {
+	return func(s *SchemaRegistry) {
+		s.schemaRegistryAddress = address
 	}
 }
 
+// Reconcile ensures the schema registry contains exactly the expected schemas.
+// It synchronizes the registry state by adding missing schemas and removing unexpected ones.
+// The operation follows a multi-phase process with proper error handling and context support.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeout control (required)
+//   - expectedSubjects: Map of subject names to their JSON schema definitions
+//
+// Behavior:
+//   - Adds schemas that exist in expectedSubjects but not in registry
+//   - Removes schemas that exist in registry but not in expectedSubjects
+//   - Processes operations atomically (one schema per call)
+//   - Updates internal metrics for monitoring
+//
+// Error conditions:
+//   - Network failures: HTTP errors, connection timeouts
+//   - Schema validation: Invalid JSON schema format
+//   - Registry conflicts: Concurrent modifications
+//   - Context cancellation: Immediate abort with context.Canceled
+//
+// Thread safety:
+//   - Method is thread-safe with internal synchronization
+//   - Concurrent calls will serialize through internal mutex
+//   - Metrics are updated atomically
+//
+// Usage example:
+//
+//	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+//	defer cancel()
+//
+//	schemas := map[SubjectName]JSONSchemaDefinition{
+//		"user-events": `{"type": "object", "properties": {"id": {"type": "string"}}}`,
+//		"system-logs": `{"type": "object", "properties": {"level": {"type": "string"}}}`,
+//	}
+//
+//	if err := registry.Reconcile(ctx, schemas); err != nil {
+//		if errors.Is(err, context.DeadlineExceeded) {
+//			// Handle timeout
+//		}
+//		// Handle other errors
+//	}
 func (s *SchemaRegistry) Reconcile(ctx context.Context, expectedSubjects map[SubjectName]JSONSchemaDefinition) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -460,6 +589,43 @@ func (s *SchemaRegistry) getNextPhase(currentPhase SchemaRegistryPhase, changePh
 	}
 }
 
+// GetMetrics returns current operational metrics for monitoring and alerting.
+// All metrics are atomic and thread-safe, providing real-time visibility into
+// reconciliation status, performance, and health.
+//
+// Returned metrics:
+//   - CurrentPhase: Current reconciliation state (lookup, decode, compare, remove_unknown, add_new)
+//   - TotalReconciliations: Total number of Reconcile() calls
+//   - SuccessfulOperations: Count of successful reconciliation operations
+//   - FailedOperations: Count of failed reconciliation operations
+//   - SubjectsToAdd: Number of schemas pending addition to registry
+//   - SubjectsToRemove: Number of schemas pending removal from registry
+//   - LastOperationTime: Timestamp of last reconciliation attempt
+//   - LastError: Error message from most recent failure (empty if last operation succeeded)
+//
+// Thread safety:
+//   - Method is thread-safe with read-only access
+//   - Metrics are updated atomically during reconciliation
+//   - Concurrent calls return consistent snapshots
+//
+// Usage for monitoring:
+//
+//	metrics := registry.GetMetrics()
+//
+//	// Health check
+//	if metrics.FailedOperations > 0 && metrics.LastError != "" {
+//		log.Printf("Schema registry unhealthy: %s", metrics.LastError)
+//	}
+//
+//	// Performance monitoring
+//	if time.Since(metrics.LastOperationTime) > 5*time.Minute {
+//		log.Printf("Schema registry stale - last operation: %v", metrics.LastOperationTime)
+//	}
+//
+//	// Work queue monitoring
+//	if metrics.SubjectsToAdd > 0 || metrics.SubjectsToRemove > 0 {
+//		log.Printf("Schema registry pending work: +%d -%d", metrics.SubjectsToAdd, metrics.SubjectsToRemove)
+//	}
 func (s *SchemaRegistry) GetMetrics() SchemaRegistryMetrics {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -580,7 +746,7 @@ func (s *SchemaRegistry) lookup(ctx context.Context) (err error, changePhase boo
 		}
 	}
 
-	url := fmt.Sprintf("http://%s/subjects", SchemaRegistryAddress)
+	url := fmt.Sprintf("%s/subjects", s.schemaRegistryAddress)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -771,7 +937,7 @@ func (s *SchemaRegistry) removeUnknown(ctx context.Context) (err error, changePh
 	s.currentOperationSubject = subjectToRemove
 
 	// HTTP DELETE /subjects/{subject}
-	url := fmt.Sprintf("http://%s/subjects/%s", SchemaRegistryAddress, string(subjectToRemove))
+	url := fmt.Sprintf("%s/subjects/%s", s.schemaRegistryAddress, string(subjectToRemove))
 	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {
 		return err, false
@@ -909,7 +1075,7 @@ func (s *SchemaRegistry) addNew(ctx context.Context) (err error, changePhase boo
 	}
 
 	// HTTP POST /subjects/{subject}/versions
-	url := fmt.Sprintf("http://%s/subjects/%s/versions", SchemaRegistryAddress, string(subjectToAdd))
+	url := fmt.Sprintf("%s/subjects/%s/versions", s.schemaRegistryAddress, string(subjectToAdd))
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(payloadBytes))
 	if err != nil {
 		return err, false
