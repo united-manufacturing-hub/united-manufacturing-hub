@@ -154,6 +154,42 @@ func (d *ProtocolConverterConfig) UnmarshalYAML(value *yaml.Node) error {
 	return nil
 }
 
+// UnmarshalYAML is a helper function to detect anchors and set the hasAnchors flag
+// See also UnmarshalYAML for DataFlowComponentConfig and ProtocolConverterConfig
+func (d *StreamProcessorConfig) UnmarshalYAML(value *yaml.Node) error {
+	type plain StreamProcessorConfig // prevent recursion
+	var tmp plain
+
+	// 1. decode into the temporary value just like the default behaviour
+	if err := value.Decode(&tmp); err != nil {
+		return err
+	}
+
+	// 2. locate the child node with key "streamProcessorServiceConfig"
+	// Note: In YAML v3, mapping nodes store key-value pairs in Content as alternating elements:
+	// Content[0]=key1, Content[1]=value1, Content[2]=key2, Content[3]=value2, etc.
+	// We iterate by 2 to step through each key-value pair.
+	var cfgNode *yaml.Node
+	if len(value.Content)%2 != 0 {
+		return fmt.Errorf("invalid YAML mapping node: Content length %d is not even", len(value.Content))
+	}
+	for i := 0; i < len(value.Content); i += 2 {
+		k, v := value.Content[i], value.Content[i+1]
+		if k.Value == "streamProcessorServiceConfig" {
+			cfgNode = v
+			break
+		}
+	}
+
+	// 3. copy decoded data into the receiver
+	*d = StreamProcessorConfig(tmp)
+
+	// 4. flag = true when that subtree has &anchor or *alias
+	d.hasAnchors = hasAnchors(cfgNode)
+
+	return nil
+}
+
 // RenderTemplate takes an *arbitrary* struct that still contains
 // {{ … }} actions, renders it with text/template and returns the same
 // struct type fully materialised.
