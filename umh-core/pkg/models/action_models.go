@@ -203,6 +203,12 @@ const (
 	EditDataModel ActionType = "edit-datamodel"
 	// GetDataModel represents the action type for retrieving a data model
 	GetDataModel ActionType = "get-datamodel"
+	// DeployStreamProcessor represents the action type for deploying a stream processor
+	DeployStreamProcessor ActionType = "deploy-stream-processor"
+	// EditStreamProcessor represents the action type for editing a stream processor
+	EditStreamProcessor ActionType = "edit-stream-processor"
+	// DeleteStreamProcessor represents the action type for deleting a stream processor
+	DeleteStreamProcessor ActionType = "delete-stream-processor"
 )
 
 // TestNetworkConnectionPayload contains the necessary fields for executing a TestNetworkConnection action.
@@ -781,4 +787,34 @@ type ProtocolConverter struct {
 type ProtocolConverterMeta struct {
 	ProcessingMode string `json:"processingMode"`
 	Protocol       string `json:"protocol"`
+}
+
+// StreamProcessorModelRef represents a reference to a data model
+type StreamProcessorModelRef struct {
+	Name    string `json:"name" binding:"required"`    // name of the referenced data model
+	Version string `json:"version" binding:"required"` // version of the referenced data model
+}
+
+// StreamProcessorVariable represents a template variable
+type StreamProcessorVariable struct {
+	Label string `json:"label" yaml:"label" mapstructure:"label"`
+	Value string `json:"value" yaml:"value" mapstructure:"value"`
+}
+
+// StreamProcessorTemplateInfo contains template information
+type StreamProcessorTemplateInfo struct {
+	IsTemplated bool                      `json:"isTemplated" yaml:"isTemplated" mapstructure:"isTemplated"`
+	Variables   []StreamProcessorVariable `json:"variables" yaml:"variables" mapstructure:"variables"`
+	RootUUID    uuid.UUID                 `json:"rootUUID" yaml:"rootUUID" mapstructure:"rootUUID"`
+}
+
+// StreamProcessor represents a stream processor configuration
+type StreamProcessor struct {
+	UUID         *uuid.UUID                   `json:"uuid" binding:"required"`
+	Name         string                       `json:"name" binding:"required"`
+	Location     map[int]string               `json:"location"`
+	Model        StreamProcessorModelRef      `json:"model" binding:"required"`
+	Sources      map[string]string            `json:"sources"` // source alias to UNS topic mapping
+	Mapping      map[string]interface{}       `json:"mapping"` // field mappings
+	TemplateInfo *StreamProcessorTemplateInfo `json:"templateInfo"`
 }

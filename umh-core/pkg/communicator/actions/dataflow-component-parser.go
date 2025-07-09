@@ -517,6 +517,15 @@ func ValidateProtocolConverterName(name string) error {
 	return nil
 }
 
+func ValidateStreamProcessorName(name string) error {
+	for _, char := range name {
+		if (char < 'a' || char > 'z') && (char < 'A' || char > 'Z') && (char < '0' || char > '9') && char != '-' {
+			return errors.New("name can only contain letters (a-z, A-Z) and numbers (0-9) and hyphens (-)")
+		}
+	}
+	return nil
+}
+
 func ValidateDataFlowComponentState(state string) error {
 	if state != dataflowcomponent.OperationalStateStopped && state != dataflowcomponent.OperationalStateActive {
 		return fmt.Errorf("invalid state: %s", state)

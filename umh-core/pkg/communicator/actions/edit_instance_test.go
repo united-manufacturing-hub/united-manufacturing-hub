@@ -601,21 +601,21 @@ func (w *writeFailingMockConfigManager) AtomicAddStreamProcessor(ctx context.Con
 }
 
 // AtomicEditStreamProcessor implements the required interface method but ensures the write fails
-func (w *writeFailingMockConfigManager) AtomicEditStreamProcessor(ctx context.Context, sp config.StreamProcessorConfig) error {
+func (w *writeFailingMockConfigManager) AtomicEditStreamProcessor(ctx context.Context, sp config.StreamProcessorConfig) (config.StreamProcessorConfig, error) {
 	// Get the current config
 	configData, err := w.GetConfig(ctx, 0)
 	if err != nil {
-		return err
+		return config.StreamProcessorConfig{}, err
 	}
 
 	// do not edit anything
 
 	// Write config (will fail with this mock)
 	if err := w.writeConfig(ctx, configData); err != nil {
-		return err
+		return config.StreamProcessorConfig{}, err
 	}
 
-	return nil
+	return config.StreamProcessorConfig{}, nil
 }
 
 // AtomicDeleteStreamProcessor implements the required interface method but ensures the write fails
