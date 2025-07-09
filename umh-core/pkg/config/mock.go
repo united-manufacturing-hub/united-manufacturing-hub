@@ -41,6 +41,9 @@ type MockConfigManager struct {
 	AtomicAddProtocolConverterCalled    bool
 	AtomicEditProtocolConverterCalled   bool
 	AtomicDeleteProtocolConverterCalled bool
+	AtomicAddStreamProcessorCalled      bool
+	AtomicEditStreamProcessorCalled     bool
+	AtomicDeleteStreamProcessorCalled   bool
 	AtomicAddDataModelCalled            bool
 	AtomicEditDataModelCalled           bool
 	AtomicDeleteDataModelCalled         bool
@@ -53,6 +56,9 @@ type MockConfigManager struct {
 	AtomicAddProtocolConverterError     error
 	AtomicEditProtocolConverterError    error
 	AtomicDeleteProtocolConverterError  error
+	AtomicAddStreamProcessorError       error
+	AtomicEditStreamProcessorError      error
+	AtomicDeleteStreamProcessorError    error
 	AtomicAddDataModelError             error
 	AtomicEditDataModelError            error
 	AtomicDeleteDataModelError          error
@@ -198,6 +204,24 @@ func (m *MockConfigManager) WithAtomicDeleteProtocolConverterError(err error) *M
 	return m
 }
 
+// WithAtomicAddStreamProcessorError configures the mock to return the given error when AtomicAddStreamProcessor is called
+func (m *MockConfigManager) WithAtomicAddStreamProcessorError(err error) *MockConfigManager {
+	m.AtomicAddStreamProcessorError = err
+	return m
+}
+
+// WithAtomicEditStreamProcessorError configures the mock to return the given error when AtomicEditStreamProcessor is called
+func (m *MockConfigManager) WithAtomicEditStreamProcessorError(err error) *MockConfigManager {
+	m.AtomicEditStreamProcessorError = err
+	return m
+}
+
+// WithAtomicDeleteStreamProcessorError configures the mock to return the given error when AtomicDeleteStreamProcessor is called
+func (m *MockConfigManager) WithAtomicDeleteStreamProcessorError(err error) *MockConfigManager {
+	m.AtomicDeleteStreamProcessorError = err
+	return m
+}
+
 // WithAtomicAddDataModelError configures the mock to return the given error when AtomicAddDataModel is called
 func (m *MockConfigManager) WithAtomicAddDataModelError(err error) *MockConfigManager {
 	m.AtomicAddDataModelError = err
@@ -233,6 +257,9 @@ func (m *MockConfigManager) ResetCalls() {
 	m.AtomicAddProtocolConverterCalled = false
 	m.AtomicEditProtocolConverterCalled = false
 	m.AtomicDeleteProtocolConverterCalled = false
+	m.AtomicAddStreamProcessorCalled = false
+	m.AtomicEditStreamProcessorCalled = false
+	m.AtomicDeleteStreamProcessorCalled = false
 	m.AtomicAddDataModelCalled = false
 	m.AtomicEditDataModelCalled = false
 	m.AtomicDeleteDataModelCalled = false
@@ -554,55 +581,229 @@ func (m *MockConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 		return fmt.Errorf("failed to get config: %w", err)
 	}
 
-	// Find the target protocol converter by UUID
+	// Find the component to delete
+	var targetComponent *ProtocolConverterConfig
 	targetIndex := -1
-	var targetConverter ProtocolConverterConfig
-	for i, converter := range config.ProtocolConverter {
-		converterID := dataflowcomponentserviceconfig.GenerateUUIDFromName(converter.Name)
-		if converterID == componentUUID {
+	for i, component := range config.ProtocolConverter {
+		componentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
+		if componentID == componentUUID {
+			targetComponent = &component
 			targetIndex = i
-			targetConverter = converter
+			break
+		}
+	}
+
+	if targetComponent == nil {
+		return fmt.Errorf("protocol converter with UUID %s not found", componentUUID)
+	}
+
+	// Check if this is a root component (TemplateRef == Name) that has dependent children
+	isRoot := targetComponent.ProtocolConverterServiceConfig.TemplateRef == targetComponent.Name
+	if isRoot {
+		// Check for dependent children
+		for _, component := range config.ProtocolConverter {
+			if component.ProtocolConverterServiceConfig.TemplateRef == targetComponent.Name && component.Name != targetComponent.Name {
+				return fmt.Errorf("cannot delete template %q: it has dependent child instances", targetComponent.Name)
+			}
+		}
+	}
+
+	// Remove the component (no cascading deletion)
+	config.ProtocolConverter = append(config.ProtocolConverter[:targetIndex], config.ProtocolConverter[targetIndex+1:]...)
+
+	// write the config
+	if err := m.writeConfig(ctx, config); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
+}
+
+// AtomicAddStreamProcessor implements the ConfigManager interface
+func (m *MockConfigManager) AtomicAddStreamProcessor(ctx context.Context, sp StreamProcessorConfig) error {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	m.AtomicAddStreamProcessorCalled = true
+
+	if m.AtomicAddStreamProcessorError != nil {
+		return m.AtomicAddStreamProcessorError
+	}
+
+	// get the current config
+	config, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
+	}
+
+	// check for duplicate name before add
+	for _, cmp := range config.StreamProcessor {
+		if cmp.Name == sp.Name {
+			return fmt.Errorf("another stream processor with name %q already exists – choose a unique name", sp.Name)
+		}
+	}
+
+	// If it's a child (TemplateRef is non-empty and != Name), verify that a root with that TemplateRef exists
+	if sp.StreamProcessorServiceConfig.TemplateRef != "" && sp.StreamProcessorServiceConfig.TemplateRef != sp.Name {
+		templateRef := sp.StreamProcessorServiceConfig.TemplateRef
+		rootExists := false
+
+		// Scan existing stream processors to find a root with matching name
+		for _, existing := range config.StreamProcessor {
+			if existing.Name == templateRef && existing.StreamProcessorServiceConfig.TemplateRef == existing.Name {
+				rootExists = true
+				break
+			}
+		}
+
+		if !rootExists {
+			return fmt.Errorf("template %q not found for child %s", templateRef, sp.Name)
+		}
+	}
+
+	// Add the stream processor - let convertSpecToYAML handle template generation
+	config.StreamProcessor = append(config.StreamProcessor, sp)
+
+	// write the config
+	if err := m.writeConfig(ctx, config); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
+}
+
+// AtomicEditStreamProcessor implements the ConfigManager interface
+func (m *MockConfigManager) AtomicEditStreamProcessor(ctx context.Context, sp StreamProcessorConfig) error {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	m.AtomicEditStreamProcessorCalled = true
+
+	if m.AtomicEditStreamProcessorError != nil {
+		return m.AtomicEditStreamProcessorError
+	}
+
+	// get the current config
+	config, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
+	}
+
+	// Find target index by name
+	targetIndex := -1
+	var oldConfig StreamProcessorConfig
+	for i, component := range config.StreamProcessor {
+		if component.Name == sp.Name {
+			targetIndex = i
+			oldConfig = config.StreamProcessor[i]
 			break
 		}
 	}
 
 	if targetIndex == -1 {
-		return fmt.Errorf("protocol converter with UUID %s not found", componentUUID)
+		return fmt.Errorf("stream processor with name %s not found", sp.Name)
 	}
 
-	// Determine if target is a root
-	isRoot := targetConverter.ProtocolConverterServiceConfig.TemplateRef != "" &&
-		targetConverter.ProtocolConverterServiceConfig.TemplateRef == targetConverter.Name
+	newIsRoot := sp.StreamProcessorServiceConfig.TemplateRef != "" &&
+		sp.StreamProcessorServiceConfig.TemplateRef == sp.Name
+	oldIsRoot := oldConfig.StreamProcessorServiceConfig.TemplateRef != "" &&
+		oldConfig.StreamProcessorServiceConfig.TemplateRef == oldConfig.Name
 
-	// If it's a root, check for dependent children
-	if isRoot {
-		childCount := 0
-		for i, converter := range config.ProtocolConverter {
-			// Skip the target itself
+	// Handle root rename - propagate to children
+	if oldIsRoot && newIsRoot && oldConfig.Name != sp.Name {
+		// Update all children that reference the old root name
+		for i, inst := range config.StreamProcessor {
+			if i != targetIndex && inst.StreamProcessorServiceConfig.TemplateRef == oldConfig.Name {
+				inst.StreamProcessorServiceConfig.TemplateRef = sp.Name
+				config.StreamProcessor[i] = inst
+			}
+		}
+	}
+
+	// If it's a child (TemplateRef is non-empty and not a root), validate that the template reference exists
+	if !newIsRoot && sp.StreamProcessorServiceConfig.TemplateRef != "" {
+		templateRef := sp.StreamProcessorServiceConfig.TemplateRef
+		rootExists := false
+
+		// Scan existing stream processors to find a root with matching name
+		// Note: we check the updated slice which may include renamed roots
+		for i, inst := range config.StreamProcessor {
+			// Skip the instance being edited since it's not committed yet
 			if i == targetIndex {
 				continue
 			}
-			// Count children that reference this root
-			if converter.ProtocolConverterServiceConfig.TemplateRef == targetConverter.Name {
-				childCount++
+			if inst.Name == templateRef && inst.StreamProcessorServiceConfig.TemplateRef == inst.Name {
+				rootExists = true
+				break
 			}
 		}
 
-		if childCount > 0 {
-			return fmt.Errorf("cannot delete root %q; %d dependent converters exist", targetConverter.Name, childCount)
+		// Also check if the new instance itself becomes the root for this template
+		if sp.Name == templateRef && newIsRoot {
+			rootExists = true
+		}
+
+		if !rootExists {
+			return fmt.Errorf("template %q not found for child %s", templateRef, sp.Name)
 		}
 	}
 
-	// Build new slice omitting the target
-	filteredConverters := make([]ProtocolConverterConfig, 0, len(config.ProtocolConverter)-1)
-	for i, converter := range config.ProtocolConverter {
-		if i != targetIndex {
-			filteredConverters = append(filteredConverters, converter)
+	// Commit the edit
+	config.StreamProcessor[targetIndex] = sp
+
+	// write the config
+	if err := m.writeConfig(ctx, config); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
+}
+
+// AtomicDeleteStreamProcessor implements the ConfigManager interface
+func (m *MockConfigManager) AtomicDeleteStreamProcessor(ctx context.Context, name string) error {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	m.AtomicDeleteStreamProcessorCalled = true
+
+	if m.AtomicDeleteStreamProcessorError != nil {
+		return m.AtomicDeleteStreamProcessorError
+	}
+
+	// get the current config
+	config, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
+	}
+
+	// Find the component to delete
+	var targetComponent *StreamProcessorConfig
+	targetIndex := -1
+	for i, component := range config.StreamProcessor {
+		if component.Name == name {
+			targetComponent = &component
+			targetIndex = i
+			break
 		}
 	}
 
-	// Update config with filtered converters
-	config.ProtocolConverter = filteredConverters
+	if targetComponent == nil {
+		return fmt.Errorf("stream processor with name %s not found", name)
+	}
+
+	// Check if this is a root component (TemplateRef == Name) that has dependent children
+	isRoot := targetComponent.StreamProcessorServiceConfig.TemplateRef == targetComponent.Name
+	if isRoot {
+		// Check for dependent children
+		for _, component := range config.StreamProcessor {
+			if component.StreamProcessorServiceConfig.TemplateRef == targetComponent.Name && component.Name != targetComponent.Name {
+				return fmt.Errorf("cannot delete template %q: it has dependent child instances", targetComponent.Name)
+			}
+		}
+	}
+
+	// Remove the component (no cascading deletion)
+	config.StreamProcessor = append(config.StreamProcessor[:targetIndex], config.StreamProcessor[targetIndex+1:]...)
 
 	// write the config
 	if err := m.writeConfig(ctx, config); err != nil {
