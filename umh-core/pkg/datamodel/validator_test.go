@@ -144,7 +144,7 @@ var _ = Describe("Validator", func() {
 
 			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("non-leaf nodes (folders) cannot have _type"))
+			Expect(err.Error()).To(ContainSubstring("non-leaf nodes (folders) cannot have _payloadshape"))
 			Expect(err.Error()).To(ContainSubstring("parent"))
 		})
 
@@ -157,7 +157,7 @@ var _ = Describe("Validator", func() {
 
 			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("leaf nodes must contain _type"))
+			Expect(err.Error()).To(ContainSubstring("leaf nodes must contain _payloadshape"))
 			Expect(err.Error()).To(ContainSubstring("invalid"))
 		})
 
@@ -176,7 +176,7 @@ var _ = Describe("Validator", func() {
 
 			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("field cannot have both _type and _refModel"))
+			Expect(err.Error()).To(ContainSubstring("field cannot have both _payloadshape and _refModel"))
 			Expect(err.Error()).To(ContainSubstring("conflicted"))
 		})
 
