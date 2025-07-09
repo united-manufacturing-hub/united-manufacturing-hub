@@ -89,6 +89,13 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 		return nil, false
 	}
 
+	// Early optimization: if both current and desired states are stopped, skip all reconciliation
+	currentState := b.baseFSMInstance.GetCurrentFSMState()
+	desiredState := b.baseFSMInstance.GetDesiredFSMState()
+	if currentState == OperationalStateStopped && desiredState == OperationalStateStopped {
+		return nil, false
+	}
+
 	// Step 2: Detect external changes.
 	if err := b.reconcileExternalChanges(ctx, services, snapshot); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling

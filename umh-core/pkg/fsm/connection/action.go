@@ -170,14 +170,6 @@ func (c *ConnectionInstance) UpdateObservedStateOfInstance(ctx context.Context, 
 	// Store the raw service info
 	c.ObservedState.ServiceInfo = info
 
-	currentState := c.baseFSMInstance.GetCurrentFSMState()
-	desiredState := c.baseFSMInstance.GetDesiredFSMState()
-	// If both desired and current state are stopped, we can return immediately
-	// There wont be any logs, metrics, etc. to check
-	if desiredState == OperationalStateStopped && currentState == OperationalStateStopped {
-		return nil
-	}
-
 	// Fetch the actual Nmap config from the service
 	start = time.Now()
 	observedConfig, err := c.service.GetConfig(ctx, services.GetFileSystem(), c.baseFSMInstance.GetID())

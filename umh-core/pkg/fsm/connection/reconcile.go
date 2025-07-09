@@ -23,12 +23,11 @@ import (
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	connectionsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 )
 
 // Reconcile examines the ConnectionInstance and, in three steps:
@@ -89,6 +88,13 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 				},
 			)
 		}
+		return nil, false
+	}
+
+	// Early optimization: if both current and desired states are stopped, skip all reconciliation
+	currentState := c.baseFSMInstance.GetCurrentFSMState()
+	desiredState := c.baseFSMInstance.GetDesiredFSMState()
+	if currentState == OperationalStateStopped && desiredState == OperationalStateStopped {
 		return nil, false
 	}
 

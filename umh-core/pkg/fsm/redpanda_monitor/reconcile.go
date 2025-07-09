@@ -86,6 +86,13 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 		return nil, false
 	}
 
+	// Early optimization: if both current and desired states are stopped, skip all reconciliation
+	currentState := b.baseFSMInstance.GetCurrentFSMState()
+	desiredState := b.baseFSMInstance.GetDesiredFSMState()
+	if currentState == OperationalStateStopped && desiredState == OperationalStateStopped {
+		return nil, false
+	}
+
 	// Step 2: Detect external changes.
 	if err = b.reconcileExternalChanges(ctx, services, snapshot); err != nil {
 
@@ -118,7 +125,7 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 	}
 
 	// Step 3: Attempt to reconcile the state.
-	err, reconciled = b.reconcileStateTransition(ctx, services)
+	err, reconciled = b.reconcileStateTransition(ctx, services, time.Now())
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
 		// Also this should not
@@ -183,7 +190,7 @@ func (b *RedpandaMonitorInstance) reconcileExternalChanges(ctx context.Context, 
 // Any functions that fetch information are disallowed here and must be called in reconcileExternalChanges
 // and exist in ExternalState.
 // This is to ensure full testability of the FSM.
-func (b *RedpandaMonitorInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider) (err error, reconciled bool) {
+func (b *RedpandaMonitorInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaMonitor, b.baseFSMInstance.GetID()+".reconcileStateTransition", time.Since(start))
@@ -198,24 +205,16 @@ func (b *RedpandaMonitorInstance) reconcileStateTransition(ctx context.Context, 
 		if err != nil {
 			return err, false
 		}
-		if reconciled {
-			return nil, true
-		} else {
-			return nil, false
-		}
+		return nil, reconciled
 	}
 
 	// Handle operational states
 	if IsOperationalState(currentState) {
-		err, reconciled := b.reconcileOperationalStates(ctx, services, currentState, desiredState, time.Now())
+		err, reconciled := b.reconcileOperationalStates(ctx, services, currentState, desiredState, currentTime)
 		if err != nil {
 			return err, false
 		}
-		if reconciled {
-			return nil, true
-		} else {
-			return nil, false
-		}
+		return nil, reconciled
 	}
 
 	return fmt.Errorf("invalid state: %s", currentState), false

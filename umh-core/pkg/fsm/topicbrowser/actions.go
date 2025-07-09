@@ -176,16 +176,6 @@ func (i *TopicBrowserInstance) UpdateObservedStateOfInstance(ctx context.Context
 		return ctx.Err()
 	}
 
-	currentState := i.baseFSMInstance.GetCurrentFSMState()
-	desiredState := i.baseFSMInstance.GetDesiredFSMState()
-	// If both desired and current state are stopped, we can return immediately
-	// There wont be any logs, metrics, etc. to check
-	// It is moved here before the getServiceStatus call to avoid unnecessary calls to the service
-	// as getServiceStatus is quite expensive
-	if desiredState == OperationalStateStopped && currentState == OperationalStateStopped {
-		return nil
-	}
-
 	start := time.Now()
 	info, err := i.getServiceStatus(ctx, services, snapshot)
 	if err != nil {

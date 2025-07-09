@@ -153,14 +153,6 @@ func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, servic
 		return ctx.Err()
 	}
 
-	currentState := n.baseFSMInstance.GetCurrentFSMState()
-	desiredState := n.baseFSMInstance.GetDesiredFSMState()
-	// If both desired and current state are stopped, we can return immediately
-	// There wont be any logs, metrics, etc. to check
-	if desiredState == OperationalStateStopped && currentState == OperationalStateStopped {
-		return nil
-	}
-
 	start := time.Now()
 	svcInfo, err := n.monitorService.Status(ctx, services.GetFileSystem(), n.config.Name, snapshot.Tick)
 	if err != nil {

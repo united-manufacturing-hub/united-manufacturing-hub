@@ -92,6 +92,13 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 		return nil, false
 	}
 
+	// Early optimization: if both current and desired states are stopped, skip all reconciliation
+	currentState := d.baseFSMInstance.GetCurrentFSMState()
+	desiredState := d.baseFSMInstance.GetDesiredFSMState()
+	if currentState == OperationalStateStopped && desiredState == OperationalStateStopped {
+		return nil, false
+	}
+
 	// Step 2: Detect external changes.
 	err = d.reconcileExternalChanges(ctx, services, snapshot)
 	if err != nil {
