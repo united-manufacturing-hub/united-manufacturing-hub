@@ -172,7 +172,7 @@ func (b *BenthosInstance) PrintState() {
 	b.baseFSMInstance.GetLogger().Debugf("Observed state: %+v", b.ObservedState)
 }
 
-// GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance
+// GetExpectedMaxP95ExecutionTimePerInstance returns the minimum required time for this instance
 func (b *BenthosInstance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
-	return constants.BenthosExpectedMaxP95ExecutionTimePerInstance
+	return constants.BenthosUpdateObservedStateTimeout
 }

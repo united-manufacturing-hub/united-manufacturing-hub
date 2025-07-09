@@ -41,6 +41,7 @@ import (
 func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
 	start := time.Now()
 	benthosInstanceName := b.baseFSMInstance.GetID()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentBenthosInstance, benthosInstanceName, time.Since(start))
 		if err != nil {
@@ -132,6 +133,7 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 		b.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
 		return nil, false
 	}
+
 	// If either Benthos state or S6 state was reconciled, we return reconciled so that nothing happens anymore in this tick
 	// nothing should happen as we might have already taken up some significant time of the avaialble time per tick, so better
 	// to be on the safe side and let the rest handle in another tick
@@ -151,12 +153,12 @@ func (b *BenthosInstance) reconcileExternalChanges(ctx context.Context, services
 		metrics.ObserveReconcileTime(metrics.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
 	}()
 
-	// Fetching the observed state can sometimes take longer, but we need to ensure when reconciling a lot of instances
-	// that a single status of a single instance does not block the whole reconciliation
-	observedStateCtx, cancel := context.WithTimeout(ctx, constants.BenthosUpdateObservedStateTimeout)
+	// Create context for UpdateObservedStateOfInstance with minimum timeout guarantee
+	// This ensures we get either 80% of available time OR the minimum required time, whichever is larger
+	updateCtx, cancel := constants.CreateUpdateObservedStateContextWithMinimum(ctx, constants.BenthosUpdateObservedStateTimeout)
 	defer cancel()
 
-	err := b.UpdateObservedStateOfInstance(observedStateCtx, services, snapshot)
+	err := b.UpdateObservedStateOfInstance(updateCtx, services, snapshot)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}

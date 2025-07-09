@@ -161,11 +161,12 @@ func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, service
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
 	}()
 
-	// Fetching the observed state can sometimes take longer, but we need to ensure when reconciling a lot of instances
-	// that a single status of a single instance does not block the whole reconciliation
-	observedStateCtx, cancel := context.WithTimeout(ctx, constants.RedpandaUpdateObservedStateTimeout)
+	// Create context for UpdateObservedStateOfInstance with minimum timeout guarantee
+	// This ensures we get either 80% of available time OR the minimum required time, whichever is larger
+	updateCtx, cancel := constants.CreateUpdateObservedStateContextWithMinimum(ctx, constants.RedpandaUpdateObservedStateTimeout)
 	defer cancel()
-	err = r.UpdateObservedStateOfInstance(observedStateCtx, services, snapshot)
+
+	err = r.UpdateObservedStateOfInstance(updateCtx, services, snapshot)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err), false
 	}

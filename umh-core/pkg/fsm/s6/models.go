@@ -145,7 +145,7 @@ func (s *S6Instance) GetConfig() config.S6FSMConfig {
 
 // GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance
 func (s *S6Instance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
-	return constants.S6ExpectedMaxP95ExecutionTimePerInstance
+	return constants.S6UpdateObservedStateTimeout
 }
 
 // IsTransientStreakCounterMaxed returns whether the transient streak counter

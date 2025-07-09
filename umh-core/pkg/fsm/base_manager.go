@@ -850,8 +850,9 @@ func (m *BaseFSMManager[C]) reconcileInstanceWithTimeout(ctx context.Context, in
 
 	// Time budget check is now done upfront before goroutine creation
 	// This method assumes sufficient time has already been verified
-	instanceCtx, instanceCancel := context.WithTimeout(ctx, expectedMaxP95ExecutionTime)
-	defer instanceCancel()
+	// Use the full manager context instead of artificially limiting to expectedMaxP95ExecutionTime
+	// The time budget check is the primary gating mechanism, not context timeout
+	instanceCtx := ctx
 
 	// Pass manager-specific tick to instance.Reconcile
 	reconcileErr, instanceReconciled := instance.Reconcile(instanceCtx, snapshot, services)

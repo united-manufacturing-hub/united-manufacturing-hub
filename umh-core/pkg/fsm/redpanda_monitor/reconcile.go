@@ -166,9 +166,12 @@ func (b *RedpandaMonitorInstance) reconcileExternalChanges(ctx context.Context, 
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaMonitor, b.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
 	}()
 
-	observedStateCtx, cancel := context.WithTimeout(ctx, constants.RedpandaMonitorUpdateObservedStateTimeout)
+	// Create context for UpdateObservedStateOfInstance with minimum timeout guarantee
+	// This ensures we get either 80% of available time OR the minimum required time, whichever is larger
+	updateCtx, cancel := constants.CreateUpdateObservedStateContextWithMinimum(ctx, constants.RedpandaMonitorUpdateObservedStateTimeout)
 	defer cancel()
-	err := b.UpdateObservedStateOfInstance(observedStateCtx, services, snapshot)
+
+	err := b.UpdateObservedStateOfInstance(updateCtx, services, snapshot)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}

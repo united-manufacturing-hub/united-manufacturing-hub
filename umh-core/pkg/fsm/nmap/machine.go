@@ -271,7 +271,7 @@ func (n *NmapInstance) PrintState() {
 		n.baseFSMInstance.GetID(), n.GetCurrentFSMState(), n.GetDesiredFSMState())
 }
 
-// GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance
+// GetExpectedMaxP95ExecutionTimePerInstance returns the minimum required time for this instance
 func (n *NmapInstance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
-	return constants.NmapExpectedMaxP95ExecutionTimePerInstance
+	return constants.NmapUpdateObservedStateTimeout + constants.NmapProcessMetricsTimeout
 }

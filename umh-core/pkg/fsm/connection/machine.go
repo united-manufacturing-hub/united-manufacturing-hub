@@ -183,7 +183,7 @@ func (c *ConnectionInstance) PrintState() {
 	c.baseFSMInstance.GetLogger().Debugf("Observed state: %+v", c.ObservedState)
 }
 
-// GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance
+// GetExpectedMaxP95ExecutionTimePerInstance returns the minimum required time for this instance
 func (c *ConnectionInstance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
-	return constants.ConnectionExpectedMaxP95ExecutionTimePerInstance
+	return constants.ConnectionUpdateObservedStateTimeout
 }

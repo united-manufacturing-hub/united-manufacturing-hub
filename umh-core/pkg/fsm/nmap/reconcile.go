@@ -144,9 +144,12 @@ func (n *NmapInstance) reconcileExternalChanges(ctx context.Context, services se
 		metrics.ObserveReconcileTime(metrics.ComponentNmapInstance, n.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
 	}()
 
-	observedStateCtx, cancel := context.WithTimeout(ctx, constants.S6UpdateObservedStateTimeout)
+	// Create context for UpdateObservedStateOfInstance with minimum timeout guarantee
+	// This ensures we get either 80% of available time OR the minimum required time, whichever is larger
+	updateCtx, cancel := constants.CreateUpdateObservedStateContextWithMinimum(ctx, constants.NmapUpdateObservedStateTimeout)
 	defer cancel()
-	err := n.UpdateObservedStateOfInstance(observedStateCtx, services, snapshot)
+
+	err := n.UpdateObservedStateOfInstance(updateCtx, services, snapshot)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}

@@ -83,11 +83,8 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSn
 		return nil, false
 	}
 
-	// 2) Update observed state (i.e., fetch container metrics) with a timeout
-	updateCtx, cancel := context.WithTimeout(ctx, constants.ContainerMonitorUpdateObservedStateTimeout)
-	defer cancel()
-
-	if err := c.updateObservedState(updateCtx); err != nil {
+	// Step 2: Detect external changes
+	if err := c.reconcileExternalChanges(ctx, services, snapshot); err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			// Updating the observed state can sometimes take longer,
 			// resulting in context.DeadlineExceeded errors. In this case, we want to
@@ -134,6 +131,26 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSn
 	c.baseFSMInstance.ResetState()
 
 	return nil, reconciled
+}
+
+// reconcileExternalChanges checks if the ContainerInstance service status has changed
+// externally and updates the observed state accordingly
+func (c *ContainerInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentContainerMonitor, c.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
+	}()
+
+	// Create context for UpdateObservedStateOfInstance with minimum timeout guarantee
+	// This ensures we get either 80% of available time OR the minimum required time, whichever is larger
+	updateCtx, cancel := constants.CreateUpdateObservedStateContextWithMinimum(ctx, constants.ContainerUpdateObservedStateTimeout)
+	defer cancel()
+
+	err := c.UpdateObservedStateOfInstance(updateCtx, services, snapshot)
+	if err != nil {
+		return fmt.Errorf("failed to update observed state: %w", err)
+	}
+	return nil
 }
 
 // printSystemState prints the full system state in a human-readable format
@@ -246,17 +263,6 @@ func (c *ContainerInstance) reconcileStateTransition(ctx context.Context, servic
 	}
 
 	return fmt.Errorf("invalid state: %s", currentState), false
-}
-
-// updateObservedState queries container_monitor.Service for new metrics
-func (c *ContainerInstance) updateObservedState(ctx context.Context) error {
-	status, err := c.monitorService.GetStatus(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get container metrics: %w", err)
-	}
-	// Save to observed state
-	c.ObservedState.ServiceInfo = status
-	return nil
 }
 
 // reconcileOperationalStates handles states related to instance operations (starting/stopping)

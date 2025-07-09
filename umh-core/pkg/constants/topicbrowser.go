@@ -21,13 +21,11 @@ const (
 )
 
 const (
-	TopicBrowserExpectedMaxP95ExecutionTimePerInstance = TopicBrowserUpdateObservedStateTimeout + time.Millisecond*35 // needs to be higher than S6ExpectedMaxP95ExecutionTimePerInstance
+	// TopicBrowser Operation Timeouts - Level 2 Service (depends on Redpanda)
+	// TopicBrowserUpdateObservedStateTimeout is the timeout for updating the observed state
+	TopicBrowserUpdateObservedStateTimeout = 20 * time.Millisecond
 )
 
-const (
-	// TopicBrowserUpdateObservedStateTimeout is the timeout for updating the observed state
-	TopicBrowserUpdateObservedStateTimeout = 15 * time.Millisecond
-)
 const (
 	// BLOCK_START_MARKER marks the begin of a new data/general block inside the logs.
 	BLOCK_START_MARKER = "STARTSTARTSTART"

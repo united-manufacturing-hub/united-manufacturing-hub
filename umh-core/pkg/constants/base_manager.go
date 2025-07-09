@@ -25,9 +25,7 @@ const (
 	// leaving instances in inconsistent states. If set too high, reduces available time
 	// for actual reconciliation work, impacting system responsiveness.
 	//
-	// CALCULATION EXAMPLE: With 100ms manager deadline and 0.95 factor:
-	//   - Available work time: 100ms * 0.95 = 95ms
-	//   - Reserved cleanup time: 100ms - 95ms = 5ms
-	//   - Cleanup buffer: 5% of total deadline
-	BaseManagerControlLoopTimeFactor = 0.95
+	// CALCULATION: 1.0 - ManagerReservePercent (5%) = 0.95 (95% of manager time)
+	// With 90ms manager time: 90ms * 0.95 = 85.5ms for instances, 4.5ms for cleanup
+	BaseManagerControlLoopTimeFactor = 1.0 - ManagerReservePercent
 )
