@@ -219,6 +219,14 @@ func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, ser
 	// Store the raw service info
 	b.ObservedState.ServiceInfo = info
 
+	currentState := b.baseFSMInstance.GetCurrentFSMState()
+	desiredState := b.baseFSMInstance.GetDesiredFSMState()
+	// If both desired and current state are stopped, we can return immediately
+	// There wont be any logs, metrics, etc. to check
+	if desiredState == OperationalStateStopped && currentState == OperationalStateStopped {
+		return nil
+	}
+
 	// Fetch the actual Benthos config from the service
 	start = time.Now()
 	observedConfig, err := b.service.GetConfig(ctx, services.GetFileSystem(), b.baseFSMInstance.GetID())

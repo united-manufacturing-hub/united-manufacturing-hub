@@ -92,13 +92,6 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 		return nil, false
 	}
 
-	// Early optimization: if both current and desired states are stopped, skip all reconciliation
-	currentState := p.baseFSMInstance.GetCurrentFSMState()
-	desiredState := p.baseFSMInstance.GetDesiredFSMState()
-	if currentState == OperationalStateStopped && desiredState == OperationalStateStopped {
-		return nil, false
-	}
-
 	// Step 2: Detect external changes.
 	if err = p.reconcileExternalChanges(ctx, services, snapshot); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling

@@ -198,6 +198,11 @@ func (r *RedpandaInstance) reconcileStateTransition(ctx context.Context, service
 		return nil, reconciled
 	}
 
+	// If both current and desired state are stopped, we don't need to do anything
+	if currentState == OperationalStateStopped && desiredState == OperationalStateStopped {
+		return nil, false
+	}
+
 	// Handle operational states
 	if IsOperationalState(currentState) {
 		err, reconciled := r.reconcileOperationalStates(ctx, services, currentState, desiredState, currentTime)

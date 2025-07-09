@@ -219,6 +219,14 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 	// Store the raw service info
 	p.ObservedState.ServiceInfo = info
 
+	currentState := p.baseFSMInstance.GetCurrentFSMState()
+	desiredState := p.baseFSMInstance.GetDesiredFSMState()
+	// If both desired and current state are stopped, we can return immediately
+	// There wont be any logs, metrics, etc. to check
+	if desiredState == OperationalStateStopped && currentState == OperationalStateStopped {
+		return nil
+	}
+
 	// Fetch the actual Benthos config from the service
 	start = time.Now()
 	observedConfig, err := p.service.GetConfig(ctx, services.GetFileSystem(), p.baseFSMInstance.GetID())
