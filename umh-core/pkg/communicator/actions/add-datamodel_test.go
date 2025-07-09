@@ -89,8 +89,8 @@ var _ = Describe("AddDataModelAction", func() {
 		Context("with valid payload", func() {
 			It("should parse successfully", func() {
 				payload := models.AddDataModelPayload{
-					Name:        "test-model",
 					Description: "Test data model",
+					Name:        "test-model",
 					Structure: map[string]models.Field{
 						"field1": {
 							PayloadShape: "timeseries-string",
@@ -135,7 +135,6 @@ var _ = Describe("AddDataModelAction", func() {
 	// 		BeforeEach(func() {
 	// 			payload := models.AddDataModelPayload{
 	// 				Name:        "test-model",
-	// 				Description: "Test data model",
 	// 				Structure: map[string]models.Field{
 	// 					"field1": {
 	// 						PayloadShape: "timeseries-string",
@@ -156,7 +155,6 @@ var _ = Describe("AddDataModelAction", func() {
 	// 		BeforeEach(func() {
 	// 			payload := models.AddDataModelPayload{
 	// 				Name:        "",
-	// 				Description: "Test data model",
 	// 				Structure: map[string]models.Field{
 	// 					"field1": {
 	// 						PayloadShape: "timeseries-string",
@@ -178,7 +176,6 @@ var _ = Describe("AddDataModelAction", func() {
 	// 		BeforeEach(func() {
 	// 			payload := models.AddDataModelPayload{
 	// 				Name:        "test-model",
-	// 				Description: "Test data model",
 	// 				Structure:   map[string]models.Field{},
 	// 			}
 	// 			err := action.Parse(structToEncodedMap(payload))
@@ -196,7 +193,6 @@ var _ = Describe("AddDataModelAction", func() {
 	// 		BeforeEach(func() {
 	// 			payload := models.AddDataModelPayload{
 	// 				Name:        "test-model",
-	// 				Description: "Test data model",
 	// 				Structure:   nil,
 	// 			}
 	// 			err := action.Parse(structToEncodedMap(payload))
@@ -214,7 +210,6 @@ var _ = Describe("AddDataModelAction", func() {
 	// 		BeforeEach(func() {
 	// 			payload := models.AddDataModelPayload{
 	// 				Name:        "test-model",
-	// 				Description: "Test data model",
 	// 				Structure: map[string]models.Field{
 	// 					"leaf_field": {
 	// 						PayloadShape: "timeseries-string",
@@ -248,7 +243,6 @@ var _ = Describe("AddDataModelAction", func() {
 	// 		It("should fail with no version", func() {
 	// 			payload := models.AddDataModelPayload{
 	// 				Name:        "test-model",
-	// 				Description: "Test data model",
 	// 				Structure: map[string]models.Field{
 	// 					"invalid_ref": {
 	// 						ModelRef: &models.ModelRef{
@@ -268,7 +262,6 @@ var _ = Describe("AddDataModelAction", func() {
 	// 		It("should fail with no version in complex name", func() {
 	// 			payload := models.AddDataModelPayload{
 	// 				Name:        "test-model",
-	// 				Description: "Test data model",
 	// 				Structure: map[string]models.Field{
 	// 					"invalid_ref": {
 	// 						ModelRef: &models.ModelRef{
@@ -288,7 +281,6 @@ var _ = Describe("AddDataModelAction", func() {
 	// 		It("should fail with empty version", func() {
 	// 			payload := models.AddDataModelPayload{
 	// 				Name:        "test-model",
-	// 				Description: "Test data model",
 	// 				Structure: map[string]models.Field{
 	// 					"invalid_ref": {
 	// 						ModelRef: &models.ModelRef{
@@ -310,7 +302,6 @@ var _ = Describe("AddDataModelAction", func() {
 	// 		It("should fail with version not matching v\\d+", func() {
 	// 			payload := models.AddDataModelPayload{
 	// 				Name:        "test-model",
-	// 				Description: "Test data model",
 	// 				Structure: map[string]models.Field{
 	// 					"invalid_version": {
 	// 						ModelRef: &models.ModelRef{
@@ -333,7 +324,6 @@ var _ = Describe("AddDataModelAction", func() {
 	// 		It("should fail when field has both _type and _refModel", func() {
 	// 			payload := models.AddDataModelPayload{
 	// 				Name:        "test-model",
-	// 				Description: "Test data model",
 	// 				Structure: map[string]models.Field{
 	// 					"invalid_field": {
 	// 						PayloadShape: "timeseries-string",
@@ -355,7 +345,6 @@ var _ = Describe("AddDataModelAction", func() {
 	// 		It("should fail when field has both subfields and _refModel", func() {
 	// 			payload := models.AddDataModelPayload{
 	// 				Name:        "test-model",
-	// 				Description: "Test data model",
 	// 				Structure: map[string]models.Field{
 	// 					"invalid_field": {
 	// 						ModelRef: &models.ModelRef{
@@ -383,7 +372,6 @@ var _ = Describe("AddDataModelAction", func() {
 	// 		It("should fail when leaf node has no _type", func() {
 	// 			payload := models.AddDataModelPayload{
 	// 				Name:        "test-model",
-	// 				Description: "Test data model",
 	// 				Structure: map[string]models.Field{
 	// 					"invalid_leaf": {},
 	// 				},
@@ -401,7 +389,6 @@ var _ = Describe("AddDataModelAction", func() {
 	// 		It("should fail when submodel node has additional fields besides _refModel", func() {
 	// 			payload := models.AddDataModelPayload{
 	// 				Name:        "test-model",
-	// 				Description: "Test data model",
 	// 				Structure: map[string]models.Field{
 	// 					"invalid_submodel": {
 	// 						ModelRef: &models.ModelRef{
@@ -424,7 +411,6 @@ var _ = Describe("AddDataModelAction", func() {
 	// 		It("should return all validation errors", func() {
 	// 			payload := models.AddDataModelPayload{
 	// 				Name:        "test-model",
-	// 				Description: "Test data model",
 	// 				Structure: map[string]models.Field{
 	// 					"invalid_ref1": {
 	// 						ModelRef: &models.ModelRef{
@@ -597,8 +583,7 @@ var _ = Describe("AddDataModelAction", func() {
 	Describe("Integration with different field types", func() {
 		It("should handle complex nested structures", func() {
 			payload := models.AddDataModelPayload{
-				Name:        "complex-model",
-				Description: "Complex data model with nested fields",
+				Name: "complex-model",
 				Structure: map[string]models.Field{
 					"simple_string": {
 						PayloadShape: "timeseries-string",
@@ -613,7 +598,6 @@ var _ = Describe("AddDataModelAction", func() {
 						},
 					},
 					"nested_object": {
-						PayloadShape: "timeseries-object",
 						Subfields: map[string]models.Field{
 							"nested_string": {
 								PayloadShape: "timeseries-string",

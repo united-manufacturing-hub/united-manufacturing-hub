@@ -55,8 +55,7 @@ var _ = Describe("GetDataModelAction", func() {
 
 		// Create an existing data model with multiple versions
 		existingDataModel = config.DataModelsConfig{
-			Name:        "test-model",
-			Description: "Test data model description",
+			Name: "test-model",
 			Versions: map[string]config.DataModelVersion{
 				"v1": {
 					Structure: map[string]config.Field{
@@ -260,8 +259,7 @@ var _ = Describe("GetDataModelAction", func() {
 			BeforeEach(func() {
 				// Create a data model with nested subfields
 				complexDataModel := config.DataModelsConfig{
-					Name:        "complex-model",
-					Description: "Complex data model with nested structures",
+					Name: "complex-model",
 					Versions: map[string]config.DataModelVersion{
 						"v1": {
 							Structure: map[string]config.Field{

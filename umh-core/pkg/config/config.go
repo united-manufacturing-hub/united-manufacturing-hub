@@ -30,18 +30,20 @@ import (
 
 type FullConfig struct {
 	Agent             AgentConfig               `yaml:"agent"`                       // Agent config, requires restart to take effect
-	Templates         TemplatesConfig           `yaml:"templates,omitempty"`         // Templates section with enforced structure for protocol converters
+	Templates         TemplatesConfig           `yaml:"templates,omitempty"`         // Templates section with enforced structure for protocol converter
 	PayloadShapes     map[string]PayloadShape   `yaml:"payloadShapes,omitempty"`     // PayloadShapes section with enforced structure for payload shapes
 	DataModels        []DataModelsConfig        `yaml:"dataModels,omitempty"`        // DataModels section with enforced structure for data models
 	DataContracts     []DataContractsConfig     `yaml:"dataContracts,omitempty"`     // DataContracts section with enforced structure for data contracts
 	DataFlow          []DataFlowComponentConfig `yaml:"dataFlow,omitempty"`          // DataFlow components to manage, can be updated while running
 	ProtocolConverter []ProtocolConverterConfig `yaml:"protocolConverter,omitempty"` // ProtocolConverter config, can be updated while runnnig
+	StreamProcessor   []StreamProcessorConfig   `yaml:"streamProcessor,omitempty"`   // StreamProcessor config, can be updated while running
 	Internal          InternalConfig            `yaml:"internal,omitempty"`          // Internal config, not to be used by the user, only to be used for testing internal components
 }
 
 // TemplatesConfig defines the structure for the templates section
 type TemplatesConfig struct {
 	ProtocolConverter map[string]interface{} `yaml:"protocolConverter,omitempty"` // Array of protocol converter templates
+	StreamProcessor   map[string]interface{} `yaml:"streamProcessor,omitempty"`   // Array of stream processor templates
 }
 
 // DataModelsConfig defines the structure for the data models section
@@ -192,6 +194,25 @@ func (d *ProtocolConverterConfig) HasAnchors() bool { return d.hasAnchors }
 // AnchorName returns the anchor name of the ProtocolConverterConfig, see templating.go
 func (d *ProtocolConverterConfig) AnchorName() string { return d.anchorName }
 
+// StreamProcessorConfig contains configuration for creating a StreamProcessor
+type StreamProcessorConfig struct {
+	// For the FSM
+	FSMInstanceConfig `yaml:",inline"`
+
+	StreamProcessorServiceConfig streamprocessorserviceconfig.StreamProcessorServiceConfigSpec `yaml:"streamProcessorServiceConfig"`
+
+	// private marker – not (un)marshalled
+	// explanation see templating.go
+	hasAnchors bool   `yaml:"-"`
+	anchorName string `yaml:"-"`
+}
+
+// HasAnchors returns true if the StreamProcessorConfig has anchors, see templating.go
+func (d *StreamProcessorConfig) HasAnchors() bool { return d.hasAnchors }
+
+// AnchorName returns the anchor name of the StreamProcessorConfig, see templating.go
+func (d *StreamProcessorConfig) AnchorName() string { return d.anchorName }
+
 // NmapConfig contains configuration for creating a Nmap service
 type NmapConfig struct {
 	// For the FSM
@@ -263,6 +284,7 @@ func (c FullConfig) Clone() FullConfig {
 		DataContracts:     make([]DataContractsConfig, len(c.DataContracts)),
 		DataFlow:          make([]DataFlowComponentConfig, len(c.DataFlow)),
 		ProtocolConverter: make([]ProtocolConverterConfig, len(c.ProtocolConverter)),
+		StreamProcessor:   make([]StreamProcessorConfig, len(c.StreamProcessor)),
 		Templates:         TemplatesConfig{},
 		Internal:          InternalConfig{},
 	}
@@ -294,6 +316,10 @@ func (c FullConfig) Clone() FullConfig {
 		return FullConfig{}
 	}
 	err = deepcopy.Copy(&clone.ProtocolConverter, &c.ProtocolConverter)
+	if err != nil {
+		return FullConfig{}
+	}
+	err = deepcopy.Copy(&clone.StreamProcessor, &c.StreamProcessor)
 	if err != nil {
 		return FullConfig{}
 	}

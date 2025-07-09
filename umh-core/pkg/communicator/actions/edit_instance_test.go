@@ -581,3 +581,57 @@ func (w *writeFailingMockConfigManager) AtomicAddDataContract(ctx context.Contex
 
 	return nil
 }
+
+// AtomicAddStreamProcessor implements the required interface method but ensures the write fails
+func (w *writeFailingMockConfigManager) AtomicAddStreamProcessor(ctx context.Context, sp config.StreamProcessorConfig) error {
+	// Get the current config
+	configData, err := w.GetConfig(ctx, 0)
+	if err != nil {
+		return err
+	}
+
+	// do not add anything
+
+	// Write config (will fail with this mock)
+	if err := w.writeConfig(ctx, configData); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// AtomicEditStreamProcessor implements the required interface method but ensures the write fails
+func (w *writeFailingMockConfigManager) AtomicEditStreamProcessor(ctx context.Context, sp config.StreamProcessorConfig) error {
+	// Get the current config
+	configData, err := w.GetConfig(ctx, 0)
+	if err != nil {
+		return err
+	}
+
+	// do not edit anything
+
+	// Write config (will fail with this mock)
+	if err := w.writeConfig(ctx, configData); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// AtomicDeleteStreamProcessor implements the required interface method but ensures the write fails
+func (w *writeFailingMockConfigManager) AtomicDeleteStreamProcessor(ctx context.Context, name string) error {
+	// Get the current config
+	configData, err := w.GetConfig(ctx, 0)
+	if err != nil {
+		return err
+	}
+
+	// do not delete anything
+
+	// Write config (will fail with this mock)
+	if err := w.writeConfig(ctx, configData); err != nil {
+		return err
+	}
+
+	return nil
+}
