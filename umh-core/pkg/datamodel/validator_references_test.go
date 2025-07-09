@@ -407,7 +407,7 @@ var _ = Describe("Validator References", func() {
 
 			err := validator.ValidateWithReferences(ctx, invalidModel, allDataModels)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("leaf nodes must contain _type"))
+			Expect(err.Error()).To(ContainSubstring("leaf nodes must contain _payloadshape"))
 		})
 
 		It("should handle complex reference scenarios", func() {
