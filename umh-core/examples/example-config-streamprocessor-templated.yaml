@@ -81,14 +81,12 @@ dataModels:
 
 # ---------- Data Contracts ---------- #
 dataContracts:
-  - name: pump-contract
+  - name: _pump-contract_v1
     model:
       name: pump
       version: v1
-    default_bridges:
-      - type: kafka_to_postgresql
-        config:
-          topic: "{{ .location_path }}/pump"
+    default_bridges: # empty for now, but will be used in the future
+  - name: _raw
 
 # ---------- Templates ---------- #
 templates:
@@ -98,18 +96,13 @@ templates:
         name: pump
         version: v1
       sources:
-        vibration_sensor: "umh.v1.{{ .location_path }}.vibration"
+        vibration_sensor: "umh.v1.{{ .location_path }}.vibration" # you can never import a folder, only a single topic
         count_sensor: "umh.v1.{{ .location_path }}.count"
         motor_data: "umh.v1.{{ .location_path }}.motor"
       mapping:
-        static:
           serialNumber: "{{ .SERIAL_NUMBER }}"
-        dynamic:
           count: "count_sensor.value"
-          vibration:
-            x-axis: "vibration_sensor.x_axis"
-            y-axis: "vibration_sensor.y_axis"
-            z-axis: "vibration_sensor.z_axis"
+          vibration: "vibration_sensor"
           motor:
             speed: "motor_data.speed"
             current: "motor_data.current"
@@ -158,9 +151,7 @@ streamProcessor:
         sources:
           motor_telemetry: "umh.v1.{{ .location_path }}.motor.telemetry"
         mapping:
-          static:
             status: "{{ .STATUS }}"
-          dynamic:
             speed: "motor_telemetry.speed"
             current: "motor_telemetry.current"
             temperature: "motor_telemetry.temperature"

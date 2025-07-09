@@ -503,7 +503,7 @@ internal:
 				Expect(config.StreamProcessor).To(HaveLen(3))
 				Expect(config.PayloadShapes).To(HaveLen(3))
 				Expect(config.DataModels).To(HaveLen(2))
-				Expect(config.DataContracts).To(HaveLen(1))
+				Expect(config.DataContracts).To(HaveLen(2))
 				Expect(config.Templates.StreamProcessor).To(BeEmpty())
 
 				// Verify payload shapes
@@ -521,9 +521,12 @@ internal:
 				Expect(pumpModel.Versions).To(HaveKey("v1"))
 
 				// Verify data contracts
-				Expect(config.DataContracts[0].Name).To(Equal("pump-contract"))
+				Expect(config.DataContracts[0].Name).To(Equal("_pump-contract_v1"))
 				Expect(config.DataContracts[0].Model.Name).To(Equal("pump"))
 				Expect(config.DataContracts[0].Model.Version).To(Equal("v1"))
+				Expect(config.DataContracts[1].Name).To(Equal("_raw"))
+				Expect(config.DataContracts[1].Model).To(BeNil())
+				Expect(config.DataContracts[1].DefaultBridges).To(BeEmpty())
 
 				// Find the pump-processor-1 that uses the template
 				var pumpProcessor1 *StreamProcessorConfig
@@ -566,7 +569,7 @@ internal:
 				Expect(writtenConfig.StreamProcessor).To(HaveLen(3))
 				Expect(writtenConfig.PayloadShapes).To(HaveLen(3))
 				Expect(writtenConfig.DataModels).To(HaveLen(2))
-				Expect(writtenConfig.DataContracts).To(HaveLen(1))
+				Expect(writtenConfig.DataContracts).To(HaveLen(2))
 				Expect(writtenConfig.Agent.Location).To(HaveKeyWithValue(0, "factory-A"))
 				Expect(writtenConfig.Agent.Location).To(HaveKeyWithValue(1, "line-1"))
 

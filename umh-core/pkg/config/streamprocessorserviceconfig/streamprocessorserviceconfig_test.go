@@ -40,13 +40,9 @@ var _ = Describe("StreamProcessorServiceConfig", func() {
 						"sensor1": "ia/factory/line1/sensor1",
 						"sensor2": "ia/factory/line1/sensor2",
 					},
-					Mapping: streamprocessorserviceconfig.FieldMapping{
-						Static: map[string]interface{}{
-							"field1": "value1",
-						},
-						Dynamic: map[string]interface{}{
-							"field2": "{{ .sensor1.value }}",
-						},
+					Mapping: map[string]interface{}{
+						"field1": "value1",
+						"field2": "{{ .sensor1.value }}",
 					},
 				},
 			}
@@ -55,7 +51,7 @@ var _ = Describe("StreamProcessorServiceConfig", func() {
 			Expect(runtime.Model.Name).To(Equal("test-model"))
 			Expect(runtime.Model.Version).To(Equal("1.0.0"))
 			Expect(runtime.Sources["sensor1"]).To(Equal("ia/factory/line1/sensor1"))
-			Expect(runtime.Mapping.Static["field1"]).To(Equal("value1"))
+			Expect(runtime.Mapping["field1"]).To(Equal("value1"))
 		})
 	})
 

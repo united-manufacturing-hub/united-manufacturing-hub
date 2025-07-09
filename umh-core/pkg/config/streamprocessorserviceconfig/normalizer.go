@@ -46,11 +46,8 @@ func (n *Normalizer) NormalizeConfig(cfg StreamProcessorServiceConfigSpec) Strea
 	}
 
 	// Normalize mapping - ensure both dynamic and static exist even if empty
-	if normalized.Config.Mapping.Dynamic == nil {
-		normalized.Config.Mapping.Dynamic = make(map[string]interface{})
-	}
-	if normalized.Config.Mapping.Static == nil {
-		normalized.Config.Mapping.Static = make(map[string]interface{})
+	if normalized.Config.Mapping == nil {
+		normalized.Config.Mapping = make(map[string]interface{})
 	}
 
 	// No need to normalize the location

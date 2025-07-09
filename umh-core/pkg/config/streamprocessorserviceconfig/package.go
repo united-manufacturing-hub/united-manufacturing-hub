@@ -32,12 +32,6 @@ type ModelRef struct {
 // SourceMapping represents the mapping of source aliases to UNS topics
 type SourceMapping map[string]string
 
-// FieldMapping represents the mapping configuration for stream processor fields
-type FieldMapping struct {
-	Dynamic map[string]interface{} `yaml:"dynamic,omitempty"` // JavaScript expressions for dynamic field mapping
-	Static  map[string]interface{} `yaml:"static,omitempty"`  // Static values for field mapping
-}
-
 // StreamProcessorServiceConfigTemplate is the *blueprint* for deploying a
 // Stream Processor. The struct **may still contain** Go
 // `text/template` actions (e.g. `{{ .location_path }}`) so that callers can
@@ -53,7 +47,8 @@ type StreamProcessorServiceConfigTemplate struct {
 	Sources SourceMapping `yaml:"sources,omitempty"`
 
 	// Mapping defines how source values are transformed into model fields
-	Mapping FieldMapping `yaml:"mapping,omitempty"`
+
+	Mapping map[string]interface{} `yaml:"mapping,omitempty"`
 }
 
 // StreamProcessorServiceConfigRuntime is the **fully rendered** form of a
@@ -73,7 +68,11 @@ type StreamProcessorServiceConfigRuntime struct {
 	Sources SourceMapping `yaml:"sources"`
 
 	// Mapping defines how source values are transformed into model fields
-	Mapping FieldMapping `yaml:"mapping"`
+	// here we don't differentiate between static and dynamic mappings
+	// the difference is tackled in the benthos plugin
+	// "dynamic" mappings are mappings that are triggered by incoming messages in the specified source topic
+	// "static" mappings are mappings that are triggered by the stream processor itself (e.g. a static value)
+	Mapping map[string]interface{} `yaml:"mapping"`
 }
 
 // StreamProcessorServiceConfigSpec is the **user‑facing** wrapper that binds a
