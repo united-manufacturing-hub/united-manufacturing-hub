@@ -511,7 +511,7 @@ func (w *writeFailingMockConfigManager) WriteYAMLConfigFromString(ctx context.Co
 }
 
 // AtomicAddDataModel implements the required interface method but ensures the write fails
-func (w *writeFailingMockConfigManager) AtomicAddDataModel(ctx context.Context, name string, dmVersion config.DataModelVersion) error {
+func (w *writeFailingMockConfigManager) AtomicAddDataModel(ctx context.Context, name string, dmVersion config.DataModelVersion, description string) error {
 	// Get the current config
 	configData, err := w.GetConfig(ctx, 0)
 	if err != nil {
@@ -529,7 +529,7 @@ func (w *writeFailingMockConfigManager) AtomicAddDataModel(ctx context.Context, 
 }
 
 // AtomicEditDataModel implements the required interface method but ensures the write fails
-func (w *writeFailingMockConfigManager) AtomicEditDataModel(ctx context.Context, name string, dmVersion config.DataModelVersion) error {
+func (w *writeFailingMockConfigManager) AtomicEditDataModel(ctx context.Context, name string, dmVersion config.DataModelVersion, description string) error {
 	// Get the current config
 	configData, err := w.GetConfig(ctx, 0)
 	if err != nil {
@@ -580,8 +580,4 @@ func (w *writeFailingMockConfigManager) AtomicAddDataContract(ctx context.Contex
 	}
 
 	return nil
-}
-
-func (w *writeFailingMockConfigManager) GetDataModels() []config.DataModelsConfig {
-	return w.mockConfigManager.GetDataModels()
 }

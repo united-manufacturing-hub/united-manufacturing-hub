@@ -29,8 +29,8 @@ import (
 
 type FullConfig struct {
 	Agent             AgentConfig               `yaml:"agent"`                       // Agent config, requires restart to take effect
-	Templates         TemplatesConfig           `yaml:"templates,omitempty"`         // Templates section with enforced structure for protocol converters
-	PayloadShapes     map[string]PayloadShape   `yaml:"payloadShapes,omitempty"`     // PayloadShapes section with payload shape definitions
+	Templates         TemplatesConfig           `yaml:"templates,omitempty"`         // Templates section with enforced structure for protocol converter
+	PayloadShapes     map[string]PayloadShape   `yaml:"payloadShapes,omitempty"`     // PayloadShapes section with enforced structure for payload shapes
 	DataModels        []DataModelsConfig        `yaml:"dataModels,omitempty"`        // DataModels section with enforced structure for data models
 	DataContracts     []DataContractsConfig     `yaml:"dataContracts,omitempty"`     // DataContracts section with enforced structure for data contracts
 	DataFlow          []DataFlowComponentConfig `yaml:"dataFlow,omitempty"`          // DataFlow components to manage, can be updated while running
@@ -71,16 +71,6 @@ type Field struct {
 	PayloadShape string           `yaml:"_payloadshape,omitempty"` // type of the field (timeseries only for now)
 	ModelRef     *ModelRef        `yaml:"_refModel,omitempty"`     // this is a special field that is used to reference another data model to be used as a type for this field
 	Subfields    map[string]Field `yaml:",inline"`                 // subfields of the field (allow recursive definition of fields)
-}
-
-// PayloadShape defines the structure of a payload shape (e.g., timeseries-number, timeseries-string)
-type PayloadShape struct {
-	Fields map[string]PayloadShapeField `yaml:"fields"` // fields in the payload shape
-}
-
-// PayloadShapeField defines a field within a payload shape
-type PayloadShapeField struct {
-	Type string `yaml:"_type"` // type of the field (number, string, boolean, etc.)
 }
 
 type InternalConfig struct {
@@ -243,6 +233,18 @@ type TopicBrowserConfig struct {
 
 	// For the Connection service
 	TopicBrowserServiceConfig topicbrowserserviceconfig.Config `yaml:"serviceConfig,omitempty"`
+}
+
+// PayloadShape defines the structure for a single payload shape
+type PayloadShape struct {
+	Description string                  `yaml:"description,omitempty"` // description of the payload shape
+	Fields      map[string]PayloadField `yaml:"fields"`                // fields of the payload shape
+}
+
+// PayloadField represents a field within a payload shape with recursive structure support
+type PayloadField struct {
+	Type      string                  `yaml:"_type,omitempty"` // type of the field (number, string, etc.)
+	Subfields map[string]PayloadField `yaml:",inline"`         // subfields for recursive definition (inline to allow direct field access)
 }
 
 // Clone creates a deep copy of FullConfig
