@@ -288,7 +288,7 @@ var _ = Describe("Real Redpanda Integration Tests", Ordered, func() {
 			}
 
 			Eventually(func() bool {
-				err := registry.Reconcile(ctx, expectedSchemas)
+				err := registry.ReconcileWithSchemas(ctx, expectedSchemas)
 				if err != nil {
 					return false
 				}
@@ -335,7 +335,7 @@ var _ = Describe("Real Redpanda Integration Tests", Ordered, func() {
 
 			// First, reconcile the schemas
 			Eventually(func() bool {
-				err := registry.Reconcile(ctx, expectedSchemas)
+				err := registry.ReconcileWithSchemas(ctx, expectedSchemas)
 				if err != nil {
 					return false
 				}
@@ -383,7 +383,7 @@ var _ = Describe("Real Redpanda Integration Tests", Ordered, func() {
 			}
 
 			Eventually(func() bool {
-				err := registry.Reconcile(ctx, expectedSchemas)
+				err := registry.ReconcileWithSchemas(ctx, expectedSchemas)
 				if err != nil {
 					return false
 				}

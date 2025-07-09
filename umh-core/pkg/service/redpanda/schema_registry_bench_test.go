@@ -200,7 +200,7 @@ func benchmarkSingleSchema(b *testing.B, registry *SchemaRegistry) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		err := registry.Reconcile(ctx, schema)
+		err := registry.ReconcileWithSchemas(ctx, schema)
 		if err != nil {
 			b.Fatalf("Reconciliation failed: %v", err)
 		}
@@ -374,7 +374,7 @@ func benchmarkConcurrentReconciliation(b *testing.B, registry *SchemaRegistry) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			err := registry.Reconcile(ctx, schema)
+			err := registry.ReconcileWithSchemas(ctx, schema)
 			if err != nil {
 				b.Errorf("Concurrent reconciliation failed: %v", err)
 			}
@@ -548,7 +548,7 @@ func warmupSingleSchema(b *testing.B, registry *SchemaRegistry, schema map[Subje
 	b.Helper()
 	for i := 0; i < 5; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		_ = registry.Reconcile(ctx, schema)
+		_ = registry.ReconcileWithSchemas(ctx, schema)
 		cancel()
 	}
 }
@@ -594,7 +594,7 @@ func warmupConcurrentReconciliation(b *testing.B, registry *SchemaRegistry, sche
 	// Sequential warmup first
 	for i := 0; i < 10; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		_ = registry.Reconcile(ctx, schema)
+		_ = registry.ReconcileWithSchemas(ctx, schema)
 		cancel()
 	}
 
@@ -605,7 +605,7 @@ func warmupConcurrentReconciliation(b *testing.B, registry *SchemaRegistry, sche
 			defer func() { done <- true }()
 			for j := 0; j < 5; j++ {
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-				_ = registry.Reconcile(ctx, schema)
+				_ = registry.ReconcileWithSchemas(ctx, schema)
 				cancel()
 			}
 		}()

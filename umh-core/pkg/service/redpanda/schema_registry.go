@@ -381,9 +381,12 @@ func (s *SchemaRegistry) Reconcile(ctx context.Context, dataModels []config.Data
 	if err != nil {
 		return fmt.Errorf("failed to translate data models to schemas: %w", err)
 	}
+	return s.ReconcileWithSchemas(ctx, expectedSubjects)
+}
 
+func (s *SchemaRegistry) ReconcileWithSchemas(ctx context.Context, schemas map[SubjectName]JSONSchemaDefinition) error {
 	// Use existing reconciliation logic with translated schemas
-	err, _ = s.reconcileInternal(ctx, expectedSubjects)
+	err := s.reconcileInternal(ctx, schemas)
 	return err
 }
 
@@ -602,12 +605,12 @@ func (s *SchemaRegistry) GetMetrics() SchemaRegistryMetrics {
 // Memory management:
 // - Each phase cleans up its data when transitioning (e.g., decode clears rawSubjectsData)
 // - Work queues are reset at compare phase start to ensure clean state
-func (s *SchemaRegistry) reconcileInternal(ctx context.Context, expectedSubjects map[SubjectName]JSONSchemaDefinition) (err error, reconciled bool) {
+func (s *SchemaRegistry) reconcileInternal(ctx context.Context, expectedSubjects map[SubjectName]JSONSchemaDefinition) (err error) {
 	// Run through phases until we complete the reconciliation cycle or hit an error
 	for {
 		// Early abort if context is done
 		if ctx.Err() != nil {
-			return ctx.Err(), false
+			return ctx.Err()
 		}
 
 		var changePhase bool
@@ -628,7 +631,7 @@ func (s *SchemaRegistry) reconcileInternal(ctx context.Context, expectedSubjects
 			// Phase 5: Add missing schemas (one at a time)
 			err, changePhase = s.addNew(ctx)
 		default:
-			return fmt.Errorf("unknown phase: %s", s.currentPhase), false
+			return fmt.Errorf("unknown phase: %s", s.currentPhase)
 		}
 
 		// Handle error
@@ -637,7 +640,7 @@ func (s *SchemaRegistry) reconcileInternal(ctx context.Context, expectedSubjects
 			if changePhase {
 				s.currentPhase = s.getNextPhase(s.currentPhase, changePhase)
 			}
-			return err, false
+			return err
 		}
 
 		// Update phase if requested
@@ -647,7 +650,7 @@ func (s *SchemaRegistry) reconcileInternal(ctx context.Context, expectedSubjects
 			// Special case: if we're fully in sync after compare, return early
 			if s.currentPhase == SchemaRegistryPhaseLookup &&
 				len(s.missingInRegistry) == 0 && len(s.inRegistryButUnknownLocally) == 0 {
-				return nil, true // Fully in sync, reconciliation complete
+				return nil // Fully in sync, reconciliation complete
 			}
 
 			continue // Continue to next phase

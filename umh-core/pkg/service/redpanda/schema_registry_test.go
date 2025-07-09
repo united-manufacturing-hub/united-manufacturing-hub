@@ -104,7 +104,7 @@ var _ = Describe("SchemaRegistry", func() {
 			})
 
 			It("should successfully retrieve subjects and process through reconciliation", func() {
-				err := registry.Reconcile(ctx, SampleSchemas())
+				err := registry.ReconcileWithSchemas(ctx, SampleSchemas())
 
 				Expect(err).NotTo(HaveOccurred())
 				// After reconciliation, we expect to have processed unknown schemas for removal
@@ -135,7 +135,7 @@ var _ = Describe("SchemaRegistry", func() {
 
 				overrideSchemaRegistryAddress(registry, emptyMockRegistry.URL())
 
-				err := registry.Reconcile(ctx, SampleSchemas())
+				err := registry.ReconcileWithSchemas(ctx, SampleSchemas())
 
 				Expect(err).NotTo(HaveOccurred())
 				// With empty registry and SampleSchemas() to add, we should be in add_new phase
@@ -152,7 +152,7 @@ var _ = Describe("SchemaRegistry", func() {
 				shortCtx, shortCancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 				defer shortCancel()
 
-				err := registry.Reconcile(shortCtx, SampleSchemas())
+				err := registry.ReconcileWithSchemas(shortCtx, SampleSchemas())
 
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("insufficient time remaining in context"))
@@ -162,7 +162,7 @@ var _ = Describe("SchemaRegistry", func() {
 			It("should handle network errors gracefully", func() {
 				mockRegistry.SimulateNetworkError(true)
 
-				err := registry.Reconcile(ctx, SampleSchemas())
+				err := registry.ReconcileWithSchemas(ctx, SampleSchemas())
 
 				Expect(err).To(HaveOccurred())
 				Expect(registry.currentPhase).To(Equal(SchemaRegistryPhaseLookup)) // Should not transition
@@ -172,7 +172,7 @@ var _ = Describe("SchemaRegistry", func() {
 				// Cancel the context before making the request
 				cancel()
 
-				err := registry.Reconcile(ctx, SampleSchemas())
+				err := registry.ReconcileWithSchemas(ctx, SampleSchemas())
 
 				Expect(err).To(HaveOccurred())
 				Expect(registry.currentPhase).To(Equal(SchemaRegistryPhaseLookup)) // Should not transition
@@ -187,7 +187,7 @@ var _ = Describe("SchemaRegistry", func() {
 			})
 
 			It("should complete comparison and proceed with reconciliation", func() {
-				err := registry.Reconcile(ctx, SampleSchemas())
+				err := registry.ReconcileWithSchemas(ctx, SampleSchemas())
 
 				Expect(err).NotTo(HaveOccurred())
 				// Starting from compare phase, reconciliation should proceed to action phases
@@ -208,7 +208,7 @@ var _ = Describe("SchemaRegistry", func() {
 			})
 
 			It("should complete add operation and return success", func() {
-				err := registry.Reconcile(ctx, SampleSchemas())
+				err := registry.ReconcileWithSchemas(ctx, SampleSchemas())
 
 				Expect(err).NotTo(HaveOccurred())
 				// After add phase, we should either stay in add_new (more to add) or move to lookup (cycle complete)
@@ -225,7 +225,7 @@ var _ = Describe("SchemaRegistry", func() {
 			})
 
 			It("should return an error for unknown phase", func() {
-				err := registry.Reconcile(ctx, SampleSchemas())
+				err := registry.ReconcileWithSchemas(ctx, SampleSchemas())
 
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("unknown phase: unknown"))
