@@ -98,6 +98,15 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 	if err := n.reconcileExternalChanges(ctx, services, snapshot); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, nmap_service.ErrServiceNotExist) {
+
+			if errors.Is(err, context.DeadlineExceeded) {
+				// Context deadline exceeded should be retried with backoff, not ignored
+				n.baseFSMInstance.SetError(err, snapshot.Tick)
+				n.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileExternalChanges, will retry with backoff")
+				err = nil // Clear error so reconciliation continues
+				return nil, false
+			}
+
 			n.baseFSMInstance.SetError(err, snapshot.Tick)
 			n.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
 

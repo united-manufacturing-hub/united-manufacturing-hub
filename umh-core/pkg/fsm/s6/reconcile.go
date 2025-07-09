@@ -94,6 +94,15 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 	if err := s.reconcileExternalChanges(ctx, services, snapshot); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, s6service.ErrServiceNotExist) {
+
+			if errors.Is(err, context.DeadlineExceeded) {
+				// Context deadline exceeded should be retried with backoff, not ignored
+				s.baseFSMInstance.SetError(err, snapshot.Tick)
+				s.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileExternalChanges, will retry with backoff")
+				err = nil // Clear error so reconciliation continues
+				return nil, false
+			}
+
 			s.baseFSMInstance.SetError(err, snapshot.Tick)
 			s.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
@@ -113,12 +122,11 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 		}
 
 		if errors.Is(err, context.DeadlineExceeded) {
-			// Updating the observed state can sometimes take longer,
-			// resulting in context.DeadlineExceeded errors. In this case, we want to
-			// mark the reconciliation as complete for this tick since we've likely
-			// already consumed significant time. We return reconciled=true to prevent
-			// further reconciliation attempts in the current tick.
-			return nil, true // We don't want to return an error here, as this can happen in normal operations
+			// Context deadline exceeded should be retried with backoff, not ignored
+			s.baseFSMInstance.SetError(err, snapshot.Tick)
+			s.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileStateTransition, will retry with backoff")
+			err = nil // Clear error so reconciliation continues
+			return nil, false
 		}
 
 		s.baseFSMInstance.SetError(err, snapshot.Tick)
