@@ -58,7 +58,10 @@ func startRedpandaContainer() error {
 	// Get the schema registry URL
 	schemaRegistryURL, err := container.SchemaRegistryAddress(ctx)
 	if err != nil {
-		container.Terminate(ctx)
+		errX := container.Terminate(ctx)
+		if errX != nil {
+			return fmt.Errorf("failed to terminate Redpanda container: %w", errX)
+		}
 		return fmt.Errorf("failed to get schema registry URL: %w", err)
 	}
 
@@ -85,7 +88,9 @@ var _ = Describe("Real Redpanda Integration Tests", Ordered, func() {
 				if err != nil {
 					return false
 				}
-				defer resp.Body.Close()
+				if resp.Body != nil {
+					resp.Body.Close()
+				}
 				return resp.StatusCode == 200
 			}, 30*time.Second, 1*time.Second).Should(BeTrue())
 		})
