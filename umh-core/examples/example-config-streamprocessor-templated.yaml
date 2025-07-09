@@ -98,9 +98,9 @@ templates:
         name: pump
         version: v1
       sources:
-        vibration_sensor: "ia/{{ .location_path }}/vibration"
-        count_sensor: "ia/{{ .location_path }}/count"
-        motor_data: "ia/{{ .location_path }}/motor"
+        vibration_sensor: "umh.v1.{{ .location_path }}.vibration"
+        count_sensor: "umh.v1.{{ .location_path }}.count"
+        motor_data: "umh.v1.{{ .location_path }}.motor"
       mapping:
         static:
           serialNumber: "{{ .SERIAL_NUMBER }}"
@@ -156,7 +156,7 @@ streamProcessor:
           name: motor
           version: v1
         sources:
-          motor_telemetry: "ia/{{ .location_path }}/motor/telemetry"
+          motor_telemetry: "umh.v1.{{ .location_path }}.motor.telemetry"
         mapping:
           static:
             status: "{{ .STATUS }}"
