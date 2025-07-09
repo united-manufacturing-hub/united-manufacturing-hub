@@ -26,7 +26,7 @@ const (
 	// Time budget percentages for parallel execution
 	// These percentages are applied to whatever context time budget is available,
 	// naturally creating a hierarchy without hardcoded absolute timeouts
-	ControlLoopReservePercent  = 0.10 // 10% overhead for control loop coordination
+	ControlLoopReservePercent  = 0.25 // 10% overhead for control loop coordination
 	ManagerReservePercent      = 0.05 // 5% overhead per manager execution
 	UpdateObservedStatePercent = 0.80 // 80% of manager time for I/O operations (parsing logs, health checks, metrics)
 	// Remaining 20% automatically goes to reconciliation logic (FSM transitions, event sending)
