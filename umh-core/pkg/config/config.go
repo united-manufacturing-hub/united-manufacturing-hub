@@ -73,16 +73,6 @@ type Field struct {
 	Subfields    map[string]Field `yaml:",inline"`                 // subfields of the field (allow recursive definition of fields)
 }
 
-// PayloadShape defines the structure of a payload shape (e.g., timeseries-number, timeseries-string)
-type PayloadShape struct {
-	Fields map[string]PayloadShapeField `yaml:"fields"` // fields in the payload shape
-}
-
-// PayloadShapeField defines a field within a payload shape
-type PayloadShapeField struct {
-	Type string `yaml:"_type"` // type of the field (number, string, boolean, etc.)
-}
-
 type InternalConfig struct {
 	Services        []S6FSMConfig           `yaml:"services,omitempty"`        // Services to manage, can be updated while running
 	Benthos         []BenthosConfig         `yaml:"benthos,omitempty"`         // Benthos services to manage, can be updated while running

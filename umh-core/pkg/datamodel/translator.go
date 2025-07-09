@@ -82,7 +82,7 @@ func ensureDefaultPayloadShapes(payloadShapes map[string]config.PayloadShape) ma
 	// Inject default timeseries-number if not present
 	if _, exists := enriched["timeseries-number"]; !exists {
 		enriched["timeseries-number"] = config.PayloadShape{
-			Fields: map[string]config.PayloadShapeField{
+			Fields: map[string]config.PayloadField{
 				"timestamp_ms": {Type: "number"},
 				"value":        {Type: "number"},
 			},
@@ -92,7 +92,7 @@ func ensureDefaultPayloadShapes(payloadShapes map[string]config.PayloadShape) ma
 	// Inject default timeseries-string if not present
 	if _, exists := enriched["timeseries-string"]; !exists {
 		enriched["timeseries-string"] = config.PayloadShape{
-			Fields: map[string]config.PayloadShapeField{
+			Fields: map[string]config.PayloadField{
 				"timestamp_ms": {Type: "number"},
 				"value":        {Type: "string"},
 			},

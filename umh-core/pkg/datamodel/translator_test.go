@@ -350,7 +350,7 @@ var _ = Describe("Translator", func() {
 				description: "should not override existing payload shapes with defaults",
 				payloadShapes: map[string]config.PayloadShape{
 					"timeseries-number": {
-						Fields: map[string]config.PayloadShapeField{
+						Fields: map[string]config.PayloadField{
 							"custom_timestamp": {Type: "number"},
 							"custom_value":     {Type: "number"},
 							"extra_field":      {Type: "string"},
