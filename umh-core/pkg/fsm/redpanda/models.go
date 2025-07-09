@@ -177,16 +177,3 @@ func (r *RedpandaInstance) getDataContracts() []config.DataContractsConfig {
 func (r *RedpandaInstance) getPayloadShapes() map[string]config.PayloadShape {
 	return r.payloadShapes
 }
-
-// Setter methods for schema registry configuration (called by RedpandaManager)
-func (r *RedpandaInstance) setDataModels(dataModels []config.DataModelsConfig) {
-	r.dataModels = dataModels
-}
-
-func (r *RedpandaInstance) setDataContracts(dataContracts []config.DataContractsConfig) {
-	r.dataContracts = dataContracts
-}
-
-func (r *RedpandaInstance) setPayloadShapes(payloadShapes map[string]config.PayloadShape) {
-	r.payloadShapes = payloadShapes
-}
