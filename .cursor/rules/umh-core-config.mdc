@@ -1,0 +1,308 @@
+---
+title: UMH Core Config YAML Rules
+---
+
+# UMH Core Config YAML Rules
+
+## Design Goals
+
+* **Bridge vs Flow Clarity:** Clearly distinguish when to use a **Bridge** (`protocolConverter:` in YAML) versus a **Stand-alone Flow** (`dataFlow:`), aligning with UMH Core’s terminology. Bridges connect devices to the Unified Namespace (UNS) with health monitoring, while stand-alone flows handle custom point-to-point pipelines without UNS buffering.
+* **Protocol Patterns:** Provide ready-to-use patterns for common protocols (OPC UA, MQTT, Modbus, SQL, etc.), including Benthos input configurations and examples, all validated against official UMH documentation. Each pattern indicates the required YAML keys and structure, ensuring correctness.
+* **Variables & Templating:** Encourage using the `variables:` section to define connection details (IP, PORT, NodeIDs, credentials, etc.) once and reuse them throughout the config. User-defined variables (flattened for top-level access) override internal defaults. This reduces repetition and eases scaling to multiple machines. Common variable names include `IP`, `PORT`, `SCAN_RATE`, `USERNAME`, `PASSWORD`.
+* **Metadata & Tagging:** Embed **`tag_processor`** usage for each input pattern to enrich messages with required metadata (location, data contract, tag names) so that outputs conform to the UMH data model. The rules emphasize setting `msg.meta.location_path`, `msg.meta.data_contract`, and `msg.meta.tag_name` for each message, which auto-generates the proper UNS topic routing (`umh_topic`).
+* **Unified Namespace Output:** Default to outputting into the UNS (`output: uns: {}`), which writes to the internal Redpanda/Kafka broker. This provides at-least-once delivery and makes data immediately available to other UMH components. The rules also guide how to switch outputs to external targets (databases, HTTP endpoints, files) when needed, using Benthos connectors.
+* **Valid & Production-Ready YAML:** Ensure all generated YAML is syntactically valid and passes UMH Core validation. The UMH agent hot-reloads `config.yaml` and will reject malformed definitions, so the rules enforce correct indentation, quoting, and key names. YAML anchors may be used for common snippets to avoid errors and repetition.
+* **Hot Reloading Support:** UMH Core supports automatic hot reloading for most configuration changes - simply save config.yaml and the system will detect and apply changes without needing to restart the container. Most protocol converter changes, bridge configurations, and data flow updates apply immediately. Rare exceptions include GraphQL service configuration changes which may require restart.
+* **GraphQL Verification:** Include a post-deployment “smoke test” step. After applying a config, use the **GraphQL Tag Browser** API to query the UNS and verify data is flowing to the expected topics. (UMH Core’s GraphQL service is enabled on port **8090** by default, with an interactive GraphiQL UI available if `debug: true`.) This helps confirm that the configuration works as intended.
+* **Documentation Links:** Provide deep links to official UMH docs for each feature or pattern. This ensures that any suggestions or code generated can be traced back to the authoritative source for accuracy and further reading. (The Management Console UI mirrors these YAML structures, and the docs often show equivalent YAML for each UI option.)
+
+## Bridges vs. Stand-alone Flows
+
+**Bridges** (YAML key: `protocolConverter:`) are used for **connecting external devices** (PLCs, sensors, etc.) **to the Unified Namespace** with built-in network monitoring. Each Bridge can include a connection health probe and one or more data flows (read from device, write to device) under a single name. Use a Bridge when you need:
+
+* **Connection monitoring:** e.g. automatic pings to check if a device is online (UMH uses an `nmap` TCP probe by default).
+* **Location context:** Bridges integrate with the `agent.location` hierarchy to automatically tag data with its enterprise/site/area context.
+* **UNS publishing:** Bridges are ideal when the goal is to publish device data into the UNS for buffering and fan-out. (In the Management Console UI, Bridges appear under “Connections” or “Protocol Converters.”)
+
+**Stand-alone Flows** (YAML key: `dataFlow:`) are **point-to-point pipelines** without the overhead of UNS unless you explicitly add it. They’re suited for custom data transformations, integrations between two external systems, or high-throughput tasks where you might not want every message stored in the UNS. Use a stand-alone flow when:
+
+* You are **moving data directly** from one system to another (e.g. replicating between two MQTT brokers, database ETL jobs) and **do not require UNS buffering**.
+* No device connectivity or network health check is needed (for example, processing files or streaming from an API).
+* You want to leverage **Benthos’s connectors** in a flexible way (any input → any output) outside the strict UNS publish/subscribe pattern.
+
+> **Tip:** It’s acceptable to mix approaches. Many projects use Bridges for ingesting OT devices into the UNS, then use stand-alone flows for processing or forwarding that data to IT systems. The UMH Core config supports defining multiple of both under their respective keys.
+
+## Variables and Templating
+
+UMH Core configurations support templating via a **variables system** to avoid hard-coding connection details. In YAML, you can define a `variables:` map for each converter/flow. These user-defined variables will be available as `.VARNAME` throughout that template. They take precedence over any internal or global variables.
+
+For example, to avoid repeating an IP address or port in multiple places, define them once:
+
+```yaml
+variables:
+  IP: "192.168.0.50"
+  PORT: "4840"
+```
+
+Then use `{{ .IP }}` and `{{ .PORT }}` placeholders in the connection and input sections. This pattern is shown in the OPC UA example below, where the OPC UA endpoint and the TCP liveness probe both reference the same `IP` and `PORT` variables. The `.IP` and `.PORT` variables can come from user-defined `variables:` (as above) or from an attached Connection object in the UI (UMH auto-injects those for Bridges). Either way, using templated variables makes the YAML portable and easy to update.
+
+All variables in the YAML are processed by Go’s template engine. If a variable isn’t resolving, remember to check for typos and that it’s defined in the right scope. UMH’s docs note that `.IP`/`.PORT` come from the Connection or `variables:` section, and missing variables will cause a "variable not found" error if not provided.
+
+## Protocol Input Patterns
+
+This section provides **Benthos input** configuration patterns for common industrial protocols and data sources. Each pattern includes the typical YAML snippet and guidance on how to integrate it into a UMH Core config. **Use `protocolConverter:` (Bridge) patterns when ingesting from a device into UNS**, and **use `dataFlow:` (stand-alone) patterns for other point-to-point cases** as noted.
+
+### OPC UA (Industrial Device via Bridge)
+
+OPC UA is a common protocol for PLCs and sensors. In UMH Core, an OPC UA **Bridge** will subscribe to one or more NodeIDs on an OPC UA server and publish the tag readings into the UNS. The example below shows a complete Bridge definition for an OPC UA server:
+
+```yaml
+protocolConverter:
+  - name: press-opcua                        # Unique bridge name
+    desiredState: active                     # start immediately
+    protocolConverterServiceConfig:
+      location:
+        2: press1                            # location context (appended to agent.location)
+      template:
+        connection:
+          nmap:
+            target: "{{ .IP }}"              # ping device IP to check connectivity
+            port: "{{ .PORT }}"
+        dataflowcomponent_read:
+          benthos:
+            input:
+              opcua:
+                endpoint: "opc.tcp://{{ .IP }}:{{ .PORT }}"   # OPC UA endpoint URL
+                nodeIDs: ["ns=2;s=MachineFolder"]            # root NodeID to subscribe (folder)
+            pipeline:
+              processors:
+                - tag_processor:
+                    defaults: |
+                      msg.meta.location_path = "{{ .location_path }}"
+                      msg.meta.data_contract = "_raw"
+                      msg.meta.tag_name      = msg.meta.opcua_tag_name
+                      return msg;
+            output:
+              uns: {}                                       # publish to Unified Namespace
+      variables:
+        IP: "192.168.0.50"    # PLC address
+        PORT: "4840"          # OPC UA port
+```
+
+In this pattern:
+
+* The **`opcua` input** uses an endpoint URI with the IP/port (from variables) and a list of `nodeIDs` to subscribe. If a NodeID is a folder, the OPC UA input will auto-browse all child nodes up to 10 levels deep, effectively collecting all tags under `MachineFolder`. The example above subscribes to all tags under namespace 2, node `MachineFolder`. You can list multiple NodeIDs in the array if needed (each can be a node or folder). Authentication can be added via `username`/`password` if required.
+* The **`tag_processor`** in the pipeline sets default metadata: it uses the auto-injected `{{ .location_path }}` (which combines the global location and the `location: 2: press1` given in the config), sets `data_contract = "_raw"` (meaning these are raw sensor readings), and uses the `opcua_tag_name` metadata (provided by the OPC UA input for each tag) as the `tag_name`. This ensures each message has metadata for UNS routing. (For example, a tag `Temperature` under `MachineFolder` might produce `msg.meta.opcua_tag_name = "Temperature"`, so the tag processor will tag it accordingly.)
+* The **`uns: {}` output** writes the processed message into the internal UNS message broker (Redpanda). The `uns` plugin will automatically use the metadata set by the `tag_processor` to determine the Kafka topic. Specifically, the combination of `location_path + data_contract + tag_name` yields an **`umh_topic`** like:
+
+  ```
+  umh.v1.<enterprise>.<site>.<area>.<line>.<workcell>._raw.<tag_name>
+  ```
+
+  This is assigned internally to `msg.meta.umh_topic` by the tag processor (from v0.5+ of UMH Core, the tag processor auto-creates `umh_topic`). So no further output config is needed – the bridge writes to the correct UNS topic for each tag automatically.
+
+**References:** The OPC UA input plugin supports a wide range of data types and will provide metadata like `opcua_tag_path` (full path) and timestamps for each message. Consult the \[OPC UA Input docs] for advanced options (security policies, certificates, etc.), and see “Our Take on OPC UA” on UMH’s blog for context on how browsing is handled. All officially supported protocols (including OPC UA) are integration-tested against real PLCs and simulators to ensure reliability.
+
+### S7 (Siemens PLC via Bridge)
+
+S7 is used to connect to Siemens PLCs (S7-300, S7-400, S7-1200, S7-1500 series). The S7 protocol provides direct access to data blocks, merkers, inputs, and outputs. Use the `s7comm` input with specific S7 addresses.
+
+```yaml
+# Template definition in templates section
+templates:
+  protocolConverter:
+    s7-plc:
+      connection:
+        nmap:
+          target: "{{ .IP }}"
+          port: "{{ .PORT }}"
+      dataflowcomponent_read:
+        benthos:
+          input:
+            s7comm:
+              tcpDevice: "{{ .IP }}"
+              rack: 0
+              slot: 1
+              batchMaxSize: 480
+              timeout: 10
+              disableCPUInfo: false
+              addresses:
+                - "DB1.DW20"       # Double word - production count
+                - "DB2.I0"         # Integer - changing value
+                - "DB3.R2"         # Real - temperature in Celsius
+                - "DB3.R6"         # Real - temperature in Fahrenheit  
+                - "DB3.S14.10"     # String - machine state
+                - "DB3.I270"       # Integer - machine RPM
+                - "DB3.I272"       # Integer - machine direction
+                - "DB3.X0.0"       # Boolean - is UMH cool
+          pipeline:
+            processors:
+              - tag_processor:
+                  defaults: |
+                    msg.meta.location_path = "{{ .location_path }}";
+                    msg.meta.data_contract = "_raw";
+                    msg.meta.tag_name = msg.meta.s7_address;
+                    return msg;
+          output:
+            uns: {}
+
+# Protocol converter using the template
+protocolConverter:
+  - name: s7-plc-bridge
+    desiredState: active  
+    protocolConverterServiceConfig:
+      variables:
+        IP: "192.168.1.100"    # Replace with your PLC IP
+        PORT: "102"            # S7 default port
+      location:
+        0: enterprise
+        1: site
+        2: s7-plc
+      templateRef: s7-plc
+```
+
+**Key Points:**
+- Use `s7comm` input (not `s7`)
+- Set `tcpDevice` to PLC IP address
+- Address format: `DB<num>.<type><offset>` (e.g., `DB1.DW20` for double word at offset 20)
+- The `s7_address` metadata contains the address used for tag naming
+- For S7-1200/1500: disable "Optimized block access" and enable "Permit access with PUT/GET"
+- Use `templateRef` approach for cleaner configuration (define template once, reference multiple times)
+- **Validation:** Use GraphQL to verify data: `curl -X POST http://localhost:8090/graphql -H "Content-Type: application/json" -d '{"query": "query { topic(topic: \"enterprise.site.s7-plc._raw.DB3.R2\") { lastEvent { ... on TimeSeriesEvent { numericValue } } } }"}'`
+
+**References:** See [Siemens S7 Input docs](https://docs.umh.app/benthos-umh/input/siemens-s7) for complete address format specification and advanced configuration options.
+
+### UNS (Internal Broker) as Input/Output
+
+Finally, note that UMH Core provides an **`uns`** input and output for reading from or writing to its internal message broker. We saw `uns: {}` as an output in Bridge examples. Likewise, you can use `input: uns:` in a stand-alone flow to subscribe to internal topics:
+
+```yaml
+input:
+  uns:
+    topics: ["umh.v1.+.+.+.+._raw.temperature"]  # subscribe to all _raw temperature tags
+```
+
+This would let you consume UNS data (with pattern matching on topics) within a custom flow. For example, the stand-alone flow example “uns-analytics” in the docs uses an `uns` input to read all temperature readings from the UNS and then outputs results to InfluxDB. Use `uns` input when building internal analytics or routing data from UNS out to other systems. Use `uns` output when you want to **publish** processed data back into the UNS so other services (like the Historian or external subscribers via Kafka) can consume it.
+
+The **Unified Namespace** is central in UMH architecture – it’s a Kafka-like bus for all data. By adhering to the topic conventions (which the `tag_processor` helps with), you ensure interoperability. The topic format is `umh.v1.<location_path>.<data_contract>[.<virtual_path>].<tag_name>`. The `uns` connectors abstract away the Kafka details and let you use this topic structure with wildcard support (the `+` in topics acts as a single-level wildcard, and `*` can be used in place of multi-level if enabled via regex).
+
+## Tag Processor and Data Contracts
+
+The **`tag_processor`** is a custom processor provided by **benthos-umh** to simplify preparing device data for the UNS. It operates in three stages (defaults, conditions, advanced), but in most cases you will only need the defaults stage to set the required metadata. The required metadata fields are:
+
+* `msg.meta.location_path` – Hierarchical location (enterprise.site.area.line.machine, etc.) identifying where this data is coming from. Usually, you set this to `{{ .location_path }}`, which UMH resolves by combining the global `agent.location` and any per-bridge `location` override.
+* `msg.meta.data_contract` – The **data contract** or schema that this data follows (starts with an underscore, e.g. `_raw`, `_temperature`, `_pressure`). This describes the type of data and how it will be stored. Use **`_raw`** for initial integrations or unmodeled data. For more structured use cases, define a custom contract (with a corresponding data model) such as `_temperature` or `_pump` to enforce schema and retention policies. (See *Data Contracts* below.)
+* `msg.meta.tag_name` – The name of the tag or measurement (e.g. `"temperature"`, `"pressure"`, `"status"`). This typically comes from the device’s metadata (like `opcua_tag_name`, `modbus_tag_name`) or from the user’s context (as in MQTT examples). It should be a concise identifier for the value being measured.
+
+When these three are set, the tag processor will auto-generate `msg.meta.umh_topic` as `umh.v1.<location_path>.<data_contract>.<tag_name>` (if no `virtual_path`) or including `virtual_path` if that was set. It will also format the message payload into a standard JSON structure, ensuring a top-level `"value"` field exists. For instance, a raw numeric payload will be output as `{"value": 42}`. This means by the time the message hits the `uns` output, it’s correctly structured for downstream consumers.
+
+It’s important to choose an appropriate **data contract**. The data contract ties into how data is stored and managed:
+
+* Use `_raw` for general, unstructured time-series data or when prototyping a new connection. `_raw` data by default might be stored in a generic timeseries table (often called “historian”).
+* Use a specific contract (like `_temperature`, `_pump`) when you have set up a corresponding data model in UMH (via the `datamodels:` and `datacontracts:` sections of the config). For example, `_temperature` might map to a data model that has a schema for temperature readings (with units, etc.). Contracts also define data retention and storage targets (e.g. send to TimescaleDB, cloud storage, etc.).
+* The `_historian` contract was used in UMH Classic for generic timeseries. In UMH Core, `_historian` may still exist for compatibility, but the docs suggest using `_raw` or creating explicit contracts going forward.
+
+The `tag_processor` in current UMH Core (v0.5 at time of writing) is geared toward the classic model where tag names appear in the payload. A future update will fully align it with the new data model (no tag names in payload, strictly in topic). For now, following the above pattern ensures your data is correctly published. You can always verify the output by checking the **Unified Namespace Topic Browser** (either via the Management Console UI or GraphQL API) to see that topics and payloads look as expected.
+
+For more advanced processing, the `tag_processor` allows conditional logic (`conditions:`) and additional transformations (`advancedProcessing:`) using a JavaScript runtime. This is useful if you need to handle certain tags differently (e.g., apply a formula only to specific tags, or group multiple raw tags into one logical measurement). There’s also a `nodered_js` processor if you prefer Node-RED style coding for complex logic. However, for most straightforward ingest tasks, the defaults shown are sufficient.
+
+**In summary:** Always include a `tag_processor` (or equivalent Bloblang mapping) when ingesting device data into UNS to set the metadata. Without it, the `uns` output won’t know what topic to use and will error (`"topic is not set or is empty"` errors occur if `msg.meta.umh_topic` is missing). The examples in this rules file use `tag_processor` for each input pattern to ensure compliance with UMH data contracts.
+
+## Output to UNS vs External Outputs
+
+By default, Bridges and many flows should output to the **Unified Namespace** (`uns: {}`), as this is the core of UMH’s architecture. The UNS output plugin requires minimal config (often just an empty `{}` is enough) because it draws the necessary info from message metadata. When using `uns:`, you get reliable, buffered delivery into UMH’s internal Redpanda broker (which stores messages in the `umh.messages` Kafka topic). Other UMH services (Historian, Analytics, etc.) will consume from there. This ensures **decoupling** – devices publish once to UNS, and many consumers can subscribe without impacting the device or flow.
+
+## GraphQL Smoke Test & Validation
+
+After writing or updating the `config.yaml`, it’s good practice to verify that it’s working as expected. UMH Core provides a GraphQL API (the *Topic Browser* service) to query the Unified Namespace for debugging and monitoring.
+
+**1. Validate YAML:** First, ensure the YAML is valid. The UMH Core agent continuously watches the config file and will log errors if the YAML is malformed or fails schema validation. If you’re editing via Cursor or another IDE, use a YAML linter or the UMH docs’ examples to confirm structure. Common pitfalls include wrong indentation or using tabs instead of spaces. The agent will not apply changes until they are error-free. In the config above, we’ve used consistent two-space indentation and quoted any special characters (like the `:` in URLs). Also remember that keys are case-sensitive.
+
+**2. Check Service Status:** Once the YAML is loaded, each defined `protocolConverter` or `dataFlow` will be started by the agent. You can run `docker logs` on the UMH Core container or check the UMH Management Console to see if all pipelines are active. If a pipeline fails to start, error logs will indicate why (e.g., unable to connect to device, syntax error in Benthos pipeline, etc.).
+
+**3. Query via GraphQL:** With pipelines running, use the GraphQL API to retrieve some data. By default, the GraphQL endpoint is at `http://<umh-core-ip>:8090/graphql` (if `agent.graphql.enabled` is true, which it is by default). You can send queries to list topics or get recent messages. For example, to list topics under the `enterprise.plant1` location, you could query (using a GraphQL client or curl):
+
+```bash
+# List all topics
+curl -X POST http://localhost:8090/graphql -H "Content-Type: application/json" -d '{"query": "query { topics { topic } }"}'
+
+# Query specific topic with filters
+curl -X POST http://localhost:8090/graphql -H "Content-Type: application/json" -d '{"query": "query { topics(filter: {text: \"enterprise\"}) { topic } }"}'
+```
+
+To get actual data values from a topic, use the `lastEvent` field (not `messages`):
+
+```bash
+# Get latest numeric value (e.g., temperature)
+curl -X POST http://localhost:8090/graphql -H "Content-Type: application/json" -d '{"query": "query { topic(topic: \"enterprise.site.s7-plc._raw.DB3.R2\") { topic lastEvent { producedAt ... on TimeSeriesEvent { sourceTs scalarType numericValue } } } }"}'
+
+# Get latest boolean value
+curl -X POST http://localhost:8090/graphql -H "Content-Type: application/json" -d '{"query": "query { topic(topic: \"enterprise.site.s7-plc._raw.DB3.X0.0\") { topic lastEvent { ... on TimeSeriesEvent { booleanValue } } } }"}'
+
+# Get latest string value
+curl -X POST http://localhost:8090/graphql -H "Content-Type: application/json" -d '{"query": "query { topic(topic: \"enterprise.site.s7-plc._raw.DB3.S14.10\") { topic lastEvent { ... on TimeSeriesEvent { stringValue } } } }"}'
+```
+
+This assumes your `location_path` included `enterprise.plant1.press1` and one of the tags was `Temperature`. The response will include the last 5 messages’ payloads and timestamps. This is a quick way to confirm that data is flowing and being formatted correctly (e.g., you’ll see the JSON with `"value": 42` and the meta fields might be in headers).
+
+> **GraphiQL UI:** If you set `agent.graphql.debug: true` in the config, you can open a browser at `http://<umh-core-ip>:8090` to get an interactive GraphiQL interface. This makes it easy to construct queries and browse the schema. (Remember to disable debug in production for security.)
+
+Using GraphQL, you can verify each Bridge/Flow:
+
+* For Bridges, locate the topics named after their `location_path` and `data_contract`. For example, our OPC UA bridge above would produce topics like `umh.v1.<enterprise>.<site>.press1._raw.<TagName>`. You should see those topics and data flowing if the device is active.
+* For stand-alone flows that output to external systems, you might not see topics (if they don’t use UNS). In that case, GraphQL can’t directly show their data (since it left UMH). Instead, verify by checking the target system (e.g., see if the SQL table updated, or if the MQTT broker has the messages). You *can*, however, use GraphQL to monitor any stand-alone flow that **inputs from** or **outputs to** UNS internally.
+
+If something is not working:
+
+* Double-check the `desiredState`. If it’s `stopped`, the pipeline won’t run.
+* Check the `variables` substitution – missing or misnamed variables are a common issue (the logs will warn if `{{ .SOMETHING }}` wasn’t found).
+* Ensure external connections (IP, ports, credentials) are correct and accessible from the UMH container.
+
+By following these guidelines and testing with GraphQL, you can iteratively refine the configuration. Remember that changes to `config.yaml` apply on the fly (hot-reload), so you can adjust and see results quickly. Keep the rules and examples above in mind, and refer to the UMH Docs for deeper details on each connector.
+
+## Example Conversations
+
+To illustrate how one might use Cursor (with these rules) to generate configurations, here are a couple of example user requests and the expected YAML output that should result:
+
+**Example 1: OPC UA Ingestion**
+**User:** *"I need to connect an OPC UA server at 192.168.0.50:4840 for machine press1 and ingest all its tags into the UNS. The OPC UA namespace is 2 and the root folder node is `MachineFolder`. Make sure the data shows up under the enterprise `ACME.plant1` location and is marked as raw."*
+
+**Cursor:** (Consulting the rules, it recognizes this as a Bridge scenario with OPC UA input.) It may reply with a YAML snippet such as:
+
+```yaml
+protocolConverter:
+  - name: press1-opcua
+    desiredState: active
+    protocolConverterServiceConfig:
+      location:
+        0: ACME           # enterprise
+        1: plant1         # site
+        2: press1         # area (or line)
+      template:
+        connection:
+          nmap:
+            target: "{{ .IP }}"
+            port: "{{ .PORT }}"
+        dataflowcomponent_read:
+          benthos:
+            input:
+              opcua:
+                endpoint: "opc.tcp://{{ .IP }}:{{ .PORT }}"
+                nodeIDs: ["ns=2;s=MachineFolder"]
+            pipeline:
+              processors:
+                - tag_processor:
+                    defaults: |
+                      msg.meta.location_path = "{{ .location_path }}"
+                      msg.meta.data_contract = "_raw"
+                      msg.meta.tag_name      = msg.meta.opcua_tag_name
+                      return msg;
+            output:
+              uns: {}
+      variables:
+        IP: "192.168.0.50"
+        PORT: "4840"
+```
+
+This YAML defines a bridge named `press1-opcua` with the given IP/port and node, and uses the tag processor to mark data as `_raw` under the `ACME.plant1.press1` location path. The user’s request mentioned the enterprise and site, so those were included in the `location` hierarchy. The `nodeIDs` and `IP/PORT` came directly from the query. This means all tags under `MachineFolder` will be imported, and in the UNS they’ll appear at topics like `umh.v1.ACME.plant1.press1._raw.<TagName>`. The user can then verify in the UI or via GraphQL that `press1` data is flowing.
+
