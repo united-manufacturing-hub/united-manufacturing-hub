@@ -31,7 +31,7 @@ var (
 const (
 	// S6 Operation Timeouts - Foundation Service (Level 0)
 	// S6 is the foundation service with no dependencies
-	S6UpdateObservedStateTimeout = 20 * time.Millisecond
+	S6UpdateObservedStateTimeout = 6 * time.Millisecond
 	S6RemoveTimeout              = 10 * time.Millisecond
 	S6MaxLines                   = 10000
 

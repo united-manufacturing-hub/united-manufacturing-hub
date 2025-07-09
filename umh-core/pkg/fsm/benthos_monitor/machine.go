@@ -135,5 +135,5 @@ func (a *BenthosMonitorInstance) PrintState() {
 
 // GetMinimumRequiredTime returns the minimum required time for this instance
 func (a *BenthosMonitorInstance) GetMinimumRequiredTime() time.Duration {
-	return constants.BenthosMonitorUpdateObservedStateTimeout + constants.BenthosMonitorProcessMetricsTimeout
+	return constants.BenthosMonitorUpdateObservedStateTimeout
 }

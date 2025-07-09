@@ -136,5 +136,5 @@ func (a *RedpandaMonitorInstance) PrintState() {
 
 // GetMinimumRequiredTime returns the minimum required time for this instance
 func (a *RedpandaMonitorInstance) GetMinimumRequiredTime() time.Duration {
-	return constants.RedpandaMonitorUpdateObservedStateTimeout + constants.RedpandaMonitorProcessMetricsTimeout
+	return constants.RedpandaMonitorUpdateObservedStateTimeout
 }

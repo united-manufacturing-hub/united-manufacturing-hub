@@ -273,5 +273,5 @@ func (n *NmapInstance) PrintState() {
 
 // GetMinimumRequiredTime returns the minimum required time for this instance
 func (n *NmapInstance) GetMinimumRequiredTime() time.Duration {
-	return constants.NmapUpdateObservedStateTimeout + constants.NmapProcessMetricsTimeout
+	return constants.NmapUpdateObservedStateTimeout
 }

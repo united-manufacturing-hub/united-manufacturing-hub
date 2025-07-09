@@ -27,7 +27,7 @@ const (
 const (
 	// Benthos Operation Timeouts - Level 1 Service (depends on S6)
 	// Benthos depends on S6 for service management
-	BenthosUpdateObservedStateTimeout = 20 * time.Millisecond
+	BenthosUpdateObservedStateTimeout = 10 * time.Millisecond
 	BenthosRemoveTimeout              = 10 * time.Millisecond
 	BenthosMaxLines                   = 10000
 )
