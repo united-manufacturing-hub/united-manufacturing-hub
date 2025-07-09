@@ -72,8 +72,8 @@ type FSMInstance interface {
 	// GetLastObservedState returns the last known state of the instance
 	// This is cached data from the last reconciliation cycle
 	GetLastObservedState() ObservedState
-	// GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance
-	GetExpectedMaxP95ExecutionTimePerInstance() time.Duration
+	// GetMinimumRequiredTime returns the minimum required time for this instance
+	GetMinimumRequiredTime() time.Duration
 
 	// FSMInstanceActions defines the actions that can be performed on an FSM instance
 	FSMInstanceActions
@@ -131,13 +131,13 @@ type BaseFSMManager[C any] struct {
 	nextStateTick  uint64 // Earliest tick another desired‑state change may happen
 
 	// These methods are implemented by each concrete manager
-	extractConfigs                            func(config config.FullConfig) ([]C, error)
-	getName                                   func(C) (string, error)
-	getDesiredState                           func(C) (string, error)
-	createInstance                            func(C) (FSMInstance, error)
-	compareConfig                             func(FSMInstance, C) (bool, error)
-	setConfig                                 func(FSMInstance, C) error
-	getExpectedMaxP95ExecutionTimePerInstance func(FSMInstance) (time.Duration, error)
+	extractConfigs         func(config config.FullConfig) ([]C, error)
+	getName                func(C) (string, error)
+	getDesiredState        func(C) (string, error)
+	createInstance         func(C) (FSMInstance, error)
+	compareConfig          func(FSMInstance, C) (bool, error)
+	setConfig              func(FSMInstance, C) error
+	getMinimumRequiredTime func(FSMInstance) (time.Duration, error)
 }
 
 // NewBaseFSMManager creates a new base manager with dependencies injected.
@@ -153,6 +153,7 @@ type BaseFSMManager[C any] struct {
 // - createInstance: Factory function that creates appropriate FSM instances
 // - compareConfig: Determines if a config change requires an update
 // - setConfig: Updates an instance with new configuration
+// - getMinimumRequiredTime: Returns the minimum time required for an instance to complete its UpdateObservedState operation
 func NewBaseFSMManager[C any](
 	managerName string,
 	baseDir string,
@@ -162,26 +163,26 @@ func NewBaseFSMManager[C any](
 	createInstance func(C) (FSMInstance, error),
 	compareConfig func(FSMInstance, C) (bool, error),
 	setConfig func(FSMInstance, C) error,
-	getExpectedMaxP95ExecutionTimePerInstance func(FSMInstance) (time.Duration, error),
+	getMinimumRequiredTime func(FSMInstance) (time.Duration, error),
 ) *BaseFSMManager[C] {
 
 	metrics.InitErrorCounter(metrics.ComponentBaseFSMManager, managerName)
 	return &BaseFSMManager[C]{
-		instances:       make(map[string]FSMInstance),
-		logger:          logger.For(managerName),
-		managerName:     managerName,
-		managerTick:     0,
-		nextAddTick:     0,
-		nextUpdateTick:  0,
-		nextRemoveTick:  0,
-		nextStateTick:   0,
-		extractConfigs:  extractConfigs,
-		getName:         getName,
-		getDesiredState: getDesiredState,
-		createInstance:  createInstance,
-		compareConfig:   compareConfig,
-		setConfig:       setConfig,
-		getExpectedMaxP95ExecutionTimePerInstance: getExpectedMaxP95ExecutionTimePerInstance,
+		instances:              make(map[string]FSMInstance),
+		logger:                 logger.For(managerName),
+		managerName:            managerName,
+		managerTick:            0,
+		nextAddTick:            0,
+		nextUpdateTick:         0,
+		nextRemoveTick:         0,
+		nextStateTick:          0,
+		extractConfigs:         extractConfigs,
+		getName:                getName,
+		getDesiredState:        getDesiredState,
+		createInstance:         createInstance,
+		compareConfig:          compareConfig,
+		setConfig:              setConfig,
+		getMinimumRequiredTime: getMinimumRequiredTime,
 	}
 }
 
@@ -280,7 +281,7 @@ func (m *BaseFSMManager[C]) GetNextStateTick() uint64 {
 // TIME BUDGET MANAGEMENT:
 //   - Creates inner context with BaseManagerControlLoopTimeFactor (95%) of available time
 //   - Reserves 5% for error aggregation, cleanup, and instance removal operations
-//   - Pre-validates execution time budget using getExpectedMaxP95ExecutionTimePerInstance
+//   - Pre-validates execution time budget using getMinimumRequiredTime
 //   - Skips instances without sufficient time rather than causing timeout failures
 //
 // CONCURRENT SAFETY GUARANTEES:
@@ -555,13 +556,13 @@ func (m *BaseFSMManager[C]) Reconcile(
 
 		// Check time budget before spawning goroutine to prevent concurrent execution
 		// from exceeding the control loop's deadline
-		expectedMaxP95ExecutionTime, execTimeErr := m.getExpectedMaxP95ExecutionTimePerInstance(instance)
+		minimumRequiredTime, execTimeErr := m.getMinimumRequiredTime(instance)
 		if execTimeErr != nil {
 			metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
-			return fmt.Errorf("failed to get expected max p95 execution time for instance %s: %w", name, execTimeErr), false
+			return fmt.Errorf("failed to get minimum required time for instance %s: %w", name, execTimeErr), false
 		}
 
-		remaining, sufficient, timeErr := ctxutil.HasSufficientTime(innerCtx, expectedMaxP95ExecutionTime)
+		remaining, sufficient, timeErr := ctxutil.HasSufficientTime(innerCtx, minimumRequiredTime)
 		if timeErr != nil {
 			if errors.Is(timeErr, ctxutil.ErrNoDeadline) {
 				return fmt.Errorf("no deadline set in context"), false
@@ -573,7 +574,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 
 		if !sufficient {
 			m.logger.Warnf("not enough time left to reconcile instance %s (only %v remaining, needed %v), skipping",
-				name, remaining, expectedMaxP95ExecutionTime)
+				name, remaining, minimumRequiredTime)
 			hasAnyReconcilesMutex.Lock()
 			hasAnyReconciles = true
 			hasAnyReconcilesMutex.Unlock()
@@ -584,7 +585,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 		instanceCaptured := instance
 
 		errorgroup.Go(func() error {
-			reconciled, shallBeRemoved, err := m.reconcileInstanceWithTimeout(innerCtx, instanceCaptured, services, nameCaptured, snapshot, expectedMaxP95ExecutionTime)
+			reconciled, shallBeRemoved, err := m.reconcileInstanceWithTimeout(innerCtx, instanceCaptured, services, nameCaptured, snapshot, minimumRequiredTime)
 			if err != nil {
 				return err
 			}
@@ -845,12 +846,12 @@ func (m *BaseFSMManager[C]) maybeEscalateRemoval(ctx context.Context, inst FSMIn
 	}
 }
 
-func (m *BaseFSMManager[C]) reconcileInstanceWithTimeout(ctx context.Context, instance FSMInstance, services serviceregistry.Provider, name string, snapshot SystemSnapshot, expectedMaxP95ExecutionTime time.Duration) (reconciled bool, shallBeRemoved bool, err error) {
+func (m *BaseFSMManager[C]) reconcileInstanceWithTimeout(ctx context.Context, instance FSMInstance, services serviceregistry.Provider, name string, snapshot SystemSnapshot, minimumRequiredTime time.Duration) (reconciled bool, shallBeRemoved bool, err error) {
 	reconcileStart := time.Now()
 
 	// Time budget check is now done upfront before goroutine creation
 	// This method assumes sufficient time has already been verified
-	// Use the full manager context instead of artificially limiting to expectedMaxP95ExecutionTime
+	// Use the full manager context instead of artificially limiting to minimumRequiredTime
 	// The time budget check is the primary gating mechanism, not context timeout
 	instanceCtx := ctx
 

@@ -158,7 +158,7 @@ func (d *DataflowComponentInstance) PrintState() {
 	d.baseFSMInstance.GetLogger().Debugf("Observed state: %+v", d.ObservedState)
 }
 
-// GetExpectedMaxP95ExecutionTimePerInstance returns the minimum required time for this instance
-func (d *DataflowComponentInstance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
+// GetMinimumRequiredTime returns the minimum required time for this instance
+func (d *DataflowComponentInstance) GetMinimumRequiredTime() time.Duration {
 	return constants.DataflowComponentUpdateObservedStateTimeout
 }

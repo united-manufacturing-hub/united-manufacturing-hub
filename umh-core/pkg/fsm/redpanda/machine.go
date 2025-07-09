@@ -166,7 +166,7 @@ func (r *RedpandaInstance) PrintState() {
 // - HasWarnings() - Checks if Redpanda is reporting warnings
 // - HasErrors() - Checks if Redpanda is reporting errors
 
-// GetExpectedMaxP95ExecutionTimePerInstance returns the minimum required time for this instance
-func (r *RedpandaInstance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
+// GetMinimumRequiredTime returns the minimum required time for this instance
+func (r *RedpandaInstance) GetMinimumRequiredTime() time.Duration {
 	return constants.RedpandaUpdateObservedStateTimeout
 }

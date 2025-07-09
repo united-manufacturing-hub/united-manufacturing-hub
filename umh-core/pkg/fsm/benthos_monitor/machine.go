@@ -133,7 +133,7 @@ func (a *BenthosMonitorInstance) PrintState() {
 		a.baseFSMInstance.GetID(), a.GetCurrentFSMState(), a.GetDesiredFSMState())
 }
 
-// GetExpectedMaxP95ExecutionTimePerInstance returns the minimum required time for this instance
-func (a *BenthosMonitorInstance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
+// GetMinimumRequiredTime returns the minimum required time for this instance
+func (a *BenthosMonitorInstance) GetMinimumRequiredTime() time.Duration {
 	return constants.BenthosMonitorUpdateObservedStateTimeout + constants.BenthosMonitorProcessMetricsTimeout
 }

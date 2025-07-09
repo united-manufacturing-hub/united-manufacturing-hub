@@ -229,7 +229,7 @@ func (i *TopicBrowserInstance) PrintState() {
 	i.baseFSMInstance.GetLogger().Debugf("Observed state: %+v", i.ObservedState)
 }
 
-// GetExpectedMaxP95ExecutionTimePerInstance returns the minimum required time for this instance
-func (i *TopicBrowserInstance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
+// GetMinimumRequiredTime returns the minimum required time for this instance
+func (i *TopicBrowserInstance) GetMinimumRequiredTime() time.Duration {
 	return constants.TopicBrowserUpdateObservedStateTimeout
 }
