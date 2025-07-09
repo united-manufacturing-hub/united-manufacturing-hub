@@ -77,9 +77,9 @@ type ConfigManager interface {
 	// AtomicDeleteProtocolConverter deletes a protocol converter from the config atomically
 	AtomicDeleteProtocolConverter(ctx context.Context, componentUUID uuid.UUID) error
 	// AtomicAddDataModel adds a data model to the config atomically
-	AtomicAddDataModel(ctx context.Context, name string, dmVersion DataModelVersion) error
+	AtomicAddDataModel(ctx context.Context, name string, dmVersion DataModelVersion, description string) error
 	// AtomicEditDataModel edits (append-only) a data model by adding a new version
-	AtomicEditDataModel(ctx context.Context, name string, dmVersion DataModelVersion) error
+	AtomicEditDataModel(ctx context.Context, name string, dmVersion DataModelVersion, description string) error
 	// AtomicDeleteDataModel deletes a data model from the config atomically
 	AtomicDeleteDataModel(ctx context.Context, name string) error
 	// AtomicAddDataContract adds a data contract to the config atomically

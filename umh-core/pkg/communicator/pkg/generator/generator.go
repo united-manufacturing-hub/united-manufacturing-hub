@@ -15,6 +15,8 @@
 package generator
 
 import (
+	"context"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -56,7 +58,7 @@ func NewStatusCollector(
 	return collector
 }
 
-func (s *StatusCollectorType) GenerateStatusMessage(isBootstrapped bool) *models.StatusMessage {
+func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBootstrapped bool) *models.StatusMessage {
 
 	// Step 1: Get the snapshot
 	snapshot := s.systemSnapshotManager.GetDeepCopySnapshot()
@@ -90,6 +92,20 @@ func (s *StatusCollectorType) GenerateStatusMessage(isBootstrapped bool) *models
 	rpInst, ok := fsm.FindInstance(snapshot, constants.RedpandaManagerName, constants.RedpandaInstanceName)
 	if ok {
 		redpandaData = RedpandaFromSnapshot(rpInst, s.logger)
+	}
+
+	// --- data models (multiple instances, extracted from the config directly) -------------------------------------------------------------
+	dataModelData, err := DataModelsFromConfig(ctx, s.configManager, s.logger)
+	if err != nil {
+		s.logger.Warnf("Failed to get data models from config: %v", err)
+		return &models.StatusMessage{} // Return empty status message on error
+	}
+
+	// --- data contracts (multiple instances, extracted from the config directly) -------------------------------------------------------------
+	dataContractData, err := DataContractsFromConfig(ctx, s.configManager, s.logger)
+	if err != nil {
+		s.logger.Warnf("Failed to get data contracts from config: %v", err)
+		return &models.StatusMessage{} // Return empty status message on error
 	}
 
 	// --- dfc (multiple instances) ----------------------	---------------------------------------
@@ -131,10 +147,12 @@ func (s *StatusCollectorType) GenerateStatusMessage(isBootstrapped bool) *models
 				Latency:  &models.Latency{},
 				Location: agentData.Location,
 			},
-			Container:    containerData,
-			Dfcs:         dfcData,
-			Redpanda:     redpandaData,
-			TopicBrowser: *topicBrowserData,
+			Container:     containerData,
+			Dfcs:          dfcData,
+			Redpanda:      redpandaData,
+			TopicBrowser:  *topicBrowserData,
+			DataModels:    dataModelData,
+			DataContracts: dataContractData,
 			Release: models.Release{
 				Health: &models.Health{
 					Message:       "",

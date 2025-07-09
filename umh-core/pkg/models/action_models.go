@@ -197,6 +197,12 @@ const (
 	SetConfigFile ActionType = "set-config-file"
 	// AddDataModel represents the action type for adding a data model
 	AddDataModel ActionType = "add-datamodel"
+	// DeleteDataModel represents the action type for deleting a data model
+	DeleteDataModel ActionType = "delete-datamodel"
+	// EditDataModel represents the action type for editing a data model
+	EditDataModel ActionType = "edit-datamodel"
+	// GetDataModel represents the action type for retrieving a data model
+	GetDataModel ActionType = "get-datamodel"
 )
 
 // TestNetworkConnectionPayload contains the necessary fields for executing a TestNetworkConnection action.
@@ -604,11 +610,60 @@ type SetConfigFileResponse struct {
 	Success          bool   `json:"success"`
 }
 
+type DataModelVersion struct {
+	Structure map[string]Field `yaml:"structure"` // structure of the data model (fields)
+}
+
+// ModelRef represents a reference to another data model
+type ModelRef struct {
+	Name    string `yaml:"name"`    // name of the referenced data model
+	Version string `yaml:"version"` // version of the referenced data model
+}
+
+type Field struct {
+	PayloadShape string           `yaml:"_payloadshape,omitempty"` // payload shape of the field
+	ModelRef     *ModelRef        `yaml:"_refModel,omitempty"`     // this is a special field that is used to reference another data model to be used as a type for this field
+	Subfields    map[string]Field `yaml:",inline"`                 // subfields of the field (allow recursive definition of fields)
+}
+
 // AddDataModelPayload contains the necessary fields for executing an AddDataModel action.
 type AddDataModelPayload struct {
-	Name        string                 `json:"name" binding:"required"`      // Name of the data model
-	Description string                 `json:"description,omitempty"`        // Description of the data model version
-	Structure   map[string]interface{} `json:"structure" binding:"required"` // Structure of the data model (fields)
+	Name             string           `json:"name" binding:"required"`             // Name of the data model
+	Description      string           `json:"description,omitempty"`               // Description of the data model
+	EncodedStructure string           `json:"encodedStructure" binding:"required"` // Encoded structure of the data model
+	Structure        map[string]Field `json:"-"`                                   // Data model version (not used in the action, but filled by the action)
+}
+
+// DeleteDataModelPayload contains the necessary fields for executing a DeleteDataModel action.
+type DeleteDataModelPayload struct {
+	Name string `json:"name" binding:"required"` // Name of the data model to delete
+}
+
+// EditDataModelPayload contains the necessary fields for executing an EditDataModel action.
+type EditDataModelPayload struct {
+	Name             string           `json:"name" binding:"required"`             // Name of the data model to edit
+	Description      string           `json:"description,omitempty"`               // Description of the data model
+	EncodedStructure string           `json:"encodedStructure" binding:"required"` // Encoded structure of the data model
+	Structure        map[string]Field `json:"-"`                                   // Data model version (not used in the action, but filled by the action)
+}
+
+// GetDataModelPayload contains the necessary fields for executing a GetDataModel action.
+type GetDataModelPayload struct {
+	Name string `json:"name" binding:"required"` // Name of the data model to retrieve
+}
+
+// GetDataModelVersion represents a version of a data model with base64-encoded structure
+type GetDataModelVersion struct {
+	Description      string           `json:"description,omitempty"` // Description of the data model version
+	EncodedStructure string           `json:"encodedStructure"`      // Base64-encoded structure of the data model version
+	Structure        map[string]Field `json:"-"`                     // Data model version structure (not sent in response, but used internally)
+}
+
+// GetDataModelResponse contains the response for a GetDataModel action.
+type GetDataModelResponse struct {
+	Name        string                         `json:"name"`                  // Name of the data model
+	Description string                         `json:"description,omitempty"` // Description of the data model
+	Versions    map[string]GetDataModelVersion `json:"versions"`              // All versions of the data model
 }
 
 // Deprecated: Use GetMetricsRequest instead.

@@ -21,13 +21,15 @@ type StatusMessage struct {
 }
 
 type Core struct {
-	Health       *Health      `json:"health"`
-	Agent        Agent        `json:"agent"`
-	Container    Container    `json:"container"`
-	Dfcs         []Dfc        `json:"dfcs"`
-	Redpanda     Redpanda     `json:"redpanda"`
-	TopicBrowser TopicBrowser `json:"topicBrowser"`
-	Release      Release      `json:"release"`
+	Health        *Health        `json:"health"`
+	Agent         Agent          `json:"agent"`
+	Container     Container      `json:"container"`
+	Dfcs          []Dfc          `json:"dfcs"`
+	Redpanda      Redpanda       `json:"redpanda"`
+	TopicBrowser  TopicBrowser   `json:"topicBrowser"`
+	Release       Release        `json:"release"`
+	DataModels    []DataModel    `json:"dataModels"`
+	DataContracts []DataContract `json:"dataContracts"`
 }
 
 type Agent struct {
@@ -72,6 +74,24 @@ type Health struct {
 	ObservedState string         `json:"state"`        // Observed state of the component
 	DesiredState  string         `json:"desiredState"` // Desired state of the component
 	Category      HealthCategory `json:"category"`     // Category of the health state for easy classification
+}
+
+type DataModel struct {
+	Name          string `json:"name"`
+	Description   string `json:"description"`
+	LatestVersion string `json:"latestVersion"`
+	Hash          string `json:"hash"`
+}
+
+type DataContract struct {
+	Name      string          `json:"name"`
+	DataModel DataContractRef `json:"dataModel"`
+	Flows     int             `json:"flows"`
+}
+
+type DataContractRef struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
 }
 
 type Latency struct {

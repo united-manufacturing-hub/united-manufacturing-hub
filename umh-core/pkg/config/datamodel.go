@@ -24,7 +24,7 @@ import (
 // AtomicAddDataModel adds a new data model to the config
 // the data model is added with the given name and version
 // the version is appended to the data model and the config is written back to the file
-func (m *FileConfigManager) AtomicAddDataModel(ctx context.Context, name string, dmVersion DataModelVersion) error {
+func (m *FileConfigManager) AtomicAddDataModel(ctx context.Context, name string, dmVersion DataModelVersion, description string) error {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to lock config file: %w", err)
@@ -46,7 +46,8 @@ func (m *FileConfigManager) AtomicAddDataModel(ctx context.Context, name string,
 
 	// add the data model to the config
 	config.DataModels = append(config.DataModels, DataModelsConfig{
-		Name: name,
+		Name:        name,
+		Description: description,
 		Versions: map[string]DataModelVersion{
 			"v1": dmVersion,
 		},
@@ -61,20 +62,20 @@ func (m *FileConfigManager) AtomicAddDataModel(ctx context.Context, name string,
 	return nil
 }
 
-func (m *FileConfigManagerWithBackoff) AtomicAddDataModel(ctx context.Context, name string, dmVersion DataModelVersion) error {
+func (m *FileConfigManagerWithBackoff) AtomicAddDataModel(ctx context.Context, name string, dmVersion DataModelVersion, description string) error {
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
-	return m.configManager.AtomicAddDataModel(ctx, name, dmVersion)
+	return m.configManager.AtomicAddDataModel(ctx, name, dmVersion, description)
 }
 
 // AtomicEditDataModel edits (append-only) the data model with the given name and appends the new version
 // the version is appended to the data model and the config is written back to the file
 // we do not allow, editing existing versions, as this would break the data contract
-func (m *FileConfigManager) AtomicEditDataModel(ctx context.Context, name string, dmVersion DataModelVersion) error {
+func (m *FileConfigManager) AtomicEditDataModel(ctx context.Context, name string, dmVersion DataModelVersion, description string) error {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to lock config file: %w", err)
@@ -119,6 +120,9 @@ func (m *FileConfigManager) AtomicEditDataModel(ctx context.Context, name string
 	nextVersion := maxVersion + 1
 	currentDataModel.Versions[fmt.Sprintf("v%d", nextVersion)] = dmVersion
 
+	// update the description
+	currentDataModel.Description = description
+
 	// edit the data model in the config
 	config.DataModels[targetIndex] = currentDataModel
 
@@ -131,14 +135,14 @@ func (m *FileConfigManager) AtomicEditDataModel(ctx context.Context, name string
 	return nil
 }
 
-func (m *FileConfigManagerWithBackoff) AtomicEditDataModel(ctx context.Context, name string, dmVersion DataModelVersion) error {
+func (m *FileConfigManagerWithBackoff) AtomicEditDataModel(ctx context.Context, name string, dmVersion DataModelVersion, description string) error {
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
-	return m.configManager.AtomicEditDataModel(ctx, name, dmVersion)
+	return m.configManager.AtomicEditDataModel(ctx, name, dmVersion, description)
 }
 
 func (m *FileConfigManager) AtomicDeleteDataModel(ctx context.Context, name string) error {

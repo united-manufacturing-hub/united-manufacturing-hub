@@ -120,7 +120,7 @@ func (s *Handler) notify() {
 	defer cncl()
 
 	notified := 0
-	baseStatusMessage := s.StatusCollector.GenerateStatusMessage(true)
+	baseStatusMessage := s.StatusCollector.GenerateStatusMessage(ctx, true)
 	encodedBaseStatusMessage, err := encoding.EncodeMessageFromUMHInstanceToUser(models.UMHMessageContent{
 		MessageType: models.Status,
 		Payload:     baseStatusMessage,
@@ -133,7 +133,7 @@ func (s *Handler) notify() {
 
 	var encodedNewSubscriberMessage string
 	if s.subscriberRegistry.HasNewSubscribers() {
-		newSubscriberMessage := s.StatusCollector.GenerateStatusMessage(false)
+		newSubscriberMessage := s.StatusCollector.GenerateStatusMessage(ctx, false)
 		encodedNewSubscriberMessage, err = encoding.EncodeMessageFromUMHInstanceToUser(models.UMHMessageContent{
 			MessageType: models.Status,
 			Payload:     newSubscriberMessage,
