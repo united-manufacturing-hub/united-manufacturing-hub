@@ -36,9 +36,9 @@ Payload-Shape → Data-Model → Data-Contract → Stream-Processor
 
 | Layer | Purpose | Example |
 |-------|---------|---------|
-| **[Payload-Shape](data-models.md#payload-shapes)** | Canonical schema fragment (timeseries default) | `timeseries`, `blob` |
+| **[Payload-Shape](payload-shapes.md)** | Canonical schema fragment (timeseries default) | `timeseries`, `blob` |
 | **[Data-Model](data-models.md)** | Reusable class; tree of fields, folders, sub-models | `Motor`, `Pump`, `Temperature` |
-| **[Data-Contract](data-contracts.md)** | Binds model version; decides retention & sinks | `_temperature:v1`, `_pump:v1` |
+| **[Data-Contract](data-contracts.md)** | Binds model version; decides retention & sinks | `_temperature_v1`, `_pump_v1` |
 | **[Stream-Processor](stream-processors.md)** | Runtime pipeline for model instances | `furnaceTemp_sp`, `pump41_sp` |
 
 ## Quick Example
@@ -54,42 +54,45 @@ Payload: { "value": 1500, "timestamp_ms": 1733904005123 }
 ### 2. Data Model Definition
 ```yaml
 datamodels:
-  - name: Temperature
-    version: v1
-    structure:
-      temperature_in_c:
-        type: timeseries
+  temperature:
+    description: "Temperature sensor model"
+    versions:
+      v1:
+        structure:
+          temperatureInC:
+            _payloadshape: timeseries-number
 ```
 
 ### 3. Data Contract
 ```yaml
 datacontracts:
-  - name: _temperature
-    version: v1
-    model: Temperature:v1
-    sinks:
-      timescaledb: true
+  - name: _temperature_v1
+    model:
+      name: temperature
+      version: v1
+    default_bridges:
+      - type: timescaledb
+        retention_in_days: 365
 ```
 
 ### 4. Stream Processor
 ```yaml
 streamprocessors:
   - name: furnaceTemp_sp
-    contract: _temperature:v1
+    _templateRef: "temperature_template"
     location:
-      level0: corpA
-      level1: plant-A
-      level2: line-4
-      level3: furnace1
-    sources:
-      tF: "umh.v1.corpA.plant-A.line-4.furnace1._raw.temperature_F"
-    mapping:
-      temperature_in_c: "(tF - 32) * 5 / 9"
+      0: corpA
+      1: plant-A
+      2: line-4
+      3: furnace1
+    variables:
+      temp_sensor: "temperature_F"
+      sn: "SN-F1-001"
 ```
 
 ### 5. Structured Output
 ```
-Topic: umh.v1.corpA.plant-A.line-4.furnace1._temperature.temperature_in_c
+Topic: umh.v1.corpA.plant-A.line-4.furnace1._temperature.temperatureInC
 Payload: { "value": 815.6, "timestamp_ms": 1733904005123 }
 Database: Auto-created TimescaleDB hypertable
 ```
