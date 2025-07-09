@@ -166,10 +166,10 @@ func (m *MockSchemaRegistry) handleSubjectOperations(w http.ResponseWriter, r *h
 func (m *MockSchemaRegistry) handleDeleteSubject(w http.ResponseWriter, r *http.Request, subject string) {
 	// Check if subject exists
 	if _, exists := m.schemas[subject]; !exists {
-		// Return custom error format for subject not found
+		// Subject not found
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte(fmt.Sprintf(`{"error_code":40401,"message":"Subject '%s' not found."}`, subject)))
+		_, _ = fmt.Fprintf(w, `{"error_code":40401,"message":"Subject '%s' not found."}`, subject)
 		return
 	}
 
@@ -179,7 +179,7 @@ func (m *MockSchemaRegistry) handleDeleteSubject(w http.ResponseWriter, r *http.
 	// Return success with version list (what Redpanda returns)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`[1]`)) // Mock version list
+	_, _ = w.Write([]byte(`[1]`)) // Mock version list
 }
 
 // handlePostSubjectVersion handles POST /subjects/{subject}/versions
@@ -193,7 +193,7 @@ func (m *MockSchemaRegistry) handlePostSubjectVersion(w http.ResponseWriter, r *
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(`{"error_code":42201,"message":"Invalid JSON"}`))
+		_, _ = w.Write([]byte(`{"error_code":42201,"message":"Invalid JSON"}`))
 		return
 	}
 
@@ -204,7 +204,7 @@ func (m *MockSchemaRegistry) handlePostSubjectVersion(w http.ResponseWriter, r *
 				// Schema already exists, return 409 Conflict
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusConflict)
-				w.Write([]byte(fmt.Sprintf(`{"id":%d}`, schema.ID)))
+				_, _ = fmt.Fprintf(w, `{"id":%d}`, schema.ID)
 				return
 			}
 		}
@@ -236,7 +236,7 @@ func (m *MockSchemaRegistry) handlePostSubjectVersion(w http.ResponseWriter, r *
 	// Return success with schema ID
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	w.Write([]byte(fmt.Sprintf(`{"id":%d}`, id)))
+	_, _ = fmt.Fprintf(w, `{"id":%d}`, id)
 }
 
 // handleGetSubjectVersions handles GET /subjects/{subject}/versions/{version}
