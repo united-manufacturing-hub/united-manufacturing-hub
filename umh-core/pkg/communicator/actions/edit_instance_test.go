@@ -581,7 +581,3 @@ func (w *writeFailingMockConfigManager) AtomicAddDataContract(ctx context.Contex
 
 	return nil
 }
-
-func (w *writeFailingMockConfigManager) GetDataModels() []config.DataModelsConfig {
-	return w.mockConfigManager.GetDataModels()
-}

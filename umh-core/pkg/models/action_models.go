@@ -621,7 +621,7 @@ type ModelRef struct {
 }
 
 type Field struct {
-	PayloadShape string           `yaml:"_payloadshape,omitempty"` // type of the field (timeseries only for now)
+	PayloadShape string           `yaml:"_payloadshape,omitempty"` // payload shape of the field
 	ModelRef     *ModelRef        `yaml:"_refModel,omitempty"`     // this is a special field that is used to reference another data model to be used as a type for this field
 	Subfields    map[string]Field `yaml:",inline"`                 // subfields of the field (allow recursive definition of fields)
 }

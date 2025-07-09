@@ -262,7 +262,7 @@ streamprocessors:
     # ... transformation logic ...
 ```
 
-_Results in:_ `umh.v1.acme.plant1.line4.sensor1._temperature.temperature_in_c`
+_Results in:_ `umh.v1.acme.plant1.line4.sensor1._temperature.temperatureInC`
 
 For payload format details, see [Payload Formats](../unified-namespace/payload-formats.md).
 

@@ -120,9 +120,11 @@ func (m *FileConfigManager) AtomicEditDataModel(ctx context.Context, name string
 	nextVersion := maxVersion + 1
 	currentDataModel.Versions[fmt.Sprintf("v%d", nextVersion)] = dmVersion
 
+	// update the description
+	currentDataModel.Description = description
+
 	// edit the data model in the config
 	config.DataModels[targetIndex] = currentDataModel
-	config.DataModels[targetIndex].Description = description
 
 	// write the config back to the file
 	err = m.writeConfig(ctx, config)
