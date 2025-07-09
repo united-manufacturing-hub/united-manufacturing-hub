@@ -91,7 +91,7 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 	}
 
 	// Step 2: Detect external changes.
-	if err := s.reconcileExternalChanges(ctx, services, snapshot); err != nil {
+	if err = s.reconcileExternalChanges(ctx, services, snapshot); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, s6service.ErrServiceNotExist) {
 
@@ -108,7 +108,6 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
 
-		//nolint:ineffassign
 		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
 	}
 
