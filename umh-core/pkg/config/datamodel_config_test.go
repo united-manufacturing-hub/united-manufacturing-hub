@@ -254,7 +254,7 @@ dataModels:
 					},
 				}
 
-				err := configManager.AtomicAddDataModel(ctx, "temperature", dmVersion)
+				err := configManager.AtomicAddDataModel(ctx, "temperature", dmVersion, "test description")
 				Expect(err).NotTo(HaveOccurred())
 
 				// Verify the written data
@@ -293,7 +293,7 @@ dataModels:
 					},
 				}
 
-				err := configManager.AtomicAddDataModel(ctx, "existing-model", dmVersion)
+				err := configManager.AtomicAddDataModel(ctx, "existing-model", dmVersion, "test description")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("another data model with name \"existing-model\" already exists"))
 			})
@@ -315,7 +315,7 @@ dataModels:
 					},
 				}
 
-				err := configManager.AtomicAddDataModel(ctx, "test-model", dmVersion)
+				err := configManager.AtomicAddDataModel(ctx, "test-model", dmVersion, "test description")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to get config"))
 			})
@@ -384,7 +384,7 @@ dataModels:
 					},
 				}
 
-				err := configManager.AtomicEditDataModel(ctx, "temperature", dmVersion)
+				err := configManager.AtomicEditDataModel(ctx, "temperature", dmVersion, "test description")
 				Expect(err).NotTo(HaveOccurred())
 
 				// Verify the written data
@@ -398,6 +398,7 @@ dataModels:
 				Expect(writtenConfig.DataModels[0].Versions).To(HaveLen(2))
 				Expect(writtenConfig.DataModels[0].Versions).To(HaveKey("v1"))
 				Expect(writtenConfig.DataModels[0].Versions).To(HaveKey("v2"))
+				Expect(writtenConfig.DataModels[0].Description).To(Equal("test description"))
 
 				// Verify v2 has the new structure
 				v2 := writtenConfig.DataModels[0].Versions["v2"]
@@ -431,7 +432,7 @@ dataModels:
 					},
 				}
 
-				err := configManager.AtomicEditDataModel(ctx, "non-existent", dmVersion)
+				err := configManager.AtomicEditDataModel(ctx, "non-existent", dmVersion, "test description")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("data model with name \"non-existent\" not found"))
 			})
