@@ -182,7 +182,7 @@ func (a *AddDataModelAction) Execute() (interface{}, map[string]interface{}, err
 		},
 	}
 
-	dataContractErr := a.configManager.AtomicAddDataContract(ctx, dataContract)
+	dataContractErr := a.configManager.AtomicAddDataContract(a.ctx, dataContract)
 	if dataContractErr != nil {
 		// Log the error but don't fail the entire operation since the data model was successfully added
 		a.actionLogger.Warnf("Failed to automatically create data contract for data model %s: %v", a.payload.Name, dataContractErr)
