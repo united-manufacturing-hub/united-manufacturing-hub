@@ -367,14 +367,9 @@ func (s *DefaultService) createS6RunScript(ctx context.Context, servicePath stri
 		return fmt.Errorf("failed to execute run script template: %w", err)
 	}
 
-	// Write the templated content directly to the file
-	if err := fsService.WriteFile(ctx, runScript, buf.Bytes(), 0644); err != nil {
+	// Write the templated content directly to the file with executable permissions
+	if err := fsService.WriteFile(ctx, runScript, buf.Bytes(), 0755); err != nil {
 		return fmt.Errorf("failed to write run script: %w", err)
-	}
-
-	// Make run script executable
-	if err := fsService.Chmod(ctx, runScript, 0755); err != nil {
-		return fmt.Errorf("failed to make run script executable: %w", err)
 	}
 
 	return nil
