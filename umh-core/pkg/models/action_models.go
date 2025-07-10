@@ -817,15 +817,11 @@ type StreamProcessorConfig struct {
 // StreamProcessorSourceMapping represents the source mapping (alias to UNS topic)
 type StreamProcessorSourceMapping map[string]string
 
-// StreamProcessorMapping represents field mappings with recursive structure
-type StreamProcessorMapping struct {
-	// Source field reference in the format "source_alias.field_path"
-	Source string `yaml:"source,omitempty"`
-	// Transform to apply to the source data (e.g., bloblang expression)
-	Transform string `yaml:"transform,omitempty"`
-	// Subfields allows recursive definition of nested mappings
-	Subfields map[string]StreamProcessorMapping `yaml:",inline"`
-}
+// StreamProcessorMapping represents field mappings with support for nested structures
+// where the key is the output field name and the value is either:
+// - A string transformation expression (e.g., "source_alias * 2")
+// - A nested map[string]interface{} for complex field structures
+type StreamProcessorMapping map[string]interface{}
 
 // StreamProcessor represents a stream processor configuration
 type StreamProcessor struct {

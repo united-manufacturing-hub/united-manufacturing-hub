@@ -68,17 +68,12 @@ var _ = Describe("EditStreamProcessor", func() {
 			"mqtt":  "umh.v1.{{ .enterprise }}.{{ .site }}.{{ .area }}.{{ .line }}.mqtt",
 		}
 		spMapping = models.StreamProcessorMapping{
-			Source:    "opcua",
-			Transform: "count",
-			Subfields: map[string]models.StreamProcessorMapping{
-				"temperature": {
-					Source:    "opcua.temperature",
-					Transform: "average",
-				},
-				"pressure": {
-					Source:    "mqtt.pressure",
-					Transform: "latest",
-				},
+			"count":       "opcua",
+			"temperature": "opcua.temperature",
+			"pressure":    "mqtt.pressure",
+			"motor": models.StreamProcessorMapping{
+				"speed":   "motor_data.speed",
+				"current": "motor_data.current",
 			},
 		}
 		spVariables = []models.StreamProcessorVariable{
@@ -613,10 +608,44 @@ var _ = Describe("EditStreamProcessor", func() {
 			Expect(editedSP.StreamProcessorServiceConfig.Config.Sources).To(HaveKey("mqtt"))
 
 			// Check mapping
-			Expect(editedSP.StreamProcessorServiceConfig.Config.Mapping).To(HaveKey("source"))
-			Expect(editedSP.StreamProcessorServiceConfig.Config.Mapping).To(HaveKey("transform"))
-			Expect(editedSP.StreamProcessorServiceConfig.Config.Mapping["source"]).To(Equal("opcua"))
-			Expect(editedSP.StreamProcessorServiceConfig.Config.Mapping["transform"]).To(Equal("count"))
+			Expect(editedSP.StreamProcessorServiceConfig.Config.Mapping).To(HaveKey("count"))
+			Expect(editedSP.StreamProcessorServiceConfig.Config.Mapping).To(HaveKey("temperature"))
+			Expect(editedSP.StreamProcessorServiceConfig.Config.Mapping).To(HaveKey("pressure"))
+			Expect(editedSP.StreamProcessorServiceConfig.Config.Mapping).To(HaveKey("motor"))
+
+			// Check simple string mappings
+			Expect(editedSP.StreamProcessorServiceConfig.Config.Mapping["count"]).To(Equal("opcua"))
+			Expect(editedSP.StreamProcessorServiceConfig.Config.Mapping["temperature"]).To(Equal("opcua.temperature"))
+			Expect(editedSP.StreamProcessorServiceConfig.Config.Mapping["pressure"]).To(Equal("mqtt.pressure"))
+
+			// Check nested mapping
+			motorValue := editedSP.StreamProcessorServiceConfig.Config.Mapping["motor"]
+			var motorMapping models.StreamProcessorMapping
+			var ok bool
+
+			// Handle different possible types
+			switch v := motorValue.(type) {
+			case map[string]interface{}:
+				motorMapping = models.StreamProcessorMapping(v)
+				ok = true
+			case models.StreamProcessorMapping:
+				motorMapping = v
+				ok = true
+			case map[interface{}]interface{}:
+				motorMapping = make(models.StreamProcessorMapping)
+				for k, val := range v {
+					if keyStr, keyOk := k.(string); keyOk {
+						motorMapping[keyStr] = val
+					}
+				}
+				ok = true
+			}
+
+			Expect(ok).To(BeTrue(), "motor mapping should be convertible to map[string]interface{}")
+			Expect(motorMapping).To(HaveKey("speed"))
+			Expect(motorMapping).To(HaveKey("current"))
+			Expect(motorMapping["speed"]).To(Equal("motor_data.speed"))
+			Expect(motorMapping["current"]).To(Equal("motor_data.current"))
 
 			// Verify the response contains the expected UUID
 			responseMap, ok := result.(map[string]any)

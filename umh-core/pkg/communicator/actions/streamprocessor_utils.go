@@ -27,49 +27,24 @@ func generateUUIDFromName(name string) uuid.UUID {
 	return uuid.NewSHA1(uuid.NameSpaceOID, []byte(name))
 }
 
-// convertStreamProcessorMappingToInterface converts recursive StreamProcessorMapping to map[string]interface{}
+// convertStreamProcessorMappingToInterface converts StreamProcessorMapping to map[string]interface{}
 func convertStreamProcessorMappingToInterface(mapping models.StreamProcessorMapping) map[string]interface{} {
-	result := make(map[string]interface{})
-
-	// Add source and transform fields if they exist
-	if mapping.Source != "" {
-		result["source"] = mapping.Source
+	// Since StreamProcessorMapping is already map[string]interface{}, we can return it directly
+	// but we make a copy to avoid any potential mutations
+	result := make(map[string]interface{}, len(mapping))
+	for key, value := range mapping {
+		result[key] = value
 	}
-	if mapping.Transform != "" {
-		result["transform"] = mapping.Transform
-	}
-
-	// Recursively convert subfields
-	for key, subMapping := range mapping.Subfields {
-		result[key] = convertStreamProcessorMappingToInterface(subMapping)
-	}
-
 	return result
 }
 
-// convertInterfaceToStreamProcessorMapping converts map[string]interface{} to recursive StreamProcessorMapping
+// convertInterfaceToStreamProcessorMapping converts map[string]interface{} to StreamProcessorMapping
 func convertInterfaceToStreamProcessorMapping(mapping map[string]interface{}) models.StreamProcessorMapping {
-	result := models.StreamProcessorMapping{
-		Subfields: make(map[string]models.StreamProcessorMapping),
-	}
-
+	// Since StreamProcessorMapping is already map[string]interface{}, we can assign directly
+	// but we make a copy to avoid any potential mutations
+	result := make(models.StreamProcessorMapping, len(mapping))
 	for key, value := range mapping {
-		switch key {
-		case "source":
-			if str, ok := value.(string); ok {
-				result.Source = str
-			}
-		case "transform":
-			if str, ok := value.(string); ok {
-				result.Transform = str
-			}
-		default:
-			// Handle nested mappings
-			if valueMap, ok := value.(map[string]interface{}); ok {
-				result.Subfields[key] = convertInterfaceToStreamProcessorMapping(valueMap)
-			}
-		}
+		result[key] = value
 	}
-
 	return result
 }

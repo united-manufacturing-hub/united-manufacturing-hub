@@ -67,17 +67,12 @@ var _ = Describe("DeployStreamProcessor", func() {
 			"mqtt":  "umh.v1.{{ .enterprise }}.{{ .site }}.{{ .area }}.{{ .line }}.mqtt",
 		}
 		spMapping = models.StreamProcessorMapping{
-			Source:    "opcua",
-			Transform: "count",
-			Subfields: map[string]models.StreamProcessorMapping{
-				"temperature": {
-					Source:    "opcua.temperature",
-					Transform: "average",
-				},
-				"pressure": {
-					Source:    "mqtt.pressure",
-					Transform: "latest",
-				},
+			"count":       "opcua",
+			"temperature": "opcua.temperature",
+			"pressure":    "mqtt.pressure",
+			"motor": models.StreamProcessorMapping{
+				"speed":   "motor_data.speed",
+				"current": "motor_data.current",
 			},
 		}
 		spVariables = []models.StreamProcessorVariable{
