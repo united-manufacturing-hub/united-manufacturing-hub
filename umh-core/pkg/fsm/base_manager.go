@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
-	"runtime"
 	"sync"
 	"time"
 
@@ -537,8 +536,8 @@ func (m *BaseFSMManager[C]) Reconcile(
 	// We do not use the returned ctx, as it cancles once any of the reconciles returns either an error or finishes (And the 2nd behaviour is undesired.)
 
 	errorgroup, _ := errgroup.WithContext(innerCtx)
-	// Limit the number of threads available, preventing CPU starvation for other system tasks
-	errorgroup.SetLimit(runtime.NumCPU())
+	// Limit concurrent FSM operations for I/O-bound workloads
+	errorgroup.SetLimit(constants.MaxConcurrentFSMOperations)
 	hasAnyReconciles := false
 	hasAnyReconcilesMutex := sync.Mutex{}
 

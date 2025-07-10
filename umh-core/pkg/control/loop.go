@@ -365,6 +365,8 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	hasAnyReconcilesMutex := sync.Mutex{}
 
 	errorgroup, _ := errgroup.WithContext(innerCtx)
+	// Limit concurrent manager operations for I/O-bound workloads
+	errorgroup.SetLimit(constants.MaxConcurrentFSMOperations)
 	for _, manager := range c.managers {
 		capturedManager := manager
 
