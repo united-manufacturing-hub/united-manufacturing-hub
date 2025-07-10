@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	pkgfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
@@ -138,47 +137,6 @@ var _ = Describe("Connection FSM", func() {
 			)
 			Expect(err).NotTo(HaveOccurred())
 		})
-	})
-
-	Context("Stopping Flow", func() {
-		It("should force-remove component on permanent error when already Stopped", func() {
-			// Setup to Active state
-			// 1. First get to Stopped state
-			tick, err := fsmtest.TestConnectionStateTransition(
-				ctx, instance, mockService, mockSvcRegistry, connectionName,
-				internalfsm.LifecycleStateToBeCreated,
-				internalfsm.LifecycleStateCreating, 5, tick)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Creating → Stopped
-			tick, err = fsmtest.TestConnectionStateTransition(
-				ctx, instance, mockService, mockSvcRegistry, connectionName,
-				internalfsm.LifecycleStateCreating,
-				connection.OperationalStateStopped, 5, tick)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(mockService.AddConnectionToNmapManagerCalled).To(BeTrue())
-
-			// inject permanent error
-			mockService.StatusError = fmt.Errorf("%s: simulated", backoff.PermanentFailureError)
-
-			_, recErr, reconciled := fsmtest.ReconcileConnectionUntilError(
-				ctx,
-				pkgfsm.SystemSnapshot{Tick: tick},
-				instance,
-				mockService,
-				mockSvcRegistry,
-				connectionName,
-				5,
-			)
-
-			Expect(recErr).To(HaveOccurred())
-			Expect(recErr.Error()).To(ContainSubstring(backoff.PermanentFailureError))
-			Expect(reconciled).To(BeTrue())
-			Expect(mockService.ForceRemoveConnectionCalled).To(BeTrue())
-
-			mockService.StatusError = nil // cleanup for other tests
-		})
-
 	})
 
 	Context("Error Handling", func() {

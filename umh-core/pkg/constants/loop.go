@@ -14,14 +14,28 @@
 
 package constants
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 const (
-	// defaultTickerTime is the interval between reconciliation cycles.
-	// This value balances responsiveness with resource utilization:
-	// - Too small: could mean that the managers do not have enough time to complete their work
-	// - Too high: Delayed response to configuration changes
+	// DefaultTickerTime is the default time between ticks
 	DefaultTickerTime = 100 * time.Millisecond
+
+	// Time budget percentages for parallel execution
+	// These percentages are applied to whatever context time budget is available,
+	// naturally creating a hierarchy without hardcoded absolute timeouts
+	ControlLoopReservePercent  = 0.25 // 25% overhead for control loop coordination
+	ManagerReservePercent      = 0.05 // 5% overhead per manager execution
+	UpdateObservedStatePercent = 0.80 // 80% of manager time for I/O operations (parsing logs, health checks, metrics)
+	// Remaining 20% automatically goes to reconciliation logic (FSM transitions, event sending)
+
+	// Legacy constants - to be removed
+	LoopControlLoopTimeFactor = 1.0 - ControlLoopReservePercent
+
+	StarvationLimit = 5
+	CoolDownTicks   = 5
 
 	// starvationThreshold defines when to consider the control loop starved.
 	// If no reconciliation has happened for this duration, the starvation
@@ -30,22 +44,95 @@ const (
 	// at once.
 	StarvationThreshold = 15 * time.Second
 
-	// DefaultManagerName is the default name for a manager.
-	DefaultManagerName = "Core"
-
-	// DefaultInstanceName is the default name for an instance.
+	// Default names
+	DefaultManagerName  = "Core"
 	DefaultInstanceName = "Core"
 
-	// DefaultMinimumRemainingTimePerManager is the default minimum remaining time for a manager.
-	DefaultMinimumRemainingTimePerManager = time.Millisecond * 50
-
-	// maximum times in a row the same manager may return (reconciled = true)
-	// before we put it into a cooling‑off period
-	StarvationLimit = 3
-
-	// number of control‑loop ticks a manager stays in cooldown
-	CoolDownTicks = 5
+	RingBufferCapacity = 3
 )
+
+// CreateSubContext applies a percentage to the parent context's remaining time.
+// This enables hierarchical time budgets where each level respects its parent's constraints.
+func CreateSubContext(parentCtx context.Context, percentage float64) (context.Context, context.CancelFunc) {
+	if percentage < 0 || percentage > 1.0 {
+		// Invalid percentage, return parent context to avoid breaking the chain
+		return parentCtx, func() {}
+	}
+
+	deadline, ok := parentCtx.Deadline()
+	if !ok {
+		// No deadline to split - return parent context
+		return parentCtx, func() {}
+	}
+
+	remainingTime := time.Until(deadline)
+	if remainingTime <= 0 {
+		// Parent context already expired
+		return parentCtx, func() {}
+	}
+
+	subTime := time.Duration(float64(remainingTime) * percentage)
+	return context.WithTimeout(parentCtx, subTime)
+}
+
+// CreateUpdateObservedStateContext creates a context for UpdateObservedState operations.
+// Takes 80% of the manager's remaining time for I/O operations like parsing logs,
+// health checks, and metrics collection.
+func CreateUpdateObservedStateContext(managerCtx context.Context) (context.Context, context.CancelFunc) {
+	return CreateSubContext(managerCtx, UpdateObservedStatePercent)
+}
+
+// CreateUpdateObservedStateContextWithMinimum creates a context for UpdateObservedState operations
+// with a guaranteed minimum timeout. This ensures that even when the percentage-based allocation
+// is smaller than the minimum required time, the operation gets enough time to complete safely.
+//
+// It takes the larger of:
+// - 80% of the manager's remaining time (percentage-based allocation)
+// - The specified minimum timeout (safety guarantee)
+//
+// This prevents context deadline exceeded errors when the instance execution time
+// approaches the time budget limits while still respecting the hierarchical time allocation.
+func CreateUpdateObservedStateContextWithMinimum(managerCtx context.Context, minimumTimeout time.Duration) (context.Context, context.CancelFunc) {
+	deadline, ok := managerCtx.Deadline()
+	if !ok {
+		// No deadline to split - create context with minimum timeout
+		return context.WithTimeout(managerCtx, minimumTimeout)
+	}
+
+	remainingTime := time.Until(deadline)
+	if remainingTime <= 0 {
+		// Parent context already expired
+		return managerCtx, func() {}
+	}
+
+	// Calculate percentage-based allocation (80% of remaining time)
+	percentageTime := time.Duration(float64(remainingTime) * UpdateObservedStatePercent)
+
+	// Use the larger of percentage allocation or minimum guarantee
+	var timeoutDuration time.Duration
+	if percentageTime > minimumTimeout {
+		timeoutDuration = percentageTime
+	} else {
+		timeoutDuration = minimumTimeout
+	}
+
+	return context.WithTimeout(managerCtx, timeoutDuration)
+}
+
+// CreateReconciliationContext creates a context for reconciliation logic.
+// Takes 20% of the manager's remaining time for FSM transitions and event sending.
+func CreateReconciliationContext(managerCtx context.Context) (context.Context, context.CancelFunc) {
+	return CreateSubContext(managerCtx, 1.0-UpdateObservedStatePercent)
+}
+
+// CreateManagerContext creates a context for manager execution.
+// Reserves 5% of available time for manager overhead.
+func CreateManagerContext(controlLoopCtx context.Context) (context.Context, context.CancelFunc) {
+	return CreateSubContext(controlLoopCtx, 1.0-ManagerReservePercent)
+}
+
+// Legacy functions for backward compatibility - these calculate absolute timeouts
+// and should be gradually replaced with percentage-based contexts
 
 // FilesAndDirectoriesToIgnore is a list of files and directories that we will not read.
 // All older archived logs begin with @40000000

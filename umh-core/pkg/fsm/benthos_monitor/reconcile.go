@@ -100,12 +100,11 @@ func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sys
 		if !isExpectedError {
 
 			if errors.Is(err, context.DeadlineExceeded) {
-				// Healthchecks occasionally take longer (sometimes up to 70ms),
-				// resulting in context.DeadlineExceeded errors. In this case, we want to
-				// mark the reconciliation as complete for this tick since we've likely
-				// already consumed significant time. We return reconciled=true to prevent
-				// further reconciliation attempts in the current tick.
-				return nil, true // We don't want to return an error here, as this can happen in normal operations
+				// Context deadline exceeded should be retried with backoff, not ignored
+				b.baseFSMInstance.SetError(err, snapshot.Tick)
+				b.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileExternalChanges, will retry with backoff")
+				err = nil // Clear error so reconciliation continues
+				return nil, false
 			}
 
 			b.baseFSMInstance.SetError(err, snapshot.Tick)
@@ -127,12 +126,11 @@ func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sys
 		}
 
 		if errors.Is(err, context.DeadlineExceeded) {
-			// Updating the observed state can sometimes take longer,
-			// resulting in context.DeadlineExceeded errors. In this case, we want to
-			// mark the reconciliation as complete for this tick since we've likely
-			// already consumed significant time. We return reconciled=true to prevent
-			// further reconciliation attempts in the current tick.
-			return nil, true // We don't want to return an error here, as this can happen in normal operations
+			// Context deadline exceeded should be retried with backoff, not ignored
+			b.baseFSMInstance.SetError(err, snapshot.Tick)
+			b.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileStateTransition, will retry with backoff")
+			err = nil // Clear error so reconciliation continues
+			return nil, false
 		}
 
 		b.baseFSMInstance.SetError(err, snapshot.Tick)
@@ -166,9 +164,12 @@ func (b *BenthosMonitorInstance) reconcileExternalChanges(ctx context.Context, s
 		metrics.ObserveReconcileTime(metrics.ComponentBenthosMonitor, b.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
 	}()
 
-	observedStateCtx, cancel := context.WithTimeout(ctx, constants.S6UpdateObservedStateTimeout)
+	// Create context for UpdateObservedStateOfInstance with minimum timeout guarantee
+	// This ensures we get either 80% of available time OR the minimum required time, whichever is larger
+	updateCtx, cancel := constants.CreateUpdateObservedStateContextWithMinimum(ctx, constants.BenthosMonitorUpdateObservedStateTimeout)
 	defer cancel()
-	err := b.UpdateObservedStateOfInstance(observedStateCtx, services, snapshot)
+
+	err := b.UpdateObservedStateOfInstance(updateCtx, services, snapshot)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}

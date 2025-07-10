@@ -16,6 +16,7 @@ package agent_monitor
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -67,9 +68,15 @@ func (a *AgentInstance) CheckForCreation(ctx context.Context, filesystemService 
 }
 
 // UpdateObservedStateOfInstance is called when the FSM transitions to updating.
-// For agent monitoring, this is a no-op as we don't need to update any resources.
+// It queries agent_monitor.Service for new metrics and updates the observed state.
 func (a *AgentInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
-	a.baseFSMInstance.GetLogger().Debugf("Updating observed state for %s (no-op)", a.baseFSMInstance.GetID())
+	// get the config from the config manager
+	status, err := a.monitorService.Status(ctx, snapshot)
+	if err != nil {
+		return fmt.Errorf("failed to get agent metrics: %w", err)
+	}
+	// Save to observed state
+	a.ObservedState.ServiceInfo = status
 	return nil
 }
 
