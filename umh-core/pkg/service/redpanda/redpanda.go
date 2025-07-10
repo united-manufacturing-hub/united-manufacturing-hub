@@ -891,7 +891,7 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, services service
 
 	schemaRegistryErr := s.schemaRegistryManager.Reconcile(ctx, dataModels, dataContracts, payloadShapes)
 	if schemaRegistryErr != nil {
-		return WrapSchemaRegistryError(fmt.Errorf("failed to reconcile schema registry: %w", schemaRegistryErr)), false
+		return WrapSchemaRegistryError(schemaRegistryErr), false
 	}
 
 	// If either was reconciled, indicate that reconciliation occurred
