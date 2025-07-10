@@ -353,7 +353,10 @@ func createDfcManagerSnapshot(
 	//start with a basic snapshot
 	dfcManagerInstaces := map[string]*fsm.FSMInstanceSnapshot{}
 
-	for _, curDataflowcomponent := range configManager.GetDataFlowConfig() {
+	// Cache the config to avoid race conditions between multiple calls
+	dataFlowConfigs := configManager.GetDataFlowConfig()
+
+	for _, curDataflowcomponent := range dataFlowConfigs {
 		instanceExistsInCurrentSnapshot := false
 
 		// get the default currentState from the last observed state (s.state)
@@ -414,7 +417,7 @@ func createDfcManagerSnapshot(
 			for _, instance := range manager.GetInstances() {
 				// check if the instance is in the config
 				found := false
-				for _, dfcConfig := range configManager.GetDataFlowConfig() {
+				for _, dfcConfig := range dataFlowConfigs {
 					if dfcConfig.Name == instance.ID {
 						found = true
 						break

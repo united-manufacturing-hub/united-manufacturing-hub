@@ -17,7 +17,6 @@ package actions_test
 import (
 	"encoding/base64"
 	"errors"
-	"time"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
@@ -49,12 +48,13 @@ func structToEncodedMap(v interface{}) map[string]interface{} {
 
 var _ = Describe("AddDataModelAction", func() {
 	var (
-		action          *actions.AddDataModelAction
-		mockConfigMgr   *config.MockConfigManager
-		outboundChannel chan *models.UMHMessage
-		userEmail       string
-		actionUUID      uuid.UUID
-		instanceUUID    uuid.UUID
+		action           *actions.AddDataModelAction
+		mockConfigMgr    *config.MockConfigManager
+		outboundChannel  chan *models.UMHMessage
+		channelCollector *ThreadSafeChannelCollector
+		userEmail        string
+		actionUUID       uuid.UUID
+		instanceUUID     uuid.UUID
 	)
 
 	BeforeEach(func() {
@@ -62,7 +62,8 @@ var _ = Describe("AddDataModelAction", func() {
 		actionUUID = uuid.New()
 		instanceUUID = uuid.New()
 		mockConfigMgr = config.NewMockConfigManager()
-		outboundChannel = make(chan *models.UMHMessage, 10)
+		channelCollector = NewThreadSafeChannelCollector(10)
+		outboundChannel = channelCollector.GetChannel()
 
 		action = actions.NewAddDataModelAction(
 			userEmail,
@@ -71,10 +72,12 @@ var _ = Describe("AddDataModelAction", func() {
 			outboundChannel,
 			mockConfigMgr,
 		)
+
+		channelCollector.StartCollecting()
 	})
 
 	AfterEach(func() {
-		close(outboundChannel)
+		channelCollector.Stop()
 	})
 
 	Describe("NewAddDataModelAction", func() {
@@ -506,18 +509,12 @@ var _ = Describe("AddDataModelAction", func() {
 				}()
 
 				// Should receive multiple messages
-				var messages []*models.UMHMessage
 				Eventually(func() int {
-					select {
-					case msg := <-outboundChannel:
-						messages = append(messages, msg)
-					case <-time.After(100 * time.Millisecond):
-						// Timeout to prevent hanging
-					}
-					return len(messages)
+					return channelCollector.GetMessageCount()
 				}, "1s").Should(BeNumerically(">=", 2))
 
 				// Verify we received some messages (exact structure depends on UMHMessage)
+				messages := channelCollector.GetMessages()
 				Expect(len(messages)).To(BeNumerically(">", 0))
 			})
 		})

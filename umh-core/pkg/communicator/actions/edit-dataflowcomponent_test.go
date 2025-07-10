@@ -43,7 +43,7 @@ var _ = Describe("EditDataflowComponent", func() {
 		componentName   string
 		componentUUID   uuid.UUID
 		stateMocker     *actions.StateMocker
-		messages        *actions.ThreadSafeMessages
+		messages        *ThreadSafeMessages
 	)
 
 	// Setup before each test
@@ -55,7 +55,7 @@ var _ = Describe("EditDataflowComponent", func() {
 		outboundChannel = make(chan *models.UMHMessage, 10) // Buffer to prevent blocking
 		componentName = "test-component"
 		componentUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(componentName)
-		messages = actions.NewThreadSafeMessages()
+		messages = NewThreadSafeMessages()
 
 		// Create initial config with one data flow component
 		initialConfig := config.FullConfig{
@@ -107,7 +107,7 @@ var _ = Describe("EditDataflowComponent", func() {
 
 		action = actions.NewEditDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockManagerSnapshot)
 
-		go actions.ConsumeOutboundMessagesThreadSafe(outboundChannel, messages, true)
+		go ConsumeOutboundMessagesThreadSafe(outboundChannel, messages, true)
 
 	})
 

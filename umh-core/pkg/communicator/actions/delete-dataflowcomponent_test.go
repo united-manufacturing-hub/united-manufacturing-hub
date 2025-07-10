@@ -42,7 +42,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 		componentName   string
 		componentUUID   uuid.UUID
 		stateMocker     *actions.StateMocker
-		messages        *actions.ThreadSafeMessages
+		messages        *ThreadSafeMessages
 	)
 
 	// Setup before each test
@@ -54,7 +54,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 		outboundChannel = make(chan *models.UMHMessage, 10) // Buffer to prevent blocking
 		componentName = "test-component"
 		componentUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(componentName)
-		messages = actions.NewThreadSafeMessages()
+		messages = NewThreadSafeMessages()
 
 		// Create initial config with one data flow component
 		initialConfig := config.FullConfig{
@@ -84,7 +84,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 		mockStateManager := stateMocker.GetStateManager()
 		action = actions.NewDeleteDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockStateManager)
 
-		go actions.ConsumeOutboundMessagesThreadSafe(outboundChannel, messages, true)
+		go ConsumeOutboundMessagesThreadSafe(outboundChannel, messages, true)
 
 	})
 
