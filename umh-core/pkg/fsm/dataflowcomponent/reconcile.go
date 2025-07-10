@@ -54,6 +54,12 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			// Context deadline exceeded should be retried with backoff, not ignored
+			d.baseFSMInstance.SetError(ctx.Err(), snapshot.Tick)
+			d.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded at start of reconciliation, will retry with backoff")
+			return nil, false
+		}
 		return ctx.Err(), false
 	}
 

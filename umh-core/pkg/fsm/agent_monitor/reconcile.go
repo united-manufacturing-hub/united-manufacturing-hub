@@ -49,6 +49,12 @@ func (a *AgentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsh
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			// Context deadline exceeded should be retried with backoff, not ignored
+			a.baseFSMInstance.SetError(ctx.Err(), snapshot.Tick)
+			a.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded at start of reconciliation, will retry with backoff")
+			return nil, false
+		}
 		return ctx.Err(), false
 	}
 
