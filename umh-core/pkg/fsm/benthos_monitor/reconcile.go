@@ -51,8 +51,8 @@ func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sys
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
-		if err, shouldContinue := b.baseFSMInstance.HandleDeadlineExceeded(ctx.Err(), snapshot.Tick, "start of reconciliation"); !shouldContinue {
-			return err, false
+		if b.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "start of reconciliation") {
+			return nil, false
 		}
 		return ctx.Err(), false
 	}

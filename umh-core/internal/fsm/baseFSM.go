@@ -511,13 +511,14 @@ func (s *BaseFSMInstance) IsTransientStreakCounterMaxed() bool {
 	return s.transientStreakCounter >= s.cfg.MaxTicksToRemainInTransientState
 }
 
-// HandleDeadlineExceeded handles context deadline exceeded errors consistently across all FSM implementations.
+// IsDeadlineExceededAndHandle checks if the error is a context deadline exceeded error
+// and handles it appropriately by setting the error and logging a warning.
 // If the error is a context deadline exceeded, it:
 // 1. Sets the error on the FSM instance for backoff handling
 // 2. Logs a warning message
-// 3. Returns (nil, false) to indicate the error was handled and reconciliation should stop
+// 3. Returns true to indicate the error was handled and reconciliation should stop
 //
-// If the error is not a context deadline exceeded, it returns (original_error, true) to continue
+// If the error is not a context deadline exceeded, it returns false to continue
 // with normal error handling.
 //
 // Parameters:
@@ -526,14 +527,13 @@ func (s *BaseFSMInstance) IsTransientStreakCounterMaxed() bool {
 //   - location: A description of where the error occurred (for logging)
 //
 // Returns:
-//   - error: nil if deadline exceeded (handled), original error otherwise
-//   - bool: false if deadline exceeded (stop reconciliation), true otherwise (continue)
-func (s *BaseFSMInstance) HandleDeadlineExceeded(err error, tick uint64, location string) (error, bool) {
+//   - bool: true if deadline exceeded (handled, return early), false otherwise (continue)
+func (s *BaseFSMInstance) IsDeadlineExceededAndHandle(err error, tick uint64, location string) bool {
 	if errors.Is(err, context.DeadlineExceeded) {
 		// Context deadline exceeded should be retried with backoff, not ignored
 		s.SetError(err, tick)
 		s.logger.Warnf("Context deadline exceeded in %s, will retry with backoff", location)
-		return nil, false
+		return true // handled, return early
 	}
-	return err, true // Continue with original error handling
+	return false // not handled, continue
 }

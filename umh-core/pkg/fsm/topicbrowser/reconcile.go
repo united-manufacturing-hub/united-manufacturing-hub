@@ -55,8 +55,8 @@ func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.Syste
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
-		if err, shouldContinue := i.baseFSMInstance.HandleDeadlineExceeded(ctx.Err(), snapshot.Tick, "start of reconciliation"); !shouldContinue {
-			return err, false
+		if i.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "start of reconciliation") {
+			return nil, false
 		}
 		return ctx.Err(), false
 	}

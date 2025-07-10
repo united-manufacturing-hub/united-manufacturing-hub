@@ -55,8 +55,8 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
-		if err, shouldContinue := r.baseFSMInstance.HandleDeadlineExceeded(ctx.Err(), snapshot.Tick, "start of reconciliation"); !shouldContinue {
-			return err, false
+		if r.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "start of reconciliation") {
+			return nil, false
 		}
 		return ctx.Err(), false
 	}
@@ -106,11 +106,7 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 
 		if !isExpectedError {
 
-			if errors.Is(err, context.DeadlineExceeded) {
-				// Context deadline exceeded should be retried with backoff, not ignored
-				r.baseFSMInstance.SetError(err, snapshot.Tick)
-				r.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileExternalChanges, will retry with backoff")
-				err = nil // Clear error so reconciliation continues
+			if r.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
 				return nil, false
 			}
 
@@ -132,10 +128,7 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 			return nil, false
 		}
 
-		if errors.Is(err, context.DeadlineExceeded) {
-			// Context deadline exceeded should be retried with backoff, not ignored
-			r.baseFSMInstance.SetError(err, snapshot.Tick)
-			r.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileStateTransition, will retry with backoff")
+		if r.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileStateTransition") {
 			return nil, false
 		}
 
@@ -147,10 +140,7 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 	// Reconcile the s6Manager
 	s6Err, s6Reconciled := r.service.ReconcileManager(ctx, services, snapshot.Tick)
 	if s6Err != nil {
-		if errors.Is(s6Err, context.DeadlineExceeded) {
-			// Context deadline exceeded should be retried with backoff, not ignored
-			r.baseFSMInstance.SetError(s6Err, snapshot.Tick)
-			r.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in s6Manager reconciliation, will retry with backoff")
+		if r.baseFSMInstance.IsDeadlineExceededAndHandle(s6Err, snapshot.Tick, "s6Manager reconciliation") {
 			return nil, false
 		}
 		r.baseFSMInstance.SetError(s6Err, snapshot.Tick)

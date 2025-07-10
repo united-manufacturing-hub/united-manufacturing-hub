@@ -53,8 +53,8 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
-		if err, shouldContinue := s.baseFSMInstance.HandleDeadlineExceeded(ctx.Err(), snapshot.Tick, "start of reconciliation"); !shouldContinue {
-			return err, false
+		if s.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "start of reconciliation") {
+			return nil, false
 		}
 		return ctx.Err(), false
 	}
@@ -116,8 +116,8 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 	// This single rule, combined with "children first", breaks the restart dead‑loop while still recording real problems.
 	//
 	if err = s.reconcileExternalChanges(ctx, services, snapshot); err != nil {
-		if err, shouldContinue := s.baseFSMInstance.HandleDeadlineExceeded(err, snapshot.Tick, "reconcileExternalChanges"); !shouldContinue {
-			return err, false
+		if s.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
+			return nil, false
 		}
 
 		// Log the error but always continue reconciling - we need reconcileStateTransition to run
@@ -137,8 +137,8 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 			return nil, false
 		}
 
-		if err, shouldContinue := s.baseFSMInstance.HandleDeadlineExceeded(err, snapshot.Tick, "reconcileStateTransition"); !shouldContinue {
-			return err, false
+		if s.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileStateTransition") {
+			return nil, false
 		}
 
 		s.baseFSMInstance.SetError(err, snapshot.Tick)

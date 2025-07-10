@@ -49,8 +49,8 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSn
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
-		if err, shouldContinue := c.baseFSMInstance.HandleDeadlineExceeded(ctx.Err(), snapshot.Tick, "start of reconciliation"); !shouldContinue {
-			return err, false
+		if c.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "start of reconciliation") {
+			return nil, false
 		}
 		return ctx.Err(), false
 	}
@@ -88,11 +88,7 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSn
 
 	// Step 2: Detect external changes
 	if err = c.reconcileExternalChanges(ctx, services, snapshot); err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
-			// Context deadline exceeded should be retried with backoff, not ignored
-			c.baseFSMInstance.SetError(err, snapshot.Tick)
-			c.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileExternalChanges, will retry with backoff")
-			err = nil // Clear error so reconciliation continues
+		if c.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
 			return nil, false
 		}
 
@@ -115,11 +111,7 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSn
 			return nil, false
 		}
 
-		if errors.Is(err, context.DeadlineExceeded) {
-			// Context deadline exceeded should be retried with backoff, not ignored
-			c.baseFSMInstance.SetError(err, snapshot.Tick)
-			c.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileStateTransition, will retry with backoff")
-			err = nil // Clear error so reconciliation continues
+		if c.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileStateTransition") {
 			return nil, false
 		}
 
