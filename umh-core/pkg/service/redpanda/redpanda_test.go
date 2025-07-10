@@ -71,8 +71,7 @@ var _ = Describe("Redpanda Service", func() {
 		mockSchemaRegistry := NewMockSchemaRegistry()
 		mockSchemaRegistry.SetupTestSchemas()
 
-		schemaRegistry := NewSchemaRegistry()
-		schemaRegistry.schemaRegistryAddress = mockSchemaRegistry.URL()
+		schemaRegistry := NewSchemaRegistry(WithSchemaRegistryAddress(mockSchemaRegistry.URL()))
 
 		service = NewDefaultRedpandaService("redpanda",
 			WithSchemaRegistryManager(schemaRegistry),
@@ -160,8 +159,7 @@ var _ = Describe("Redpanda Service", func() {
 			mockSchemaRegistry := NewMockSchemaRegistry()
 			mockSchemaRegistry.SetupTestSchemas()
 
-			schemaRegistry := NewSchemaRegistry()
-			schemaRegistry.schemaRegistryAddress = mockSchemaRegistry.URL()
+			schemaRegistry := NewSchemaRegistry(WithSchemaRegistryAddress(mockSchemaRegistry.URL()))
 
 			service = NewDefaultRedpandaService("redpanda",
 				WithS6Service(mockS6Service),
@@ -273,8 +271,7 @@ var _ = Describe("Redpanda Service", func() {
 			mockSchemaRegistry := NewMockSchemaRegistry()
 			mockSchemaRegistry.SetupTestSchemas()
 
-			schemaRegistry := NewSchemaRegistry()
-			schemaRegistry.schemaRegistryAddress = mockSchemaRegistry.URL()
+			schemaRegistry := NewSchemaRegistry(WithSchemaRegistryAddress(mockSchemaRegistry.URL()))
 
 			service = NewDefaultRedpandaService("redpanda",
 				WithSchemaRegistryManager(schemaRegistry),
@@ -617,8 +614,7 @@ var _ = Describe("Redpanda Service", func() {
 			mockSchemaRegistry := NewMockSchemaRegistry()
 			mockSchemaRegistry.SetupTestSchemas()
 
-			schemaRegistry := NewSchemaRegistry()
-			schemaRegistry.schemaRegistryAddress = mockSchemaRegistry.URL()
+			schemaRegistry := NewSchemaRegistry(WithSchemaRegistryAddress(mockSchemaRegistry.URL()))
 
 			service = NewDefaultRedpandaService("redpanda",
 				WithS6Service(mockS6Service),
