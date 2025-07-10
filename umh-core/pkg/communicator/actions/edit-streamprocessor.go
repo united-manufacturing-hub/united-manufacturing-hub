@@ -284,10 +284,10 @@ func (a *EditStreamProcessorAction) applyMutation() (config.StreamProcessorConfi
 
 		// Add the new variables and preserve existing child variables
 		newVB = make(map[string]any)
+		maps.Copy(newVB, targetSP.StreamProcessorServiceConfig.Variables.User)
 		for _, variable := range a.vb {
 			newVB[variable.Label] = variable.Value
 		}
-		maps.Copy(newVB, targetSP.StreamProcessorServiceConfig.Variables.User)
 	} else {
 		// Root or stand-alone: apply mutations directly
 		instanceToModify = targetSP
@@ -295,10 +295,10 @@ func (a *EditStreamProcessorAction) applyMutation() (config.StreamProcessorConfi
 
 		// Add the variables and keep the existing variables
 		newVB = make(map[string]any)
+		maps.Copy(newVB, targetSP.StreamProcessorServiceConfig.Variables.User)
 		for _, variable := range a.vb {
 			newVB[variable.Label] = variable.Value
 		}
-		maps.Copy(newVB, targetSP.StreamProcessorServiceConfig.Variables.User)
 	}
 
 	// As the BuildRuntimeConfig function always adds location and location_path to the user variables,
