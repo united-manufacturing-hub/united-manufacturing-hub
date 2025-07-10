@@ -55,11 +55,8 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			// Context deadline exceeded should be retried with backoff, not ignored
-			r.baseFSMInstance.SetError(ctx.Err(), snapshot.Tick)
-			r.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded at start of reconciliation, will retry with backoff")
-			return nil, false
+		if err, shouldContinue := r.baseFSMInstance.HandleDeadlineExceeded(ctx.Err(), snapshot.Tick, "start of reconciliation"); !shouldContinue {
+			return err, false
 		}
 		return ctx.Err(), false
 	}

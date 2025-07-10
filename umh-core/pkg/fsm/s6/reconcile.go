@@ -53,11 +53,8 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			// Context deadline exceeded should be retried with backoff, not ignored
-			s.baseFSMInstance.SetError(ctx.Err(), snapshot.Tick)
-			s.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded at start of reconciliation, will retry with backoff")
-			return nil, false
+		if err, shouldContinue := s.baseFSMInstance.HandleDeadlineExceeded(ctx.Err(), snapshot.Tick, "start of reconciliation"); !shouldContinue {
+			return err, false
 		}
 		return ctx.Err(), false
 	}
@@ -119,12 +116,8 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 	// This single rule, combined with "children first", breaks the restart dead‑loop while still recording real problems.
 	//
 	if err = s.reconcileExternalChanges(ctx, services, snapshot); err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
-			// Context deadline exceeded should be retried with backoff, not ignored
-			s.baseFSMInstance.SetError(err, snapshot.Tick)
-			s.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileExternalChanges, will retry with backoff")
-			err = nil // Clear error so reconciliation continues
-			return nil, false
+		if err, shouldContinue := s.baseFSMInstance.HandleDeadlineExceeded(err, snapshot.Tick, "reconcileExternalChanges"); !shouldContinue {
+			return err, false
 		}
 
 		// Log the error but always continue reconciling - we need reconcileStateTransition to run
@@ -144,12 +137,8 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 			return nil, false
 		}
 
-		if errors.Is(err, context.DeadlineExceeded) {
-			// Context deadline exceeded should be retried with backoff, not ignored
-			s.baseFSMInstance.SetError(err, snapshot.Tick)
-			s.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileStateTransition, will retry with backoff")
-			err = nil // Clear error so reconciliation continues
-			return nil, false
+		if err, shouldContinue := s.baseFSMInstance.HandleDeadlineExceeded(err, snapshot.Tick, "reconcileStateTransition"); !shouldContinue {
+			return err, false
 		}
 
 		s.baseFSMInstance.SetError(err, snapshot.Tick)

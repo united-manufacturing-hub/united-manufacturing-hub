@@ -54,11 +54,8 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			// Context deadline exceeded should be retried with backoff, not ignored
-			n.baseFSMInstance.SetError(ctx.Err(), snapshot.Tick)
-			n.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded at start of reconciliation, will retry with backoff")
-			return nil, false
+		if err, shouldContinue := n.baseFSMInstance.HandleDeadlineExceeded(ctx.Err(), snapshot.Tick, "start of reconciliation"); !shouldContinue {
+			return err, false
 		}
 		return ctx.Err(), false
 	}
