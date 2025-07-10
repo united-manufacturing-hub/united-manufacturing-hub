@@ -21,8 +21,8 @@ import (
 	"reflect"
 	"time"
 
+	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -157,30 +157,85 @@ func (s *S6Instance) CheckForCreation(ctx context.Context, filesystemService fil
 
 // UpdateObservedStateOfInstance updates the observed state of the service
 func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
-	start := time.Now()
-	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".updateObservedState", time.Since(start))
-	}()
-
-	observedStateCtx, cancel := context.WithTimeout(ctx, constants.S6UpdateObservedStateTimeout)
-	defer cancel()
-
-	//nolint:gosec
-	serviceInfo, err := s.service.Status(observedStateCtx, s.servicePath, services.GetFileSystem())
-	if err != nil {
-		return fmt.Errorf("failed to get service status: %w", err)
+	if ctx.Err() != nil {
+		return ctx.Err()
 	}
 
-	s.ObservedState.ServiceInfo = serviceInfo
+	// If both desired and current state are stopped, we do not return immediately, as we still need to check for permanent errors
 
+	// Measure status time
+	info, err := s.service.Status(ctx, s.servicePath, services.GetFileSystem())
+	if err != nil {
+		s.ObservedState.ServiceInfo.Status = s6service.ServiceUnknown
+
+		if s.baseFSMInstance.GetCurrentFSMState() == internalfsm.LifecycleStateCreating || s.baseFSMInstance.GetCurrentFSMState() == internalfsm.LifecycleStateToBeCreated {
+			// If the service is being created, we don't want to count this as an error
+			return s6service.ErrServiceNotExist
+		}
+
+		// Otherwise, we count this as an error
+		s.baseFSMInstance.GetLogger().Errorf("error updating observed state for %s: %s", s.baseFSMInstance.GetID(), err)
+		return err
+	}
+
+	// Store the raw service info
+	s.ObservedState.ServiceInfo = info
+
+	// Map the service status to FSM status
+	switch info.Status {
+	case s6service.ServiceUp:
+		s.ObservedState.ServiceInfo.Status = s6service.ServiceUp
+	case s6service.ServiceDown:
+		s.ObservedState.ServiceInfo.Status = s6service.ServiceDown
+	case s6service.ServiceRestarting:
+		s.ObservedState.ServiceInfo.Status = s6service.ServiceRestarting
+	default:
+		s.ObservedState.ServiceInfo.Status = s6service.ServiceUnknown
+	}
+
+	// Set LastStateChange time if this is the first update
 	if s.ObservedState.LastStateChange == 0 {
 		s.ObservedState.LastStateChange = time.Now().Unix()
+	}
+
+	// Check service health (only if service exists and is in a stable state)
+	// Health checking should only happen when service is not being created or removed
+	if s.baseFSMInstance.GetCurrentFSMState() != internalfsm.LifecycleStateCreating &&
+		s.baseFSMInstance.GetCurrentFSMState() != internalfsm.LifecycleStateToBeCreated &&
+		s.baseFSMInstance.GetCurrentFSMState() != internalfsm.LifecycleStateRemoving &&
+		s.baseFSMInstance.GetCurrentFSMState() != internalfsm.LifecycleStateRemoved {
+
+		// Use tri-state health checking that separates observation from action
+		healthStatus, err := s.service.(*s6service.DefaultService).CheckHealth(ctx, s.servicePath, services.GetFileSystem())
+		if err != nil {
+			s.baseFSMInstance.GetLogger().Debugf("Health check I/O error for service %s: %v", s.baseFSMInstance.GetID(), err)
+			// Don't trigger removal for I/O errors - just log and continue
+		} else {
+			switch healthStatus {
+			case s6service.HealthOK:
+				// Service is healthy, continue normally
+
+			case s6service.HealthUnknown:
+				// Probe failed (I/O error, timeout) - don't trigger removal, just log
+				s.baseFSMInstance.GetLogger().Debugf("Service %s health check: Unknown (will retry next tick)", s.baseFSMInstance.GetID())
+
+			case s6service.HealthBad:
+				// Service is definitely broken - trigger removal
+				s.baseFSMInstance.GetLogger().Warnf("Service %s health check: Bad (triggering recreation)", s.baseFSMInstance.GetID())
+				err := s.baseFSMInstance.Remove(ctx)
+				if err != nil {
+					s.baseFSMInstance.GetLogger().Errorf("error removing unhealthy S6 instance %s: %v", s.baseFSMInstance.GetID(), err)
+					return err
+				}
+				return nil
+			}
+		}
 	}
 
 	// Fetch the actual service config from s6
 	config, err := s.service.GetConfig(ctx, s.servicePath, services.GetFileSystem())
 	if err != nil {
-		return fmt.Errorf("failed to get service config: %w", err)
+		return fmt.Errorf("failed to get S6 service config for %s: %w", s.baseFSMInstance.GetID(), err)
 	}
 	s.ObservedState.ObservedS6ServiceConfig = config
 
@@ -302,5 +357,10 @@ func (s *S6Instance) logConfigDifferences(desired, observed s6serviceconfig.S6Se
 	// Memory limit differences
 	if desired.MemoryLimit != observed.MemoryLimit {
 		s.baseFSMInstance.GetLogger().Infof("Memory limit - want: %d, is: %d", desired.MemoryLimit, observed.MemoryLimit)
+	}
+
+	// Log filesize differences
+	if desired.LogFilesize != observed.LogFilesize {
+		s.baseFSMInstance.GetLogger().Infof("Log filesize - want: %d, is: %d", desired.LogFilesize, observed.LogFilesize)
 	}
 }

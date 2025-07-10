@@ -31,7 +31,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
 )
 
@@ -44,6 +43,7 @@ type Handler struct {
 	disableHardwareStatusCheck bool // nolint:unused // will be used in the future
 	systemSnapshotManager      *fsm.SnapshotManager
 	configManager              config.ConfigManager
+	topicBrowserCommunicator   *topicbrowser.TopicBrowserCommunicator
 	logger                     *zap.SugaredLogger
 }
 
@@ -58,10 +58,8 @@ func NewHandler(
 	systemSnapshotManager *fsm.SnapshotManager,
 	configManager config.ConfigManager,
 	logger *zap.SugaredLogger,
-	topicBrowserCache *topicbrowser.Cache,
-	topicBrowserSimulator *topicbrowser.Simulator,
+	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator,
 ) *Handler {
-	encoding.ChooseEncoder(encoding.EncodingCorev1)
 	s := &Handler{}
 	s.subscriberRegistry = subscribers.NewRegistry(cull, ttl)
 	s.dog = dog
@@ -69,14 +67,14 @@ func NewHandler(
 	s.instanceUUID = instanceUUID
 	s.systemSnapshotManager = systemSnapshotManager
 	s.configManager = configManager
+	s.topicBrowserCommunicator = topicBrowserCommunicator
 	s.logger = logger
 	s.StatusCollector = generator.NewStatusCollector(
 		dog,
 		systemSnapshotManager,
 		configManager,
 		logger,
-		topicBrowserCache,
-		topicBrowserSimulator,
+		topicBrowserCommunicator,
 	)
 
 	return s
@@ -116,47 +114,45 @@ func (s *Handler) notify() {
 		return
 	}
 
+	// Update Topic Browser cache before generating status messages (Phase 2 architectural improvement)
+	// This consolidates the cache update logic into the single notification ticker
+	err := s.StatusCollector.UpdateTopicBrowserCache()
+	if err != nil {
+		s.logger.Warnf("Failed to update topic browser cache: %v", err)
+		// Continue with status generation even if cache update fails
+	}
+
 	ctx, cncl := tools.Get1SecondContext()
 	defer cncl()
 
 	notified := 0
 	baseStatusMessage := s.StatusCollector.GenerateStatusMessage(ctx, true)
-	encodedBaseStatusMessage, err := encoding.EncodeMessageFromUMHInstanceToUser(models.UMHMessageContent{
-		MessageType: models.Status,
-		Payload:     baseStatusMessage,
-	})
-	if err != nil {
-		s.logger.Warnf("Failed to encode base status message: %s", err.Error())
-		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "Failed to encode base status message: %s", err.Error())
-		return
-	}
-
-	var encodedNewSubscriberMessage string
-	if s.subscriberRegistry.HasNewSubscribers() {
-		newSubscriberMessage := s.StatusCollector.GenerateStatusMessage(ctx, false)
-		encodedNewSubscriberMessage, err = encoding.EncodeMessageFromUMHInstanceToUser(models.UMHMessageContent{
-			MessageType: models.Status,
-			Payload:     newSubscriberMessage,
-		})
-		if err != nil {
-			s.logger.Warnf("Failed to encode new subscriber message: %s", err.Error())
-			sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "Failed to encode new subscriber message: %s", err.Error())
-			return
-		}
-	}
 
 	s.subscriberRegistry.ForEach(func(email string, bootstrapped bool) {
+		// Generate personalized status message based on bootstrap state
+		statusMessage := baseStatusMessage
+		if !bootstrapped {
+			// If the subscriber is not bootstrapped, we need to generate a new status message
+			statusMessage = s.StatusCollector.GenerateStatusMessage(ctx, false)
+		}
+
 		if ctx.Err() != nil {
 			// It is expected that the first 1-2 times this might fail, due to the systems starting up
 			s.logger.Warnf("Failed to generate status message: %s", ctx.Err().Error())
 			return
 		}
+		if statusMessage == nil {
+			s.logger.Warnf("Failed to generate status message")
+			return
+		}
 
-		var message string
-		if bootstrapped {
-			message = encodedBaseStatusMessage
-		} else {
-			message = encodedNewSubscriberMessage
+		message, err := encoding.EncodeMessageFromUMHInstanceToUser(models.UMHMessageContent{
+			MessageType: models.Status,
+			Payload:     statusMessage,
+		})
+		if err != nil {
+			s.logger.Warnf("Failed to encrypt message for subscriber %s", email)
+			return
 		}
 
 		s.pusher.Push(models.UMHMessage{
@@ -173,4 +169,9 @@ func (s *Handler) notify() {
 
 		notified++
 	})
+
+	// Mark data as sent for tracking purposes
+	if notified > 0 && s.topicBrowserCommunicator != nil {
+		s.topicBrowserCommunicator.MarkDataAsSent(time.Now())
+	}
 }

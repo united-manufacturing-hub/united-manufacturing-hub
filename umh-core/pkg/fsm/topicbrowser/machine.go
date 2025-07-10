@@ -226,7 +226,12 @@ func (i *TopicBrowserInstance) WantsToBeStopped() bool {
 func (i *TopicBrowserInstance) PrintState() {
 	i.baseFSMInstance.GetLogger().Debugf("Current state: %s", i.baseFSMInstance.GetCurrentFSMState())
 	i.baseFSMInstance.GetLogger().Debugf("Desired state: %s", i.baseFSMInstance.GetDesiredFSMState())
-	i.baseFSMInstance.GetLogger().Debugf("Observed state: %+v", i.ObservedState)
+	i.baseFSMInstance.GetLogger().Debugf("Benthos: %s (active: %t), Redpanda: %s (active: %t), Status: %s",
+		i.ObservedState.ServiceInfo.BenthosFSMState,
+		i.ObservedState.ServiceInfo.BenthosProcessing,
+		i.ObservedState.ServiceInfo.RedpandaFSMState,
+		i.ObservedState.ServiceInfo.RedpandaProcessing,
+		i.ObservedState.ServiceInfo.StatusReason)
 }
 
 // GetMinimumRequiredTime returns the minimum required time for this instance

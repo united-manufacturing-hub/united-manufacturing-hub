@@ -89,7 +89,7 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 		return nil, false
 	}
 
-	/// Step 2: Try to read service status every tick (but continue even if it fails)
+	// Step 2: Try to read service status every tick (but continue even if it fails)
 	//
 	// DESIGN DECISION: Allowing **Reconcile** to continue when *Update‑Observed‑State* fails
 	//

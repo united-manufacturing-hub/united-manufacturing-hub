@@ -172,6 +172,29 @@ func (m *MockFileSystem) Glob(ctx context.Context, pattern string) ([]string, er
 	panic("not implemented")
 }
 
+// Rename renames (moves) a file or directory from oldPath to newPath
+func (m *MockFileSystem) Rename(ctx context.Context, oldPath, newPath string) error {
+	if m.RenameFunc != nil {
+		return m.RenameFunc(ctx, oldPath, newPath)
+	}
+
+	shouldFail, delay := m.simulateRandomBehavior("Rename:" + oldPath + ":" + newPath)
+
+	if delay > 0 {
+		select {
+		case <-time.After(delay):
+			// Delay completed
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	if shouldFail {
+		return errors.New("simulated failure in Rename")
+	}
+	return nil
+}
+
 // WriteFile writes data to a file respecting the context
 func (m *MockFileSystem) WriteFile(ctx context.Context, path string, data []byte, perm os.FileMode) error {
 	if m.WriteFileFunc != nil {

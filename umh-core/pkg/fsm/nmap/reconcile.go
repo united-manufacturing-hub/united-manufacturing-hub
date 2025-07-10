@@ -102,14 +102,10 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 
 			n.baseFSMInstance.SetError(err, snapshot.Tick)
 			n.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
-
-			// We want to return the error here, to stop reconciling since this would
-			// lead the fsm going into degraded. But Nmap-scans are triggered once per second
-			// and each tick is 100ms, therefore it could fail, because it doesn't get
-			// complete logs from which it parses.
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
-		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition}
+
+		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
 	}
 
 	// Step 3: Attempt to reconcile the state.

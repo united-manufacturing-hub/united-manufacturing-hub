@@ -24,10 +24,14 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
+const (
+	// gracePeriodForTermination is the grace period to wait between SIGTERM and SIGKILL
+	gracePeriodForTermination = 500 * time.Millisecond
+)
+
 // ForceCleanup performs aggressive cleanup for stuck services
 // Uses expert-recommended patterns:
 // - Process termination and supervisor killing
-// - Orphan process cleanup (optional)
 // - Comprehensive artifact removal
 func (s *DefaultService) ForceCleanup(ctx context.Context, artifacts *ServiceArtifacts, fsService filesystem.Service) error {
 	if s == nil {
@@ -62,10 +66,6 @@ func (s *DefaultService) ForceCleanup(ctx context.Context, artifacts *ServiceArt
 		s.logger.Warnf("Failed to kill supervisor processes: %v", err)
 		// Continue with cleanup even if supervisor killing fails
 	}
-
-	// TODO: Consider implementing orphan process cleanup in the future
-	// Previous implementation had goroutine leak - spawned background goroutine that did nothing
-	// If needed, implement with proper lifecycle management and actual cleanup logic
 
 	// Remove directories with timeout awareness
 	if err := s.removeDirectoryWithTimeout(ctx, artifacts.ServiceDir, fsService); err != nil {
@@ -109,15 +109,14 @@ func (s *DefaultService) killSupervisors(ctx context.Context, artifacts *Service
 				}
 
 				// Wait for graceful shutdown with timeout
-				gracePeriod := 500 * time.Millisecond
 				select {
-				case <-time.After(gracePeriod):
+				case <-time.After(gracePeriodForTermination):
 					// Process didn't terminate gracefully, use SIGKILL
 					if _, err := fsService.ExecuteCommand(ctx, "kill", "-KILL", pidStr); err != nil {
 						s.logger.Debugf("Failed to send SIGKILL to supervisor process %s: %v", pidStr, err)
 						lastErr = err
 					} else {
-						s.logger.Debugf("Sent SIGKILL to supervisor process %s after %v grace period", pidStr, gracePeriod)
+						s.logger.Debugf("Sent SIGKILL to supervisor process %s after %v grace period", pidStr, gracePeriodForTermination)
 					}
 				case <-ctx.Done():
 					// Context cancelled, exit early
