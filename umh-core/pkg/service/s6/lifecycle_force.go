@@ -99,10 +99,28 @@ func (s *DefaultService) killSupervisors(ctx context.Context, artifacts *Service
 		pidFile := filepath.Join(supervisePath, "pid")
 		if data, err := fsService.ReadFile(ctx, pidFile); err == nil && len(data) > 0 {
 			if pidStr := strings.TrimSpace(string(data)); pidStr != "" {
-				// Try SIGTERM first
+				// Try SIGTERM first for graceful shutdown
 				if _, err := fsService.ExecuteCommand(ctx, "kill", "-TERM", pidStr); err != nil {
-					s.logger.Debugf("Failed to kill supervisor process %s: %v", pidStr, err)
+					s.logger.Debugf("Failed to send SIGTERM to supervisor process %s: %v", pidStr, err)
 					lastErr = err
+				} else {
+					s.logger.Debugf("Sent SIGTERM to supervisor process %s", pidStr)
+				}
+
+				// Wait for graceful shutdown with timeout
+				gracePeriod := 500 * time.Millisecond
+				select {
+				case <-time.After(gracePeriod):
+					// Process didn't terminate gracefully, use SIGKILL
+					if _, err := fsService.ExecuteCommand(ctx, "kill", "-KILL", pidStr); err != nil {
+						s.logger.Debugf("Failed to send SIGKILL to supervisor process %s: %v", pidStr, err)
+						lastErr = err
+					} else {
+						s.logger.Debugf("Sent SIGKILL to supervisor process %s after %v grace period", pidStr, gracePeriod)
+					}
+				case <-ctx.Done():
+					// Context cancelled, exit early
+					return ctx.Err()
 				}
 			}
 		}
