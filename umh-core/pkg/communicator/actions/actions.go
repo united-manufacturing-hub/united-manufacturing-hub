@@ -201,8 +201,8 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 		action = NewEditStreamProcessorAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, nil) // TODO: add systemSnapshotManager
 	case models.DeployStreamProcessor:
 		action = NewDeployStreamProcessorAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, nil) // TODO: add systemSnapshotManager
-	// case models.GetStreamProcessor:
-	// 	action = NewGetStreamProcessorAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
+	case models.GetStreamProcessor:
+		action = NewGetStreamProcessorAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
 
 	default:
 		log.Errorf("Unknown action type: %s", payload.ActionType)

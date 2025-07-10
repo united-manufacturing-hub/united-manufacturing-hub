@@ -209,6 +209,8 @@ const (
 	EditStreamProcessor ActionType = "edit-stream-processor"
 	// DeleteStreamProcessor represents the action type for deleting a stream processor
 	DeleteStreamProcessor ActionType = "delete-stream-processor"
+	// GetStreamProcessor represents the action type for getting a stream processor
+	GetStreamProcessor ActionType = "get-stream-processor"
 )
 
 // TestNetworkConnectionPayload contains the necessary fields for executing a TestNetworkConnection action.
@@ -832,4 +834,9 @@ type StreamProcessor struct {
 	EncodedConfig string                       `json:"encodedConfig" binding:"required"` // base64-encoded YAML structure containing sources and mappings
 	Config        *StreamProcessorConfig       `json:"-"`                                // parsed configuration (not used in the action, but filled by the action)
 	TemplateInfo  *StreamProcessorTemplateInfo `json:"templateInfo"`
+}
+
+// GetStreamProcessorPayload contains the necessary fields for getting a stream processor.
+type GetStreamProcessorPayload struct {
+	UUID uuid.UUID `json:"uuid" binding:"required"`
 }
