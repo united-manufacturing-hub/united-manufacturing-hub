@@ -1,951 +1,7 @@
 DATA RACE #1
 ==================
 WARNING: DATA RACE
-Write at 0x00c00047ef30 by goroutine 90:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Stop()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:490 +0x80
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func5.5.1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/deploy-protocolconverter_test.go:251 +0x4bc
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-
-Previous read at 0x00c00047ef30 by goroutine 91:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run.func1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:465 +0x110
-
-Goroutine 90 (running) created at:
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:881 +0xdec
-  github.com/onsi/ginkgo/v2/internal.(*group).attemptSpec()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:199 +0xb60
-  github.com/onsi/ginkgo/v2/internal.(*group).run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:349 +0xc78
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:489 +0xc30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:130 +0x420
-  github.com/onsi/ginkgo/v2.RunSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/core_dsl.go:300 +0xcf4
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.TestActions()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/actions_suite_test.go:26 +0x54
-  testing.tRunner()
-      /usr/local/go/src/testing/testing.go:1792 +0x180
-  testing.(*T).Run.gowrap1()
-      /usr/local/go/src/testing/testing.go:1851 +0x40
-
-Goroutine 91 (running) created at:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:455 +0xe8
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Start()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:477 +0x374
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func5.5.1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/deploy-protocolconverter_test.go:242 +0x364
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-==================
-
-DATA RACE #2
-==================
-WARNING: DATA RACE
-Write at 0x00c00047e330 by goroutine 107:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Stop()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:490 +0x80
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func5.5.2()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/deploy-protocolconverter_test.go:312 +0x658
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-
-Previous read at 0x00c00047e330 by goroutine 108:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run.func1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:465 +0x110
-
-Goroutine 107 (running) created at:
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:881 +0xdec
-  github.com/onsi/ginkgo/v2/internal.(*group).attemptSpec()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:199 +0xb60
-  github.com/onsi/ginkgo/v2/internal.(*group).run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:349 +0xc78
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:489 +0xc30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:130 +0x420
-  github.com/onsi/ginkgo/v2.RunSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/core_dsl.go:300 +0xcf4
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.TestActions()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/actions_suite_test.go:26 +0x54
-  testing.tRunner()
-      /usr/local/go/src/testing/testing.go:1792 +0x180
-  testing.(*T).Run.gowrap1()
-      /usr/local/go/src/testing/testing.go:1851 +0x40
-
-Goroutine 108 (running) created at:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:455 +0xe8
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Start()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:477 +0x408
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func5.5.2()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/deploy-protocolconverter_test.go:301 +0x3f8
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-==================
-
-DATA RACE #3
-==================
-WARNING: DATA RACE
-Write at 0x00c00047e630 by goroutine 121:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Stop()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:490 +0x80
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func5.5.3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/deploy-protocolconverter_test.go:352 +0x784
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-
-Previous read at 0x00c00047e630 by goroutine 122:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run.func1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:465 +0x110
-
-Goroutine 121 (running) created at:
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:881 +0xdec
-  github.com/onsi/ginkgo/v2/internal.(*group).attemptSpec()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:199 +0xb60
-  github.com/onsi/ginkgo/v2/internal.(*group).run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:349 +0xc78
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:489 +0xc30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:130 +0x420
-  github.com/onsi/ginkgo/v2.RunSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/core_dsl.go:300 +0xcf4
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.TestActions()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/actions_suite_test.go:26 +0x54
-  testing.tRunner()
-      /usr/local/go/src/testing/testing.go:1792 +0x180
-  testing.(*T).Run.gowrap1()
-      /usr/local/go/src/testing/testing.go:1851 +0x40
-
-Goroutine 122 (running) created at:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:455 +0xe8
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Start()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:477 +0x534
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func5.5.3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/deploy-protocolconverter_test.go:341 +0x524
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-==================
-
-DATA RACE #4
-==================
-WARNING: DATA RACE
-Write at 0x00c00088af30 by goroutine 175:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Stop()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:490 +0x80
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func4.5.1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/deploy-dataflowcomponent_test.go:485 +0xbf8
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-
-Previous read at 0x00c00088af30 by goroutine 176:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run.func1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:465 +0x110
-
-Goroutine 175 (running) created at:
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:881 +0xdec
-  github.com/onsi/ginkgo/v2/internal.(*group).attemptSpec()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:199 +0xb60
-  github.com/onsi/ginkgo/v2/internal.(*group).run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:349 +0xc78
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:489 +0xc30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:130 +0x420
-  github.com/onsi/ginkgo/v2.RunSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/core_dsl.go:300 +0xcf4
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.TestActions()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/actions_suite_test.go:26 +0x54
-  testing.tRunner()
-      /usr/local/go/src/testing/testing.go:1792 +0x180
-  testing.(*T).Run.gowrap1()
-      /usr/local/go/src/testing/testing.go:1851 +0x40
-
-Goroutine 176 (running) created at:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:455 +0xe8
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Start()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:477 +0xa00
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func4.5.1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/deploy-dataflowcomponent_test.go:475 +0x9f0
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-==================
-
-DATA RACE #5
-==================
-WARNING: DATA RACE
-Write at 0x00c0004ddb30 by goroutine 197:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Stop()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:490 +0x80
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func4.5.2()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/deploy-dataflowcomponent_test.go:579 +0xc04
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-
-Previous read at 0x00c0004ddb30 by goroutine 198:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run.func1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:465 +0x110
-
-Goroutine 197 (running) created at:
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:881 +0xdec
-  github.com/onsi/ginkgo/v2/internal.(*group).attemptSpec()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:199 +0xb60
-  github.com/onsi/ginkgo/v2/internal.(*group).run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:349 +0xc78
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:489 +0xc30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:130 +0x420
-  github.com/onsi/ginkgo/v2.RunSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/core_dsl.go:300 +0xcf4
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.TestActions()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/actions_suite_test.go:26 +0x54
-  testing.tRunner()
-      /usr/local/go/src/testing/testing.go:1792 +0x180
-  testing.(*T).Run.gowrap1()
-      /usr/local/go/src/testing/testing.go:1851 +0x40
-
-Goroutine 198 (running) created at:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:455 +0xe8
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Start()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:477 +0x9fc
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func4.5.2()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/deploy-dataflowcomponent_test.go:569 +0x9ec
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-==================
-
-DATA RACE #6
-==================
-WARNING: DATA RACE
-Write at 0x00c0004fa630 by goroutine 208:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Stop()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:490 +0x80
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func4.5.3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/deploy-dataflowcomponent_test.go:632 +0xa9c
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-
-Previous read at 0x00c0004fa630 by goroutine 209:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run.func1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:465 +0x110
-
-Goroutine 208 (running) created at:
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:881 +0xdec
-  github.com/onsi/ginkgo/v2/internal.(*group).attemptSpec()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:199 +0xb60
-  github.com/onsi/ginkgo/v2/internal.(*group).run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:349 +0xc78
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:489 +0xc30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:130 +0x420
-  github.com/onsi/ginkgo/v2.RunSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/core_dsl.go:300 +0xcf4
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.TestActions()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/actions_suite_test.go:26 +0x54
-  testing.tRunner()
-      /usr/local/go/src/testing/testing.go:1792 +0x180
-  testing.(*T).Run.gowrap1()
-      /usr/local/go/src/testing/testing.go:1851 +0x40
-
-Goroutine 209 (running) created at:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:455 +0xe8
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Start()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:477 +0x84c
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func4.5.3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/deploy-dataflowcomponent_test.go:621 +0x83c
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-==================
-
-DATA RACE #7
-==================
-WARNING: DATA RACE
-Read at 0x00c00033aee8 by goroutine 208:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func4.5.3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/deploy-dataflowcomponent_test.go:635 +0xaa4
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-
-Previous write at 0x00c00033aee8 by goroutine 207:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.ConsumeOutboundMessages()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/action_helper.go:31 +0xf8
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func4.1.gowrap1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/deploy-dataflowcomponent_test.go:76 +0x44
-
-Goroutine 208 (running) created at:
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:881 +0xdec
-  github.com/onsi/ginkgo/v2/internal.(*group).attemptSpec()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:199 +0xb60
-  github.com/onsi/ginkgo/v2/internal.(*group).run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:349 +0xc78
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:489 +0xc30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:130 +0x420
-  github.com/onsi/ginkgo/v2.RunSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/core_dsl.go:300 +0xcf4
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.TestActions()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/actions_suite_test.go:26 +0x54
-  testing.tRunner()
-      /usr/local/go/src/testing/testing.go:1792 +0x180
-  testing.(*T).Run.gowrap1()
-      /usr/local/go/src/testing/testing.go:1851 +0x40
-
-Goroutine 207 (running) created at:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func4.1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/deploy-dataflowcomponent_test.go:76 +0x7ac
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-==================
-
-DATA RACE #8
-==================
-WARNING: DATA RACE
-Write at 0x00c0004fa330 by goroutine 225:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Stop()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:490 +0x80
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func4.5.4()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/deploy-dataflowcomponent_test.go:705 +0xa78
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-
-Previous read at 0x00c0004fa330 by goroutine 226:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run.func1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:465 +0x110
-
-Goroutine 225 (running) created at:
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:881 +0xdec
-  github.com/onsi/ginkgo/v2/internal.(*group).attemptSpec()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:199 +0xb60
-  github.com/onsi/ginkgo/v2/internal.(*group).run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:349 +0xc78
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:489 +0xc30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:130 +0x420
-  github.com/onsi/ginkgo/v2.RunSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/core_dsl.go:300 +0xcf4
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.TestActions()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/actions_suite_test.go:26 +0x54
-  testing.tRunner()
-      /usr/local/go/src/testing/testing.go:1792 +0x180
-  testing.(*T).Run.gowrap1()
-      /usr/local/go/src/testing/testing.go:1851 +0x40
-
-Goroutine 226 (running) created at:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:455 +0xe8
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Start()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:477 +0x880
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func4.5.4()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/deploy-dataflowcomponent_test.go:695 +0x870
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-==================
-
-DATA RACE #9
-==================
-WARNING: DATA RACE
-Write at 0x00c0004fa630 by goroutine 247:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Stop()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:490 +0x80
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func4.5.5()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/deploy-dataflowcomponent_test.go:772 +0x9b0
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-
-Previous read at 0x00c0004fa630 by goroutine 248:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run.func1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:465 +0x110
-
-Goroutine 247 (running) created at:
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:881 +0xdec
-  github.com/onsi/ginkgo/v2/internal.(*group).attemptSpec()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:199 +0xb60
-  github.com/onsi/ginkgo/v2/internal.(*group).run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:349 +0xc78
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:489 +0xc30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:130 +0x420
-  github.com/onsi/ginkgo/v2.RunSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/core_dsl.go:300 +0xcf4
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.TestActions()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/actions_suite_test.go:26 +0x54
-  testing.tRunner()
-      /usr/local/go/src/testing/testing.go:1792 +0x180
-  testing.(*T).Run.gowrap1()
-      /usr/local/go/src/testing/testing.go:1851 +0x40
-
-Goroutine 248 (running) created at:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:455 +0xe8
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Start()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:477 +0x7b8
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func4.5.5()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/deploy-dataflowcomponent_test.go:762 +0x7a8
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-==================
-
-DATA RACE #10
-==================
-WARNING: DATA RACE
-Write at 0x00c000122680 by goroutine 344:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config.(*MockConfigManager).AtomicEditDataflowcomponent()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/config/mock.go:403 +0x638
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*EditDataflowComponentAction).Execute()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/edit-dataflowcomponent.go:471 +0x1e48
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func6.5.1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/edit-dataflowcomponent_test.go:453 +0x8b4
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-
-Previous read at 0x00c000122680 by goroutine 345:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.createDfcManagerSnapshot()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:417 +0xa8c
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Tick()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:119 +0x3b0
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run.func1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:463 +0x17c
-
-Goroutine 344 (running) created at:
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:881 +0xdec
-  github.com/onsi/ginkgo/v2/internal.(*group).attemptSpec()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:199 +0xb60
-  github.com/onsi/ginkgo/v2/internal.(*group).run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:349 +0xc78
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:489 +0xc30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:130 +0x420
-  github.com/onsi/ginkgo/v2.RunSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/core_dsl.go:300 +0xcf4
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.TestActions()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/actions_suite_test.go:26 +0x54
-  testing.tRunner()
-      /usr/local/go/src/testing/testing.go:1792 +0x180
-  testing.(*T).Run.gowrap1()
-      /usr/local/go/src/testing/testing.go:1851 +0x40
-
-Goroutine 345 (running) created at:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:455 +0xe8
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Start()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:477 +0x82c
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func6.5.1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/edit-dataflowcomponent_test.go:448 +0x81c
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-==================
-
-DATA RACE #11
-==================
-WARNING: DATA RACE
-Write at 0x00c000335230 by goroutine 344:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Stop()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:490 +0x80
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func6.5.1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/edit-dataflowcomponent_test.go:459 +0xa30
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-
-Previous read at 0x00c000335230 by goroutine 345:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run.func1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:465 +0x110
-
-Goroutine 344 (running) created at:
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:881 +0xdec
-  github.com/onsi/ginkgo/v2/internal.(*group).attemptSpec()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:199 +0xb60
-  github.com/onsi/ginkgo/v2/internal.(*group).run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:349 +0xc78
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:489 +0xc30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:130 +0x420
-  github.com/onsi/ginkgo/v2.RunSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/core_dsl.go:300 +0xcf4
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.TestActions()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/actions_suite_test.go:26 +0x54
-  testing.tRunner()
-      /usr/local/go/src/testing/testing.go:1792 +0x180
-  testing.(*T).Run.gowrap1()
-      /usr/local/go/src/testing/testing.go:1851 +0x40
-
-Goroutine 345 (running) created at:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:455 +0xe8
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Start()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:477 +0x82c
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func6.5.1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/edit-dataflowcomponent_test.go:448 +0x81c
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-==================
-
-DATA RACE #12
-==================
-WARNING: DATA RACE
-Write at 0x00c0001e4c30 by goroutine 365:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Stop()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:490 +0x80
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func6.5.2()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/edit-dataflowcomponent_test.go:536 +0xc6c
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-
-Previous read at 0x00c0001e4c30 by goroutine 366:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run.func1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:465 +0x110
-
-Goroutine 365 (running) created at:
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:881 +0xdec
-  github.com/onsi/ginkgo/v2/internal.(*group).attemptSpec()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:199 +0xb60
-  github.com/onsi/ginkgo/v2/internal.(*group).run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:349 +0xc78
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:489 +0xc30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:130 +0x420
-  github.com/onsi/ginkgo/v2.RunSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/core_dsl.go:300 +0xcf4
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.TestActions()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/actions_suite_test.go:26 +0x54
-  testing.tRunner()
-      /usr/local/go/src/testing/testing.go:1792 +0x180
-  testing.(*T).Run.gowrap1()
-      /usr/local/go/src/testing/testing.go:1851 +0x40
-
-Goroutine 366 (running) created at:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:455 +0xe8
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Start()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:477 +0xa74
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func6.5.2()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/edit-dataflowcomponent_test.go:526 +0xa64
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-==================
-
-DATA RACE #13
-==================
-WARNING: DATA RACE
-Write at 0x00c0004ca930 by goroutine 386:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Stop()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:490 +0x80
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func6.5.3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/edit-dataflowcomponent_test.go:627 +0xaec
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-
-Previous read at 0x00c0004ca930 by goroutine 387:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run.func1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:465 +0x110
-
-Goroutine 386 (running) created at:
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:881 +0xdec
-  github.com/onsi/ginkgo/v2/internal.(*group).attemptSpec()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:199 +0xb60
-  github.com/onsi/ginkgo/v2/internal.(*group).run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:349 +0xc78
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:489 +0xc30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:130 +0x420
-  github.com/onsi/ginkgo/v2.RunSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/core_dsl.go:300 +0xcf4
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.TestActions()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/actions_suite_test.go:26 +0x54
-  testing.tRunner()
-      /usr/local/go/src/testing/testing.go:1792 +0x180
-  testing.(*T).Run.gowrap1()
-      /usr/local/go/src/testing/testing.go:1851 +0x40
-
-Goroutine 387 (running) created at:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:455 +0xe8
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Start()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:477 +0x8f4
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func6.5.3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/edit-dataflowcomponent_test.go:617 +0x8e4
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-==================
-
-DATA RACE #14
-==================
-WARNING: DATA RACE
-Write at 0x00c00032d230 by goroutine 406:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Stop()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:490 +0x80
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func6.5.4()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/edit-dataflowcomponent_test.go:780 +0x1e14
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-
-Previous read at 0x00c00032d230 by goroutine 407:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run.func1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:465 +0x110
-
-Goroutine 406 (running) created at:
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:881 +0xdec
-  github.com/onsi/ginkgo/v2/internal.(*group).attemptSpec()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:199 +0xb60
-  github.com/onsi/ginkgo/v2/internal.(*group).run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:349 +0xc78
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:489 +0xc30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:130 +0x420
-  github.com/onsi/ginkgo/v2.RunSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/core_dsl.go:300 +0xcf4
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.TestActions()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/actions_suite_test.go:26 +0x54
-  testing.tRunner()
-      /usr/local/go/src/testing/testing.go:1792 +0x180
-  testing.(*T).Run.gowrap1()
-      /usr/local/go/src/testing/testing.go:1851 +0x40
-
-Goroutine 407 (running) created at:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:455 +0xe8
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Start()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:477 +0xf64
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func6.5.4()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/edit-dataflowcomponent_test.go:721 +0xf54
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-==================
-
-DATA RACE #15
-==================
-WARNING: DATA RACE
-Read at 0x00c00033b260 by goroutine 429:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func6.5.5()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/edit-dataflowcomponent_test.go:831 +0xa80
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-
-Previous write at 0x00c00033b260 by goroutine 428:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.ConsumeOutboundMessages()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/action_helper.go:31 +0xf8
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func6.1.gowrap1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/edit-dataflowcomponent_test.go:109 +0x44
-
-Goroutine 429 (running) created at:
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:881 +0xdec
-  github.com/onsi/ginkgo/v2/internal.(*group).attemptSpec()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:199 +0xb60
-  github.com/onsi/ginkgo/v2/internal.(*group).run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:349 +0xc78
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:489 +0xc30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:130 +0x420
-  github.com/onsi/ginkgo/v2.RunSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/core_dsl.go:300 +0xcf4
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.TestActions()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/actions_suite_test.go:26 +0x54
-  testing.tRunner()
-      /usr/local/go/src/testing/testing.go:1792 +0x180
-  testing.(*T).Run.gowrap1()
-      /usr/local/go/src/testing/testing.go:1851 +0x40
-
-Goroutine 428 (running) created at:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func6.1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/edit-dataflowcomponent_test.go:109 +0xcf8
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-==================
-
-DATA RACE #16
-==================
-WARNING: DATA RACE
-Write at 0x00c0003f6930 by goroutine 474:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Stop()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:490 +0x80
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func2.5.1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/delete-dataflowcomponent_test.go:175 +0x420
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-
-Previous read at 0x00c0003f6930 by goroutine 475:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run.func1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:465 +0x110
-
-Goroutine 474 (running) created at:
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:881 +0xdec
-  github.com/onsi/ginkgo/v2/internal.(*group).attemptSpec()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:199 +0xb60
-  github.com/onsi/ginkgo/v2/internal.(*group).run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:349 +0xc78
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:489 +0xc30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:130 +0x420
-  github.com/onsi/ginkgo/v2.RunSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/core_dsl.go:300 +0xcf4
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.TestActions()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/actions_suite_test.go:26 +0x54
-  testing.tRunner()
-      /usr/local/go/src/testing/testing.go:1792 +0x180
-  testing.(*T).Run.gowrap1()
-      /usr/local/go/src/testing/testing.go:1851 +0x40
-
-Goroutine 475 (running) created at:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:455 +0xe8
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Start()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:477 +0x1b0
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func2.5.1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/delete-dataflowcomponent_test.go:165 +0x1a0
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-==================
-
-DATA RACE #17
-==================
-WARNING: DATA RACE
-Write at 0x00c0002c2630 by goroutine 500:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Stop()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:490 +0x80
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func2.5.2()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/delete-dataflowcomponent_test.go:208 +0x49c
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-
-Previous read at 0x00c0002c2630 by goroutine 501:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run.func1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:465 +0x110
-
-Goroutine 500 (running) created at:
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:881 +0xdec
-  github.com/onsi/ginkgo/v2/internal.(*group).attemptSpec()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:199 +0xb60
-  github.com/onsi/ginkgo/v2/internal.(*group).run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:349 +0xc78
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:489 +0xc30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:130 +0x420
-  github.com/onsi/ginkgo/v2.RunSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/core_dsl.go:300 +0xcf4
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.TestActions()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/actions_suite_test.go:26 +0x54
-  testing.tRunner()
-      /usr/local/go/src/testing/testing.go:1792 +0x180
-  testing.(*T).Run.gowrap1()
-      /usr/local/go/src/testing/testing.go:1851 +0x40
-
-Goroutine 501 (running) created at:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:455 +0xe8
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Start()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:477 +0x24c
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func2.5.2()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/delete-dataflowcomponent_test.go:197 +0x23c
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-==================
-
-DATA RACE #18
-==================
-WARNING: DATA RACE
-Read at 0x00c00033a9a8 by goroutine 500:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func2.5.2()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/delete-dataflowcomponent_test.go:211 +0x4a4
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-
-Previous write at 0x00c00033a9a8 by goroutine 499:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.ConsumeOutboundMessages()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/action_helper.go:31 +0xf8
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func2.1.gowrap1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/delete-dataflowcomponent_test.go:86 +0x44
-
-Goroutine 500 (running) created at:
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:881 +0xdec
-  github.com/onsi/ginkgo/v2/internal.(*group).attemptSpec()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:199 +0xb60
-  github.com/onsi/ginkgo/v2/internal.(*group).run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:349 +0xc78
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:489 +0xc30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:130 +0x420
-  github.com/onsi/ginkgo/v2.RunSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/core_dsl.go:300 +0xcf4
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.TestActions()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/actions_suite_test.go:26 +0x54
-  testing.tRunner()
-      /usr/local/go/src/testing/testing.go:1792 +0x180
-  testing.(*T).Run.gowrap1()
-      /usr/local/go/src/testing/testing.go:1851 +0x40
-
-Goroutine 499 (running) created at:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func2.1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/delete-dataflowcomponent_test.go:86 +0x92c
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-==================
-
-DATA RACE #19
-==================
-WARNING: DATA RACE
-Write at 0x00c0002c2f30 by goroutine 517:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Stop()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:490 +0x80
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func2.5.3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/delete-dataflowcomponent_test.go:258 +0x49c
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-
-Previous read at 0x00c0002c2f30 by goroutine 518:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run.func1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:465 +0x110
-
-Goroutine 517 (running) created at:
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:881 +0xdec
-  github.com/onsi/ginkgo/v2/internal.(*group).attemptSpec()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:199 +0xb60
-  github.com/onsi/ginkgo/v2/internal.(*group).run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:349 +0xc78
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:489 +0xc30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:130 +0x420
-  github.com/onsi/ginkgo/v2.RunSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/core_dsl.go:300 +0xcf4
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.TestActions()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/actions_suite_test.go:26 +0x54
-  testing.tRunner()
-      /usr/local/go/src/testing/testing.go:1792 +0x180
-  testing.(*T).Run.gowrap1()
-      /usr/local/go/src/testing/testing.go:1851 +0x40
-
-Goroutine 518 (running) created at:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:455 +0xe8
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Start()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:477 +0x24c
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func2.5.3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/delete-dataflowcomponent_test.go:247 +0x23c
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-==================
-
-DATA RACE #20
-==================
-WARNING: DATA RACE
-Write at 0x00c000152470 by goroutine 666:
+Write at 0x00c00023e780 by goroutine 147:
   runtime.recvDirect()
       /usr/local/go/src/runtime/chan.go:405 +0x7c
   github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func7.2()
@@ -955,7 +11,7 @@ Write at 0x00c000152470 by goroutine 666:
   github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
       /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
 
-Previous read at 0x00c000152470 by goroutine 665:
+Previous read at 0x00c00023e780 by goroutine 145:
   runtime.chansend1()
       /usr/local/go/src/runtime/chan.go:162 +0x2c
   github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.sendActionReplyInternal()
@@ -969,7 +25,7 @@ Previous read at 0x00c000152470 by goroutine 665:
   github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func7.6.1.3.1()
       /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/edit-datamodel_test.go:519 +0x54
 
-Goroutine 666 (running) created at:
+Goroutine 147 (running) created at:
   github.com/onsi/ginkgo/v2/internal.(*Suite).runNode()
       /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:881 +0xdec
   github.com/onsi/ginkgo/v2/internal.(*group).attemptSpec()
@@ -989,7 +45,7 @@ Goroutine 666 (running) created at:
   testing.(*T).Run.gowrap1()
       /usr/local/go/src/testing/testing.go:1851 +0x40
 
-Goroutine 665 (finished) created at:
+Goroutine 145 (finished) created at:
   github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func7.6.1.3()
       /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/edit-datamodel_test.go:517 +0x94
   github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
@@ -998,24 +54,86 @@ Goroutine 665 (finished) created at:
       /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
 ==================
 
-DATA RACE #21
+DATA RACE #2
 ==================
 WARNING: DATA RACE
-Write at 0x00c000a24330 by goroutine 823:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Stop()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:490 +0x80
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func8.5.1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/edit-protocolconverter_test.go:347 +0xb74
+Write at 0x00c000410b00 by goroutine 446:
+  runtime.recvDirect()
+      /usr/local/go/src/runtime/chan.go:405 +0x7c
+  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func1.2()
+      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/add-datamodel_test.go:77 +0x38
   github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
       /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
   github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
       /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
 
-Previous read at 0x00c000a24330 by goroutine 824:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run.func1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:465 +0x110
+Previous read at 0x00c000410b00 by goroutine 445:
+  runtime.chansend1()
+      /usr/local/go/src/runtime/chan.go:162 +0x2c
+  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.sendActionReplyInternal()
+      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/actions.go:298 +0x3b4
+  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.SendActionReplyWithAdditionalContext()
+      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/actions.go:265 +0x84
+  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.SendActionReply()
+      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/actions.go:253 +0xabc
+  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*AddDataModelAction).Execute()
+      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/add-datamodel.go:193 +0xa10
+  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func1.5.1.3.1()
+      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/add-datamodel_test.go:505 +0x54
 
-Goroutine 823 (running) created at:
+Goroutine 446 (running) created at:
+  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode()
+      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:881 +0xdec
+  github.com/onsi/ginkgo/v2/internal.(*group).attemptSpec()
+      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:286 +0x20bc
+  github.com/onsi/ginkgo/v2/internal.(*group).run()
+      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:349 +0xc78
+  github.com/onsi/ginkgo/v2/internal.(*Suite).runSpecs()
+      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:489 +0xc30
+  github.com/onsi/ginkgo/v2/internal.(*Suite).Run()
+      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:130 +0x420
+  github.com/onsi/ginkgo/v2.RunSpecs()
+      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/core_dsl.go:300 +0xcf4
+  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.TestActions()
+      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/actions_suite_test.go:26 +0x54
+  testing.tRunner()
+      /usr/local/go/src/testing/testing.go:1792 +0x180
+  testing.(*T).Run.gowrap1()
+      /usr/local/go/src/testing/testing.go:1851 +0x40
+
+Goroutine 445 (finished) created at:
+  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func1.5.1.3()
+      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/add-datamodel_test.go:503 +0x94
+  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
+      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
+  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
+      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
+==================
+
+DATA RACE #3
+==================
+WARNING: DATA RACE
+Write at 0x00c0008da980 by goroutine 766:
+  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config.(*MockConfigManager).AtomicEditDataflowcomponent()
+      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/config/mock.go:403 +0x638
+  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*EditDataflowComponentAction).Execute()
+      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/edit-dataflowcomponent.go:471 +0x1e48
+  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func6.5.1()
+      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/edit-dataflowcomponent_test.go:454 +0x8b4
+  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
+      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
+  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
+      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
+
+Previous read at 0x00c0008da980 by goroutine 767:
+  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.createDfcManagerSnapshot()
+      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:417 +0xa8c
+  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Tick()
+      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:119 +0x3b0
+  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run.func1()
+      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:464 +0xf0
+
+Goroutine 766 (running) created at:
   github.com/onsi/ginkgo/v2/internal.(*Suite).runNode()
       /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:881 +0xdec
   github.com/onsi/ginkgo/v2/internal.(*group).attemptSpec()
@@ -1035,69 +153,13 @@ Goroutine 823 (running) created at:
   testing.(*T).Run.gowrap1()
       /usr/local/go/src/testing/testing.go:1851 +0x40
 
-Goroutine 824 (running) created at:
+Goroutine 767 (running) created at:
   github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Run()
       /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:455 +0xe8
   github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*StateMocker).Start()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:477 +0xa34
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func8.5.1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/edit-protocolconverter_test.go:338 +0xa24
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-==================
-
-DATA RACE #22
-==================
-WARNING: DATA RACE
-Write at 0x00c0001502b0 by goroutine 891:
-  runtime.recvDirect()
-      /usr/local/go/src/runtime/chan.go:405 +0x7c
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func1.2()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/add-datamodel_test.go:77 +0x38
-  github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:894 +0xf0
-
-Previous read at 0x00c0001502b0 by goroutine 890:
-  runtime.chansend1()
-      /usr/local/go/src/runtime/chan.go:162 +0x2c
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.sendActionReplyInternal()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/actions.go:298 +0x3b4
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.SendActionReplyWithAdditionalContext()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/actions.go:265 +0x84
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.SendActionReply()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/actions.go:253 +0xabc
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions.(*AddDataModelAction).Execute()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/add-datamodel.go:193 +0xa10
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func1.5.1.3.1()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/add-datamodel_test.go:505 +0x54
-
-Goroutine 891 (running) created at:
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runNode()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:881 +0xdec
-  github.com/onsi/ginkgo/v2/internal.(*group).attemptSpec()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:286 +0x20bc
-  github.com/onsi/ginkgo/v2/internal.(*group).run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/group.go:349 +0xc78
-  github.com/onsi/ginkgo/v2/internal.(*Suite).runSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:489 +0xc30
-  github.com/onsi/ginkgo/v2/internal.(*Suite).Run()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/suite.go:130 +0x420
-  github.com/onsi/ginkgo/v2.RunSpecs()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/core_dsl.go:300 +0xcf4
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.TestActions()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/actions_suite_test.go:26 +0x54
-  testing.tRunner()
-      /usr/local/go/src/testing/testing.go:1792 +0x180
-  testing.(*T).Run.gowrap1()
-      /usr/local/go/src/testing/testing.go:1851 +0x40
-
-Goroutine 890 (finished) created at:
-  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func1.5.1.3()
-      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/add-datamodel_test.go:503 +0x94
+      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/stateMocker.go:474 +0x82c
+  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions_test.init.func6.5.1()
+      /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/pkg/communicator/actions/edit-dataflowcomponent_test.go:449 +0x81c
   github.com/onsi/ginkgo/v2/internal.extractBodyFunction.func3()
       /Users/fl/Git/umh3/united-manufacturing-hub/umh-core/vendor/github.com/onsi/ginkgo/v2/internal/node.go:475 +0x30
   github.com/onsi/ginkgo/v2/internal.(*Suite).runNode.func3()

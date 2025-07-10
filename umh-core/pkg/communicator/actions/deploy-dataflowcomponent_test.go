@@ -40,7 +40,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 		outboundChannel chan *models.UMHMessage
 		mockConfig      *config.MockConfigManager
 		stateMocker     *actions.StateMocker
-		messages        []*models.UMHMessage
+		messages        *actions.ThreadSafeMessages
 	)
 
 	// Setup before each test
@@ -50,6 +50,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 		actionUUID = uuid.New()
 		instanceUUID = uuid.New()
 		outboundChannel = make(chan *models.UMHMessage, 10) // Buffer to prevent blocking
+		messages = actions.NewThreadSafeMessages()
 
 		// Create initial config
 		initialConfig := config.FullConfig{
@@ -73,7 +74,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 
 		action = actions.NewDeployDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockStateManager)
 
-		go actions.ConsumeOutboundMessages(outboundChannel, &messages, true)
+		go actions.ConsumeOutboundMessagesThreadSafe(outboundChannel, messages, true)
 
 	})
 
@@ -632,7 +633,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 			stateMocker.Stop()
 
 			// Verify the failure message content
-			decodedMessage, err := encoding.DecodeMessageFromUMHInstanceToUser(messages[1].Content)
+			decodedMessage, err := encoding.DecodeMessageFromUMHInstanceToUser(messages.Get(1).Content)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Extract the ActionReplyPayload from the decoded message
