@@ -580,7 +580,7 @@ var _ = Describe("S6 Log Rotation", func() {
 			currentInode = 54321 // Different inode indicates file rotation
 
 			// Should handle missing rotated file gracefully and read current file
-			// With the fix, it preserves the existing entry AND adds the new one
+			// s6 correctly preserves the existing entry AND adds the new one
 			entries, err = service.GetLogs(ctx, servicePath, fsService)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(entries).To(HaveLen(2))
@@ -674,7 +674,7 @@ var _ = Describe("S6 Log Rotation", func() {
 			rotatedFiles = []string{rotatedFile} // Now there's a rotated file
 
 			// Should find rotated file and combine with current
-			// With the fix, it preserves the existing entry AND adds the rotated + current content
+			// s6 correctly preserves the existing entry AND adds the rotated + current content
 			entries, err = service.GetLogs(ctx, servicePath, fsService)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(entries).To(HaveLen(3))
@@ -686,8 +686,14 @@ var _ = Describe("S6 Log Rotation", func() {
 		})
 
 		It("should preserve previously accumulated entries during rotation", func() {
-			// This test demonstrates the bug where rotation resets the ring buffer
-			// and loses previously accumulated entries
+			// This test verifies correct s6 log rotation behavior where the ring buffer
+			// resets (by design) but all entries are preserved across rotated + current files
+			//
+			// s6 Log Rotation Design:
+			// 1. Ring buffer accumulates entries during normal operation
+			// 2. On rotation: ring buffer resets, previous entries move to rotated file
+			// 3. Service reads from BOTH rotated + current files to provide complete history
+			// 4. Total entry count is preserved across rotation boundaries
 			actualLogDir := filepath.Join(constants.S6LogBaseDir, serviceName)
 			currentFile := filepath.Join(actualLogDir, "current")
 
@@ -795,16 +801,17 @@ var _ = Describe("S6 Log Rotation", func() {
 			currentInode = 54321                 // Different inode indicates file rotation
 			rotatedFiles = []string{rotatedFile} // Now there's a rotated file
 
-			// BUG: With current implementation, this will likely fail because
-			// the ring buffer gets reset and we lose the previously accumulated entries
+			// EXPECTED s6 BEHAVIOR: Ring buffer resets on rotation (by design), but
+			// all entries are preserved by reading from both rotated + current files
 			entries, err = service.GetLogs(ctx, servicePath, fsService)
 			Expect(err).ToNot(HaveOccurred())
 
-			// CRITICAL: The count should never decrease during rotation!
-			// We should have at least the 3 entries we had before, plus the new ones
+			// VERIFICATION: Total entry count should be preserved during rotation
+			// We should have all 5 entries: 3 from previous calls + 2 from rotation (1 rotated + 1 current)
 			Expect(entries).To(HaveLen(5), "After rotation, should have all 5 entries (3 previous + 2 new)")
 
-			// Verify chronological order is maintained
+			// Verify chronological order is maintained across rotation
+			// s6 log rotation preserves chronological order: old entries first, then rotated, then current
 			Expect(entries[0].Content).To(Equal("entry 1"))
 			Expect(entries[1].Content).To(Equal("entry 2"))
 			Expect(entries[2].Content).To(Equal("entry 3"))
