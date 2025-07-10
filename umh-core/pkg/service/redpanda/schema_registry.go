@@ -691,7 +691,11 @@ func (s *SchemaRegistry) lookup(ctx context.Context) (err error, changePhase boo
 
 	url := s.urlBuilder.subjectsURL()
 
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	// Create timeout context based on minimum lookup time to prevent overuse
+	timeoutCtx, cancel := s.createTimeoutContext(ctx, MinimumLookupTime)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(timeoutCtx, "GET", url, nil)
 	if err != nil {
 		return err, false
 	}
@@ -881,7 +885,12 @@ func (s *SchemaRegistry) removeUnknown(ctx context.Context) (err error, changePh
 
 	// HTTP DELETE /subjects/{subject}
 	url := s.urlBuilder.subjectURL(subjectToRemove)
-	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
+
+	// Create timeout context based on minimum remove time to prevent overuse
+	timeoutCtx, cancel := s.createTimeoutContext(ctx, MinimumRemoveTime)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(timeoutCtx, "DELETE", url, nil)
 	if err != nil {
 		return err, false
 	}
@@ -1019,7 +1028,12 @@ func (s *SchemaRegistry) addNew(ctx context.Context) (err error, changePhase boo
 
 	// HTTP POST /subjects/{subject}/versions
 	url := s.urlBuilder.subjectVersionsURL(subjectToAdd)
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(payloadBytes))
+
+	// Create timeout context based on minimum add time to prevent overuse
+	timeoutCtx, cancel := s.createTimeoutContext(ctx, MinimumAddTime)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(timeoutCtx, "POST", url, bytes.NewReader(payloadBytes))
 	if err != nil {
 		return err, false
 	}
@@ -1090,4 +1104,23 @@ func (s *SchemaRegistry) addNew(ctx context.Context) (err error, changePhase boo
 	}
 
 	return nil, false // Added schema, stay in same phase (more to add)
+}
+
+// createTimeoutContext creates a context with timeout based on the minimum required time for the operation.
+// It respects the parent context's deadline if it's shorter than our desired timeout.
+// This prevents HTTP requests from running longer than expected while still respecting caller timeouts.
+func (s *SchemaRegistry) createTimeoutContext(ctx context.Context, minTime time.Duration) (context.Context, context.CancelFunc) {
+	// Use the exact minimum time to prevent overuse
+	timeout := minTime
+
+	// If parent context has a deadline, respect it if it's shorter
+	if deadline, ok := ctx.Deadline(); ok {
+		remaining := time.Until(deadline)
+		if remaining < timeout {
+			timeout = remaining
+		}
+	}
+
+	// Create new context with our calculated timeout
+	return context.WithTimeout(ctx, timeout)
 }
