@@ -31,6 +31,7 @@ package actions
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"maps"
@@ -45,6 +46,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
+	"gopkg.in/yaml.v3"
 )
 
 // EditStreamProcessorAction implements the Action interface for editing
@@ -105,8 +107,21 @@ func (a *EditStreamProcessorAction) Parse(payload interface{}) error {
 	a.streamProcessorUUID = *spPayload.UUID
 	a.name = spPayload.Name
 	a.model = spPayload.Model
-	a.sources = spPayload.Sources
-	a.mapping = spPayload.Mapping
+
+	// Decode the base64-encoded config
+	decodedConfig, err := base64.StdEncoding.DecodeString(spPayload.EncodedConfig)
+	if err != nil {
+		return fmt.Errorf("failed to decode stream processor config: %v", err)
+	}
+
+	var config models.StreamProcessorConfig
+	err = yaml.Unmarshal(decodedConfig, &config)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal stream processor config: %v", err)
+	}
+
+	a.sources = config.Sources
+	a.mapping = convertStreamProcessorMappingToInterface(config.Mapping)
 
 	if spPayload.TemplateInfo != nil {
 		a.vb = spPayload.TemplateInfo.Variables
@@ -467,12 +482,22 @@ func (a *EditStreamProcessorAction) GetStreamProcessorUUID() uuid.UUID {
 
 // GetParsedPayload returns the parsed payload - exposed primarily for testing purposes.
 func (a *EditStreamProcessorAction) GetParsedPayload() models.StreamProcessor {
+	// Marshal the config back to base64 for response
+	configData, err := yaml.Marshal(models.StreamProcessorConfig{
+		Sources: a.sources,
+		Mapping: convertInterfaceToStreamProcessorMapping(a.mapping),
+	})
+	if err != nil {
+		a.actionLogger.Errorf("Failed to marshal stream processor config: %v", err)
+		return models.StreamProcessor{}
+	}
+	encodedConfig := base64.StdEncoding.EncodeToString(configData)
+
 	return models.StreamProcessor{
-		UUID:     &a.streamProcessorUUID,
-		Name:     a.name,
-		Location: a.location,
-		Model:    a.model,
-		Sources:  a.sources,
-		Mapping:  a.mapping,
+		UUID:          &a.streamProcessorUUID,
+		Name:          a.name,
+		Location:      a.location,
+		Model:         a.model,
+		EncodedConfig: encodedConfig,
 	}
 }

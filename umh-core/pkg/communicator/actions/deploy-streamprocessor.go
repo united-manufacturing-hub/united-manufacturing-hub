@@ -34,6 +34,7 @@ package actions
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"time"
@@ -47,6 +48,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
+	"gopkg.in/yaml.v3"
 )
 
 // DeployStreamProcessorAction implements the Action interface for deploying a
@@ -89,6 +91,21 @@ func (a *DeployStreamProcessorAction) Parse(payload interface{}) error {
 	}
 
 	a.payload = parsedPayload
+
+	// Decode the base64-encoded config
+	decodedConfig, err := base64.StdEncoding.DecodeString(a.payload.EncodedConfig)
+	if err != nil {
+		return fmt.Errorf("failed to decode stream processor config: %v", err)
+	}
+
+	var config models.StreamProcessorConfig
+	err = yaml.Unmarshal(decodedConfig, &config)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal stream processor config: %v", err)
+	}
+
+	a.payload.Config = &config
+
 	a.actionLogger.Debugf("Parsed DeployStreamProcessor action payload: name=%s, model=%s:%s",
 		a.payload.Name, a.payload.Model.Name, a.payload.Model.Version)
 
@@ -151,12 +168,12 @@ func (a *DeployStreamProcessorAction) Execute() (interface{}, map[string]interfa
 
 	// Create response with the filled UUID
 	response := models.StreamProcessor{
-		UUID:     &spUUID,
-		Name:     a.payload.Name,
-		Location: a.payload.Location,
-		Model:    a.payload.Model,
-		Sources:  a.payload.Sources,
-		Mapping:  a.payload.Mapping,
+		UUID:          &spUUID,
+		Name:          a.payload.Name,
+		Location:      a.payload.Location,
+		Model:         a.payload.Model,
+		EncodedConfig: a.payload.EncodedConfig,
+		Config:        a.payload.Config,
 		// TemplateInfo is nil as it will be populated later if needed
 	}
 
@@ -201,8 +218,8 @@ func (a *DeployStreamProcessorAction) createStreamProcessorConfig() config.Strea
 			Name:    a.payload.Model.Name,
 			Version: a.payload.Model.Version,
 		},
-		Sources: streamprocessorserviceconfig.SourceMapping(a.payload.Sources),
-		Mapping: a.payload.Mapping,
+		Sources: streamprocessorserviceconfig.SourceMapping(a.payload.Config.Sources),
+		Mapping: convertStreamProcessorMappingToInterface(a.payload.Config.Mapping),
 	}
 
 	// Convert location map from int keys to string keys
@@ -228,13 +245,6 @@ func (a *DeployStreamProcessorAction) createStreamProcessorConfig() config.Strea
 		},
 		StreamProcessorServiceConfig: spec,
 	}
-}
-
-// generateUUIDFromName generates a UUID from a name (similar to protocol converter pattern)
-func generateUUIDFromName(name string) uuid.UUID {
-	// Use a deterministic UUID generation based on name
-	// This ensures the same name always produces the same UUID
-	return uuid.NewSHA1(uuid.NameSpaceOID, []byte(name))
 }
 
 // getUserEmail implements the Action interface by returning the user email associated with this action.

@@ -808,13 +808,32 @@ type StreamProcessorTemplateInfo struct {
 	RootUUID    uuid.UUID                 `json:"rootUUID" yaml:"rootUUID" mapstructure:"rootUUID"`
 }
 
+// StreamProcessorConfig represents the configuration for a stream processor
+type StreamProcessorConfig struct {
+	Sources StreamProcessorSourceMapping `yaml:"sources"` // source alias to UNS topic mapping
+	Mapping StreamProcessorMapping       `yaml:"mapping"` // field mappings
+}
+
+// StreamProcessorSourceMapping represents the source mapping (alias to UNS topic)
+type StreamProcessorSourceMapping map[string]string
+
+// StreamProcessorMapping represents field mappings with recursive structure
+type StreamProcessorMapping struct {
+	// Source field reference in the format "source_alias.field_path"
+	Source string `yaml:"source,omitempty"`
+	// Transform to apply to the source data (e.g., bloblang expression)
+	Transform string `yaml:"transform,omitempty"`
+	// Subfields allows recursive definition of nested mappings
+	Subfields map[string]StreamProcessorMapping `yaml:",inline"`
+}
+
 // StreamProcessor represents a stream processor configuration
 type StreamProcessor struct {
-	UUID         *uuid.UUID                   `json:"uuid" binding:"required"`
-	Name         string                       `json:"name" binding:"required"`
-	Location     map[int]string               `json:"location"`
-	Model        StreamProcessorModelRef      `json:"model" binding:"required"`
-	Sources      map[string]string            `json:"sources"` // source alias to UNS topic mapping
-	Mapping      map[string]interface{}       `json:"mapping"` // field mappings
-	TemplateInfo *StreamProcessorTemplateInfo `json:"templateInfo"`
+	UUID          *uuid.UUID                   `json:"uuid" binding:"required"`
+	Name          string                       `json:"name" binding:"required"`
+	Location      map[int]string               `json:"location"`
+	Model         StreamProcessorModelRef      `json:"model" binding:"required"`
+	EncodedConfig string                       `json:"encodedConfig" binding:"required"` // base64-encoded YAML structure containing sources and mappings
+	Config        *StreamProcessorConfig       `json:"-"`                                // parsed configuration (not used in the action, but filled by the action)
+	TemplateInfo  *StreamProcessorTemplateInfo `json:"templateInfo"`
 }
