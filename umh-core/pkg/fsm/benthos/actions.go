@@ -203,10 +203,7 @@ func (b *BenthosInstance) getServiceStatus(ctx context.Context, services service
 // UpdateObservedStateOfInstance updates the observed state of the service
 func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			// Context deadline exceeded should be retried with backoff, not ignored
-			b.baseFSMInstance.SetError(ctx.Err(), snapshot.Tick)
-			b.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in UpdateObservedStateOfInstance, will retry with backoff")
+		if b.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "UpdateObservedStateOfInstance") {
 			return nil
 		}
 		return ctx.Err()

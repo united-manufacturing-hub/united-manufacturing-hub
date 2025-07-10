@@ -150,10 +150,7 @@ func (n *NmapInstance) CheckForCreation(ctx context.Context, filesystemService f
 // UpdateObservedStateOfInstance updates the observed state of the service
 func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			// Context deadline exceeded should be retried with backoff, not ignored
-			n.baseFSMInstance.SetError(ctx.Err(), snapshot.Tick)
-			n.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in UpdateObservedStateOfInstance, will retry with backoff")
+		if n.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "UpdateObservedStateOfInstance") {
 			return nil
 		}
 		return ctx.Err()
