@@ -98,6 +98,9 @@ var _ = Describe("DFC YAML Normalizer", func() {
 			// Buffer should have the none buffer set
 			Expect(config.BenthosConfig.Buffer).To(HaveKey("none"))
 
+			// Logger should have the none logger set
+			Expect(config.BenthosConfig.Logger).To(HaveKey("none"))
+
 			// These should be empty
 			Expect(config.BenthosConfig.CacheResources).To(BeEmpty())
 			Expect(config.BenthosConfig.RateLimitResources).To(BeEmpty())

@@ -124,6 +124,9 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 			// Buffer should have the none buffer set
 			Expect(config.Config.DataflowComponentReadServiceConfig.BenthosConfig.Buffer).To(HaveKey("none"))
 
+			// Logger should have the none logger set
+			Expect(config.Config.DataflowComponentReadServiceConfig.BenthosConfig.Logger).To(HaveKey("none"))
+
 			// These should be empty
 			Expect(config.Config.DataflowComponentReadServiceConfig.BenthosConfig.CacheResources).To(BeEmpty())
 			Expect(config.Config.DataflowComponentReadServiceConfig.BenthosConfig.RateLimitResources).To(BeEmpty())
