@@ -889,14 +889,9 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, services service
 	dataContracts := snapshot.CurrentConfig.DataContracts
 	payloadShapes := snapshot.CurrentConfig.PayloadShapes
 
-	// Only reconcile schema registry when Redpanda is running
-	// This prevents connection refused errors when the service is stopped
-	redpandaConfig := snapshot.CurrentConfig.Internal.Redpanda
-	if redpandaConfig.DesiredFSMState == "active" || redpandaConfig.DesiredFSMState == "idle" || redpandaConfig.DesiredFSMState == "degraded" {
-		schemaRegistryErr := s.schemaRegistryManager.Reconcile(ctx, dataModels, dataContracts, payloadShapes)
-		if schemaRegistryErr != nil {
-			return fmt.Errorf("failed to reconcile schema registry: %w", schemaRegistryErr), false
-		}
+	schemaRegistryErr := s.schemaRegistryManager.Reconcile(ctx, dataModels, dataContracts, payloadShapes)
+	if schemaRegistryErr != nil {
+		return WrapSchemaRegistryError(fmt.Errorf("failed to reconcile schema registry: %w", schemaRegistryErr)), false
 	}
 
 	// If either was reconciled, indicate that reconciliation occurred

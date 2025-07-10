@@ -149,6 +149,14 @@ func (r *RedpandaInstance) IsStopped() bool {
 	return r.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopped
 }
 
+// IsRunning returns true if the instance is in any running state (active, idle, or degraded)
+func (r *RedpandaInstance) IsRunning() bool {
+	currentState := r.baseFSMInstance.GetCurrentFSMState()
+	return currentState == OperationalStateActive ||
+		currentState == OperationalStateIdle ||
+		currentState == OperationalStateDegraded
+}
+
 // WantsToBeStopped returns true if the instance wants to be stopped
 func (r *RedpandaInstance) WantsToBeStopped() bool {
 	return r.baseFSMInstance.GetDesiredFSMState() == OperationalStateStopped
