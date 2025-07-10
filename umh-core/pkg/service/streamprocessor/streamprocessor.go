@@ -38,16 +38,15 @@ import (
 
 type IStreamProcessorService interface {
 	// GetConfig pulls the **actual** runtime configuration that is currently
-	// deployed for the given Protocol-Converter.
+	// deployed for the given Stream Processor.
 	//
 	// It does so by:
-	//  1. Deriving the names of the underlying resources (Connection, read-DFC,
-	//     write-DFC).
+	//  1. Deriving the names of the underlying resources (DFC).
 	//  2. Asking the respective sub-services for their *Runtime* configs.
 	//  3. Stitching those parts back together via
-	//     `FromConnectionAndDFCServiceConfig`.
+	//     `FromDFCServiceConfig`.
 	//
-	// The resulting **ProtocolConverterServiceConfigRuntime** reflects the state
+	// The resulting **StreamProcessorServiceConfigRuntime** reflects the state
 	// the FSM is *really* running with and therefore forms the "live" side of the
 	// reconcile equation:
 	GetConfig(ctx context.Context, filesystemService filesystem.Service, spName string) (streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime, error)
@@ -57,22 +56,22 @@ type IStreamProcessorService interface {
 	// mutate it.
 	Status(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot, spName string) (ServiceInfo, error)
 
-	// AddToManager adds a ProtocolConverter to the Connection & DFC manager
+	// AddToManager adds a Stream Processor to the  DFC manager
 	AddToManager(ctx context.Context, filesystemService filesystem.Service, cfg *dataflowcomponentserviceconfig.DataflowComponentServiceConfig, spName string) error
 
-	// UpdateInManager updates an existing ProtocolConverter in the Connection & DFC manager
+	// UpdateInManager updates an existing Stream Processor in the  DFC manager
 	UpdateInManager(ctx context.Context, filesystemService filesystem.Service, cfg *dataflowcomponentserviceconfig.DataflowComponentServiceConfig, spName string) error
 
-	// RemoveFromManager removes a ProtocolConverter from the Connection & DFC manager
+	// RemoveFromManager removes a Stream Processor from the  DFC manager
 	RemoveFromManager(ctx context.Context, filesystemService filesystem.Service, spName string) error
 
-	// Start starts a ProtocolConverter
+	// Start starts a Stream Processor
 	Start(ctx context.Context, filesystemService filesystem.Service, spName string) error
 
-	// Stop stops a ProtocolConverter
+	// Stop stops a Stream Processor
 	Stop(ctx context.Context, filesystemService filesystem.Service, spName string) error
 
-	// ForceRemove removes a ProtocolConverter from the Connetion & DFC manager
+	// ForceRemove removes a Stream Processor from the  DFC manager
 	ForceRemove(ctx context.Context, filesystemService filesystem.Service, spName string) error
 
 	// ServiceExists checks if a connection and a dataflowcomponent with the given name exist.
@@ -84,18 +83,18 @@ type IStreamProcessorService interface {
 	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
 
 	// EvaluateDFCDesiredStates determines the appropriate desired states for the underlying
-	// DFCs based on the protocol converter's desired state and current DFC configurations.
+	// DFCs based on the stream processor's desired state and current DFC configurations.
 	// This is used internally for both initial startup and config change re-evaluation.
-	EvaluateDFCDesiredStates(spName string, protocolConverterDesiredState string) error
+	EvaluateDFCDesiredStates(spName string, spDesiredState string) error
 }
 
-// ServiceInfo holds information about the ProtocolConverters underlying health states.
+// ServiceInfo holds information about the StreamProcessor underlying health states.
 type ServiceInfo struct {
 	// DFCObservedState mirrors the DFC manager.
 	DFCObservedState dfcfsm.DataflowComponentObservedState
 	DFCFSMState      string
 
-	// RedpandaObservedState is included so a protocol-converter can degrade
+	// RedpandaObservedState is included so a stream processor can degrade
 	// itself when the message bus is down.
 	RedpandaObservedState redpandafsm.RedpandaObservedState
 	RedpandaFSMState      string
@@ -120,7 +119,7 @@ type Service struct {
 // This follows the functional options pattern for flexible configuration.
 type ServiceOption func(*Service)
 
-// WithUnderlyingService sets the underlying services for the protocol converter service
+// WithUnderlyingService sets the underlying services for the stream processor service
 // Used for testing purposes
 func WithUnderlyingService(
 	dfcService dfc.IDataFlowComponentService,
@@ -130,7 +129,7 @@ func WithUnderlyingService(
 	}
 }
 
-// WithUnderlyingManager sets the underlying managers for the protocol converter service
+// WithUnderlyingManager sets the underlying managers for the stream processor service
 // Used for testing purposes
 func WithUnderlyingManager(
 	dfcMgr *dfcfsm.DataflowComponentManager,
@@ -140,13 +139,13 @@ func WithUnderlyingManager(
 	}
 }
 
-// NewDefaultProtocolConverterService returns a fully initialised service with
+// NewDefaultService returns a fully initialised service with
 // default child managers.  Call-site may inject mocks via functional options.
 //
-// Note: `spName` is the *logical* name – **without** the "protocolconverter-"
+// Note: `spName` is the *logical* name – **without** the "streamprocessor-"
 // prefix – exactly as it appears in the UMH YAML.
-func NewDefaultProtocolConverterService(spName string, opts ...ServiceOption) *Service {
-	managerName := fmt.Sprintf("%s%s", logger.ComponentProtocolConverterService, spName)
+func NewDefaultService(spName string, opts ...ServiceOption) *Service {
+	managerName := fmt.Sprintf("%s%s", logger.ComponentStreamProcessorService, spName)
 	service := &Service{
 		logger:                   logger.For(managerName),
 		dataflowComponentManager: dfcfsm.NewDataflowComponentManager(managerName),
@@ -184,7 +183,7 @@ func (p *Service) getUnderlyingDFCReadName(spName string) string {
 //  3. Stitching those parts back together via
 //     `FromConnectionAndDFCServiceConfig`.
 //
-// The resulting **ProtocolConverterServiceConfigRuntime** reflects the state
+// The resulting **StreamProcessorServiceConfigRuntime** reflects the state
 // the FSM is *really* running with and therefore forms the "live" side of the
 // reconcile equation:
 func (p *Service) GetConfig(
@@ -289,7 +288,7 @@ func (p *Service) Status(
 	}, nil
 }
 
-// AddToManager registers a new protocolconverter in the Connection & DFC service.
+// AddToManager registers a new stream processor in the  DFC service.
 func (p *Service) AddToManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
@@ -300,7 +299,7 @@ func (p *Service) AddToManager(
 		return errors.New("dataflowcomponent manager not initialized")
 	}
 
-	p.logger.Infof("Adding ProtocolConverter %s", spName)
+	p.logger.Infof("Adding StreamProcessor %s", spName)
 
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -425,12 +424,12 @@ func (p *Service) RemoveFromManager(
 }
 
 // EvaluateDFCDesiredStates determines the appropriate desired states for the underlying
-// DFCs based on the protocol converter's desired state and current DFC configurations.
+// DFCs based on the stream processors's desired state and current DFC configurations.
 //
 // UNIQUE BEHAVIOR: Unlike other FSMs that make start/stop decisions once during initial
-// startup, protocol converters must re-evaluate DFC states whenever configs change because:
+// startup, stream processors must re-evaluate DFC states whenever configs change because:
 //
-//  1. Protocol converters start with template-based configs containing variables like
+//  1. Stream processors start with template-based configs containing variables like
 //     {{ .internal.bridged_by }} and {{ .location.0 }}
 //  2. These templates are rendered during reconciliation using runtime data (agent location,
 //     node name, etc.) that's not available at creation time
@@ -438,12 +437,12 @@ func (p *Service) RemoveFromManager(
 //     are processed, requiring state re-evaluation
 //
 // Logic:
-// - If protocol converter desired state is stopped: all DFCs -> stopped
-// - If protocol converter desired state is active: DFCs -> active only if they have non-empty input configs
+// - If stream processors desired state is stopped: all DFCs -> stopped
+// - If stream processors desired state is active: DFCs -> active only if they have non-empty input configs
 //
 // Called from:
-// 1. StartProtocolConverter() - during initial activation
-// 2. StopProtocolConverter() - during shutdown
+// 1. Start() - during initial activation
+// 2. Stop() - during shutdown
 // 3. UpdateObservedStateOfInstance() - when config changes are detected during reconciliation
 func (p *Service) EvaluateDFCDesiredStates(
 	spName string,
@@ -529,8 +528,8 @@ func (p *Service) Stop(
 	return p.EvaluateDFCDesiredStates(spName, "stopped")
 }
 
-// ReconcileManager synchronizes all protocolconverters on each tick.
-// It delegates to the ProtocolConverter service's reconciliation function,
+// ReconcileManager synchronizes all stream processors on each tick.
+// It delegates to the Stream Processors service's reconciliation function,
 // which ensures that the actual state matches the desired state
 // for all services.
 //
