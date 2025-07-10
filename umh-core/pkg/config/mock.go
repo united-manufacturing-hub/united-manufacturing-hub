@@ -86,7 +86,15 @@ func NewMockConfigManager() *MockConfigManager {
 func (m *MockConfigManager) GetDataFlowConfig() []DataFlowComponentConfig {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
-	return m.Config.DataFlow
+
+	// Return a copy to avoid race conditions
+	if m.Config.DataFlow == nil {
+		return nil
+	}
+
+	configCopy := make([]DataFlowComponentConfig, len(m.Config.DataFlow))
+	copy(configCopy, m.Config.DataFlow)
+	return configCopy
 }
 
 // GetConfig implements the ConfigManager interface
