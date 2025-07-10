@@ -657,7 +657,8 @@ type EditDataModelPayload struct {
 
 // GetDataModelPayload contains the necessary fields for executing a GetDataModel action.
 type GetDataModelPayload struct {
-	Name string `json:"name" binding:"required"` // Name of the data model to retrieve
+	Name            string `json:"name" binding:"required"`   // Name of the data model to retrieve
+	GetEnrichedTree bool   `json:"getEnrichedTree,omitempty"` // Whether to fill refModel fields with actual model data
 }
 
 // GetDataModelVersion represents a version of a data model with base64-encoded structure
