@@ -88,6 +88,7 @@ var _ = Describe("StateMocker", func() {
 								CacheResources:     testConfig.BenthosConfig.CacheResources,
 								RateLimitResources: testConfig.BenthosConfig.RateLimitResources,
 								Buffer:             testConfig.BenthosConfig.Buffer,
+								Logger:             testConfig.BenthosConfig.Logger,
 							},
 						},
 					},

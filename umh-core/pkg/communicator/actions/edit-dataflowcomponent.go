@@ -458,6 +458,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 				CacheResources:     normalizedConfig.CacheResources,
 				RateLimitResources: normalizedConfig.RateLimitResources,
 				Buffer:             normalizedConfig.Buffer,
+				Logger:             normalizedConfig.Logger,
 			},
 		},
 	}
@@ -682,6 +683,7 @@ func CompareSnapshotWithDesiredConfig(dfcSnapshot *dataflowcomponent.DataflowCom
 			CacheResources:     observedConfig.CacheResources,
 			RateLimitResources: observedConfig.RateLimitResources,
 			Buffer:             observedConfig.Buffer,
+			Logger:             observedConfig.Logger,
 		},
 	}
 	return dataflowcomponentserviceconfig.NewComparator().ConfigsEqual(observedConfigInDfcConfig, desiredConfig.DataFlowComponentServiceConfig)

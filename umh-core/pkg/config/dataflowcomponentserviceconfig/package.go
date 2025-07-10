@@ -31,6 +31,7 @@ type BenthosConfig struct {
 	CacheResources     []map[string]any `yaml:"cache_resources,omitempty"`
 	RateLimitResources []map[string]any `yaml:"rate_limit_resources,omitempty"`
 	Buffer             map[string]any   `yaml:"buffer,omitempty"`
+	Logger             map[string]any   `yaml:"logger,omitempty"`
 }
 
 // DataflowComponentServiceConfig represents the configuration for a DataFlowComponent

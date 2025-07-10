@@ -400,6 +400,7 @@ func createDfcManagerSnapshot(
 							CacheResources:     curDataflowcomponent.DataFlowComponentServiceConfig.BenthosConfig.CacheResources,
 							RateLimitResources: curDataflowcomponent.DataFlowComponentServiceConfig.BenthosConfig.RateLimitResources,
 							Buffer:             curDataflowcomponent.DataFlowComponentServiceConfig.BenthosConfig.Buffer,
+							Logger:             curDataflowcomponent.DataFlowComponentServiceConfig.BenthosConfig.Logger,
 						},
 					},
 				},

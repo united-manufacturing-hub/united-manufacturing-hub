@@ -238,6 +238,11 @@ func CreateBenthosConfigFromCDFCPayload(payload models.CDFCPayload, componentNam
 		buffer = map[string]interface{}{}
 	}
 
+	logger, ok := benthosYamlInject["logger"].(map[string]interface{})
+	if !ok {
+		logger = map[string]interface{}{}
+	}
+
 	benthosCacheResources := make([]map[string]interface{}, len(cacheResources))
 	for i, resource := range cacheResources {
 		resourceMap, ok := resource.(map[string]interface{})
@@ -259,6 +264,11 @@ func CreateBenthosConfigFromCDFCPayload(payload models.CDFCPayload, componentNam
 	benthosBuffer := make(map[string]interface{})
 	for key, value := range buffer {
 		benthosBuffer[key] = value
+	}
+
+	benthosLogger := make(map[string]interface{})
+	for key, value := range logger {
+		benthosLogger[key] = value
 	}
 
 	// Convert pipeline data to Benthos pipeline configuration
@@ -305,6 +315,7 @@ func CreateBenthosConfigFromCDFCPayload(payload models.CDFCPayload, componentNam
 		CacheResources:     benthosCacheResources,
 		RateLimitResources: benthosRateLimitResources,
 		Buffer:             benthosBuffer,
+		Logger:             benthosLogger,
 	}
 
 	// Normalize the config
@@ -318,6 +329,7 @@ func CreateBenthosConfigFromCDFCPayload(payload models.CDFCPayload, componentNam
 		CacheResources:     normalizedConfig.CacheResources,
 		RateLimitResources: normalizedConfig.RateLimitResources,
 		Buffer:             normalizedConfig.Buffer,
+		Logger:             normalizedConfig.Logger,
 	}, nil
 }
 
@@ -490,6 +502,11 @@ func BuildCommonDataFlowComponentPropertiesFromConfig(dfcConfig dataflowcomponen
 	// Add buffer if present
 	if len(dfcConfig.BenthosConfig.Buffer) > 0 {
 		rawYAMLMap["buffer"] = dfcConfig.BenthosConfig.Buffer
+	}
+
+	// Add logger if present
+	if len(dfcConfig.BenthosConfig.Logger) > 0 {
+		rawYAMLMap["logger"] = dfcConfig.BenthosConfig.Logger
 	}
 
 	// Only create rawYAML if we have any data

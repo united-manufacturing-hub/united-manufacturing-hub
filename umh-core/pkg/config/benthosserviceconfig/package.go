@@ -31,6 +31,7 @@ type BenthosServiceConfig struct {
 	CacheResources     []map[string]interface{} `yaml:"cache_resources,omitempty"`
 	RateLimitResources []map[string]interface{} `yaml:"rate_limit_resources,omitempty"`
 	Buffer             map[string]interface{}   `yaml:"buffer,omitempty"`
+	Logger             map[string]interface{}   `yaml:"logger,omitempty"`
 
 	// Advanced configuration
 	MetricsPort uint16 `yaml:"metrics_port"`

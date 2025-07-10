@@ -35,6 +35,7 @@ func (bc BenthosConfig) ToBenthosServiceConfig() benthosserviceconfig.BenthosSer
 		CacheResources:     bc.CacheResources,
 		RateLimitResources: bc.RateLimitResources,
 		Buffer:             bc.Buffer,
+		Logger:             bc.Logger,
 		// Default values for advanced configuration
 		MetricsPort: 0, // Will be assigned dynamically by the port manager
 		LogLevel:    constants.DefaultBenthosLogLevel,
@@ -52,6 +53,7 @@ func FromBenthosServiceConfig(benthos benthosserviceconfig.BenthosServiceConfig)
 			CacheResources:     benthos.CacheResources,
 			RateLimitResources: benthos.RateLimitResources,
 			Buffer:             benthos.Buffer,
+			Logger:             benthos.Logger,
 		},
 	}
 }

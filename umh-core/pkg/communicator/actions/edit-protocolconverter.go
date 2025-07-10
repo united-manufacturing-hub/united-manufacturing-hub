@@ -633,6 +633,7 @@ func (a *EditProtocolConverterAction) compareProtocolConverterDFCConfig(pcSnapsh
 			CacheResources:     observedBenthosConfig.CacheResources,
 			RateLimitResources: observedBenthosConfig.RateLimitResources,
 			Buffer:             observedBenthosConfig.Buffer,
+			Logger:             observedBenthosConfig.Logger,
 		},
 	}
 
