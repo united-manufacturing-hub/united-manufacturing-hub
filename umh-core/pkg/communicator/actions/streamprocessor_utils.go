@@ -20,8 +20,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
-// generateUUIDFromName generates a UUID from a name (similar to protocol converter pattern)
-func generateUUIDFromName(name string) uuid.UUID {
+// GenerateUUIDFromName generates a UUID from a name (similar to protocol converter pattern)
+func GenerateUUIDFromName(name string) uuid.UUID {
 	// Use a deterministic UUID generation based on name
 	// This ensures the same name always produces the same UUID
 	return uuid.NewSHA1(uuid.NameSpaceOID, []byte(name))

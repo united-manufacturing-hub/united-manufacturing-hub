@@ -351,7 +351,7 @@ var _ = Describe("DeployStreamProcessor", func() {
 			Expect(ok).To(BeTrue(), "Result should be a StreamProcessor")
 
 			// Verify the UUID was generated correctly
-			expectedUUID := uuid.NewSHA1(uuid.NameSpaceOID, []byte(spName))
+			expectedUUID := actions.GenerateUUIDFromName(spName)
 			Expect(responseSP.UUID).NotTo(BeNil())
 			Expect(*responseSP.UUID).To(Equal(expectedUUID))
 

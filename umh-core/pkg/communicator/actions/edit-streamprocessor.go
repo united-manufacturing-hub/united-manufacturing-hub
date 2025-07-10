@@ -146,7 +146,7 @@ func (a *EditStreamProcessorAction) Validate() error {
 		return errors.New("missing or invalid stream processor UUID")
 	}
 
-	if err := ValidateStreamProcessorName(a.name); err != nil {
+	if err := ValidateComponentName(a.name); err != nil {
 		return err
 	}
 
@@ -209,7 +209,7 @@ func (a *EditStreamProcessorAction) Execute() (interface{}, map[string]interface
 			"Stream processor successfully updated", a.outboundChannel, models.EditStreamProcessor)
 	}
 
-	newUUID := generateUUIDFromName(a.name)
+	newUUID := GenerateUUIDFromName(a.name)
 	response := map[string]any{
 		"uuid": newUUID,
 	}
@@ -235,7 +235,7 @@ func (a *EditStreamProcessorAction) applyMutation() (config.StreamProcessorConfi
 	var targetSP config.StreamProcessorConfig
 	found := false
 	for _, sp := range currentConfig.StreamProcessor {
-		spID := generateUUIDFromName(sp.Name)
+		spID := GenerateUUIDFromName(sp.Name)
 		if spID == a.streamProcessorUUID {
 			targetSP = sp
 			found = true
@@ -280,7 +280,7 @@ func (a *EditStreamProcessorAction) applyMutation() (config.StreamProcessorConfi
 
 		// Apply mutations to the root, but keep child's variables
 		instanceToModify = rootSP
-		atomicEditUUID = generateUUIDFromName(rootSP.Name)
+		atomicEditUUID = GenerateUUIDFromName(rootSP.Name)
 
 		// Add the new variables and preserve existing child variables
 		newVB = make(map[string]any)

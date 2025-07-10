@@ -127,7 +127,7 @@ func (a *DeployStreamProcessorAction) Validate() error {
 		return errors.New("missing required field Model.Version")
 	}
 
-	if err := ValidateStreamProcessorName(a.payload.Name); err != nil {
+	if err := ValidateComponentName(a.payload.Name); err != nil {
 		return err
 	}
 
@@ -164,7 +164,7 @@ func (a *DeployStreamProcessorAction) Execute() (interface{}, map[string]interfa
 	}
 
 	// Generate the UUID for the response
-	spUUID := generateUUIDFromName(a.payload.Name)
+	spUUID := GenerateUUIDFromName(a.payload.Name)
 
 	// Create response with the filled UUID
 	response := models.StreamProcessor{

@@ -107,7 +107,7 @@ func (a *DeleteStreamProcessorAction) Validate() error {
 		return errors.New("missing or invalid stream processor UUID")
 	}
 
-	if err := ValidateStreamProcessorName(a.name); err != nil {
+	if err := ValidateComponentName(a.name); err != nil {
 		return err
 	}
 

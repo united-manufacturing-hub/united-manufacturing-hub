@@ -17,8 +17,8 @@ package generator
 import (
 	"context"
 
-	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
@@ -52,7 +52,7 @@ func buildStreamProcessorAsDfc(
 	log *zap.SugaredLogger,
 ) models.Dfc {
 	// Generate UUID from stream processor name using deterministic method
-	spUUID := uuid.NewSHA1(uuid.NameSpaceOID, []byte(sp.Name))
+	spUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(sp.Name)
 
 	// Use hardcoded health as requested
 	health := &models.Health{

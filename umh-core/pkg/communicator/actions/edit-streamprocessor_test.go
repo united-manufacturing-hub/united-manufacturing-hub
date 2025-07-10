@@ -58,7 +58,7 @@ var _ = Describe("EditStreamProcessor", func() {
 		instanceUUID = uuid.New()
 		outboundChannel = make(chan *models.UMHMessage, 10) // Buffer to prevent blocking
 		spName = "test-stream-processor"
-		spUUID = uuid.NewSHA1(uuid.NameSpaceOID, []byte(spName))
+		spUUID = actions.GenerateUUIDFromName(spName)
 		spModel = models.StreamProcessorModelRef{
 			Name:    "test-model",
 			Version: "1.0.0",
@@ -328,7 +328,7 @@ var _ = Describe("EditStreamProcessor", func() {
 			Expect(err).To(BeNil())
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("name can only contain letters"))
+			Expect(err.Error()).To(ContainSubstring("name cannot be empty"))
 		})
 
 		It("should fail validation with missing model name", func() {
@@ -432,7 +432,7 @@ var _ = Describe("EditStreamProcessor", func() {
 			Expect(responseMap).To(HaveKey("uuid"))
 
 			// Verify the UUID was generated correctly
-			expectedUUID := uuid.NewSHA1(uuid.NameSpaceOID, []byte(spName))
+			expectedUUID := actions.GenerateUUIDFromName(spName)
 			Expect(responseMap["uuid"]).To(Equal(expectedUUID))
 
 			// Verify expected configuration changes

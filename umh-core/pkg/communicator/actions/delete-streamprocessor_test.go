@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/streamprocessorserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -50,7 +51,7 @@ var _ = Describe("DeleteStreamProcessor", func() {
 		instanceUUID = uuid.New()
 		outboundChannel = make(chan *models.UMHMessage, 10) // Buffer to prevent blocking
 		spName = "test-stream-processor"
-		spUUID = uuid.NewSHA1(uuid.NameSpaceOID, []byte(spName))
+		spUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(spName)
 
 		// Create initial config with existing stream processor
 		initialConfig := config.FullConfig{
@@ -206,7 +207,7 @@ var _ = Describe("DeleteStreamProcessor", func() {
 			Expect(err).To(BeNil())
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("name can only contain letters"))
+			Expect(err.Error()).To(ContainSubstring("name cannot be empty"))
 		})
 
 		It("should fail validation with invalid stream processor name", func() {
@@ -293,7 +294,7 @@ var _ = Describe("DeleteStreamProcessor", func() {
 		It("should handle stream processor not found", func() {
 			// Use a different name that doesn't exist
 			nonExistentName := "non-existent-processor"
-			nonExistentUUID := uuid.NewSHA1(uuid.NameSpaceOID, []byte(nonExistentName))
+			nonExistentUUID := actions.GenerateUUIDFromName(nonExistentName)
 
 			// Set up mock to fail when stream processor is not found
 			mockConfig.WithAtomicDeleteStreamProcessorError(errors.New("stream processor with name \"" + nonExistentName + "\" not found"))
