@@ -59,6 +59,7 @@ type StateMocker struct {
 	PendingTransitions map[string][]StateTransition // key is component ID
 	done               chan struct{}                // channel to signal shutdown of goroutine
 	running            atomic.Bool                  // flag to track if the mocker is running
+	stopped            atomic.Bool                  // flag to track if the mocker is stopping
 	mu                 *sync.RWMutex                // mutex to protect the state of the mocker
 	lastConfig         config.FullConfig            // last config is needed to detect config changes (events)
 	lastConfigSet      bool                         // flag to track if the last config has been set
@@ -458,7 +459,9 @@ func (s *StateMocker) Run() error {
 		for {
 			select {
 			case <-ticker.C:
-				s.Tick()
+				if !s.stopped.Load() {
+					s.Tick()
+				}
 			case <-s.done:
 				return
 			}
@@ -481,9 +484,11 @@ func (s *StateMocker) Start() error {
 // It is safe to call Stop even if the mocker isn't running
 func (s *StateMocker) Stop() {
 	if s.running.Load() {
+		s.stopped.Store(true)
 		close(s.done)
 		// Create a new channel for next run
 		s.done = make(chan struct{})
+		s.stopped.Store(false)
 	}
 }
 

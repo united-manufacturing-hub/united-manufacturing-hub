@@ -84,6 +84,8 @@ func NewMockConfigManager() *MockConfigManager {
 
 // GetDataFlowConfig returns the DataFlow component configurations
 func (m *MockConfigManager) GetDataFlowConfig() []DataFlowComponentConfig {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
 	return m.Config.DataFlow
 }
 
