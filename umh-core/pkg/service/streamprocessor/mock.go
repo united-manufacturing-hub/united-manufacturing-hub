@@ -50,7 +50,7 @@ type MockService struct {
 	// Return values for each method
 	GenerateConfigResultDFC    dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 	GenerateConfigError        error
-	GetConfigResult            streamprocessorserviceconfig.RuntimeConfig
+	GetConfigResult            streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime
 	GetConfigError             error
 	StatusResult               ServiceInfo
 	StatusError                error
@@ -197,14 +197,14 @@ func (m *MockService) GetConfig(
 	filesystemService filesystem.Service,
 	spName string,
 ) (
-	streamprocessorserviceconfig.RuntimeConfig,
+	streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime,
 	error,
 ) {
 	m.GetConfigCalled = true
 
 	// If error is set, return it
 	if m.GetConfigError != nil {
-		return streamprocessorserviceconfig.RuntimeConfig{}, m.GetConfigError
+		return streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime{}, m.GetConfigError
 	}
 
 	// If a result is preset, return it

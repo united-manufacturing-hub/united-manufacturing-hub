@@ -182,12 +182,6 @@ type ProtocolConverterConfig struct {
 	anchorName string `yaml:"-"`
 }
 
-type StreamProcessorConfig struct {
-	FSMInstanceConfig `yaml:",inline"`
-
-	StreamProcessorServiceConfig streamprocessorserviceconfig.ConfigSpec `yaml:"streamProcessorServiceConfig"`
-}
-
 // HasAnchors returns true if the ProtocolConverterConfig has anchors, see templating.go
 func (d *ProtocolConverterConfig) HasAnchors() bool { return d.hasAnchors }
 

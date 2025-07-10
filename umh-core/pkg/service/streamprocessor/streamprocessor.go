@@ -50,7 +50,7 @@ type IStreamProcessorService interface {
 	// The resulting **ProtocolConverterServiceConfigRuntime** reflects the state
 	// the FSM is *really* running with and therefore forms the "live" side of the
 	// reconcile equation:
-	GetConfig(ctx context.Context, filesystemService filesystem.Service, spName string) (streamprocessorserviceconfig.RuntimeConfig, error)
+	GetConfig(ctx context.Context, filesystemService filesystem.Service, spName string) (streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime, error)
 
 	// Status aggregates health  DFC and Redpanda into a single
 	// snapshot.  The returned structure is **read-only** – callers must not
@@ -191,22 +191,22 @@ func (p *Service) GetConfig(
 	ctx context.Context,
 	filesystemService filesystem.Service,
 	spName string,
-) (streamprocessorserviceconfig.RuntimeConfig, error) {
+) (streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime, error) {
 	if ctx.Err() != nil {
-		return streamprocessorserviceconfig.RuntimeConfig{}, ctx.Err()
+		return streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime{}, ctx.Err()
 	}
 
 	underlyingDFCName := p.getUnderlyingDFCReadName(spName)
 
 	dfcConfig, err := p.dataflowComponentService.GetConfig(ctx, filesystemService, underlyingDFCName)
 	if err != nil {
-		return streamprocessorserviceconfig.RuntimeConfig{}, fmt.Errorf("failed to get read dataflowcomponent config: %w", err)
+		return streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime{}, fmt.Errorf("failed to get read dataflowcomponent config: %w", err)
 	}
 
 	// TODO: From Config
 	// actualConfig := protocolconverterserviceconfig.FromConnectionAndDFCServiceConfig(connConfig, dfcConfig, dfcWriteConfig)
 
-	var actualConfig streamprocessorserviceconfig.RuntimeConfig
+	var actualConfig streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime
 	// placeholder
 	dfcConfig.GetBenthosServiceConfig()
 	return actualConfig, nil
