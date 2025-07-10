@@ -119,6 +119,13 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 			return nil, false
 		}
 
+		if errors.Is(err, context.DeadlineExceeded) {
+			// Context deadline exceeded should be retried with backoff, not ignored
+			b.baseFSMInstance.SetError(err, snapshot.Tick)
+			b.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileStateTransition, will retry with backoff")
+			return nil, false
+		}
+
 		b.baseFSMInstance.SetError(err, snapshot.Tick)
 		b.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
@@ -127,6 +134,12 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 	// Reconcile the s6Manager
 	s6Err, s6Reconciled := b.service.ReconcileManager(ctx, services, snapshot.Tick)
 	if s6Err != nil {
+		if errors.Is(s6Err, context.DeadlineExceeded) {
+			// Context deadline exceeded should be retried with backoff, not ignored
+			b.baseFSMInstance.SetError(s6Err, snapshot.Tick)
+			b.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in s6Manager reconciliation, will retry with backoff")
+			return nil, false
+		}
 		b.baseFSMInstance.SetError(s6Err, snapshot.Tick)
 		b.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
 		return nil, false

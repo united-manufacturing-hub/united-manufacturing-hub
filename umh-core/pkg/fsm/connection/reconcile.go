@@ -121,6 +121,13 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 			return nil, false
 		}
 
+		if errors.Is(err, context.DeadlineExceeded) {
+			// Context deadline exceeded should be retried with backoff, not ignored
+			c.baseFSMInstance.SetError(err, snapshot.Tick)
+			c.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileStateTransition, will retry with backoff")
+			return nil, false
+		}
+
 		c.baseFSMInstance.SetError(err, snapshot.Tick)
 		c.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
@@ -129,6 +136,12 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 	// Reconcile the benthosManager
 	nmapErr, nmapReconciled := c.service.ReconcileManager(ctx, services, snapshot.Tick)
 	if nmapErr != nil {
+		if errors.Is(nmapErr, context.DeadlineExceeded) {
+			// Context deadline exceeded should be retried with backoff, not ignored
+			c.baseFSMInstance.SetError(nmapErr, snapshot.Tick)
+			c.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in nmapManager reconciliation, will retry with backoff")
+			return nil, false
+		}
 		c.baseFSMInstance.SetError(nmapErr, snapshot.Tick)
 		c.baseFSMInstance.GetLogger().Errorf("error reconciling nmapManager: %s", nmapErr)
 		return nil, false

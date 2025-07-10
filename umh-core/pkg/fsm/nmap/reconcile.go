@@ -120,6 +120,13 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 			return nil, false
 		}
 
+		if errors.Is(err, context.DeadlineExceeded) {
+			// Context deadline exceeded should be retried with backoff, not ignored
+			n.baseFSMInstance.SetError(err, snapshot.Tick)
+			n.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileStateTransition, will retry with backoff")
+			return nil, false
+		}
+
 		n.baseFSMInstance.SetError(err, snapshot.Tick)
 		n.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
@@ -128,8 +135,14 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 	// Reconcile the s6Manager
 	s6Err, s6Reconciled := n.monitorService.ReconcileManager(ctx, services, snapshot.Tick)
 	if s6Err != nil {
+		if errors.Is(s6Err, context.DeadlineExceeded) {
+			// Context deadline exceeded should be retried with backoff, not ignored
+			n.baseFSMInstance.SetError(s6Err, snapshot.Tick)
+			n.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in monitorService reconciliation, will retry with backoff")
+			return nil, false
+		}
 		n.baseFSMInstance.SetError(s6Err, snapshot.Tick)
-		n.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
+		n.baseFSMInstance.GetLogger().Errorf("error reconciling monitorService: %s", s6Err)
 		return nil, false
 	}
 

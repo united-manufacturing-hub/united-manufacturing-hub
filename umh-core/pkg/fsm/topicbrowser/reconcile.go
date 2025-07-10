@@ -137,16 +137,29 @@ func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.Syste
 			return nil, false
 		}
 
+		if errors.Is(err, context.DeadlineExceeded) {
+			// Context deadline exceeded should be retried with backoff, not ignored
+			i.baseFSMInstance.SetError(err, snapshot.Tick)
+			i.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileStateTransition, will retry with backoff")
+			return nil, false
+		}
+
 		i.baseFSMInstance.SetError(err, snapshot.Tick)
 		i.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
-	// Reconcile the underlying Manager
+	// Reconcile the manager
 	managerErr, managerReconciled := i.service.ReconcileManager(ctx, services, snapshot.Tick)
 	if managerErr != nil {
+		if errors.Is(managerErr, context.DeadlineExceeded) {
+			// Context deadline exceeded should be retried with backoff, not ignored
+			i.baseFSMInstance.SetError(managerErr, snapshot.Tick)
+			i.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in manager reconciliation, will retry with backoff")
+			return nil, false
+		}
 		i.baseFSMInstance.SetError(managerErr, snapshot.Tick)
-		i.baseFSMInstance.GetLogger().Errorf("error reconciling Topic Browser manager: %s", managerErr)
+		i.baseFSMInstance.GetLogger().Errorf("error reconciling manager: %s", managerErr)
 		return nil, false
 	}
 

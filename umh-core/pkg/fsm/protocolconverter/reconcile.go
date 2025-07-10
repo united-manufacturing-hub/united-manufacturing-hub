@@ -130,6 +130,13 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 			return nil, false
 		}
 
+		if errors.Is(err, context.DeadlineExceeded) {
+			// Context deadline exceeded should be retried with backoff, not ignored
+			p.baseFSMInstance.SetError(err, snapshot.Tick)
+			p.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileStateTransition, will retry with backoff")
+			return nil, false
+		}
+
 		// Enhanced error logging with state context
 		currentState := p.baseFSMInstance.GetCurrentFSMState()
 		desiredState := p.baseFSMInstance.GetDesiredFSMState()
@@ -140,9 +147,15 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
-	// Reconcile the DFC and Connection manager
+	// Reconcile the manager
 	managerErr, managerReconciled := p.service.ReconcileManager(ctx, services, snapshot.Tick)
 	if managerErr != nil {
+		if errors.Is(managerErr, context.DeadlineExceeded) {
+			// Context deadline exceeded should be retried with backoff, not ignored
+			p.baseFSMInstance.SetError(managerErr, snapshot.Tick)
+			p.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in manager reconciliation, will retry with backoff")
+			return nil, false
+		}
 		p.baseFSMInstance.SetError(managerErr, snapshot.Tick)
 		p.baseFSMInstance.GetLogger().Errorf("error reconciling manager: %s", managerErr)
 		return nil, false
