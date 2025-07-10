@@ -546,7 +546,37 @@ func (m *BaseFSMManager[C]) Reconcile(
 
 	// Update the snapshot tick to the manager tick
 	snapshot.Tick = m.managerTick
-	for name, instance := range m.instances {
+
+	// Convert map to slice for deterministic ordering and rotation
+	instanceNames := make([]string, 0, len(m.instances))
+	for name := range m.instances {
+		instanceNames = append(instanceNames, name)
+	}
+
+	// If we have more instances than the concurrency limit, schedule only a subset
+	// and rotate based on tick to ensure all instances get scheduled over time
+	startIdx := 0
+	endIdx := len(instanceNames)
+
+	if len(instanceNames) > constants.MaxConcurrentFSMOperations {
+		// Calculate rotation based on manager tick
+		totalBatches := (len(instanceNames) + constants.MaxConcurrentFSMOperations - 1) / constants.MaxConcurrentFSMOperations
+		currentBatch := int(m.managerTick % uint64(totalBatches))
+
+		startIdx = currentBatch * constants.MaxConcurrentFSMOperations
+		endIdx = startIdx + constants.MaxConcurrentFSMOperations
+		if endIdx > len(instanceNames) {
+			endIdx = len(instanceNames)
+		}
+
+		m.logger.Debugf("Scheduling batch %d/%d: instances %d-%d (tick %d)",
+			currentBatch+1, totalBatches, startIdx, endIdx-1, m.managerTick)
+	}
+
+	// Schedule the selected batch of instances
+	for i := startIdx; i < endIdx; i++ {
+		name := instanceNames[i]
+		instance := m.instances[name]
 		// If the ctx is already expired, we can skip adding new goroutines
 		if innerCtx.Err() != nil {
 			m.logger.Debugf("context expired, skipping reconciliation of instance %s", name)

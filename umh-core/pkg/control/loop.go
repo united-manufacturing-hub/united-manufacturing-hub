@@ -367,8 +367,30 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	errorgroup, _ := errgroup.WithContext(innerCtx)
 	// Limit concurrent manager operations for I/O-bound workloads
 	errorgroup.SetLimit(constants.MaxConcurrentFSMOperations)
-	for _, manager := range c.managers {
-		capturedManager := manager
+
+	// If we have more managers than the concurrency limit, schedule only a subset
+	// and rotate based on tick to ensure all managers get scheduled over time
+	startIdx := 0
+	endIdx := len(c.managers)
+
+	if len(c.managers) > constants.MaxConcurrentFSMOperations {
+		// Calculate rotation based on current tick
+		totalBatches := (len(c.managers) + constants.MaxConcurrentFSMOperations - 1) / constants.MaxConcurrentFSMOperations
+		currentBatch := int(c.currentTick % uint64(totalBatches))
+
+		startIdx = currentBatch * constants.MaxConcurrentFSMOperations
+		endIdx = startIdx + constants.MaxConcurrentFSMOperations
+		if endIdx > len(c.managers) {
+			endIdx = len(c.managers)
+		}
+
+		c.logger.Debugf("Scheduling manager batch %d/%d: managers %d-%d (tick %d)",
+			currentBatch+1, totalBatches, startIdx, endIdx-1, c.currentTick)
+	}
+
+	// Schedule the selected batch of managers
+	for i := startIdx; i < endIdx; i++ {
+		capturedManager := c.managers[i]
 
 		errorgroup.Go(func() error {
 			reconciled, err := c.reconcileManager(innerCtx, capturedManager, &executedManagers, &executedManagersMutex, newSnapshot)
