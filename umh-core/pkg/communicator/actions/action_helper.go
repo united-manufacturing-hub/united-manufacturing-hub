@@ -16,6 +16,7 @@ package actions
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
@@ -24,11 +25,74 @@ import (
 	"go.uber.org/zap"
 )
 
+// ThreadSafeMessages provides thread-safe access to a slice of UMH messages
+type ThreadSafeMessages struct {
+	mu       sync.Mutex
+	messages []*models.UMHMessage
+}
+
+// NewThreadSafeMessages creates a new thread-safe message container
+func NewThreadSafeMessages() *ThreadSafeMessages {
+	return &ThreadSafeMessages{
+		messages: make([]*models.UMHMessage, 0),
+	}
+}
+
+// Append adds a message to the slice in a thread-safe manner
+func (tsm *ThreadSafeMessages) Append(msg *models.UMHMessage) {
+	tsm.mu.Lock()
+	defer tsm.mu.Unlock()
+	tsm.messages = append(tsm.messages, msg)
+}
+
+// Get returns a copy of the message at the given index in a thread-safe manner
+func (tsm *ThreadSafeMessages) Get(index int) *models.UMHMessage {
+	tsm.mu.Lock()
+	defer tsm.mu.Unlock()
+	if index < 0 || index >= len(tsm.messages) {
+		return nil
+	}
+	return tsm.messages[index]
+}
+
+// Len returns the current length of the slice in a thread-safe manner
+func (tsm *ThreadSafeMessages) Len() int {
+	tsm.mu.Lock()
+	defer tsm.mu.Unlock()
+	return len(tsm.messages)
+}
+
+// GetAll returns a copy of all messages in a thread-safe manner
+func (tsm *ThreadSafeMessages) GetAll() []*models.UMHMessage {
+	tsm.mu.Lock()
+	defer tsm.mu.Unlock()
+	result := make([]*models.UMHMessage, len(tsm.messages))
+	copy(result, tsm.messages)
+	return result
+}
+
 // ConsumeOutboundMessages processes messages from the outbound channel
 // This method is used for testing purposes to consume messages that would normally be sent to the user
 func ConsumeOutboundMessages(outboundChannel chan *models.UMHMessage, messages *[]*models.UMHMessage, logMessages bool) {
 	for msg := range outboundChannel {
 		*messages = append(*messages, msg)
+		decodedMessage, err := encoding.DecodeMessageFromUMHInstanceToUser(msg.Content)
+		if err != nil {
+			zap.S().Error("error decoding message", zap.Error(err))
+			continue
+		}
+		if logMessages {
+			zap.S().Info("received message", decodedMessage.Payload)
+		}
+
+	}
+}
+
+// ConsumeOutboundMessagesThreadSafe processes messages from the outbound channel in a thread-safe manner
+// This method is used for testing purposes to consume messages that would normally be sent to the user
+func ConsumeOutboundMessagesThreadSafe(outboundChannel chan *models.UMHMessage, messages *ThreadSafeMessages, logMessages bool) {
+	for msg := range outboundChannel {
+		messages.Append(msg)
 		decodedMessage, err := encoding.DecodeMessageFromUMHInstanceToUser(msg.Content)
 		if err != nil {
 			zap.S().Error("error decoding message", zap.Error(err))

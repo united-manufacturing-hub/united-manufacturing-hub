@@ -457,14 +457,11 @@ func (s *StateMocker) Run() error {
 		defer s.running.Store(false)
 
 		for {
-			select {
-			case <-ticker.C:
-				if !s.stopped.Load() {
-					s.Tick()
-				}
-			case <-s.done:
+			<-ticker.C
+			if s.stopped.Load() {
 				return
 			}
+			s.Tick()
 		}
 	}()
 
@@ -485,9 +482,10 @@ func (s *StateMocker) Start() error {
 func (s *StateMocker) Stop() {
 	if s.running.Load() {
 		s.stopped.Store(true)
-		close(s.done)
-		// Create a new channel for next run
-		s.done = make(chan struct{})
+		// Wait for the goroutine to finish by checking the running flag
+		for s.running.Load() {
+			time.Sleep(1 * time.Millisecond)
+		}
 		s.stopped.Store(false)
 	}
 }
