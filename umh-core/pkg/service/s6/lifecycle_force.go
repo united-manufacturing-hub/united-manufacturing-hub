@@ -57,7 +57,7 @@ func (s *DefaultService) ForceCleanup(ctx context.Context, artifacts *ServiceArt
 	}
 
 	// Kill supervise processes
-	if err := s.killSupervisors(artifacts, fsService); err != nil {
+	if err := s.killSupervisors(ctx, artifacts, fsService); err != nil {
 		s.logger.Warnf("Failed to kill supervisor processes: %v", err)
 		// Continue with cleanup even if supervisor killing fails
 	}
@@ -88,7 +88,7 @@ func (s *DefaultService) ForceCleanup(ctx context.Context, artifacts *ServiceArt
 }
 
 // killSupervisors kills s6-supervise processes
-func (s *DefaultService) killSupervisors(artifacts *ServiceArtifacts, fsService filesystem.Service) error {
+func (s *DefaultService) killSupervisors(ctx context.Context, artifacts *ServiceArtifacts, fsService filesystem.Service) error {
 	supervisePaths := []string{
 		filepath.Join(artifacts.ServiceDir, "supervise"),
 		filepath.Join(artifacts.ServiceDir, "log", "supervise"),
@@ -97,10 +97,10 @@ func (s *DefaultService) killSupervisors(artifacts *ServiceArtifacts, fsService 
 	var lastErr error
 	for _, supervisePath := range supervisePaths {
 		pidFile := filepath.Join(supervisePath, "pid")
-		if data, err := fsService.ReadFile(context.Background(), pidFile); err == nil && len(data) > 0 {
+		if data, err := fsService.ReadFile(ctx, pidFile); err == nil && len(data) > 0 {
 			if pidStr := strings.TrimSpace(string(data)); pidStr != "" {
 				// Try SIGTERM first
-				if _, err := fsService.ExecuteCommand(context.Background(), "kill", "-TERM", pidStr); err != nil {
+				if _, err := fsService.ExecuteCommand(ctx, "kill", "-TERM", pidStr); err != nil {
 					s.logger.Debugf("Failed to kill supervisor process %s: %v", pidStr, err)
 					lastErr = err
 				}
