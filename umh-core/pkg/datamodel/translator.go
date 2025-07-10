@@ -472,12 +472,20 @@ func (t *Translator) convertTypeToJSONSchema(umhType string) (string, error) {
 }
 
 // generateSubjectName creates a Schema Registry subject name from contract, version, and payload shape
-// Format: {contract_name}_{version}-{payload_shape}
-// Example: "_pump_v1-timeseries-number"
+// Format: {contract_name}_{version}-{payload_shape} or {contract_name}-{payload_shape} if version already in name
+// Example: "_pump_v1-timeseries-number" or "_sensor_data_v1-timeseries-number"
 func generateSubjectName(contractName, version, payloadShape string) string {
 	// Ensure contract name starts with underscore
 	if !strings.HasPrefix(contractName, "_") {
 		contractName = "_" + contractName
+	}
+
+	// Check if contract name already contains a version suffix (e.g., _v1, _v2, etc.)
+	// This handles cases where the data contract name already includes the version
+	versionPattern := "_v"
+	if strings.Contains(contractName, versionPattern) {
+		// Contract name already includes version, don't append it again
+		return fmt.Sprintf("%s-%s", contractName, payloadShape)
 	}
 
 	// Ensure version has 'v' prefix
