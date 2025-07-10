@@ -388,6 +388,14 @@ var _ = Describe("Real Redpanda Integration Tests", Ordered, Label("integration"
 					return false
 				}
 				metrics := registry.GetMetrics()
+				GinkgoWriter.Printf("==============================================\n")
+				GinkgoWriter.Printf("SubjectsToAdd: %d\n", metrics.SubjectsToAdd)
+				GinkgoWriter.Printf("SubjectsToRemove: %d\n", metrics.SubjectsToRemove)
+				GinkgoWriter.Printf("TotalReconciliations: %d\n", metrics.TotalReconciliations)
+				GinkgoWriter.Printf("SuccessfulOperations: %d\n", metrics.SuccessfulOperations)
+				GinkgoWriter.Printf("LastError: %s\n", metrics.LastError)
+				GinkgoWriter.Printf("LastOperationTime: %s\n", metrics.LastOperationTime)
+				GinkgoWriter.Printf("LastOperationTime under 10 seconds: %t\n", time.Since(metrics.LastOperationTime) < 10*time.Second)
 				return metrics.SubjectsToAdd == 0 &&
 					metrics.SubjectsToRemove == 0 &&
 					metrics.TotalReconciliations > initialReconciliations &&
@@ -421,19 +429,26 @@ var _ = Describe("Real Redpanda Integration Tests", Ordered, Label("integration"
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			// For now, we'll use empty configuration since schema validation
-			// will be handled by the data model translation layer
-			dataModels, dataContracts, payloadShapes := emptyIntegrationTestConfig()
+			// Test with actually malformed JSON schema
+			malformedSchemas := map[SubjectName]JSONSchemaDefinition{
+				"malformed-schema": JSONSchemaDefinition(`{
+					"type": "object",
+					"properties": {
+						"field": {"type": "invalid-type"}  // This is invalid JSON Schema
+					},
+					"required": ["field"
+				}`),
+			}
 
-			// This should eventually fail consistently
-			Consistently(func() bool {
-				err := registry.Reconcile(ctx, dataModels, dataContracts, payloadShapes)
+			// This should fail due to invalid schema
+			Eventually(func() bool {
+				err := registry.ReconcileWithSchemas(ctx, malformedSchemas)
 				if err == nil {
 					return false
 				}
 				metrics := registry.GetMetrics()
 				return metrics.FailedOperations > 0 && metrics.LastError != ""
-			}, 3*time.Second, 500*time.Millisecond).Should(BeTrue())
+			}, 5*time.Second, 500*time.Millisecond).Should(BeTrue())
 		})
 	})
 

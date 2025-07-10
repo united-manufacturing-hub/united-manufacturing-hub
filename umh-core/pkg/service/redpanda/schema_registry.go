@@ -365,6 +365,21 @@ func WithSchemaRegistryAddress(address string) func(*SchemaRegistry) {
 //		// Handle reconciliation error
 //	}
 func (s *SchemaRegistry) Reconcile(ctx context.Context, dataModels []config.DataModelsConfig, dataContracts []config.DataContractsConfig, payloadShapes map[string]config.PayloadShape) error {
+	// Translate data models and contracts to expected schemas
+	expectedSubjects, err := s.translateToSchemas(ctx, dataModels, dataContracts, payloadShapes)
+	if err != nil {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		s.totalReconciliations++
+		s.lastError = err.Error()
+		s.failedOperations++
+		s.lastOperationTime = time.Now()
+		return fmt.Errorf("failed to translate data models to schemas: %w", err)
+	}
+	return s.ReconcileWithSchemas(ctx, expectedSubjects)
+}
+
+func (s *SchemaRegistry) ReconcileWithSchemas(ctx context.Context, schemas map[SubjectName]JSONSchemaDefinition) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -382,17 +397,8 @@ func (s *SchemaRegistry) Reconcile(ctx context.Context, dataModels []config.Data
 		}
 	}()
 
-	// Translate data models and contracts to expected schemas
-	expectedSubjects, err := s.translateToSchemas(ctx, dataModels, dataContracts, payloadShapes)
-	if err != nil {
-		return fmt.Errorf("failed to translate data models to schemas: %w", err)
-	}
-	return s.ReconcileWithSchemas(ctx, expectedSubjects)
-}
-
-func (s *SchemaRegistry) ReconcileWithSchemas(ctx context.Context, schemas map[SubjectName]JSONSchemaDefinition) error {
 	// Use existing reconciliation logic with translated schemas
-	err := s.reconcileInternal(ctx, schemas)
+	err = s.reconcileInternal(ctx, schemas)
 	return err
 }
 
