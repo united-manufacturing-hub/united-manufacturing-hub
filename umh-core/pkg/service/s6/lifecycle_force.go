@@ -62,8 +62,9 @@ func (s *DefaultService) ForceCleanup(ctx context.Context, artifacts *ServiceArt
 		// Continue with cleanup even if supervisor killing fails
 	}
 
-	// Optional: Kill orphan processes using service directory
-	s.killOrphanProcesses(artifacts.ServiceDir)
+	// TODO: Consider implementing orphan process cleanup in the future
+	// Previous implementation had goroutine leak - spawned background goroutine that did nothing
+	// If needed, implement with proper lifecycle management and actual cleanup logic
 
 	// Remove directories with timeout awareness
 	if err := s.removeDirectoryWithTimeout(ctx, artifacts.ServiceDir, fsService); err != nil {
@@ -129,22 +130,4 @@ func (s *DefaultService) removeDirectoryWithTimeout(ctx context.Context, path st
 	}
 
 	return nil
-}
-
-// killOrphanProcesses kills processes using the service directory (Linux-specific)
-// This is optional and can be disabled for performance
-func (s *DefaultService) killOrphanProcesses(servicePath string) {
-	// This is a platform-specific operation
-	// In production, consider making this optional via feature flag
-
-	// Execute in background to avoid blocking
-	go func() {
-		// Use find to locate processes with cwd under the service path
-		// Implementation would parse /proc entries and send SIGKILL
-		// This is left as a stub for platform-specific implementation
-
-		// Example command that would be used:
-		// find /proc -maxdepth 2 -name cwd -exec readlink {} \; 2>/dev/null | grep '^servicePath' | head -10
-		_ = servicePath // Placeholder to avoid unused parameter warning
-	}()
 }
