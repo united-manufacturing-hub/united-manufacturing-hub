@@ -25,6 +25,7 @@ require (
 	github.com/prometheus/common v0.64.0
 	github.com/prometheus/prometheus v0.304.1
 	github.com/shirou/gopsutil/v3 v3.24.5
+	github.com/testcontainers/testcontainers-go/modules/redpanda v0.37.0
 	github.com/tiendc/go-deepcopy v1.6.1
 	github.com/united-manufacturing-hub/expiremap/v2 v2.1.0
 	github.com/united-manufacturing-hub/umh-utils v0.2.2
@@ -106,7 +107,6 @@ require (
 	github.com/sosodev/duration v1.3.1 // indirect
 	github.com/stretchr/testify v1.10.0 // indirect
 	github.com/testcontainers/testcontainers-go v0.37.0 // indirect
-	github.com/testcontainers/testcontainers-go/modules/redpanda v0.37.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.15 // indirect
 	github.com/tklauser/numcpus v0.10.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
