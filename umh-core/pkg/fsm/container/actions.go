@@ -16,6 +16,7 @@ package container
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -71,6 +72,12 @@ func (c *ContainerInstance) CheckForCreation(ctx context.Context, filesystemServ
 // It queries container_monitor.Service for new metrics and updates the observed state.
 func (c *ContainerInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			// Context deadline exceeded should be retried with backoff, not ignored
+			c.baseFSMInstance.SetError(ctx.Err(), snapshot.Tick)
+			c.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in UpdateObservedStateOfInstance, will retry with backoff")
+			return nil
+		}
 		return ctx.Err()
 	}
 

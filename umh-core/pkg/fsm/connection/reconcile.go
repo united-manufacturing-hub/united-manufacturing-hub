@@ -54,11 +54,8 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			// Context deadline exceeded should be retried with backoff, not ignored
-			c.baseFSMInstance.SetError(ctx.Err(), snapshot.Tick)
-			c.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded at start of reconciliation, will retry with backoff")
-			return nil, false
+		if err, shouldContinue := c.baseFSMInstance.HandleDeadlineExceeded(ctx.Err(), snapshot.Tick, "start of reconciliation"); !shouldContinue {
+			return err, false
 		}
 		return ctx.Err(), false
 	}
@@ -103,12 +100,8 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, connectionsvc.ErrServiceNotExist) {
 
-			if errors.Is(err, context.DeadlineExceeded) {
-				// Context deadline exceeded should be retried with backoff, not ignored
-				c.baseFSMInstance.SetError(err, snapshot.Tick)
-				c.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileExternalChanges, will retry with backoff")
-				err = nil // Clear error so reconciliation continues
-				return nil, false
+			if err, shouldContinue := c.baseFSMInstance.HandleDeadlineExceeded(err, snapshot.Tick, "reconcileExternalChanges"); !shouldContinue {
+				return err, false
 			}
 			c.baseFSMInstance.SetError(err, snapshot.Tick)
 			c.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
@@ -127,11 +120,8 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 			return nil, false
 		}
 
-		if errors.Is(err, context.DeadlineExceeded) {
-			// Context deadline exceeded should be retried with backoff, not ignored
-			c.baseFSMInstance.SetError(err, snapshot.Tick)
-			c.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileStateTransition, will retry with backoff")
-			return nil, false
+		if err, shouldContinue := c.baseFSMInstance.HandleDeadlineExceeded(err, snapshot.Tick, "reconcileStateTransition"); !shouldContinue {
+			return err, false
 		}
 
 		c.baseFSMInstance.SetError(err, snapshot.Tick)
@@ -142,11 +132,8 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 	// Reconcile the benthosManager
 	nmapErr, nmapReconciled := c.service.ReconcileManager(ctx, services, snapshot.Tick)
 	if nmapErr != nil {
-		if errors.Is(nmapErr, context.DeadlineExceeded) {
-			// Context deadline exceeded should be retried with backoff, not ignored
-			c.baseFSMInstance.SetError(nmapErr, snapshot.Tick)
-			c.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in nmapManager reconciliation, will retry with backoff")
-			return nil, false
+		if nmapErr, shouldContinue := c.baseFSMInstance.HandleDeadlineExceeded(nmapErr, snapshot.Tick, "nmapManager reconciliation"); !shouldContinue {
+			return nmapErr, false
 		}
 		c.baseFSMInstance.SetError(nmapErr, snapshot.Tick)
 		c.baseFSMInstance.GetLogger().Errorf("error reconciling nmapManager: %s", nmapErr)

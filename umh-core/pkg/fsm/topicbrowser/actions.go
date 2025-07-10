@@ -173,6 +173,12 @@ func (i *TopicBrowserInstance) getServiceStatus(ctx context.Context, services se
 // UpdateObservedStateOfInstance updates the observed state of the service
 func (i *TopicBrowserInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			// Context deadline exceeded should be retried with backoff, not ignored
+			i.baseFSMInstance.SetError(ctx.Err(), snapshot.Tick)
+			i.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in UpdateObservedStateOfInstance, will retry with backoff")
+			return nil
+		}
 		return ctx.Err()
 	}
 

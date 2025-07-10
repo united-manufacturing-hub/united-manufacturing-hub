@@ -137,6 +137,12 @@ func (b *BenthosMonitorInstance) CheckForCreation(ctx context.Context, filesyste
 // For Benthos monitoring, this is a no-op as we don't need to update any resources.
 func (b *BenthosMonitorInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			// Context deadline exceeded should be retried with backoff, not ignored
+			b.baseFSMInstance.SetError(ctx.Err(), snapshot.Tick)
+			b.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in UpdateObservedStateOfInstance, will retry with backoff")
+			return nil
+		}
 		return ctx.Err()
 	}
 

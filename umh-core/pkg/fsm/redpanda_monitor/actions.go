@@ -138,6 +138,12 @@ func (r *RedpandaMonitorInstance) CheckForCreation(ctx context.Context, filesyst
 // UpdateObservedStateOfInstance is called when the FSM transitions to updating.
 func (r *RedpandaMonitorInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			// Context deadline exceeded should be retried with backoff, not ignored
+			r.baseFSMInstance.SetError(ctx.Err(), snapshot.Tick)
+			r.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in UpdateObservedStateOfInstance, will retry with backoff")
+			return nil
+		}
 		return ctx.Err()
 	}
 

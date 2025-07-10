@@ -16,6 +16,7 @@ package agent_monitor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -70,6 +71,16 @@ func (a *AgentInstance) CheckForCreation(ctx context.Context, filesystemService 
 // UpdateObservedStateOfInstance is called when the FSM transitions to updating.
 // It queries agent_monitor.Service for new metrics and updates the observed state.
 func (a *AgentInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
+	if ctx.Err() != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			// Context deadline exceeded should be retried with backoff, not ignored
+			a.baseFSMInstance.SetError(ctx.Err(), snapshot.Tick)
+			a.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in UpdateObservedStateOfInstance, will retry with backoff")
+			return nil
+		}
+		return ctx.Err()
+	}
+
 	// get the config from the config manager
 	status, err := a.monitorService.Status(ctx, snapshot)
 	if err != nil {
