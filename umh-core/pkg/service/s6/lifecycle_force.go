@@ -42,7 +42,8 @@ func (s *DefaultService) ForceCleanup(ctx context.Context, artifacts *ServiceArt
 		return fmt.Errorf("artifacts is nil")
 	}
 
-	s.logger.Warnf("Force cleaning service artifacts: %+v", artifacts)
+	s.logger.Warnf("Force cleaning service artifacts: service=%s, files=%d",
+		filepath.Base(artifacts.ServiceDir), len(artifacts.CreatedFiles))
 
 	// Create down files first
 	if err := s.createDownFiles(ctx, artifacts, fsService); err != nil {
@@ -83,7 +84,7 @@ func (s *DefaultService) ForceCleanup(ctx context.Context, artifacts *ServiceArt
 		return fmt.Errorf("force cleanup incomplete: service=%v, log=%v", serviceExists, logExists)
 	}
 
-	s.logger.Infof("Force cleanup completed for service artifacts: %+v", artifacts)
+	s.logger.Infof("Force cleanup completed for service: %s", filepath.Base(artifacts.ServiceDir))
 	return nil
 }
 
