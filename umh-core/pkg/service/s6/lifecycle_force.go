@@ -30,7 +30,7 @@ const (
 )
 
 // ForceCleanup performs aggressive cleanup for stuck services
-// Uses comprehensive cleanup approach:
+// Uses expert-recommended patterns:
 // - Process termination and supervisor killing
 // - Comprehensive artifact removal
 func (s *DefaultService) ForceCleanup(ctx context.Context, artifacts *ServiceArtifacts, fsService filesystem.Service) error {
@@ -134,10 +134,9 @@ func (s *DefaultService) killSupervisors(ctx context.Context, artifacts *Service
 // force cleanup operations where thoroughness is prioritized over speed.
 func (s *DefaultService) removeDirectoryWithTimeout(ctx context.Context, path string, fsService filesystem.Service) error {
 	// Use a short timeout for chunk-based deletion
-	// Use background context to ensure we get the full timeout regardless of outer context
 	const chunkTimeout = 750 * time.Millisecond
 
-	chunkCtx, cancel := context.WithTimeout(context.Background(), chunkTimeout)
+	chunkCtx, cancel := context.WithTimeout(ctx, chunkTimeout)
 	defer cancel()
 
 	if err := fsService.RemoveAll(chunkCtx, path); err != nil {

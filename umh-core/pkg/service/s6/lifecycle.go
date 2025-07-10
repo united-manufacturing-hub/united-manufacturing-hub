@@ -31,7 +31,7 @@ import (
 )
 
 // ServiceArtifacts represents the essential paths for an S6 service
-// Tracks only essential root paths to minimize I/O operations and improve performance
+// Simplified to track only root paths as recommended by expert feedback
 type ServiceArtifacts struct {
 	// ServiceDir is the main service directory (e.g., /data/services/foo)
 	ServiceDir string
@@ -44,11 +44,11 @@ type ServiceArtifacts struct {
 }
 
 // CreateArtifacts creates a complete S6 service atomically
-// Uses proven atomic creation patterns:
-// - EXDEV-safe temp directory (sibling of target) to avoid cross-device link errors
-// - Atomic rename operation to prevent partially created services
-// - .complete sentinel file to detect creation completion
-// - S6 scanner notification to trigger supervision setup
+// Uses expert-recommended patterns:
+// - EXDEV-safe temp directory (sibling of target)
+// - Atomic rename operation
+// - .complete sentinel file
+// - S6 scanner notification
 func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, fsService filesystem.Service) (*ServiceArtifacts, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
@@ -124,7 +124,7 @@ func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string
 	return artifacts, nil
 }
 
-// RemoveArtifacts removes service artifacts using a fast, idempotent approach:
+// RemoveArtifacts removes service artifacts using expert-recommended fast, idempotent approach:
 // - Uses unified lifecycle mutex to prevent concurrent operations
 // - Multi-step approach: stop services, then remove on next reconcile call
 // - Each call is fast (<100ms) to respect FSM context timeouts
@@ -468,9 +468,7 @@ func (s *DefaultService) createDownFiles(ctx context.Context, artifacts *Service
 	return nil
 }
 
-// terminateProcesses attempts immediate termination of services and their supervisors
-// This is called during force removal scenarios where graceful termination has already failed.
-// Uses s6-svc -xd which brings down the service AND exits the supervisor immediately - no grace period.
+// terminateProcesses attempts graceful termination of service processes
 func (s *DefaultService) terminateProcesses(ctx context.Context, artifacts *ServiceArtifacts, fsService filesystem.Service) error {
 	servicePaths := []string{
 		artifacts.ServiceDir,
@@ -478,58 +476,15 @@ func (s *DefaultService) terminateProcesses(ctx context.Context, artifacts *Serv
 	}
 
 	var lastErr error
-
 	for _, servicePath := range servicePaths {
-		// Use -xd flag: brings down service and exits supervisor immediately
-		// This ensures supervisor processes don't remain after service termination
-		if _, err := s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-xd", servicePath); err != nil {
-			s.logger.Debugf("Failed to terminate service and supervisor for %s: %v", servicePath, err)
-			lastErr = err
-
-			// If s6-svc fails, fall back to direct supervisor process killing
-			// This handles cases where S6 commands are unresponsive
-			if killErr := s.killSupervisorProcess(ctx, servicePath, fsService); killErr != nil {
-				s.logger.Debugf("Failed to kill supervisor process directly for %s: %v", servicePath, killErr)
-				// Keep the s6-svc error as the primary error since it's more specific
-			}
+		if _, err := s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-t", servicePath); err != nil {
+			// Log the error but continue trying to terminate other services
+			s.logger.Debugf("Failed to terminate service %s: %v", servicePath, err)
+			lastErr = err // Keep track of the last error but continue trying other services
 		}
 	}
 
-	return lastErr
-}
-
-// killSupervisorProcess directly kills supervisor process when S6 commands fail
-// This is a last resort when s6-svc -xd doesn't work (e.g., corrupted supervise state)
-func (s *DefaultService) killSupervisorProcess(ctx context.Context, servicePath string, fsService filesystem.Service) error {
-	supervisePidFile := filepath.Join(servicePath, "supervise", "pid")
-	data, err := fsService.ReadFile(ctx, supervisePidFile)
-	if err != nil {
-		return err // No pid file means no supervisor to kill
-	}
-
-	pidStr := strings.TrimSpace(string(data))
-	if pidStr == "" {
-		return fmt.Errorf("empty pid file for %s", servicePath)
-	}
-
-	// Try SIGTERM first for clean shutdown
-	if _, err := fsService.ExecuteCommand(ctx, "kill", "-TERM", pidStr); err != nil {
-		s.logger.Debugf("Failed to send SIGTERM to supervisor %s: %v", pidStr, err)
-	}
-
-	// Wait briefly, then use SIGKILL if process still exists
-	select {
-	case <-time.After(gracePeriodForTermination):
-		// Process didn't terminate gracefully, use SIGKILL
-		if _, err := fsService.ExecuteCommand(ctx, "kill", "-KILL", pidStr); err != nil {
-			return fmt.Errorf("failed to kill supervisor process %s: %w", pidStr, err)
-		}
-		s.logger.Debugf("Sent SIGKILL to supervisor process %s", pidStr)
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-
-	return nil
+	return lastErr // Return the last error encountered, or nil if all succeeded
 }
 
 // removeFileFromArtifacts removes a file from the artifacts tracking
