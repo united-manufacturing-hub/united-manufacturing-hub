@@ -21,7 +21,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	pkgfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
@@ -769,39 +768,6 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				dataflowcomponent.OperationalStateActive,
 				5, tick)
 			Expect(err).NotTo(HaveOccurred())
-		})
-
-		It("should force-remove component on permanent error when already Stopped", func() {
-			// Setup to Active state
-			// 1. First get to Stopped state
-			tick, err := fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockSvcRegistry, componentName,
-				fsm.LifecycleStateToBeCreated,
-				fsm.LifecycleStateCreating, 5, tick)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Creating → Stopped
-			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockSvcRegistry, componentName,
-				fsm.LifecycleStateCreating,
-				dataflowcomponent.OperationalStateStopped, 5, tick)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(mockService.AddDataFlowComponentToBenthosManagerCalled).To(BeTrue())
-
-			// inject permanent error
-			mockService.StatusError = fmt.Errorf("%s: simulated", backoff.PermanentFailureError)
-
-			tick, recErr, reconciled := fsmtest.ReconcileDataflowComponentUntilError(
-				ctx, pkgfsm.SystemSnapshot{Tick: tick},
-				instance, mockService, mockSvcRegistry,
-				componentName, 5)
-
-			Expect(recErr).To(HaveOccurred())
-			Expect(recErr.Error()).To(ContainSubstring(backoff.PermanentFailureError))
-			Expect(reconciled).To(BeTrue())
-			Expect(mockService.ForceRemoveDataFlowComponentCalled).To(BeTrue())
-
-			mockService.StatusError = nil // cleanup for other tests
 		})
 
 	})

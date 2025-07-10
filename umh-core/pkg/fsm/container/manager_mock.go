@@ -71,7 +71,7 @@ func NewContainerManagerWithMockedService(name string, mockSvc container_monitor
 			if !ok {
 				return 0, fmt.Errorf("instance not a ContainerInstance")
 			}
-			return ci.GetExpectedMaxP95ExecutionTimePerInstance(), nil
+			return ci.GetMinimumRequiredTime(), nil
 		},
 	)
 

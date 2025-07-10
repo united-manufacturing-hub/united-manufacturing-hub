@@ -112,7 +112,7 @@ func NewS6ManagerWithMockedServices(name string) *S6Manager {
 		},
 		// Get expected max p95 execution time per instance - same as original
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
-			return constants.S6ExpectedMaxP95ExecutionTimePerInstance, nil
+			return constants.S6UpdateObservedStateTimeout, nil
 		},
 	)
 

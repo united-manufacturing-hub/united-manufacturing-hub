@@ -312,7 +312,7 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	// ---------- FAST PATH ----------
 	m.cacheMu.RLock()
 	if !m.cacheModTime.IsZero() && info.ModTime().Equal(m.cacheModTime) {
-		cfg := m.cacheConfig // return cached struct
+		cfg := m.cacheConfig.Clone() // Use deep copy to prevent race conditions with slices/maps
 		m.cacheMu.RUnlock()
 		return cfg, nil
 	}
