@@ -48,6 +48,8 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"go.uber.org/zap"
 )
 
 // SubjectName represents a schema subject identifier in the registry.
@@ -168,6 +170,7 @@ type SchemaRegistry struct {
 	// Core state
 	currentPhase SchemaRegistryPhase
 	httpClient   http.Client
+	logger       *zap.SugaredLogger
 
 	// Translation
 	translator *datamodel.Translator
@@ -267,6 +270,7 @@ func NewSchemaRegistry(opts ...func(*SchemaRegistry)) *SchemaRegistry {
 				DisableCompression:  false,            // Enable gzip compression
 			},
 		},
+		logger:                      logger.For("SchemaRegistry"),
 		translator:                  datamodel.NewTranslator(),
 		missingInRegistry:           make(map[SubjectName]JSONSchemaDefinition),
 		inRegistryButUnknownLocally: make(map[SubjectName]bool),
@@ -715,21 +719,18 @@ func (s *SchemaRegistry) lookup(ctx context.Context) (err error, changePhase boo
 
 	// Only HTTP 200 is considered success - all others are transient failures
 	if resp.StatusCode != http.StatusOK {
+		s.logHTTPErrorDetails(resp, "lookup", resp.StatusCode)
 		return fmt.Errorf("schema registry lookup failed with status %d", resp.StatusCode), false
 	}
 
-	// Store raw response bytes for decode phase
-	decoder := json.NewDecoder(resp.Body)
-	var subjects []string
-	if err := decoder.Decode(&subjects); err != nil {
-		return err, false
+	// Extract response body using our helper function
+	bodyBytes, err := s.extractResponseBody(resp, "lookup")
+	if err != nil {
+		return fmt.Errorf("failed to extract response body: %w", err), false
 	}
 
-	// We need to re-encode to store as raw bytes for the decode phase
-	s.rawSubjectsData, err = json.Marshal(subjects)
-	if err != nil {
-		return err, false
-	}
+	// Store raw response bytes for decode phase
+	s.rawSubjectsData = bodyBytes
 
 	return nil, true // Downloaded data, advance to next phase
 }
@@ -919,7 +920,7 @@ func (s *SchemaRegistry) removeUnknown(ctx context.Context) (err error, changePh
 	default:
 		// Handle client errors with custom error code parsing
 		if resp.StatusCode >= 400 && resp.StatusCode < 500 {
-			respBody, readErr := io.ReadAll(resp.Body)
+			respBody, readErr := s.extractResponseBody(resp, fmt.Sprintf("DELETE subject %s", string(subjectToRemove)))
 			if readErr == nil {
 				var errorResp map[string]interface{}
 				if json.Unmarshal(respBody, &errorResp) == nil {
@@ -945,6 +946,7 @@ func (s *SchemaRegistry) removeUnknown(ctx context.Context) (err error, changePh
 			}
 		} else {
 			// Server errors and other cases - transient failure
+			s.logHTTPErrorDetails(resp, fmt.Sprintf("DELETE subject %s", string(subjectToRemove)), resp.StatusCode)
 			return fmt.Errorf("delete subject %s returned status %d", string(subjectToRemove), resp.StatusCode), false
 		}
 	}
@@ -1066,7 +1068,7 @@ func (s *SchemaRegistry) addNew(ctx context.Context) (err error, changePhase boo
 	default:
 		// Handle client errors with custom error code parsing
 		if resp.StatusCode >= 400 && resp.StatusCode < 500 {
-			respBody, readErr := io.ReadAll(resp.Body)
+			respBody, readErr := s.extractResponseBody(resp, fmt.Sprintf("POST subject %s", string(subjectToAdd)))
 			if readErr == nil {
 				var errorResp map[string]interface{}
 				if json.Unmarshal(respBody, &errorResp) == nil {
@@ -1091,6 +1093,7 @@ func (s *SchemaRegistry) addNew(ctx context.Context) (err error, changePhase boo
 			}
 		} else {
 			// Server errors and other cases - transient failure
+			s.logHTTPErrorDetails(resp, fmt.Sprintf("POST subject %s", string(subjectToAdd)), resp.StatusCode)
 			return fmt.Errorf("add subject %s returned status %d", string(subjectToAdd), resp.StatusCode), false
 		}
 	}
@@ -1123,4 +1126,61 @@ func (s *SchemaRegistry) createTimeoutContext(ctx context.Context, minTime time.
 
 	// Create new context with our calculated timeout
 	return context.WithTimeout(ctx, timeout)
+}
+
+// extractResponseBody safely extracts the HTTP response body and provides debug logging on errors.
+// This helper function provides consistent error handling and debugging for all HTTP operations.
+//
+// Parameters:
+//   - resp: HTTP response to extract body from
+//   - operation: Description of the operation for logging context (e.g., "lookup", "delete subject X")
+//
+// Returns:
+//   - []byte: The response body content (may be partial if error occurred)
+//   - error: Any error encountered while reading the body
+//
+// The function logs debug information when errors occur, including any partial content
+// that was successfully read before the error occurred.
+func (s *SchemaRegistry) extractResponseBody(resp *http.Response, operation string) ([]byte, error) {
+	if resp == nil {
+		s.logger.Debugf("HTTP %s - no response available", operation)
+		return nil, fmt.Errorf("no response available")
+	}
+
+	if resp.Body == nil {
+		s.logger.Debugf("HTTP %s - no response body available", operation)
+		return nil, fmt.Errorf("no response body available")
+	}
+
+	// Read the response body
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		// Log what we could extract before the error
+		if len(bodyBytes) > 0 {
+			s.logger.Debugf("HTTP %s - failed to read response body (partial content: %s): %v",
+				operation, string(bodyBytes), err)
+		} else {
+			s.logger.Debugf("HTTP %s - failed to read response body: %v", operation, err)
+		}
+		return bodyBytes, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	// Log the complete response body at debug level for troubleshooting
+	if len(bodyBytes) > 0 {
+		s.logger.Debugf("HTTP %s - response body: %s", operation, string(bodyBytes))
+	} else {
+		s.logger.Debugf("HTTP %s - empty response body", operation)
+	}
+
+	return bodyBytes, nil
+}
+
+// logHTTPErrorDetails logs HTTP error details using the extracted body information.
+// This is a convenience wrapper around extractResponseBody for error cases.
+func (s *SchemaRegistry) logHTTPErrorDetails(resp *http.Response, operation string, statusCode int) {
+	_, err := s.extractResponseBody(resp, fmt.Sprintf("%s (status %d)", operation, statusCode))
+	if err != nil {
+		// Error details are already logged by extractResponseBody
+		return
+	}
 }
