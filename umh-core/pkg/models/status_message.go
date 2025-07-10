@@ -144,6 +144,7 @@ const (
 	DfcTypeCustom            DfcType = "custom"
 	DfcTypeDataBridge        DfcType = "data-bridge"
 	DfcTypeProtocolConverter DfcType = "protocol-converter"
+	DfcTypeStreamProcessor   DfcType = "stream-processor"
 )
 
 // Dfc represents a Data Flow Component.
