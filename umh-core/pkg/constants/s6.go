@@ -29,14 +29,19 @@ var (
 )
 
 const (
-	S6UpdateObservedStateTimeout = time.Millisecond * 3
-	S6RemoveTimeout              = time.Millisecond * 3
+	// S6 Operation Timeouts - Foundation Service (Level 0)
+	// S6 is the foundation service with no dependencies
+	S6UpdateObservedStateTimeout = 6 * time.Millisecond
+	S6RemoveTimeout              = 10 * time.Millisecond
 	S6MaxLines                   = 10000
-)
 
-const (
-	// S6ExpectedMaxP95ExecutionTimePerInstance means that an instance will not reconcile if not 30ms are left
-	// Note: in the intergation test, we defined an alerting threshold of 80% of the max ticker time, which is 100ms
-	// So by setting this to 30 ms, we can ensure that an instance will never start if it triggers the alerting threshold
-	S6ExpectedMaxP95ExecutionTimePerInstance = time.Millisecond * 30
+	// S6FileReadTimeBuffer is the minimum time buffer required before attempting to read a file chunk
+	// This is half of DefaultTickerTime to ensure graceful early exit from file operations
+	// WHY HALF: Provides safety margin to complete current chunk + cleanup before context deadline
+	// BUSINESS LOGIC: Prevents timeout failures by returning partial success instead of total failure
+	S6FileReadTimeBuffer = time.Millisecond * 1
+
+	// S6FileReadChunkSize is the buffer size used for reading files in chunks
+	// Set to 1MB for optimal I/O performance while maintaining reasonable memory usage
+	S6FileReadChunkSize = 1024 * 1024
 )

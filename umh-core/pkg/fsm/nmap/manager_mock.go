@@ -104,7 +104,7 @@ func NewNmapManagerWithMockedService(name string) (*NmapManager, *nmap.MockNmapS
 			if !ok {
 				return 0, fmt.Errorf("instance not a NmapInstance")
 			}
-			return ni.GetExpectedMaxP95ExecutionTimePerInstance(), nil
+			return ni.GetMinimumRequiredTime(), nil
 		},
 	)
 

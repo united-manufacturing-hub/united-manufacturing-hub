@@ -104,21 +104,21 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 			// So set the err to nil in this case
 			// An example error: "failed to update observed state: failed to get observed DataflowComponent config: failed to get benthos config: failed to get benthos config file for service benthos-dataflow-hello-world-dfc: service does not exist"
 
+			if errors.Is(err, context.DeadlineExceeded) {
+				// Context deadline exceeded should be retried with backoff, not ignored
+				p.baseFSMInstance.SetError(err, snapshot.Tick)
+				p.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileExternalChanges, will retry with backoff")
+				err = nil // Clear error so reconciliation continues
+				return nil, false
+			}
+
 			p.baseFSMInstance.SetError(err, snapshot.Tick)
 			p.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
 
-			if errors.Is(err, context.DeadlineExceeded) {
-				// Healthchecks occasionally take longer (sometimes up to 70ms),
-				// resulting in context.DeadlineExceeded errors. In this case, we want to
-				// mark the reconciliation as complete for this tick since we've likely
-				// already consumed significant time. We return reconciled=true to prevent
-				// further reconciliation attempts in the current tick.
-				return nil, true // We don't want to return an error here, as this can happen in normal operations
-			}
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
 
-		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
+		err = nil
 	}
 
 	// Step 3: Attempt to reconcile the state.
@@ -167,12 +167,12 @@ func (p *ProtocolConverterInstance) reconcileExternalChanges(ctx context.Context
 		metrics.ObserveReconcileTime(metrics.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
 	}()
 
-	// Fetching the observed state can sometimes take longer, but we need to ensure when reconciling a lot of instances
-	// that a single status of a single instance does not block the whole reconciliation
-	observedStateCtx, cancel := context.WithTimeout(ctx, constants.ProtocolConverterUpdateObservedStateTimeout)
+	// Create context for UpdateObservedStateOfInstance with minimum timeout guarantee
+	// This ensures we get either 80% of available time OR the minimum required time, whichever is larger
+	updateCtx, cancel := constants.CreateUpdateObservedStateContextWithMinimum(ctx, constants.ProtocolConverterUpdateObservedStateTimeout)
 	defer cancel()
 
-	err := p.UpdateObservedStateOfInstance(observedStateCtx, services, snapshot)
+	err := p.UpdateObservedStateOfInstance(updateCtx, services, snapshot)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}

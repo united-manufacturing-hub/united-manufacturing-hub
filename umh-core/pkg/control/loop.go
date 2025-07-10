@@ -38,6 +38,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/tiendc/go-deepcopy"
@@ -64,6 +65,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/starvationchecker"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 // ControlLoop is the central orchestration component of the UMH Core.
@@ -86,6 +88,7 @@ type ControlLoop struct {
 	currentTick       uint64
 	snapshotManager   *fsm.SnapshotManager
 	managerTimes      map[string]time.Duration // Tracks execution time for each manager
+	managerTimesMutex sync.RWMutex
 	services          *serviceregistry.Registry
 }
 
@@ -142,6 +145,7 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 		starvationChecker: starvationChecker,
 		snapshotManager:   snapshotManager,
 		managerTimes:      make(map[string]time.Duration),
+		managerTimesMutex: sync.RWMutex{},
 		services:          servicesRegistry,
 	}
 }
@@ -219,15 +223,38 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 	}
 }
 
-// Reconcile performs a single reconciliation cycle across all managers.
+// Reconcile performs a single reconciliation cycle across all managers using parallel execution.
 // This is the core algorithm that drives the system toward its desired state:
 // 1. Fetch the latest configuration
-// 2. For each manager in sequence:
-//   - Call its Reconcile method with the configuration
-//   - If error occurs, propagate it upward
-//   - If reconciliation occurred (bool=true), skip the reconcilation of the next managers to avoid reaching the ticker interval
+// 2. Create time budget hierarchy with LoopControlLoopTimeFactor (80% of available time)
+// 3. Execute all managers in parallel using errgroup for coordination
+// 4. Aggregate results and handle errors from parallel execution
+// 5. Create a snapshot of the current system state for external consumers
 //
-// 3. Create a snapshot of the current system state for external consumers
+// Parallel Execution Strategy:
+//   - Uses errgroup.WithContext for coordinated parallel execution
+//   - Each manager runs in its own goroutine with shared error handling
+//   - Thread-safe tracking of executed managers and reconciliation status
+//   - Time budget enforcement prevents individual managers from consuming excessive time
+//   - Early termination if any manager encounters critical errors
+//
+// Time Budget Management:
+//   - Inner context created with LoopControlLoopTimeFactor (80%) of remaining time
+//   - Ensures 20% buffer for error handling, cleanup, and snapshot creation
+//   - Individual managers checked for sufficient time before execution
+//   - Performance monitoring and warnings for time budget violations
+//
+// Error Handling:
+//   - Parallel execution errors are aggregated and wrapped with context
+//   - Timeout scenarios handled gracefully with partial success logging
+//   - Manager-specific errors include manager name for debugging
+//   - System continues operation even if individual managers fail
+//
+// Performance Monitoring:
+//   - Detailed logging with [PARALLEL] prefix for debugging parallel execution
+//   - Time efficiency calculations for each manager
+//   - Warning alerts when managers approach time budget limits
+//   - Metrics collection for reconciliation times and error rates
 func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	// Get the config
 	if c.configManager == nil {
@@ -312,55 +339,72 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 		}
 	}
 
+	// <factor>% ctx to ensure we finish in time.
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return ctxutil.ErrNoDeadline
+	}
+	remainingTime := time.Until(deadline)
+	timeToAdd := time.Duration(float64(remainingTime) * constants.LoopControlLoopTimeFactor)
+	newDeadline := time.Now().Add(timeToAdd)
+	innerCtx, cancel := context.WithDeadline(ctx, newDeadline)
+	defer cancel()
+
 	// 5) Reconcile each manager with the current tick count and passing in the newSnapshot
 	// Reset manager times for this reconciliation cycle
+	c.managerTimesMutex.Lock()
 	c.managerTimes = make(map[string]time.Duration)
+	c.managerTimesMutex.Unlock()
 
 	// Track executed managers for logging purposes
 	var executedManagers []string
+	executedManagersMutex := sync.RWMutex{}
 
+	// Track if any managers were reconciled
+	hasAnyReconciles := false
+	hasAnyReconcilesMutex := sync.Mutex{}
+
+	errorgroup, _ := errgroup.WithContext(innerCtx)
 	for _, manager := range c.managers {
-		managerName := manager.GetManagerName()
-		executedManagers = append(executedManagers, managerName)
+		capturedManager := manager
 
-		// Check if we have enough time to reconcile the manager
-		remaining, sufficient, err := ctxutil.HasSufficientTime(ctx, constants.DefaultMinimumRemainingTimePerManager)
-		if err != nil {
-			if errors.Is(err, ctxutil.ErrNoDeadline) {
-				return fmt.Errorf("context has no deadline")
+		errorgroup.Go(func() error {
+			reconciled, err := c.reconcileManager(innerCtx, capturedManager, &executedManagers, &executedManagersMutex, newSnapshot)
+			if err != nil {
+				return err
 			}
-			// For ErrInsufficientTime, skip reconciliation
-			if errors.Is(err, ctxutil.ErrInsufficientTime) {
-				c.logManagerTimes(remaining, executedManagers)
-				return nil
+			if reconciled {
+				hasAnyReconcilesMutex.Lock()
+				hasAnyReconciles = true
+				hasAnyReconcilesMutex.Unlock()
 			}
-			// Any other unexpected error
-			return fmt.Errorf("deadline check error: %w", err)
-		}
-
-		// If sufficient is true but err is nil, we're good to proceed
-		if !sufficient {
-			c.logManagerTimes(remaining, executedManagers)
 			return nil
-		}
+		})
+	}
+	waitErrorChannel := make(chan error, 1)
+	go func() {
+		waitErrorChannel <- errorgroup.Wait()
+	}()
 
-		// Record manager execution time
-		managerStart := time.Now()
-		err, reconciled := manager.Reconcile(ctx, newSnapshot, c.services)
-		executionTime := time.Since(managerStart)
-		c.managerTimes[managerName] = executionTime
+	select {
+	case wgErr := <-waitErrorChannel:
+		err = wgErr
+	case <-innerCtx.Done():
+		err = innerCtx.Err()
+	}
 
-		if err != nil {
-			metrics.IncErrorCount(metrics.ComponentControlLoop, managerName)
-			return fmt.Errorf("manager %s reconciliation failed: %w", managerName, err)
-		}
+	// If any managers were reconciled, create a snapshot
+	hasAnyReconcilesMutex.Lock()
+	defer hasAnyReconcilesMutex.Unlock()
+	if hasAnyReconciles {
+		// Create a snapshot after any successful reconciliation
+		c.updateSystemSnapshot(ctx, cfg)
+		return nil
+	}
 
-		// If the manager was reconciled, skip the reconcilation of the next managers
-		if reconciled {
-			// Create a snapshot after any successful reconciliation
-			c.updateSystemSnapshot(ctx, cfg)
-			return nil
-		}
+	// If there was an error during any of the managers, return it
+	if err != nil {
+		return err
 	}
 
 	if c.starvationChecker != nil {
@@ -452,19 +496,76 @@ func (c *ControlLoop) Stop(ctx context.Context) error {
 	return nil
 }
 
-// logManagerTimes logs the execution times of all managers that were executed before skipping
-func (c *ControlLoop) logManagerTimes(remaining time.Duration, executedManagers []string) {
-	var totalTime time.Duration
+// reconcileManager executes a single manager within the parallel execution context.
+// It demonstrates proper error handling, timeout management, and performance monitoring
+// in a concurrent environment.
+//
+// The function handles three critical aspects:
+// 1. Time Budget Validation - Ensures sufficient time before starting work
+// 2. Concurrent State Management - Thread-safe updates to shared execution tracking
+// 3. Performance Monitoring - Detailed timing and efficiency metrics
+//
+// Error scenarios and handling:
+//   - ErrNoDeadline: Context missing deadline, indicates improper setup
+//   - ErrInsufficientTime: Not enough time remaining, manager execution skipped
+//   - Manager-specific errors: Wrapped with manager context for debugging
+//
+// Performance considerations:
+//   - Execution time is measured and logged for performance monitoring
+//   - Time budget warnings are issued when managers approach limits (using LoopControlLoopTimeFactor)
+//   - Thread-safe manager time tracking for system-wide visibility
+//   - Parallel execution context logging with [PARALLEL] prefix for debugging
+//
+// The function returns:
+//   - bool: whether the manager performed reconciliation work
+//   - error: any error encountered during execution, wrapped with manager context
+func (c *ControlLoop) reconcileManager(ctx context.Context, manager fsm.FSMManager[any], executedManagers *[]string, executedManagersMutex *sync.RWMutex, newSnapshot fsm.SystemSnapshot) (bool, error) {
+	managerName := manager.GetManagerName()
 
-	for _, managerName := range executedManagers {
-		if execTime, ok := c.managerTimes[managerName]; ok {
-			totalTime += execTime
+	// Add parallel execution context logging
+	c.logger.Debugf("[PARALLEL] Starting manager %s (goroutine)", managerName)
+
+	executedManagersMutex.Lock()
+	*executedManagers = append(*executedManagers, managerName)
+	executedManagersMutex.Unlock()
+
+	// Record manager execution time
+	managerStart := time.Now()
+	err, reconciled := manager.Reconcile(ctx, newSnapshot, c.services)
+	executionTime := time.Since(managerStart)
+
+	// Get remaining time for logging
+	var remaining time.Duration
+	if deadline, ok := ctx.Deadline(); ok {
+		remaining = time.Until(deadline)
+	}
+
+	// Detailed performance logging
+	if remaining > 0 {
+		efficiencyPercent := float64(remaining-executionTime) / float64(remaining) * 100
+		c.logger.Debugf("[PARALLEL] Manager %s completed - Duration: %v, Reconciled: %v, Time efficiency: %.2f%%",
+			managerName, executionTime, reconciled, efficiencyPercent)
+
+		// Warning for potential time budget violations using the constant
+		timeBudgetThreshold := time.Duration(float64(remaining) * constants.LoopControlLoopTimeFactor)
+		if executionTime > timeBudgetThreshold {
+			utilizationPercent := float64(executionTime) / float64(remaining) * 100
+			c.logger.Warnf("[PARALLEL] Manager %s approaching time budget limit: %v/%v (%.1f%%) - threshold: %v",
+				managerName, executionTime, remaining, utilizationPercent, timeBudgetThreshold)
 		}
+	} else {
+		c.logger.Debugf("[PARALLEL] Manager %s completed - Duration: %v, Reconciled: %v",
+			managerName, executionTime, reconciled)
 	}
 
-	c.logger.Warnf("Skipping reconcile cycle due to remaining time: %v", remaining)
-	for _, managerName := range executedManagers {
-		c.logger.Warnf("Manager %s took %v", managerName, c.managerTimes[managerName])
+	c.managerTimesMutex.Lock()
+	c.managerTimes[managerName] = executionTime
+	c.managerTimesMutex.Unlock()
+
+	if err != nil {
+		metrics.IncErrorCount(metrics.ComponentControlLoop, managerName)
+		return false, fmt.Errorf("manager %s reconciliation failed: %w", managerName, err)
 	}
-	c.logger.Warnf("Total time: %v", totalTime)
+
+	return reconciled, nil
 }

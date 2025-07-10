@@ -16,6 +16,7 @@ package container
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -67,7 +68,7 @@ func (c *ContainerInstance) CheckForCreation(ctx context.Context, filesystemServ
 }
 
 // UpdateObservedStateOfInstance is called when the FSM transitions to updating.
-// For container monitoring, this is a no-op as we don't need to update any resources.
+// It queries container_monitor.Service for new metrics and updates the observed state.
 func (c *ContainerInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -81,7 +82,12 @@ func (c *ContainerInstance) UpdateObservedStateOfInstance(ctx context.Context, s
 		return nil
 	}
 
-	c.baseFSMInstance.GetLogger().Debugf("Updating observed state for %s (no-op)", c.baseFSMInstance.GetID())
+	status, err := c.monitorService.GetStatus(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get container metrics: %w", err)
+	}
+	// Save to observed state
+	c.ObservedState.ServiceInfo = status
 	return nil
 }
 

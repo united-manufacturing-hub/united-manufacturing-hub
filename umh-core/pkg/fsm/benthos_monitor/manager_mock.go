@@ -74,7 +74,7 @@ func NewBenthosMonitorManagerWithMockedService(name string, mockSvc benthos_moni
 			if !ok {
 				return 0, fmt.Errorf("instance not an BenthosMonitorInstance")
 			}
-			return bi.GetExpectedMaxP95ExecutionTimePerInstance(), nil
+			return bi.GetMinimumRequiredTime(), nil
 		},
 	)
 
