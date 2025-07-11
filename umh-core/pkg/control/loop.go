@@ -392,7 +392,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	for i := startIdx; i < endIdx; i++ {
 		capturedManager := c.managers[i]
 
-		errorgroup.Go(func() error {
+		started := errorgroup.TryGo(func() error {
 			// It might be that .Go is blocked until the ctx is already cancelled, in that case we just return
 			if ctx.Err() != nil {
 				return nil
@@ -409,6 +409,9 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 			}
 			return nil
 		})
+		if !started {
+			break
+		}
 	}
 	waitErrorChannel := make(chan error, 1)
 	go func() {

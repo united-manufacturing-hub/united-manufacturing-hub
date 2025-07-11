@@ -613,7 +613,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 		nameCaptured := name
 		instanceCaptured := instance
 
-		errorgroup.Go(func() error {
+		started := errorgroup.TryGo(func() error {
 			reconciled, shallBeRemoved, err := m.reconcileInstanceWithTimeout(innerCtx, instanceCaptured, services, nameCaptured, snapshot, minimumRequiredTime)
 			if err != nil {
 				return err
@@ -630,6 +630,9 @@ func (m *BaseFSMManager[C]) Reconcile(
 			}
 			return nil
 		})
+		if !started {
+			break
+		}
 	}
 
 	waitErrorChannel := make(chan error, 1)
