@@ -58,6 +58,10 @@ type RemovalProgress struct {
 	MainSupervisorCleanupConfirmed bool
 	// LogSupervisorCleanupConfirmed indicates that log service supervisor cleanup is complete
 	LogSupervisorCleanupConfirmed bool
+	// MainSuperviseDirectoryEmpty indicates that main service supervise directory is empty/gone
+	MainSuperviseDirectoryEmpty bool
+	// LogSuperviseDirectoryEmpty indicates that log service supervise directory is empty/gone
+	LogSuperviseDirectoryEmpty bool
 	// ServiceDirRemoved indicates that the service directory has been successfully removed
 	ServiceDirRemoved bool
 	// LogDirRemoved indicates that the log directory has been successfully removed
@@ -77,7 +81,7 @@ func (artifacts *ServiceArtifacts) IsFullyRemoved() bool {
 		return false
 	}
 	p := artifacts.RemovalProgress
-	return p.ProcessesStopped && p.SupervisorsStopped && p.MainSupervisorCleanupConfirmed && p.LogSupervisorCleanupConfirmed && p.ServiceDirRemoved && p.LogDirRemoved
+	return p.ProcessesStopped && p.SupervisorsStopped && p.MainSupervisorCleanupConfirmed && p.LogSupervisorCleanupConfirmed && p.MainSuperviseDirectoryEmpty && p.LogSuperviseDirectoryEmpty && p.ServiceDirRemoved && p.LogDirRemoved
 }
 
 // CreateArtifacts creates a complete S6 service atomically
@@ -275,6 +279,56 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *Service
 		}
 		progress.LogSupervisorCleanupConfirmed = true
 		s.logger.Debugf("Log supervisor cleanup confirmed for service: %s", artifacts.ServiceDir)
+	}
+
+	// Step 2.5c: Check if main service supervise directory is empty/gone (idempotent)
+	//
+	// RACE CONDITION FIX - PHASE 3: Wait for S6 to clean up supervise directories
+	// Even after supervisor processes terminate and IsFinishing=false, S6 needs a brief moment
+	// to finish cleaning up the supervise directory files (pid, status, control, lock, etc.).
+	//
+	// DETERMINISTIC APPROACH:
+	// Instead of blindly waiting one tick, we actively check that the supervise directory
+	// is actually empty or gone before proceeding with removal. This ensures we only
+	// attempt directory removal when it's actually safe to do so.
+	//
+	// FSM COMPATIBILITY:
+	// - No blocking: Returns immediately if directory not empty yet
+	// - Incremental progress: Each FSM tick checks actual directory state
+	// - Fast: Typically completes in 1-2 FSM ticks after supervisor cleanup
+	if !progress.MainSuperviseDirectoryEmpty {
+		mainSuperviseDir := filepath.Join(artifacts.ServiceDir, "supervise")
+		if empty, err := s.isSuperviseDirectoryEmpty(ctx, mainSuperviseDir, fsService); err != nil {
+			s.logger.Debugf("Failed to check main supervise directory state: %v", err)
+			return fmt.Errorf("failed to check main supervise directory state: %w", err)
+		} else if !empty {
+			s.logger.Debugf("Main supervise directory not yet empty for service: %s", artifacts.ServiceDir)
+			return nil // Return and wait for next FSM tick
+		}
+		progress.MainSuperviseDirectoryEmpty = true
+		s.logger.Debugf("Main supervise directory empty for service: %s", artifacts.ServiceDir)
+	}
+
+	// Step 2.5d: Check if log service supervise directory is empty/gone (idempotent)
+	//
+	// RACE CONDITION FIX - PHASE 4: Wait for S6 to clean up log supervise directory
+	// Same as main service, but for the log service supervise directory.
+	//
+	// FSM COMPATIBILITY:
+	// - No blocking: Returns immediately if directory not empty yet
+	// - Incremental progress: Each FSM tick checks actual directory state
+	// - Fast: Typically completes in 1-2 FSM ticks after supervisor cleanup
+	if !progress.LogSuperviseDirectoryEmpty {
+		logSuperviseDir := filepath.Join(artifacts.ServiceDir, "log", "supervise")
+		if empty, err := s.isSuperviseDirectoryEmpty(ctx, logSuperviseDir, fsService); err != nil {
+			s.logger.Debugf("Failed to check log supervise directory state: %v", err)
+			return fmt.Errorf("failed to check log supervise directory state: %w", err)
+		} else if !empty {
+			s.logger.Debugf("Log supervise directory not yet empty for service: %s", artifacts.ServiceDir)
+			return nil // Return and wait for next FSM tick
+		}
+		progress.LogSuperviseDirectoryEmpty = true
+		s.logger.Debugf("Log supervise directory empty for service: %s", artifacts.ServiceDir)
 	}
 
 	// Step 3: Remove service directory (idempotent)
@@ -741,6 +795,40 @@ func (s *DefaultService) isSingleSupervisorCleanupComplete(ctx context.Context, 
 
 	// Single supervisor has completed cleanup
 	return true, nil
+}
+
+// isSuperviseDirectoryEmpty checks if a supervise directory is empty or doesn't exist
+// Returns true if the directory doesn't exist or is empty, false if it contains files
+func (s *DefaultService) isSuperviseDirectoryEmpty(ctx context.Context, superviseDir string, fsService filesystem.Service) (bool, error) {
+	// Check if directory exists
+	exists, err := fsService.PathExists(ctx, superviseDir)
+	if err != nil {
+		return false, fmt.Errorf("failed to check supervise directory %s: %w", superviseDir, err)
+	}
+
+	if !exists {
+		// Directory doesn't exist, so it's "empty"
+		return true, nil
+	}
+
+	// Directory exists, check if it's empty
+	contents, err := fsService.ReadDir(ctx, superviseDir)
+	if err != nil {
+		return false, fmt.Errorf("failed to read supervise directory %s: %w", superviseDir, err)
+	}
+
+	// Directory is empty if it has no contents
+	isEmpty := len(contents) == 0
+
+	if !isEmpty {
+		// Debug log the contents that are preventing removal
+		s.logger.Debugf("Supervise directory %s still contains %d files/directories", superviseDir, len(contents))
+		for _, item := range contents {
+			s.logger.Debugf("  - %s", item.Name())
+		}
+	}
+
+	return isEmpty, nil
 }
 
 // killSupervisorProcess directly kills supervisor process when S6 commands fail
