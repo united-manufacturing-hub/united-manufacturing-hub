@@ -727,20 +727,20 @@ func (m *MockConfigManager) AtomicAddStreamProcessor(ctx context.Context, sp Str
 }
 
 // AtomicEditStreamProcessor implements the ConfigManager interface
-func (m *MockConfigManager) AtomicEditStreamProcessor(ctx context.Context, sp StreamProcessorConfig) error {
+func (m *MockConfigManager) AtomicEditStreamProcessor(ctx context.Context, sp StreamProcessorConfig) (StreamProcessorConfig, error) {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
 
 	m.AtomicEditStreamProcessorCalled = true
 
 	if m.AtomicEditStreamProcessorError != nil {
-		return m.AtomicEditStreamProcessorError
+		return StreamProcessorConfig{}, m.AtomicEditStreamProcessorError
 	}
 
 	// get the current config
 	config, err := m.getConfigUnsafe(ctx, 0)
 	if err != nil {
-		return fmt.Errorf("failed to get config: %w", err)
+		return StreamProcessorConfig{}, fmt.Errorf("failed to get config: %w", err)
 	}
 
 	// Find target index by name
@@ -755,7 +755,7 @@ func (m *MockConfigManager) AtomicEditStreamProcessor(ctx context.Context, sp St
 	}
 
 	if targetIndex == -1 {
-		return fmt.Errorf("stream processor with name %s not found", sp.Name)
+		return StreamProcessorConfig{}, fmt.Errorf("stream processor with name %s not found", sp.Name)
 	}
 
 	newIsRoot := sp.StreamProcessorServiceConfig.TemplateRef != "" &&
@@ -798,7 +798,7 @@ func (m *MockConfigManager) AtomicEditStreamProcessor(ctx context.Context, sp St
 		}
 
 		if !rootExists {
-			return fmt.Errorf("template %q not found for child %s", templateRef, sp.Name)
+			return StreamProcessorConfig{}, fmt.Errorf("template %q not found for child %s", templateRef, sp.Name)
 		}
 	}
 
@@ -807,10 +807,10 @@ func (m *MockConfigManager) AtomicEditStreamProcessor(ctx context.Context, sp St
 
 	// write the config
 	if err := m.writeConfig(ctx, config); err != nil {
-		return fmt.Errorf("failed to write config: %w", err)
+		return StreamProcessorConfig{}, fmt.Errorf("failed to write config: %w", err)
 	}
 
-	return nil
+	return oldConfig, nil
 }
 
 // AtomicDeleteStreamProcessor implements the ConfigManager interface

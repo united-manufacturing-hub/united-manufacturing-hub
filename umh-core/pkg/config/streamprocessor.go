@@ -100,17 +100,17 @@ func (m *FileConfigManagerWithBackoff) AtomicAddStreamProcessor(ctx context.Cont
 // - The processor with the given name doesn't exist
 // - Attempting to edit a child processor (TemplateRef != "" && TemplateRef != Name)
 // - The new configuration has validation errors
-func (m *FileConfigManager) AtomicEditStreamProcessor(ctx context.Context, sp StreamProcessorConfig) error {
+func (m *FileConfigManager) AtomicEditStreamProcessor(ctx context.Context, sp StreamProcessorConfig) (StreamProcessorConfig, error) {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to lock config file: %w", err)
+		return StreamProcessorConfig{}, fmt.Errorf("failed to lock config file: %w", err)
 	}
 	defer m.mutexAtomicUpdate.Unlock()
 
 	// get the current config
 	config, err := m.GetConfig(ctx, 0)
 	if err != nil {
-		return fmt.Errorf("failed to get config: %w", err)
+		return StreamProcessorConfig{}, fmt.Errorf("failed to get config: %w", err)
 	}
 
 	// find the stream processor by name
@@ -125,7 +125,7 @@ func (m *FileConfigManager) AtomicEditStreamProcessor(ctx context.Context, sp St
 	}
 
 	if oldStreamProcessor == nil {
-		return fmt.Errorf("stream processor with name %q not found", sp.Name)
+		return StreamProcessorConfig{}, fmt.Errorf("stream processor with name %q not found", sp.Name)
 	}
 
 	// Check if the old stream processor is a root (TemplateRef == Name or TemplateRef == "")
@@ -133,26 +133,29 @@ func (m *FileConfigManager) AtomicEditStreamProcessor(ctx context.Context, sp St
 
 	// Prevent editing child stream processors directly
 	if !oldIsRoot && oldStreamProcessor.StreamProcessorServiceConfig.TemplateRef != "" {
-		return fmt.Errorf("cannot edit child stream processor %q directly – edit the root template %q instead", sp.Name, oldStreamProcessor.StreamProcessorServiceConfig.TemplateRef)
+		return StreamProcessorConfig{}, fmt.Errorf("cannot edit child stream processor %q directly – edit the root template %q instead", sp.Name, oldStreamProcessor.StreamProcessorServiceConfig.TemplateRef)
 	}
+
+	// Store the old config for return
+	oldConfig := *oldStreamProcessor
 
 	// Update the stream processor
 	config.StreamProcessor[index] = sp
 
 	// write the config
 	if err := m.writeConfig(ctx, config); err != nil {
-		return fmt.Errorf("failed to write config: %w", err)
+		return StreamProcessorConfig{}, fmt.Errorf("failed to write config: %w", err)
 	}
 
-	return nil
+	return oldConfig, nil
 }
 
 // AtomicEditStreamProcessor delegates to the underlying FileConfigManager
-func (m *FileConfigManagerWithBackoff) AtomicEditStreamProcessor(ctx context.Context, sp StreamProcessorConfig) error {
+func (m *FileConfigManagerWithBackoff) AtomicEditStreamProcessor(ctx context.Context, sp StreamProcessorConfig) (StreamProcessorConfig, error) {
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
-		return ctx.Err()
+		return StreamProcessorConfig{}, ctx.Err()
 	}
 
 	return m.configManager.AtomicEditStreamProcessor(ctx, sp)

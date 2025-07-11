@@ -137,6 +137,9 @@ func (b *BenthosMonitorInstance) CheckForCreation(ctx context.Context, filesyste
 // For Benthos monitoring, this is a no-op as we don't need to update any resources.
 func (b *BenthosMonitorInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
+		if b.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "UpdateObservedStateOfInstance") {
+			return nil
+		}
 		return ctx.Err()
 	}
 

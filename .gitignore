@@ -11,5 +11,7 @@
 .DS_Store
 
 
-# Results
+# Test results
+*.result.txt
 result.txt
+

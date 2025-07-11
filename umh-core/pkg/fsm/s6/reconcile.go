@@ -25,7 +25,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
@@ -44,16 +43,18 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s6InstanceName, time.Since(start))
 		if err != nil {
-			s.baseFSMInstance.GetLogger().Errorf("error reconciling S6 instance %s: %s", s.baseFSMInstance.GetID(), err)
+			s.baseFSMInstance.GetLogger().Errorf("error reconciling s6 instance %s: %s", s6InstanceName, err)
 			s.PrintState()
 			// Add metrics for error
-			metrics.IncErrorCount(metrics.ComponentS6Instance, s6InstanceName)
-
+			metrics.IncErrorCountAndLog(metrics.ComponentS6Instance, s6InstanceName, err, s.baseFSMInstance.GetLogger())
 		}
 	}()
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
+		if s.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "start of reconciliation") {
+			return nil, false
+		}
 		return ctx.Err(), false
 	}
 
@@ -90,25 +91,40 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 		return nil, false
 	}
 
-	// Step 2: Detect external changes.
+	/// Step 2: Try to read service status every tick (but continue even if it fails)
+	//
+	// DESIGN DECISION: Allowing **Reconcile** to continue when *Update‑Observed‑State* fails
+	//
+	// The following logic implements a critical deadlock prevention mechanism. Here's the reasoning:
+	//
+	// | Stage                            | Key question                                                                                                                                                                                                                                 | Reasoning that led to the final rule                                                                                                                                                                                                                                               |
+	// | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+	// | **1 — Problem surfaced**         | *After a cold restart* `Status()` throws **`ErrServiceNotExist`** on the very first tick because the child FSM is not yet re‑registered. The error is treated as fatal → the back‑off decorator suspends the instance → no further progress. | We saw an **ordering flaw** (read before write). Re‑ordering fixed the root cause but raised a new one: during normal startup there is still a brief window where the service exists in the manager yet `Status()` can fail (e.g. metrics side‑car not up, log files not created). |
+	// | **2 — Goal statement**           | *Controller must keep driving the FSM even if the very first status poll fails.*                                                                                                                                                             | If the service is in the middle of "creating → starting", we should **retry next tick** instead of pausing via back‑off; otherwise we dead‑lock again.                                                                                                                             |
+	// | **3 — Classification of errors** | Which errors are *harmless transients* and which are *real faults*?                                                                                                                                                                          | *Harmless* → `ErrServiceNotExist`, `ErrBenthosMonitorNotRunning`, `ErrLastObservedStateNil` – they simply mean "child not ready yet". *Real* → anything else (file I/O, YAML parse, context timeout). Only the real ones should trigger the back‑off / error state.             |
+	// | **4 — Control‑flow change**      | How to keep the "three‑phase" structure but avoid early exit?                                                                                                                                                                                | 1. **ReconcileManager first** (creates/updates children). 2. Call `reconcileExternalChanges`; **swallow** harmless errors (log/debug, but don't `SetError`). 3. Run `reconcileStateTransition`; let it evaluate predicates that don't rely on missing data yet.              |
+	// | **5 — Safety check**             | Could this hide real production issues?                                                                                                                                                                                                      | No. As soon as the monitor/metrics/logs are available, `Status()` will succeed and its data drive the FSM. If a child never becomes ready, later predicates (health‑check, time‑outs) push the parent FSM into *degraded* → operator alert.                                        |
+	// | **6 — Implementation rule**      | **"Reconcile may keep running even when Update‑Observed‑State returns a *transient* error.  Only escalate non‑transient errors."**                                                                                                           | *In code:* We log the error but continue reconciling. For timeout errors specifically, we mark as reconciled to prevent further attempts this tick. For all other errors, we continue without setting backoff.                                                                     |
+	// | **7 — Outcome**                  | *Cold restart scenario* now proceeds: child is registered (tick 1), status succeeds by tick 2‑3, FSM leaves *creating* → *starting* → *idle*. Observed‑state snapshot is continuously retried until valid.                                   |                                                                                                                                                                                                                                                                                    |
+	//
+	// **Summary for the implementation team:**
+	// * **Do not** treat *every* failure of `UpdateObservedState` as fatal.
+	// * **Whitelist** transient creation‑phase errors; log them and let the FSM keep reconciling.
+	// * Back‑off / error state should be reserved for genuine faults that won't heal by simply retrying in the next tick.
+	//
+	// This single rule, combined with "children first", breaks the restart dead‑loop while still recording real problems.
+	//
 	if err = s.reconcileExternalChanges(ctx, services, snapshot); err != nil {
-		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
-		if !errors.Is(err, s6service.ErrServiceNotExist) {
-
-			if errors.Is(err, context.DeadlineExceeded) {
-				// Context deadline exceeded should be retried with backoff, not ignored
-				s.baseFSMInstance.SetError(err, snapshot.Tick)
-				s.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileExternalChanges, will retry with backoff")
-				err = nil // Clear error so reconciliation continues
-				return nil, false
-			}
-
-			s.baseFSMInstance.SetError(err, snapshot.Tick)
-			s.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
-			return nil, false // We don't want to return an error here, because we want to continue reconciling
+		if s.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
+			return nil, false
 		}
 
-		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
+		// Log the error but always continue reconciling - we need reconcileStateTransition to run
+		// to restore services after restart, even if we can't read their status yet
+		s.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)
+
+		// For all other errors, just continue reconciling without setting backoff
+		err = nil
 	}
 
 	// Step 3: Attempt to reconcile the state.
@@ -120,11 +136,7 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 			return nil, false
 		}
 
-		if errors.Is(err, context.DeadlineExceeded) {
-			// Context deadline exceeded should be retried with backoff, not ignored
-			s.baseFSMInstance.SetError(err, snapshot.Tick)
-			s.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileStateTransition, will retry with backoff")
-			err = nil // Clear error so reconciliation continues
+		if s.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileStateTransition") {
 			return nil, false
 		}
 

@@ -213,19 +213,25 @@ stop-and-remove-umh-core-latest:
 	docker rm $(IMAGE_NAME) || true
 	docker rmi $(IMAGE_NAME):$(TAG) || true
 
-# Clean up Docker build cache and unused objects for CI environments & stop all containers
+# Cleanup Docker, Go build cache and test cache
 cleanup-ci:
-	echo "Cleaning up Docker build cache and unused objects for CI environments & stop all containers"
-	echo "Running containers:"
+	echo "Docker cleanup - removing everything"
+	echo " - Running containers:"
 	docker ps -a || true
-	echo "Stopping all containers"
-	docker ps -a -q | xargs -r docker stop || true
-	echo "Removing all containers"
-	docker ps -a -q | xargs -r docker rm || true
-	echo "Pruning Docker build cache"
-	docker builder prune -f || true
-	echo "Pruning Docker system"
-	docker system prune -f --volumes || true
+	echo " - Stopping all containers"
+	docker stop $$(docker ps -aq) 2>/dev/null || true
+	echo " - Removing all containers"
+	docker rm $$(docker ps -aq) 2>/dev/null || true
+	echo " - Removing all images"
+	docker rmi $$(docker images -q) 2>/dev/null || true
+	echo " - Pruning Docker build cache"
+	docker builder prune -a -f || true
+	echo " - Pruning Docker system"
+	docker system prune -a -f --volumes || true
+	echo " - Cleaning Go build cache"
+	go clean -cache -modcache || true
+	echo " - Cleaning Go test cache"
+	go clean -testcache || true
 
 cleanup-tmp:
 	rm -rf ./tmp/*
