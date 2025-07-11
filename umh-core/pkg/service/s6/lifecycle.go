@@ -267,6 +267,29 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *Service
 		serviceExists, _ := fsService.PathExists(ctx, artifacts.ServiceDir)
 		if serviceExists {
 			if err := fsService.RemoveAll(ctx, artifacts.ServiceDir); err != nil {
+				// DEBUG: List directory contents when removal fails to troubleshoot what's blocking removal
+				if contents, listErr := fsService.ReadDir(ctx, artifacts.ServiceDir); listErr == nil {
+					s.logger.Debugf("Failed to remove service directory %s, contents still present:", artifacts.ServiceDir)
+					for _, item := range contents {
+						itemPath := filepath.Join(artifacts.ServiceDir, item.Name())
+						if item.IsDir() {
+							// For directories, also list their contents
+							if subContents, subErr := fsService.ReadDir(ctx, itemPath); subErr == nil {
+								subItems := make([]string, len(subContents))
+								for i, subItem := range subContents {
+									subItems[i] = subItem.Name()
+								}
+								s.logger.Debugf("  DIR  %s/ -> [%s]", item.Name(), strings.Join(subItems, ", "))
+							} else {
+								s.logger.Debugf("  DIR  %s/ -> (cannot read: %v)", item.Name(), subErr)
+							}
+						} else {
+							s.logger.Debugf("  FILE %s", item.Name())
+						}
+					}
+				} else {
+					s.logger.Debugf("Failed to remove service directory %s, cannot list contents: %v", artifacts.ServiceDir, listErr)
+				}
 				s.logger.Debugf("Failed to remove service directory: %v", err)
 				return fmt.Errorf("failed to remove service directory: %w", err)
 			}
