@@ -393,6 +393,11 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 		capturedManager := c.managers[i]
 
 		errorgroup.Go(func() error {
+			// It might be that .Go is blocked until the ctx is already cancelled, in that case we just return
+			if ctx.Err() != nil {
+				return nil
+			}
+
 			reconciled, err := c.reconcileManager(innerCtx, capturedManager, &executedManagers, &executedManagersMutex, newSnapshot)
 			if err != nil {
 				return err
