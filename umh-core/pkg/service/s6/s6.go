@@ -283,10 +283,16 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 				return fmt.Errorf("failed to remove orphaned directory %s: %w", servicePath, err)
 			}
 
-			// Remove succeeded, clear artifacts and return success
-			// Next FSM reconcile will call Create() again and find no directory
+			// Remove succeeded, clear artifacts
 			s.artifacts = nil
-			s.logger.Infof("Orphaned directory %s removed, ready for fresh creation", servicePath)
+			s.logger.Infof("Orphaned directory %s removed, proceeding with fresh creation", servicePath)
+
+			// Now create fresh - the directory is gone, so this should succeed
+			artifacts, err = s.CreateArtifacts(ctx, servicePath, config, fsService)
+			if err != nil {
+				return err
+			}
+			s.artifacts = artifacts
 			return nil
 		}
 
