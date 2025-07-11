@@ -24,7 +24,7 @@ import (
 func GenerateUUIDFromName(name string) uuid.UUID {
 	// Use a deterministic UUID generation based on name
 	// This ensures the same name always produces the same UUID
-	return uuid.NewSHA1(uuid.NameSpaceOID, []byte(name))
+	return uuid.NewSHA1(uuid.NameSpaceDNS, []byte(name))
 }
 
 // convertStreamProcessorMappingToInterface converts StreamProcessorMapping to map[string]interface{}
