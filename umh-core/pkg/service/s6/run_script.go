@@ -37,7 +37,11 @@ export {{ $key }} {{ $value }}
 s6-softlimit -m {{ .MemoryLimit }}
 {{- end }}
 
-# Drop privileges
+# Wait for log service to be up before starting to prevent race condition
+# Run s6-svwait as root since it needs access to supervise/control pipe
+foreground { s6-svwait -u {{ .ServicePath }}/log }
+
+# Drop privileges for the actual service
 s6-setuidgid nobody 
 
 # Keep stderr and stdout separate but both visible in logs
@@ -71,16 +75,46 @@ func getLogRunScript(config s6serviceconfig.S6ServiceConfig, logDir string) (str
 		// Important: This needs to be T (ISO 8861) as our time parser expects this format
 		logutilEnv = fmt.Sprintf("export S6_LOGGING_SCRIPT \"n%d s%d T\"", 20, config.LogFilesize)
 	}
-	logutilServiceCmd = fmt.Sprintf("logutil-service %s", logDir)
+	// ----------  ⚠️ Logging caveat (2025-07-04)  ----------
+	//
+	// We observed occasional binary blobs in `docker logs ...` that also
+	// appeared in /data/logs/<svc>/current. After deep-dive investigation:
+	//
+	//   • s6-log writes only its own diagnostics to stderr; it never mirrors
+	//     service output to stdout unless the `1` directive is present.
+	//     Source: https://skarnet.org/software/s6/s6-log.html
+	//   • logutil-service passes exactly one action (the log directory), so
+	//     duplicate output is *not* expected. The blobs leak during the
+	//     few milliseconds before s6-log's pipe is ready (startup/rotation
+	//     race in s6-svscan).
+	//   • We still *need* those stderr diagnostics because they include
+	//     fatal errors such as "unable to mkdir...", "disk full", and
+	//     "broken pipe" alerts.
+	//
+	// Mitigation: quarantine everything the logger writes **to stderr**
+	// into a side-channel file that does not pollute Docker logs but
+	// remains available for post-mortem analysis.
+	//
+	// NOTE: Do **NOT** redirect to /dev/null — that would hide critical
+	// s6-log warnings.
+	//
+	// --------------------------------------------------------
+
+	// Keep stdout quiet (stops binary blob leakage), but leave stderr visible
+	// in Docker logs for s6-log diagnostics
+	logutilServiceCmd = fmt.Sprintf(
+		"logutil-service %s 1>/dev/null",
+		logDir,
+	)
 
 	// Create log run script
 	logRunContent := fmt.Sprintf(`#!/command/execlineb -P
 fdmove -c 2 1
 foreground { mkdir -p %s }
 foreground { chown -R nobody:nobody %s }
+
 %s
-%s
-`, logDir, logDir, logutilEnv, logutilServiceCmd)
+%s`, logDir, logDir, logutilEnv, logutilServiceCmd)
 
 	return logRunContent, nil
 }

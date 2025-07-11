@@ -138,7 +138,7 @@ func (a *GetDataModelAction) Execute() (interface{}, map[string]interface{}, err
 	responseVersions := make(map[string]models.GetDataModelVersion)
 	for versionKey, versionData := range foundDataModel.Versions {
 		// Convert config.Field to models.Field recursively
-		modelsStructure := a.convertConfigFieldsToModelsFields(versionData.Structure)
+		modelsStructure := a.convertConfigFieldsToModelsFields(versionData.Structure, &fullConfig, make(map[string]bool))
 
 		// Marshal the structure to YAML
 		yamlData, err := yaml.Marshal(modelsStructure)
@@ -169,7 +169,7 @@ func (a *GetDataModelAction) Execute() (interface{}, map[string]interface{}, err
 }
 
 // convertConfigFieldsToModelsFields converts config.Field map to models.Field map recursively
-func (a *GetDataModelAction) convertConfigFieldsToModelsFields(configFields map[string]config.Field) map[string]models.Field {
+func (a *GetDataModelAction) convertConfigFieldsToModelsFields(configFields map[string]config.Field, fullConfig *config.FullConfig, visited map[string]bool) map[string]models.Field {
 	modelsFields := make(map[string]models.Field)
 
 	for key, configField := range configFields {
@@ -181,10 +181,45 @@ func (a *GetDataModelAction) convertConfigFieldsToModelsFields(configFields map[
 			}
 		}
 
+		// Start with the base subfields
+		var subfields map[string]models.Field
+		if configField.Subfields != nil {
+			subfields = a.convertConfigFieldsToModelsFields(configField.Subfields, fullConfig, visited)
+		}
+
+		// If getEnrichedTree is enabled, ModelRef exists, and we haven't visited this model yet
+		if a.payload.GetEnrichedTree && modelsModelRef != nil && fullConfig != nil {
+			refKey := modelsModelRef.Name + ":" + modelsModelRef.Version
+			if !visited[refKey] {
+				visited[refKey] = true
+
+				// Find the referenced model in the full configuration
+				for _, dataModel := range fullConfig.DataModels {
+					if dataModel.Name == modelsModelRef.Name {
+						if modelVersion, exists := dataModel.Versions[modelsModelRef.Version]; exists {
+							// Recursively convert the referenced model's structure
+							enrichedFields := a.convertConfigFieldsToModelsFields(modelVersion.Structure, fullConfig, visited)
+
+							// Merge the enriched fields into the subfields
+							if subfields == nil {
+								subfields = make(map[string]models.Field)
+							}
+							for enrichedKey, enrichedField := range enrichedFields {
+								subfields[enrichedKey] = enrichedField
+							}
+						}
+						break
+					}
+				}
+
+				delete(visited, refKey)
+			}
+		}
+
 		modelsFields[key] = models.Field{
 			PayloadShape: configField.PayloadShape,
 			ModelRef:     modelsModelRef,
-			Subfields:    a.convertConfigFieldsToModelsFields(configField.Subfields),
+			Subfields:    subfields,
 		}
 	}
 

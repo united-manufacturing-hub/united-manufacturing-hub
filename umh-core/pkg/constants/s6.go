@@ -31,9 +31,11 @@ var (
 const (
 	// S6 Operation Timeouts - Foundation Service (Level 0)
 	// S6 is the foundation service with no dependencies
-	S6UpdateObservedStateTimeout = 6 * time.Millisecond
-	S6RemoveTimeout              = 10 * time.Millisecond
-	S6MaxLines                   = 10000
+	// Increased from 6ms to 15ms to handle scaling test load (benthos-scaling integration test)
+	S6UpdateObservedStateTimeout = 15 * time.Millisecond
+	// Increased from 10ms to 20ms to handle scaling test load
+	S6RemoveTimeout = 20 * time.Millisecond
+	S6MaxLines      = 10000
 
 	// S6FileReadTimeBuffer is the minimum time buffer required before attempting to read a file chunk
 	// This is half of DefaultTickerTime to ensure graceful early exit from file operations

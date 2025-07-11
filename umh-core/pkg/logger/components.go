@@ -34,6 +34,7 @@ const (
 	ComponentNmapManager              = "NmapCompManager"
 	ComponentConnectionManager        = "ConnectionManager"
 	ComponentProtocolConverterManager = "ProtocolConverterManager"
+	ComponentStreamProcessorManager   = "StreamProcessorManager"
 	ComponentTopicBrowserManager      = "TopicBrowserManager"
 
 	// FSM components

@@ -21,8 +21,8 @@ import (
 	"reflect"
 	"time"
 
-	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -157,43 +157,22 @@ func (s *S6Instance) CheckForCreation(ctx context.Context, filesystemService fil
 
 // UpdateObservedStateOfInstance updates the observed state of the service
 func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".updateObservedState", time.Since(start))
+	}()
 
-	// If both desired and current state are stopped, we do not return immediately, as we still need to check for permanent errors
+	observedStateCtx, cancel := context.WithTimeout(ctx, constants.S6UpdateObservedStateTimeout)
+	defer cancel()
 
-	// Measure status time
-	info, err := s.service.Status(ctx, s.servicePath, services.GetFileSystem())
+	//nolint:gosec
+	serviceInfo, err := s.service.Status(observedStateCtx, s.servicePath, services.GetFileSystem())
 	if err != nil {
-		s.ObservedState.ServiceInfo.Status = s6service.ServiceUnknown
-
-		if s.baseFSMInstance.GetCurrentFSMState() == internalfsm.LifecycleStateCreating || s.baseFSMInstance.GetCurrentFSMState() == internalfsm.LifecycleStateToBeCreated {
-			// If the service is being created, we don't want to count this as an error
-			return s6service.ErrServiceNotExist
-		}
-
-		// Otherwise, we count this as an error
-		s.baseFSMInstance.GetLogger().Errorf("error updating observed state for %s: %s", s.baseFSMInstance.GetID(), err)
-		return err
+		return fmt.Errorf("failed to get service status: %w", err)
 	}
 
-	// Store the raw service info
-	s.ObservedState.ServiceInfo = info
+	s.ObservedState.ServiceInfo = serviceInfo
 
-	// Map the service status to FSM status
-	switch info.Status {
-	case s6service.ServiceUp:
-		s.ObservedState.ServiceInfo.Status = s6service.ServiceUp
-	case s6service.ServiceDown:
-		s.ObservedState.ServiceInfo.Status = s6service.ServiceDown
-	case s6service.ServiceRestarting:
-		s.ObservedState.ServiceInfo.Status = s6service.ServiceRestarting
-	default:
-		s.ObservedState.ServiceInfo.Status = s6service.ServiceUnknown
-	}
-
-	// Set LastStateChange time if this is the first update
 	if s.ObservedState.LastStateChange == 0 {
 		s.ObservedState.LastStateChange = time.Now().Unix()
 	}
@@ -201,7 +180,7 @@ func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, services
 	// Fetch the actual service config from s6
 	config, err := s.service.GetConfig(ctx, s.servicePath, services.GetFileSystem())
 	if err != nil {
-		return fmt.Errorf("failed to get S6 service config for %s: %w", s.baseFSMInstance.GetID(), err)
+		return fmt.Errorf("failed to get service config: %w", err)
 	}
 	s.ObservedState.ObservedS6ServiceConfig = config
 

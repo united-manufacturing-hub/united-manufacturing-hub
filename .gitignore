@@ -12,3 +12,6 @@
 
 # Claude artifacts
 compass_artifact*
+
+# Test results
+*.result.txt
