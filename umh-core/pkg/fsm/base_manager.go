@@ -332,6 +332,10 @@ func (m *BaseFSMManager[C]) Reconcile(
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
+		// If it is a ctx context exceeded, return no error
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, false
+		}
 		return ctx.Err(), false
 	}
 
