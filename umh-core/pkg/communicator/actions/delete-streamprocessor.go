@@ -80,23 +80,28 @@ func NewDeleteStreamProcessorAction(userEmail string, actionUUID uuid.UUID, inst
 	}
 }
 
-// Parse implements the Action interface by extracting the stream processor UUID and name from the payload.
+// Parse implements the Action interface by extracting the stream processor UUID from the payload.
 func (a *DeleteStreamProcessorAction) Parse(payload interface{}) error {
-	// Parse the payload directly as a complete StreamProcessor object
-	spPayload, err := ParseActionPayload[models.StreamProcessor](payload)
+	// Parse the payload to get the UUID
+	parsedPayload, err := ParseActionPayload[models.DeleteStreamProcessorPayload](payload)
 	if err != nil {
-		return fmt.Errorf("failed to parse stream processor payload: %v", err)
+		return fmt.Errorf("failed to parse payload: %v", err)
 	}
 
-	// Extract UUID and name
-	if spPayload.UUID == nil {
+	// Validate UUID is provided
+	if parsedPayload.UUID == "" {
 		return errors.New("missing required field UUID")
 	}
-	a.streamProcessorUUID = *spPayload.UUID
-	a.name = spPayload.Name
 
-	a.actionLogger.Debugf("Parsed DeleteStreamProcessor action payload: uuid=%s, name=%s",
-		a.streamProcessorUUID, a.name)
+	// Parse string UUID into UUID object
+	streamProcessorUUID, err := uuid.Parse(parsedPayload.UUID)
+	if err != nil {
+		return fmt.Errorf("invalid UUID format: %v", err)
+	}
+
+	a.streamProcessorUUID = streamProcessorUUID
+
+	a.actionLogger.Debugf("Parsed DeleteStreamProcessor action payload: UUID=%s", a.streamProcessorUUID)
 	return nil
 }
 
@@ -107,16 +112,21 @@ func (a *DeleteStreamProcessorAction) Validate() error {
 		return errors.New("missing or invalid stream processor UUID")
 	}
 
-	if err := ValidateComponentName(a.name); err != nil {
-		return err
-	}
-
 	return nil
 }
 
 // Execute implements the Action interface by deleting the stream processor configuration.
 func (a *DeleteStreamProcessorAction) Execute() (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Info("Executing DeleteStreamProcessor action")
+
+	// Find the stream processor by UUID to get the name
+	err := a.findStreamProcessorByUUID()
+	if err != nil {
+		errorMsg := fmt.Sprintf("Failed to find stream processor: %v", err)
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+			errorMsg, a.outboundChannel, models.DeleteStreamProcessor)
+		return nil, nil, fmt.Errorf("%s", errorMsg)
+	}
 
 	// Send confirmation that action is starting
 	confirmationMessage := fmt.Sprintf("Starting deletion of stream processor %s", a.name)
@@ -127,7 +137,7 @@ func (a *DeleteStreamProcessorAction) Execute() (interface{}, map[string]interfa
 		"Deleting stream processor configuration...", a.outboundChannel, models.DeleteStreamProcessor)
 
 	// Delete the stream processor configuration
-	err := a.deleteStreamProcessor()
+	err = a.deleteStreamProcessor()
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to delete stream processor: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -151,6 +161,30 @@ func (a *DeleteStreamProcessorAction) Execute() (interface{}, map[string]interfa
 	}
 
 	return response, nil, nil
+}
+
+// findStreamProcessorByUUID finds the stream processor by UUID from the configuration and extracts the name.
+func (a *DeleteStreamProcessorAction) findStreamProcessorByUUID() error {
+	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	defer cancel()
+
+	// Get current configuration
+	currentConfig, err := a.configManager.GetConfig(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get current configuration: %w", err)
+	}
+
+	// Find the stream processor in the configuration
+	for _, sp := range currentConfig.StreamProcessor {
+		spID := GenerateUUIDFromName(sp.Name)
+		if spID == a.streamProcessorUUID {
+			a.name = sp.Name
+			a.actionLogger.Debugf("Found stream processor: uuid=%s, name=%s", a.streamProcessorUUID, a.name)
+			return nil
+		}
+	}
+
+	return fmt.Errorf("stream processor with UUID %s not found", a.streamProcessorUUID)
 }
 
 // deleteStreamProcessor performs the actual deletion of the stream processor from the configuration.
@@ -246,9 +280,8 @@ func (a *DeleteStreamProcessorAction) GetStreamProcessorUUID() uuid.UUID {
 }
 
 // GetParsedPayload returns the parsed payload - exposed primarily for testing purposes.
-func (a *DeleteStreamProcessorAction) GetParsedPayload() models.StreamProcessor {
-	return models.StreamProcessor{
-		UUID: &a.streamProcessorUUID,
-		Name: a.name,
+func (a *DeleteStreamProcessorAction) GetParsedPayload() models.DeleteStreamProcessorPayload {
+	return models.DeleteStreamProcessorPayload{
+		UUID: a.streamProcessorUUID.String(),
 	}
 }

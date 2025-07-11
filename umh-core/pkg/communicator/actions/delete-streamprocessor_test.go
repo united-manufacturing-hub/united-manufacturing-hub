@@ -130,7 +130,6 @@ var _ = Describe("DeleteStreamProcessor", func() {
 	Describe("Parse", func() {
 		It("should parse valid stream processor delete payload", func() {
 			payload := map[string]interface{}{
-				"name": spName,
 				"uuid": spUUID.String(),
 			}
 
@@ -141,15 +140,12 @@ var _ = Describe("DeleteStreamProcessor", func() {
 			Expect(action.GetStreamProcessorUUID()).To(Equal(spUUID))
 
 			parsedPayload := action.GetParsedPayload()
-			Expect(parsedPayload.Name).To(Equal(spName))
-			Expect(*parsedPayload.UUID).To(Equal(spUUID))
+			Expect(parsedPayload.UUID).To(Equal(spUUID.String()))
 		})
 
 		It("should return error for missing UUID", func() {
 			// Payload without UUID
-			payload := map[string]interface{}{
-				"name": spName,
-			}
+			payload := map[string]interface{}{}
 
 			err := action.Parse(payload)
 			Expect(err).To(HaveOccurred())
@@ -162,15 +158,14 @@ var _ = Describe("DeleteStreamProcessor", func() {
 
 			err := action.Parse(payload)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to parse stream processor payload"))
+			Expect(err.Error()).To(ContainSubstring("failed to parse payload"))
 		})
 	})
 
 	Describe("Validate", func() {
-		It("should pass validation with valid stream processor configuration", func() {
+		It("should pass validation with valid stream processor UUID", func() {
 			// First parse valid payload
 			payload := map[string]interface{}{
-				"name": spName,
 				"uuid": spUUID.String(),
 			}
 
@@ -185,7 +180,6 @@ var _ = Describe("DeleteStreamProcessor", func() {
 		It("should fail validation with invalid UUID", func() {
 			// Payload with nil UUID
 			payload := map[string]interface{}{
-				"name": spName,
 				"uuid": uuid.Nil.String(),
 			}
 
@@ -195,41 +189,12 @@ var _ = Describe("DeleteStreamProcessor", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing or invalid stream processor UUID"))
 		})
-
-		It("should fail validation with missing name", func() {
-			// Payload with missing name field
-			payload := map[string]interface{}{
-				"name": "",
-				"uuid": spUUID.String(),
-			}
-
-			err := action.Parse(payload)
-			Expect(err).To(BeNil())
-			err = action.Validate()
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("name cannot be empty"))
-		})
-
-		It("should fail validation with invalid stream processor name", func() {
-			// Payload with invalid name (contains special characters)
-			payload := map[string]interface{}{
-				"name": "invalid name!@#",
-				"uuid": spUUID.String(),
-			}
-
-			err := action.Parse(payload)
-			Expect(err).To(BeNil())
-			err = action.Validate()
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("name can only contain letters"))
-		})
 	})
 
 	Describe("Execute", func() {
 		It("should delete stream processor successfully", func() {
 			// Setup - parse valid payload first
 			payload := map[string]interface{}{
-				"name": spName,
 				"uuid": spUUID.String(),
 			}
 
@@ -270,7 +235,6 @@ var _ = Describe("DeleteStreamProcessor", func() {
 
 			// Parse valid payload
 			payload := map[string]interface{}{
-				"name": spName,
 				"uuid": spUUID.String(),
 			}
 
@@ -296,11 +260,7 @@ var _ = Describe("DeleteStreamProcessor", func() {
 			nonExistentName := "non-existent-processor"
 			nonExistentUUID := actions.GenerateUUIDFromName(nonExistentName)
 
-			// Set up mock to fail when stream processor is not found
-			mockConfig.WithAtomicDeleteStreamProcessorError(errors.New("stream processor with name \"" + nonExistentName + "\" not found"))
-
 			payload := map[string]interface{}{
-				"name": nonExistentName,
 				"uuid": nonExistentUUID.String(),
 			}
 
@@ -311,10 +271,10 @@ var _ = Describe("DeleteStreamProcessor", func() {
 			err = stateMocker.Start()
 			Expect(err).NotTo(HaveOccurred())
 
-			// Execute the action - should fail
+			// Execute the action - should fail because stream processor lookup will fail
 			_, metadata, err := action.Execute()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("Failed to delete stream processor"))
+			Expect(err.Error()).To(ContainSubstring("Failed to find stream processor"))
 			Expect(err.Error()).To(ContainSubstring("not found"))
 			Expect(metadata).To(BeNil())
 
@@ -328,7 +288,6 @@ var _ = Describe("DeleteStreamProcessor", func() {
 
 			// Parse valid payload
 			payload := map[string]interface{}{
-				"name": spName,
 				"uuid": spUUID.String(),
 			}
 
@@ -356,7 +315,6 @@ var _ = Describe("DeleteStreamProcessor", func() {
 		It("should delete root stream processor successfully", func() {
 			// Setup - parse valid payload first
 			payload := map[string]interface{}{
-				"name": spName,
 				"uuid": spUUID.String(),
 			}
 
@@ -436,7 +394,6 @@ var _ = Describe("DeleteStreamProcessor", func() {
 
 			// Parse valid payload for root deletion
 			payload := map[string]interface{}{
-				"name": spName,
 				"uuid": spUUID.String(),
 			}
 

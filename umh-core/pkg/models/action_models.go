@@ -841,3 +841,8 @@ type StreamProcessor struct {
 type GetStreamProcessorPayload struct {
 	UUID uuid.UUID `json:"uuid" binding:"required"`
 }
+
+// DeleteStreamProcessorPayload contains the UUID of the stream processor to delete.
+type DeleteStreamProcessorPayload struct {
+	UUID string `json:"uuid" binding:"required"`
+}
