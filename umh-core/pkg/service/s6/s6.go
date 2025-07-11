@@ -248,8 +248,21 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 
 		// 2. Directory exists but we have no artifacts → inconsistent state
 		if s.artifacts == nil {
-			s.logger.Debugf("Service %s exists but has no artifacts, failing to trigger FSM removal", servicePath)
-			return fmt.Errorf("service directory exists but artifacts is nil - inconsistent state")
+			s.logger.Warnf("Service %s exists but has no artifacts - orphaned directory, force removing", servicePath)
+
+			// Use ForceRemove which is designed for exactly this case
+			if err := s.ForceRemove(ctx, servicePath, fsService); err != nil {
+				return fmt.Errorf("failed to force remove orphaned directory for %s: %w", servicePath, err)
+			}
+
+			// Directory removed, now create fresh
+			s.logger.Infof("Orphaned directory removed for %s, creating fresh", servicePath)
+			artifacts, err := s.CreateArtifacts(ctx, servicePath, config, fsService)
+			if err != nil {
+				return err
+			}
+			s.artifacts = artifacts
+			return nil
 		}
 
 		// 3. Directory exists and we have artifacts → check health

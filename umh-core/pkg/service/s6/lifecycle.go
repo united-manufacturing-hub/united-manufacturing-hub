@@ -370,7 +370,12 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *Service
 
 	// Step 3: Remove service directory (idempotent)
 	if !progress.ServiceDirRemoved {
-		serviceExists, _ := fsService.PathExists(ctx, artifacts.ServiceDir)
+		serviceExists, err := fsService.PathExists(ctx, artifacts.ServiceDir)
+		if err != nil {
+			s.logger.Debugf("Failed to check service directory existence: %v", err)
+			return fmt.Errorf("failed to check service directory existence: %w", err)
+		}
+
 		if serviceExists {
 			if err := fsService.RemoveAll(ctx, artifacts.ServiceDir); err != nil {
 				// DEBUG: List directory contents when removal fails to troubleshoot what's blocking removal
@@ -399,22 +404,37 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *Service
 				s.logger.Debugf("Failed to remove service directory: %v", err)
 				return fmt.Errorf("failed to remove service directory: %w", err)
 			}
+			// Only mark as removed after successful removal
+			progress.ServiceDirRemoved = true
+			s.logger.Debugf("Service directory removed: %s", artifacts.ServiceDir)
+		} else {
+			// Directory doesn't exist, so removal is complete
+			progress.ServiceDirRemoved = true
+			s.logger.Debugf("Service directory already gone: %s", artifacts.ServiceDir)
 		}
-		progress.ServiceDirRemoved = true
-		s.logger.Debugf("Service directory removed: %s", artifacts.ServiceDir)
 	}
 
 	// Step 4: Remove log directory (idempotent)
 	if !progress.LogDirRemoved {
-		logExists, _ := fsService.PathExists(ctx, artifacts.LogDir)
+		logExists, err := fsService.PathExists(ctx, artifacts.LogDir)
+		if err != nil {
+			s.logger.Debugf("Failed to check log directory existence: %v", err)
+			return fmt.Errorf("failed to check log directory existence: %w", err)
+		}
+
 		if logExists {
 			if err := fsService.RemoveAll(ctx, artifacts.LogDir); err != nil {
 				s.logger.Debugf("Failed to remove log directory: %v", err)
 				return fmt.Errorf("failed to remove log directory: %w", err)
 			}
+			// Only mark as removed after successful removal
+			progress.LogDirRemoved = true
+			s.logger.Debugf("Log directory removed: %s", artifacts.LogDir)
+		} else {
+			// Directory doesn't exist, so removal is complete
+			progress.LogDirRemoved = true
+			s.logger.Debugf("Log directory already gone: %s", artifacts.LogDir)
 		}
-		progress.LogDirRemoved = true
-		s.logger.Debugf("Log directory removed: %s", artifacts.LogDir)
 	}
 
 	s.logger.Debugf("Successfully completed all removal steps for service artifacts: %+v", artifacts)
