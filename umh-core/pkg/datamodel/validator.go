@@ -36,7 +36,7 @@
 //
 // For reference validation:
 //
-//	err := validator.ValidateWithReferences(ctx, dataModel, allDataModels)
+//	err := validator.ValidateWithReferences(ctx, dataModel, allDataModels, payloadShapes)
 //	if err != nil {
 //	    // Handle validation or reference errors
 //	}
@@ -108,14 +108,20 @@ func (v *Validator) ValidateStructureOnly(ctx context.Context, dataModel config.
 // - ctx: context for cancellation
 // - dataModel: the data model to validate
 // - allDataModels: map of all available data models for reference resolution
+// - payloadShapes: map of all available payload shapes for payload shape validation
 // Returns error if validation fails or circular references are detected
-func (v *Validator) ValidateWithReferences(ctx context.Context, dataModel config.DataModelVersion, allDataModels map[string]config.DataModelsConfig) error {
+func (v *Validator) ValidateWithReferences(ctx context.Context, dataModel config.DataModelVersion, allDataModels map[string]config.DataModelsConfig, payloadShapes map[string]config.PayloadShape) error {
 	// First validate the data model structure itself
 	if err := v.ValidateStructureOnly(ctx, dataModel); err != nil {
 		return err
 	}
 
-	// Then validate all references
+	// Then validate payload shapes
+	if err := v.validatePayloadShapes(ctx, dataModel, payloadShapes); err != nil {
+		return err
+	}
+
+	// Finally validate all references
 	visitedModels := make(map[string]bool)
 	return v.validateReferences(ctx, dataModel, allDataModels, visitedModels, 0)
 }
@@ -399,6 +405,78 @@ func (v *Validator) validateStructureReferences(ctx context.Context, structure m
 		if field.Subfields != nil {
 			v.validateStructureReferences(ctx, field.Subfields, allDataModels, visitedModels, depth, currentPath, errors)
 		}
+	}
+}
+
+// validatePayloadShapes validates that all payload shapes referenced in the data model exist
+func (v *Validator) validatePayloadShapes(ctx context.Context, dataModel config.DataModelVersion, payloadShapes map[string]config.PayloadShape) error {
+	// Check if context is cancelled before starting payload shape validation
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	// Pre-allocate error slice with reasonable capacity to avoid growth allocations
+	errors := make([]ValidationError, 0, 8)
+	v.validateStructurePayloadShapes(ctx, dataModel.Structure, payloadShapes, "", &errors)
+
+	if len(errors) > 0 {
+		// Build error message with all validation errors using strings.Builder
+		var errorMsg strings.Builder
+		errorMsg.WriteString("data model payload shape validation failed:")
+		for _, validationError := range errors {
+			errorMsg.WriteString("\n  - ")
+			errorMsg.WriteString(validationError.Error())
+		}
+		return fmt.Errorf("%s", errorMsg.String())
+	}
+
+	return nil
+}
+
+// validateStructurePayloadShapes recursively validates payload shapes in a structure
+func (v *Validator) validateStructurePayloadShapes(ctx context.Context, structure map[string]config.Field, payloadShapes map[string]config.PayloadShape, path string, errors *[]ValidationError) {
+	// Check if context is cancelled before processing this level
+	select {
+	case <-ctx.Done():
+		*errors = append(*errors, ValidationError{
+			Path:    path,
+			Message: "validation cancelled: " + safeContextError(ctx),
+		})
+		return
+	default:
+	}
+
+	for fieldName, field := range structure {
+		// Build path efficiently once - use simple concatenation for single segment
+		var currentPath string
+		if path == "" {
+			currentPath = fieldName
+		} else {
+			currentPath = path + "." + fieldName
+		}
+
+		// Check if this field has a payload shape
+		if field.PayloadShape != "" {
+			v.validateSinglePayloadShape(field.PayloadShape, currentPath, payloadShapes, errors)
+		}
+
+		// Recursively check subfields
+		if field.Subfields != nil {
+			v.validateStructurePayloadShapes(ctx, field.Subfields, payloadShapes, currentPath, errors)
+		}
+	}
+}
+
+// validateSinglePayloadShape validates a single payload shape reference
+func (v *Validator) validateSinglePayloadShape(payloadShape string, path string, payloadShapes map[string]config.PayloadShape, errors *[]ValidationError) {
+	// Check if the payload shape exists
+	if _, exists := payloadShapes[payloadShape]; !exists {
+		*errors = append(*errors, ValidationError{
+			Path:    path,
+			Message: fmt.Sprintf("referenced payload shape '%s' does not exist", payloadShape),
+		})
 	}
 }
 

@@ -151,7 +151,7 @@ func (t *Translator) TranslateDataModel(
 
 	if hasReferences {
 		// Validate with full reference checking
-		if err := t.validator.ValidateWithReferences(ctx, dataModel, allDataModels); err != nil {
+		if err := t.validator.ValidateWithReferences(ctx, dataModel, allDataModels, enrichedPayloadShapes); err != nil {
 			return nil, fmt.Errorf("data model reference validation failed: %w", err)
 		}
 
