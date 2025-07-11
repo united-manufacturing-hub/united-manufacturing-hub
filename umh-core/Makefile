@@ -213,7 +213,7 @@ stop-and-remove-umh-core-latest:
 	docker rm $(IMAGE_NAME) || true
 	docker rmi $(IMAGE_NAME):$(TAG) || true
 
-# Clean up Docker build cache and unused objects for CI environments & stop all containers
+# Cleanup Docker, Go build cache and test cache
 cleanup-ci:
 	echo "Docker cleanup - removing everything"
 	echo " - Running containers:"
