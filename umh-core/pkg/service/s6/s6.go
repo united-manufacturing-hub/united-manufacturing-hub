@@ -1438,31 +1438,3 @@ func (s *DefaultService) CheckHealth(ctx context.Context, servicePath string, fs
 	// Use lifecycle manager for comprehensive health check
 	return s.CheckArtifactsHealth(ctx, artifacts, fsService)
 }
-
-// scanDirectoryForArtifacts recursively scans a directory and adds all files to artifacts.CreatedFiles
-func (s *DefaultService) scanDirectoryForArtifacts(ctx context.Context, dirPath string, artifacts *ServiceArtifacts, fsService filesystem.Service) error {
-	entries, err := fsService.ReadDir(ctx, dirPath)
-	if err != nil {
-		return fmt.Errorf("failed to read directory %s: %w", dirPath, err)
-	}
-
-	for _, entry := range entries {
-		fullPath := filepath.Join(dirPath, entry.Name())
-
-		if entry.IsDir() {
-			// Recursively scan subdirectories
-			if err := s.scanDirectoryForArtifacts(ctx, fullPath, artifacts, fsService); err != nil {
-				s.logger.Debugf("Failed to scan subdirectory %s: %v", fullPath, err)
-				// Continue scanning other entries even if one fails
-			}
-		} else {
-			// Add file to artifacts
-			artifacts.CreatedFiles = append(artifacts.CreatedFiles, fullPath)
-		}
-	}
-
-	// Add the directory itself to the list for removal
-	artifacts.CreatedFiles = append(artifacts.CreatedFiles, dirPath)
-
-	return nil
-}
