@@ -199,7 +199,24 @@ type DefaultService struct {
 	logCursors sync.Map // map[string]*logState (key = abs log path)
 
 	// Lifecycle management with concurrency protection
+	//
+	// This coordination system handles rapid FSM reconciliation loops that may call
+	// Create()/Remove() hundreds of times per minute. Three components work together:
+	//
+	// 1. MUTEX (mu): Provides mutual exclusion to prevent corrupted state
+	// 2. CREATING FLAG: Provides idempotency for rapid Create() calls
+	//    - Without this: FSM tick 1 starts Create(), tick 2 waits then repeats work
+	//    - With this: FSM tick 1 starts Create(), tick 2 returns immediately
+	// 3. REMOVING FLAG: Prevents create/remove races and provides removal idempotency
+	//    - Without this: Create() in progress + Remove() call = newly created files get removed
+	//    - With this: Create() in progress + Remove() call = fails fast "service being removed"
+	//
+	// The mutex alone cannot provide operation state awareness - it only serializes access.
+	// The flags provide semantic meaning about what operation is in progress, enabling
+	// proper FSM coordination patterns.
 	mu        sync.Mutex        // serializes all state-changing calls
+	creating  bool              // true when Create() is in progress - provides idempotency
+	removing  bool              // true when Remove()/ForceRemove() is in progress - prevents create/remove races
 	artifacts *ServiceArtifacts // cached artifacts for the service
 }
 
@@ -232,6 +249,19 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 	s.logger.Debugf("Creating S6 service %s", servicePath)
 
 	return s.withLifecycleGuard(func() error {
+		// Check for conflicting operations
+		if s.removing {
+			return fmt.Errorf("service %s is being removed", servicePath)
+		}
+		if s.creating {
+			// Another Create() during rapid FSM reconciliation - idempotent; nothing to do
+			s.logger.Debugf("Service %s creation already in progress", servicePath)
+			return nil
+		}
+
+		s.creating = true
+		defer func() { s.creating = false }()
+
 		// No need to ensure artifacts here - they'll be created by CreateArtifacts
 
 		// 1. Directory doesn't exist → create it fresh
@@ -319,6 +349,16 @@ func (s *DefaultService) Remove(ctx context.Context, servicePath string, fsServi
 	s.logger.Debugf("Removing S6 service %s", servicePath)
 
 	return s.withLifecycleGuard(func() error {
+		// Check for conflicting operations
+		if s.removing {
+			// Already tearing down - idempotent for rapid FSM reconciliation
+			s.logger.Debugf("Service %s removal already in progress", servicePath)
+			return nil
+		}
+
+		s.removing = true
+		defer func() { s.removing = false }()
+
 		// If we have tracked artifacts, use them for proper removal
 		if s.artifacts != nil && len(s.artifacts.CreatedFiles) > 0 {
 			return s.RemoveArtifacts(ctx, s.artifacts, fsService)
@@ -1156,6 +1196,10 @@ func (s *DefaultService) ForceRemove(
 	s.logger.Warnf("Force removing S6 service %s", servicePath)
 
 	return s.withLifecycleGuard(func() error {
+		// Set removing flag to prevent concurrent create operations
+		s.removing = true
+		defer func() { s.removing = false }()
+
 		// ForceRemove doesn't need tracked files - it does aggressive cleanup
 		// Create minimal artifacts for cleanup operations
 		serviceName := filepath.Base(servicePath)
