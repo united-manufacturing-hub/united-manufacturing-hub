@@ -46,10 +46,10 @@ func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.Syste
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, tbInstanceName, time.Since(start))
 		if err != nil {
-			i.baseFSMInstance.GetLogger().Errorf("error reconciling topic browser instance %s: %v", tbInstanceName, err)
+			i.baseFSMInstance.GetLogger().Errorf("error reconciling topic browser instance %s: %s", tbInstanceName, err)
 			i.PrintState()
 			// Add metrics for error
-			metrics.IncErrorCount(metrics.ComponentTopicBrowserInstance, tbInstanceName)
+			metrics.IncErrorCountAndLog(metrics.ComponentTopicBrowserInstance, tbInstanceName, err, i.baseFSMInstance.GetLogger())
 		}
 	}()
 

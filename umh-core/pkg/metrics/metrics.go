@@ -23,6 +23,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	"go.uber.org/zap"
 )
 
 const (
@@ -147,6 +148,13 @@ func SetupMetricsEndpoint(addr string) *http.Server {
 	}()
 
 	return server
+}
+
+func IncErrorCountAndLog(component, instance string, err error, logger *zap.SugaredLogger) {
+	IncErrorCount(component, instance)
+	if logger != nil {
+		logger.Debugf("Component %s instance %s reconciliation failed: %v", component, instance, err)
+	}
 }
 
 // IncErrorCount increments the error counter for a component

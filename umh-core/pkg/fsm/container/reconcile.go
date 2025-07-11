@@ -43,7 +43,7 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSn
 			c.baseFSMInstance.GetLogger().Errorf("error reconciling container instance %s: %s", instanceName, err)
 			c.PrintState()
 			// Add metrics for error
-			metrics.IncErrorCount(metrics.ComponentContainerMonitor, instanceName)
+			metrics.IncErrorCountAndLog(metrics.ComponentContainerMonitor, instanceName, err, c.baseFSMInstance.GetLogger())
 		}
 	}()
 

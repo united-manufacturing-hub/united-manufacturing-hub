@@ -48,7 +48,7 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 			p.baseFSMInstance.GetLogger().Errorf("error reconciling protocolconverter instance %s: %v", protocolConverterInstanceName, err)
 			p.PrintState()
 			// Add metrics for error
-			metrics.IncErrorCount(metrics.ComponentProtocolConverterInstance, protocolConverterInstanceName)
+			metrics.IncErrorCountAndLog(metrics.ComponentProtocolConverterInstance, protocolConverterInstanceName, err, p.baseFSMInstance.GetLogger())
 		}
 	}()
 

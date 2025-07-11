@@ -45,7 +45,7 @@ func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sys
 			b.baseFSMInstance.GetLogger().Errorf("error reconciling benthos monitor instance %s: %s", instanceName, err)
 			b.PrintState()
 			// Add metrics for error
-			metrics.IncErrorCount(metrics.ComponentBenthosMonitor, instanceName)
+			metrics.IncErrorCountAndLog(metrics.ComponentBenthosMonitor, instanceName, err, b.baseFSMInstance.GetLogger())
 		}
 	}()
 

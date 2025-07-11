@@ -45,10 +45,10 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentBenthosInstance, benthosInstanceName, time.Since(start))
 		if err != nil {
-			b.baseFSMInstance.GetLogger().Errorf("error reconciling Benthos instance %s: %v", benthosInstanceName, err)
+			b.baseFSMInstance.GetLogger().Errorf("error reconciling benthos instance %s: %s", benthosInstanceName, err)
 			b.PrintState()
 			// Add metrics for error
-			metrics.IncErrorCount(metrics.ComponentBenthosInstance, benthosInstanceName)
+			metrics.IncErrorCountAndLog(metrics.ComponentBenthosInstance, benthosInstanceName, err, b.baseFSMInstance.GetLogger())
 		}
 	}()
 

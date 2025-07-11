@@ -48,7 +48,7 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 			n.baseFSMInstance.GetLogger().Errorf("error reconciling nmap instance %s: %s", instanceName, err)
 			n.PrintState()
 			// Add metrics for error
-			metrics.IncErrorCount(metrics.ComponentNmapInstance, instanceName)
+			metrics.IncErrorCountAndLog(metrics.ComponentNmapInstance, instanceName, err, n.baseFSMInstance.GetLogger())
 		}
 	}()
 

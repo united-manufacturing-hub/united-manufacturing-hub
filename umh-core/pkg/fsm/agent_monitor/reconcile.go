@@ -43,7 +43,7 @@ func (a *AgentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsh
 			a.baseFSMInstance.GetLogger().Errorf("error reconciling agent instance %s: %s", instanceName, err)
 			a.PrintState()
 			// Add metrics for error
-			metrics.IncErrorCount(metrics.ComponentAgentMonitor, instanceName)
+			metrics.IncErrorCountAndLog(metrics.ComponentAgentMonitor, instanceName, err, a.baseFSMInstance.GetLogger())
 		}
 	}()
 

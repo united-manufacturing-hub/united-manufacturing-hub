@@ -204,7 +204,7 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 
 			// Handle errors differently based on type
 			if err != nil {
-				metrics.IncErrorCount(metrics.ComponentControlLoop, "main")
+				metrics.IncErrorCountAndLog(metrics.ComponentControlLoop, "main", err, c.logger)
 
 				if errors.Is(err, context.DeadlineExceeded) {
 					// For timeouts, log warning but continue
@@ -304,7 +304,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 			originalErr := backoff.ExtractOriginalError(err)
 			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Config manager has permanently failed after max retries: %v (original error: %v)",
 				err, originalErr)
-			metrics.IncErrorCount(metrics.ComponentControlLoop, "config_permanent_failure")
+			metrics.IncErrorCountAndLog(metrics.ComponentControlLoop, "config_permanent_failure", err, c.logger)
 
 			// Propagate the error to the parent component so it can potentially restart the system
 			return fmt.Errorf("config permanently failed, system needs intervention: %w", err)
@@ -587,7 +587,7 @@ func (c *ControlLoop) reconcileManager(ctx context.Context, manager fsm.FSMManag
 	c.managerTimesMutex.Unlock()
 
 	if err != nil {
-		metrics.IncErrorCount(metrics.ComponentControlLoop, managerName)
+		metrics.IncErrorCountAndLog(metrics.ComponentControlLoop, managerName, err, c.logger)
 		return false, fmt.Errorf("manager %s reconciliation failed: %w", managerName, err)
 	}
 

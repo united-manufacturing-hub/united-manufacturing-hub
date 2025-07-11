@@ -45,10 +45,10 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentConnectionInstance, connectionInstanceName, time.Since(start))
 		if err != nil {
-			c.baseFSMInstance.GetLogger().Errorf("error reconciling connection instance %s: %v", connectionInstanceName, err)
+			c.baseFSMInstance.GetLogger().Errorf("error reconciling connection instance %s: %s", connectionInstanceName, err)
 			c.PrintState()
 			// Add metrics for error
-			metrics.IncErrorCount(metrics.ComponentConnectionInstance, connectionInstanceName)
+			metrics.IncErrorCountAndLog(metrics.ComponentConnectionInstance, connectionInstanceName, err, c.baseFSMInstance.GetLogger())
 		}
 	}()
 

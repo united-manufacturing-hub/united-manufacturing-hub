@@ -43,11 +43,10 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s6InstanceName, time.Since(start))
 		if err != nil {
-			s.baseFSMInstance.GetLogger().Errorf("error reconciling S6 instance %s: %s", s.baseFSMInstance.GetID(), err)
+			s.baseFSMInstance.GetLogger().Errorf("error reconciling s6 instance %s: %s", s6InstanceName, err)
 			s.PrintState()
 			// Add metrics for error
-			metrics.IncErrorCount(metrics.ComponentS6Instance, s6InstanceName)
-
+			metrics.IncErrorCountAndLog(metrics.ComponentS6Instance, s6InstanceName, err, s.baseFSMInstance.GetLogger())
 		}
 	}()
 

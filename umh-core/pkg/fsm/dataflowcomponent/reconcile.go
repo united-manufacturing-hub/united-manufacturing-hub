@@ -45,10 +45,10 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentDataflowComponentInstance, dataflowComponentInstanceName, time.Since(start))
 		if err != nil {
-			d.baseFSMInstance.GetLogger().Errorf("error reconciling dataflowcomponent instance %s: %v", dataflowComponentInstanceName, err)
+			d.baseFSMInstance.GetLogger().Errorf("error reconciling dataflow component instance %s: %s", dataflowComponentInstanceName, err)
 			d.PrintState()
 			// Add metrics for error
-			metrics.IncErrorCount(metrics.ComponentDataflowComponentInstance, dataflowComponentInstanceName)
+			metrics.IncErrorCountAndLog(metrics.ComponentDataflowComponentInstance, dataflowComponentInstanceName, err, d.baseFSMInstance.GetLogger())
 		}
 	}()
 

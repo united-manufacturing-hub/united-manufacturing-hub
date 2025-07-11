@@ -46,10 +46,10 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, redpandaInstanceName, time.Since(start))
 		if err != nil {
-			r.baseFSMInstance.GetLogger().Errorf("error reconciling Redpanda instance %s: %w", redpandaInstanceName, err)
+			r.baseFSMInstance.GetLogger().Errorf("error reconciling redpanda instance %s: %s", redpandaInstanceName, err)
 			r.PrintState()
 			// Add metrics for error
-			metrics.IncErrorCount(metrics.ComponentRedpandaInstance, redpandaInstanceName)
+			metrics.IncErrorCountAndLog(metrics.ComponentRedpandaInstance, redpandaInstanceName, err, r.baseFSMInstance.GetLogger())
 		}
 	}()
 

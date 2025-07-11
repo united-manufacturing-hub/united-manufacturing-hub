@@ -339,7 +339,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 	extractStart := time.Now()
 	desiredState, err := m.extractConfigs(snapshot.CurrentConfig)
 	if err != nil {
-		metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
+		metrics.IncErrorCountAndLog(metrics.ComponentBaseFSMManager, m.managerName, err, m.logger)
 		return fmt.Errorf("failed to extract configs: %w", err), false
 	}
 	metrics.ObserveReconcileTime(metrics.ComponentBaseFSMManager, m.managerName+".extract_configs", time.Since(extractStart))
@@ -348,7 +348,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 	for _, cfg := range desiredState {
 		name, err := m.getName(cfg)
 		if err != nil {
-			metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
+			metrics.IncErrorCountAndLog(metrics.ComponentBaseFSMManager, m.managerName, err, m.logger)
 			return fmt.Errorf("failed to get name: %w", err), false
 		}
 
@@ -366,19 +366,19 @@ func (m *BaseFSMManager[C]) Reconcile(
 			createStart := time.Now()
 			instance, err := m.createInstance(cfg)
 			if err != nil || instance == nil {
-				metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
+				metrics.IncErrorCountAndLog(metrics.ComponentBaseFSMManager, m.managerName, err, m.logger)
 				return fmt.Errorf("failed to create instance: %w", err), false
 			}
 			metrics.ObserveReconcileTime(metrics.ComponentBaseFSMManager, m.managerName+".create_instance", time.Since(createStart))
 
 			desiredState, err := m.getDesiredState(cfg)
 			if err != nil {
-				metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
+				metrics.IncErrorCountAndLog(metrics.ComponentBaseFSMManager, m.managerName, err, m.logger)
 				return fmt.Errorf("failed to get desired state: %w", err), false
 			}
 			err = instance.SetDesiredFSMState(desiredState)
 			if err != nil {
-				metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
+				metrics.IncErrorCountAndLog(metrics.ComponentBaseFSMManager, m.managerName, err, m.logger)
 				m.logger.Errorf("failed to set desired state: %v for newly to be created instance %s", err, name)
 				continue // Skip this instance for now, we should not create it
 			}
@@ -393,7 +393,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 		compareStart := time.Now()
 		equal, err := m.compareConfig(m.instances[name], cfg)
 		if err != nil {
-			metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
+			metrics.IncErrorCountAndLog(metrics.ComponentBaseFSMManager, m.managerName, err, m.logger)
 			return fmt.Errorf("failed to compare config: %w", err), false
 		}
 		metrics.ObserveReconcileTime(metrics.ComponentBaseFSMManager, m.managerName+".compare_config", time.Since(compareStart))
@@ -411,7 +411,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 			updateStart := time.Now()
 			err := m.setConfig(m.instances[name], cfg)
 			if err != nil {
-				metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
+				metrics.IncErrorCountAndLog(metrics.ComponentBaseFSMManager, m.managerName, err, m.logger)
 				return fmt.Errorf("failed to set config: %w", err), false
 			}
 			metrics.ObserveReconcileTime(metrics.ComponentBaseFSMManager, m.managerName+".set_config", time.Since(updateStart))
@@ -425,7 +425,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 		// If the instance exists, but the desired state is different, update it
 		desiredState, err := m.getDesiredState(cfg)
 		if err != nil {
-			metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
+			metrics.IncErrorCountAndLog(metrics.ComponentBaseFSMManager, m.managerName, err, m.logger)
 			return fmt.Errorf("failed to get desired state: %w", err), false
 		}
 		if m.instances[name].GetDesiredFSMState() != desiredState {
@@ -442,7 +442,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 				name, m.instances[name].GetDesiredFSMState(), desiredState)
 			err := m.instances[name].SetDesiredFSMState(desiredState)
 			if err != nil {
-				metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
+				metrics.IncErrorCountAndLog(metrics.ComponentBaseFSMManager, m.managerName, err, m.logger)
 				m.logger.Errorf("failed to set desired state: %w for instance %s", err, name)
 				continue // Skip this state change for now, it is broken, we should not update it
 			}
@@ -464,7 +464,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 		for _, desired := range desiredState {
 			name, err := m.getName(desired)
 			if err != nil {
-				metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
+				metrics.IncErrorCountAndLog(metrics.ComponentBaseFSMManager, m.managerName, err, m.logger)
 				return fmt.Errorf("failed to get name: %w", err), false
 			}
 			if name == instanceName {
@@ -587,7 +587,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 		// from exceeding the control loop's deadline
 		minimumRequiredTime, execTimeErr := m.getMinimumRequiredTime(instance)
 		if execTimeErr != nil {
-			metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
+			metrics.IncErrorCountAndLog(metrics.ComponentBaseFSMManager, m.managerName, execTimeErr, m.logger)
 			return fmt.Errorf("failed to get minimum required time for instance %s: %w", name, execTimeErr), false
 		}
 
@@ -597,7 +597,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 				return fmt.Errorf("no deadline set in context"), false
 			}
 			// For any other error, log and abort reconciliation
-			metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
+			metrics.IncErrorCountAndLog(metrics.ComponentBaseFSMManager, m.managerName, timeErr, m.logger)
 			return fmt.Errorf("deadline check error for instance %s: %w", name, timeErr), false
 		}
 
@@ -890,7 +890,7 @@ func (m *BaseFSMManager[C]) reconcileInstanceWithTimeout(ctx context.Context, in
 	metrics.ObserveReconcileTime(metrics.ComponentBaseFSMManager, m.managerName+".instances."+name, reconcileTime)
 
 	if reconcileErr != nil {
-		metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName+".instances."+name)
+		metrics.IncErrorCountAndLog(metrics.ComponentBaseFSMManager, m.managerName+".instances."+name, reconcileErr, m.logger)
 
 		// If the error is a permanent failure, remove the instance from the manager
 		// so that it can be recreated in further ticks

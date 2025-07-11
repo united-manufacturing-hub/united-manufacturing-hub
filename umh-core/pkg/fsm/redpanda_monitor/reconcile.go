@@ -45,7 +45,7 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 			b.baseFSMInstance.GetLogger().Errorf("error reconciling redpanda monitor instance %s: %s", instanceName, err)
 			b.PrintState()
 			// Add metrics for error
-			metrics.IncErrorCount(metrics.ComponentRedpandaMonitor, instanceName)
+			metrics.IncErrorCountAndLog(metrics.ComponentRedpandaMonitor, instanceName, err, b.baseFSMInstance.GetLogger())
 		}
 	}()
 
