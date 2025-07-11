@@ -246,54 +246,32 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 			return nil
 		}
 
-		// 2. Directory exists but we have no artifacts → inconsistent state
+		// 2. Directory exists but we have no artifacts → reconstruct state
 		if s.artifacts == nil {
-			s.logger.Warnf("Service %s exists but has no artifacts - orphaned directory, scanning and removing", servicePath)
+			s.logger.Warnf("Service %s exists but has no artifacts - inconsistent state", servicePath)
 
-			// Scan the orphaned directory to build artifacts based on what's actually there
+			// This can happen after:
+			// 1. Agent restart (lost in-memory state)
+			// 2. Failed removal (orphaned directory)
+			// 3. External interference
+			//
+			// We cannot safely determine which case this is or what state the service is in.
+			// The safest approach is to fail fast and let the FSM/reconciler handle it.
+			//
+			// The reconciler should:
+			// 1. Detect this error
+			// 2. Trigger proper removal through FSM state transitions
+			// 3. Retry creation after removal completes
+
+			// Create minimal artifacts so the FSM can track this for removal
 			serviceName := filepath.Base(servicePath)
-			artifacts := &ServiceArtifacts{
+			s.artifacts = &ServiceArtifacts{
 				ServiceDir:   servicePath,
 				LogDir:       filepath.Join(constants.S6LogBaseDir, serviceName),
-				CreatedFiles: []string{},
+				CreatedFiles: []string{}, // Empty = unknown files, RemoveArtifacts will handle
 			}
 
-			// Scan service directory for all files to track them for removal
-			err := s.scanDirectoryForArtifacts(ctx, servicePath, artifacts, fsService)
-			if err != nil {
-				s.logger.Warnf("Failed to scan orphaned directory %s: %v", servicePath, err)
-				// Even if scan fails, continue with removal attempt
-			}
-
-			// Also check if log directory exists and scan it
-			logExists, _ := fsService.PathExists(ctx, artifacts.LogDir)
-			if logExists {
-				err := s.scanDirectoryForArtifacts(ctx, artifacts.LogDir, artifacts, fsService)
-				if err != nil {
-					s.logger.Warnf("Failed to scan orphaned log directory %s: %v", artifacts.LogDir, err)
-				}
-			}
-
-			s.logger.Debugf("Found %d files in orphaned directory %s", len(artifacts.CreatedFiles), servicePath)
-			s.artifacts = artifacts
-
-			// Use normal Remove() which now has complete file list
-			if err := s.Remove(ctx, servicePath, fsService); err != nil {
-				// Remove failed, return error so FSM can retry with backoff
-				return fmt.Errorf("failed to remove orphaned directory %s: %w", servicePath, err)
-			}
-
-			// Remove succeeded, clear artifacts
-			s.artifacts = nil
-			s.logger.Infof("Orphaned directory %s removed, proceeding with fresh creation", servicePath)
-
-			// Now create fresh - the directory is gone, so this should succeed
-			artifacts, err = s.CreateArtifacts(ctx, servicePath, config, fsService)
-			if err != nil {
-				return err
-			}
-			s.artifacts = artifacts
-			return nil
+			return fmt.Errorf("service directory exists but artifacts is nil - requires removal first")
 		}
 
 		// 3. Directory exists and we have artifacts → check health
