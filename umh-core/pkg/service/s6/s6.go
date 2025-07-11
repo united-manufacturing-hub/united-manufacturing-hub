@@ -198,25 +198,10 @@ type DefaultService struct {
 	logger     *zap.SugaredLogger
 	logCursors sync.Map // map[string]*logState (key = abs log path)
 
-	// Lifecycle management with concurrency protection
-	//
-	// This coordination system handles rapid FSM reconciliation loops that may call
-	// Create()/Remove() hundreds of times per minute. Three components work together:
-	//
-	// 1. MUTEX (mu): Provides mutual exclusion to prevent corrupted state
-	// 2. CREATING FLAG: Provides idempotency for rapid Create() calls
-	//    - Without this: FSM tick 1 starts Create(), tick 2 waits then repeats work
-	//    - With this: FSM tick 1 starts Create(), tick 2 returns immediately
-	// 3. REMOVING FLAG: Prevents create/remove races and provides removal idempotency
-	//    - Without this: Create() in progress + Remove() call = newly created files get removed
-	//    - With this: Create() in progress + Remove() call = fails fast "service being removed"
-	//
-	// The mutex alone cannot provide operation state awareness - it only serializes access.
-	// The flags provide semantic meaning about what operation is in progress, enabling
-	// proper FSM coordination patterns.
+	// Lifecycle management with expert-recommended concurrency protection
 	mu        sync.Mutex        // serializes all state-changing calls
-	creating  bool              // true when Create() is in progress - provides idempotency
-	removing  bool              // true when Remove()/ForceRemove() is in progress - prevents create/remove races
+	creating  bool              // true when Create() is in progress
+	removing  bool              // true when Remove()/ForceRemove() is in progress
 	artifacts *ServiceArtifacts // cached artifacts for the service
 }
 
@@ -229,14 +214,14 @@ func NewDefaultService() Service {
 }
 
 // withLifecycleGuard serializes all state-changing operations to prevent race conditions
-// This addresses concurrent Create/Remove/ForceRemove operations
+// This addresses the expert-identified issue of concurrent Create/Remove/ForceRemove operations
 func (s *DefaultService) withLifecycleGuard(fn func() error) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return fn()
 }
 
-// Create creates the S6 service with specific configuration using proven patterns:
+// Create creates the S6 service with specific configuration using expert-recommended patterns:
 // - Unified lifecycle mutex prevents concurrent Create/Remove/ForceRemove operations
 // - Uses lifecycle manager for atomic creation with EXDEV protection
 // - Simplified 3-path approach with health checks
@@ -254,7 +239,7 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 			return fmt.Errorf("service %s is being removed", servicePath)
 		}
 		if s.creating {
-			// Another Create() during rapid FSM reconciliation - idempotent; nothing to do
+			// Another Create is busy (rare) - idempotent; nothing to do
 			s.logger.Debugf("Service %s creation already in progress", servicePath)
 			return nil
 		}
@@ -329,7 +314,7 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 	})
 }
 
-// Remove removes S6 service artifacts using a fast, idempotent approach:
+// Remove removes S6 service artifacts using expert-recommended fast, idempotent approach:
 // - Uses unified lifecycle mutex to prevent concurrent operations
 // - Implements rename-then-delete pattern for immediate S6 scanner visibility removal
 // - Returns quickly (<1 second) to respect FSM context timeouts
@@ -351,7 +336,7 @@ func (s *DefaultService) Remove(ctx context.Context, servicePath string, fsServi
 	return s.withLifecycleGuard(func() error {
 		// Check for conflicting operations
 		if s.removing {
-			// Already tearing down - idempotent for rapid FSM reconciliation
+			// Already tearing down - idempotent
 			s.logger.Debugf("Service %s removal already in progress", servicePath)
 			return nil
 		}
@@ -1169,7 +1154,7 @@ func (s *DefaultService) GetS6ConfigFile(ctx context.Context, servicePath string
 	return content, nil
 }
 
-// ForceRemove performs aggressive cleanup for stuck S6 services using comprehensive patterns:
+// ForceRemove performs aggressive cleanup for stuck S6 services using expert-recommended patterns:
 // - Uses unified lifecycle mutex to prevent concurrent operations
 // - Implements comprehensive process termination and supervisor killing
 // - Performs timeout-aware recursive deletion
@@ -1196,7 +1181,7 @@ func (s *DefaultService) ForceRemove(
 	s.logger.Warnf("Force removing S6 service %s", servicePath)
 
 	return s.withLifecycleGuard(func() error {
-		// Set removing flag to prevent concurrent create operations
+		// Set removing flag regardless of current state
 		s.removing = true
 		defer func() { s.removing = false }()
 
@@ -1650,7 +1635,7 @@ func (s *DefaultService) findLatestRotatedFile(entries []string) string {
 	return latestFile
 }
 
-// CheckHealth performs tri-state health check with lifecycle manager:
+// CheckHealth performs expert-recommended tri-state health check with lifecycle manager:
 // - Uses cached artifacts to avoid repeated path calculations
 // - Implements proper separation of observation from action
 // - Optional s6-svok integration for runtime health verification
