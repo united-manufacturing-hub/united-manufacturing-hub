@@ -41,6 +41,37 @@ type ServiceArtifacts struct {
 	TempDir string
 	// CreatedFiles tracks all files created during service creation for health checks
 	CreatedFiles []string
+	// RemovalProgress tracks what has been completed during removal for idempotent incremental removal
+	RemovalProgress *RemovalProgress
+}
+
+// RemovalProgress tracks the state of removal operations for incremental idempotent removal
+// Each field represents a step that has been completed and verified
+type RemovalProgress struct {
+	// ProcessesStopped indicates that S6 processes have been terminated
+	ProcessesStopped bool
+	// SupervisorsStopped indicates that S6 supervisor processes have been killed
+	SupervisorsStopped bool
+	// ServiceDirRemoved indicates that the service directory has been successfully removed
+	ServiceDirRemoved bool
+	// LogDirRemoved indicates that the log directory has been successfully removed
+	LogDirRemoved bool
+}
+
+// InitRemovalProgress initializes removal progress tracking if not already present
+func (artifacts *ServiceArtifacts) InitRemovalProgress() {
+	if artifacts.RemovalProgress == nil {
+		artifacts.RemovalProgress = &RemovalProgress{}
+	}
+}
+
+// IsFullyRemoved checks if all removal steps have been completed
+func (artifacts *ServiceArtifacts) IsFullyRemoved() bool {
+	if artifacts.RemovalProgress == nil {
+		return false
+	}
+	p := artifacts.RemovalProgress
+	return p.ProcessesStopped && p.SupervisorsStopped && p.ServiceDirRemoved && p.LogDirRemoved
 }
 
 // CreateArtifacts creates a complete S6 service atomically
@@ -124,13 +155,12 @@ func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string
 	return artifacts, nil
 }
 
-// RemoveArtifacts removes service artifacts using a fast, idempotent approach:
+// RemoveArtifacts removes service artifacts using an incremental, idempotent approach:
 // - Uses unified lifecycle mutex to prevent concurrent operations
-// - Multi-step approach: stop services, then remove on next reconcile call
+// - Tracks removal progress in artifacts to continue from where it left off
 // - Each call is fast (<100ms) to respect FSM context timeouts
 // - Fully idempotent - safe to call repeatedly during the removal process
 // - Returns nil only when nothing is left
-// The servicesRunning parameter should be provided by the service layer (s6.go)
 func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *ServiceArtifacts, fsService filesystem.Service) error {
 	if s == nil {
 		return fmt.Errorf("lifecycle manager is nil")
@@ -144,36 +174,70 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *Service
 		return fmt.Errorf("artifacts is nil")
 	}
 
-	// Fast path: Check if already removed
-	serviceExists, _ := fsService.PathExists(ctx, artifacts.ServiceDir)
-	logExists, _ := fsService.PathExists(ctx, artifacts.LogDir)
+	// Initialize removal progress tracking
+	artifacts.InitRemovalProgress()
 
-	if !serviceExists && !logExists {
-		s.logger.Debugf("Service artifacts already removed: %+v", artifacts)
-		return nil // Already removed
+	// Fast path: Check if already fully removed
+	if artifacts.IsFullyRemoved() {
+		s.logger.Debugf("Service artifacts already fully removed: %+v", artifacts)
+		return nil
 	}
 
-	if serviceExists {
-		// Stop services using tracked files - we know exactly what was created
-		if err := s.terminateProcesses(ctx, artifacts, fsService); err != nil {
-			s.logger.Debugf("Failed to terminate services during removal: %v", err)
-			// Continue with removal even if termination fails
+	progress := artifacts.RemovalProgress
+
+	// Step 1: Stop S6 processes (idempotent)
+	if !progress.ProcessesStopped {
+		serviceExists, _ := fsService.PathExists(ctx, artifacts.ServiceDir)
+		if serviceExists {
+			if err := s.terminateProcesses(ctx, artifacts, fsService); err != nil {
+				s.logger.Debugf("Failed to terminate processes during removal: %v", err)
+				return fmt.Errorf("failed to terminate processes: %w", err)
+			}
 		}
+		progress.ProcessesStopped = true
+		s.logger.Debugf("Processes stopped for service: %s", artifacts.ServiceDir)
 	}
 
-	if serviceExists {
-		if err := fsService.RemoveAll(ctx, artifacts.ServiceDir); err != nil {
-			return fmt.Errorf("failed to remove service directory: %w", err)
+	// Step 2: Stop supervisor processes (idempotent)
+	if !progress.SupervisorsStopped {
+		serviceExists, _ := fsService.PathExists(ctx, artifacts.ServiceDir)
+		if serviceExists {
+			if err := s.killSupervisors(ctx, artifacts, fsService); err != nil {
+				s.logger.Debugf("Failed to kill supervisors during removal: %v", err)
+				return fmt.Errorf("failed to kill supervisors: %w", err)
+			}
 		}
+		progress.SupervisorsStopped = true
+		s.logger.Debugf("Supervisors stopped for service: %s", artifacts.ServiceDir)
 	}
 
-	if logExists {
-		if err := fsService.RemoveAll(ctx, artifacts.LogDir); err != nil {
-			return fmt.Errorf("failed to remove log directory: %w", err)
+	// Step 3: Remove service directory (idempotent)
+	if !progress.ServiceDirRemoved {
+		serviceExists, _ := fsService.PathExists(ctx, artifacts.ServiceDir)
+		if serviceExists {
+			if err := fsService.RemoveAll(ctx, artifacts.ServiceDir); err != nil {
+				s.logger.Debugf("Failed to remove service directory: %v", err)
+				return fmt.Errorf("failed to remove service directory: %w", err)
+			}
 		}
+		progress.ServiceDirRemoved = true
+		s.logger.Debugf("Service directory removed: %s", artifacts.ServiceDir)
 	}
 
-	s.logger.Debugf("Successfully removed service artifacts: %+v", artifacts)
+	// Step 4: Remove log directory (idempotent)
+	if !progress.LogDirRemoved {
+		logExists, _ := fsService.PathExists(ctx, artifacts.LogDir)
+		if logExists {
+			if err := fsService.RemoveAll(ctx, artifacts.LogDir); err != nil {
+				s.logger.Debugf("Failed to remove log directory: %v", err)
+				return fmt.Errorf("failed to remove log directory: %w", err)
+			}
+		}
+		progress.LogDirRemoved = true
+		s.logger.Debugf("Log directory removed: %s", artifacts.LogDir)
+	}
+
+	s.logger.Debugf("Successfully completed all removal steps for service artifacts: %+v", artifacts)
 	return nil
 }
 

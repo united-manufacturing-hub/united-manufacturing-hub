@@ -92,31 +92,36 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 		return nil, false
 	}
 
-	// Step 2: Detect external changes.
+	// Step 2: Detect external changes - skip during removal
 	var externalReconciled bool
-	err, externalReconciled = r.reconcileExternalChanges(ctx, services, snapshot)
-	if err != nil {
-		// I am using strings.Contains as i cannot get it working with errors.Is
-		isExpectedError := strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNotExist.Error()) ||
-			strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNoLogFile.Error()) ||
-			strings.Contains(err.Error(), monitor.ErrServiceConnectionRefused.Error()) ||
-			strings.Contains(err.Error(), monitor.ErrServiceConnectionTimedOut.Error()) ||
-			strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNoSectionsFound.Error()) ||
-			strings.Contains(err.Error(), monitor.ErrServiceStopped.Error()) // This is expected when the service is stopped or stopping, no need to fetch logs, metrics, etc.
+	if r.baseFSMInstance.IsRemoving() {
+		// Skip external changes detection during removal - config files may be deleted
+		r.baseFSMInstance.GetLogger().Debugf("Skipping external changes detection during removal")
+	} else {
+		err, externalReconciled = r.reconcileExternalChanges(ctx, services, snapshot)
+		if err != nil {
+			// I am using strings.Contains as i cannot get it working with errors.Is
+			isExpectedError := strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNotExist.Error()) ||
+				strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNoLogFile.Error()) ||
+				strings.Contains(err.Error(), monitor.ErrServiceConnectionRefused.Error()) ||
+				strings.Contains(err.Error(), monitor.ErrServiceConnectionTimedOut.Error()) ||
+				strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNoSectionsFound.Error()) ||
+				strings.Contains(err.Error(), monitor.ErrServiceStopped.Error()) // This is expected when the service is stopped or stopping, no need to fetch logs, metrics, etc.
 
-		if !isExpectedError {
+			if !isExpectedError {
 
-			if r.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
-				return nil, false
+				if r.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
+					return nil, false
+				}
+
+				r.baseFSMInstance.SetError(err, snapshot.Tick)
+				r.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
+				return nil, false // We don't want to return an error here, because we want to continue reconciling
 			}
 
-			r.baseFSMInstance.SetError(err, snapshot.Tick)
-			r.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
-			return nil, false // We don't want to return an error here, because we want to continue reconciling
+			//nolint:ineffassign
+			err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
 		}
-
-		//nolint:ineffassign
-		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
 	}
 
 	// Step 3: Attempt to reconcile the state.
