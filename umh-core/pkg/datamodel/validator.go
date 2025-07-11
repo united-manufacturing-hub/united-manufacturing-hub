@@ -54,6 +54,43 @@ import (
 // Pre-compiled regex for version validation to avoid repeated compilation
 var versionRegex = regexp.MustCompile(`^v\d+$`)
 
+// ensureDefaultPayloadShapes creates a copy of the payload shapes map with default payload shapes injected if not present.
+// This ensures that the two fundamental payload shapes (timeseries-number and timeseries-string) are always available.
+//
+// The function never overrides existing payload shapes, preserving any custom definitions provided by the user.
+// Default payload shapes include standard UMH timeseries fields (timestamp_ms and value) with appropriate types.
+func ensureDefaultPayloadShapes(payloadShapes map[string]config.PayloadShape) map[string]config.PayloadShape {
+	// Create a copy to avoid modifying the original map, pre-size for existing + 2 defaults
+	enriched := make(map[string]config.PayloadShape, len(payloadShapes)+2)
+
+	// Copy existing payload shapes
+	for name, shape := range payloadShapes {
+		enriched[name] = shape
+	}
+
+	// Inject default timeseries-number if not present
+	if _, exists := enriched["timeseries-number"]; !exists {
+		enriched["timeseries-number"] = config.PayloadShape{
+			Fields: map[string]config.PayloadField{
+				"timestamp_ms": {Type: "number"},
+				"value":        {Type: "number"},
+			},
+		}
+	}
+
+	// Inject default timeseries-string if not present
+	if _, exists := enriched["timeseries-string"]; !exists {
+		enriched["timeseries-string"] = config.PayloadShape{
+			Fields: map[string]config.PayloadField{
+				"timestamp_ms": {Type: "number"},
+				"value":        {Type: "string"},
+			},
+		}
+	}
+
+	return enriched
+}
+
 // Validator provides high-performance validation for UMH data models.
 // The validator is stateless and thread-safe, allowing concurrent use across
 // multiple goroutines. It validates data model structures according to UMH
@@ -111,13 +148,16 @@ func (v *Validator) ValidateStructureOnly(ctx context.Context, dataModel config.
 // - payloadShapes: map of all available payload shapes for payload shape validation
 // Returns error if validation fails or circular references are detected
 func (v *Validator) ValidateWithReferences(ctx context.Context, dataModel config.DataModelVersion, allDataModels map[string]config.DataModelsConfig, payloadShapes map[string]config.PayloadShape) error {
+	// Ensure default payload shapes are available
+	enrichedPayloadShapes := ensureDefaultPayloadShapes(payloadShapes)
+
 	// First validate the data model structure itself
 	if err := v.ValidateStructureOnly(ctx, dataModel); err != nil {
 		return err
 	}
 
 	// Then validate payload shapes
-	if err := v.validatePayloadShapes(ctx, dataModel, payloadShapes); err != nil {
+	if err := v.validatePayloadShapes(ctx, dataModel, enrichedPayloadShapes); err != nil {
 		return err
 	}
 

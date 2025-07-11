@@ -65,43 +65,6 @@ func NewTranslator() *Translator {
 	}
 }
 
-// ensureDefaultPayloadShapes creates a copy of the payload shapes map with default payload shapes injected if not present.
-// This ensures that the two fundamental payload shapes (timeseries-number and timeseries-string) are always available.
-//
-// The function never overrides existing payload shapes, preserving any custom definitions provided by the user.
-// Default payload shapes include standard UMH timeseries fields (timestamp_ms and value) with appropriate types.
-func ensureDefaultPayloadShapes(payloadShapes map[string]config.PayloadShape) map[string]config.PayloadShape {
-	// Create a copy to avoid modifying the original map, pre-size for existing + 2 defaults
-	enriched := make(map[string]config.PayloadShape, len(payloadShapes)+2)
-
-	// Copy existing payload shapes
-	for name, shape := range payloadShapes {
-		enriched[name] = shape
-	}
-
-	// Inject default timeseries-number if not present
-	if _, exists := enriched["timeseries-number"]; !exists {
-		enriched["timeseries-number"] = config.PayloadShape{
-			Fields: map[string]config.PayloadField{
-				"timestamp_ms": {Type: "number"},
-				"value":        {Type: "number"},
-			},
-		}
-	}
-
-	// Inject default timeseries-string if not present
-	if _, exists := enriched["timeseries-string"]; !exists {
-		enriched["timeseries-string"] = config.PayloadShape{
-			Fields: map[string]config.PayloadField{
-				"timestamp_ms": {Type: "number"},
-				"value":        {Type: "string"},
-			},
-		}
-	}
-
-	return enriched
-}
-
 // TranslateDataModel translates a UMH data model to JSON Schema format for Schema Registry.
 // The function first validates the data model structure, then extracts virtual paths,
 // groups them by payload shape, and generates JSON schemas for each payload shape.
