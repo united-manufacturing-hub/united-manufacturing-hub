@@ -228,6 +228,10 @@ cleanup-ci:
 	docker builder prune -a -f || true
 	echo " - Pruning Docker system"
 	docker system prune -a -f --volumes || true
+	echo " - Cleaning Go build cache"
+	go clean -cache -modcache || true
+	echo " - Cleaning Go test cache"
+	go clean -testcache || true
 
 cleanup-tmp:
 	rm -rf ./tmp/*
