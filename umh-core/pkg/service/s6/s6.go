@@ -248,20 +248,45 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 
 		// 2. Directory exists but we have no artifacts → inconsistent state
 		if s.artifacts == nil {
-			s.logger.Warnf("Service %s exists but has no artifacts - orphaned directory, force removing", servicePath)
+			s.logger.Warnf("Service %s exists but has no artifacts - orphaned directory, scanning and removing", servicePath)
 
-			// Use ForceRemove which is designed for exactly this case
-			if err := s.ForceRemove(ctx, servicePath, fsService); err != nil {
-				return fmt.Errorf("failed to force remove orphaned directory for %s: %w", servicePath, err)
+			// Scan the orphaned directory to build artifacts based on what's actually there
+			serviceName := filepath.Base(servicePath)
+			artifacts := &ServiceArtifacts{
+				ServiceDir:   servicePath,
+				LogDir:       filepath.Join(constants.S6LogBaseDir, serviceName),
+				CreatedFiles: []string{},
 			}
 
-			// Directory removed, now create fresh
-			s.logger.Infof("Orphaned directory removed for %s, creating fresh", servicePath)
-			artifacts, err := s.CreateArtifacts(ctx, servicePath, config, fsService)
+			// Scan service directory for all files to track them for removal
+			err := s.scanDirectoryForArtifacts(ctx, servicePath, artifacts, fsService)
 			if err != nil {
-				return err
+				s.logger.Warnf("Failed to scan orphaned directory %s: %v", servicePath, err)
+				// Even if scan fails, continue with removal attempt
 			}
+
+			// Also check if log directory exists and scan it
+			logExists, _ := fsService.PathExists(ctx, artifacts.LogDir)
+			if logExists {
+				err := s.scanDirectoryForArtifacts(ctx, artifacts.LogDir, artifacts, fsService)
+				if err != nil {
+					s.logger.Warnf("Failed to scan orphaned log directory %s: %v", artifacts.LogDir, err)
+				}
+			}
+
+			s.logger.Debugf("Found %d files in orphaned directory %s", len(artifacts.CreatedFiles), servicePath)
 			s.artifacts = artifacts
+
+			// Use normal Remove() which now has complete file list
+			if err := s.Remove(ctx, servicePath, fsService); err != nil {
+				// Remove failed, return error so FSM can retry with backoff
+				return fmt.Errorf("failed to remove orphaned directory %s: %w", servicePath, err)
+			}
+
+			// Remove succeeded, clear artifacts and return success
+			// Next FSM reconcile will call Create() again and find no directory
+			s.artifacts = nil
+			s.logger.Infof("Orphaned directory %s removed, ready for fresh creation", servicePath)
 			return nil
 		}
 
@@ -329,15 +354,14 @@ func (s *DefaultService) Remove(ctx context.Context, servicePath string, fsServi
 	s.logger.Debugf("Removing S6 service %s", servicePath)
 
 	return s.withLifecycleGuard(func() error {
-		// If we have tracked artifacts, use them for proper removal
-		if s.artifacts != nil && len(s.artifacts.CreatedFiles) > 0 {
+		// If we have artifacts, use them for removal
+		if s.artifacts != nil {
 			return s.RemoveArtifacts(ctx, s.artifacts, fsService)
 		}
 
-		// No tracked files - service is in an inconsistent state
-		// Remove() requires tracked files to work properly
-		s.logger.Debugf("No tracked files for service %s, cannot do tracked removal", servicePath)
-		return fmt.Errorf("service %s has no tracked files - use ForceRemove() instead", servicePath)
+		// No artifacts at all - nothing to remove
+		s.logger.Debugf("No artifacts for service %s, nothing to remove", servicePath)
+		return nil
 	})
 }
 
@@ -1429,4 +1453,32 @@ func (s *DefaultService) CheckHealth(ctx context.Context, servicePath string, fs
 
 	// Use lifecycle manager for comprehensive health check
 	return s.CheckArtifactsHealth(ctx, artifacts, fsService)
+}
+
+// scanDirectoryForArtifacts recursively scans a directory and adds all files to artifacts.CreatedFiles
+func (s *DefaultService) scanDirectoryForArtifacts(ctx context.Context, dirPath string, artifacts *ServiceArtifacts, fsService filesystem.Service) error {
+	entries, err := fsService.ReadDir(ctx, dirPath)
+	if err != nil {
+		return fmt.Errorf("failed to read directory %s: %w", dirPath, err)
+	}
+
+	for _, entry := range entries {
+		fullPath := filepath.Join(dirPath, entry.Name())
+
+		if entry.IsDir() {
+			// Recursively scan subdirectories
+			if err := s.scanDirectoryForArtifacts(ctx, fullPath, artifacts, fsService); err != nil {
+				s.logger.Debugf("Failed to scan subdirectory %s: %v", fullPath, err)
+				// Continue scanning other entries even if one fails
+			}
+		} else {
+			// Add file to artifacts
+			artifacts.CreatedFiles = append(artifacts.CreatedFiles, fullPath)
+		}
+	}
+
+	// Add the directory itself to the list for removal
+	artifacts.CreatedFiles = append(artifacts.CreatedFiles, dirPath)
+
+	return nil
 }
