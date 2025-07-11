@@ -14,7 +14,10 @@
 
 package redpanda
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 var (
 	// ErrServiceNotExist indicates the requested service does not exist
@@ -35,3 +38,30 @@ var (
 	// ErrLastObservedStateNil indicates the last observed state is nil
 	ErrLastObservedStateNil = errors.New("last observed state is nil")
 )
+
+// SchemaRegistryError wraps errors that originate from schema registry operations
+type SchemaRegistryError struct {
+	Err error
+}
+
+func (e *SchemaRegistryError) Error() string {
+	return fmt.Sprintf("schema registry error: %v", e.Err)
+}
+
+func (e *SchemaRegistryError) Unwrap() error {
+	return e.Err
+}
+
+// WrapSchemaRegistryError wraps an error as a schema registry error
+func WrapSchemaRegistryError(err error) error {
+	if err == nil {
+		return nil
+	}
+	return &SchemaRegistryError{Err: err}
+}
+
+// IsSchemaRegistryError checks if an error is a schema registry error
+func IsSchemaRegistryError(err error) bool {
+	var schemaRegistryErr *SchemaRegistryError
+	return errors.As(err, &schemaRegistryErr)
+}

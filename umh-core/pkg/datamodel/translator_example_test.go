@@ -63,7 +63,7 @@ var _ = Describe("Translator Examples", func() {
 			Expect(err).To(BeNil())
 
 			// Get the generated schema
-			subjectName := "_pump_data_v1_timeseries-number"
+			subjectName := "_pump_data_v1-timeseries-number"
 			schema, exists := result.Schemas[subjectName]
 			Expect(exists).To(BeTrue())
 
@@ -180,7 +180,7 @@ var _ = Describe("Translator Examples", func() {
 
 			Expect(err).To(BeNil())
 
-			subjectName := "_pump_data_v1_timeseries-number"
+			subjectName := "_pump_data_v1-timeseries-number"
 			jsonBytes, err := result.GetSchemaAsJSON(subjectName)
 			Expect(err).To(BeNil())
 

@@ -225,8 +225,24 @@ func TestPerformanceTargetWithReferences(t *testing.T) {
 	deadline := start.Add(1 * time.Second)
 	count := 0
 
+	// Add empty payload shapes for the test
+	payloadShapes := map[string]config.PayloadShape{
+		"timeseries-number": {
+			Description: "Time series number data",
+			Fields: map[string]config.PayloadField{
+				"value": {Type: "number"},
+			},
+		},
+		"timeseries-string": {
+			Description: "Time series string data",
+			Fields: map[string]config.PayloadField{
+				"value": {Type: "string"},
+			},
+		},
+	}
+
 	for time.Now().Before(deadline) {
-		err := validator.ValidateWithReferences(ctx, testModel, allDataModels)
+		err := validator.ValidateWithReferences(ctx, testModel, allDataModels, payloadShapes)
 		if err != nil {
 			t.Fatalf("Reference validation failed: %v", err)
 		}

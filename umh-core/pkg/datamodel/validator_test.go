@@ -340,4 +340,157 @@ var _ = Describe("Validator", func() {
 		})
 
 	})
+
+	Context("ValidateWithReferences - Payload Shape Validation", func() {
+		var (
+			payloadShapes map[string]config.PayloadShape
+			dataModels    map[string]config.DataModelsConfig
+		)
+
+		BeforeEach(func() {
+			// Set up valid payload shapes
+			payloadShapes = map[string]config.PayloadShape{
+				"timeseries-number": {
+					Description: "Time series number data",
+					Fields: map[string]config.PayloadField{
+						"value": {Type: "number"},
+					},
+				},
+				"timeseries-string": {
+					Description: "Time series string data",
+					Fields: map[string]config.PayloadField{
+						"value": {Type: "string"},
+					},
+				},
+			}
+
+			// Set up empty data models for basic tests
+			dataModels = map[string]config.DataModelsConfig{}
+		})
+
+		It("should validate when all payload shapes exist", func() {
+			dataModel := config.DataModelVersion{
+				Structure: map[string]config.Field{
+					"temperature": {
+						PayloadShape: "timeseries-number",
+					},
+					"unit": {
+						PayloadShape: "timeseries-string",
+					},
+					"metadata": {
+						Subfields: map[string]config.Field{
+							"sensor_id": {
+								PayloadShape: "timeseries-string",
+							},
+						},
+					},
+				},
+			}
+
+			err := validator.ValidateWithReferences(ctx, dataModel, dataModels, payloadShapes)
+			Expect(err).To(BeNil())
+		})
+
+		It("should fail validation when payload shape does not exist", func() {
+			dataModel := config.DataModelVersion{
+				Structure: map[string]config.Field{
+					"pressure": {
+						PayloadShape: "undefined-payload-shape",
+					},
+				},
+			}
+
+			err := validator.ValidateWithReferences(ctx, dataModel, dataModels, payloadShapes)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("data model payload shape validation failed"))
+			Expect(err.Error()).To(ContainSubstring("referenced payload shape 'undefined-payload-shape' does not exist"))
+			Expect(err.Error()).To(ContainSubstring("pressure"))
+		})
+
+		It("should fail validation for undefined payload shapes in nested structures", func() {
+			dataModel := config.DataModelVersion{
+				Structure: map[string]config.Field{
+					"sensor": {
+						Subfields: map[string]config.Field{
+							"reading": {
+								PayloadShape: "timeseries-number", // This exists
+							},
+							"calibration": {
+								Subfields: map[string]config.Field{
+									"offset": {
+										PayloadShape: "invalid-shape", // This doesn't exist
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			err := validator.ValidateWithReferences(ctx, dataModel, dataModels, payloadShapes)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("data model payload shape validation failed"))
+			Expect(err.Error()).To(ContainSubstring("referenced payload shape 'invalid-shape' does not exist"))
+			Expect(err.Error()).To(ContainSubstring("sensor.calibration.offset"))
+		})
+
+		It("should handle multiple undefined payload shapes", func() {
+			dataModel := config.DataModelVersion{
+				Structure: map[string]config.Field{
+					"field1": {
+						PayloadShape: "undefined-shape-1",
+					},
+					"field2": {
+						PayloadShape: "undefined-shape-2",
+					},
+				},
+			}
+
+			err := validator.ValidateWithReferences(ctx, dataModel, dataModels, payloadShapes)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("data model payload shape validation failed"))
+			Expect(err.Error()).To(ContainSubstring("referenced payload shape 'undefined-shape-1' does not exist"))
+			Expect(err.Error()).To(ContainSubstring("referenced payload shape 'undefined-shape-2' does not exist"))
+		})
+
+		It("should validate with empty payload shapes map", func() {
+			dataModel := config.DataModelVersion{
+				Structure: map[string]config.Field{
+					"field_with_reference": {
+						ModelRef: &config.ModelRef{
+							Name:    "external-model",
+							Version: "v1",
+						},
+					},
+				},
+			}
+
+			// Use empty payload shapes map
+			emptyPayloadShapes := map[string]config.PayloadShape{}
+
+			err := validator.ValidateWithReferences(ctx, dataModel, dataModels, emptyPayloadShapes)
+			// Should fail because external-model doesn't exist, but not because of payload shapes
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("referenced model 'external-model' does not exist"))
+			Expect(err.Error()).ToNot(ContainSubstring("payload shape"))
+		})
+
+		It("should respect context cancellation during payload shape validation", func() {
+			// Create a cancelled context
+			cancelledCtx, cancel := context.WithCancel(context.Background())
+			cancel() // Cancel immediately
+
+			dataModel := config.DataModelVersion{
+				Structure: map[string]config.Field{
+					"simple": {
+						PayloadShape: "timeseries-number",
+					},
+				},
+			}
+
+			err := validator.ValidateWithReferences(cancelledCtx, dataModel, dataModels, payloadShapes)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("context canceled"))
+		})
+	})
 })

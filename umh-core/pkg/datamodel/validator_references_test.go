@@ -27,13 +27,30 @@ import (
 
 var _ = Describe("Validator References", func() {
 	var (
-		validator *datamodel.Validator
-		ctx       context.Context
+		validator     *datamodel.Validator
+		ctx           context.Context
+		payloadShapes map[string]config.PayloadShape
 	)
 
 	BeforeEach(func() {
 		validator = datamodel.NewValidator()
 		ctx = context.Background()
+
+		// Set up common payload shapes for all tests
+		payloadShapes = map[string]config.PayloadShape{
+			"timeseries-number": {
+				Description: "Time series number data",
+				Fields: map[string]config.PayloadField{
+					"value": {Type: "number"},
+				},
+			},
+			"timeseries-string": {
+				Description: "Time series string data",
+				Fields: map[string]config.PayloadField{
+					"value": {Type: "string"},
+				},
+			},
+		}
 	})
 
 	Context("ValidateDataModelWithReferences", func() {
@@ -81,7 +98,7 @@ var _ = Describe("Validator References", func() {
 				},
 			}
 
-			err := validator.ValidateWithReferences(ctx, pumpModel, allDataModels)
+			err := validator.ValidateWithReferences(ctx, pumpModel, allDataModels, payloadShapes)
 			Expect(err).To(BeNil())
 		})
 
@@ -106,7 +123,7 @@ var _ = Describe("Validator References", func() {
 				},
 			}
 
-			err := validator.ValidateWithReferences(ctx, testModel, allDataModels)
+			err := validator.ValidateWithReferences(ctx, testModel, allDataModels, payloadShapes)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("referenced model 'nonexistent' does not exist"))
 		})
@@ -146,7 +163,7 @@ var _ = Describe("Validator References", func() {
 				},
 			}
 
-			err := validator.ValidateWithReferences(ctx, testModel, allDataModels)
+			err := validator.ValidateWithReferences(ctx, testModel, allDataModels, payloadShapes)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("referenced model 'motor' version 'v2' does not exist"))
 		})
@@ -197,7 +214,7 @@ var _ = Describe("Validator References", func() {
 				},
 			}
 
-			err := validator.ValidateWithReferences(ctx, modelA, allDataModels)
+			err := validator.ValidateWithReferences(ctx, modelA, allDataModels, payloadShapes)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("circular reference detected"))
 		})
@@ -227,7 +244,7 @@ var _ = Describe("Validator References", func() {
 				},
 			}
 
-			err := validator.ValidateWithReferences(ctx, selfRefModel, allDataModels)
+			err := validator.ValidateWithReferences(ctx, selfRefModel, allDataModels, payloadShapes)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("circular reference detected: selfRef:v1"))
 		})
@@ -272,7 +289,7 @@ var _ = Describe("Validator References", func() {
 			}
 
 			// Validate the first model - should pass (9 levels deep)
-			err := validator.ValidateWithReferences(ctx, allDataModels["level0"].Versions["v1"], allDataModels)
+			err := validator.ValidateWithReferences(ctx, allDataModels["level0"].Versions["v1"], allDataModels, payloadShapes)
 			Expect(err).To(BeNil())
 		})
 
@@ -317,7 +334,7 @@ var _ = Describe("Validator References", func() {
 			}
 
 			// Validate the first model - should fail (12 levels deep)
-			err := validator.ValidateWithReferences(ctx, allDataModels["level0"].Versions["v1"], allDataModels)
+			err := validator.ValidateWithReferences(ctx, allDataModels["level0"].Versions["v1"], allDataModels, payloadShapes)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("reference validation depth limit exceeded (10 levels)"))
 		})
@@ -382,7 +399,7 @@ var _ = Describe("Validator References", func() {
 				},
 			}
 
-			err := validator.ValidateWithReferences(ctx, complexModel, allDataModels)
+			err := validator.ValidateWithReferences(ctx, complexModel, allDataModels, payloadShapes)
 			Expect(err).To(BeNil())
 		})
 
@@ -405,7 +422,7 @@ var _ = Describe("Validator References", func() {
 				},
 			}
 
-			err := validator.ValidateWithReferences(ctx, invalidModel, allDataModels)
+			err := validator.ValidateWithReferences(ctx, invalidModel, allDataModels, payloadShapes)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("leaf nodes must contain _payloadshape"))
 		})
@@ -448,7 +465,7 @@ var _ = Describe("Validator References", func() {
 				},
 			}
 
-			err := validator.ValidateWithReferences(ctx, dataModel, allDataModels)
+			err := validator.ValidateWithReferences(ctx, dataModel, allDataModels, payloadShapes)
 			Expect(err).To(BeNil())
 		})
 
@@ -475,7 +492,7 @@ var _ = Describe("Validator References", func() {
 				},
 			}
 
-			err := validator.ValidateWithReferences(cancelledCtx, dataModel, allDataModels)
+			err := validator.ValidateWithReferences(cancelledCtx, dataModel, allDataModels, payloadShapes)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("context canceled"))
 		})

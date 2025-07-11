@@ -36,8 +36,8 @@ type JSONSchema map[string]interface{}
 // SchemaTranslationResult contains the result of translating a data model to JSON schemas
 type SchemaTranslationResult struct {
 	// Schemas maps schema registry subject names to JSON schemas
-	// Subject format: {contract_name}_v{version}_{payload_shape}
-	// Example: "_pump_data_v1_timeseries-number"
+	// Subject format: {contract_name}_{version}-{payload_shape}
+	// Example: "_pump_v1-timeseries-number"
 	Schemas map[string]JSONSchema
 
 	// PayloadShapeUsage maps payload shapes to the virtual paths that use them
@@ -63,43 +63,6 @@ func NewTranslator() *Translator {
 	return &Translator{
 		validator: NewValidator(),
 	}
-}
-
-// ensureDefaultPayloadShapes creates a copy of the payload shapes map with default payload shapes injected if not present.
-// This ensures that the two fundamental payload shapes (timeseries-number and timeseries-string) are always available.
-//
-// The function never overrides existing payload shapes, preserving any custom definitions provided by the user.
-// Default payload shapes include standard UMH timeseries fields (timestamp_ms and value) with appropriate types.
-func ensureDefaultPayloadShapes(payloadShapes map[string]config.PayloadShape) map[string]config.PayloadShape {
-	// Create a copy to avoid modifying the original map, pre-size for existing + 2 defaults
-	enriched := make(map[string]config.PayloadShape, len(payloadShapes)+2)
-
-	// Copy existing payload shapes
-	for name, shape := range payloadShapes {
-		enriched[name] = shape
-	}
-
-	// Inject default timeseries-number if not present
-	if _, exists := enriched["timeseries-number"]; !exists {
-		enriched["timeseries-number"] = config.PayloadShape{
-			Fields: map[string]config.PayloadField{
-				"timestamp_ms": {Type: "number"},
-				"value":        {Type: "number"},
-			},
-		}
-	}
-
-	// Inject default timeseries-string if not present
-	if _, exists := enriched["timeseries-string"]; !exists {
-		enriched["timeseries-string"] = config.PayloadShape{
-			Fields: map[string]config.PayloadField{
-				"timestamp_ms": {Type: "number"},
-				"value":        {Type: "string"},
-			},
-		}
-	}
-
-	return enriched
 }
 
 // TranslateDataModel translates a UMH data model to JSON Schema format for Schema Registry.
@@ -151,7 +114,7 @@ func (t *Translator) TranslateDataModel(
 
 	if hasReferences {
 		// Validate with full reference checking
-		if err := t.validator.ValidateWithReferences(ctx, dataModel, allDataModels); err != nil {
+		if err := t.validator.ValidateWithReferences(ctx, dataModel, allDataModels, enrichedPayloadShapes); err != nil {
 			return nil, fmt.Errorf("data model reference validation failed: %w", err)
 		}
 
@@ -472,18 +435,28 @@ func (t *Translator) convertTypeToJSONSchema(umhType string) (string, error) {
 }
 
 // generateSubjectName creates a Schema Registry subject name from contract, version, and payload shape
-// Format: {contract_name}_v{version}_{payload_shape}
-// Example: "_pump_data_v1_timeseries-number"
+// Format: {contract_name}_{version}-{payload_shape} or {contract_name}-{payload_shape} if version already in name
+// Example: "_pump_v1-timeseries-number" or "_sensor_data_v1-timeseries-number"
 func generateSubjectName(contractName, version, payloadShape string) string {
 	// Ensure contract name starts with underscore
 	if !strings.HasPrefix(contractName, "_") {
 		contractName = "_" + contractName
 	}
 
-	// Remove 'v' prefix from version if present
-	versionSuffix := strings.TrimPrefix(version, "v")
+	// Check if contract name already contains a version suffix (e.g., _v1, _v2, etc.)
+	// This handles cases where the data contract name already includes the version
+	versionPattern := "_v"
+	if strings.Contains(contractName, versionPattern) {
+		// Contract name already includes version, don't append it again
+		return fmt.Sprintf("%s-%s", contractName, payloadShape)
+	}
 
-	return fmt.Sprintf("%s_v%s_%s", contractName, versionSuffix, payloadShape)
+	// Ensure version has 'v' prefix
+	if !strings.HasPrefix(version, "v") {
+		version = "v" + version
+	}
+
+	return fmt.Sprintf("%s_%s-%s", contractName, version, payloadShape)
 }
 
 // GetSchemaAsJSON returns a JSON schema as a JSON byte array

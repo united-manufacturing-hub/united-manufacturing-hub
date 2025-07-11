@@ -617,6 +617,45 @@ var _ = Describe("AddDataModelAction", func() {
 			err := action.Parse(structToEncodedMap(payload))
 			Expect(err).ToNot(HaveOccurred())
 
+			// Set up mock config with the referenced model and payload shapes
+			mockConfig := config.FullConfig{
+				DataModels: []config.DataModelsConfig{
+					{
+						Name: "external-model",
+						Versions: map[string]config.DataModelVersion{
+							"v1": {
+								Structure: map[string]config.Field{
+									"external_field": {
+										PayloadShape: "timeseries-string",
+									},
+								},
+							},
+						},
+					},
+				},
+				PayloadShapes: map[string]config.PayloadShape{
+					"timeseries-string": {
+						Description: "Time series string data",
+						Fields: map[string]config.PayloadField{
+							"value": {Type: "string"},
+						},
+					},
+					"timeseries-number": {
+						Description: "Time series number data",
+						Fields: map[string]config.PayloadField{
+							"value": {Type: "number"},
+						},
+					},
+					"timeseries-boolean": {
+						Description: "Time series boolean data",
+						Fields: map[string]config.PayloadField{
+							"value": {Type: "boolean"},
+						},
+					},
+				},
+			}
+			mockConfigMgr.WithConfig(mockConfig)
+
 			err = action.Validate()
 			Expect(err).ToNot(HaveOccurred())
 

@@ -134,9 +134,21 @@ func (a *EditDataModelAction) Validate() error {
 		Structure: configStructure,
 	}
 
-	// Use shared context for validation
-	if err := validator.ValidateStructureOnly(a.ctx, dmVersion); err != nil {
-		return fmt.Errorf("data model structure validation failed: %v", err)
+	// Get all existing data models and payload shapes for validation
+	currentConfig, err := a.configManager.GetConfig(a.ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get current config for validation: %v", err)
+	}
+
+	// Convert existing data models to the format expected by the validator
+	allDataModels := make(map[string]config.DataModelsConfig)
+	for _, dataModel := range currentConfig.DataModels {
+		allDataModels[dataModel.Name] = dataModel
+	}
+
+	// Validate with references and payload shapes (handles cases with no references gracefully)
+	if err := validator.ValidateWithReferences(a.ctx, dmVersion, allDataModels, currentConfig.PayloadShapes); err != nil {
+		return fmt.Errorf("data model validation failed: %v", err)
 	}
 
 	return nil
@@ -156,6 +168,15 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 	// Convert models types to config types
 	dmVersion := config.DataModelVersion{
 		Structure: a.convertModelsFieldsToConfigFields(a.payload.Structure),
+	}
+
+	// Safety validation before editing the data model
+	validator := datamodel.NewValidator()
+	if err := validator.ValidateStructureOnly(a.ctx, dmVersion); err != nil {
+		errorMsg := fmt.Sprintf("Final validation failed before editing data model: %v", err)
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+			errorMsg, a.outboundChannel, models.EditDataModel)
+		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
