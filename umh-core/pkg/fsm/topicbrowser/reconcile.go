@@ -46,15 +46,18 @@ func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.Syste
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, tbInstanceName, time.Since(start))
 		if err != nil {
-			i.baseFSMInstance.GetLogger().Errorf("error reconciling topic browser instance %s: %v", tbInstanceName, err)
+			i.baseFSMInstance.GetLogger().Errorf("error reconciling topic browser instance %s: %s", tbInstanceName, err)
 			i.PrintState()
 			// Add metrics for error
-			metrics.IncErrorCount(metrics.ComponentTopicBrowserInstance, tbInstanceName)
+			metrics.IncErrorCountAndLog(metrics.ComponentTopicBrowserInstance, tbInstanceName, err, i.baseFSMInstance.GetLogger())
 		}
 	}()
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
+		if i.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "start of reconciliation") {
+			return nil, false
+		}
 		return ctx.Err(), false
 	}
 
@@ -94,6 +97,13 @@ func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.Syste
 		return nil, false
 	}
 
+	// Early optimization: if both current and desired states are stopped, skip all reconciliation
+	currentState := i.baseFSMInstance.GetCurrentFSMState()
+	desiredState := i.baseFSMInstance.GetDesiredFSMState()
+	if currentState == OperationalStateStopped && desiredState == OperationalStateStopped {
+		return nil, false
+	}
+
 	// Step 2: Detect external changes.
 	if err = i.reconcileExternalChanges(ctx, services, snapshot); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
@@ -105,17 +115,16 @@ func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.Syste
 			// So set the err to nil in this case
 			// An example error: "failed to update observed state: failed to get observed TopicBrowser config: failed to get benthos config: failed to get benthos config file for service benthos-topic-browser: service does not exist"
 
+			if errors.Is(err, context.DeadlineExceeded) {
+				// Context deadline exceeded should be retried with backoff, not ignored
+				i.baseFSMInstance.SetError(err, snapshot.Tick)
+				i.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileExternalChanges, will retry with backoff")
+				err = nil // Clear error so reconciliation continues
+				return nil, false
+			}
+
 			i.baseFSMInstance.SetError(err, snapshot.Tick)
 			i.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
-
-			if errors.Is(err, context.DeadlineExceeded) {
-				// Healthchecks occasionally take longer (sometimes up to 70ms),
-				// resulting in context.DeadlineExceeded errors. In this case, we want to
-				// mark the reconciliation as complete for this tick since we've likely
-				// already consumed significant time. We return reconciled=true to prevent
-				// further reconciliation attempts in the current tick.
-				return nil, true // We don't want to return an error here, as this can happen in normal operations
-			}
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
 
@@ -131,16 +140,29 @@ func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.Syste
 			return nil, false
 		}
 
+		if errors.Is(err, context.DeadlineExceeded) {
+			// Context deadline exceeded should be retried with backoff, not ignored
+			i.baseFSMInstance.SetError(err, snapshot.Tick)
+			i.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileStateTransition, will retry with backoff")
+			return nil, false
+		}
+
 		i.baseFSMInstance.SetError(err, snapshot.Tick)
 		i.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
-	// Reconcile the underlying Manager
+	// Reconcile the manager
 	managerErr, managerReconciled := i.service.ReconcileManager(ctx, services, snapshot.Tick)
 	if managerErr != nil {
+		if errors.Is(managerErr, context.DeadlineExceeded) {
+			// Context deadline exceeded should be retried with backoff, not ignored
+			i.baseFSMInstance.SetError(managerErr, snapshot.Tick)
+			i.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in manager reconciliation, will retry with backoff")
+			return nil, false
+		}
 		i.baseFSMInstance.SetError(managerErr, snapshot.Tick)
-		i.baseFSMInstance.GetLogger().Errorf("error reconciling Topic Browser manager: %s", managerErr)
+		i.baseFSMInstance.GetLogger().Errorf("error reconciling manager: %s", managerErr)
 		return nil, false
 	}
 
@@ -163,12 +185,12 @@ func (i *TopicBrowserInstance) reconcileExternalChanges(ctx context.Context, ser
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
 	}()
 
-	// Fetching the observed state can sometimes take longer, but we need to ensure when reconciling a lot of instances
-	// that a single status of a single instance does not block the whole reconciliation
-	observedStateCtx, cancel := context.WithTimeout(ctx, constants.TopicBrowserUpdateObservedStateTimeout)
+	// Create context for UpdateObservedStateOfInstance with minimum timeout guarantee
+	// This ensures we get either 80% of available time OR the minimum required time, whichever is larger
+	updateCtx, cancel := constants.CreateUpdateObservedStateContextWithMinimum(ctx, constants.TopicBrowserUpdateObservedStateTimeout)
 	defer cancel()
 
-	err := i.UpdateObservedStateOfInstance(observedStateCtx, services, snapshot)
+	err := i.UpdateObservedStateOfInstance(updateCtx, services, snapshot)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}

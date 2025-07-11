@@ -93,7 +93,7 @@ func NewAgentManager(name string) *AgentManager {
 			if !ok {
 				return 0, fmt.Errorf("instance is not an AgentInstance")
 			}
-			return ai.GetExpectedMaxP95ExecutionTimePerInstance(), nil
+			return ai.GetMinimumRequiredTime(), nil
 		},
 	)
 	metrics.InitErrorCounter(logger.AgentManagerComponentName, name)

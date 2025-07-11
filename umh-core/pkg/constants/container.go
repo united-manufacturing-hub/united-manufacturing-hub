@@ -23,8 +23,9 @@ const (
 	DataMountPath = "/data"
 )
 
-// ContainerMonitorUpdateObservedStateTimeout is the timeout for updating the observed state
-const ContainerMonitorUpdateObservedStateTimeout = 5 * time.Millisecond
+// Container Operation Timeouts - Level 1 Service (depends on S6)
+// ContainerUpdateObservedStateTimeout is the timeout for updating the observed state
+const ContainerUpdateObservedStateTimeout = 10 * time.Millisecond
 
 // Health assessment thresholds
 const (
@@ -37,8 +38,3 @@ const (
 	DiskHighThresholdPercent   = 90.0 // Degraded if above this
 	DiskMediumThresholdPercent = 80.0 // Warning level (but still Active)
 )
-
-// ContainerExpectedMaxP95ExecutionTimePerInstance means that an instance will not reconcile if not 30ms are left
-// Note: in the intergation test, we defined an alerting threshold of 80% of the max ticker time, which is 100ms
-// So by setting this to 30 ms, we can ensure that an instance will never start if it triggers the alerting threshold
-const ContainerExpectedMaxP95ExecutionTimePerInstance = time.Millisecond * 30

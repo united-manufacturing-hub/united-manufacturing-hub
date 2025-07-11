@@ -494,36 +494,20 @@ var _ = Describe("S6Instance FSM", func() {
 			)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Force start error
-			//mockService.StartError = fmt.Errorf("failing start")
+			// Set desired state to running to trigger start operations
 			err = instance.SetDesiredFSMState(s6fsm.OperationalStateRunning)
 			Expect(err).NotTo(HaveOccurred())
 
-			snapshot = fsm.SystemSnapshot{Tick: tick}
-			tick, err = fsmtest.TestS6StateTransition(ctx, snapshot, instance, mockSvcRegistry,
-				s6fsm.OperationalStateStopped,
-				s6fsm.OperationalStateStarting,
-				5,
-			)
-			Expect(err).NotTo(HaveOccurred())
-
-			snapshot = fsm.SystemSnapshot{Tick: tick}
-			tick, err = fsmtest.TestS6StateTransition(ctx, snapshot, instance, mockSvcRegistry,
-				s6fsm.OperationalStateStarting,
-				s6fsm.OperationalStateRunning,
-				5,
-			)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Create a permanent error that will be encountered during reconcile
-			mockService.StatusError = fmt.Errorf("%s: test permanent error", backoff.PermanentFailureError)
+			// Create a permanent error that will be encountered during state transition (StartError)
+			// Note: StatusError is no longer used here because the S6 FSM continues reconciling
+			// even when observed state updates fail (to prevent deadlocks in re-creation)
+			mockService.StartError = fmt.Errorf("%s: test permanent error", backoff.PermanentFailureError)
 
 			recErr, reconciled := fsmtest.ReconcileS6UntilError(ctx, fsm.SystemSnapshot{Tick: tick}, instance, mockSvcRegistry, 100)
 			Expect(recErr).To(HaveOccurred())
 			Expect(reconciled).To(BeTrue())
 
 			Expect(mockService.ForceRemoveCalled).To(BeTrue())
-
 		})
 	})
 })

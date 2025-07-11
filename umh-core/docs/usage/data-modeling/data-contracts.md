@@ -11,11 +11,12 @@ Data contracts are stored in the `datacontracts:` configuration section and refe
 ```yaml
 datacontracts:
   - name: contract_name
-    version: v1
-    model: ModelName:v1
-    sinks:
-      timescaledb: true
-    retention_days: 365
+    model:
+      name: modelname
+      version: v1
+    default_bridges:
+      - type: timescaledb
+        retention_in_days: 365
 ```
 
 ## Core Properties
@@ -24,15 +25,15 @@ datacontracts:
 
 ```yaml
 datacontracts:
-  - name: _temperature
-    version: v1
-    model: Temperature:v1
+  - name: _temperature_v1
+    model:
+      name: temperature
+      version: v1
 ```
 
 **Naming Convention:**
 - Contract names start with underscore (`_temperature`, `_pump`)
-- Versions follow semantic versioning (`v1`, `v2`, etc.)
-- Model references include version (`Temperature:v1`)
+- Model references include name and version (`name: temperature, version: v1`)
 
 ### Model Binding
 
@@ -40,33 +41,47 @@ Each contract binds to exactly one data model version:
 
 ```yaml
 datacontracts:
-  - name: _pump
-    version: v1
-    model: Pump:v1  # Specific model version
+  - name: _pump_v1
+    model:
+      name: pump
+      version: v1  # Specific model version
 ```
 
 This binding is immutable - to change the model, create a new contract version.
 
-### Data Sinks
+### Data Bridges
 
 Contracts specify where data gets stored and processed:
 
 ```yaml
 datacontracts:
-  - name: _temperature
-    version: v1
-    model: Temperature:v1
-    sinks:
-      timescaledb: true
-      custom_analytics: false
-      cloud_storage: true
+  - name: _temperature_v1
+    model:
+      name: temperature
+      version: v1
+    default_bridges:
+      - type: timescaledb
+        retention_in_days: 365
+      - type: cloud_storage
 ```
 
-**Available Sinks:**
+**Available Bridge Types:**
 - `timescaledb`: Automatic TimescaleDB hypertable creation
-- `custom_dfc`: Custom data flow configurations
+- `umh-api-sync`: Sync to higher-level UNS
 - `cloud_storage`: S3-compatible storage
 - `analytics_pipeline`: Stream analytics processing
+
+**Bridge Configuration Details:**
+```yaml
+default_bridges:        # 🚧 **Roadmap Item**
+  - type: timescaledb   # create a default bridge that will store it to timescaledb 
+    host:
+    port:
+    credentials:
+    retention_in_days: 365
+  - type: umh-api-sync
+    remote: 10.13.37.50:80   # create a default bridge, that will send it to a higher level UNS on that IP
+```
 
 ### Retention Policies
 
@@ -74,12 +89,13 @@ Define how long data is kept:
 
 ```yaml
 datacontracts:
-  - name: _historian
-    version: v1
-    model: HistorianData:v1
-    sinks:
-      timescaledb: true
-    retention_days: 2555  # ~7 years
+  - name: _historian_v1
+    model:
+      name: historiandata
+      version: v1
+    default_bridges:
+      - type: timescaledb
+        retention_in_days: 2555  # ~7 years
 ```
 
 ## Complete Examples
@@ -88,123 +104,106 @@ datacontracts:
 
 ```yaml
 datamodels:
-  - name: Temperature
-    version: v1
-    structure:
-      temperature_in_c:
-        type: timeseries
-        constraints:
-          unit: "°C"
+  temperature:
+    description: "Temperature sensor model"
+    versions:
+      v1:
+        structure:
+          temperatureInC:
+            _payloadshape: timeseries-number
 
 datacontracts:
-  - name: _temperature
-    version: v1
-    model: Temperature:v1
-    sinks:
-      timescaledb: true
-    retention_days: 365
+  - name: _temperature_v1
+    model:
+      name: temperature
+      version: v1
+    default_bridges:
+      - type: timescaledb
+        retention_in_days: 365
 ```
 
 ### Complex Pump Contract
 
 ```yaml
 datamodels:
-  - name: Motor
-    version: v1
-    structure:
-      current:
-        type: timeseries
-      rpm:
-        type: timeseries
+  motor:
+    description: "Standard motor model"
+    versions:
+      v1:
+        structure:
+          current:
+            _payloadshape: timeseries-number
+          rpm:
+            _payloadshape: timeseries-number
+          temperature:
+            _payloadshape: timeseries-number
 
-  - name: Pump
-    version: v1
-    structure:
-      pressure:
-        type: timeseries
-        constraints:
-          unit: kPa
-          min: 0
-      temperature:
-        type: timeseries
-        constraints:
-          unit: "°C"
-      running:
-        type: timeseries
-        constraints:
-          allowed: [true, false]
-      diagnostics:
-        vibration:
-          type: timeseries
-          constraints:
-            unit: "mm/s"
-      motor:
-        _model: Motor:v1
-      total_power:
-        type: timeseries
-        constraints:
-          unit: kW
-      serial_number:
-        type: timeseries
+  pump:
+    description: "Pump with motor and diagnostics"
+    versions:
+      v1:
+        structure:
+          pressure:
+            _payloadshape: timeseries-number
+          temperature:
+            _payloadshape: timeseries-number
+          running:
+            _payloadshape: timeseries-string
+          vibration:
+            x-axis:
+              _payloadshape: timeseries-number
+            y-axis:
+              _payloadshape: timeseries-number
+            z-axis:
+              _payloadshape: timeseries-number
+              _meta: # 🚧 **Roadmap Item**
+                description: "Z-axis vibration measurement"
+                unit: "m/s"
+              _constraints: # 🚧 **Roadmap Item**
+                max: 100
+                min: 0
+          motor:
+            _refModel:
+              name: motor
+              version: v1
+          acceleration:
+            x:
+              _payloadshape: timeseries-number
+            y:
+              _payloadshape: timeseries-number
+          serialNumber:
+            _payloadshape: timeseries-string
 
 datacontracts:
-  - name: _pump
-    version: v1
-    model: Pump:v1
-    sinks:
-      timescaledb: true
-      analytics_pipeline: true
-    retention_days: 1825  # 5 years
+  - name: _pump_v1
+    model:
+      name: pump
+      version: v1
+    default_bridges:
+      - type: timescaledb
+        retention_in_days: 1825  # 5 years
+      - type: analytics_pipeline
+  - name: _historian
+    # no model = no enforcement
+    default_bridges: # 🚧 **Roadmap Item**
+      - type: timescaledb   # create a default bridge that will store it to timescaledb 
+        host:
+        port:
+        credentials:
+        retention_in_days: 365
+  - name: _raw
+    # no model
+    # no bridge
 ```
 
 ## Generated Database Schema
 
-When a contract with TimescaleDB sink is deployed, UMH automatically creates:
-
-### Hypertable Structure
-
-For the `_pump:v1` contract:
-
-```sql
--- Auto-generated hypertable: pump_v1
-CREATE TABLE pump_v1 (
-    time TIMESTAMPTZ NOT NULL,
-    location JSONB NOT NULL,
-    
-    -- Top-level fields
-    pressure DOUBLE PRECISION,
-    temperature DOUBLE PRECISION,
-    running BOOLEAN,
-    total_power DOUBLE PRECISION,
-    serial_number TEXT,
-    
-    -- Sub-model fields (flattened)
-    motor_current DOUBLE PRECISION,
-    motor_rpm DOUBLE PRECISION,
-    
-    -- Folder fields (flattened with path)
-    diagnostics_vibration DOUBLE PRECISION
-);
-
--- Hypertable conversion
-SELECT create_hypertable('pump_v1', 'time');
-
--- Indexes for location-based queries
-CREATE INDEX idx_pump_v1_location ON pump_v1 USING GIN (location);
-```
-
-### Location Structure
-
-The `location` field stores ISA-95 hierarchy:
-
-```json
-{
-  "level0": "corpA",
-  "level1": "plant-A", 
-  "level2": "line-4",
-  "level3": "pump41"
-}
-```
+> 🚧 **Roadmap Item** - Automatic database schema generation from data contracts and models is under design. This will include:
+> - Auto-generated TimescaleDB hypertables based on data models
+> - Field type mapping from payload shapes to database columns
+> - Automatic indexing for location-based queries
+> - Sub-model field flattening strategies
+> - Location hierarchy storage format
 
 ## Contract Evolution
 
@@ -215,21 +214,24 @@ Contracts support controlled evolution:
 ```yaml
 # Version 1
 datacontracts:
-  - name: _pump
-    version: v1
-    model: Pump:v1
-    sinks:
-      timescaledb: true
+  - name: _pump_v1
+    model:
+      name: pump
+      version: v1
+    default_bridges:
+      - type: timescaledb
+        retention_in_days: 365
 
 # Version 2 - Extended retention
 datacontracts:
-  - name: _pump
-    version: v2
-    model: Pump:v2  # Updated model
-    sinks:
-      timescaledb: true
-      analytics_pipeline: true  # New sink
-    retention_days: 2555  # Extended retention
+  - name: _pump_v2
+    model:
+      name: pump
+      version: v2  # Updated model
+    default_bridges:
+      - type: timescaledb
+        retention_in_days: 2555  # Extended retention
+      - type: analytics_pipeline  # New bridge
 ```
 
 ### Backward Compatibility
@@ -239,13 +241,14 @@ datacontracts:
 - Database schemas adapt automatically for new fields
 - No downtime required for contract updates
 
-## Sink Configuration Details
+## Bridge Configuration Details
 
-### TimescaleDB Sink
+### TimescaleDB Bridge
 
 ```yaml
-sinks:
-  timescaledb: true
+default_bridges:
+  - type: timescaledb
+    retention_in_days: 365
 ```
 
 **Behavior:**
@@ -254,13 +257,13 @@ sinks:
 - Creates location indexes for ISA-95 queries
 - Handles sub-model field flattening automatically
 
-### Custom Data Flow Sink
+### UMH API Sync Bridge
 
 ```yaml
-sinks:
-  custom_dfc:
-    endpoint: "https://analytics.company.com/api/pump-data"
-    auth_token: "${DFC_AUTH_TOKEN}"
+default_bridges:
+  - type: umh-api-sync
+    remote: "10.13.37.50:80"
+    auth_token: "${API_AUTH_TOKEN}"
     batch_size: 1000
 ```
 
@@ -270,11 +273,11 @@ sinks:
 - Configurable retry policies
 - Schema validation before transmission
 
-### Cloud Storage Sink
+### Cloud Storage Bridge
 
 ```yaml
-sinks:
-  cloud_storage:
+default_bridges:
+  - type: cloud_storage
     bucket: "industrial-data-lake"
     prefix: "pump-data/{year}/{month}/{day}/"
     format: "parquet"
@@ -303,11 +306,11 @@ The UNS output plugin enforces contract compliance:
 
 ```yaml
 # Invalid message - rejected
-Topic: umh.v1.corpA.plant-A.line-4.pump41._pump.invalid_field
-Reason: Field 'invalid_field' not defined in Pump:v1 model
+Topic: umh.v1.corpA.plant-A.line-4.pump41._pump_v1.invalid_field
+Reason: Field 'invalid_field' not defined in _pump model, version v1
 
 # Valid message - accepted
-Topic: umh.v1.corpA.plant-A.line-4.pump41._pump.pressure
+Topic: umh.v1.corpA.plant-A.line-4.pump41._pump_v1.pressure
 Payload: {"value": 42.5, "timestamp_ms": 1733904005123}
 ```
 
@@ -318,7 +321,7 @@ Payload: {"value": 42.5, "timestamp_ms": 1733904005123}
 - **Single responsibility**: One contract per logical entity type
 - **Semantic naming**: Use descriptive, underscore-prefixed names
 - **Version explicitly**: Always specify model and contract versions
-- **Plan for growth**: Consider future sink requirements
+- **Plan for growth**: Consider future bridge requirements
 
 ### Retention Planning
 
@@ -326,11 +329,11 @@ Payload: {"value": 42.5, "timestamp_ms": 1733904005123}
 - **Consider storage costs**: Balance retention vs. storage expenses
 - **Plan for archival**: Design archival strategies for historical data
 
-### Sink Selection
+### Bridge Selection
 
 - **TimescaleDB for time-series**: Optimal for sensor data and analytics
 - **Cloud storage for archives**: Long-term, cost-effective storage
-- **Custom DFC for integration**: External system connectivity
+- **UMH API Sync for integration**: Higher-level UNS connectivity
 
 ### Schema Evolution
 
@@ -338,27 +341,30 @@ Payload: {"value": 42.5, "timestamp_ms": 1733904005123}
 - **Test compatibility**: Validate schema evolution before deployment
 - **Document changes**: Maintain clear change logs
 
-## Integration with Stream Processors
+## Relationship to Stream Processors
 
-Data contracts are consumed by stream processors:
+**Stream processors do NOT use data contracts directly.** Instead, stream processors use templates that reference data models directly:
 
 ```yaml
-streamprocessors:
+# Template references model directly, not contract
+templates:
+  streamProcessors:
+    pump_template:
+      model:
+        name: pump      # Direct model reference
+        version: v1
+      sources: {...}
+      mapping: {...}
+
+# Stream processor uses template
+streamProcessors:
   - name: pump41_sp
-    contract: _pump:v1  # References this contract
-    location:
-      level0: corpA
-      level1: plant-A
-      level2: line-4
-      level3: pump41
-    # ... mapping configuration
+    _templateRef: "pump_template"
+    location: {...}
+    variables: {...}
 ```
 
-The stream processor:
-1. Validates output against the contract's model schema
-2. Routes data to configured sinks
-3. Applies retention policies automatically
-4. Enforces location hierarchy requirements
+**Data contracts are separate** - they define storage bridges and retention policies for data models. Stream processors work with models directly through templates, but **if a data contract exists for the same model**, the stream processor's output will be automatically validated against that contract and routed to the contract's configured bridges.
 
 ## Related Documentation
 

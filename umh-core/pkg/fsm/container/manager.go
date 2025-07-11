@@ -100,7 +100,7 @@ func NewContainerManager(name string) *ContainerManager {
 			if !ok {
 				return 0, fmt.Errorf("instance is not a ContainerInstance")
 			}
-			return ci.GetExpectedMaxP95ExecutionTimePerInstance(), nil
+			return ci.GetMinimumRequiredTime(), nil
 		},
 	)
 	metrics.InitErrorCounter(ContainerManagerComponentName, name)

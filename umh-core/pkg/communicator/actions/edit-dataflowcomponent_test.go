@@ -128,6 +128,7 @@ var _ = Describe("EditDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						"inputs": map[string]interface{}{
@@ -163,6 +164,7 @@ var _ = Describe("EditDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						"inputs": map[string]interface{}{
@@ -191,6 +193,7 @@ var _ = Describe("EditDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 			}
 
 			// Call Parse method
@@ -206,6 +209,7 @@ var _ = Describe("EditDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						"inputs": map[string]interface{}{
@@ -229,9 +233,10 @@ var _ = Describe("EditDataflowComponent", func() {
 		It("should return error for missing meta type", func() {
 			// Payload with missing meta type
 			payload := map[string]interface{}{
-				"name": "test-component-updated",
-				"uuid": componentUUID.String(),
-				"meta": map[string]interface{}{},
+				"name":  "test-component-updated",
+				"uuid":  componentUUID.String(),
+				"meta":  map[string]interface{}{},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						"inputs": map[string]interface{}{
@@ -260,6 +265,7 @@ var _ = Describe("EditDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "unsupported-type",
 				},
+				"state": "active",
 			}
 
 			// Call Parse method
@@ -276,6 +282,7 @@ var _ = Describe("EditDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						"inputs": map[string]interface{}{
@@ -317,6 +324,7 @@ var _ = Describe("EditDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						"inputs": map[string]interface{}{
@@ -355,6 +363,7 @@ var _ = Describe("EditDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						"inputs": map[string]interface{}{
@@ -396,6 +405,7 @@ var _ = Describe("EditDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						"inputs": map[string]interface{}{
@@ -475,6 +485,7 @@ var _ = Describe("EditDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						"inputs": map[string]interface{}{
@@ -563,6 +574,7 @@ var _ = Describe("EditDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						"inputs": map[string]interface{}{
@@ -626,6 +638,151 @@ buffer:
 			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.Buffer["memory"]).To(Equal(map[string]interface{}{}))
 		})
 
+		It("should successfully edit component state from active to stopped and back", func() {
+			// Start with a component that has "active" as the desired state
+			mockConfig.WithConfig(config.FullConfig{
+				Agent: config.AgentConfig{
+					MetricsPort: 8080,
+					CommunicatorConfig: config.CommunicatorConfig{
+						APIURL:    "https://example.com",
+						AuthToken: "test-token",
+					},
+					ReleaseChannel: config.ReleaseChannelStable,
+				},
+				DataFlow: []config.DataFlowComponentConfig{
+					{
+						FSMInstanceConfig: config.FSMInstanceConfig{
+							Name:            componentName,
+							DesiredFSMState: "active",
+						},
+						DataFlowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+								Input: map[string]interface{}{
+									"type": "http_server",
+									"http_server": map[string]interface{}{
+										"path": "/input",
+										"port": 8000,
+									},
+								},
+								Output: map[string]interface{}{
+									"type": "stdout",
+								},
+							},
+						},
+					},
+				},
+			})
+
+			// Update stateMocker with the new config
+			stateMocker = actions.NewStateMocker(mockConfig)
+			stateMocker.Tick()
+			mockManagerSnapshot := stateMocker.GetStateManager()
+
+			action = actions.NewEditDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockManagerSnapshot)
+
+			// Step 1: Change state from active to stopped
+			payloadStopped := map[string]interface{}{
+				"name": componentName,
+				"uuid": componentUUID.String(),
+				"meta": map[string]interface{}{
+					"type": "custom",
+				},
+				"state": "stopped", // Set desired state to stopped
+				"payload": map[string]interface{}{
+					"customDataFlowComponent": map[string]interface{}{
+						"inputs": map[string]interface{}{
+							"type": "yaml",
+							"data": "type: http_server\nhttp_server:\n  path: /input\n  port: 8000",
+						},
+						"outputs": map[string]interface{}{
+							"type": "yaml",
+							"data": "type: stdout",
+						},
+						"pipeline": map[string]interface{}{
+							"processors": map[string]interface{}{
+								"0": map[string]interface{}{
+									"type": "yaml",
+									"data": "type: mapping\nprocs: []",
+								},
+							},
+						},
+					},
+				},
+			}
+
+			// Parse the stopped state payload
+			err := action.Parse(payloadStopped)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Reset tracking
+			mockConfig.ResetCalls()
+
+			// Start state mocker for the first state transition
+			err = stateMocker.Start()
+			Expect(err).NotTo(HaveOccurred())
+
+			// Execute the first state change (active to stopped)
+			result, metadata, err := action.Execute()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(ContainSubstring("success"))
+			Expect(metadata).To(BeNil())
+
+			// Verify the state was updated to stopped
+			Expect(mockConfig.Config.DataFlow[0].DesiredFSMState).To(Equal("stopped"))
+
+			// Step 2: Change state from stopped back to active
+			payloadActive := map[string]interface{}{
+				"name": componentName,
+				"uuid": componentUUID.String(),
+				"meta": map[string]interface{}{
+					"type": "custom",
+				},
+				"state": "active", // Set desired state back to active
+				"payload": map[string]interface{}{
+					"customDataFlowComponent": map[string]interface{}{
+						"inputs": map[string]interface{}{
+							"type": "yaml",
+							"data": "type: http_server\nhttp_server:\n  path: /input\n  port: 8000",
+						},
+						"outputs": map[string]interface{}{
+							"type": "yaml",
+							"data": "type: stdout",
+						},
+						"pipeline": map[string]interface{}{
+							"processors": map[string]interface{}{
+								"0": map[string]interface{}{
+									"type": "yaml",
+									"data": "type: mapping\nprocs: []",
+								},
+							},
+						},
+					},
+				},
+			}
+
+			// Reset tracking
+			mockConfig.ResetCalls()
+
+			// Create fresh action instance for the second state transition
+			action = actions.NewEditDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockManagerSnapshot)
+
+			// Parse the active state payload
+			err = action.Parse(payloadActive)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Execute the second state change (stopped to active)
+			result, metadata, err = action.Execute()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(ContainSubstring("success"))
+			Expect(metadata).To(BeNil())
+
+			// Stop state mocker
+			stateMocker.Stop()
+
+			// Verify the state was updated back to active
+			Expect(mockConfig.Config.DataFlow[0].DesiredFSMState).To(Equal("active"))
+		})
+
 		It("should handle AtomicEditDataflowcomponent failure", func() {
 			// Set up mock to fail on AtomicEditDataflowcomponent
 			mockConfig.WithEditDataflowcomponentError(errors.New("mock edit dataflow component failure"))
@@ -637,6 +794,7 @@ buffer:
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						"inputs": map[string]interface{}{
@@ -691,6 +849,7 @@ buffer:
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						"inputs": map[string]interface{}{

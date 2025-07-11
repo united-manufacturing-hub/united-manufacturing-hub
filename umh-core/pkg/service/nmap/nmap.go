@@ -241,19 +241,14 @@ func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port uint16) *Nma
 		result.PortResult.State = "unknown"
 	}
 
-	// Extract latency
-	latencyRegex := regexp.MustCompile(`rtt=([0-9.]+)([a-z]+)`)
-	if matches := latencyRegex.FindStringSubmatch(scanOutput); len(matches) > 2 {
+	// Extract latency (sample line: "Host is up (0.016s latency).")
+	latencyRegex := regexp.MustCompile(`Host is up \(([0-9.]+)s latency\).`)
+	matches := latencyRegex.FindStringSubmatch(scanOutput)
+	if len(matches) >= 2 {
 		latency, err := strconv.ParseFloat(matches[1], 64)
 		if err == nil {
-			// Convert to milliseconds if needed
-			unit := matches[2]
-			switch unit {
-			case "s":
-				latency *= 1000
-			case "us":
-				latency /= 1000
-			}
+			// Convert to milliseconds
+			latency *= 1000
 			result.PortResult.LatencyMs = latency
 		}
 	}

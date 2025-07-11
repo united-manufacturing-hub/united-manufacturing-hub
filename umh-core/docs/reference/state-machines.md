@@ -93,6 +93,28 @@ Each component inherits lifecycle states (`to_be_created`, `creating`, `removing
 
 ---
 
+## 5 — Topic Browser Service
+
+The Topic Browser service manages real-time topic discovery and caching.
+
+| State | Verified | Description | Enter Trigger | Exit Trigger |
+|-------|----------|-------------|---------------|--------------|
+| **stopped** | ✅ | Service not running | Initial state or *stop_done* | *start* → **starting** |
+| *starting* | ✅ | Service initialization | *start* | *benthos_started* → **starting_benthos** |
+| *starting_benthos* | ✅ | Benthos starting | *benthos_started* | *redpanda_started* → **starting_redpanda** |
+| *starting_redpanda* | ✅ | Redpanda connection | *redpanda_started* | *start_done* → **idle** |
+| **idle** | ✅ | Healthy, no active data | *start_done* or *recovered* | *data_received* → **active** |
+| **active** | ✅ | Processing topic data | *data_received* | *no_data_timeout* → **idle** |
+| ⚠️ **degraded_benthos** | ✅ | Benthos degraded | *benthos_degraded* | *recovered* → **idle** |
+| ⚠️ **degraded_redpanda** | ✅ | Redpanda degraded | *redpanda_degraded* | *recovered* → **idle** |
+| *stopping* | ✅ | Graceful shutdown | *stop* | *stop_done* → **stopped** |
+
+**Default:** Active (runs automatically)  
+**Transitions:** idle ↔ active based on topic activity  
+**Recovery:** Automatic from degraded states when underlying services recover
+
+---
+
 ### Quick Defaults
 
 | Parameter              | Default | Source Const / Env     |

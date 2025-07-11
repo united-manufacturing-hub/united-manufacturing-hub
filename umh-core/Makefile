@@ -213,19 +213,25 @@ stop-and-remove-umh-core-latest:
 	docker rm $(IMAGE_NAME) || true
 	docker rmi $(IMAGE_NAME):$(TAG) || true
 
-# Clean up Docker build cache and unused objects for CI environments & stop all containers
+# Cleanup Docker, Go build cache and test cache
 cleanup-ci:
-	echo "Cleaning up Docker build cache and unused objects for CI environments & stop all containers"
-	echo "Running containers:"
+	echo "Docker cleanup - removing everything"
+	echo " - Running containers:"
 	docker ps -a || true
-	echo "Stopping all containers"
-	docker ps -a -q | xargs -r docker stop || true
-	echo "Removing all containers"
-	docker ps -a -q | xargs -r docker rm || true
-	echo "Pruning Docker build cache"
-	docker builder prune -f || true
-	echo "Pruning Docker system"
-	docker system prune -f --volumes || true
+	echo " - Stopping all containers"
+	docker stop $$(docker ps -aq) 2>/dev/null || true
+	echo " - Removing all containers"
+	docker rm $$(docker ps -aq) 2>/dev/null || true
+	echo " - Removing all images"
+	docker rmi $$(docker images -q) 2>/dev/null || true
+	echo " - Pruning Docker build cache"
+	docker builder prune -a -f || true
+	echo " - Pruning Docker system"
+	docker system prune -a -f --volumes || true
+	echo " - Cleaning Go build cache"
+	go clean -cache -modcache || true
+	echo " - Cleaning Go test cache"
+	go clean -testcache || true
 
 cleanup-tmp:
 	rm -rf ./tmp/*
@@ -280,6 +286,10 @@ benchmark-redpanda-metrics:
 benchmark-s6-time:
 	@echo "Running S6 time benchmarks..."
 	cd pkg/service/s6 && go test -bench=. -benchmem
+
+benchmark-encoding:
+	@echo "Running encoding benchmarks..."
+	cd pkg/communicator/pkg/encoding && go test -bench=. -benchmem -benchtime=10s -count=1
 
 integration-test: stop-all-pods vet nilaway lint
 
@@ -601,6 +611,22 @@ test-debug: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
 		-e LOGGING_LEVEL=DEBUG \
+		$(IMAGE_NAME):$(TAG)
+
+test-allow-insecure-tls: stop-and-remove-umh-core-latest $(BUILD_TARGET)
+	@mkdir -p $(PWD)/data
+	@cp $(PWD)/examples/example-config-empty.yaml $(PWD)/data/config.yaml
+	docker run \
+		--name $(IMAGE_NAME) \
+		-v $(PWD)/data:/data \
+		-p 8081:8080 \
+		-p 4195:4195 \
+		-p 6060:6060 \
+		-p 40000:40000 \
+		--memory $(MEMORY) \
+		--cpus $(CPUS) \
+		-e LOGGING_LEVEL=DEBUG \
+		-e ALLOW_INSECURE_TLS=true \
 		$(IMAGE_NAME):$(TAG)
 
 # This run configuration allows easy start without overwriting the config.yaml

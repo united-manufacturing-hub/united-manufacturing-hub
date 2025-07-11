@@ -87,7 +87,7 @@ func NewS6Manager(name string) *S6Manager {
 			if !ok {
 				return 0, fmt.Errorf("instance is not an S6Instance")
 			}
-			return s6Instance.GetExpectedMaxP95ExecutionTimePerInstance(), nil
+			return s6Instance.GetMinimumRequiredTime(), nil
 		},
 	)
 

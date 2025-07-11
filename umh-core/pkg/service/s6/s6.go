@@ -30,7 +30,6 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"text/template"
 	"time"
 
 	"github.com/cactus/tai64"
@@ -42,8 +41,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-
-	"golang.org/x/sync/errgroup"
 )
 
 // ServiceStatus represents the status of an S6 service
@@ -59,6 +56,33 @@ const (
 	// ServiceRestarting indicates the service is restarting
 	ServiceRestarting ServiceStatus = "restarting"
 )
+
+// HealthStatus represents the health state of an S6 service
+type HealthStatus int
+
+const (
+	// HealthUnknown indicates the health check failed due to I/O errors, timeouts, etc.
+	// This should not trigger service recreation, just retry next tick
+	HealthUnknown HealthStatus = iota
+	// HealthOK indicates the service directory is healthy and complete
+	HealthOK
+	// HealthBad indicates the service directory is definitely broken and needs recreation
+	HealthBad
+)
+
+// String returns a string representation of the health status
+func (h HealthStatus) String() string {
+	switch h {
+	case HealthUnknown:
+		return "unknown"
+	case HealthOK:
+		return "ok"
+	case HealthBad:
+		return "bad"
+	default:
+		return "invalid"
+	}
+}
 
 // ServiceInfo contains information about an S6 service
 type ServiceInfo struct {
@@ -173,16 +197,34 @@ type logState struct {
 type DefaultService struct {
 	logger     *zap.SugaredLogger
 	logCursors sync.Map // map[string]*logState (key = abs log path)
+
+	// Lifecycle management with expert-recommended concurrency protection
+	mu        sync.Mutex        // serializes all state-changing calls
+	creating  bool              // true when Create() is in progress
+	removing  bool              // true when Remove()/ForceRemove() is in progress
+	artifacts *ServiceArtifacts // cached artifacts for the service
 }
 
 // NewDefaultService creates a new default S6 service
 func NewDefaultService() Service {
+	serviceLogger := logger.For(logger.ComponentS6Service)
 	return &DefaultService{
-		logger: logger.For(logger.ComponentS6Service),
+		logger: serviceLogger,
 	}
 }
 
-// Create creates the S6 service with specific configuration
+// withLifecycleGuard serializes all state-changing operations to prevent race conditions
+// This addresses the expert-identified issue of concurrent Create/Remove/ForceRemove operations
+func (s *DefaultService) withLifecycleGuard(fn func() error) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return fn()
+}
+
+// Create creates the S6 service with specific configuration using expert-recommended patterns:
+// - Unified lifecycle mutex prevents concurrent Create/Remove/ForceRemove operations
+// - Uses lifecycle manager for atomic creation with EXDEV protection
+// - Simplified 3-path approach with health checks
 func (s *DefaultService) Create(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, fsService filesystem.Service) error {
 	start := time.Now()
 	defer func() {
@@ -191,194 +233,93 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 
 	s.logger.Debugf("Creating S6 service %s", servicePath)
 
-	// Create service directory if it doesn't exist
-	if err := fsService.EnsureDirectory(ctx, servicePath); err != nil {
-		return fmt.Errorf("failed to create service directory: %w", err)
-	}
+	return s.withLifecycleGuard(func() error {
+		// Check for conflicting operations
+		if s.removing {
+			return fmt.Errorf("service %s is being removed", servicePath)
+		}
+		if s.creating {
+			// Another Create is busy (rare) - idempotent; nothing to do
+			s.logger.Debugf("Service %s creation already in progress", servicePath)
+			return nil
+		}
 
-	// Create down file to prevent automatic startup
-	downFilePath := filepath.Join(servicePath, "down")
-	exists, err := fsService.FileExists(ctx, downFilePath)
-	if err != nil {
-		return fmt.Errorf("failed to check if down file exists: %w", err)
-	}
-	if !exists {
-		err := fsService.WriteFile(ctx, downFilePath, []byte{}, 0644)
+		s.creating = true
+		defer func() { s.creating = false }()
+
+		// No need to ensure artifacts here - they'll be created by CreateArtifacts
+
+		// 1. Directory doesn't exist → create it fresh
+		exists, err := fsService.PathExists(ctx, servicePath)
 		if err != nil {
-			return fmt.Errorf("failed to create down file: %w", err)
+			return fmt.Errorf("failed to check if service path exists: %w", err)
 		}
-	}
+		if !exists {
+			s.logger.Debugf("Service %s doesn't exist, creating fresh", servicePath)
+			artifacts, err := s.CreateArtifacts(ctx, servicePath, config, fsService)
+			if err != nil {
+				return err
+			}
+			s.artifacts = artifacts
+			return nil
+		}
 
-	// Create type file (required for s6-rc)
-	typeFile := filepath.Join(servicePath, "type")
-	exists, err = fsService.FileExists(ctx, typeFile)
-	if err != nil {
-		return fmt.Errorf("failed to check if type file exists: %w", err)
-	}
-	if !exists {
-		err := fsService.WriteFile(ctx, typeFile, []byte("longrun"), 0644)
+		// 2. Directory exists but we have no artifacts → inconsistent state
+		if s.artifacts == nil {
+			s.logger.Debugf("Service %s exists but has no artifacts, failing to trigger FSM removal", servicePath)
+			return fmt.Errorf("service directory exists but artifacts is nil - inconsistent state")
+		}
+
+		// 3. Directory exists and we have artifacts → check health
+		health, err := s.CheckArtifactsHealth(ctx, s.artifacts, fsService)
+		if err != nil && health != HealthUnknown {
+			return fmt.Errorf("failed to check service health: %w", err)
+		}
+		if health == HealthBad {
+			s.logger.Debugf("Service %s is unhealthy, removing and recreating", servicePath)
+			if err := s.ForceCleanup(ctx, s.artifacts, fsService); err != nil {
+				return fmt.Errorf("failed to remove unhealthy service: %w", err)
+			}
+			artifacts, err := s.CreateArtifacts(ctx, servicePath, config, fsService)
+			if err != nil {
+				return err
+			}
+			s.artifacts = artifacts
+			return nil
+		}
+
+		// 4. Directory exists and is healthy → check config
+		currentConfig, err := s.GetConfig(ctx, servicePath, fsService)
 		if err != nil {
-			return fmt.Errorf("failed to create type file: %w", err)
+			return fmt.Errorf("failed to get current config: %w", err)
 		}
-	}
 
-	// s6-supervise requires a run script to function properly
-	if len(config.Command) > 0 {
-		if err := s.createS6RunScript(ctx, servicePath, fsService, config.Command, config.Env, config.MemoryLimit); err != nil {
-			return fmt.Errorf("failed to create S6 run script: %w", err)
+		// 5. Same config → do nothing (success)
+		if currentConfig.Equal(config) {
+			s.logger.Debugf("Service %s config unchanged, nothing to do", servicePath)
+			return nil
 		}
-	} else {
-		return fmt.Errorf("no command specified for service %s", servicePath)
-	}
 
-	// Create any config files specified
-	if err := s.createS6ConfigFiles(ctx, servicePath, fsService, config.ConfigFiles); err != nil {
-		return fmt.Errorf("failed to create S6 config files: %w", err)
-	}
-
-	// There is no need to register the service in user/contents.d,
-	// as s6-overlay expects a static service configuration defined at container build time.
-	// S6-overlay works in two phases:
-	// 1. At container build time: Services are defined in /etc/s6-overlay/s6-rc.d/
-	//    (including the special "user" bundle that lists services to start)
-	// 2. At container startup: S6-overlay copies these definitions to /run/service/ and supervises them
-	//
-	// Attempting to modify /run/service/user/contents.d at runtime will cause errors because:
-	// - S6-overlay treats "user" as a special directory and tries to supervise it
-	// - This causes the "s6-supervise user: warning: unable to spawn ./run (waiting 60 seconds)" error
-	// - S6-overlay won't recognize services added after container initialization
-	//
-	// For dynamic services, it's better to:
-	// 1. Create services in their own directories under /run/service/
-	// 2. Use s6-svscanctl to notify s6 about the new service
-
-	// Create a dependency on base services to prevent race conditions
-	dependenciesDPath := filepath.Join(servicePath, "dependencies.d")
-	if err := fsService.EnsureDirectory(ctx, dependenciesDPath); err != nil {
-		return fmt.Errorf("failed to create dependencies.d directory: %w", err)
-	}
-
-	baseDepFile := filepath.Join(dependenciesDPath, "base")
-	err = fsService.WriteFile(ctx, baseDepFile, []byte{}, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to create base dependency file: %w", err)
-	}
-
-	// Create log service directory and run script
-	serviceName := filepath.Base(servicePath)
-	logDir := filepath.Join(constants.S6LogBaseDir, serviceName)
-	logServicePath := filepath.Join(servicePath, "log")
-
-	// Create log service directory
-	if err := fsService.EnsureDirectory(ctx, logServicePath); err != nil {
-		return fmt.Errorf("failed to create log service directory: %w", err)
-	}
-
-	// Create logutil-service command line, see also https://skarnet.org/software/s6/s6-log.html
-	// logutil-service is a wrapper around s6_log and reads from the S6_LOGGING_SCRIPT environment variable
-	// We overwrite the default S6_LOGGING_SCRIPT with our own if config.LogFilesize is set
-	logRunContent, err := getLogRunScript(config, logDir)
-	if err != nil {
-		return fmt.Errorf("failed to get log run script: %w", err)
-	}
-
-	// Create log run script
-	logRunPath := filepath.Join(logServicePath, "run")
-	if err := fsService.WriteFile(ctx, logRunPath, []byte(logRunContent), 0755); err != nil {
-		return fmt.Errorf("failed to write log run script: %w", err)
-	}
-
-	// Notification is now handled by EnsureSupervision
-	// We don't call s6-svscanctl here anymore to avoid duplicating the logic
-
-	s.logger.Debugf("S6 service %s created with logging to %s", servicePath, logDir)
-
-	return nil
-}
-
-// createRunScript creates a run script for the service
-func (s *DefaultService) createS6RunScript(ctx context.Context, servicePath string, fsService filesystem.Service, command []string, env map[string]string, memoryLimit int64) error {
-	runScript := filepath.Join(servicePath, "run")
-
-	// Create template data
-	data := struct {
-		Command     []string
-		Env         map[string]string
-		MemoryLimit int64
-	}{
-		Command:     command,
-		Env:         env,
-		MemoryLimit: memoryLimit,
-	}
-
-	// Parse and execute the template
-	tmpl, err := template.New("runscript").Parse(runScriptTemplate)
-	if err != nil {
-		return fmt.Errorf("failed to parse run script template: %w", err)
-	}
-
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		return fmt.Errorf("failed to execute run script template: %w", err)
-	}
-
-	// Write the templated content directly to the file
-	if err := fsService.WriteFile(ctx, runScript, buf.Bytes(), 0644); err != nil {
-		return fmt.Errorf("failed to write run script: %w", err)
-	}
-
-	// Make run script executable
-	if err := fsService.Chmod(ctx, runScript, 0755); err != nil {
-		return fmt.Errorf("failed to make run script executable: %w", err)
-	}
-
-	return nil
-}
-
-// createConfigFiles creates config files needed by the service
-func (s *DefaultService) createS6ConfigFiles(ctx context.Context, servicePath string, fsService filesystem.Service, configFiles map[string]string) error {
-	if len(configFiles) == 0 {
+		// 6. Different config → remove and recreate
+		s.logger.Debugf("Service %s config changed, removing and recreating", servicePath)
+		if err := s.RemoveArtifacts(ctx, s.artifacts, fsService); err != nil {
+			return fmt.Errorf("failed to remove service for recreation: %w", err)
+		}
+		artifacts, err := s.CreateArtifacts(ctx, servicePath, config, fsService)
+		if err != nil {
+			return err
+		}
+		s.artifacts = artifacts
 		return nil
-	}
-
-	configPath := filepath.Join(servicePath, "config")
-
-	for path, content := range configFiles {
-		// If path is relative, make it relative to service directory
-		if !filepath.IsAbs(path) {
-			path = filepath.Join(configPath, path)
-		}
-
-		// Create directory if it doesn't exist
-		dir := filepath.Dir(path)
-		if err := fsService.EnsureDirectory(ctx, dir); err != nil {
-			return fmt.Errorf("failed to create directory for config file: %w", err)
-		}
-
-		// Create and write the file
-		if err := fsService.WriteFile(ctx, path, []byte(content), 0644); err != nil {
-			return fmt.Errorf("failed to write to config file %s: %w", path, err)
-		}
-	}
-
-	return nil
+	})
 }
 
-// Remove deletes every artefact that `Create` produced:
-//
-//   - <servicePath>             (the long-run service directory)
-//   - <servicePath>/log         (nested logger service)
-//   - <logBase>/<name>          (rotated log directory)
-//
-// The method is called once per reconcile *tick* while the S6-FSM is in the
-// *removing* state, therefore it must:
-//
-//  1. **Return quickly** – never wait or poll.
-//  2. **Be idempotent**  – safe to call when directories are half-gone.
-//  3. **Return nil only when nothing is left.**
-//
-// Any remaining file or I/O error leads to a non-nil return so the FSM keeps
-// trying (or escalates after the back-off threshold).
+// Remove removes S6 service artifacts using expert-recommended fast, idempotent approach:
+// - Uses unified lifecycle mutex to prevent concurrent operations
+// - Implements rename-then-delete pattern for immediate S6 scanner visibility removal
+// - Returns quickly (<1 second) to respect FSM context timeouts
+// - Fully idempotent - safe to call when directories are partially removed
+// - Returns nil only when nothing is left
 func (s *DefaultService) Remove(ctx context.Context, servicePath string, fsService filesystem.Service) error {
 	start := time.Now()
 	defer func() {
@@ -390,108 +331,29 @@ func (s *DefaultService) Remove(ctx context.Context, servicePath string, fsServi
 		return ctx.Err() // context already cancelled / deadline exceeded
 	}
 
-	srvName := filepath.Base(servicePath)
-	logDir := filepath.Join(constants.S6LogBaseDir, srvName)
+	s.logger.Debugf("Removing S6 service %s", servicePath)
 
-	// ──────────────────────── fast-path ────────────────────────────
-	// If both paths are already gone we are done – lets the FSM fire
-	// "remove_done" immediately and exit the reconcile loop.
-	if gone, _ := fsService.PathExists(ctx, servicePath); !gone {
-		if gone2, _ := fsService.PathExists(ctx, logDir); !gone2 {
+	return s.withLifecycleGuard(func() error {
+		// Check for conflicting operations
+		if s.removing {
+			// Already tearing down - idempotent
+			s.logger.Debugf("Service %s removal already in progress", servicePath)
 			return nil
 		}
-	}
 
-	//----------------------------------------------------------------
-	// Two independent best-effort deletions.  We *always* call them,
-	// even if the directory is missing, because RemoveAll on a non-
-	// existent path is cheap and returns nil – keeps the code simple.
-	// We start it in a separate goroutine and wait for constants.S6RemoveTimeout
-	// so that we keep the main reconcile loop fast. If this requires a couple
-	// of retries, it is fine as long as we do not block the main reconcile loop.
-	//----------------------------------------------------------------
-	ctxRemoveTimeout, cancel := context.WithTimeout(ctx, constants.S6RemoveTimeout)
-	defer cancel()
+		s.removing = true
+		defer func() { s.removing = false }()
 
-	g, gctx := errgroup.WithContext(ctxRemoveTimeout)
+		// If we have tracked artifacts, use them for proper removal
+		if s.artifacts != nil && len(s.artifacts.CreatedFiles) > 0 {
+			return s.RemoveArtifacts(ctx, s.artifacts, fsService)
+		}
 
-	var srvErr, logErr error
-
-	g.Go(func() error {
-		srvErr = fsService.RemoveAll(gctx, servicePath)
-		return srvErr
+		// No tracked files - service is in an inconsistent state
+		// Remove() requires tracked files to work properly
+		s.logger.Debugf("No tracked files for service %s, cannot do tracked removal", servicePath)
+		return fmt.Errorf("service %s has no tracked files - use ForceRemove() instead", servicePath)
 	})
-
-	g.Go(func() error {
-		logErr = fsService.RemoveAll(gctx, logDir)
-		return logErr
-	})
-
-	// Create a buffered channel to receive the result from g.Wait().
-	// The channel is buffered so that the goroutine sending on it doesn't block.
-	errc := make(chan error, 1)
-
-	// Run g.Wait() in a separate goroutine.
-	// This allows us to use a select statement to return early if the context is canceled.
-	go func() {
-		// g.Wait() blocks until all goroutines launched with g.Go() have returned.
-		// It returns the first non-nil error, if any.
-		errc <- g.Wait()
-	}()
-
-	// Use a select statement to wait for either the g.Wait() result or the context's cancellation.
-	select {
-	case err := <-errc:
-		// g.Wait() has finished, so check if any goroutine returned an error.
-		if err != nil {
-			// If there was an error in any sub-call, return that error.
-			return fmt.Errorf("s6.Remove incomplete for %q: %s",
-				servicePath, err.Error())
-		}
-		// If err is nil, all goroutines completed successfully.
-	case <-ctxRemoveTimeout.Done():
-		// The context was canceled or its deadline was exceeded before all goroutines finished.
-		// Although some goroutines might still be running in the background,
-		// they use a context (gctx) that should cause them to terminate promptly.
-		return ctxRemoveTimeout.Err()
-	}
-
-	//----------------------------------------------------------------
-	// Double-check: report success only when both paths are gone *and*
-	// no I/O error occurred.
-	//----------------------------------------------------------------
-	srvLeft, srvLeftErr := fsService.PathExists(ctx, servicePath)
-	logLeft, logLeftErr := fsService.PathExists(ctx, logDir)
-
-	if srvErr != nil || logErr != nil || srvLeft || logLeft {
-		// build a helpful composite error message
-		var parts []string
-		if srvErr != nil {
-			parts = append(parts, fmt.Sprintf("serviceDir: %v", srvErr))
-		}
-		if logErr != nil {
-			parts = append(parts, fmt.Sprintf("logDir: %v", logErr))
-		}
-		if srvLeft {
-			parts = append(parts, "serviceDir still exists")
-		}
-		if logLeft {
-			parts = append(parts, "logDir still exists")
-		}
-
-		if srvLeftErr != nil {
-			parts = append(parts, fmt.Sprintf("serviceDir: %v", srvLeftErr))
-		}
-		if logLeftErr != nil {
-			parts = append(parts, fmt.Sprintf("logDir: %v", logLeftErr))
-		}
-
-		return fmt.Errorf("s6.Remove incomplete for %q: %s",
-			servicePath, strings.Join(parts, "; "))
-	}
-
-	s.logger.Debugf("Removed S6 service %s and its logs", servicePath)
-	return nil
 }
 
 // Start starts the S6 service
@@ -510,6 +372,36 @@ func (s *DefaultService) Start(ctx context.Context, servicePath string, fsServic
 		return ErrServiceNotExist
 	}
 
+	// Remove down files to indicate the service should stay up
+	downFiles := []string{
+		filepath.Join(servicePath, "down"),        // Main service down file
+		filepath.Join(servicePath, "log", "down"), // Log service down file
+	}
+
+	for _, downFile := range downFiles {
+		if exists, _ := fsService.FileExists(ctx, downFile); exists {
+			if err := fsService.Remove(ctx, downFile); err != nil {
+				s.logger.Warnf("Failed to remove down file %s: %v", downFile, err)
+				// Continue anyway - s6-svc -u might still work
+			} else {
+				s.logger.Debugf("Removed down file %s", downFile)
+				// Update artifacts to remove the down file from tracking
+				if s.artifacts != nil {
+					s.removeFileFromArtifacts(downFile)
+				}
+			}
+		}
+	}
+
+	// First start the log service
+	logServicePath := filepath.Join(servicePath, "log")
+	_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-u", logServicePath)
+	if err != nil {
+		s.logger.Warnf("Failed to start log service: %v", err)
+		return fmt.Errorf("failed to start log service: %w", err)
+	}
+
+	// Then start the main service to prevent a race condition
 	_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-u", servicePath)
 	if err != nil {
 		s.logger.Warnf("Failed to start service: %v", err)
@@ -536,10 +428,38 @@ func (s *DefaultService) Stop(ctx context.Context, servicePath string, fsService
 		return ErrServiceNotExist
 	}
 
+	// Stop the service first
 	_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-d", servicePath)
 	if err != nil {
 		s.logger.Warnf("Failed to stop service: %v", err)
 		return fmt.Errorf("failed to stop service: %w", err)
+	}
+
+	// Also stop the log service separately
+	logServicePath := filepath.Join(servicePath, "log")
+	_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-d", logServicePath)
+	if err != nil {
+		s.logger.Warnf("Failed to stop log service: %v", err)
+		return fmt.Errorf("failed to stop log service: %w", err)
+	}
+
+	// Create down files to ensure the service stays down
+	downFiles := []string{
+		filepath.Join(servicePath, "down"),        // Main service down file
+		filepath.Join(servicePath, "log", "down"), // Log service down file
+	}
+
+	for _, downFile := range downFiles {
+		if err := fsService.WriteFile(ctx, downFile, []byte{}, 0644); err != nil {
+			s.logger.Warnf("Failed to create down file %s: %v", downFile, err)
+			// Continue anyway - service is already stopped
+		} else {
+			s.logger.Debugf("Created down file %s", downFile)
+			// Update artifacts to track the down file
+			if s.artifacts != nil {
+				s.addFileToArtifacts(downFile)
+			}
+		}
 	}
 
 	s.logger.Debugf("Stopped S6 service %s", servicePath)
@@ -1234,29 +1154,12 @@ func (s *DefaultService) GetS6ConfigFile(ctx context.Context, servicePath string
 	return content, nil
 }
 
-// ForceRemove tears down an S6 long-run service **unconditionally**.
-//
-// It is the "nuclear option" the manager calls after several failed
-// graceful removals.  The function must therefore:
-//
-//   - **Be idempotent & non-blocking** – safe to invoke every 100 ms;
-//     never waits or polls.
-//   - **Erase every artefact** the service could have left behind.
-//   - **Return nil only when nothing remains.**
-//
-// Removal sequence
-// ----------------
-//  1. Best-effort **stop** the daemon *and* its logger with `s6-svc -d`.
-//     This is fast and harmless even if they are already down.
-//  2. **SIGTERM any lingering `s6-supervise` processes** (main + logger)
-//     by reading `<servicedir>/supervise/pid`.  Without this step a still-
-//     running supervisor could re-create the `supervise/` directory after
-//     we delete the tree.
-//  3. **Delete the two artefact trees**
-//     <servicePath>                       (includes …/log subdir)
-//     <logsBase>/<serviceName>            (rotated log files)
-//  4. **Double-check** that both paths are truly gone and that no I/O
-//     errors occurred; otherwise return an error so the caller retries.
+// ForceRemove performs aggressive cleanup for stuck S6 services using expert-recommended patterns:
+// - Uses unified lifecycle mutex to prevent concurrent operations
+// - Implements comprehensive process termination and supervisor killing
+// - Performs timeout-aware recursive deletion
+// - Called by FSM escalation - can take longer than Remove but must be thorough
+// - Returns nil only when nothing remains
 func (s *DefaultService) ForceRemove(
 	ctx context.Context,
 	servicePath string,
@@ -1275,96 +1178,25 @@ func (s *DefaultService) ForceRemove(
 		return ctx.Err()
 	}
 
-	//--------------------------------------------------------------------
-	// 1. Best-effort graceful stop (idempotent, non-blocking)
-	//--------------------------------------------------------------------
-	mainErr := s.Stop(ctx, servicePath, fsService)                         // main
-	loggerErr := s.Stop(ctx, filepath.Join(servicePath, "log"), fsService) // logger
+	s.logger.Warnf("Force removing S6 service %s", servicePath)
 
-	//--------------------------------------------------------------------
-	// 2. SIGTERM lingering s6-supervise processes to avoid resurrection
-	//--------------------------------------------------------------------
-	killSupervise := func(dir string) error {
-		pidFile := filepath.Join(dir, "supervise", "pid")
-		data, err := fsService.ReadFile(ctx, pidFile)
-		if err != nil || len(data) == 0 {
-			return nil // no supervisor ⇒ nothing to kill
-		}
-		if pid, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil && pid > 0 {
-			err = syscall.Kill(pid, syscall.SIGTERM)
-			if err != nil {
-				return fmt.Errorf("failed to kill supervisor for service %s: %w", dir, err)
-			}
-		}
-		return nil
-	}
-	killSuperviseMainErr := killSupervise(servicePath)
-	killSuperviseLoggerErr := killSupervise(filepath.Join(servicePath, "log"))
+	return s.withLifecycleGuard(func() error {
+		// Set removing flag regardless of current state
+		s.removing = true
+		defer func() { s.removing = false }()
 
-	//--------------------------------------------------------------------
-	// 3. Delete artefact trees
-	//--------------------------------------------------------------------
-	srvErr := fsService.RemoveAll(ctx, servicePath)
-
-	svcName := filepath.Base(servicePath)
-	logDir := filepath.Join(constants.S6LogBaseDir, svcName)
-	logErr := fsService.RemoveAll(ctx, logDir)
-
-	//--------------------------------------------------------------------
-	// 4. Verification – declare success *only* if nothing is left
-	//--------------------------------------------------------------------
-	svcLeft, pathExistsMainErr := fsService.PathExists(ctx, servicePath)
-	logLeft, pathExistsLoggerErr := fsService.PathExists(ctx, logDir)
-
-	if srvErr != nil || logErr != nil || svcLeft || logLeft {
-		var parts []string
-		if srvErr != nil {
-			parts = append(parts, fmt.Sprintf("serviceDir: %v", srvErr))
-		}
-		if logErr != nil {
-			parts = append(parts, fmt.Sprintf("logDir: %v", logErr))
-		}
-		if svcLeft || pathExistsMainErr != nil {
-			parts = append(parts, "serviceDir still exists")
-		}
-		if logLeft || pathExistsLoggerErr != nil {
-			parts = append(parts, "logDir still exists")
+		// ForceRemove doesn't need tracked files - it does aggressive cleanup
+		// Create minimal artifacts for cleanup operations
+		serviceName := filepath.Base(servicePath)
+		artifacts := &ServiceArtifacts{
+			ServiceDir: servicePath,
+			LogDir:     filepath.Join(constants.S6LogBaseDir, serviceName),
+			// CreatedFiles intentionally empty - we don't care about tracked files for force cleanup
 		}
 
-		if mainErr != nil {
-			parts = append(parts, fmt.Sprintf("stopping service: %v", mainErr))
-		}
-
-		if loggerErr != nil {
-			parts = append(parts, fmt.Sprintf("stopping logger for service: %v", loggerErr))
-		}
-
-		if killSuperviseMainErr != nil {
-			parts = append(parts, fmt.Sprintf("killing supervisor for service: %v", killSuperviseMainErr))
-		}
-
-		if killSuperviseLoggerErr != nil {
-			parts = append(parts, fmt.Sprintf("killing supervisor for logger: %v", killSuperviseLoggerErr))
-		}
-
-		if pathExistsMainErr != nil {
-			parts = append(parts, fmt.Sprintf("checking if service exists: %v", pathExistsMainErr))
-		}
-
-		if pathExistsLoggerErr != nil {
-			parts = append(parts, fmt.Sprintf("checking if logger exists: %v", pathExistsLoggerErr))
-		}
-
-		aggregatedErr := fmt.Errorf("s6.ForceRemove incomplete for %q: %s",
-			servicePath, strings.Join(parts, "; "))
-
-		sentry.ReportIssuef(sentry.IssueTypeWarning, s.logger, "%s", aggregatedErr.Error())
-
-		return aggregatedErr
-	}
-
-	s.logger.Infof("Force-removed S6 service %s and its logs", servicePath)
-	return nil
+		// Use lifecycle manager for aggressive cleanup
+		return s.ForceCleanup(ctx, artifacts, fsService)
+	})
 }
 
 // appendToRingBuffer appends entries to the ring buffer, extracted from existing GetLogs logic.
@@ -1480,7 +1312,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 		return nil, fmt.Errorf("failed to check if log file exists: %w", err)
 	}
 	if !exists {
-		s.logger.Debugf("Log file %s does not exist, returning ErrLogFileNotFound", logFile)
+		//s.logger.Debugf("Log file %s does not exist, returning ErrLogFileNotFound", logFile)
 		return nil, fmt.Errorf("path: %s err :%w", logFile, ErrLogFileNotFound)
 	}
 
@@ -1508,24 +1340,12 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 		s.logger.Debugf("Detected rotation for log file %s (inode: %d->%d, offset: %d, size: %d)",
 			logFile, st.inode, ino, st.offset, size)
 
-		// Reset ring buffer on rotation
+		// Ensure ring buffer is initialized but preserve existing entries
 		if st.logs == nil {
 			st.logs = make([]LogEntry, constants.S6MaxLines)
 		}
-		/*
-			Why the previous implementation used st.logs[:0]:
-				The old approach allocated with make([]LogEntry, 0, max) and used append(), so the slice would grow from length 0 to some length. On rotation, it needed to reset the length back to 0 with st.logs[:0] while keeping the capacity.
-
-			Why we don't need it now:
-				With our optimized approach:
-				We preallocate to full size: make([]LogEntry, max) - length is always max
-				We use direct indexing: st.logs[st.head] = e - no append operations
-				We track valid entries with st.head and st.full: The slice length never changes
-		*/
-
-		// Reset ring buffer state but keep the backing array
-		st.head = 0
-		st.full = false
+		// NOTE: We do NOT reset st.head or st.full here to preserve existing entries
+		// The ring buffer will naturally handle new entries being appended
 
 		// Find the most recent rotated file
 		logDir := filepath.Dir(logFile)
@@ -1546,7 +1366,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 			}
 		}
 
-		// Reset for new current file
+		// Reset only the file tracking for new current file
 		st.inode, st.offset = ino, 0
 	} else if st.inode == 0 {
 		// First call - initialize inode
@@ -1813,4 +1633,29 @@ func (s *DefaultService) findLatestRotatedFile(entries []string) string {
 	latestFile := slices.MaxFunc(entries, cmp.Compare[string])
 
 	return latestFile
+}
+
+// CheckHealth performs expert-recommended tri-state health check with lifecycle manager:
+// - Uses cached artifacts to avoid repeated path calculations
+// - Implements proper separation of observation from action
+// - Optional s6-svok integration for runtime health verification
+// Returns:
+//   - HealthUnknown: probe failed due to I/O errors, timeouts, etc. - retry next tick
+//   - HealthOK: service directory is healthy and complete
+//   - HealthBad: service directory is definitely broken - triggers FSM transition
+func (s *DefaultService) CheckHealth(ctx context.Context, servicePath string, fsService filesystem.Service) (HealthStatus, error) {
+	// Context already cancelled → Unknown, never Bad
+	if ctx.Err() != nil {
+		return HealthUnknown, ctx.Err()
+	}
+
+	// If we don't have tracked artifacts, the service is in an inconsistent state
+	artifacts := s.artifacts
+	if artifacts == nil || len(artifacts.CreatedFiles) == 0 {
+		s.logger.Debugf("No tracked files for service %s, returning HealthBad", servicePath)
+		return HealthBad, nil
+	}
+
+	// Use lifecycle manager for comprehensive health check
+	return s.CheckArtifactsHealth(ctx, artifacts, fsService)
 }

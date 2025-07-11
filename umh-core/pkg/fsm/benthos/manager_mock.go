@@ -126,7 +126,7 @@ func NewBenthosManagerWithMockedServices(name string) (*BenthosManager, *benthos
 		},
 		// Get expected max p95 execution time per instance - same as original
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
-			return constants.BenthosExpectedMaxP95ExecutionTimePerInstance, nil
+			return constants.BenthosUpdateObservedStateTimeout, nil
 		},
 	)
 

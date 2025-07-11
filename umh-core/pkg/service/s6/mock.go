@@ -17,6 +17,7 @@ package s6
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -24,6 +25,9 @@ import (
 
 // MockService is a mock implementation of the S6 Service interface for testing
 type MockService struct {
+	// Mutex to protect concurrent access to shared maps
+	mu sync.RWMutex
+
 	// Tracks calls to methods
 	CreateCalled                  bool
 	RemoveCalled                  bool
@@ -95,6 +99,10 @@ func NewMockService() *MockService {
 // Create mocks creating an S6 service
 func (m *MockService) Create(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, filesystemService filesystem.Service) error {
 	m.CreateCalled = true
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.ExistingServices[servicePath] = true
 	return m.CreateError
 }
@@ -102,6 +110,10 @@ func (m *MockService) Create(ctx context.Context, servicePath string, config s6s
 // Remove mocks removing an S6 service
 func (m *MockService) Remove(ctx context.Context, servicePath string, filesystemService filesystem.Service) error {
 	m.RemoveCalled = true
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	delete(m.ExistingServices, servicePath)
 	delete(m.ServiceStates, servicePath)
 	return m.RemoveError
@@ -110,6 +122,9 @@ func (m *MockService) Remove(ctx context.Context, servicePath string, filesystem
 // Start mocks starting an S6 service
 func (m *MockService) Start(ctx context.Context, servicePath string, filesystemService filesystem.Service) error {
 	m.StartCalled = true
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	if !m.ExistingServices[servicePath] {
 		return ErrServiceNotExist
@@ -125,6 +140,9 @@ func (m *MockService) Start(ctx context.Context, servicePath string, filesystemS
 // Stop mocks stopping an S6 service
 func (m *MockService) Stop(ctx context.Context, servicePath string, filesystemService filesystem.Service) error {
 	m.StopCalled = true
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	if !m.ExistingServices[servicePath] {
 		return ErrServiceNotExist

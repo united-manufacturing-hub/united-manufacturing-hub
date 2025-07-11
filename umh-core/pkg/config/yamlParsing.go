@@ -19,6 +19,7 @@ import (
 	"reflect"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/streamprocessorserviceconfig"
 	"gopkg.in/yaml.v3"
 )
 
@@ -29,22 +30,41 @@ func convertYamlToSpec(config FullConfig) (FullConfig, error) {
 	processedConfig := config.Clone()
 
 	// Build a map of available protocol converter templates for quick lookup
-	templateMap := make(map[string]protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate)
+	protocolConverterTemplateMap := make(map[string]protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate)
 
 	// Process protocol converter templates from the enforced structure
 	for templateName, templateContent := range processedConfig.Templates.ProtocolConverter {
 		// Convert the template content to the proper structure
 		templateBytes, err := yaml.Marshal(templateContent)
 		if err != nil {
-			return FullConfig{}, fmt.Errorf("failed to marshal template %s: %w", templateName, err)
+			return FullConfig{}, fmt.Errorf("failed to marshal protocol converter template %s: %w", templateName, err)
 		}
 
 		var template protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate
 		if err := yaml.Unmarshal(templateBytes, &template); err != nil {
-			return FullConfig{}, fmt.Errorf("failed to unmarshal template %s: %w", templateName, err)
+			return FullConfig{}, fmt.Errorf("failed to unmarshal protocol converter template %s: %w", templateName, err)
 		}
 
-		templateMap[templateName] = template
+		protocolConverterTemplateMap[templateName] = template
+	}
+
+	// Build a map of available stream processor templates for quick lookup
+	streamProcessorTemplateMap := make(map[string]streamprocessorserviceconfig.StreamProcessorServiceConfigTemplate)
+
+	// Process stream processor templates from the enforced structure
+	for templateName, templateContent := range processedConfig.Templates.StreamProcessor {
+		// Convert the template content to the proper structure
+		templateBytes, err := yaml.Marshal(templateContent)
+		if err != nil {
+			return FullConfig{}, fmt.Errorf("failed to marshal stream processor template %s: %w", templateName, err)
+		}
+
+		var template streamprocessorserviceconfig.StreamProcessorServiceConfigTemplate
+		if err := yaml.Unmarshal(templateBytes, &template); err != nil {
+			return FullConfig{}, fmt.Errorf("failed to unmarshal stream processor template %s: %w", templateName, err)
+		}
+
+		streamProcessorTemplateMap[templateName] = template
 	}
 
 	// Process each protocol converter to resolve templateRef
@@ -53,9 +73,9 @@ func convertYamlToSpec(config FullConfig) (FullConfig, error) {
 		if pc.ProtocolConverterServiceConfig.TemplateRef != "" {
 			// Resolve the template reference
 			templateName := pc.ProtocolConverterServiceConfig.TemplateRef
-			template, exists := templateMap[templateName]
+			template, exists := protocolConverterTemplateMap[templateName]
 			if !exists {
-				return FullConfig{}, fmt.Errorf("template reference %q not found for protocol converter %s", templateName, pc.Name)
+				return FullConfig{}, fmt.Errorf("protocol converter template reference %q not found for protocol converter %s", templateName, pc.Name)
 			}
 
 			// Create a new spec with the resolved template
@@ -64,6 +84,27 @@ func convertYamlToSpec(config FullConfig) (FullConfig, error) {
 
 			// Update the config
 			processedConfig.ProtocolConverter[i].ProtocolConverterServiceConfig = resolvedSpec
+		}
+		// If templateRef is empty/null, use the inline config as-is
+	}
+
+	// Process each stream processor to resolve templateRef
+	for i, sp := range processedConfig.StreamProcessor {
+		// Only resolve templateRef if it's not empty/null and there's no inline config
+		if sp.StreamProcessorServiceConfig.TemplateRef != "" {
+			// Resolve the template reference
+			templateName := sp.StreamProcessorServiceConfig.TemplateRef
+			template, exists := streamProcessorTemplateMap[templateName]
+			if !exists {
+				return FullConfig{}, fmt.Errorf("stream processor template reference %q not found for stream processor %s", templateName, sp.Name)
+			}
+
+			// Create a new spec with the resolved template
+			resolvedSpec := sp.StreamProcessorServiceConfig
+			resolvedSpec.Config = template
+
+			// Update the config
+			processedConfig.StreamProcessor[i].StreamProcessorServiceConfig = resolvedSpec
 		}
 		// If templateRef is empty/null, use the inline config as-is
 	}
@@ -110,22 +151,27 @@ func convertSpecToYaml(spec FullConfig) (FullConfig, error) {
 	// 2) helper structures
 	//------------------------------------
 
+	// Protocol Converter template maps
 	// tplMap collects every **root** protocol-converter we encounter.
-	// A “root” is the first, fully-detailed instance whose TemplateRef
+	// A "root" is the first, fully-detailed instance whose TemplateRef
 	// equals its own Name.  We stash those complete Config blocks here
 	// so that, after the loop, we can write them once into
 	//   clone.Templates.protocolConverter[<root-name>]
-	tplMap := make(map[string]protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate) // roots collected here
+	protocolConverterTplMap := make(map[string]protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate) // roots collected here
 
 	// pendingRefs
 	// -----------
 	// As we meet **child** instances (TemplateRef points to some other name) we
 	// jot down the referenced template name in pendingRefs.
 	// After the loop finishes we make sure every entry in pendingRefs also exists
-	// in tplMap.  If something is missing we’ve discovered an “orphan” child that
+	// in tplMap.  If something is missing we've discovered an "orphan" child that
 	// points to a template which is not present – in that case we return an error
 	// instead of writing an inconsistent YAML file.
-	pendingRefs := make(map[string]struct{}) // child refs to be validated
+	protocolConverterPendingRefs := make(map[string]struct{}) // child refs to be validated
+
+	// Stream Processor template maps
+	streamProcessorTplMap := make(map[string]streamprocessorserviceconfig.StreamProcessorServiceConfigTemplate) // roots collected here
+	streamProcessorPendingRefs := make(map[string]struct{})                                                     // child refs to be validated
 
 	//------------------------------------
 	// 3) walk every PC once
@@ -145,14 +191,14 @@ func convertSpecToYaml(spec FullConfig) (FullConfig, error) {
 		// 3b) Root  (golden instance)
 		// ─────────────────────────────
 		if tr == pc.Name {
-			if prev, dup := tplMap[tr]; dup {
+			if prev, dup := protocolConverterTplMap[tr]; dup {
 				// second root with same name ⇒ must be byte-identical
 				if !reflect.DeepEqual(prev, pc.ProtocolConverterServiceConfig.Config) {
 					return FullConfig{}, fmt.Errorf(
-						"duplicate root %q with different Config blocks", tr)
+						"duplicate protocol converter root %q with different Config blocks", tr)
 				}
 			} else {
-				tplMap[tr] = pc.ProtocolConverterServiceConfig.Config
+				protocolConverterTplMap[tr] = pc.ProtocolConverterServiceConfig.Config
 			}
 		} else {
 			// ─────────────────────────
@@ -170,9 +216,9 @@ func convertSpecToYaml(spec FullConfig) (FullConfig, error) {
 			// because the empty struct occupies **zero bytes**.
 			// We only care whether a key exists, not about any value it might hold, so
 			// storing an empty struct is the most memory-efficient and idiomatic way to
-			// represent a “set” in Go.  At the end of the loop we simply iterate over the
+			// represent a "set" in Go.  At the end of the loop we simply iterate over the
 			// keys to verify that every referenced template has a corresponding root.
-			pendingRefs[tr] = struct{}{}
+			protocolConverterPendingRefs[tr] = struct{}{}
 		}
 
 		// Strip Config from every templated instance (root or child) ─ the full
@@ -187,32 +233,109 @@ func convertSpecToYaml(spec FullConfig) (FullConfig, error) {
 	}
 
 	//------------------------------------
-	// 4) orphan-ref validation (children → root)
+	// 4) walk every SP once
+	//------------------------------------
+	for i, sp := range clone.StreamProcessor {
+		tr := sp.StreamProcessorServiceConfig.TemplateRef
+
+		// ─────────────────────────────
+		// 4a) Stand-alone (no template)
+		// ─────────────────────────────
+		if tr == "" {
+			// keep Config as-is → nothing else to do
+			continue
+		}
+
+		// ─────────────────────────────
+		// 4b) Root  (golden instance)
+		// ─────────────────────────────
+		if tr == sp.Name {
+			if prev, dup := streamProcessorTplMap[tr]; dup {
+				// second root with same name ⇒ must be byte-identical
+				if !reflect.DeepEqual(prev, sp.StreamProcessorServiceConfig.Config) {
+					return FullConfig{}, fmt.Errorf(
+						"duplicate stream processor root %q with different Config blocks", tr)
+				}
+			} else {
+				streamProcessorTplMap[tr] = sp.StreamProcessorServiceConfig.Config
+			}
+		} else {
+			// ─────────────────────────
+			// 4c) Child (inherits root)
+			// ─────────────────────────
+			streamProcessorPendingRefs[tr] = struct{}{}
+		}
+
+		// Strip Config from every templated instance (root or child) ─ the full
+		// definition will live once in the templates section, so we avoid
+		// duplicating it inside each instance.
+		sp.StreamProcessorServiceConfig.Config =
+			streamprocessorserviceconfig.StreamProcessorServiceConfigTemplate{}
+		// remove the location and location_path from the user variables
+		delete(sp.StreamProcessorServiceConfig.Variables.User, "location")
+		delete(sp.StreamProcessorServiceConfig.Variables.User, "location_path")
+		clone.StreamProcessor[i] = sp
+	}
+
+	//------------------------------------
+	// 5) orphan-ref validation and cleanup (children → root)
 	//------------------------------------
 	// If a reference is missing it means a child points to a
-	// non-existent template, which would leave the YAML in an invalid state;
-	// in that case we abort with an error instead of writing a broken file.
-	for ref := range pendingRefs {
-		if _, ok := tplMap[ref]; !ok {
+	// non-existent template. For protocol converters, this is an error.
+	// For stream processors, we convert them to inline configs to handle
+	// the external template pattern.
+	for ref := range protocolConverterPendingRefs {
+		if _, ok := protocolConverterTplMap[ref]; !ok {
 			return FullConfig{}, fmt.Errorf(
 				"protocol converter references unknown template %q", ref)
 		}
 	}
 
-	//------------------------------------
-	// 5) attach template map (only if we have roots)
-	//------------------------------------
-	if len(tplMap) > 0 {
-		if clone.Templates.ProtocolConverter == nil {
-			clone.Templates.ProtocolConverter = make(map[string]interface{})
+	// For stream processors with orphaned references, convert to inline configs
+	orphanedStreamProcessorRefs := make(map[string]struct{})
+	for ref := range streamProcessorPendingRefs {
+		if _, ok := streamProcessorTplMap[ref]; !ok {
+			orphanedStreamProcessorRefs[ref] = struct{}{}
 		}
-		for name, tpl := range tplMap {
-			clone.Templates.ProtocolConverter[name] = tpl
+	}
+
+	// Convert orphaned stream processor references to inline configs
+	if len(orphanedStreamProcessorRefs) > 0 {
+		for i, sp := range clone.StreamProcessor {
+			if sp.StreamProcessorServiceConfig.TemplateRef != "" {
+				if _, isOrphaned := orphanedStreamProcessorRefs[sp.StreamProcessorServiceConfig.TemplateRef]; isOrphaned {
+					// Clear the template reference since it points to an external template
+					// The config should already be expanded inline from convertYamlToSpec
+					sp.StreamProcessorServiceConfig.TemplateRef = ""
+					clone.StreamProcessor[i] = sp
+				}
+			}
 		}
 	}
 
 	//------------------------------------
-	// 6) done –  clone now has YAML layout
+	// 6) attach template maps (only if we have roots)
+	//------------------------------------
+	if len(protocolConverterTplMap) > 0 {
+		if clone.Templates.ProtocolConverter == nil {
+			clone.Templates.ProtocolConverter = make(map[string]interface{})
+		}
+		for name, tpl := range protocolConverterTplMap {
+			clone.Templates.ProtocolConverter[name] = tpl
+		}
+	}
+
+	if len(streamProcessorTplMap) > 0 {
+		if clone.Templates.StreamProcessor == nil {
+			clone.Templates.StreamProcessor = make(map[string]interface{})
+		}
+		for name, tpl := range streamProcessorTplMap {
+			clone.Templates.StreamProcessor[name] = tpl
+		}
+	}
+
+	//------------------------------------
+	// 7) done –  clone now has YAML layout
 	//------------------------------------
 	return clone, nil
 }

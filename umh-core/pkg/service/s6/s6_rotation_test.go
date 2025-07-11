@@ -580,10 +580,12 @@ var _ = Describe("S6 Log Rotation", func() {
 			currentInode = 54321 // Different inode indicates file rotation
 
 			// Should handle missing rotated file gracefully and read current file
+			// s6 correctly preserves the existing entry AND adds the new one
 			entries, err = service.GetLogs(ctx, servicePath, fsService)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(entries).To(HaveLen(1))
-			Expect(entries[0].Content).To(Equal("after rotation"))
+			Expect(entries).To(HaveLen(2))
+			Expect(entries[0].Content).To(Equal("initial message"))
+			Expect(entries[1].Content).To(Equal("after rotation"))
 		})
 
 		It("should read and combine rotated file with current file", func() {
@@ -672,13 +674,149 @@ var _ = Describe("S6 Log Rotation", func() {
 			rotatedFiles = []string{rotatedFile} // Now there's a rotated file
 
 			// Should find rotated file and combine with current
+			// s6 correctly preserves the existing entry AND adds the rotated + current content
+			entries, err = service.GetLogs(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(entries).To(HaveLen(3))
+
+			// Should be in chronological order: existing, rotated content, then current
+			Expect(entries[0].Content).To(Equal("initial message"))
+			Expect(entries[1].Content).To(Equal("rotated message"))
+			Expect(entries[2].Content).To(Equal("new current message"))
+		})
+
+		It("should preserve previously accumulated entries during rotation", func() {
+			// This test verifies correct s6 log rotation behavior where the ring buffer
+			// resets (by design) but all entries are preserved across rotated + current files
+			//
+			// s6 Log Rotation Design:
+			// 1. Ring buffer accumulates entries during normal operation
+			// 2. On rotation: ring buffer resets, previous entries move to rotated file
+			// 3. Service reads from BOTH rotated + current files to provide complete history
+			// 4. Total entry count is preserved across rotation boundaries
+			actualLogDir := filepath.Join(constants.S6LogBaseDir, serviceName)
+			currentFile := filepath.Join(actualLogDir, "current")
+
+			// Phase 1: Build up some entries in the ring buffer over multiple calls
+			phase1Content := "2025-01-20 10:00:00.000000000  entry 1\n"
+			phase2Content := phase1Content + "2025-01-20 10:00:01.000000000  entry 2\n"
+			phase3Content := phase2Content + "2025-01-20 10:00:02.000000000  entry 3\n"
+
+			// Phase 4: Rotation occurs - rotated file contains all previous content plus new entry
+			rotatedContent := phase3Content + "2025-01-20 10:00:03.000000000  entry 4 (rotated)\n"
+			newCurrentContent := "2025-01-20 10:00:04.000000000  entry 5 (new current)\n"
+
+			// Create rotated file name
+			rotatedTime := time.Now().Add(-1 * time.Minute)
+			rotatedFileName := tai64.FormatNano(rotatedTime) + ".s"
+			rotatedFile := filepath.Join(actualLogDir, rotatedFileName)
+
+			// Set up mock filesystem with state tracking
+			mockFS := fsService.(*filesystem.MockFileSystem)
+			var currentContent = phase1Content
+			var currentInode = 12345
+			var rotatedFiles = []string{}
+
+			mockFS.WithPathExistsFunc(func(ctx context.Context, path string) (bool, error) {
+				if path == currentFile {
+					return true, nil
+				}
+				if path == rotatedFile {
+					return len(rotatedFiles) > 0, nil
+				}
+				if path == servicePath {
+					return true, nil
+				}
+				return false, nil
+			})
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+				if path == currentFile {
+					return []byte(currentContent), nil
+				}
+				if path == rotatedFile && len(rotatedFiles) > 0 {
+					return []byte(rotatedContent), nil
+				}
+				return nil, os.ErrNotExist
+			})
+			mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+				if path == currentFile {
+					return &mockFileInfoWithSys{
+						name:    "current",
+						size:    int64(len(currentContent)),
+						mode:    0644,
+						modTime: time.Now(),
+						isDir:   false,
+						inode:   uint64(currentInode),
+					}, nil
+				}
+				return nil, os.ErrNotExist
+			})
+			mockFS.WithGlobFunc(func(ctx context.Context, pattern string) ([]string, error) {
+				return rotatedFiles, nil
+			})
+			mockFS.WithReadFileRangeFunc(func(ctx context.Context, path string, from int64) ([]byte, int64, error) {
+				if path == currentFile {
+					content := []byte(currentContent)
+					if from >= int64(len(content)) {
+						return nil, int64(len(content)), nil // No new data
+					}
+					return content[from:], int64(len(content)), nil
+				}
+				if path == rotatedFile && len(rotatedFiles) > 0 {
+					content := []byte(rotatedContent)
+					if from >= int64(len(content)) {
+						return nil, int64(len(content)), nil // No new data
+					}
+					return content[from:], int64(len(content)), nil
+				}
+				return nil, 0, os.ErrNotExist
+			})
+
+			// Phase 1: First call - should get 1 entry
+			entries, err := service.GetLogs(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(entries).To(HaveLen(1))
+			Expect(entries[0].Content).To(Equal("entry 1"))
+
+			// Phase 2: Add more content, same inode - should get 2 entries
+			currentContent = phase2Content
 			entries, err = service.GetLogs(ctx, servicePath, fsService)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(entries).To(HaveLen(2))
+			Expect(entries[0].Content).To(Equal("entry 1"))
+			Expect(entries[1].Content).To(Equal("entry 2"))
 
-			// Should be in chronological order: rotated content first, then current
-			Expect(entries[0].Content).To(Equal("rotated message"))
-			Expect(entries[1].Content).To(Equal("new current message"))
+			// Phase 3: Add more content, same inode - should get 3 entries
+			currentContent = phase3Content
+			entries, err = service.GetLogs(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(entries).To(HaveLen(3))
+			Expect(entries[0].Content).To(Equal("entry 1"))
+			Expect(entries[1].Content).To(Equal("entry 2"))
+			Expect(entries[2].Content).To(Equal("entry 3"))
+
+			// Phase 4: ROTATION - Change inode and add rotated file
+			// This should PRESERVE the 3 existing entries AND add the new ones
+			currentContent = newCurrentContent
+			currentInode = 54321                 // Different inode indicates file rotation
+			rotatedFiles = []string{rotatedFile} // Now there's a rotated file
+
+			// EXPECTED s6 BEHAVIOR: Ring buffer resets on rotation (by design), but
+			// all entries are preserved by reading from both rotated + current files
+			entries, err = service.GetLogs(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// VERIFICATION: Total entry count should be preserved during rotation
+			// We should have all 5 entries: 3 from previous calls + 2 from rotation (1 rotated + 1 current)
+			Expect(entries).To(HaveLen(5), "After rotation, should have all 5 entries (3 previous + 2 new)")
+
+			// Verify chronological order is maintained across rotation
+			// s6 log rotation preserves chronological order: old entries first, then rotated, then current
+			Expect(entries[0].Content).To(Equal("entry 1"))
+			Expect(entries[1].Content).To(Equal("entry 2"))
+			Expect(entries[2].Content).To(Equal("entry 3"))
+			Expect(entries[3].Content).To(Equal("entry 4 (rotated)"))
+			Expect(entries[4].Content).To(Equal("entry 5 (new current)"))
 		})
 	})
 })

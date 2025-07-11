@@ -100,7 +100,7 @@ _Results in:_ `umh.v1.acme.plant1.line4.sensor1._raw.temperature`
 **Evolve to Structured (Data Models):** 🚧\
 For structured data evolution using data models, data contracts, and stream processors, see [Data Modeling Documentation](../data-modeling/).
 
-Example result: `umh.v1.acme.plant1.line4.sensor1._temperature.temperature_in_c`
+Example result: `umh.v1.acme.plant1.line4.sensor1._temperature.temperatureInC`
 
 ## Stand-alone Flows vs Bridges
 

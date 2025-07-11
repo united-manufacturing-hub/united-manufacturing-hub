@@ -92,7 +92,7 @@ func NewTopicBrowserManager(name string) *Manager {
 			if !ok {
 				return 0, fmt.Errorf("instance is not a Topic Browser Instance")
 			}
-			return tbInstance.GetExpectedMaxP95ExecutionTimePerInstance(), nil
+			return tbInstance.GetMinimumRequiredTime(), nil
 		},
 	)
 	metrics.InitErrorCounter(metrics.ComponentTopicBrowserManager, name)

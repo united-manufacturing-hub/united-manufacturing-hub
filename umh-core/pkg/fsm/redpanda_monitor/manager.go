@@ -86,7 +86,7 @@ func NewRedpandaMonitorManager(name string) *RedpandaMonitorManager {
 			if !ok {
 				return 0, fmt.Errorf("instance is not a RedpandaMonitorInstance")
 			}
-			return bi.GetExpectedMaxP95ExecutionTimePerInstance(), nil
+			return bi.GetMinimumRequiredTime(), nil
 		},
 	)
 	metrics.InitErrorCounter(logger.ComponentRedpandaMonitorManager, name)

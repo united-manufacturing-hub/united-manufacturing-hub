@@ -87,7 +87,7 @@ func NewProtocolConverterManager(name string) *ProtocolConverterManager {
 			if !ok {
 				return 0, fmt.Errorf("instance is not a ProtocolConverterInstance")
 			}
-			return protocolConverterInstance.GetExpectedMaxP95ExecutionTimePerInstance(), nil
+			return protocolConverterInstance.GetMinimumRequiredTime(), nil
 		},
 	)
 	metrics.InitErrorCounter(metrics.ComponentProtocolConverterManager, name)

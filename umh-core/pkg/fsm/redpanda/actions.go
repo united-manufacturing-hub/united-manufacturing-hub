@@ -187,6 +187,9 @@ func (r *RedpandaInstance) GetServiceStatus(ctx context.Context, filesystemServi
 // UpdateObservedStateOfInstance updates the observed state of the service
 func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
+		if r.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "UpdateObservedStateOfInstance") {
+			return nil
+		}
 		return ctx.Err()
 	}
 

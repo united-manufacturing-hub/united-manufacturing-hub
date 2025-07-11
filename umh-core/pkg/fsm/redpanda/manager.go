@@ -93,7 +93,7 @@ func NewRedpandaManager(name string) *RedpandaManager {
 			if !ok {
 				return 0, fmt.Errorf("instance is not a RedpandaInstance")
 			}
-			return redpandaInstance.GetExpectedMaxP95ExecutionTimePerInstance(), nil
+			return redpandaInstance.GetMinimumRequiredTime(), nil
 		},
 	)
 
