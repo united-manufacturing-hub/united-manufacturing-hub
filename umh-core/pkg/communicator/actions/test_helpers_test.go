@@ -161,7 +161,11 @@ func (tsc *ThreadSafeChannelCollector) Stop() {
 		return
 	}
 
+	// Signal the goroutine to stop first
 	close(tsc.done)
-	close(tsc.ch)
 	tsc.started = false
+
+	// Close the channel after signaling stop
+	// This prevents new sends but allows the goroutine to finish
+	close(tsc.ch)
 }
