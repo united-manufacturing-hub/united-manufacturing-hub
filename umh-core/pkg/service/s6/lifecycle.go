@@ -54,8 +54,10 @@ type RemovalProgress struct {
 	ProcessesStopped bool
 	// SupervisorsStopped indicates that S6 supervisor processes have been killed
 	SupervisorsStopped bool
-	// SupervisorsCleanupConfirmed indicates that S6 supervisor cleanup is complete
-	SupervisorsCleanupConfirmed bool
+	// MainSupervisorCleanupConfirmed indicates that main service supervisor cleanup is complete
+	MainSupervisorCleanupConfirmed bool
+	// LogSupervisorCleanupConfirmed indicates that log service supervisor cleanup is complete
+	LogSupervisorCleanupConfirmed bool
 	// ServiceDirRemoved indicates that the service directory has been successfully removed
 	ServiceDirRemoved bool
 	// LogDirRemoved indicates that the log directory has been successfully removed
@@ -75,7 +77,7 @@ func (artifacts *ServiceArtifacts) IsFullyRemoved() bool {
 		return false
 	}
 	p := artifacts.RemovalProgress
-	return p.ProcessesStopped && p.SupervisorsStopped && p.SupervisorsCleanupConfirmed && p.ServiceDirRemoved && p.LogDirRemoved
+	return p.ProcessesStopped && p.SupervisorsStopped && p.MainSupervisorCleanupConfirmed && p.LogSupervisorCleanupConfirmed && p.ServiceDirRemoved && p.LogDirRemoved
 }
 
 // CreateArtifacts creates a complete S6 service atomically
@@ -215,51 +217,64 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *Service
 		s.logger.Debugf("Supervisors stopped for service: %s", artifacts.ServiceDir)
 	}
 
-	// Step 2.5: Confirm supervisor cleanup is complete (idempotent)
+	// Step 2.5a: Confirm main service supervisor cleanup is complete (idempotent)
 	//
-	// RACE CONDITION FIX:
-	// This step solves a 4.5ms race condition discovered in integration tests.
-	// Timeline analysis showed "directory not empty" errors when we attempted removal
-	// immediately after killing supervisors, before S6 completed internal cleanup.
+	// RACE CONDITION FIX - PHASE 1: Main Service Supervisor
+	// This step solves a race condition where we check both supervisors together.
+	// Timeline analysis showed main service supervisor cleanup can complete while
+	// log service supervisor is still cleaning up, causing false positives.
 	//
-	// THE PROBLEM:
-	// 12:43:22.297 - killSupervisors() terminates S6 processes
-	// 12:43:22.297 - Directory removal fails: "directory not empty"
-	// 12:43:22.393 - Retry succeeds 96ms later
-	//
-	// ROOT CAUSE:
-	// S6 supervisors need time after termination to:
-	// 1. Run finish scripts (./finish with 5sec timeout)
-	// 2. Clean up internal state files
-	// 3. Close file handles in supervise/ directory
-	// 4. Update status file with flagfinishing=0
-	//
-	// THE SOLUTION:
-	// Instead of arbitrary delays, we use S6's own completion signal (flagfinishing flag).
-	// From S6 source code (uplastup_z() and set_down_and_ready() functions):
-	// - flagfinishing=1: Cleanup in progress (S6 still has files open)
-	// - flagfinishing=0: Cleanup complete (safe to remove directories)
-	//
-	// This respects S6's documented behavior: "When killed or asked to exit,
-	// it waits for the service to go down one last time, then exits."
+	// DEPENDENCY ORDER:
+	// Main service depends on log service for logging, so we check main service first.
+	// If main service supervisor cleanup is complete, we can proceed to check log service.
 	//
 	// FSM COMPATIBILITY:
 	// - No blocking: Returns immediately if cleanup not ready
 	// - Incremental progress: Each FSM tick checks if ready to proceed
 	// - Fast: Typically completes in 5-10ms (1-2 FSM ticks)
-	if !progress.SupervisorsCleanupConfirmed {
+	if !progress.MainSupervisorCleanupConfirmed {
 		serviceExists, _ := fsService.PathExists(ctx, artifacts.ServiceDir)
 		if serviceExists {
-			if confirmed, err := s.isSupervisorCleanupComplete(ctx, artifacts, fsService); err != nil {
-				s.logger.Debugf("Failed to check supervisor cleanup: %v", err)
-				return fmt.Errorf("failed to check supervisor cleanup: %w", err)
+			if confirmed, err := s.isSingleSupervisorCleanupComplete(ctx, artifacts.ServiceDir, fsService); err != nil {
+				s.logger.Debugf("Failed to check main supervisor cleanup: %v", err)
+				return fmt.Errorf("failed to check main supervisor cleanup: %w", err)
 			} else if !confirmed {
-				s.logger.Debugf("Supervisor cleanup not yet complete for service: %s", artifacts.ServiceDir)
+				s.logger.Debugf("Main supervisor cleanup not yet complete for service: %s", artifacts.ServiceDir)
 				return nil // Return and wait for next FSM tick
 			}
 		}
-		progress.SupervisorsCleanupConfirmed = true
-		s.logger.Debugf("Supervisor cleanup confirmed for service: %s", artifacts.ServiceDir)
+		progress.MainSupervisorCleanupConfirmed = true
+		s.logger.Debugf("Main supervisor cleanup confirmed for service: %s", artifacts.ServiceDir)
+	}
+
+	// Step 2.5b: Confirm log service supervisor cleanup is complete (idempotent)
+	//
+	// RACE CONDITION FIX - PHASE 2: Log Service Supervisor
+	// This step ensures the log service supervisor has also completed cleanup.
+	// Log service supervisor can take longer as it may need to flush remaining log data.
+	//
+	// DEPENDENCY ORDER:
+	// Log service is independent, so we check it after main service cleanup is confirmed.
+	// This ensures proper cleanup order: dependent (main) first, then dependency (log).
+	//
+	// FSM COMPATIBILITY:
+	// - No blocking: Returns immediately if cleanup not ready
+	// - Incremental progress: Each FSM tick checks if ready to proceed
+	// - Fast: Typically completes in 5-10ms (1-2 FSM ticks)
+	if !progress.LogSupervisorCleanupConfirmed {
+		logServiceDir := filepath.Join(artifacts.ServiceDir, "log")
+		serviceExists, _ := fsService.PathExists(ctx, logServiceDir)
+		if serviceExists {
+			if confirmed, err := s.isSingleSupervisorCleanupComplete(ctx, logServiceDir, fsService); err != nil {
+				s.logger.Debugf("Failed to check log supervisor cleanup: %v", err)
+				return fmt.Errorf("failed to check log supervisor cleanup: %w", err)
+			} else if !confirmed {
+				s.logger.Debugf("Log supervisor cleanup not yet complete for service: %s", artifacts.ServiceDir)
+				return nil // Return and wait for next FSM tick
+			}
+		}
+		progress.LogSupervisorCleanupConfirmed = true
+		s.logger.Debugf("Log supervisor cleanup confirmed for service: %s", artifacts.ServiceDir)
 	}
 
 	// Step 3: Remove service directory (idempotent)
@@ -639,6 +654,95 @@ func (s *DefaultService) terminateProcesses(ctx context.Context, artifacts *Serv
 // Note: parseStatusFile logic has been moved to status.go as parseS6StatusFile
 // This centralizes all S6 status parsing logic in one place
 
+// isSingleSupervisorCleanupComplete checks if a single S6 supervisor cleanup is complete
+// This function checks one specific service path (either main service or log service)
+// instead of checking both together, preventing false positives in cleanup detection.
+//
+// CRITICAL DESIGN: This function uses S6's own internal state tracking to detect
+// when a specific supervisor has completed its cleanup sequence.
+//
+// S6 CLEANUP LIFECYCLE (from source code analysis):
+// 1. Service dies → uplastup_z() called
+// 2. S6 sets flagfinishing=1 (cleanup begins)
+// 3. S6 spawns ./finish script (5sec timeout by default)
+// 4. S6 cleans internal state, closes file handles
+// 5. S6 calls set_down_and_ready() → flagfinishing=0 (cleanup complete)
+//
+// DETECTION METHODS:
+// Method 1 (Primary): Check S6 status file flagfinishing flag
+// Method 2 (Fallback): Check supervisor PID file
+func (s *DefaultService) isSingleSupervisorCleanupComplete(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
+	superviseDir := filepath.Join(servicePath, "supervise")
+
+	// Check if supervise directory exists
+	exists, err := fsService.PathExists(ctx, superviseDir)
+	if err != nil {
+		return false, fmt.Errorf("failed to check supervise directory %s: %w", superviseDir, err)
+	}
+
+	if !exists {
+		// No supervise directory means cleanup is complete
+		return true, nil
+	}
+
+	// Method 1: Check S6 status file for IsFinishing flag
+	statusFile := filepath.Join(superviseDir, "status")
+	statusExists, err := fsService.FileExists(ctx, statusFile)
+	if err != nil {
+		return false, fmt.Errorf("failed to check status file %s: %w", statusFile, err)
+	}
+
+	if statusExists {
+		// Parse status file directly using centralized parser
+		statusData, err := parseS6StatusFile(ctx, statusFile, fsService)
+		if err != nil {
+			// Can't read status, assume cleanup in progress
+			return false, nil
+		}
+
+		// If IsFinishing=true, supervisor is still cleaning up
+		if statusData.IsFinishing {
+			return false, nil
+		}
+
+		// If process is still running (PID != 0), cleanup not complete
+		if statusData.Pid != 0 {
+			return false, nil
+		}
+	}
+
+	// Method 2: Check if supervisor process is still running via PID file
+	pidFile := filepath.Join(superviseDir, "pid")
+	pidExists, err := fsService.FileExists(ctx, pidFile)
+	if err != nil {
+		return false, fmt.Errorf("failed to check PID file %s: %w", pidFile, err)
+	}
+
+	if pidExists {
+		// Read PID and check if process exists
+		data, err := fsService.ReadFile(ctx, pidFile)
+		if err != nil {
+			// Can't read PID file, assume cleanup in progress
+			return false, nil
+		}
+
+		pidStr := strings.TrimSpace(string(data))
+		if pidStr != "" {
+			pid, err := strconv.Atoi(pidStr)
+			if err == nil {
+				// Check if process still exists (kill -0 doesn't send signal)
+				if err := syscall.Kill(pid, 0); err == nil {
+					// Process still exists, cleanup not complete
+					return false, nil
+				}
+			}
+		}
+	}
+
+	// Single supervisor has completed cleanup
+	return true, nil
+}
+
 // isSupervisorCleanupComplete checks if S6 supervisor cleanup is complete
 //
 // CRITICAL DESIGN: This function uses S6's own internal state tracking to detect
@@ -683,72 +787,10 @@ func (s *DefaultService) isSupervisorCleanupComplete(ctx context.Context, artifa
 	}
 
 	for _, servicePath := range servicePaths {
-		superviseDir := filepath.Join(servicePath, "supervise")
-
-		// Check if supervise directory exists
-		exists, err := fsService.PathExists(ctx, superviseDir)
-		if err != nil {
-			return false, fmt.Errorf("failed to check supervise directory %s: %w", superviseDir, err)
-		}
-
-		if !exists {
-			// No supervise directory means cleanup is complete
-			continue
-		}
-
-		// Method 1: Check S6 status file for IsFinishing flag
-		// Use parseStatusFile() to avoid circular dependency with Status() method
-		statusFile := filepath.Join(superviseDir, "status")
-		statusExists, err := fsService.FileExists(ctx, statusFile)
-		if err != nil {
-			return false, fmt.Errorf("failed to check status file %s: %w", statusFile, err)
-		}
-
-		if statusExists {
-			// Parse status file directly using centralized parser - avoids circular dependency and FSM blocks
-			statusData, err := parseS6StatusFile(ctx, statusFile, fsService)
-			if err != nil {
-				// Can't read status, assume cleanup in progress
-				return false, nil
-			}
-
-			// If IsFinishing=true, supervisor is still cleaning up
-			if statusData.IsFinishing {
-				return false, nil
-			}
-
-			// If process is still running (PID != 0), cleanup not complete
-			if statusData.Pid != 0 {
-				return false, nil
-			}
-		}
-
-		// Method 2: Check if supervisor process is still running via PID file
-		pidFile := filepath.Join(superviseDir, "pid")
-		pidExists, err := fsService.FileExists(ctx, pidFile)
-		if err != nil {
-			return false, fmt.Errorf("failed to check PID file %s: %w", pidFile, err)
-		}
-
-		if pidExists {
-			// Read PID and check if process exists
-			data, err := fsService.ReadFile(ctx, pidFile)
-			if err != nil {
-				// Can't read PID file, assume cleanup in progress
-				return false, nil
-			}
-
-			pidStr := strings.TrimSpace(string(data))
-			if pidStr != "" {
-				pid, err := strconv.Atoi(pidStr)
-				if err == nil {
-					// Check if process still exists (kill -0 doesn't send signal)
-					if err := syscall.Kill(pid, 0); err == nil {
-						// Process still exists, cleanup not complete
-						return false, nil
-					}
-				}
-			}
+		if confirmed, err := s.isSingleSupervisorCleanupComplete(ctx, servicePath, fsService); err != nil {
+			return false, err
+		} else if !confirmed {
+			return false, nil
 		}
 	}
 
