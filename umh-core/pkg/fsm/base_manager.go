@@ -664,6 +664,11 @@ func (m *BaseFSMManager[C]) Reconcile(
 	}
 	instancesToRemoveMutex.Unlock()
 
+	// Ignore context deadline issues
+	if errors.Is(err, context.DeadlineExceeded) {
+		return nil, hasAnyReconciles
+	}
+
 	// Return nil if no errors occurred
 	return err, hasAnyReconciles
 }

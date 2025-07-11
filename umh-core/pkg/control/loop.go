@@ -178,15 +178,14 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 			// Increment tick counter on each iteration
 			c.currentTick++
 
-			// Create a timeout context for the reconcile
-			timeoutCtx, cancel := context.WithTimeout(ctx, c.tickerTime)
-			defer cancel()
-
 			// Measure reconcile time
 			start := time.Now()
 
+			// Create a timeout context for the reconcile
+			timeoutCtx, cancel := context.WithTimeout(ctx, c.tickerTime)
 			// Reconcile the managers
 			err := c.Reconcile(timeoutCtx, c.currentTick)
+			cancel()
 
 			// Record metrics for the reconcile cycle
 			cycleTime := time.Since(start)
@@ -204,8 +203,6 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 
 			// Handle errors differently based on type
 			if err != nil {
-				metrics.IncErrorCountAndLog(metrics.ComponentControlLoop, "main", err, c.logger)
-
 				if errors.Is(err, context.DeadlineExceeded) {
 					// For timeouts, log warning but continue
 					sentry.ReportIssuef(sentry.IssueTypeWarning, c.logger, "Control loop reconcile timed out: %v", err)
@@ -214,6 +211,7 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 					c.logger.Infof("Control loop cancelled")
 					return nil
 				} else {
+					metrics.IncErrorCountAndLog(metrics.ComponentControlLoop, "main", err, c.logger)
 					// Any other unhandled error will result in the control loop stopping
 					sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Control loop error: %v", err)
 					return err
