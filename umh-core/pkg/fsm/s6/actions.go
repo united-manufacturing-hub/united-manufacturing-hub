@@ -53,18 +53,41 @@ func (s *S6Instance) CreateInstance(ctx context.Context, filesystemService files
 	// Check if we have a config with command or other settings
 	configEmpty := s.config.S6ServiceConfig.Command == nil && s.config.S6ServiceConfig.Env == nil && s.config.S6ServiceConfig.ConfigFiles == nil
 
+	var createErr error
 	if !configEmpty {
 		// Create service with custom configuration
-		err := s.service.Create(ctx, s.servicePath, s.config.S6ServiceConfig, filesystemService)
-		if err != nil {
-			return fmt.Errorf("failed to create service with config for %s: %w", s.baseFSMInstance.GetID(), err)
-		}
+		createErr = s.service.Create(ctx, s.servicePath, s.config.S6ServiceConfig, filesystemService)
 	} else {
 		// Simple creation with no configuration, useful for testing
-		err := s.service.Create(ctx, s.servicePath, s6serviceconfig.S6ServiceConfig{}, filesystemService)
-		if err != nil {
-			return fmt.Errorf("failed to create service directory for %s: %w", s.baseFSMInstance.GetID(), err)
+		createErr = s.service.Create(ctx, s.servicePath, s6serviceconfig.S6ServiceConfig{}, filesystemService)
+	}
+
+	if createErr != nil {
+		// Check if this is an orphaned directory error
+		errMsg := createErr.Error()
+		if errMsg == "service directory exists but artifacts is nil - requires removal first" ||
+			errMsg == fmt.Sprintf("failed to create service with config for %s: service directory exists but artifacts is nil - requires removal first", s.baseFSMInstance.GetID()) ||
+			errMsg == fmt.Sprintf("failed to create service directory for %s: service directory exists but artifacts is nil - requires removal first", s.baseFSMInstance.GetID()) {
+
+			s.baseFSMInstance.GetLogger().Warnf("Orphaned directory detected for %s, triggering removal", s.baseFSMInstance.GetID())
+
+			// Trigger removal of this instance
+			// This will cause the FSM to transition through the removal states
+			// and then the manager will recreate it
+			if removeErr := s.baseFSMInstance.Remove(ctx); removeErr != nil {
+				s.baseFSMInstance.GetLogger().Errorf("Failed to trigger removal for orphaned directory: %v", removeErr)
+				return fmt.Errorf("orphaned directory exists and removal failed: %w", removeErr)
+			}
+
+			// Return a specific error that indicates removal was triggered
+			return fmt.Errorf("orphaned directory detected, removal triggered")
 		}
+
+		// For other errors, return them as-is
+		if !configEmpty {
+			return fmt.Errorf("failed to create service with config for %s: %w", s.baseFSMInstance.GetID(), createErr)
+		}
+		return fmt.Errorf("failed to create service directory for %s: %w", s.baseFSMInstance.GetID(), createErr)
 	}
 
 	s.baseFSMInstance.GetLogger().Debugf("S6 service %s directory structure created", s.baseFSMInstance.GetID())

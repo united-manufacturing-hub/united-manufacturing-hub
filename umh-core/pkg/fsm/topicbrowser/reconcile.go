@@ -104,31 +104,36 @@ func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.Syste
 		return nil, false
 	}
 
-	// Step 2: Detect external changes.
-	if err = i.reconcileExternalChanges(ctx, services, snapshot); err != nil {
-		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
-		if !errors.Is(err, topicbrowsersvc.ErrServiceNotExist) && !errors.Is(err, s6.ErrServiceNotExist) {
-			// Consider a special case for TopicBrowser FSM here
-			// While creating for the first time, reconcileExternalChanges function will throw an error such as
-			// s6 service not found in the path since TopicBrowser fsm is relying on BenthosFSM and Benthos in turn relies on S6 fsm
-			// Inorder for TopicBrowser fsm to start, benthosManager.Reconcile should be called and this is called at the end of the function
-			// So set the err to nil in this case
-			// An example error: "failed to update observed state: failed to get observed TopicBrowser config: failed to get benthos config: failed to get benthos config file for service benthos-topic-browser: service does not exist"
+	// Step 2: Detect external changes - skip during removal
+	if i.baseFSMInstance.IsRemoving() {
+		// Skip external changes detection during removal - config files may be deleted
+		i.baseFSMInstance.GetLogger().Debugf("Skipping external changes detection during removal")
+	} else {
+		if err = i.reconcileExternalChanges(ctx, services, snapshot); err != nil {
+			// If the service is not running, we don't want to return an error here, because we want to continue reconciling
+			if !errors.Is(err, topicbrowsersvc.ErrServiceNotExist) && !errors.Is(err, s6.ErrServiceNotExist) {
+				// Consider a special case for TopicBrowser FSM here
+				// While creating for the first time, reconcileExternalChanges function will throw an error such as
+				// s6 service not found in the path since TopicBrowser fsm is relying on BenthosFSM and Benthos in turn relies on S6 fsm
+				// Inorder for TopicBrowser fsm to start, benthosManager.Reconcile should be called and this is called at the end of the function
+				// So set the err to nil in this case
+				// An example error: "failed to update observed state: failed to get observed TopicBrowser config: failed to get benthos config: failed to get benthos config file for service benthos-topic-browser: service does not exist"
 
-			if errors.Is(err, context.DeadlineExceeded) {
-				// Context deadline exceeded should be retried with backoff, not ignored
+				if errors.Is(err, context.DeadlineExceeded) {
+					// Context deadline exceeded should be retried with backoff, not ignored
+					i.baseFSMInstance.SetError(err, snapshot.Tick)
+					i.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileExternalChanges, will retry with backoff")
+					err = nil // Clear error so reconciliation continues
+					return nil, false
+				}
+
 				i.baseFSMInstance.SetError(err, snapshot.Tick)
-				i.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileExternalChanges, will retry with backoff")
-				err = nil // Clear error so reconciliation continues
-				return nil, false
+				i.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
+				return nil, false // We don't want to return an error here, because we want to continue reconciling
 			}
 
-			i.baseFSMInstance.SetError(err, snapshot.Tick)
-			i.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
-			return nil, false // We don't want to return an error here, because we want to continue reconciling
+			err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
 		}
-
-		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
 	}
 
 	// Step 3: Attempt to reconcile the state.
