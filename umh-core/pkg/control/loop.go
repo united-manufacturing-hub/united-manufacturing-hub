@@ -395,6 +395,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 		started := errorgroup.TryGo(func() error {
 			// It might be that .Go is blocked until the ctx is already cancelled, in that case we just return
 			if ctx.Err() != nil {
+				c.logger.Debugf("Context is already cancelled, skipping manager")
 				return nil
 			}
 
@@ -410,6 +411,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 			return nil
 		})
 		if !started {
+			c.logger.Debugf("To many running managers, skipping remaining")
 			break
 		}
 	}
