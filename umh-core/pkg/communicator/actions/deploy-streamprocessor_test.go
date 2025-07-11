@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"gopkg.in/yaml.v3"
 )
@@ -351,7 +352,7 @@ var _ = Describe("DeployStreamProcessor", func() {
 			Expect(ok).To(BeTrue(), "Result should be a StreamProcessor")
 
 			// Verify the UUID was generated correctly
-			expectedUUID := actions.GenerateUUIDFromName(spName)
+			expectedUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(spName)
 			Expect(responseSP.UUID).NotTo(BeNil())
 			Expect(*responseSP.UUID).To(Equal(expectedUUID))
 

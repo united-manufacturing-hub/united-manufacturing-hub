@@ -41,6 +41,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/streamprocessorserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -164,7 +165,7 @@ func (a *DeployStreamProcessorAction) Execute() (interface{}, map[string]interfa
 	}
 
 	// Generate the UUID for the response
-	spUUID := GenerateUUIDFromName(a.payload.Name)
+	spUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(a.payload.Name)
 
 	// Create response with the filled UUID
 	response := models.StreamProcessor{

@@ -258,7 +258,7 @@ var _ = Describe("DeleteStreamProcessor", func() {
 		It("should handle stream processor not found", func() {
 			// Use a different name that doesn't exist
 			nonExistentName := "non-existent-processor"
-			nonExistentUUID := actions.GenerateUUIDFromName(nonExistentName)
+			nonExistentUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(nonExistentName)
 
 			payload := map[string]interface{}{
 				"uuid": nonExistentUUID.String(),

@@ -40,6 +40,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/streamprocessorserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -209,7 +210,7 @@ func (a *EditStreamProcessorAction) Execute() (interface{}, map[string]interface
 			"Stream processor successfully updated", a.outboundChannel, models.EditStreamProcessor)
 	}
 
-	newUUID := GenerateUUIDFromName(a.name)
+	newUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name)
 	response := map[string]any{
 		"uuid": newUUID,
 	}
@@ -235,7 +236,7 @@ func (a *EditStreamProcessorAction) applyMutation() (config.StreamProcessorConfi
 	var targetSP config.StreamProcessorConfig
 	found := false
 	for _, sp := range currentConfig.StreamProcessor {
-		spID := GenerateUUIDFromName(sp.Name)
+		spID := dataflowcomponentserviceconfig.GenerateUUIDFromName(sp.Name)
 		if spID == a.streamProcessorUUID {
 			targetSP = sp
 			found = true
@@ -280,7 +281,7 @@ func (a *EditStreamProcessorAction) applyMutation() (config.StreamProcessorConfi
 
 		// Apply mutations to the root, but keep child's variables
 		instanceToModify = rootSP
-		atomicEditUUID = GenerateUUIDFromName(rootSP.Name)
+		atomicEditUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(rootSP.Name)
 
 		// Add the new variables and preserve existing child variables
 		newVB = make(map[string]any)

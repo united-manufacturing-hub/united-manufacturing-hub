@@ -16,16 +16,8 @@
 package actions
 
 import (
-	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
-
-// GenerateUUIDFromName generates a UUID from a name (similar to protocol converter pattern)
-func GenerateUUIDFromName(name string) uuid.UUID {
-	// Use a deterministic UUID generation based on name
-	// This ensures the same name always produces the same UUID
-	return uuid.NewSHA1(uuid.NameSpaceDNS, []byte(name))
-}
 
 // convertStreamProcessorMappingToInterface converts StreamProcessorMapping to map[string]interface{}
 func convertStreamProcessorMappingToInterface(mapping models.StreamProcessorMapping) map[string]interface{} {

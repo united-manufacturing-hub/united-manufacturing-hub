@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/streamprocessorserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -58,7 +59,7 @@ var _ = Describe("EditStreamProcessor", func() {
 		instanceUUID = uuid.New()
 		outboundChannel = make(chan *models.UMHMessage, 10) // Buffer to prevent blocking
 		spName = "test-stream-processor"
-		spUUID = actions.GenerateUUIDFromName(spName)
+		spUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(spName)
 		spModel = models.StreamProcessorModelRef{
 			Name:    "test-model",
 			Version: "1.0.0",
@@ -432,7 +433,7 @@ var _ = Describe("EditStreamProcessor", func() {
 			Expect(responseMap).To(HaveKey("uuid"))
 
 			// Verify the UUID was generated correctly
-			expectedUUID := actions.GenerateUUIDFromName(spName)
+			expectedUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(spName)
 			Expect(responseMap["uuid"]).To(Equal(expectedUUID))
 
 			// Verify expected configuration changes

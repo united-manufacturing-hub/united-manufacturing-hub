@@ -39,6 +39,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -176,7 +177,7 @@ func (a *DeleteStreamProcessorAction) findStreamProcessorByUUID() error {
 
 	// Find the stream processor in the configuration
 	for _, sp := range currentConfig.StreamProcessor {
-		spID := GenerateUUIDFromName(sp.Name)
+		spID := dataflowcomponentserviceconfig.GenerateUUIDFromName(sp.Name)
 		if spID == a.streamProcessorUUID {
 			a.name = sp.Name
 			a.actionLogger.Debugf("Found stream processor: uuid=%s, name=%s", a.streamProcessorUUID, a.name)
