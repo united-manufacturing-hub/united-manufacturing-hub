@@ -743,61 +743,6 @@ func (s *DefaultService) isSingleSupervisorCleanupComplete(ctx context.Context, 
 	return true, nil
 }
 
-// isSupervisorCleanupComplete checks if S6 supervisor cleanup is complete
-//
-// CRITICAL DESIGN: This function uses S6's own internal state tracking to detect
-// when supervisors have completed their cleanup sequence. This eliminates the
-// 4.5ms race condition that caused "directory not empty" errors in integration tests.
-//
-// S6 CLEANUP LIFECYCLE (from source code analysis):
-// 1. Service dies → uplastup_z() called
-// 2. S6 sets flagfinishing=1 (cleanup begins)
-// 3. S6 spawns ./finish script (5sec timeout by default)
-// 4. S6 cleans internal state, closes file handles
-// 5. S6 calls set_down_and_ready() → flagfinishing=0 (cleanup complete)
-//
-// DETECTION METHODS:
-// Method 1 (Primary): Check S6 status file flagfinishing flag
-// - Uses parseS6StatusFile() to read 43-byte binary status file directly
-// - flagfinishing=1: S6 still cleaning up (return false, wait for next FSM tick)
-// - flagfinishing=0: S6 cleanup complete (safe to proceed with removal)
-// - pid=0: Ensures service process has fully exited
-//
-// Method 2 (Fallback): Check supervisor PID file
-// - If status file unavailable, check if supervisor process still exists
-// - Uses syscall.Kill(pid, 0) to test process existence without sending signal
-//
-// AVOIDS CIRCULAR DEPENDENCIES:
-// We cannot call Status() method during removal because:
-// - FSM blocks Status() calls during removal operations
-// - Status() reads config files that we're about to delete
-// - This would create circular dependency: removal → Status() → config read → failure
-//
-// Instead we use parseS6StatusFile() directly:
-// - Same binary parser as Status() method (centralized in status.go)
-// - No business logic, just raw S6 state data
-// - No config file dependencies
-// - Lightweight, fast operation (<1ms)
-//
-// Uses parseStatusFile() to avoid circular dependency with Status() method
-func (s *DefaultService) isSupervisorCleanupComplete(ctx context.Context, artifacts *ServiceArtifacts, fsService filesystem.Service) (bool, error) {
-	servicePaths := []string{
-		artifacts.ServiceDir,
-		filepath.Join(artifacts.ServiceDir, "log"),
-	}
-
-	for _, servicePath := range servicePaths {
-		if confirmed, err := s.isSingleSupervisorCleanupComplete(ctx, servicePath, fsService); err != nil {
-			return false, err
-		} else if !confirmed {
-			return false, nil
-		}
-	}
-
-	// All supervisors have completed cleanup
-	return true, nil
-}
-
 // killSupervisorProcess directly kills supervisor process when S6 commands fail
 // This is a last resort when s6-svc -xd doesn't work (e.g., corrupted supervise state)
 func (s *DefaultService) killSupervisorProcess(ctx context.Context, servicePath string, fsService filesystem.Service) error {
