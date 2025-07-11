@@ -206,7 +206,13 @@ func (a *GetStreamProcessorAction) buildStreamProcessorFromConfig(streamProcesso
 
 	// Build encoded config - encode the YAML representation
 	var encodedConfig string
-	if configData, err := yaml.Marshal(streamProcessorConfig.StreamProcessorServiceConfig.Config); err == nil {
+	spConfig := streamProcessorConfig.StreamProcessorServiceConfig.Config
+	// remove the model reference from the config and encode the rest (sources and mapping)
+	toEncode := map[string]interface{}{
+		"sources": spConfig.Sources,
+		"mapping": spConfig.Mapping,
+	}
+	if configData, err := yaml.Marshal(toEncode); err == nil {
 		encodedConfig = base64.StdEncoding.EncodeToString(configData)
 	}
 
@@ -217,7 +223,7 @@ func (a *GetStreamProcessorAction) buildStreamProcessorFromConfig(streamProcesso
 		isTemplated := streamProcessorConfig.StreamProcessorServiceConfig.TemplateRef != streamProcessorConfig.Name
 
 		// Build variables from the StreamProcessorServiceConfig
-		var variables []models.StreamProcessorVariable
+		variables := make([]models.StreamProcessorVariable, 0)
 		if streamProcessorConfig.StreamProcessorServiceConfig.Variables.User != nil {
 			for label, value := range streamProcessorConfig.StreamProcessorServiceConfig.Variables.User {
 				variables = append(variables, models.StreamProcessorVariable{
