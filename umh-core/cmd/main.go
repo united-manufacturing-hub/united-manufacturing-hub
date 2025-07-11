@@ -148,7 +148,7 @@ func main() {
 	}
 
 	if configData.Agent.APIURL != "" && configData.Agent.AuthToken != "" {
-		enableBackendConnection(&configData, communicationState, controlLoop, communicationState.Logger)
+		enableBackendConnection(ctx, &configData, communicationState, controlLoop, communicationState.Logger)
 	} else {
 		log.Warnf("No backend connection enabled, please set API_URL and AUTH_TOKEN")
 	}
@@ -250,7 +250,7 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 	}
 }
 
-func enableBackendConnection(config *config.FullConfig, communicationState *communication_state.CommunicationState, controlLoop *control.ControlLoop, logger *zap.SugaredLogger) {
+func enableBackendConnection(ctx context.Context, config *config.FullConfig, communicationState *communication_state.CommunicationState, controlLoop *control.ControlLoop, logger *zap.SugaredLogger) {
 
 	logger.Info("Enabling backend connection")
 	// directly log the config to console, not to the logger
@@ -277,7 +277,7 @@ func enableBackendConnection(config *config.FullConfig, communicationState *comm
 		snapshotManager := controlLoop.GetSnapshotManager()
 		communicationState.InitialiseAndStartPuller()
 		communicationState.InitialiseAndStartPusher()
-		communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config, snapshotManager, configManager)
+		communicationState.InitialiseAndStartSubscriberHandler(ctx, time.Minute*5, time.Minute, config, snapshotManager, configManager)
 		communicationState.InitialiseAndStartRouter()
 		communicationState.InitialiseReAuthHandler(config.Agent.AuthToken, config.Agent.AllowInsecureTLS)
 
