@@ -10,5 +10,8 @@
 # .DS_Store from macos
 .DS_Store
 
+
 # Test results
 *.result.txt
+result.txt
+

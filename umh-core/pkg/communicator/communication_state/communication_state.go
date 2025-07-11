@@ -206,7 +206,7 @@ func (c *CommunicationState) StartTopicBrowserCacheUpdater(systemSnapshotManager
 // InitialiseAndStartSubscriberHandler creates a new subscriber handler and starts it
 // ttl is the time until a subscriber is considered dead (if no new subscriber message is received)
 // cull is the cycle time to remove dead subscribers
-func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Duration, cull time.Duration, config *config.FullConfig, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager) {
+func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ctx context.Context, ttl time.Duration, cull time.Duration, config *config.FullConfig, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.LoginResponseMu.RLock()
@@ -247,7 +247,7 @@ func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 	if c.SubscriberHandler == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create subscriber handler")
 	}
-	c.SubscriberHandler.StartNotifier()
+	c.SubscriberHandler.StartNotifierWithContext(ctx)
 }
 
 func (c *CommunicationState) InitialiseReAuthHandler(authToken string, insecureTLS bool) {

@@ -17,6 +17,7 @@ package protocolconverter
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
@@ -50,6 +51,9 @@ import (
 // fns (`SetupConnectionServiceState`, `TransitionToDataflowComponentState`,
 // …) remain reusable.
 type MockProtocolConverterService struct {
+	// Mutex to protect concurrent access to shared state
+	mu sync.RWMutex
+
 	// Tracks calls to methods
 	GenerateConfigCalled     bool
 	GetConfigCalled          bool
@@ -142,6 +146,9 @@ func (m *MockProtocolConverterService) SetConverterState(
 	protConvName string,
 	flags ConverterStateFlags,
 ) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	// Ensure service exists in mock
 	m.ExistingComponents[protConvName] = true
 
@@ -169,6 +176,9 @@ func (m *MockProtocolConverterService) SetComponentState(protConvName string, fl
 
 // GetConverterState gets the state flags for a protocol converter
 func (m *MockProtocolConverterService) GetConverterState(protConvName string) *ConverterStateFlags {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	if flags, exists := m.stateFlags[protConvName]; exists {
 		return flags
 	}
@@ -254,15 +264,19 @@ func (m *MockProtocolConverterService) GetConfig(
 	protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
 	error,
 ) {
+	m.mu.Lock()
 	m.GetConfigCalled = true
+	configError := m.GetConfigError
+	configResult := m.GetConfigResult
+	m.mu.Unlock()
 
 	// If error is set, return it
-	if m.GetConfigError != nil {
-		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, m.GetConfigError
+	if configError != nil {
+		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, configError
 	}
 
 	// If a result is preset, return it
-	return m.GetConfigResult, nil
+	return configResult, nil
 }
 
 // Status mocks getting the status of a ProtocolConverter
@@ -272,20 +286,27 @@ func (m *MockProtocolConverterService) Status(
 	snapshot fsm.SystemSnapshot,
 	protConvName string,
 ) (ServiceInfo, error) {
+	m.mu.Lock()
 	m.StatusCalled = true
 
 	// Check if the component exists in the ExistingComponents map
 	if exists, ok := m.ExistingComponents[protConvName]; !ok || !exists {
+		m.mu.Unlock()
 		return ServiceInfo{}, ErrServiceNotExist
 	}
 
 	// If we have a state already stored, return it
 	if state, exists := m.ConverterStates[protConvName]; exists {
-		return *state, m.StatusError
+		statusError := m.StatusError
+		m.mu.Unlock()
+		return *state, statusError
 	}
 
 	// If no state is stored, return the default mock result
-	return m.StatusResult, m.StatusError
+	statusResult := m.StatusResult
+	statusError := m.StatusError
+	m.mu.Unlock()
+	return statusResult, statusError
 }
 
 // AddToManager mocks adding a ProtocolConverter to the Connection & DFC manager
@@ -295,6 +316,9 @@ func (m *MockProtocolConverterService) AddToManager(
 	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
 	protConvName string,
 ) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.AddToManagerCalled = true
 
 	underlyingName := fmt.Sprintf("protocolconverter-%s", protConvName)
@@ -348,6 +372,9 @@ func (m *MockProtocolConverterService) UpdateInManager(
 	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
 	protConvName string,
 ) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.UpdateInManagerCalled = true
 
 	underlyingName := fmt.Sprintf("protocolconverter-%s", protConvName)
@@ -407,6 +434,9 @@ func (m *MockProtocolConverterService) RemoveFromManager(
 	filesystemService filesystem.Service,
 	protConvName string,
 ) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.RemoveFromManagerCalled = true
 
 	underlyingName := fmt.Sprintf("protocolconverter-%s", protConvName)
@@ -445,6 +475,9 @@ func (m *MockProtocolConverterService) RemoveFromManager(
 
 // StartProtocolConverter mocks starting a ProtocolConverter
 func (m *MockProtocolConverterService) StartProtocolConverter(ctx context.Context, filesystemService filesystem.Service, protConvName string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.StartCalled = true
 
 	underlyingName := fmt.Sprintf("protocolconverter-%s", protConvName)
@@ -484,6 +517,9 @@ func (m *MockProtocolConverterService) StopProtocolConverter(
 	filesystemService filesystem.Service,
 	protConvName string,
 ) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.StopCalled = true
 
 	underlyingName := fmt.Sprintf("protocolconverter-%s", protConvName)
@@ -519,20 +555,30 @@ func (m *MockProtocolConverterService) StopProtocolConverter(
 
 // ForceRemoveProtocolConverter mocks force removing a ProtocolConverter
 func (m *MockProtocolConverterService) ForceRemoveProtocolConverter(ctx context.Context, filesystemService filesystem.Service, protConvName string) error {
+	m.mu.Lock()
 	m.ForceRemoveCalled = true
-	return m.ForceRemoveError
+	err := m.ForceRemoveError
+	m.mu.Unlock()
+	return err
 }
 
 // ServiceExists mocks checking if a ProtocolConverter exists
 func (m *MockProtocolConverterService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, protConvName string) bool {
+	m.mu.Lock()
 	m.ServiceExistsCalled = true
-	return m.ServiceExistsResult
+	result := m.ServiceExistsResult
+	m.mu.Unlock()
+	return result
 }
 
 // ReconcileManager mocks reconciling the ProtocolConverter manager
 func (m *MockProtocolConverterService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool) {
+	m.mu.Lock()
 	m.ReconcileManagerCalled = true
-	return m.ReconcileManagerError, m.ReconcileManagerReconciled
+	reconcileError := m.ReconcileManagerError
+	reconcileReconciled := m.ReconcileManagerReconciled
+	m.mu.Unlock()
+	return reconcileError, reconcileReconciled
 }
 
 // EvaluateDFCDesiredStates mocks the DFC state evaluation logic.
