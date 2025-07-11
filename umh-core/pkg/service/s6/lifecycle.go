@@ -193,6 +193,43 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *Service
 		return nil
 	}
 
+	// ORPHANED DIRECTORY FAST PATH:
+	// If we have no tracked files, this is an orphaned directory from a previous run
+	// or force cleanup scenario. Skip the detailed supervisor cleanup checks and
+	// just remove the directories directly since we can't rely on artifact tracking.
+	if len(artifacts.CreatedFiles) == 0 {
+		s.logger.Debugf("No tracked files for service %s, using direct removal for orphaned directory", artifacts.ServiceDir)
+
+		// Terminate any processes that might still be running
+		if err := s.terminateProcesses(ctx, artifacts, fsService); err != nil {
+			s.logger.Debugf("Failed to terminate processes during orphaned removal: %v", err)
+			// Continue anyway - directory might be completely dead
+		}
+
+		// Kill any supervisor processes
+		if err := s.killSupervisors(ctx, artifacts, fsService); err != nil {
+			s.logger.Debugf("Failed to kill supervisors during orphaned removal: %v", err)
+			// Continue anyway - directory might be completely dead
+		}
+
+		// Remove directories directly
+		if serviceExists, _ := fsService.PathExists(ctx, artifacts.ServiceDir); serviceExists {
+			if err := fsService.RemoveAll(ctx, artifacts.ServiceDir); err != nil {
+				return fmt.Errorf("failed to remove orphaned service directory: %w", err)
+			}
+			s.logger.Debugf("Removed orphaned service directory: %s", artifacts.ServiceDir)
+		}
+
+		if logExists, _ := fsService.PathExists(ctx, artifacts.LogDir); logExists {
+			if err := fsService.RemoveAll(ctx, artifacts.LogDir); err != nil {
+				return fmt.Errorf("failed to remove orphaned log directory: %w", err)
+			}
+			s.logger.Debugf("Removed orphaned log directory: %s", artifacts.LogDir)
+		}
+
+		return nil // Orphaned directory removal complete
+	}
+
 	progress := artifacts.RemovalProgress
 
 	// Step 1: Stop S6 processes (idempotent)
