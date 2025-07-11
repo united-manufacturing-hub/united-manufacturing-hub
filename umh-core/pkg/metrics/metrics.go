@@ -16,6 +16,7 @@ package metrics
 
 import (
 	"net/http"
+	"runtime/debug"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -150,9 +151,12 @@ func SetupMetricsEndpoint(addr string) *http.Server {
 	return server
 }
 
+// IncErrorCountAndLog increments the error counter for a component and logs a debug message if a logger is provided
 func IncErrorCountAndLog(component, instance string, err error, logger *zap.SugaredLogger) {
 	IncErrorCount(component, instance)
 	if logger != nil {
+		// Display stacktrace
+		debug.PrintStack()
 		logger.Debugf("Component %s instance %s reconciliation failed: %v", component, instance, err)
 	}
 }
