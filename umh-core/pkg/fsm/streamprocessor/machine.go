@@ -30,8 +30,8 @@ import (
 	spsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/streamprocessor"
 )
 
-// NewProtocolConverterInstance creates a new ProtocolConverterInstance with a given ID and service path
-func NewProtocolConverterInstance(
+// NewInstance creates a new StreamProcessorInstance with a given ID and service path
+func NewInstance(
 	s6BaseDir string,
 	config config.StreamProcessorConfig,
 ) *Instance {

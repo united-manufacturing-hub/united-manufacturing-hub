@@ -23,7 +23,6 @@ import (
 	"time"
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/streamprocessorserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	dataflowfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
@@ -33,6 +32,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 	spsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/streamprocessor"
+	runtime_config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/streamprocessor/runtime_config.go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
@@ -68,8 +68,8 @@ func (i *Instance) CreateInstance(ctx context.Context, filesystemService filesys
 	// AddToManager intentionally receives an empty runtime config because template
 	// rendering requires SystemSnapshot data not available at creation time.
 	// The first UpdateObservedStateOfInstance() call will render and push the real config.
-	// err := i.service.AddToManager(ctx, filesystemService, &i.runtimeConfig, i.baseFSMInstance.GetID())
-	err := i.service.AddToManager(ctx, filesystemService, &dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, i.baseFSMInstance.GetID())
+	// At creation time, i.dfcRuntimeConfig will be empty (zero value), which is what we want.
+	err := i.service.AddToManager(ctx, filesystemService, &i.dfcRuntimeConfig, i.baseFSMInstance.GetID())
 	if err != nil {
 		if errors.Is(err, protocolconvertersvc.ErrServiceAlreadyExists) {
 			i.baseFSMInstance.GetLogger().Debugf("Stream Processor service %s already exists in DFC  manager", i.baseFSMInstance.GetID())
@@ -228,7 +228,7 @@ func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services s
 		return nil
 	}
 
-	// Fetch the actual Benthos config from the service
+	// Fetch the actual StreamProcessor config from the service
 	start = time.Now()
 	observedConfig, err := i.service.GetConfig(ctx, services.GetFileSystem(), i.baseFSMInstance.GetID())
 	metrics.ObserveReconcileTime(logger.ComponentStreamProcessorInstance, i.baseFSMInstance.GetID()+".getConfig", time.Since(start))
@@ -241,7 +241,7 @@ func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services s
 			i.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
 			return nil
 		} else {
-			return fmt.Errorf("failed to get observed Stream Processor config: %w", err)
+			return fmt.Errorf("failed to get observed StreamProcessor config: %w", err)
 		}
 	}
 
@@ -251,31 +251,32 @@ func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services s
 	// Now render the config
 	// WARN: TODO
 	start = time.Now()
-	//i.runtimeConfig, err = runtime_config.BuildRuntimeConfig(
-	//	i.specConfig,
-	//	convertIntMapToStringMap(snapshot.CurrentConfig.Agent.Location),
-	//	nil,             // TODO: add global vars
-	//	"unimplemented", // TODO: add node name
-	//	i.baseFSMInstance.GetID(),
-	//)
+	i.runtimeConfig, i.dfcRuntimeConfig, err = runtime_config.BuildRuntimeConfig(
+		i.specConfig,
+		convertIntMapToStringMap(snapshot.CurrentConfig.Agent.Location),
+		nil,             // TODO: add global vars
+		"unimplemented", // TODO: add node name
+		i.baseFSMInstance.GetID(),
+	)
 	if err != nil {
 		// Capture the configuration error in StatusReason for troubleshooting
 		i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("config error: %s", err.Error())
 		return fmt.Errorf("failed to build runtime config: %w", err)
 	}
+
 	metrics.ObserveReconcileTime(logger.ComponentStreamProcessorInstance, i.baseFSMInstance.GetID()+".buildRuntimeConfig", time.Since(start))
 
+	// Compare StreamProcessor configs for detecting changes
 	if !streamprocessorserviceconfig.ConfigsEqualRuntime(i.runtimeConfig, i.ObservedState.ObservedRuntimeConfig) {
 		// Check if the service exists before attempting to update
 		if i.service.ServiceExists(ctx, services.GetFileSystem(), i.baseFSMInstance.GetID()) {
-			i.baseFSMInstance.GetLogger().Debugf("Observed ProtocolConverter config is different from desired config, updating ProtocolConverter configuration")
+			i.baseFSMInstance.GetLogger().Debugf("Observed StreamProcessor config is different from desired config, updating StreamProcessor configuration")
 
 			diffStr := streamprocessorserviceconfig.ConfigDiffRuntime(i.runtimeConfig, i.ObservedState.ObservedRuntimeConfig)
 			i.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
-			// Update the config in the Benthos manager
-			// err := i.service.UpdateInManager(ctx, services.GetFileSystem(), &i.runtimeConfig, i.baseFSMInstance.GetID())
-			err := i.service.UpdateInManager(ctx, services.GetFileSystem(), &dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, i.baseFSMInstance.GetID())
+			// Update the config in the DFC manager with the rendered DFC config
+			err := i.service.UpdateInManager(ctx, services.GetFileSystem(), &i.dfcRuntimeConfig, i.baseFSMInstance.GetID())
 			if err != nil {
 				return fmt.Errorf("failed to update Stream Processor service configuration: %w", err)
 			}
@@ -283,7 +284,7 @@ func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services s
 
 			// UNIQUE BEHAVIOR: Re-evaluate DFC desired states after config changes
 			// This is different from other FSMs which set desired states once and don't change them.
-			// Protocol converters must re-evaluate because:
+			// Stream processors must re-evaluate because:
 			// 1. DFC configs may transition from empty -> populated as templates are rendered
 			// 2. Empty DFCs should remain stopped, populated DFCs should be started
 			// 3. This ensures we don't start broken Benthos instances with empty configs

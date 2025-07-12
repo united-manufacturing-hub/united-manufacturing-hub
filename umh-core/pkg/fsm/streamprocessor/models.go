@@ -16,6 +16,7 @@ package streamprocessor
 
 import (
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/streamprocessorserviceconfig"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	spsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/streamprocessor"
@@ -170,6 +171,13 @@ type Instance struct {
 	// once the instance has access to SystemSnapshot (agent location,
 	// global variables, node name, …).
 	runtimeConfig streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime
+
+	// dfcRuntimeConfig is the last fully-rendered DFC runtime configuration.
+	// It is **zero-value** when the instance is first created; the real
+	// configuration is rendered during the *first* Reconcile() cycle
+	// once the instance has access to SystemSnapshot (agent location,
+	// global variables, node name, …).
+	dfcRuntimeConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 }
 
 // GetLastObservedState returns the last known state of the instance

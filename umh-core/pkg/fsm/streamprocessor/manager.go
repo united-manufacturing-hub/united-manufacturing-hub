@@ -33,7 +33,7 @@ const (
 
 // Manager implements the FSM management for ProtocolConverter services
 type Manager struct {
-	*public_fsm.BaseFSMManager[config.ProtocolConverterConfig]
+	*public_fsm.BaseFSMManager[config.StreamProcessorConfig]
 }
 
 // Snapshot extends the base ManagerSnapshot with ProtocolConverter specific information
