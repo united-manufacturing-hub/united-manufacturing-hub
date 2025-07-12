@@ -239,11 +239,7 @@ func renderConfig(
 
 	// ─── Convert template to runtime config ─────────────────────────────
 	// All template variables have been resolved, now convert to runtime format
-	runtime := streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime{
-		Model:   rendered.Model,
-		Sources: rendered.Sources,
-		Mapping: rendered.Mapping,
-	}
+	runtime := streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime(rendered)
 
 	return runtime, nil
 }

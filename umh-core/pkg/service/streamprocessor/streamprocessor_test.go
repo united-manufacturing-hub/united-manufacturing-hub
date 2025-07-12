@@ -27,7 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/streamprocessorserviceconfig"
 	dfcfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	dfcservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
-	runtime_config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/streamprocessor/runtime_config.go"
+	runtime_config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/streamprocessor/runtime_config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
