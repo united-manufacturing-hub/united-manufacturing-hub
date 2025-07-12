@@ -138,7 +138,7 @@ func (c *ContainerInstance) PrintState() {
 		c.baseFSMInstance.GetID(), c.GetCurrentFSMState(), c.GetDesiredFSMState())
 }
 
-// GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance
-func (c *ContainerInstance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
-	return constants.ContainerExpectedMaxP95ExecutionTimePerInstance
+// GetMinimumRequiredTime returns the minimum required time for this instance
+func (c *ContainerInstance) GetMinimumRequiredTime() time.Duration {
+	return constants.ContainerUpdateObservedStateTimeout
 }

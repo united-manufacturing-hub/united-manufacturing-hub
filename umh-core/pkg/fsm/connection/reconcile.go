@@ -45,15 +45,18 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentConnectionInstance, connectionInstanceName, time.Since(start))
 		if err != nil {
-			c.baseFSMInstance.GetLogger().Errorf("error reconciling connection instance %s: %v", connectionInstanceName, err)
+			c.baseFSMInstance.GetLogger().Errorf("error reconciling connection instance %s: %s", connectionInstanceName, err)
 			c.PrintState()
 			// Add metrics for error
-			metrics.IncErrorCount(metrics.ComponentConnectionInstance, connectionInstanceName)
+			metrics.IncErrorCountAndLog(metrics.ComponentConnectionInstance, connectionInstanceName, err, c.baseFSMInstance.GetLogger())
 		}
 	}()
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
+		if c.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "start of reconciliation") {
+			return nil, false
+		}
 		return ctx.Err(), false
 	}
 
@@ -97,13 +100,8 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, connectionsvc.ErrServiceNotExist) {
 
-			if errors.Is(err, context.DeadlineExceeded) {
-				// Healthchecks occasionally take longer (sometimes up to 70ms),
-				// resulting in context.DeadlineExceeded errors. In this case, we want to
-				// mark the reconciliation as complete for this tick since we've likely
-				// already consumed significant time. We return reconciled=true to prevent
-				// further reconciliation attempts in the current tick.
-				return nil, true // We don't want to return an error here, as this can happen in normal operations
+			if c.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
+				return nil, false
 			}
 			c.baseFSMInstance.SetError(err, snapshot.Tick)
 			c.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
@@ -122,6 +120,10 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 			return nil, false
 		}
 
+		if c.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileStateTransition") {
+			return nil, false
+		}
+
 		c.baseFSMInstance.SetError(err, snapshot.Tick)
 		c.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
@@ -130,6 +132,9 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 	// Reconcile the benthosManager
 	nmapErr, nmapReconciled := c.service.ReconcileManager(ctx, services, snapshot.Tick)
 	if nmapErr != nil {
+		if c.baseFSMInstance.IsDeadlineExceededAndHandle(nmapErr, snapshot.Tick, "nmapManager reconciliation") {
+			return nil, false
+		}
 		c.baseFSMInstance.SetError(nmapErr, snapshot.Tick)
 		c.baseFSMInstance.GetLogger().Errorf("error reconciling nmapManager: %s", nmapErr)
 		return nil, false
@@ -154,12 +159,12 @@ func (c *ConnectionInstance) reconcileExternalChanges(ctx context.Context, servi
 		metrics.ObserveReconcileTime(metrics.ComponentConnectionInstance, c.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
 	}()
 
-	// Fetching the observed state can sometimes take longer, but we need to ensure when reconciling a lot of instances
-	// that a single status of a single instance does not block the whole reconciliation
-	observedStateCtx, cancel := context.WithTimeout(ctx, constants.ConnectionUpdateObservedStateTimeout)
+	// Create context for UpdateObservedStateOfInstance with minimum timeout guarantee
+	// This ensures we get either 80% of available time OR the minimum required time, whichever is larger
+	updateCtx, cancel := constants.CreateUpdateObservedStateContextWithMinimum(ctx, constants.ConnectionUpdateObservedStateTimeout)
 	defer cancel()
 
-	err := c.UpdateObservedStateOfInstance(observedStateCtx, services, snapshot)
+	err := c.UpdateObservedStateOfInstance(updateCtx, services, snapshot)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}

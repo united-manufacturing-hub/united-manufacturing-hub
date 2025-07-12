@@ -16,10 +16,6 @@ package constants
 
 import "time"
 
+// Agent Operation Timeouts - Level 1 Service (depends on S6)
 // AgentMonitorUpdateObservedStateTimeout is the timeout for updating the observed state
-const AgentMonitorUpdateObservedStateTimeout = 15 * time.Millisecond
-
-// AgentExpectedMaxP95ExecutionTimePerInstance means that an instance will not reconcile if not 30ms are left
-// Note: in the intergation test, we defined an alerting threshold of 80% of the max ticker time, which is 100ms
-// So by setting this to 30 ms, we can ensure that an instance will never start if it triggers the alerting threshold
-const AgentExpectedMaxP95ExecutionTimePerInstance = time.Millisecond * 30
+const AgentMonitorUpdateObservedStateTimeout = 30 * time.Millisecond

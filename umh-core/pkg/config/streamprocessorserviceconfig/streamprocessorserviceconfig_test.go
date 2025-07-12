@@ -37,8 +37,8 @@ var _ = Describe("StreamProcessorServiceConfig", func() {
 						Version: "1.0.0",
 					},
 					Sources: map[string]string{
-						"sensor1": "ia/factory/line1/sensor1",
-						"sensor2": "ia/factory/line1/sensor2",
+						"sensor1": "umh.v1.factory.line1.sensor1",
+						"sensor2": "umh.v1.factory.line1.sensor2",
 					},
 					Mapping: map[string]interface{}{
 						"field1": "value1",
@@ -50,7 +50,7 @@ var _ = Describe("StreamProcessorServiceConfig", func() {
 			runtime := streamprocessorserviceconfig.SpecToRuntime(spec)
 			Expect(runtime.Model.Name).To(Equal("test-model"))
 			Expect(runtime.Model.Version).To(Equal("1.0.0"))
-			Expect(runtime.Sources["sensor1"]).To(Equal("ia/factory/line1/sensor1"))
+			Expect(runtime.Sources["sensor1"]).To(Equal("umh.v1.factory.line1.sensor1"))
 			Expect(runtime.Mapping["field1"]).To(Equal("value1"))
 		})
 	})
@@ -64,7 +64,7 @@ var _ = Describe("StreamProcessorServiceConfig", func() {
 						Version: "1.0.0",
 					},
 					Sources: map[string]string{
-						"sensor1": "ia/factory/line1/sensor1",
+						"sensor1": "umh.v1.factory.line1.sensor1",
 					},
 				},
 			}
@@ -76,7 +76,7 @@ var _ = Describe("StreamProcessorServiceConfig", func() {
 						Version: "1.0.0",
 					},
 					Sources: map[string]string{
-						"sensor1": "ia/factory/line1/sensor1",
+						"sensor1": "umh.v1.factory.line1.sensor1",
 					},
 				},
 			}
@@ -115,7 +115,7 @@ var _ = Describe("StreamProcessorServiceConfig", func() {
 					Version: "1.0.0",
 				},
 				Sources: map[string]string{
-					"sensor1": "ia/factory/line1/sensor1",
+					"sensor1": "umh.v1.factory.line1.sensor1",
 				},
 			}
 
@@ -125,7 +125,7 @@ var _ = Describe("StreamProcessorServiceConfig", func() {
 					Version: "1.0.0",
 				},
 				Sources: map[string]string{
-					"sensor1": "ia/factory/line1/sensor1",
+					"sensor1": "umh.v1.factory.line1.sensor1",
 				},
 			}
 

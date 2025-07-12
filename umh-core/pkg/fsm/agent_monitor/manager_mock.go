@@ -71,7 +71,7 @@ func NewAgentManagerWithMockedService(name string, mockSvc agent_monitor.MockSer
 			if !ok {
 				return 0, fmt.Errorf("instance not an AgentInstance")
 			}
-			return ai.GetExpectedMaxP95ExecutionTimePerInstance(), nil
+			return ai.GetMinimumRequiredTime(), nil
 		},
 	)
 

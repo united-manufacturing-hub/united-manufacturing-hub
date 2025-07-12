@@ -86,7 +86,7 @@ func NewBenthosMonitorManager(name string) *BenthosMonitorManager {
 			if !ok {
 				return 0, fmt.Errorf("instance is not a BenthosMonitorInstance")
 			}
-			return bi.GetExpectedMaxP95ExecutionTimePerInstance(), nil
+			return bi.GetMinimumRequiredTime(), nil
 		},
 	)
 	metrics.InitErrorCounter(logger.ComponentBenthosMonitorManager, name)

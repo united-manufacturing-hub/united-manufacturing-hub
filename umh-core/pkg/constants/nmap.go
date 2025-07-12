@@ -18,16 +18,16 @@ import "time"
 
 // Nmap monitor constants
 const (
+	// Nmap Operation Timeouts - Level 1 Service (depends on S6)
 	// NmapUpdateObservedStateTimeout is the timeout for updating the observed state
-	NmapUpdateObservedStateTimeout = 5 * time.Millisecond
+	NmapUpdateObservedStateTimeout = 10 * time.Millisecond
 
-	// Health assessment thresholds
-	// NmapScanTimeout is the timeout for a scan to be considered healthy
-	// If this is exceeded it means the last result is too old and we should not use it
+	// NmapProcessMetricsTimeout is the timeout for processing metrics
+	NmapProcessMetricsTimeout = 5 * time.Millisecond // needs to be smaller than NmapUpdateObservedStateTimeout
+
+	// NmapReportTimeout is the timeout for generating the report
+	NmapReportTimeout = 10 * time.Second
+
+	// NmapScanTimeout is the timeout for the scan
 	NmapScanTimeout = 10 * time.Second
-
-	// NmapExpectedMaxP95ExecutionTimePerInstance means that an instance will not reconcile if not 35ms are left
-	// Note: in the intergation test, we defined an alerting threshold of 80% of the max ticker time, which is 100ms
-	// So by setting this to 35 ms, we can ensure that an instance will never start if it triggers the alerting threshold
-	NmapExpectedMaxP95ExecutionTimePerInstance = time.Millisecond * 35
 )

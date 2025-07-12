@@ -79,7 +79,7 @@ type ConfigManager interface {
 	// AtomicAddStreamProcessor adds a stream processor to the config atomically
 	AtomicAddStreamProcessor(ctx context.Context, sp StreamProcessorConfig) error
 	// AtomicEditStreamProcessor edits a stream processor in the config atomically
-	AtomicEditStreamProcessor(ctx context.Context, sp StreamProcessorConfig) error
+	AtomicEditStreamProcessor(ctx context.Context, sp StreamProcessorConfig) (StreamProcessorConfig, error)
 	// AtomicDeleteStreamProcessor deletes a stream processor from the config atomically
 	AtomicDeleteStreamProcessor(ctx context.Context, name string) error
 	// AtomicAddDataModel adds a data model to the config atomically
@@ -312,7 +312,7 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	// ---------- FAST PATH ----------
 	m.cacheMu.RLock()
 	if !m.cacheModTime.IsZero() && info.ModTime().Equal(m.cacheModTime) {
-		cfg := m.cacheConfig // return cached struct
+		cfg := m.cacheConfig.Clone() // Use deep copy to prevent race conditions with slices/maps
 		m.cacheMu.RUnlock()
 		return cfg, nil
 	}
