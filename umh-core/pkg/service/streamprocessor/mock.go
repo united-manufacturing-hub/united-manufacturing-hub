@@ -23,7 +23,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/streamprocessorserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	dfcfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
-	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	redpandafsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -97,7 +96,6 @@ type StateFlags struct {
 	DfcFSMWriteState   string
 	ConnectionFSMState string
 	RedpandaFSMState   string
-	PortState          nmapfsm.PortState
 }
 
 // NewMockService creates a new mock DataFlowComponent service
@@ -191,15 +189,12 @@ func BuildServiceInfo(
 	}
 }
 
-// GetConfig mocks getting the StreamProcessor configuration
+// GetConfig mocks getting the actual deployed StreamProcessor config
 func (m *MockService) GetConfig(
 	ctx context.Context,
 	filesystemService filesystem.Service,
 	spName string,
-) (
-	streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime,
-	error,
-) {
+) (streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime, error) {
 	m.GetConfigCalled = true
 
 	// If error is set, return it
@@ -207,7 +202,7 @@ func (m *MockService) GetConfig(
 		return streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime{}, m.GetConfigError
 	}
 
-	// If a result is preset, return it
+	// Return the StreamProcessor config
 	return m.GetConfigResult, nil
 }
 

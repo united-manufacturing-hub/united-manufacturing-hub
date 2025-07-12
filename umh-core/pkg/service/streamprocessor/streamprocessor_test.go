@@ -16,22 +16,18 @@ package streamprocessor
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/streamprocessorserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
-	connfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	dfcfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
-	connservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
 	dfcservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
-	runtime_config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter/runtime_config"
+	runtime_config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/streamprocessor/runtime_config.go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -40,7 +36,6 @@ var _ = Describe("StreamProcessorService", func() {
 		service         *Service
 		mockDfc         *dfcservice.MockDataFlowComponentService
 		ctx             context.Context
-		tick            uint64
 		spName          string
 		cancelFunc      context.CancelFunc
 		mockSvcRegistry *serviceregistry.Registry
@@ -48,15 +43,13 @@ var _ = Describe("StreamProcessorService", func() {
 
 	BeforeEach(func() {
 		ctx, cancelFunc = context.WithDeadline(context.Background(), time.Now().Add(500*time.Second))
-		tick = 1
 		spName = "test-streamprocessor"
 
-		// Set up mock benthos service
+		// Set up mock DFC service
 		mockDfc = dfcservice.NewMockDataFlowComponentService()
 
 		// Set up a real service with mocked dependencies
-		service = NewDefaultService(spName,
-			WithUnderlyingService(mockDfc))
+		service = NewDefaultService(spName, WithUnderlyingService(mockDfc))
 		mockSvcRegistry = serviceregistry.NewMockRegistry()
 	})
 
@@ -67,712 +60,491 @@ var _ = Describe("StreamProcessorService", func() {
 
 	Describe("AddToManager", func() {
 		var (
-			cfg        streamprocessorserviceconfig.StreamProcessorServiceConfigSpec
-			runtimeCfg streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime
+			cfg       streamprocessorserviceconfig.StreamProcessorServiceConfigSpec
+			dfcConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 		)
 
 		BeforeEach(func() {
-			// Create a basic config for testing
-			cfg = protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
-						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
-							Target: "localhost",
-							Port:   "102",
-						},
+			// Create a realistic streamprocessor config using location-based templating
+			cfg = streamprocessorserviceconfig.StreamProcessorServiceConfigSpec{
+				Config: streamprocessorserviceconfig.StreamProcessorServiceConfigTemplate{
+					Model: streamprocessorserviceconfig.ModelRef{
+						Name:    "pump",
+						Version: "v1",
 					},
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-							Input: map[string]interface{}{
-								"kafka_consumer": map[string]interface{}{
-									"addresses": []string{"localhost:9092"},
-									"topics":    []string{"test-topic"},
-									"group_id":  "test-group",
-								},
-							},
-							Pipeline: map[string]interface{}{
-								"processors": []map[string]interface{}{
-									{
-										"mapping": "root = this",
-									},
-								},
-							},
-							Output: map[string]interface{}{
-								"elasticsearch": map[string]interface{}{
-									"urls":  []string{"http://localhost:9200"},
-									"index": "test-index",
-								},
-							},
+					Sources: map[string]string{
+						"vibration_sensor": "{{ .location_path }}.vibration",
+						"count_sensor":     "{{ .location_path }}.count",
+						"motor_data":       "{{ .location_path }}.motor",
+					},
+					Mapping: map[string]any{
+						"count":     "count_sensor.value",
+						"vibration": "vibration_sensor",
+						"motor": map[string]any{
+							"speed":       "motor_data.speed",
+							"current":     "motor_data.current",
+							"temperature": "motor_data.temperature",
+							"status":      "motor_data.status",
 						},
 					},
 				},
 			}
 
-			// Set up mock to return a valid BenthosServiceConfig when generating config
-			mockDfc.ServiceExistsResult = false
+			// Set up agent location only
+			agentLocation := map[string]string{
+				"0": "factory-A",
+				"1": "line-1",
+			}
 
 			var err error
-			runtimeCfg, err = runtime_config.BuildRuntimeConfig(cfg, nil, nil, "", spName)
+			_, dfcConfig, err = runtime_config.BuildRuntimeConfig(cfg, agentLocation, nil, "test-node", spName)
 			Expect(err).NotTo(HaveOccurred())
+
+			// Set up mock to return false for service exists
+			mockDfc.ServiceExistsResult = false
 		})
 
-		It("should add a new protocolConverter to the underlying manager", func() {
+		It("should add a new streamprocessor to the underlying DFC manager", func() {
 			// Act
-			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, spName)
+			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &dfcConfig, spName)
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
 
-			// Verify that a configs were added to the service
-			Expect(service.connectionConfig).To(HaveLen(1))
-			Expect(service.dataflowComponentConfig).To(HaveLen(2))
+			// Verify that a config was added to the service
+			Expect(service.dataflowComponentConfig).To(HaveLen(1))
 
 			// Verify the name follows the expected pattern
-			underlyingConnectionName := service.getUnderlyingConnectionName(spName)
-			underlyingDFCReadName := service.getUnderlyingDFCReadName(spName)
-			underlyingDFCWriteName := service.getUnderlyingDFCWriteName(spName)
-
-			Expect(service.connectionConfig[0].Name).To(Equal(underlyingConnectionName))
-			Expect(service.dataflowComponentConfig[0].Name).To(Equal(underlyingDFCReadName))
-			Expect(service.dataflowComponentConfig[1].Name).To(Equal(underlyingDFCWriteName))
+			underlyingDFCName := service.getUnderlyingDFCReadName(spName)
+			Expect(service.dataflowComponentConfig[0].Name).To(Equal(underlyingDFCName))
 
 			// Verify the desired state is set correctly
-			Expect(service.connectionConfig[0].DesiredFSMState).To(Equal(connfsm.OperationalStateStopped))
 			Expect(service.dataflowComponentConfig[0].DesiredFSMState).To(Equal(dfcfsm.OperationalStateStopped))
 		})
 
-		It("should return error when the protocolConverter already exists", func() {
-			// Add the ProtocolConverter first
-			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, spName)
+		It("should create DFC config with proper UNS structure", func() {
+			// Verify the DFC config has the expected structure
+			Expect(dfcConfig.BenthosConfig.Input).To(HaveKey("uns"))
+			Expect(dfcConfig.BenthosConfig.Output).To(HaveKey("uns"))
+			Expect(dfcConfig.BenthosConfig.Pipeline).To(HaveKey("stream_processor"))
+
+			// Check UNS input structure
+			unsInput := dfcConfig.BenthosConfig.Input["uns"].(map[string]any)
+			Expect(unsInput).To(HaveKey("umh_topics"))
+
+			umhTopics := unsInput["umh_topics"].([]any)
+			Expect(umhTopics).To(ContainElement("umh.v1.factory-A.line-1.vibration"))
+			Expect(umhTopics).To(ContainElement("umh.v1.factory-A.line-1.count"))
+			Expect(umhTopics).To(ContainElement("umh.v1.factory-A.line-1.motor"))
+
+			// Check stream processor pipeline structure
+			streamProcessor := dfcConfig.BenthosConfig.Pipeline["stream_processor"].(map[string]any)
+			Expect(streamProcessor).To(HaveKey("model"))
+			Expect(streamProcessor).To(HaveKey("sources"))
+			Expect(streamProcessor).To(HaveKey("mapping"))
+			Expect(streamProcessor).To(HaveKey("output_topic"))
+
+			// Verify model
+			model := streamProcessor["model"].(map[string]any)
+			Expect(model["name"]).To(Equal("pump"))
+			Expect(model["version"]).To(Equal("v1"))
+
+			// Verify output topic
+			Expect(streamProcessor["output_topic"]).To(Equal("umh.v1.factory-A.line-1"))
+
+			// Verify sources mapping
+			sources := streamProcessor["sources"].(map[string]any)
+			Expect(sources["vibration_sensor"]).To(Equal("umh.v1.factory-A.line-1.vibration"))
+			Expect(sources["count_sensor"]).To(Equal("umh.v1.factory-A.line-1.count"))
+			Expect(sources["motor_data"]).To(Equal("umh.v1.factory-A.line-1.motor"))
+		})
+
+		It("should return error when the streamprocessor already exists", func() {
+			// Add the StreamProcessor first
+			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &dfcConfig, spName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Try to add it again
-			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, spName)
+			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &dfcConfig, spName)
 
 			// Assert
 			Expect(err).To(MatchError(ErrServiceAlreadyExists))
 		})
-
-		It("should set up the protocolConverter for reconciliation with the managers", func() {
-			// Act
-			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, spName)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Reconcile to ensure the protocl converter is passed to managers
-			mockConn.ReconcileManagerReconciled = true
-			mockDfc.ReconcileManagerReconciled = true
-			_, _ = service.ReconcileManager(ctx, mockSvcRegistry, tick)
-
-			Expect(service.connectionConfig).To(HaveLen(1))
-			Expect(service.dataflowComponentConfig).To(HaveLen(2))
-		})
 	})
 
-	Describe("Status", func() {
+	Describe("GetConfig", func() {
 		var (
-			cfg             protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
-			runtimeCfg      protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
-			dfcManager      *dfcfsm.DataflowComponentManager
-			connManager     *connfsm.ConnectionManager
-			mockConnService *connservice.MockConnectionService
-			mockDfcService  *dfcservice.MockDataFlowComponentService
-			statusService   *ProtocolConverterService
+			cfg       streamprocessorserviceconfig.StreamProcessorServiceConfigSpec
+			dfcConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 		)
 
 		BeforeEach(func() {
-			// Create a basic config for testing
-			cfg = protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
-						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
-							Target: "localhost",
-							Port:   "102",
-						},
+			// Create a config for testing using location-based templating
+			cfg = streamprocessorserviceconfig.StreamProcessorServiceConfigSpec{
+				Config: streamprocessorserviceconfig.StreamProcessorServiceConfigTemplate{
+					Model: streamprocessorserviceconfig.ModelRef{
+						Name:    "motor",
+						Version: "v1",
 					},
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-							Input: map[string]interface{}{
-								"kafka_consumer": map[string]interface{}{
-									"addresses": []string{"localhost:9092"},
-									"topics":    []string{"test-topic"},
-									"group_id":  "test-group",
-								},
-							},
-						},
+					Sources: map[string]string{
+						"motor_telemetry": "{{ .location_path }}.motor.telemetry",
+					},
+					Mapping: map[string]any{
+						"speed":       "motor_telemetry.speed",
+						"current":     "motor_telemetry.current",
+						"temperature": "motor_telemetry.temperature",
+						"status":      "operational",
 					},
 				},
 			}
 
+			// Set up agent location only
+			agentLocation := map[string]string{
+				"0": "factory-A",
+				"1": "line-1",
+			}
+
+			// Build runtime config using BuildRuntimeConfig
 			var err error
-			runtimeCfg, err = runtime_config.BuildRuntimeConfig(cfg, nil, nil, "", spName)
+			_, dfcConfig, err = runtime_config.BuildRuntimeConfig(cfg, agentLocation, nil, "test-node", spName)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Use the official mock manager from the FSM package
-			dfcManager, mockDfcService = dfcfsm.NewDataflowComponentManagerWithMockedServices("test")
-			connManager, mockConnService = connfsm.NewConnectionManagerWithMockedServices("test")
-
-			// Create service with our official mock benthos manager
-			statusService = NewDefaultService(spName,
-				WithUnderlyingServices(mockConnService, mockDfcService),
-				WithUnderlyingManagers(connManager, dfcManager))
-
-			// Add the component to the service
-			err = statusService.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, spName)
+			// Add the component to the service first
+			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &dfcConfig, spName)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Get the benthos name that will be used
+			// Set up the mock DFC service to return the config we expect
+			mockDfc.GetConfigResult = dfcConfig
+		})
 
-			// Set up the mock to say the component exists
-			mockDfcService.ServiceExistsResult = true
-			if mockDfcService.ExistingComponents == nil {
-				mockDfcService.ExistingComponents = make(map[string]bool)
-			}
-			mockDfcService.ExistingComponents[fmt.Sprintf("dataflow-read-protocolconverter-%s", spName)] = true
+		It("should retrieve the streamprocessor config by converting from DFC config", func() {
+			// Act
+			result, err := service.GetConfig(ctx, mockSvcRegistry.GetFileSystem(), spName)
 
-			mockConnService.ServiceExistsResult = true
-			if mockConnService.ExistingConnections == nil {
-				mockConnService.ExistingConnections = make(map[string]bool)
-			}
-			mockConnService.ExistingConnections[fmt.Sprintf("connection-protocolconverter-%s", spName)] = true
+			// Assert
+			Expect(err).NotTo(HaveOccurred())
+			Expect(mockDfc.GetConfigCalled).To(BeTrue())
+
+			// Verify the config was properly converted from DFC format
+			Expect(result.Model.Name).To(Equal("motor"))
+			Expect(result.Model.Version).To(Equal("v1"))
+
+			// Check that templates were rendered (location_path should be resolved)
+			Expect(result.Sources["motor_telemetry"]).To(Equal("factory-A.line-1.motor.telemetry"))
+		})
+
+		It("should return error when service doesn't exist", func() {
+			// Configure mock to simulate service not existing
+			mockDfc.GetConfigError = ErrServiceNotExist
+
+			// Act
+			_, err := service.GetConfig(ctx, mockSvcRegistry.GetFileSystem(), "non-existent")
+
+			// Assert
+			Expect(err).To(MatchError(ContainSubstring("failed to get read dataflowcomponent config")))
 		})
 	})
 
 	Describe("UpdateInManager", func() {
 		var (
-			config            protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
-			updatedConfig     protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
-			runtimeCfg        protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
-			updatedRuntimeCfg protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
+			initialConfig    streamprocessorserviceconfig.StreamProcessorServiceConfigSpec
+			updatedConfig    streamprocessorserviceconfig.StreamProcessorServiceConfigSpec
+			initialDFCConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig
+			updatedDFCConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 		)
 
 		BeforeEach(func() {
 			// Initial config
-			config = protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
-						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
-							Target: "localhost",
-							Port:   "102",
-						},
+			initialConfig = streamprocessorserviceconfig.StreamProcessorServiceConfigSpec{
+				Config: streamprocessorserviceconfig.StreamProcessorServiceConfigTemplate{
+					Model: streamprocessorserviceconfig.ModelRef{
+						Name:    "pump",
+						Version: "v1",
 					},
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-							Input: map[string]interface{}{
-								"kafka_consumer": map[string]interface{}{
-									"addresses": []string{"localhost:9092"},
-									"topics":    []string{"test-topic"},
-								},
-							},
+					Sources: map[string]string{
+						"vibration_sensor": "{{ .location_path }}.vibration",
+						"count_sensor":     "{{ .location_path }}.count",
+					},
+					Mapping: map[string]any{
+						"count":     "count_sensor.value",
+						"vibration": "vibration_sensor",
+					},
+				},
+			}
+
+			// Updated config with added motor data
+			updatedConfig = streamprocessorserviceconfig.StreamProcessorServiceConfigSpec{
+				Config: streamprocessorserviceconfig.StreamProcessorServiceConfigTemplate{
+					Model: streamprocessorserviceconfig.ModelRef{
+						Name:    "pump",
+						Version: "v1",
+					},
+					Sources: map[string]string{
+						"vibration_sensor": "{{ .location_path }}.vibration",
+						"count_sensor":     "{{ .location_path }}.count",
+						"motor_data":       "{{ .location_path }}.motor", // Added motor data
+					},
+					Mapping: map[string]any{
+						"count":     "count_sensor.value",
+						"vibration": "vibration_sensor",
+						"motor": map[string]any{
+							"speed": "motor_data.speed",
 						},
 					},
 				},
 			}
 
-			// Updated config with different settings
-
-			updatedConfig = protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
-						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
-							Target: "localhost",
-							Port:   "102",
-						},
-					},
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-							Input: map[string]interface{}{
-								"kafka_consumer": map[string]interface{}{
-									"addresses": []string{"localhost:9092"},
-									"topics":    []string{"updated-topic"},
-								},
-							},
-						},
-					},
-				},
+			// Set up agent location only
+			agentLocation := map[string]string{
+				"0": "factory-A",
+				"1": "line-1",
 			}
 
+			// Build runtime configs using BuildRuntimeConfig
 			var err error
-			runtimeCfg, err = runtime_config.BuildRuntimeConfig(config, nil, nil, "", spName)
+			_, initialDFCConfig, err = runtime_config.BuildRuntimeConfig(initialConfig, agentLocation, nil, "test-node", spName)
 			Expect(err).NotTo(HaveOccurred())
 
-			updatedRuntimeCfg, err = runtime_config.BuildRuntimeConfig(updatedConfig, nil, nil, "", spName)
+			_, updatedDFCConfig, err = runtime_config.BuildRuntimeConfig(updatedConfig, agentLocation, nil, "test-node", spName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Add the component first
-			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, spName)
+			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &initialDFCConfig, spName)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("should update an existing component", func() {
-			// Act - update the component
-			err := service.UpdateInManager(ctx, mockSvcRegistry.GetFileSystem(), &updatedRuntimeCfg, spName)
-
-			// Assert
-			Expect(err).NotTo(HaveOccurred())
-
-			// Verify the config was updated but the desired state was preserved
-			underlyingConnectionName := service.getUnderlyingConnectionName(spName)
-			underlyingDFCReadName := service.getUnderlyingDFCReadName(spName)
-			underlyingDFCWriteName := service.getUnderlyingDFCWriteName(spName)
-
-			var dfcReadFound, dfcWriteFound, connFound bool
-			for _, config := range service.dataflowComponentConfig {
-				if config.Name == underlyingDFCReadName {
-					dfcReadFound = true
-					Expect(config.DesiredFSMState).To(Equal(dfcfsm.OperationalStateStopped))
-					break
-				}
-			}
-			Expect(dfcReadFound).To(BeTrue())
-
-			for _, config := range service.dataflowComponentConfig {
-				if config.Name == underlyingDFCWriteName {
-					dfcWriteFound = true
-					Expect(config.DesiredFSMState).To(Equal(dfcfsm.OperationalStateStopped))
-					break
-				}
-			}
-			Expect(dfcWriteFound).To(BeTrue())
-
-			for _, config := range service.connectionConfig {
-				if config.Name == underlyingConnectionName {
-					connFound = true
-					Expect(config.DesiredFSMState).To(Equal(connfsm.OperationalStateStopped))
-					break
-				}
-			}
-			Expect(connFound).To(BeTrue())
-		})
-
-		It("should return error when protocolConverter doesn't exist", func() {
-			// Act - try to update a non-existent component
-			err := service.UpdateInManager(ctx, mockSvcRegistry.GetFileSystem(), &updatedRuntimeCfg, "non-existent")
-
-			// Assert
-			Expect(err).To(MatchError(ErrServiceNotExist))
-		})
-	})
-
-	Describe("StartAndStopDataFlowComponent", func() {
-		var (
-			cfg        protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
-			runtimeCfg protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
-		)
-
-		BeforeEach(func() {
-			// Create a basic config for testing
-			cfg = protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
-						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
-							Target: "localhost",
-							Port:   "102",
-						},
-					},
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-							Input: map[string]interface{}{
-								"http_server": map[string]interface{}{
-									"address": "0.0.0.0:8080",
-								},
-							},
-						},
-					},
-				},
-			}
-
-			var err error
-			runtimeCfg, err = runtime_config.BuildRuntimeConfig(cfg, nil, nil, "", spName)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Add the component first
-			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, spName)
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		It("should start a protocolConverter by changing its desired state", func() {
-			// First stop the component
-			err := service.StartProtocolConverter(ctx, mockSvcRegistry.GetFileSystem(), spName)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Verify the desired state was changed to started
-			underlyingDFCReadName := service.getUnderlyingDFCReadName(spName)
-			underlyingConnectionName := service.getUnderlyingConnectionName(spName)
-			var foundDfcActive, foundConnUp bool
-			for _, config := range service.dataflowComponentConfig {
-				if config.Name == underlyingDFCReadName {
-					foundDfcActive = true
-					Expect(config.DesiredFSMState).To(Equal(dfcfsm.OperationalStateActive))
-					break
-				}
-			}
-			Expect(foundDfcActive).To(BeTrue())
-
-			for _, config := range service.connectionConfig {
-				if config.Name == underlyingConnectionName {
-					foundConnUp = true
-					Expect(config.DesiredFSMState).To(Equal(connfsm.OperationalStateUp))
-					break
-				}
-			}
-			Expect(foundConnUp).To(BeTrue())
-
-			// Now start the component
-			err = service.StartProtocolConverter(ctx, mockSvcRegistry.GetFileSystem(), spName)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Verify the desired state was changed to active
-			var foundDfcStopped, foundConnStopped bool
-			for _, config := range service.dataflowComponentConfig {
-				if config.Name == underlyingDFCReadName {
-					foundDfcStopped = true
-					Expect(config.DesiredFSMState).To(Equal(dfcfsm.OperationalStateActive))
-					break
-				}
-			}
-			Expect(foundDfcStopped).To(BeTrue())
-
-			for _, config := range service.connectionConfig {
-				if config.Name == underlyingConnectionName {
-					foundConnStopped = true
-					Expect(config.DesiredFSMState).To(Equal(connfsm.OperationalStateUp))
-					break
-				}
-			}
-			Expect(foundConnStopped).To(BeTrue())
-		})
-
-		It("should return error when trying to start/stop non-existent protocolConverter", func() {
-			// Try to start a non-existent protocolConverter
-			err := service.StartProtocolConverter(ctx, mockSvcRegistry.GetFileSystem(), "non-existent")
-			Expect(err).To(MatchError(ErrServiceNotExist))
-
-			// Try to stop a non-existent protocolConverter
-			err = service.StopProtocolConverter(ctx, mockSvcRegistry.GetFileSystem(), "non-existent")
-			Expect(err).To(MatchError(ErrServiceNotExist))
-		})
-	})
-
-	Describe("RemoveFromManager", func() {
-		var (
-			cfg        protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
-			runtimeCfg protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
-		)
-
-		BeforeEach(func() {
-			// Create a basic config for testing
-			cfg = protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
-						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
-							Target: "localhost",
-							Port:   "102",
-						},
-					},
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-							Input: map[string]interface{}{
-								"http_server": map[string]interface{}{
-									"address": "0.0.0.0:8080",
-								},
-							},
-						},
-					},
-				},
-			}
-
-			var err error
-			runtimeCfg, err = runtime_config.BuildRuntimeConfig(cfg, nil, nil, "", spName)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Add the component first
-			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, spName)
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		It("should remove a protocolConverter from the managers", func() {
-			// Get the initial count
-			initialDfcCount := len(service.dataflowComponentConfig)
-			initialConnCount := len(service.connectionConfig)
-
-			// Act - remove the component
-			err := service.RemoveFromManager(ctx, mockSvcRegistry.GetFileSystem(), spName)
-
-			// Assert
-			Expect(err).NotTo(HaveOccurred())
-			Expect(service.dataflowComponentConfig).To(HaveLen(initialDfcCount - 2))
-			Expect(service.connectionConfig).To(HaveLen(initialConnCount - 1))
-
-			// Verify the component is no longer in the list
-			underlyingName := service.getUnderlyingName(spName)
-			for _, config := range service.dataflowComponentConfig {
-				Expect(config.Name).NotTo(Equal(underlyingName))
-			}
-
-			for _, config := range service.connectionConfig {
-				Expect(config.Name).NotTo(Equal(underlyingName))
-			}
-		})
-
-		// Note: removing a non-existent component should not result in an error
-		// the remove action will be called multiple times until the component is gone it returns nil
-	})
-
-	Describe("ReconcileManager", func() {
-		It("should pass configs to the managers for reconciliation", func() {
-			// Add a test component to have something to reconcile
-			cfg := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
-						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
-							Target: "localhost",
-							Port:   "102",
-						},
-					},
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-							Input: map[string]interface{}{
-								"http_server": map[string]interface{}{
-									"address": "0.0.0.0:8080",
-								},
-							},
-						},
-					},
-				},
-			}
-
-			runtimeCfg, err := runtime_config.BuildRuntimeConfig(cfg, nil, nil, "", spName)
-			Expect(err).NotTo(HaveOccurred())
-
-			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, spName)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Use the real mock from the FSM package
-			dfcManager, _ := dfcfsm.NewDataflowComponentManagerWithMockedServices("test")
-			connManager, _ := connfsm.NewConnectionManagerWithMockedServices("test")
-			service.dataflowComponentManager = dfcManager
-			service.connectionManager = connManager
-
-			// Configure the mock to return true for reconciled
-			mockDfc.ReconcileManagerReconciled = true
-
+		It("should update an existing streamprocessor configuration", func() {
 			// Act
-			err, reconciled := service.ReconcileManager(ctx, mockSvcRegistry, tick)
+			err := service.UpdateInManager(ctx, mockSvcRegistry.GetFileSystem(), &updatedDFCConfig, spName)
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
-			// Change expectation to match the actual behavior
-			Expect(reconciled).To(BeTrue()) // The mock is configured to return true
+
+			// Verify the service was updated
+			Expect(service.dataflowComponentConfig).To(HaveLen(1))
+
+			// The configuration should have been updated with the new DFC config
+			underlyingDFCName := service.getUnderlyingDFCReadName(spName)
+			Expect(service.dataflowComponentConfig[0].Name).To(Equal(underlyingDFCName))
 		})
 
-		It("should handle errors from the managers", func() {
-			// Create a custom mock that returns an error
-			mockError := errors.New("test reconcile error")
+		It("should return error when trying to update non-existent service", func() {
+			// Act
+			err := service.UpdateInManager(ctx, mockSvcRegistry.GetFileSystem(), &updatedDFCConfig, "non-existent")
 
-			// Create a real manager with mocked services
-			mockDfcManager, mockDfcService := dfcfsm.NewDataflowComponentManagerWithMockedServices("test-error")
-			mockConnManager, mockConnService := connfsm.NewConnectionManagerWithMockedServices("test-error")
+			// Assert
+			Expect(err).To(MatchError(ErrServiceNotExist))
+		})
+	})
 
-			// Create a service with our mocked manager
-			testService := NewDefaultService("test-error-service",
-				WithUnderlyingServices(mockConnService, mockDfcService),
-				WithUnderlyingManagers(mockConnManager, mockDfcManager))
+	Describe("lifecycle management", func() {
+		var (
+			cfg       streamprocessorserviceconfig.StreamProcessorServiceConfigSpec
+			dfcConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig
+		)
 
-			// Add a test component to have something to reconcile (just like in the other test)
-			testComponentName := "test-error-component"
-			cfg := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
-						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
-							Target: "localhost",
-							Port:   "102",
-						},
+		BeforeEach(func() {
+			// Create config using location-based templating
+			cfg = streamprocessorserviceconfig.StreamProcessorServiceConfigSpec{
+				Config: streamprocessorserviceconfig.StreamProcessorServiceConfigTemplate{
+					Model: streamprocessorserviceconfig.ModelRef{
+						Name:    "pump",
+						Version: "v1",
 					},
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-							Input: map[string]interface{}{
-								"http_server": map[string]interface{}{
-									"address": "0.0.0.0:8080",
-								},
-							},
-						},
+					Sources: map[string]string{
+						"vibration_sensor": "{{ .location_path }}.vibration",
+						"count_sensor":     "{{ .location_path }}.count",
+					},
+					Mapping: map[string]any{
+						"count":     "count_sensor.value",
+						"vibration": "vibration_sensor",
 					},
 				},
 			}
 
-			runtimeCfg, err := runtime_config.BuildRuntimeConfig(cfg, nil, nil, "", testComponentName)
+			// Set up agent location only
+			agentLocation := map[string]string{
+				"0": "factory-A",
+				"1": "line-1",
+			}
+
+			// Build runtime config using BuildRuntimeConfig
+			var err error
+			_, dfcConfig, err = runtime_config.BuildRuntimeConfig(cfg, agentLocation, nil, "test-node", spName)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = testService.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, testComponentName)
+			// Add the component
+			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &dfcConfig, spName)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should handle start/stop/remove operations", func() {
+			// Start
+			err := service.Start(ctx, mockSvcRegistry.GetFileSystem(), spName)
 			Expect(err).NotTo(HaveOccurred())
 
-			// First reconcile - this will just create the instance in the manager
-			firstErr, reconciled := testService.ReconcileManager(ctx, mockSvcRegistry, tick)
-			Expect(firstErr).NotTo(HaveOccurred())
-			Expect(reconciled).To(BeTrue()) // Should be true because we created a new instance
+			// Stop
+			err = service.Stop(ctx, mockSvcRegistry.GetFileSystem(), spName)
+			Expect(err).NotTo(HaveOccurred())
 
-			// Now set up the mock service to fail during the actual instance reconciliation
-			mockDfcService.ReconcileManagerError = mockError
-			mockConnService.ReconcileManagerError = mockError
+			// Remove
+			err = service.RemoveFromManager(ctx, mockSvcRegistry.GetFileSystem(), spName)
+			Expect(err).NotTo(HaveOccurred())
 
-			// Second reconcile - now that the instance exists, it will try to reconcile it
-			err, reconciled = testService.ReconcileManager(ctx, mockSvcRegistry, tick+1)
-
-			// Assert
-			Expect(err).ToNot(HaveOccurred()) // it should not return an error
-			Expect(reconciled).To(BeFalse())  // it should not be reconciled
-			// it should throw the "error reconciling s6Manager: test reconcile error" error through the logs
-
-			// Skip the error checking part as it's not accessible directly
-			// The test has already verified that the error is handled properly
-			// by checking that reconciled is false
-
-			// Alternatively, we could check for side effects of the error
-			// but for a unit test, verifying that reconciled is false is sufficient
+			// Verify the service was removed
+			Expect(service.dataflowComponentConfig).To(HaveLen(0))
 		})
 	})
 
 	Describe("runtime_config.BuildRuntimeConfig", func() {
-		It("should correctly render variables in templates", func() {
-			// Create a spec with templates that use variables
-			spec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-				Variables: variables.VariableBundle{
-					User: map[string]interface{}{
-						"custom_var": "test-value",
-						"nested": map[string]interface{}{
-							"key": "nested-value",
-						},
+		It("should successfully build runtime config from example config", func() {
+			// Parse the example config file using the config manager's parseConfig function
+			exampleConfigPath := "../../../examples/example-config-streamprocessor-templated.yaml"
+
+			// Read the example config file
+			data, err := os.ReadFile(exampleConfigPath)
+			Expect(err).NotTo(HaveOccurred(), "Failed to read example config file")
+
+			// Use the config manager's parseConfig function to properly handle templates and anchors
+			fullConfig, err := config.ParseConfig(data, true) // Allow unknown fields for template handling
+			Expect(err).NotTo(HaveOccurred(), "Failed to parse example config")
+
+			// Extract the first stream processor (pump-processor)
+			Expect(fullConfig.StreamProcessor).To(HaveLen(3), "Expected 3 stream processors in example config")
+			firstSP := fullConfig.StreamProcessor[0]
+			Expect(firstSP.Name).To(Equal("pump-processor"), "Expected first SP to be pump-processor")
+
+			// Get the spec from the first stream processor
+			spec := firstSP.StreamProcessorServiceConfig
+
+			// Extract agent location from the config
+			agentLocation := map[string]string{}
+			for k, v := range fullConfig.Agent.Location {
+				agentLocation[fmt.Sprintf("%d", k)] = v
+			}
+
+			// Set up test data
+			globalVars := map[string]any{
+				"releaseChannel": "stable",
+				"version":        "1.0.0",
+			}
+			nodeName := "test-node"
+			spName := "pump-processor"
+
+			// Build runtime config
+			spRuntimeCfg, dfcRuntimeCfg, err := runtime_config.BuildRuntimeConfig(spec, agentLocation, globalVars, nodeName, spName)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify the runtime config structure
+			Expect(spRuntimeCfg).NotTo(BeZero())
+			Expect(dfcRuntimeCfg).NotTo(BeZero())
+
+			// Check that template variables have been rendered
+			Expect(spRuntimeCfg.Model.Name).To(Equal("pump"))
+			Expect(spRuntimeCfg.Model.Version).To(Equal("v1"))
+
+			// Check that location_path template was rendered
+			// The example config has both agent location (factory-A.line-1) and component location (station-7.pump-001)
+			// and the template includes "umh.v1." prefix, so the rendered values should reflect this
+			Expect(spRuntimeCfg.Sources["vibration_sensor"]).To(Equal("umh.v1.factory-A.line-1.station-7.pump-001.vibration"))
+			Expect(spRuntimeCfg.Sources["count_sensor"]).To(Equal("umh.v1.factory-A.line-1.station-7.pump-001.count"))
+			Expect(spRuntimeCfg.Sources["motor_data"]).To(Equal("umh.v1.factory-A.line-1.station-7.pump-001.motor"))
+
+			// Check that user variables were rendered
+			Expect(spRuntimeCfg.Mapping["serialNumber"]).To(Equal("ABC-12345"))
+
+			// Verify DFC config has proper UNS structure
+			Expect(dfcRuntimeCfg.BenthosConfig.Input).To(HaveKey("uns"))
+			Expect(dfcRuntimeCfg.BenthosConfig.Output).To(HaveKey("uns"))
+			Expect(dfcRuntimeCfg.BenthosConfig.Pipeline).To(HaveKey("stream_processor"))
+
+			// Check UNS input topics
+			unsInput := dfcRuntimeCfg.BenthosConfig.Input["uns"].(map[string]any)
+			umhTopics := unsInput["umh_topics"].([]any)
+			Expect(umhTopics).To(ContainElement("umh.v1.factory-A.line-1.station-7.pump-001.vibration"))
+			Expect(umhTopics).To(ContainElement("umh.v1.factory-A.line-1.station-7.pump-001.count"))
+			Expect(umhTopics).To(ContainElement("umh.v1.factory-A.line-1.station-7.pump-001.motor"))
+		})
+
+		It("should handle location-based template variable substitution", func() {
+			// Create a spec with location-based templates
+			spec := streamprocessorserviceconfig.StreamProcessorServiceConfigSpec{
+				Config: streamprocessorserviceconfig.StreamProcessorServiceConfigTemplate{
+					Model: streamprocessorserviceconfig.ModelRef{
+						Name:    "test-model",
+						Version: "v1",
 					},
-				},
-				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
-						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
-							Target: "{{.custom_var}}",
-							Port:   "102",
-						},
+					Sources: map[string]string{
+						"sensor_data": "{{ .location_path }}.sensor",
 					},
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-							Input: map[string]interface{}{
-								"random_input": map[string]interface{}{
-									"address":    "{{.nested.key}}",
-									"bridged_by": "{{.internal.bridged_by}}",
-									"global_var": "{{.global.global_var}}",
-									"location_0": "{{index .location \"0\"}}",
-									"location_1": "{{index .location \"1\"}}",
-									"location_2": "{{index .location \"2\"}}",
-								},
-							},
-						},
+					Mapping: map[string]any{
+						"id":         "{{ .internal.id }}",
+						"location_0": "{{ index .location \"0\" }}",
+						"location_1": "{{ index .location \"1\" }}",
+						"location_2": "{{ index .location \"2\" }}",
+						"value":      "sensor_data.value",
 					},
 				},
 			}
 
-			// Set up location maps
+			// Set up agent location only
 			agentLocation := map[string]string{
 				"0": "factory",
 				"1": "line1",
 			}
-			pcLocation := map[string]string{
-				"2": "machine1",
-			}
-
-			spec.Location = pcLocation
-
-			// Set up global vars
-			globalVars := map[string]interface{}{
-				"global_var": "global-value",
-			}
 
 			// Build the runtime config
-			runtimeCfg, err := runtime_config.BuildRuntimeConfig(spec, agentLocation, globalVars, "test-node", "test-pc")
+			spRuntimeCfg, dfcRuntimeCfg, err := runtime_config.BuildRuntimeConfig(spec, agentLocation, nil, "test-node", "test-sp")
 			Expect(err).NotTo(HaveOccurred())
 
-			// 1. Verify user variables are rendered
-			Expect(runtimeCfg.ConnectionServiceConfig.NmapServiceConfig.Target).To(Equal("test-value"))
-			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["address"]).To(Equal("nested-value"))
+			// Verify location_path template was rendered
+			Expect(spRuntimeCfg.Sources["sensor_data"]).To(Equal("factory.line1.sensor"))
 
-			// 2. Verify global vars are accessible
-			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["global_var"]).To(Equal("global-value"))
+			// Verify location variables are rendered
+			Expect(spRuntimeCfg.Mapping["location_0"]).To(Equal("factory"))
+			Expect(spRuntimeCfg.Mapping["location_1"]).To(Equal("line1"))
+			// location_2 doesn't exist when using only agent location
 
-			// 3. Verify bridged_by header
-			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["bridged_by"]).To(Equal("protocol-converter-test-node-test-pc"))
+			// Verify internal variables are rendered
+			Expect(spRuntimeCfg.Mapping["id"]).To(Equal("test-sp"))
 
-			// 4. Verify location merging
-			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["location_0"]).To(Equal("factory"))
-			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["location_1"]).To(Equal("line1"))
-			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["location_2"]).To(Equal("machine1"))
+			// Verify DFC config has proper UNS input with rendered topic
+			unsInput := dfcRuntimeCfg.BenthosConfig.Input["uns"].(map[string]any)
+			umhTopics := unsInput["umh_topics"].([]any)
+			Expect(umhTopics).To(ContainElement("umh.v1.factory.line1.sensor"))
 		})
 
-		It("should handle nil inputs gracefully", func() {
-			// Test with nil spec
-			_, err := runtime_config.BuildRuntimeConfig(protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{}, nil, nil, "", "")
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("nil spec"))
-
-			// Test with nil maps, but reference internal and user variables in the template
-			spec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-				Variables: variables.VariableBundle{
-					User: map[string]interface{}{
-						"custom_var": "test-value",
+		It("should properly use agent location", func() {
+			spec := streamprocessorserviceconfig.StreamProcessorServiceConfigSpec{
+				Config: streamprocessorserviceconfig.StreamProcessorServiceConfigTemplate{
+					Model: streamprocessorserviceconfig.ModelRef{
+						Name:    "test-model",
+						Version: "v1",
 					},
-				},
-				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
-						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
-							Target: "{{.custom_var}}",
-							Port:   "102",
-						},
+					Sources: map[string]string{
+						"test_source": "{{ .location_path }}.test",
 					},
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-							Input: map[string]interface{}{
-								"random_input": map[string]interface{}{
-									"internal_id": "{{.internal.id}}",
-								},
-							},
-						},
-					},
-				},
-			}
-			runtimeCfg, err := runtime_config.BuildRuntimeConfig(spec, nil, nil, "", "test-pc")
-			Expect(err).NotTo(HaveOccurred())
-			// User variable rendered
-			Expect(runtimeCfg.ConnectionServiceConfig.NmapServiceConfig.Target).To(Equal("test-value"))
-			// Internal variable rendered
-			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["internal_id"]).To(Equal("test-pc"))
-		})
-
-		It("should sanitize bridged_by header correctly", func() {
-			spec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
-						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
-							Target: "localhost",
-							Port:   "443",
-						},
-					},
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-							Input: map[string]interface{}{
-								"random_input": map[string]interface{}{
-									"bridged_by": "{{.internal.bridged_by}}",
-								},
-							},
-						},
+					Mapping: map[string]any{
+						"test": "test_source.value",
 					},
 				},
 			}
 
-			// Test with special characters
-			runtimeCfg, err := runtime_config.BuildRuntimeConfig(spec, nil, nil, "test@node", "test.pc")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["bridged_by"]).To(Equal("protocol-converter-test-node-test-pc"))
+			agentLocation := map[string]string{
+				"0": "factory-from-agent",
+				"1": "line-from-agent",
+			}
 
-			// Test with multiple special characters
-			runtimeCfg, err = runtime_config.BuildRuntimeConfig(spec, nil, nil, "test@node#1", "test.pc@2")
+			spRuntimeCfg, dfcRuntimeCfg, err := runtime_config.BuildRuntimeConfig(spec, agentLocation, nil, "test-node", "test-sp")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["bridged_by"]).To(Equal("protocol-converter-test-node-1-test-pc-2"))
+
+			// The location should be properly used from agent location
+			Expect(spRuntimeCfg.Sources["test_source"]).To(Equal("factory-from-agent.line-from-agent.test"))
+
+			// Verify DFC config has the agent location in UNS topics
+			unsInput := dfcRuntimeCfg.BenthosConfig.Input["uns"].(map[string]any)
+			umhTopics := unsInput["umh_topics"].([]any)
+			Expect(umhTopics).To(ContainElement("umh.v1.factory-from-agent.line-from-agent.test"))
 		})
 	})
 })

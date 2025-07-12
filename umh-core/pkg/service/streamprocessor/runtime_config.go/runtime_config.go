@@ -21,14 +21,13 @@ import (
 	"strings"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/streamprocessorserviceconfig"
 )
 
 // BuildRuntimeConfig merges all variables (user + agent + global + internal),
 // performs the location merge, derives the `bridged_by` header, and finally
-// renders the three sub-templates.
+// renders the streamprocessor config and the associated DFC config.
 // ─────────────
 //
 //   - *Spec* has been unmarshalled from YAML **and** already passed through the
@@ -40,44 +39,17 @@ import (
 //     – fleet-wide  `.global`  namespace   (injected by central loop)
 //     – runtime-only `.internal` namespace (added by the manager)
 //
-// Workflow
-// ──────────────────────────────────────────────────────────────────────────────
-// 1. Merge & normalize location maps:
-//   - `agentLocation` – authoritative map from agent.location (may be nil)
-//   - `pcLocation`    – optional overrides/extension from the PC spec
-//   - Fill gaps with "unknown" up to highest defined level
-//
-// 2. Assemble complete variable bundle:
-//   - Start with user bundle (flat)
-//   - Add merged location map
-//   - Add global variables if present
-//   - Add internal namespace with PC ID
-//   - Add bridged_by header derived from nodeName and pcName
-//
-// 3. Render all three sub-templates:
-//   - Connection
-//   - read-DFC   (with UNS **output** enforced)
-//   - write-DFC  (with UNS **input**  enforced)
-//
-// Notes
-// ─────
-//   - The function is pure: it performs no side-effects and never mutates *Spec*.
-//   - Passing a nil *Spec* results in an explicit error; an empty runtime
-//     struct is **never** returned.
-//   - After rendering, **no** `{{ … }}` directives remain.
-//   - The returned object is ready for diffing or to be handed straight to the
-//     Protocol-Converter FSM.
-//
-// It does NOT belong to the service
+// Returns both the streamprocessor runtime config and the rendered DFC config
 func BuildRuntimeConfig(
 	spec streamprocessorserviceconfig.StreamProcessorServiceConfigSpec,
 	agentLocation map[string]string,
 	globalVars map[string]any,
 	nodeName string,
 	spName string,
-) (streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime, error) {
+) (streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime, dataflowcomponentserviceconfig.DataflowComponentServiceConfig, error) {
 	if reflect.DeepEqual(spec, streamprocessorserviceconfig.StreamProcessorServiceConfigSpec{}) {
 		return streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime{},
+			dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
 			fmt.Errorf("nil spec")
 	}
 
@@ -164,17 +136,28 @@ func BuildRuntimeConfig(
 	}
 
 	//----------------------------------------------------------------------
-	// 3. bridged_by header
-	//----------------------------------------------------------------------
-	if nodeName == "" {
-		nodeName = "unknown"
-	}
-
-	//----------------------------------------------------------------------
-	// 4. Render all three sub-templates
+	// 3. Render both configs
 	//----------------------------------------------------------------------
 	scope := vb.Flatten()
-	return renderConfig(spec, scope) // unexported helper that enforces UNS
+
+	// Render the streamprocessor runtime config
+	spRuntime, err := renderConfig(spec, scope)
+	if err != nil {
+		return streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime{},
+			dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
+			fmt.Errorf("failed to render streamprocessor config: %w", err)
+	}
+
+	// Render the DFC config
+	dfcTemplate := spec.GetDFCServiceConfig()
+	dfcRuntime, err := config.RenderTemplate(dfcTemplate, scope)
+	if err != nil {
+		return streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime{},
+			dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
+			fmt.Errorf("failed to render DFC config: %w", err)
+	}
+
+	return spRuntime, dfcRuntime, nil
 }
 
 // renderConfig turns the **author-facing** specification (*Spec*) into the
@@ -206,7 +189,7 @@ func BuildRuntimeConfig(
 //
 //   - Connection
 //
-//   - read-DFC   (with UNS **output** enforced via GetDFCReadServiceConfig)
+//   - read-DFC   (with UNS **output** enforced via GetDFCServiceConfig)
 //
 //   - write-DFC  (with UNS **input**  enforced via GetDFCWriteServiceConfig)
 //
@@ -243,40 +226,24 @@ func renderConfig(
 	streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime,
 	error,
 ) {
-	if reflect.DeepEqual(spec, protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{}) {
-		return streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime{}, fmt.Errorf("protocolConverter config is nil")
+	if reflect.DeepEqual(spec, streamprocessorserviceconfig.StreamProcessorServiceConfigSpec{}) {
+		return streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime{}, fmt.Errorf("streamprocessor config is nil")
 	}
 
-	// ─── Render the three sub-templates ─────────────────────────────
-	// Ensure to use GetDFCReadServiceConfig(), etc. to get the uns input/output enforced
-
-	// 1. Render the connection template with variable substitution
-	// This converts template strings like "{{ .PORT }}" to actual values
-	conn, err := config.RenderTemplate(spec.GetConnectionServiceConfig(), scope)
+	// ─── Render the streamprocessor template with variable substitution ─────────────────────────────
+	// This converts template strings like "{{ .location_path }}" to actual values
+	rendered, err := config.RenderTemplate(spec.Config, scope)
 	if err != nil {
-		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
+		return streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime{}, fmt.Errorf("failed to render streamprocessor template: %w", err)
 	}
 
-	// 2. Convert the rendered template to runtime config with proper types
-	// This handles the string-to-uint16 port conversion and type safety
-	connRuntime, err := connectionserviceconfig.ConvertTemplateToRuntime(conn)
-	if err != nil {
-		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("failed to convert connection template to runtime: %w", err)
+	// ─── Convert template to runtime config ─────────────────────────────
+	// All template variables have been resolved, now convert to runtime format
+	runtime := streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime{
+		Model:   rendered.Model,
+		Sources: rendered.Sources,
+		Mapping: rendered.Mapping,
 	}
 
-	read, err := config.RenderTemplate(spec.GetDFCReadServiceConfig(), scope)
-	if err != nil {
-		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
-	}
-
-	write, err := config.RenderTemplate(spec.GetDFCWriteServiceConfig(), scope)
-	if err != nil {
-		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
-	}
-
-	return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{
-		ConnectionServiceConfig:             connRuntime,
-		DataflowComponentReadServiceConfig:  read,
-		DataflowComponentWriteServiceConfig: write,
-	}, nil
+	return runtime, nil
 }
