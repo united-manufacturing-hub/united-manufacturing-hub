@@ -71,20 +71,10 @@ type MockService struct {
 	// State control for FSM testing
 	stateFlags map[string]*StateFlags
 
-	/*
-	   Each protocol-converter *instance* is backed by
-	     • one Connection  (talks to PLC / OPC-UA, etc.)
-	     • one READ DFC    (Benthos pipeline → Kafka, …)
-
-	   Instead of re-implementing state flags here, we embed the
-	   **already battle-tested** mocks used by those FSMs.  That gives
-	   us full fidelity (e.g. Nmap scan results, Benthos metrics-active
-	   flag) and keeps all FSM helpers DRY.
-	*/
 	DfcService *dataflowcomponent.MockDataFlowComponentService
 }
 
-// Ensure MockProtocolConverterService implements IProtocolConverterService
+// Ensure MockService implements IStreamProcessorService
 var _ IStreamProcessorService = (*MockService)(nil)
 
 // StateFlags contains all the state flags needed for FSM testing
@@ -238,7 +228,7 @@ func (m *MockService) AddToManager(
 ) error {
 	m.AddToManagerCalled = true
 
-	underlyingName := fmt.Sprintf("protocolconverter-%s", spName)
+	underlyingName := fmt.Sprintf("streamprocessor-%s", spName)
 
 	// Check whether the component already exists
 	for _, dfcConfig := range m.dfcConfigs {
@@ -265,7 +255,7 @@ func (m *MockService) AddToManager(
 	return m.AddToManagerError
 }
 
-// UpdateInManager mocks updating a ProtocolConverter in Connection & DFC manager
+// UpdateInManager mocks updating a Stream Processor  DFC manager
 func (m *MockService) UpdateInManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
@@ -304,7 +294,7 @@ func (m *MockService) UpdateInManager(
 	return m.UpdateInManagerError
 }
 
-// RemoveFromManager mocks removing a DataFlowComponent from the Benthos manager
+// RemoveFromManager mocks removing a Stream Processor from the DFC manager
 func (m *MockService) RemoveFromManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
@@ -336,7 +326,7 @@ func (m *MockService) RemoveFromManager(
 	return m.RemoveFromManagerError
 }
 
-// Start mocks starting a ProtocolConverter
+// Start mocks starting a Steram Processor
 func (m *MockService) Start(
 	ctx context.Context,
 	filesystemService filesystem.Service,
@@ -348,7 +338,7 @@ func (m *MockService) Start(
 
 	dfcFound := false
 
-	// Set the desired state to active for the given component
+	// Set the desired state to active for the given processor
 	for i, dfcConfig := range m.dfcConfigs {
 		if dfcConfig.Name == underlyingName {
 			m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateActive
@@ -423,7 +413,7 @@ func (m *MockService) ReconcileManager(
 }
 
 // EvaluateDFCDesiredStates mocks the DFC state evaluation logic.
-// This method exists because protocol converters must re-evaluate DFC states
+// This method exists because stream processors must re-evaluate DFC states
 // when configs change during reconciliation (unlike other FSMs that set states once).
 func (m *MockService) EvaluateDFCDesiredStates(
 	spName string,

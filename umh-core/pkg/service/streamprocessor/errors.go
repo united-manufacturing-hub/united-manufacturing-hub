@@ -18,7 +18,7 @@ import "errors"
 
 var (
 	// ErrServiceNotExist indicates the requested service does not exist
-	ErrServiceNotExist = errors.New("protocol converter service does not exist")
+	ErrServiceNotExist = errors.New("stream processor service does not exist")
 	// ErrServiceAlreadyExists indicates the service already exists
-	ErrServiceAlreadyExists = errors.New("protocol converter service already exists")
+	ErrServiceAlreadyExists = errors.New("stream processor service already exists")
 )

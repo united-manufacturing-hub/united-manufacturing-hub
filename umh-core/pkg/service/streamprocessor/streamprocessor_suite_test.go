@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestProtocolConverter(t *testing.T) {
+func TestStreamProcessor(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "StreamProcessor Suite")
 }

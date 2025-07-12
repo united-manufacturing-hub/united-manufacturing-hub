@@ -20,9 +20,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 )
 
-// GetDFCServiceConfig converts the component config to a full ProtocolConverterServiceConfig
-// For a read DFC, the user is not allowed to set its own output config, so we "enforce" the output config
-// to be the UNS output config. This ensures protocol converters always write to the unified namespace.
+// GetDFCServiceConfig converts the component config to a full DFCServiceConfig
+// it enforces the output to uns-plugin, the input to uns-plugin and prefixes the
+// given sources and umh-topics accordingly with it's location path.
 func (c StreamProcessorServiceConfigSpec) GetDFCServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
 	// create dfc config
 	dfcReadConfig := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}
@@ -73,8 +73,6 @@ func (c StreamProcessorServiceConfigSpec) GetDFCServiceConfig() dataflowcomponen
 }
 
 // FromDFCServiceConfig creates a StreamProcessorServiceConfigRuntime from a DFC config
-// This is used by the service's GetConfig method to reconstruct the StreamProcessor config
-// from the underlying DFC deployment
 func FromDFCServiceConfig(dfcConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig) StreamProcessorServiceConfigRuntime {
 	// Extract the stream processor config from the DFC pipeline section
 	var model ModelRef

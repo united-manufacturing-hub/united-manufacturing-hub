@@ -195,9 +195,8 @@ func (p *Service) GetConfig(
 	return streamprocessorserviceconfig.FromDFCServiceConfig(dfcConfig), nil
 }
 
-// Status returns information about the connection health for the specified connection.
-// It queries the underlying Connection service and then enhances the result with
-// additional context like flakiness detection based on historical data.
+// Status returns information about the stream processor health for the specified connection.
+// It queries the underlying DFC and Redpanda services and aggregates their states.
 func (p *Service) Status(
 	ctx context.Context,
 	services serviceregistry.Provider,
