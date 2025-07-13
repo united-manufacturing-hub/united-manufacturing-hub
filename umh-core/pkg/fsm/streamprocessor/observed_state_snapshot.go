@@ -39,14 +39,14 @@ func (i *Instance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	// Create a deep copy of the observed state
 	snapshot := &ObservedStateSnapshot{}
 
-	// Deep copy observed protocol converter runtime config
+	// Deep copy observed stream processor runtime config
 	err := deepcopy.Copy(&snapshot.ObservedRuntimeConfig, &i.ObservedState.ObservedRuntimeConfig)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, i.baseFSMInstance.GetLogger(), "failed to deep copy observed stream processor runtime config: %v", err)
 		return nil
 	}
 
-	// Deep copy observed protocol converter spec config
+	// Deep copy observed stream processor spec config
 	err = deepcopy.Copy(&snapshot.ObservedSpecConfig, &i.ObservedState.ObservedSpecConfig)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, i.baseFSMInstance.GetLogger(), "failed to deep copy observed stream processor spec config: %v", err)

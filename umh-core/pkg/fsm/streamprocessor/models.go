@@ -30,9 +30,9 @@ const (
 	OperationalStateStopped = "stopped"
 
 	// Starting phase states
-	// OperationalStateStartingRedpanda is the state when the protocol converter waits for redpanda to be either idle or active
+	// OperationalStateStartingRedpanda is the state when the stream processor waits for redpanda to be either idle or active
 	OperationalStateStartingRedpanda = "starting_redpanda"
-	// OperationalStateStartingDFC is the state when the protocol converter waits for the DFC to be either idle or active
+	// OperationalStateStartingDFC is the state when the stream processor waits for the DFC to be either idle or active
 	OperationalStateStartingDFC = "starting_dfc"
 	// OperationalStateStartingFailedDFC is the state when the DFC failed to start and landed up in starting_failed state
 	OperationalStateStartingFailedDFC = "starting_failed_dfc"
@@ -42,12 +42,12 @@ const (
 	OperationalStateIdle = "idle"
 	// OperationalStateActive is the state when the service is running and actively processing data
 	OperationalStateActive = "active"
-	// OperationalStateDegradedRedpanda is the state when the protocol converter successfully started up once, but then the redpanda goes down or degraded
+	// OperationalStateDegradedRedpanda is the state when the stream processor successfully started up once, but then the redpanda goes down or degraded
 	OperationalStateDegradedRedpanda = "degraded_redpanda"
-	// OperationalStateDegradedDFC is the state when the protocol converter successfully started up once, but then the DFC goes down or degraded
+	// OperationalStateDegradedDFC is the state when the stream processor successfully started up once, but then the DFC goes down or degraded
 	OperationalStateDegradedDFC = "degraded_dfc"
 
-	// OperationalStateDegradedOther is the state when the protocol converter successfully started up once, but then we detected some state that cannot happen
+	// OperationalStateDegradedOther is the state when the stream processor successfully started up once, but then we detected some state that cannot happen
 	// State 1: redpanda is idle or active, but the DFC benthos has no output active (or vice versa) --> they depend on each other
 	// State 2: DFC is idle, but redpanda is active (or vice versa) --> they depend on each other
 	OperationalStateDegradedOther = "degraded_other"
@@ -180,7 +180,7 @@ func (i *Instance) GetLastObservedState() publicfsm.ObservedState {
 	return i.ObservedState
 }
 
-// SetService sets the ProtocolConverter service implementation to use
+// SetService sets the StreamProcessor service implementation to use
 // This is a testing-only utility to access the private service field
 func (i *Instance) SetService(service spsvc.IStreamProcessorService) {
 	i.service = service

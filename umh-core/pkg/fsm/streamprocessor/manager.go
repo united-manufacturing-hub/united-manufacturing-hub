@@ -31,12 +31,12 @@ const (
 	baseStreamProcessorDir = constants.S6BaseDir
 )
 
-// Manager implements the FSM management for ProtocolConverter services
+// Manager implements the FSM management for StreamProcessor services
 type Manager struct {
 	*public_fsm.BaseFSMManager[config.StreamProcessorConfig]
 }
 
-// Snapshot extends the base ManagerSnapshot with ProtocolConverter specific information
+// Snapshot extends the base ManagerSnapshot with StreamProcessor specific information
 type Snapshot struct {
 	// Embed BaseManagerSnapshot to include its methods using composition
 	*public_fsm.BaseManagerSnapshot
@@ -47,36 +47,36 @@ func NewManager(name string) *Manager {
 	baseManager := public_fsm.NewBaseFSMManager[config.StreamProcessorConfig](
 		managerName,
 		baseStreamProcessorDir,
-		// Extract the protocolconverter config from fullConfig
+		// Extract the streamprocessor config from fullConfig
 		func(fullConfig config.FullConfig) ([]config.StreamProcessorConfig, error) {
 			return fullConfig.StreamProcessor, nil
 		},
-		// Get name for ProtocolConverter config
+		// Get name for StreamProcessor config
 		func(cfg config.StreamProcessorConfig) (string, error) {
 			return cfg.Name, nil
 		},
-		// Get desired state for ProtocolConverter config
+		// Get desired state for StreamProcessor config
 		func(cfg config.StreamProcessorConfig) (string, error) {
 			return cfg.DesiredFSMState, nil
 		},
-		// Create ProtocolConverter instance from config
+		// Create StreamProcessor instance from config
 		func(cfg config.StreamProcessorConfig) (public_fsm.FSMInstance, error) {
 			// We'll pass nil for the portManager here, and the instance will get it from the services registry during reconciliation
 			return NewInstance(baseStreamProcessorDir, cfg), nil
 		},
-		// Compare ProtocolConverter configs
+		// Compare StreamProcessor configs
 		func(instance public_fsm.FSMInstance, cfg config.StreamProcessorConfig) (bool, error) {
 			spInstance, ok := instance.(*Instance)
 			if !ok {
-				return false, fmt.Errorf("instance is not a ProtocolConverterInstance")
+				return false, fmt.Errorf("instance is not a StreamProcessorInstance")
 			}
 			return spInstance.specConfig.Equal(cfg.StreamProcessorServiceConfig), nil
 		},
-		// Set ProtocolConverter config
+		// Set StreamProcessor config
 		func(instance public_fsm.FSMInstance, cfg config.StreamProcessorConfig) error {
 			spInstance, ok := instance.(*Instance)
 			if !ok {
-				return fmt.Errorf("instance is not a ProtocolConverterInstance")
+				return fmt.Errorf("instance is not a StreamProcessorInstance")
 			}
 			spInstance.specConfig = cfg.StreamProcessorServiceConfig
 			return nil
@@ -120,7 +120,7 @@ func (m *Manager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	// We need to convert the interface to the concrete type
 	baseManagerSnapshot, ok := baseSnapshot.(*public_fsm.BaseManagerSnapshot)
 	if !ok {
-		logger.For(logger.ComponentProtocolConverterManager).Errorf(
+		logger.For(logger.ComponentStreamProcessorManager).Errorf(
 			"Failed to convert base snapshot to BaseManagerSnapshot, using generic snapshot")
 		return baseSnapshot
 	}

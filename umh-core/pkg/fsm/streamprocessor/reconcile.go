@@ -25,8 +25,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	spsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/streamprocessor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
@@ -95,7 +95,7 @@ func (i *Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, s
 	// Step 2: Detect external changes.
 	if err = i.reconcileExternalChanges(ctx, services, snapshot); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
-		if !errors.Is(err, protocolconvertersvc.ErrServiceNotExist) && !errors.Is(err, s6.ErrServiceNotExist) {
+		if !errors.Is(err, spsvc.ErrServiceNotExist) && !errors.Is(err, s6.ErrServiceNotExist) {
 			// errors.Is(err, s6.ErrServiceNotExist)
 			// Consider a special case for DFC FSM here
 			// While creating for the first time, reconcileExternalChanges function will throw an error such as
@@ -140,7 +140,7 @@ func (i *Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, s
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
-	// Reconcile the DFC and Connection manager
+	// Reconcile the DFC manager
 	managerErr, managerReconciled := i.service.ReconcileManager(ctx, services, snapshot.Tick)
 	if managerErr != nil {
 		i.baseFSMInstance.SetError(managerErr, snapshot.Tick)
@@ -272,7 +272,7 @@ func (i *Instance) reconcileTransitionToActive(ctx context.Context, services ser
 func (i *Instance) reconcileStartingStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentProtocolConverterInstance, i.baseFSMInstance.GetID()+".reconcileStartingState", time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentStreamProcessorInstance, i.baseFSMInstance.GetID()+".reconcileStartingState", time.Since(start))
 	}()
 
 	switch currentState {

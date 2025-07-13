@@ -64,7 +64,7 @@ type MockService struct {
 	ReconcileManagerReconciled bool
 
 	// For more complex testing scenarios
-	ConverterStates    map[string]*ServiceInfo
+	States             map[string]*ServiceInfo
 	ExistingComponents map[string]bool
 	dfcConfigs         []config.DataFlowComponentConfig
 
@@ -88,10 +88,10 @@ type StateFlags struct {
 	RedpandaFSMState   string
 }
 
-// NewMockService creates a new mock DataFlowComponent service
+// NewMockService creates a new mock StreamProcessor service
 func NewMockService() *MockService {
 	return &MockService{
-		ConverterStates:    make(map[string]*ServiceInfo),
+		States:             make(map[string]*ServiceInfo),
 		ExistingComponents: make(map[string]bool),
 		dfcConfigs:         make([]config.DataFlowComponentConfig, 0),
 		stateFlags:         make(map[string]*StateFlags),
@@ -108,11 +108,11 @@ func (m *MockService) SetProcessorState(
 	m.ExistingComponents[spName] = true
 
 	// 1. Forward to DFC mock
-	dfcFlags := ConverterToDFCFlags(flags)
+	dfcFlags := ProcessorToDFCFlags(flags)
 	m.DfcService.SetComponentState(spName, dfcFlags)
 
 	// 3. Build a *single* aggregate ServiceInfo for Status()
-	m.ConverterStates[spName] = BuildServiceInfo(
+	m.States[spName] = BuildServiceInfo(
 		spName, flags, m.DfcService,
 	)
 
@@ -136,9 +136,9 @@ func (m *MockService) GetProcessorState(spName string) *StateFlags {
 	return flags
 }
 
-// ConverterToDFCFlags converts high-level ConverterStateFlags into the
+// ProcessorToDFCFlags converts high-level ProcessorStateFlags into the
 // exact flag struct used by the DFC mock.
-func ConverterToDFCFlags(src StateFlags) dataflowcomponent.ComponentStateFlags {
+func ProcessorToDFCFlags(src StateFlags) dataflowcomponent.ComponentStateFlags {
 	return dataflowcomponent.ComponentStateFlags{
 		IsBenthosRunning:                 src.IsDFCRunning,
 		BenthosFSMState:                  src.DfcFSMReadState,
@@ -176,6 +176,7 @@ func BuildServiceInfo(
 				},
 			},
 		},
+		StatusReason: "", // Default to empty for successful states
 	}
 }
 
@@ -211,7 +212,7 @@ func (m *MockService) Status(
 	}
 
 	// If we have a state already stored, return it
-	if state, exists := m.ConverterStates[spName]; exists {
+	if state, exists := m.States[spName]; exists {
 		return *state, m.StatusError
 	}
 
@@ -252,7 +253,12 @@ func (m *MockService) AddToManager(
 	// Add the dfcConfig to the list of dfcConfigs
 	m.dfcConfigs = append(m.dfcConfigs, dfcConfig)
 
-	return m.AddToManagerError
+	// Return error after successful setup if configured (simulating creation failure)
+	if m.AddToManagerError != nil {
+		return m.AddToManagerError
+	}
+
+	return nil
 }
 
 // UpdateInManager mocks updating a Stream Processor  DFC manager
@@ -321,7 +327,7 @@ func (m *MockService) RemoveFromManager(
 
 	// Remove the component from the list of existing components
 	delete(m.ExistingComponents, spName)
-	delete(m.ConverterStates, spName)
+	delete(m.States, spName)
 
 	return m.RemoveFromManagerError
 }

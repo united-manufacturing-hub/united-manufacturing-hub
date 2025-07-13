@@ -58,7 +58,7 @@ import (
 // start with an empty config here and perform the real rendering at the
 // very beginning of the first Reconcile() tick.
 //
-// ⚠️  Do **not** assume the underlying Connection / Dataflow components are
+// ⚠️  Do **not** assume the underlying Dataflow components are
 // already configured when this function returns – they will be updated in
 // the next reconciliation cycle.
 func (i *Instance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
@@ -378,7 +378,6 @@ func (i *Instance) safeBenthosMetrics() (input, output struct{ ConnectionUp, Con
 // and moves the instance into a degraded state if they happen anyway
 // Case 1: DFC and redpanda should either be both idle or both active, if they differ (for more than a tick) something must have gone wrong (exept that redpanda can be active because of a different DFC)
 // Case 2: if redpanda is idle or active, but the DFC has no output active, something must have gone wrong (either redpanda is actually down and not detected, or the DFC is not connecting to Kafka)
-// Case 3: if the connection is down, but the DFC input is active, something must have gone wrong (either the connection is actually down and not detected, or the DFC is not handling it well)
 //
 // It returns:
 //
