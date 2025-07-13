@@ -30,9 +30,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 	spsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/streamprocessor"
-	runtime_config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/streamprocessor/runtime_config.go"
+	runtime_config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/streamprocessor/runtime_config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
@@ -71,7 +70,7 @@ func (i *Instance) CreateInstance(ctx context.Context, filesystemService filesys
 	// At creation time, i.dfcRuntimeConfig will be empty (zero value), which is what we want.
 	err := i.service.AddToManager(ctx, filesystemService, &i.dfcRuntimeConfig, i.baseFSMInstance.GetID())
 	if err != nil {
-		if errors.Is(err, protocolconvertersvc.ErrServiceAlreadyExists) {
+		if errors.Is(err, spsvc.ErrServiceAlreadyExists) {
 			i.baseFSMInstance.GetLogger().Debugf("Stream Processor service %s already exists in DFC  manager", i.baseFSMInstance.GetID())
 			return nil // do not throw an error, as each action is expected to be idempotent
 		}
@@ -82,7 +81,7 @@ func (i *Instance) CreateInstance(ctx context.Context, filesystemService filesys
 	return nil
 }
 
-// RemoveInstance attempts to remove the ProtocolConverter from the Benthos and connection manager.
+// RemoveInstance attempts to remove the StreamProcessor from the Benthos and DFC manager.
 // It requires the service to be stopped before removal.
 func (i *Instance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	i.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing Stream Processor service %s from DFC  manager ...", i.baseFSMInstance.GetID())
@@ -99,7 +98,7 @@ func (i *Instance) RemoveInstance(ctx context.Context, filesystemService filesys
 				i.baseFSMInstance.GetID())
 		return nil
 
-	case errors.Is(err, protocolconvertersvc.ErrServiceNotExist):
+	case errors.Is(err, spsvc.ErrServiceNotExist):
 		i.baseFSMInstance.GetLogger().
 			Debugf("Benthos service %s already removed from S6 manager",
 				i.baseFSMInstance.GetID())
@@ -163,14 +162,14 @@ func (i *Instance) CheckForCreation(ctx context.Context, filesystemService files
 	return true
 }
 
-// getServiceStatus gets the status of the ProtocolConverter service
+// getServiceStatus gets the status of the StreamProcessor service
 // its main purpose is to handle the edge cases where the service is not yet created or not yet running
 func (i *Instance) getServiceStatus(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (spsvc.ServiceInfo, error) {
 	info, err := i.service.Status(ctx, services, snapshot, i.baseFSMInstance.GetID())
 	if err != nil {
 		// If there's an error getting the service status, we need to distinguish between cases
 
-		if errors.Is(err, protocolconvertersvc.ErrServiceNotExist) {
+		if errors.Is(err, spsvc.ErrServiceNotExist) {
 			// If the service is being created, we don't want to count this as an error
 			// The instance is likely in Creating or ToBeCreated state, so service doesn't exist yet
 			// This will be handled in the reconcileStateTransition where the service gets created
@@ -216,7 +215,7 @@ func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services s
 	if err != nil {
 		return fmt.Errorf("error while getting service status: %w", err)
 	}
-	metrics.ObserveReconcileTime(logger.ComponentProtocolConverterInstance, i.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
+	metrics.ObserveReconcileTime(logger.ComponentStreamProcessorInstance, i.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
 	// Store the raw service info
 	i.ObservedState.ServiceInfo = info
 
@@ -429,14 +428,14 @@ func (i *Instance) IsDataflowComponentWithProcessingActivity() (bool, string) {
 	return false, fmt.Sprintf("DFC is %s", dfcState)
 }
 
-// IsProtocolConverterStopped checks whether the ProtocolConverter is stopped
-// which means that connection and DFC are both stopped
+// IsStreamProcessorStopped checks whether the StreamProcessor is stopped
+// which means that DFC is stopped
 //
 // It returns:
 //
-//	ok     – true when the ProtocolConverter is stopped, false otherwise.
+//	ok     – true when the StreamProcessor is stopped, false otherwise.
 //	reason – empty when ok is true; otherwise a service‑provided explanation
-func (i *Instance) IsProtocolConverterStopped() (bool, string) {
+func (i *Instance) IsStreamProcessorStopped() (bool, string) {
 	// TODO: check the write DFC as well
 	if i.ObservedState.ServiceInfo.DFCFSMState == dataflowfsm.OperationalStateStopped {
 		return true, ""

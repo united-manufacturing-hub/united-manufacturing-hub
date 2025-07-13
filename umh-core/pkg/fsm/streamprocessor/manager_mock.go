@@ -38,7 +38,7 @@ func NewManagerWithMockedServices(name string) (*Manager, *spsvc.MockService) {
 			return config.StreamProcessor, nil
 		},
 		func(config config.StreamProcessorConfig) (string, error) {
-			return config.Name, nil
+			return fmt.Sprintf("streamprocessor-%s", config.Name), nil
 		},
 		// Get desired state for StreamProcessor config
 		func(cfg config.StreamProcessorConfig) (string, error) {

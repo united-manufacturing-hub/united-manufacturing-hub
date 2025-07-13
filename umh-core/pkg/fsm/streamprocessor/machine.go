@@ -111,12 +111,6 @@ func NewInstance(
 
 			// starting -> startingFailed
 			{
-				Name: EventStartFailedDFCMissing, Src: []string{
-					OperationalStateStartingRedpanda,
-					OperationalStateStartingDFC,
-				}, Dst: OperationalStateStartingFailedDFCMissing,
-			},
-			{
 				Name: EventStartFailedDFC, Src: []string{
 					OperationalStateStartingRedpanda,
 					OperationalStateStartingDFC,
@@ -130,7 +124,6 @@ func NewInstance(
 					OperationalStateStartingRedpanda,
 					OperationalStateStartingDFC,
 					OperationalStateStartingFailedDFC,
-					OperationalStateStartingFailedDFCMissing,
 					OperationalStateIdle,
 					OperationalStateActive,
 					OperationalStateDegradedRedpanda,
@@ -229,4 +222,9 @@ func (i *Instance) PrintState() {
 // GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance
 func (i *Instance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
 	return constants.StreamProcessorExpectedMaxP95ExecutionTimePerInstance
+}
+
+// GetMinimumRequiredTime returns the minimum required time for this instance
+func (i *Instance) GetMinimumRequiredTime() time.Duration {
+	return constants.StreamProcessorUpdateObservedStateTimeout
 }

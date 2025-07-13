@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	baseProtocolConverterDir = constants.S6BaseDir
+	baseStreamProcessorDir = constants.S6BaseDir
 )
 
 // Manager implements the FSM management for ProtocolConverter services
@@ -46,7 +46,7 @@ func NewManager(name string) *Manager {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentStreamProcessorManager, name)
 	baseManager := public_fsm.NewBaseFSMManager[config.StreamProcessorConfig](
 		managerName,
-		baseProtocolConverterDir,
+		baseStreamProcessorDir,
 		// Extract the protocolconverter config from fullConfig
 		func(fullConfig config.FullConfig) ([]config.StreamProcessorConfig, error) {
 			return fullConfig.StreamProcessor, nil
@@ -62,7 +62,7 @@ func NewManager(name string) *Manager {
 		// Create ProtocolConverter instance from config
 		func(cfg config.StreamProcessorConfig) (public_fsm.FSMInstance, error) {
 			// We'll pass nil for the portManager here, and the instance will get it from the services registry during reconciliation
-			return NewInstance(baseProtocolConverterDir, cfg), nil
+			return NewInstance(baseStreamProcessorDir, cfg), nil
 		},
 		// Compare ProtocolConverter configs
 		func(instance public_fsm.FSMInstance, cfg config.StreamProcessorConfig) (bool, error) {

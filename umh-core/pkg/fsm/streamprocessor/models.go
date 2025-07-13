@@ -36,8 +36,6 @@ const (
 	OperationalStateStartingDFC = "starting_dfc"
 	// OperationalStateStartingFailedDFC is the state when the DFC failed to start and landed up in starting_failed state
 	OperationalStateStartingFailedDFC = "starting_failed_dfc"
-	// OperationalStateStartingFailedDFCMissing is the state when the DFC is missing (e.g., if only deployed so far the connection)
-	OperationalStateStartingFailedDFCMissing = "starting_failed_dfc_missing"
 
 	// Running phase states
 	// OperationalStateIdle is the state when the service is running but not actively processing data
@@ -66,8 +64,7 @@ const (
 	EventStop     = "stop"
 	EventStopDone = "stop_done"
 
-	EventStartFailedDFCMissing = "start_failed_dfc_missing"
-	EventStartFailedDFC        = "start_failed_dfc"
+	EventStartFailedDFC = "start_failed_dfc"
 
 	// EventRedpandaHealthy is either idle or active
 	EventRedpandaHealthy  = "redpanda_healthy"
@@ -91,7 +88,6 @@ func IsOperationalState(state string) bool {
 		OperationalStateStartingRedpanda,
 		OperationalStateStartingDFC,
 		OperationalStateStartingFailedDFC,
-		OperationalStateStartingFailedDFCMissing,
 		OperationalStateIdle,
 		OperationalStateActive,
 		OperationalStateDegradedRedpanda,
@@ -107,8 +103,7 @@ func IsStartingState(state string) bool {
 	switch state {
 	case OperationalStateStartingRedpanda,
 		OperationalStateStartingDFC,
-		OperationalStateStartingFailedDFC,
-		OperationalStateStartingFailedDFCMissing:
+		OperationalStateStartingFailedDFC:
 		return true
 	}
 	return false
@@ -135,7 +130,7 @@ type ObservedState struct {
 	// ObservedRuntimeConfig contains the observed Stream Processor service config
 	ObservedRuntimeConfig streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime
 
-	// ObservedSpecConfig contains the observed Stresm Processor service config spec with variables
+	// ObservedSpecConfig contains the observed Stream Processor service config spec with variables
 	// it is here for the purpose of the UI to display the variables and the location
 	ObservedSpecConfig streamprocessorserviceconfig.StreamProcessorServiceConfigSpec
 }
@@ -143,8 +138,8 @@ type ObservedState struct {
 // IsObservedState implements the ObservedState interface
 func (b ObservedState) IsObservedState() {}
 
-// ProtocolConverterInstance implements the FSMInstance interface
-// If ProtocolConverterInstance does not implement the FSMInstance interface, this will
+// Instance implements the FSMInstance interface
+// If Instance does not implement the FSMInstance interface, this will
 // be detected at compile time
 var _ publicfsm.FSMInstance = (*Instance)(nil)
 

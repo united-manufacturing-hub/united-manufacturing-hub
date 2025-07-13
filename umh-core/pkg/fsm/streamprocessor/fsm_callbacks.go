@@ -78,17 +78,6 @@ func (i *Instance) registerCallbacks() {
 		//})
 	})
 
-	i.baseFSMInstance.AddCallback("enter_"+OperationalStateStartingFailedDFCMissing, func(ctx context.Context, e *fsm.Event) {
-		i.baseFSMInstance.GetLogger().Errorf("Entering starting-failed-dfc-missing state for %s", i.baseFSMInstance.GetID())
-		//instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
-		//	Record: storage.Record{
-		//		State:       OperationalStateStartingFailedDFCMissing,
-		//		SourceEvent: e.Event,
-		//	},
-		//	Time: time.Now(),
-		//})
-	})
-
 	// Running phase state callbacks
 	i.baseFSMInstance.AddCallback("enter_"+OperationalStateIdle, func(ctx context.Context, e *fsm.Event) {
 		i.baseFSMInstance.GetLogger().Infof("Entering idle state for %s", i.baseFSMInstance.GetID())
