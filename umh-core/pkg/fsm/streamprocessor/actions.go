@@ -94,13 +94,13 @@ func (i *Instance) RemoveInstance(ctx context.Context, filesystemService filesys
 	// ---------------------------------------------------------------
 	case err == nil: // fully removed
 		i.baseFSMInstance.GetLogger().
-			Debugf("Benthos service %s removed from S6 manager",
+			Debugf("StreamProcessor service %s removed from DFC manager",
 				i.baseFSMInstance.GetID())
 		return nil
 
 	case errors.Is(err, spsvc.ErrServiceNotExist):
 		i.baseFSMInstance.GetLogger().
-			Debugf("Benthos service %s already removed from S6 manager",
+			Debugf("StreamProcessor service %s already removed from DFC manager",
 				i.baseFSMInstance.GetID())
 		// idempotent: was already gone
 		return nil
@@ -110,7 +110,7 @@ func (i *Instance) RemoveInstance(ctx context.Context, filesystemService filesys
 	// ---------------------------------------------------------------
 	case errors.Is(err, standarderrors.ErrRemovalPending):
 		i.baseFSMInstance.GetLogger().
-			Debugf("Benthos service %s removal still in progress",
+			Debugf("StreamProcessor service %s removal still in progress",
 				i.baseFSMInstance.GetID())
 		// not an error from the FSM's perspective – just means "try again"
 		return err
