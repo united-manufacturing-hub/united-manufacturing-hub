@@ -17,6 +17,7 @@ package s6
 import (
 	"context"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager"
 	"os"
 	"path/filepath"
 	"strings"
@@ -88,7 +89,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(health).To(Equal(HealthBad)) // Missing completion file = bad state
+			Expect(health).To(Equal(process_manager.HealthBad)) // Missing completion file = bad state
 		})
 
 		It("should return HealthUnknown for I/O errors during health check", func() {
@@ -99,7 +100,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).To(HaveOccurred())
-			Expect(health).To(Equal(HealthUnknown)) // I/O error = unknown state, retry
+			Expect(health).To(Equal(process_manager.HealthUnknown)) // I/O error = unknown state, retry
 		})
 
 		It("should handle partial directory structure", func() {
@@ -118,7 +119,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(health).To(Equal(HealthBad)) // Partial structure = bad state
+			Expect(health).To(Equal(process_manager.HealthBad)) // Partial structure = bad state
 		})
 	})
 
@@ -207,7 +208,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).To(HaveOccurred())
-			Expect(health).To(Equal(HealthUnknown)) // Permission error = unknown, retry
+			Expect(health).To(Equal(process_manager.HealthUnknown)) // Permission error = unknown, retry
 		})
 	})
 
@@ -228,7 +229,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(health).To(Equal(HealthBad)) // Inconsistent supervise = bad state
+			Expect(health).To(Equal(process_manager.HealthBad)) // Inconsistent supervise = bad state
 		})
 
 		It("should detect incomplete service creation", func() {
@@ -247,7 +248,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(health).To(Equal(HealthBad)) // Missing type file = bad state
+			Expect(health).To(Equal(process_manager.HealthBad)) // Missing type file = bad state
 		})
 	})
 
@@ -354,7 +355,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).To(HaveOccurred())
-			Expect(health).To(Equal(HealthUnknown)) // Network error = unknown, retry
+			Expect(health).To(Equal(process_manager.HealthUnknown)) // Network error = unknown, retry
 		})
 
 		It("should handle network timeouts during operations", func() {
@@ -448,7 +449,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(health).To(Equal(HealthBad)) // Partial creation = bad state
+			Expect(health).To(Equal(process_manager.HealthBad)) // Partial creation = bad state
 		})
 
 		It("should validate all required files for healthy state", func() {
@@ -470,7 +471,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(health).To(Equal(HealthOK)) // All files present = healthy
+			Expect(health).To(Equal(process_manager.HealthOK)) // All files present = healthy
 		})
 	})
 
@@ -487,7 +488,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).To(HaveOccurred())
-			Expect(health).To(Equal(HealthUnknown))
+			Expect(health).To(Equal(process_manager.HealthUnknown))
 		})
 
 		It("should handle permission denied as retryable", func() {
@@ -502,7 +503,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).To(HaveOccurred())
-			Expect(health).To(Equal(HealthUnknown))
+			Expect(health).To(Equal(process_manager.HealthUnknown))
 		})
 
 		It("should handle network errors as retryable", func() {
@@ -517,7 +518,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).To(HaveOccurred())
-			Expect(health).To(Equal(HealthUnknown))
+			Expect(health).To(Equal(process_manager.HealthUnknown))
 		})
 
 		It("should handle missing files as permanent errors", func() {
@@ -533,7 +534,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(health).To(Equal(HealthBad))
+			Expect(health).To(Equal(process_manager.HealthBad))
 		})
 	})
 
@@ -642,7 +643,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).To(HaveOccurred())
-			Expect(health).To(Equal(HealthUnknown))
+			Expect(health).To(Equal(process_manager.HealthUnknown))
 		})
 	})
 
@@ -719,7 +720,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(health).To(Equal(HealthBad))
+			Expect(health).To(Equal(process_manager.HealthBad))
 		})
 
 		It("should handle partially created services", func() {
@@ -736,7 +737,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(health).To(Equal(HealthBad))
+			Expect(health).To(Equal(process_manager.HealthBad))
 		})
 	})
 })

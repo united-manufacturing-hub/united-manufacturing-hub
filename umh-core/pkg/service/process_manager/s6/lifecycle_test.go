@@ -17,6 +17,7 @@ package s6
 import (
 	"context"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager"
 	"os"
 	"path/filepath"
 	"strings"
@@ -326,7 +327,7 @@ var _ = Describe("LifecycleManager", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(health).To(Equal(HealthOK))
+			Expect(health).To(Equal(process_manager.HealthOK))
 		})
 
 		It("should return HealthBad for missing service directory", func() {
@@ -338,7 +339,7 @@ var _ = Describe("LifecycleManager", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(health).To(Equal(HealthBad))
+			Expect(health).To(Equal(process_manager.HealthBad))
 		})
 
 		It("should return HealthBad for missing completion sentinel", func() {
@@ -349,7 +350,7 @@ var _ = Describe("LifecycleManager", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(health).To(Equal(HealthBad))
+			Expect(health).To(Equal(process_manager.HealthBad))
 		})
 
 		It("should return HealthUnknown for filesystem errors", func() {
@@ -360,7 +361,7 @@ var _ = Describe("LifecycleManager", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).To(HaveOccurred())
-			Expect(health).To(Equal(HealthUnknown))
+			Expect(health).To(Equal(process_manager.HealthUnknown))
 		})
 
 		It("should handle nil artifacts", func() {
@@ -368,7 +369,7 @@ var _ = Describe("LifecycleManager", func() {
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("artifacts is nil"))
-			Expect(health).To(Equal(HealthBad))
+			Expect(health).To(Equal(process_manager.HealthBad))
 		})
 	})
 

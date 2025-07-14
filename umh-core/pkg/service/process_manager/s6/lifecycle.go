@@ -20,6 +20,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager"
 	"path/filepath"
 	"strings"
 	"text/template"
@@ -182,24 +183,24 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *Service
 // - HealthUnknown: I/O errors, timeouts, etc. (retry next tick)
 // - HealthOK: Service directory is healthy and complete
 // - HealthBad: Service directory is broken (triggers FSM transition)
-func (s *DefaultService) CheckArtifactsHealth(ctx context.Context, artifacts *ServiceArtifacts, fsService filesystem.Service) (HealthStatus, error) {
+func (s *DefaultService) CheckArtifactsHealth(ctx context.Context, artifacts *ServiceArtifacts, fsService filesystem.Service) (process_manager.HealthStatus, error) {
 	if s == nil {
-		return HealthUnknown, fmt.Errorf("lifecycle manager is nil")
+		return process_manager.HealthUnknown, fmt.Errorf("lifecycle manager is nil")
 	}
 
 	if ctx.Err() != nil {
-		return HealthUnknown, ctx.Err()
+		return process_manager.HealthUnknown, ctx.Err()
 	}
 
 	if artifacts == nil {
-		return HealthBad, fmt.Errorf("artifacts is nil")
+		return process_manager.HealthBad, fmt.Errorf("artifacts is nil")
 	}
 
 	// Always use tracked files for health check
 	if len(artifacts.CreatedFiles) == 0 {
 		// No tracked files indicates service was not properly created or is from old version
 		s.logger.Debugf("Health check: no tracked files available, service needs recreation")
-		return HealthBad, nil
+		return process_manager.HealthBad, nil
 	}
 
 	// Check all tracked files exist
@@ -208,12 +209,12 @@ func (s *DefaultService) CheckArtifactsHealth(ctx context.Context, artifacts *Se
 		if err != nil {
 			// I/O error - return Unknown so we retry next tick
 			s.logger.Debugf("Health check: I/O error checking tracked file %s: %v", file, err)
-			return HealthUnknown, err
+			return process_manager.HealthUnknown, err
 		}
 		if !exists {
 			// Missing required file - definitely broken
 			s.logger.Debugf("Health check: missing tracked file %s", file)
-			return HealthBad, nil
+			return process_manager.HealthBad, nil
 		}
 	}
 
@@ -227,17 +228,17 @@ func (s *DefaultService) CheckArtifactsHealth(ctx context.Context, artifacts *Se
 	// If either check failed due to I/O error, return Unknown
 	if mainErr != nil || logErr != nil {
 		s.logger.Debugf("Health check: I/O error checking supervise directories: main=%v, log=%v", mainErr, logErr)
-		return HealthUnknown, fmt.Errorf("supervise directory check failed: main=%v, log=%v", mainErr, logErr)
+		return process_manager.HealthUnknown, fmt.Errorf("supervise directory check failed: main=%v, log=%v", mainErr, logErr)
 	}
 
 	// If supervise directories exist, both must exist (prevents race condition)
 	if mainExists != logExists {
 		s.logger.Debugf("Health check: supervise directory mismatch - main=%v, log=%v", mainExists, logExists)
-		return HealthBad, nil
+		return process_manager.HealthBad, nil
 	}
 
 	// All checks passed
-	return HealthOK, nil
+	return process_manager.HealthOK, nil
 }
 
 // generateUniqueID creates a unique identifier for temp directories

@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -42,115 +43,6 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 )
-
-// ServiceStatus represents the status of an S6 service
-type ServiceStatus string
-
-const (
-	// ServiceUnknown indicates the service status cannot be determined
-	ServiceUnknown ServiceStatus = "unknown"
-	// ServiceUp indicates the service is running
-	ServiceUp ServiceStatus = "up"
-	// ServiceDown indicates the service is stopped
-	ServiceDown ServiceStatus = "down"
-	// ServiceRestarting indicates the service is restarting
-	ServiceRestarting ServiceStatus = "restarting"
-)
-
-// HealthStatus represents the health state of an S6 service
-type HealthStatus int
-
-const (
-	// HealthUnknown indicates the health check failed due to I/O errors, timeouts, etc.
-	// This should not trigger service recreation, just retry next tick
-	HealthUnknown HealthStatus = iota
-	// HealthOK indicates the service directory is healthy and complete
-	HealthOK
-	// HealthBad indicates the service directory is definitely broken and needs recreation
-	HealthBad
-)
-
-// String returns a string representation of the health status
-func (h HealthStatus) String() string {
-	switch h {
-	case HealthUnknown:
-		return "unknown"
-	case HealthOK:
-		return "ok"
-	case HealthBad:
-		return "bad"
-	default:
-		return "invalid"
-	}
-}
-
-// ServiceInfo contains information about an S6 service
-type ServiceInfo struct {
-	Status        ServiceStatus // Current status of the service
-	Uptime        int64         // Seconds the service has been up
-	DownTime      int64         // Seconds the service has been down
-	ReadyTime     int64         // Seconds the service has been ready
-	Pid           int           // Process ID if service is up
-	Pgid          int           // Process group ID if service is up
-	ExitCode      int           // Exit code if service is down
-	WantUp        bool          // Whether the service wants to be up (based on existence of down file)
-	IsPaused      bool          // Whether the service is paused
-	IsFinishing   bool          // Whether the service is shutting down
-	IsWantingUp   bool          // Whether the service wants to be up (based on flags)
-	IsReady       bool          // Whether the service is ready
-	ExitHistory   []ExitEvent   // History of exit codes
-	LastChangedAt time.Time     // Timestamp when the service status last changed
-	LastReadyAt   time.Time     // Timestamp when the service was last ready
-}
-
-// ExitEvent represents a service exit event
-type ExitEvent struct {
-	Timestamp time.Time // timestamp of the exit event
-	ExitCode  int       // exit code of the service
-	Signal    int       // signal number of the exit event
-}
-
-// LogEntry represents a parsed log entry from the S6 logs
-type LogEntry struct {
-	// Timestamp in UTC time
-	Timestamp time.Time `json:"timestamp"`
-	// Content of the log entry
-	Content string `json:"content"`
-}
-
-// Service defines the interface for interacting with S6 services
-type Service interface {
-	// Create creates the service with specific configuration
-	Create(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, fsService filesystem.Service) error
-	// Remove removes the service directory structure
-	Remove(ctx context.Context, servicePath string, fsService filesystem.Service) error
-	// Start starts the service
-	Start(ctx context.Context, servicePath string, fsService filesystem.Service) error
-	// Stop stops the service
-	Stop(ctx context.Context, servicePath string, fsService filesystem.Service) error
-	// Restart restarts the service
-	Restart(ctx context.Context, servicePath string, fsService filesystem.Service) error
-	// Status gets the current status of the service
-	Status(ctx context.Context, servicePath string, fsService filesystem.Service) (ServiceInfo, error)
-	// ExitHistory gets the exit history of the service
-	ExitHistory(ctx context.Context, superviseDir string, fsService filesystem.Service) ([]ExitEvent, error)
-	// ServiceExists checks if the service directory exists
-	ServiceExists(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error)
-	// GetConfig gets the actual service config from s6
-	GetConfig(ctx context.Context, servicePath string, fsService filesystem.Service) (s6serviceconfig.S6ServiceConfig, error)
-	// CleanS6ServiceDirectory cleans the S6 service directory, removing non-standard services
-	CleanS6ServiceDirectory(ctx context.Context, path string, fsService filesystem.Service) error
-	// GetS6ConfigFile retrieves a config file for a service
-	GetS6ConfigFile(ctx context.Context, servicePath string, configFileName string, fsService filesystem.Service) ([]byte, error)
-	// ForceRemove removes a service from the S6 manager
-	ForceRemove(ctx context.Context, servicePath string, fsService filesystem.Service) error
-	// GetLogs gets the logs of the service
-	GetLogs(ctx context.Context, servicePath string, fsService filesystem.Service) ([]LogEntry, error)
-	// EnsureSupervision checks if the supervise directory exists for a service and notifies
-	// s6-svscan if it doesn't, to trigger supervision setup.
-	// Returns true if supervise directory exists (ready for supervision), false otherwise.
-	EnsureSupervision(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error)
-}
 
 // logState is the per-log-file cursor used by GetLogs.
 //
@@ -184,7 +76,7 @@ type logState struct {
 
 	// logs is the backing array that holds *at most* S6MaxLines entries.
 	// Allocated once; after that, entries are overwritten in place.
-	logs []LogEntry
+	logs []process_manager.LogEntry
 	// head is the index of the slot where the **next** entry will be written.
 	// When head wraps from max-1 to 0, `full` is set to true.
 	head int
@@ -206,7 +98,7 @@ type DefaultService struct {
 }
 
 // NewDefaultService creates a new default S6 service
-func NewDefaultService() Service {
+func NewDefaultService() process_manager.Service {
 	serviceLogger := logger.For(logger.ComponentS6Service)
 	return &DefaultService{
 		logger: serviceLogger,
@@ -272,10 +164,10 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 
 		// 3. Directory exists and we have artifacts → check health
 		health, err := s.CheckArtifactsHealth(ctx, s.artifacts, fsService)
-		if err != nil && health != HealthUnknown {
+		if err != nil && health != process_manager.HealthUnknown {
 			return fmt.Errorf("failed to check service health: %w", err)
 		}
-		if health == HealthBad {
+		if health == process_manager.HealthBad {
 			s.logger.Debugf("Service %s is unhealthy, removing and recreating", servicePath)
 			if err := s.ForceCleanup(ctx, s.artifacts, fsService); err != nil {
 				return fmt.Errorf("failed to remove unhealthy service: %w", err)
@@ -492,7 +384,7 @@ func (s *DefaultService) Restart(ctx context.Context, servicePath string, fsServ
 	return nil
 }
 
-func (s *DefaultService) Status(ctx context.Context, servicePath string, fsService filesystem.Service) (ServiceInfo, error) {
+func (s *DefaultService) Status(ctx context.Context, servicePath string, fsService filesystem.Service) (process_manager.ServiceInfo, error) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".status", time.Since(start))
@@ -501,15 +393,15 @@ func (s *DefaultService) Status(ctx context.Context, servicePath string, fsServi
 	// First, check that the service exists.
 	exists, err := s.ServiceExists(ctx, servicePath, fsService)
 	if err != nil {
-		return ServiceInfo{}, fmt.Errorf("failed to check if service exists: %w", err)
+		return process_manager.ServiceInfo{}, fmt.Errorf("failed to check if service exists: %w", err)
 	}
 	if !exists {
-		return ServiceInfo{}, ErrServiceNotExist
+		return process_manager.ServiceInfo{}, ErrServiceNotExist
 	}
 
 	// Default info.
-	info := ServiceInfo{
-		Status: ServiceUnknown,
+	info := process_manager.ServiceInfo{
+		Status: process_manager.ServiceUnknown,
 	}
 
 	// Build supervise directory path.
@@ -581,14 +473,14 @@ func (s *DefaultService) Status(ctx context.Context, servicePath string, fsServi
 	// --- Determine service status ---
 	now := time.Now().UTC()
 	if pid != 0 && !flagFinishing {
-		info.Status = ServiceUp
+		info.Status = process_manager.ServiceUp
 		info.Pid = int(pid)
 		info.Pgid = int(pgid)
 		// uptime is measured from the stamp timestamp
 		info.Uptime = int64(now.Sub(stampTime).Seconds())
 		info.ReadyTime = int64(now.Sub(readyTime).Seconds())
 	} else {
-		info.Status = ServiceDown
+		info.Status = process_manager.ServiceDown
 		// Interpret wstat as a wait status.
 		// We convert to syscall.WaitStatus so that we can check if the process exited normally.
 		ws := syscall.WaitStatus(wstat)
@@ -642,7 +534,7 @@ func (s *DefaultService) Status(ctx context.Context, servicePath string, fsServi
 //
 // If the file size is not a multiple of the record size, it is considered corrupted.
 // In that case, you may choose to truncate the file (as the C code does) or return an error.
-func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, fsService filesystem.Service) ([]ExitEvent, error) {
+func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, fsService filesystem.Service) ([]process_manager.ExitEvent, error) {
 	// Build the full path to the dtally file.
 	dtallyFile := filepath.Join(superviseDir, S6DtallyFileName)
 
@@ -675,7 +567,7 @@ func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, f
 
 	// Calculate the number of records.
 	numRecords := len(data) / S6_DTALLY_PACK
-	var history []ExitEvent
+	var history []process_manager.ExitEvent
 
 	// Process each dtally record.
 	for i := 0; i < numRecords; i++ {
@@ -696,7 +588,7 @@ func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, f
 		exitCode := int(record[12])
 		signalNumber := int(record[13])
 
-		history = append(history, ExitEvent{
+		history = append(history, process_manager.ExitEvent{
 			Timestamp: parsedTime,
 			ExitCode:  exitCode,
 			Signal:    signalNumber,
@@ -1200,12 +1092,12 @@ func (s *DefaultService) ForceRemove(
 }
 
 // appendToRingBuffer appends entries to the ring buffer, extracted from existing GetLogs logic.
-func (s *DefaultService) appendToRingBuffer(entries []LogEntry, st *logState) {
+func (s *DefaultService) appendToRingBuffer(entries []process_manager.LogEntry, st *logState) {
 	const max = constants.S6MaxLines
 
 	// Preallocate backing storage to full size once - it's recycled at runtime and never dropped
 	if st.logs == nil {
-		st.logs = make([]LogEntry, max) // len == max, cap == max
+		st.logs = make([]process_manager.LogEntry, max) // len == max, cap == max
 		st.head = 0
 		st.full = false
 	}
@@ -1287,7 +1179,7 @@ func (s *DefaultService) appendToRingBuffer(entries []LogEntry, st *logState) {
 //
 // Errors are returned early and unwrapped where they occur so callers
 // see the root cause (e.g. "file disappeared", "permission denied").
-func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsService filesystem.Service) ([]LogEntry, error) {
+func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsService filesystem.Service) ([]process_manager.LogEntry, error) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".getLogs", time.Since(start))
@@ -1342,7 +1234,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 
 		// Ensure ring buffer is initialized but preserve existing entries
 		if st.logs == nil {
-			st.logs = make([]LogEntry, constants.S6MaxLines)
+			st.logs = make([]process_manager.LogEntry, constants.S6MaxLines)
 		}
 		// NOTE: We do NOT reset st.head or st.full here to preserve existing entries
 		// The ring buffer will naturally handle new entries being appended
@@ -1408,7 +1300,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 		length = st.head // number of valid entries written so far
 	}
 
-	out := make([]LogEntry, length)
+	out := make([]process_manager.LogEntry, length)
 
 	// `head` always points **to** the slot for the *next* write, so the
 	// oldest entry is there, and the newest entry is just before it.
@@ -1434,13 +1326,13 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 //
 //	*apart from the unavoidable string↔[]byte conversions needed for the
 //	LogEntry struct – those are just header copies, no heap memcopy.
-func ParseLogsFromBytes(buf []byte) ([]LogEntry, error) {
+func ParseLogsFromBytes(buf []byte) ([]process_manager.LogEntry, error) {
 	// Trim one trailing newline that is always present in rotated logs.
 	buf = bytes.TrimSuffix(buf, []byte{'\n'})
 
 	// 1) -------- pre-allocation --------------------------------------
 	nLines := bytes.Count(buf, []byte{'\n'}) + 1
-	entries := make([]LogEntry, 0, nLines) // avoids  runtime.growslice
+	entries := make([]process_manager.LogEntry, 0, nLines) // avoids  runtime.growslice
 
 	// 2) -------- single pass over the buffer -------------------------
 	for start := 0; start < len(buf); {
@@ -1462,17 +1354,17 @@ func ParseLogsFromBytes(buf []byte) ([]LogEntry, error) {
 		// format: 2025-04-20 13:01:02.123456789␠␠payload
 		sep := bytes.Index(line, []byte("  "))
 		if sep == -1 || sep < 29 { // malformed – keep raw
-			entries = append(entries, LogEntry{Content: string(line)})
+			entries = append(entries, process_manager.LogEntry{Content: string(line)})
 			continue
 		}
 
 		ts, err := ParseNano(string(line[:sep])) // ParseNano is already fast
 		if err != nil {
-			entries = append(entries, LogEntry{Content: string(line)})
+			entries = append(entries, process_manager.LogEntry{Content: string(line)})
 			continue
 		}
 
-		entries = append(entries, LogEntry{
+		entries = append(entries, process_manager.LogEntry{
 			Timestamp: ts,
 			Content:   string(line[sep+2:]),
 		})
@@ -1481,12 +1373,12 @@ func ParseLogsFromBytes(buf []byte) ([]LogEntry, error) {
 }
 
 // ParseLogsFromBytes_Unoptimized is the more readable not optimized version of ParseLogsFromBytes
-func ParseLogsFromBytes_Unoptimized(content []byte) ([]LogEntry, error) {
+func ParseLogsFromBytes_Unoptimized(content []byte) ([]process_manager.LogEntry, error) {
 	// Split logs by newline
 	logs := strings.Split(strings.TrimSpace(string(content)), "\n")
 
 	// Parse each log line into structured entries
-	var entries []LogEntry
+	var entries []process_manager.LogEntry
 	for _, line := range logs {
 		if line == "" {
 			continue
@@ -1502,16 +1394,16 @@ func ParseLogsFromBytes_Unoptimized(content []byte) ([]LogEntry, error) {
 }
 
 // parseLogLine parses a log line from S6 format and returns a LogEntry
-func parseLogLine(line string) LogEntry {
+func parseLogLine(line string) process_manager.LogEntry {
 	// Quick check for empty strings or too short lines
 	if len(line) < 28 { // Minimum length for "YYYY-MM-DD HH:MM:SS.<9 digit nanoseconds>  content"
-		return LogEntry{Content: line}
+		return process_manager.LogEntry{Content: line}
 	}
 
 	// Check if we have the double space separator
 	sepIdx := strings.Index(line, "  ")
 	if sepIdx == -1 || sepIdx > 29 {
-		return LogEntry{Content: line}
+		return process_manager.LogEntry{Content: line}
 	}
 
 	// Extract timestamp part
@@ -1527,10 +1419,10 @@ func parseLogLine(line string) LogEntry {
 	// We are using ParseNano over time.Parse because it is faster for our specific time format
 	timestamp, err := ParseNano(timestampStr)
 	if err != nil {
-		return LogEntry{Content: line}
+		return process_manager.LogEntry{Content: line}
 	}
 
-	return LogEntry{
+	return process_manager.LogEntry{
 		Timestamp: timestamp,
 		Content:   content,
 	}
@@ -1643,17 +1535,17 @@ func (s *DefaultService) findLatestRotatedFile(entries []string) string {
 //   - HealthUnknown: probe failed due to I/O errors, timeouts, etc. - retry next tick
 //   - HealthOK: service directory is healthy and complete
 //   - HealthBad: service directory is definitely broken - triggers FSM transition
-func (s *DefaultService) CheckHealth(ctx context.Context, servicePath string, fsService filesystem.Service) (HealthStatus, error) {
+func (s *DefaultService) CheckHealth(ctx context.Context, servicePath string, fsService filesystem.Service) (process_manager.HealthStatus, error) {
 	// Context already cancelled → Unknown, never Bad
 	if ctx.Err() != nil {
-		return HealthUnknown, ctx.Err()
+		return process_manager.HealthUnknown, ctx.Err()
 	}
 
 	// If we don't have tracked artifacts, the service is in an inconsistent state
 	artifacts := s.artifacts
 	if artifacts == nil || len(artifacts.CreatedFiles) == 0 {
 		s.logger.Debugf("No tracked files for service %s, returning HealthBad", servicePath)
-		return HealthBad, nil
+		return process_manager.HealthBad, nil
 	}
 
 	// Use lifecycle manager for comprehensive health check

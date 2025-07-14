@@ -17,6 +17,7 @@ package s6
 import (
 	"context"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -206,7 +207,7 @@ var _ = Describe("S6 Log Rotation", func() {
 	Describe("appendToRingBuffer", func() {
 		It("should append entries to empty ring buffer", func() {
 			st := &logState{}
-			entries := []LogEntry{
+			entries := []process_manager.LogEntry{
 				{Timestamp: time.Now(), Content: "test1"},
 				{Timestamp: time.Now(), Content: "test2"},
 			}
@@ -231,12 +232,12 @@ var _ = Describe("S6 Log Rotation", func() {
 
 			// Create more entries than the ring buffer can hold
 			totalEntries := maxLines + 50 // Exceed capacity by 50
-			entries := make([]LogEntry, totalEntries)
+			entries := make([]process_manager.LogEntry, totalEntries)
 
 			// Create entries with sequential timestamps and identifiable content
 			baseTime := time.Now()
 			for i := 0; i < totalEntries; i++ {
-				entries[i] = LogEntry{
+				entries[i] = process_manager.LogEntry{
 					Timestamp: baseTime.Add(time.Duration(i) * time.Second),
 					Content:   fmt.Sprintf("entry_%d", i),
 				}
@@ -291,9 +292,9 @@ var _ = Describe("S6 Log Rotation", func() {
 			maxLines := constants.S6MaxLines
 
 			// Create exactly maxLines entries (should fill but not wrap)
-			entries := make([]LogEntry, maxLines)
+			entries := make([]process_manager.LogEntry, maxLines)
 			for i := 0; i < maxLines; i++ {
-				entries[i] = LogEntry{
+				entries[i] = process_manager.LogEntry{
 					Timestamp: time.Now().Add(time.Duration(i) * time.Second),
 					Content:   fmt.Sprintf("exact_entry_%d", i),
 				}
@@ -318,16 +319,16 @@ var _ = Describe("S6 Log Rotation", func() {
 			maxLines := constants.S6MaxLines
 
 			// First fill: exactly maxLines entries
-			firstBatch := make([]LogEntry, maxLines)
+			firstBatch := make([]process_manager.LogEntry, maxLines)
 			for i := 0; i < maxLines; i++ {
-				firstBatch[i] = LogEntry{Content: fmt.Sprintf("first_%d", i)}
+				firstBatch[i] = process_manager.LogEntry{Content: fmt.Sprintf("first_%d", i)}
 			}
 			service.appendToRingBuffer(firstBatch, st)
 
 			// Second fill: another maxLines entries (complete wrap)
-			secondBatch := make([]LogEntry, maxLines)
+			secondBatch := make([]process_manager.LogEntry, maxLines)
 			for i := 0; i < maxLines; i++ {
-				secondBatch[i] = LogEntry{Content: fmt.Sprintf("second_%d", i)}
+				secondBatch[i] = process_manager.LogEntry{Content: fmt.Sprintf("second_%d", i)}
 			}
 			service.appendToRingBuffer(secondBatch, st)
 
