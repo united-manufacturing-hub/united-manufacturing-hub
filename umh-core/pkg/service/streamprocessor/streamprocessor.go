@@ -536,7 +536,7 @@ func (p *Service) ReconcileManager(
 	p.logger.Debugf("Reconciling streamprocessor manager at tick %d", tick)
 
 	if p.dataflowComponentManager == nil {
-		return errors.New("dataflowcomponent manager not initilized"), false
+		return errors.New("dataflowcomponent manager not initialized"), false
 	}
 
 	if ctx.Err() != nil {
@@ -579,7 +579,7 @@ func (p *Service) ServiceExists(
 }
 
 // ForceRemove removes a StreamProcessor from the  DFC manager
-// Expects spName (e.g. "streamrpcoessor-myservice") as defined in the UMH config
+// Expects spName (e.g. "streamprocessor-myservice") as defined in the UMH config
 func (c *Service) ForceRemove(
 	ctx context.Context,
 	filesystemService filesystem.Service,
