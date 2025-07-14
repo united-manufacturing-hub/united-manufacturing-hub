@@ -17,7 +17,6 @@ package ipm
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -86,45 +85,29 @@ func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier
 	logPath := filepath.Join(servicePath, logDirectoryName)
 	pidFile := filepath.Join(servicePath, pidFileName)
 
+	// Ensure log directory exists
+	if err := fsService.EnsureDirectory(ctx, logPath); err != nil {
+		return fmt.Errorf("error ensuring log directory: %w", err)
+	}
+
+	// Register service with log manager for rotation monitoring
+	pm.logManager.RegisterService(identifier, logPath, config.LogFilesize)
+
 	// Determine the command to execute - for now, assume there's a "run.sh" script
 	// TODO: This should be configurable in the service config
 	commandPath := filepath.Join(configPath, "run.sh")
+	currentLogFile := filepath.Join(logPath, "current")
 
-	// Create the command
-	cmd := exec.CommandContext(ctx, "/bin/bash", commandPath)
+	// Create the command with shell redirection
+	// Format: /bin/bash /path/to/run.sh >> /path/to/logs/current 2>&1
+	shellCommand := fmt.Sprintf("/bin/bash %s >> %s 2>&1", commandPath, currentLogFile)
+
+	// Create the command using shell to handle the redirection
+	cmd := exec.CommandContext(ctx, "/bin/bash", "-c", shellCommand)
 	cmd.Dir = configPath
-
-	// Set up logging - redirect stdout and stderr to a single log file
-	currentLogFile := filepath.Join(logPath, "current.log")
-
-	// Ensure the log directory exists on the real filesystem (needed for stdout/stderr redirection)
-	// We use os.MkdirAll instead of fsService because the log file needs to exist on the real filesystem
-	err := os.MkdirAll(logPath, 0755)
-	if err != nil {
-		// If we can't create the directory (e.g., permission denied in tests),
-		// use a temporary directory as fallback
-		tempDir, tempErr := os.MkdirTemp("", "ipm-test-log-")
-		if tempErr != nil {
-			return fmt.Errorf("error creating log directory and temp fallback: %w", tempErr)
-		}
-		logPath = tempDir
-		currentLogFile = filepath.Join(logPath, "current.log")
-	}
-
-	// Open the log file for writing (create if it doesn't exist, append if it does)
-	logFile, err := os.OpenFile(currentLogFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		return fmt.Errorf("error opening log file: %w", err)
-	}
-	// Note: We don't defer close here because the process needs to keep writing to this file
-
-	// Redirect both stdout and stderr to the same log file
-	cmd.Stdout = logFile
-	cmd.Stderr = logFile
 
 	// Start the process
 	if err := cmd.Start(); err != nil {
-		logFile.Close() // Close log file since process failed to start
 		return fmt.Errorf("error starting process: %w", err)
 	}
 
@@ -139,7 +122,6 @@ func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier
 		if killErr := cmd.Process.Kill(); killErr != nil {
 			pm.Logger.Error("Failed to kill process after PID write failure", zap.Int("pid", pid), zap.Error(killErr))
 		}
-		logFile.Close() // Close log file since we're terminating the process
 		return fmt.Errorf("error writing PID file: %w", err)
 	}
 

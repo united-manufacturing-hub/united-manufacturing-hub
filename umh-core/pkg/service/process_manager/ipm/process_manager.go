@@ -72,6 +72,9 @@ type ProcessManager struct {
 
 	// serviceDirectory is the root directory where service files are stored
 	serviceDirectory string
+
+	// logManager manages log files with rotation
+	logManager *LogManager
 }
 
 type service struct {
@@ -98,6 +101,7 @@ func NewProcessManager(logger *zap.SugaredLogger, options ...ProcessManagerOptio
 		services:         make(map[serviceIdentifier]service),
 		taskQueue:        make([]Task, 0),
 		serviceDirectory: DefaultServiceDirectory, // Default value
+		logManager:       NewLogManager(logger),
 	}
 
 	// Apply options
@@ -284,4 +288,20 @@ func (pm *ProcessManager) EnsureSupervision(ctx context.Context, servicePath str
 	pm.Logger.Info("Ensuring supervision of process manager service", zap.String("servicePath", servicePath))
 
 	return false, errors.New("not implemented")
+}
+
+// Close closes all log files and performs cleanup
+func (pm *ProcessManager) Close() error {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	pm.Logger.Info("Closing ProcessManager and all log files")
+
+	// Close all log files
+	if err := pm.logManager.CloseAll(); err != nil {
+		pm.Logger.Error("Error closing log files", zap.Error(err))
+		return err
+	}
+
+	return nil
 }

@@ -581,7 +581,181 @@ var _ = Describe("ProcessManager", func() {
 		})
 	})
 
-	Describe("Real Filesystem Tests", func() {
+	Context("Resilience to Short Context Timeouts", func() {
+		It("should eventually succeed creating a service even with very short context timeouts", func() {
+			// Use a very short timeout that might interrupt the operation
+			shortCtx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+			defer cancel()
+
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "test: value",
+					"run.sh":      "#!/bin/bash\necho 'Hello World'",
+				},
+				LogFilesize: 8192,
+			}
+
+			// First attempt with short timeout - might fail
+			_ = pm.Create(shortCtx, "timeout-test-service", config, fsService)
+			// Don't check error here - it might timeout
+
+			// Retry with longer timeout - should eventually succeed
+			normalCtx, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel2()
+
+			var finalErr error
+			for i := 0; i < 10; i++ { // Allow up to 10 retries
+				finalErr = pm.Create(normalCtx, "timeout-test-service", config, fsService)
+				if finalErr == nil {
+					break
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+
+			Expect(finalErr).ToNot(HaveOccurred())
+		})
+
+		It("should eventually succeed starting a service even with very short context timeouts", func() {
+			// First create the service
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "test: value",
+					"run.sh":      "#!/bin/bash\necho 'Hello World'\nsleep 10",
+				},
+				LogFilesize: 8192,
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			err := pm.Create(ctx, "timeout-start-service", config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Use a very short timeout that might interrupt the start operation
+			shortCtx, cancel2 := context.WithTimeout(context.Background(), 1*time.Millisecond)
+			defer cancel2()
+
+			// First attempt with short timeout - might fail
+			_ = pm.Start(shortCtx, "timeout-start-service", fsService)
+			// Don't check error here - it might timeout
+
+			// Retry with longer timeout - should eventually succeed
+			normalCtx, cancel3 := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel3()
+
+			var finalErr error
+			for i := 0; i < 10; i++ { // Allow up to 10 retries
+				finalErr = pm.Start(normalCtx, "timeout-start-service", fsService)
+				if finalErr == nil {
+					break
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+
+			Expect(finalErr).ToNot(HaveOccurred())
+		})
+
+		It("should eventually succeed removing a service even with very short context timeouts", func() {
+			// First create the service
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "test: value",
+					"run.sh":      "#!/bin/bash\necho 'Hello World'",
+				},
+				LogFilesize: 8192,
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			err := pm.Create(ctx, "timeout-remove-service", config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Use a very short timeout that might interrupt the remove operation
+			shortCtx, cancel2 := context.WithTimeout(context.Background(), 1*time.Millisecond)
+			defer cancel2()
+
+			// First attempt with short timeout - might fail
+			_ = pm.Remove(shortCtx, "timeout-remove-service", fsService)
+			// Don't check error here - it might timeout
+
+			// Retry with longer timeout - should eventually succeed
+			normalCtx, cancel3 := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel3()
+
+			var finalErr error
+			for i := 0; i < 10; i++ { // Allow up to 10 retries
+				finalErr = pm.Remove(normalCtx, "timeout-remove-service", fsService)
+				if finalErr == nil {
+					break
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+
+			Expect(finalErr).ToNot(HaveOccurred())
+		})
+
+		It("should handle multiple rapid operations with short timeouts gracefully", func() {
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "test: value",
+					"run.sh":      "#!/bin/bash\necho 'Hello World'",
+				},
+				LogFilesize: 8192,
+			}
+
+			// Simulate rapid operations with very short timeouts
+			for i := 0; i < 5; i++ {
+				shortCtx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+				_ = pm.Create(shortCtx, "rapid-test-service", config, fsService)
+				cancel()
+
+				shortCtx2, cancel2 := context.WithTimeout(context.Background(), 1*time.Millisecond)
+				_ = pm.Remove(shortCtx2, "rapid-test-service", fsService)
+				cancel2()
+			}
+
+			// Eventually, with a proper timeout, it should succeed
+			normalCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			var finalErr error
+			for i := 0; i < 10; i++ {
+				finalErr = pm.Create(normalCtx, "rapid-test-service", config, fsService)
+				if finalErr == nil {
+					break
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+
+			Expect(finalErr).ToNot(HaveOccurred())
+		})
+
+		It("should handle context cancellation during step processing gracefully", func() {
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "test: value",
+					"run.sh":      "#!/bin/bash\necho 'Hello World'",
+				},
+				LogFilesize: 8192,
+			}
+
+			// Create a context that we'll cancel immediately
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel() // Cancel immediately
+
+			// This should fail due to cancelled context
+			err := pm.Create(ctx, "cancel-test-service", config, fsService)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(Equal(context.Canceled))
+
+			// But with a fresh context, it should succeed
+			freshCtx, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel2()
+			err = pm.Create(freshCtx, "cancel-test-service", config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+		})
+	})
+
+	Context("Real Filesystem Tests", func() {
 		var (
 			tempDir string
 			realFS  filesystem.Service

@@ -57,6 +57,12 @@ func (pm *ProcessManager) step(ctx context.Context, fsService filesystem.Service
 		return nil // No time left, stop
 	}
 
+	// Before processing tasks, check and rotate logs if needed
+	if err := pm.logManager.CheckAndRotate(ctx, fsService); err != nil {
+		pm.Logger.Error("Error during log rotation", zap.Error(err))
+		// Continue with task processing even if log rotation fails
+	}
+
 	// Check if there are any tasks to process
 	if len(pm.taskQueue) > 0 {
 		task := pm.taskQueue[0]
@@ -91,11 +97,9 @@ func (pm *ProcessManager) step(ctx context.Context, fsService filesystem.Service
 
 	// Only recurse if there are more tasks to process
 	if len(pm.taskQueue) > 0 {
-		// Step again (the callee will check if there is time left)
 		return pm.step(ctx, fsService)
 	}
 
-	// No more tasks to process
 	return nil
 }
 

@@ -39,6 +39,9 @@ func (pm *ProcessManager) removeService(ctx context.Context, identifier serviceI
 
 	servicePath := filepath.Join(pm.serviceDirectory, string(identifier))
 
+	// Close the log file for this service to prevent file handle leaks
+	pm.logManager.UnregisterService(identifier)
+
 	// Attempt to terminate any running process gracefully
 	if err := pm.terminateServiceProcess(ctx, servicePath, fsService); err != nil {
 		// Log error but continue with cleanup - we want to remove the service directory regardless
