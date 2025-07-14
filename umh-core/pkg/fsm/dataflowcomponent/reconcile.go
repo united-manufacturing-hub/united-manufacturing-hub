@@ -25,8 +25,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	dataflowcomponentservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
@@ -45,18 +43,15 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentDataflowComponentInstance, dataflowComponentInstanceName, time.Since(start))
 		if err != nil {
-			d.baseFSMInstance.GetLogger().Errorf("error reconciling dataflow component instance %s: %s", dataflowComponentInstanceName, err)
+			d.baseFSMInstance.GetLogger().Errorf("error reconciling dataflowcomponent instance %s: %v", dataflowComponentInstanceName, err)
 			d.PrintState()
 			// Add metrics for error
-			metrics.IncErrorCountAndLog(metrics.ComponentDataflowComponentInstance, dataflowComponentInstanceName, err, d.baseFSMInstance.GetLogger())
+			metrics.IncErrorCount(metrics.ComponentDataflowComponentInstance, dataflowComponentInstanceName)
 		}
 	}()
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
-		if d.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "start of reconciliation") {
-			return nil, false
-		}
 		return ctx.Err(), false
 	}
 
@@ -95,34 +90,25 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 		return nil, false
 	}
 
-	// Step 2: Detect external changes.
+	// Step 2: Try to read child status every tick (but continue even if it fails)
 	err = d.reconcileExternalChanges(ctx, services, snapshot)
 	if err != nil {
-		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
-		if !errors.Is(err, dataflowcomponentservice.ErrServiceNotExists) && !errors.Is(err, s6.ErrServiceNotExist) {
-			// errors.Is(err, s6.ErrServiceNotExist)
-			// Consider a special case for DFC FSM here
-			// While creating for the first time, reconcileExternalChanges function will throw an error such as
-			// s6 service not found in the path since DFC fsm is relying on BenthosFSM and Benthos in turn relies on S6 fsm
-			// Inorder for DFC fsm to start, benthosManager.Reconcile should be called and this is called at the end of the function
-			// So set the err to nil in this case
-			// An example error: "failed to update observed state: failed to get observed DataflowComponent config: failed to get benthos config: failed to get benthos config file for service benthos-dataflow-hello-world-dfc: service does not exist"
+		// Log the error but always continue reconciling - we need ReconcileManager to run
+		// to restore child services after restart, even if we can't read their status yet
+		d.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)
 
-			if errors.Is(err, context.DeadlineExceeded) {
-				// Context deadline exceeded should be retried with backoff, not ignored
-				d.baseFSMInstance.SetError(err, snapshot.Tick)
-				d.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileExternalChanges, will retry with backoff")
-				err = nil // Clear error so reconciliation continues
-				return nil, false
-			}
-
+		if errors.Is(err, context.DeadlineExceeded) {
+			// Context deadline exceeded should be retried with backoff, not ignored
 			d.baseFSMInstance.SetError(err, snapshot.Tick)
-			d.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
-
-			return nil, false // We don't want to return an error here, because we want to continue reconciling
+			d.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileExternalChanges, will retry with backoff")
+			err = nil // Clear error so reconciliation continues
+			return nil, false
 		}
 
-		err = nil
+		d.baseFSMInstance.SetError(err, snapshot.Tick)
+		d.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
+
+		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
 	// Step 3: Attempt to reconcile the state.
@@ -134,33 +120,19 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 			return nil, false
 		}
 
-		if errors.Is(err, context.DeadlineExceeded) {
-			// Context deadline exceeded should be retried with backoff, not ignored
-			d.baseFSMInstance.SetError(err, snapshot.Tick)
-			d.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileStateTransition, will retry with backoff")
-			return nil, false
-		}
-
 		d.baseFSMInstance.SetError(err, snapshot.Tick)
 		d.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
-	// Reconcile the benthosManager
+	// Reconcile the benthos Manager
 	benthosErr, benthosReconciled := d.service.ReconcileManager(ctx, services, snapshot.Tick)
 	if benthosErr != nil {
-		if errors.Is(benthosErr, context.DeadlineExceeded) {
-			// Context deadline exceeded should be retried with backoff, not ignored
-			d.baseFSMInstance.SetError(benthosErr, snapshot.Tick)
-			d.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in benthosManager reconciliation, will retry with backoff")
-			return nil, false
-		}
 		d.baseFSMInstance.SetError(benthosErr, snapshot.Tick)
 		d.baseFSMInstance.GetLogger().Errorf("error reconciling benthosManager: %s", benthosErr)
 		return nil, false
 	}
-
-	// If either Dataflowcomponent state or Benthos state was reconciled, we return reconciled so that nothing happens anymore in this tick
+	// If either Dataflowcomponent state or benthos manager state was reconciled, we return reconciled so that nothing happens anymore in this tick
 	// nothing should happen as we might have already taken up some significant time of the avaialble time per tick, so better
 	// to be on the safe side and let the rest handle in another tick
 	reconciled = reconciled || benthosReconciled

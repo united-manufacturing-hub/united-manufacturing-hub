@@ -48,15 +48,12 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 			n.baseFSMInstance.GetLogger().Errorf("error reconciling nmap instance %s: %s", instanceName, err)
 			n.PrintState()
 			// Add metrics for error
-			metrics.IncErrorCountAndLog(metrics.ComponentNmapInstance, instanceName, err, n.baseFSMInstance.GetLogger())
+			metrics.IncErrorCount(metrics.ComponentNmapInstance, instanceName)
 		}
 	}()
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
-		if n.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "start of reconciliation") {
-			return nil, false
-		}
 		return ctx.Err(), false
 	}
 
@@ -95,20 +92,20 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, nmap_service.ErrServiceNotExist) {
 
-			if n.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
+			if errors.Is(err, context.DeadlineExceeded) {
+				// Context deadline exceeded should be retried with backoff, not ignored
+				n.baseFSMInstance.SetError(err, snapshot.Tick)
+				n.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileExternalChanges, will retry with backoff")
+				err = nil // Clear error so reconciliation continues
 				return nil, false
 			}
 
 			n.baseFSMInstance.SetError(err, snapshot.Tick)
 			n.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
-
-			// We want to return the error here, to stop reconciling since this would
-			// lead the fsm going into degraded. But Nmap-scans are triggered once per second
-			// and each tick is 100ms, therefore it could fail, because it doesn't get
-			// complete logs from which it parses.
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
-		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition}
+
+		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
 	}
 
 	// Step 3: Attempt to reconcile the state.
@@ -116,10 +113,6 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
 		if errors.Is(err, standarderrors.ErrInstanceRemoved) {
-			return nil, false
-		}
-
-		if n.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileStateTransition") {
 			return nil, false
 		}
 
@@ -131,11 +124,8 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 	// Reconcile the s6Manager
 	s6Err, s6Reconciled := n.monitorService.ReconcileManager(ctx, services, snapshot.Tick)
 	if s6Err != nil {
-		if n.baseFSMInstance.IsDeadlineExceededAndHandle(s6Err, snapshot.Tick, "monitorService reconciliation") {
-			return nil, false
-		}
 		n.baseFSMInstance.SetError(s6Err, snapshot.Tick)
-		n.baseFSMInstance.GetLogger().Errorf("error reconciling monitorService: %s", s6Err)
+		n.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
 		return nil, false
 	}
 

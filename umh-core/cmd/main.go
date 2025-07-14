@@ -30,7 +30,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -104,9 +103,9 @@ func main() {
 		topicbrowser.NewCache(),
 	)
 
-	// Start the topic browser cache updater independent of the backend connection (e.g., for HTTP endpoints)
-	// it updates the TopicBrowserCache based on the observed state of the topic browser service once per second
-	communicationState.StartTopicBrowserCacheUpdater(systemSnapshotManager, ctx, configData.Agent.Simulator)
+	// Initialize the topic browser simulator (cache update logic moved to subscriber notification pipeline)
+	// This eliminates the redundant ticker and consolidates the architecture
+	communicationState.InitializeTopicBrowserSimulator(configData.Agent.Simulator)
 
 	// Start the GraphQL server if enabled
 	var graphqlServer *graphql.Server
@@ -220,10 +219,6 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 							case "ProtocolConverterManagerCore":
 								if pcSnapshot, ok := instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot); ok {
 									statusReason = pcSnapshot.ServiceInfo.StatusReason
-								}
-							case "RedpandaManagerCore":
-								if redpandaSnapshot, ok := instance.LastObservedState.(*redpanda.RedpandaObservedStateSnapshot); ok {
-									statusReason = redpandaSnapshot.ServiceInfoSnapshot.StatusReason
 								}
 							}
 						}
