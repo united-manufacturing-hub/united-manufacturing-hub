@@ -26,22 +26,52 @@ import (
 	"golang.org/x/net/context"
 )
 
+// OperationType represents the type of operation to be performed on a service
+type OperationType int
+
+const (
+	OperationCreate OperationType = iota
+	OperationRemove
+	OperationRestart
+	OperationStart
+	OperationStop
+)
+
+// String returns the string representation of the operation type
+func (o OperationType) String() string {
+	switch o {
+	case OperationCreate:
+		return "create"
+	case OperationRemove:
+		return "remove"
+	case OperationRestart:
+		return "restart"
+	case OperationStart:
+		return "start"
+	case OperationStop:
+		return "stop"
+	default:
+		return "unknown"
+	}
+}
+
+// Task represents a pending operation on a service
+type Task struct {
+	Identifier serviceIdentifier
+	Operation  OperationType
+}
+
 type ProcessManager struct {
 	Logger *zap.SugaredLogger
 	mu     sync.Mutex
 
 	services map[serviceIdentifier]service
 
-	// toBeCreated is a list of services that need to be created
-	toBeCreated []serviceIdentifier
-	// toBeRemoved is a list of services that need to be removed
-	toBeRemoved []serviceIdentifier
-	// toBeRestarted is a list of services that need to be restarted
-	toBeRestarted []serviceIdentifier
-	// toBeStarted is a list of services that need to be started
-	toBeStarted []serviceIdentifier
-	// toBeStopped is a list of services that need to be stopped
-	toBeStopped []serviceIdentifier
+	// taskQueue is a list of pending operations to be processed
+	taskQueue []Task
+
+	// serviceDirectory is the root directory where service files are stored
+	serviceDirectory string
 }
 
 type service struct {
@@ -49,7 +79,34 @@ type service struct {
 	history process_shared.ServiceInfo
 }
 
-const IPM_SERVICE_DIRECTORY = "/var/lib/umh/ipm"
+const DefaultServiceDirectory = "/var/lib/umh/ipm"
+
+// ProcessManagerOption is a functional option for configuring ProcessManager
+type ProcessManagerOption func(*ProcessManager)
+
+// WithServiceDirectory sets the service directory for the ProcessManager
+func WithServiceDirectory(dir string) ProcessManagerOption {
+	return func(pm *ProcessManager) {
+		pm.serviceDirectory = dir
+	}
+}
+
+// NewProcessManager creates a new ProcessManager with the given options
+func NewProcessManager(logger *zap.SugaredLogger, options ...ProcessManagerOption) *ProcessManager {
+	pm := &ProcessManager{
+		Logger:           logger,
+		services:         make(map[serviceIdentifier]service),
+		taskQueue:        make([]Task, 0),
+		serviceDirectory: DefaultServiceDirectory, // Default value
+	}
+
+	// Apply options
+	for _, option := range options {
+		option(pm)
+	}
+
+	return pm
+}
 
 func (pm *ProcessManager) Create(ctx context.Context, servicePath string, config process_manager_serviceconfig.ProcessManagerServiceConfig, fsService filesystem.Service) error {
 	pm.mu.Lock()
@@ -71,7 +128,11 @@ func (pm *ProcessManager) Create(ctx context.Context, servicePath string, config
 	}
 
 	// Add to toBeCreated list
-	pm.toBeCreated = append(pm.toBeCreated, identifier)
+	// pm.toBeCreated = append(pm.toBeCreated, identifier) // This line is removed as per the new_code
+	pm.taskQueue = append(pm.taskQueue, Task{
+		Identifier: identifier,
+		Operation:  OperationCreate,
+	})
 
 	// Advance the service handling process
 	return pm.step(ctx, fsService)
@@ -92,7 +153,11 @@ func (pm *ProcessManager) Remove(ctx context.Context, servicePath string, fsServ
 	delete(pm.services, identifier)
 
 	// Add to toBeRemoved list
-	pm.toBeRemoved = append(pm.toBeRemoved, identifier)
+	// pm.toBeRemoved = append(pm.toBeRemoved, identifier) // This line is removed as per the new_code
+	pm.taskQueue = append(pm.taskQueue, Task{
+		Identifier: identifier,
+		Operation:  OperationRemove,
+	})
 
 	// Advance the service handling process
 	return pm.step(ctx, fsService)
@@ -105,7 +170,11 @@ func (pm *ProcessManager) Start(ctx context.Context, servicePath string, fsServi
 
 	identifier := servicePathToIdentifier(servicePath)
 	// Add to toBeStarted list
-	pm.toBeStarted = append(pm.toBeStarted, identifier)
+	// pm.toBeStarted = append(pm.toBeStarted, identifier) // This line is removed as per the new_code
+	pm.taskQueue = append(pm.taskQueue, Task{
+		Identifier: identifier,
+		Operation:  OperationStart,
+	})
 
 	// Advance the service handling process
 	return pm.step(ctx, fsService)
@@ -118,7 +187,11 @@ func (pm *ProcessManager) Stop(ctx context.Context, servicePath string, fsServic
 
 	identifier := servicePathToIdentifier(servicePath)
 	// Add to toBeStopped list
-	pm.toBeStopped = append(pm.toBeStopped, identifier)
+	// pm.toBeStopped = append(pm.toBeStopped, identifier) // This line is removed as per the new_code
+	pm.taskQueue = append(pm.taskQueue, Task{
+		Identifier: identifier,
+		Operation:  OperationStop,
+	})
 
 	// Advance the service handling process
 	return pm.step(ctx, fsService)
@@ -131,7 +204,11 @@ func (pm *ProcessManager) Restart(ctx context.Context, servicePath string, fsSer
 
 	identifier := servicePathToIdentifier(servicePath)
 	// Add to toBeRestarted list
-	pm.toBeRestarted = append(pm.toBeRestarted, identifier)
+	// pm.toBeRestarted = append(pm.toBeRestarted, identifier) // This line is removed as per the new_code
+	pm.taskQueue = append(pm.taskQueue, Task{
+		Identifier: identifier,
+		Operation:  OperationRestart,
+	})
 
 	// Advance the service handling process
 	return pm.step(ctx, fsService)

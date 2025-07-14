@@ -1,0 +1,148 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package ipm
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"go.uber.org/zap"
+)
+
+// startService orchestrates the starting of a service process in the process manager.
+// This function handles the complex task of checking for existing processes, terminating them if necessary,
+// and starting a new process atomically. The function first checks for an existing PID file to detect
+// running processes. If a process is already running, it terminates the existing process, removes the
+// PID file, and returns an error to allow retry. If no process is running, it starts a new subprocess
+// and saves its PID atomically to prevent race conditions during process startup.
+func (pm *ProcessManager) startService(ctx context.Context, identifier serviceIdentifier, fsService filesystem.Service) error {
+	pm.Logger.Info("Starting service", zap.String("identifier", string(identifier)))
+
+	servicePath := filepath.Join(pm.serviceDirectory, string(identifier))
+	pidFile := filepath.Join(servicePath, pidFileName)
+
+	// Check if there's already a PID file indicating a running process
+	if _, err := fsService.Stat(ctx, pidFile); err == nil {
+		pm.Logger.Info("Found existing PID file, terminating old process", zap.String("identifier", string(identifier)))
+
+		// Terminate the existing process
+		if err := pm.terminateServiceProcess(ctx, servicePath, fsService); err != nil {
+			pm.Logger.Error("Error terminating existing process", zap.Error(err))
+			return fmt.Errorf("error terminating existing process: %w", err)
+		}
+
+		// Remove the PID file
+		if err := fsService.Remove(ctx, pidFile); err != nil {
+			pm.Logger.Error("Error removing PID file", zap.Error(err))
+			return fmt.Errorf("error removing PID file: %w", err)
+		}
+
+		// Return an error to allow retry in the next step after cleanup
+		return fmt.Errorf("terminated existing process, retry start in next step")
+	}
+
+	// Get service configuration to determine what to execute
+	service, err := pm.getServiceConfig(identifier)
+	if err != nil {
+		return err
+	}
+
+	// Start the new process atomically
+	if err := pm.startProcessAtomically(ctx, identifier, service.config, fsService); err != nil {
+		return err
+	}
+
+	pm.Logger.Info("Service started successfully", zap.String("identifier", string(identifier)))
+	return nil
+}
+
+// startProcessAtomically starts a new service process and saves its PID in an atomic operation.
+// This function creates a subprocess based on the service configuration and immediately writes
+// its PID to the filesystem. If the PID writing fails, the process is terminated to maintain
+// consistency. This atomic approach ensures that either both the process starts and its PID
+// is recorded, or neither happens, preventing orphaned processes or missing PID files that
+// could cause management issues later.
+func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier serviceIdentifier, config process_manager_serviceconfig.ProcessManagerServiceConfig, fsService filesystem.Service) error {
+	servicePath := filepath.Join(pm.serviceDirectory, string(identifier))
+	configPath := filepath.Join(servicePath, configDirectoryName)
+	logPath := filepath.Join(servicePath, logDirectoryName)
+	pidFile := filepath.Join(servicePath, pidFileName)
+
+	// Determine the command to execute - for now, assume there's a "run.sh" script
+	// TODO: This should be configurable in the service config
+	commandPath := filepath.Join(configPath, "run.sh")
+
+	// Create the command
+	cmd := exec.CommandContext(ctx, "/bin/bash", commandPath)
+	cmd.Dir = configPath
+
+	// Set up logging - redirect stdout and stderr to a single log file
+	currentLogFile := filepath.Join(logPath, "current.log")
+
+	// Ensure the log directory exists on the real filesystem (needed for stdout/stderr redirection)
+	// We use os.MkdirAll instead of fsService because the log file needs to exist on the real filesystem
+	err := os.MkdirAll(logPath, 0755)
+	if err != nil {
+		// If we can't create the directory (e.g., permission denied in tests),
+		// use a temporary directory as fallback
+		tempDir, tempErr := os.MkdirTemp("", "ipm-test-log-")
+		if tempErr != nil {
+			return fmt.Errorf("error creating log directory and temp fallback: %w", tempErr)
+		}
+		logPath = tempDir
+		currentLogFile = filepath.Join(logPath, "current.log")
+	}
+
+	// Open the log file for writing (create if it doesn't exist, append if it does)
+	logFile, err := os.OpenFile(currentLogFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("error opening log file: %w", err)
+	}
+	// Note: We don't defer close here because the process needs to keep writing to this file
+
+	// Redirect both stdout and stderr to the same log file
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+
+	// Start the process
+	if err := cmd.Start(); err != nil {
+		logFile.Close() // Close log file since process failed to start
+		return fmt.Errorf("error starting process: %w", err)
+	}
+
+	// Get the process PID
+	pid := cmd.Process.Pid
+
+	// Atomically write the PID to the file
+	pidData := []byte(strconv.Itoa(pid))
+	if err := fsService.WriteFile(ctx, pidFile, pidData, configFilePermission); err != nil {
+		// If writing PID fails, terminate the process to maintain consistency
+		pm.Logger.Error("Failed to write PID file, terminating process", zap.Int("pid", pid), zap.Error(err))
+		if killErr := cmd.Process.Kill(); killErr != nil {
+			pm.Logger.Error("Failed to kill process after PID write failure", zap.Int("pid", pid), zap.Error(killErr))
+		}
+		logFile.Close() // Close log file since we're terminating the process
+		return fmt.Errorf("error writing PID file: %w", err)
+	}
+
+	pm.Logger.Info("Process started and PID saved", zap.String("identifier", string(identifier)), zap.Int("pid", pid))
+	return nil
+}

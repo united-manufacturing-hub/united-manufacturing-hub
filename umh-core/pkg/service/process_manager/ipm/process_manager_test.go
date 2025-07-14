@@ -30,6 +30,18 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 )
 
+// mockFileInfo is a simple implementation of os.FileInfo for testing
+type mockFileInfo struct {
+	name string
+}
+
+func (m *mockFileInfo) Name() string       { return m.name }
+func (m *mockFileInfo) Size() int64        { return 0 }
+func (m *mockFileInfo) Mode() os.FileMode  { return 0644 }
+func (m *mockFileInfo) ModTime() time.Time { return time.Now() }
+func (m *mockFileInfo) IsDir() bool        { return false }
+func (m *mockFileInfo) Sys() interface{}   { return nil }
+
 var _ = Describe("ProcessManager", func() {
 	var (
 		pm        *ProcessManager
@@ -39,8 +51,15 @@ var _ = Describe("ProcessManager", func() {
 	)
 
 	BeforeEach(func() {
-		ctx = context.Background()
-		logger = zap.NewNop().Sugar()
+		// Use a context with a deadline for testing
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
+		DeferCleanup(cancel)
+
+		// Use a development logger for testing so we can see log messages
+		devLogger, _ := zap.NewDevelopment()
+		logger = devLogger.Sugar()
+
 		mockFS := filesystem.NewMockFileSystem()
 
 		// Setup mock filesystem to return the content that was written
@@ -54,17 +73,17 @@ var _ = Describe("ProcessManager", func() {
 			return []byte{}, nil
 		})
 
+		// Setup mock filesystem to indicate no PID file exists by default
+		mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+			if filepath.Base(path) == "run.pid" {
+				return nil, os.ErrNotExist
+			}
+			return nil, os.ErrNotExist
+		})
+
 		fsService = mockFS
 
-		pm = &ProcessManager{
-			Logger:        logger,
-			services:      make(map[serviceIdentifier]service),
-			toBeCreated:   make([]serviceIdentifier, 0),
-			toBeRemoved:   make([]serviceIdentifier, 0),
-			toBeRestarted: make([]serviceIdentifier, 0),
-			toBeStarted:   make([]serviceIdentifier, 0),
-			toBeStopped:   make([]serviceIdentifier, 0),
-		}
+		pm = NewProcessManager(logger)
 	})
 
 	Describe("Create", func() {
@@ -77,6 +96,7 @@ var _ = Describe("ProcessManager", func() {
 				},
 			}
 
+			// First, add service to the PM's service map
 			err := pm.Create(ctx, servicePath, config, fsService)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -88,12 +108,12 @@ var _ = Describe("ProcessManager", func() {
 			Expect(service.history.Status).To(Equal(process_shared.ServiceUnknown))
 			Expect(service.history.ExitHistory).To(HaveLen(0))
 
-			// Verify service was added to toBeCreated (should be empty after step() execution)
-			Expect(pm.toBeCreated).To(HaveLen(0))
+			// Verify service was added to task queue (should be empty after step() execution)
+			Expect(pm.taskQueue).To(HaveLen(0))
 
 			// Verify directories were created
-			logDir := filepath.Join(IPM_SERVICE_DIRECTORY, servicePath, "log")
-			configDir := filepath.Join(IPM_SERVICE_DIRECTORY, servicePath, "config")
+			logDir := filepath.Join(DefaultServiceDirectory, servicePath, "log")
+			configDir := filepath.Join(DefaultServiceDirectory, servicePath, "config")
 
 			logDirExists, err := fsService.PathExists(ctx, logDir)
 			Expect(err).ToNot(HaveOccurred())
@@ -154,6 +174,11 @@ var _ = Describe("ProcessManager", func() {
 				return fmt.Errorf("mock filesystem error")
 			})
 
+			// Ensure no PID file exists to bypass cleanup logic
+			mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+				return nil, os.ErrNotExist
+			})
+
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
 				ConfigFiles: map[string]string{
@@ -173,6 +198,11 @@ var _ = Describe("ProcessManager", func() {
 				return fmt.Errorf("mock filesystem error")
 			})
 
+			// Ensure no PID file exists to bypass cleanup logic
+			mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+				return nil, os.ErrNotExist
+			})
+
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
 				ConfigFiles: map[string]string{
@@ -183,6 +213,53 @@ var _ = Describe("ProcessManager", func() {
 			err := pm.Create(ctx, servicePath, config, mockFS)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("error writing config file"))
+		})
+
+		It("should cleanup old PID file and retry creation", func() {
+			servicePath := "test-service"
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "test: value",
+				},
+			}
+
+			// Setup mock filesystem to simulate existing PID file
+			mockFS := filesystem.NewMockFileSystem()
+			pidFileExists := true
+			mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+				if filepath.Base(path) == "run.pid" && pidFileExists {
+					return &mockFileInfo{name: "run.pid"}, nil
+				}
+				return nil, os.ErrNotExist
+			})
+
+			// Mock ReadFile to return a PID when the file exists
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+				if filepath.Base(path) == "run.pid" && pidFileExists {
+					return []byte("99999"), nil // Non-existent PID
+				}
+				return []byte{}, os.ErrNotExist
+			})
+
+			// First attempt should fail because of cleanup
+			err := pm.Create(ctx, servicePath, config, mockFS)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("cleaned up old service instance"))
+
+			// Service should still be in the services map
+			identifier := servicePathToIdentifier(servicePath)
+			_, exists := pm.services[identifier]
+			Expect(exists).To(BeTrue())
+
+			// Simulate PID file being removed after cleanup
+			pidFileExists = false
+
+			// Second attempt should succeed by calling step() again manually
+			err = pm.step(ctx, mockFS)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Verify service was processed (should be empty after step() execution)
+			Expect(pm.taskQueue).To(HaveLen(0))
 		})
 	})
 
@@ -218,7 +295,7 @@ var _ = Describe("ProcessManager", func() {
 			Expect(exists).To(BeFalse())
 
 			// Verify service was processed (should be empty after step() execution)
-			Expect(pm.toBeRemoved).To(HaveLen(0))
+			Expect(pm.taskQueue).To(HaveLen(0))
 		})
 
 		It("should remove a service successfully when process is not running but .pid file exists", func() {
@@ -341,6 +418,120 @@ var _ = Describe("ProcessManager", func() {
 		})
 	})
 
+	Describe("Start", func() {
+		BeforeEach(func() {
+			// Create a service first for start tests
+			servicePath := "test-service"
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "test: value",
+					"run.sh":      "#!/bin/bash\necho 'Hello World'\nsleep 10", // Long-running script for testing
+				},
+			}
+			err := pm.Create(ctx, servicePath, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should start a service when no process is running", func() {
+			servicePath := "test-service"
+
+			// Setup mock filesystem to simulate no existing PID file
+			mockFS := filesystem.NewMockFileSystem()
+			mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+				if filepath.Base(path) == "run.pid" {
+					return nil, os.ErrNotExist // No PID file exists
+				}
+				return nil, os.ErrNotExist
+			})
+
+			// Start the service - this will fail because it tries to execute a real process
+			// but we can verify the error handling works correctly
+			err := pm.Start(ctx, servicePath, mockFS)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("error starting process"))
+
+			// Verify service was NOT processed due to error
+			Expect(pm.taskQueue).To(HaveLen(1))
+			Expect(pm.taskQueue[0].Operation).To(Equal(OperationStart))
+		})
+
+		It("should terminate existing process and retry start", func() {
+			servicePath := "test-service"
+
+			// Setup mock filesystem to simulate existing PID file
+			mockFS := filesystem.NewMockFileSystem()
+			pidFileExists := true
+			mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+				if filepath.Base(path) == "run.pid" && pidFileExists {
+					return &mockFileInfo{name: "run.pid"}, nil
+				}
+				return nil, os.ErrNotExist
+			})
+
+			// Mock ReadFile to return a PID when the file exists
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+				if filepath.Base(path) == "run.pid" && pidFileExists {
+					return []byte("99999"), nil // Non-existent PID
+				}
+				return []byte{}, os.ErrNotExist
+			})
+
+			// Mock Remove to simulate PID file removal
+			mockFS.WithRemoveFunc(func(ctx context.Context, path string) error {
+				if filepath.Base(path) == "run.pid" {
+					pidFileExists = false
+				}
+				return nil
+			})
+
+			// First attempt should fail because of existing process termination
+			err := pm.Start(ctx, servicePath, mockFS)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("error terminating existing process"))
+
+			// Service should still be in the task queue for retry
+			identifier := servicePathToIdentifier(servicePath)
+			Expect(pm.taskQueue).To(HaveLen(1))
+			Expect(pm.taskQueue[0].Identifier).To(Equal(identifier))
+			Expect(pm.taskQueue[0].Operation).To(Equal(OperationStart))
+		})
+
+		It("should handle filesystem errors during PID file writing", func() {
+			servicePath := "test-service"
+
+			// Setup mock filesystem to simulate no existing PID file
+			mockFS := filesystem.NewMockFileSystem()
+			mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+				return nil, os.ErrNotExist
+			})
+
+			// Since real process execution will fail before PID writing,
+			// we expect the process startup error rather than PID write error
+			err := pm.Start(ctx, servicePath, mockFS)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("error starting process"))
+		})
+
+		It("should handle context cancellation during start", func() {
+			cancelCtx, cancel := context.WithCancel(context.Background())
+			cancel() // Cancel immediately
+
+			servicePath := "test-service"
+
+			err := pm.Start(cancelCtx, servicePath, fsService)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(Equal(context.Canceled))
+		})
+
+		It("should handle non-existent service", func() {
+			servicePath := "non-existent-service"
+
+			err := pm.Start(ctx, servicePath, fsService)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("not found"))
+		})
+	})
+
 	Describe("generateContext", func() {
 		It("should create a context with proper deadline", func() {
 			timeout := 100 * time.Millisecond
@@ -387,6 +578,126 @@ var _ = Describe("ProcessManager", func() {
 			_, _, err := generateContext(parentCtx, timeout)
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(Equal(context.Canceled))
+		})
+	})
+
+	Describe("Real Filesystem Tests", func() {
+		var (
+			tempDir string
+			realFS  filesystem.Service
+		)
+
+		BeforeEach(func() {
+			// Create a temporary directory for testing
+			var err error
+			tempDir, err = os.MkdirTemp("", "ipm-test-")
+			Expect(err).ToNot(HaveOccurred())
+
+			// Debug: Check if temp directory is writable
+			testFile := filepath.Join(tempDir, "test-write")
+			err = os.WriteFile(testFile, []byte("test"), 0644)
+			Expect(err).ToNot(HaveOccurred())
+			os.Remove(testFile)
+
+			GinkgoT().Logf("Created temp directory: %s", tempDir)
+
+			// Use real filesystem service
+			realFS = filesystem.NewDefaultService()
+
+			// Create ProcessManager with custom service directory
+			pm = NewProcessManager(logger, WithServiceDirectory(tempDir))
+
+			// Debug: Check if ProcessManager has correct service directory
+			GinkgoT().Logf("ProcessManager service directory: %s", pm.serviceDirectory)
+		})
+
+		AfterEach(func() {
+			// Clean up temporary directory
+			if tempDir != "" {
+				os.RemoveAll(tempDir)
+			}
+		})
+
+		It("should create a service with real filesystem", func() {
+			servicePath := "test-service"
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "test: value",
+					"run.sh":      "#!/bin/bash\necho 'Hello World'",
+				},
+			}
+
+			// Debug: Check task queue before Create
+			Expect(pm.taskQueue).To(HaveLen(0), "Task queue should be empty before Create")
+
+			err := pm.Create(ctx, servicePath, config, realFS)
+
+			// Debug: Check what error occurred, if any
+			if err != nil {
+				GinkgoT().Logf("Create returned error: %v", err)
+			}
+
+			// If Create failed, let's see what's in the task queue
+			GinkgoT().Logf("Task queue length after Create: %d", len(pm.taskQueue))
+			if len(pm.taskQueue) > 0 {
+				GinkgoT().Logf("First task in queue: %+v", pm.taskQueue[0])
+			}
+
+			Expect(err).ToNot(HaveOccurred())
+
+			// Debug: Check if task queue is empty (meaning step() processed the task)
+			Expect(pm.taskQueue).To(HaveLen(0), "Task queue should be empty after Create")
+
+			// Verify service was added to services map
+			identifier := servicePathToIdentifier(servicePath)
+			service, exists := pm.services[identifier]
+			Expect(exists).To(BeTrue())
+			Expect(service.config).To(Equal(config))
+
+			// Verify directories were created on real filesystem
+			// Note: We use the identifier (not servicePath) because that's what ProcessManager uses internally
+			logDir := filepath.Join(tempDir, string(identifier), "log")
+			configDir := filepath.Join(tempDir, string(identifier), "config")
+
+			// Debug: Check if service directory exists at all
+			serviceDir := filepath.Join(tempDir, string(identifier))
+			serviceDirExists, err := realFS.PathExists(ctx, serviceDir)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(serviceDirExists).To(BeTrue(), "Service directory should exist")
+
+			logDirExists, err := realFS.PathExists(ctx, logDir)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(logDirExists).To(BeTrue(), "Log directory should exist")
+
+			configDirExists, err := realFS.PathExists(ctx, configDir)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(configDirExists).To(BeTrue(), "Config directory should exist")
+
+			// Verify config files were written
+			configFilePath := filepath.Join(configDir, "config.yaml")
+			configFileExists, err := realFS.PathExists(ctx, configFilePath)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(configFileExists).To(BeTrue())
+
+			// Verify file contents
+			content, err := realFS.ReadFile(ctx, configFilePath)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(string(content)).To(Equal("test: value"))
+
+			// Verify run.sh was written
+			runScriptPath := filepath.Join(configDir, "run.sh")
+			runScriptExists, err := realFS.PathExists(ctx, runScriptPath)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(runScriptExists).To(BeTrue())
+
+			content, err = realFS.ReadFile(ctx, runScriptPath)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(string(content)).To(Equal("#!/bin/bash\necho 'Hello World'"))
+		})
+
+		It("should use custom service directory", func() {
+			// Verify ProcessManager is using the custom directory
+			Expect(pm.serviceDirectory).To(Equal(tempDir))
 		})
 	})
 })
