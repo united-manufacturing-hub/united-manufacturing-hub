@@ -57,6 +57,43 @@ func (pm *ProcessManager) removeService(ctx context.Context, identifier serviceI
 	return nil
 }
 
+// stopService stops a running service process without removing the service directory.
+// This function gracefully terminates the service process and removes the PID file while
+// preserving the service configuration and logs. It uses the same termination logic as
+// removeService but only cleans up the process state. This allows services to be stopped
+// temporarily without losing their configuration or historical data, enabling easy restart
+// operations later.
+func (pm *ProcessManager) stopService(ctx context.Context, identifier serviceIdentifier, fsService filesystem.Service) error {
+	pm.Logger.Info("Stopping service", zap.String("identifier", string(identifier)))
+
+	// Check if the service exists in our services map
+	if _, exists := pm.services[identifier]; !exists {
+		return fmt.Errorf("service %s not found", string(identifier))
+	}
+
+	servicePath := filepath.Join(pm.serviceDirectory, string(identifier))
+	pidFile := filepath.Join(servicePath, pidFileName)
+
+	// Attempt to terminate the running process gracefully
+	if err := pm.terminateServiceProcess(ctx, servicePath, fsService); err != nil {
+		// For stop operations, we're more forgiving about termination errors
+		// If the process is already dead, that's fine - we just want it stopped
+		pm.Logger.Debug("Process termination had issues during stop, but continuing", zap.Error(err))
+	}
+
+	// Remove the PID file after termination attempt
+	if err := fsService.Remove(ctx, pidFile); err != nil {
+		// If the PID file doesn't exist, that's fine - the process might have cleaned up itself
+		if !os.IsNotExist(err) {
+			pm.Logger.Error("Error removing PID file", zap.Error(err))
+			return fmt.Errorf("error removing PID file: %w", err)
+		}
+	}
+
+	pm.Logger.Info("Service stopped successfully", zap.String("identifier", string(identifier)))
+	return nil
+}
+
 // terminateServiceProcess attempts to gracefully terminate a running service process.
 // This function handles the complex task of finding and stopping a service process that
 // may or may not be running. It first checks for the existence of a PID file, which
@@ -111,11 +148,18 @@ func (pm *ProcessManager) readProcessPid(ctx context.Context, servicePath string
 // sends SIGTERM to allow the process to shut down gracefully, then waits for the process to exit.
 // If the process doesn't respond to SIGTERM or takes too long to exit, it falls back to SIGKILL
 // for immediate termination. This approach balances clean shutdown with system reliability.
+// Additionally, it attempts to terminate the entire process group to ensure child processes are cleaned up.
 func (pm *ProcessManager) terminateProcess(ctx context.Context, process *os.Process, pid int) error {
 	// First attempt: Send SIGTERM (graceful shutdown)
-	if err := process.Signal(syscall.SIGTERM); err != nil {
-		pm.Logger.Error("Error sending SIGTERM, trying SIGKILL", zap.Int("pid", pid), zap.Error(err))
-		return pm.forceKillProcess(process, pid)
+	// Try to terminate the process group first (negative PID), then fall back to individual process
+	if err := syscall.Kill(-pid, syscall.SIGTERM); err != nil {
+		pm.Logger.Debug("Failed to send SIGTERM to process group, trying individual process", zap.Int("pid", pid), zap.Error(err))
+		if err := process.Signal(syscall.SIGTERM); err != nil {
+			pm.Logger.Error("Error sending SIGTERM, trying SIGKILL", zap.Int("pid", pid), zap.Error(err))
+			return pm.forceKillProcess(process, pid)
+		}
+	} else {
+		pm.Logger.Debug("Sent SIGTERM to process group", zap.Int("pid", pid))
 	}
 
 	// Wait for graceful shutdown with timeout
@@ -160,20 +204,26 @@ func (pm *ProcessManager) waitForProcessExit(ctx context.Context, process *os.Pr
 	return errGroup.Wait()
 }
 
-// forceKillProcess sends SIGKILL to forcefully terminate a process that didn't respond to SIGTERM.
+// forceKillProcess forcefully terminates a process using SIGKILL when graceful shutdown fails.
 // This function serves as the final step in process termination when graceful shutdown fails.
-// SIGKILL cannot be ignored or caught by processes, making it the ultimate tool for ensuring
-// that processes are terminated. While this approach doesn't allow for clean shutdown, it's
+// SIGKILL cannot be caught or ignored by the process, ensuring immediate termination. This is
 // necessary to prevent hung processes from blocking service management operations or consuming
 // system resources indefinitely. The function is designed to be used only after graceful
 // termination attempts have failed.
+// Additionally, it attempts to terminate the entire process group to ensure child processes are cleaned up.
 func (pm *ProcessManager) forceKillProcess(process *os.Process, pid int) error {
-	if err := process.Signal(syscall.SIGKILL); err != nil {
-		pm.Logger.Error("Error sending SIGKILL", zap.Int("pid", pid), zap.Error(err))
-		return err
+	// Try to kill the process group first (negative PID), then fall back to individual process
+	if err := syscall.Kill(-pid, syscall.SIGKILL); err != nil {
+		pm.Logger.Debug("Failed to send SIGKILL to process group, trying individual process", zap.Int("pid", pid), zap.Error(err))
+		if err := process.Signal(syscall.SIGKILL); err != nil {
+			pm.Logger.Error("Error sending SIGKILL to process", zap.Int("pid", pid), zap.Error(err))
+			return err
+		}
+	} else {
+		pm.Logger.Debug("Sent SIGKILL to process group", zap.Int("pid", pid))
 	}
 
-	pm.Logger.Info("Process force killed", zap.Int("pid", pid))
+	pm.Logger.Info("Process force-killed", zap.Int("pid", pid))
 	return nil
 }
 

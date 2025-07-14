@@ -124,9 +124,7 @@ func (lm *LogManager) rotateIfNeeded(ctx context.Context, identifier serviceIden
 	tai64nString := tai64.FormatNano(time.Now())
 
 	// Remove the '@' prefix from the TAI64N string if present
-	if strings.HasPrefix(tai64nString, "@") {
-		tai64nString = tai64nString[1:]
-	}
+	tai64nString = strings.TrimPrefix(tai64nString, "@")
 
 	// Create rotated filename: TAI64N timestamp + .log extension
 	rotatedPath := filepath.Join(info.LogPath, tai64nString+".log")

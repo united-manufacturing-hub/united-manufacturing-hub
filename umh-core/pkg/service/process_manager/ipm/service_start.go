@@ -20,6 +20,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"syscall"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -105,6 +106,27 @@ func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier
 	// Create the command using shell to handle the redirection
 	cmd := exec.CommandContext(ctx, "/bin/bash", "-c", shellCommand)
 	cmd.Dir = configPath
+
+	// Set memory limits if configured
+	if config.MemoryLimit > 0 {
+		memoryLimitMB := config.MemoryLimit / (1024 * 1024) // Convert bytes to MB
+		if memoryLimitMB == 0 {
+			memoryLimitMB = 1 // Minimum 1MB
+		}
+
+		pm.Logger.Info("Applying memory limit to process",
+			zap.String("identifier", string(identifier)),
+			zap.Int64("memoryLimitBytes", config.MemoryLimit),
+			zap.Int64("memoryLimitMB", memoryLimitMB))
+
+		// Modify the shell command to include ulimit
+		shellCommand = fmt.Sprintf("ulimit -v %d && %s", memoryLimitMB*1024, shellCommand) // ulimit -v is in KB
+		cmd = exec.CommandContext(ctx, "/bin/bash", "-c", shellCommand)
+		cmd.Dir = configPath
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			Setpgid: true, // Create new process group for better process management
+		}
+	}
 
 	// Start the process
 	if err := cmd.Start(); err != nil {

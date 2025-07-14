@@ -77,11 +77,21 @@ func (pm *ProcessManager) step(ctx context.Context, fsService filesystem.Service
 		case OperationStart:
 			err = pm.startService(ctx, task.Identifier, fsService)
 		case OperationStop:
-			// TODO: Implement stop functionality
-			err = fmt.Errorf("stop operation not yet implemented")
+			err = pm.stopService(ctx, task.Identifier, fsService)
 		case OperationRestart:
-			// TODO: Implement restart functionality
-			err = fmt.Errorf("restart operation not yet implemented")
+			// Try to stop the service first
+			err = pm.stopService(ctx, task.Identifier, fsService)
+			if err == nil {
+				// If stop succeeded, queue a start operation for later execution
+				startTask := Task{
+					Identifier: task.Identifier,
+					Operation:  OperationStart,
+				}
+				pm.taskQueue = append(pm.taskQueue, startTask)
+				pm.Logger.Info("Restart: stop succeeded, queued start operation", zap.String("identifier", string(task.Identifier)))
+			} else {
+				pm.Logger.Error("Restart: stop failed, not queuing start operation", zap.String("identifier", string(task.Identifier)), zap.Error(err))
+			}
 		default:
 			err = fmt.Errorf("unknown operation type: %v", task.Operation)
 		}

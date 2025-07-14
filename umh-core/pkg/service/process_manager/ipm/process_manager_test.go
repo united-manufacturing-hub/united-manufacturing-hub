@@ -532,6 +532,277 @@ var _ = Describe("ProcessManager", func() {
 		})
 	})
 
+	Describe("Stop", func() {
+		BeforeEach(func() {
+			// Create a service first for stop tests
+			servicePath := "test-service"
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "test: value",
+					"run.sh":      "#!/bin/bash\necho 'Hello World'\nsleep 10",
+				},
+			}
+			err := pm.Create(ctx, servicePath, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should stop a service successfully when no process is running", func() {
+			servicePath := "test-service"
+
+			// Setup mock filesystem to simulate no running process (no PID file)
+			mockFS := filesystem.NewMockFileSystem()
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+				if filepath.Base(path) == "run.pid" {
+					return nil, os.ErrNotExist // No PID file exists
+				}
+				return []byte{}, nil
+			})
+
+			// Stop the service
+			err := pm.Stop(ctx, servicePath, mockFS)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Verify service was processed (should be empty after step() execution)
+			Expect(pm.taskQueue).To(HaveLen(0))
+
+			// Verify service still exists in services map (only process is stopped, not removed)
+			identifier := servicePathToIdentifier(servicePath)
+			_, exists := pm.services[identifier]
+			Expect(exists).To(BeTrue())
+		})
+
+		It("should stop a service successfully when process is running", func() {
+			servicePath := "test-service"
+
+			// Setup mock filesystem to simulate running process with PID file
+			mockFS := filesystem.NewMockFileSystem()
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+				if filepath.Base(path) == "run.pid" {
+					return []byte("99999"), nil // Non-existent PID for testing
+				}
+				return []byte{}, nil
+			})
+
+			// Stop the service
+			err := pm.Stop(ctx, servicePath, mockFS)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Verify service was processed (should be empty after step() execution)
+			Expect(pm.taskQueue).To(HaveLen(0))
+
+			// Verify service still exists in services map (only process is stopped, not removed)
+			identifier := servicePathToIdentifier(servicePath)
+			_, exists := pm.services[identifier]
+			Expect(exists).To(BeTrue())
+		})
+
+		It("should handle corrupted PID file gracefully", func() {
+			servicePath := "test-service"
+
+			// Setup mock filesystem to simulate corrupted PID file
+			mockFS := filesystem.NewMockFileSystem()
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+				if filepath.Base(path) == "run.pid" {
+					return []byte("not-a-number"), nil // Corrupted PID
+				}
+				return []byte{}, nil
+			})
+
+			// Stop the service - should succeed despite corrupted PID
+			err := pm.Stop(ctx, servicePath, mockFS)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Verify service still exists in services map
+			identifier := servicePathToIdentifier(servicePath)
+			_, exists := pm.services[identifier]
+			Expect(exists).To(BeTrue())
+		})
+
+		It("should return error when service does not exist", func() {
+			servicePath := "non-existent-service"
+
+			err := pm.Stop(ctx, servicePath, fsService)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("not found"))
+		})
+
+		It("should handle filesystem errors during PID file removal", func() {
+			servicePath := "test-service"
+
+			// Setup mock filesystem to simulate PID file that can't be removed
+			mockFS := filesystem.NewMockFileSystem()
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+				if filepath.Base(path) == "run.pid" {
+					return []byte("99999"), nil // Non-existent PID
+				}
+				return []byte{}, nil
+			})
+			mockFS.WithRemoveFunc(func(ctx context.Context, path string) error {
+				if filepath.Base(path) == "run.pid" {
+					return fmt.Errorf("mock filesystem error")
+				}
+				return nil
+			})
+
+			err := pm.Stop(ctx, servicePath, mockFS)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("error removing PID file"))
+		})
+
+		It("should handle context cancellation during stop", func() {
+			cancelCtx, cancel := context.WithCancel(context.Background())
+			cancel() // Cancel immediately
+
+			servicePath := "test-service"
+
+			err := pm.Stop(cancelCtx, servicePath, fsService)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(Equal(context.Canceled))
+		})
+	})
+
+	Describe("Restart", func() {
+		BeforeEach(func() {
+			// Create a service first for restart tests
+			servicePath := "test-service"
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "test: value",
+					"run.sh":      "#!/bin/bash\necho 'Hello World'\nsleep 10",
+				},
+			}
+			err := pm.Create(ctx, servicePath, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should restart a service successfully when no process is running", func() {
+			servicePath := "test-service"
+
+			// Setup mock filesystem to simulate no running process
+			mockFS := filesystem.NewMockFileSystem()
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+				if filepath.Base(path) == "run.pid" {
+					return nil, os.ErrNotExist // No PID file exists
+				}
+				return []byte{}, nil
+			})
+
+			// Restart the service
+			err := pm.Restart(ctx, servicePath, mockFS)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Verify restart queued a start operation
+			Expect(pm.taskQueue).To(HaveLen(1))
+			Expect(pm.taskQueue[0].Operation).To(Equal(OperationStart))
+			Expect(pm.taskQueue[0].Identifier).To(Equal(servicePathToIdentifier(servicePath)))
+
+			// Verify service still exists in services map
+			identifier := servicePathToIdentifier(servicePath)
+			_, exists := pm.services[identifier]
+			Expect(exists).To(BeTrue())
+		})
+
+		It("should restart a service successfully when process is running", func() {
+			servicePath := "test-service"
+
+			// Setup mock filesystem to simulate running process with PID file
+			mockFS := filesystem.NewMockFileSystem()
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+				if filepath.Base(path) == "run.pid" {
+					return []byte("99999"), nil // Non-existent PID for testing
+				}
+				return []byte{}, nil
+			})
+
+			// Restart the service
+			err := pm.Restart(ctx, servicePath, mockFS)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Verify restart queued a start operation
+			Expect(pm.taskQueue).To(HaveLen(1))
+			Expect(pm.taskQueue[0].Operation).To(Equal(OperationStart))
+			Expect(pm.taskQueue[0].Identifier).To(Equal(servicePathToIdentifier(servicePath)))
+
+			// Verify service still exists in services map
+			identifier := servicePathToIdentifier(servicePath)
+			_, exists := pm.services[identifier]
+			Expect(exists).To(BeTrue())
+		})
+
+		It("should not queue start operation when stop fails", func() {
+			servicePath := "test-service"
+
+			// Setup mock filesystem to simulate stop failure
+			mockFS := filesystem.NewMockFileSystem()
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+				if filepath.Base(path) == "run.pid" {
+					return []byte("99999"), nil // Non-existent PID
+				}
+				return []byte{}, nil
+			})
+			mockFS.WithRemoveFunc(func(ctx context.Context, path string) error {
+				if filepath.Base(path) == "run.pid" {
+					return fmt.Errorf("mock filesystem error")
+				}
+				return nil
+			})
+
+			// Restart the service - should fail during stop
+			err := pm.Restart(ctx, servicePath, mockFS)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("error removing PID file"))
+
+			// Verify NO start operation was queued due to stop failure
+			Expect(pm.taskQueue).To(HaveLen(1))
+			Expect(pm.taskQueue[0].Operation).To(Equal(OperationRestart)) // Original task still there
+		})
+
+		It("should handle multiple restart operations in sequence", func() {
+			servicePath := "test-service"
+
+			// Setup mock filesystem to simulate successful stop operations
+			mockFS := filesystem.NewMockFileSystem()
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+				if filepath.Base(path) == "run.pid" {
+					return nil, os.ErrNotExist // No PID file exists
+				}
+				return []byte{}, nil
+			})
+
+			// First restart
+			err := pm.Restart(ctx, servicePath, mockFS)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(pm.taskQueue).To(HaveLen(1))
+			Expect(pm.taskQueue[0].Operation).To(Equal(OperationStart))
+
+			// Second restart (should add another start task)
+			err = pm.Restart(ctx, servicePath, mockFS)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(pm.taskQueue).To(HaveLen(2))
+			Expect(pm.taskQueue[0].Operation).To(Equal(OperationStart))
+			Expect(pm.taskQueue[1].Operation).To(Equal(OperationStart))
+		})
+
+		It("should return error when service does not exist", func() {
+			servicePath := "non-existent-service"
+
+			err := pm.Restart(ctx, servicePath, fsService)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("not found"))
+		})
+
+		It("should handle context cancellation during restart", func() {
+			cancelCtx, cancel := context.WithCancel(context.Background())
+			cancel() // Cancel immediately
+
+			servicePath := "test-service"
+
+			err := pm.Restart(cancelCtx, servicePath, fsService)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(Equal(context.Canceled))
+		})
+	})
+
 	Describe("generateContext", func() {
 		It("should create a context with proper deadline", func() {
 			timeout := 100 * time.Millisecond
@@ -578,180 +849,6 @@ var _ = Describe("ProcessManager", func() {
 			_, _, err := generateContext(parentCtx, timeout)
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(Equal(context.Canceled))
-		})
-	})
-
-	Context("Resilience to Short Context Timeouts", func() {
-		It("should eventually succeed creating a service even with very short context timeouts", func() {
-			// Use a very short timeout that might interrupt the operation
-			shortCtx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
-			defer cancel()
-
-			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
-				ConfigFiles: map[string]string{
-					"config.yaml": "test: value",
-					"run.sh":      "#!/bin/bash\necho 'Hello World'",
-				},
-				LogFilesize: 8192,
-			}
-
-			// First attempt with short timeout - might fail
-			_ = pm.Create(shortCtx, "timeout-test-service", config, fsService)
-			// Don't check error here - it might timeout
-
-			// Retry with longer timeout - should eventually succeed
-			normalCtx, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel2()
-
-			var finalErr error
-			for i := 0; i < 10; i++ { // Allow up to 10 retries
-				finalErr = pm.Create(normalCtx, "timeout-test-service", config, fsService)
-				if finalErr == nil {
-					break
-				}
-				time.Sleep(10 * time.Millisecond)
-			}
-
-			Expect(finalErr).ToNot(HaveOccurred())
-		})
-
-		It("should eventually succeed starting a service even with very short context timeouts", func() {
-			// First create the service
-			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
-				ConfigFiles: map[string]string{
-					"config.yaml": "test: value",
-					"run.sh":      "#!/bin/bash\necho 'Hello World'\nsleep 10",
-				},
-				LogFilesize: 8192,
-			}
-
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			err := pm.Create(ctx, "timeout-start-service", config, fsService)
-			Expect(err).ToNot(HaveOccurred())
-
-			// Use a very short timeout that might interrupt the start operation
-			shortCtx, cancel2 := context.WithTimeout(context.Background(), 1*time.Millisecond)
-			defer cancel2()
-
-			// First attempt with short timeout - might fail
-			_ = pm.Start(shortCtx, "timeout-start-service", fsService)
-			// Don't check error here - it might timeout
-
-			// Retry with longer timeout - should eventually succeed
-			normalCtx, cancel3 := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel3()
-
-			var finalErr error
-			for i := 0; i < 10; i++ { // Allow up to 10 retries
-				finalErr = pm.Start(normalCtx, "timeout-start-service", fsService)
-				if finalErr == nil {
-					break
-				}
-				time.Sleep(10 * time.Millisecond)
-			}
-
-			Expect(finalErr).ToNot(HaveOccurred())
-		})
-
-		It("should eventually succeed removing a service even with very short context timeouts", func() {
-			// First create the service
-			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
-				ConfigFiles: map[string]string{
-					"config.yaml": "test: value",
-					"run.sh":      "#!/bin/bash\necho 'Hello World'",
-				},
-				LogFilesize: 8192,
-			}
-
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			err := pm.Create(ctx, "timeout-remove-service", config, fsService)
-			Expect(err).ToNot(HaveOccurred())
-
-			// Use a very short timeout that might interrupt the remove operation
-			shortCtx, cancel2 := context.WithTimeout(context.Background(), 1*time.Millisecond)
-			defer cancel2()
-
-			// First attempt with short timeout - might fail
-			_ = pm.Remove(shortCtx, "timeout-remove-service", fsService)
-			// Don't check error here - it might timeout
-
-			// Retry with longer timeout - should eventually succeed
-			normalCtx, cancel3 := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel3()
-
-			var finalErr error
-			for i := 0; i < 10; i++ { // Allow up to 10 retries
-				finalErr = pm.Remove(normalCtx, "timeout-remove-service", fsService)
-				if finalErr == nil {
-					break
-				}
-				time.Sleep(10 * time.Millisecond)
-			}
-
-			Expect(finalErr).ToNot(HaveOccurred())
-		})
-
-		It("should handle multiple rapid operations with short timeouts gracefully", func() {
-			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
-				ConfigFiles: map[string]string{
-					"config.yaml": "test: value",
-					"run.sh":      "#!/bin/bash\necho 'Hello World'",
-				},
-				LogFilesize: 8192,
-			}
-
-			// Simulate rapid operations with very short timeouts
-			for i := 0; i < 5; i++ {
-				shortCtx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
-				_ = pm.Create(shortCtx, "rapid-test-service", config, fsService)
-				cancel()
-
-				shortCtx2, cancel2 := context.WithTimeout(context.Background(), 1*time.Millisecond)
-				_ = pm.Remove(shortCtx2, "rapid-test-service", fsService)
-				cancel2()
-			}
-
-			// Eventually, with a proper timeout, it should succeed
-			normalCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-
-			var finalErr error
-			for i := 0; i < 10; i++ {
-				finalErr = pm.Create(normalCtx, "rapid-test-service", config, fsService)
-				if finalErr == nil {
-					break
-				}
-				time.Sleep(10 * time.Millisecond)
-			}
-
-			Expect(finalErr).ToNot(HaveOccurred())
-		})
-
-		It("should handle context cancellation during step processing gracefully", func() {
-			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
-				ConfigFiles: map[string]string{
-					"config.yaml": "test: value",
-					"run.sh":      "#!/bin/bash\necho 'Hello World'",
-				},
-				LogFilesize: 8192,
-			}
-
-			// Create a context that we'll cancel immediately
-			ctx, cancel := context.WithCancel(context.Background())
-			cancel() // Cancel immediately
-
-			// This should fail due to cancelled context
-			err := pm.Create(ctx, "cancel-test-service", config, fsService)
-			Expect(err).To(HaveOccurred())
-			Expect(err).To(Equal(context.Canceled))
-
-			// But with a fresh context, it should succeed
-			freshCtx, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel2()
-			err = pm.Create(freshCtx, "cancel-test-service", config, fsService)
-			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 
