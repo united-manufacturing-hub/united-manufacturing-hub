@@ -16,6 +16,7 @@ package ipm
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
@@ -29,11 +30,23 @@ type ProcessManager struct {
 	Logger *zap.SugaredLogger
 	mu     sync.Mutex
 
-	services map[string]service
+	services map[serviceIdentifier]service
+
+	// toBeCreated is a list of services that need to be created
+	toBeCreated []serviceIdentifier
+	// toBeRemoved is a list of services that need to be removed
+	toBeRemoved []serviceIdentifier
+	// toBeRestarted is a list of services that need to be restarted
+	toBeRestarted []serviceIdentifier
+	// toBeStarted is a list of services that need to be started
+	toBeStarted []serviceIdentifier
+	// toBeStopped is a list of services that need to be stopped
+	toBeStopped []serviceIdentifier
 }
 
 type service struct {
-	config process_manager_serviceconfig.ProcessManagerServiceConfig
+	config  process_manager_serviceconfig.ProcessManagerServiceConfig
+	history process_shared.ServiceInfo
 }
 
 const IPM_SERVICE_DIRECTORY = "/var/lib/umh/ipm"
@@ -43,7 +56,24 @@ func (pm *ProcessManager) Create(ctx context.Context, servicePath string, config
 	defer pm.mu.Unlock()
 	pm.Logger.Info("Creating process manager service", zap.String("servicePath", servicePath), zap.Any("config", config))
 
-	return errors.New("not implemented")
+	identifier := servicePathToIdentifier(servicePath)
+	// Add to services map (return err if already exists)
+	if _, ok := pm.services[identifier]; ok {
+		return fmt.Errorf("service %s already exists", servicePath)
+	}
+
+	pm.services[identifier] = service{
+		config: config,
+		history: process_shared.ServiceInfo{
+			Status:      process_shared.ServiceUnknown,
+			ExitHistory: make([]process_shared.ExitEvent, 0),
+		},
+	}
+
+	// Add to toBeCreated list
+	pm.toBeCreated = append(pm.toBeCreated, identifier)
+
+	return nil
 }
 
 func (pm *ProcessManager) Remove(ctx context.Context, servicePath string, _ filesystem.Service) error {
@@ -51,7 +81,19 @@ func (pm *ProcessManager) Remove(ctx context.Context, servicePath string, _ file
 	defer pm.mu.Unlock()
 	pm.Logger.Info("Removing process manager service", zap.String("servicePath", servicePath))
 
-	return errors.New("not implemented")
+	identifier := servicePathToIdentifier(servicePath)
+	// Remove from services map (return err if not exists)
+	if _, ok := pm.services[identifier]; !ok {
+		return fmt.Errorf("service %s does not exist", servicePath)
+	}
+
+	// Remove from services map (this is safe as for removal we only need the serviceIdentifier)
+	delete(pm.services, identifier)
+
+	// Add to toBeRemoved list
+	pm.toBeRemoved = append(pm.toBeRemoved, identifier)
+
+	return nil
 }
 
 func (pm *ProcessManager) Start(ctx context.Context, servicePath string, fsService filesystem.Service) error {
@@ -59,7 +101,11 @@ func (pm *ProcessManager) Start(ctx context.Context, servicePath string, fsServi
 	defer pm.mu.Unlock()
 	pm.Logger.Info("Starting process manager service", zap.String("servicePath", servicePath))
 
-	return errors.New("not implemented")
+	identifier := servicePathToIdentifier(servicePath)
+	// Add to toBeStarted list
+	pm.toBeStarted = append(pm.toBeStarted, identifier)
+
+	return nil
 }
 
 func (pm *ProcessManager) Stop(ctx context.Context, servicePath string, fsService filesystem.Service) error {
@@ -67,7 +113,11 @@ func (pm *ProcessManager) Stop(ctx context.Context, servicePath string, fsServic
 	defer pm.mu.Unlock()
 	pm.Logger.Info("Stopping process manager service", zap.String("servicePath", servicePath))
 
-	return errors.New("not implemented")
+	identifier := servicePathToIdentifier(servicePath)
+	// Add to toBeStopped list
+	pm.toBeStopped = append(pm.toBeStopped, identifier)
+
+	return nil
 }
 
 func (pm *ProcessManager) Restart(ctx context.Context, servicePath string, fsService filesystem.Service) error {
@@ -75,7 +125,11 @@ func (pm *ProcessManager) Restart(ctx context.Context, servicePath string, fsSer
 	defer pm.mu.Unlock()
 	pm.Logger.Info("Restarting process manager service", zap.String("servicePath", servicePath))
 
-	return errors.New("not implemented")
+	identifier := servicePathToIdentifier(servicePath)
+	// Add to toBeRestarted list
+	pm.toBeRestarted = append(pm.toBeRestarted, identifier)
+
+	return nil
 }
 
 func (pm *ProcessManager) Status(ctx context.Context, servicePath string, fsService filesystem.Service) (process_shared.ServiceInfo, error) {
