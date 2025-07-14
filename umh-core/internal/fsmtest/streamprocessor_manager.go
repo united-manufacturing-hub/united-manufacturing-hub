@@ -169,7 +169,7 @@ func SetupServiceInStreamProcessorManager(
 	instance := spfsm.NewInstance("", CreateStreamProcessorTestConfig(processorName, desiredState))
 
 	// Add it to the manager
-	manager.BaseFSMManager.AddInstanceForTest(fmt.Sprintf("%s-%s", streamProcessorInstancePrefix, processorName), instance)
+	manager.AddInstanceForTest(fmt.Sprintf("%s-%s", streamProcessorInstancePrefix, processorName), instance)
 
 	// Make sure the service exists in the mock service
 	mockService.ExistingComponents[processorName] = true

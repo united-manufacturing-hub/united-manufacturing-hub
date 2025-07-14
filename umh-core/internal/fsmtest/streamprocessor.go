@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/streamprocessorserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	dataflowcomponentfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
@@ -28,27 +27,6 @@ import (
 	spfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/streamprocessor"
 	spsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/streamprocessor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
-)
-
-var (
-	goodStreamProcessorDFCConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-		BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-			Input: map[string]interface{}{
-				"generate": map[string]interface{}{
-					"mapping":  "root = {\"message\":\"hello world\"}",
-					"interval": "1s",
-				},
-			},
-			Output: map[string]interface{}{
-				"kafka": map[string]interface{}{
-					"addresses": []string{"localhost:9092"},
-					"topic":     "test-topic",
-				},
-			},
-		},
-	}
-
-	missingStreamProcessorDFCConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}
 )
 
 // CreateStreamProcessorTestConfig creates a standard StreamProcessor config for testing
