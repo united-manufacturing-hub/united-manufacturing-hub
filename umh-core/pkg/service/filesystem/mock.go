@@ -467,29 +467,6 @@ func (m *MockFileSystem) ExecuteCommand(ctx context.Context, name string, args .
 	return []byte("mock command output"), nil
 }
 
-// Rename renames (moves) a file or directory from oldPath to newPath
-func (m *MockFileSystem) Rename(ctx context.Context, oldPath, newPath string) error {
-	if m.RenameFunc != nil {
-		return m.RenameFunc(ctx, oldPath, newPath)
-	}
-
-	shouldFail, delay := m.simulateRandomBehavior("Rename:" + oldPath + ":" + newPath)
-
-	if delay > 0 {
-		select {
-		case <-time.After(delay):
-			// Delay completed
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-
-	if shouldFail {
-		return errors.New("simulated failure in Rename")
-	}
-	return nil
-}
-
 // WithEnsureDirectoryFunc sets a custom implementation for EnsureDirectory
 func (m *MockFileSystem) WithEnsureDirectoryFunc(fn func(ctx context.Context, path string) error) *MockFileSystem {
 	m.EnsureDirectoryFunc = fn

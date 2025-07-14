@@ -135,7 +135,7 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 	}
 
 	// Reconcile the s6Manager
-	s6Err, s6Reconciled := r.service.ReconcileManager(ctx, services, snapshot.Tick)
+	s6Err, s6Reconciled := r.service.ReconcileManager(ctx, services, snapshot)
 	if s6Err != nil {
 		r.baseFSMInstance.SetError(s6Err, snapshot.Tick)
 		r.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)

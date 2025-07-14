@@ -1262,43 +1262,60 @@ func (bs *BufferedService) Rename(ctx context.Context, oldPath, newPath string) 
 		}
 	}
 
-	// Check if source exists
-	sourceState, sourceExists := bs.files[oldPath]
-	if !sourceExists {
+	// Check if source exists in memory
+	srcState, exists := bs.files[oldPath]
+	if !exists {
 		return os.ErrNotExist
 	}
 
-	// Check if destination already exists
-	if _, destExists := bs.files[newPath]; destExists {
-		return fmt.Errorf("destination already exists: %s", newPath)
+	// Check if source is marked as removed
+	if chg, inChg := bs.changed[oldPath]; inChg && chg.removed {
+		return fmt.Errorf("source path is marked for removal: %s", oldPath)
 	}
 
-	// Move all files that start with oldPath to newPath
-	filesToMove := make(map[string]fileState)
-	for path, state := range bs.files {
-		if path == oldPath || hasPrefix(path, oldPath+string(os.PathSeparator)) {
-			// Calculate new path
-			newSubPath := strings.Replace(path, oldPath, newPath, 1)
-			filesToMove[newSubPath] = state
-			delete(bs.files, path)
+	// Check if destination already exists
+	if _, exists := bs.files[newPath]; exists {
+		// Check if destination is marked as removed
+		if chg, inChg := bs.changed[newPath]; !inChg || !chg.removed {
+			return fmt.Errorf("destination path already exists: %s", newPath)
 		}
 	}
 
-	// Add moved files to new locations
-	for newPath, state := range filesToMove {
-		bs.files[newPath] = state
+	// Perform the rename in memory
+	bs.files[newPath] = srcState
+	delete(bs.files, oldPath)
+
+	// Handle any existing changes for the old path
+	if chg, inChg := bs.changed[oldPath]; inChg {
+		// Move the changes to the new path
+		bs.changed[newPath] = chg
+		delete(bs.changed, oldPath)
 	}
 
-	// Mark changes for disk sync
-	// Remove old path
-	bs.changed[oldPath] = fileChange{removed: true, wasDir: sourceState.isDir}
+	// If we're dealing with a directory, we need to rename all child paths
+	if srcState.isDir {
+		oldPrefix := oldPath
+		if !strings.HasSuffix(oldPrefix, string(os.PathSeparator)) {
+			oldPrefix += string(os.PathSeparator)
+		}
+		newPrefix := newPath
+		if !strings.HasSuffix(newPrefix, string(os.PathSeparator)) {
+			newPrefix += string(os.PathSeparator)
+		}
 
-	// Add new paths
-	for newPath, state := range filesToMove {
-		bs.changed[newPath] = fileChange{
-			content: state.content,
-			perm:    state.fileMode,
-			removed: false,
+		// Rename all child paths
+		for childPath := range bs.files {
+			if strings.HasPrefix(childPath, oldPrefix) {
+				newChildPath := newPrefix + childPath[len(oldPrefix):]
+				bs.files[newChildPath] = bs.files[childPath]
+				delete(bs.files, childPath)
+
+				// Move any changes as well
+				if chg, inChg := bs.changed[childPath]; inChg {
+					bs.changed[newChildPath] = chg
+					delete(bs.changed, childPath)
+				}
+			}
 		}
 	}
 
@@ -1606,69 +1623,4 @@ func (bs *BufferedService) ReadFileRange(ctx context.Context, path string, from 
 // Glob is a wrapper around filepath.Glob that respects the context
 func (bs *BufferedService) Glob(ctx context.Context, pattern string) ([]string, error) {
 	panic("not implemented")
-}
-
-// Rename renames (moves) a file or directory from oldPath to newPath
-func (bs *BufferedService) Rename(ctx context.Context, oldPath, newPath string) error {
-	bs.mu.Lock()
-	defer bs.mu.Unlock()
-
-	// Check if source exists in memory
-	srcState, exists := bs.files[oldPath]
-	if !exists {
-		return fmt.Errorf("source path does not exist: %s", oldPath)
-	}
-
-	// Check if source is marked as removed
-	if chg, inChg := bs.changed[oldPath]; inChg && chg.removed {
-		return fmt.Errorf("source path is marked for removal: %s", oldPath)
-	}
-
-	// Check if destination already exists
-	if _, exists := bs.files[newPath]; exists {
-		// Check if destination is marked as removed
-		if chg, inChg := bs.changed[newPath]; !inChg || !chg.removed {
-			return fmt.Errorf("destination path already exists: %s", newPath)
-		}
-	}
-
-	// Perform the rename in memory
-	bs.files[newPath] = srcState
-	delete(bs.files, oldPath)
-
-	// Handle any existing changes for the old path
-	if chg, inChg := bs.changed[oldPath]; inChg {
-		// Move the changes to the new path
-		bs.changed[newPath] = chg
-		delete(bs.changed, oldPath)
-	}
-
-	// If we're dealing with a directory, we need to rename all child paths
-	if srcState.isDir {
-		oldPrefix := oldPath
-		if !strings.HasSuffix(oldPrefix, string(os.PathSeparator)) {
-			oldPrefix += string(os.PathSeparator)
-		}
-		newPrefix := newPath
-		if !strings.HasSuffix(newPrefix, string(os.PathSeparator)) {
-			newPrefix += string(os.PathSeparator)
-		}
-
-		// Rename all child paths
-		for childPath := range bs.files {
-			if strings.HasPrefix(childPath, oldPrefix) {
-				newChildPath := newPrefix + childPath[len(oldPrefix):]
-				bs.files[newChildPath] = bs.files[childPath]
-				delete(bs.files, childPath)
-
-				// Move any changes as well
-				if chg, inChg := bs.changed[childPath]; inChg {
-					bs.changed[newChildPath] = chg
-					delete(bs.changed, childPath)
-				}
-			}
-		}
-	}
-
-	return nil
 }
