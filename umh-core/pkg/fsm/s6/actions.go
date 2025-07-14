@@ -206,7 +206,7 @@ func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, services
 		s.baseFSMInstance.GetCurrentFSMState() != internalfsm.LifecycleStateRemoved {
 
 		// Use tri-state health checking that separates observation from action
-		healthStatus, err := s.service.(*s6service.DefaultService).CheckHealth(ctx, s.servicePath, services.GetFileSystem())
+		healthStatus, err := s.service.CheckHealth(ctx, s.servicePath, services.GetFileSystem())
 		if err != nil {
 			s.baseFSMInstance.GetLogger().Debugf("Health check I/O error for service %s: %v", s.baseFSMInstance.GetID(), err)
 			// Don't trigger removal for I/O errors - just log and continue

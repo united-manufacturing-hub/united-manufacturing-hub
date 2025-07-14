@@ -43,6 +43,7 @@ type MockService struct {
 	ForceRemoveCalled             bool
 	GetLogsCalled                 bool
 	GetStructuredLogsCalled       bool
+	CheckHealthCalled             bool
 
 	// Return values for each method
 	CreateError                  error
@@ -58,6 +59,7 @@ type MockService struct {
 	GetS6ConfigFileError         error
 	ForceRemoveError             error
 	GetLogsError                 error
+	CheckHealthError             error
 
 	// Results for each method
 	CreateResult                  error
@@ -73,6 +75,7 @@ type MockService struct {
 	GetS6ConfigFileResult         []byte
 	ForceRemoveResult             error
 	GetLogsResult                 []LogEntry
+	CheckHealthResult             HealthStatus
 
 	// Used parameters for each method (only if needed for certain tests)
 	ForceRemovePath string
@@ -250,4 +253,13 @@ func (m *MockService) EnsureSupervision(ctx context.Context, servicePath string,
 	}
 
 	return true, nil
+}
+
+// CheckHealth performs a health check on the service
+func (m *MockService) CheckHealth(ctx context.Context, servicePath string, fsService filesystem.Service) (HealthStatus, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.CheckHealthCalled = true
+	return m.CheckHealthResult, m.CheckHealthError
 }

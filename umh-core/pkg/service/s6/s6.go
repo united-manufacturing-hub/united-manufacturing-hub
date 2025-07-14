@@ -150,6 +150,8 @@ type Service interface {
 	// s6-svscan if it doesn't, to trigger supervision setup.
 	// Returns true if supervise directory exists (ready for supervision), false otherwise.
 	EnsureSupervision(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error)
+	// CheckHealth performs a health check on the service
+	CheckHealth(ctx context.Context, servicePath string, fsService filesystem.Service) (HealthStatus, error)
 }
 
 // logState is the per-log-file cursor used by GetLogs.

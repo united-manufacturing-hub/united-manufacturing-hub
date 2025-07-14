@@ -36,7 +36,8 @@ import (
 // BUFFER REUSE: Each buffer is completely overwritten by io.ReadFull before being appended to result
 var chunkBufferPool = sync.Pool{
 	New: func() interface{} {
-		return make([]byte, constants.S6FileReadChunkSize)
+		b := make([]byte, constants.S6FileReadChunkSize)
+		return &b
 	},
 }
 
@@ -253,8 +254,9 @@ func (s *DefaultService) ReadFileRange(
 
 		// BUFFER POOL USAGE: Get reusable 1MB buffer to minimize allocations
 		// The buffer gets completely overwritten by io.ReadFull each time
-		smallBuf := chunkBufferPool.Get().([]byte)
-		defer chunkBufferPool.Put(smallBuf)
+		smallBufPtr := chunkBufferPool.Get().(*[]byte)
+		smallBuf := *smallBufPtr
+		defer chunkBufferPool.Put(smallBufPtr)
 
 		for {
 			// GRACEFUL EARLY EXIT: Check if enough time remains for another chunk
