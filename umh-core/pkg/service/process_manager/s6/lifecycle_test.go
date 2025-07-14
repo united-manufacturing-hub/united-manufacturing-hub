@@ -17,7 +17,7 @@ package s6
 import (
 	"context"
 	"fmt"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"os"
 	"path/filepath"
 	"strings"
@@ -43,7 +43,7 @@ var _ = Describe("LifecycleManager", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		service = &DefaultService{logger: logger.For("test")}
+		service = &DefaultService{Logger: logger.For("test")}
 		mockFS = filesystem.NewMockFileSystem()
 		artifacts = &ServiceArtifacts{
 			ServiceDir: filepath.Join(constants.S6BaseDir, "test-service"),
@@ -327,7 +327,7 @@ var _ = Describe("LifecycleManager", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(health).To(Equal(process_manager.HealthOK))
+			Expect(health).To(Equal(process_shared.HealthOK))
 		})
 
 		It("should return HealthBad for missing service directory", func() {
@@ -339,7 +339,7 @@ var _ = Describe("LifecycleManager", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(health).To(Equal(process_manager.HealthBad))
+			Expect(health).To(Equal(process_shared.HealthBad))
 		})
 
 		It("should return HealthBad for missing completion sentinel", func() {
@@ -350,7 +350,7 @@ var _ = Describe("LifecycleManager", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(health).To(Equal(process_manager.HealthBad))
+			Expect(health).To(Equal(process_shared.HealthBad))
 		})
 
 		It("should return HealthUnknown for filesystem errors", func() {
@@ -361,7 +361,7 @@ var _ = Describe("LifecycleManager", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).To(HaveOccurred())
-			Expect(health).To(Equal(process_manager.HealthUnknown))
+			Expect(health).To(Equal(process_shared.HealthUnknown))
 		})
 
 		It("should handle nil artifacts", func() {
@@ -369,7 +369,7 @@ var _ = Describe("LifecycleManager", func() {
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("artifacts is nil"))
-			Expect(health).To(Equal(process_manager.HealthBad))
+			Expect(health).To(Equal(process_shared.HealthBad))
 		})
 	})
 

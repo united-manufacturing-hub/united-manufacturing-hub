@@ -20,6 +20,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"strconv"
 	"strings"
 	"sync"
@@ -27,7 +28,6 @@ import (
 
 	"github.com/pierrec/lz4/v4"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
 // 10MiB
@@ -44,7 +44,7 @@ const maxPayloadBytes = 10 << 20
 // ENDDATAENDDATAENDDATA
 // 1750091514783
 // ENDENDENDEND
-func extractRaw(entries []s6svc.LogEntry) (compressed []byte, epochMS int64, err error) {
+func extractRaw(entries []process_shared.LogEntry) (compressed []byte, epochMS int64, err error) {
 	var (
 		blockEndIndex = -1
 		dataEndIndex  = -1
@@ -107,7 +107,7 @@ func extractRaw(entries []s6svc.LogEntry) (compressed []byte, epochMS int64, err
 	return raw, epochMS, nil
 }
 
-func (svc *Service) parseBlock(entries []s6svc.LogEntry) error {
+func (svc *Service) parseBlock(entries []process_shared.LogEntry) error {
 	hexBuf, epoch, err := extractRaw(entries)
 	if err != nil || len(hexBuf) == 0 {
 		return err // nil or extractor error

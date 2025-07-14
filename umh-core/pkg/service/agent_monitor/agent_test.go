@@ -20,6 +20,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -27,17 +29,16 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/agent_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
-// CustomMockS6Service extends s6.MockService to track the servicePath parameter passed to GetLogs
+// CustomMockS6Service extends process_shared.MockService to track the servicePath parameter passed to GetLogs
 type CustomMockS6Service struct {
-	*s6.MockService
+	*process_shared.MockService
 	lastServicePath string
 }
 
 // GetLogs overrides the mock implementation to track the servicePath parameter
-func (m *CustomMockS6Service) GetLogs(ctx context.Context, servicePath string, fs filesystem.Service) ([]s6.LogEntry, error) {
+func (m *CustomMockS6Service) GetLogs(ctx context.Context, servicePath string, fs filesystem.Service) ([]process_shared.LogEntry, error) {
 	m.lastServicePath = servicePath
 	return m.MockService.GetLogs(ctx, servicePath, fs)
 }
@@ -45,7 +46,7 @@ func (m *CustomMockS6Service) GetLogs(ctx context.Context, servicePath string, f
 // NewCustomMockS6Service creates a new custom mock S6 service
 func NewCustomMockS6Service() *CustomMockS6Service {
 	return &CustomMockS6Service{
-		MockService: s6.NewMockService(),
+		MockService: process_shared.NewMockService(),
 	}
 }
 
@@ -53,7 +54,7 @@ var _ = Describe("Agent Monitor Service", func() {
 	var (
 		service      *agent_monitor.AgentMonitorService
 		mockFS       *filesystem.MockFileSystem
-		mockS6       *s6.MockService
+		mockS6       *process_shared.MockService
 		ctx          context.Context
 		mockCfg      config.FullConfig
 		mockSnapshot fsm.SystemSnapshot
@@ -61,7 +62,7 @@ var _ = Describe("Agent Monitor Service", func() {
 
 	BeforeEach(func() {
 		mockFS = filesystem.NewMockFileSystem()
-		mockS6 = s6.NewMockService()
+		mockS6 = process_shared.NewMockService()
 		ctx = context.Background()
 
 		// Create a mock config
@@ -84,7 +85,7 @@ var _ = Describe("Agent Monitor Service", func() {
 		}
 
 		// Setup default mock behaviors
-		mockS6.GetLogsResult = []s6.LogEntry{
+		mockS6.GetLogsResult = []process_shared.LogEntry{
 			{
 				Timestamp: time.Now().Add(-10 * time.Minute),
 				Content:   "INFO: Test log entry 1",
@@ -306,7 +307,7 @@ var _ = Describe("Agent Monitor Service", func() {
 		It("should correctly get logs from the expected service path", func() {
 			// Create a custom mock S6 service to track the servicePath parameter
 			customMockS6 := NewCustomMockS6Service()
-			customMockS6.GetLogsResult = []s6.LogEntry{
+			customMockS6.GetLogsResult = []process_shared.LogEntry{
 				{
 					Timestamp: time.Now(),
 					Content:   "Test log",

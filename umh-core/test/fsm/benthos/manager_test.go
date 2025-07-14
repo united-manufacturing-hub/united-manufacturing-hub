@@ -35,7 +35,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	benthos_monitor_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -585,7 +585,7 @@ var _ = Describe("BenthosManager", func() {
 			mockS6Mgr := s6fsm.NewS6ManagerWithMockedServices("rm-test-mgr")
 
 			// ---------- mock S6 *service* injected into BenthosService ----------
-			myMockS6Svc := s6service.NewMockService()
+			myMockS6Svc := process_shared.NewMockService()
 			// a minimal, valid YAML so Unmarshal succeeds
 			myMockS6Svc.GetS6ConfigFileResult = []byte("logger:\n  level: info\n")
 			// we also return a stub S6ServiceConfig for GetConfig()
@@ -639,7 +639,7 @@ var _ = Describe("BenthosManager", func() {
 			s6Inst, ok := s6InstIfc.(*s6fsm.S6Instance)
 			Expect(ok).To(BeTrue())
 
-			innerMockS6Svc, ok := s6Inst.GetService().(*s6service.MockService)
+			innerMockS6Svc, ok := s6Inst.GetService().(*process_shared.MockService)
 			Expect(ok).To(BeTrue(), "internal service is not a MockService")
 
 			//----------------------------------------------------------------------

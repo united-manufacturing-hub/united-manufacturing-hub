@@ -20,9 +20,11 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/s6"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -32,12 +34,12 @@ import (
 // parseLogOutput converts raw log output (like from the current log file) into []s6service.LogEntry
 // Input format: "2025-05-27 09:29:59.576902049  NMAP_SCAN_START"
 // Just copy-paste the actual log lines and this will convert them to the test format
-func parseLogOutput(rawLogs string) []s6service.LogEntry {
+func parseLogOutput(rawLogs string) []process_shared.LogEntry {
 	// Use the existing optimized s6 parsing function
-	entries, err := s6service.ParseLogsFromBytes([]byte(rawLogs))
+	entries, err := s6.ParseLogsFromBytes([]byte(rawLogs))
 	if err != nil {
 		// Fallback to empty slice if parsing fails
-		return []s6service.LogEntry{}
+		return []process_shared.LogEntry{}
 	}
 	return entries
 }
@@ -45,7 +47,7 @@ func parseLogOutput(rawLogs string) []s6service.LogEntry {
 var _ = Describe("Nmap Service", func() {
 	var (
 		service         *NmapService
-		mockS6          *s6service.MockService
+		mockS6          *process_shared.MockService
 		tick            uint64
 		nmapName        string
 		s6Service       string
@@ -53,7 +55,7 @@ var _ = Describe("Nmap Service", func() {
 	)
 
 	BeforeEach(func() {
-		mockS6 = s6service.NewMockService()
+		mockS6 = process_shared.NewMockService()
 		nmapName = "test-scan"
 		service = NewDefaultNmapService(nmapName, WithS6Service(mockS6))
 		tick = 0
@@ -232,7 +234,7 @@ done`
 	Describe("Log Parsing", func() {
 		Context("with valid nmap scan logs", func() {
 			It("should parse scan results correctly", func() {
-				logs := []s6service.LogEntry{
+				logs := []process_shared.LogEntry{
 					{
 						Timestamp: time.Now(),
 						Content:   "NMAP_SCAN_START",
@@ -638,7 +640,7 @@ done`
 			})
 
 			It("should handle closed ports correctly", func() {
-				logs := []s6service.LogEntry{
+				logs := []process_shared.LogEntry{
 					{
 						Timestamp: time.Now(),
 						Content:   "NMAP_SCAN_START",
@@ -688,12 +690,12 @@ done`
 			})
 
 			It("should return nil for empty logs", func() {
-				result := service.parseScanLogs([]s6service.LogEntry{}, 80)
+				result := service.parseScanLogs([]process_shared.LogEntry{}, 80)
 				Expect(result).To(BeNil())
 			})
 
 			It("should return nil for incomplete scan logs", func() {
-				logs := []s6service.LogEntry{
+				logs := []process_shared.LogEntry{
 					{
 						Timestamp: time.Now(),
 						Content:   "NMAP_SCAN_START",
@@ -786,13 +788,13 @@ done`
 	Describe("ForceRemoveNmap", func() {
 		var (
 			service       *NmapService
-			mockS6Service *s6service.MockService
+			mockS6Service *process_shared.MockService
 			mockServices  *serviceregistry.Registry
 			nmapName      string
 		)
 
 		BeforeEach(func() {
-			mockS6Service = s6service.NewMockService()
+			mockS6Service = process_shared.NewMockService()
 			mockServices = serviceregistry.NewMockRegistry()
 			nmapName = "test-nmap"
 			service = NewDefaultNmapService(nmapName, WithS6Service(mockS6Service))

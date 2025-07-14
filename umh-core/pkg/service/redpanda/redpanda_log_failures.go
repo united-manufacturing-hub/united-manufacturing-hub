@@ -15,19 +15,18 @@
 package redpanda
 
 import (
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
-
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
 type RedpandaFailure interface {
 	// IsFailure checks if the log line contains a failure
 	// transitionToRunningTime is the time when the service was transitioned to running
 	// This can be used to ignore certain failures, which might occur during the startup phase
-	IsFailure(log s6service.LogEntry, transitionToRunningTime time.Time) bool
+	IsFailure(log process_shared.LogEntry, transitionToRunningTime time.Time) bool
 }
 
 // RedpandaFailures is a list of failure detectors (implements RedpandaFailure), each checking for a specific condition inside the log line
@@ -40,7 +39,7 @@ var RedpandaFailures = []RedpandaFailure{
 type AddressAlreadyInUseFailure struct{}
 
 // IsFailure checks if the log line contains "Address already in use"
-func (a *AddressAlreadyInUseFailure) IsFailure(log s6service.LogEntry, _ time.Time) bool {
+func (a *AddressAlreadyInUseFailure) IsFailure(log process_shared.LogEntry, _ time.Time) bool {
 	return strings.Contains(log.Content, "Address already in use")
 }
 
@@ -50,7 +49,7 @@ type ReactorStalledFailure struct{}
 // IsFailure checks if the log line contains "Reactor stalled for", and if so, if the number of milliseconds is greater than 500
 var reactorStallRegex = regexp.MustCompile(`Reactor stalled for (\d+) ms`)
 
-func (r *ReactorStalledFailure) IsFailure(log s6service.LogEntry, transitionToRunningTime time.Time) bool {
+func (r *ReactorStalledFailure) IsFailure(log process_shared.LogEntry, transitionToRunningTime time.Time) bool {
 	// Early return if the log line does not contain "Reactor stalled for"
 	if !strings.Contains(log.Content, "Reactor stalled for") {
 		return false

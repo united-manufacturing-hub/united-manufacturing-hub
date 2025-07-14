@@ -17,6 +17,7 @@ package redpanda_monitor
 import (
 	"context"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -24,7 +25,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -444,7 +444,7 @@ func (m *MockRedpandaMonitorService) SetMetricsState(isActive bool) {
 }
 
 // SetMockLogs allows tests to set the mock logs for the service
-func (m *MockRedpandaMonitorService) SetMockLogs(logs []s6service.LogEntry) {
+func (m *MockRedpandaMonitorService) SetMockLogs(logs []process_shared.LogEntry) {
 	if m.ServiceState == nil {
 		m.ServiceState = &ServiceInfo{
 			RedpandaStatus: RedpandaMonitorStatus{

@@ -20,11 +20,12 @@ package fsmtest
 import (
 	"context"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -181,8 +182,8 @@ func CreateMockNmapManager(name string) (*nmapfsm.NmapManager, *nmap.MockNmapSer
 	s6MockService.ServiceExistsResult = true
 
 	// Configure default successful statuses
-	s6MockService.StatusResult = s6svc.ServiceInfo{
-		Status: s6svc.ServiceUp,
+	s6MockService.StatusResult = process_shared.ServiceInfo{
+		Status: process_shared.ServiceUp,
 		Pid:    12345, // Fake PID
 		Uptime: 60,    // Fake uptime in seconds
 	}

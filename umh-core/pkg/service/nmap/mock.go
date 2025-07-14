@@ -20,12 +20,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -152,7 +154,7 @@ func NewMockNmapService() *MockNmapService {
 		ServiceStates:    make(map[string]*ServiceInfo),
 		ExistingServices: make(map[string]bool),
 		stateFlags:       make(map[string]*ServiceStateFlags),
-		S6Service:        &s6service.MockService{},
+		S6Service:        &process_shared.MockService{},
 	}
 }
 
@@ -431,12 +433,12 @@ func (m *MockNmapService) SetServicePortState(serviceName string, state string, 
 						ScanDuration: 0.5,
 					},
 				},
-				Logs: []s6service.LogEntry{},
+				Logs: []process_shared.LogEntry{},
 			},
 		}
 	}
 
-	logs := []s6service.LogEntry{
+	logs := []process_shared.LogEntry{
 		{
 			Timestamp: now,
 			Content:   "NMAP_SCAN_START",
@@ -532,7 +534,7 @@ func (m *MockNmapService) SetNmapError(serviceName string, latencyMs float64) {
 						ScanDuration: 0.5,
 					},
 				},
-				Logs: []s6service.LogEntry{},
+				Logs: []process_shared.LogEntry{},
 			},
 		}
 	}

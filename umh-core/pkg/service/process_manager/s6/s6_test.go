@@ -12,16 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package s6
+package s6_test
 
 import (
 	"context"
 	"fmt"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/s6"
 
 	"github.com/cactus/tai64"
 	. "github.com/onsi/ginkgo/v2"
@@ -44,14 +47,14 @@ func (m mockDirEntry) Info() (os.FileInfo, error) { return nil, nil }
 
 var _ = Describe("S6 Service", func() {
 	var (
-		mockService *MockService
+		mockService *process_shared.MockService
 		ctx         context.Context
 		testPath    string
 		mockFS      *filesystem.MockFileSystem
 	)
 
 	BeforeEach(func() {
-		mockService = NewMockService()
+		mockService = process_shared.NewMockService()
 		ctx = context.Background()
 		testPath = "/tmp/test-s6-service"
 		mockFS = filesystem.NewMockFileSystem()
@@ -111,32 +114,32 @@ var _ = Describe("S6 Service", func() {
 		Expect(exists).To(BeTrue())
 
 		// Set the service state to down initially
-		mockService.ServiceStates[testPath] = process_manager.ServiceInfo{
-			Status: process_manager.ServiceDown,
+		mockService.ServiceStates[testPath] = process_shared.ServiceInfo{
+			Status: process_shared.ServiceDown,
 		}
 
 		// Get status should return the set state
 		info, err := mockService.Status(ctx, testPath, mockFS)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(info.Status).To(Equal(process_manager.ServiceDown))
+		Expect(info.Status).To(Equal(process_shared.ServiceDown))
 
 		// Start service should change state to up
 		err = mockService.Start(ctx, testPath, mockFS)
 		Expect(err).NotTo(HaveOccurred())
 		info, _ = mockService.Status(ctx, testPath, mockFS)
-		Expect(info.Status).To(Equal(process_manager.ServiceUp))
+		Expect(info.Status).To(Equal(process_shared.ServiceUp))
 
 		// Stop service should change state to down
 		err = mockService.Stop(ctx, testPath, mockFS)
 		Expect(err).NotTo(HaveOccurred())
 		info, _ = mockService.Status(ctx, testPath, mockFS)
-		Expect(info.Status).To(Equal(process_manager.ServiceDown))
+		Expect(info.Status).To(Equal(process_shared.ServiceDown))
 
 		// Restart service should change state to up (after briefly being restarting)
 		err = mockService.Restart(ctx, testPath, mockFS)
 		Expect(err).NotTo(HaveOccurred())
 		info, _ = mockService.Status(ctx, testPath, mockFS)
-		Expect(info.Status).To(Equal(process_manager.ServiceUp))
+		Expect(info.Status).To(Equal(process_shared.ServiceUp))
 
 		// Remove service should make it not exist
 		err = mockService.Remove(ctx, testPath, mockFS)
@@ -148,15 +151,15 @@ var _ = Describe("S6 Service", func() {
 		_, err = mockService.Status(ctx, testPath, mockFS)
 		Expect(err).NotTo(HaveOccurred()) // No error, but...
 		info = mockService.StatusResult   // Should return the default result
-		Expect(info.Status).To(Equal(process_manager.ServiceUnknown))
+		Expect(info.Status).To(Equal(process_shared.ServiceUnknown))
 	})
 
 	Describe("IsKnownService", func() {
-		var s6Service *DefaultService
+		var s6Service *s6.DefaultService
 
 		BeforeEach(func() {
-			s6Service = &DefaultService{
-				logger: nil,
+			s6Service = &s6.DefaultService{
+				Logger: nil,
 			}
 		})
 
@@ -204,15 +207,15 @@ var _ = Describe("S6 Service", func() {
 
 	Describe("CleanS6ServiceDirectory", func() {
 		var (
-			s6Service          *DefaultService
+			s6Service          *s6.DefaultService
 			mockFS             *filesystem.MockFileSystem
 			removedDirectories []string
 		)
 
 		BeforeEach(func() {
 			mockFS = filesystem.NewMockFileSystem()
-			s6Service = &DefaultService{
-				logger: nil, // Don't need the logger for this test
+			s6Service = &s6.DefaultService{
+				Logger: nil, // Don't need the logger for this test
 			}
 
 			// Track removed directories
@@ -298,15 +301,15 @@ var _ = Describe("S6 Service", func() {
 	// TestGetS6ConfigFile tests the GetS6ConfigFile method
 	Describe("GetS6ConfigFile", func() {
 		var (
-			s6Service *DefaultService
+			s6Service *s6.DefaultService
 			mockFS    *filesystem.MockFileSystem
 			ctx       context.Context
 		)
 
 		BeforeEach(func() {
 			mockFS = filesystem.NewMockFileSystem()
-			s6Service = &DefaultService{
-				logger: nil, // Not needed for this test
+			s6Service = &s6.DefaultService{
+				Logger: nil, // Not needed for this test
 			}
 			ctx = context.Background()
 		})
@@ -322,7 +325,7 @@ var _ = Describe("S6 Service", func() {
 			It("should return ErrServiceNotExist", func() {
 				servicePath := filepath.Join(constants.S6BaseDir, "non-existent-service")
 				_, err := s6Service.GetS6ConfigFile(ctx, servicePath, "config.yaml", mockFS)
-				Expect(err).To(Equal(ErrServiceNotExist))
+				Expect(err).To(Equal(process_shared.ErrServiceNotExist))
 			})
 		})
 
@@ -393,7 +396,7 @@ var _ = Describe("S6 Service", func() {
 			data, err := os.ReadFile("s6_test_log_data.txt")
 			Expect(len(data)).To(BeNumerically(">", 0))
 			Expect(err).NotTo(HaveOccurred())
-			entries, err := ParseLogsFromBytes(data)
+			entries, err := s6.ParseLogsFromBytes(data)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Expect more than 0 log entries
@@ -405,7 +408,7 @@ var _ = Describe("S6 Service", func() {
 		var (
 			ctx     context.Context
 			mockFS  *filesystem.MockFileSystem
-			svc     *DefaultService
+			svc     *s6.DefaultService
 			svcPath string
 			logDir  string
 
@@ -421,7 +424,7 @@ var _ = Describe("S6 Service", func() {
 		BeforeEach(func() {
 			ctx = context.Background()
 			mockFS = filesystem.NewMockFileSystem()
-			svc = NewDefaultService().(*DefaultService)
+			svc = process_manager.NewDefaultService().(*s6.DefaultService)
 			svcPath = filepath.Join(constants.S6BaseDir, "my-service")
 			logDir = filepath.Join(constants.S6LogBaseDir, "my-service")
 
@@ -453,7 +456,7 @@ var _ = Describe("S6 Service", func() {
 
 		It("removes both service and log directory (normal case)", func() {
 			// Simulate a service with tracked files
-			svc.artifacts = &ServiceArtifacts{
+			svc.Artifacts = &s6.ServiceArtifacts{
 				ServiceDir: svcPath,
 				LogDir:     logDir,
 				CreatedFiles: []string{
@@ -476,7 +479,7 @@ var _ = Describe("S6 Service", func() {
 
 		It("is successful when only the log dir had to be removed", func() {
 			// Simulate a service with tracked files
-			svc.artifacts = &ServiceArtifacts{
+			svc.Artifacts = &s6.ServiceArtifacts{
 				ServiceDir: svcPath,
 				LogDir:     logDir,
 				CreatedFiles: []string{
@@ -500,7 +503,7 @@ var _ = Describe("S6 Service", func() {
 
 		It("is idempotent (everything already gone)", func() {
 			// Simulate a service with tracked files
-			svc.artifacts = &ServiceArtifacts{
+			svc.Artifacts = &s6.ServiceArtifacts{
 				ServiceDir: svcPath,
 				LogDir:     logDir,
 				CreatedFiles: []string{
@@ -530,7 +533,7 @@ var _ = Describe("S6 Service", func() {
 
 		It("returns an error when deletion fails", func() {
 			// Simulate a service with tracked files
-			svc.artifacts = &ServiceArtifacts{
+			svc.Artifacts = &s6.ServiceArtifacts{
 				ServiceDir: svcPath,
 				LogDir:     logDir,
 				CreatedFiles: []string{
@@ -618,16 +621,16 @@ var _ = Describe("MaxFunc Approach for Rotated Files", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		// Use MaxFunc to find latest file
-		service := NewDefaultService().(*DefaultService)
-		result := service.findLatestRotatedFile(entries)
+		service := process_manager.NewDefaultService().(*s6.DefaultService)
+		result := service.FindLatestRotatedFile(entries)
 
 		// Should return the chronologically latest file
 		Expect(result).To(Equal(expectedLatest))
 	})
 
 	It("should handle empty directory gracefully", func() {
-		service := NewDefaultService().(*DefaultService)
-		result := service.findLatestRotatedFile(entries)
+		service := process_manager.NewDefaultService().(*s6.DefaultService)
+		result := service.FindLatestRotatedFile(entries)
 		Expect(result).To(BeEmpty())
 	})
 
@@ -643,8 +646,8 @@ var _ = Describe("MaxFunc Approach for Rotated Files", func() {
 		entries, err := fsService.Glob(ctx, filepath.Join(logDir, "@*.s"))
 		Expect(err).ToNot(HaveOccurred())
 
-		service := NewDefaultService().(*DefaultService)
-		result := service.findLatestRotatedFile(entries)
+		service := process_manager.NewDefaultService().(*s6.DefaultService)
+		result := service.FindLatestRotatedFile(entries)
 		Expect(result).To(Equal(filePath))
 	})
 
@@ -669,8 +672,8 @@ var _ = Describe("MaxFunc Approach for Rotated Files", func() {
 		entries, err := fsService.Glob(ctx, filepath.Join(logDir, "@*.s"))
 		Expect(err).ToNot(HaveOccurred())
 
-		service := NewDefaultService().(*DefaultService)
-		result := service.findLatestRotatedFile(entries)
+		service := process_manager.NewDefaultService().(*s6.DefaultService)
+		result := service.FindLatestRotatedFile(entries)
 		Expect(result).To(Equal(rotatedFilePath))
 	})
 
@@ -704,8 +707,8 @@ var _ = Describe("MaxFunc Approach for Rotated Files", func() {
 		entries, err := fsService.Glob(ctx, filepath.Join(logDir, "@*.s"))
 		Expect(err).ToNot(HaveOccurred())
 
-		service := NewDefaultService().(*DefaultService)
-		result := service.findLatestRotatedFile(entries)
+		service := process_manager.NewDefaultService().(*s6.DefaultService)
+		result := service.FindLatestRotatedFile(entries)
 		Expect(result).To(Equal(expectedLatest))
 	})
 })

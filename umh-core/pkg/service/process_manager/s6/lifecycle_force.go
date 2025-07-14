@@ -46,34 +46,34 @@ func (s *DefaultService) ForceCleanup(ctx context.Context, artifacts *ServiceArt
 		return fmt.Errorf("artifacts is nil")
 	}
 
-	s.logger.Warnf("Force cleaning service artifacts: service=%s, files=%d",
+	s.Logger.Warnf("Force cleaning service artifacts: service=%s, files=%d",
 		filepath.Base(artifacts.ServiceDir), len(artifacts.CreatedFiles))
 
 	// Create down files first
 	if err := s.createDownFiles(ctx, artifacts, fsService); err != nil {
-		s.logger.Warnf("Failed to create down files: %v", err)
+		s.Logger.Warnf("Failed to create down files: %v", err)
 		// Continue with cleanup even if down files fail
 	}
 
 	// Best-effort process termination
 	if err := s.terminateProcesses(ctx, artifacts, fsService); err != nil {
-		s.logger.Warnf("Failed to terminate processes: %v", err)
+		s.Logger.Warnf("Failed to terminate processes: %v", err)
 		// Continue with cleanup even if process termination fails
 	}
 
 	// Kill supervise processes
 	if err := s.killSupervisors(ctx, artifacts, fsService); err != nil {
-		s.logger.Warnf("Failed to kill supervisor processes: %v", err)
+		s.Logger.Warnf("Failed to kill supervisor processes: %v", err)
 		// Continue with cleanup even if supervisor killing fails
 	}
 
 	// Remove directories with timeout awareness
 	if err := s.removeDirectoryWithTimeout(ctx, artifacts.ServiceDir, fsService); err != nil {
-		s.logger.Warnf("Failed to remove service directory: %v", err)
+		s.Logger.Warnf("Failed to remove service directory: %v", err)
 	}
 
 	if err := s.removeDirectoryWithTimeout(ctx, artifacts.LogDir, fsService); err != nil {
-		s.logger.Warnf("Failed to remove log directory: %v", err)
+		s.Logger.Warnf("Failed to remove log directory: %v", err)
 	}
 
 	// Verify cleanup completed
@@ -84,7 +84,7 @@ func (s *DefaultService) ForceCleanup(ctx context.Context, artifacts *ServiceArt
 		return fmt.Errorf("force cleanup incomplete: service=%v, log=%v", serviceExists, logExists)
 	}
 
-	s.logger.Infof("Force cleanup completed for service: %s", filepath.Base(artifacts.ServiceDir))
+	s.Logger.Infof("Force cleanup completed for service: %s", filepath.Base(artifacts.ServiceDir))
 	return nil
 }
 
@@ -102,10 +102,10 @@ func (s *DefaultService) killSupervisors(ctx context.Context, artifacts *Service
 			if pidStr := strings.TrimSpace(string(data)); pidStr != "" {
 				// Try SIGTERM first for graceful shutdown
 				if _, err := fsService.ExecuteCommand(ctx, "kill", "-TERM", pidStr); err != nil {
-					s.logger.Debugf("Failed to send SIGTERM to supervisor process %s: %v", pidStr, err)
+					s.Logger.Debugf("Failed to send SIGTERM to supervisor process %s: %v", pidStr, err)
 					lastErr = err
 				} else {
-					s.logger.Debugf("Sent SIGTERM to supervisor process %s", pidStr)
+					s.Logger.Debugf("Sent SIGTERM to supervisor process %s", pidStr)
 				}
 
 				// Wait for graceful shutdown with timeout
@@ -113,10 +113,10 @@ func (s *DefaultService) killSupervisors(ctx context.Context, artifacts *Service
 				case <-time.After(gracePeriodForTermination):
 					// Process didn't terminate gracefully, use SIGKILL
 					if _, err := fsService.ExecuteCommand(ctx, "kill", "-KILL", pidStr); err != nil {
-						s.logger.Debugf("Failed to send SIGKILL to supervisor process %s: %v", pidStr, err)
+						s.Logger.Debugf("Failed to send SIGKILL to supervisor process %s: %v", pidStr, err)
 						lastErr = err
 					} else {
-						s.logger.Debugf("Sent SIGKILL to supervisor process %s after %v grace period", pidStr, gracePeriodForTermination)
+						s.Logger.Debugf("Sent SIGKILL to supervisor process %s after %v grace period", pidStr, gracePeriodForTermination)
 					}
 				case <-ctx.Done():
 					// Context cancelled, exit early
@@ -141,7 +141,7 @@ func (s *DefaultService) removeDirectoryWithTimeout(ctx context.Context, path st
 
 	if err := fsService.RemoveAll(chunkCtx, path); err != nil {
 		if chunkCtx.Err() == context.DeadlineExceeded {
-			s.logger.Debugf("Directory removal timed out for %s, will retry", path)
+			s.Logger.Debugf("Directory removal timed out for %s, will retry", path)
 			return context.DeadlineExceeded
 		}
 		return err

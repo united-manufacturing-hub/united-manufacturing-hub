@@ -15,6 +15,7 @@
 package topicbrowser_test
 
 import (
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -24,7 +25,6 @@ import (
 	tbproto "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models/topicbrowser/pb"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	topicbrowserservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/topicbrowser"
 )
 
@@ -330,7 +330,7 @@ func createMockObservedStateSnapshot(buffers []*topicbrowserservice.Buffer) *top
 		ServiceInfo: topicbrowserservice.ServiceInfo{
 			Status: topicbrowserservice.Status{
 				Buffer: buffers,
-				Logs:   []s6svc.LogEntry{}, // Initia	lize with empty slice
+				Logs:   []process_shared.LogEntry{}, // Initia	lize with empty slice
 			},
 			// Leave other fields as zero values
 		},

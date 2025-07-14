@@ -16,15 +16,14 @@ package topicbrowser
 
 import (
 	"encoding/hex"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 )
 
 // benthos log from samples for topic_browser plugin
@@ -81,7 +80,7 @@ var _ = Describe("extractRaw / parseBlock", func() {
 
 	Context("incomplete block", func() {
 		It("returns without error and without writing", func() {
-			logs := []s6svc.LogEntry{
+			logs := []process_shared.LogEntry{
 				{Content: constants.BLOCK_START_MARKER},
 				{Content: string(compressed)},
 			}
@@ -114,11 +113,11 @@ var _ = Describe("extractRaw / parseBlock", func() {
 
 	Context("origin benthos block ", func() {
 		It("processes the full benthos sample", func() {
-			var logs []s6svc.LogEntry
+			var logs []process_shared.LogEntry
 			for _, l := range strings.Split(rawLog, "\n") {
 				l = strings.TrimSpace(l)
 				if l != "" {
-					logs = append(logs, s6svc.LogEntry{Content: l})
+					logs = append(logs, process_shared.LogEntry{Content: l})
 				}
 			}
 
@@ -143,15 +142,15 @@ var _ = Describe("extractRaw / parseBlock", func() {
 // supplied hex-encoded data line between BLOCK_START / DATA_END / BLOCK_END
 // markers and, if includeTimestamp is true, inserts the given epochMS as the
 // timestamp line.  The returned slice is ready to be fed into parseBlock.
-func buildLogs(includeTimestamp bool, dataLine string, epochMS int64) []s6svc.LogEntry {
-	logs := []s6svc.LogEntry{
+func buildLogs(includeTimestamp bool, dataLine string, epochMS int64) []process_shared.LogEntry {
+	logs := []process_shared.LogEntry{
 		{Content: constants.BLOCK_START_MARKER},
 		{Content: dataLine},
 		{Content: constants.DATA_END_MARKER},
 	}
 	if includeTimestamp {
-		logs = append(logs, s6svc.LogEntry{Content: strconv.FormatInt(epochMS, 10)})
+		logs = append(logs, process_shared.LogEntry{Content: strconv.FormatInt(epochMS, 10)})
 	}
-	logs = append(logs, s6svc.LogEntry{Content: constants.BLOCK_END_MARKER})
+	logs = append(logs, process_shared.LogEntry{Content: constants.BLOCK_END_MARKER})
 	return logs
 }

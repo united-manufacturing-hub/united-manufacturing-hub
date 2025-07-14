@@ -33,6 +33,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"maps"
 	"strconv"
 	"time"
@@ -46,7 +47,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"go.uber.org/zap"
 )
 
@@ -478,8 +478,8 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 	startTime := time.Now()
 	timeoutDuration := constants.DataflowComponentWaitForActiveTimeout
 
-	var logs []s6.LogEntry
-	var lastLogs []s6.LogEntry
+	var logs []process_shared.LogEntry
+	var lastLogs []process_shared.LogEntry
 
 	for {
 		elapsed := time.Since(startTime)

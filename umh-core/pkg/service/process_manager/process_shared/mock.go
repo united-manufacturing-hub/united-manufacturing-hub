@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package s6
+package process_shared
 
 import (
 	"context"
 	"fmt"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager"
 	"sync"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
@@ -66,20 +65,20 @@ type MockService struct {
 	StartResult                   error
 	StopResult                    error
 	RestartResult                 error
-	StatusResult                  process_manager.ServiceInfo
-	ExitHistoryResult             []process_manager.ExitEvent
+	StatusResult                  ServiceInfo
+	ExitHistoryResult             []ExitEvent
 	ServiceExistsResult           bool
 	GetConfigResult               s6serviceconfig.S6ServiceConfig
 	CleanS6ServiceDirectoryResult error
 	GetS6ConfigFileResult         []byte
 	ForceRemoveResult             error
-	GetLogsResult                 []process_manager.LogEntry
+	GetLogsResult                 []LogEntry
 
 	// Used parameters for each method (only if needed for certain tests)
 	ForceRemovePath string
 
 	// For more complex testing scenarios
-	ServiceStates    map[string]process_manager.ServiceInfo
+	ServiceStates    map[string]ServiceInfo
 	ExistingServices map[string]bool
 	// New fields for EnsureSupervision
 	MockExists bool
@@ -89,10 +88,10 @@ type MockService struct {
 // NewMockService creates a new mock S6 service
 func NewMockService() *MockService {
 	return &MockService{
-		ServiceStates:    make(map[string]process_manager.ServiceInfo),
+		ServiceStates:    make(map[string]ServiceInfo),
 		ExistingServices: make(map[string]bool),
-		StatusResult: process_manager.ServiceInfo{
-			Status: process_manager.ServiceUnknown,
+		StatusResult: ServiceInfo{
+			Status: ServiceUnknown,
 		},
 	}
 }
@@ -132,7 +131,7 @@ func (m *MockService) Start(ctx context.Context, servicePath string, filesystemS
 	}
 
 	info := m.ServiceStates[servicePath]
-	info.Status = process_manager.ServiceUp
+	info.Status = ServiceUp
 	m.ServiceStates[servicePath] = info
 
 	return m.StartError
@@ -150,7 +149,7 @@ func (m *MockService) Stop(ctx context.Context, servicePath string, filesystemSe
 	}
 
 	info := m.ServiceStates[servicePath]
-	info.Status = process_manager.ServiceDown
+	info.Status = ServiceDown
 	m.ServiceStates[servicePath] = info
 
 	return m.StopError
@@ -165,18 +164,18 @@ func (m *MockService) Restart(ctx context.Context, servicePath string, filesyste
 	}
 
 	info := m.ServiceStates[servicePath]
-	info.Status = process_manager.ServiceRestarting
+	info.Status = ServiceRestarting
 	m.ServiceStates[servicePath] = info
 
 	// Simulate a successful restart
-	info.Status = process_manager.ServiceUp
+	info.Status = ServiceUp
 	m.ServiceStates[servicePath] = info
 
 	return m.RestartError
 }
 
 // Status mocks getting the status of an S6 service
-func (m *MockService) Status(ctx context.Context, servicePath string, filesystemService filesystem.Service) (process_manager.ServiceInfo, error) {
+func (m *MockService) Status(ctx context.Context, servicePath string, filesystemService filesystem.Service) (ServiceInfo, error) {
 	m.StatusCalled = true
 
 	if state, exists := m.ServiceStates[servicePath]; exists {
@@ -201,7 +200,7 @@ func (m *MockService) GetConfig(ctx context.Context, servicePath string, filesys
 	return m.GetConfigResult, m.GetConfigError
 }
 
-func (m *MockService) ExitHistory(ctx context.Context, servicePath string, filesystemService filesystem.Service) ([]process_manager.ExitEvent, error) {
+func (m *MockService) ExitHistory(ctx context.Context, servicePath string, filesystemService filesystem.Service) ([]ExitEvent, error) {
 	m.ExitHistoryCalled = true
 	return m.ExitHistoryResult, m.ExitHistoryError
 }
@@ -225,7 +224,7 @@ func (m *MockService) ForceRemove(ctx context.Context, servicePath string, files
 	return m.ForceRemoveError
 }
 
-func (m *MockService) GetLogs(ctx context.Context, servicePath string, filesystemService filesystem.Service) ([]process_manager.LogEntry, error) {
+func (m *MockService) GetLogs(ctx context.Context, servicePath string, filesystemService filesystem.Service) ([]LogEntry, error) {
 	m.GetLogsCalled = true
 
 	return m.GetLogsResult, m.GetLogsError

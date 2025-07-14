@@ -28,7 +28,7 @@ import (
 	benthos "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	benthos_monitor "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 	dfcsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 )
 
 // These structs mock the necessary types from benthos_monitor package
@@ -86,7 +86,7 @@ type MockBenthosMetrics struct {
 
 type MockBenthosStatus struct {
 	BenthosMetrics MockBenthosMetrics
-	BenthosLogs    []s6.LogEntry
+	BenthosLogs    []process_shared.LogEntry
 }
 
 type MockServiceInfo struct {

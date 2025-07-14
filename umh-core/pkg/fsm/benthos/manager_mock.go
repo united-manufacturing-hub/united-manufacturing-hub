@@ -18,13 +18,14 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
 // NewBenthosManagerWithMockedServices creates a BenthosManager with fully mocked services
@@ -65,12 +66,12 @@ func NewBenthosManagerWithMockedServices(name string) (*BenthosManager, *benthos
 			instance := NewBenthosInstance(cfg)
 
 			// Create a mock S6 service and attach it to the Benthos mock
-			s6MockService := s6svc.NewMockService()
+			s6MockService := process_shared.NewMockService()
 
 			// Configure mock S6 service
 			s6MockService.ServiceExistsResult = true
-			s6MockService.StatusResult = s6svc.ServiceInfo{
-				Status:    s6svc.ServiceUp, // Start in UP state
+			s6MockService.StatusResult = process_shared.ServiceInfo{
+				Status:    process_shared.ServiceUp, // Start in UP state
 				Pid:       12345,
 				Uptime:    60,
 				IsReady:   true,

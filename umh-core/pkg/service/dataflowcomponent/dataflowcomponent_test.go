@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -30,7 +31,6 @@ import (
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	benthosservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -249,7 +249,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
 			Expect(status.BenthosFSMState).To(Equal(benthosfsmmanager.OperationalStateActive))
-			Expect(status.BenthosObservedState.ServiceInfo.S6ObservedState.ServiceInfo.Status).To(Equal(s6svc.ServiceUp))
+			Expect(status.BenthosObservedState.ServiceInfo.S6ObservedState.ServiceInfo.Status).To(Equal(process_shared.ServiceUp))
 			Expect(status.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive).To(BeTrue())
 			Expect(status.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady).To(BeTrue())
 			Expect(status.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics.Input.Received).To(Equal(int64(10)))
@@ -629,14 +629,14 @@ func SetupBenthosServiceState(
 
 	// Update S6 observed state
 	if flags.IsS6Running {
-		mockService.ServiceStates[serviceName].S6ObservedState.ServiceInfo = s6svc.ServiceInfo{
-			Status: s6svc.ServiceUp,
+		mockService.ServiceStates[serviceName].S6ObservedState.ServiceInfo = process_shared.ServiceInfo{
+			Status: process_shared.ServiceUp,
 			Uptime: 10, // Set uptime to 10s to simulate config loaded
 			Pid:    1234,
 		}
 	} else {
-		mockService.ServiceStates[serviceName].S6ObservedState.ServiceInfo = s6svc.ServiceInfo{
-			Status: s6svc.ServiceDown,
+		mockService.ServiceStates[serviceName].S6ObservedState.ServiceInfo = process_shared.ServiceInfo{
+			Status: process_shared.ServiceDown,
 		}
 	}
 

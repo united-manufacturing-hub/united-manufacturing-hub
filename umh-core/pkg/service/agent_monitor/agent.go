@@ -17,6 +17,7 @@ package agent_monitor
 import (
 	"context"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"path/filepath"
 	"time"
 
@@ -29,7 +30,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	s6 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version"
 )
 
@@ -63,8 +64,8 @@ type ServiceInfo struct {
 	//
 	// Therefore we override the default behaviour and copy only the 3-word
 	// slice header (24 B on amd64) — see CopyAgentLogs below.
-	AgentLogs    []s6.LogEntry          `json:"agentLogs"`
-	AgentMetrics map[string]interface{} `json:"agentMetrics,omitempty"`
+	AgentLogs    []process_shared.LogEntry `json:"agentLogs"`
+	AgentMetrics map[string]interface{}    `json:"agentMetrics,omitempty"`
 	// Release: Channel, Version, Supported Feature
 	Release *models.Release `json:"release"`
 
@@ -94,7 +95,7 @@ type ServiceInfo struct {
 // deep-copy (O(n) but safe for mutable slices).
 //
 // See also: https://github.com/tiendc/go-deepcopy?tab=readme-ov-file#copy-struct-fields-via-struct-methods
-func (si *ServiceInfo) CopyAgentLogs(src []s6.LogEntry) error {
+func (si *ServiceInfo) CopyAgentLogs(src []process_shared.LogEntry) error {
 	si.AgentLogs = src
 	return nil
 }
@@ -156,7 +157,7 @@ func (c *AgentMonitorService) Status(ctx context.Context, systemSnapshot fsm.Sys
 	status := &ServiceInfo{
 		Location:     map[int]string{},
 		Latency:      &models.Latency{},
-		AgentLogs:    []s6.LogEntry{},
+		AgentLogs:    []process_shared.LogEntry{},
 		AgentMetrics: map[string]interface{}{},
 		Release:      &models.Release{},
 	}
@@ -220,7 +221,7 @@ func (c *AgentMonitorService) getReleaseInfo(cfg config.FullConfig) (*models.Rel
 }
 
 // getAgentLogs retrieves the logs for the umh-core service from the log file
-func (c *AgentMonitorService) getAgentLogs(ctx context.Context) ([]s6.LogEntry, error) {
+func (c *AgentMonitorService) getAgentLogs(ctx context.Context) ([]process_shared.LogEntry, error) {
 	// Path to the umh-core service
 	servicePath := filepath.Join(constants.S6BaseDir, "umh-core")
 

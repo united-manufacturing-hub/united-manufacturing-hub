@@ -31,7 +31,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -538,7 +538,7 @@ var _ = Describe("S6Manager", func() {
 			s6Instance, ok := instance.(*s6fsm.S6Instance)
 			Expect(ok).To(BeTrue())
 
-			mockService, ok := s6Instance.GetService().(*s6service.MockService)
+			mockService, ok := s6Instance.GetService().(*process_shared.MockService)
 			Expect(ok).To(BeTrue(), "Service is not a mock service")
 
 			// Configure the mock service to fail temporarily
@@ -603,7 +603,7 @@ var _ = Describe("S6Manager", func() {
 			s6Instance, ok := instance.(*s6fsm.S6Instance)
 			Expect(ok).To(BeTrue())
 
-			mockService, ok := s6Instance.GetService().(*s6service.MockService)
+			mockService, ok := s6Instance.GetService().(*process_shared.MockService)
 			Expect(ok).To(BeTrue(), "Service is not a mock service")
 
 			// Configure the mock service to fail with a permanent error during removal
@@ -760,7 +760,7 @@ var _ = Describe("S6Manager", func() {
 			s6Instance, ok := failingInstance.(*s6fsm.S6Instance)
 			Expect(ok).To(BeTrue())
 
-			mockService, ok := s6Instance.GetService().(*s6service.MockService)
+			mockService, ok := s6Instance.GetService().(*process_shared.MockService)
 			Expect(ok).To(BeTrue(), "Service is not a mock service")
 
 			// Configure permanent error for the failing service during removal

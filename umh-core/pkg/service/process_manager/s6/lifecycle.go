@@ -20,7 +20,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"path/filepath"
 	"strings"
 	"text/template"
@@ -80,7 +80,7 @@ func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string
 		if artifacts.TempDir != "" {
 			if tempExists, _ := fsService.PathExists(ctx, artifacts.TempDir); tempExists {
 				if cleanupErr := fsService.RemoveAll(ctx, artifacts.TempDir); cleanupErr != nil {
-					s.logger.Warnf("Failed to clean up temp directory %s: %v", artifacts.TempDir, cleanupErr)
+					s.Logger.Warnf("Failed to clean up temp directory %s: %v", artifacts.TempDir, cleanupErr)
 				}
 			}
 		}
@@ -118,10 +118,10 @@ func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string
 
 	// Notify S6 scanner of new service
 	if _, err := s.EnsureSupervision(ctx, servicePath, fsService); err != nil {
-		s.logger.Warnf("Failed to notify S6 scanner: %v", err)
+		s.Logger.Warnf("Failed to notify S6 scanner: %v", err)
 	}
 
-	s.logger.Debugf("Successfully created service artifacts: %+v", artifacts)
+	s.Logger.Debugf("Successfully created service artifacts: %+v", artifacts)
 	return artifacts, nil
 }
 
@@ -150,14 +150,14 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *Service
 	logExists, _ := fsService.PathExists(ctx, artifacts.LogDir)
 
 	if !serviceExists && !logExists {
-		s.logger.Debugf("Service artifacts already removed: %+v", artifacts)
+		s.Logger.Debugf("Service artifacts already removed: %+v", artifacts)
 		return nil // Already removed
 	}
 
 	if serviceExists {
 		// Stop services using tracked files - we know exactly what was created
 		if err := s.terminateProcesses(ctx, artifacts, fsService); err != nil {
-			s.logger.Debugf("Failed to terminate services during removal: %v", err)
+			s.Logger.Debugf("Failed to terminate services during removal: %v", err)
 			// Continue with removal even if termination fails
 		}
 	}
@@ -174,7 +174,7 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *Service
 		}
 	}
 
-	s.logger.Debugf("Successfully removed service artifacts: %+v", artifacts)
+	s.Logger.Debugf("Successfully removed service artifacts: %+v", artifacts)
 	return nil
 }
 
@@ -183,24 +183,24 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *Service
 // - HealthUnknown: I/O errors, timeouts, etc. (retry next tick)
 // - HealthOK: Service directory is healthy and complete
 // - HealthBad: Service directory is broken (triggers FSM transition)
-func (s *DefaultService) CheckArtifactsHealth(ctx context.Context, artifacts *ServiceArtifacts, fsService filesystem.Service) (process_manager.HealthStatus, error) {
+func (s *DefaultService) CheckArtifactsHealth(ctx context.Context, artifacts *ServiceArtifacts, fsService filesystem.Service) (process_shared.HealthStatus, error) {
 	if s == nil {
-		return process_manager.HealthUnknown, fmt.Errorf("lifecycle manager is nil")
+		return process_shared.HealthUnknown, fmt.Errorf("lifecycle manager is nil")
 	}
 
 	if ctx.Err() != nil {
-		return process_manager.HealthUnknown, ctx.Err()
+		return process_shared.HealthUnknown, ctx.Err()
 	}
 
 	if artifacts == nil {
-		return process_manager.HealthBad, fmt.Errorf("artifacts is nil")
+		return process_shared.HealthBad, fmt.Errorf("artifacts is nil")
 	}
 
 	// Always use tracked files for health check
 	if len(artifacts.CreatedFiles) == 0 {
 		// No tracked files indicates service was not properly created or is from old version
-		s.logger.Debugf("Health check: no tracked files available, service needs recreation")
-		return process_manager.HealthBad, nil
+		s.Logger.Debugf("Health check: no tracked files available, service needs recreation")
+		return process_shared.HealthBad, nil
 	}
 
 	// Check all tracked files exist
@@ -208,13 +208,13 @@ func (s *DefaultService) CheckArtifactsHealth(ctx context.Context, artifacts *Se
 		exists, err := fsService.FileExists(ctx, file)
 		if err != nil {
 			// I/O error - return Unknown so we retry next tick
-			s.logger.Debugf("Health check: I/O error checking tracked file %s: %v", file, err)
-			return process_manager.HealthUnknown, err
+			s.Logger.Debugf("Health check: I/O error checking tracked file %s: %v", file, err)
+			return process_shared.HealthUnknown, err
 		}
 		if !exists {
 			// Missing required file - definitely broken
-			s.logger.Debugf("Health check: missing tracked file %s", file)
-			return process_manager.HealthBad, nil
+			s.Logger.Debugf("Health check: missing tracked file %s", file)
+			return process_shared.HealthBad, nil
 		}
 	}
 
@@ -227,18 +227,18 @@ func (s *DefaultService) CheckArtifactsHealth(ctx context.Context, artifacts *Se
 
 	// If either check failed due to I/O error, return Unknown
 	if mainErr != nil || logErr != nil {
-		s.logger.Debugf("Health check: I/O error checking supervise directories: main=%v, log=%v", mainErr, logErr)
-		return process_manager.HealthUnknown, fmt.Errorf("supervise directory check failed: main=%v, log=%v", mainErr, logErr)
+		s.Logger.Debugf("Health check: I/O error checking supervise directories: main=%v, log=%v", mainErr, logErr)
+		return process_shared.HealthUnknown, fmt.Errorf("supervise directory check failed: main=%v, log=%v", mainErr, logErr)
 	}
 
 	// If supervise directories exist, both must exist (prevents race condition)
 	if mainExists != logExists {
-		s.logger.Debugf("Health check: supervise directory mismatch - main=%v, log=%v", mainExists, logExists)
-		return process_manager.HealthBad, nil
+		s.Logger.Debugf("Health check: supervise directory mismatch - main=%v, log=%v", mainExists, logExists)
+		return process_shared.HealthBad, nil
 	}
 
 	// All checks passed
-	return process_manager.HealthOK, nil
+	return process_shared.HealthOK, nil
 }
 
 // generateUniqueID creates a unique identifier for temp directories
@@ -480,7 +480,7 @@ func (s *DefaultService) terminateProcesses(ctx context.Context, artifacts *Serv
 	for _, servicePath := range servicePaths {
 		if _, err := s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-t", servicePath); err != nil {
 			// Log the error but continue trying to terminate other services
-			s.logger.Debugf("Failed to terminate service %s: %v", servicePath, err)
+			s.Logger.Debugf("Failed to terminate service %s: %v", servicePath, err)
 			lastErr = err // Keep track of the last error but continue trying other services
 		}
 	}
@@ -488,34 +488,34 @@ func (s *DefaultService) terminateProcesses(ctx context.Context, artifacts *Serv
 	return lastErr // Return the last error encountered, or nil if all succeeded
 }
 
-// removeFileFromArtifacts removes a file from the artifacts tracking
+// removeFileFromArtifacts removes a file from the Artifacts tracking
 func (s *DefaultService) removeFileFromArtifacts(filePath string) {
-	if s.artifacts == nil {
+	if s.Artifacts == nil {
 		return
 	}
 
 	// Remove from CreatedFiles slice
-	for i, createdFile := range s.artifacts.CreatedFiles {
+	for i, createdFile := range s.Artifacts.CreatedFiles {
 		if createdFile == filePath {
-			s.artifacts.CreatedFiles = append(s.artifacts.CreatedFiles[:i], s.artifacts.CreatedFiles[i+1:]...)
+			s.Artifacts.CreatedFiles = append(s.Artifacts.CreatedFiles[:i], s.Artifacts.CreatedFiles[i+1:]...)
 			break
 		}
 	}
 }
 
-// addFileToArtifacts adds a file to the artifacts tracking
+// addFileToArtifacts adds a file to the Artifacts tracking
 func (s *DefaultService) addFileToArtifacts(filePath string) {
-	if s.artifacts == nil {
+	if s.Artifacts == nil {
 		return
 	}
 
 	// Check if file is already tracked
-	for _, createdFile := range s.artifacts.CreatedFiles {
+	for _, createdFile := range s.Artifacts.CreatedFiles {
 		if createdFile == filePath {
 			return // Already tracked
 		}
 	}
 
 	// Add to CreatedFiles slice
-	s.artifacts.CreatedFiles = append(s.artifacts.CreatedFiles, filePath)
+	s.Artifacts.CreatedFiles = append(s.Artifacts.CreatedFiles, filePath)
 }

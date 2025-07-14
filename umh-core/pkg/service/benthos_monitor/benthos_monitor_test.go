@@ -21,12 +21,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -60,7 +61,7 @@ var _ = Describe("Benthos Monitor Service", func() {
 
 	BeforeEach(func() {
 		mockServices = serviceregistry.NewMockRegistry()
-		service = benthos_monitor.NewBenthosMonitorService(serviceName, benthos_monitor.WithS6Service(s6service.NewMockService()))
+		service = benthos_monitor.NewBenthosMonitorService(serviceName, benthos_monitor.WithS6Service(process_shared.NewMockService()))
 		tick = 0
 
 		// Cleanup the data directory
@@ -109,7 +110,7 @@ var _ = Describe("Benthos Monitor Service", func() {
 			defer cancel()
 
 			// Mock the S6 service to return some logs
-			mockS6 := s6service.NewMockService()
+			mockS6 := process_shared.NewMockService()
 
 			// Create a new service with the mock S6 service
 			service = benthos_monitor.NewBenthosMonitorService(serviceName, benthos_monitor.WithS6Service(mockS6))
@@ -127,7 +128,7 @@ var _ = Describe("Benthos Monitor Service", func() {
 			mockS6.ExistingServices[servicePath] = true
 
 			// Set up mock logs that include our markers and some fake metrics data
-			mockLogs := []s6service.LogEntry{
+			mockLogs := []process_shared.LogEntry{
 				{Content: fmt.Sprintf("%s\n", benthos_monitor.BLOCK_START_MARKER)},
 				{Content: pingResponse + "\n"}, // Some hex-encoded gzipped data from the /ping endpoint
 				{Content: fmt.Sprintf("%s\n", benthos_monitor.PING_END_MARKER)},
@@ -157,14 +158,14 @@ var _ = Describe("Benthos Monitor Service", func() {
 
 	Describe("ParseBenthosLogs", func() {
 		It("should return an error for empty logs", func() {
-			logs := []s6service.LogEntry{}
+			logs := []process_shared.LogEntry{}
 			_, err := service.ParseBenthosLogs(ctx, logs, tick)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("no logs provided"))
 		})
 
 		It("should return an error if no block end marker is found", func() {
-			logs := []s6service.LogEntry{
+			logs := []process_shared.LogEntry{
 				{Content: fmt.Sprintf("%s\n", benthos_monitor.BLOCK_START_MARKER)},
 				{Content: "some data\n"},
 				{Content: fmt.Sprintf("%s\n", benthos_monitor.PING_END_MARKER)},
@@ -183,7 +184,7 @@ var _ = Describe("Benthos Monitor Service", func() {
 		})
 
 		It("should return an error if no start marker is found", func() {
-			logs := []s6service.LogEntry{
+			logs := []process_shared.LogEntry{
 				{Content: "some data\n"},
 				{Content: fmt.Sprintf("%s\n", benthos_monitor.PING_END_MARKER)},
 				{Content: "more data\n"},
@@ -201,7 +202,7 @@ var _ = Describe("Benthos Monitor Service", func() {
 		})
 
 		It("should return an error if no ping end marker is found", func() {
-			logs := []s6service.LogEntry{
+			logs := []process_shared.LogEntry{
 				{Content: fmt.Sprintf("%s\n", benthos_monitor.BLOCK_START_MARKER)},
 				{Content: "some data\n"},
 				{Content: "more data\n"},
@@ -219,7 +220,7 @@ var _ = Describe("Benthos Monitor Service", func() {
 		})
 
 		It("should return an error if no ready end marker is found", func() {
-			logs := []s6service.LogEntry{
+			logs := []process_shared.LogEntry{
 				{Content: fmt.Sprintf("%s\n", benthos_monitor.BLOCK_START_MARKER)},
 				{Content: "some data\n"},
 				{Content: fmt.Sprintf("%s\n", benthos_monitor.PING_END_MARKER)},
@@ -236,7 +237,7 @@ var _ = Describe("Benthos Monitor Service", func() {
 		})
 
 		It("should return an error if no version end marker is found", func() {
-			logs := []s6service.LogEntry{
+			logs := []process_shared.LogEntry{
 				{Content: fmt.Sprintf("%s\n", benthos_monitor.BLOCK_START_MARKER)},
 				{Content: "some data\n"},
 				{Content: fmt.Sprintf("%s\n", benthos_monitor.PING_END_MARKER)},
@@ -253,7 +254,7 @@ var _ = Describe("Benthos Monitor Service", func() {
 		})
 
 		It("should return an error if no metrics end marker is found", func() {
-			logs := []s6service.LogEntry{
+			logs := []process_shared.LogEntry{
 				{Content: fmt.Sprintf("%s\n", benthos_monitor.BLOCK_START_MARKER)},
 				{Content: "some data\n"},
 				{Content: fmt.Sprintf("%s\n", benthos_monitor.PING_END_MARKER)},
@@ -272,7 +273,7 @@ var _ = Describe("Benthos Monitor Service", func() {
 		})
 
 		It("should return an error if markers are in incorrect order", func() {
-			logs := []s6service.LogEntry{
+			logs := []process_shared.LogEntry{
 				{Content: fmt.Sprintf("%s\n", benthos_monitor.BLOCK_START_MARKER)},
 				{Content: "some data\n"},
 				{Content: fmt.Sprintf("%s\n", benthos_monitor.METRICS_END_MARKER)}, // Wrong order
@@ -407,7 +408,7 @@ var _ = Describe("Benthos Monitor Service", func() {
 
 		// 2. Parse it line by line into s6service.LogEntry
 		lines := strings.Split(string(metricsData), "\n")
-		var logEntries []s6service.LogEntry
+		var logEntries []process_shared.LogEntry
 
 		for _, line := range lines {
 			if len(line) > 0 {
@@ -415,10 +416,10 @@ var _ = Describe("Benthos Monitor Service", func() {
 				parts := strings.SplitN(line, "  ", 2)
 				if len(parts) == 2 {
 					// Use the content part (after the timestamp)
-					logEntries = append(logEntries, s6service.LogEntry{Content: parts[1]})
+					logEntries = append(logEntries, process_shared.LogEntry{Content: parts[1]})
 				} else {
 					// For lines without timestamps (like the marker lines)
-					logEntries = append(logEntries, s6service.LogEntry{Content: line})
+					logEntries = append(logEntries, process_shared.LogEntry{Content: line})
 				}
 			}
 		}

@@ -12,16 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package s6
+package s6_test
 
 import (
 	"context"
 	"fmt"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager"
 	"os"
 	"path/filepath"
 	"syscall"
 	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/s6"
 
 	"github.com/cactus/tai64"
 	. "github.com/onsi/ginkgo/v2"
@@ -80,7 +83,7 @@ func (m *mockFileInfoWithSys) Sys() interface{} {
 // - Robust error handling with graceful fallbacks
 var _ = Describe("S6 Log Rotation", func() {
 	var (
-		service     *DefaultService
+		service     *s6.DefaultService
 		fsService   filesystem.Service
 		tempDir     string
 		logDir      string
@@ -90,7 +93,7 @@ var _ = Describe("S6 Log Rotation", func() {
 	)
 
 	BeforeEach(func() {
-		service = NewDefaultService().(*DefaultService)
+		service = process_manager.NewDefaultService().(*s6.DefaultService)
 		fsService = filesystem.NewMockFileSystem()
 		ctx = context.Background()
 
@@ -130,7 +133,7 @@ var _ = Describe("S6 Log Rotation", func() {
 	//
 	Describe("findLatestRotatedFile", func() {
 		It("should return empty string when no rotated files exist", func() {
-			result := service.findLatestRotatedFile(entries)
+			result := service.FindLatestRotatedFile(entries)
 			Expect(result).To(BeEmpty())
 		})
 
@@ -143,7 +146,7 @@ var _ = Describe("S6 Log Rotation", func() {
 				Expect(err).ToNot(HaveOccurred())
 			}
 
-			result := service.findLatestRotatedFile(entries)
+			result := service.FindLatestRotatedFile(entries)
 			Expect(result).To(BeEmpty())
 		})
 
@@ -166,7 +169,7 @@ var _ = Describe("S6 Log Rotation", func() {
 			}
 
 			// Should return the newest file (last one created)
-			result := service.findLatestRotatedFile(files)
+			result := service.FindLatestRotatedFile(files)
 			Expect(result).To(Equal(files[2])) // The newest file
 		})
 
@@ -180,7 +183,7 @@ var _ = Describe("S6 Log Rotation", func() {
 			entries := []string{validFilePath}
 
 			// Should find the valid file despite invalid ones
-			result := service.findLatestRotatedFile(entries)
+			result := service.FindLatestRotatedFile(entries)
 			Expect(result).To(Equal(validFilePath))
 		})
 	})
@@ -206,55 +209,55 @@ var _ = Describe("S6 Log Rotation", func() {
 	//
 	Describe("appendToRingBuffer", func() {
 		It("should append entries to empty ring buffer", func() {
-			st := &logState{}
-			entries := []process_manager.LogEntry{
+			st := &s6.LogState{}
+			entries := []process_shared.LogEntry{
 				{Timestamp: time.Now(), Content: "test1"},
 				{Timestamp: time.Now(), Content: "test2"},
 			}
 
-			service.appendToRingBuffer(entries, st)
+			service.AppendToRingBuffer(entries, st)
 
 			// With preallocation optimization, st.logs always has length constants.S6MaxLines
-			Expect(st.logs).To(HaveLen(constants.S6MaxLines))
+			Expect(st.Logs).To(HaveLen(constants.S6MaxLines))
 			// Check logical state: head should point to position 2 (next write position)
-			Expect(st.head).To(Equal(2))
+			Expect(st.Head).To(Equal(2))
 			// Check the actual entries are in the correct positions
-			Expect(st.logs[0].Content).To(Equal("test1"))
-			Expect(st.logs[1].Content).To(Equal("test2"))
-			Expect(st.full).To(BeFalse())
+			Expect(st.Logs[0].Content).To(Equal("test1"))
+			Expect(st.Logs[1].Content).To(Equal("test2"))
+			Expect(st.Full).To(BeFalse())
 		})
 
 		It("should handle ring buffer wrapping correctly", func() {
-			st := &logState{}
+			st := &s6.LogState{}
 
 			// Use the actual S6MaxLines constant (10000)
 			maxLines := constants.S6MaxLines
 
 			// Create more entries than the ring buffer can hold
 			totalEntries := maxLines + 50 // Exceed capacity by 50
-			entries := make([]process_manager.LogEntry, totalEntries)
+			entries := make([]process_shared.LogEntry, totalEntries)
 
 			// Create entries with sequential timestamps and identifiable content
 			baseTime := time.Now()
 			for i := 0; i < totalEntries; i++ {
-				entries[i] = process_manager.LogEntry{
+				entries[i] = process_shared.LogEntry{
 					Timestamp: baseTime.Add(time.Duration(i) * time.Second),
 					Content:   fmt.Sprintf("entry_%d", i),
 				}
 			}
 
 			// Append all entries to trigger wrapping
-			service.appendToRingBuffer(entries, st)
+			service.AppendToRingBuffer(entries, st)
 
 			// Verify ring buffer is marked as full
-			Expect(st.full).To(BeTrue(), "Ring buffer should be marked as full after wrapping")
+			Expect(st.Full).To(BeTrue(), "Ring buffer should be marked as full after wrapping")
 
 			// Verify we only kept the maximum number of entries
-			Expect(len(st.logs)).To(Equal(maxLines), "Ring buffer should contain exactly maxLines entries")
+			Expect(len(st.Logs)).To(Equal(maxLines), "Ring buffer should contain exactly maxLines entries")
 
 			// Verify head pointer wrapped correctly
 			expectedHead := totalEntries % maxLines // Should be 50 for our test
-			Expect(st.head).To(Equal(expectedHead), "Head pointer should wrap correctly")
+			Expect(st.Head).To(Equal(expectedHead), "Head pointer should wrap correctly")
 
 			// The ring buffer should contain the LAST maxLines entries
 			// Due to wrapping, the oldest entry in the buffer should be at index st.head
@@ -265,81 +268,81 @@ var _ = Describe("S6 Log Rotation", func() {
 			newestKeptIndex := totalEntries - 1        // Should be maxLines + 49
 
 			// The entry at st.head should be the oldest kept entry
-			oldestInBuffer := st.logs[st.head]
+			oldestInBuffer := st.Logs[st.Head]
 			Expect(oldestInBuffer.Content).To(Equal(fmt.Sprintf("entry_%d", oldestKeptIndex)),
 				"Oldest entry in ring buffer should be correct")
 
 			// The entry just before st.head should be the newest entry
-			newestIndex := (st.head - 1 + maxLines) % maxLines
-			newestInBuffer := st.logs[newestIndex]
+			newestIndex := (st.Head - 1 + maxLines) % maxLines
+			newestInBuffer := st.Logs[newestIndex]
 			Expect(newestInBuffer.Content).To(Equal(fmt.Sprintf("entry_%d", newestKeptIndex)),
 				"Newest entry in ring buffer should be correct")
 
 			// Verify chronological ordering is maintained in the buffer
 			// All entries should be sequential when read in ring order
 			for i := 0; i < maxLines; i++ {
-				bufferIndex := (st.head + i) % maxLines
+				bufferIndex := (st.Head + i) % maxLines
 				expectedEntryIndex := oldestKeptIndex + i
 				expectedContent := fmt.Sprintf("entry_%d", expectedEntryIndex)
 
-				Expect(st.logs[bufferIndex].Content).To(Equal(expectedContent),
+				Expect(st.Logs[bufferIndex].Content).To(Equal(expectedContent),
 					"Entry at buffer position %d should have correct content", bufferIndex)
 			}
 		})
 
 		It("should handle exact ring buffer capacity without wrapping", func() {
-			st := &logState{}
+			st := &s6.LogState{}
 			maxLines := constants.S6MaxLines
 
 			// Create exactly maxLines entries (should fill but not wrap)
-			entries := make([]process_manager.LogEntry, maxLines)
+			entries := make([]process_shared.LogEntry, maxLines)
 			for i := 0; i < maxLines; i++ {
-				entries[i] = process_manager.LogEntry{
+				entries[i] = process_shared.LogEntry{
 					Timestamp: time.Now().Add(time.Duration(i) * time.Second),
 					Content:   fmt.Sprintf("exact_entry_%d", i),
 				}
 			}
 
-			service.appendToRingBuffer(entries, st)
+			service.AppendToRingBuffer(entries, st)
 
 			// Should be full but head should point to 0 (ready for next write)
-			Expect(st.full).To(BeTrue(), "Buffer should be full at exact capacity")
-			Expect(st.head).To(Equal(0), "Head should be at 0 when exactly full")
-			Expect(len(st.logs)).To(Equal(maxLines), "Should contain exactly maxLines entries")
+			Expect(st.Full).To(BeTrue(), "Buffer should be full at exact capacity")
+			Expect(st.Head).To(Equal(0), "Head should be at 0 when exactly full")
+			Expect(len(st.Logs)).To(Equal(maxLines), "Should contain exactly maxLines entries")
 
 			// All entries should be in order from 0 to maxLines-1
 			for i := 0; i < maxLines; i++ {
-				Expect(st.logs[i].Content).To(Equal(fmt.Sprintf("exact_entry_%d", i)),
+				Expect(st.Logs[i].Content).To(Equal(fmt.Sprintf("exact_entry_%d", i)),
 					"Entry at position %d should be correct", i)
 			}
 		})
 
 		It("should handle multiple wrapping cycles", func() {
-			st := &logState{}
+			st := &s6.LogState{}
 			maxLines := constants.S6MaxLines
 
 			// First fill: exactly maxLines entries
-			firstBatch := make([]process_manager.LogEntry, maxLines)
+			firstBatch := make([]process_shared.LogEntry, maxLines)
 			for i := 0; i < maxLines; i++ {
-				firstBatch[i] = process_manager.LogEntry{Content: fmt.Sprintf("first_%d", i)}
+				firstBatch[i] = process_shared.LogEntry{Content: fmt.Sprintf("first_%d", i)}
 			}
-			service.appendToRingBuffer(firstBatch, st)
+			service.AppendToRingBuffer(firstBatch, st)
 
 			// Second fill: another maxLines entries (complete wrap)
-			secondBatch := make([]process_manager.LogEntry, maxLines)
+			secondBatch := make([]process_shared.LogEntry, maxLines)
 			for i := 0; i < maxLines; i++ {
-				secondBatch[i] = process_manager.LogEntry{Content: fmt.Sprintf("second_%d", i)}
+				secondBatch[i] = process_shared.LogEntry{Content: fmt.Sprintf("second_%d", i)}
 			}
-			service.appendToRingBuffer(secondBatch, st)
+			service.AppendToRingBuffer(secondBatch, st)
 
 			// Should still be full, head should be back to 0
-			Expect(st.full).To(BeTrue())
-			Expect(st.head).To(Equal(0))
-			Expect(len(st.logs)).To(Equal(maxLines))
+			Expect(st.Full).To(BeTrue())
+			Expect(st.Head).To(Equal(0))
+			Expect(len(st.Logs)).To(Equal(maxLines))
 
 			// Buffer should contain only second batch entries
 			for i := 0; i < maxLines; i++ {
-				Expect(st.logs[i].Content).To(Equal(fmt.Sprintf("second_%d", i)),
+				Expect(st.Logs[i].Content).To(Equal(fmt.Sprintf("second_%d", i)),
 					"After complete wrap, should contain second batch at position %d", i)
 			}
 		})

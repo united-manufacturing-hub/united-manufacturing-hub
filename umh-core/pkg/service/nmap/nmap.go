@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -32,7 +33,7 @@ import (
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 	"go.uber.org/zap"
@@ -169,7 +170,7 @@ func (s *NmapService) GetConfig(ctx context.Context, filesystemService filesyste
 }
 
 // parseScanLogs parses the logs of an nmap service and extracts scan results
-func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port uint16) *NmapScanResult {
+func (s *NmapService) parseScanLogs(logs []process_shared.LogEntry, port uint16) *NmapScanResult {
 	if len(logs) == 0 {
 		return nil
 	}
@@ -318,9 +319,9 @@ func (s *NmapService) Status(ctx context.Context, filesystemService filesystem.S
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
 	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, filesystemService)
 	if err != nil {
-		if errors.Is(err, s6service.ErrServiceNotExist) {
+		if errors.Is(err, process_shared.ErrServiceNotExist) {
 			return ServiceInfo{}, ErrServiceNotExist
-		} else if errors.Is(err, s6service.ErrLogFileNotFound) {
+		} else if errors.Is(err, process_shared.ErrLogFileNotFound) {
 			return ServiceInfo{}, ErrServiceNotExist
 		}
 		return ServiceInfo{}, fmt.Errorf("failed to get logs: %w", err)

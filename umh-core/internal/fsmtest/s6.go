@@ -22,12 +22,13 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
+
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -55,9 +56,9 @@ func CreateS6TestConfig(name string, desiredState string) config.S6FSMConfig {
 }
 
 // ConfigureServiceForState sets up a mock S6 service to return the given state
-func ConfigureServiceForState(mockService *s6service.MockService, servicePath string, state string) {
+func ConfigureServiceForState(mockService *process_shared.MockService, servicePath string, state string) {
 	if mockService.ServiceStates == nil {
-		mockService.ServiceStates = make(map[string]s6service.ServiceInfo)
+		mockService.ServiceStates = make(map[string]process_shared.ServiceInfo)
 	}
 	if mockService.ExistingServices == nil {
 		mockService.ExistingServices = make(map[string]bool)
@@ -72,14 +73,14 @@ func ConfigureServiceForState(mockService *s6service.MockService, servicePath st
 	case internal_fsm.LifecycleStateCreating:
 		// Service directory exists but isn't running
 		mockService.ExistingServices[servicePath] = true
-		mockService.ServiceStates[servicePath] = s6service.ServiceInfo{
-			Status: s6service.ServiceDown,
+		mockService.ServiceStates[servicePath] = process_shared.ServiceInfo{
+			Status: process_shared.ServiceDown,
 		}
 	case internal_fsm.LifecycleStateRemoving:
 		// Service exists but is about to be removed
 		mockService.ExistingServices[servicePath] = true
-		mockService.ServiceStates[servicePath] = s6service.ServiceInfo{
-			Status: s6service.ServiceDown,
+		mockService.ServiceStates[servicePath] = process_shared.ServiceInfo{
+			Status: process_shared.ServiceDown,
 		}
 	case internal_fsm.LifecycleStateRemoved:
 		// Service doesn't exist anymore
@@ -87,36 +88,36 @@ func ConfigureServiceForState(mockService *s6service.MockService, servicePath st
 		delete(mockService.ServiceStates, servicePath)
 	case s6RunningState:
 		mockService.ExistingServices[servicePath] = true
-		mockService.ServiceStates[servicePath] = s6service.ServiceInfo{
-			Status: s6service.ServiceUp,
+		mockService.ServiceStates[servicePath] = process_shared.ServiceInfo{
+			Status: process_shared.ServiceUp,
 			Uptime: 10,
 			Pid:    12345,
 		}
 	case s6StoppedState:
 		mockService.ExistingServices[servicePath] = true
-		mockService.ServiceStates[servicePath] = s6service.ServiceInfo{
-			Status: s6service.ServiceDown,
+		mockService.ServiceStates[servicePath] = process_shared.ServiceInfo{
+			Status: process_shared.ServiceDown,
 		}
 	case s6StartingState:
 		mockService.ExistingServices[servicePath] = true
-		mockService.ServiceStates[servicePath] = s6service.ServiceInfo{
-			Status: s6service.ServiceRestarting, // Use as proxy for "starting"
+		mockService.ServiceStates[servicePath] = process_shared.ServiceInfo{
+			Status: process_shared.ServiceRestarting, // Use as proxy for "starting"
 		}
 	case s6StoppingState:
 		mockService.ExistingServices[servicePath] = true
-		mockService.ServiceStates[servicePath] = s6service.ServiceInfo{
-			Status: s6service.ServiceDown, // Use as proxy for "stopping"
+		mockService.ServiceStates[servicePath] = process_shared.ServiceInfo{
+			Status: process_shared.ServiceDown, // Use as proxy for "stopping"
 		}
 	default:
 		mockService.ExistingServices[servicePath] = true
-		mockService.ServiceStates[servicePath] = s6service.ServiceInfo{
-			Status: s6service.ServiceUnknown,
+		mockService.ServiceStates[servicePath] = process_shared.ServiceInfo{
+			Status: process_shared.ServiceUnknown,
 		}
 	}
 }
 
 // ConfigureS6ServiceConfig configures the mock service with default config
-func ConfigureS6ServiceConfig(mockService *s6service.MockService) {
+func ConfigureS6ServiceConfig(mockService *process_shared.MockService) {
 	mockService.GetConfigResult = s6serviceconfig.S6ServiceConfig{
 		Command:     []string{"/bin/sh", "-c", "echo test"},
 		Env:         map[string]string{},
@@ -126,7 +127,7 @@ func ConfigureS6ServiceConfig(mockService *s6service.MockService) {
 
 // ConfigureS6State sets up both the instance and its mock service for a specific state
 func ConfigureS6State(instance *s6fsm.S6Instance, targetState string) error {
-	mockService, ok := instance.GetService().(*s6service.MockService)
+	mockService, ok := instance.GetService().(*process_shared.MockService)
 	if !ok {
 		return fmt.Errorf("instance doesn't use a MockService")
 	}
@@ -209,7 +210,7 @@ func ResetInstanceError(instance *s6fsm.S6Instance, snapshot fsm.SystemSnapshot,
 	// a successful operation cycle. We rely on the fact that
 	// each instance.Reconcile call will reset the error state
 	// when operations succeed.
-	mockService, ok := instance.GetService().(*s6service.MockService)
+	mockService, ok := instance.GetService().(*process_shared.MockService)
 	if !ok {
 		return
 	}
@@ -250,7 +251,7 @@ func StabilizeS6Instance(
 	maxAttempts int,
 ) (uint64, error) {
 	// Get the mock service and service path from the instance
-	mockService, ok := instance.GetService().(*s6service.MockService)
+	mockService, ok := instance.GetService().(*process_shared.MockService)
 	if !ok {
 		return snapshot.Tick, fmt.Errorf("instance doesn't use a MockService")
 	}
@@ -318,8 +319,8 @@ func SetupS6Instance(
 	baseDir string,
 	name string,
 	desiredState string,
-) (*s6fsm.S6Instance, *s6service.MockService, string) {
-	mockService := s6service.NewMockService()
+) (*s6fsm.S6Instance, *process_shared.MockService, string) {
+	mockService := process_shared.NewMockService()
 
 	// Create config
 	instanceConfig := CreateS6TestConfig(name, desiredState)

@@ -22,7 +22,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -36,7 +36,6 @@ import (
 	"github.com/cactus/tai64"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"go.uber.org/zap"
@@ -65,7 +64,7 @@ import (
 // full   – true once the buffer has wrapped at least once; used to decide
 //
 //	how to linearise the ring when we copy it out.
-type logState struct {
+type LogState struct {
 	// mu guards every field in the struct (single-writer, multi-reader)
 	mu sync.Mutex
 	// inode is the inode of the file when we last touched it; changes ⇒ rotation
@@ -74,35 +73,27 @@ type logState struct {
 	// rotation or truncation)
 	offset int64
 
-	// logs is the backing array that holds *at most* S6MaxLines entries.
+	// Logs is the backing array that holds *at most* S6MaxLines entries.
 	// Allocated once; after that, entries are overwritten in place.
-	logs []process_manager.LogEntry
-	// head is the index of the slot where the **next** entry will be written.
-	// When head wraps from max-1 to 0, `full` is set to true.
-	head int
-	// full is true once the buffer has wrapped at least once; used to decide
+	Logs []process_shared.LogEntry
+	// Head is the index of the slot where the **next** entry will be written.
+	// When Head wraps from max-1 to 0, `full` is set to true.
+	Head int
+	// Full is true once the buffer has wrapped at least once; used to decide
 	// how to linearise the ring when we copy it out.
-	full bool
+	Full bool
 }
 
 // DefaultService is the default implementation of the S6 Service interface
 type DefaultService struct {
-	logger     *zap.SugaredLogger
-	logCursors sync.Map // map[string]*logState (key = abs log path)
+	Logger     *zap.SugaredLogger
+	logCursors sync.Map // map[string]*LogState (key = abs log path)
 
 	// Lifecycle management with expert-recommended concurrency protection
 	mu        sync.Mutex        // serializes all state-changing calls
 	creating  bool              // true when Create() is in progress
 	removing  bool              // true when Remove()/ForceRemove() is in progress
-	artifacts *ServiceArtifacts // cached artifacts for the service
-}
-
-// NewDefaultService creates a new default S6 service
-func NewDefaultService() process_manager.Service {
-	serviceLogger := logger.For(logger.ComponentS6Service)
-	return &DefaultService{
-		logger: serviceLogger,
-	}
+	Artifacts *ServiceArtifacts // cached Artifacts for the service
 }
 
 // withLifecycleGuard serializes all state-changing operations to prevent race conditions
@@ -123,7 +114,7 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".create", time.Since(start))
 	}()
 
-	s.logger.Debugf("Creating S6 service %s", servicePath)
+	s.Logger.Debugf("Creating S6 service %s", servicePath)
 
 	return s.withLifecycleGuard(func() error {
 		// Check for conflicting operations
@@ -132,7 +123,7 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 		}
 		if s.creating {
 			// Another Create is busy (rare) - idempotent; nothing to do
-			s.logger.Debugf("Service %s creation already in progress", servicePath)
+			s.Logger.Debugf("Service %s creation already in progress", servicePath)
 			return nil
 		}
 
@@ -147,36 +138,36 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 			return fmt.Errorf("failed to check if service path exists: %w", err)
 		}
 		if !exists {
-			s.logger.Debugf("Service %s doesn't exist, creating fresh", servicePath)
+			s.Logger.Debugf("Service %s doesn't exist, creating fresh", servicePath)
 			artifacts, err := s.CreateArtifacts(ctx, servicePath, config, fsService)
 			if err != nil {
 				return err
 			}
-			s.artifacts = artifacts
+			s.Artifacts = artifacts
 			return nil
 		}
 
 		// 2. Directory exists but we have no artifacts → inconsistent state
-		if s.artifacts == nil {
-			s.logger.Debugf("Service %s exists but has no artifacts, failing to trigger FSM removal", servicePath)
+		if s.Artifacts == nil {
+			s.Logger.Debugf("Service %s exists but has no artifacts, failing to trigger FSM removal", servicePath)
 			return fmt.Errorf("service directory exists but artifacts is nil - inconsistent state")
 		}
 
 		// 3. Directory exists and we have artifacts → check health
-		health, err := s.CheckArtifactsHealth(ctx, s.artifacts, fsService)
-		if err != nil && health != process_manager.HealthUnknown {
+		health, err := s.CheckArtifactsHealth(ctx, s.Artifacts, fsService)
+		if err != nil && health != process_shared.HealthUnknown {
 			return fmt.Errorf("failed to check service health: %w", err)
 		}
-		if health == process_manager.HealthBad {
-			s.logger.Debugf("Service %s is unhealthy, removing and recreating", servicePath)
-			if err := s.ForceCleanup(ctx, s.artifacts, fsService); err != nil {
+		if health == process_shared.HealthBad {
+			s.Logger.Debugf("Service %s is unhealthy, removing and recreating", servicePath)
+			if err := s.ForceCleanup(ctx, s.Artifacts, fsService); err != nil {
 				return fmt.Errorf("failed to remove unhealthy service: %w", err)
 			}
 			artifacts, err := s.CreateArtifacts(ctx, servicePath, config, fsService)
 			if err != nil {
 				return err
 			}
-			s.artifacts = artifacts
+			s.Artifacts = artifacts
 			return nil
 		}
 
@@ -188,20 +179,20 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 
 		// 5. Same config → do nothing (success)
 		if currentConfig.Equal(config) {
-			s.logger.Debugf("Service %s config unchanged, nothing to do", servicePath)
+			s.Logger.Debugf("Service %s config unchanged, nothing to do", servicePath)
 			return nil
 		}
 
 		// 6. Different config → remove and recreate
-		s.logger.Debugf("Service %s config changed, removing and recreating", servicePath)
-		if err := s.RemoveArtifacts(ctx, s.artifacts, fsService); err != nil {
+		s.Logger.Debugf("Service %s config changed, removing and recreating", servicePath)
+		if err := s.RemoveArtifacts(ctx, s.Artifacts, fsService); err != nil {
 			return fmt.Errorf("failed to remove service for recreation: %w", err)
 		}
 		artifacts, err := s.CreateArtifacts(ctx, servicePath, config, fsService)
 		if err != nil {
 			return err
 		}
-		s.artifacts = artifacts
+		s.Artifacts = artifacts
 		return nil
 	})
 }
@@ -223,13 +214,13 @@ func (s *DefaultService) Remove(ctx context.Context, servicePath string, fsServi
 		return ctx.Err() // context already cancelled / deadline exceeded
 	}
 
-	s.logger.Debugf("Removing S6 service %s", servicePath)
+	s.Logger.Debugf("Removing S6 service %s", servicePath)
 
 	return s.withLifecycleGuard(func() error {
 		// Check for conflicting operations
 		if s.removing {
 			// Already tearing down - idempotent
-			s.logger.Debugf("Service %s removal already in progress", servicePath)
+			s.Logger.Debugf("Service %s removal already in progress", servicePath)
 			return nil
 		}
 
@@ -237,13 +228,13 @@ func (s *DefaultService) Remove(ctx context.Context, servicePath string, fsServi
 		defer func() { s.removing = false }()
 
 		// If we have tracked artifacts, use them for proper removal
-		if s.artifacts != nil && len(s.artifacts.CreatedFiles) > 0 {
-			return s.RemoveArtifacts(ctx, s.artifacts, fsService)
+		if s.Artifacts != nil && len(s.Artifacts.CreatedFiles) > 0 {
+			return s.RemoveArtifacts(ctx, s.Artifacts, fsService)
 		}
 
 		// No tracked files - service is in an inconsistent state
 		// Remove() requires tracked files to work properly
-		s.logger.Debugf("No tracked files for service %s, cannot do tracked removal", servicePath)
+		s.Logger.Debugf("No tracked files for service %s, cannot do tracked removal", servicePath)
 		return fmt.Errorf("service %s has no tracked files - use ForceRemove() instead", servicePath)
 	})
 }
@@ -255,13 +246,13 @@ func (s *DefaultService) Start(ctx context.Context, servicePath string, fsServic
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".start", time.Since(start))
 	}()
 
-	s.logger.Debugf("Starting S6 service %s", servicePath)
+	s.Logger.Debugf("Starting S6 service %s", servicePath)
 	exists, err := s.ServiceExists(ctx, servicePath, fsService)
 	if err != nil {
 		return fmt.Errorf("failed to check if service exists: %w", err)
 	}
 	if !exists {
-		return ErrServiceNotExist
+		return process_shared.ErrServiceNotExist
 	}
 
 	// Remove down files to indicate the service should stay up
@@ -273,12 +264,12 @@ func (s *DefaultService) Start(ctx context.Context, servicePath string, fsServic
 	for _, downFile := range downFiles {
 		if exists, _ := fsService.FileExists(ctx, downFile); exists {
 			if err := fsService.Remove(ctx, downFile); err != nil {
-				s.logger.Warnf("Failed to remove down file %s: %v", downFile, err)
+				s.Logger.Warnf("Failed to remove down file %s: %v", downFile, err)
 				// Continue anyway - s6-svc -u might still work
 			} else {
-				s.logger.Debugf("Removed down file %s", downFile)
+				s.Logger.Debugf("Removed down file %s", downFile)
 				// Update artifacts to remove the down file from tracking
-				if s.artifacts != nil {
+				if s.Artifacts != nil {
 					s.removeFileFromArtifacts(downFile)
 				}
 			}
@@ -289,18 +280,18 @@ func (s *DefaultService) Start(ctx context.Context, servicePath string, fsServic
 	logServicePath := filepath.Join(servicePath, "log")
 	_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-u", logServicePath)
 	if err != nil {
-		s.logger.Warnf("Failed to start log service: %v", err)
+		s.Logger.Warnf("Failed to start log service: %v", err)
 		return fmt.Errorf("failed to start log service: %w", err)
 	}
 
 	// Then start the main service to prevent a race condition
 	_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-u", servicePath)
 	if err != nil {
-		s.logger.Warnf("Failed to start service: %v", err)
+		s.Logger.Warnf("Failed to start service: %v", err)
 		return fmt.Errorf("failed to start service: %w", err)
 	}
 
-	s.logger.Debugf("Started S6 service %s", servicePath)
+	s.Logger.Debugf("Started S6 service %s", servicePath)
 	return nil
 }
 
@@ -311,19 +302,19 @@ func (s *DefaultService) Stop(ctx context.Context, servicePath string, fsService
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".stop", time.Since(start))
 	}()
 
-	s.logger.Debugf("Stopping S6 service %s", servicePath)
+	s.Logger.Debugf("Stopping S6 service %s", servicePath)
 	exists, err := s.ServiceExists(ctx, servicePath, fsService)
 	if err != nil {
 		return fmt.Errorf("failed to check if service exists: %w", err)
 	}
 	if !exists {
-		return ErrServiceNotExist
+		return process_shared.ErrServiceNotExist
 	}
 
 	// Stop the service first
 	_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-d", servicePath)
 	if err != nil {
-		s.logger.Warnf("Failed to stop service: %v", err)
+		s.Logger.Warnf("Failed to stop service: %v", err)
 		return fmt.Errorf("failed to stop service: %w", err)
 	}
 
@@ -331,7 +322,7 @@ func (s *DefaultService) Stop(ctx context.Context, servicePath string, fsService
 	logServicePath := filepath.Join(servicePath, "log")
 	_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-d", logServicePath)
 	if err != nil {
-		s.logger.Warnf("Failed to stop log service: %v", err)
+		s.Logger.Warnf("Failed to stop log service: %v", err)
 		return fmt.Errorf("failed to stop log service: %w", err)
 	}
 
@@ -343,18 +334,18 @@ func (s *DefaultService) Stop(ctx context.Context, servicePath string, fsService
 
 	for _, downFile := range downFiles {
 		if err := fsService.WriteFile(ctx, downFile, []byte{}, 0644); err != nil {
-			s.logger.Warnf("Failed to create down file %s: %v", downFile, err)
+			s.Logger.Warnf("Failed to create down file %s: %v", downFile, err)
 			// Continue anyway - service is already stopped
 		} else {
-			s.logger.Debugf("Created down file %s", downFile)
+			s.Logger.Debugf("Created down file %s", downFile)
 			// Update artifacts to track the down file
-			if s.artifacts != nil {
+			if s.Artifacts != nil {
 				s.addFileToArtifacts(downFile)
 			}
 		}
 	}
 
-	s.logger.Debugf("Stopped S6 service %s", servicePath)
+	s.Logger.Debugf("Stopped S6 service %s", servicePath)
 	return nil
 }
 
@@ -365,26 +356,26 @@ func (s *DefaultService) Restart(ctx context.Context, servicePath string, fsServ
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".restart", time.Since(start))
 	}()
 
-	s.logger.Debugf("Restarting S6 service %s", servicePath)
+	s.Logger.Debugf("Restarting S6 service %s", servicePath)
 	exists, err := s.ServiceExists(ctx, servicePath, fsService)
 	if err != nil {
 		return fmt.Errorf("failed to check if service exists: %w", err)
 	}
 	if !exists {
-		return ErrServiceNotExist
+		return process_shared.ErrServiceNotExist
 	}
 
 	_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-r", servicePath)
 	if err != nil {
-		s.logger.Warnf("Failed to restart service: %v", err)
+		s.Logger.Warnf("Failed to restart service: %v", err)
 		return fmt.Errorf("failed to restart service: %w", err)
 	}
 
-	s.logger.Debugf("Restarted S6 service %s", servicePath)
+	s.Logger.Debugf("Restarted S6 service %s", servicePath)
 	return nil
 }
 
-func (s *DefaultService) Status(ctx context.Context, servicePath string, fsService filesystem.Service) (process_manager.ServiceInfo, error) {
+func (s *DefaultService) Status(ctx context.Context, servicePath string, fsService filesystem.Service) (process_shared.ServiceInfo, error) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".status", time.Since(start))
@@ -393,15 +384,15 @@ func (s *DefaultService) Status(ctx context.Context, servicePath string, fsServi
 	// First, check that the service exists.
 	exists, err := s.ServiceExists(ctx, servicePath, fsService)
 	if err != nil {
-		return process_manager.ServiceInfo{}, fmt.Errorf("failed to check if service exists: %w", err)
+		return process_shared.ServiceInfo{}, fmt.Errorf("failed to check if service exists: %w", err)
 	}
 	if !exists {
-		return process_manager.ServiceInfo{}, ErrServiceNotExist
+		return process_shared.ServiceInfo{}, process_shared.ErrServiceNotExist
 	}
 
 	// Default info.
-	info := process_manager.ServiceInfo{
-		Status: process_manager.ServiceUnknown,
+	info := process_shared.ServiceInfo{
+		Status: process_shared.ServiceUnknown,
 	}
 
 	// Build supervise directory path.
@@ -411,7 +402,7 @@ func (s *DefaultService) Status(ctx context.Context, servicePath string, fsServi
 		return info, fmt.Errorf("failed to check if supervise directory exists: %w", err)
 	}
 	if !exists {
-		return info, ErrServiceNotExist // This is a temporary thing that can happen in bufered filesystems, when s6 did not yet have time to create the directory
+		return info, process_shared.ErrServiceNotExist // This is a temporary thing that can happen in bufered filesystems, when s6 did not yet have time to create the directory
 	}
 
 	// Read the status file.
@@ -421,7 +412,7 @@ func (s *DefaultService) Status(ctx context.Context, servicePath string, fsServi
 		return info, fmt.Errorf("failed to check if status file exists: %w", err)
 	}
 	if !exists {
-		return info, ErrServiceNotExist // This is a temporary thing that can happen in bufered filesystems, when s6 did not yet have time to create the file
+		return info, process_shared.ErrServiceNotExist // This is a temporary thing that can happen in bufered filesystems, when s6 did not yet have time to create the file
 	}
 	statusData, err := fsService.ReadFile(ctx, statusFile)
 	if err != nil {
@@ -431,7 +422,7 @@ func (s *DefaultService) Status(ctx context.Context, servicePath string, fsServi
 	// Check if the status file has the expected size
 	if len(statusData) != S6StatusFileSize {
 		return info, fmt.Errorf("invalid status file size: got %d bytes, expected %d: %w",
-			len(statusData), S6StatusFileSize, ErrInvalidStatus)
+			len(statusData), S6StatusFileSize, process_shared.ErrInvalidStatus)
 	}
 
 	// --- Parse the two TAI64N timestamps ---
@@ -473,14 +464,14 @@ func (s *DefaultService) Status(ctx context.Context, servicePath string, fsServi
 	// --- Determine service status ---
 	now := time.Now().UTC()
 	if pid != 0 && !flagFinishing {
-		info.Status = process_manager.ServiceUp
+		info.Status = process_shared.ServiceUp
 		info.Pid = int(pid)
 		info.Pgid = int(pgid)
 		// uptime is measured from the stamp timestamp
 		info.Uptime = int64(now.Sub(stampTime).Seconds())
 		info.ReadyTime = int64(now.Sub(readyTime).Seconds())
 	} else {
-		info.Status = process_manager.ServiceDown
+		info.Status = process_shared.ServiceDown
 		// Interpret wstat as a wait status.
 		// We convert to syscall.WaitStatus so that we can check if the process exited normally.
 		ws := syscall.WaitStatus(wstat)
@@ -534,7 +525,7 @@ func (s *DefaultService) Status(ctx context.Context, servicePath string, fsServi
 //
 // If the file size is not a multiple of the record size, it is considered corrupted.
 // In that case, you may choose to truncate the file (as the C code does) or return an error.
-func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, fsService filesystem.Service) ([]process_manager.ExitEvent, error) {
+func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, fsService filesystem.Service) ([]process_shared.ExitEvent, error) {
 	// Build the full path to the dtally file.
 	dtallyFile := filepath.Join(superviseDir, S6DtallyFileName)
 
@@ -567,7 +558,7 @@ func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, f
 
 	// Calculate the number of records.
 	numRecords := len(data) / S6_DTALLY_PACK
-	var history []process_manager.ExitEvent
+	var history []process_shared.ExitEvent
 
 	// Process each dtally record.
 	for i := 0; i < numRecords; i++ {
@@ -588,7 +579,7 @@ func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, f
 		exitCode := int(record[12])
 		signalNumber := int(record[13])
 
-		history = append(history, process_manager.ExitEvent{
+		history = append(history, process_shared.ExitEvent{
 			Timestamp: parsedTime,
 			ExitCode:  exitCode,
 			Signal:    signalNumber,
@@ -611,8 +602,8 @@ func (s *DefaultService) ServiceExists(ctx context.Context, servicePath string, 
 		return false, fmt.Errorf("failed to check if S6 service exists: %w", err)
 	}
 	if !exists {
-		if s.logger != nil {
-			s.logger.Debugf("S6 service %s does not exist", servicePath)
+		if s.Logger != nil {
+			s.Logger.Debugf("S6 service %s does not exist", servicePath)
 		}
 		return false, nil
 	}
@@ -626,7 +617,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to check if service exists: %w", err)
 	}
 	if !exists {
-		return s6serviceconfig.S6ServiceConfig{}, ErrServiceNotExist
+		return s6serviceconfig.S6ServiceConfig{}, process_shared.ErrServiceNotExist
 	}
 
 	observedS6ServiceConfig := s6serviceconfig.S6ServiceConfig{
@@ -716,7 +707,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 			}
 		} else {
 			// Absolute fallback - try to look for the command we know should be there
-			sentry.ReportIssuef(sentry.IssueTypeWarning, s.logger, "[s6.GetConfig] Could not find command in run script for %s, searching for known paths", servicePath)
+			sentry.ReportIssuef(sentry.IssueTypeWarning, s.Logger, "[s6.GetConfig] Could not find command in run script for %s, searching for known paths", servicePath)
 			cmdRegex := regexp.MustCompile(`(/[^\s]+)`)
 			cmdMatches := cmdRegex.FindAllString(scriptContent, -1)
 
@@ -934,16 +925,16 @@ func (s *DefaultService) CleanS6ServiceDirectory(ctx context.Context, path strin
 	}
 
 	// Use safe logging that handles nil loggers
-	if s.logger != nil {
-		s.logger.Infof("Cleaning S6 service directory: %s, found %d entries", path, len(entries))
+	if s.Logger != nil {
+		s.Logger.Infof("Cleaning S6 service directory: %s, found %d entries", path, len(entries))
 	}
 
 	// Iterate over all directory entries
 	for _, entry := range entries {
 		// Skip files, only process directories
 		if !entry.IsDir() {
-			if s.logger != nil {
-				s.logger.Debugf("Skipping non-directory: %s", entry.Name())
+			if s.Logger != nil {
+				s.Logger.Debugf("Skipping non-directory: %s", entry.Name())
 			}
 			continue
 		}
@@ -952,25 +943,25 @@ func (s *DefaultService) CleanS6ServiceDirectory(ctx context.Context, path strin
 		dirName := entry.Name()
 		if !s.IsKnownService(dirName) {
 			dirPath := filepath.Join(path, dirName)
-			if s.logger != nil {
-				s.logger.Infof("Removing unknown directory: %s", dirPath)
+			if s.Logger != nil {
+				s.Logger.Infof("Removing unknown directory: %s", dirPath)
 			}
 
 			// Simply remove the directory (and its contents)
 			if err := fsService.RemoveAll(ctx, dirPath); err != nil {
-				if s.logger != nil {
-					sentry.ReportIssuef(sentry.IssueTypeWarning, s.logger, "Failed to remove directory %s: %v", dirPath, err)
+				if s.Logger != nil {
+					sentry.ReportIssuef(sentry.IssueTypeWarning, s.Logger, "Failed to remove directory %s: %v", dirPath, err)
 				}
-			} else if s.logger != nil {
-				s.logger.Infof("Successfully removed directory: %s", dirPath)
+			} else if s.Logger != nil {
+				s.Logger.Infof("Successfully removed directory: %s", dirPath)
 			}
-		} else if s.logger != nil {
-			s.logger.Debugf("Keeping known directory: %s", dirName)
+		} else if s.Logger != nil {
+			s.Logger.Debugf("Keeping known directory: %s", dirName)
 		}
 	}
 
-	if s.logger != nil {
-		s.logger.Infof("Finished cleaning S6 service directory: %s", path)
+	if s.Logger != nil {
+		s.Logger.Infof("Finished cleaning S6 service directory: %s", path)
 	}
 	return nil
 }
@@ -1022,7 +1013,7 @@ func (s *DefaultService) GetS6ConfigFile(ctx context.Context, servicePath string
 		return nil, fmt.Errorf("failed to check if service exists: %w", err)
 	}
 	if !exists {
-		return nil, ErrServiceNotExist
+		return nil, process_shared.ErrServiceNotExist
 	}
 
 	// Form the path to the config file using the constant
@@ -1070,7 +1061,7 @@ func (s *DefaultService) ForceRemove(
 		return ctx.Err()
 	}
 
-	s.logger.Warnf("Force removing S6 service %s", servicePath)
+	s.Logger.Warnf("Force removing S6 service %s", servicePath)
 
 	return s.withLifecycleGuard(func() error {
 		// Set removing flag regardless of current state
@@ -1091,22 +1082,22 @@ func (s *DefaultService) ForceRemove(
 	})
 }
 
-// appendToRingBuffer appends entries to the ring buffer, extracted from existing GetLogs logic.
-func (s *DefaultService) appendToRingBuffer(entries []process_manager.LogEntry, st *logState) {
+// AppendToRingBuffer appends entries to the ring buffer, extracted from existing GetLogs logic.
+func (s *DefaultService) AppendToRingBuffer(entries []process_shared.LogEntry, st *LogState) {
 	const max = constants.S6MaxLines
 
 	// Preallocate backing storage to full size once - it's recycled at runtime and never dropped
-	if st.logs == nil {
-		st.logs = make([]process_manager.LogEntry, max) // len == max, cap == max
-		st.head = 0
-		st.full = false
+	if st.Logs == nil {
+		st.Logs = make([]process_shared.LogEntry, max) // len == max, cap == max
+		st.Head = 0
+		st.Full = false
 	}
 
 	for _, e := range entries {
-		st.logs[st.head] = e
-		st.head = (st.head + 1) % max
-		if !st.full && st.head == 0 {
-			st.full = true // wrapped around for the first time
+		st.Logs[st.Head] = e
+		st.Head = (st.Head + 1) % max
+		if !st.Full && st.Head == 0 {
+			st.Full = true // wrapped around for the first time
 		}
 	}
 }
@@ -1179,7 +1170,7 @@ func (s *DefaultService) appendToRingBuffer(entries []process_manager.LogEntry, 
 //
 // Errors are returned early and unwrapped where they occur so callers
 // see the root cause (e.g. "file disappeared", "permission denied").
-func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsService filesystem.Service) ([]process_manager.LogEntry, error) {
+func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsService filesystem.Service) ([]process_shared.LogEntry, error) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".getLogs", time.Since(start))
@@ -1193,8 +1184,8 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 		return nil, fmt.Errorf("failed to check if service exists: %w", err)
 	}
 	if !exists {
-		s.logger.Debugf("Service with path %s does not exist, returning empty logs", servicePath)
-		return nil, ErrServiceNotExist
+		s.Logger.Debugf("Service with path %s does not exist, returning empty logs", servicePath)
+		return nil, process_shared.ErrServiceNotExist
 	}
 
 	// Get the log file from /data/logs/<service-name>/current
@@ -1205,12 +1196,12 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	}
 	if !exists {
 		//s.logger.Debugf("Log file %s does not exist, returning ErrLogFileNotFound", logFile)
-		return nil, fmt.Errorf("path: %s err :%w", logFile, ErrLogFileNotFound)
+		return nil, fmt.Errorf("path: %s err :%w", logFile, process_shared.ErrLogFileNotFound)
 	}
 
 	// ── 1. grab / create state ──────────────────────────────────────
-	stAny, _ := s.logCursors.LoadOrStore(logFile, &logState{})
-	st := stAny.(*logState)
+	stAny, _ := s.logCursors.LoadOrStore(logFile, &LogState{})
+	st := stAny.(*LogState)
 
 	st.mu.Lock()
 	defer st.mu.Unlock()
@@ -1229,12 +1220,12 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	// Check for rotation or truncation
 	var rotatedContent []byte
 	if st.inode != 0 && (st.inode != ino || st.offset > size) {
-		s.logger.Debugf("Detected rotation for log file %s (inode: %d->%d, offset: %d, size: %d)",
+		s.Logger.Debugf("Detected rotation for log file %s (inode: %d->%d, offset: %d, size: %d)",
 			logFile, st.inode, ino, st.offset, size)
 
 		// Ensure ring buffer is initialized but preserve existing entries
-		if st.logs == nil {
-			st.logs = make([]process_manager.LogEntry, constants.S6MaxLines)
+		if st.Logs == nil {
+			st.Logs = make([]process_shared.LogEntry, constants.S6MaxLines)
 		}
 		// NOTE: We do NOT reset st.head or st.full here to preserve existing entries
 		// The ring buffer will naturally handle new entries being appended
@@ -1244,17 +1235,17 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 		pattern := filepath.Join(logDir, "@*.s")
 		entries, err := fsService.Glob(ctx, pattern)
 		if err != nil {
-			s.logger.Debugf("Failed to read log directory %s: %v", logDir, err)
+			s.Logger.Debugf("Failed to read log directory %s: %v", logDir, err)
 			return nil, err
 		}
-		rotatedFile := s.findLatestRotatedFile(entries)
+		rotatedFile := s.FindLatestRotatedFile(entries)
 		if rotatedFile != "" {
 			var err error
 			rotatedContent, _, err = fsService.ReadFileRange(ctx, rotatedFile, st.offset)
 			if err != nil {
-				s.logger.Warnf("Failed to read rotated file %s from offset %d: %v", rotatedFile, st.offset, err)
+				s.Logger.Warnf("Failed to read rotated file %s from offset %d: %v", rotatedFile, st.offset, err)
 			} else if len(rotatedContent) > 0 {
-				s.logger.Debugf("Read %d bytes from rotated file %s", len(rotatedContent), rotatedFile)
+				s.Logger.Debugf("Read %d bytes from rotated file %s", len(rotatedContent), rotatedFile)
 			}
 		}
 
@@ -1281,7 +1272,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 		if err != nil {
 			return nil, err
 		}
-		s.appendToRingBuffer(entries, st)
+		s.AppendToRingBuffer(entries, st)
 	}
 
 	if len(currentContent) > 0 {
@@ -1289,31 +1280,31 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 		if err != nil {
 			return nil, err
 		}
-		s.appendToRingBuffer(entries, st)
+		s.AppendToRingBuffer(entries, st)
 	}
 
 	// ── 5. return *copy* so caller can't mutate our cache ───────────
 	var length int
-	if st.full {
+	if st.Full {
 		length = constants.S6MaxLines
 	} else {
-		length = st.head // number of valid entries written so far
+		length = st.Head // number of valid entries written so far
 	}
 
-	out := make([]process_manager.LogEntry, length)
+	out := make([]process_shared.LogEntry, length)
 
 	// `head` always points **to** the slot for the *next* write, so the
 	// oldest entry is there, and the newest entry is just before it.
 	// We need to lay the data out linearly in time order:
 	//
 	//	[head … max-1]  followed by  [0 … head-1]
-	if st.full {
+	if st.Full {
 		// Ring buffer has wrapped - linearize it
-		n := copy(out, st.logs[st.head:])
-		copy(out[n:], st.logs[:st.head])
+		n := copy(out, st.Logs[st.Head:])
+		copy(out[n:], st.Logs[:st.Head])
 	} else {
 		// Ring buffer hasn't wrapped yet - simple copy from beginning
-		copy(out, st.logs[:st.head])
+		copy(out, st.Logs[:st.Head])
 	}
 
 	return out, nil
@@ -1326,13 +1317,13 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 //
 //	*apart from the unavoidable string↔[]byte conversions needed for the
 //	LogEntry struct – those are just header copies, no heap memcopy.
-func ParseLogsFromBytes(buf []byte) ([]process_manager.LogEntry, error) {
+func ParseLogsFromBytes(buf []byte) ([]process_shared.LogEntry, error) {
 	// Trim one trailing newline that is always present in rotated logs.
 	buf = bytes.TrimSuffix(buf, []byte{'\n'})
 
 	// 1) -------- pre-allocation --------------------------------------
 	nLines := bytes.Count(buf, []byte{'\n'}) + 1
-	entries := make([]process_manager.LogEntry, 0, nLines) // avoids  runtime.growslice
+	entries := make([]process_shared.LogEntry, 0, nLines) // avoids  runtime.growslice
 
 	// 2) -------- single pass over the buffer -------------------------
 	for start := 0; start < len(buf); {
@@ -1354,17 +1345,17 @@ func ParseLogsFromBytes(buf []byte) ([]process_manager.LogEntry, error) {
 		// format: 2025-04-20 13:01:02.123456789␠␠payload
 		sep := bytes.Index(line, []byte("  "))
 		if sep == -1 || sep < 29 { // malformed – keep raw
-			entries = append(entries, process_manager.LogEntry{Content: string(line)})
+			entries = append(entries, process_shared.LogEntry{Content: string(line)})
 			continue
 		}
 
 		ts, err := ParseNano(string(line[:sep])) // ParseNano is already fast
 		if err != nil {
-			entries = append(entries, process_manager.LogEntry{Content: string(line)})
+			entries = append(entries, process_shared.LogEntry{Content: string(line)})
 			continue
 		}
 
-		entries = append(entries, process_manager.LogEntry{
+		entries = append(entries, process_shared.LogEntry{
 			Timestamp: ts,
 			Content:   string(line[sep+2:]),
 		})
@@ -1373,12 +1364,12 @@ func ParseLogsFromBytes(buf []byte) ([]process_manager.LogEntry, error) {
 }
 
 // ParseLogsFromBytes_Unoptimized is the more readable not optimized version of ParseLogsFromBytes
-func ParseLogsFromBytes_Unoptimized(content []byte) ([]process_manager.LogEntry, error) {
+func ParseLogsFromBytes_Unoptimized(content []byte) ([]process_shared.LogEntry, error) {
 	// Split logs by newline
 	logs := strings.Split(strings.TrimSpace(string(content)), "\n")
 
 	// Parse each log line into structured entries
-	var entries []process_manager.LogEntry
+	var entries []process_shared.LogEntry
 	for _, line := range logs {
 		if line == "" {
 			continue
@@ -1394,16 +1385,16 @@ func ParseLogsFromBytes_Unoptimized(content []byte) ([]process_manager.LogEntry,
 }
 
 // parseLogLine parses a log line from S6 format and returns a LogEntry
-func parseLogLine(line string) process_manager.LogEntry {
+func parseLogLine(line string) process_shared.LogEntry {
 	// Quick check for empty strings or too short lines
 	if len(line) < 28 { // Minimum length for "YYYY-MM-DD HH:MM:SS.<9 digit nanoseconds>  content"
-		return process_manager.LogEntry{Content: line}
+		return process_shared.LogEntry{Content: line}
 	}
 
 	// Check if we have the double space separator
 	sepIdx := strings.Index(line, "  ")
 	if sepIdx == -1 || sepIdx > 29 {
-		return process_manager.LogEntry{Content: line}
+		return process_shared.LogEntry{Content: line}
 	}
 
 	// Extract timestamp part
@@ -1419,10 +1410,10 @@ func parseLogLine(line string) process_manager.LogEntry {
 	// We are using ParseNano over time.Parse because it is faster for our specific time format
 	timestamp, err := ParseNano(timestampStr)
 	if err != nil {
-		return process_manager.LogEntry{Content: line}
+		return process_shared.LogEntry{Content: line}
 	}
 
-	return process_manager.LogEntry{
+	return process_shared.LogEntry{
 		Timestamp: timestamp,
 		Content:   content,
 	}
@@ -1442,7 +1433,7 @@ func (s *DefaultService) EnsureSupervision(ctx context.Context, servicePath stri
 		return false, fmt.Errorf("failed to check if service exists: %w", err)
 	}
 	if !exists {
-		return false, ErrServiceNotExist
+		return false, process_shared.ErrServiceNotExist
 	}
 
 	superviseDir := filepath.Join(servicePath, "supervise")
@@ -1452,17 +1443,17 @@ func (s *DefaultService) EnsureSupervision(ctx context.Context, servicePath stri
 	}
 
 	if !exists {
-		s.logger.Debugf("Supervise directory not found for %s, notifying s6-svscan", servicePath)
+		s.Logger.Debugf("Supervise directory not found for %s, notifying s6-svscan", servicePath)
 
 		_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svscanctl", "-a", constants.S6BaseDir)
 		if err != nil {
 			return false, fmt.Errorf("failed to notify s6-svscan: %w", err)
 		}
-		s.logger.Debugf("Notified s6-svscan, waiting for supervise directory to be created on next reconcile")
+		s.Logger.Debugf("Notified s6-svscan, waiting for supervise directory to be created on next reconcile")
 		return false, nil
 	}
 
-	s.logger.Debugf("Supervise directory exists for %s", servicePath)
+	s.Logger.Debugf("Supervise directory exists for %s", servicePath)
 	return true, nil
 }
 
@@ -1482,17 +1473,17 @@ func (s *DefaultService) ExecuteS6Command(ctx context.Context, servicePath strin
 		if errors.As(err, &exitErr) {
 			switch exitErr.ExitCode() {
 			case 111:
-				s.logger.Debugf("S6 command encountered a temporary error (exit code 111) for service %s", servicePath)
-				return "", ErrS6TemporaryError
+				s.Logger.Debugf("S6 command encountered a temporary error (exit code 111) for service %s", servicePath)
+				return "", process_shared.ErrS6TemporaryError
 			case 100:
-				s.logger.Debugf("S6 service %s is already being monitored (exit code 100), continuing", servicePath)
+				s.Logger.Debugf("S6 service %s is already being monitored (exit code 100), continuing", servicePath)
 				return "", nil
 			case 127:
-				s.logger.Debugf("S6 command could not find program (exit code 127) for service %s", servicePath)
-				return "", ErrS6ProgramNotFound
+				s.Logger.Debugf("S6 command could not find program (exit code 127) for service %s", servicePath)
+				return "", process_shared.ErrS6ProgramNotFound
 			case 126:
-				s.logger.Debugf("S6 command could not execute program (exit code 126) for service %s", servicePath)
-				return "", ErrS6ProgramNotExecutable
+				s.Logger.Debugf("S6 command could not execute program (exit code 126) for service %s", servicePath)
+				return "", process_shared.ErrS6ProgramNotExecutable
 			default:
 				return "", fmt.Errorf("unknown S6 error (exit code %d) for service %s: %w, output: %s",
 					exitErr.ExitCode(), servicePath, err, string(output))
@@ -1504,7 +1495,7 @@ func (s *DefaultService) ExecuteS6Command(ctx context.Context, servicePath strin
 	return string(output), nil
 }
 
-// findLatestRotatedFile finds the most recently rotated file using slices.MaxFunc.
+// FindLatestRotatedFile finds the most recently rotated file using slices.MaxFunc.
 //
 // S6 creates rotated files with TAI64N timestamps in their names (e.g., @400000006501234567890abc.s).
 // TAI64N timestamps are designed to be lexicographically sortable, so we can use string comparison
@@ -1516,7 +1507,7 @@ func (s *DefaultService) ExecuteS6Command(ctx context.Context, servicePath strin
 //   - No intermediate sorting required
 //
 // Returns an empty string if no valid rotated files are found.
-func (s *DefaultService) findLatestRotatedFile(entries []string) string {
+func (s *DefaultService) FindLatestRotatedFile(entries []string) string {
 	if len(entries) == 0 {
 		return ""
 	}
@@ -1535,17 +1526,17 @@ func (s *DefaultService) findLatestRotatedFile(entries []string) string {
 //   - HealthUnknown: probe failed due to I/O errors, timeouts, etc. - retry next tick
 //   - HealthOK: service directory is healthy and complete
 //   - HealthBad: service directory is definitely broken - triggers FSM transition
-func (s *DefaultService) CheckHealth(ctx context.Context, servicePath string, fsService filesystem.Service) (process_manager.HealthStatus, error) {
+func (s *DefaultService) CheckHealth(ctx context.Context, servicePath string, fsService filesystem.Service) (process_shared.HealthStatus, error) {
 	// Context already cancelled → Unknown, never Bad
 	if ctx.Err() != nil {
-		return process_manager.HealthUnknown, ctx.Err()
+		return process_shared.HealthUnknown, ctx.Err()
 	}
 
 	// If we don't have tracked artifacts, the service is in an inconsistent state
-	artifacts := s.artifacts
+	artifacts := s.Artifacts
 	if artifacts == nil || len(artifacts.CreatedFiles) == 0 {
-		s.logger.Debugf("No tracked files for service %s, returning HealthBad", servicePath)
-		return process_manager.HealthBad, nil
+		s.Logger.Debugf("No tracked files for service %s, returning HealthBad", servicePath)
+		return process_shared.HealthBad, nil
 	}
 
 	// Use lifecycle manager for comprehensive health check

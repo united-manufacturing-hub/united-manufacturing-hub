@@ -15,6 +15,7 @@
 package s6
 
 import (
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"time"
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
@@ -22,7 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager"
 )
 
 // Operational state constants represent the runtime states of a service
@@ -69,7 +70,7 @@ type S6ObservedState struct {
 	// LastStateChange is the timestamp of the last observed state change
 	LastStateChange int64
 	// ServiceInfo contains the actual service info from s6
-	ServiceInfo s6svc.ServiceInfo
+	ServiceInfo process_shared.ServiceInfo
 
 	// ObservedS6ServiceConfig contains the actual service config from s6
 	ObservedS6ServiceConfig s6serviceconfig.S6ServiceConfig

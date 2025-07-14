@@ -20,6 +20,7 @@ package nmap_test
 import (
 	"context"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -33,7 +34,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	nmapsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -86,7 +86,7 @@ var _ = Describe("NmapInstance FSM", func() {
 			mockService.ServiceStates[serviceName] = &nmapsvc.ServiceInfo{
 				S6FSMState: s6fsm.OperationalStateStopped,
 				S6ObservedState: s6fsm.S6ObservedState{
-					ServiceInfo: s6svc.ServiceInfo{Status: s6svc.ServiceDown, Uptime: 5},
+					ServiceInfo: process_shared.ServiceInfo{Status: process_shared.ServiceDown, Uptime: 5},
 				},
 				NmapStatus: nmapsvc.NmapServiceInfo{
 					IsRunning: true,

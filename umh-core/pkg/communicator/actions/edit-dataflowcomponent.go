@@ -76,6 +76,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"slices"
 	"time"
 
@@ -88,7 +89,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
@@ -544,8 +544,8 @@ func (a *EditDataflowComponentAction) waitForComponentToBeReady(ctx context.Cont
 	startTime := time.Now()
 	timeoutDuration := constants.DataflowComponentWaitForActiveTimeout
 
-	var logs []s6.LogEntry
-	var lastLogs []s6.LogEntry
+	var logs []process_shared.LogEntry
+	var lastLogs []process_shared.LogEntry
 
 	for {
 		select {

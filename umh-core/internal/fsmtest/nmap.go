@@ -20,6 +20,7 @@ package fsmtest
 import (
 	"context"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
@@ -27,7 +28,6 @@ import (
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -66,14 +66,14 @@ func SetupNmapServiceState(
 
 	// Update S6 observed state
 	if flags.IsS6Running {
-		mockService.ServiceStates[serviceName].S6ObservedState.ServiceInfo = s6svc.ServiceInfo{
-			Status: s6svc.ServiceUp,
+		mockService.ServiceStates[serviceName].S6ObservedState.ServiceInfo = process_shared.ServiceInfo{
+			Status: process_shared.ServiceUp,
 			Uptime: 10, // Set uptime to 10s to simulate config loaded
 			Pid:    1234,
 		}
 	} else {
-		mockService.ServiceStates[serviceName].S6ObservedState.ServiceInfo = s6svc.ServiceInfo{
-			Status: s6svc.ServiceDown,
+		mockService.ServiceStates[serviceName].S6ObservedState.ServiceInfo = process_shared.ServiceInfo{
+			Status: process_shared.ServiceDown,
 		}
 	}
 

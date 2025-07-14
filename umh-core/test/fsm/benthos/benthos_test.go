@@ -20,6 +20,7 @@ package benthos_test
 import (
 	"context"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -36,7 +37,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	benthos_monitor "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -89,7 +89,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			mockService.ServiceStates[serviceName] = &benthossvc.ServiceInfo{
 				S6FSMState: s6fsm.OperationalStateStopped,
 				S6ObservedState: s6fsm.S6ObservedState{
-					ServiceInfo: s6svc.ServiceInfo{Status: s6svc.ServiceDown, Uptime: 5},
+					ServiceInfo: process_shared.ServiceInfo{Status: process_shared.ServiceDown, Uptime: 5},
 				},
 				BenthosStatus: benthossvc.BenthosStatus{
 					BenthosMetrics: benthos_monitor.BenthosMetrics{

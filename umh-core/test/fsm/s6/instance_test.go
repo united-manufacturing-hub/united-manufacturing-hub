@@ -20,6 +20,7 @@ package s6_test
 import (
 	"context"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -30,7 +31,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -194,8 +194,8 @@ var _ = Describe("S6Instance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Keep the service in "down" or "restarting" so it doesn't reach running
-			mockService.ServiceStates[instance.GetServicePath()] = s6service.ServiceInfo{
-				Status: s6service.ServiceRestarting,
+			mockService.ServiceStates[instance.GetServicePath()] = process_shared.ServiceInfo{
+				Status: process_shared.ServiceRestarting,
 			}
 
 			// Verify it remains in "starting"
@@ -322,8 +322,8 @@ var _ = Describe("S6Instance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Keep service in "up" => instance remains stopping
-			mockService.ServiceStates[instance.GetServicePath()] = s6service.ServiceInfo{
-				Status: s6service.ServiceUp,
+			mockService.ServiceStates[instance.GetServicePath()] = process_shared.ServiceInfo{
+				Status: process_shared.ServiceUp,
 			}
 
 			// Verify stable in stopping

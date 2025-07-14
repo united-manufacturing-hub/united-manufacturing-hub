@@ -16,13 +16,13 @@ package nmap
 
 import (
 	"context"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -120,7 +120,7 @@ type NmapServiceInfo struct {
 	//
 	// Therefore we override the default behaviour and copy only the 3-word
 	// slice header (24 B on amd64) — see CopyLogs below.
-	Logs []s6service.LogEntry
+	Logs []process_shared.LogEntry
 }
 
 // CopyLogs is a go-deepcopy override for the Logs field.
@@ -143,7 +143,7 @@ type NmapServiceInfo struct {
 // deep-copy (O(n) but safe for mutable slices).
 //
 // See also: https://github.com/tiendc/go-deepcopy?tab=readme-ov-file#copy-struct-fields-via-struct-methods
-func (nsi *NmapServiceInfo) CopyLogs(src []s6service.LogEntry) error {
+func (nsi *NmapServiceInfo) CopyLogs(src []process_shared.LogEntry) error {
 	nsi.Logs = src
 	return nil
 }

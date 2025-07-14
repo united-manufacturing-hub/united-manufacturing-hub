@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"io"
 	"path/filepath"
 	"strconv"
@@ -41,7 +42,7 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/monitor"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )
@@ -183,7 +184,7 @@ type BenthosMonitorStatus struct {
 	//
 	// Therefore we override the default behaviour and copy only the 3-word
 	// slice header (24 B on amd64) — see CopyLogs below.
-	Logs []s6service.LogEntry
+	Logs []process_shared.LogEntry
 }
 
 // CopyLogs is a go-deepcopy override for the Logs field.
@@ -206,7 +207,7 @@ type BenthosMonitorStatus struct {
 // deep-copy (O(n) but safe for mutable slices).
 //
 // See also: https://github.com/tiendc/go-deepcopy?tab=readme-ov-file#copy-struct-fields-via-struct-methods
-func (bms *BenthosMonitorStatus) CopyLogs(src []s6service.LogEntry) error {
+func (bms *BenthosMonitorStatus) CopyLogs(src []process_shared.LogEntry) error {
 	bms.Logs = src
 	return nil
 }
@@ -356,7 +357,7 @@ type Section struct {
 // ConcatContent concatenates the content of a slice of LogEntry objects into a single byte slice.
 // It calculates the total size of the content, allocates a buffer of that size, and then copies each LogEntry's content into the buffer.
 // This approach is more efficient than using multiple strings.ReplaceAll calls or regex operations.
-func ConcatContent(logs []s6service.LogEntry) []byte {
+func ConcatContent(logs []process_shared.LogEntry) []byte {
 	// 1st pass: exact size
 	size := 0
 	for i := range logs {
@@ -392,7 +393,7 @@ func StripMarkers(b []byte) []byte {
 }
 
 // ParseBenthosLogs parses the logs of a benthos service and extracts metrics
-func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6service.LogEntry, tick uint64) (*BenthosMetricsScan, error) {
+func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []process_shared.LogEntry, tick uint64) (*BenthosMetricsScan, error) {
 	/*
 		A normal log entry looks like this:
 		BLOCK_START_MARKER

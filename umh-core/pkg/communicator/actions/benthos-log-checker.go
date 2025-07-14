@@ -15,9 +15,8 @@
 package actions
 
 import (
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"strings"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
 var ErrBenthosLogLines = []string{
@@ -33,7 +32,7 @@ var ErrBenthosLogLines = []string{
 // Benthos to enter a CrashLoop. When such errors are detected, we can immediately
 // abort the startup process rather than waiting for the full timeout period,
 // as these errors require configuration changes to resolve.
-func CheckBenthosLogLinesForConfigErrors(logs []s6.LogEntry) bool {
+func CheckBenthosLogLinesForConfigErrors(logs []process_shared.LogEntry) bool {
 	for _, log := range logs {
 		logContent := strings.ToLower(log.Content)
 		if !strings.Contains(logContent, "error") {
