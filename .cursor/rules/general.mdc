@@ -22,4 +22,5 @@ DO NOT GIVE ME HIGH LEVEL SHIT, IF I ASK FOR FIX OR EXPLANATION, I WANT ACTUAL C
 - Please respect my formatting preferences when you provide code.
 - Please respect all code comments, they're usually there for a reason. Remove them ONLY if they're completely irrelevant after a code change. if unsure, do not remove the comment.
 - Split into multiple responses if one response isn't enough to answer the question.
+- Do not attempt to bypass failing tests (That includes, but is not limited to: using Ginkgo skip, commenting out tests, writing no-op code)
 If I ask for adjustments to code I have provided you, do not repeat all of my code unnecessarily. Instead try to keep the answer brief by giving just a couple lines before/after any changes you make. Multiple code blocks are ok.

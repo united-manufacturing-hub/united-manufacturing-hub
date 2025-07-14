@@ -67,7 +67,7 @@ NMAP_VERSION = 7.95-r1
 S6_OVERLAY_VERSION = 3.2.0.2
 REDPANDA_VERSION = 24.3.8
 ## Benthos version is a tag or a sha-<commit hash> (e.g. 0.9.4 or sha-a51a685) to be used in the docker image
-BENTHOS_UMH_VERSION = 0.9.6
+BENTHOS_UMH_VERSION = 0.10.0-alpha.1
 BUF_VERSION = 1.55.1
 PROTOC_GEN_GO_VERSION = 1.36.6
 
@@ -249,7 +249,10 @@ lint:
 
 nilaway:
 	# See lefthook.yaml for more details
-	nilaway -exclude-pkgs="github.com/prometheus/prometheus/util/textparse,github.com/onsi/ginkgo/v2" -exclude-errors-in-files="integration/" ./...
+	nilaway \
+		-exclude-pkgs="github.com/prometheus/prometheus/util/textparse,github.com/onsi/ginkgo/v2,go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp,github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda" \
+		-exclude-errors-in-files="integration/" \
+		./...
 
 test: vet nilaway lint
 	go test -race -v -tags=test ./...
