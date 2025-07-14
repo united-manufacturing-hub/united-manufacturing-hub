@@ -25,7 +25,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	filesystem "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"go.uber.org/zap"
@@ -63,7 +63,7 @@ var _ = Describe("S6 Run Script", func() {
 	Context("with template-based configuration", func() {
 		It("should correctly read back the same configuration that was written", func() {
 			// Setup the config to write
-			originalConfig := s6serviceconfig.S6ServiceConfig{
+			originalConfig := process_manager_serviceconfig.ProcessManagerServiceConfig{
 				Command: []string{"/usr/local/bin/benthos", "-c", "/config/benthos.yaml"},
 				Env: map[string]string{
 					"LOG_LEVEL": "DEBUG",
@@ -163,7 +163,7 @@ var _ = Describe("S6 Run Script", func() {
 
 		It("should correctly read back the same configuration that was written, even if log filesize is set", func() {
 			// Setup the config to write
-			originalConfig := s6serviceconfig.S6ServiceConfig{
+			originalConfig := process_manager_serviceconfig.ProcessManagerServiceConfig{
 				Command: []string{"/usr/local/bin/benthos", "-c", "/config/benthos.yaml"},
 				Env: map[string]string{
 					"LOG_LEVEL": "DEBUG",
@@ -266,7 +266,7 @@ var _ = Describe("S6 Run Script", func() {
 
 		It("should handle complex scripts with quotes and special characters", func() {
 			// Complex config with quotes and special characters
-			complexConfig := s6serviceconfig.S6ServiceConfig{
+			complexConfig := process_manager_serviceconfig.ProcessManagerServiceConfig{
 				Command: []string{"/bin/sh", "-c", "echo Hello World | grep Hello"},
 				Env: map[string]string{
 					"COMPLEX_VAR": "value with \"quotes\" and spaces",

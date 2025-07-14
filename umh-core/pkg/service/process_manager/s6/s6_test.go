@@ -29,7 +29,7 @@ import (
 	"github.com/cactus/tai64"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
@@ -72,7 +72,7 @@ var _ = Describe("S6 Service", func() {
 
 	It("should track method calls in the mock implementation", func() {
 		Expect(mockService.CreateCalled).To(BeFalse())
-		err := mockService.Create(ctx, testPath, s6serviceconfig.S6ServiceConfig{}, mockFS)
+		err := mockService.Create(ctx, testPath, process_manager_serviceconfig.ProcessManagerServiceConfig{}, mockFS)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(mockService.CreateCalled).To(BeTrue())
 
@@ -108,7 +108,7 @@ var _ = Describe("S6 Service", func() {
 		Expect(exists).To(BeFalse())
 
 		// Create service should make it exist
-		err := mockService.Create(ctx, testPath, s6serviceconfig.S6ServiceConfig{}, mockFS)
+		err := mockService.Create(ctx, testPath, process_manager_serviceconfig.ProcessManagerServiceConfig{}, mockFS)
 		Expect(err).NotTo(HaveOccurred())
 		exists, _ = mockService.ServiceExists(ctx, testPath, mockFS)
 		Expect(exists).To(BeTrue())
@@ -205,7 +205,7 @@ var _ = Describe("S6 Service", func() {
 		})
 	})
 
-	Describe("CleanS6ServiceDirectory", func() {
+	Describe("CleanServiceDirectory", func() {
 		var (
 			s6Service          *s6.DefaultService
 			mockFS             *filesystem.MockFileSystem
@@ -273,7 +273,7 @@ var _ = Describe("S6 Service", func() {
 
 		It("should only remove non-standard directories", func() {
 			// Execute the function under test
-			err := s6Service.CleanS6ServiceDirectory(ctx, constants.S6BaseDir, mockFS)
+			err := s6Service.CleanServiceDirectory(ctx, constants.S6BaseDir, mockFS)
 
 			// Verify function execution
 			Expect(err).NotTo(HaveOccurred())
@@ -293,13 +293,13 @@ var _ = Describe("S6 Service", func() {
 		It("should skip files that are not directories", func() {
 			// This is verified by the mock setup - if it attempts to remove
 			// a file, the test will fail since our mock only expects directories
-			err := s6Service.CleanS6ServiceDirectory(ctx, constants.S6BaseDir, mockFS)
+			err := s6Service.CleanServiceDirectory(ctx, constants.S6BaseDir, mockFS)
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 
-	// TestGetS6ConfigFile tests the GetS6ConfigFile method
-	Describe("GetS6ConfigFile", func() {
+	// TestGetS6ConfigFile tests the GetConfigFile method
+	Describe("GetConfigFile", func() {
 		var (
 			s6Service *s6.DefaultService
 			mockFS    *filesystem.MockFileSystem
@@ -324,7 +324,7 @@ var _ = Describe("S6 Service", func() {
 
 			It("should return ErrServiceNotExist", func() {
 				servicePath := filepath.Join(constants.S6BaseDir, "non-existent-service")
-				_, err := s6Service.GetS6ConfigFile(ctx, servicePath, "config.yaml", mockFS)
+				_, err := s6Service.GetConfigFile(ctx, servicePath, "config.yaml", mockFS)
 				Expect(err).To(Equal(process_shared.ErrServiceNotExist))
 			})
 		})
@@ -348,7 +348,7 @@ var _ = Describe("S6 Service", func() {
 
 			It("should return an error indicating the file doesn't exist", func() {
 				servicePath := filepath.Join(constants.S6BaseDir, "test-service")
-				_, err := s6Service.GetS6ConfigFile(ctx, servicePath, "config.yaml", mockFS)
+				_, err := s6Service.GetConfigFile(ctx, servicePath, "config.yaml", mockFS)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("does not exist"))
 			})
@@ -373,7 +373,7 @@ var _ = Describe("S6 Service", func() {
 
 			It("should return the file content", func() {
 				servicePath := filepath.Join(constants.S6BaseDir, "test-service")
-				content, err := s6Service.GetS6ConfigFile(ctx, servicePath, "config.yaml", mockFS)
+				content, err := s6Service.GetConfigFile(ctx, servicePath, "config.yaml", mockFS)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(content).To(Equal([]byte("key: value")))
 			})
@@ -385,7 +385,7 @@ var _ = Describe("S6 Service", func() {
 				cancel() // Cancel immediately
 
 				servicePath := filepath.Join(constants.S6BaseDir, "test-service")
-				_, err := s6Service.GetS6ConfigFile(cancelledCtx, servicePath, "config.yaml", mockFS)
+				_, err := s6Service.GetConfigFile(cancelledCtx, servicePath, "config.yaml", mockFS)
 				Expect(err).To(Equal(context.Canceled))
 			})
 		})

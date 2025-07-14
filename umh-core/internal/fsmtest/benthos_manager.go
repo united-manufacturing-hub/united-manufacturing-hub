@@ -20,13 +20,13 @@ package fsmtest
 import (
 	"context"
 	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -177,7 +177,7 @@ func CreateMockBenthosManager(name string) (*benthosfsm.BenthosManager, *benthos
 	manager, mockService := benthosfsm.NewBenthosManagerWithMockedServices(name)
 
 	// Set up the mock service to prevent real filesystem operations
-	s6MockService := mockService.S6Service.(*s6svc.MockService)
+	s6MockService := mockService.S6Service.(*process_shared.MockService)
 
 	// Configure default responses to prevent real filesystem operations
 	s6MockService.CreateError = nil

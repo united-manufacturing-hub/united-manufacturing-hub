@@ -28,8 +28,8 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -50,7 +50,7 @@ import (
 // IRedpandaService is the interface for managing Redpanda
 type IRedpandaService interface {
 	// GenerateS6ConfigForRedpanda generates a S6 config for a given redpanda instance
-	GenerateS6ConfigForRedpanda(redpandaConfig *redpandaserviceconfig.RedpandaServiceConfig, redpandaName string) (s6serviceconfig.S6ServiceConfig, error)
+	GenerateS6ConfigForRedpanda(redpandaConfig *redpandaserviceconfig.RedpandaServiceConfig, redpandaName string) (process_manager_serviceconfig.ProcessManagerServiceConfig, error)
 	// GetConfig returns the actual Redpanda config from the S6 service
 	GetConfig(ctx context.Context, filesystemService filesystem.Service, redpandaName string, tick uint64, loopStartTime time.Time) (redpandaserviceconfig.RedpandaServiceConfig, error)
 	// Status checks the status of a Redpanda service
@@ -265,12 +265,12 @@ func (s *RedpandaService) generateRedpandaYaml(config *redpandaserviceconfig.Red
 
 // generateS6ConfigForRedpanda creates a S6 config for a given redpanda instance
 // Expects s6ServiceName (e.g. "redpanda-myservice"), not the raw redpandaName
-func (s *RedpandaService) GenerateS6ConfigForRedpanda(redpandaConfig *redpandaserviceconfig.RedpandaServiceConfig, s6ServiceName string) (s6Config s6serviceconfig.S6ServiceConfig, err error) {
+func (s *RedpandaService) GenerateS6ConfigForRedpanda(redpandaConfig *redpandaserviceconfig.RedpandaServiceConfig, s6ServiceName string) (s6Config process_manager_serviceconfig.ProcessManagerServiceConfig, err error) {
 	configPath := fmt.Sprintf("%s/%s/config/%s", constants.S6BaseDir, s6ServiceName, constants.RedpandaConfigFileName)
 
 	yamlConfig, err := s.generateRedpandaYaml(redpandaConfig)
 	if err != nil {
-		return s6serviceconfig.S6ServiceConfig{}, err
+		return process_manager_serviceconfig.ProcessManagerServiceConfig{}, err
 	}
 
 	if redpandaConfig.Resources.MaxCores == 0 {
@@ -281,7 +281,7 @@ func (s *RedpandaService) GenerateS6ConfigForRedpanda(redpandaConfig *redpandase
 		redpandaConfig.Resources.MemoryPerCoreInBytes = 2048 * 1024 * 1024 // 2GB
 	}
 
-	s6Config = s6serviceconfig.S6ServiceConfig{
+	s6Config = process_manager_serviceconfig.ProcessManagerServiceConfig{
 		Command: []string{
 			"/opt/redpanda/bin/redpanda",
 			"--redpanda-cfg",

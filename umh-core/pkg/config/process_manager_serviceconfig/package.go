@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package s6serviceconfig
+package process_manager_serviceconfig
 
 import "reflect"
 
-// S6ServiceConfig contains configuration for creating a service
-type S6ServiceConfig struct {
+// ProcessManagerServiceConfig contains configuration for creating a service
+type ProcessManagerServiceConfig struct {
 	Command     []string          `yaml:"command"`
 	Env         map[string]string `yaml:"env"`
 	ConfigFiles map[string]string `yaml:"configFiles"`
@@ -26,6 +26,6 @@ type S6ServiceConfig struct {
 }
 
 // Equal checks if two S6ServiceConfigs are equal
-func (c S6ServiceConfig) Equal(other S6ServiceConfig) bool {
+func (c ProcessManagerServiceConfig) Equal(other ProcessManagerServiceConfig) bool {
 	return reflect.DeepEqual(c, other)
 }

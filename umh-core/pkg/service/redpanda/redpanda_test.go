@@ -23,8 +23,8 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -142,7 +142,7 @@ var _ = Describe("Redpanda Service", func() {
 			It("should return error", func() {
 				s6Config, err := service.GenerateS6ConfigForRedpanda(nil, service.GetS6ServiceName(redpandaName))
 				Expect(err).To(HaveOccurred())
-				Expect(s6Config).To(Equal(s6serviceconfig.S6ServiceConfig{}))
+				Expect(s6Config).To(Equal(process_manager_serviceconfig.ProcessManagerServiceConfig{}))
 			})
 		})
 	})

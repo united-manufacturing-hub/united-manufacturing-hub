@@ -26,7 +26,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
@@ -50,7 +50,7 @@ type ServiceArtifacts struct {
 // - Atomic rename operation
 // - .complete sentinel file
 // - S6 scanner notification
-func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, fsService filesystem.Service) (*ServiceArtifacts, error) {
+func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string, config process_manager_serviceconfig.ProcessManagerServiceConfig, fsService filesystem.Service) (*ServiceArtifacts, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -252,7 +252,7 @@ func (s *DefaultService) generateUniqueID() string {
 }
 
 // createS6FilesInTemp creates the service files in the temp directory
-func (s *DefaultService) createS6FilesInTemp(ctx context.Context, tempDir string, servicePath string, config s6serviceconfig.S6ServiceConfig, fsService filesystem.Service) ([]string, error) {
+func (s *DefaultService) createS6FilesInTemp(ctx context.Context, tempDir string, servicePath string, config process_manager_serviceconfig.ProcessManagerServiceConfig, fsService filesystem.Service) ([]string, error) {
 	var createdFiles []string
 	// Create service directory structure
 	if err := fsService.EnsureDirectory(ctx, tempDir); err != nil {

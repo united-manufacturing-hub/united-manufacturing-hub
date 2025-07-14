@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -42,7 +42,7 @@ type MockRedpandaMonitorService struct {
 	ServiceExistsCalled                      bool
 	ForceRemoveRedpandaMonitorCalled         bool
 	// Return values for each method
-	GenerateS6ConfigForRedpandaMonitorResult s6serviceconfig.S6ServiceConfig
+	GenerateS6ConfigForRedpandaMonitorResult process_manager_serviceconfig.ProcessManagerServiceConfig
 	GenerateS6ConfigForRedpandaMonitorError  error
 	StatusResult                             ServiceInfo
 	StatusError                              error
@@ -204,12 +204,12 @@ func (m *MockRedpandaMonitorService) SetGoodLastScan(currentTime time.Time) {
 }
 
 // GenerateS6ConfigForRedpandaMonitor mocks generating S6 config for Redpanda monitor
-func (m *MockRedpandaMonitorService) GenerateS6ConfigForRedpandaMonitor(s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error) {
+func (m *MockRedpandaMonitorService) GenerateS6ConfigForRedpandaMonitor(s6ServiceName string) (process_manager_serviceconfig.ProcessManagerServiceConfig, error) {
 	m.GenerateS6ConfigForRedpandaMonitorCalled = true
 
 	// If error is set, return it
 	if m.GenerateS6ConfigForRedpandaMonitorError != nil {
-		return s6serviceconfig.S6ServiceConfig{}, m.GenerateS6ConfigForRedpandaMonitorError
+		return process_manager_serviceconfig.ProcessManagerServiceConfig{}, m.GenerateS6ConfigForRedpandaMonitorError
 	}
 
 	// If a result is preset, return it
@@ -218,7 +218,7 @@ func (m *MockRedpandaMonitorService) GenerateS6ConfigForRedpandaMonitor(s6Servic
 	}
 
 	// Return a default config
-	s6Config := s6serviceconfig.S6ServiceConfig{
+	s6Config := process_manager_serviceconfig.ProcessManagerServiceConfig{
 		Command: []string{
 			"/bin/sh",
 			fmt.Sprintf("%s/%s/config/run_redpanda_monitor.sh", constants.S6BaseDir, s6ServiceName),

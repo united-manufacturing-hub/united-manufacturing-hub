@@ -22,7 +22,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -61,7 +61,7 @@ func (s *S6Instance) CreateInstance(ctx context.Context, filesystemService files
 		}
 	} else {
 		// Simple creation with no configuration, useful for testing
-		err := s.service.Create(ctx, s.servicePath, s6serviceconfig.S6ServiceConfig{}, filesystemService)
+		err := s.service.Create(ctx, s.servicePath, process_manager_serviceconfig.ProcessManagerServiceConfig{}, filesystemService)
 		if err != nil {
 			return fmt.Errorf("failed to create service directory for %s: %w", s.baseFSMInstance.GetID(), err)
 		}
@@ -246,7 +246,7 @@ func (s *S6Instance) GetExitHistory() []process_shared.ExitEvent {
 }
 
 // logConfigDifferences logs the specific differences between desired and observed configurations
-func (s *S6Instance) logConfigDifferences(desired, observed s6serviceconfig.S6ServiceConfig) {
+func (s *S6Instance) logConfigDifferences(desired, observed process_manager_serviceconfig.ProcessManagerServiceConfig) {
 	s.baseFSMInstance.GetLogger().Infof("Configuration differences for %s:", s.baseFSMInstance.GetID())
 
 	// Command differences

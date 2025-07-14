@@ -34,7 +34,7 @@ import (
 	"time"
 
 	"github.com/cactus/tai64"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -108,7 +108,7 @@ func (s *DefaultService) withLifecycleGuard(fn func() error) error {
 // - Unified lifecycle mutex prevents concurrent Create/Remove/ForceRemove operations
 // - Uses lifecycle manager for atomic creation with EXDEV protection
 // - Simplified 3-path approach with health checks
-func (s *DefaultService) Create(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, fsService filesystem.Service) error {
+func (s *DefaultService) Create(ctx context.Context, servicePath string, config process_manager_serviceconfig.ProcessManagerServiceConfig, fsService filesystem.Service) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".create", time.Since(start))
@@ -611,16 +611,16 @@ func (s *DefaultService) ServiceExists(ctx context.Context, servicePath string, 
 }
 
 // GetConfig gets the actual service config from s6
-func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsService filesystem.Service) (s6serviceconfig.S6ServiceConfig, error) {
+func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsService filesystem.Service) (process_manager_serviceconfig.ProcessManagerServiceConfig, error) {
 	exists, err := s.ServiceExists(ctx, servicePath, fsService)
 	if err != nil {
-		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to check if service exists: %w", err)
+		return process_manager_serviceconfig.ProcessManagerServiceConfig{}, fmt.Errorf("failed to check if service exists: %w", err)
 	}
 	if !exists {
-		return s6serviceconfig.S6ServiceConfig{}, process_shared.ErrServiceNotExist
+		return process_manager_serviceconfig.ProcessManagerServiceConfig{}, process_shared.ErrServiceNotExist
 	}
 
-	observedS6ServiceConfig := s6serviceconfig.S6ServiceConfig{
+	observedS6ServiceConfig := process_manager_serviceconfig.ProcessManagerServiceConfig{
 		ConfigFiles: make(map[string]string),
 		Env:         make(map[string]string),
 		MemoryLimit: 0,
@@ -631,15 +631,15 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 	runScript := filepath.Join(servicePath, "run")
 	exists, err = fsService.FileExists(ctx, runScript)
 	if err != nil {
-		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to check if run script exists: %w", err)
+		return process_manager_serviceconfig.ProcessManagerServiceConfig{}, fmt.Errorf("failed to check if run script exists: %w", err)
 	}
 	if !exists {
-		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("run script not found")
+		return process_manager_serviceconfig.ProcessManagerServiceConfig{}, fmt.Errorf("run script not found")
 	}
 
 	content, err := fsService.ReadFile(ctx, runScript)
 	if err != nil {
-		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to read run script: %w", err)
+		return process_manager_serviceconfig.ProcessManagerServiceConfig{}, fmt.Errorf("failed to read run script: %w", err)
 	}
 
 	// Parse the run script content
@@ -665,7 +665,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 		cmdLine := strings.TrimSpace(cmdMatch[1])
 		observedS6ServiceConfig.Command, err = parseCommandLine(cmdLine)
 		if err != nil {
-			return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to parse command: %w", err)
+			return process_manager_serviceconfig.ProcessManagerServiceConfig{}, fmt.Errorf("failed to parse command: %w", err)
 		}
 	} else {
 		// If the command is on the line after fdmove, or regex didn't match properly
@@ -703,7 +703,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 		if commandLine != "" {
 			observedS6ServiceConfig.Command, err = parseCommandLine(commandLine)
 			if err != nil {
-				return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to parse command: %w", err)
+				return process_manager_serviceconfig.ProcessManagerServiceConfig{}, fmt.Errorf("failed to parse command: %w", err)
 			}
 		} else {
 			// Absolute fallback - try to look for the command we know should be there
@@ -723,14 +723,14 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 					if argPart != "" {
 						args, err = parseCommandLine(argPart)
 						if err != nil {
-							return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to parse command: %w", err)
+							return process_manager_serviceconfig.ProcessManagerServiceConfig{}, fmt.Errorf("failed to parse command: %w", err)
 						}
 					}
 				}
 
 				observedS6ServiceConfig.Command = append([]string{cmd}, args...)
 			} else {
-				return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to parse run script: no valid command found")
+				return process_manager_serviceconfig.ProcessManagerServiceConfig{}, fmt.Errorf("failed to parse run script: no valid command found")
 			}
 		}
 	}
@@ -740,7 +740,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 	if len(memoryLimitMatches) >= 2 && memoryLimitMatches[1] != "" {
 		observedS6ServiceConfig.MemoryLimit, err = strconv.ParseInt(memoryLimitMatches[1], 10, 64)
 		if err != nil {
-			return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to parse memory limit: %w", err)
+			return process_manager_serviceconfig.ProcessManagerServiceConfig{}, fmt.Errorf("failed to parse memory limit: %w", err)
 		}
 	}
 
@@ -748,7 +748,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 	configPath := filepath.Join(servicePath, "config")
 	exists, err = fsService.FileExists(ctx, configPath)
 	if err != nil {
-		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to check if config directory exists: %w", err)
+		return process_manager_serviceconfig.ProcessManagerServiceConfig{}, fmt.Errorf("failed to check if config directory exists: %w", err)
 	}
 	if !exists {
 		return observedS6ServiceConfig, nil
@@ -756,7 +756,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 
 	entries, err := fsService.ReadDir(ctx, configPath)
 	if err != nil {
-		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to read config directory: %w", err)
+		return process_manager_serviceconfig.ProcessManagerServiceConfig{}, fmt.Errorf("failed to read config directory: %w", err)
 	}
 
 	// Extract config files
@@ -768,7 +768,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 		filePath := filepath.Join(configPath, entry.Name())
 		content, err := fsService.ReadFile(ctx, filePath)
 		if err != nil {
-			return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to read config file %s: %w", entry.Name(), err)
+			return process_manager_serviceconfig.ProcessManagerServiceConfig{}, fmt.Errorf("failed to read config file %s: %w", entry.Name(), err)
 		}
 
 		observedS6ServiceConfig.ConfigFiles[entry.Name()] = string(content)
@@ -780,15 +780,15 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 	logScript := filepath.Join(logServicePath, "run")
 	exists, err = fsService.FileExists(ctx, logScript)
 	if err != nil {
-		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to check if log run§ script exists: %w", err)
+		return process_manager_serviceconfig.ProcessManagerServiceConfig{}, fmt.Errorf("failed to check if log run§ script exists: %w", err)
 	}
 	if !exists {
-		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("log run script not found")
+		return process_manager_serviceconfig.ProcessManagerServiceConfig{}, fmt.Errorf("log run script not found")
 	}
 
 	logScriptContentRaw, err := fsService.ReadFile(ctx, logScript)
 	if err != nil {
-		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to read log run script: %w", err)
+		return process_manager_serviceconfig.ProcessManagerServiceConfig{}, fmt.Errorf("failed to read log run script: %w", err)
 	}
 
 	// Parse the run script content
@@ -799,7 +799,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 	if len(logSizeMatches) >= 2 {
 		observedS6ServiceConfig.LogFilesize, err = strconv.ParseInt(logSizeMatches[1], 10, 64)
 		if err != nil {
-			return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to parse log filesize: %w", err)
+			return process_manager_serviceconfig.ProcessManagerServiceConfig{}, fmt.Errorf("failed to parse log filesize: %w", err)
 		}
 	} else {
 		// If no match found, default to 0
@@ -910,7 +910,7 @@ const (
 )
 
 // CleanS6ServiceDirectory cleans the S6 service directory except for the known services
-func (s *DefaultService) CleanS6ServiceDirectory(ctx context.Context, path string, fsService filesystem.Service) error {
+func (s *DefaultService) CleanServiceDirectory(ctx context.Context, path string, fsService filesystem.Service) error {
 	if ctx == nil {
 		return fmt.Errorf("context is nil")
 	}
@@ -1002,7 +1002,7 @@ func (s *DefaultService) IsKnownService(name string) bool {
 
 // GetS6ConfigFile retrieves the specified config file for a service
 // servicePath should be the full path including S6BaseDir
-func (s *DefaultService) GetS6ConfigFile(ctx context.Context, servicePath string, configFileName string, fsService filesystem.Service) ([]byte, error) {
+func (s *DefaultService) GetConfigFile(ctx context.Context, servicePath string, configFileName string, fsService filesystem.Service) ([]byte, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}

@@ -24,7 +24,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	s6_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -62,7 +62,7 @@ type MockBenthosService struct {
 	ServiceExistsCalled                            bool
 	ForceRemoveBenthosCalled                       bool
 	// Return values for each method
-	GenerateS6ConfigForBenthosResult s6serviceconfig.S6ServiceConfig
+	GenerateS6ConfigForBenthosResult process_manager_serviceconfig.ProcessManagerServiceConfig
 	GenerateS6ConfigForBenthosError  error
 	GetConfigResult                  benthosserviceconfig.BenthosServiceConfig
 	GetConfigError                   error
@@ -156,7 +156,7 @@ func (m *MockBenthosService) GetServiceState(serviceName string) *ServiceStateFl
 }
 
 // GenerateS6ConfigForBenthos mocks generating S6 config for Benthos
-func (m *MockBenthosService) GenerateS6ConfigForBenthos(benthosConfig *benthosserviceconfig.BenthosServiceConfig, name string) (s6serviceconfig.S6ServiceConfig, error) {
+func (m *MockBenthosService) GenerateS6ConfigForBenthos(benthosConfig *benthosserviceconfig.BenthosServiceConfig, name string) (process_manager_serviceconfig.ProcessManagerServiceConfig, error) {
 	m.GenerateS6ConfigForBenthosCalled = true
 	return m.GenerateS6ConfigForBenthosResult, m.GenerateS6ConfigForBenthosError
 }

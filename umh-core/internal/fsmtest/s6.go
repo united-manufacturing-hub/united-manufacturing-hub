@@ -26,7 +26,7 @@ import (
 
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
@@ -47,7 +47,7 @@ func CreateS6TestConfig(name string, desiredState string) config.S6FSMConfig {
 			Name:            name,
 			DesiredFSMState: desiredState,
 		},
-		S6ServiceConfig: s6serviceconfig.S6ServiceConfig{
+		S6ServiceConfig: process_manager_serviceconfig.ProcessManagerServiceConfig{
 			Command:     []string{"/bin/sh", "-c", "echo test"},
 			Env:         map[string]string{},
 			ConfigFiles: map[string]string{},
@@ -118,7 +118,7 @@ func ConfigureServiceForState(mockService *process_shared.MockService, servicePa
 
 // ConfigureS6ServiceConfig configures the mock service with default config
 func ConfigureS6ServiceConfig(mockService *process_shared.MockService) {
-	mockService.GetConfigResult = s6serviceconfig.S6ServiceConfig{
+	mockService.GetConfigResult = process_manager_serviceconfig.ProcessManagerServiceConfig{
 		Command:     []string{"/bin/sh", "-c", "echo test"},
 		Env:         map[string]string{},
 		ConfigFiles: map[string]string{},

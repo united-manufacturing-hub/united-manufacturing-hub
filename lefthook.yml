@@ -56,7 +56,8 @@ pre-commit:
       glob: "**/*.go"
       root: "umh-core"
       run: |
-        go vet ./...
+        go vet -tags='test s6_process_manager' ./...
+        go vet -tags='test internal_process_manager' ./...
 
     - name: gofmt
       glob: "**/*.go"

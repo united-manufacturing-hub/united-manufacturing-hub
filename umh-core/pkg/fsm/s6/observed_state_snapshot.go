@@ -17,7 +17,7 @@ package s6
 import (
 	"github.com/tiendc/go-deepcopy"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
@@ -28,7 +28,7 @@ type S6ObservedStateSnapshot struct {
 	Config                  config.S6FSMConfig
 	LastStateChange         int64
 	ServiceInfo             process_shared.ServiceInfo
-	ObservedS6ServiceConfig s6serviceconfig.S6ServiceConfig
+	ObservedS6ServiceConfig process_manager_serviceconfig.ProcessManagerServiceConfig
 }
 
 // IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface

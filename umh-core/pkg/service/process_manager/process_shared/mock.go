@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -68,7 +68,7 @@ type MockService struct {
 	StatusResult                  ServiceInfo
 	ExitHistoryResult             []ExitEvent
 	ServiceExistsResult           bool
-	GetConfigResult               s6serviceconfig.S6ServiceConfig
+	GetConfigResult               process_manager_serviceconfig.ProcessManagerServiceConfig
 	CleanS6ServiceDirectoryResult error
 	GetS6ConfigFileResult         []byte
 	ForceRemoveResult             error
@@ -97,7 +97,7 @@ func NewMockService() *MockService {
 }
 
 // Create mocks creating an S6 service
-func (m *MockService) Create(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, filesystemService filesystem.Service) error {
+func (m *MockService) Create(ctx context.Context, servicePath string, config process_manager_serviceconfig.ProcessManagerServiceConfig, filesystemService filesystem.Service) error {
 	m.CreateCalled = true
 
 	m.mu.Lock()
@@ -195,7 +195,7 @@ func (m *MockService) ServiceExists(ctx context.Context, servicePath string, fil
 }
 
 // GetConfig mocks getting the config of an S6 service
-func (m *MockService) GetConfig(ctx context.Context, servicePath string, filesystemService filesystem.Service) (s6serviceconfig.S6ServiceConfig, error) {
+func (m *MockService) GetConfig(ctx context.Context, servicePath string, filesystemService filesystem.Service) (process_manager_serviceconfig.ProcessManagerServiceConfig, error) {
 	m.GetConfigCalled = true
 	return m.GetConfigResult, m.GetConfigError
 }
@@ -206,13 +206,13 @@ func (m *MockService) ExitHistory(ctx context.Context, servicePath string, files
 }
 
 // CleanS6ServiceDirectory implements the Service interface
-func (m *MockService) CleanS6ServiceDirectory(ctx context.Context, path string, filesystemService filesystem.Service) error {
+func (m *MockService) CleanServiceDirectory(ctx context.Context, path string, filesystemService filesystem.Service) error {
 	m.CleanS6ServiceDirectoryCalled = true
 	return m.CleanS6ServiceDirectoryResult
 }
 
 // GetS6ConfigFile is a mock method
-func (m *MockService) GetS6ConfigFile(ctx context.Context, servicePath string, configFileName string, filesystemService filesystem.Service) ([]byte, error) {
+func (m *MockService) GetConfigFile(ctx context.Context, servicePath string, configFileName string, filesystemService filesystem.Service) ([]byte, error) {
 	m.GetS6ConfigFileCalled = true
 	return m.GetS6ConfigFileResult, m.GetS6ConfigFileError
 }

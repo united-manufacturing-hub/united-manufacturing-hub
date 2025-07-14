@@ -28,7 +28,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -52,7 +52,7 @@ import (
 type IBenthosService interface {
 	// GenerateS6ConfigForBenthos generates a S6 config for a given benthos instance
 	// Expects s6ServiceName (e.g. "benthos-myservice"), not the raw benthosName
-	GenerateS6ConfigForBenthos(benthosConfig *benthosserviceconfig.BenthosServiceConfig, s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error)
+	GenerateS6ConfigForBenthos(benthosConfig *benthosserviceconfig.BenthosServiceConfig, s6ServiceName string) (process_manager_serviceconfig.ProcessManagerServiceConfig, error)
 	// GetConfig returns the actual Benthos config from the S6 service
 	// Expects benthosName (e.g. "myservice") as defined in the UMH config
 	GetConfig(ctx context.Context, filesystemService filesystem.Service, benthosName string) (benthosserviceconfig.BenthosServiceConfig, error)
@@ -305,15 +305,15 @@ func (s *BenthosService) GetS6ServiceName(benthosName string) string {
 
 // generateS6ConfigForBenthos creates a S6 config for a given benthos instance
 // Expects s6ServiceName (e.g. "benthos-myservice"), not the raw benthosName
-func (s *BenthosService) GenerateS6ConfigForBenthos(benthosConfig *benthosserviceconfig.BenthosServiceConfig, s6ServiceName string) (s6Config s6serviceconfig.S6ServiceConfig, err error) {
+func (s *BenthosService) GenerateS6ConfigForBenthos(benthosConfig *benthosserviceconfig.BenthosServiceConfig, s6ServiceName string) (s6Config process_manager_serviceconfig.ProcessManagerServiceConfig, err error) {
 	configPath := fmt.Sprintf("%s/%s/config/%s", constants.S6BaseDir, s6ServiceName, constants.BenthosConfigFileName)
 
 	yamlConfig, err := s.generateBenthosYaml(benthosConfig)
 	if err != nil {
-		return s6serviceconfig.S6ServiceConfig{}, err
+		return process_manager_serviceconfig.ProcessManagerServiceConfig{}, err
 	}
 
-	s6Config = s6serviceconfig.S6ServiceConfig{
+	s6Config = process_manager_serviceconfig.ProcessManagerServiceConfig{
 		Command: []string{
 			"/usr/local/bin/benthos",
 			"-c",
@@ -339,7 +339,7 @@ func (s *BenthosService) GetConfig(ctx context.Context, filesystemService filesy
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
 
 	// Request the config file from the S6 service
-	yamlData, err := s.s6Service.GetS6ConfigFile(ctx, s6ServicePath, constants.BenthosConfigFileName, filesystemService)
+	yamlData, err := s.s6Service.GetConfigFile(ctx, s6ServicePath, constants.BenthosConfigFileName, filesystemService)
 	if err != nil {
 		return benthosserviceconfig.BenthosServiceConfig{}, fmt.Errorf("failed to get benthos config file for service %s: %w", s6ServiceName, err)
 	}

@@ -20,7 +20,7 @@ import (
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager"
@@ -73,7 +73,7 @@ type S6ObservedState struct {
 	ServiceInfo process_shared.ServiceInfo
 
 	// ObservedS6ServiceConfig contains the actual service config from s6
-	ObservedS6ServiceConfig s6serviceconfig.S6ServiceConfig
+	ObservedS6ServiceConfig process_manager_serviceconfig.ProcessManagerServiceConfig
 }
 
 // IsObservedState implements the ObservedState interface

@@ -20,12 +20,12 @@ package fsmtest
 import (
 	"context"
 	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -169,7 +169,7 @@ func CreateMockNmapManager(name string) (*nmapfsm.NmapManager, *nmap.MockNmapSer
 	manager, mockService := nmapfsm.NewNmapManagerWithMockedService(name)
 
 	// Set up the mock service to prevent real filesystem operations
-	s6MockService := mockService.S6Service.(*s6svc.MockService)
+	s6MockService := mockService.S6Service.(*process_shared.MockService)
 
 	// Configure default responses to prevent real filesystem operations
 	s6MockService.CreateError = nil

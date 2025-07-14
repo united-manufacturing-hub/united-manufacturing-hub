@@ -23,7 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	benthos_monitor_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos_monitor"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
@@ -177,7 +177,7 @@ var _ = Describe("Benthos Service", func() {
 			It("should return error", func() {
 				s6Config, err := service.GenerateS6ConfigForBenthos(nil, "test")
 				Expect(err).To(HaveOccurred())
-				Expect(s6Config).To(Equal(s6serviceconfig.S6ServiceConfig{}))
+				Expect(s6Config).To(Equal(process_manager_serviceconfig.ProcessManagerServiceConfig{}))
 			})
 		})
 	})
@@ -640,7 +640,7 @@ var _ = Describe("Benthos Service", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create expected S6 config with initial Benthos config
-			mockS6Service.GetConfigResult = s6serviceconfig.S6ServiceConfig{
+			mockS6Service.GetConfigResult = process_manager_serviceconfig.ProcessManagerServiceConfig{
 				ConfigFiles: map[string]string{
 					"config.yaml": serviceConfigYaml,
 				},
@@ -695,7 +695,7 @@ logger:
 `
 
 			// Update mock service to return the new config
-			mockS6Service.GetConfigResult = s6serviceconfig.S6ServiceConfig{
+			mockS6Service.GetConfigResult = process_manager_serviceconfig.ProcessManagerServiceConfig{
 				ConfigFiles: map[string]string{
 					"config.yaml": updatedServiceConfigYaml,
 				},

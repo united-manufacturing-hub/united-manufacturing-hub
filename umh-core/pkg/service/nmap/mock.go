@@ -24,7 +24,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager"
@@ -159,12 +159,12 @@ func NewMockNmapService() *MockNmapService {
 }
 
 // GenerateS6ConfigForNmap generates a mock S6 config
-func (m *MockNmapService) GenerateS6ConfigForNmap(nmapConfig *nmapserviceconfig.NmapServiceConfig, s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error) {
+func (m *MockNmapService) GenerateS6ConfigForNmap(nmapConfig *nmapserviceconfig.NmapServiceConfig, s6ServiceName string) (process_manager_serviceconfig.ProcessManagerServiceConfig, error) {
 	if m.GenerateS6ConfigForNmapError != nil {
-		return s6serviceconfig.S6ServiceConfig{}, m.GenerateS6ConfigForNmapError
+		return process_manager_serviceconfig.ProcessManagerServiceConfig{}, m.GenerateS6ConfigForNmapError
 	}
 
-	return s6serviceconfig.S6ServiceConfig{
+	return process_manager_serviceconfig.ProcessManagerServiceConfig{
 		Command: []string{"/bin/sh", "/path/to/script.sh"},
 		ConfigFiles: map[string]string{
 			"run_nmap.sh": "mock script content",
@@ -281,7 +281,7 @@ func (m *MockNmapService) UpdateNmapInS6Manager(ctx context.Context, cfg *nmapse
 	s6ServiceName := "nmap-" + nmapName
 	for i, s6Config := range m.S6ServiceConfigs {
 		if s6Config.Name == s6ServiceName {
-			m.S6ServiceConfigs[i].S6ServiceConfig = s6serviceconfig.S6ServiceConfig{
+			m.S6ServiceConfigs[i].S6ServiceConfig = process_manager_serviceconfig.ProcessManagerServiceConfig{
 				Command: []string{"/bin/sh", "/path/to/script.sh"},
 				ConfigFiles: map[string]string{
 					"run_nmap.sh": "updated mock script content",

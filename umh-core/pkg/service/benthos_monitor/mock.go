@@ -17,11 +17,12 @@ package benthos_monitor
 import (
 	"context"
 	"fmt"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
@@ -41,7 +42,7 @@ type MockBenthosMonitorService struct {
 	ServiceExistsCalled                     bool
 	ForceRemoveBenthosMonitorCalled         bool
 	// Return values for each method
-	GenerateS6ConfigForBenthosMonitorResult s6serviceconfig.S6ServiceConfig
+	GenerateS6ConfigForBenthosMonitorResult process_manager_serviceconfig.ProcessManagerServiceConfig
 	GenerateS6ConfigForBenthosMonitorError  error
 	StatusResult                            ServiceInfo
 	StatusError                             error
@@ -219,12 +220,12 @@ func (m *MockBenthosMonitorService) SetGoodLastScan(currentTime time.Time) {
 }
 
 // GenerateS6ConfigForBenthosMonitor mocks generating S6 config for Benthos monitor
-func (m *MockBenthosMonitorService) GenerateS6ConfigForBenthosMonitor(s6ServiceName string, _ uint16) (s6serviceconfig.S6ServiceConfig, error) {
+func (m *MockBenthosMonitorService) GenerateS6ConfigForBenthosMonitor(s6ServiceName string, _ uint16) (process_manager_serviceconfig.ProcessManagerServiceConfig, error) {
 	m.GenerateS6ConfigForBenthosMonitorCalled = true
 
 	// If error is set, return it
 	if m.GenerateS6ConfigForBenthosMonitorError != nil {
-		return s6serviceconfig.S6ServiceConfig{}, m.GenerateS6ConfigForBenthosMonitorError
+		return process_manager_serviceconfig.ProcessManagerServiceConfig{}, m.GenerateS6ConfigForBenthosMonitorError
 	}
 
 	// If a result is preset, return it
@@ -233,7 +234,7 @@ func (m *MockBenthosMonitorService) GenerateS6ConfigForBenthosMonitor(s6ServiceN
 	}
 
 	// Return a default config
-	s6Config := s6serviceconfig.S6ServiceConfig{
+	s6Config := process_manager_serviceconfig.ProcessManagerServiceConfig{
 		Command: []string{
 			"/bin/sh",
 			fmt.Sprintf("%s/%s/config/run_benthos_monitor.sh", constants.S6BaseDir, s6ServiceName),

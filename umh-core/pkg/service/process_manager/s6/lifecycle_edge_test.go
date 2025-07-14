@@ -26,7 +26,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -38,7 +38,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 		service   *DefaultService
 		mockFS    *filesystem.MockFileSystem
 		artifacts *ServiceArtifacts
-		config    s6serviceconfig.S6ServiceConfig
+		config    process_manager_serviceconfig.ProcessManagerServiceConfig
 	)
 
 	BeforeEach(func() {
@@ -59,7 +59,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				filepath.Join(constants.S6BaseDir, "test-service", ".complete"),
 			},
 		}
-		config = s6serviceconfig.S6ServiceConfig{
+		config = process_manager_serviceconfig.ProcessManagerServiceConfig{
 			Command: []string{"echo", "test"},
 			Env: map[string]string{
 				"TEST_VAR": "test_value",
@@ -542,7 +542,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 		It("should handle very long service names", func() {
 			longName := strings.Repeat("a", 200)
 			servicePath := filepath.Join(constants.S6BaseDir, longName)
-			config := s6serviceconfig.S6ServiceConfig{
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
 				Command: []string{"echo", "test"},
 			}
 
@@ -555,7 +555,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 		It("should handle service names with unicode characters", func() {
 			unicodeName := "service-测试-नमस्ते"
 			servicePath := filepath.Join(constants.S6BaseDir, unicodeName)
-			config := s6serviceconfig.S6ServiceConfig{
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
 				Command: []string{"echo", "test"},
 			}
 
@@ -567,7 +567,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 
 		It("should handle creation with large config files", func() {
 			largeContent := strings.Repeat("x", 10000)
-			config := s6serviceconfig.S6ServiceConfig{
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
 				Command: []string{"echo", "test"},
 				ConfigFiles: map[string]string{
 					"large-config.txt": largeContent,
@@ -587,7 +587,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				return fmt.Errorf("no space left on device")
 			})
 
-			config := s6serviceconfig.S6ServiceConfig{
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
 				Command: []string{"echo", "test"},
 			}
 
@@ -603,7 +603,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				return fmt.Errorf("permission denied")
 			})
 
-			config := s6serviceconfig.S6ServiceConfig{
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
 				Command: []string{"echo", "test"},
 			}
 
@@ -619,7 +619,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				return fmt.Errorf("input/output error")
 			})
 
-			config := s6serviceconfig.S6ServiceConfig{
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
 				Command: []string{"echo", "test"},
 			}
 
@@ -654,7 +654,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			results := make([]*ServiceArtifacts, 0)
 			errors := make([]error, 0)
 
-			config := s6serviceconfig.S6ServiceConfig{
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
 				Command: []string{"echo", "test"},
 			}
 

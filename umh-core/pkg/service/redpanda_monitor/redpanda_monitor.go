@@ -35,7 +35,7 @@ import (
 
 	"github.com/prometheus/common/expfmt"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -223,7 +223,7 @@ func (rms *RedpandaMonitorStatus) CopyLogs(src []process_shared.LogEntry) error 
 }
 
 type IRedpandaMonitorService interface {
-	GenerateS6ConfigForRedpandaMonitor(s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error)
+	GenerateS6ConfigForRedpandaMonitor(s6ServiceName string) (process_manager_serviceconfig.ProcessManagerServiceConfig, error)
 	Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error)
 	AddRedpandaMonitorToS6Manager(ctx context.Context) error
 	RemoveRedpandaMonitorFromS6Manager(ctx context.Context) error
@@ -335,13 +335,13 @@ func (s *RedpandaMonitorService) GetS6ServiceName() string {
 	return fmt.Sprintf("redpanda-monitor-%s", s.redpandaName)
 }
 
-func (s *RedpandaMonitorService) GenerateS6ConfigForRedpandaMonitor(s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error) {
+func (s *RedpandaMonitorService) GenerateS6ConfigForRedpandaMonitor(s6ServiceName string) (process_manager_serviceconfig.ProcessManagerServiceConfig, error) {
 	scriptContent, err := s.generateRedpandaScript()
 	if err != nil {
-		return s6serviceconfig.S6ServiceConfig{}, err
+		return process_manager_serviceconfig.ProcessManagerServiceConfig{}, err
 	}
 
-	s6Config := s6serviceconfig.S6ServiceConfig{
+	s6Config := process_manager_serviceconfig.ProcessManagerServiceConfig{
 		Command: []string{
 			"/bin/sh",
 			fmt.Sprintf("%s/%s/config/run_redpanda_monitor.sh", constants.S6BaseDir, s6ServiceName),

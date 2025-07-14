@@ -27,7 +27,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
@@ -113,13 +113,13 @@ func (s *NmapService) getS6ServiceName(nmapName string) string {
 }
 
 // GenerateS6ConfigForNmap creates a S6 config for a given nmap instance
-func (s *NmapService) GenerateS6ConfigForNmap(nmapConfig *nmapserviceconfig.NmapServiceConfig, s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error) {
+func (s *NmapService) GenerateS6ConfigForNmap(nmapConfig *nmapserviceconfig.NmapServiceConfig, s6ServiceName string) (process_manager_serviceconfig.ProcessManagerServiceConfig, error) {
 	scriptContent, err := s.generateNmapScript(nmapConfig)
 	if err != nil {
-		return s6serviceconfig.S6ServiceConfig{}, err
+		return process_manager_serviceconfig.ProcessManagerServiceConfig{}, err
 	}
 
-	s6Config := s6serviceconfig.S6ServiceConfig{
+	s6Config := process_manager_serviceconfig.ProcessManagerServiceConfig{
 		Command: []string{
 			"/bin/sh",
 			fmt.Sprintf("%s/%s/config/run_nmap.sh", constants.S6BaseDir, s6ServiceName),
@@ -143,7 +143,7 @@ func (s *NmapService) GetConfig(ctx context.Context, filesystemService filesyste
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
 
 	// Get the script file
-	scriptData, err := s.s6Service.GetS6ConfigFile(ctx, s6ServicePath, "run_nmap.sh", filesystemService)
+	scriptData, err := s.s6Service.GetConfigFile(ctx, s6ServicePath, "run_nmap.sh", filesystemService)
 	if err != nil {
 		return nmapserviceconfig.NmapServiceConfig{}, fmt.Errorf("failed to get nmap config file for service %s: %w", s6ServiceName, err)
 	}

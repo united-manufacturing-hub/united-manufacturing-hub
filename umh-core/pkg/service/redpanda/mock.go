@@ -21,8 +21,8 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	s6_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -53,7 +53,7 @@ type MockRedpandaService struct {
 	UpdateRedpandaClusterConfigCalled bool
 
 	// Return values for each method
-	GenerateS6ConfigForRedpandaResult s6serviceconfig.S6ServiceConfig
+	GenerateS6ConfigForRedpandaResult process_manager_serviceconfig.ProcessManagerServiceConfig
 	GenerateS6ConfigForRedpandaError  error
 	GetConfigResult                   redpandaserviceconfig.RedpandaServiceConfig
 	GetConfigError                    error
@@ -139,7 +139,7 @@ func (m *MockRedpandaService) GetServiceState() *ServiceStateFlags {
 }
 
 // GenerateS6ConfigForRedpanda mocks generating S6 config for Redpanda
-func (m *MockRedpandaService) GenerateS6ConfigForRedpanda(redpandaConfig *redpandaserviceconfig.RedpandaServiceConfig, redpandaName string) (s6serviceconfig.S6ServiceConfig, error) {
+func (m *MockRedpandaService) GenerateS6ConfigForRedpanda(redpandaConfig *redpandaserviceconfig.RedpandaServiceConfig, redpandaName string) (process_manager_serviceconfig.ProcessManagerServiceConfig, error) {
 	m.GenerateS6ConfigForRedpandaCalled = true
 	return m.GenerateS6ConfigForRedpandaResult, m.GenerateS6ConfigForRedpandaError
 }

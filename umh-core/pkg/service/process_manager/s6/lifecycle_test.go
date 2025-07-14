@@ -27,7 +27,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -57,13 +57,13 @@ var _ = Describe("LifecycleManager", func() {
 
 	Describe("CreateArtifacts", func() {
 		var (
-			config      s6serviceconfig.S6ServiceConfig
+			config      process_manager_serviceconfig.ProcessManagerServiceConfig
 			servicePath string
 		)
 
 		BeforeEach(func() {
 			servicePath = filepath.Join(constants.S6BaseDir, "test-service")
-			config = s6serviceconfig.S6ServiceConfig{
+			config = process_manager_serviceconfig.ProcessManagerServiceConfig{
 				Command: []string{"echo", "hello world"},
 				Env: map[string]string{
 					"TEST_VAR": "test_value",
@@ -382,7 +382,7 @@ var _ = Describe("LifecycleManager", func() {
 				return fmt.Errorf("permission denied")
 			})
 
-			config := s6serviceconfig.S6ServiceConfig{
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
 				Command: []string{"echo", "test"},
 			}
 
@@ -422,7 +422,7 @@ var _ = Describe("LifecycleManager", func() {
 				return fmt.Errorf("simulated failure")
 			})
 
-			config := s6serviceconfig.S6ServiceConfig{
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
 				Command: []string{"echo", "test"},
 			}
 
@@ -440,7 +440,7 @@ var _ = Describe("LifecycleManager", func() {
 				return fmt.Errorf("no space left on device")
 			})
 
-			config := s6serviceconfig.S6ServiceConfig{
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
 				Command: []string{"echo", "test"},
 			}
 

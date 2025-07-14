@@ -28,7 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
@@ -88,7 +88,7 @@ var _ = Describe("S6Manager", func() {
 						Name:            serviceName,
 						DesiredFSMState: s6fsm.OperationalStateStopped,
 					},
-					S6ServiceConfig: s6serviceconfig.S6ServiceConfig{
+					S6ServiceConfig: process_manager_serviceconfig.ProcessManagerServiceConfig{
 						Command:     []string{"/bin/sh", "-c", "echo hello"},
 						Env:         map[string]string{"TEST_ENV": "test_value"},
 						ConfigFiles: map[string]string{},
@@ -143,7 +143,7 @@ var _ = Describe("S6Manager", func() {
 						Name:            serviceName,
 						DesiredFSMState: s6fsm.OperationalStateRunning,
 					},
-					S6ServiceConfig: s6serviceconfig.S6ServiceConfig{
+					S6ServiceConfig: process_manager_serviceconfig.ProcessManagerServiceConfig{
 						Command:     []string{"/bin/sh", "-c", "echo hello"},
 						Env:         map[string]string{"TEST_ENV": "test_value"},
 						ConfigFiles: map[string]string{},
@@ -181,7 +181,7 @@ var _ = Describe("S6Manager", func() {
 						Name:            serviceName,
 						DesiredFSMState: s6fsm.OperationalStateStopped,
 					},
-					S6ServiceConfig: s6serviceconfig.S6ServiceConfig{
+					S6ServiceConfig: process_manager_serviceconfig.ProcessManagerServiceConfig{
 						Command:     []string{"/bin/sh", "-c", "echo test-service"},
 						Env:         map[string]string{},
 						ConfigFiles: map[string]string{},
@@ -215,7 +215,7 @@ var _ = Describe("S6Manager", func() {
 						Name:            serviceName,
 						DesiredFSMState: s6fsm.OperationalStateRunning,
 					},
-					S6ServiceConfig: s6serviceconfig.S6ServiceConfig{
+					S6ServiceConfig: process_manager_serviceconfig.ProcessManagerServiceConfig{
 						Command:     []string{"/bin/sh", "-c", "echo test-service"},
 						Env:         map[string]string{},
 						ConfigFiles: map[string]string{},
@@ -242,7 +242,7 @@ var _ = Describe("S6Manager", func() {
 						Name:            serviceName,
 						DesiredFSMState: s6fsm.OperationalStateStopped,
 					},
-					S6ServiceConfig: s6serviceconfig.S6ServiceConfig{
+					S6ServiceConfig: process_manager_serviceconfig.ProcessManagerServiceConfig{
 						Command:     []string{"/bin/sh", "-c", "echo test-service"},
 						Env:         map[string]string{},
 						ConfigFiles: map[string]string{},
@@ -274,7 +274,7 @@ var _ = Describe("S6Manager", func() {
 						Name:            serviceName,
 						DesiredFSMState: s6fsm.OperationalStateRunning,
 					},
-					S6ServiceConfig: s6serviceconfig.S6ServiceConfig{
+					S6ServiceConfig: process_manager_serviceconfig.ProcessManagerServiceConfig{
 						Command:     []string{"/bin/sh", "-c", "echo lifecycle-test"},
 						Env:         map[string]string{"LIFECYCLE": "test"},
 						ConfigFiles: map[string]string{},
@@ -308,7 +308,7 @@ var _ = Describe("S6Manager", func() {
 						Name:            serviceName,
 						DesiredFSMState: s6fsm.OperationalStateStopped,
 					},
-					S6ServiceConfig: s6serviceconfig.S6ServiceConfig{
+					S6ServiceConfig: process_manager_serviceconfig.ProcessManagerServiceConfig{
 						Command:     []string{"/bin/sh", "-c", "echo lifecycle-test"},
 						Env:         map[string]string{"LIFECYCLE": "test"},
 						ConfigFiles: map[string]string{},
@@ -349,7 +349,7 @@ var _ = Describe("S6Manager", func() {
 						Name:            initialServiceName,
 						DesiredFSMState: s6fsm.OperationalStateStopped,
 					},
-					S6ServiceConfig: s6serviceconfig.S6ServiceConfig{
+					S6ServiceConfig: process_manager_serviceconfig.ProcessManagerServiceConfig{
 						Command:     []string{"/bin/sh", "-c", "echo hello"},
 						Env:         map[string]string{"TEST_ENV": "test_value"},
 						ConfigFiles: map[string]string{},
@@ -373,7 +373,7 @@ var _ = Describe("S6Manager", func() {
 					Name:            newServiceName,
 					DesiredFSMState: s6fsm.OperationalStateStopped,
 				},
-				S6ServiceConfig: s6serviceconfig.S6ServiceConfig{
+				S6ServiceConfig: process_manager_serviceconfig.ProcessManagerServiceConfig{
 					Command:     []string{"/bin/sh", "-c", "echo world"},
 					Env:         map[string]string{"NEW_ENV": "new_value"},
 					ConfigFiles: map[string]string{},
@@ -416,7 +416,7 @@ var _ = Describe("S6Manager", func() {
 						Name:            service1Name,
 						DesiredFSMState: s6fsm.OperationalStateStopped,
 					},
-					S6ServiceConfig: s6serviceconfig.S6ServiceConfig{
+					S6ServiceConfig: process_manager_serviceconfig.ProcessManagerServiceConfig{
 						Command:     []string{"/bin/sh", "-c", "echo service1"},
 						Env:         map[string]string{},
 						ConfigFiles: map[string]string{},
@@ -427,7 +427,7 @@ var _ = Describe("S6Manager", func() {
 						Name:            service2Name,
 						DesiredFSMState: s6fsm.OperationalStateStopped,
 					},
-					S6ServiceConfig: s6serviceconfig.S6ServiceConfig{
+					S6ServiceConfig: process_manager_serviceconfig.ProcessManagerServiceConfig{
 						Command:     []string{"/bin/sh", "-c", "echo service2"},
 						Env:         map[string]string{},
 						ConfigFiles: map[string]string{},
@@ -475,7 +475,7 @@ var _ = Describe("S6Manager", func() {
 						Name:            service1Name,
 						DesiredFSMState: s6fsm.OperationalStateStopped,
 					},
-					S6ServiceConfig: s6serviceconfig.S6ServiceConfig{
+					S6ServiceConfig: process_manager_serviceconfig.ProcessManagerServiceConfig{
 						Command:     []string{"/bin/sh", "-c", "echo service1"},
 						Env:         map[string]string{},
 						ConfigFiles: map[string]string{},
@@ -511,7 +511,7 @@ var _ = Describe("S6Manager", func() {
 						Name:            serviceName,
 						DesiredFSMState: s6fsm.OperationalStateStopped,
 					},
-					S6ServiceConfig: s6serviceconfig.S6ServiceConfig{
+					S6ServiceConfig: process_manager_serviceconfig.ProcessManagerServiceConfig{
 						Command:     []string{"/bin/sh", "-c", "echo test-service"},
 						Env:         map[string]string{},
 						ConfigFiles: map[string]string{},
@@ -576,7 +576,7 @@ var _ = Describe("S6Manager", func() {
 						Name:            serviceName,
 						DesiredFSMState: s6fsm.OperationalStateStopped,
 					},
-					S6ServiceConfig: s6serviceconfig.S6ServiceConfig{
+					S6ServiceConfig: process_manager_serviceconfig.ProcessManagerServiceConfig{
 						Command:     []string{"/bin/sh", "-c", "echo test-service"},
 						Env:         map[string]string{},
 						ConfigFiles: map[string]string{},
@@ -634,7 +634,7 @@ var _ = Describe("S6Manager", func() {
 						Name:            service1Name,
 						DesiredFSMState: s6fsm.OperationalStateStopped,
 					},
-					S6ServiceConfig: s6serviceconfig.S6ServiceConfig{
+					S6ServiceConfig: process_manager_serviceconfig.ProcessManagerServiceConfig{
 						Command:     []string{"/bin/sh", "-c", "echo service1"},
 						Env:         map[string]string{"SERVICE": "1"},
 						ConfigFiles: map[string]string{},
@@ -645,7 +645,7 @@ var _ = Describe("S6Manager", func() {
 						Name:            service2Name,
 						DesiredFSMState: s6fsm.OperationalStateStopped,
 					},
-					S6ServiceConfig: s6serviceconfig.S6ServiceConfig{
+					S6ServiceConfig: process_manager_serviceconfig.ProcessManagerServiceConfig{
 						Command:     []string{"/bin/sh", "-c", "echo service2"},
 						Env:         map[string]string{"SERVICE": "2"},
 						ConfigFiles: map[string]string{},
@@ -704,7 +704,7 @@ var _ = Describe("S6Manager", func() {
 						Name:            stableServiceName,
 						DesiredFSMState: s6fsm.OperationalStateStopped,
 					},
-					S6ServiceConfig: s6serviceconfig.S6ServiceConfig{
+					S6ServiceConfig: process_manager_serviceconfig.ProcessManagerServiceConfig{
 						Command:     []string{"/bin/sh", "-c", "echo stable-service"},
 						Env:         map[string]string{"TYPE": "stable"},
 						ConfigFiles: map[string]string{},
@@ -715,7 +715,7 @@ var _ = Describe("S6Manager", func() {
 						Name:            failingServiceName,
 						DesiredFSMState: s6fsm.OperationalStateStopped,
 					},
-					S6ServiceConfig: s6serviceconfig.S6ServiceConfig{
+					S6ServiceConfig: process_manager_serviceconfig.ProcessManagerServiceConfig{
 						Command:     []string{"/bin/sh", "-c", "echo failing-service"},
 						Env:         map[string]string{"TYPE": "failing"},
 						ConfigFiles: map[string]string{},
@@ -776,7 +776,7 @@ var _ = Describe("S6Manager", func() {
 						Name:            stableServiceName,
 						DesiredFSMState: s6fsm.OperationalStateStopped,
 					},
-					S6ServiceConfig: s6serviceconfig.S6ServiceConfig{
+					S6ServiceConfig: process_manager_serviceconfig.ProcessManagerServiceConfig{
 						Command:     []string{"/bin/sh", "-c", "echo stable-service"},
 						Env:         map[string]string{"TYPE": "stable"},
 						ConfigFiles: map[string]string{},
