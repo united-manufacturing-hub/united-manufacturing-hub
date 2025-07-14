@@ -51,7 +51,7 @@ type service struct {
 
 const IPM_SERVICE_DIRECTORY = "/var/lib/umh/ipm"
 
-func (pm *ProcessManager) Create(ctx context.Context, servicePath string, config process_manager_serviceconfig.ProcessManagerServiceConfig, _ filesystem.Service) error {
+func (pm *ProcessManager) Create(ctx context.Context, servicePath string, config process_manager_serviceconfig.ProcessManagerServiceConfig, fsService filesystem.Service) error {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 	pm.Logger.Info("Creating process manager service", zap.String("servicePath", servicePath), zap.Any("config", config))
@@ -73,10 +73,11 @@ func (pm *ProcessManager) Create(ctx context.Context, servicePath string, config
 	// Add to toBeCreated list
 	pm.toBeCreated = append(pm.toBeCreated, identifier)
 
-	return nil
+	// Advance the service handling process
+	return pm.step(ctx, fsService)
 }
 
-func (pm *ProcessManager) Remove(ctx context.Context, servicePath string, _ filesystem.Service) error {
+func (pm *ProcessManager) Remove(ctx context.Context, servicePath string, fsService filesystem.Service) error {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 	pm.Logger.Info("Removing process manager service", zap.String("servicePath", servicePath))
@@ -93,7 +94,8 @@ func (pm *ProcessManager) Remove(ctx context.Context, servicePath string, _ file
 	// Add to toBeRemoved list
 	pm.toBeRemoved = append(pm.toBeRemoved, identifier)
 
-	return nil
+	// Advance the service handling process
+	return pm.step(ctx, fsService)
 }
 
 func (pm *ProcessManager) Start(ctx context.Context, servicePath string, fsService filesystem.Service) error {
@@ -105,7 +107,8 @@ func (pm *ProcessManager) Start(ctx context.Context, servicePath string, fsServi
 	// Add to toBeStarted list
 	pm.toBeStarted = append(pm.toBeStarted, identifier)
 
-	return nil
+	// Advance the service handling process
+	return pm.step(ctx, fsService)
 }
 
 func (pm *ProcessManager) Stop(ctx context.Context, servicePath string, fsService filesystem.Service) error {
@@ -117,7 +120,8 @@ func (pm *ProcessManager) Stop(ctx context.Context, servicePath string, fsServic
 	// Add to toBeStopped list
 	pm.toBeStopped = append(pm.toBeStopped, identifier)
 
-	return nil
+	// Advance the service handling process
+	return pm.step(ctx, fsService)
 }
 
 func (pm *ProcessManager) Restart(ctx context.Context, servicePath string, fsService filesystem.Service) error {
@@ -129,7 +133,8 @@ func (pm *ProcessManager) Restart(ctx context.Context, servicePath string, fsSer
 	// Add to toBeRestarted list
 	pm.toBeRestarted = append(pm.toBeRestarted, identifier)
 
-	return nil
+	// Advance the service handling process
+	return pm.step(ctx, fsService)
 }
 
 func (pm *ProcessManager) Status(ctx context.Context, servicePath string, fsService filesystem.Service) (process_shared.ServiceInfo, error) {

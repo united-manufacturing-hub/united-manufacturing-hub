@@ -14,17 +14,15 @@
 
 package ipm
 
-import "strings"
+import (
+	"fmt"
+
+	"github.com/zeebo/xxh3"
+)
 
 type serviceIdentifier string
 
 func servicePathToIdentifier(servicePath string) serviceIdentifier {
-	// Strip servicePath of all dangerous characters (replace all non A-Za-z0-9 characters with _)
-	servicePath = strings.Map(func(r rune) rune {
-		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
-			return r
-		}
-		return '_'
-	}, servicePath)
-	return serviceIdentifier(servicePath)
+	hash := xxh3.HashString(servicePath)
+	return serviceIdentifier(fmt.Sprintf("%x", hash))
 }
