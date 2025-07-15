@@ -304,12 +304,7 @@ func sendActionReplyInternal(instanceUUID uuid.UUID, userEmail string, actionUUI
 		return err
 	}
 
-	select {
-	case outboundChannel <- &umhMessage:
-		// message sent successfully
-	default:
-		// channel is closed or full
-	}
+	outboundChannel <- &umhMessage
 
 	return nil
 }
