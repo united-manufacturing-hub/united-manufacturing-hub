@@ -2033,7 +2033,7 @@ func (s *DefaultService) TryGetLock(ctx context.Context, servicePath string, loc
 		return nil, ctx.Err()
 	}
 
-	s.safeLogDebugf("[LOCK/%s] Successfully acquired %s lock for service %s", operation, lockType.String(), servicePath)
+	//s.safeLogDebugf("[LOCK/%s] Successfully acquired %s lock for service %s", operation, lockType.String(), servicePath)
 	return wrapper, nil
 }
 
@@ -2054,11 +2054,12 @@ func (lw *lockWrapper) Unlock() {
 		return
 	}
 	// Calculate duration and get operation before releasing the lock
-	duration := time.Since(lw.writeAcquiredAt)
-	operation := lw.currentOperation
-
+	/*
+		duration := time.Since(lw.writeAcquiredAt)
+		operation := lw.currentOperation
+	*/
 	lw.CASMutex.Unlock()
-	lw.logger.safeLogDebugf("[LOCK/%s] Released write lock for service %s (held for %v)", operation, lw.servicePath, duration)
+	// lw.logger.safeLogDebugf("[LOCK/%s] Released write lock for service %s (held for %v)", operation, lw.servicePath, duration)
 }
 
 // RUnlock releases a read lock with debug logging
@@ -2067,9 +2068,10 @@ func (lw *lockWrapper) RUnlock() {
 		return
 	}
 	// Calculate duration and get operation before releasing the lock
-	duration := time.Since(lw.readAcquiredAt)
-	operation := lw.currentOperation
-
+	/*
+		duration := time.Since(lw.readAcquiredAt)
+		operation := lw.currentOperation
+	*/
 	lw.CASMutex.RUnlock()
-	lw.logger.safeLogDebugf("[LOCK/%s] Released read lock for service %s (held for %v)", operation, lw.servicePath, duration)
+	// lw.logger.safeLogDebugf("[LOCK/%s] Released read lock for service %s (held for %v)", operation, lw.servicePath, duration)
 }
