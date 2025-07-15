@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"runtime"
 	"sync"
 	"time"
 
@@ -332,11 +333,6 @@ func (m *BaseFSMManager[C]) Reconcile(
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
-		// If it is a ctx context exceeded, return no error
-		if ctx.Err() == context.DeadlineExceeded {
-			m.logger.Debugf("Context is already cancelled, skipping manager %s", m.managerName)
-			return nil, false
-		}
 		return ctx.Err(), false
 	}
 
@@ -344,7 +340,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 	extractStart := time.Now()
 	desiredState, err := m.extractConfigs(snapshot.CurrentConfig)
 	if err != nil {
-		metrics.IncErrorCountAndLog(metrics.ComponentBaseFSMManager, m.managerName, err, m.logger)
+		metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
 		return fmt.Errorf("failed to extract configs: %w", err), false
 	}
 	metrics.ObserveReconcileTime(metrics.ComponentBaseFSMManager, m.managerName+".extract_configs", time.Since(extractStart))
@@ -353,7 +349,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 	for _, cfg := range desiredState {
 		name, err := m.getName(cfg)
 		if err != nil {
-			metrics.IncErrorCountAndLog(metrics.ComponentBaseFSMManager, m.managerName, err, m.logger)
+			metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
 			return fmt.Errorf("failed to get name: %w", err), false
 		}
 
@@ -371,19 +367,19 @@ func (m *BaseFSMManager[C]) Reconcile(
 			createStart := time.Now()
 			instance, err := m.createInstance(cfg)
 			if err != nil || instance == nil {
-				metrics.IncErrorCountAndLog(metrics.ComponentBaseFSMManager, m.managerName, err, m.logger)
+				metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
 				return fmt.Errorf("failed to create instance: %w", err), false
 			}
 			metrics.ObserveReconcileTime(metrics.ComponentBaseFSMManager, m.managerName+".create_instance", time.Since(createStart))
 
 			desiredState, err := m.getDesiredState(cfg)
 			if err != nil {
-				metrics.IncErrorCountAndLog(metrics.ComponentBaseFSMManager, m.managerName, err, m.logger)
+				metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
 				return fmt.Errorf("failed to get desired state: %w", err), false
 			}
 			err = instance.SetDesiredFSMState(desiredState)
 			if err != nil {
-				metrics.IncErrorCountAndLog(metrics.ComponentBaseFSMManager, m.managerName, err, m.logger)
+				metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
 				m.logger.Errorf("failed to set desired state: %v for newly to be created instance %s", err, name)
 				continue // Skip this instance for now, we should not create it
 			}
@@ -398,7 +394,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 		compareStart := time.Now()
 		equal, err := m.compareConfig(m.instances[name], cfg)
 		if err != nil {
-			metrics.IncErrorCountAndLog(metrics.ComponentBaseFSMManager, m.managerName, err, m.logger)
+			metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
 			return fmt.Errorf("failed to compare config: %w", err), false
 		}
 		metrics.ObserveReconcileTime(metrics.ComponentBaseFSMManager, m.managerName+".compare_config", time.Since(compareStart))
@@ -416,7 +412,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 			updateStart := time.Now()
 			err := m.setConfig(m.instances[name], cfg)
 			if err != nil {
-				metrics.IncErrorCountAndLog(metrics.ComponentBaseFSMManager, m.managerName, err, m.logger)
+				metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
 				return fmt.Errorf("failed to set config: %w", err), false
 			}
 			metrics.ObserveReconcileTime(metrics.ComponentBaseFSMManager, m.managerName+".set_config", time.Since(updateStart))
@@ -430,7 +426,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 		// If the instance exists, but the desired state is different, update it
 		desiredState, err := m.getDesiredState(cfg)
 		if err != nil {
-			metrics.IncErrorCountAndLog(metrics.ComponentBaseFSMManager, m.managerName, err, m.logger)
+			metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
 			return fmt.Errorf("failed to get desired state: %w", err), false
 		}
 		if m.instances[name].GetDesiredFSMState() != desiredState {
@@ -447,7 +443,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 				name, m.instances[name].GetDesiredFSMState(), desiredState)
 			err := m.instances[name].SetDesiredFSMState(desiredState)
 			if err != nil {
-				metrics.IncErrorCountAndLog(metrics.ComponentBaseFSMManager, m.managerName, err, m.logger)
+				metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
 				m.logger.Errorf("failed to set desired state: %w for instance %s", err, name)
 				continue // Skip this state change for now, it is broken, we should not update it
 			}
@@ -469,7 +465,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 		for _, desired := range desiredState {
 			name, err := m.getName(desired)
 			if err != nil {
-				metrics.IncErrorCountAndLog(metrics.ComponentBaseFSMManager, m.managerName, err, m.logger)
+				metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
 				return fmt.Errorf("failed to get name: %w", err), false
 			}
 			if name == instanceName {
@@ -541,8 +537,8 @@ func (m *BaseFSMManager[C]) Reconcile(
 	// We do not use the returned ctx, as it cancles once any of the reconciles returns either an error or finishes (And the 2nd behaviour is undesired.)
 
 	errorgroup, _ := errgroup.WithContext(innerCtx)
-	// Limit concurrent FSM operations for I/O-bound workloads
-	errorgroup.SetLimit(constants.MaxConcurrentFSMOperations)
+	// Limit the number of threads available, preventing CPU starvation for other system tasks
+	errorgroup.SetLimit(runtime.NumCPU())
 	hasAnyReconciles := false
 	hasAnyReconcilesMutex := sync.Mutex{}
 
@@ -551,37 +547,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 
 	// Update the snapshot tick to the manager tick
 	snapshot.Tick = m.managerTick
-
-	// Convert map to slice for deterministic ordering and rotation
-	instanceNames := make([]string, 0, len(m.instances))
-	for name := range m.instances {
-		instanceNames = append(instanceNames, name)
-	}
-
-	// If we have more instances than the concurrency limit, schedule only a subset
-	// and rotate based on tick to ensure all instances get scheduled over time
-	startIdx := 0
-	endIdx := len(instanceNames)
-
-	if len(instanceNames) > constants.MaxConcurrentFSMOperations {
-		// Calculate rotation based on manager tick
-		totalBatches := (len(instanceNames) + constants.MaxConcurrentFSMOperations - 1) / constants.MaxConcurrentFSMOperations
-		currentBatch := int(m.managerTick % uint64(totalBatches))
-
-		startIdx = currentBatch * constants.MaxConcurrentFSMOperations
-		endIdx = startIdx + constants.MaxConcurrentFSMOperations
-		if endIdx > len(instanceNames) {
-			endIdx = len(instanceNames)
-		}
-
-		m.logger.Debugf("Scheduling batch %d/%d: instances %d-%d (tick %d)",
-			currentBatch+1, totalBatches, startIdx, endIdx-1, m.managerTick)
-	}
-
-	// Schedule the selected batch of instances
-	for i := startIdx; i < endIdx; i++ {
-		name := instanceNames[i]
-		instance := m.instances[name]
+	for name, instance := range m.instances {
 		// If the ctx is already expired, we can skip adding new goroutines
 		if innerCtx.Err() != nil {
 			m.logger.Debugf("context expired, skipping reconciliation of instance %s", name)
@@ -592,7 +558,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 		// from exceeding the control loop's deadline
 		minimumRequiredTime, execTimeErr := m.getMinimumRequiredTime(instance)
 		if execTimeErr != nil {
-			metrics.IncErrorCountAndLog(metrics.ComponentBaseFSMManager, m.managerName, execTimeErr, m.logger)
+			metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
 			return fmt.Errorf("failed to get minimum required time for instance %s: %w", name, execTimeErr), false
 		}
 
@@ -602,7 +568,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 				return fmt.Errorf("no deadline set in context"), false
 			}
 			// For any other error, log and abort reconciliation
-			metrics.IncErrorCountAndLog(metrics.ComponentBaseFSMManager, m.managerName, timeErr, m.logger)
+			metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
 			return fmt.Errorf("deadline check error for instance %s: %w", name, timeErr), false
 		}
 
@@ -618,11 +584,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 		nameCaptured := name
 		instanceCaptured := instance
 
-		started := errorgroup.TryGo(func() error {
-			if innerCtx.Err() != nil {
-				m.logger.Debugf("Context is already cancelled, skipping instance %s", nameCaptured)
-				return nil
-			}
+		errorgroup.Go(func() error {
 			reconciled, shallBeRemoved, err := m.reconcileInstanceWithTimeout(innerCtx, instanceCaptured, services, nameCaptured, snapshot, minimumRequiredTime)
 			if err != nil {
 				return err
@@ -639,10 +601,6 @@ func (m *BaseFSMManager[C]) Reconcile(
 			}
 			return nil
 		})
-		if !started {
-			m.logger.Debugf("To many running managers, skipping remaining")
-			break
-		}
 	}
 
 	waitErrorChannel := make(chan error, 1)
@@ -663,11 +621,6 @@ func (m *BaseFSMManager[C]) Reconcile(
 		delete(m.instances, name)
 	}
 	instancesToRemoveMutex.Unlock()
-
-	// Ignore context deadline issues
-	if errors.Is(err, context.DeadlineExceeded) {
-		return nil, hasAnyReconciles
-	}
 
 	// Return nil if no errors occurred
 	return err, hasAnyReconciles
@@ -908,7 +861,7 @@ func (m *BaseFSMManager[C]) reconcileInstanceWithTimeout(ctx context.Context, in
 	metrics.ObserveReconcileTime(metrics.ComponentBaseFSMManager, m.managerName+".instances."+name, reconcileTime)
 
 	if reconcileErr != nil {
-		metrics.IncErrorCountAndLog(metrics.ComponentBaseFSMManager, m.managerName+".instances."+name, reconcileErr, m.logger)
+		metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName+".instances."+name)
 
 		// If the error is a permanent failure, remove the instance from the manager
 		// so that it can be recreated in further ticks

@@ -207,9 +207,6 @@ func (p *ProtocolConverterInstance) getServiceStatus(ctx context.Context, servic
 // UpdateObservedStateOfInstance updates the observed state of the service
 func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
-		if p.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "UpdateObservedStateOfInstance") {
-			return nil
-		}
 		return ctx.Err()
 	}
 

@@ -49,11 +49,6 @@ const (
 	DefaultInstanceName = "Core"
 
 	RingBufferCapacity = 3
-
-	// MaxConcurrentFSMOperations defines the maximum number of concurrent FSM operations
-	// This applies to both manager-level and instance-level parallel execution
-	// Set high for I/O-bound operations like filesystem access, health checks, and network calls
-	MaxConcurrentFSMOperations = 1000
 )
 
 // CreateSubContext applies a percentage to the parent context's remaining time.

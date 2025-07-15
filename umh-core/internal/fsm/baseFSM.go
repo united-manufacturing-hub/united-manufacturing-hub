@@ -510,30 +510,3 @@ func (s *BaseFSMInstance) ReconcileLifecycleStates(
 func (s *BaseFSMInstance) IsTransientStreakCounterMaxed() bool {
 	return s.transientStreakCounter >= s.cfg.MaxTicksToRemainInTransientState
 }
-
-// IsDeadlineExceededAndHandle checks if the error is a context deadline exceeded error
-// and handles it appropriately by setting the error and logging a warning.
-// If the error is a context deadline exceeded, it:
-// 1. Sets the error on the FSM instance for backoff handling
-// 2. Logs a warning message
-// 3. Returns true to indicate the error was handled and reconciliation should stop
-//
-// If the error is not a context deadline exceeded, it returns false to continue
-// with normal error handling.
-//
-// Parameters:
-//   - err: The error to check
-//   - tick: The current system tick for backoff handling
-//   - location: A description of where the error occurred (for logging)
-//
-// Returns:
-//   - bool: true if deadline exceeded (handled, return early), false otherwise (continue)
-func (s *BaseFSMInstance) IsDeadlineExceededAndHandle(err error, tick uint64, location string) bool {
-	if errors.Is(err, context.DeadlineExceeded) {
-		// Context deadline exceeded should be retried with backoff, not ignored
-		s.SetError(err, tick)
-		s.logger.Warnf("Context deadline exceeded in %s, will retry with backoff", location)
-		return true // handled, return early
-	}
-	return false // not handled, continue
-}

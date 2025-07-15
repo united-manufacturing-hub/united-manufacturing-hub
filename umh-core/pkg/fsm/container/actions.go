@@ -71,9 +71,6 @@ func (c *ContainerInstance) CheckForCreation(ctx context.Context, filesystemServ
 // It queries container_monitor.Service for new metrics and updates the observed state.
 func (c *ContainerInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
-		if c.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "UpdateObservedStateOfInstance") {
-			return nil
-		}
 		return ctx.Err()
 	}
 

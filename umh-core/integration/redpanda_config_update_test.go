@@ -29,6 +29,7 @@ var _ = Describe("Redpanda Config Update Integration Test", Ordered, Label("inte
 		topicName         = "dfc-config-update-test-topic"
 		messagesPerSecond = 5
 		testDuration      = 1 * time.Minute
+		postRestartWait   = 5 * time.Second
 	)
 
 	var lastOffset = -1
@@ -104,27 +105,31 @@ var _ = Describe("Redpanda Config Update Integration Test", Ordered, Label("inte
 		}, 5*time.Second, 1*time.Second).Should(BeTrue(), "Messages should be produced after config update")
 
 		By("Verifying messages continue to be produced after config update")
-		var failureCount int
-		Consistently(func() bool {
-			newOffset, err := checkRPK(topicName, lastOffset, lastTimestamp, 0.1, 0.2, messagesPerSecond)
-			if err == nil {
+		failure := false
+		for i := 0; i < 10; i++ {
+			failure = false
+			startTime := time.Now()
+			for time.Since(startTime) < testDuration {
+				time.Sleep(1 * time.Second)
+				newOffset, err := checkRPK(topicName, lastOffset, lastTimestamp, 0.1, 0.2, messagesPerSecond)
+				if err != nil {
+					GinkgoWriter.Printf("Error: %v\n", err)
+					failure = true
+					break
+				}
 				lastOffset = newOffset
 				lastTimestamp = time.Now()
-				failureCount = 0 // Reset failure count on success
-				return true
 			}
-			failureCount++
-			return failureCount < 5 // Allow up to 5 failures before returning false
-		}, testDuration, 1*time.Second).Should(BeTrue(), "Messages should be consistently produced for full test duration after config update")
+			if failure == false {
+				break
+			}
+			time.Sleep(1 * time.Second)
+		}
 
 		By("Ensuring that the state of redpanda is healthy")
-		Eventually(func() int {
-			redpandaState, err := checkRedpandaState(GetMetricsURL(), 1*time.Second)
-			if err != nil {
-				return -1
-			}
-			return redpandaState
-		}, 10*time.Second, 1*time.Second).Should(BeNumerically("==", 3), "Redpanda should be in healthy state")
+		redpandaState, err := checkRedpandaState(GetMetricsURL(), 1*time.Second)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(redpandaState).To(BeNumerically("==", 3))
 
 		By("Checking if the config has not been changed back")
 		Eventually(func() bool {

@@ -215,32 +215,4 @@ var _ = Describe("BaseFSMInstance", func() {
 			Expect(fsmInstance.GetCurrentFSMState()).To(Equal("running"))
 		})
 	})
-
-	Context("when using IsDeadlineExceededAndHandle", func() {
-		It("should handle context deadline exceeded errors", func() {
-			// Test with a context deadline exceeded error
-			deadlineErr := context.DeadlineExceeded
-
-			// Should return true for deadline exceeded (handled)
-			handled := fsmInstance.IsDeadlineExceededAndHandle(deadlineErr, tick, "test operation")
-
-			Expect(handled).To(BeTrue())
-
-			// Should have set the error on the FSM
-			Expect(fsmInstance.GetError()).To(Equal(deadlineErr))
-		})
-
-		It("should pass through non-deadline exceeded errors", func() {
-			// Test with a regular error
-			regularErr := errors.New("regular error")
-
-			// Should return false for non-deadline errors (not handled)
-			handled := fsmInstance.IsDeadlineExceededAndHandle(regularErr, tick, "test operation")
-
-			Expect(handled).To(BeFalse())
-
-			// Should not have set the error on the FSM
-			Expect(fsmInstance.GetError()).To(BeNil())
-		})
-	})
 })

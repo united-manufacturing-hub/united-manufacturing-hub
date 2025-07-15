@@ -45,15 +45,12 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 			b.baseFSMInstance.GetLogger().Errorf("error reconciling redpanda monitor instance %s: %s", instanceName, err)
 			b.PrintState()
 			// Add metrics for error
-			metrics.IncErrorCountAndLog(metrics.ComponentRedpandaMonitor, instanceName, err, b.baseFSMInstance.GetLogger())
+			metrics.IncErrorCount(metrics.ComponentRedpandaMonitor, instanceName)
 		}
 	}()
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
-		if b.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "start of reconciliation") {
-			return nil, false
-		}
 		return ctx.Err(), false
 	}
 
@@ -102,7 +99,11 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 
 		if !isExpectedError {
 
-			if b.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
+			if errors.Is(err, context.DeadlineExceeded) {
+				// Context deadline exceeded should be retried with backoff, not ignored
+				b.baseFSMInstance.SetError(err, snapshot.Tick)
+				b.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileExternalChanges, will retry with backoff")
+				err = nil // Clear error so reconciliation continues
 				return nil, false
 			}
 
@@ -124,7 +125,11 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 			return nil, false
 		}
 
-		if b.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileStateTransition") {
+		if errors.Is(err, context.DeadlineExceeded) {
+			// Context deadline exceeded should be retried with backoff, not ignored
+			b.baseFSMInstance.SetError(err, snapshot.Tick)
+			b.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileStateTransition, will retry with backoff")
+			err = nil // Clear error so reconciliation continues
 			return nil, false
 		}
 
@@ -135,11 +140,8 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 
 	s6Err, s6Reconciled := b.monitorService.ReconcileManager(ctx, services, snapshot.Tick)
 	if s6Err != nil {
-		if b.baseFSMInstance.IsDeadlineExceededAndHandle(s6Err, snapshot.Tick, "monitorService reconciliation") {
-			return nil, false
-		}
 		b.baseFSMInstance.SetError(s6Err, snapshot.Tick)
-		b.baseFSMInstance.GetLogger().Errorf("error reconciling monitorService: %s", s6Err)
+		b.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
 		return nil, false
 	}
 

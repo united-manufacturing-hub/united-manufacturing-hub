@@ -48,7 +48,6 @@ func NewS6Instance(
 			{Name: EventStop, Src: []string{OperationalStateRunning, OperationalStateStarting}, Dst: OperationalStateStopping},
 			{Name: EventStopDone, Src: []string{OperationalStateStopping}, Dst: OperationalStateStopped},
 		},
-		MaxTicksToRemainInTransientState: 20, // 20 ticks = 20 * 100ms = 2s
 	}
 
 	logger := logger.For(config.Name)
@@ -134,8 +133,5 @@ func (s *S6Instance) WantsToBeStopped() bool {
 func (s *S6Instance) PrintState() {
 	s.baseFSMInstance.GetLogger().Debugf("Current state: %s", s.baseFSMInstance.GetCurrentFSMState())
 	s.baseFSMInstance.GetLogger().Debugf("Desired state: %s", s.baseFSMInstance.GetDesiredFSMState())
-	s.baseFSMInstance.GetLogger().Debugf("Service: %s, PID: %d, Uptime: %ds",
-		s.ObservedState.ServiceInfo.Status,
-		s.ObservedState.ServiceInfo.Pid,
-		s.ObservedState.ServiceInfo.Uptime)
+	s.baseFSMInstance.GetLogger().Debugf("Observed state: %+v", s.ObservedState)
 }

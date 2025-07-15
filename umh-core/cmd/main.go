@@ -30,7 +30,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -220,10 +219,6 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 							case "ProtocolConverterManagerCore":
 								if pcSnapshot, ok := instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot); ok {
 									statusReason = pcSnapshot.ServiceInfo.StatusReason
-								}
-							case "RedpandaManagerCore":
-								if redpandaSnapshot, ok := instance.LastObservedState.(*redpanda.RedpandaObservedStateSnapshot); ok {
-									statusReason = redpandaSnapshot.ServiceInfoSnapshot.StatusReason
 								}
 							}
 						}

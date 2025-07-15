@@ -178,14 +178,15 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 			// Increment tick counter on each iteration
 			c.currentTick++
 
+			// Create a timeout context for the reconcile
+			timeoutCtx, cancel := context.WithTimeout(ctx, c.tickerTime)
+			defer cancel()
+
 			// Measure reconcile time
 			start := time.Now()
 
-			// Create a timeout context for the reconcile
-			timeoutCtx, cancel := context.WithTimeout(ctx, c.tickerTime)
 			// Reconcile the managers
 			err := c.Reconcile(timeoutCtx, c.currentTick)
-			cancel()
 
 			// Record metrics for the reconcile cycle
 			cycleTime := time.Since(start)
@@ -203,6 +204,8 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 
 			// Handle errors differently based on type
 			if err != nil {
+				metrics.IncErrorCount(metrics.ComponentControlLoop, "main")
+
 				if errors.Is(err, context.DeadlineExceeded) {
 					// For timeouts, log warning but continue
 					sentry.ReportIssuef(sentry.IssueTypeWarning, c.logger, "Control loop reconcile timed out: %v", err)
@@ -211,7 +214,6 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 					c.logger.Infof("Control loop cancelled")
 					return nil
 				} else {
-					metrics.IncErrorCountAndLog(metrics.ComponentControlLoop, "main", err, c.logger)
 					// Any other unhandled error will result in the control loop stopping
 					sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Control loop error: %v", err)
 					return err
@@ -302,7 +304,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 			originalErr := backoff.ExtractOriginalError(err)
 			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Config manager has permanently failed after max retries: %v (original error: %v)",
 				err, originalErr)
-			metrics.IncErrorCountAndLog(metrics.ComponentControlLoop, "config_permanent_failure", err, c.logger)
+			metrics.IncErrorCount(metrics.ComponentControlLoop, "config_permanent_failure")
 
 			// Propagate the error to the parent component so it can potentially restart the system
 			return fmt.Errorf("config permanently failed, system needs intervention: %w", err)
@@ -363,40 +365,10 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	hasAnyReconcilesMutex := sync.Mutex{}
 
 	errorgroup, _ := errgroup.WithContext(innerCtx)
-	// Limit concurrent manager operations for I/O-bound workloads
-	errorgroup.SetLimit(constants.MaxConcurrentFSMOperations)
+	for _, manager := range c.managers {
+		capturedManager := manager
 
-	// If we have more managers than the concurrency limit, schedule only a subset
-	// and rotate based on tick to ensure all managers get scheduled over time
-	startIdx := 0
-	endIdx := len(c.managers)
-
-	if len(c.managers) > constants.MaxConcurrentFSMOperations {
-		// Calculate rotation based on current tick
-		totalBatches := (len(c.managers) + constants.MaxConcurrentFSMOperations - 1) / constants.MaxConcurrentFSMOperations
-		currentBatch := int(c.currentTick % uint64(totalBatches))
-
-		startIdx = currentBatch * constants.MaxConcurrentFSMOperations
-		endIdx = startIdx + constants.MaxConcurrentFSMOperations
-		if endIdx > len(c.managers) {
-			endIdx = len(c.managers)
-		}
-
-		c.logger.Debugf("Scheduling manager batch %d/%d: managers %d-%d (tick %d)",
-			currentBatch+1, totalBatches, startIdx, endIdx-1, c.currentTick)
-	}
-
-	// Schedule the selected batch of managers
-	for i := startIdx; i < endIdx; i++ {
-		capturedManager := c.managers[i]
-
-		started := errorgroup.TryGo(func() error {
-			// It might be that .Go is blocked until the ctx is already cancelled, in that case we just return
-			if innerCtx.Err() != nil {
-				c.logger.Debugf("Context is already cancelled, skipping manager %s", capturedManager.GetManagerName())
-				return nil
-			}
-
+		errorgroup.Go(func() error {
 			reconciled, err := c.reconcileManager(innerCtx, capturedManager, &executedManagers, &executedManagersMutex, newSnapshot)
 			if err != nil {
 				return err
@@ -408,10 +380,6 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 			}
 			return nil
 		})
-		if !started {
-			c.logger.Debugf("To many running managers, skipping remaining")
-			break
-		}
 	}
 	waitErrorChannel := make(chan error, 1)
 	go func() {
@@ -595,7 +563,7 @@ func (c *ControlLoop) reconcileManager(ctx context.Context, manager fsm.FSMManag
 	c.managerTimesMutex.Unlock()
 
 	if err != nil {
-		metrics.IncErrorCountAndLog(metrics.ComponentControlLoop, managerName, err, c.logger)
+		metrics.IncErrorCount(metrics.ComponentControlLoop, managerName)
 		return false, fmt.Errorf("manager %s reconciliation failed: %w", managerName, err)
 	}
 

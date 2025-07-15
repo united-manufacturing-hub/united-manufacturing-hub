@@ -173,9 +173,6 @@ func (i *TopicBrowserInstance) getServiceStatus(ctx context.Context, services se
 // UpdateObservedStateOfInstance updates the observed state of the service
 func (i *TopicBrowserInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
-		if i.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "UpdateObservedStateOfInstance") {
-			return nil
-		}
 		return ctx.Err()
 	}
 
