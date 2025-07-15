@@ -57,6 +57,15 @@ func NewInstance(
 				}, Dst: OperationalStateStartingDFC,
 			},
 
+			// retry starting for failed
+			{
+				Name: EventStartRetry, Src: []string{
+					OperationalStateStartingDFC,
+					OperationalStateStartingRedpanda,
+					OperationalStateStartingFailedDFC,
+				}, Dst: OperationalStateStartingRedpanda,
+			},
+
 			// starting -> idle
 			{
 				Name: EventStartDFCUp, Src: []string{
