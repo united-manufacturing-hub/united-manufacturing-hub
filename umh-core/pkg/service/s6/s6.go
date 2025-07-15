@@ -194,6 +194,28 @@ type logState struct {
 	full bool
 }
 
+// LockType represents the type of lock to acquire
+type LockType int
+
+const (
+	// LockTypeRead indicates a read lock should be acquired
+	LockTypeRead LockType = iota
+	// LockTypeWrite indicates a write lock should be acquired
+	LockTypeWrite
+)
+
+// String returns a string representation of the lock type
+func (lt LockType) String() string {
+	switch lt {
+	case LockTypeRead:
+		return "read"
+	case LockTypeWrite:
+		return "write"
+	default:
+		return "unknown"
+	}
+}
+
 // DefaultService is the default implementation of the S6 Service interface
 type DefaultService struct {
 	logger     *zap.SugaredLogger
@@ -205,6 +227,10 @@ type DefaultService struct {
 	removing       bool              // true when Remove()/ForceRemove() is in progress
 	artifacts      *ServiceArtifacts // cached artifacts for the service
 	operationMutex *lock.CASMutex
+
+	// Per-service locks for better concurrency
+	serviceLocks      map[string]*lock.CASMutex // map[servicePath]*lock.CASMutex
+	serviceLocksMutex sync.RWMutex              // protects serviceLocks map
 }
 
 // NewDefaultService creates a new default S6 service
@@ -213,6 +239,7 @@ func NewDefaultService() Service {
 	return &DefaultService{
 		logger:         serviceLogger,
 		operationMutex: lock.NewCASMutex(),
+		serviceLocks:   make(map[string]*lock.CASMutex),
 	}
 }
 
@@ -227,13 +254,6 @@ func (s *DefaultService) safeLogWarnf(format string, args ...interface{}) {
 func (s *DefaultService) safeLogDebugf(format string, args ...interface{}) {
 	if s.logger != nil {
 		s.logger.Debugf(format, args...)
-	}
-}
-
-// safeLogInfof logs an info message if the logger is not nil
-func (s *DefaultService) safeLogInfof(format string, args ...interface{}) {
-	if s.logger != nil {
-		s.logger.Infof(format, args...)
 	}
 }
 
@@ -1840,4 +1860,67 @@ func (s *DefaultService) CheckHealth(ctx context.Context, servicePath string, fs
 
 	// Use lifecycle manager for comprehensive health check
 	return s.CheckArtifactsHealth(ctx, artifacts, fsService)
+}
+
+// TryGetLock attempts to acquire a lock for the specified service path and lock type.
+// Each service path has its own lock to allow concurrent operations on different services.
+// Returns the acquired lock on success, or an error if the lock could not be acquired.
+//
+// Usage examples:
+//
+//	// For read operations (multiple readers allowed):
+//	lock, err := s.TryGetLock(ctx, servicePath, LockTypeRead)
+//	if err != nil {
+//		return err
+//	}
+//	defer lock.RUnlock()
+//	// ... perform read operations ...
+//
+//	// For write operations (exclusive access):
+//	lock, err := s.TryGetLock(ctx, servicePath, LockTypeWrite)
+//	if err != nil {
+//		return err
+//	}
+//	defer lock.Unlock()
+//	// ... perform write operations ...
+//
+//	// Or use the helper function:
+//	err := s.withServiceLock(ctx, servicePath, LockTypeWrite, func() error {
+//		// ... perform operations that need write lock ...
+//		return nil
+//	})
+func (s *DefaultService) TryGetLock(ctx context.Context, servicePath string, lockType LockType) (*lock.CASMutex, error) {
+	// Get or create the lock for this servicePath using double-checked locking pattern
+	s.serviceLocksMutex.RLock()
+	serviceLock, exists := s.serviceLocks[servicePath]
+	s.serviceLocksMutex.RUnlock()
+
+	if !exists {
+		s.serviceLocksMutex.Lock()
+		// Double-check: another goroutine might have created the lock while we waited
+		serviceLock, exists = s.serviceLocks[servicePath]
+		if !exists {
+			serviceLock = lock.NewCASMutex()
+			s.serviceLocks[servicePath] = serviceLock
+		}
+		s.serviceLocksMutex.Unlock()
+	}
+
+	// Try to acquire the lock based on type
+	var success bool
+	switch lockType {
+	case LockTypeRead:
+		success = serviceLock.RTryLockWithContext(ctx)
+	case LockTypeWrite:
+		success = serviceLock.TryLockWithContext(ctx)
+	default:
+		return nil, fmt.Errorf("invalid lock type: %d", lockType)
+	}
+
+	if !success {
+		s.safeLogWarnf("Failed to acquire %s lock for service %s within context deadline", lockType.String(), servicePath)
+		return nil, ctx.Err()
+	}
+
+	return serviceLock, nil
 }
