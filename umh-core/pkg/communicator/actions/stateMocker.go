@@ -59,6 +59,7 @@ type StateMocker struct {
 	PendingTransitions map[string][]StateTransition // key is component ID
 	done               chan struct{}                // channel to signal shutdown of goroutine
 	running            atomic.Bool                  // flag to track if the mocker is running
+	stopped            atomic.Bool                  // flag to track if the mocker is stopping
 	mu                 *sync.RWMutex                // mutex to protect the state of the mocker
 	lastConfig         config.FullConfig            // last config is needed to detect config changes (events)
 	lastConfigSet      bool                         // flag to track if the last config has been set
@@ -352,7 +353,10 @@ func createDfcManagerSnapshot(
 	//start with a basic snapshot
 	dfcManagerInstaces := map[string]*fsm.FSMInstanceSnapshot{}
 
-	for _, curDataflowcomponent := range configManager.GetDataFlowConfig() {
+	// Cache the config to avoid race conditions between multiple calls
+	dataFlowConfigs := configManager.GetDataFlowConfig()
+
+	for _, curDataflowcomponent := range dataFlowConfigs {
 		instanceExistsInCurrentSnapshot := false
 
 		// get the default currentState from the last observed state (s.state)
@@ -413,7 +417,7 @@ func createDfcManagerSnapshot(
 			for _, instance := range manager.GetInstances() {
 				// check if the instance is in the config
 				found := false
-				for _, dfcConfig := range configManager.GetDataFlowConfig() {
+				for _, dfcConfig := range dataFlowConfigs {
 					if dfcConfig.Name == instance.ID {
 						found = true
 						break
@@ -456,12 +460,11 @@ func (s *StateMocker) Run() error {
 		defer s.running.Store(false)
 
 		for {
-			select {
-			case <-ticker.C:
-				s.Tick()
-			case <-s.done:
+			<-ticker.C
+			if s.stopped.Load() {
 				return
 			}
+			s.Tick()
 		}
 	}()
 
@@ -481,9 +484,12 @@ func (s *StateMocker) Start() error {
 // It is safe to call Stop even if the mocker isn't running
 func (s *StateMocker) Stop() {
 	if s.running.Load() {
-		close(s.done)
-		// Create a new channel for next run
-		s.done = make(chan struct{})
+		s.stopped.Store(true)
+		// Wait for the goroutine to finish by checking the running flag
+		for s.running.Load() {
+			time.Sleep(1 * time.Millisecond)
+		}
+		s.stopped.Store(false)
 	}
 }
 

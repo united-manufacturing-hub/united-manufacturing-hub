@@ -90,10 +90,21 @@ func (p *Pusher) Push(message models.UMHMessage) {
 			p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 		}
 	}
-	p.outboundMessageChannel <- &models.UMHMessage{
+
+	// Use select with default to prevent panic on closed channel
+	select {
+	case p.outboundMessageChannel <- &models.UMHMessage{
 		InstanceUUID: p.instanceUUID,
 		Content:      message.Content,
 		Email:        message.Email,
+	}:
+		// Message sent successfully
+	default:
+		// Channel is either full or closed, log warning but don't panic
+		p.logger.Warnf("Failed to send message to outbound channel - channel may be full or closed")
+		if p.watcherUUID != uuid.Nil {
+			p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
+		}
 	}
 }
 

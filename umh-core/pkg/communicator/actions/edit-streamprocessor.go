@@ -248,13 +248,14 @@ func (a *EditStreamProcessorAction) applyMutation() (config.StreamProcessorConfi
 		return config.StreamProcessorConfig{}, uuid.Nil, fmt.Errorf("stream processor with UUID %s not found", a.streamProcessorUUID)
 	}
 
+	// Classify the stream processor instance BEFORE modifying templateRef
+	// This prevents the bug where child detection always returns false
+	isChild := targetSP.StreamProcessorServiceConfig.TemplateRef != "" &&
+		targetSP.StreamProcessorServiceConfig.TemplateRef != targetSP.Name
+
 	// Currently, we cannot reuse templates, so we need to create a new one
 	targetSP.StreamProcessorServiceConfig.TemplateRef = a.name
 	targetSP.Name = a.name
-
-	// Classify the stream processor instance
-	isChild := targetSP.StreamProcessorServiceConfig.TemplateRef != "" &&
-		targetSP.StreamProcessorServiceConfig.TemplateRef != targetSP.Name
 
 	// Determine which instance to modify and which UUID to use for atomic operation
 	var instanceToModify config.StreamProcessorConfig
@@ -279,13 +280,17 @@ func (a *EditStreamProcessorAction) applyMutation() (config.StreamProcessorConfi
 				targetSP.StreamProcessorServiceConfig.TemplateRef, targetSP.Name)
 		}
 
-		// Apply mutations to the root, but keep child's variables
+		// For child processors, we modify the root template but keep the root's existing variables
+		// The child-specific variables should be handled separately in the child processor config
 		instanceToModify = rootSP
 		atomicEditUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(rootSP.Name)
 
-		// Add the new variables and preserve existing child variables
+		// Keep the root template's variables unchanged
 		newVB = make(map[string]any)
-		maps.Copy(newVB, targetSP.StreamProcessorServiceConfig.Variables.User)
+		if rootSP.StreamProcessorServiceConfig.Variables.User != nil {
+			maps.Copy(newVB, rootSP.StreamProcessorServiceConfig.Variables.User)
+		}
+		// Add only the new variables from the edit request to the root template
 		for _, variable := range a.vb {
 			newVB[variable.Label] = variable.Value
 		}
@@ -296,7 +301,11 @@ func (a *EditStreamProcessorAction) applyMutation() (config.StreamProcessorConfi
 
 		// Add the variables and keep the existing variables
 		newVB = make(map[string]any)
-		maps.Copy(newVB, targetSP.StreamProcessorServiceConfig.Variables.User)
+		// First copy existing variables
+		if targetSP.StreamProcessorServiceConfig.Variables.User != nil {
+			maps.Copy(newVB, targetSP.StreamProcessorServiceConfig.Variables.User)
+		}
+		// Then add/overwrite with new variables (new variables take precedence)
 		for _, variable := range a.vb {
 			newVB[variable.Label] = variable.Value
 		}
@@ -333,48 +342,34 @@ func (a *EditStreamProcessorAction) persistConfig(atomicEditUUID uuid.UUID, newS
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
 
-	// Get the old config before applying changes (for rollback purposes)
-	configSnapshot, err := a.configManager.GetConfig(ctx, 0)
-	if err != nil {
-		return config.StreamProcessorConfig{}, fmt.Errorf("failed to get current config: %w", err)
-	}
-
-	// Find the old stream processor configuration
-	var oldConfig config.StreamProcessorConfig
-	found := false
-	for _, sp := range configSnapshot.StreamProcessor {
-		if sp.Name == newSpec.Name {
-			oldConfig = sp
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		return config.StreamProcessorConfig{}, fmt.Errorf("stream processor %q not found", newSpec.Name)
-	}
-
-	// Apply the configuration changes
+	// Apply the configuration changes and get the old config atomically
+	// This eliminates the race condition by using only the returned old config
 	returnedOldConfig, err := a.configManager.AtomicEditStreamProcessor(ctx, newSpec)
 	if err != nil {
 		return config.StreamProcessorConfig{}, fmt.Errorf("failed to update stream processor: %w", err)
 	}
 
-	// Deep copy the old config using the Clone function
-	// This may seem hacky but allows us to reuse the Clone() function
-	// and we do not need to implement a custom Clone() function for the StreamProcessorConfig
-	fullConfig := config.FullConfig{
-		StreamProcessor: []config.StreamProcessorConfig{returnedOldConfig},
+	// Create a more efficient copy of just the StreamProcessorConfig
+	// Instead of wrapping in FullConfig and cloning everything, we create a targeted copy
+	oldConfig := config.StreamProcessorConfig{
+		FSMInstanceConfig: config.FSMInstanceConfig{
+			Name:            returnedOldConfig.Name,
+			DesiredFSMState: returnedOldConfig.DesiredFSMState,
+		},
+		StreamProcessorServiceConfig: returnedOldConfig.StreamProcessorServiceConfig,
 	}
-
-	copiedConfig := fullConfig.Clone()
-	oldConfig = copiedConfig.StreamProcessor[0]
 
 	// Remove the location and location_path from the user variables
 	// Check if User map exists before trying to delete from it
 	if oldConfig.StreamProcessorServiceConfig.Variables.User != nil {
-		delete(oldConfig.StreamProcessorServiceConfig.Variables.User, "location")
-		delete(oldConfig.StreamProcessorServiceConfig.Variables.User, "location_path")
+		// Create a copy of the variables map to avoid modifying the original
+		userVars := make(map[string]any)
+		for k, v := range oldConfig.StreamProcessorServiceConfig.Variables.User {
+			userVars[k] = v
+		}
+		delete(userVars, "location")
+		delete(userVars, "location_path")
+		oldConfig.StreamProcessorServiceConfig.Variables.User = userVars
 	}
 
 	return oldConfig, nil

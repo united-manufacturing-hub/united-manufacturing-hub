@@ -187,6 +187,11 @@ func (a *GetStreamProcessorAction) Execute() (interface{}, map[string]interface{
 
 // buildStreamProcessorFromConfig constructs a models.StreamProcessor from the config data.
 func (a *GetStreamProcessorAction) buildStreamProcessorFromConfig(streamProcessorConfig *config.StreamProcessorConfig, instanceName string) (*models.StreamProcessor, error) {
+	// Add nil checks to prevent panics
+	if streamProcessorConfig == nil {
+		return nil, fmt.Errorf("stream processor config is nil")
+	}
+
 	// Build location map from agent location - convert map[int]string to map[int]string
 	locationMap := make(map[int]string)
 	if streamProcessorConfig.StreamProcessorServiceConfig.Location != nil {

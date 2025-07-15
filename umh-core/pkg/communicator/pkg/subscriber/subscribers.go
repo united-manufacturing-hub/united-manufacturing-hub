@@ -15,6 +15,7 @@
 package subscriber
 
 import (
+	"context"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/push"
@@ -83,7 +84,14 @@ func NewHandler(
 }
 
 func (s *Handler) StartNotifier() {
-	go s.notifySubscribers()
+	// Create a context that will be cancelled when the function returns
+	// This is a compatibility layer for existing code that doesn't pass context
+	ctx := context.Background()
+	go s.notifySubscribers(ctx)
+}
+
+func (s *Handler) StartNotifierWithContext(ctx context.Context) {
+	go s.notifySubscribers(ctx)
 }
 
 func (s *Handler) AddOrRefreshSubscriber(identifier string, bootstrapped bool) {
@@ -97,16 +105,22 @@ func (s *Handler) GetSubscribers() []string {
 	return subscribers
 }
 
-func (s *Handler) notifySubscribers() {
+func (s *Handler) notifySubscribers(ctx context.Context) {
 	watcherUUID := s.dog.RegisterHeartbeat("notifySubscribers", 0, 600, true)
 	var timer = time.NewTicker(time.Second)
 	defer timer.Stop()
 
-	for range timer.C {
-		s.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
-		s.notify()
-		// The ticker will automatically fire at 1 second intervals
-		// This prevents large message queues from building up
+	for {
+		select {
+		case <-ctx.Done():
+			s.logger.Debugf("Stopping notify subscribers due to context cancellation")
+			return
+		case <-timer.C:
+			s.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
+			s.notify()
+			// The ticker will automatically fire at 1 second intervals
+			// This prevents large message queues from building up
+		}
 	}
 }
 

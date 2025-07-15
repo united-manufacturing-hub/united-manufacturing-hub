@@ -192,7 +192,7 @@ var _ = Describe("Subscribe and Receive Test", func() {
 			topicbrowser.NewCache(),
 			topicbrowser.NewSimulator(),
 		)
-		subHandler.StartNotifier()
+		subHandler.StartNotifierWithContext(ctx)
 
 		// Set subscriber handler in communication state
 		state.SubscriberHandler = subHandler
