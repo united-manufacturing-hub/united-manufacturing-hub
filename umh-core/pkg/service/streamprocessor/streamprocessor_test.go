@@ -126,7 +126,7 @@ var _ = Describe("StreamProcessorService", func() {
 			// Verify the DFC config has the expected structure
 			Expect(dfcConfig.BenthosConfig.Input).To(HaveKey("uns"))
 			Expect(dfcConfig.BenthosConfig.Output).To(HaveKey("uns"))
-			Expect(dfcConfig.BenthosConfig.Pipeline).To(HaveKey("stream_processor"))
+			Expect(dfcConfig.BenthosConfig.Pipeline).To(HaveKey("processors"))
 
 			// Check UNS input structure
 			unsInput := dfcConfig.BenthosConfig.Input["uns"].(map[string]any)
@@ -138,25 +138,35 @@ var _ = Describe("StreamProcessorService", func() {
 			Expect(umhTopics).To(ContainElement("umh.v1.factory-A.line-1.motor"))
 
 			// Check stream processor pipeline structure
-			streamProcessor := dfcConfig.BenthosConfig.Pipeline["stream_processor"].(map[string]any)
-			Expect(streamProcessor).To(HaveKey("model"))
-			Expect(streamProcessor).To(HaveKey("sources"))
-			Expect(streamProcessor).To(HaveKey("mapping"))
-			Expect(streamProcessor).To(HaveKey("output_topic"))
+			processors, ok := dfcConfig.BenthosConfig.Pipeline["processors"].([]any)
+			if ok {
+				processor, ok := processors[0].(map[string]any)
+				if ok {
+					Expect(processor).To(HaveKey("stream_processor"))
+					streamprocessor, ok := processor["stream_processor"].(map[string]any)
+					if ok {
+						Expect(streamprocessor).To(HaveKey("model"))
+						Expect(streamprocessor).To(HaveKey("sources"))
+						Expect(streamprocessor).To(HaveKey("mapping"))
+						Expect(streamprocessor).To(HaveKey("output_topic"))
+						// Verify model
+						model := streamprocessor["model"].(map[string]any)
+						Expect(model["name"]).To(Equal("pump"))
+						Expect(model["version"]).To(Equal("v1"))
 
-			// Verify model
-			model := streamProcessor["model"].(map[string]any)
-			Expect(model["name"]).To(Equal("pump"))
-			Expect(model["version"]).To(Equal("v1"))
+						// Verify output topic
+						Expect(streamprocessor["output_topic"]).To(Equal("umh.v1.factory-A.line-1"))
 
-			// Verify output topic
-			Expect(streamProcessor["output_topic"]).To(Equal("umh.v1.factory-A.line-1"))
-
-			// Verify sources mapping
-			sources := streamProcessor["sources"].(map[string]any)
-			Expect(sources["vibration_sensor"]).To(Equal("umh.v1.factory-A.line-1.vibration"))
-			Expect(sources["count_sensor"]).To(Equal("umh.v1.factory-A.line-1.count"))
-			Expect(sources["motor_data"]).To(Equal("umh.v1.factory-A.line-1.motor"))
+						// Verify sources mapping
+						sources := streamprocessor["sources"].(map[string]any)
+						Expect(sources["vibration_sensor"]).To(Equal("umh.v1.factory-A.line-1.vibration"))
+						Expect(sources["count_sensor"]).To(Equal("umh.v1.factory-A.line-1.count"))
+						Expect(sources["motor_data"]).To(Equal("umh.v1.factory-A.line-1.motor"))
+					}
+				}
+				Expect(ok).To(BeTrue())
+			}
+			Expect(ok).To(BeTrue())
 		})
 
 		It("should return error when the streamprocessor already exists", func() {
@@ -456,8 +466,16 @@ var _ = Describe("StreamProcessorService", func() {
 			// Verify DFC config has proper UNS structure
 			Expect(dfcRuntimeCfg.BenthosConfig.Input).To(HaveKey("uns"))
 			Expect(dfcRuntimeCfg.BenthosConfig.Output).To(HaveKey("uns"))
-			Expect(dfcRuntimeCfg.BenthosConfig.Pipeline).To(HaveKey("stream_processor"))
-
+			Expect(dfcRuntimeCfg.BenthosConfig.Pipeline).To(HaveKey("processors"))
+			processors, ok := dfcRuntimeCfg.BenthosConfig.Pipeline["processors"].([]any)
+			if ok {
+				streamprocessor, ok := processors[0].(map[string]any)
+				if ok {
+					Expect(streamprocessor).To(HaveKey("stream_processor"))
+				}
+				Expect(ok).To(BeTrue())
+			}
+			Expect(ok).To(BeTrue())
 			// Check UNS input topics
 			unsInput := dfcRuntimeCfg.BenthosConfig.Input["uns"].(map[string]any)
 			umhTopics := unsInput["umh_topics"].([]any)

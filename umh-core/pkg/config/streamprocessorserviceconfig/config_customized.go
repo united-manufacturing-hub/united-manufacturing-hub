@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"gopkg.in/yaml.v3"
 )
 
 // GetDFCServiceConfig converts the component config to a full DFCServiceConfig
@@ -55,14 +56,28 @@ func (c StreamProcessorServiceConfigSpec) GetDFCServiceConfig() dataflowcomponen
 	outputTopic := "umh.v1.{{ .location_path }}"
 
 	dfcReadConfig.BenthosConfig.Pipeline = map[string]any{
-		"stream_processor": map[string]any{
-			"mode":         "timeseries",
-			"model":        c.Config.Model,
-			"sources":      enhancedSources, // Use enhanced sources with umh.v1. prefix
-			"mapping":      c.Config.Mapping,
-			"output_topic": outputTopic,
+		"processors": []any{
+			map[string]any{
+				"stream_processor": StreamProcessorBenthosConfig{
+					Model:       c.Config.Model,
+					Mode:        "timeseries",
+					Sources:     enhancedSources,
+					Mapping:     c.Config.Mapping,
+					OutputTopic: outputTopic,
+				},
+			},
 		},
 	}
+
+	// dfcReadConfig.BenthosConfig.Pipeline = map[string]any{
+	// 	"stream_processor": map[string]any{
+	// 		"mode":         "timeseries",
+	// 		"model":        c.Config.Model,
+	// 		"sources":      enhancedSources, // Use enhanced sources with umh.v1. prefix
+	// 		"mapping":      c.Config.Mapping,
+	// 		"output_topic": outputTopic,
+	// 	},
+	// }
 
 	// Always set UNS output
 	dfcReadConfig.BenthosConfig.Output = map[string]any{
@@ -72,6 +87,14 @@ func (c StreamProcessorServiceConfigSpec) GetDFCServiceConfig() dataflowcomponen
 	return dfcReadConfig
 }
 
+type StreamProcessorBenthosConfig struct {
+	Model       ModelRef       `yaml:"model"`
+	Mode        string         `yaml:"mode"`
+	Sources     SourceMapping  `yaml:"sources"`
+	Mapping     map[string]any `yaml:"mapping"`
+	OutputTopic string         `yaml:"output_topic"`
+}
+
 // FromDFCServiceConfig creates a StreamProcessorServiceConfigRuntime from a DFC config
 func FromDFCServiceConfig(dfcConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig) StreamProcessorServiceConfigRuntime {
 	// Extract the stream processor config from the DFC pipeline section
@@ -79,40 +102,34 @@ func FromDFCServiceConfig(dfcConfig dataflowcomponentserviceconfig.DataflowCompo
 	var sources SourceMapping
 	var mapping map[string]any
 
-	if pipeline, ok := dfcConfig.BenthosConfig.Pipeline["stream_processor"].(map[string]any); ok {
-		// Convert model from map[string]any to ModelRef
-		if modelData, ok := pipeline["model"].(map[string]any); ok {
-			if name, ok := modelData["name"].(string); ok {
-				model.Name = name
-			}
-			if version, ok := modelData["version"].(string); ok {
-				model.Version = version
-			}
-		}
-
-		// Convert sources from map[string]any to SourceMapping
-		if sourcesData, ok := pipeline["sources"].(map[string]any); ok {
-			sources = make(SourceMapping)
-			for key, value := range sourcesData {
-				if strValue, ok := value.(string); ok {
-					// Strip the "umh.v1." prefix to get the clean user-facing format
-					cleanValue := strValue
-					if strings.HasPrefix(strValue, "umh.v1.") {
-						cleanValue = strings.TrimPrefix(strValue, "umh.v1.")
+	if processor, ok := dfcConfig.BenthosConfig.Pipeline["processors"].([]any); ok {
+		for _, v := range processor {
+			if processor, ok := v.(map[string]any); ok {
+				if streamProcessorMap, ok := processor["stream_processor"].(map[string]any); ok {
+					// Use YAML marshal/unmarshal to convert map to struct to avoid nesting pain
+					yamlBytes, err := yaml.Marshal(streamProcessorMap)
+					if err == nil {
+						var streamProcessor StreamProcessorBenthosConfig
+						if err := yaml.Unmarshal(yamlBytes, &streamProcessor); err == nil {
+							model = streamProcessor.Model
+							sources = streamProcessor.Sources
+							mapping = streamProcessor.Mapping
+						}
 					}
-					sources[key] = cleanValue
 				}
 			}
 		}
+	}
 
-		if mappingData, ok := pipeline["mapping"].(map[string]any); ok {
-			mapping = mappingData
-		}
+	// Strip umh.v1. prefix from sources to match original configuration format
+	originalSources := make(SourceMapping)
+	for alias, topic := range sources {
+		originalSources[alias] = strings.TrimPrefix(topic, "umh.v1.")
 	}
 
 	return StreamProcessorServiceConfigRuntime{
 		Model:   model,
-		Sources: sources,
+		Sources: originalSources,
 		Mapping: mapping,
 	}
 }

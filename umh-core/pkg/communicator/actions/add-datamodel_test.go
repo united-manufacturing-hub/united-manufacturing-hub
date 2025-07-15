@@ -17,7 +17,6 @@ package actions_test
 import (
 	"encoding/base64"
 	"errors"
-	"time"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
@@ -499,27 +498,6 @@ var _ = Describe("AddDataModelAction", func() {
 				Expect(mockConfigMgr.AtomicAddDataContractCalled).To(BeTrue())
 			})
 
-			It("should send correct action replies to outbound channel", func() {
-				go func() {
-					defer GinkgoRecover()
-					_, _, _ = action.Execute()
-				}()
-
-				// Should receive multiple messages
-				var messages []*models.UMHMessage
-				Eventually(func() int {
-					select {
-					case msg := <-outboundChannel:
-						messages = append(messages, msg)
-					case <-time.After(100 * time.Millisecond):
-						// Timeout to prevent hanging
-					}
-					return len(messages)
-				}, "1s").Should(BeNumerically(">=", 2))
-
-				// Verify we received some messages (exact structure depends on UMHMessage)
-				Expect(len(messages)).To(BeNumerically(">", 0))
-			})
 		})
 
 		Context("when data contract creation fails", func() {

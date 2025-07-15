@@ -470,14 +470,11 @@ func (p *Service) EvaluateDFCDesiredStates(
 	return nil
 }
 
-// Start starts a StreamProcessor by setting connection to "up" and
-// evaluating which DFCs should be active based on their current configurations.
+// Start starts a StreamProcessor by setting DFC to "active" and
 //
 // UNIQUE BEHAVIOR: Unlike other FSM start methods that simply set desired states to active,
 // stream processors must check DFC config content because:
 // - DFCs start with template configs that may be empty initially
-// - Only DFCs with non-empty input configs should be started
-// - Empty DFCs remain stopped to avoid creating broken Benthos instances
 //
 // This conditional starting is handled by EvaluateDFCDesiredStates.
 func (p *Service) Start(
