@@ -41,6 +41,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	lock "github.com/viney-shih/go-lock"
 )
 
 // ServiceStatus represents the status of an S6 service
@@ -199,17 +200,40 @@ type DefaultService struct {
 	logCursors sync.Map // map[string]*logState (key = abs log path)
 
 	// Lifecycle management with expert-recommended concurrency protection
-	mu        sync.Mutex        // serializes all state-changing calls
-	creating  bool              // true when Create() is in progress
-	removing  bool              // true when Remove()/ForceRemove() is in progress
-	artifacts *ServiceArtifacts // cached artifacts for the service
+	mu             sync.Mutex        // serializes all state-changing calls
+	creating       bool              // true when Create() is in progress
+	removing       bool              // true when Remove()/ForceRemove() is in progress
+	artifacts      *ServiceArtifacts // cached artifacts for the service
+	operationMutex *lock.CASMutex
 }
 
 // NewDefaultService creates a new default S6 service
 func NewDefaultService() Service {
 	serviceLogger := logger.For(logger.ComponentS6Service)
 	return &DefaultService{
-		logger: serviceLogger,
+		logger:         serviceLogger,
+		operationMutex: lock.NewCASMutex(),
+	}
+}
+
+// safeLogWarnf logs a warning message if the logger is not nil
+func (s *DefaultService) safeLogWarnf(format string, args ...interface{}) {
+	if s.logger != nil {
+		s.logger.Warnf(format, args...)
+	}
+}
+
+// safeLogDebugf logs a debug message if the logger is not nil
+func (s *DefaultService) safeLogDebugf(format string, args ...interface{}) {
+	if s.logger != nil {
+		s.logger.Debugf(format, args...)
+	}
+}
+
+// safeLogInfof logs an info message if the logger is not nil
+func (s *DefaultService) safeLogInfof(format string, args ...interface{}) {
+	if s.logger != nil {
+		s.logger.Infof(format, args...)
 	}
 }
 
@@ -226,6 +250,17 @@ func (s *DefaultService) withLifecycleGuard(fn func() error) error {
 // - Uses lifecycle manager for atomic creation with EXDEV protection
 // - Simplified 3-path approach with health checks
 func (s *DefaultService) Create(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, fsService filesystem.Service) error {
+	if !s.operationMutex.TryLockWithContext(ctx) {
+		s.safeLogWarnf("Failed to acquire write lock for Create operation on service %s within context deadline", servicePath)
+		return ctx.Err()
+	}
+	defer s.operationMutex.Unlock()
+
+	return s.createImpl(ctx, servicePath, config, fsService)
+}
+
+// createImpl is the internal implementation of Create
+func (s *DefaultService) createImpl(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, fsService filesystem.Service) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".create", time.Since(start))
@@ -321,6 +356,17 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 // - Fully idempotent - safe to call when directories are partially removed
 // - Returns nil only when nothing is left
 func (s *DefaultService) Remove(ctx context.Context, servicePath string, fsService filesystem.Service) error {
+	if !s.operationMutex.TryLockWithContext(ctx) {
+		s.safeLogWarnf("Failed to acquire write lock for Remove operation on service %s within context deadline", servicePath)
+		return ctx.Err()
+	}
+	defer s.operationMutex.Unlock()
+
+	return s.removeImpl(ctx, servicePath, fsService)
+}
+
+// removeImpl is the internal implementation of Remove
+func (s *DefaultService) removeImpl(ctx context.Context, servicePath string, fsService filesystem.Service) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service,
@@ -358,13 +404,24 @@ func (s *DefaultService) Remove(ctx context.Context, servicePath string, fsServi
 
 // Start starts the S6 service
 func (s *DefaultService) Start(ctx context.Context, servicePath string, fsService filesystem.Service) error {
+	if !s.operationMutex.TryLockWithContext(ctx) {
+		s.safeLogWarnf("Failed to acquire write lock for Start operation on service %s within context deadline", servicePath)
+		return ctx.Err()
+	}
+	defer s.operationMutex.Unlock()
+
+	return s.startImpl(ctx, servicePath, fsService)
+}
+
+// startImpl is the internal implementation of Start
+func (s *DefaultService) startImpl(ctx context.Context, servicePath string, fsService filesystem.Service) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".start", time.Since(start))
 	}()
 
 	s.logger.Debugf("Starting S6 service %s", servicePath)
-	exists, err := s.ServiceExists(ctx, servicePath, fsService)
+	exists, err := s.serviceExistsImpl(ctx, servicePath, fsService)
 	if err != nil {
 		return fmt.Errorf("failed to check if service exists: %w", err)
 	}
@@ -381,7 +438,7 @@ func (s *DefaultService) Start(ctx context.Context, servicePath string, fsServic
 	for _, downFile := range downFiles {
 		if exists, _ := fsService.FileExists(ctx, downFile); exists {
 			if err := fsService.Remove(ctx, downFile); err != nil {
-				s.logger.Warnf("Failed to remove down file %s: %v", downFile, err)
+				s.safeLogWarnf("Failed to remove down file %s: %v", downFile, err)
 				// Continue anyway - s6-svc -u might still work
 			} else {
 				s.logger.Debugf("Removed down file %s", downFile)
@@ -397,14 +454,14 @@ func (s *DefaultService) Start(ctx context.Context, servicePath string, fsServic
 	logServicePath := filepath.Join(servicePath, "log")
 	_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-u", logServicePath)
 	if err != nil {
-		s.logger.Warnf("Failed to start log service: %v", err)
+		s.safeLogWarnf("Failed to start log service: %v", err)
 		return fmt.Errorf("failed to start log service: %w", err)
 	}
 
 	// Then start the main service to prevent a race condition
 	_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-u", servicePath)
 	if err != nil {
-		s.logger.Warnf("Failed to start service: %v", err)
+		s.safeLogWarnf("Failed to start service: %v", err)
 		return fmt.Errorf("failed to start service: %w", err)
 	}
 
@@ -414,13 +471,24 @@ func (s *DefaultService) Start(ctx context.Context, servicePath string, fsServic
 
 // Stop stops the S6 service
 func (s *DefaultService) Stop(ctx context.Context, servicePath string, fsService filesystem.Service) error {
+	if !s.operationMutex.TryLockWithContext(ctx) {
+		s.safeLogWarnf("Failed to acquire write lock for Stop operation on service %s within context deadline", servicePath)
+		return ctx.Err()
+	}
+	defer s.operationMutex.Unlock()
+
+	return s.stopImpl(ctx, servicePath, fsService)
+}
+
+// stopImpl is the internal implementation of Stop
+func (s *DefaultService) stopImpl(ctx context.Context, servicePath string, fsService filesystem.Service) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".stop", time.Since(start))
 	}()
 
 	s.logger.Debugf("Stopping S6 service %s", servicePath)
-	exists, err := s.ServiceExists(ctx, servicePath, fsService)
+	exists, err := s.serviceExistsImpl(ctx, servicePath, fsService)
 	if err != nil {
 		return fmt.Errorf("failed to check if service exists: %w", err)
 	}
@@ -431,7 +499,7 @@ func (s *DefaultService) Stop(ctx context.Context, servicePath string, fsService
 	// Stop the service first
 	_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-d", servicePath)
 	if err != nil {
-		s.logger.Warnf("Failed to stop service: %v", err)
+		s.safeLogWarnf("Failed to stop service: %v", err)
 		return fmt.Errorf("failed to stop service: %w", err)
 	}
 
@@ -439,7 +507,7 @@ func (s *DefaultService) Stop(ctx context.Context, servicePath string, fsService
 	logServicePath := filepath.Join(servicePath, "log")
 	_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-d", logServicePath)
 	if err != nil {
-		s.logger.Warnf("Failed to stop log service: %v", err)
+		s.safeLogWarnf("Failed to stop log service: %v", err)
 		return fmt.Errorf("failed to stop log service: %w", err)
 	}
 
@@ -451,7 +519,7 @@ func (s *DefaultService) Stop(ctx context.Context, servicePath string, fsService
 
 	for _, downFile := range downFiles {
 		if err := fsService.WriteFile(ctx, downFile, []byte{}, 0644); err != nil {
-			s.logger.Warnf("Failed to create down file %s: %v", downFile, err)
+			s.safeLogWarnf("Failed to create down file %s: %v", downFile, err)
 			// Continue anyway - service is already stopped
 		} else {
 			s.logger.Debugf("Created down file %s", downFile)
@@ -468,13 +536,24 @@ func (s *DefaultService) Stop(ctx context.Context, servicePath string, fsService
 
 // Restart restarts the S6 service
 func (s *DefaultService) Restart(ctx context.Context, servicePath string, fsService filesystem.Service) error {
+	if !s.operationMutex.TryLockWithContext(ctx) {
+		s.safeLogWarnf("Failed to acquire write lock for Restart operation on service %s within context deadline", servicePath)
+		return ctx.Err()
+	}
+	defer s.operationMutex.Unlock()
+
+	return s.restartImpl(ctx, servicePath, fsService)
+}
+
+// restartImpl is the internal implementation of Restart
+func (s *DefaultService) restartImpl(ctx context.Context, servicePath string, fsService filesystem.Service) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".restart", time.Since(start))
 	}()
 
 	s.logger.Debugf("Restarting S6 service %s", servicePath)
-	exists, err := s.ServiceExists(ctx, servicePath, fsService)
+	exists, err := s.serviceExistsImpl(ctx, servicePath, fsService)
 	if err != nil {
 		return fmt.Errorf("failed to check if service exists: %w", err)
 	}
@@ -484,7 +563,7 @@ func (s *DefaultService) Restart(ctx context.Context, servicePath string, fsServ
 
 	_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-r", servicePath)
 	if err != nil {
-		s.logger.Warnf("Failed to restart service: %v", err)
+		s.safeLogWarnf("Failed to restart service: %v", err)
 		return fmt.Errorf("failed to restart service: %w", err)
 	}
 
@@ -493,13 +572,24 @@ func (s *DefaultService) Restart(ctx context.Context, servicePath string, fsServ
 }
 
 func (s *DefaultService) Status(ctx context.Context, servicePath string, fsService filesystem.Service) (ServiceInfo, error) {
+	if !s.operationMutex.RTryLockWithContext(ctx) {
+		s.safeLogWarnf("Failed to acquire read lock for Status operation on service %s within context deadline", servicePath)
+		return ServiceInfo{}, ctx.Err()
+	}
+	defer s.operationMutex.RUnlock()
+
+	return s.statusImpl(ctx, servicePath, fsService)
+}
+
+// statusImpl is the internal implementation of Status
+func (s *DefaultService) statusImpl(ctx context.Context, servicePath string, fsService filesystem.Service) (ServiceInfo, error) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".status", time.Since(start))
 	}()
 
 	// First, check that the service exists.
-	exists, err := s.ServiceExists(ctx, servicePath, fsService)
+	exists, err := s.serviceExistsImpl(ctx, servicePath, fsService)
 	if err != nil {
 		return ServiceInfo{}, fmt.Errorf("failed to check if service exists: %w", err)
 	}
@@ -620,7 +710,7 @@ func (s *DefaultService) Status(ctx context.Context, servicePath string, fsServi
 	info.WantUp = !downExists
 
 	// Optionally update exit history.
-	history, histErr := s.ExitHistory(ctx, superviseDir, fsService)
+	history, histErr := s.exitHistoryImpl(ctx, superviseDir, fsService)
 	if histErr == nil {
 		info.ExitHistory = history
 	} else {
@@ -643,6 +733,17 @@ func (s *DefaultService) Status(ctx context.Context, servicePath string, fsServi
 // If the file size is not a multiple of the record size, it is considered corrupted.
 // In that case, you may choose to truncate the file (as the C code does) or return an error.
 func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, fsService filesystem.Service) ([]ExitEvent, error) {
+	if !s.operationMutex.RTryLockWithContext(ctx) {
+		s.safeLogWarnf("Failed to acquire read lock for ExitHistory operation on service %s within context deadline", superviseDir)
+		return nil, ctx.Err()
+	}
+	defer s.operationMutex.RUnlock()
+
+	return s.exitHistoryImpl(ctx, superviseDir, fsService)
+}
+
+// exitHistoryImpl is the internal implementation of ExitHistory
+func (s *DefaultService) exitHistoryImpl(ctx context.Context, superviseDir string, fsService filesystem.Service) ([]ExitEvent, error) {
 	// Build the full path to the dtally file.
 	dtallyFile := filepath.Join(superviseDir, S6DtallyFileName)
 
@@ -709,6 +810,17 @@ func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, f
 
 // ServiceExists checks if the service directory exists
 func (s *DefaultService) ServiceExists(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
+	if !s.operationMutex.RTryLockWithContext(ctx) {
+		s.safeLogWarnf("Failed to acquire read lock for ServiceExists operation on service %s within context deadline", servicePath)
+		return false, ctx.Err()
+	}
+	defer s.operationMutex.RUnlock()
+
+	return s.serviceExistsImpl(ctx, servicePath, fsService)
+}
+
+// serviceExistsImpl is the internal implementation of ServiceExists
+func (s *DefaultService) serviceExistsImpl(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".serviceExists", time.Since(start))
@@ -729,7 +841,18 @@ func (s *DefaultService) ServiceExists(ctx context.Context, servicePath string, 
 
 // GetConfig gets the actual service config from s6
 func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsService filesystem.Service) (s6serviceconfig.S6ServiceConfig, error) {
-	exists, err := s.ServiceExists(ctx, servicePath, fsService)
+	if !s.operationMutex.RTryLockWithContext(ctx) {
+		s.safeLogWarnf("Failed to acquire read lock for GetConfig operation on service %s within context deadline", servicePath)
+		return s6serviceconfig.S6ServiceConfig{}, ctx.Err()
+	}
+	defer s.operationMutex.RUnlock()
+
+	return s.getConfigImpl(ctx, servicePath, fsService)
+}
+
+// getConfigImpl is the internal implementation of GetConfig
+func (s *DefaultService) getConfigImpl(ctx context.Context, servicePath string, fsService filesystem.Service) (s6serviceconfig.S6ServiceConfig, error) {
+	exists, err := s.serviceExistsImpl(ctx, servicePath, fsService)
 	if err != nil {
 		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to check if service exists: %w", err)
 	}
@@ -1028,6 +1151,17 @@ const (
 
 // CleanS6ServiceDirectory cleans the S6 service directory except for the known services
 func (s *DefaultService) CleanS6ServiceDirectory(ctx context.Context, path string, fsService filesystem.Service) error {
+	if !s.operationMutex.TryLockWithContext(ctx) {
+		s.safeLogWarnf("Failed to acquire write lock for CleanS6ServiceDirectory operation on path %s within context deadline", path)
+		return ctx.Err()
+	}
+	defer s.operationMutex.Unlock()
+
+	return s.cleanS6ServiceDirectoryImpl(ctx, path, fsService)
+}
+
+// cleanS6ServiceDirectoryImpl is the internal implementation of CleanS6ServiceDirectory
+func (s *DefaultService) cleanS6ServiceDirectoryImpl(ctx context.Context, path string, fsService filesystem.Service) error {
 	if ctx == nil {
 		return fmt.Errorf("context is nil")
 	}
@@ -1120,12 +1254,23 @@ func (s *DefaultService) IsKnownService(name string) bool {
 // GetS6ConfigFile retrieves the specified config file for a service
 // servicePath should be the full path including S6BaseDir
 func (s *DefaultService) GetS6ConfigFile(ctx context.Context, servicePath string, configFileName string, fsService filesystem.Service) ([]byte, error) {
+	if !s.operationMutex.RTryLockWithContext(ctx) {
+		s.safeLogWarnf("Failed to acquire read lock for GetS6ConfigFile operation on service %s within context deadline", servicePath)
+		return nil, ctx.Err()
+	}
+	defer s.operationMutex.RUnlock()
+
+	return s.getS6ConfigFileImpl(ctx, servicePath, configFileName, fsService)
+}
+
+// getS6ConfigFileImpl is the internal implementation of GetS6ConfigFile
+func (s *DefaultService) getS6ConfigFileImpl(ctx context.Context, servicePath string, configFileName string, fsService filesystem.Service) ([]byte, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
 
 	// Check if the service exists with the full path
-	exists, err := s.ServiceExists(ctx, servicePath, fsService)
+	exists, err := s.serviceExistsImpl(ctx, servicePath, fsService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check if service exists: %w", err)
 	}
@@ -1161,6 +1306,21 @@ func (s *DefaultService) GetS6ConfigFile(ctx context.Context, servicePath string
 // - Called by FSM escalation - can take longer than Remove but must be thorough
 // - Returns nil only when nothing remains
 func (s *DefaultService) ForceRemove(
+	ctx context.Context,
+	servicePath string,
+	fsService filesystem.Service,
+) error {
+	if !s.operationMutex.TryLockWithContext(ctx) {
+		s.safeLogWarnf("Failed to acquire write lock for ForceRemove operation on service %s within context deadline", servicePath)
+		return ctx.Err()
+	}
+	defer s.operationMutex.Unlock()
+
+	return s.forceRemoveImpl(ctx, servicePath, fsService)
+}
+
+// forceRemoveImpl is the internal implementation of ForceRemove
+func (s *DefaultService) forceRemoveImpl(
 	ctx context.Context,
 	servicePath string,
 	fsService filesystem.Service,
@@ -1288,6 +1448,17 @@ func (s *DefaultService) appendToRingBuffer(entries []LogEntry, st *logState) {
 // Errors are returned early and unwrapped where they occur so callers
 // see the root cause (e.g. "file disappeared", "permission denied").
 func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsService filesystem.Service) ([]LogEntry, error) {
+	if !s.operationMutex.TryLockWithContext(ctx) {
+		s.safeLogWarnf("Failed to acquire write lock for GetLogs operation on service %s within context deadline", servicePath)
+		return nil, ctx.Err()
+	}
+	defer s.operationMutex.Unlock()
+
+	return s.getLogsImpl(ctx, servicePath, fsService)
+}
+
+// getLogsImpl is the internal implementation of GetLogs
+func (s *DefaultService) getLogsImpl(ctx context.Context, servicePath string, fsService filesystem.Service) ([]LogEntry, error) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".getLogs", time.Since(start))
@@ -1296,7 +1467,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	serviceName := filepath.Base(servicePath)
 
 	// Check if the service exists first
-	exists, err := s.ServiceExists(ctx, servicePath, fsService)
+	exists, err := s.serviceExistsImpl(ctx, servicePath, fsService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check if service exists: %w", err)
 	}
@@ -1360,9 +1531,9 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 			var err error
 			rotatedContent, _, err = fsService.ReadFileRange(ctx, rotatedFile, st.offset)
 			if err != nil {
-				s.logger.Warnf("Failed to read rotated file %s from offset %d: %v", rotatedFile, st.offset, err)
+				s.safeLogWarnf("Failed to read rotated file %s from offset %d: %v", rotatedFile, st.offset, err)
 			} else if len(rotatedContent) > 0 {
-				s.logger.Debugf("Read %d bytes from rotated file %s", len(rotatedContent), rotatedFile)
+				s.safeLogDebugf("Read %d bytes from rotated file %s", len(rotatedContent), rotatedFile)
 			}
 		}
 
@@ -1540,12 +1711,23 @@ func parseLogLine(line string) LogEntry {
 // s6-svscan if it doesn't, to trigger supervision setup.
 // Returns true if supervise directory exists (ready for supervision), false otherwise.
 func (s *DefaultService) EnsureSupervision(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
+	if !s.operationMutex.TryLockWithContext(ctx) {
+		s.safeLogWarnf("Failed to acquire write lock for EnsureSupervision operation on service %s within context deadline", servicePath)
+		return false, ctx.Err()
+	}
+	defer s.operationMutex.Unlock()
+
+	return s.ensureSupervisionImpl(ctx, servicePath, fsService)
+}
+
+// ensureSupervisionImpl is the internal implementation of EnsureSupervision
+func (s *DefaultService) ensureSupervisionImpl(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".ensureSupervision", time.Since(start))
 	}()
 
-	exists, err := s.ServiceExists(ctx, servicePath, fsService)
+	exists, err := s.serviceExistsImpl(ctx, servicePath, fsService)
 	if err != nil {
 		return false, fmt.Errorf("failed to check if service exists: %w", err)
 	}

@@ -154,9 +154,8 @@ var _ = Describe("S6 Service", func() {
 		var s6Service *DefaultService
 
 		BeforeEach(func() {
-			s6Service = &DefaultService{
-				logger: nil,
-			}
+			s6Service = NewDefaultService().(*DefaultService)
+			s6Service.logger = nil
 		})
 
 		It("should correctly identify known services", func() {
@@ -210,9 +209,8 @@ var _ = Describe("S6 Service", func() {
 
 		BeforeEach(func() {
 			mockFS = filesystem.NewMockFileSystem()
-			s6Service = &DefaultService{
-				logger: nil, // Don't need the logger for this test
-			}
+			s6Service = NewDefaultService().(*DefaultService)
+			s6Service.logger = nil // Don't need the logger for this test
 
 			// Track removed directories
 			removedDirectories = []string{}
@@ -304,9 +302,8 @@ var _ = Describe("S6 Service", func() {
 
 		BeforeEach(func() {
 			mockFS = filesystem.NewMockFileSystem()
-			s6Service = &DefaultService{
-				logger: nil, // Not needed for this test
-			}
+			s6Service = NewDefaultService().(*DefaultService)
+			s6Service.logger = nil // Not needed for this test
 			ctx = context.Background()
 		})
 

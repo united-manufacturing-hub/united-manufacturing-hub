@@ -42,7 +42,8 @@ var _ = Describe("LifecycleManager", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		service = &DefaultService{logger: logger.For("test")}
+		service = NewDefaultService().(*DefaultService)
+		service.logger = logger.For("test")
 		mockFS = filesystem.NewMockFileSystem()
 		artifacts = &ServiceArtifacts{
 			ServiceDir: filepath.Join(constants.S6BaseDir, "test-service"),

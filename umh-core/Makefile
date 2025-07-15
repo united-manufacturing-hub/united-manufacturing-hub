@@ -26,6 +26,7 @@ help: ## Display available make targets and usage information
 	@echo "   make build          # Build Docker image"
 	@echo "   make build-debug    # Build with debug support"
 	@echo "   make build-pprof    # Build with profiling support"
+	@echo "   make build-race     # Build with race detection support"
 	@echo ""
 	@echo "🧪 TEST COMMANDS:"
 	@echo "   make test-graphql      # GraphQL API with real-time simulator data (recommended)"
@@ -178,7 +179,7 @@ download-docker-binaries:
 
 	@echo "All required files are present and up to date"
 
-.PHONY: build build-pprof build-debug
+.PHONY: build build-pprof build-debug build-race
 COMMON_ARGS = \
 	--platform linux/$(TARGETARCH) \
 	--build-arg GOLANG_VERSION=$(GOLANG_VERSION) \
@@ -200,9 +201,10 @@ endef
 build:
 build-pprof:       EXTRA_ARGS := --build-arg PPROF=true
 build-debug:       EXTRA_ARGS := --build-arg DEBUG=true
+build-race:        EXTRA_ARGS := --build-arg RACE=true
 
 # Refresh cache and build docker binaries
-build build-pprof build-debug: build-protobuf download-docker-binaries
+build build-pprof build-debug build-race: build-protobuf download-docker-binaries
 	$(call DOCKER_BUILD)
 
 FLAVOR ?=                         # empty → normal build
@@ -361,6 +363,7 @@ build-protobuf: install-buf
 #   make test-dfc              → uses normal  image (build)                  #
 #   make test-dfc FLAVOR=pprof → uses pprof   image (build-pprof)            #
 #   make test-dfc FLAVOR=debug → uses delve   image (build-debug)            #
+#   make test-dfc FLAVOR=race  → uses race    image (build-race)             #
 ###############################################################################
 # To extract pprof data use:
 # http://localhost:6060/debug/pprof/profile?seconds=20

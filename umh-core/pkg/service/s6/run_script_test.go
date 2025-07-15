@@ -50,9 +50,8 @@ var _ = Describe("S6 Run Script", func() {
 		zapLogger, err := zap.NewDevelopment()
 		Expect(err).NotTo(HaveOccurred())
 		logger = zapLogger.Sugar()
-		s6Service = &DefaultService{
-			logger: logger,
-		}
+		s6Service = NewDefaultService().(*DefaultService)
+		s6Service.logger = logger
 		servicePath = constants.S6BaseDir + "/test-service"
 		runScriptPath = filepath.Join(servicePath, "run")
 		configPath = filepath.Join(servicePath, "config")
