@@ -17,7 +17,6 @@ package topicbrowser
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"strconv"
@@ -112,16 +111,18 @@ func (svc *Service) parseBlock(entries []s6svc.LogEntry) error {
 	if err != nil || len(hexBuf) == 0 {
 		return err // nil or extractor error
 	}
+	/*
 
-	compressed := make([]byte, hex.DecodedLen(len(hexBuf)))
-	if _, err := hex.Decode(compressed, hexBuf); err != nil {
-		return fmt.Errorf("hex decode: %w", err)
-	}
+		compressed := make([]byte, hex.DecodedLen(len(hexBuf)))
+		if _, err := hex.Decode(compressed, hexBuf); err != nil {
+			return fmt.Errorf("hex decode: %w", err)
+		}
 
-	payload, err := decompressLZ4(compressed)
-	if err != nil {
-		return err
-	}
+		payload, err := decompressLZ4(compressed)
+		if err != nil {
+			return err
+		}*/
+	payload := hexBuf
 
 	if len(payload) > maxPayloadBytes {
 		return fmt.Errorf("payload %d bytes exceed max %d limit", len(payload), maxPayloadBytes)
