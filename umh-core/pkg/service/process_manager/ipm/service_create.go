@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -123,12 +124,78 @@ func (pm *ProcessManager) createServiceDirectories(ctx context.Context, identifi
 func (pm *ProcessManager) writeServiceConfigFiles(ctx context.Context, identifier serviceIdentifier, config process_manager_serviceconfig.ProcessManagerServiceConfig, fsService filesystem.Service) error {
 	configDirectory := filepath.Join(pm.serviceDirectory, string(identifier), configDirectoryName)
 
+	// First, write all user-provided configuration files
 	for configFileName, configFileContent := range config.ConfigFiles {
 		configFilePath := filepath.Join(configDirectory, configFileName)
 		if err := fsService.WriteFile(ctx, configFilePath, []byte(configFileContent), configFilePermission); err != nil {
 			return fmt.Errorf("error writing config file %s: %w", configFileName, err)
 		}
 	}
+
+	// Generate and write the run.sh script from the Command field
+	if err := pm.generateRunScript(ctx, identifier, config, fsService); err != nil {
+		return fmt.Errorf("error generating run script: %w", err)
+	}
+
+	return nil
+}
+
+// generateRunScript creates a run.sh script from the ProcessManagerServiceConfig.Command field.
+// This script serves as the entry point for the service process and handles command execution
+// with proper argument passing and environment variable setup.
+func (pm *ProcessManager) generateRunScript(ctx context.Context, identifier serviceIdentifier, config process_manager_serviceconfig.ProcessManagerServiceConfig, fsService filesystem.Service) error {
+	configDirectory := filepath.Join(pm.serviceDirectory, string(identifier), configDirectoryName)
+	runScriptPath := filepath.Join(configDirectory, "run.sh")
+
+	// Build the shell script content
+	var scriptBuilder strings.Builder
+	scriptBuilder.WriteString("#!/bin/bash\n")
+	scriptBuilder.WriteString("# Auto-generated run script for service\n")
+	scriptBuilder.WriteString("set -e\n\n")
+
+	// Add environment variables if any
+	if len(config.Env) > 0 {
+		scriptBuilder.WriteString("# Set environment variables\n")
+		for key, value := range config.Env {
+			// Simple shell escaping - wrap values in single quotes and escape any single quotes
+			escapedValue := strings.ReplaceAll(value, "'", "'\"'\"'")
+			scriptBuilder.WriteString(fmt.Sprintf("export %s='%s'\n", key, escapedValue))
+		}
+		scriptBuilder.WriteString("\n")
+	}
+
+	// Add the command execution
+	if len(config.Command) == 0 {
+		return fmt.Errorf("no command specified in service configuration")
+	}
+
+	scriptBuilder.WriteString("# Execute the service command\n")
+	scriptBuilder.WriteString("exec")
+
+	// Add each command argument with proper shell escaping
+	for _, arg := range config.Command {
+		// Remove /run/service/... from the argument (everything until /config/)
+		configIndex := strings.Index(arg, "/config/")
+		if configIndex != -1 {
+			arg = arg[configIndex:]
+			arg = filepath.Join(pm.serviceDirectory, string(identifier), arg)
+		}
+		// Simple shell escaping - wrap arguments in single quotes and escape any single quotes
+		escapedArg := strings.ReplaceAll(arg, "'", "'\"'\"'")
+		scriptBuilder.WriteString(fmt.Sprintf(" '%s'", escapedArg))
+	}
+	scriptBuilder.WriteString("\n")
+
+	// Write the script file with executable permissions
+	scriptContent := scriptBuilder.String()
+	if err := fsService.WriteFile(ctx, runScriptPath, []byte(scriptContent), 0755); err != nil {
+		return fmt.Errorf("error writing run script: %w", err)
+	}
+
+	pm.Logger.Info("Generated run script for service",
+		zap.String("identifier", string(identifier)),
+		zap.String("scriptPath", runScriptPath),
+		zap.Strings("command", config.Command))
 
 	return nil
 }

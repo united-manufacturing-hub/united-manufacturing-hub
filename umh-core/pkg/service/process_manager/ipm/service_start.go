@@ -125,12 +125,12 @@ func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier
 		// Use exec to replace the shell process instead of creating a subprocess
 		// This eliminates one bash layer while still applying memory limits
 		shellCommand := fmt.Sprintf("ulimit -v %d && exec %s >> %s 2>&1", memoryLimitMB*1024, commandPath, currentLogFile)
-		cmd = exec.CommandContext(ctx, "/bin/bash", "-c", shellCommand)
+		cmd = exec.Command("/bin/bash", "-c", shellCommand)
 	} else {
 		// Direct execution without memory limits - cleanest approach
 		// Set up logging via shell redirection for simplicity
 		redirectedCommand := fmt.Sprintf("%s >> %s 2>&1", commandPath, currentLogFile)
-		cmd = exec.CommandContext(ctx, "/bin/bash", "-c", redirectedCommand)
+		cmd = exec.Command("/bin/bash", "-c", redirectedCommand)
 	}
 
 	// Set up process group for better process management

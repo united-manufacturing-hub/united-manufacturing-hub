@@ -92,6 +92,7 @@ var _ = Describe("ProcessManager", func() {
 		It("should create a new service successfully", func() {
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "Hello World"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 					"run.sh":      "#!/bin/bash\necho 'Hello World'",
@@ -146,6 +147,7 @@ var _ = Describe("ProcessManager", func() {
 		It("should return error when service already exists", func() {
 			servicePath := "existing-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "test"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 				},
@@ -164,6 +166,7 @@ var _ = Describe("ProcessManager", func() {
 		It("should handle context cancellation", func() {
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "test"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 				},
@@ -196,6 +199,7 @@ var _ = Describe("ProcessManager", func() {
 
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "test"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 				},
@@ -225,6 +229,7 @@ var _ = Describe("ProcessManager", func() {
 
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "test"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 				},
@@ -243,6 +248,7 @@ var _ = Describe("ProcessManager", func() {
 		It("should cleanup old PID file and retry creation", func() {
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "test"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 				},
@@ -296,6 +302,7 @@ var _ = Describe("ProcessManager", func() {
 		It("should remove a service successfully when no process is running", func() {
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "test"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 				},
@@ -342,6 +349,7 @@ var _ = Describe("ProcessManager", func() {
 		It("should remove a service successfully when process is not running but .pid file exists", func() {
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "test"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 				},
@@ -385,6 +393,7 @@ var _ = Describe("ProcessManager", func() {
 		It("should handle corrupted .pid file gracefully", func() {
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "test"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 				},
@@ -394,7 +403,7 @@ var _ = Describe("ProcessManager", func() {
 			err := pm.Create(ctx, servicePath, config, fsService)
 			Expect(err).ToNot(HaveOccurred())
 
-			// Process the create task
+			// Process the creation
 			err = pm.Reconcile(ctx, fsService)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -497,6 +506,7 @@ var _ = Describe("ProcessManager", func() {
 			// Create a service first for start tests
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/bash", "-c", "echo 'Hello World'; sleep 10"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 					"run.sh":      "#!/bin/bash\necho 'Hello World'\nsleep 10", // Long-running script for testing
@@ -643,6 +653,7 @@ var _ = Describe("ProcessManager", func() {
 			// Create a service first for stop tests
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/bash", "-c", "echo 'Hello World'; sleep 10"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 					"run.sh":      "#!/bin/bash\necho 'Hello World'\nsleep 10",
@@ -814,6 +825,7 @@ var _ = Describe("ProcessManager", func() {
 			// Create a service first for restart tests
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/bash", "-c", "echo 'Hello World'; sleep 10"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 					"run.sh":      "#!/bin/bash\necho 'Hello World'\nsleep 10",
@@ -977,6 +989,7 @@ var _ = Describe("ProcessManager", func() {
 		It("should return service status for existing service with no process running", func() {
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "Hello World"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 					"run.sh":      "#!/bin/bash\necho 'Hello World'",
@@ -1003,6 +1016,7 @@ var _ = Describe("ProcessManager", func() {
 		It("should return service status for existing service with process running", func() {
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "Hello World"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 					"run.sh":      "#!/bin/bash\necho 'Hello World'",
@@ -1067,6 +1081,7 @@ var _ = Describe("ProcessManager", func() {
 		It("should handle corrupted PID file gracefully", func() {
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "test"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 				},
@@ -1110,6 +1125,7 @@ var _ = Describe("ProcessManager", func() {
 		It("should handle filesystem error when reading PID file", func() {
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "test"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 				},
@@ -1147,6 +1163,7 @@ var _ = Describe("ProcessManager", func() {
 		It("should return true for existing service", func() {
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "test"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 				},
@@ -1174,6 +1191,7 @@ var _ = Describe("ProcessManager", func() {
 		It("should return false after service is removed", func() {
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "test"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 				},
@@ -1204,6 +1222,7 @@ var _ = Describe("ProcessManager", func() {
 			service3 := "non-existent-service"
 
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "test"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 				},
@@ -1284,6 +1303,7 @@ var _ = Describe("ProcessManager", func() {
 		It("should return empty exit history for new service", func() {
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "test"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 				},
@@ -1315,6 +1335,7 @@ var _ = Describe("ProcessManager", func() {
 		It("should record exit events when process terminates", func() {
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "test"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 				},
@@ -1344,6 +1365,7 @@ var _ = Describe("ProcessManager", func() {
 		It("should record signal-based exit events", func() {
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "test"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 				},
@@ -1372,6 +1394,7 @@ var _ = Describe("ProcessManager", func() {
 		It("should maintain multiple exit events in chronological order", func() {
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "test"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 				},
@@ -1414,6 +1437,7 @@ var _ = Describe("ProcessManager", func() {
 		It("should limit exit history to prevent unbounded growth", func() {
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "test"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 				},
@@ -1461,6 +1485,7 @@ var _ = Describe("ProcessManager", func() {
 		It("should return config for existing service", func() {
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/usr/bin/my-app", "--config", "app.conf"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 					"app.conf":    "setting=production",
@@ -1497,6 +1522,7 @@ var _ = Describe("ProcessManager", func() {
 		It("should handle service with no config files", func() {
 			servicePath := "simple-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command:     []string{"/bin/echo", "simple"},
 				ConfigFiles: map[string]string{}, // Empty config files
 				MemoryLimit: 0,
 				LogFilesize: 0,
@@ -1534,6 +1560,7 @@ var _ = Describe("ProcessManager", func() {
 		It("should return config file content for existing service and file", func() {
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/usr/bin/database-server", "--port", "5432"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "database:\n  host: localhost\n  port: 5432",
 					"app.conf":    "debug=true\nport=8080",
@@ -1594,6 +1621,7 @@ var _ = Describe("ProcessManager", func() {
 		It("should handle empty config file content", func() {
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "test"},
 				ConfigFiles: map[string]string{
 					"empty.conf":  "", // Empty file
 					"normal.conf": "content=value",
@@ -1635,6 +1663,7 @@ var _ = Describe("ProcessManager", func() {
 		It("should return empty logs for service with no log file", func() {
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "test"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 				},
@@ -1666,6 +1695,7 @@ var _ = Describe("ProcessManager", func() {
 		It("should return empty logs for empty log file", func() {
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "test"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 				},
@@ -1705,6 +1735,7 @@ var _ = Describe("ProcessManager", func() {
 		It("should parse log entries correctly", func() {
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "test"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 				},
@@ -1759,6 +1790,7 @@ var _ = Describe("ProcessManager", func() {
 		It("should handle malformed log entries gracefully", func() {
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "test"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 				},
@@ -1818,6 +1850,7 @@ just plain text
 		It("should handle filesystem errors when reading log file", func() {
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "test"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 				},
@@ -1859,6 +1892,7 @@ just plain text
 		It("should handle filesystem errors when checking log file existence", func() {
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "test"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 				},
@@ -1981,6 +2015,7 @@ just plain text
 		It("should create a service with real filesystem", func() {
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "Hello World"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 					"run.sh":      "#!/bin/bash\necho 'Hello World'",
