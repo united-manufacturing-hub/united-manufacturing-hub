@@ -255,6 +255,8 @@ func NewDefaultService() Service {
 func (s *DefaultService) safeLogWarnf(format string, args ...interface{}) {
 	if s.logger != nil {
 		s.logger.Warnf(format, args...)
+	} else {
+		fmt.Printf("Warning: %s\n", fmt.Sprintf(format, args...))
 	}
 }
 
@@ -262,6 +264,8 @@ func (s *DefaultService) safeLogWarnf(format string, args ...interface{}) {
 func (s *DefaultService) safeLogDebugf(format string, args ...interface{}) {
 	if s.logger != nil {
 		s.logger.Debugf(format, args...)
+	} else {
+		fmt.Printf("Debug: %s\n", fmt.Sprintf(format, args...))
 	}
 }
 
