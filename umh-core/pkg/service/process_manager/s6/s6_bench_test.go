@@ -20,13 +20,14 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 
 	"github.com/cactus/tai64"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -126,7 +127,7 @@ func parseLogLineOptimized(line string) process_shared.LogEntry {
 
 	// Try to parse the timestamp
 	// We are using ParseNano over time.Parse because it is faster for our specific time format
-	timestamp, err := ParseNano(timestampStr)
+	timestamp, err := process_shared.ParseNano(timestampStr)
 	if err != nil {
 		return process_shared.LogEntry{Content: line}
 	}
@@ -146,7 +147,7 @@ func parseLogLineOriginal(line string) process_shared.LogEntry {
 	}
 
 	// We are using ParseNano over time.Parse because it is faster for our specific time format
-	timestamp, err := ParseNano(parts[0])
+	timestamp, err := process_shared.ParseNano(parts[0])
 	if err != nil {
 		return process_shared.LogEntry{Content: line}
 	}
