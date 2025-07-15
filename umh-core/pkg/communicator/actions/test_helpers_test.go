@@ -92,6 +92,7 @@ type ThreadSafeChannelCollector struct {
 	ch       chan *models.UMHMessage
 	done     chan struct{}
 	started  bool
+	wg       sync.WaitGroup
 }
 
 // NewThreadSafeChannelCollector creates a new thread-safe channel collector
@@ -118,7 +119,9 @@ func (tsc *ThreadSafeChannelCollector) StartCollecting() {
 	}
 	tsc.started = true
 
+	tsc.wg.Add(1)
 	go func() {
+		defer tsc.wg.Done()
 		for {
 			select {
 			case msg, ok := <-tsc.ch:
@@ -155,17 +158,19 @@ func (tsc *ThreadSafeChannelCollector) GetMessageCount() int {
 // Stop stops the collector and closes the channel safely
 func (tsc *ThreadSafeChannelCollector) Stop() {
 	tsc.mu.Lock()
-	defer tsc.mu.Unlock()
-
 	if !tsc.started {
+		tsc.mu.Unlock()
 		return
 	}
 
 	// Signal the goroutine to stop first
 	close(tsc.done)
 	tsc.started = false
+	tsc.mu.Unlock()
 
-	// Close the channel after signaling stop
-	// This prevents new sends but allows the goroutine to finish
+	// Wait for the collecting goroutine to finish
+	tsc.wg.Wait()
+
+	// Now it's safe to close the channel since no goroutine is reading from it
 	close(tsc.ch)
 }
