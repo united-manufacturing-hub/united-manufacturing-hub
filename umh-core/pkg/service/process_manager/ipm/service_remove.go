@@ -42,7 +42,12 @@ func (pm *ProcessManager) removeService(ctx context.Context, identifier serviceI
 	servicePath := filepath.Join(pm.serviceDirectory, string(identifier))
 
 	// Close the log file for this service to prevent file handle leaks
-	pm.logManager.UnregisterService(identifier)
+	if pm.logManager != nil {
+		pm.logManager.UnregisterService(identifier)
+	} else {
+		pm.Logger.Warn("LogManager is nil - skipping service unregistration from log rotation",
+			zap.String("identifier", string(identifier)))
+	}
 
 	// Attempt to terminate any running process gracefully
 	if err := pm.terminateServiceProcess(ctx, identifier, servicePath, fsService); err != nil {

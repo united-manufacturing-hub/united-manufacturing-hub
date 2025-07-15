@@ -21,10 +21,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/ipm"
 )
 
-// NewDefaultService creates a new default S6 service
+// NewDefaultService creates a new default IPM service
 func NewDefaultService() Service {
 	serviceLogger := logger.For(logger.ComponentS6Service)
-	return &ipm.ProcessManager{
-		Logger: serviceLogger,
-	}
+	return ipm.NewProcessManager(serviceLogger)
 }

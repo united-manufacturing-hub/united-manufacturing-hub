@@ -92,7 +92,12 @@ func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier
 	}
 
 	// Register service with log manager for rotation monitoring
-	pm.logManager.RegisterService(identifier, logPath, config.LogFilesize)
+	if pm.logManager != nil {
+		pm.logManager.RegisterService(identifier, logPath, config.LogFilesize)
+	} else {
+		pm.Logger.Warn("LogManager is nil - skipping service registration for log rotation",
+			zap.String("identifier", string(identifier)))
+	}
 
 	// Determine the command to execute - for now, assume there's a "run.sh" script
 	// TODO: This should be configurable in the service config

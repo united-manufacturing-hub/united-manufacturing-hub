@@ -102,6 +102,10 @@ func WithServiceDirectory(dir string) ProcessManagerOption {
 
 // NewProcessManager creates a new ProcessManager with the given options
 func NewProcessManager(logger *zap.SugaredLogger, options ...ProcessManagerOption) *ProcessManager {
+	if logger == nil {
+		panic("logger cannot be nil - ProcessManager requires a valid logger")
+	}
+
 	pm := &ProcessManager{
 		Logger:           logger,
 		services:         make(map[serviceIdentifier]service),
@@ -515,9 +519,13 @@ func (pm *ProcessManager) Close() error {
 	pm.Logger.Info("Closing ProcessManager and all log files")
 
 	// Close all log files
-	if err := pm.logManager.CloseAll(); err != nil {
-		pm.Logger.Error("Error closing log files", zap.Error(err))
-		return err
+	if pm.logManager != nil {
+		if err := pm.logManager.CloseAll(); err != nil {
+			pm.Logger.Error("Error closing log files", zap.Error(err))
+			return err
+		}
+	} else {
+		pm.Logger.Warn("LogManager is nil - skipping log file cleanup")
 	}
 
 	return nil

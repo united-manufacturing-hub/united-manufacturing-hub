@@ -58,9 +58,13 @@ func (pm *ProcessManager) step(ctx context.Context, fsService filesystem.Service
 	}
 
 	// Before processing tasks, check and rotate logs if needed
-	if err := pm.logManager.CheckAndRotate(ctx, fsService); err != nil {
-		pm.Logger.Error("Error during log rotation", zap.Error(err))
-		// Continue with task processing even if log rotation fails
+	if pm.logManager != nil {
+		if err := pm.logManager.CheckAndRotate(ctx, fsService); err != nil {
+			pm.Logger.Error("Error during log rotation", zap.Error(err))
+			// Continue with task processing even if log rotation fails
+		}
+	} else {
+		pm.Logger.Warn("LogManager is nil - skipping log rotation. This should not happen in production.")
 	}
 
 	// Check if there are any tasks to process
