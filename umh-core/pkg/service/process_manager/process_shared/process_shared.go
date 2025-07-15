@@ -14,7 +14,11 @@
 
 package process_shared
 
-import "time"
+import (
+	"bytes"
+	"strings"
+	"time"
+)
 
 // ServiceStatus represents the status of an S6 service
 type ServiceStatus string
@@ -89,4 +93,113 @@ type LogEntry struct {
 	Timestamp time.Time `json:"timestamp"`
 	// Content of the log entry
 	Content string `json:"content"`
+}
+
+// ParseLogsFromBytes is a zero-allocation* parser for an s6 "current"
+// file.  It scans the buffer **once**, pre-allocates the result slice
+// and never calls strings.Split/Index, so the costly
+// runtime.growslice/strings.* nodes vanish from the profile.
+//
+//	*apart from the unavoidable string↔[]byte conversions needed for the
+//	LogEntry struct – those are just header copies, no heap memcopy.
+func ParseLogsFromBytes(buf []byte) ([]LogEntry, error) {
+	// Trim one trailing newline that is always present in rotated logs.
+	buf = bytes.TrimSuffix(buf, []byte{'\n'})
+
+	// 1) -------- pre-allocation --------------------------------------
+	nLines := bytes.Count(buf, []byte{'\n'}) + 1
+	entries := make([]LogEntry, 0, nLines) // avoids  runtime.growslice
+
+	// 2) -------- single pass over the buffer -------------------------
+	for start := 0; start < len(buf); {
+		// find next '\n'
+		nl := bytes.IndexByte(buf[start:], '\n')
+		var line []byte
+		if nl == -1 {
+			line = buf[start:]
+			start = len(buf)
+		} else {
+			line = buf[start : start+nl]
+			start += nl + 1
+		}
+		if len(line) == 0 { // empty line – rotate artefact
+			continue
+		}
+
+		// 3) -------- parse one line ----------------------------------
+		// format: 2025-04-20 13:01:02.123456789␠␠payload
+		sep := bytes.Index(line, []byte("  "))
+		if sep == -1 || sep < 29 { // malformed – keep raw
+			entries = append(entries, LogEntry{Content: string(line)})
+			continue
+		}
+
+		ts, err := ParseNano(string(line[:sep])) // ParseNano is already fast
+		if err != nil {
+			entries = append(entries, LogEntry{Content: string(line)})
+			continue
+		}
+
+		entries = append(entries, LogEntry{
+			Timestamp: ts,
+			Content:   string(line[sep+2:]),
+		})
+	}
+	return entries, nil
+}
+
+// ParseLogsFromBytes_Unoptimized is the more readable not optimized version of ParseLogsFromBytes
+func ParseLogsFromBytes_Unoptimized(content []byte) ([]LogEntry, error) {
+	// Split logs by newline
+	logs := strings.Split(strings.TrimSpace(string(content)), "\n")
+
+	// Parse each log line into structured entries
+	var entries []LogEntry
+	for _, line := range logs {
+		if line == "" {
+			continue
+		}
+
+		entry := parseLogLine(line)
+		if !entry.Timestamp.IsZero() {
+			entries = append(entries, entry)
+		}
+	}
+
+	return entries, nil
+}
+
+// parseLogLine parses a log line from S6 format and returns a LogEntry
+func parseLogLine(line string) LogEntry {
+	// Quick check for empty strings or too short lines
+	if len(line) < 28 { // Minimum length for "YYYY-MM-DD HH:MM:SS.<9 digit nanoseconds>  content"
+		return LogEntry{Content: line}
+	}
+
+	// Check if we have the double space separator
+	sepIdx := strings.Index(line, "  ")
+	if sepIdx == -1 || sepIdx > 29 {
+		return LogEntry{Content: line}
+	}
+
+	// Extract timestamp part
+	timestampStr := line[:sepIdx]
+
+	// Extract content part (after the double space)
+	content := ""
+	if sepIdx+2 < len(line) {
+		content = line[sepIdx+2:]
+	}
+
+	// Try to parse the timestamp
+	// We are using ParseNano over time.Parse because it is faster for our specific time format
+	timestamp, err := ParseNano(timestampStr)
+	if err != nil {
+		return LogEntry{Content: line}
+	}
+
+	return LogEntry{
+		Timestamp: timestamp,
+		Content:   content,
+	}
 }

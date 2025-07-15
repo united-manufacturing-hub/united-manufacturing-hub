@@ -1,17 +1,18 @@
+//go:build s6_process_manager
+
 // Copyright 2025 UMH Systems GmbH
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package s6_test
 
 import (
@@ -22,7 +23,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/s6"
 
@@ -424,7 +424,7 @@ var _ = Describe("S6 Service", func() {
 		BeforeEach(func() {
 			ctx = context.Background()
 			mockFS = filesystem.NewMockFileSystem()
-			svc = process_manager.NewDefaultService().(*s6.DefaultService)
+			svc = &s6.DefaultService{Logger: nil}
 			svcPath = filepath.Join(constants.S6BaseDir, "my-service")
 			logDir = filepath.Join(constants.S6LogBaseDir, "my-service")
 
@@ -621,7 +621,7 @@ var _ = Describe("MaxFunc Approach for Rotated Files", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		// Use MaxFunc to find latest file
-		service := process_manager.NewDefaultService().(*s6.DefaultService)
+		service := &s6.DefaultService{Logger: nil}
 		result := service.FindLatestRotatedFile(entries)
 
 		// Should return the chronologically latest file
@@ -629,7 +629,7 @@ var _ = Describe("MaxFunc Approach for Rotated Files", func() {
 	})
 
 	It("should handle empty directory gracefully", func() {
-		service := process_manager.NewDefaultService().(*s6.DefaultService)
+		service := &s6.DefaultService{Logger: nil}
 		result := service.FindLatestRotatedFile(entries)
 		Expect(result).To(BeEmpty())
 	})
@@ -646,7 +646,7 @@ var _ = Describe("MaxFunc Approach for Rotated Files", func() {
 		entries, err := fsService.Glob(ctx, filepath.Join(logDir, "@*.s")) //nolint:staticcheck // entries used in FindLatestRotatedFile
 		Expect(err).ToNot(HaveOccurred())
 
-		service := process_manager.NewDefaultService().(*s6.DefaultService)
+		service := &s6.DefaultService{Logger: nil}
 		result := service.FindLatestRotatedFile(entries)
 		Expect(result).To(Equal(filePath))
 	})
@@ -672,7 +672,7 @@ var _ = Describe("MaxFunc Approach for Rotated Files", func() {
 		entries, err := fsService.Glob(ctx, filepath.Join(logDir, "@*.s")) //nolint:staticcheck // entries used in FindLatestRotatedFile
 		Expect(err).ToNot(HaveOccurred())
 
-		service := process_manager.NewDefaultService().(*s6.DefaultService)
+		service := &s6.DefaultService{Logger: nil}
 		result := service.FindLatestRotatedFile(entries)
 		Expect(result).To(Equal(rotatedFilePath))
 	})
@@ -707,7 +707,7 @@ var _ = Describe("MaxFunc Approach for Rotated Files", func() {
 		entries, err := fsService.Glob(ctx, filepath.Join(logDir, "@*.s")) //nolint:staticcheck // entries used in FindLatestRotatedFile
 		Expect(err).ToNot(HaveOccurred())
 
-		service := process_manager.NewDefaultService().(*s6.DefaultService)
+		service := &s6.DefaultService{Logger: nil}
 		result := service.FindLatestRotatedFile(entries)
 		Expect(result).To(Equal(expectedLatest))
 	})

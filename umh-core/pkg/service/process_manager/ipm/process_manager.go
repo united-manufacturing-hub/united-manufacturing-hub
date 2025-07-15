@@ -131,15 +131,14 @@ func (pm *ProcessManager) Create(ctx context.Context, servicePath string, config
 		},
 	}
 
-	// Add to toBeCreated list
-	// pm.toBeCreated = append(pm.toBeCreated, identifier) // This line is removed as per the new_code
+	// Add to task queue
 	pm.taskQueue = append(pm.taskQueue, Task{
 		Identifier: identifier,
 		Operation:  OperationCreate,
 	})
 
-	// Advance the service handling process
-	return pm.step(ctx, fsService)
+	// Tasks are queued and will be processed by Reconcile
+	return nil
 }
 
 func (pm *ProcessManager) Remove(ctx context.Context, servicePath string, fsService filesystem.Service) error {
@@ -156,15 +155,14 @@ func (pm *ProcessManager) Remove(ctx context.Context, servicePath string, fsServ
 	// Remove from services map (this is safe as for removal we only need the serviceIdentifier)
 	delete(pm.services, identifier)
 
-	// Add to toBeRemoved list
-	// pm.toBeRemoved = append(pm.toBeRemoved, identifier) // This line is removed as per the new_code
+	// Add to task queue
 	pm.taskQueue = append(pm.taskQueue, Task{
 		Identifier: identifier,
 		Operation:  OperationRemove,
 	})
 
-	// Advance the service handling process
-	return pm.step(ctx, fsService)
+	// Tasks are queued and will be processed by Reconcile
+	return nil
 }
 
 func (pm *ProcessManager) Start(ctx context.Context, servicePath string, fsService filesystem.Service) error {
@@ -173,15 +171,19 @@ func (pm *ProcessManager) Start(ctx context.Context, servicePath string, fsServi
 	pm.Logger.Info("Starting process manager service", zap.String("servicePath", servicePath))
 
 	identifier := servicePathToIdentifier(servicePath)
-	// Add to toBeStarted list
-	// pm.toBeStarted = append(pm.toBeStarted, identifier) // This line is removed as per the new_code
+	// Validate that service exists before queuing
+	if _, ok := pm.services[identifier]; !ok {
+		return fmt.Errorf("service %s not found", servicePath)
+	}
+
+	// Add to task queue
 	pm.taskQueue = append(pm.taskQueue, Task{
 		Identifier: identifier,
 		Operation:  OperationStart,
 	})
 
-	// Advance the service handling process
-	return pm.step(ctx, fsService)
+	// Tasks are queued and will be processed by Reconcile
+	return nil
 }
 
 func (pm *ProcessManager) Stop(ctx context.Context, servicePath string, fsService filesystem.Service) error {
@@ -190,15 +192,19 @@ func (pm *ProcessManager) Stop(ctx context.Context, servicePath string, fsServic
 	pm.Logger.Info("Stopping process manager service", zap.String("servicePath", servicePath))
 
 	identifier := servicePathToIdentifier(servicePath)
-	// Add to toBeStopped list
-	// pm.toBeStopped = append(pm.toBeStopped, identifier) // This line is removed as per the new_code
+	// Validate that service exists before queuing
+	if _, ok := pm.services[identifier]; !ok {
+		return fmt.Errorf("service %s not found", servicePath)
+	}
+
+	// Add to task queue
 	pm.taskQueue = append(pm.taskQueue, Task{
 		Identifier: identifier,
 		Operation:  OperationStop,
 	})
 
-	// Advance the service handling process
-	return pm.step(ctx, fsService)
+	// Tasks are queued and will be processed by Reconcile
+	return nil
 }
 
 func (pm *ProcessManager) Restart(ctx context.Context, servicePath string, fsService filesystem.Service) error {
@@ -207,15 +213,19 @@ func (pm *ProcessManager) Restart(ctx context.Context, servicePath string, fsSer
 	pm.Logger.Info("Restarting process manager service", zap.String("servicePath", servicePath))
 
 	identifier := servicePathToIdentifier(servicePath)
-	// Add to toBeRestarted list
-	// pm.toBeRestarted = append(pm.toBeRestarted, identifier) // This line is removed as per the new_code
+	// Validate that service exists before queuing
+	if _, ok := pm.services[identifier]; !ok {
+		return fmt.Errorf("service %s not found", servicePath)
+	}
+
+	// Add to task queue
 	pm.taskQueue = append(pm.taskQueue, Task{
 		Identifier: identifier,
 		Operation:  OperationRestart,
 	})
 
-	// Advance the service handling process
-	return pm.step(ctx, fsService)
+	// Tasks are queued and will be processed by Reconcile
+	return nil
 }
 
 func (pm *ProcessManager) Status(ctx context.Context, servicePath string, fsService filesystem.Service) (process_shared.ServiceInfo, error) {
@@ -288,6 +298,19 @@ func (pm *ProcessManager) EnsureSupervision(ctx context.Context, servicePath str
 	pm.Logger.Info("Ensuring supervision of process manager service", zap.String("servicePath", servicePath))
 
 	return false, errors.New("not implemented")
+}
+
+// Reconcile processes all queued tasks in the task queue.
+// This is the main entry point for processing service operations and should be called periodically.
+// It acquires the ProcessManager mutex and processes tasks until the queue is empty or context times out.
+func (pm *ProcessManager) Reconcile(ctx context.Context, fsService filesystem.Service) error {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	pm.Logger.Debug("Starting reconciliation", zap.Int("queueLength", len(pm.taskQueue)))
+
+	// Process all queued tasks
+	return pm.step(ctx, fsService)
 }
 
 // Close closes all log files and performs cleanup

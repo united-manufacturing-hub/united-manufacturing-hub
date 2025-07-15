@@ -270,7 +270,11 @@ test: vet nilaway lint
 	go test -v -tags='test $(PROCESS_MANAGER)' ./...
 
 unit-test: vet nilaway lint
+ifeq ($(PROCESS_MANAGER),s6_process_manager)
 	ginkgo -r -v --tags='test $(PROCESS_MANAGER)' --label-filter='!integration && !redpanda-extended && !tls' --fail-fast ./...
+else
+	ginkgo -r -v --tags='test $(PROCESS_MANAGER)' --label-filter='!integration && !redpanda-extended && !tls' --fail-fast --skip-package='./pkg/service/process_manager/s6' ./...
+endif
 
 benchmark:
 	@echo "Running benchmarks..."
@@ -315,20 +319,36 @@ pre-test: build-protobuf stop-all-pods vet nilaway lint
 pre-test-ci: vet lint
 
 integration-test: pre-test
+ifeq ($(PROCESS_MANAGER),s6_process_manager)
 	ginkgo -r -v --tags='test $(PROCESS_MANAGER)' --label-filter='integration' --fail-fast ./...
+else
+	ginkgo -r -v --tags='test $(PROCESS_MANAGER)' --label-filter='integration' --fail-fast --skip-package='./pkg/service/process_manager/s6' ./...
+endif
 
 redpanda-extended-test: pre-test
+ifeq ($(PROCESS_MANAGER),s6_process_manager)
 	ginkgo -r -v --tags='test $(PROCESS_MANAGER)' --label-filter='redpanda-extended' --fail-fast --timeout=1.5h ./...
+else
+	ginkgo -r -v --tags='test $(PROCESS_MANAGER)' --label-filter='redpanda-extended' --fail-fast --timeout=1.5h --skip-package='./pkg/service/process_manager/s6' ./...
+endif
 
 badssl-test: pre-test
+ifeq ($(PROCESS_MANAGER),s6_process_manager)
 	ginkgo -r -v --tags='test $(PROCESS_MANAGER)' --label-filter='tls' --fail-fast ./...
+else
+	ginkgo -r -v --tags='test $(PROCESS_MANAGER)' --label-filter='tls' --fail-fast --skip-package='./pkg/service/process_manager/s6' ./...
+endif
 
 # integration-test-ci: Runs integration tests in CI environments with proper version tagging
 # - Injects VERSION via ldflags into AppVersion for proper error identification in Sentry
 # - CI test failures SHOULD be reported to Sentry (unlike local dev failures)
 # - Helps identify flaky tests by consistently tracking failures in CI pipelines
 integration-test-ci: pre-test-ci
+ifeq ($(PROCESS_MANAGER),s6_process_manager)
 	VERSION=$(VERSION) ginkgo -r -v --tags='test $(PROCESS_MANAGER)' --label-filter='integration' --fail-fast -ldflags="-X 'github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/version.AppVersion=$(VERSION)'" ./...
+else
+	VERSION=$(VERSION) ginkgo -r -v --tags='test $(PROCESS_MANAGER)' --label-filter='integration' --fail-fast -ldflags="-X 'github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/version.AppVersion=$(VERSION)'" --skip-package='./pkg/service/process_manager/s6' ./...
+endif
 
 update-go-dependencies:
 	go get -u ./...

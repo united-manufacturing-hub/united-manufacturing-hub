@@ -16,6 +16,7 @@ package process_manager
 
 import (
 	"context"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
@@ -53,4 +54,7 @@ type Service interface {
 	// s6-svscan if it doesn't, to trigger supervision setup.
 	// Returns true if supervise directory exists (ready for supervision), false otherwise.
 	EnsureSupervision(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error)
+	// Reconcile processes all queued tasks in the task queue.
+	// This is the main entry point for processing service operations and should be called periodically.
+	Reconcile(ctx context.Context, fsService filesystem.Service) error
 }

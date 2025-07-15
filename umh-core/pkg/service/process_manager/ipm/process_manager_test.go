@@ -108,7 +108,15 @@ var _ = Describe("ProcessManager", func() {
 			Expect(service.history.Status).To(Equal(process_shared.ServiceUnknown))
 			Expect(service.history.ExitHistory).To(HaveLen(0))
 
-			// Verify service was added to task queue (should be empty after step() execution)
+			// Verify task was queued
+			Expect(pm.taskQueue).To(HaveLen(1))
+			Expect(pm.taskQueue[0].Operation).To(Equal(OperationCreate))
+
+			// Process the queued task
+			err = pm.Reconcile(ctx, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Verify service was processed (should be empty after Reconcile() execution)
 			Expect(pm.taskQueue).To(HaveLen(0))
 
 			// Verify directories were created
@@ -152,9 +160,6 @@ var _ = Describe("ProcessManager", func() {
 		})
 
 		It("should handle context cancellation", func() {
-			cancelCtx, cancel := context.WithCancel(context.Background())
-			cancel() // Cancel immediately
-
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
 				ConfigFiles: map[string]string{
@@ -162,7 +167,15 @@ var _ = Describe("ProcessManager", func() {
 				},
 			}
 
-			err := pm.Create(cancelCtx, servicePath, config, fsService)
+			// Create operation should succeed (just queues task)
+			err := pm.Create(ctx, servicePath, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// But Reconcile with cancelled context should fail
+			cancelCtx, cancel := context.WithCancel(context.Background())
+			cancel() // Cancel immediately
+
+			err = pm.Reconcile(cancelCtx, fsService)
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(Equal(context.Canceled))
 		})
@@ -186,7 +199,12 @@ var _ = Describe("ProcessManager", func() {
 				},
 			}
 
-			err := pm.Create(ctx, servicePath, config, mockFS)
+			// Create should succeed (just queues task)
+			err := pm.Create(ctx, servicePath, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// But Reconcile should fail due to filesystem error
+			err = pm.Reconcile(ctx, mockFS)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("error creating directory"))
 		})
@@ -210,7 +228,12 @@ var _ = Describe("ProcessManager", func() {
 				},
 			}
 
-			err := pm.Create(ctx, servicePath, config, mockFS)
+			// Create should succeed (just queues task)
+			err := pm.Create(ctx, servicePath, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// But Reconcile should fail due to filesystem error
+			err = pm.Reconcile(ctx, mockFS)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("error writing config file"))
 		})
@@ -241,8 +264,12 @@ var _ = Describe("ProcessManager", func() {
 				return []byte{}, os.ErrNotExist
 			})
 
-			// First attempt should fail because of cleanup
-			err := pm.Create(ctx, servicePath, config, mockFS)
+			// Create should succeed (just queues task)
+			err := pm.Create(ctx, servicePath, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// First Reconcile attempt should fail because of cleanup
+			err = pm.Reconcile(ctx, mockFS)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("cleaned up old service instance"))
 
@@ -254,11 +281,11 @@ var _ = Describe("ProcessManager", func() {
 			// Simulate PID file being removed after cleanup
 			pidFileExists = false
 
-			// Second attempt should succeed by calling step() again manually
-			err = pm.step(ctx, mockFS)
+			// Second attempt should succeed by calling Reconcile() again manually
+			err = pm.Reconcile(ctx, mockFS)
 			Expect(err).ToNot(HaveOccurred())
 
-			// Verify service was processed (should be empty after step() execution)
+			// Verify service was processed (should be empty after Reconcile() execution)
 			Expect(pm.taskQueue).To(HaveLen(0))
 		})
 	})
@@ -276,6 +303,15 @@ var _ = Describe("ProcessManager", func() {
 			err := pm.Create(ctx, servicePath, config, fsService)
 			Expect(err).ToNot(HaveOccurred())
 
+			// Process the create task first
+			err = pm.Reconcile(ctx, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Verify service was created
+			identifier := servicePathToIdentifier(servicePath)
+			_, exists := pm.services[identifier]
+			Expect(exists).To(BeTrue())
+
 			// Setup mock filesystem to simulate no .pid file (process not running)
 			mockFS := filesystem.NewMockFileSystem()
 			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
@@ -286,15 +322,18 @@ var _ = Describe("ProcessManager", func() {
 			})
 
 			// Remove the service
-			err = pm.Remove(ctx, servicePath, mockFS)
+			err = pm.Remove(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Process the queued remove task
+			err = pm.Reconcile(ctx, mockFS)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Verify service was removed from services map
-			identifier := servicePathToIdentifier(servicePath)
-			_, exists := pm.services[identifier]
+			_, exists = pm.services[identifier]
 			Expect(exists).To(BeFalse())
 
-			// Verify service was processed (should be empty after step() execution)
+			// Verify service was processed (should be empty after Reconcile() execution)
 			Expect(pm.taskQueue).To(HaveLen(0))
 		})
 
@@ -310,6 +349,15 @@ var _ = Describe("ProcessManager", func() {
 			err := pm.Create(ctx, servicePath, config, fsService)
 			Expect(err).ToNot(HaveOccurred())
 
+			// Process the create task first
+			err = pm.Reconcile(ctx, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Verify service was created
+			identifier := servicePathToIdentifier(servicePath)
+			_, exists := pm.services[identifier]
+			Expect(exists).To(BeTrue())
+
 			// Setup mock filesystem to simulate .pid file with non-existent process
 			mockFS := filesystem.NewMockFileSystem()
 			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
@@ -320,12 +368,15 @@ var _ = Describe("ProcessManager", func() {
 			})
 
 			// Remove the service
-			err = pm.Remove(ctx, servicePath, mockFS)
+			err = pm.Remove(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Process the queued remove task
+			err = pm.Reconcile(ctx, mockFS)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Verify service was removed from services map
-			identifier := servicePathToIdentifier(servicePath)
-			_, exists := pm.services[identifier]
+			_, exists = pm.services[identifier]
 			Expect(exists).To(BeFalse())
 		})
 
@@ -341,6 +392,10 @@ var _ = Describe("ProcessManager", func() {
 			err := pm.Create(ctx, servicePath, config, fsService)
 			Expect(err).ToNot(HaveOccurred())
 
+			// Process the create task
+			err = pm.Reconcile(ctx, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
 			// Setup mock filesystem to simulate corrupted .pid file
 			mockFS := filesystem.NewMockFileSystem()
 			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
@@ -350,8 +405,12 @@ var _ = Describe("ProcessManager", func() {
 				return []byte{}, nil
 			})
 
-			// Remove the service - should succeed despite corrupted PID because we continue with cleanup
-			err = pm.Remove(ctx, servicePath, mockFS)
+			// Remove the service
+			err = pm.Remove(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Process the remove task - should succeed despite corrupted PID because we continue with cleanup
+			err = pm.Reconcile(ctx, mockFS)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Verify service was removed from services map
@@ -380,6 +439,10 @@ var _ = Describe("ProcessManager", func() {
 			err := pm.Create(ctx, servicePath, config, fsService)
 			Expect(err).ToNot(HaveOccurred())
 
+			// Process the create task
+			err = pm.Reconcile(ctx, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
 			// Setup mock filesystem to fail on RemoveAll
 			mockFS := filesystem.NewMockFileSystem()
 			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
@@ -392,15 +455,16 @@ var _ = Describe("ProcessManager", func() {
 				return fmt.Errorf("mock filesystem error")
 			})
 
-			err = pm.Remove(ctx, servicePath, mockFS)
+			err = pm.Remove(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Reconcile should fail due to filesystem error
+			err = pm.Reconcile(ctx, mockFS)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("error removing pid file"))
 		})
 
 		It("should handle context cancellation during removal", func() {
-			cancelCtx, cancel := context.WithCancel(context.Background())
-			cancel() // Cancel immediately
-
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
 				ConfigFiles: map[string]string{
@@ -412,7 +476,15 @@ var _ = Describe("ProcessManager", func() {
 			err := pm.Create(ctx, servicePath, config, fsService)
 			Expect(err).ToNot(HaveOccurred())
 
-			err = pm.Remove(cancelCtx, servicePath, fsService)
+			// Remove should succeed (just queues task)
+			err = pm.Remove(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// But Reconcile with cancelled context should fail
+			cancelCtx, cancel := context.WithCancel(context.Background())
+			cancel() // Cancel immediately
+
+			err = pm.Reconcile(cancelCtx, fsService)
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(Equal(context.Canceled))
 		})
@@ -430,6 +502,10 @@ var _ = Describe("ProcessManager", func() {
 			}
 			err := pm.Create(ctx, servicePath, config, fsService)
 			Expect(err).ToNot(HaveOccurred())
+
+			// Process the create task to actually create the service
+			err = pm.Reconcile(ctx, fsService)
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should start a service when no process is running", func() {
@@ -444,19 +520,23 @@ var _ = Describe("ProcessManager", func() {
 				return nil, os.ErrNotExist
 			})
 
+			// Start should succeed (just queues task)
+			err := pm.Start(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Verify task was queued
+			Expect(pm.taskQueue).To(HaveLen(1))
+			Expect(pm.taskQueue[0].Operation).To(Equal(OperationStart))
+
 			// Make EnsureDirectory fail to simulate filesystem issues during startup
 			mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
 				return fmt.Errorf("simulated filesystem error during directory creation")
 			})
 
-			// Start the service - this will fail because EnsureDirectory fails
-			err := pm.Start(ctx, servicePath, mockFS)
+			// Reconcile should fail because EnsureDirectory fails
+			err = pm.Reconcile(ctx, mockFS)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("error ensuring log directory"))
-
-			// Verify service was NOT processed due to error
-			Expect(pm.taskQueue).To(HaveLen(1))
-			Expect(pm.taskQueue[0].Operation).To(Equal(OperationStart))
 		})
 
 		It("should terminate existing process and retry start", func() {
@@ -488,16 +568,20 @@ var _ = Describe("ProcessManager", func() {
 				return nil
 			})
 
-			// First attempt should fail because of existing process termination
-			err := pm.Start(ctx, servicePath, mockFS)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("error terminating existing process"))
+			// Start should succeed (just queues task)
+			err := pm.Start(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
 
-			// Service should still be in the task queue for retry
+			// Verify task was queued
 			identifier := servicePathToIdentifier(servicePath)
 			Expect(pm.taskQueue).To(HaveLen(1))
 			Expect(pm.taskQueue[0].Identifier).To(Equal(identifier))
 			Expect(pm.taskQueue[0].Operation).To(Equal(OperationStart))
+
+			// First Reconcile attempt should fail because of existing process termination
+			err = pm.Reconcile(ctx, mockFS)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("error terminating existing process"))
 		})
 
 		It("should handle filesystem errors during PID file writing", func() {
@@ -509,11 +593,22 @@ var _ = Describe("ProcessManager", func() {
 				return nil, os.ErrNotExist
 			})
 
-			// Since real process execution will fail before PID writing,
-			// we expect the process startup error rather than PID write error
-			err := pm.Start(ctx, servicePath, mockFS)
+			// Mock WriteFile to fail when writing PID file
+			mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+				if filepath.Base(path) == "run.pid" {
+					return fmt.Errorf("mock filesystem error during PID file writing")
+				}
+				return nil // Allow other file writes to succeed
+			})
+
+			// Start should succeed (just queues task)
+			err := pm.Start(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Reconcile should fail during PID file writing
+			err = pm.Reconcile(ctx, mockFS)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("error starting process"))
+			Expect(err.Error()).To(ContainSubstring("error writing PID file"))
 		})
 
 		It("should handle context cancellation during start", func() {
@@ -522,7 +617,12 @@ var _ = Describe("ProcessManager", func() {
 
 			servicePath := "test-service"
 
-			err := pm.Start(cancelCtx, servicePath, fsService)
+			// Start should succeed (just queues task)
+			err := pm.Start(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Reconcile with canceled context should fail
+			err = pm.Reconcile(cancelCtx, fsService)
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(Equal(context.Canceled))
 		})
@@ -548,6 +648,10 @@ var _ = Describe("ProcessManager", func() {
 			}
 			err := pm.Create(ctx, servicePath, config, fsService)
 			Expect(err).ToNot(HaveOccurred())
+
+			// Process the create task to actually create the service
+			err = pm.Reconcile(ctx, fsService)
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should stop a service successfully when no process is running", func() {
@@ -563,10 +667,18 @@ var _ = Describe("ProcessManager", func() {
 			})
 
 			// Stop the service
-			err := pm.Stop(ctx, servicePath, mockFS)
+			err := pm.Stop(ctx, servicePath, fsService)
 			Expect(err).ToNot(HaveOccurred())
 
-			// Verify service was processed (should be empty after step() execution)
+			// Verify task was queued
+			Expect(pm.taskQueue).To(HaveLen(1))
+			Expect(pm.taskQueue[0].Operation).To(Equal(OperationStop))
+
+			// Process the queued task
+			err = pm.Reconcile(ctx, mockFS)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Verify service was processed (should be empty after Reconcile() execution)
 			Expect(pm.taskQueue).To(HaveLen(0))
 
 			// Verify service still exists in services map (only process is stopped, not removed)
@@ -588,10 +700,18 @@ var _ = Describe("ProcessManager", func() {
 			})
 
 			// Stop the service
-			err := pm.Stop(ctx, servicePath, mockFS)
+			err := pm.Stop(ctx, servicePath, fsService)
 			Expect(err).ToNot(HaveOccurred())
 
-			// Verify service was processed (should be empty after step() execution)
+			// Verify task was queued
+			Expect(pm.taskQueue).To(HaveLen(1))
+			Expect(pm.taskQueue[0].Operation).To(Equal(OperationStop))
+
+			// Process the queued task
+			err = pm.Reconcile(ctx, mockFS)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Verify service was processed (should be empty after Reconcile() execution)
 			Expect(pm.taskQueue).To(HaveLen(0))
 
 			// Verify service still exists in services map (only process is stopped, not removed)
@@ -612,8 +732,16 @@ var _ = Describe("ProcessManager", func() {
 				return []byte{}, nil
 			})
 
-			// Stop the service - should succeed despite corrupted PID
-			err := pm.Stop(ctx, servicePath, mockFS)
+			// Stop the service - should succeed (just queues task)
+			err := pm.Stop(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Verify task was queued
+			Expect(pm.taskQueue).To(HaveLen(1))
+			Expect(pm.taskQueue[0].Operation).To(Equal(OperationStop))
+
+			// Process the queued task - should succeed despite corrupted PID
+			err = pm.Reconcile(ctx, mockFS)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Verify service still exists in services map
@@ -648,7 +776,16 @@ var _ = Describe("ProcessManager", func() {
 				return nil
 			})
 
-			err := pm.Stop(ctx, servicePath, mockFS)
+			// Stop should succeed (just queues task)
+			err := pm.Stop(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Verify task was queued
+			Expect(pm.taskQueue).To(HaveLen(1))
+			Expect(pm.taskQueue[0].Operation).To(Equal(OperationStop))
+
+			// Reconcile should fail due to filesystem error
+			err = pm.Reconcile(ctx, mockFS)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("error removing PID file"))
 		})
@@ -659,7 +796,12 @@ var _ = Describe("ProcessManager", func() {
 
 			servicePath := "test-service"
 
-			err := pm.Stop(cancelCtx, servicePath, fsService)
+			// Stop should succeed (just queues task)
+			err := pm.Stop(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Reconcile with canceled context should fail
+			err = pm.Reconcile(cancelCtx, fsService)
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(Equal(context.Canceled))
 		})
@@ -676,6 +818,10 @@ var _ = Describe("ProcessManager", func() {
 				},
 			}
 			err := pm.Create(ctx, servicePath, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Process the create task to actually create the service
+			err = pm.Reconcile(ctx, fsService)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -695,10 +841,12 @@ var _ = Describe("ProcessManager", func() {
 			err := pm.Restart(ctx, servicePath, mockFS)
 			Expect(err).ToNot(HaveOccurred())
 
-			// Verify restart queued a start operation
-			Expect(pm.taskQueue).To(HaveLen(1))
-			Expect(pm.taskQueue[0].Operation).To(Equal(OperationStart))
-			Expect(pm.taskQueue[0].Identifier).To(Equal(servicePathToIdentifier(servicePath)))
+			// Process the restart task (should complete both stop and start)
+			err = pm.Reconcile(ctx, mockFS)
+			Expect(err).ToNot(HaveOccurred())
+
+			// After successful restart, queue should be empty (both stop and start completed)
+			Expect(pm.taskQueue).To(HaveLen(0))
 
 			// Verify service still exists in services map
 			identifier := servicePathToIdentifier(servicePath)
@@ -709,11 +857,11 @@ var _ = Describe("ProcessManager", func() {
 		It("should restart a service successfully when process is running", func() {
 			servicePath := "test-service"
 
-			// Setup mock filesystem to simulate running process with PID file
+			// Setup mock filesystem to simulate running process with PID file that gets cleaned up
 			mockFS := filesystem.NewMockFileSystem()
 			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
 				if filepath.Base(path) == "run.pid" {
-					return []byte("99999"), nil // Non-existent PID for testing
+					return nil, os.ErrNotExist // No PID file exists (simulating clean state)
 				}
 				return []byte{}, nil
 			})
@@ -722,10 +870,12 @@ var _ = Describe("ProcessManager", func() {
 			err := pm.Restart(ctx, servicePath, mockFS)
 			Expect(err).ToNot(HaveOccurred())
 
-			// Verify restart queued a start operation
-			Expect(pm.taskQueue).To(HaveLen(1))
-			Expect(pm.taskQueue[0].Operation).To(Equal(OperationStart))
-			Expect(pm.taskQueue[0].Identifier).To(Equal(servicePathToIdentifier(servicePath)))
+			// Process the restart task (should complete both stop and start)
+			err = pm.Reconcile(ctx, mockFS)
+			Expect(err).ToNot(HaveOccurred())
+
+			// After successful restart, queue should be empty (both stop and start completed)
+			Expect(pm.taskQueue).To(HaveLen(0))
 
 			// Verify service still exists in services map
 			identifier := servicePathToIdentifier(servicePath)
@@ -751,14 +901,23 @@ var _ = Describe("ProcessManager", func() {
 				return nil
 			})
 
-			// Restart the service - should fail during stop
-			err := pm.Restart(ctx, servicePath, mockFS)
+			// Restart should succeed (just queues task)
+			err := pm.Restart(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Verify restart task was queued
+			Expect(pm.taskQueue).To(HaveLen(1))
+			Expect(pm.taskQueue[0].Operation).To(Equal(OperationRestart))
+
+			// Reconcile should fail during stop part of restart
+			err = pm.Reconcile(ctx, mockFS)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("error removing PID file"))
 
-			// Verify NO start operation was queued due to stop failure
+			// Verify NO start operation was queued due to stop failure during restart
+			// Task queue should still have the failed restart task
 			Expect(pm.taskQueue).To(HaveLen(1))
-			Expect(pm.taskQueue[0].Operation).To(Equal(OperationRestart)) // Original task still there
+			Expect(pm.taskQueue[0].Operation).To(Equal(OperationRestart))
 		})
 
 		It("should handle multiple restart operations in sequence", func() {
@@ -777,14 +936,14 @@ var _ = Describe("ProcessManager", func() {
 			err := pm.Restart(ctx, servicePath, mockFS)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(pm.taskQueue).To(HaveLen(1))
-			Expect(pm.taskQueue[0].Operation).To(Equal(OperationStart))
+			Expect(pm.taskQueue[0].Operation).To(Equal(OperationRestart))
 
-			// Second restart (should add another start task)
+			// Second restart (should add another restart task)
 			err = pm.Restart(ctx, servicePath, mockFS)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(pm.taskQueue).To(HaveLen(2))
-			Expect(pm.taskQueue[0].Operation).To(Equal(OperationStart))
-			Expect(pm.taskQueue[1].Operation).To(Equal(OperationStart))
+			Expect(pm.taskQueue[0].Operation).To(Equal(OperationRestart))
+			Expect(pm.taskQueue[1].Operation).To(Equal(OperationRestart))
 		})
 
 		It("should return error when service does not exist", func() {
@@ -801,7 +960,12 @@ var _ = Describe("ProcessManager", func() {
 
 			servicePath := "test-service"
 
-			err := pm.Restart(cancelCtx, servicePath, fsService)
+			// Restart should succeed (just queues task)
+			err := pm.Restart(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Reconcile with canceled context should fail
+			err = pm.Reconcile(cancelCtx, fsService)
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(Equal(context.Canceled))
 		})
@@ -912,16 +1076,22 @@ var _ = Describe("ProcessManager", func() {
 				GinkgoT().Logf("Create returned error: %v", err)
 			}
 
-			// If Create failed, let's see what's in the task queue
+			Expect(err).ToNot(HaveOccurred())
+
+			// Verify task was queued
 			GinkgoT().Logf("Task queue length after Create: %d", len(pm.taskQueue))
 			if len(pm.taskQueue) > 0 {
 				GinkgoT().Logf("First task in queue: %+v", pm.taskQueue[0])
 			}
+			Expect(pm.taskQueue).To(HaveLen(1), "Task queue should have one task after Create")
+			Expect(pm.taskQueue[0].Operation).To(Equal(OperationCreate))
 
+			// Process the queued task
+			err = pm.Reconcile(ctx, realFS)
 			Expect(err).ToNot(HaveOccurred())
 
-			// Debug: Check if task queue is empty (meaning step() processed the task)
-			Expect(pm.taskQueue).To(HaveLen(0), "Task queue should be empty after Create")
+			// Debug: Check if task queue is empty (meaning Reconcile() processed the task)
+			Expect(pm.taskQueue).To(HaveLen(0), "Task queue should be empty after Reconcile")
 
 			// Verify service was added to services map
 			identifier := servicePathToIdentifier(servicePath)

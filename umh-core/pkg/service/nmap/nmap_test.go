@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/s6"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -36,7 +35,7 @@ import (
 // Just copy-paste the actual log lines and this will convert them to the test format
 func parseLogOutput(rawLogs string) []process_shared.LogEntry {
 	// Use the existing optimized s6 parsing function
-	entries, err := s6.ParseLogsFromBytes([]byte(rawLogs))
+	entries, err := process_shared.ParseLogsFromBytes([]byte(rawLogs))
 	if err != nil {
 		// Fallback to empty slice if parsing fails
 		return []process_shared.LogEntry{}

@@ -1,28 +1,27 @@
+//go:build s6_process_manager
+
 // Copyright 2025 UMH Systems GmbH
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package s6
 
 import (
-	"bytes"
 	"cmp"
 	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -32,6 +31,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 
 	"github.com/cactus/tai64"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
@@ -1310,115 +1311,6 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	return out, nil
 }
 
-// ParseLogsFromBytes is a zero-allocation* parser for an s6 "current"
-// file.  It scans the buffer **once**, pre-allocates the result slice
-// and never calls strings.Split/Index, so the costly
-// runtime.growslice/strings.* nodes vanish from the profile.
-//
-//	*apart from the unavoidable string↔[]byte conversions needed for the
-//	LogEntry struct – those are just header copies, no heap memcopy.
-func ParseLogsFromBytes(buf []byte) ([]process_shared.LogEntry, error) {
-	// Trim one trailing newline that is always present in rotated logs.
-	buf = bytes.TrimSuffix(buf, []byte{'\n'})
-
-	// 1) -------- pre-allocation --------------------------------------
-	nLines := bytes.Count(buf, []byte{'\n'}) + 1
-	entries := make([]process_shared.LogEntry, 0, nLines) // avoids  runtime.growslice
-
-	// 2) -------- single pass over the buffer -------------------------
-	for start := 0; start < len(buf); {
-		// find next '\n'
-		nl := bytes.IndexByte(buf[start:], '\n')
-		var line []byte
-		if nl == -1 {
-			line = buf[start:]
-			start = len(buf)
-		} else {
-			line = buf[start : start+nl]
-			start += nl + 1
-		}
-		if len(line) == 0 { // empty line – rotate artefact
-			continue
-		}
-
-		// 3) -------- parse one line ----------------------------------
-		// format: 2025-04-20 13:01:02.123456789␠␠payload
-		sep := bytes.Index(line, []byte("  "))
-		if sep == -1 || sep < 29 { // malformed – keep raw
-			entries = append(entries, process_shared.LogEntry{Content: string(line)})
-			continue
-		}
-
-		ts, err := ParseNano(string(line[:sep])) // ParseNano is already fast
-		if err != nil {
-			entries = append(entries, process_shared.LogEntry{Content: string(line)})
-			continue
-		}
-
-		entries = append(entries, process_shared.LogEntry{
-			Timestamp: ts,
-			Content:   string(line[sep+2:]),
-		})
-	}
-	return entries, nil
-}
-
-// ParseLogsFromBytes_Unoptimized is the more readable not optimized version of ParseLogsFromBytes
-func ParseLogsFromBytes_Unoptimized(content []byte) ([]process_shared.LogEntry, error) {
-	// Split logs by newline
-	logs := strings.Split(strings.TrimSpace(string(content)), "\n")
-
-	// Parse each log line into structured entries
-	var entries []process_shared.LogEntry
-	for _, line := range logs {
-		if line == "" {
-			continue
-		}
-
-		entry := parseLogLine(line)
-		if !entry.Timestamp.IsZero() {
-			entries = append(entries, entry)
-		}
-	}
-
-	return entries, nil
-}
-
-// parseLogLine parses a log line from S6 format and returns a LogEntry
-func parseLogLine(line string) process_shared.LogEntry {
-	// Quick check for empty strings or too short lines
-	if len(line) < 28 { // Minimum length for "YYYY-MM-DD HH:MM:SS.<9 digit nanoseconds>  content"
-		return process_shared.LogEntry{Content: line}
-	}
-
-	// Check if we have the double space separator
-	sepIdx := strings.Index(line, "  ")
-	if sepIdx == -1 || sepIdx > 29 {
-		return process_shared.LogEntry{Content: line}
-	}
-
-	// Extract timestamp part
-	timestampStr := line[:sepIdx]
-
-	// Extract content part (after the double space)
-	content := ""
-	if sepIdx+2 < len(line) {
-		content = line[sepIdx+2:]
-	}
-
-	// Try to parse the timestamp
-	// We are using ParseNano over time.Parse because it is faster for our specific time format
-	timestamp, err := ParseNano(timestampStr)
-	if err != nil {
-		return process_shared.LogEntry{Content: line}
-	}
-
-	return process_shared.LogEntry{
-		Timestamp: timestamp,
-		Content:   content,
-	}
-}
-
 // EnsureSupervision checks if the supervise directory exists for a service and notifies
 // s6-svscan if it doesn't, to trigger supervision setup.
 // Returns true if supervise directory exists (ready for supervision), false otherwise.
@@ -1455,6 +1347,13 @@ func (s *DefaultService) EnsureSupervision(ctx context.Context, servicePath stri
 
 	s.Logger.Debugf("Supervise directory exists for %s", servicePath)
 	return true, nil
+}
+
+// Reconcile is a no-op for s6 implementation as s6 processes tasks immediately.
+// This method exists to satisfy the Service interface.
+func (s *DefaultService) Reconcile(ctx context.Context, fsService filesystem.Service) error {
+	// No-op: s6 processes operations immediately, no queuing needed
+	return nil
 }
 
 // ExecuteS6Command executes an S6 command and handles its specific exit codes.

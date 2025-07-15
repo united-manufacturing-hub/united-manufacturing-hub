@@ -251,3 +251,9 @@ func (m *MockService) EnsureSupervision(ctx context.Context, servicePath string,
 
 	return true, nil
 }
+
+// Reconcile is a mock implementation that processes queued tasks (no-op for mock)
+func (m *MockService) Reconcile(ctx context.Context, fsService filesystem.Service) error {
+	// No-op for mock service - just return nil
+	return nil
+}
