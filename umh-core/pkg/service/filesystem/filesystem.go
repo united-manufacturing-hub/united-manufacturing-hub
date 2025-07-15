@@ -253,7 +253,7 @@ func (s *DefaultService) ReadFileRange(
 
 		// BUFFER POOL USAGE: Get reusable 1MB buffer to minimize allocations
 		// The buffer gets completely overwritten by io.ReadFull each time
-		smallBuf := chunkBufferPool.Get().([]byte)
+		smallBuf := chunkBufferPool.Get().(*[]byte)
 		defer chunkBufferPool.Put(&smallBuf)
 
 		for {
@@ -268,12 +268,12 @@ func (s *DefaultService) ReadFileRange(
 			}
 
 			// Read chunk: io.ReadFull either reads exactly len(smallBuf) bytes OR returns error
-			n, err := io.ReadFull(f, smallBuf)
+			n, err := io.ReadFull(f, *smallBuf)
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
 				if n > 0 {
 					// PARTIAL READ: Use smallBuf[:n] to avoid appending garbage data
 					// This is why buf contains NO EXTRA ZEROS - we only append actual file data
-					buf = append(buf, smallBuf[:n]...)
+					buf = append(buf, (*smallBuf)[:n]...)
 				}
 				break
 			}
@@ -284,7 +284,7 @@ func (s *DefaultService) ReadFileRange(
 
 			// FULL READ SUCCESS: io.ReadFull guarantees smallBuf contains exactly 1MB of file data
 			// No slicing needed here - the entire buffer contains valid data
-			buf = append(buf, smallBuf...)
+			buf = append(buf, *smallBuf...)
 		}
 
 		// FINAL RESULT: buf contains only actual file data, newSize = next read offset
