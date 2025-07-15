@@ -191,8 +191,6 @@ func (i *Instance) getServiceStatus(ctx context.Context, services serviceregistr
 		// Only set health checks for components that have them (Benthos components and Redpanda)
 		infoWithFailedHealthChecks.DFCObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive = false
 		infoWithFailedHealthChecks.DFCObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady = false
-		infoWithFailedHealthChecks.DFCObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive = false
-		infoWithFailedHealthChecks.DFCObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady = false
 
 		// Set the StatusReason to explain the error
 		infoWithFailedHealthChecks.StatusReason = fmt.Sprintf("service status error: %s", err.Error())
