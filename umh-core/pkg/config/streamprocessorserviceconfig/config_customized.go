@@ -55,14 +55,28 @@ func (c StreamProcessorServiceConfigSpec) GetDFCServiceConfig() dataflowcomponen
 	outputTopic := "umh.v1.{{ .location_path }}"
 
 	dfcReadConfig.BenthosConfig.Pipeline = map[string]any{
-		"stream_processor": map[string]any{
-			"mode":         "timeseries",
-			"model":        c.Config.Model,
-			"sources":      enhancedSources, // Use enhanced sources with umh.v1. prefix
-			"mapping":      c.Config.Mapping,
-			"output_topic": outputTopic,
+		"processors": []any{
+			map[string]any{
+				"stream_processor": StreamProcessorBenthosConfig{
+					Model:       c.Config.Model,
+					Mode:        "timeseries",
+					Sources:     enhancedSources,
+					Mapping:     c.Config.Mapping,
+					OutputTopic: outputTopic,
+				},
+			},
 		},
 	}
+
+	// dfcReadConfig.BenthosConfig.Pipeline = map[string]any{
+	// 	"stream_processor": map[string]any{
+	// 		"mode":         "timeseries",
+	// 		"model":        c.Config.Model,
+	// 		"sources":      enhancedSources, // Use enhanced sources with umh.v1. prefix
+	// 		"mapping":      c.Config.Mapping,
+	// 		"output_topic": outputTopic,
+	// 	},
+	// }
 
 	// Always set UNS output
 	dfcReadConfig.BenthosConfig.Output = map[string]any{
@@ -72,6 +86,14 @@ func (c StreamProcessorServiceConfigSpec) GetDFCServiceConfig() dataflowcomponen
 	return dfcReadConfig
 }
 
+type StreamProcessorBenthosConfig struct {
+	Model       ModelRef
+	Mode        string
+	Sources     SourceMapping
+	Mapping     map[string]any
+	OutputTopic string
+}
+
 // FromDFCServiceConfig creates a StreamProcessorServiceConfigRuntime from a DFC config
 func FromDFCServiceConfig(dfcConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig) StreamProcessorServiceConfigRuntime {
 	// Extract the stream processor config from the DFC pipeline section
@@ -79,34 +101,16 @@ func FromDFCServiceConfig(dfcConfig dataflowcomponentserviceconfig.DataflowCompo
 	var sources SourceMapping
 	var mapping map[string]any
 
-	if pipeline, ok := dfcConfig.BenthosConfig.Pipeline["stream_processor"].(map[string]any); ok {
-		// Convert model from map[string]any to ModelRef
-		if modelData, ok := pipeline["model"].(map[string]any); ok {
-			if name, ok := modelData["name"].(string); ok {
-				model.Name = name
-			}
-			if version, ok := modelData["version"].(string); ok {
-				model.Version = version
-			}
-		}
-
-		// Convert sources from map[string]any to SourceMapping
-		if sourcesData, ok := pipeline["sources"].(map[string]any); ok {
-			sources = make(SourceMapping)
-			for key, value := range sourcesData {
-				if strValue, ok := value.(string); ok {
-					// Strip the "umh.v1." prefix to get the clean user-facing format
-					cleanValue := strValue
-					if strings.HasPrefix(strValue, "umh.v1.") {
-						cleanValue = strings.TrimPrefix(strValue, "umh.v1.")
-					}
-					sources[key] = cleanValue
+	if processor, ok := dfcConfig.BenthosConfig.Pipeline["processors"].([]any); ok {
+		for _, v := range processor {
+			if processor, ok := v.(map[string]any); ok {
+				if streamProcessor, ok := processor["stream_processor"].(StreamProcessorBenthosConfig); ok {
+					// found a stream processor
+					model = streamProcessor.Model
+					sources = streamProcessor.Sources
+					mapping = streamProcessor.Mapping
 				}
 			}
-		}
-
-		if mappingData, ok := pipeline["mapping"].(map[string]any); ok {
-			mapping = mappingData
 		}
 	}
 

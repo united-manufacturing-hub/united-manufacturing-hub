@@ -19,6 +19,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/streamprocessorserviceconfig"
 )
 
@@ -130,6 +131,66 @@ var _ = Describe("StreamProcessorServiceConfig", func() {
 			}
 
 			Expect(streamprocessorserviceconfig.ConfigsEqualRuntime(runtime1, runtime2)).To(BeTrue())
+		})
+	})
+
+	Describe("FromDFCServiceConfig", func() {
+		It("should extract stream processor config from DFC config", func() {
+			// Create a DFC config that matches the provided YAML structure
+			dfcConfig := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}
+			dfcConfig.BenthosConfig.Input = map[string]any{
+				"uns": map[string]any{
+					"umh_topics": []string{
+						"umh.v1.corpA.plant-A.aawd._raw.press",
+						"umh.v1.corpA.plant-A.aawd._raw.tempF",
+						"umh.v1.corpA.plant-A.aawd._raw.run",
+					},
+				},
+			}
+
+			dfcConfig.BenthosConfig.Pipeline = map[string]any{
+				"processors": []any{map[string]any{
+					"stream_processor": streamprocessorserviceconfig.StreamProcessorBenthosConfig{
+						Mode: "timeseries",
+						Model: streamprocessorserviceconfig.ModelRef{
+							Name:    "pump",
+							Version: "v1",
+						},
+						OutputTopic: "umh.v1.corpA.plant-A.aawd",
+						Sources: map[string]string{
+							"press": "umh.v1.corpA.plant-A.aawd._raw.press",
+							"tF":    "umh.v1.corpA.plant-A.aawd._raw.tempF",
+							"r":     "umh.v1.corpA.plant-A.aawd._raw.run",
+						},
+						Mapping: map[string]any{
+							"pressure":    "press+4.00001",
+							"temperature": "tF*69/31",
+							"motor": map[string]any{
+								"rpm": "press/4",
+							},
+							"serialNumber": `"SN-P42-008"`,
+						},
+					},
+				}},
+			}
+
+			dfcConfig.BenthosConfig.Output = map[string]any{
+				"uns": map[string]any{},
+			}
+
+			// Convert back to StreamProcessor runtime config
+			runtime := streamprocessorserviceconfig.FromDFCServiceConfig(dfcConfig)
+
+			// Verify the extracted values
+			Expect(runtime.Model.Name).To(Equal("pump"))
+			Expect(runtime.Model.Version).To(Equal("v1"))
+			Expect(runtime.Sources["press"]).To(Equal("umh.v1.corpA.plant-A.aawd._raw.press"))
+			Expect(runtime.Sources["tF"]).To(Equal("umh.v1.corpA.plant-A.aawd._raw.tempF"))
+			Expect(runtime.Sources["r"]).To(Equal("umh.v1.corpA.plant-A.aawd._raw.run"))
+			Expect(runtime.Mapping["pressure"]).To(Equal("press+4.00001"))
+			Expect(runtime.Mapping["temperature"]).To(Equal("tF*69/31"))
+			Expect(runtime.Mapping["motor"].(map[string]any)["rpm"]).To(Equal("press/4"))
+			Expect(runtime.Mapping["serialNumber"]).To(Equal(`"SN-P42-008"`))
 		})
 	})
 })
