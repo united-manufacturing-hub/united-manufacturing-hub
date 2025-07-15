@@ -67,7 +67,7 @@ NMAP_VERSION = 7.95-r1
 S6_OVERLAY_VERSION = 3.2.0.2
 REDPANDA_VERSION = 24.3.8
 ## Benthos version is a tag or a sha-<commit hash> (e.g. 0.9.4 or sha-a51a685) to be used in the docker image
-BENTHOS_UMH_VERSION = 0.9.6
+BENTHOS_UMH_VERSION = 0.10.0-alpha.1
 BUF_VERSION = 1.55.1
 PROTOC_GEN_GO_VERSION = 1.36.6
 
@@ -213,19 +213,25 @@ stop-and-remove-umh-core-latest:
 	docker rm $(IMAGE_NAME) || true
 	docker rmi $(IMAGE_NAME):$(TAG) || true
 
-# Clean up Docker build cache and unused objects for CI environments & stop all containers
+# Cleanup Docker, Go build cache and test cache
 cleanup-ci:
-	echo "Cleaning up Docker build cache and unused objects for CI environments & stop all containers"
-	echo "Running containers:"
+	echo "Docker cleanup - removing everything"
+	echo " - Running containers:"
 	docker ps -a || true
-	echo "Stopping all containers"
-	docker ps -a -q | xargs -r docker stop || true
-	echo "Removing all containers"
-	docker ps -a -q | xargs -r docker rm || true
-	echo "Pruning Docker build cache"
-	docker builder prune -f || true
-	echo "Pruning Docker system"
-	docker system prune -f --volumes || true
+	echo " - Stopping all containers"
+	docker stop $$(docker ps -aq) 2>/dev/null || true
+	echo " - Removing all containers"
+	docker rm $$(docker ps -aq) 2>/dev/null || true
+	echo " - Removing all images"
+	docker rmi $$(docker images -q) 2>/dev/null || true
+	echo " - Pruning Docker build cache"
+	docker builder prune -a -f || true
+	echo " - Pruning Docker system"
+	docker system prune -a -f --volumes || true
+	echo " - Cleaning Go build cache"
+	go clean -cache -modcache || true
+	echo " - Cleaning Go test cache"
+	go clean -testcache || true
 
 cleanup-tmp:
 	rm -rf ./tmp/*
@@ -243,7 +249,10 @@ lint:
 
 nilaway:
 	# See lefthook.yaml for more details
-	nilaway -exclude-pkgs="github.com/prometheus/prometheus/util/textparse,github.com/onsi/ginkgo/v2" -exclude-errors-in-files="integration/" ./...
+	nilaway \
+		-exclude-pkgs="github.com/prometheus/prometheus/util/textparse,github.com/onsi/ginkgo/v2,go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp,github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda" \
+		-exclude-errors-in-files="integration/" \
+		./...
 
 test: vet nilaway lint
 	go test -v -tags=test ./...

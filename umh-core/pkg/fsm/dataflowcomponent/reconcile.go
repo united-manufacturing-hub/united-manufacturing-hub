@@ -43,15 +43,18 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentDataflowComponentInstance, dataflowComponentInstanceName, time.Since(start))
 		if err != nil {
-			d.baseFSMInstance.GetLogger().Errorf("error reconciling dataflowcomponent instance %s: %v", dataflowComponentInstanceName, err)
+			d.baseFSMInstance.GetLogger().Errorf("error reconciling dataflow component instance %s: %s", dataflowComponentInstanceName, err)
 			d.PrintState()
 			// Add metrics for error
-			metrics.IncErrorCount(metrics.ComponentDataflowComponentInstance, dataflowComponentInstanceName)
+			metrics.IncErrorCountAndLog(metrics.ComponentDataflowComponentInstance, dataflowComponentInstanceName, err, d.baseFSMInstance.GetLogger())
 		}
 	}()
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
+		if d.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "start of reconciliation") {
+			return nil, false
+		}
 		return ctx.Err(), false
 	}
 
@@ -120,6 +123,13 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 			return nil, false
 		}
 
+		if errors.Is(err, context.DeadlineExceeded) {
+			// Context deadline exceeded should be retried with backoff, not ignored
+			d.baseFSMInstance.SetError(err, snapshot.Tick)
+			d.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileStateTransition, will retry with backoff")
+			return nil, false
+		}
+
 		d.baseFSMInstance.SetError(err, snapshot.Tick)
 		d.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
@@ -128,6 +138,12 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 	// Reconcile the benthos Manager
 	benthosErr, benthosReconciled := d.service.ReconcileManager(ctx, services, snapshot.Tick)
 	if benthosErr != nil {
+		if errors.Is(benthosErr, context.DeadlineExceeded) {
+			// Context deadline exceeded should be retried with backoff, not ignored
+			d.baseFSMInstance.SetError(benthosErr, snapshot.Tick)
+			d.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in benthosManager reconciliation, will retry with backoff")
+			return nil, false
+		}
 		d.baseFSMInstance.SetError(benthosErr, snapshot.Tick)
 		d.baseFSMInstance.GetLogger().Errorf("error reconciling benthosManager: %s", benthosErr)
 		return nil, false

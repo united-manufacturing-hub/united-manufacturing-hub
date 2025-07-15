@@ -70,6 +70,13 @@ func (a *AgentInstance) CheckForCreation(ctx context.Context, filesystemService 
 // UpdateObservedStateOfInstance is called when the FSM transitions to updating.
 // It queries agent_monitor.Service for new metrics and updates the observed state.
 func (a *AgentInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
+	if ctx.Err() != nil {
+		if a.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "UpdateObservedStateOfInstance") {
+			return nil
+		}
+		return ctx.Err()
+	}
+
 	// get the config from the config manager
 	status, err := a.monitorService.Status(ctx, snapshot)
 	if err != nil {
