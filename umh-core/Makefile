@@ -132,14 +132,14 @@ download-docker-binaries:
 		rm -rf .docker-cache/redpanda/redpanda-*.tar.gz .docker-cache/redpanda/amd64 .docker-cache/redpanda/arm64; \
 		echo "$(REDPANDA_VERSION)" > .docker-cache/redpanda/version; \
 		mkdir -p .docker-cache/redpanda/amd64 .docker-cache/redpanda/arm64; \
-		echo "Pulling redpandadata/redpanda:$(REDPANDA_VERSION) for amd64..."; \
-		docker pull --platform linux/amd64 redpandadata/redpanda:v$(REDPANDA_VERSION); \
-		CONTAINER_AMD64=$$(docker create --platform linux/amd64 redpandadata/redpanda:v$(REDPANDA_VERSION)); \
+		echo "Pulling docker.io/redpandadata/redpanda:$(REDPANDA_VERSION) for amd64..."; \
+		docker pull --platform linux/amd64 docker.io/redpandadata/redpanda:v$(REDPANDA_VERSION); \
+		CONTAINER_AMD64=$$(docker create --platform linux/amd64 docker.io/redpandadata/redpanda:v$(REDPANDA_VERSION)); \
 		docker cp $$CONTAINER_AMD64:/opt/redpanda .docker-cache/redpanda/amd64/; \
 		docker rm -v $$CONTAINER_AMD64; \
-		echo "Pulling redpandadata/redpanda:$(REDPANDA_VERSION) for arm64..."; \
-		docker pull --platform linux/arm64 redpandadata/redpanda:v$(REDPANDA_VERSION); \
-		CONTAINER_ARM64=$$(docker create --platform linux/arm64 redpandadata/redpanda:v$(REDPANDA_VERSION)); \
+		echo "Pulling docker.io/redpandadata/redpanda:$(REDPANDA_VERSION) for arm64..."; \
+		docker pull --platform linux/arm64 docker.io/redpandadata/redpanda:v$(REDPANDA_VERSION); \
+		CONTAINER_ARM64=$$(docker create --platform linux/arm64 docker.io/redpandadata/redpanda:v$(REDPANDA_VERSION)); \
 		docker cp $$CONTAINER_ARM64:/opt/redpanda .docker-cache/redpanda/arm64/; \
 		docker rm -v $$CONTAINER_ARM64; \
 	fi
