@@ -27,7 +27,6 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -155,9 +154,7 @@ var _ = Describe("S6 Service", func() {
 		var s6Service *DefaultService
 
 		BeforeEach(func() {
-			s6Service = &DefaultService{
-				logger: nil,
-			}
+			s6Service = NewDefaultService().(*DefaultService)
 		})
 
 		It("should correctly identify known services", func() {
@@ -211,9 +208,7 @@ var _ = Describe("S6 Service", func() {
 
 		BeforeEach(func() {
 			mockFS = filesystem.NewMockFileSystem()
-			s6Service = &DefaultService{
-				logger: nil, // Don't need the logger for this test
-			}
+			s6Service = NewDefaultService().(*DefaultService)
 
 			// Track removed directories
 			removedDirectories = []string{}
@@ -305,9 +300,7 @@ var _ = Describe("S6 Service", func() {
 
 		BeforeEach(func() {
 			mockFS = filesystem.NewMockFileSystem()
-			s6Service = &DefaultService{
-				logger: nil, // Not needed for this test
-			}
+			s6Service = NewDefaultService().(*DefaultService)
 			ctx = context.Background()
 		})
 
@@ -421,9 +414,7 @@ var _ = Describe("S6 Service", func() {
 		BeforeEach(func() {
 			ctx = context.Background()
 			mockFS = filesystem.NewMockFileSystem()
-			svc = &DefaultService{
-				logger: logger.For("test"),
-			}
+			svc = NewDefaultService().(*DefaultService)
 			svcPath = filepath.Join(constants.S6BaseDir, "my-service")
 			logDir = filepath.Join(constants.S6LogBaseDir, "my-service")
 

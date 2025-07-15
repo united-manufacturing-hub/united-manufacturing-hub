@@ -39,6 +39,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/viney-shih/go-lock"
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -173,19 +174,23 @@ type logState struct {
 type DefaultService struct {
 	logger         *zap.SugaredLogger
 	logCursors     sync.Map // map[string]*logState (key = abs log path)
-	operationMutex sync.Mutex
+	operationMutex lock.RWMutex
 }
 
 // NewDefaultService creates a new default S6 service
 func NewDefaultService() Service {
 	return &DefaultService{
-		logger: logger.For(logger.ComponentS6Service),
+		logger:         logger.For(logger.ComponentS6Service),
+		operationMutex: lock.NewCASMutex(),
 	}
 }
 
 // Create creates the S6 service with specific configuration
 func (s *DefaultService) Create(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, fsService filesystem.Service) error {
-	s.operationMutex.Lock()
+	if !s.operationMutex.TryLockWithContext(ctx) {
+		s.logger.Warnf("Failed to acquire write lock for Create operation on %s: %v", servicePath, ctx.Err())
+		return ctx.Err()
+	}
 	defer s.operationMutex.Unlock()
 
 	start := time.Now()
@@ -384,7 +389,10 @@ func (s *DefaultService) createS6ConfigFiles(ctx context.Context, servicePath st
 // Any remaining file or I/O error leads to a non-nil return so the FSM keeps
 // trying (or escalates after the back-off threshold).
 func (s *DefaultService) Remove(ctx context.Context, servicePath string, fsService filesystem.Service) error {
-	s.operationMutex.Lock()
+	if !s.operationMutex.TryLockWithContext(ctx) {
+		s.logger.Warnf("Failed to acquire write lock for Remove operation on %s: %v", servicePath, ctx.Err())
+		return ctx.Err()
+	}
 	defer s.operationMutex.Unlock()
 
 	start := time.Now()
@@ -503,7 +511,10 @@ func (s *DefaultService) Remove(ctx context.Context, servicePath string, fsServi
 
 // Start starts the S6 service
 func (s *DefaultService) Start(ctx context.Context, servicePath string, fsService filesystem.Service) error {
-	s.operationMutex.Lock()
+	if !s.operationMutex.TryLockWithContext(ctx) {
+		s.logger.Warnf("Failed to acquire write lock for Start operation on %s: %v", servicePath, ctx.Err())
+		return ctx.Err()
+	}
 	defer s.operationMutex.Unlock()
 
 	start := time.Now()
@@ -553,7 +564,10 @@ func (s *DefaultService) stop(ctx context.Context, servicePath string, fsService
 
 // Stop stops the S6 service
 func (s *DefaultService) Stop(ctx context.Context, servicePath string, fsService filesystem.Service) error {
-	s.operationMutex.Lock()
+	if !s.operationMutex.TryLockWithContext(ctx) {
+		s.logger.Warnf("Failed to acquire write lock for Stop operation on %s: %v", servicePath, ctx.Err())
+		return ctx.Err()
+	}
 	defer s.operationMutex.Unlock()
 
 	start := time.Now()
@@ -566,7 +580,10 @@ func (s *DefaultService) Stop(ctx context.Context, servicePath string, fsService
 
 // Restart restarts the S6 service
 func (s *DefaultService) Restart(ctx context.Context, servicePath string, fsService filesystem.Service) error {
-	s.operationMutex.Lock()
+	if !s.operationMutex.TryLockWithContext(ctx) {
+		s.logger.Warnf("Failed to acquire write lock for Restart operation on %s: %v", servicePath, ctx.Err())
+		return ctx.Err()
+	}
 	defer s.operationMutex.Unlock()
 
 	start := time.Now()
@@ -594,8 +611,11 @@ func (s *DefaultService) Restart(ctx context.Context, servicePath string, fsServ
 }
 
 func (s *DefaultService) Status(ctx context.Context, servicePath string, fsService filesystem.Service) (ServiceInfo, error) {
-	s.operationMutex.Lock()
-	defer s.operationMutex.Unlock()
+	if !s.operationMutex.RTryLockWithContext(ctx) {
+		s.logger.Warnf("Failed to acquire read lock for Status operation on %s: %v", servicePath, ctx.Err())
+		return ServiceInfo{}, ctx.Err()
+	}
+	defer s.operationMutex.RUnlock()
 
 	start := time.Now()
 	defer func() {
@@ -814,8 +834,11 @@ func (s *DefaultService) exitHistory(ctx context.Context, superviseDir string, f
 
 // ExitHistory retrieves the service exit history (exported version with mutex)
 func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, fsService filesystem.Service) ([]ExitEvent, error) {
-	s.operationMutex.Lock()
-	defer s.operationMutex.Unlock()
+	if !s.operationMutex.RTryLockWithContext(ctx) {
+		s.logger.Warnf("Failed to acquire read lock for ExitHistory operation on %s: %v", superviseDir, ctx.Err())
+		return nil, ctx.Err()
+	}
+	defer s.operationMutex.RUnlock()
 
 	return s.exitHistory(ctx, superviseDir, fsService)
 }
@@ -837,8 +860,11 @@ func (s *DefaultService) serviceExists(ctx context.Context, servicePath string, 
 
 // ServiceExists checks if the service directory exists
 func (s *DefaultService) ServiceExists(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
-	s.operationMutex.Lock()
-	defer s.operationMutex.Unlock()
+	if !s.operationMutex.RTryLockWithContext(ctx) {
+		s.logger.Warnf("Failed to acquire read lock for ServiceExists operation on %s: %v", servicePath, ctx.Err())
+		return false, ctx.Err()
+	}
+	defer s.operationMutex.RUnlock()
 
 	start := time.Now()
 	defer func() {
@@ -850,8 +876,11 @@ func (s *DefaultService) ServiceExists(ctx context.Context, servicePath string, 
 
 // GetConfig gets the actual service config from s6
 func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsService filesystem.Service) (s6serviceconfig.S6ServiceConfig, error) {
-	s.operationMutex.Lock()
-	defer s.operationMutex.Unlock()
+	if !s.operationMutex.RTryLockWithContext(ctx) {
+		s.logger.Warnf("Failed to acquire read lock for GetConfig operation on %s: %v", servicePath, ctx.Err())
+		return s6serviceconfig.S6ServiceConfig{}, ctx.Err()
+	}
+	defer s.operationMutex.RUnlock()
 
 	exists, err := s.serviceExists(ctx, servicePath, fsService)
 	if err != nil {
@@ -1152,7 +1181,10 @@ const (
 
 // CleanS6ServiceDirectory cleans the S6 service directory except for the known services
 func (s *DefaultService) CleanS6ServiceDirectory(ctx context.Context, path string, fsService filesystem.Service) error {
-	s.operationMutex.Lock()
+	if !s.operationMutex.TryLockWithContext(ctx) {
+		s.logger.Warnf("Failed to acquire write lock for CleanS6ServiceDirectory operation on %s: %v", path, ctx.Err())
+		return ctx.Err()
+	}
 	defer s.operationMutex.Unlock()
 
 	if ctx == nil {
@@ -1247,8 +1279,11 @@ func (s *DefaultService) IsKnownService(name string) bool {
 // GetS6ConfigFile retrieves the specified config file for a service
 // servicePath should be the full path including S6BaseDir
 func (s *DefaultService) GetS6ConfigFile(ctx context.Context, servicePath string, configFileName string, fsService filesystem.Service) ([]byte, error) {
-	s.operationMutex.Lock()
-	defer s.operationMutex.Unlock()
+	if !s.operationMutex.RTryLockWithContext(ctx) {
+		s.logger.Warnf("Failed to acquire read lock for GetS6ConfigFile operation on %s: %v", servicePath, ctx.Err())
+		return nil, ctx.Err()
+	}
+	defer s.operationMutex.RUnlock()
 
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
@@ -1312,7 +1347,10 @@ func (s *DefaultService) ForceRemove(
 	servicePath string,
 	fsService filesystem.Service,
 ) error {
-	s.operationMutex.Lock()
+	if !s.operationMutex.TryLockWithContext(ctx) {
+		s.logger.Warnf("Failed to acquire write lock for ForceRemove operation on %s: %v", servicePath, ctx.Err())
+		return ctx.Err()
+	}
 	defer s.operationMutex.Unlock()
 
 	start := time.Now()
@@ -1509,7 +1547,10 @@ func (s *DefaultService) appendToRingBuffer(entries []LogEntry, st *logState) {
 // Errors are returned early and unwrapped where they occur so callers
 // see the root cause (e.g. "file disappeared", "permission denied").
 func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsService filesystem.Service) ([]LogEntry, error) {
-	s.operationMutex.Lock()
+	if !s.operationMutex.TryLockWithContext(ctx) {
+		s.logger.Warnf("Failed to acquire write lock for GetLogs operation on %s: %v", servicePath, ctx.Err())
+		return nil, ctx.Err()
+	}
 	defer s.operationMutex.Unlock()
 
 	start := time.Now()
@@ -1776,12 +1817,18 @@ func parseLogLine(line string) LogEntry {
 // s6-svscan if it doesn't, to trigger supervision setup.
 // Returns true if supervise directory exists (ready for supervision), false otherwise.
 func (s *DefaultService) EnsureSupervision(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
+	if !s.operationMutex.TryLockWithContext(ctx) {
+		s.logger.Warnf("Failed to acquire write lock for EnsureSupervision operation on %s: %v", servicePath, ctx.Err())
+		return false, ctx.Err()
+	}
+	defer s.operationMutex.Unlock()
+
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".ensureSupervision", time.Since(start))
 	}()
 
-	exists, err := s.ServiceExists(ctx, servicePath, fsService)
+	exists, err := s.serviceExists(ctx, servicePath, fsService)
 	if err != nil {
 		return false, fmt.Errorf("failed to check if service exists: %w", err)
 	}

@@ -28,7 +28,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	filesystem "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	"go.uber.org/zap"
 )
 
 var _ = Describe("S6 Run Script", func() {
@@ -41,18 +40,13 @@ var _ = Describe("S6 Run Script", func() {
 		runScriptPath string
 		logDir        string
 		logScriptPath string
-		logger        *zap.SugaredLogger
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		mockFS = filesystem.NewMockFileSystem()
-		zapLogger, err := zap.NewDevelopment()
-		Expect(err).NotTo(HaveOccurred())
-		logger = zapLogger.Sugar()
-		s6Service = &DefaultService{
-			logger: logger,
-		}
+		mockFS = &filesystem.MockFileSystem{}
+
+		s6Service = NewDefaultService().(*DefaultService)
 		servicePath = constants.S6BaseDir + "/test-service"
 		runScriptPath = filepath.Join(servicePath, "run")
 		configPath = filepath.Join(servicePath, "config")
