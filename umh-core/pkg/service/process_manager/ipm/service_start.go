@@ -55,8 +55,8 @@ func (pm *ProcessManager) startService(ctx context.Context, identifier serviceId
 			return fmt.Errorf("error removing PID file: %w", err)
 		}
 
-		// Return an error to allow retry in the next step after cleanup
-		return fmt.Errorf("terminated existing process, retry start in next step")
+		pm.Logger.Info("terminated existing process, continuing with start")
+		// Continue with start process after cleanup
 	}
 
 	// Get service configuration to determine what to execute
@@ -105,7 +105,6 @@ func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier
 
 	// Create the command using shell to handle the redirection
 	cmd := exec.CommandContext(ctx, "/bin/bash", "-c", shellCommand)
-	cmd.Dir = configPath
 
 	// Set memory limits if configured
 	if config.MemoryLimit > 0 {
@@ -122,7 +121,6 @@ func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier
 		// Modify the shell command to include ulimit
 		shellCommand = fmt.Sprintf("ulimit -v %d && %s", memoryLimitMB*1024, shellCommand) // ulimit -v is in KB
 		cmd = exec.CommandContext(ctx, "/bin/bash", "-c", shellCommand)
-		cmd.Dir = configPath
 		cmd.SysProcAttr = &syscall.SysProcAttr{
 			Setpgid: true, // Create new process group for better process management
 		}

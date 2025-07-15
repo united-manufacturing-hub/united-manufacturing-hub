@@ -21,6 +21,7 @@ ARG BENTHOS_UMH_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG REDPANDA_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG DEBUG=false
 ARG PPROF=false
+ARG PROCESS_MANAGER=internal_process_manager
 WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub
 
 # Set app version with a default value - can be overridden at build time
@@ -33,7 +34,7 @@ COPY . .
 RUN echo "GOOS: ${GOOS:-$(go env GOOS)}, GOARCH: ${GOARCH:-$(go env GOARCH)}"
 RUN echo "Go version: $(go version)"
 RUN if [ "$DEBUG" = "true" ]; then \
-    CGO_ENABLED=0 go build \
+    CGO_ENABLED=0 go build -tags "${PROCESS_MANAGER}" \
     -gcflags="all=-N -l" \
     -ldflags "-X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \
@@ -41,7 +42,7 @@ RUN if [ "$DEBUG" = "true" ]; then \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version.AppVersion=${APP_VERSION}" \
     -o /go/bin/umh-core cmd/main.go; \
     elif [ "$PPROF" = "true" ]; then \
-    CGO_ENABLED=0 go build -mod=vendor -tags pprof \
+    CGO_ENABLED=0 go build -mod=vendor -tags "pprof ${PROCESS_MANAGER}" \
     -ldflags "-s -w \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \
@@ -49,7 +50,7 @@ RUN if [ "$DEBUG" = "true" ]; then \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version.AppVersion=${APP_VERSION}" \
     -o /go/bin/umh-core cmd/main.go; \
     else \
-    CGO_ENABLED=0 go build -mod=vendor  \
+    CGO_ENABLED=0 go build -mod=vendor -tags "${PROCESS_MANAGER}" \
     -ldflags "-s -w \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \

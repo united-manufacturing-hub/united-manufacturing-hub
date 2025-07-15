@@ -28,6 +28,8 @@ help: ## Display available make targets and usage information
 	@echo "   make build-pprof    # Build with profiling support"
 	@echo ""
 	@echo "🧪 TEST COMMANDS:"
+	@echo "   make unit-test         # Unit tests (fast)"
+	@echo "   make integration-test  # Integration tests"
 	@echo "   make test-graphql      # GraphQL API with real-time simulator data (recommended)"
 	@echo "   make test-dfc          # Data Flow Components"
 	@echo "   make test-redpanda     # Redpanda message broker"
@@ -39,6 +41,12 @@ help: ## Display available make targets and usage information
 	@echo "   make stop-all-pods  # Stop all UMH Core containers"
 	@echo "   make dump-metrics   # Save metrics to file"
 	@echo "   make cleanup-all    # Clean all Docker resources"
+	@echo ""
+	@echo "⚙️  PROCESS MANAGER:"
+	@echo "   PROCESS_MANAGER=internal_process_manager  # Default (IPM)"
+	@echo "   PROCESS_MANAGER=s6_process_manager        # Legacy S6"
+	@echo "   Examples: make test PROCESS_MANAGER=s6_process_manager"
+	@echo "            make integration-test PROCESS_MANAGER=s6_process_manager"
 	@echo ""
 	@echo "💡 NOTES:"
 	@echo "   • All test commands run in Docker containers"
@@ -59,6 +67,9 @@ GINKGO_VERSION = v2.23.4
 NILWAY_VERSION = latest
 GOLANGCI_LINT_VERSION = v2.1.6
 DLV_VERSION = v1.25.0
+
+# Process manager selection: internal_process_manager (default) or s6_process_manager
+PROCESS_MANAGER ?= internal_process_manager
 
 # Default values for build arguments
 GOLANG_VERSION = 1.24.4
@@ -189,7 +200,8 @@ COMMON_ARGS = \
 	--build-arg REDPANDA_VERSION=$(REDPANDA_VERSION) \
 	--build-arg DLV_VERSION=$(DLV_VERSION) \
 	--build-arg APP_VERSION=$(VERSION) \
-	--build-arg TARGETARCH=$(TARGETARCH)
+	--build-arg TARGETARCH=$(TARGETARCH) \
+	--build-arg PROCESS_MANAGER=$(PROCESS_MANAGER)
 
 define DOCKER_BUILD
 	docker buildx build $(COMMON_ARGS) $(EXTRA_ARGS) \
@@ -242,8 +254,7 @@ cleanup-data:
 cleanup-all: cleanup-ci cleanup-tmp cleanup-data
 
 vet:
-	go vet -tags='test s6_process_manager' ./...
-	go vet -tags='test internal_process_manager' ./...
+	go vet -tags='test $(PROCESS_MANAGER)' ./...
 
 lint:
 	golangci-lint run ./...
@@ -256,12 +267,10 @@ nilaway:
 		./...
 
 test: vet nilaway lint
-	go test -v -tags='test internal_process_manager' ./...
-	go test -v -tags='test s6_process_manager' ./...
+	go test -v -tags='test $(PROCESS_MANAGER)' ./...
 
 unit-test: vet nilaway lint
-	ginkgo -r -v --tags='test internal_process_manager' --label-filter='!integration && !redpanda-extended && !tls' --fail-fast ./...
-	ginkgo -r -v --tags='test s6_process_manager' --label-filter='!integration && !redpanda-extended && !tls' --fail-fast ./...
+	ginkgo -r -v --tags='test $(PROCESS_MANAGER)' --label-filter='!integration && !redpanda-extended && !tls' --fail-fast ./...
 
 benchmark:
 	@echo "Running benchmarks..."
@@ -306,20 +315,20 @@ pre-test: build-protobuf stop-all-pods vet nilaway lint
 pre-test-ci: vet lint
 
 integration-test: pre-test
-	ginkgo -r -v --tags=test --label-filter='integration' --fail-fast ./...
+	ginkgo -r -v --tags='test $(PROCESS_MANAGER)' --label-filter='integration' --fail-fast ./...
 
 redpanda-extended-test: pre-test
-	ginkgo -r -v --tags=test --label-filter='redpanda-extended' --fail-fast --timeout=1.5h ./...
+	ginkgo -r -v --tags='test $(PROCESS_MANAGER)' --label-filter='redpanda-extended' --fail-fast --timeout=1.5h ./...
 
 badssl-test: pre-test
-	ginkgo -r -v --tags=test --label-filter='tls' --fail-fast ./...
+	ginkgo -r -v --tags='test $(PROCESS_MANAGER)' --label-filter='tls' --fail-fast ./...
 
 # integration-test-ci: Runs integration tests in CI environments with proper version tagging
 # - Injects VERSION via ldflags into AppVersion for proper error identification in Sentry
 # - CI test failures SHOULD be reported to Sentry (unlike local dev failures)
 # - Helps identify flaky tests by consistently tracking failures in CI pipelines
 integration-test-ci: pre-test-ci
-	VERSION=$(VERSION) ginkgo -r -v --tags=test --label-filter='integration' --fail-fast -ldflags="-X 'github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/version.AppVersion=$(VERSION)'" ./...
+	VERSION=$(VERSION) ginkgo -r -v --tags='test $(PROCESS_MANAGER)' --label-filter='integration' --fail-fast -ldflags="-X 'github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/version.AppVersion=$(VERSION)'" ./...
 
 update-go-dependencies:
 	go get -u ./...

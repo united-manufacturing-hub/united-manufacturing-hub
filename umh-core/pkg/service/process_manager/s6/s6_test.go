@@ -612,12 +612,12 @@ var _ = Describe("MaxFunc Approach for Rotated Files", func() {
 
 			// The third timestamp (index 2) is the newest
 			if i == 2 {
-				expectedLatest = filepath
+				expectedLatest = filepath //nolint:staticcheck // Used in Expect() below
 			}
 		}
 
 		// Re-read entries after creating files
-		entries, err := fsService.Glob(ctx, filepath.Join(logDir, "@*.s"))
+		entries, err := fsService.Glob(ctx, filepath.Join(logDir, "@*.s")) //nolint:staticcheck // entries used in FindLatestRotatedFile
 		Expect(err).ToNot(HaveOccurred())
 
 		// Use MaxFunc to find latest file
@@ -643,7 +643,7 @@ var _ = Describe("MaxFunc Approach for Rotated Files", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		// Re-read entries after creating files
-		entries, err := fsService.Glob(ctx, filepath.Join(logDir, "@*.s"))
+		entries, err := fsService.Glob(ctx, filepath.Join(logDir, "@*.s")) //nolint:staticcheck // entries used in FindLatestRotatedFile
 		Expect(err).ToNot(HaveOccurred())
 
 		service := process_manager.NewDefaultService().(*s6.DefaultService)
@@ -669,7 +669,7 @@ var _ = Describe("MaxFunc Approach for Rotated Files", func() {
 		}
 
 		// Re-read entries after creating files
-		entries, err := fsService.Glob(ctx, filepath.Join(logDir, "@*.s"))
+		entries, err := fsService.Glob(ctx, filepath.Join(logDir, "@*.s")) //nolint:staticcheck // entries used in FindLatestRotatedFile
 		Expect(err).ToNot(HaveOccurred())
 
 		service := process_manager.NewDefaultService().(*s6.DefaultService)
@@ -699,12 +699,12 @@ var _ = Describe("MaxFunc Approach for Rotated Files", func() {
 
 			// The file with 500ms offset (index 1) should be latest
 			if i == 1 {
-				expectedLatest = filePath
+				expectedLatest = filePath //nolint:staticcheck // Used in Expect() below
 			}
 		}
 
 		// Re-read entries after creating files
-		entries, err := fsService.Glob(ctx, filepath.Join(logDir, "@*.s"))
+		entries, err := fsService.Glob(ctx, filepath.Join(logDir, "@*.s")) //nolint:staticcheck // entries used in FindLatestRotatedFile
 		Expect(err).ToNot(HaveOccurred())
 
 		service := process_manager.NewDefaultService().(*s6.DefaultService)

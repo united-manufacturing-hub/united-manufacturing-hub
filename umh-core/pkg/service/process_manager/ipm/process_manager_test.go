@@ -444,11 +444,15 @@ var _ = Describe("ProcessManager", func() {
 				return nil, os.ErrNotExist
 			})
 
-			// Start the service - this will fail because it tries to execute a real process
-			// but we can verify the error handling works correctly
+			// Make EnsureDirectory fail to simulate filesystem issues during startup
+			mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
+				return fmt.Errorf("simulated filesystem error during directory creation")
+			})
+
+			// Start the service - this will fail because EnsureDirectory fails
 			err := pm.Start(ctx, servicePath, mockFS)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("error starting process"))
+			Expect(err.Error()).To(ContainSubstring("error ensuring log directory"))
 
 			// Verify service was NOT processed due to error
 			Expect(pm.taskQueue).To(HaveLen(1))
@@ -868,7 +872,7 @@ var _ = Describe("ProcessManager", func() {
 			testFile := filepath.Join(tempDir, "test-write")
 			err = os.WriteFile(testFile, []byte("test"), 0644)
 			Expect(err).ToNot(HaveOccurred())
-			os.Remove(testFile)
+			_ = os.Remove(testFile)
 
 			GinkgoT().Logf("Created temp directory: %s", tempDir)
 
@@ -885,7 +889,7 @@ var _ = Describe("ProcessManager", func() {
 		AfterEach(func() {
 			// Clean up temporary directory
 			if tempDir != "" {
-				os.RemoveAll(tempDir)
+				_ = os.RemoveAll(tempDir)
 			}
 		})
 
