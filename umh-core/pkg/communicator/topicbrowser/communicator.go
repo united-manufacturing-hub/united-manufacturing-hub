@@ -180,7 +180,7 @@ func (tbc *TopicBrowserCommunicator) processNewBuffers(obs *topicbrowserfsm.Obse
 		return nil, fmt.Errorf("buffer size validation failed: %w", err)
 	}
 
-	result := &ProcessingResult{}
+	var result *ProcessingResult
 
 	// Process the buffers and update internal cache
 	var err error

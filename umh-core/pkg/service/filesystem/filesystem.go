@@ -254,7 +254,7 @@ func (s *DefaultService) ReadFileRange(
 		// BUFFER POOL USAGE: Get reusable 1MB buffer to minimize allocations
 		// The buffer gets completely overwritten by io.ReadFull each time
 		smallBuf := chunkBufferPool.Get().([]byte)
-		defer chunkBufferPool.Put(smallBuf)
+		defer chunkBufferPool.Put(&smallBuf)
 
 		for {
 			// GRACEFUL EARLY EXIT: Check if enough time remains for another chunk
