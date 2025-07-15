@@ -8,3 +8,17 @@ tmp/
 data/
 
 metrics.txt
+
+**/.git
+**/node_modules
+**/.DS_Store
+**/Thumbs.db
+**/*.log
+**/coverage.txt
+**/*.test
+**/testdata
+**/examples
+**/docs
+**/*.md
+!README.md
+.buildx-cache/

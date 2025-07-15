@@ -127,6 +127,8 @@ type Service interface {
 	// s6-svscan if it doesn't, to trigger supervision setup.
 	// Returns true if supervise directory exists (ready for supervision), false otherwise.
 	EnsureSupervision(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error)
+	// IsLogServiceReady checks if the log service for a given service is running and ready to capture logs
+	IsLogServiceReady(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error)
 }
 
 // logState is the per-log-file cursor used by GetLogs.
@@ -226,52 +228,76 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".create", time.Since(start))
 	}()
 
+	return s.create(ctx, servicePath, config, fsService)
+}
+
+// create is the internal implementation of Create that assumes the lock is already held
+func (s *DefaultService) create(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, fsService filesystem.Service) error {
 	s.logger.Debugf("Creating S6 service %s", servicePath)
 
 	// Create service directory if it doesn't exist
 	if err := fsService.EnsureDirectory(ctx, servicePath); err != nil {
+		s.logger.Errorf("[s6/create/fail] failed to create service directory (%s): %v", servicePath, err)
 		return fmt.Errorf("failed to create service directory: %w", err)
 	}
+
+	s.logger.Debugf("[s6/create/step] service directory created (%s)", servicePath)
 
 	// Create down file to prevent automatic startup
 	downFilePath := filepath.Join(servicePath, "down")
 	exists, err := fsService.FileExists(ctx, downFilePath)
 	if err != nil {
+		s.logger.Errorf("[s6/create/fail] failed to check if down file exists (%s): %v", downFilePath, err)
 		return fmt.Errorf("failed to check if down file exists: %w", err)
 	}
+
+	s.logger.Debugf("[s6/create/step] down file exists (%s): %v", downFilePath, exists)
 	if !exists {
 		err := fsService.WriteFile(ctx, downFilePath, []byte{}, 0644)
 		if err != nil {
+			s.logger.Errorf("[s6/create/fail] failed to create down file (%s): %v", downFilePath, err)
 			return fmt.Errorf("failed to create down file: %w", err)
 		}
 	}
+	s.logger.Debugf("[s6/create/step] down file created (%s)", downFilePath)
 
 	// Create type file (required for s6-rc)
 	typeFile := filepath.Join(servicePath, "type")
 	exists, err = fsService.FileExists(ctx, typeFile)
 	if err != nil {
+		s.logger.Errorf("[s6/create/fail] failed to check if type file exists (%s): %v", typeFile, err)
 		return fmt.Errorf("failed to check if type file exists: %w", err)
 	}
+	s.logger.Debugf("[s6/create/step] type file exists (%s): %v", typeFile, exists)
 	if !exists {
 		err := fsService.WriteFile(ctx, typeFile, []byte("longrun"), 0644)
 		if err != nil {
+			s.logger.Errorf("[s6/create/fail] failed to create type file (%s): %v", typeFile, err)
 			return fmt.Errorf("failed to create type file: %w", err)
 		}
 	}
+	s.logger.Debugf("[s6/create/step] type file created (%s)", typeFile)
 
 	// s6-supervise requires a run script to function properly
 	if len(config.Command) > 0 {
 		if err := s.createS6RunScript(ctx, servicePath, fsService, config.Command, config.Env, config.MemoryLimit); err != nil {
+			s.logger.Errorf("[s6/create/fail] failed to create S6 run script (%s): %v", servicePath, err)
 			return fmt.Errorf("failed to create S6 run script: %w", err)
 		}
 	} else {
+		s.logger.Errorf("[s6/create/fail] no command specified for service %s", servicePath)
 		return fmt.Errorf("no command specified for service %s", servicePath)
 	}
 
+	s.logger.Debugf("[s6/create/step] S6 run script created (%s)", servicePath)
+
 	// Create any config files specified
 	if err := s.createS6ConfigFiles(ctx, servicePath, fsService, config.ConfigFiles); err != nil {
+		s.logger.Errorf("[s6/create/fail] failed to create S6 config files (%s): %v", servicePath, err)
 		return fmt.Errorf("failed to create S6 config files: %w", err)
 	}
+
+	s.logger.Debugf("[s6/create/step] S6 config files created (%s)", servicePath)
 
 	// There is no need to register the service in user/contents.d,
 	// as s6-overlay expects a static service configuration defined at container build time.
@@ -292,43 +318,81 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 	// Create a dependency on base services to prevent race conditions
 	dependenciesDPath := filepath.Join(servicePath, "dependencies.d")
 	if err := fsService.EnsureDirectory(ctx, dependenciesDPath); err != nil {
+		s.logger.Errorf("[s6/create/fail] failed to create dependencies.d directory (%s): %v", dependenciesDPath, err)
 		return fmt.Errorf("failed to create dependencies.d directory: %w", err)
 	}
 
+	s.logger.Debugf("[s6/create/step] dependencies.d directory created (%s)", dependenciesDPath)
 	baseDepFile := filepath.Join(dependenciesDPath, "base")
 	err = fsService.WriteFile(ctx, baseDepFile, []byte{}, 0644)
 	if err != nil {
+		s.logger.Errorf("[s6/create/fail] failed to create base dependency file (%s): %v", baseDepFile, err)
 		return fmt.Errorf("failed to create base dependency file: %w", err)
 	}
 
 	// Create log service directory and run script
+	s.logger.Debugf("[s6/create/step] base dependency file created (%s)", baseDepFile)
+
 	serviceName := filepath.Base(servicePath)
 	logDir := filepath.Join(constants.S6LogBaseDir, serviceName)
 	logServicePath := filepath.Join(servicePath, "log")
 
 	// Create log service directory
 	if err := fsService.EnsureDirectory(ctx, logServicePath); err != nil {
+		s.logger.Errorf("[s6/create/fail] failed to create log service directory (%s): %v", logServicePath, err)
 		return fmt.Errorf("failed to create log service directory: %w", err)
 	}
 
 	// Create logutil-service command line, see also https://skarnet.org/software/s6/s6-log.html
 	// logutil-service is a wrapper around s6_log and reads from the S6_LOGGING_SCRIPT environment variable
+	s.logger.Debugf("[s6/create/step] log service directory created (%s)", logServicePath)
+
 	// We overwrite the default S6_LOGGING_SCRIPT with our own if config.LogFilesize is set
 	logRunContent, err := getLogRunScript(config, logDir)
 	if err != nil {
+		s.logger.Errorf("[s6/create/fail] failed to get log run script (%s): %v", logDir, err)
 		return fmt.Errorf("failed to get log run script: %w", err)
 	}
 
 	// Create log run script
 	logRunPath := filepath.Join(logServicePath, "run")
 	if err := fsService.WriteFile(ctx, logRunPath, []byte(logRunContent), 0755); err != nil {
+		s.logger.Errorf("[s6/create/fail] failed to write log run script (%s): %v", logRunPath, err)
 		return fmt.Errorf("failed to write log run script: %w", err)
 	}
 
-	// Notification is now handled by EnsureSupervision
-	// We don't call s6-svscanctl here anymore to avoid duplicating the logic
+	// Ensure both the main service and log service are properly supervised
+	// This is critical for S6 to establish the automatic piping between services
+	s.logger.Debugf("[s6/create/step] log run script created (%s)", logRunPath)
 
-	s.logger.Debugf("S6 service %s created with logging to %s", servicePath, logDir)
+	s.logger.Debugf("Ensuring supervision for both main service and log service for %s", servicePath)
+
+	tenMDbgCtx, tenMDbgCancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer tenMDbgCancel()
+	// First ensure the main service supervision
+	mainSupervised, err := s.ensureSupervision(tenMDbgCtx, servicePath, fsService)
+	if err != nil {
+		s.logger.Errorf("[s6/create/fail] failed to ensure main service supervision (%s): %v", servicePath, err)
+		return fmt.Errorf("failed to ensure main service supervision: %w", err)
+	}
+
+	s.logger.Debugf("[s6/create/step] main service supervision ensured (%s)", servicePath)
+
+	// Then ensure the log service supervision
+	logSupervised, err := s.ensureSupervision(tenMDbgCtx, logServicePath, fsService)
+	if err != nil {
+		s.logger.Errorf("[s6/create/fail] failed to ensure log service supervision (%s): %v", logServicePath, err)
+		return fmt.Errorf("failed to ensure log service supervision: %w", err)
+	}
+
+	if !mainSupervised || !logSupervised {
+		s.logger.Debugf("[s6/create/step] Services not yet fully supervised for %s (main: %v, log: %v), will retry on next reconcile",
+			servicePath, mainSupervised, logSupervised)
+	} else {
+		s.logger.Debugf("[s6/create/step] Both main and log services are properly supervised for %s", servicePath)
+	}
+
+	s.logger.Debugf("[s6/create/finish] S6 service %s created with logging to %s", servicePath, logDir)
 
 	return nil
 }
@@ -337,15 +401,25 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 func (s *DefaultService) createS6RunScript(ctx context.Context, servicePath string, fsService filesystem.Service, command []string, env map[string]string, memoryLimit int64) error {
 	runScript := filepath.Join(servicePath, "run")
 
+	// Get service name and log directory for template
+	serviceName := filepath.Base(servicePath)
+	logDir := filepath.Join(constants.S6LogBaseDir, serviceName)
+
 	// Create template data
 	data := struct {
 		Command     []string
 		Env         map[string]string
 		MemoryLimit int64
+		ServicePath string
+		ServiceName string
+		LogDir      string
 	}{
 		Command:     command,
 		Env:         env,
 		MemoryLimit: memoryLimit,
+		ServicePath: servicePath,
+		ServiceName: serviceName,
+		LogDir:      logDir,
 	}
 
 	// Parse and execute the template
@@ -550,6 +624,11 @@ func (s *DefaultService) Start(ctx context.Context, servicePath string, fsServic
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".start", time.Since(start))
 	}()
 
+	return s.start(ctx, servicePath, fsService)
+}
+
+// start is the internal implementation of Start that assumes the lock is already held
+func (s *DefaultService) start(ctx context.Context, servicePath string, fsService filesystem.Service) error {
 	s.logger.Debugf("Starting S6 service %s", servicePath)
 	exists, err := s.serviceExists(ctx, servicePath, fsService)
 	if err != nil {
@@ -567,6 +646,22 @@ func (s *DefaultService) Start(ctx context.Context, servicePath string, fsServic
 
 	s.logger.Debugf("Started S6 service %s", servicePath)
 	return nil
+}
+
+// Stop stops the S6 service
+func (s *DefaultService) Stop(ctx context.Context, servicePath string, fsService filesystem.Service) error {
+	lock, err := s.TryGetLock(ctx, servicePath, LockTypeWrite, "stop")
+	if err != nil {
+		return err
+	}
+	defer lock.Unlock()
+
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".stop", time.Since(start))
+	}()
+
+	return s.stop(ctx, servicePath, fsService)
 }
 
 // stop is an internal helper that stops the S6 service without acquiring the mutex
@@ -590,22 +685,6 @@ func (s *DefaultService) stop(ctx context.Context, servicePath string, fsService
 	return nil
 }
 
-// Stop stops the S6 service
-func (s *DefaultService) Stop(ctx context.Context, servicePath string, fsService filesystem.Service) error {
-	lock, err := s.TryGetLock(ctx, servicePath, LockTypeWrite, "stop")
-	if err != nil {
-		return err
-	}
-	defer lock.Unlock()
-
-	start := time.Now()
-	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".stop", time.Since(start))
-	}()
-
-	return s.stop(ctx, servicePath, fsService)
-}
-
 // Restart restarts the S6 service
 func (s *DefaultService) Restart(ctx context.Context, servicePath string, fsService filesystem.Service) error {
 	lock, err := s.TryGetLock(ctx, servicePath, LockTypeWrite, "restart")
@@ -619,6 +698,11 @@ func (s *DefaultService) Restart(ctx context.Context, servicePath string, fsServ
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".restart", time.Since(start))
 	}()
 
+	return s.restart(ctx, servicePath, fsService)
+}
+
+// restart is the internal implementation of Restart that assumes the lock is already held
+func (s *DefaultService) restart(ctx context.Context, servicePath string, fsService filesystem.Service) error {
 	s.logger.Debugf("Restarting S6 service %s", servicePath)
 	exists, err := s.serviceExists(ctx, servicePath, fsService)
 	if err != nil {
@@ -650,6 +734,11 @@ func (s *DefaultService) Status(ctx context.Context, servicePath string, fsServi
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".status", time.Since(start))
 	}()
 
+	return s.status(ctx, servicePath, fsService)
+}
+
+// status is the internal implementation of Status that assumes the lock is already held
+func (s *DefaultService) status(ctx context.Context, servicePath string, fsService filesystem.Service) (ServiceInfo, error) {
 	// First, check that the service exists.
 	exists, err := s.serviceExists(ctx, servicePath, fsService)
 	if err != nil {
@@ -772,7 +861,7 @@ func (s *DefaultService) Status(ctx context.Context, servicePath string, fsServi
 	info.WantUp = !downExists
 
 	// Optionally update exit history.
-	history, histErr := s.exitHistory(ctx, superviseDir, fsService)
+	history, histErr := s.exitHistory(ctx, filepath.Join(servicePath, "supervise"), fsService)
 	if histErr == nil {
 		info.ExitHistory = history
 	} else {
@@ -910,6 +999,11 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 	}
 	defer lock.RUnlock()
 
+	return s.getConfig(ctx, servicePath, fsService)
+}
+
+// getConfig is the internal implementation of GetConfig that assumes the lock is already held
+func (s *DefaultService) getConfig(ctx context.Context, servicePath string, fsService filesystem.Service) (s6serviceconfig.S6ServiceConfig, error) {
 	exists, err := s.serviceExists(ctx, servicePath, fsService)
 	if err != nil {
 		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to check if service exists: %w", err)
@@ -1215,6 +1309,11 @@ func (s *DefaultService) CleanS6ServiceDirectory(ctx context.Context, path strin
 	}
 	defer lock.Unlock()
 
+	return s.cleanS6ServiceDirectory(ctx, path, fsService)
+}
+
+// cleanS6ServiceDirectory is the internal implementation of CleanS6ServiceDirectory that assumes the lock is already held
+func (s *DefaultService) cleanS6ServiceDirectory(ctx context.Context, path string, fsService filesystem.Service) error {
 	if ctx == nil {
 		return fmt.Errorf("context is nil")
 	}
@@ -1313,6 +1412,11 @@ func (s *DefaultService) GetS6ConfigFile(ctx context.Context, servicePath string
 	}
 	defer lock.RUnlock()
 
+	return s.getS6ConfigFile(ctx, servicePath, configFileName, fsService)
+}
+
+// getS6ConfigFile is the internal implementation of GetS6ConfigFile that assumes the lock is already held
+func (s *DefaultService) getS6ConfigFile(ctx context.Context, servicePath string, configFileName string, fsService filesystem.Service) ([]byte, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -1390,6 +1494,11 @@ func (s *DefaultService) ForceRemove(
 			time.Since(start))
 	}()
 
+	return s.forceRemove(ctx, servicePath, fsService)
+}
+
+// forceRemove is the internal implementation of ForceRemove that assumes the lock is already held
+func (s *DefaultService) forceRemove(ctx context.Context, servicePath string, fsService filesystem.Service) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -1586,6 +1695,11 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".getLogs", time.Since(start))
 	}()
 
+	return s.getLogs(ctx, servicePath, fsService)
+}
+
+// getLogs is the internal implementation of GetLogs that assumes the lock is already held
+func (s *DefaultService) getLogs(ctx context.Context, servicePath string, fsService filesystem.Service) ([]LogEntry, error) {
 	serviceName := filepath.Base(servicePath)
 
 	// Check if the service exists first
@@ -1856,6 +1970,11 @@ func (s *DefaultService) EnsureSupervision(ctx context.Context, servicePath stri
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".ensureSupervision", time.Since(start))
 	}()
 
+	return s.ensureSupervision(ctx, servicePath, fsService)
+}
+
+// ensureSupervision is the internal implementation of EnsureSupervision that assumes the lock is already held
+func (s *DefaultService) ensureSupervision(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
 	exists, err := s.serviceExists(ctx, servicePath, fsService)
 	if err != nil {
 		return false, fmt.Errorf("failed to check if service exists: %w", err)
@@ -1883,6 +2002,65 @@ func (s *DefaultService) EnsureSupervision(ctx context.Context, servicePath stri
 
 	s.logger.Debugf("Supervise directory exists for %s", servicePath)
 	return true, nil
+}
+
+// IsLogServiceReady checks if the log service for a given service is running and ready to capture logs.
+// This function can be used by FSMs to ensure log services are ready before starting main services.
+func (s *DefaultService) IsLogServiceReady(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
+	lock, err := s.TryGetLock(ctx, servicePath, LockTypeRead, "isLogServiceReady")
+	if err != nil {
+		return false, err
+	}
+	defer lock.RUnlock()
+
+	return s.isLogServiceReady(ctx, servicePath, fsService)
+}
+
+// isLogServiceReady is the internal implementation of IsLogServiceReady that assumes the lock is already held
+func (s *DefaultService) isLogServiceReady(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
+	// Check if the service has a log subdirectory
+	logServicePath := filepath.Join(servicePath, "log")
+	logServiceExists, err := fsService.FileExists(ctx, logServicePath)
+	if err != nil {
+		return false, fmt.Errorf("failed to check if log service exists: %w", err)
+	}
+
+	if !logServiceExists {
+		// No log service configured, consider it "ready" (main service will log to stdout)
+		return true, nil
+	}
+
+	// Check if log service is supervised
+	logSupervised, err := s.ensureSupervision(ctx, logServicePath, fsService)
+	if err != nil {
+		return false, fmt.Errorf("failed to check log service supervision: %w", err)
+	}
+
+	if !logSupervised {
+		return false, nil
+	}
+
+	// Check log service status
+	logServiceInfo, err := s.status(ctx, logServicePath, fsService)
+	if err != nil {
+		// If we can't get status, assume not ready
+		return false, nil
+	}
+
+	// Log service should be running
+	if logServiceInfo.Status != ServiceUp {
+		return false, nil
+	}
+
+	// Verify log directory exists and is writable
+	serviceName := filepath.Base(servicePath)
+	logDir := filepath.Join(constants.S6LogBaseDir, serviceName)
+	logDirExists, err := fsService.FileExists(ctx, logDir)
+	if err != nil {
+		return false, fmt.Errorf("failed to check if log directory exists: %w", err)
+	}
+
+	return logDirExists, nil
 }
 
 // ExecuteS6Command executes an S6 command and handles its specific exit codes.

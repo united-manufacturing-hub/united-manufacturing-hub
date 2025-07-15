@@ -251,3 +251,14 @@ func (m *MockService) EnsureSupervision(ctx context.Context, servicePath string,
 
 	return true, nil
 }
+
+// IsLogServiceReady is a mock implementation for checking log service readiness
+func (m *MockService) IsLogServiceReady(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
+	// Check if we should return an error
+	if m.ErrorMode {
+		return false, fmt.Errorf("mock error")
+	}
+
+	// For simplicity, mock that log service is always ready if service exists
+	return m.MockExists, nil
+}

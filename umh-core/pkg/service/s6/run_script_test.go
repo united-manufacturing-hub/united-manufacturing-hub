@@ -96,14 +96,23 @@ var _ = Describe("S6 Run Script", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			var buf bytes.Buffer
+			servicePath := "/run/service/test-service"
+			serviceName := "test-service"
+			logDir := "/data/logs/test-service"
 			err = tmpl.Execute(&buf, struct {
 				Command     []string
 				Env         map[string]string
 				MemoryLimit int64
+				ServicePath string
+				ServiceName string
+				LogDir      string
 			}{
 				Command:     originalConfig.Command,
 				Env:         originalConfig.Env,
 				MemoryLimit: originalConfig.MemoryLimit,
+				ServicePath: servicePath,
+				ServiceName: serviceName,
+				LogDir:      logDir,
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -195,14 +204,23 @@ var _ = Describe("S6 Run Script", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			var buf bytes.Buffer
+			servicePath := "/run/service/test-service"
+			serviceName := "test-service"
+			logDir := "/data/logs/test-service"
 			err = tmpl.Execute(&buf, struct {
 				Command     []string
 				Env         map[string]string
 				MemoryLimit int64
+				ServicePath string
+				ServiceName string
+				LogDir      string
 			}{
 				Command:     originalConfig.Command,
 				Env:         originalConfig.Env,
 				MemoryLimit: originalConfig.MemoryLimit,
+				ServicePath: servicePath,
+				ServiceName: serviceName,
+				LogDir:      logDir,
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -280,14 +298,23 @@ var _ = Describe("S6 Run Script", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			var buf bytes.Buffer
+			servicePath := "/run/service/test-service"
+			serviceName := "test-service"
+			logDir := "/data/logs/test-service"
 			err = tmpl.Execute(&buf, struct {
 				Command     []string
 				Env         map[string]string
 				MemoryLimit int64
+				ServicePath string
+				ServiceName string
+				LogDir      string
 			}{
 				Command:     complexConfig.Command,
 				Env:         complexConfig.Env,
 				MemoryLimit: complexConfig.MemoryLimit,
+				ServicePath: servicePath,
+				ServiceName: serviceName,
+				LogDir:      logDir,
 			})
 			Expect(err).NotTo(HaveOccurred())
 
