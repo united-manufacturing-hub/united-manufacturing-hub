@@ -150,19 +150,19 @@ var _ = Describe("StreamProcessorServiceConfig", func() {
 
 			dfcConfig.BenthosConfig.Pipeline = map[string]any{
 				"processors": []any{map[string]any{
-					"stream_processor": streamprocessorserviceconfig.StreamProcessorBenthosConfig{
-						Mode: "timeseries",
-						Model: streamprocessorserviceconfig.ModelRef{
-							Name:    "pump",
-							Version: "v1",
+					"stream_processor": map[string]any{
+						"mode": "timeseries",
+						"model": map[string]any{
+							"name":    "pump",
+							"version": "v1",
 						},
-						OutputTopic: "umh.v1.corpA.plant-A.aawd",
-						Sources: map[string]string{
+						"output_topic": "umh.v1.corpA.plant-A.aawd",
+						"sources": map[string]any{
 							"press": "umh.v1.corpA.plant-A.aawd._raw.press",
 							"tF":    "umh.v1.corpA.plant-A.aawd._raw.tempF",
 							"r":     "umh.v1.corpA.plant-A.aawd._raw.run",
 						},
-						Mapping: map[string]any{
+						"mapping": map[string]any{
 							"pressure":    "press+4.00001",
 							"temperature": "tF*69/31",
 							"motor": map[string]any{
@@ -184,9 +184,9 @@ var _ = Describe("StreamProcessorServiceConfig", func() {
 			// Verify the extracted values
 			Expect(runtime.Model.Name).To(Equal("pump"))
 			Expect(runtime.Model.Version).To(Equal("v1"))
-			Expect(runtime.Sources["press"]).To(Equal("umh.v1.corpA.plant-A.aawd._raw.press"))
-			Expect(runtime.Sources["tF"]).To(Equal("umh.v1.corpA.plant-A.aawd._raw.tempF"))
-			Expect(runtime.Sources["r"]).To(Equal("umh.v1.corpA.plant-A.aawd._raw.run"))
+			Expect(runtime.Sources["press"]).To(Equal("corpA.plant-A.aawd._raw.press"))
+			Expect(runtime.Sources["tF"]).To(Equal("corpA.plant-A.aawd._raw.tempF"))
+			Expect(runtime.Sources["r"]).To(Equal("corpA.plant-A.aawd._raw.run"))
 			Expect(runtime.Mapping["pressure"]).To(Equal("press+4.00001"))
 			Expect(runtime.Mapping["temperature"]).To(Equal("tF*69/31"))
 			Expect(runtime.Mapping["motor"].(map[string]any)["rpm"]).To(Equal("press/4"))
