@@ -284,7 +284,7 @@ func (b *BenthosInstance) IsBenthosS6Running() (bool, string) {
 		return true, ""
 	}
 	currentState := b.ObservedState.ServiceInfo.S6FSMState
-	if currentState == "" {
+	if strings.TrimSpace(currentState) == "" {
 		currentState = "not existing"
 	}
 	return false, fmt.Sprintf("s6 is not running, current state: %s", currentState)

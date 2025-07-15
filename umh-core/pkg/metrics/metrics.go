@@ -16,7 +16,7 @@ package metrics
 
 import (
 	"net/http"
-	"runtime"
+	"runtime/debug"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -151,14 +151,11 @@ func SetupMetricsEndpoint(addr string) *http.Server {
 	return server
 }
 
-// printDetailedStackTrace prints a detailed stack trace with more information
+// printDetailedStackTrace prints a stack trace
 func printDetailedStackTrace() {
-	// Get stack trace for all goroutines with a large buffer
-	buf := make([]byte, 1024*1024) // Allocate 1MB buffer
-	n := runtime.Stack(buf, true)
-
 	// Print the full stack trace
-	logger.For("stacktrace").Debugf("=== DETAILED STACK TRACE ===\n%s", string(buf[:n]))
+	logger.For("stacktrace").Debugf("=== STACK TRACE ===")
+	debug.PrintStack()
 }
 
 // IncErrorCountAndLog increments the error counter for a component and logs a debug message if a logger is provided

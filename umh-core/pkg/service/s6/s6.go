@@ -280,7 +280,7 @@ func (s *DefaultService) withLifecycleGuard(fn func() error) error {
 // - Uses lifecycle manager for atomic creation with EXDEV protection
 // - Simplified 3-path approach with health checks
 func (s *DefaultService) Create(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, fsService filesystem.Service) error {
-	lock, err := s.TryGetLock(ctx, servicePath, LockTypeWrite)
+	lock, err := s.TryGetLock(ctx, servicePath, LockTypeWrite, "create")
 	if err != nil {
 		return err
 	}
@@ -386,7 +386,7 @@ func (s *DefaultService) createImpl(ctx context.Context, servicePath string, con
 // - Fully idempotent - safe to call when directories are partially removed
 // - Returns nil only when nothing is left
 func (s *DefaultService) Remove(ctx context.Context, servicePath string, fsService filesystem.Service) error {
-	lock, err := s.TryGetLock(ctx, servicePath, LockTypeWrite)
+	lock, err := s.TryGetLock(ctx, servicePath, LockTypeWrite, "remove")
 	if err != nil {
 		return err
 	}
@@ -434,7 +434,7 @@ func (s *DefaultService) removeImpl(ctx context.Context, servicePath string, fsS
 
 // Start starts the S6 service
 func (s *DefaultService) Start(ctx context.Context, servicePath string, fsService filesystem.Service) error {
-	lock, err := s.TryGetLock(ctx, servicePath, LockTypeWrite)
+	lock, err := s.TryGetLock(ctx, servicePath, LockTypeWrite, "start")
 	if err != nil {
 		return err
 	}
@@ -501,7 +501,7 @@ func (s *DefaultService) startImpl(ctx context.Context, servicePath string, fsSe
 
 // Stop stops the S6 service
 func (s *DefaultService) Stop(ctx context.Context, servicePath string, fsService filesystem.Service) error {
-	lock, err := s.TryGetLock(ctx, servicePath, LockTypeWrite)
+	lock, err := s.TryGetLock(ctx, servicePath, LockTypeWrite, "stop")
 	if err != nil {
 		return err
 	}
@@ -566,7 +566,7 @@ func (s *DefaultService) stopImpl(ctx context.Context, servicePath string, fsSer
 
 // Restart restarts the S6 service
 func (s *DefaultService) Restart(ctx context.Context, servicePath string, fsService filesystem.Service) error {
-	lock, err := s.TryGetLock(ctx, servicePath, LockTypeWrite)
+	lock, err := s.TryGetLock(ctx, servicePath, LockTypeWrite, "restart")
 	if err != nil {
 		return err
 	}
@@ -602,7 +602,7 @@ func (s *DefaultService) restartImpl(ctx context.Context, servicePath string, fs
 }
 
 func (s *DefaultService) Status(ctx context.Context, servicePath string, fsService filesystem.Service) (ServiceInfo, error) {
-	lock, err := s.TryGetLock(ctx, servicePath, LockTypeRead)
+	lock, err := s.TryGetLock(ctx, servicePath, LockTypeRead, "status")
 	if err != nil {
 		return ServiceInfo{}, err
 	}
@@ -766,7 +766,7 @@ func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, f
 	// For ExitHistory, we need to derive the service path from superviseDir to get the right lock
 	servicePath := filepath.Dir(superviseDir) // Remove the "supervise" part to get service path
 
-	lock, err := s.TryGetLock(ctx, servicePath, LockTypeRead)
+	lock, err := s.TryGetLock(ctx, servicePath, LockTypeRead, "exitHistory")
 	if err != nil {
 		return nil, err
 	}
@@ -843,7 +843,7 @@ func (s *DefaultService) exitHistoryImpl(ctx context.Context, superviseDir strin
 
 // ServiceExists checks if the service directory exists
 func (s *DefaultService) ServiceExists(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
-	lock, err := s.TryGetLock(ctx, servicePath, LockTypeRead)
+	lock, err := s.TryGetLock(ctx, servicePath, LockTypeRead, "serviceExists")
 	if err != nil {
 		return false, err
 	}
@@ -874,7 +874,7 @@ func (s *DefaultService) serviceExistsImpl(ctx context.Context, servicePath stri
 
 // GetConfig gets the actual service config from s6
 func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsService filesystem.Service) (s6serviceconfig.S6ServiceConfig, error) {
-	lock, err := s.TryGetLock(ctx, servicePath, LockTypeRead)
+	lock, err := s.TryGetLock(ctx, servicePath, LockTypeRead, "getConfig")
 	if err != nil {
 		return s6serviceconfig.S6ServiceConfig{}, err
 	}
@@ -1184,7 +1184,7 @@ const (
 
 // CleanS6ServiceDirectory cleans the S6 service directory except for the known services
 func (s *DefaultService) CleanS6ServiceDirectory(ctx context.Context, path string, fsService filesystem.Service) error {
-	lock, err := s.TryGetLock(ctx, path, LockTypeWrite)
+	lock, err := s.TryGetLock(ctx, path, LockTypeWrite, "cleanS6ServiceDirectory")
 	if err != nil {
 		return err
 	}
@@ -1287,7 +1287,7 @@ func (s *DefaultService) IsKnownService(name string) bool {
 // GetS6ConfigFile retrieves the specified config file for a service
 // servicePath should be the full path including S6BaseDir
 func (s *DefaultService) GetS6ConfigFile(ctx context.Context, servicePath string, configFileName string, fsService filesystem.Service) ([]byte, error) {
-	lock, err := s.TryGetLock(ctx, servicePath, LockTypeRead)
+	lock, err := s.TryGetLock(ctx, servicePath, LockTypeRead, "getS6ConfigFile")
 	if err != nil {
 		return nil, err
 	}
@@ -1343,7 +1343,7 @@ func (s *DefaultService) ForceRemove(
 	servicePath string,
 	fsService filesystem.Service,
 ) error {
-	lock, err := s.TryGetLock(ctx, servicePath, LockTypeWrite)
+	lock, err := s.TryGetLock(ctx, servicePath, LockTypeWrite, "forceRemove")
 	if err != nil {
 		return err
 	}
@@ -1481,7 +1481,7 @@ func (s *DefaultService) appendToRingBuffer(entries []LogEntry, st *logState) {
 // Errors are returned early and unwrapped where they occur so callers
 // see the root cause (e.g. "file disappeared", "permission denied").
 func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsService filesystem.Service) ([]LogEntry, error) {
-	lock, err := s.TryGetLock(ctx, servicePath, LockTypeWrite)
+	lock, err := s.TryGetLock(ctx, servicePath, LockTypeWrite, "getLogs")
 	if err != nil {
 		return nil, err
 	}
@@ -1744,7 +1744,7 @@ func parseLogLine(line string) LogEntry {
 // s6-svscan if it doesn't, to trigger supervision setup.
 // Returns true if supervise directory exists (ready for supervision), false otherwise.
 func (s *DefaultService) EnsureSupervision(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
-	lock, err := s.TryGetLock(ctx, servicePath, LockTypeWrite)
+	lock, err := s.TryGetLock(ctx, servicePath, LockTypeWrite, "ensureSupervision")
 	if err != nil {
 		return false, err
 	}
@@ -1882,7 +1882,7 @@ func (s *DefaultService) CheckHealth(ctx context.Context, servicePath string, fs
 // Usage examples:
 //
 //	// For read operations (multiple readers allowed):
-//	lock, err := s.TryGetLock(ctx, servicePath, LockTypeRead)
+//	lock, err := s.TryGetLock(ctx, servicePath, LockTypeRead, "status")
 //	if err != nil {
 //		return err
 //	}
@@ -1890,7 +1890,7 @@ func (s *DefaultService) CheckHealth(ctx context.Context, servicePath string, fs
 //	// ... perform read operations ...
 //
 //	// For write operations (exclusive access):
-//	lock, err := s.TryGetLock(ctx, servicePath, LockTypeWrite)
+//	lock, err := s.TryGetLock(ctx, servicePath, LockTypeWrite, "create")
 //	if err != nil {
 //		return err
 //	}
@@ -1899,7 +1899,7 @@ func (s *DefaultService) CheckHealth(ctx context.Context, servicePath string, fs
 //
 // Note: The function returns a ServiceLock interface that includes debug logging
 // for lock acquisition and release when logger is available.
-func (s *DefaultService) TryGetLock(ctx context.Context, servicePath string, lockType LockType) (ServiceLock, error) {
+func (s *DefaultService) TryGetLock(ctx context.Context, servicePath string, lockType LockType, operation string) (ServiceLock, error) {
 	// Get or create the lock wrapper for this servicePath using double-checked locking pattern
 	s.serviceLocksMutex.RLock()
 	serviceLock, exists := s.serviceLocks[servicePath]
@@ -1925,36 +1925,68 @@ func (s *DefaultService) TryGetLock(ctx context.Context, servicePath string, loc
 	switch lockType {
 	case LockTypeRead:
 		success = serviceLock.RTryLockWithContext(ctx)
+		if success {
+			// Record read acquisition time and operation
+			wrapper := serviceLock.(*lockWrapper)
+			wrapper.readAcquiredAt = time.Now()
+			wrapper.currentOperation = operation
+			wrapper.hasLocked = true
+		}
 	case LockTypeWrite:
 		success = serviceLock.TryLockWithContext(ctx)
+		if success {
+			// Record write acquisition time and operation
+			wrapper := serviceLock.(*lockWrapper)
+			wrapper.writeAcquiredAt = time.Now()
+			wrapper.currentOperation = operation
+			wrapper.hasLocked = true
+		}
 	default:
 		return nil, fmt.Errorf("invalid lock type: %d", lockType)
 	}
 
 	if !success {
-		s.safeLogWarnf("Failed to acquire %s lock for service %s within context deadline", lockType.String(), servicePath)
+		s.safeLogWarnf("[LOCK/%s] Failed to acquire %s lock for service %s within context deadline", operation, lockType.String(), servicePath)
 		return nil, ctx.Err()
 	}
 
-	s.safeLogDebugf("Successfully acquired %s lock for service %s", lockType.String(), servicePath)
+	s.safeLogDebugf("[LOCK/%s] Successfully acquired %s lock for service %s", operation, lockType.String(), servicePath)
 	return serviceLock, nil
 }
 
 // lockWrapper wraps a CASMutex to add debug logging on release
 type lockWrapper struct {
 	*lock.CASMutex
-	servicePath string
-	logger      *DefaultService
+	servicePath      string
+	logger           *DefaultService
+	writeAcquiredAt  time.Time // timestamp when write lock was acquired
+	readAcquiredAt   time.Time // timestamp when read lock was acquired (for the current holder)
+	currentOperation string    // current operation holding the lock
+	hasLocked        bool      // whether the lock has been acquired
 }
 
 // Unlock releases a write lock with debug logging
 func (lw *lockWrapper) Unlock() {
+	if !lw.hasLocked {
+		return
+	}
+	// Calculate duration and get operation before releasing the lock
+	duration := time.Since(lw.writeAcquiredAt)
+	operation := lw.currentOperation
+
 	lw.CASMutex.Unlock()
-	lw.logger.safeLogDebugf("Released write lock for service %s", lw.servicePath)
+	lw.logger.safeLogDebugf("[LOCK/%s] Released write lock for service %s (held for %v)", operation, lw.servicePath, duration)
 }
 
 // RUnlock releases a read lock with debug logging
 func (lw *lockWrapper) RUnlock() {
+	if !lw.hasLocked {
+		return
+	}
+	// Calculate duration and get operation before releasing the lock
+	duration := time.Since(lw.readAcquiredAt)
+	operation := lw.currentOperation
+
 	lw.CASMutex.RUnlock()
-	lw.logger.safeLogDebugf("Released read lock for service %s", lw.servicePath)
+	lw.logger.safeLogDebugf("[LOCK/%s] Released read lock for service %s (held for %v)", operation, lw.servicePath, duration)
 }
