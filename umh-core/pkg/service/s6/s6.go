@@ -216,6 +216,14 @@ func (lt LockType) String() string {
 	}
 }
 
+// ServiceLock interface for service-specific locks with logging
+type ServiceLock interface {
+	Unlock()
+	RUnlock()
+	TryLockWithContext(ctx context.Context) bool
+	RTryLockWithContext(ctx context.Context) bool
+}
+
 // DefaultService is the default implementation of the S6 Service interface
 type DefaultService struct {
 	logger     *zap.SugaredLogger
@@ -1884,12 +1892,9 @@ func (s *DefaultService) CheckHealth(ctx context.Context, servicePath string, fs
 //	defer lock.Unlock()
 //	// ... perform write operations ...
 //
-//	// Or use the helper function:
-//	err := s.withServiceLock(ctx, servicePath, LockTypeWrite, func() error {
-//		// ... perform operations that need write lock ...
-//		return nil
-//	})
-func (s *DefaultService) TryGetLock(ctx context.Context, servicePath string, lockType LockType) (*lock.CASMutex, error) {
+// Note: The function returns a ServiceLock interface that includes debug logging
+// for lock acquisition and release when logger is available.
+func (s *DefaultService) TryGetLock(ctx context.Context, servicePath string, lockType LockType) (ServiceLock, error) {
 	// Get or create the lock for this servicePath using double-checked locking pattern
 	s.serviceLocksMutex.RLock()
 	serviceLock, exists := s.serviceLocks[servicePath]
@@ -1922,5 +1927,41 @@ func (s *DefaultService) TryGetLock(ctx context.Context, servicePath string, loc
 		return nil, ctx.Err()
 	}
 
-	return serviceLock, nil
+	s.safeLogDebugf("Successfully acquired %s lock for service %s", lockType.String(), servicePath)
+	return &lockWrapper{
+		CASMutex:    serviceLock,
+		lockType:    lockType,
+		servicePath: servicePath,
+		logger:      s,
+	}, nil
+}
+
+// lockWrapper wraps a CASMutex to add debug logging on release
+type lockWrapper struct {
+	*lock.CASMutex
+	lockType    LockType
+	servicePath string
+	logger      *DefaultService
+}
+
+// Unlock releases a write lock with debug logging
+func (lw *lockWrapper) Unlock() {
+	lw.CASMutex.Unlock()
+	lw.logger.safeLogDebugf("Released %s lock for service %s", lw.lockType.String(), lw.servicePath)
+}
+
+// RUnlock releases a read lock with debug logging
+func (lw *lockWrapper) RUnlock() {
+	lw.CASMutex.RUnlock()
+	lw.logger.safeLogDebugf("Released %s lock for service %s", lw.lockType.String(), lw.servicePath)
+}
+
+// TryLockWithContext passes through to the underlying mutex
+func (lw *lockWrapper) TryLockWithContext(ctx context.Context) bool {
+	return lw.CASMutex.TryLockWithContext(ctx)
+}
+
+// RTryLockWithContext passes through to the underlying mutex
+func (lw *lockWrapper) RTryLockWithContext(ctx context.Context) bool {
+	return lw.CASMutex.RTryLockWithContext(ctx)
 }
