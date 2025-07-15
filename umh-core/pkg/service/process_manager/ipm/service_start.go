@@ -44,7 +44,7 @@ func (pm *ProcessManager) startService(ctx context.Context, identifier serviceId
 		pm.Logger.Info("Found existing PID file, terminating old process", zap.String("identifier", string(identifier)))
 
 		// Terminate the existing process
-		if err := pm.terminateServiceProcess(ctx, servicePath, fsService); err != nil {
+		if err := pm.terminateServiceProcess(ctx, identifier, servicePath, fsService); err != nil {
 			pm.Logger.Error("Error terminating existing process", zap.Error(err))
 			return fmt.Errorf("error terminating existing process: %w", err)
 		}

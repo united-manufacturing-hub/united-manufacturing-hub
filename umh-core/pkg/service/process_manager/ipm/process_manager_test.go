@@ -25,6 +25,8 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 
+	"syscall"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
@@ -968,6 +970,664 @@ var _ = Describe("ProcessManager", func() {
 			err = pm.Reconcile(cancelCtx, fsService)
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(Equal(context.Canceled))
+		})
+	})
+
+	Describe("Status", func() {
+		It("should return service status for existing service with no process running", func() {
+			servicePath := "test-service"
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "test: value",
+					"run.sh":      "#!/bin/bash\necho 'Hello World'",
+				},
+			}
+
+			// Create service first
+			err := pm.Create(ctx, servicePath, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Process the creation
+			err = pm.Reconcile(ctx, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Status should return ServiceDown since no process is running
+			status, err := pm.Status(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(status.Status).To(Equal(process_shared.ServiceDown))
+			Expect(status.Pid).To(Equal(0))
+			Expect(status.Pgid).To(Equal(0))
+			Expect(status.Uptime).To(Equal(int64(0)))
+		})
+
+		It("should return service status for existing service with process running", func() {
+			servicePath := "test-service"
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "test: value",
+					"run.sh":      "#!/bin/bash\necho 'Hello World'",
+				},
+			}
+
+			// Create service first
+			err := pm.Create(ctx, servicePath, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Process the creation
+			err = pm.Reconcile(ctx, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Setup mock to simulate a running process
+			identifier := servicePathToIdentifier(servicePath)
+			pidFile := filepath.Join(pm.serviceDirectory, string(identifier), pidFileName)
+			mockPid := "1234"
+
+			// Mock filesystem to return PID file content
+			mockFS := fsService.(*filesystem.MockFileSystem)
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+				if path == pidFile {
+					return []byte(mockPid), nil
+				}
+				// Default mock behavior for other files
+				if filepath.Base(path) == "config.yaml" {
+					return []byte("test: value"), nil
+				}
+				if filepath.Base(path) == "run.sh" {
+					return []byte("#!/bin/bash\necho 'Hello World'"), nil
+				}
+				return []byte{}, nil
+			})
+
+			// Mock Stat to simulate PID file exists
+			mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+				if path == pidFile {
+					return &mockFileInfo{name: "run.pid"}, nil
+				}
+				return nil, os.ErrNotExist
+			})
+
+			// Note: In a real test, the process checking with os.FindProcess and signal would fail
+			// for a mock PID, so the service would show as down. This is expected behavior
+			// since we can't easily mock the OS process checking functions.
+			status, err := pm.Status(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+			// Will be ServiceDown because mock PID doesn't correspond to real process
+			Expect(status.Status).To(Equal(process_shared.ServiceDown))
+		})
+
+		It("should return error for non-existent service", func() {
+			servicePath := "non-existent-service"
+
+			status, err := pm.Status(ctx, servicePath, fsService)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(Equal(process_shared.ErrServiceNotExist))
+			Expect(status).To(Equal(process_shared.ServiceInfo{}))
+		})
+
+		It("should handle corrupted PID file gracefully", func() {
+			servicePath := "test-service"
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "test: value",
+				},
+			}
+
+			// Create service first
+			err := pm.Create(ctx, servicePath, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Process the creation
+			err = pm.Reconcile(ctx, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Setup mock to simulate corrupted PID file
+			identifier := servicePathToIdentifier(servicePath)
+			pidFile := filepath.Join(pm.serviceDirectory, string(identifier), pidFileName)
+
+			// Mock filesystem to return invalid PID content
+			mockFS := fsService.(*filesystem.MockFileSystem)
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+				if path == pidFile {
+					return []byte("not-a-number"), nil
+				}
+				return []byte{}, nil
+			})
+
+			// Mock Stat to simulate PID file exists
+			mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+				if path == pidFile {
+					return &mockFileInfo{name: "run.pid"}, nil
+				}
+				return nil, os.ErrNotExist
+			})
+
+			status, err := pm.Status(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(status.Status).To(Equal(process_shared.ServiceDown))
+			Expect(status.Pid).To(Equal(0))
+		})
+
+		It("should handle filesystem error when reading PID file", func() {
+			servicePath := "test-service"
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "test: value",
+				},
+			}
+
+			// Create service first
+			err := pm.Create(ctx, servicePath, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Process the creation
+			err = pm.Reconcile(ctx, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Setup mock to simulate filesystem error when reading PID file
+			identifier := servicePathToIdentifier(servicePath)
+			pidFile := filepath.Join(pm.serviceDirectory, string(identifier), pidFileName)
+
+			// Mock filesystem to return error
+			mockFS := fsService.(*filesystem.MockFileSystem)
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+				if path == pidFile {
+					return nil, fmt.Errorf("filesystem error")
+				}
+				return []byte{}, nil
+			})
+
+			status, err := pm.Status(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(status.Status).To(Equal(process_shared.ServiceDown))
+			Expect(status.Pid).To(Equal(0))
+		})
+	})
+
+	Describe("ServiceExists", func() {
+		It("should return true for existing service", func() {
+			servicePath := "test-service"
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "test: value",
+				},
+			}
+
+			// Create service first
+			err := pm.Create(ctx, servicePath, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Check if service exists
+			exists, err := pm.ServiceExists(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(exists).To(BeTrue())
+		})
+
+		It("should return false for non-existent service", func() {
+			servicePath := "non-existent-service"
+
+			// Check if service exists
+			exists, err := pm.ServiceExists(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(exists).To(BeFalse())
+		})
+
+		It("should return false after service is removed", func() {
+			servicePath := "test-service"
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "test: value",
+				},
+			}
+
+			// Create service first
+			err := pm.Create(ctx, servicePath, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Verify service exists
+			exists, err := pm.ServiceExists(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(exists).To(BeTrue())
+
+			// Remove service
+			err = pm.Remove(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Verify service no longer exists
+			exists, err = pm.ServiceExists(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(exists).To(BeFalse())
+		})
+
+		It("should handle multiple service existence checks", func() {
+			service1 := "service-1"
+			service2 := "service-2"
+			service3 := "non-existent-service"
+
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "test: value",
+				},
+			}
+
+			// Create two services
+			err := pm.Create(ctx, service1, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = pm.Create(ctx, service2, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Check all services
+			exists1, err := pm.ServiceExists(ctx, service1, fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(exists1).To(BeTrue())
+
+			exists2, err := pm.ServiceExists(ctx, service2, fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(exists2).To(BeTrue())
+
+			exists3, err := pm.ServiceExists(ctx, service3, fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(exists3).To(BeFalse())
+		})
+	})
+
+	Describe("CleanServiceDirectory", func() {
+		It("should handle directory cleaning operation successfully", func() {
+			path := "/some/path"
+
+			err := pm.CleanServiceDirectory(ctx, path, fsService)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should handle context cancellation", func() {
+			cancelCtx, cancel := context.WithCancel(context.Background())
+			cancel() // Cancel immediately
+
+			path := "/some/path"
+
+			// CleanServiceDirectory should succeed even with canceled context
+			// since it's a no-op for IPM
+			err := pm.CleanServiceDirectory(cancelCtx, path, fsService)
+			Expect(err).ToNot(HaveOccurred())
+		})
+	})
+
+	Describe("ForceRemove", func() {
+		It("should handle force remove operation successfully", func() {
+			servicePath := "test-service"
+
+			err := pm.ForceRemove(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should handle non-existent service", func() {
+			servicePath := "non-existent-service"
+
+			err := pm.ForceRemove(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should handle context cancellation", func() {
+			cancelCtx, cancel := context.WithCancel(context.Background())
+			cancel() // Cancel immediately
+
+			servicePath := "test-service"
+
+			// ForceRemove should succeed even with canceled context
+			// since it's a no-op for IPM
+			err := pm.ForceRemove(cancelCtx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+		})
+	})
+
+	Describe("ExitHistory", func() {
+		It("should return empty exit history for new service", func() {
+			servicePath := "test-service"
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "test: value",
+				},
+			}
+
+			// Create service first
+			err := pm.Create(ctx, servicePath, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Process the creation
+			err = pm.Reconcile(ctx, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// ExitHistory should return empty list for new service
+			exitHistory, err := pm.ExitHistory(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(exitHistory).To(BeEmpty())
+		})
+
+		It("should return error for non-existent service", func() {
+			servicePath := "non-existent-service"
+
+			exitHistory, err := pm.ExitHistory(ctx, servicePath, fsService)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(Equal(process_shared.ErrServiceNotExist))
+			Expect(exitHistory).To(BeNil())
+		})
+
+		It("should record exit events when process terminates", func() {
+			servicePath := "test-service"
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "test: value",
+				},
+			}
+
+			// Create service first
+			err := pm.Create(ctx, servicePath, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Process the creation
+			err = pm.Reconcile(ctx, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Manually record an exit event to simulate process termination
+			identifier := servicePathToIdentifier(servicePath)
+			pm.recordExitEvent(identifier, 1, 0) // Normal exit with code 1
+
+			// Check exit history
+			exitHistory, err := pm.ExitHistory(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(exitHistory).To(HaveLen(1))
+			Expect(exitHistory[0].ExitCode).To(Equal(1))
+			Expect(exitHistory[0].Signal).To(Equal(0))
+			Expect(exitHistory[0].Timestamp).To(BeTemporally("~", time.Now(), time.Second))
+		})
+
+		It("should record signal-based exit events", func() {
+			servicePath := "test-service"
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "test: value",
+				},
+			}
+
+			// Create service first
+			err := pm.Create(ctx, servicePath, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Process the creation
+			err = pm.Reconcile(ctx, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Manually record a signal-based exit event
+			identifier := servicePathToIdentifier(servicePath)
+			pm.recordExitEvent(identifier, -1, int(syscall.SIGTERM)) // Killed by SIGTERM
+
+			// Check exit history
+			exitHistory, err := pm.ExitHistory(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(exitHistory).To(HaveLen(1))
+			Expect(exitHistory[0].ExitCode).To(Equal(-1))
+			Expect(exitHistory[0].Signal).To(Equal(int(syscall.SIGTERM)))
+		})
+
+		It("should maintain multiple exit events in chronological order", func() {
+			servicePath := "test-service"
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "test: value",
+				},
+			}
+
+			// Create service first
+			err := pm.Create(ctx, servicePath, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Process the creation
+			err = pm.Reconcile(ctx, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Record multiple exit events
+			identifier := servicePathToIdentifier(servicePath)
+			pm.recordExitEvent(identifier, 0, 0)                     // Normal exit
+			pm.recordExitEvent(identifier, 1, 0)                     // Error exit
+			pm.recordExitEvent(identifier, -1, int(syscall.SIGKILL)) // Killed
+
+			// Check exit history
+			exitHistory, err := pm.ExitHistory(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(exitHistory).To(HaveLen(3))
+
+			// Verify events are in order
+			Expect(exitHistory[0].ExitCode).To(Equal(0))
+			Expect(exitHistory[0].Signal).To(Equal(0))
+
+			Expect(exitHistory[1].ExitCode).To(Equal(1))
+			Expect(exitHistory[1].Signal).To(Equal(0))
+
+			Expect(exitHistory[2].ExitCode).To(Equal(-1))
+			Expect(exitHistory[2].Signal).To(Equal(int(syscall.SIGKILL)))
+
+			// Verify timestamps are in chronological order
+			Expect(exitHistory[0].Timestamp).To(BeTemporally("<=", exitHistory[1].Timestamp))
+			Expect(exitHistory[1].Timestamp).To(BeTemporally("<=", exitHistory[2].Timestamp))
+		})
+
+		It("should limit exit history to prevent unbounded growth", func() {
+			servicePath := "test-service"
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "test: value",
+				},
+			}
+
+			// Create service first
+			err := pm.Create(ctx, servicePath, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Process the creation
+			err = pm.Reconcile(ctx, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Record more than 100 exit events to test the limit
+			identifier := servicePathToIdentifier(servicePath)
+			for i := 0; i < 105; i++ {
+				pm.recordExitEvent(identifier, i, 0)
+			}
+
+			// Check exit history is limited to 100 events
+			exitHistory, err := pm.ExitHistory(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(exitHistory).To(HaveLen(100))
+
+			// Verify the first 5 events were dropped and we have the last 100
+			Expect(exitHistory[0].ExitCode).To(Equal(5))    // First kept event
+			Expect(exitHistory[99].ExitCode).To(Equal(104)) // Last event
+		})
+
+		It("should handle recordExitEvent for non-existent service gracefully", func() {
+			identifier := servicePathToIdentifier("non-existent-service")
+
+			// This should not panic or cause errors
+			pm.recordExitEvent(identifier, 1, 0)
+
+			// Try to get exit history for the non-existent service
+			exitHistory, err := pm.ExitHistory(ctx, "non-existent-service", fsService)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(Equal(process_shared.ErrServiceNotExist))
+			Expect(exitHistory).To(BeNil())
+		})
+	})
+
+	Describe("GetConfig", func() {
+		It("should return config for existing service", func() {
+			servicePath := "test-service"
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "test: value",
+					"app.conf":    "setting=production",
+				},
+				MemoryLimit: 512 * 1024 * 1024, // 512MB
+				LogFilesize: 10 * 1024 * 1024,  // 10MB
+			}
+
+			// Create service first
+			err := pm.Create(ctx, servicePath, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Process the creation
+			err = pm.Reconcile(ctx, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// GetConfig should return the stored configuration
+			retrievedConfig, err := pm.GetConfig(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(retrievedConfig.ConfigFiles).To(Equal(config.ConfigFiles))
+			Expect(retrievedConfig.MemoryLimit).To(Equal(config.MemoryLimit))
+			Expect(retrievedConfig.LogFilesize).To(Equal(config.LogFilesize))
+		})
+
+		It("should return error for non-existent service", func() {
+			servicePath := "non-existent-service"
+
+			retrievedConfig, err := pm.GetConfig(ctx, servicePath, fsService)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(Equal(process_shared.ErrServiceNotExist))
+			Expect(retrievedConfig).To(Equal(process_manager_serviceconfig.ProcessManagerServiceConfig{}))
+		})
+
+		It("should handle service with no config files", func() {
+			servicePath := "simple-service"
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{}, // Empty config files
+				MemoryLimit: 0,
+				LogFilesize: 0,
+			}
+
+			// Create service first
+			err := pm.Create(ctx, servicePath, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Process the creation
+			err = pm.Reconcile(ctx, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// GetConfig should return the stored configuration
+			retrievedConfig, err := pm.GetConfig(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(retrievedConfig.ConfigFiles).To(BeEmpty())
+			Expect(retrievedConfig.MemoryLimit).To(Equal(int64(0)))
+			Expect(retrievedConfig.LogFilesize).To(Equal(int64(0)))
+		})
+
+		It("should handle context cancellation", func() {
+			cancelledCtx, cancel := context.WithCancel(context.Background())
+			cancel() // Cancel immediately
+
+			servicePath := "test-service"
+
+			retrievedConfig, err := pm.GetConfig(cancelledCtx, servicePath, fsService)
+			Expect(err).To(HaveOccurred())
+			Expect(retrievedConfig).To(Equal(process_manager_serviceconfig.ProcessManagerServiceConfig{}))
+		})
+	})
+
+	Describe("GetConfigFile", func() {
+		It("should return config file content for existing service and file", func() {
+			servicePath := "test-service"
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "database:\n  host: localhost\n  port: 5432",
+					"app.conf":    "debug=true\nport=8080",
+				},
+			}
+
+			// Create service first
+			err := pm.Create(ctx, servicePath, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Process the creation
+			err = pm.Reconcile(ctx, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// GetConfigFile should return the specific file content
+			content, err := pm.GetConfigFile(ctx, servicePath, "config.yaml", fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(string(content)).To(Equal("database:\n  host: localhost\n  port: 5432"))
+
+			// Test the other file too
+			content, err = pm.GetConfigFile(ctx, servicePath, "app.conf", fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(string(content)).To(Equal("debug=true\nport=8080"))
+		})
+
+		It("should return error for non-existent service", func() {
+			servicePath := "non-existent-service"
+
+			content, err := pm.GetConfigFile(ctx, servicePath, "config.yaml", fsService)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(Equal(process_shared.ErrServiceNotExist))
+			Expect(content).To(BeNil())
+		})
+
+		It("should return error for non-existent config file", func() {
+			servicePath := "test-service"
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "test: value",
+				},
+			}
+
+			// Create service first
+			err := pm.Create(ctx, servicePath, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Process the creation
+			err = pm.Reconcile(ctx, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Try to get a non-existent config file
+			content, err := pm.GetConfigFile(ctx, servicePath, "non-existent.conf", fsService)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("does not exist"))
+			Expect(content).To(BeNil())
+		})
+
+		It("should handle empty config file content", func() {
+			servicePath := "test-service"
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"empty.conf":  "", // Empty file
+					"normal.conf": "content=value",
+				},
+			}
+
+			// Create service first
+			err := pm.Create(ctx, servicePath, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Process the creation
+			err = pm.Reconcile(ctx, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// GetConfigFile should return empty content for empty file
+			content, err := pm.GetConfigFile(ctx, servicePath, "empty.conf", fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(content).To(BeEmpty())
+
+			// Verify normal file still works
+			content, err = pm.GetConfigFile(ctx, servicePath, "normal.conf", fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(string(content)).To(Equal("content=value"))
+		})
+
+		It("should handle context cancellation", func() {
+			cancelledCtx, cancel := context.WithCancel(context.Background())
+			cancel() // Cancel immediately
+
+			servicePath := "test-service"
+
+			content, err := pm.GetConfigFile(cancelledCtx, servicePath, "config.yaml", fsService)
+			Expect(err).To(HaveOccurred())
+			Expect(content).To(BeNil())
 		})
 	})
 

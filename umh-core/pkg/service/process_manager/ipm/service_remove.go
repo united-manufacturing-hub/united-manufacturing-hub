@@ -21,8 +21,10 @@ import (
 	"path/filepath"
 	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )
@@ -43,7 +45,7 @@ func (pm *ProcessManager) removeService(ctx context.Context, identifier serviceI
 	pm.logManager.UnregisterService(identifier)
 
 	// Attempt to terminate any running process gracefully
-	if err := pm.terminateServiceProcess(ctx, servicePath, fsService); err != nil {
+	if err := pm.terminateServiceProcess(ctx, identifier, servicePath, fsService); err != nil {
 		// Log error but continue with cleanup - we want to remove the service directory regardless
 		pm.Logger.Error("Error terminating process, continuing with cleanup", zap.Error(err))
 	}
@@ -75,7 +77,7 @@ func (pm *ProcessManager) stopService(ctx context.Context, identifier serviceIde
 	pidFile := filepath.Join(servicePath, pidFileName)
 
 	// Attempt to terminate the running process gracefully
-	if err := pm.terminateServiceProcess(ctx, servicePath, fsService); err != nil {
+	if err := pm.terminateServiceProcess(ctx, identifier, servicePath, fsService); err != nil {
 		// For stop operations, we're more forgiving about termination errors
 		// If the process is already dead, that's fine - we just want it stopped
 		pm.Logger.Debug("Process termination had issues during stop, but continuing", zap.Error(err))
@@ -101,7 +103,7 @@ func (pm *ProcessManager) stopService(ctx context.Context, identifier serviceIde
 // termination. This approach ensures that running services are stopped cleanly during
 // service removal, preventing resource leaks and allowing processes to perform cleanup
 // operations before shutting down.
-func (pm *ProcessManager) terminateServiceProcess(ctx context.Context, servicePath string, fsService filesystem.Service) error {
+func (pm *ProcessManager) terminateServiceProcess(ctx context.Context, identifier serviceIdentifier, servicePath string, fsService filesystem.Service) error {
 	// Read the process PID from the pid file
 	pid, err := pm.readProcessPid(ctx, servicePath, fsService)
 	if err != nil {
@@ -116,7 +118,7 @@ func (pm *ProcessManager) terminateServiceProcess(ctx context.Context, servicePa
 		return nil
 	}
 
-	return pm.terminateProcess(ctx, process, pid)
+	return pm.terminateProcess(ctx, identifier, process, pid)
 }
 
 // readProcessPid reads and parses the process ID from the service's PID file.
@@ -149,23 +151,40 @@ func (pm *ProcessManager) readProcessPid(ctx context.Context, servicePath string
 // If the process doesn't respond to SIGTERM or takes too long to exit, it falls back to SIGKILL
 // for immediate termination. This approach balances clean shutdown with system reliability.
 // Additionally, it attempts to terminate the entire process group to ensure child processes are cleaned up.
-func (pm *ProcessManager) terminateProcess(ctx context.Context, process *os.Process, pid int) error {
+func (pm *ProcessManager) terminateProcess(ctx context.Context, identifier serviceIdentifier, process *os.Process, pid int) error {
 	// First attempt: Send SIGTERM (graceful shutdown)
 	// Try to terminate the process group first (negative PID), then fall back to individual process
 	if err := syscall.Kill(-pid, syscall.SIGTERM); err != nil {
 		pm.Logger.Debug("Failed to send SIGTERM to process group, trying individual process", zap.Int("pid", pid), zap.Error(err))
 		if err := process.Signal(syscall.SIGTERM); err != nil {
 			pm.Logger.Error("Error sending SIGTERM, trying SIGKILL", zap.Int("pid", pid), zap.Error(err))
-			return pm.forceKillProcess(process, pid)
+			return pm.forceKillProcess(identifier, process, pid)
 		}
 	} else {
 		pm.Logger.Debug("Sent SIGTERM to process group", zap.Int("pid", pid))
 	}
 
 	// Wait for graceful shutdown with timeout
-	if err := pm.waitForProcessExit(ctx, process, pid); err != nil {
+	processState, err := pm.waitForProcessExit(ctx, process, pid)
+	if err != nil {
 		pm.Logger.Error("Process did not exit gracefully, forcing termination", zap.Int("pid", pid), zap.Error(err))
-		return pm.forceKillProcess(process, pid)
+		return pm.forceKillProcess(identifier, process, pid)
+	}
+
+	// Record the exit event if we have a service identifier and process state
+	if identifier != "" && processState != nil {
+		exitCode := 0
+		signal := int(syscall.SIGTERM) // Process was terminated by SIGTERM
+
+		if processState.Exited() {
+			exitCode = processState.ExitCode()
+			signal = 0 // Normal exit, no signal
+		} else if ws, ok := processState.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+			exitCode = -1 // Process was killed by signal
+			signal = int(ws.Signal())
+		}
+
+		pm.recordExitEvent(identifier, exitCode, signal)
 	}
 
 	pm.Logger.Info("Process terminated gracefully", zap.Int("pid", pid))
@@ -179,20 +198,26 @@ func (pm *ProcessManager) terminateProcess(ctx context.Context, process *os.Proc
 // the termination process doesn't hang indefinitely. The timeout is calculated to leave
 // sufficient time for the overall service removal operation to complete, maintaining
 // system responsiveness while allowing reasonable cleanup time.
-func (pm *ProcessManager) waitForProcessExit(ctx context.Context, process *os.Process, pid int) error {
+// Returns the exit status if the process exits normally, or an error if it times out.
+func (pm *ProcessManager) waitForProcessExit(ctx context.Context, process *os.Process, pid int) (*os.ProcessState, error) {
 	waitCtx, cancel, err := generateContext(ctx, cleanupTimeReserve)
 	if err != nil {
 		pm.Logger.Error("Error generating wait context", zap.Error(err))
-		return err
+		return nil, err
 	}
 	defer cancel()
 
 	// Wait for either process exit or timeout
 	errGroup, _ := errgroup.WithContext(waitCtx)
+	var processState *os.ProcessState
 
 	errGroup.Go(func() error {
-		_, err := process.Wait()
-		return err
+		state, err := process.Wait()
+		if err != nil {
+			return err
+		}
+		processState = state
+		return nil
 	})
 
 	errGroup.Go(func() error {
@@ -201,7 +226,8 @@ func (pm *ProcessManager) waitForProcessExit(ctx context.Context, process *os.Pr
 	})
 
 	// Await the process to exit or the context to be cancelled
-	return errGroup.Wait()
+	err = errGroup.Wait()
+	return processState, err
 }
 
 // forceKillProcess forcefully terminates a process using SIGKILL when graceful shutdown fails.
@@ -211,7 +237,7 @@ func (pm *ProcessManager) waitForProcessExit(ctx context.Context, process *os.Pr
 // system resources indefinitely. The function is designed to be used only after graceful
 // termination attempts have failed.
 // Additionally, it attempts to terminate the entire process group to ensure child processes are cleaned up.
-func (pm *ProcessManager) forceKillProcess(process *os.Process, pid int) error {
+func (pm *ProcessManager) forceKillProcess(identifier serviceIdentifier, process *os.Process, pid int) error {
 	// Try to kill the process group first (negative PID), then fall back to individual process
 	if err := syscall.Kill(-pid, syscall.SIGKILL); err != nil {
 		pm.Logger.Debug("Failed to send SIGKILL to process group, trying individual process", zap.Int("pid", pid), zap.Error(err))
@@ -221,6 +247,12 @@ func (pm *ProcessManager) forceKillProcess(process *os.Process, pid int) error {
 		}
 	} else {
 		pm.Logger.Debug("Sent SIGKILL to process group", zap.Int("pid", pid))
+	}
+
+	// Record the exit event for force kill if we have a service identifier
+	if identifier != "" {
+		// For force kill, exit code is -1 and signal is SIGKILL
+		pm.recordExitEvent(identifier, -1, int(syscall.SIGKILL))
 	}
 
 	pm.Logger.Info("Process force-killed", zap.Int("pid", pid))
@@ -239,4 +271,39 @@ func (pm *ProcessManager) cleanupServiceDirectory(ctx context.Context, servicePa
 		return fmt.Errorf("error removing pid file: %w", err)
 	}
 	return nil
+}
+
+// recordExitEvent records an exit event in the service history
+func (pm *ProcessManager) recordExitEvent(identifier serviceIdentifier, exitCode int, signal int) {
+	// Check if service exists in our registry
+	service, exists := pm.services[identifier]
+	if !exists {
+		pm.Logger.Debug("Service not found when recording exit event", zap.String("identifier", string(identifier)))
+		return
+	}
+
+	// Create exit event
+	exitEvent := process_shared.ExitEvent{
+		Timestamp: time.Now().UTC(),
+		ExitCode:  exitCode,
+		Signal:    signal,
+	}
+
+	// Add to exit history
+	service.history.ExitHistory = append(service.history.ExitHistory, exitEvent)
+
+	// Keep only the last 100 exit events to prevent unbounded memory growth
+	const maxExitEvents = 100
+	if len(service.history.ExitHistory) > maxExitEvents {
+		service.history.ExitHistory = service.history.ExitHistory[len(service.history.ExitHistory)-maxExitEvents:]
+	}
+
+	// Update service in the registry
+	pm.services[identifier] = service
+
+	pm.Logger.Debug("Recorded exit event",
+		zap.String("identifier", string(identifier)),
+		zap.Int("exitCode", exitCode),
+		zap.Int("signal", signal),
+		zap.Time("timestamp", exitEvent.Timestamp))
 }

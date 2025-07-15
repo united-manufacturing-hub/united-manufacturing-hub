@@ -168,5 +168,6 @@ ENV S6_KEEP_ENV=1 \
     S6_LOGGING_SCRIPT="n5 s100000000 T"
 VOLUME ["/data"]
 
-ENTRYPOINT ["/init"]
-CMD []
+#ENTRYPOINT ["/init"]
+# Run our program directly
+CMD ["/usr/local/bin/umh-core"]

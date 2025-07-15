@@ -17,7 +17,13 @@ package ipm
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
+	"syscall"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -231,57 +237,228 @@ func (pm *ProcessManager) Restart(ctx context.Context, servicePath string, fsSer
 func (pm *ProcessManager) Status(ctx context.Context, servicePath string, fsService filesystem.Service) (process_shared.ServiceInfo, error) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
-	pm.Logger.Info("Getting status of process manager service", zap.String("servicePath", servicePath))
+	pm.Logger.Debug("Getting status of process manager service", zap.String("servicePath", servicePath))
 
-	return process_shared.ServiceInfo{}, errors.New("not implemented")
+	identifier := servicePathToIdentifier(servicePath)
+
+	// Check if service exists in our registry
+	service, exists := pm.services[identifier]
+	if !exists {
+		return process_shared.ServiceInfo{}, process_shared.ErrServiceNotExist
+	}
+
+	// Start with the current tracked status
+	info := service.history
+
+	// Update runtime status by checking actual process state
+	serviceDir := filepath.Join(pm.serviceDirectory, string(identifier))
+	pidFile := filepath.Join(serviceDir, pidFileName)
+
+	// Check if PID file exists
+	pidBytes, err := fsService.ReadFile(ctx, pidFile)
+	if err != nil {
+		// No PID file means service is down
+		info.Status = process_shared.ServiceDown
+		info.Pid = 0
+		info.Pgid = 0
+		info.Uptime = 0
+		// Keep existing DownTime and exit information
+		return info, nil
+	}
+
+	// Parse PID from file
+	pid, err := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
+	if err != nil {
+		pm.Logger.Error("Invalid PID file content", zap.String("pidFile", pidFile), zap.Error(err))
+		info.Status = process_shared.ServiceDown
+		info.Pid = 0
+		info.Pgid = 0
+		info.Uptime = 0
+		return info, nil
+	}
+
+	// Check if process is actually running
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		// Process not found - service is down
+		info.Status = process_shared.ServiceDown
+		info.Pid = 0
+		info.Pgid = 0
+		info.Uptime = 0
+		return info, nil
+	}
+
+	// Try to signal the process to verify it's alive
+	// Signal 0 doesn't actually send a signal, just checks if process exists
+	err = process.Signal(syscall.Signal(0))
+	if err != nil {
+		// Process is not responsive - service is down
+		info.Status = process_shared.ServiceDown
+		info.Pid = 0
+		info.Pgid = 0
+		info.Uptime = 0
+		return info, nil
+	}
+
+	// Process is running - service is up
+	info.Status = process_shared.ServiceUp
+	info.Pid = pid
+
+	// Get process group ID
+	pgid, err := syscall.Getpgid(pid)
+	if err == nil {
+		info.Pgid = pgid
+	}
+
+	// Get process start time for uptime calculation
+	if stat, err := fsService.Stat(ctx, pidFile); err == nil {
+		pidFileModTime := stat.ModTime()
+		uptime := time.Since(pidFileModTime)
+		info.Uptime = int64(uptime.Seconds())
+		info.LastChangedAt = pidFileModTime
+	}
+
+	// For IPM, we consider the service ready immediately when it's up
+	info.IsReady = true
+	info.ReadyTime = info.Uptime
+
+	// Check if service wants to be up (no explicit down state in IPM)
+	info.WantUp = true
+	info.IsWantingUp = true
+
+	// Update the tracked status in our registry
+	service.history = info
+	pm.services[identifier] = service
+
+	return info, nil
 }
 
 func (pm *ProcessManager) ExitHistory(ctx context.Context, superviseDir string, fsService filesystem.Service) ([]process_shared.ExitEvent, error) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
-	pm.Logger.Info("Getting exit history of process manager service", zap.String("servicePath", superviseDir))
+	pm.Logger.Debug("Getting exit history of process manager service", zap.String("servicePath", superviseDir))
 
-	return []process_shared.ExitEvent{}, errors.New("not implemented")
+	// For IPM, superviseDir is actually the servicePath since IPM doesn't use separate supervise directories
+	identifier := servicePathToIdentifier(superviseDir)
+
+	// Check if service exists in our registry
+	service, exists := pm.services[identifier]
+	if !exists {
+		return nil, process_shared.ErrServiceNotExist
+	}
+
+	// Return the exit history from the service info
+	return service.history.ExitHistory, nil
 }
 
 func (pm *ProcessManager) ServiceExists(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
-	pm.Logger.Info("Checking if process manager service exists", zap.String("servicePath", servicePath))
+	pm.Logger.Debug("Checking if process manager service exists", zap.String("servicePath", servicePath))
 
-	return false, errors.New("not implemented")
+	identifier := servicePathToIdentifier(servicePath)
+	_, exists := pm.services[identifier]
+	return exists, nil
 }
 
 func (pm *ProcessManager) GetConfig(ctx context.Context, servicePath string, fsService filesystem.Service) (process_manager_serviceconfig.ProcessManagerServiceConfig, error) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
-	pm.Logger.Info("Getting config of process manager service", zap.String("servicePath", servicePath))
+	pm.Logger.Debug("Getting config of process manager service", zap.String("servicePath", servicePath))
 
-	return process_manager_serviceconfig.ProcessManagerServiceConfig{}, errors.New("not implemented")
-}
+	identifier := servicePathToIdentifier(servicePath)
 
-func (pm *ProcessManager) CleanServiceDirectory(ctx context.Context, path string, fsService filesystem.Service) error {
-	pm.mu.Lock()
-	defer pm.mu.Unlock()
-	pm.Logger.Info("Cleaning process manager service directory", zap.String("servicePath", path))
+	// Check if service exists in our registry
+	service, exists := pm.services[identifier]
+	if !exists {
+		return process_manager_serviceconfig.ProcessManagerServiceConfig{}, process_shared.ErrServiceNotExist
+	}
 
-	return errors.New("not implemented")
+	// For IPM, we return the stored configuration directly
+	// This is simpler than S6 which needs to parse scripts
+	config := service.config
+
+	// Optionally validate that config files on disk match what we have stored
+	// This ensures consistency between in-memory state and filesystem
+	serviceDir := filepath.Join(pm.serviceDirectory, string(identifier))
+	configDir := filepath.Join(serviceDir, configDirectoryName)
+
+	// Check if config directory exists
+	if exists, err := fsService.PathExists(ctx, configDir); err == nil && exists {
+		// Verify stored config files match what's on disk
+		for fileName := range config.ConfigFiles {
+			configFile := filepath.Join(configDir, fileName)
+			if fileExists, err := fsService.FileExists(ctx, configFile); err == nil && !fileExists {
+				pm.Logger.Warn("Config file missing on disk",
+					zap.String("servicePath", servicePath),
+					zap.String("fileName", fileName))
+				// Continue anyway - return what we have in memory
+			}
+		}
+	}
+
+	pm.Logger.Debug("Retrieved config for service",
+		zap.String("servicePath", servicePath),
+		zap.Int("configFiles", len(config.ConfigFiles)),
+		zap.Int64("memoryLimit", config.MemoryLimit),
+		zap.Int64("logFilesize", config.LogFilesize))
+
+	return config, nil
 }
 
 func (pm *ProcessManager) GetConfigFile(ctx context.Context, servicePath string, configFileName string, fsService filesystem.Service) ([]byte, error) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
-	pm.Logger.Info("Getting config file of process manager service", zap.String("servicePath", servicePath), zap.String("configFileName", configFileName))
+	pm.Logger.Debug("Getting config file of process manager service",
+		zap.String("servicePath", servicePath),
+		zap.String("configFileName", configFileName))
 
-	return []byte{}, errors.New("not implemented")
-}
+	identifier := servicePathToIdentifier(servicePath)
 
-func (pm *ProcessManager) ForceRemove(ctx context.Context, servicePath string, fsService filesystem.Service) error {
-	pm.mu.Lock()
-	defer pm.mu.Unlock()
-	pm.Logger.Info("Force removing process manager service", zap.String("servicePath", servicePath))
+	// Check if service exists in our registry
+	service, exists := pm.services[identifier]
+	if !exists {
+		return nil, process_shared.ErrServiceNotExist
+	}
 
-	return errors.New("not implemented")
+	// Check if the config file exists in our stored configuration
+	fileContent, exists := service.config.ConfigFiles[configFileName]
+	if !exists {
+		return nil, fmt.Errorf("config file %s does not exist in service %s", configFileName, servicePath)
+	}
+
+	// Optionally verify the file exists on disk and matches
+	serviceDir := filepath.Join(pm.serviceDirectory, string(identifier))
+	configFile := filepath.Join(serviceDir, configDirectoryName, configFileName)
+
+	if fileExists, err := fsService.FileExists(ctx, configFile); err == nil && fileExists {
+		// Read from disk to verify consistency
+		diskContent, err := fsService.ReadFile(ctx, configFile)
+		if err != nil {
+			pm.Logger.Warn("Failed to read config file from disk for verification",
+				zap.String("servicePath", servicePath),
+				zap.String("configFileName", configFileName),
+				zap.Error(err))
+			// Return stored content anyway
+		} else if string(diskContent) != fileContent {
+			pm.Logger.Warn("Config file content mismatch between memory and disk",
+				zap.String("servicePath", servicePath),
+				zap.String("configFileName", configFileName))
+			// Return stored content anyway - memory is authoritative for IPM
+		}
+	} else {
+		pm.Logger.Warn("Config file missing on disk",
+			zap.String("servicePath", servicePath),
+			zap.String("configFileName", configFileName))
+		// Return stored content anyway
+	}
+
+	pm.Logger.Debug("Retrieved config file",
+		zap.String("servicePath", servicePath),
+		zap.String("configFileName", configFileName),
+		zap.Int("contentSize", len(fileContent)))
+
+	return []byte(fileContent), nil
 }
 
 func (pm *ProcessManager) GetLogs(ctx context.Context, servicePath string, fsService filesystem.Service) ([]process_shared.LogEntry, error) {
@@ -291,13 +468,30 @@ func (pm *ProcessManager) GetLogs(ctx context.Context, servicePath string, fsSer
 
 	return []process_shared.LogEntry{}, errors.New("not implemented")
 }
+func (pm *ProcessManager) CleanServiceDirectory(ctx context.Context, path string, fsService filesystem.Service) error {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+	pm.Logger.Info("Cleaning process manager service directory", zap.String("servicePath", path))
+	// We don't use this here, so we return nil
+	return nil
+}
+
+func (pm *ProcessManager) ForceRemove(ctx context.Context, servicePath string, fsService filesystem.Service) error {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+	pm.Logger.Info("Force removing process manager service", zap.String("servicePath", servicePath))
+
+	// We don't use this here, so we return nil
+	return nil
+}
 
 func (pm *ProcessManager) EnsureSupervision(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 	pm.Logger.Info("Ensuring supervision of process manager service", zap.String("servicePath", servicePath))
 
-	return false, errors.New("not implemented")
+	// We don't use this here, so we return true and nil (supervision is always ensured)
+	return true, nil
 }
 
 // Reconcile processes all queued tasks in the task queue.
