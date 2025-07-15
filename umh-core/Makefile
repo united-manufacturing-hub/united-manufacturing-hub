@@ -638,7 +638,7 @@ test-no-copy: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 	docker run \
 		--name $(IMAGE_NAME) \
 		-v $(PWD)/data:/data \
-		-e LOGGING_LEVEL=INFO \
+		-e LOGGING_LEVEL=DEBUG \
 		-p 8081:8080 \
 		-p 4195:4195 \
 		-p 6060:6060 \

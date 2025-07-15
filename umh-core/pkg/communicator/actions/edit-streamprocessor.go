@@ -188,7 +188,7 @@ func (a *EditStreamProcessorAction) Execute() (interface{}, map[string]interface
 	a.atomicEditUUID = atomicEditUUID
 
 	// Persist the configuration changes
-	oldConfig, err := a.persistConfig(atomicEditUUID, newSpec)
+	oldConfig, err := a.persistConfig(newSpec)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to persist configuration changes: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -329,30 +329,9 @@ func (a *EditStreamProcessorAction) applyMutation() (config.StreamProcessorConfi
 
 // persistConfig performs the atomic configuration update operation.
 // Returns the old configuration for potential rollback operations.
-func (a *EditStreamProcessorAction) persistConfig(atomicEditUUID uuid.UUID, newSpec config.StreamProcessorConfig) (config.StreamProcessorConfig, error) {
+func (a *EditStreamProcessorAction) persistConfig(newSpec config.StreamProcessorConfig) (config.StreamProcessorConfig, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
-
-	// Get the old config before applying changes (for rollback purposes)
-	configSnapshot, err := a.configManager.GetConfig(ctx, 0)
-	if err != nil {
-		return config.StreamProcessorConfig{}, fmt.Errorf("failed to get current config: %w", err)
-	}
-
-	// Find the old stream processor configuration
-	var oldConfig config.StreamProcessorConfig
-	found := false
-	for _, sp := range configSnapshot.StreamProcessor {
-		if sp.Name == newSpec.Name {
-			oldConfig = sp
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		return config.StreamProcessorConfig{}, fmt.Errorf("stream processor %q not found", newSpec.Name)
-	}
 
 	// Apply the configuration changes
 	returnedOldConfig, err := a.configManager.AtomicEditStreamProcessor(ctx, newSpec)
@@ -360,24 +339,7 @@ func (a *EditStreamProcessorAction) persistConfig(atomicEditUUID uuid.UUID, newS
 		return config.StreamProcessorConfig{}, fmt.Errorf("failed to update stream processor: %w", err)
 	}
 
-	// Deep copy the old config using the Clone function
-	// This may seem hacky but allows us to reuse the Clone() function
-	// and we do not need to implement a custom Clone() function for the StreamProcessorConfig
-	fullConfig := config.FullConfig{
-		StreamProcessor: []config.StreamProcessorConfig{returnedOldConfig},
-	}
-
-	copiedConfig := fullConfig.Clone()
-	oldConfig = copiedConfig.StreamProcessor[0]
-
-	// Remove the location and location_path from the user variables
-	// Check if User map exists before trying to delete from it
-	if oldConfig.StreamProcessorServiceConfig.Variables.User != nil {
-		delete(oldConfig.StreamProcessorServiceConfig.Variables.User, "location")
-		delete(oldConfig.StreamProcessorServiceConfig.Variables.User, "location_path")
-	}
-
-	return oldConfig, nil
+	return returnedOldConfig, nil
 }
 
 // awaitRollout waits for the stream processor to become active and performs health checks.
