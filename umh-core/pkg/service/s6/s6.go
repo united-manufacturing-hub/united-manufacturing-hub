@@ -171,8 +171,9 @@ type logState struct {
 
 // DefaultService is the default implementation of the S6 Service interface
 type DefaultService struct {
-	logger     *zap.SugaredLogger
-	logCursors sync.Map // map[string]*logState (key = abs log path)
+	logger         *zap.SugaredLogger
+	logCursors     sync.Map // map[string]*logState (key = abs log path)
+	operationMutex sync.Mutex
 }
 
 // NewDefaultService creates a new default S6 service
@@ -184,6 +185,9 @@ func NewDefaultService() Service {
 
 // Create creates the S6 service with specific configuration
 func (s *DefaultService) Create(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, fsService filesystem.Service) error {
+	s.operationMutex.Lock()
+	defer s.operationMutex.Unlock()
+
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".create", time.Since(start))
@@ -380,6 +384,9 @@ func (s *DefaultService) createS6ConfigFiles(ctx context.Context, servicePath st
 // Any remaining file or I/O error leads to a non-nil return so the FSM keeps
 // trying (or escalates after the back-off threshold).
 func (s *DefaultService) Remove(ctx context.Context, servicePath string, fsService filesystem.Service) error {
+	s.operationMutex.Lock()
+	defer s.operationMutex.Unlock()
+
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service,
@@ -496,13 +503,16 @@ func (s *DefaultService) Remove(ctx context.Context, servicePath string, fsServi
 
 // Start starts the S6 service
 func (s *DefaultService) Start(ctx context.Context, servicePath string, fsService filesystem.Service) error {
+	s.operationMutex.Lock()
+	defer s.operationMutex.Unlock()
+
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".start", time.Since(start))
 	}()
 
 	s.logger.Debugf("Starting S6 service %s", servicePath)
-	exists, err := s.ServiceExists(ctx, servicePath, fsService)
+	exists, err := s.serviceExists(ctx, servicePath, fsService)
 	if err != nil {
 		return fmt.Errorf("failed to check if service exists: %w", err)
 	}
@@ -520,15 +530,10 @@ func (s *DefaultService) Start(ctx context.Context, servicePath string, fsServic
 	return nil
 }
 
-// Stop stops the S6 service
-func (s *DefaultService) Stop(ctx context.Context, servicePath string, fsService filesystem.Service) error {
-	start := time.Now()
-	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".stop", time.Since(start))
-	}()
-
+// stop is an internal helper that stops the S6 service without acquiring the mutex
+func (s *DefaultService) stop(ctx context.Context, servicePath string, fsService filesystem.Service) error {
 	s.logger.Debugf("Stopping S6 service %s", servicePath)
-	exists, err := s.ServiceExists(ctx, servicePath, fsService)
+	exists, err := s.serviceExists(ctx, servicePath, fsService)
 	if err != nil {
 		return fmt.Errorf("failed to check if service exists: %w", err)
 	}
@@ -546,15 +551,31 @@ func (s *DefaultService) Stop(ctx context.Context, servicePath string, fsService
 	return nil
 }
 
+// Stop stops the S6 service
+func (s *DefaultService) Stop(ctx context.Context, servicePath string, fsService filesystem.Service) error {
+	s.operationMutex.Lock()
+	defer s.operationMutex.Unlock()
+
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".stop", time.Since(start))
+	}()
+
+	return s.stop(ctx, servicePath, fsService)
+}
+
 // Restart restarts the S6 service
 func (s *DefaultService) Restart(ctx context.Context, servicePath string, fsService filesystem.Service) error {
+	s.operationMutex.Lock()
+	defer s.operationMutex.Unlock()
+
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".restart", time.Since(start))
 	}()
 
 	s.logger.Debugf("Restarting S6 service %s", servicePath)
-	exists, err := s.ServiceExists(ctx, servicePath, fsService)
+	exists, err := s.serviceExists(ctx, servicePath, fsService)
 	if err != nil {
 		return fmt.Errorf("failed to check if service exists: %w", err)
 	}
@@ -573,13 +594,16 @@ func (s *DefaultService) Restart(ctx context.Context, servicePath string, fsServ
 }
 
 func (s *DefaultService) Status(ctx context.Context, servicePath string, fsService filesystem.Service) (ServiceInfo, error) {
+	s.operationMutex.Lock()
+	defer s.operationMutex.Unlock()
+
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".status", time.Since(start))
 	}()
 
 	// First, check that the service exists.
-	exists, err := s.ServiceExists(ctx, servicePath, fsService)
+	exists, err := s.serviceExists(ctx, servicePath, fsService)
 	if err != nil {
 		return ServiceInfo{}, fmt.Errorf("failed to check if service exists: %w", err)
 	}
@@ -700,7 +724,7 @@ func (s *DefaultService) Status(ctx context.Context, servicePath string, fsServi
 	info.WantUp = !downExists
 
 	// Optionally update exit history.
-	history, histErr := s.ExitHistory(ctx, superviseDir, fsService)
+	history, histErr := s.exitHistory(ctx, superviseDir, fsService)
 	if histErr == nil {
 		info.ExitHistory = history
 	} else {
@@ -722,7 +746,8 @@ func (s *DefaultService) Status(ctx context.Context, servicePath string, fsServi
 //
 // If the file size is not a multiple of the record size, it is considered corrupted.
 // In that case, you may choose to truncate the file (as the C code does) or return an error.
-func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, fsService filesystem.Service) ([]ExitEvent, error) {
+// exitHistory is an internal helper that retrieves exit history without acquiring the mutex
+func (s *DefaultService) exitHistory(ctx context.Context, superviseDir string, fsService filesystem.Service) ([]ExitEvent, error) {
 	// Build the full path to the dtally file.
 	dtallyFile := filepath.Join(superviseDir, S6DtallyFileName)
 
@@ -787,13 +812,16 @@ func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, f
 	return history, nil
 }
 
-// ServiceExists checks if the service directory exists
-func (s *DefaultService) ServiceExists(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
-	start := time.Now()
-	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".serviceExists", time.Since(start))
-	}()
+// ExitHistory retrieves the service exit history (exported version with mutex)
+func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, fsService filesystem.Service) ([]ExitEvent, error) {
+	s.operationMutex.Lock()
+	defer s.operationMutex.Unlock()
 
+	return s.exitHistory(ctx, superviseDir, fsService)
+}
+
+// serviceExists is an internal helper that checks if the service directory exists without acquiring the mutex
+func (s *DefaultService) serviceExists(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
 	exists, err := fsService.PathExists(ctx, servicePath)
 	if err != nil {
 		return false, fmt.Errorf("failed to check if S6 service exists: %w", err)
@@ -807,9 +835,25 @@ func (s *DefaultService) ServiceExists(ctx context.Context, servicePath string, 
 	return true, nil
 }
 
+// ServiceExists checks if the service directory exists
+func (s *DefaultService) ServiceExists(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
+	s.operationMutex.Lock()
+	defer s.operationMutex.Unlock()
+
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".serviceExists", time.Since(start))
+	}()
+
+	return s.serviceExists(ctx, servicePath, fsService)
+}
+
 // GetConfig gets the actual service config from s6
 func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsService filesystem.Service) (s6serviceconfig.S6ServiceConfig, error) {
-	exists, err := s.ServiceExists(ctx, servicePath, fsService)
+	s.operationMutex.Lock()
+	defer s.operationMutex.Unlock()
+
+	exists, err := s.serviceExists(ctx, servicePath, fsService)
 	if err != nil {
 		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to check if service exists: %w", err)
 	}
@@ -1108,6 +1152,9 @@ const (
 
 // CleanS6ServiceDirectory cleans the S6 service directory except for the known services
 func (s *DefaultService) CleanS6ServiceDirectory(ctx context.Context, path string, fsService filesystem.Service) error {
+	s.operationMutex.Lock()
+	defer s.operationMutex.Unlock()
+
 	if ctx == nil {
 		return fmt.Errorf("context is nil")
 	}
@@ -1200,12 +1247,15 @@ func (s *DefaultService) IsKnownService(name string) bool {
 // GetS6ConfigFile retrieves the specified config file for a service
 // servicePath should be the full path including S6BaseDir
 func (s *DefaultService) GetS6ConfigFile(ctx context.Context, servicePath string, configFileName string, fsService filesystem.Service) ([]byte, error) {
+	s.operationMutex.Lock()
+	defer s.operationMutex.Unlock()
+
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
 
 	// Check if the service exists with the full path
-	exists, err := s.ServiceExists(ctx, servicePath, fsService)
+	exists, err := s.serviceExists(ctx, servicePath, fsService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check if service exists: %w", err)
 	}
@@ -1262,6 +1312,9 @@ func (s *DefaultService) ForceRemove(
 	servicePath string,
 	fsService filesystem.Service,
 ) error {
+	s.operationMutex.Lock()
+	defer s.operationMutex.Unlock()
+
 	start := time.Now()
 	defer func() {
 		metrics.IncErrorCount(metrics.ComponentS6Service, servicePath+".forceRemove") // a force remove is an error
@@ -1278,8 +1331,8 @@ func (s *DefaultService) ForceRemove(
 	//--------------------------------------------------------------------
 	// 1. Best-effort graceful stop (idempotent, non-blocking)
 	//--------------------------------------------------------------------
-	mainErr := s.Stop(ctx, servicePath, fsService)                         // main
-	loggerErr := s.Stop(ctx, filepath.Join(servicePath, "log"), fsService) // logger
+	mainErr := s.stop(ctx, servicePath, fsService)                         // main
+	loggerErr := s.stop(ctx, filepath.Join(servicePath, "log"), fsService) // logger
 
 	//--------------------------------------------------------------------
 	// 2. SIGTERM lingering s6-supervise processes to avoid resurrection
@@ -1456,6 +1509,9 @@ func (s *DefaultService) appendToRingBuffer(entries []LogEntry, st *logState) {
 // Errors are returned early and unwrapped where they occur so callers
 // see the root cause (e.g. "file disappeared", "permission denied").
 func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsService filesystem.Service) ([]LogEntry, error) {
+	s.operationMutex.Lock()
+	defer s.operationMutex.Unlock()
+
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".getLogs", time.Since(start))
@@ -1464,7 +1520,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	serviceName := filepath.Base(servicePath)
 
 	// Check if the service exists first
-	exists, err := s.ServiceExists(ctx, servicePath, fsService)
+	exists, err := s.serviceExists(ctx, servicePath, fsService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check if service exists: %w", err)
 	}
