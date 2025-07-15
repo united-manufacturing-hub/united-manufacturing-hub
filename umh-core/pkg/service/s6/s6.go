@@ -1948,7 +1948,7 @@ func (s *DefaultService) findLatestRotatedFile(entries []string) string {
 
 // safeLogDebugf logs debug messages safely, handling nil logger
 //
-//golangi:ignore
+//nolint:all
 func (s *DefaultService) safeLogDebugf(format string, args ...interface{}) {
 	if s.logger != nil {
 		s.logger.Debugf(format, args...)
