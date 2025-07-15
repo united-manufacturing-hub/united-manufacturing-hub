@@ -1269,7 +1269,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	// We want to keep the newest lines at the end of the ring buffer.
 
 	if len(rotatedContent) > 0 {
-		entries, err := ParseLogsFromBytes(rotatedContent)
+		entries, err := process_shared.ParseLogsFromBytes(rotatedContent)
 		if err != nil {
 			return nil, err
 		}
@@ -1277,7 +1277,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	}
 
 	if len(currentContent) > 0 {
-		entries, err := ParseLogsFromBytes(currentContent)
+		entries, err := process_shared.ParseLogsFromBytes(currentContent)
 		if err != nil {
 			return nil, err
 		}
