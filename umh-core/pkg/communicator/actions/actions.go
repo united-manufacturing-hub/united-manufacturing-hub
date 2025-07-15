@@ -303,6 +303,7 @@ func sendActionReplyInternal(instanceUUID uuid.UUID, userEmail string, actionUUI
 		sentry.ReportIssuef(sentry.IssueTypeError, logger.For(logger.ComponentCommunicator), "Error generating umh message: %v", err)
 		return err
 	}
+
 	outboundChannel <- &umhMessage
 
 	return nil
