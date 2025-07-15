@@ -16,6 +16,7 @@ package generator
 
 import (
 	"context"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
@@ -29,12 +30,11 @@ import (
 )
 
 type StatusCollectorType struct {
-	dog                   watchdog.Iface
-	systemSnapshotManager *fsm.SnapshotManager
-	logger                *zap.SugaredLogger
-	configManager         config.ConfigManager
-	topicBrowserCache     *topicbrowser.Cache
-	topicBrowserSimulator *topicbrowser.Simulator
+	dog                      watchdog.Iface
+	systemSnapshotManager    *fsm.SnapshotManager
+	logger                   *zap.SugaredLogger
+	configManager            config.ConfigManager
+	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator
 }
 
 func NewStatusCollector(
@@ -42,20 +42,93 @@ func NewStatusCollector(
 	systemSnapshotManager *fsm.SnapshotManager,
 	configManager config.ConfigManager,
 	logger *zap.SugaredLogger,
-	topicBrowserCache *topicbrowser.Cache,
-	topicBrowserSimulator *topicbrowser.Simulator,
+	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator,
 ) *StatusCollectorType {
 
 	collector := &StatusCollectorType{
-		dog:                   dog,
-		systemSnapshotManager: systemSnapshotManager,
-		logger:                logger,
-		configManager:         configManager,
-		topicBrowserCache:     topicBrowserCache,
-		topicBrowserSimulator: topicBrowserSimulator,
+		dog:                      dog,
+		systemSnapshotManager:    systemSnapshotManager,
+		logger:                   logger,
+		configManager:            configManager,
+		topicBrowserCommunicator: topicBrowserCommunicator,
 	}
 
 	return collector
+}
+
+// UpdateTopicBrowserCache processes new topic browser data using the communicator
+// This automatically handles both real FSM data and simulated data based on the communicator mode
+func (s *StatusCollectorType) UpdateTopicBrowserCache() error {
+	s.logger.Debug("Updating topic browser cache")
+
+	if s.topicBrowserCommunicator.IsSimulatorEnabled() {
+		return s.updateTopicBrowserCacheFromSimulator()
+	} else {
+		return s.updateTopicBrowserCacheFromFSM()
+	}
+}
+
+// updateTopicBrowserCacheFromSimulator updates the cache using simulated data
+// This generates fake topic browser data for testing/demo purposes
+func (s *StatusCollectorType) updateTopicBrowserCacheFromSimulator() error {
+	s.logger.Debug("Updating topic browser cache from simulator")
+
+	// Process simulated data
+	result, err := s.topicBrowserCommunicator.ProcessSimulatedData()
+	if err != nil {
+		s.logger.Errorf("Failed to update topic browser cache from simulator: %v", err)
+		return err
+	}
+
+	// Log what was processed for debugging
+	s.logger.Infof("Topic browser cache updated from simulator: %s", result.DebugInfo)
+
+	return nil
+}
+
+// updateTopicBrowserCacheFromFSM updates the cache using real FSM observed state
+// This processes actual topic browser data from the running system
+func (s *StatusCollectorType) updateTopicBrowserCacheFromFSM() error {
+	s.logger.Debug("Updating topic browser cache from FSM")
+
+	// Get the current system snapshot
+	snapshot := s.systemSnapshotManager.GetDeepCopySnapshot()
+
+	// Find the topic browser instance in the snapshot
+	tbInstance, ok := fsm.FindInstance(snapshot, constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
+	if !ok || tbInstance == nil {
+		s.logger.Debug("Topic browser instance not found in snapshot - system not ready yet")
+		return nil // Not an error, just not ready yet
+	}
+
+	// Extract the observed state from the instance
+	tbObservedState, ok := tbInstance.LastObservedState.(*topicbrowserfsm.ObservedStateSnapshot)
+	if !ok || tbObservedState == nil {
+		s.logger.Debug("Topic browser observed state not available - system not ready yet")
+		return nil // Not an error, just not ready yet
+	}
+
+	// Process the FSM data using the communicator
+	result, err := s.topicBrowserCommunicator.ProcessRealData(tbObservedState)
+	if err != nil {
+		s.logger.Errorf("Failed to update topic browser cache from FSM: %v", err)
+		return err
+	}
+
+	// Log detailed debug information about what was processed
+	s.logger.Debugf("Topic browser cache updated from FSM: %s", result.DebugInfo)
+
+	if result.ProcessedCount > 0 {
+		s.logger.Debugf("FSM processing details - new buffers: %d, latest timestamp: %s",
+			result.ProcessedCount, result.LatestTimestamp.Format(time.RFC3339))
+	}
+
+	if result.SkippedCount > 0 {
+		s.logger.Warnf("FSM processing warnings - skipped %d buffers due to processing errors",
+			result.SkippedCount)
+	}
+
+	return nil
 }
 
 func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBootstrapped bool) *models.StatusMessage {
@@ -131,8 +204,8 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 	// --- topic browser -------------------------------------------------------------
 	topicBrowserData := &models.TopicBrowser{}
 
-	if s.topicBrowserSimulator.GetSimulatorEnabled() {
-		topicBrowserData = GenerateTopicBrowser(s.topicBrowserCache, s.topicBrowserSimulator.GetSimObservedState(), isBootstrapped, s.logger)
+	if s.topicBrowserCommunicator.IsSimulatorEnabled() {
+		topicBrowserData = GenerateTopicBrowserFromCommunicator(s.topicBrowserCommunicator, isBootstrapped, s.logger)
 	} else {
 		inst, ok := fsm.FindInstance(snapshot, constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
 		if !ok {
@@ -140,8 +213,7 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 		} else if inst == nil || inst.LastObservedState == nil {
 			s.logger.Error("Topic browser instance has nil observed state or is nil")
 		} else {
-			obs := inst.LastObservedState.(*topicbrowserfsm.ObservedStateSnapshot)
-			topicBrowserData = GenerateTopicBrowser(s.topicBrowserCache, obs, isBootstrapped, s.logger)
+			topicBrowserData = GenerateTopicBrowserFromCommunicator(s.topicBrowserCommunicator, isBootstrapped, s.logger)
 		}
 	}
 

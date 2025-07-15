@@ -104,9 +104,9 @@ func main() {
 		topicbrowser.NewCache(),
 	)
 
-	// Start the topic browser cache updater independent of the backend connection (e.g., for HTTP endpoints)
-	// it updates the TopicBrowserCache based on the observed state of the topic browser service once per second
-	communicationState.StartTopicBrowserCacheUpdater(systemSnapshotManager, ctx, configData.Agent.Simulator)
+	// Initialize the topic browser simulator (cache update logic moved to subscriber notification pipeline)
+	// This eliminates the redundant ticker and consolidates the architecture
+	communicationState.InitializeTopicBrowserSimulator(configData.Agent.Simulator)
 
 	// Start the GraphQL server if enabled
 	var graphqlServer *graphql.Server

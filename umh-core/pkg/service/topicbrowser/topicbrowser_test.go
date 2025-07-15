@@ -16,7 +16,6 @@ package topicbrowser
 
 import (
 	"context"
-	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -24,7 +23,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/pierrec/lz4/v4"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	benthossvccfg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	rpsvccfg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
@@ -232,7 +230,7 @@ var _ = Describe("TopicBrowserService", func() {
 			tick = newTick
 
 			payload := []byte("hello world")
-			hexBlock := makeLZ4Hex(payload)
+			hexBlock := makeHex(payload)
 
 			logs = []s6svc.LogEntry{
 				{Content: constants.BLOCK_START_MARKER, Timestamp: time.Now()},
@@ -306,9 +304,9 @@ var _ = Describe("TopicBrowserService", func() {
 			Expect(status.BenthosFSMState).To(Equal(benthosfsm.OperationalStateActive))
 			Expect(status.BenthosObservedState.ServiceInfo.S6ObservedState.ServiceInfo.Status).To(Equal(s6svc.ServiceUp))
 			// check the ringbuffer if logs appear
-			Expect(status.Status.Buffer).To(HaveLen(1))
-			Expect(status.Status.Buffer[0].Timestamp.UnixMilli()).To(Equal(int64(1750091514783)))
-			Expect(status.Status.Buffer[0].Payload).To(Equal([]byte("hello world")))
+			Expect(status.Status.BufferSnapshot.Items).To(HaveLen(1))
+			Expect(status.Status.BufferSnapshot.Items[0].Timestamp.UnixMilli()).To(Equal(int64(1750091514783)))
+			Expect(status.Status.BufferSnapshot.Items[0].Payload).To(Equal([]byte("hello world")))
 		})
 
 		It("should return error for non-existent topic browser", func() {
@@ -914,19 +912,7 @@ func WaitForBenthosManagerInstanceState(
 	return tick, fmt.Errorf("instance didn't reach expected state: %s", expectedState)
 }
 
-// should somehow match the function from benthos to lz4 compress the data
-func makeLZ4Hex(payload []byte) string {
-	bound := lz4.CompressBlockBound(len(payload))
-
-	compBuf := make([]byte, bound)
-
-	n, err := lz4.CompressBlock(payload, compBuf, nil)
-	Expect(err).NotTo(HaveOccurred())
-	comp := compBuf[:n]
-
-	out := make([]byte, 4+len(comp))
-	binary.LittleEndian.PutUint32(out[:4], uint32(len(payload)))
-	copy(out[4:], comp)
-
-	return hex.EncodeToString(out)
+// makeHex creates hex-encoded payload for testing
+func makeHex(payload []byte) string {
+	return hex.EncodeToString(payload)
 }
