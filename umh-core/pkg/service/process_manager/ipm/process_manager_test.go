@@ -1631,6 +1631,267 @@ var _ = Describe("ProcessManager", func() {
 		})
 	})
 
+	Describe("GetLogs", func() {
+		It("should return empty logs for service with no log file", func() {
+			servicePath := "test-service"
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "test: value",
+				},
+			}
+
+			// Create service first
+			err := pm.Create(ctx, servicePath, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Process the creation
+			err = pm.Reconcile(ctx, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// GetLogs should return empty slice when no log file exists
+			logs, err := pm.GetLogs(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(logs).To(HaveLen(0))
+		})
+
+		It("should return error for non-existent service", func() {
+			servicePath := "non-existent-service"
+
+			logs, err := pm.GetLogs(ctx, servicePath, fsService)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(Equal(process_shared.ErrServiceNotExist))
+			Expect(logs).To(BeNil())
+		})
+
+		It("should return empty logs for empty log file", func() {
+			servicePath := "test-service"
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "test: value",
+				},
+			}
+
+			// Create service first
+			err := pm.Create(ctx, servicePath, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Process the creation
+			err = pm.Reconcile(ctx, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Setup mock to simulate empty log file
+			identifier := servicePathToIdentifier(servicePath)
+			logFile := filepath.Join(pm.serviceDirectory, string(identifier), "log", "current")
+
+			mockFS := fsService.(*filesystem.MockFileSystem)
+			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+				if path == logFile {
+					return true, nil
+				}
+				return false, nil
+			})
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+				if path == logFile {
+					return []byte(""), nil // Empty log file
+				}
+				return []byte{}, nil
+			})
+
+			logs, err := pm.GetLogs(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(logs).To(HaveLen(0))
+		})
+
+		It("should parse log entries correctly", func() {
+			servicePath := "test-service"
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "test: value",
+				},
+			}
+
+			// Create service first
+			err := pm.Create(ctx, servicePath, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Process the creation
+			err = pm.Reconcile(ctx, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Setup mock to simulate log file with content
+			identifier := servicePathToIdentifier(servicePath)
+			logFile := filepath.Join(pm.serviceDirectory, string(identifier), "log", "current")
+
+			// Create sample log content in the format expected by the parser
+			logContent := `2025-01-15 10:30:45.123456789  Starting application
+2025-01-15 10:30:45.987654321  Configuration loaded successfully
+2025-01-15 10:30:46.555555555  Application ready
+`
+
+			mockFS := fsService.(*filesystem.MockFileSystem)
+			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+				if path == logFile {
+					return true, nil
+				}
+				return false, nil
+			})
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+				if path == logFile {
+					return []byte(logContent), nil
+				}
+				return []byte{}, nil
+			})
+
+			logs, err := pm.GetLogs(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(logs).To(HaveLen(3))
+
+			// Verify the parsed entries
+			Expect(logs[0].Content).To(Equal("Starting application"))
+			Expect(logs[0].Timestamp.Year()).To(Equal(2025))
+			Expect(logs[0].Timestamp.Month()).To(Equal(time.January))
+			Expect(logs[0].Timestamp.Day()).To(Equal(15))
+
+			Expect(logs[1].Content).To(Equal("Configuration loaded successfully"))
+			Expect(logs[2].Content).To(Equal("Application ready"))
+		})
+
+		It("should handle malformed log entries gracefully", func() {
+			servicePath := "test-service"
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "test: value",
+				},
+			}
+
+			// Create service first
+			err := pm.Create(ctx, servicePath, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Process the creation
+			err = pm.Reconcile(ctx, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Setup mock to simulate log file with mixed content (some valid, some malformed)
+			identifier := servicePathToIdentifier(servicePath)
+			logFile := filepath.Join(pm.serviceDirectory, string(identifier), "log", "current")
+
+			logContent := `2025-01-15 10:30:45.123456789  Valid log entry
+malformed log entry without timestamp
+2025-01-15 10:30:46.555555555  Another valid entry
+just plain text
+`
+
+			mockFS := fsService.(*filesystem.MockFileSystem)
+			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+				if path == logFile {
+					return true, nil
+				}
+				return false, nil
+			})
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+				if path == logFile {
+					return []byte(logContent), nil
+				}
+				return []byte{}, nil
+			})
+
+			logs, err := pm.GetLogs(ctx, servicePath, fsService)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(logs).To(HaveLen(4)) // Should include all lines, even malformed ones
+
+			// Verify valid entries have parsed timestamps
+			Expect(logs[0].Content).To(Equal("Valid log entry"))
+			Expect(logs[0].Timestamp.IsZero()).To(BeFalse())
+
+			// Verify malformed entries are preserved as content-only
+			Expect(logs[1].Content).To(Equal("malformed log entry without timestamp"))
+			Expect(logs[1].Timestamp.IsZero()).To(BeTrue()) // No valid timestamp
+
+			Expect(logs[2].Content).To(Equal("Another valid entry"))
+			Expect(logs[2].Timestamp.IsZero()).To(BeFalse())
+
+			Expect(logs[3].Content).To(Equal("just plain text"))
+			Expect(logs[3].Timestamp.IsZero()).To(BeTrue()) // No valid timestamp
+		})
+
+		It("should handle filesystem errors when reading log file", func() {
+			servicePath := "test-service"
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "test: value",
+				},
+			}
+
+			// Create service first
+			err := pm.Create(ctx, servicePath, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Process the creation
+			err = pm.Reconcile(ctx, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Setup mock to simulate filesystem error when reading log file
+			identifier := servicePathToIdentifier(servicePath)
+			logFile := filepath.Join(pm.serviceDirectory, string(identifier), "log", "current")
+
+			mockFS := fsService.(*filesystem.MockFileSystem)
+			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+				if path == logFile {
+					return true, nil
+				}
+				return false, nil
+			})
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+				if path == logFile {
+					return nil, fmt.Errorf("filesystem read error")
+				}
+				return []byte{}, nil
+			})
+
+			logs, err := pm.GetLogs(ctx, servicePath, fsService)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to read log file"))
+			Expect(err.Error()).To(ContainSubstring("filesystem read error"))
+			Expect(logs).To(BeNil())
+		})
+
+		It("should handle filesystem errors when checking log file existence", func() {
+			servicePath := "test-service"
+			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				ConfigFiles: map[string]string{
+					"config.yaml": "test: value",
+				},
+			}
+
+			// Create service first
+			err := pm.Create(ctx, servicePath, config, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Process the creation
+			err = pm.Reconcile(ctx, fsService)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Setup mock to simulate filesystem error when checking file existence
+			identifier := servicePathToIdentifier(servicePath)
+			logFile := filepath.Join(pm.serviceDirectory, string(identifier), "log", "current")
+
+			mockFS := fsService.(*filesystem.MockFileSystem)
+			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+				if path == logFile {
+					return false, fmt.Errorf("filesystem error checking file existence")
+				}
+				return false, nil
+			})
+
+			logs, err := pm.GetLogs(ctx, servicePath, fsService)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to check if log file exists"))
+			Expect(err.Error()).To(ContainSubstring("filesystem error checking file existence"))
+			Expect(logs).To(BeNil())
+		})
+	})
+
 	Describe("generateContext", func() {
 		It("should create a context with proper deadline", func() {
 			timeout := 100 * time.Millisecond

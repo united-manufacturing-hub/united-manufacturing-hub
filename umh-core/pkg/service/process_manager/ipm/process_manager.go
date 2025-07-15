@@ -15,7 +15,6 @@
 package ipm
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -88,7 +87,7 @@ type service struct {
 	history process_shared.ServiceInfo
 }
 
-const DefaultServiceDirectory = "/var/lib/umh/ipm"
+const DefaultServiceDirectory = "/data/ipm"
 
 // ProcessManagerOption is a functional option for configuring ProcessManager
 type ProcessManagerOption func(*ProcessManager)
@@ -468,9 +467,49 @@ func (pm *ProcessManager) GetConfigFile(ctx context.Context, servicePath string,
 func (pm *ProcessManager) GetLogs(ctx context.Context, servicePath string, fsService filesystem.Service) ([]process_shared.LogEntry, error) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
-	pm.Logger.Info("Getting logs of process manager service", zap.String("servicePath", servicePath))
+	pm.Logger.Debug("Getting logs of process manager service", zap.String("servicePath", servicePath))
 
-	return []process_shared.LogEntry{}, errors.New("not implemented")
+	identifier := servicePathToIdentifier(servicePath)
+
+	// Check if service exists in our registry
+	_, exists := pm.services[identifier]
+	if !exists {
+		return nil, process_shared.ErrServiceNotExist
+	}
+
+	// Construct the path to the current log file
+	serviceDir := filepath.Join(pm.serviceDirectory, string(identifier))
+	logDir := filepath.Join(serviceDir, logDirectoryName)
+	currentLogFile := filepath.Join(logDir, "current")
+
+	// Check if the log file exists
+	exists, err := fsService.FileExists(ctx, currentLogFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if log file exists: %w", err)
+	}
+	if !exists {
+		pm.Logger.Debug("Log file does not exist, returning empty logs", zap.String("logFile", currentLogFile))
+		return []process_shared.LogEntry{}, nil
+	}
+
+	// Read the log file content
+	logContent, err := fsService.ReadFile(ctx, currentLogFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read log file %s: %w", currentLogFile, err)
+	}
+
+	// Parse the log content using the same parser as S6
+	entries, err := process_shared.ParseLogsFromBytes(logContent)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse log content: %w", err)
+	}
+
+	pm.Logger.Debug("Retrieved logs for service",
+		zap.String("servicePath", servicePath),
+		zap.String("logFile", currentLogFile),
+		zap.Int("entryCount", len(entries)))
+
+	return entries, nil
 }
 func (pm *ProcessManager) CleanServiceDirectory(ctx context.Context, path string, fsService filesystem.Service) error {
 	pm.mu.Lock()

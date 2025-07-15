@@ -104,31 +104,38 @@ func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier
 	commandPath := filepath.Join(configPath, "run.sh")
 	currentLogFile := filepath.Join(logPath, "current")
 
-	// Create the command with shell redirection
-	// Format: /bin/bash /path/to/run.sh >> /path/to/logs/current 2>&1
-	shellCommand := fmt.Sprintf("/bin/bash %s >> %s 2>&1", commandPath, currentLogFile)
-
-	// Create the command using shell to handle the redirection
-	cmd := exec.CommandContext(ctx, "/bin/bash", "-c", shellCommand)
+	var cmd *exec.Cmd
 
 	// Set memory limits if configured
 	if config.MemoryLimit > 0 {
-		memoryLimitMB := config.MemoryLimit / (1024 * 1024) // Convert bytes to MB
+		memoryLimitBytes := config.MemoryLimit
+		if memoryLimitBytes == 0 {
+			memoryLimitBytes = 1024 * 1024 // Minimum 1MB
+		}
+
+		memoryLimitMB := memoryLimitBytes / (1024 * 1024)
 		if memoryLimitMB == 0 {
-			memoryLimitMB = 1 // Minimum 1MB
+			memoryLimitMB = 1
 		}
 
 		pm.Logger.Info("Applying memory limit to process",
 			zap.String("identifier", string(identifier)),
-			zap.Int64("memoryLimitBytes", config.MemoryLimit),
-			zap.Int64("memoryLimitMB", memoryLimitMB))
+			zap.Int64("memoryLimitBytes", memoryLimitBytes))
 
-		// Modify the shell command to include ulimit
-		shellCommand = fmt.Sprintf("ulimit -v %d && %s", memoryLimitMB*1024, shellCommand) // ulimit -v is in KB
+		// Use exec to replace the shell process instead of creating a subprocess
+		// This eliminates one bash layer while still applying memory limits
+		shellCommand := fmt.Sprintf("ulimit -v %d && exec %s >> %s 2>&1", memoryLimitMB*1024, commandPath, currentLogFile)
 		cmd = exec.CommandContext(ctx, "/bin/bash", "-c", shellCommand)
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			Setpgid: true, // Create new process group for better process management
-		}
+	} else {
+		// Direct execution without memory limits - cleanest approach
+		// Set up logging via shell redirection for simplicity
+		redirectedCommand := fmt.Sprintf("%s >> %s 2>&1", commandPath, currentLogFile)
+		cmd = exec.CommandContext(ctx, "/bin/bash", "-c", redirectedCommand)
+	}
+
+	// Set up process group for better process management
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: true, // Create new process group for better process management
 	}
 
 	// Start the process
