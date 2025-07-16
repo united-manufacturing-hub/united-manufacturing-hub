@@ -177,13 +177,8 @@ func getRedpandaMetrics(snapshot fsm.SystemSnapshot) (models.GetMetricsResponse,
 
 // getTopicBrowserMetrics retrieves metrics from the topic browser instance and converts them
 // to a standardized format matching the Get-Metrics API response structure.
-// Currently uses an empty observed state for testing purposes.
 func getTopicBrowserMetrics(snapshot fsm.SystemSnapshot) (models.GetMetricsResponse, error) {
 	res := models.GetMetricsResponse{Metrics: []models.Metric{}}
-
-	// TODO: This currently uses an empty observed state for testing purposes.
-	// This will need to be changed to retrieve the actual observed state from the system snapshot
-	// when the topic browser FSM is properly integrated.
 
 	// Create empty observed state for now
 	inst, ok := fsm.FindInstance(snapshot, constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
@@ -303,13 +298,8 @@ func addMetrics(res *models.GetMetricsResponse, componentType string, path strin
 
 // getStreamProcessorMetrics retrieves metrics from the stream processor instance and converts them
 // to a standardized format matching the Get-Metrics API response structure.
-// Currently uses an empty observed state for testing purposes.
 func getStreamProcessorMetrics(uuid string, snapshot fsm.SystemSnapshot) (models.GetMetricsResponse, error) {
 	res := models.GetMetricsResponse{Metrics: []models.Metric{}}
-
-	// TODO: This currently uses an empty observed state for testing purposes.
-	// This will need to be changed to retrieve the actual observed state from the system snapshot
-	// when the topic browser FSM is properly integrated.
 
 	// Create empty observed state for now
 	inst, ok := fsm.FindManager(snapshot, constants.StreamProcessorManagerName)
