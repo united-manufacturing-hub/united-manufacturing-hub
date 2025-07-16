@@ -98,10 +98,17 @@ func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string
 	}
 
 	// Check if target already exists and remove it if needed
+	// This handles orphaned services (agent restart scenario where service exists but no artifacts tracking)
 	if exists, _ := fsService.PathExists(ctx, servicePath); exists {
-		if err := fsService.RemoveAll(ctx, servicePath); err != nil {
-			return nil, fmt.Errorf("failed to remove existing service directory: %w", err)
+		s.logger.Debugf("Found existing service directory at %s - performing orphaned service cleanup", servicePath)
+
+		// For orphaned services, we need to properly stop S6 before removing directories
+		// This prevents "directory not empty" errors from active S6 supervisors
+		if err := s.cleanupOrphanedService(ctx, servicePath, fsService); err != nil {
+			return nil, fmt.Errorf("failed to cleanup orphaned service: %w", err)
 		}
+
+		s.logger.Debugf("Successfully cleaned up orphaned service directory: %s", servicePath)
 	}
 
 	// Create artifacts structure
@@ -356,7 +363,12 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *Service
 
 	// Step 3: Remove service directory (idempotent)
 	if !progress.ServiceDirRemoved {
-		serviceExists, _ := fsService.PathExists(ctx, artifacts.ServiceDir)
+		serviceExists, err := fsService.PathExists(ctx, artifacts.ServiceDir)
+		if err != nil {
+			s.logger.Debugf("Failed to check service directory existence: %v", err)
+			return fmt.Errorf("failed to check service directory existence: %w", err)
+		}
+
 		if serviceExists {
 			if err := fsService.RemoveAll(ctx, artifacts.ServiceDir); err != nil {
 				// DEBUG: List directory contents when removal fails to troubleshoot what's blocking removal
@@ -385,22 +397,53 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *Service
 				s.logger.Debugf("Failed to remove service directory: %v", err)
 				return fmt.Errorf("failed to remove service directory: %w", err)
 			}
+
+			// Verify removal was successful
+			stillExists, checkErr := fsService.PathExists(ctx, artifacts.ServiceDir)
+			if checkErr != nil {
+				s.logger.Debugf("Failed to verify service directory removal: %v", checkErr)
+				return fmt.Errorf("failed to verify service directory removal: %w", checkErr)
+			}
+			if stillExists {
+				s.logger.Debugf("Service directory %s still exists after removal attempt", artifacts.ServiceDir)
+				return fmt.Errorf("service directory still exists after removal attempt")
+			}
 		}
+
+		// Only mark as removed if directory definitely doesn't exist
 		progress.ServiceDirRemoved = true
-		s.logger.Debugf("Service directory removed: %s", artifacts.ServiceDir)
+		s.logger.Debugf("Service directory confirmed removed: %s", artifacts.ServiceDir)
 	}
 
 	// Step 4: Remove log directory (idempotent)
 	if !progress.LogDirRemoved {
-		logExists, _ := fsService.PathExists(ctx, artifacts.LogDir)
+		logExists, err := fsService.PathExists(ctx, artifacts.LogDir)
+		if err != nil {
+			s.logger.Debugf("Failed to check log directory existence: %v", err)
+			return fmt.Errorf("failed to check log directory existence: %w", err)
+		}
+
 		if logExists {
 			if err := fsService.RemoveAll(ctx, artifacts.LogDir); err != nil {
 				s.logger.Debugf("Failed to remove log directory: %v", err)
 				return fmt.Errorf("failed to remove log directory: %w", err)
 			}
+
+			// Verify removal was successful
+			stillExists, checkErr := fsService.PathExists(ctx, artifacts.LogDir)
+			if checkErr != nil {
+				s.logger.Debugf("Failed to verify log directory removal: %v", checkErr)
+				return fmt.Errorf("failed to verify log directory removal: %w", checkErr)
+			}
+			if stillExists {
+				s.logger.Debugf("Log directory %s still exists after removal attempt", artifacts.LogDir)
+				return fmt.Errorf("log directory still exists after removal attempt")
+			}
 		}
+
+		// Only mark as removed if directory definitely doesn't exist
 		progress.LogDirRemoved = true
-		s.logger.Debugf("Log directory removed: %s", artifacts.LogDir)
+		s.logger.Debugf("Log directory confirmed removed: %s", artifacts.LogDir)
 	}
 
 	s.logger.Debugf("Successfully completed all removal steps for service artifacts: %+v", artifacts)
@@ -567,6 +610,72 @@ func (s *DefaultService) createS6FilesInTemp(ctx context.Context, tempDir string
 	createdFiles = append(createdFiles, "dependencies.d/base")
 
 	return createdFiles, nil
+}
+
+// cleanupOrphanedService handles cleanup of services that exist but aren't tracked in artifacts
+// This occurs when the agent restarts and finds S6 service directories it didn't create
+// Uses the same cleanup sequence as RemoveArtifacts but without progress tracking
+func (s *DefaultService) cleanupOrphanedService(ctx context.Context, servicePath string, fsService filesystem.Service) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	serviceName := filepath.Base(servicePath)
+	logDir := filepath.Join(constants.S6LogBaseDir, serviceName)
+
+	s.logger.Debugf("Starting cleanup of orphaned service: %s", servicePath)
+
+	// Step 1: Terminate S6 processes
+	servicePaths := []string{
+		servicePath,
+		filepath.Join(servicePath, "log"),
+	}
+
+	for _, svcPath := range servicePaths {
+		if exists, _ := fsService.PathExists(ctx, svcPath); exists {
+			// Use s6-svc -xd to bring down service and exit supervisor
+			if _, err := s.ExecuteS6Command(ctx, svcPath, fsService, "s6-svc", "-xd", svcPath); err != nil {
+				s.logger.Debugf("Failed to terminate orphaned service %s: %v", svcPath, err)
+				// Continue with cleanup even if s6-svc fails
+			}
+		}
+	}
+
+	// Step 2: Kill supervisor processes directly if s6-svc failed
+	for _, svcPath := range servicePaths {
+		if exists, _ := fsService.PathExists(ctx, svcPath); exists {
+			if err := s.killSupervisorProcess(ctx, svcPath, fsService); err != nil {
+				s.logger.Debugf("Failed to kill supervisor for orphaned service %s: %v", svcPath, err)
+				// Continue with cleanup
+			}
+		}
+	}
+
+	// Step 3: Wait for S6 cleanup (brief pause to let S6 finish)
+	// For orphaned services, we use a short timeout instead of FSM ticks
+	select {
+	case <-time.After(100 * time.Millisecond):
+		// Brief pause to let S6 finish cleanup
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
+	// Step 4: Force remove service directory
+	if exists, _ := fsService.PathExists(ctx, servicePath); exists {
+		if err := fsService.RemoveAll(ctx, servicePath); err != nil {
+			return fmt.Errorf("failed to remove orphaned service directory %s: %w", servicePath, err)
+		}
+	}
+
+	// Step 5: Remove log directory
+	if exists, _ := fsService.PathExists(ctx, logDir); exists {
+		if err := fsService.RemoveAll(ctx, logDir); err != nil {
+			return fmt.Errorf("failed to remove orphaned log directory %s: %w", logDir, err)
+		}
+	}
+
+	s.logger.Debugf("Successfully cleaned up orphaned service: %s", servicePath)
+	return nil
 }
 
 // createS6RunScript creates a run script for the service using the proven template system
