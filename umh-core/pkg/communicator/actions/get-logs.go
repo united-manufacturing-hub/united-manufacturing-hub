@@ -268,6 +268,7 @@ func (a *GetLogsAction) getUserEmail() string {
 	return a.userEmail
 }
 
+// FindStreamProcessorInstanceByUUID finds a stream processor instance by its UUID (generated from the name)
 func FindStreamProcessorInstanceByUUID(systemSnapshot fsm.SystemSnapshot, uuid string) (*fsm.FSMInstanceSnapshot, bool) {
 	streamProcessorManager, ok := fsm.FindManager(systemSnapshot, constants.StreamProcessorManagerName)
 	if !ok {
