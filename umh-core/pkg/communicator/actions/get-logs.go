@@ -106,12 +106,12 @@ func (a *GetLogsAction) Validate() (err error) {
 		models.StreamProcessorLogType,
 	}
 	if !slices.Contains(allowedLogTypes, a.payload.Type) {
-		return errors.New("log type must be set and must be one of the following: agent, dfc, protocol-converter-read, protocol-converter-write, redpanda, topic-browser")
+		return errors.New("log type must be set and must be one of the following: agent, dfc, protocol-converter-read, protocol-converter-write, redpanda, topic-browser, stream-processor")
 	}
 
-	if a.payload.Type == models.DFCLogType || a.payload.Type == models.ProtocolConverterReadLogType || a.payload.Type == models.ProtocolConverterWriteLogType {
+	if a.payload.Type == models.DFCLogType || a.payload.Type == models.ProtocolConverterReadLogType || a.payload.Type == models.ProtocolConverterWriteLogType || a.payload.Type == models.StreamProcessorLogType {
 		if a.payload.UUID == "" {
-			return errors.New("uuid must be set to retrieve logs for a DFC or Protocol Converter")
+			return errors.New("uuid must be set to retrieve logs for a DFC, Protocol Converter, or Stream Processor")
 		}
 
 		_, err = uuid.Parse(a.payload.UUID)
