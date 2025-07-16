@@ -18,6 +18,7 @@ import (
 	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/streamprocessor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -90,6 +91,15 @@ func buildStreamProcessorAsDfc(
 		Metrics:       nil,
 		Connections:   []models.Connection{}, // Stream processors don't have direct connections
 		IsInitialized: true,
+	}
+
+	svcInfo := observed.ServiceInfo
+	if m := svcInfo.DFCObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState; m != nil &&
+		m.Input.LastCount > 0 {
+
+		dfc.Metrics = &models.DfcMetrics{
+			AvgInputThroughputPerMinuteInMsgSec: m.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds(),
+		}
 	}
 
 	return dfc, nil
