@@ -334,6 +334,10 @@ func getStreamProcessorMetrics(uuid string, snapshot fsm.SystemSnapshot) (models
 		return res, fmt.Errorf("stream processor instance %s not found", uuid)
 	}
 
+	if observedState == nil {
+		return res, fmt.Errorf("stream processor instance has nil observed state")
+	}
+
 	// Extract benthos metrics from the observed state
 	metrics := observedState.ServiceInfo.DFCObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
 
