@@ -15,6 +15,7 @@
 package streamprocessorserviceconfig
 
 import (
+	"encoding/hex"
 	"strings"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
@@ -24,7 +25,7 @@ import (
 // GetDFCServiceConfig converts the component config to a full DFCServiceConfig
 // it enforces the output to uns-plugin, the input to uns-plugin and prefixes the
 // given sources and umh-topics accordingly with it's location path.
-func (c StreamProcessorServiceConfigSpec) GetDFCServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
+func (c StreamProcessorServiceConfigSpec) GetDFCServiceConfig(spName string) dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
 	// create dfc config
 	dfcReadConfig := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}
 
@@ -44,10 +45,13 @@ func (c StreamProcessorServiceConfigSpec) GetDFCServiceConfig() dataflowcomponen
 		enhancedSources[alias] = umhTopic
 	}
 
+	hexName := hex.EncodeToString([]byte(spName))
+
 	// Set UNS input with topics from sources
 	dfcReadConfig.BenthosConfig.Input = map[string]any{
 		"uns": map[string]any{
-			"umh_topics": umhTopics,
+			"umh_topics":     umhTopics,
+			"consumer_group": hexName,
 		},
 	}
 
@@ -68,16 +72,6 @@ func (c StreamProcessorServiceConfigSpec) GetDFCServiceConfig() dataflowcomponen
 			},
 		},
 	}
-
-	// dfcReadConfig.BenthosConfig.Pipeline = map[string]any{
-	// 	"stream_processor": map[string]any{
-	// 		"mode":         "timeseries",
-	// 		"model":        c.Config.Model,
-	// 		"sources":      enhancedSources, // Use enhanced sources with umh.v1. prefix
-	// 		"mapping":      c.Config.Mapping,
-	// 		"output_topic": outputTopic,
-	// 	},
-	// }
 
 	// Always set UNS output
 	dfcReadConfig.BenthosConfig.Output = map[string]any{

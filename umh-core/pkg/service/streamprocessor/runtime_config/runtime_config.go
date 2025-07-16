@@ -149,7 +149,7 @@ func BuildRuntimeConfig(
 	}
 
 	// Render the DFC config
-	dfcTemplate := spec.GetDFCServiceConfig()
+	dfcTemplate := spec.GetDFCServiceConfig(spName)
 	dfcRuntime, err := config.RenderTemplate(dfcTemplate, scope)
 	if err != nil {
 		return streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime{},
