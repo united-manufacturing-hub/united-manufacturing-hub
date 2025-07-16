@@ -35,6 +35,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/ipm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version"
 	"go.uber.org/zap"
 )
@@ -48,6 +51,10 @@ func main() {
 
 	// Get a logger for the main component
 	log := logger.For(logger.ComponentCore)
+
+	// Set up stdout capture for umh-core service logs EARLY (before any significant logging)
+	// This only works with the internal process manager
+	setupStdoutCapture(log)
 
 	// Log using the component logger with structured fields
 	log.Info("Starting umh-core...")
@@ -289,4 +296,38 @@ func enableBackendConnection(config *config.FullConfig, communicationState *comm
 	}
 
 	logger.Info("Backend connection enabled")
+}
+
+// setupStdoutCapture enables stdout capture for the umh-core service when using internal process manager
+func setupStdoutCapture(log *zap.SugaredLogger) {
+	// Only enable if we're using the internal process manager
+	pmService := process_manager.NewDefaultService()
+
+	// Try to cast to IPM ProcessManager to access stdout capture functionality
+	if ipmService, ok := pmService.(*ipm.ProcessManager); ok {
+		// Create filesystem service
+		fs := filesystem.NewDefaultService()
+
+		// Set up stdout capture with a timeout
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		originalStdout, cleanup, err := ipmService.EnableStdoutCapture(ctx, fs)
+		if err != nil {
+			log.Warnf("Failed to enable stdout capture: %v", err)
+			return
+		}
+
+		log.Info("Stdout capture enabled - umh-core logs will be available via GetLogs API")
+
+		// Store cleanup function for later use (we could add this to a global cleanup handler)
+		_ = originalStdout // Keep reference to original stdout if needed
+		_ = cleanup        // Store cleanup function for shutdown
+
+		// Note: cleanup is not called here as we want stdout capture to remain active
+		// for the lifetime of the application. In a production system, you might want
+		// to register cleanup with a shutdown handler.
+	} else {
+		log.Debug("Process manager is not IPM, stdout capture not available")
+	}
 }
