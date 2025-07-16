@@ -15,11 +15,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ipm
+package logging
 
 import (
 	"sync"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/ipm/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 )
 
@@ -41,7 +42,7 @@ type MemoryLogBuffer struct {
 // a good balance between memory usage and log retention.
 func NewMemoryLogBuffer(maxSize int) *MemoryLogBuffer {
 	if maxSize <= 0 {
-		maxSize = DefaultLogBufferSize
+		maxSize = constants.DefaultLogBufferSize
 	}
 
 	return &MemoryLogBuffer{

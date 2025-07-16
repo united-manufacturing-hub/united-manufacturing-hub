@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ipm
+package logging
 
 import (
 	"context"
@@ -28,6 +28,7 @@ import (
 
 	"github.com/cactus/tai64"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/ipm/constants"
 	"go.uber.org/zap"
 )
 
@@ -37,7 +38,7 @@ type LogManager struct {
 	mu     sync.RWMutex
 
 	// Track services and their log file sizes for rotation
-	services map[ServiceIdentifier]logInfo
+	services map[constants.ServiceIdentifier]logInfo
 }
 
 type logInfo struct {
@@ -50,23 +51,23 @@ type logInfo struct {
 func NewLogManager(logger *zap.SugaredLogger) *LogManager {
 	return &LogManager{
 		Logger:   logger,
-		services: make(map[ServiceIdentifier]logInfo),
+		services: make(map[constants.ServiceIdentifier]logInfo),
 	}
 }
 
 // RegisterService registers a service for log rotation monitoring
-func (lm *LogManager) RegisterService(identifier ServiceIdentifier, logPath string, maxSize int64) {
+func (lm *LogManager) RegisterService(identifier constants.ServiceIdentifier, logPath string, maxSize int64) {
 	lm.mu.Lock()
 	defer lm.mu.Unlock()
 
 	// Enforce size limits
-	if maxSize < MinLogFileSize {
-		maxSize = MinLogFileSize
-	} else if maxSize > MaxLogFileSize {
-		maxSize = MaxLogFileSize
+	if maxSize < constants.MinLogFileSize {
+		maxSize = constants.MinLogFileSize
+	} else if maxSize > constants.MaxLogFileSize {
+		maxSize = constants.MaxLogFileSize
 	}
 
-	currentLogFile := filepath.Join(logPath, CurrentLogFileName)
+	currentLogFile := filepath.Join(logPath, constants.CurrentLogFileName)
 
 	lm.services[identifier] = logInfo{
 		LogPath:        logPath,
@@ -81,7 +82,7 @@ func (lm *LogManager) RegisterService(identifier ServiceIdentifier, logPath stri
 }
 
 // UnregisterService removes a service from log rotation monitoring
-func (lm *LogManager) UnregisterService(identifier ServiceIdentifier) {
+func (lm *LogManager) UnregisterService(identifier constants.ServiceIdentifier) {
 	lm.mu.Lock()
 	defer lm.mu.Unlock()
 
@@ -92,7 +93,7 @@ func (lm *LogManager) UnregisterService(identifier ServiceIdentifier) {
 // CheckAndRotate checks all registered services and rotates logs if they exceed size limits
 func (lm *LogManager) CheckAndRotate(ctx context.Context, fsService filesystem.Service) error {
 	lm.mu.RLock()
-	services := make(map[ServiceIdentifier]logInfo)
+	services := make(map[constants.ServiceIdentifier]logInfo)
 	for k, v := range lm.services {
 		services[k] = v
 	}
@@ -111,7 +112,7 @@ func (lm *LogManager) CheckAndRotate(ctx context.Context, fsService filesystem.S
 }
 
 // rotateIfNeeded checks if a log file needs rotation and performs it if necessary
-func (lm *LogManager) rotateIfNeeded(ctx context.Context, identifier ServiceIdentifier, info logInfo, fsService filesystem.Service) error {
+func (lm *LogManager) rotateIfNeeded(ctx context.Context, identifier constants.ServiceIdentifier, info logInfo, fsService filesystem.Service) error {
 	// Check if current log file exists and get its size
 	stat, err := fsService.Stat(ctx, info.CurrentLogFile)
 	if err != nil {
@@ -130,7 +131,7 @@ func (lm *LogManager) rotateIfNeeded(ctx context.Context, identifier ServiceIden
 
 // RotateLogFile forces rotation for a specific service, regardless of size.
 // This method is called by LogLineWriter when it detects that rotation is needed.
-func (lm *LogManager) RotateLogFile(identifier ServiceIdentifier, fsService filesystem.Service) error {
+func (lm *LogManager) RotateLogFile(identifier constants.ServiceIdentifier, fsService filesystem.Service) error {
 	lm.mu.RLock()
 	info, exists := lm.services[identifier]
 	lm.mu.RUnlock()
@@ -151,14 +152,14 @@ func (lm *LogManager) RotateLogFile(identifier ServiceIdentifier, fsService file
 
 // performRotation performs the actual log file rotation with TAI64N timestamping and cleanup.
 // This is the common implementation used by both rotateIfNeeded and RotateLogFile.
-func (lm *LogManager) performRotation(ctx context.Context, identifier ServiceIdentifier, info logInfo, fsService filesystem.Service, currentSize int64) error {
+func (lm *LogManager) performRotation(ctx context.Context, identifier constants.ServiceIdentifier, info logInfo, fsService filesystem.Service, currentSize int64) error {
 	// Generate TAI64N timestamp for the rotated file
 	tai64nString := tai64.FormatNano(time.Now())
 	// Remove the '@' prefix from the TAI64N string if present
 	tai64nString = strings.TrimPrefix(tai64nString, "@")
 
 	// Create rotated filename: TAI64N timestamp + .log extension
-	rotatedPath := filepath.Join(info.LogPath, tai64nString+LogFileExtension)
+	rotatedPath := filepath.Join(info.LogPath, tai64nString+constants.LogFileExtension)
 
 	// Rename current log file to rotated filename
 	if err := fsService.Rename(ctx, info.CurrentLogFile, rotatedPath); err != nil {
@@ -192,12 +193,12 @@ func (lm *LogManager) cleanupOldLogs(logPath string, fsService filesystem.Servic
 	// Filter .log files (exclude "current")
 	var logFiles []string
 	for _, file := range files {
-		if strings.HasSuffix(file.Name(), LogFileExtension) && file.Name() != CurrentLogFileName {
+		if strings.HasSuffix(file.Name(), constants.LogFileExtension) && file.Name() != constants.CurrentLogFileName {
 			logFiles = append(logFiles, filepath.Join(logPath, file.Name()))
 		}
 	}
 
-	if len(logFiles) <= DefaultLogFileRetention {
+	if len(logFiles) <= constants.DefaultLogFileRetention {
 		return nil // No cleanup needed
 	}
 
@@ -212,7 +213,7 @@ func (lm *LogManager) cleanupOldLogs(logPath string, fsService filesystem.Servic
 	})
 
 	// Remove old files (keep first N)
-	for i := DefaultLogFileRetention; i < len(logFiles); i++ {
+	for i := constants.DefaultLogFileRetention; i < len(logFiles); i++ {
 		if err := fsService.Remove(context.Background(), logFiles[i]); err != nil {
 			lm.Logger.Error("Error removing old log file",
 				zap.String("file", logFiles[i]),
@@ -234,7 +235,7 @@ func (lm *LogManager) CloseAll() error {
 	lm.Logger.Info("Closing LogManager")
 
 	// Clear the services map
-	lm.services = make(map[ServiceIdentifier]logInfo)
+	lm.services = make(map[constants.ServiceIdentifier]logInfo)
 
 	return nil
 }

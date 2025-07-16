@@ -27,6 +27,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/ipm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/ipm/constants"
 	"go.uber.org/zap"
 
 	"syscall"
@@ -108,7 +109,7 @@ var _ = Describe("ProcessManager", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// Verify service was added to services map
-			identifier := ipm.ServicePathToIdentifier(servicePath)
+			identifier := constants.ServicePathToIdentifier(servicePath)
 			service, exists := pm.Services[identifier]
 			Expect(exists).To(BeTrue())
 			Expect(service.Config).To(Equal(config))
@@ -286,7 +287,7 @@ var _ = Describe("ProcessManager", func() {
 			Expect(err.Error()).To(ContainSubstring("cleaned up old service instance"))
 
 			// Service should still be in the services map
-			identifier := ipm.ServicePathToIdentifier(servicePath)
+			identifier := constants.ServicePathToIdentifier(servicePath)
 			_, exists := pm.Services[identifier]
 			Expect(exists).To(BeTrue())
 
@@ -321,7 +322,7 @@ var _ = Describe("ProcessManager", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// Verify service was created
-			identifier := ipm.ServicePathToIdentifier(servicePath)
+			identifier := constants.ServicePathToIdentifier(servicePath)
 			_, exists := pm.Services[identifier]
 			Expect(exists).To(BeTrue())
 
@@ -368,7 +369,7 @@ var _ = Describe("ProcessManager", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// Verify service was created
-			identifier := ipm.ServicePathToIdentifier(servicePath)
+			identifier := constants.ServicePathToIdentifier(servicePath)
 			_, exists := pm.Services[identifier]
 			Expect(exists).To(BeTrue())
 
@@ -429,7 +430,7 @@ var _ = Describe("ProcessManager", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// Verify service was removed from services map
-			identifier := ipm.ServicePathToIdentifier(servicePath)
+			identifier := constants.ServicePathToIdentifier(servicePath)
 			_, exists := pm.Services[identifier]
 			Expect(exists).To(BeFalse())
 		})
@@ -589,7 +590,7 @@ var _ = Describe("ProcessManager", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// Verify task was queued
-			identifier := ipm.ServicePathToIdentifier(servicePath)
+			identifier := constants.ServicePathToIdentifier(servicePath)
 			Expect(pm.TaskQueue).To(HaveLen(1))
 			Expect(pm.TaskQueue[0].Identifier).To(Equal(identifier))
 			Expect(pm.TaskQueue[0].Operation).To(Equal(ipm.OperationStart))
@@ -699,7 +700,7 @@ var _ = Describe("ProcessManager", func() {
 			Expect(pm.TaskQueue).To(HaveLen(0))
 
 			// Verify service still exists in services map (only process is stopped, not removed)
-			identifier := ipm.ServicePathToIdentifier(servicePath)
+			identifier := constants.ServicePathToIdentifier(servicePath)
 			_, exists := pm.Services[identifier]
 			Expect(exists).To(BeTrue())
 		})
@@ -732,7 +733,7 @@ var _ = Describe("ProcessManager", func() {
 			Expect(pm.TaskQueue).To(HaveLen(0))
 
 			// Verify service still exists in services map (only process is stopped, not removed)
-			identifier := ipm.ServicePathToIdentifier(servicePath)
+			identifier := constants.ServicePathToIdentifier(servicePath)
 			_, exists := pm.Services[identifier]
 			Expect(exists).To(BeTrue())
 		})
@@ -762,7 +763,7 @@ var _ = Describe("ProcessManager", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// Verify service still exists in services map
-			identifier := ipm.ServicePathToIdentifier(servicePath)
+			identifier := constants.ServicePathToIdentifier(servicePath)
 			_, exists := pm.Services[identifier]
 			Expect(exists).To(BeTrue())
 		})
@@ -867,7 +868,7 @@ var _ = Describe("ProcessManager", func() {
 			Expect(pm.TaskQueue).To(HaveLen(0))
 
 			// Verify service still exists in services map
-			identifier := ipm.ServicePathToIdentifier(servicePath)
+			identifier := constants.ServicePathToIdentifier(servicePath)
 			_, exists := pm.Services[identifier]
 			Expect(exists).To(BeTrue())
 		})
@@ -896,7 +897,7 @@ var _ = Describe("ProcessManager", func() {
 			Expect(pm.TaskQueue).To(HaveLen(0))
 
 			// Verify service still exists in services map
-			identifier := ipm.ServicePathToIdentifier(servicePath)
+			identifier := constants.ServicePathToIdentifier(servicePath)
 			_, exists := pm.Services[identifier]
 			Expect(exists).To(BeTrue())
 		})
@@ -1036,8 +1037,8 @@ var _ = Describe("ProcessManager", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// Setup mock to simulate a running process
-			identifier := ipm.ServicePathToIdentifier(servicePath)
-			pidFile := filepath.Join(pm.ServiceDirectory, string(identifier), ipm.PidFileName)
+			identifier := constants.ServicePathToIdentifier(servicePath)
+			pidFile := filepath.Join(pm.ServiceDirectory, string(identifier), constants.PidFileName)
 			mockPid := "1234"
 
 			// Mock filesystem to return PID file content
@@ -1100,8 +1101,8 @@ var _ = Describe("ProcessManager", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// Setup mock to simulate corrupted PID file
-			identifier := ipm.ServicePathToIdentifier(servicePath)
-			pidFile := filepath.Join(pm.ServiceDirectory, string(identifier), ipm.PidFileName)
+			identifier := constants.ServicePathToIdentifier(servicePath)
+			pidFile := filepath.Join(pm.ServiceDirectory, string(identifier), constants.PidFileName)
 
 			// Mock filesystem to return invalid PID content
 			mockFS := fsService.(*filesystem.MockFileSystem)
@@ -1144,8 +1145,8 @@ var _ = Describe("ProcessManager", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// Setup mock to simulate filesystem error when reading PID file
-			identifier := ipm.ServicePathToIdentifier(servicePath)
-			pidFile := filepath.Join(pm.ServiceDirectory, string(identifier), ipm.PidFileName)
+			identifier := constants.ServicePathToIdentifier(servicePath)
+			pidFile := filepath.Join(pm.ServiceDirectory, string(identifier), constants.PidFileName)
 
 			// Mock filesystem to return error
 			mockFS := fsService.(*filesystem.MockFileSystem)
@@ -1354,7 +1355,7 @@ var _ = Describe("ProcessManager", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// Manually record an exit event to simulate process termination
-			identifier := ipm.ServicePathToIdentifier(servicePath)
+			identifier := constants.ServicePathToIdentifier(servicePath)
 			pm.RecordExitEvent(identifier, 1, 0) // Normal exit with code 1
 
 			// Check exit history
@@ -1384,7 +1385,7 @@ var _ = Describe("ProcessManager", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// Manually record a signal-based exit event
-			identifier := ipm.ServicePathToIdentifier(servicePath)
+			identifier := constants.ServicePathToIdentifier(servicePath)
 			pm.RecordExitEvent(identifier, -1, int(syscall.SIGTERM)) // Killed by SIGTERM
 
 			// Check exit history
@@ -1413,7 +1414,7 @@ var _ = Describe("ProcessManager", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// Record multiple exit events
-			identifier := ipm.ServicePathToIdentifier(servicePath)
+			identifier := constants.ServicePathToIdentifier(servicePath)
 			pm.RecordExitEvent(identifier, 0, 0)                     // Normal exit
 			pm.RecordExitEvent(identifier, 1, 0)                     // Error exit
 			pm.RecordExitEvent(identifier, -1, int(syscall.SIGKILL)) // Killed
@@ -1456,7 +1457,7 @@ var _ = Describe("ProcessManager", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// Record more than 100 exit events to test the limit
-			identifier := ipm.ServicePathToIdentifier(servicePath)
+			identifier := constants.ServicePathToIdentifier(servicePath)
 			for i := 0; i < 105; i++ {
 				pm.RecordExitEvent(identifier, i, 0)
 			}
@@ -1472,7 +1473,7 @@ var _ = Describe("ProcessManager", func() {
 		})
 
 		It("should handle recordExitEvent for non-existent service gracefully", func() {
-			identifier := ipm.ServicePathToIdentifier("non-existent-service")
+			identifier := constants.ServicePathToIdentifier("non-existent-service")
 
 			// This should not panic or cause errors
 			pm.RecordExitEvent(identifier, 1, 0)
@@ -1714,7 +1715,7 @@ var _ = Describe("ProcessManager", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// Setup mock to simulate empty log file
-			identifier := ipm.ServicePathToIdentifier(servicePath)
+			identifier := constants.ServicePathToIdentifier(servicePath)
 			logFile := filepath.Join(pm.ServiceDirectory, string(identifier), "log", "current")
 
 			mockFS := fsService.(*filesystem.MockFileSystem)
@@ -1754,7 +1755,7 @@ var _ = Describe("ProcessManager", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// Setup mock to simulate log file with content
-			identifier := ipm.ServicePathToIdentifier(servicePath)
+			identifier := constants.ServicePathToIdentifier(servicePath)
 			logFile := filepath.Join(pm.ServiceDirectory, string(identifier), "log", "current")
 
 			// Create sample log content in the format expected by the parser
@@ -1809,7 +1810,7 @@ var _ = Describe("ProcessManager", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// Setup mock to simulate log file with mixed content (some valid, some malformed)
-			identifier := ipm.ServicePathToIdentifier(servicePath)
+			identifier := constants.ServicePathToIdentifier(servicePath)
 			logFile := filepath.Join(pm.ServiceDirectory, string(identifier), "log", "current")
 
 			logContent := `2025-01-15 10:30:45.123456789  Valid log entry
@@ -1869,7 +1870,7 @@ just plain text
 			Expect(err).ToNot(HaveOccurred())
 
 			// Setup mock to simulate filesystem error when reading log file
-			identifier := ipm.ServicePathToIdentifier(servicePath)
+			identifier := constants.ServicePathToIdentifier(servicePath)
 			logFile := filepath.Join(pm.ServiceDirectory, string(identifier), "log", "current")
 
 			mockFS := fsService.(*filesystem.MockFileSystem)
@@ -1911,7 +1912,7 @@ just plain text
 			Expect(err).ToNot(HaveOccurred())
 
 			// Setup mock to simulate filesystem error when checking file existence
-			identifier := ipm.ServicePathToIdentifier(servicePath)
+			identifier := constants.ServicePathToIdentifier(servicePath)
 			logFile := filepath.Join(pm.ServiceDirectory, string(identifier), "log", "current")
 
 			mockFS := fsService.(*filesystem.MockFileSystem)
@@ -2054,7 +2055,7 @@ just plain text
 			Expect(pm.TaskQueue).To(HaveLen(0), "Task queue should be empty after Reconcile")
 
 			// Verify service was added to services map
-			identifier := ipm.ServicePathToIdentifier(servicePath)
+			identifier := constants.ServicePathToIdentifier(servicePath)
 			service, exists := pm.Services[identifier]
 			Expect(exists).To(BeTrue())
 			Expect(service.Config).To(Equal(config))

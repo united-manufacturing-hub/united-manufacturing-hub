@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ipm
+package logging
 
 import (
 	"context"
@@ -25,6 +25,7 @@ import (
 	"sync"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/ipm/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"go.uber.org/zap"
 )
@@ -35,7 +36,7 @@ import (
 // file rotation automatically when size thresholds are exceeded and coordinates
 // with the LogManager for proper log file management.
 type LogLineWriter struct {
-	Identifier   ServiceIdentifier
+	Identifier   constants.ServiceIdentifier
 	LogManager   *LogManager
 	MemoryBuffer *MemoryLogBuffer
 	logger       *zap.SugaredLogger
@@ -53,7 +54,7 @@ type LogLineWriter struct {
 // the service with the log manager for rotation monitoring. The writer will
 // create the current log file if it doesn't exist and track its size for
 // rotation purposes.
-func NewLogLineWriter(identifier ServiceIdentifier, logPath string, logManager *LogManager, memoryBuffer *MemoryLogBuffer, fsService filesystem.Service) (*LogLineWriter, error) {
+func NewLogLineWriter(identifier constants.ServiceIdentifier, logPath string, logManager *LogManager, memoryBuffer *MemoryLogBuffer, fsService filesystem.Service) (*LogLineWriter, error) {
 	if logManager == nil {
 		return nil, fmt.Errorf("logManager cannot be nil")
 	}
@@ -68,7 +69,7 @@ func NewLogLineWriter(identifier ServiceIdentifier, logPath string, logManager *
 		logger:       logManager.Logger, // Use the same logger as LogManager
 		FsService:    fsService,
 		LogPath:      logPath,
-		maxFileSize:  DefaultLogFileSize,
+		maxFileSize:  constants.DefaultLogFileSize,
 	}
 
 	// Register with log manager for rotation coordination
@@ -87,7 +88,7 @@ func NewLogLineWriter(identifier ServiceIdentifier, logPath string, logManager *
 // to ensure the current file is ready for writing. It handles both new file
 // creation and existing file size detection for proper rotation tracking.
 func (llw *LogLineWriter) initCurrentFile() error {
-	currentLogFile := filepath.Join(llw.LogPath, CurrentLogFileName)
+	currentLogFile := filepath.Join(llw.LogPath, constants.CurrentLogFileName)
 
 	// Check if file exists and get its current size
 	var currentSize int64
@@ -96,7 +97,7 @@ func (llw *LogLineWriter) initCurrentFile() error {
 	}
 
 	// Open file for appending (create if it doesn't exist)
-	file, err := os.OpenFile(currentLogFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, LogFilePermission)
+	file, err := os.OpenFile(currentLogFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, constants.LogFilePermission)
 	if err != nil {
 		return fmt.Errorf("failed to open current log file: %w", err)
 	}
@@ -121,7 +122,7 @@ func (llw *LogLineWriter) WriteLine(entry process_shared.LogEntry) error {
 
 	// Format entry for file writing
 	// Use the same format as S6 logs: "YYYY-MM-DD HH:MM:SS.NNNNNNNNN  content"
-	formattedLine := entry.Timestamp.Format(LogTimestampFormat) + LogEntrySeparator + entry.Content + "\n"
+	formattedLine := entry.Timestamp.Format(constants.LogTimestampFormat) + constants.LogEntrySeparator + entry.Content + "\n"
 
 	// Write to current file
 	if llw.currentFile != nil {
@@ -236,7 +237,7 @@ func (llw *LogLineWriter) SetMaxFileSize(size int64) {
 	defer llw.mu.Unlock()
 
 	if size <= 0 {
-		size = DefaultLogFileSize
+		size = constants.DefaultLogFileSize
 	}
 
 	llw.maxFileSize = size

@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/ipm/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -39,7 +40,7 @@ import (
 // even if process termination fails, the cleanup continues to ensure the service is fully
 // removed from the system. This prevents orphaned Services that could consume resources
 // or cause confusion in service management operations.
-func (pm *ProcessManager) removeService(ctx context.Context, identifier ServiceIdentifier, fsService filesystem.Service) error {
+func (pm *ProcessManager) removeService(ctx context.Context, identifier constants.ServiceIdentifier, fsService filesystem.Service) error {
 	pm.Logger.Info("Removing service", zap.String("identifier", string(identifier)))
 
 	servicePath := filepath.Join(pm.ServiceDirectory, string(identifier))
@@ -73,7 +74,7 @@ func (pm *ProcessManager) removeService(ctx context.Context, identifier ServiceI
 // removeService but only cleans up the process state. This allows Services to be stopped
 // temporarily without losing their configuration or historical data, enabling easy restart
 // operations later.
-func (pm *ProcessManager) stopService(ctx context.Context, identifier ServiceIdentifier, fsService filesystem.Service) error {
+func (pm *ProcessManager) stopService(ctx context.Context, identifier constants.ServiceIdentifier, fsService filesystem.Service) error {
 	pm.Logger.Info("Stopping service", zap.String("identifier", string(identifier)))
 
 	// Check if the service exists in our services map
@@ -82,7 +83,7 @@ func (pm *ProcessManager) stopService(ctx context.Context, identifier ServiceIde
 	}
 
 	servicePath := filepath.Join(pm.ServiceDirectory, string(identifier))
-	pidFile := filepath.Join(servicePath, PidFileName)
+	pidFile := filepath.Join(servicePath, constants.PidFileName)
 
 	// Attempt to terminate the running process gracefully
 	if err := pm.terminateServiceProcess(ctx, identifier, servicePath, fsService); err != nil {
@@ -111,7 +112,7 @@ func (pm *ProcessManager) stopService(ctx context.Context, identifier ServiceIde
 // termination. This approach ensures that running Services are stopped cleanly during
 // service removal, preventing resource leaks and allowing processes to perform cleanup
 // operations before shutting down.
-func (pm *ProcessManager) terminateServiceProcess(ctx context.Context, identifier ServiceIdentifier, servicePath string, fsService filesystem.Service) error {
+func (pm *ProcessManager) terminateServiceProcess(ctx context.Context, identifier constants.ServiceIdentifier, servicePath string, fsService filesystem.Service) error {
 	// Read the process PID from the pid file
 	pid, err := pm.readProcessPid(ctx, servicePath, fsService)
 	if err != nil {
@@ -137,7 +138,7 @@ func (pm *ProcessManager) terminateServiceProcess(ctx context.Context, identifie
 // it indicates that the service is not running, which is valuable information for
 // service management operations.
 func (pm *ProcessManager) readProcessPid(ctx context.Context, servicePath string, fsService filesystem.Service) (int, error) {
-	pidFile := filepath.Join(servicePath, PidFileName)
+	pidFile := filepath.Join(servicePath, constants.PidFileName)
 	pidBytes, err := fsService.ReadFile(ctx, pidFile)
 	if err != nil {
 		pm.Logger.Info("Process not running anymore, skipping termination", zap.String("pidFile", pidFile))
@@ -159,7 +160,7 @@ func (pm *ProcessManager) readProcessPid(ctx context.Context, servicePath string
 // If the process doesn't respond to SIGTERM or takes too long to exit, it falls back to SIGKILL
 // for immediate termination. This approach balances clean shutdown with system reliability.
 // Additionally, it attempts to terminate the entire process group to ensure child processes are cleaned up.
-func (pm *ProcessManager) terminateProcess(ctx context.Context, identifier ServiceIdentifier, process *os.Process, pid int) error {
+func (pm *ProcessManager) terminateProcess(ctx context.Context, identifier constants.ServiceIdentifier, process *os.Process, pid int) error {
 	// First attempt: Send SIGTERM (graceful shutdown)
 	// Try to terminate the process group first (negative PID), then fall back to individual process
 	if err := syscall.Kill(-pid, syscall.SIGTERM); err != nil {
@@ -245,7 +246,7 @@ func (pm *ProcessManager) waitForProcessExit(ctx context.Context, process *os.Pr
 // system resources indefinitely. The function is designed to be used only after graceful
 // termination attempts have failed.
 // Additionally, it attempts to terminate the entire process group to ensure child processes are cleaned up.
-func (pm *ProcessManager) forceKillProcess(identifier ServiceIdentifier, process *os.Process, pid int) error {
+func (pm *ProcessManager) forceKillProcess(identifier constants.ServiceIdentifier, process *os.Process, pid int) error {
 	// Try to kill the process group first (negative PID), then fall back to individual process
 	if err := syscall.Kill(-pid, syscall.SIGKILL); err != nil {
 		pm.Logger.Debug("Failed to send SIGKILL to process group, trying individual process", zap.Int("pid", pid), zap.Error(err))
@@ -282,7 +283,7 @@ func (pm *ProcessManager) cleanupServiceDirectory(ctx context.Context, servicePa
 }
 
 // RecordExitEvent records an exit event in the service history
-func (pm *ProcessManager) RecordExitEvent(identifier ServiceIdentifier, exitCode int, signal int) {
+func (pm *ProcessManager) RecordExitEvent(identifier constants.ServiceIdentifier, exitCode int, signal int) {
 	// Check if service exists in our registry
 	service, exists := pm.Services[identifier]
 	if !exists {
@@ -301,8 +302,8 @@ func (pm *ProcessManager) RecordExitEvent(identifier ServiceIdentifier, exitCode
 	service.History.ExitHistory = append(service.History.ExitHistory, exitEvent)
 
 	// Keep only the last N exit events to prevent unbounded memory growth
-	if len(service.History.ExitHistory) > MaxExitEvents {
-		service.History.ExitHistory = service.History.ExitHistory[len(service.History.ExitHistory)-MaxExitEvents:]
+	if len(service.History.ExitHistory) > constants.MaxExitEvents {
+		service.History.ExitHistory = service.History.ExitHistory[len(service.History.ExitHistory)-constants.MaxExitEvents:]
 	}
 
 	// Update service in the registry

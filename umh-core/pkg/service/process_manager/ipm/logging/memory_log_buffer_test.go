@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ipm_test
+package logging_test
 
 import (
 	"fmt"
@@ -24,29 +24,30 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/ipm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/ipm/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/ipm/logging"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 )
 
 var _ = Describe("MemoryLogBuffer", func() {
-	var buffer *ipm.MemoryLogBuffer
+	var buffer *logging.MemoryLogBuffer
 
 	Context("when creating a new buffer", func() {
 		It("should create with default size when given zero or negative size", func() {
-			buffer = ipm.NewMemoryLogBuffer(0)
-			Expect(buffer.MaxSize()).To(Equal(ipm.DefaultLogBufferSize))
+			buffer = logging.NewMemoryLogBuffer(0)
+			Expect(buffer.MaxSize()).To(Equal(constants.DefaultLogBufferSize))
 
-			buffer = ipm.NewMemoryLogBuffer(-100)
-			Expect(buffer.MaxSize()).To(Equal(ipm.DefaultLogBufferSize))
+			buffer = logging.NewMemoryLogBuffer(-100)
+			Expect(buffer.MaxSize()).To(Equal(constants.DefaultLogBufferSize))
 		})
 
 		It("should create with specified size when given positive size", func() {
-			buffer = ipm.NewMemoryLogBuffer(5000)
+			buffer = logging.NewMemoryLogBuffer(5000)
 			Expect(buffer.MaxSize()).To(Equal(5000))
 		})
 
 		It("should start empty", func() {
-			buffer = ipm.NewMemoryLogBuffer(1000)
+			buffer = logging.NewMemoryLogBuffer(1000)
 			Expect(buffer.Size()).To(Equal(0))
 			Expect(buffer.GetEntries()).To(BeEmpty())
 		})
@@ -54,7 +55,7 @@ var _ = Describe("MemoryLogBuffer", func() {
 
 	Context("when adding entries", func() {
 		BeforeEach(func() {
-			buffer = ipm.NewMemoryLogBuffer(5)
+			buffer = logging.NewMemoryLogBuffer(5)
 		})
 
 		It("should add entries and maintain size", func() {
@@ -109,7 +110,7 @@ var _ = Describe("MemoryLogBuffer", func() {
 
 	Context("when buffer reaches capacity", func() {
 		BeforeEach(func() {
-			buffer = ipm.NewMemoryLogBuffer(3) // Small buffer for testing
+			buffer = logging.NewMemoryLogBuffer(3) // Small buffer for testing
 		})
 
 		It("should overwrite oldest entries when full", func() {
@@ -165,7 +166,7 @@ var _ = Describe("MemoryLogBuffer", func() {
 
 	Context("when clearing the buffer", func() {
 		BeforeEach(func() {
-			buffer = ipm.NewMemoryLogBuffer(1000)
+			buffer = logging.NewMemoryLogBuffer(1000)
 
 			// Add some entries
 			for i := 1; i <= 5; i++ {
@@ -205,7 +206,7 @@ var _ = Describe("MemoryLogBuffer", func() {
 
 	Context("when accessed concurrently", func() {
 		BeforeEach(func() {
-			buffer = ipm.NewMemoryLogBuffer(1000)
+			buffer = logging.NewMemoryLogBuffer(1000)
 		})
 
 		It("should handle concurrent writes and reads safely", func() {
@@ -317,7 +318,7 @@ var _ = Describe("MemoryLogBuffer", func() {
 
 	Context("edge cases", func() {
 		It("should handle buffer of size 1", func() {
-			buffer = ipm.NewMemoryLogBuffer(1)
+			buffer = logging.NewMemoryLogBuffer(1)
 
 			entry1 := process_shared.LogEntry{
 				Timestamp: time.Now(),
@@ -340,7 +341,7 @@ var _ = Describe("MemoryLogBuffer", func() {
 		})
 
 		It("should handle empty entries correctly", func() {
-			buffer = ipm.NewMemoryLogBuffer(100)
+			buffer = logging.NewMemoryLogBuffer(100)
 
 			entry := process_shared.LogEntry{
 				Timestamp: time.Now(),
@@ -354,7 +355,7 @@ var _ = Describe("MemoryLogBuffer", func() {
 		})
 
 		It("should preserve exact timestamps", func() {
-			buffer = ipm.NewMemoryLogBuffer(100)
+			buffer = logging.NewMemoryLogBuffer(100)
 
 			timestamp := time.Date(2025, 1, 15, 12, 30, 45, 123456789, time.UTC)
 			entry := process_shared.LogEntry{

@@ -23,13 +23,14 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/ipm/constants"
 	"go.uber.org/zap"
 )
 
 const (
 	// Process termination constants - using common constants from constants.go
-	cleanupTimeReserve = CleanupTimeReserve
-	stepTimeThreshold  = StepTimeThreshold
+	cleanupTimeReserve = constants.CleanupTimeReserve
+	stepTimeThreshold  = constants.StepTimeThreshold
 )
 
 // step processes queued service operations (create, remove, restart, etc.) in a time-bounded manner.

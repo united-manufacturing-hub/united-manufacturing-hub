@@ -25,6 +25,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/ipm/constants"
 	"go.uber.org/zap"
 )
 
@@ -33,7 +34,7 @@ import (
 // and writing all configuration files. The function is designed to be atomic - if any step fails,
 // the entire operation is aborted. This ensures that partially created Services don't exist in
 // the system, which could cause confusion or errors during service management operations.
-func (pm *ProcessManager) createService(ctx context.Context, identifier ServiceIdentifier, fsService filesystem.Service) error {
+func (pm *ProcessManager) createService(ctx context.Context, identifier constants.ServiceIdentifier, fsService filesystem.Service) error {
 	pm.Logger.Info("Creating service", zap.String("identifier", string(identifier)))
 
 	// Validate service exists in our registry
@@ -45,7 +46,7 @@ func (pm *ProcessManager) createService(ctx context.Context, identifier ServiceI
 
 	// Check if there's an old PID file from a previous service instance
 	servicePath := filepath.Join(pm.ServiceDirectory, string(identifier))
-	pidFile := filepath.Join(servicePath, PidFileName)
+	pidFile := filepath.Join(servicePath, constants.PidFileName)
 
 	pm.Logger.Info("Checking for old PID file", zap.String("pidFile", pidFile))
 
@@ -87,7 +88,7 @@ func (pm *ProcessManager) createService(ctx context.Context, identifier ServiceI
 // that have been properly registered in the ProcessManager. While this should never fail
 // under normal circumstances (since we only add identifiers to queues for existing Services),
 // it provides a defensive programming measure against race conditions or programming errors.
-func (pm *ProcessManager) getServiceConfig(identifier ServiceIdentifier) (service, error) {
+func (pm *ProcessManager) getServiceConfig(identifier constants.ServiceIdentifier) (service, error) {
 	service, exists := pm.Services[identifier]
 	if !exists {
 		// This should never happen as we only add services to the list that exist
@@ -101,12 +102,12 @@ func (pm *ProcessManager) getServiceConfig(identifier ServiceIdentifier) (servic
 // proper isolation and organization. The log directory will store service output and error logs,
 // while the config directory will contain all service-specific configuration files.
 // This separation ensures that service data is organized and accessible for debugging and monitoring.
-func (pm *ProcessManager) createServiceDirectories(ctx context.Context, identifier ServiceIdentifier, fsService filesystem.Service) error {
+func (pm *ProcessManager) createServiceDirectories(ctx context.Context, identifier constants.ServiceIdentifier, fsService filesystem.Service) error {
 	servicePath := filepath.Join(pm.ServiceDirectory, string(identifier))
 
 	directories := []string{
-		filepath.Join(servicePath, LogDirectoryName),
-		filepath.Join(servicePath, ConfigDirectoryName),
+		filepath.Join(servicePath, constants.LogDirectoryName),
+		filepath.Join(servicePath, constants.ConfigDirectoryName),
 	}
 
 	for _, dir := range directories {
@@ -124,13 +125,13 @@ func (pm *ProcessManager) createServiceDirectories(ctx context.Context, identifi
 // service creation, we ensure that when the service process starts, it has access to all
 // necessary configuration data. Each file is written with appropriate permissions to maintain
 // security while allowing the service to read its configuration.
-func (pm *ProcessManager) writeServiceConfigFiles(ctx context.Context, identifier ServiceIdentifier, config process_manager_serviceconfig.ProcessManagerServiceConfig, fsService filesystem.Service) error {
-	configDirectory := filepath.Join(pm.ServiceDirectory, string(identifier), ConfigDirectoryName)
+func (pm *ProcessManager) writeServiceConfigFiles(ctx context.Context, identifier constants.ServiceIdentifier, config process_manager_serviceconfig.ProcessManagerServiceConfig, fsService filesystem.Service) error {
+	configDirectory := filepath.Join(pm.ServiceDirectory, string(identifier), constants.ConfigDirectoryName)
 
 	// First, write all user-provided configuration files
 	for configFileName, configFileContent := range config.ConfigFiles {
 		configFilePath := filepath.Join(configDirectory, configFileName)
-		if err := fsService.WriteFile(ctx, configFilePath, []byte(configFileContent), ConfigFilePermission); err != nil {
+		if err := fsService.WriteFile(ctx, configFilePath, []byte(configFileContent), constants.ConfigFilePermission); err != nil {
 			return fmt.Errorf("error writing config file %s: %w", configFileName, err)
 		}
 	}
@@ -146,9 +147,9 @@ func (pm *ProcessManager) writeServiceConfigFiles(ctx context.Context, identifie
 // generateRunScript creates a run.sh script from the ProcessManagerServiceConfig.Command field.
 // This script serves as the entry point for the service process and handles command execution
 // with proper argument passing and environment variable setup.
-func (pm *ProcessManager) generateRunScript(ctx context.Context, identifier ServiceIdentifier, config process_manager_serviceconfig.ProcessManagerServiceConfig, fsService filesystem.Service) error {
-	configDirectory := filepath.Join(pm.ServiceDirectory, string(identifier), ConfigDirectoryName)
-	runScriptPath := filepath.Join(configDirectory, RunScriptFileName)
+func (pm *ProcessManager) generateRunScript(ctx context.Context, identifier constants.ServiceIdentifier, config process_manager_serviceconfig.ProcessManagerServiceConfig, fsService filesystem.Service) error {
+	configDirectory := filepath.Join(pm.ServiceDirectory, string(identifier), constants.ConfigDirectoryName)
+	runScriptPath := filepath.Join(configDirectory, constants.RunScriptFileName)
 
 	// Build the shell script content
 	var scriptBuilder strings.Builder
@@ -191,7 +192,7 @@ func (pm *ProcessManager) generateRunScript(ctx context.Context, identifier Serv
 
 	// Write the script file with executable permissions
 	scriptContent := scriptBuilder.String()
-	if err := fsService.WriteFile(ctx, runScriptPath, []byte(scriptContent), ScriptFilePermission); err != nil {
+	if err := fsService.WriteFile(ctx, runScriptPath, []byte(scriptContent), constants.ScriptFilePermission); err != nil {
 		return fmt.Errorf("error writing run script: %w", err)
 	}
 

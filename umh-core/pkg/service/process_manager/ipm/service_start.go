@@ -27,6 +27,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/ipm/constants"
 	"go.uber.org/zap"
 )
 
@@ -36,11 +37,11 @@ import (
 // running processes. If a process is already running, it terminates the existing process, removes the
 // PID file, and returns an error to allow retry. If no process is running, it starts a new subprocess
 // and saves its PID atomically to prevent race conditions during process startup.
-func (pm *ProcessManager) startService(ctx context.Context, identifier ServiceIdentifier, fsService filesystem.Service) error {
+func (pm *ProcessManager) startService(ctx context.Context, identifier constants.ServiceIdentifier, fsService filesystem.Service) error {
 	pm.Logger.Info("Starting service", zap.String("identifier", string(identifier)))
 
 	servicePath := filepath.Join(pm.ServiceDirectory, string(identifier))
-	pidFile := filepath.Join(servicePath, PidFileName)
+	pidFile := filepath.Join(servicePath, constants.PidFileName)
 
 	// Check if there's already a PID file indicating a running process
 	if _, err := fsService.Stat(ctx, pidFile); err == nil {
@@ -83,11 +84,11 @@ func (pm *ProcessManager) startService(ctx context.Context, identifier ServiceId
 // consistency. This atomic approach ensures that either both the process starts and its PID
 // is recorded, or neither happens, preventing orphaned processes or missing PID files that
 // could cause management issues later.
-func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier ServiceIdentifier, config process_manager_serviceconfig.ProcessManagerServiceConfig, fsService filesystem.Service) error {
+func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier constants.ServiceIdentifier, config process_manager_serviceconfig.ProcessManagerServiceConfig, fsService filesystem.Service) error {
 	servicePath := filepath.Join(pm.ServiceDirectory, string(identifier))
-	configPath := filepath.Join(servicePath, ConfigDirectoryName)
-	logPath := filepath.Join(servicePath, LogDirectoryName)
-	pidFile := filepath.Join(servicePath, PidFileName)
+	configPath := filepath.Join(servicePath, constants.ConfigDirectoryName)
+	logPath := filepath.Join(servicePath, constants.LogDirectoryName)
+	pidFile := filepath.Join(servicePath, constants.PidFileName)
 
 	// Ensure log directory exists
 	if err := fsService.EnsureDirectory(ctx, logPath); err != nil {
@@ -104,8 +105,8 @@ func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier
 
 	// Determine the command to execute - for now, assume there's a "run.sh" script
 	// TODO: This should be configurable in the service config
-	commandPath := filepath.Join(configPath, RunScriptFileName)
-	currentLogFile := filepath.Join(logPath, CurrentLogFileName)
+	commandPath := filepath.Join(configPath, constants.RunScriptFileName)
+	currentLogFile := filepath.Join(logPath, constants.CurrentLogFileName)
 
 	var cmd *exec.Cmd
 
@@ -151,7 +152,7 @@ func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier
 
 	// Atomically write the PID to the file
 	pidData := []byte(strconv.Itoa(pid))
-	if err := fsService.WriteFile(ctx, pidFile, pidData, ConfigFilePermission); err != nil {
+	if err := fsService.WriteFile(ctx, pidFile, pidData, constants.ConfigFilePermission); err != nil {
 		// If writing PID fails, terminate the process to maintain consistency
 		pm.Logger.Error("Failed to write PID file, terminating process", zap.Int("pid", pid), zap.Error(err))
 		if killErr := cmd.Process.Kill(); killErr != nil {

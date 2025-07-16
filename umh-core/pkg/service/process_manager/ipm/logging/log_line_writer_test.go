@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ipm_test
+package logging_test
 
 import (
 	"context"
@@ -28,19 +28,20 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/ipm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/ipm/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/ipm/logging"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"go.uber.org/zap"
 )
 
 var _ = Describe("LogLineWriter", func() {
 	var (
-		writer       *ipm.LogLineWriter
-		memoryBuffer *ipm.MemoryLogBuffer
-		logManager   *ipm.LogManager
+		writer       *logging.LogLineWriter
+		memoryBuffer *logging.MemoryLogBuffer
+		logManager   *logging.LogManager
 		fsService    filesystem.Service
 		logger       *zap.SugaredLogger
-		identifier   ipm.ServiceIdentifier
+		identifier   constants.ServiceIdentifier
 		logPath      string
 		tempDir      string
 	)
@@ -56,14 +57,14 @@ var _ = Describe("LogLineWriter", func() {
 		logger = zapLogger.Sugar()
 
 		// Setup test data
-		identifier = ipm.ServiceIdentifier("test-service")
+		identifier = constants.ServiceIdentifier("test-service")
 		logPath = filepath.Join(tempDir, "logs")
 
 		// Create memory buffer
-		memoryBuffer = ipm.NewMemoryLogBuffer(100)
+		memoryBuffer = logging.NewMemoryLogBuffer(100)
 
 		// Create log manager
-		logManager = ipm.NewLogManager(logger)
+		logManager = logging.NewLogManager(logger)
 
 		// Use real filesystem for testing
 		fsService = filesystem.NewDefaultService()
@@ -85,7 +86,7 @@ var _ = Describe("LogLineWriter", func() {
 	Context("when creating a new writer", func() {
 		It("should create successfully with valid parameters", func() {
 			var err error
-			writer, err = ipm.NewLogLineWriter(identifier, logPath, logManager, memoryBuffer, fsService)
+			writer, err = logging.NewLogLineWriter(identifier, logPath, logManager, memoryBuffer, fsService)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(writer).ToNot(BeNil())
 			Expect(writer.Identifier).To(Equal(identifier))
@@ -96,14 +97,14 @@ var _ = Describe("LogLineWriter", func() {
 		})
 
 		It("should fail with nil log manager", func() {
-			writer, err := ipm.NewLogLineWriter(identifier, logPath, nil, memoryBuffer, fsService)
+			writer, err := logging.NewLogLineWriter(identifier, logPath, nil, memoryBuffer, fsService)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("logManager cannot be nil"))
 			Expect(writer).To(BeNil())
 		})
 
 		It("should fail with nil memory buffer", func() {
-			writer, err := ipm.NewLogLineWriter(identifier, logPath, logManager, nil, fsService)
+			writer, err := logging.NewLogLineWriter(identifier, logPath, logManager, nil, fsService)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("memoryBuffer cannot be nil"))
 			Expect(writer).To(BeNil())
@@ -111,10 +112,10 @@ var _ = Describe("LogLineWriter", func() {
 
 		It("should create ipm. current log file if it doesn't exist", func() {
 			var err error
-			writer, err = ipm.NewLogLineWriter(identifier, logPath, logManager, memoryBuffer, fsService)
+			writer, err = logging.NewLogLineWriter(identifier, logPath, logManager, memoryBuffer, fsService)
 			Expect(err).ToNot(HaveOccurred())
 
-			currentLogFile := filepath.Join(logPath, ipm.CurrentLogFileName)
+			currentLogFile := filepath.Join(logPath, constants.CurrentLogFileName)
 			exists, err := fsService.FileExists(context.Background(), currentLogFile)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(exists).To(BeTrue())
@@ -122,12 +123,12 @@ var _ = Describe("LogLineWriter", func() {
 
 		It("should detect existing log file size", func() {
 			// Create a log file with some content
-			currentLogFile := filepath.Join(logPath, ipm.CurrentLogFileName)
+			currentLogFile := filepath.Join(logPath, constants.CurrentLogFileName)
 			testContent := "Existing log content\n"
-			err := fsService.WriteFile(context.Background(), currentLogFile, []byte(testContent), ipm.LogFilePermission)
+			err := fsService.WriteFile(context.Background(), currentLogFile, []byte(testContent), constants.LogFilePermission)
 			Expect(err).ToNot(HaveOccurred())
 
-			writer, err = ipm.NewLogLineWriter(identifier, logPath, logManager, memoryBuffer, fsService)
+			writer, err = logging.NewLogLineWriter(identifier, logPath, logManager, memoryBuffer, fsService)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(writer.GetCurrentFileSize()).To(Equal(int64(len(testContent))))
 		})
@@ -136,7 +137,7 @@ var _ = Describe("LogLineWriter", func() {
 	Context("when writing log entries", func() {
 		BeforeEach(func() {
 			var err error
-			writer, err = ipm.NewLogLineWriter(identifier, logPath, logManager, memoryBuffer, fsService)
+			writer, err = logging.NewLogLineWriter(identifier, logPath, logManager, memoryBuffer, fsService)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -156,7 +157,7 @@ var _ = Describe("LogLineWriter", func() {
 			Expect(entries[0].Timestamp).To(Equal(entry.Timestamp))
 
 			// Check file content
-			currentLogFile := filepath.Join(logPath, ipm.CurrentLogFileName)
+			currentLogFile := filepath.Join(logPath, constants.CurrentLogFileName)
 			content, err := fsService.ReadFile(context.Background(), currentLogFile)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -200,7 +201,7 @@ var _ = Describe("LogLineWriter", func() {
 			}
 
 			// Check file content
-			currentLogFile := filepath.Join(logPath, ipm.CurrentLogFileName)
+			currentLogFile := filepath.Join(logPath, constants.CurrentLogFileName)
 			content, err := fsService.ReadFile(context.Background(), currentLogFile)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -243,7 +244,7 @@ var _ = Describe("LogLineWriter", func() {
 	Context("when file rotation is needed", func() {
 		BeforeEach(func() {
 			var err error
-			writer, err = ipm.NewLogLineWriter(identifier, logPath, logManager, memoryBuffer, fsService)
+			writer, err = logging.NewLogLineWriter(identifier, logPath, logManager, memoryBuffer, fsService)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Set a small file size limit for testing
@@ -268,7 +269,7 @@ var _ = Describe("LogLineWriter", func() {
 			// Should have ipm. current file + at least one rotated file
 			logFiles := make([]string, 0)
 			for _, file := range files {
-				if strings.HasSuffix(file.Name(), ipm.LogFileExtension) || file.Name() == ipm.CurrentLogFileName {
+				if strings.HasSuffix(file.Name(), constants.LogFileExtension) || file.Name() == constants.CurrentLogFileName {
 					logFiles = append(logFiles, file.Name())
 				}
 			}
@@ -322,7 +323,7 @@ var _ = Describe("LogLineWriter", func() {
 	Context("when setting file size limits", func() {
 		BeforeEach(func() {
 			var err error
-			writer, err = ipm.NewLogLineWriter(identifier, logPath, logManager, memoryBuffer, fsService)
+			writer, err = logging.NewLogLineWriter(identifier, logPath, logManager, memoryBuffer, fsService)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -344,7 +345,7 @@ var _ = Describe("LogLineWriter", func() {
 	Context("when closing the writer", func() {
 		BeforeEach(func() {
 			var err error
-			writer, err = ipm.NewLogLineWriter(identifier, logPath, logManager, memoryBuffer, fsService)
+			writer, err = logging.NewLogLineWriter(identifier, logPath, logManager, memoryBuffer, fsService)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Write some entries
@@ -398,7 +399,7 @@ var _ = Describe("LogLineWriter", func() {
 				defer os.Chmod(readOnlyDir, 0755) // Restore permissions for cleanup
 
 				// Try to create writer in read-only directory
-				_, err = ipm.NewLogLineWriter(identifier, readOnlyDir, logManager, memoryBuffer, fsService)
+				_, err = logging.NewLogLineWriter(identifier, readOnlyDir, logManager, memoryBuffer, fsService)
 				Expect(err).To(HaveOccurred())
 			}
 		})
@@ -408,7 +409,7 @@ var _ = Describe("LogLineWriter", func() {
 			// For now, we'll test that memory operations work independently
 
 			var err error
-			writer, err = ipm.NewLogLineWriter(identifier, logPath, logManager, memoryBuffer, fsService)
+			writer, err = logging.NewLogLineWriter(identifier, logPath, logManager, memoryBuffer, fsService)
 			Expect(err).ToNot(HaveOccurred())
 
 			entry := process_shared.LogEntry{
@@ -428,7 +429,7 @@ var _ = Describe("LogLineWriter", func() {
 	Context("integration with LogManager", func() {
 		BeforeEach(func() {
 			var err error
-			writer, err = ipm.NewLogLineWriter(identifier, logPath, logManager, memoryBuffer, fsService)
+			writer, err = logging.NewLogLineWriter(identifier, logPath, logManager, memoryBuffer, fsService)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -453,7 +454,7 @@ var _ = Describe("LogLineWriter", func() {
 	Context("concurrent access", func() {
 		BeforeEach(func() {
 			var err error
-			writer, err = ipm.NewLogLineWriter(identifier, logPath, logManager, memoryBuffer, fsService)
+			writer, err = logging.NewLogLineWriter(identifier, logPath, logManager, memoryBuffer, fsService)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -491,7 +492,7 @@ var _ = Describe("LogLineWriter", func() {
 			Expect(len(entries)).To(Equal(numGoroutines * entriesPerGoroutine))
 
 			// Verify file contains data
-			currentLogFile := filepath.Join(logPath, ipm.CurrentLogFileName)
+			currentLogFile := filepath.Join(logPath, constants.CurrentLogFileName)
 			content, err := fsService.ReadFile(context.Background(), currentLogFile)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(content)).To(BeNumerically(">", 0))
