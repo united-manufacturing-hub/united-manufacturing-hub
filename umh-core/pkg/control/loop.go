@@ -57,6 +57,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/streamprocessor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -127,6 +128,7 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 		connection.NewConnectionManager(constants.DefaultManagerName),
 		protocolconverter.NewProtocolConverterManager(constants.DefaultManagerName),
 		topicbrowser.NewTopicBrowserManager(constants.DefaultManagerName),
+		streamprocessor.NewManager(constants.DefaultManagerName),
 	}
 
 	// Create a starvation checker
@@ -515,7 +517,6 @@ func (c *ControlLoop) GetSnapshotManager() *fsm.SnapshotManager {
 // This should be called as part of system shutdown to prevent
 // resource leaks and ensure clean termination.
 func (c *ControlLoop) Stop(ctx context.Context) error {
-
 	if c.starvationChecker != nil {
 		// Stop the starvation checker
 		c.starvationChecker.Stop()

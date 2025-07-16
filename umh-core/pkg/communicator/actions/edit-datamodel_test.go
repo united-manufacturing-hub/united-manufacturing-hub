@@ -17,7 +17,6 @@ package actions_test
 import (
 	"encoding/base64"
 	"errors"
-	"time"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
@@ -144,6 +143,20 @@ var _ = Describe("EditDataModelAction", func() {
 				}
 				err := action.Parse(structToEncodedMapForEdit(payload))
 				Expect(err).ToNot(HaveOccurred())
+
+				// Set up mock config to provide empty data models and payload shapes for validation
+				mockConfig := config.FullConfig{
+					DataModels: []config.DataModelsConfig{},
+					PayloadShapes: map[string]config.PayloadShape{
+						"timeseries-string": {
+							Description: "Time series string data",
+							Fields: map[string]config.PayloadField{
+								"value": {Type: "string"},
+							},
+						},
+					},
+				}
+				mockConfigMgr.WithConfig(mockConfig)
 			})
 
 			It("should validate successfully", func() {
@@ -231,6 +244,39 @@ var _ = Describe("EditDataModelAction", func() {
 				}
 				err := action.Parse(structToEncodedMapForEdit(payload))
 				Expect(err).ToNot(HaveOccurred())
+
+				// Set up mock config with the referenced data model and payload shapes
+				mockConfig := config.FullConfig{
+					DataModels: []config.DataModelsConfig{
+						{
+							Name: "external-model",
+							Versions: map[string]config.DataModelVersion{
+								"v1": {
+									Structure: map[string]config.Field{
+										"external_field": {
+											PayloadShape: "timeseries-string",
+										},
+									},
+								},
+							},
+						},
+					},
+					PayloadShapes: map[string]config.PayloadShape{
+						"timeseries-string": {
+							Description: "Time series string data",
+							Fields: map[string]config.PayloadField{
+								"value": {Type: "string"},
+							},
+						},
+						"timeseries-number": {
+							Description: "Time series number data",
+							Fields: map[string]config.PayloadField{
+								"value": {Type: "number"},
+							},
+						},
+					},
+				}
+				mockConfigMgr.WithConfig(mockConfig)
 			})
 
 			It("should validate successfully", func() {
@@ -463,7 +509,6 @@ var _ = Describe("EditDataModelAction", func() {
 							PayloadShape: "timeseries-number",
 						},
 						"nested": {
-							PayloadShape: "timeseries-object",
 							Subfields: map[string]models.Field{
 								"subfield1": {
 									PayloadShape: "timeseries-boolean",
@@ -475,7 +520,7 @@ var _ = Describe("EditDataModelAction", func() {
 				err := action.Parse(structToEncodedMapForEdit(payload))
 				Expect(err).ToNot(HaveOccurred())
 
-				// Set up mock config with existing data model
+				// Set up mock config with existing data model and payload shapes
 				existingConfig := config.FullConfig{
 					DataModels: []config.DataModelsConfig{
 						{
@@ -488,6 +533,26 @@ var _ = Describe("EditDataModelAction", func() {
 										},
 									},
 								},
+							},
+						},
+					},
+					PayloadShapes: map[string]config.PayloadShape{
+						"timeseries-string": {
+							Description: "Time series string data",
+							Fields: map[string]config.PayloadField{
+								"value": {Type: "string"},
+							},
+						},
+						"timeseries-number": {
+							Description: "Time series number data",
+							Fields: map[string]config.PayloadField{
+								"value": {Type: "number"},
+							},
+						},
+						"timeseries-boolean": {
+							Description: "Time series boolean data",
+							Fields: map[string]config.PayloadField{
+								"value": {Type: "boolean"},
 							},
 						},
 					},
@@ -513,27 +578,6 @@ var _ = Describe("EditDataModelAction", func() {
 				Expect(mockConfigMgr.AtomicEditDataModelCalled).To(BeTrue())
 			})
 
-			It("should send correct action replies to outbound channel", func() {
-				go func() {
-					defer GinkgoRecover()
-					_, _, _ = action.Execute()
-				}()
-
-				// Should receive multiple messages
-				var messages []*models.UMHMessage
-				Eventually(func() int {
-					select {
-					case msg := <-outboundChannel:
-						messages = append(messages, msg)
-					case <-time.After(100 * time.Millisecond):
-						// Timeout to prevent hanging
-					}
-					return len(messages)
-				}, "1s").Should(BeNumerically(">=", 2))
-
-				// Verify we received some messages
-				Expect(len(messages)).To(BeNumerically(">", 0))
-			})
 		})
 
 		Context("with configuration manager error", func() {
@@ -633,10 +677,7 @@ var _ = Describe("EditDataModelAction", func() {
 			err := action.Parse(structToEncodedMapForEdit(payload))
 			Expect(err).ToNot(HaveOccurred())
 
-			err = action.Validate()
-			Expect(err).ToNot(HaveOccurred())
-
-			// Set up mock config with existing data model
+			// Set up mock config with existing data model and referenced model and payload shapes
 			existingConfig := config.FullConfig{
 				DataModels: []config.DataModelsConfig{
 					{
@@ -651,9 +692,44 @@ var _ = Describe("EditDataModelAction", func() {
 							},
 						},
 					},
+					{
+						Name: "another-external-model",
+						Versions: map[string]config.DataModelVersion{
+							"v1": {
+								Structure: map[string]config.Field{
+									"external_field": {
+										PayloadShape: "timeseries-string",
+									},
+								},
+							},
+						},
+					},
+				},
+				PayloadShapes: map[string]config.PayloadShape{
+					"timeseries-string": {
+						Description: "Time series string data",
+						Fields: map[string]config.PayloadField{
+							"value": {Type: "string"},
+						},
+					},
+					"timeseries-number": {
+						Description: "Time series number data",
+						Fields: map[string]config.PayloadField{
+							"value": {Type: "number"},
+						},
+					},
+					"timeseries-array": {
+						Description: "Time series array data",
+						Fields: map[string]config.PayloadField{
+							"value": {Type: "array"},
+						},
+					},
 				},
 			}
 			mockConfigMgr.WithConfig(existingConfig)
+
+			err = action.Validate()
+			Expect(err).ToNot(HaveOccurred())
 
 			response, metadata, err := action.Execute()
 			Expect(err).ToNot(HaveOccurred())

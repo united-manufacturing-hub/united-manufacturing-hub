@@ -269,11 +269,27 @@ func BenchmarkValidateWithReferences(b *testing.B) {
 		},
 	}
 
+	// Add payload shapes for the test
+	payloadShapes := map[string]config.PayloadShape{
+		"timeseries-number": {
+			Description: "Time series number data",
+			Fields: map[string]config.PayloadField{
+				"value": {Type: "number"},
+			},
+		},
+		"timeseries-string": {
+			Description: "Time series string data",
+			Fields: map[string]config.PayloadField{
+				"value": {Type: "string"},
+			},
+		},
+	}
+
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		err := validator.ValidateWithReferences(ctx, dataModel, allDataModels)
+		err := validator.ValidateWithReferences(ctx, dataModel, allDataModels, payloadShapes)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -371,11 +387,27 @@ func BenchmarkValidateWithReferences_Deep(b *testing.B) {
 		},
 	}
 
+	// Add payload shapes for the test
+	payloadShapes := map[string]config.PayloadShape{
+		"timeseries-number": {
+			Description: "Time series number data",
+			Fields: map[string]config.PayloadField{
+				"value": {Type: "number"},
+			},
+		},
+		"timeseries-string": {
+			Description: "Time series string data",
+			Fields: map[string]config.PayloadField{
+				"value": {Type: "string"},
+			},
+		},
+	}
+
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		err := validator.ValidateWithReferences(ctx, dataModel, allDataModels)
+		err := validator.ValidateWithReferences(ctx, dataModel, allDataModels, payloadShapes)
 		if err != nil {
 			b.Fatal(err)
 		}
