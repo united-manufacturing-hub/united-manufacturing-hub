@@ -58,12 +58,6 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 		return ctx.Err(), false
 	}
 
-	err = s.service.Reconcile(ctx, services.GetFileSystem())
-	if err != nil {
-		s.baseFSMInstance.GetLogger().Errorf("error reconciling s6 instance %s: %s", s6InstanceName, err)
-		return err, false
-	}
-
 	// Step 1: If there's a lastError, see if we've waited enough.
 	if s.baseFSMInstance.ShouldSkipReconcileBecauseOfError(snapshot.Tick) {
 		err := s.baseFSMInstance.GetBackoffError(snapshot.Tick)
@@ -153,6 +147,15 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 
 	// It went all right, so clear the error
 	s.baseFSMInstance.ResetState()
+
+	err = s.service.Reconcile(ctx, services.GetFileSystem())
+	if err != nil {
+		// Ignore deadline errors here, because we want to continue reconciling
+		if !errors.Is(err, context.DeadlineExceeded) {
+			s.baseFSMInstance.GetLogger().Errorf("error reconciling s6 instance %s: %s", s6InstanceName, err)
+			return err, false
+		}
+	}
 
 	return err, reconciled
 }

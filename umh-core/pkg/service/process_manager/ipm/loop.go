@@ -24,7 +24,6 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/ipm/constants"
-	"go.uber.org/zap"
 )
 
 // step processes queued service operations (create, remove, restart, etc.) in a time-bounded manner.
@@ -38,8 +37,8 @@ func (pm *ProcessManager) step(ctx context.Context, fsService filesystem.Service
 		return ctx.Err()
 	}
 	// If we have time, we will step
-	deadline, ok := ctx.Deadline()
-	if !ok {
+	deadline, hasDeadline := ctx.Deadline()
+	if !hasDeadline {
 		pm.Logger.Error("Context has no deadline, this should never happen")
 		return fmt.Errorf("context has no deadline")
 	} else if time.Until(deadline) <= constants.StepTimeThreshold {
@@ -50,7 +49,7 @@ func (pm *ProcessManager) step(ctx context.Context, fsService filesystem.Service
 	// Before processing tasks, check and rotate logs if needed
 	if pm.logManager != nil {
 		if err := pm.logManager.CheckAndRotate(ctx, fsService); err != nil {
-			pm.Logger.Error("Error during log rotation", zap.Error(err))
+			pm.Logger.Errorf("Error during log rotation: %v", err)
 			// Continue with task processing even if log rotation fails
 		}
 	} else {
@@ -60,7 +59,7 @@ func (pm *ProcessManager) step(ctx context.Context, fsService filesystem.Service
 	// Check if there are any tasks to process
 	if len(pm.TaskQueue) > 0 {
 		task := pm.TaskQueue[0]
-		pm.Logger.Info("Processing task", zap.String("operation", task.Operation.String()), zap.String("identifier", string(task.Identifier)))
+		pm.Logger.Infof("Processing task: %s for %s", task.Operation.String(), task.Identifier)
 
 		var err error
 		switch task.Operation {
@@ -74,28 +73,27 @@ func (pm *ProcessManager) step(ctx context.Context, fsService filesystem.Service
 			err = pm.stopService(ctx, task.Identifier, fsService)
 		case OperationRestart:
 			// Try to stop the service first
-			err = pm.stopService(ctx, task.Identifier, fsService)
-			if err == nil {
+			if err = pm.stopService(ctx, task.Identifier, fsService); err != nil {
+				pm.Logger.Errorf("Restart: stop failed, not queuing start operation for %s: %v", task.Identifier, err)
+			} else {
+				pm.Logger.Infof("Restart: stop succeeded, queued start operation for %s", task.Identifier)
 				// If stop succeeded, queue a start operation for later execution
 				startTask := Task{
 					Identifier: task.Identifier,
 					Operation:  OperationStart,
 				}
 				pm.TaskQueue = append(pm.TaskQueue, startTask)
-				pm.Logger.Info("Restart: stop succeeded, queued start operation", zap.String("identifier", string(task.Identifier)))
-			} else {
-				pm.Logger.Error("Restart: stop failed, not queuing start operation", zap.String("identifier", string(task.Identifier)), zap.Error(err))
 			}
 		default:
 			err = fmt.Errorf("unknown operation type: %v", task.Operation)
 		}
 
 		if err != nil {
-			pm.Logger.Error("Error processing task", zap.String("operation", task.Operation.String()), zap.Error(err))
-			return err
+			pm.Logger.Errorf("Error processing task %s: %v", task.Operation.String(), err)
 		}
 
 		// Remove the processed task from the queue
+		// We always dequeue, as the task will be re-enqued by the caller
 		pm.TaskQueue = pm.TaskQueue[1:]
 	}
 

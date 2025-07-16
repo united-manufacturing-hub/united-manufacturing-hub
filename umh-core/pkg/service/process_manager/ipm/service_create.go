@@ -26,7 +26,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/ipm/constants"
-	"go.uber.org/zap"
 )
 
 // createService orchestrates the complete creation of a service instance in the process manager.
@@ -35,12 +34,12 @@ import (
 // the entire operation is aborted. This ensures that partially created Services don't exist in
 // the system, which could cause confusion or errors during service management operations.
 func (pm *ProcessManager) createService(ctx context.Context, identifier constants.ServiceIdentifier, fsService filesystem.Service) error {
-	pm.Logger.Info("Creating service", zap.String("identifier", string(identifier)))
+	pm.Logger.Infof("Creating service: %s", identifier)
 
 	// Validate service exists in our registry
 	service, err := pm.getServiceConfig(identifier)
 	if err != nil {
-		pm.Logger.Error("Failed to get service config", zap.Error(err))
+		pm.Logger.Errorf("Failed to get service config: %v", err)
 		return err
 	}
 
@@ -48,14 +47,14 @@ func (pm *ProcessManager) createService(ctx context.Context, identifier constant
 	servicePath := string(identifier) // Convert identifier back to servicePath
 	pidFile := filepath.Join(pm.ServiceDirectory, "services", servicePath, constants.PidFileName)
 
-	pm.Logger.Info("Checking for old PID file", zap.String("pidFile", pidFile))
+	pm.Logger.Infof("Checking for old PID file: %s", pidFile)
 
 	if _, err := fsService.Stat(ctx, pidFile); err == nil {
-		pm.Logger.Info("Found old PID file, cleaning up previous service instance", zap.String("identifier", string(identifier)))
+		pm.Logger.Infof("Found old PID file, cleaning up previous service instance: %s", identifier)
 
 		// Clean up the old service instance
 		if err := pm.removeService(ctx, identifier, fsService); err != nil {
-			pm.Logger.Error("Error cleaning up old service instance", zap.Error(err))
+			pm.Logger.Errorf("Error cleaning up old service instance: %v", err)
 			return fmt.Errorf("error cleaning up old service instance: %w", err)
 		}
 
@@ -63,11 +62,11 @@ func (pm *ProcessManager) createService(ctx context.Context, identifier constant
 		return fmt.Errorf("cleaned up old service instance, retry creation in next step")
 	}
 
-	pm.Logger.Info("Creating service directories", zap.String("servicePath", servicePath))
+	pm.Logger.Infof("Creating service directories for: %s", servicePath)
 
 	// Create necessary directory structure
 	if err := pm.createServiceDirectories(ctx, identifier, fsService); err != nil {
-		pm.Logger.Error("Failed to create service directories", zap.Error(err))
+		pm.Logger.Errorf("Failed to create service directories: %v", err)
 		return err
 	}
 
@@ -75,11 +74,11 @@ func (pm *ProcessManager) createService(ctx context.Context, identifier constant
 
 	// Write all configuration files
 	if err := pm.writeServiceConfigFiles(ctx, identifier, service.Config, fsService); err != nil {
-		pm.Logger.Error("Failed to write service config files", zap.Error(err))
+		pm.Logger.Errorf("Failed to write service config files: %v", err)
 		return err
 	}
 
-	pm.Logger.Info("Service created successfully", zap.String("identifier", string(identifier)))
+	pm.Logger.Infof("Service created successfully: %s", identifier)
 	return nil
 }
 
@@ -88,7 +87,7 @@ func (pm *ProcessManager) createService(ctx context.Context, identifier constant
 // that have been properly registered in the ProcessManager. While this should never fail
 // under normal circumstances (since we only add identifiers to queues for existing Services),
 // it provides a defensive programming measure against race conditions or programming errors.
-func (pm *ProcessManager) getServiceConfig(identifier constants.ServiceIdentifier) (service, error) {
+func (pm *ProcessManager) getServiceConfig(identifier constants.ServiceIdentifier) (ipmService, error) {
 	service, exists := pm.Services[identifier]
 	if !exists {
 		// This should never happen as we only add services to the list that exist
@@ -200,10 +199,7 @@ func (pm *ProcessManager) generateRunScript(ctx context.Context, identifier cons
 		return fmt.Errorf("error writing run script: %w", err)
 	}
 
-	pm.Logger.Info("Generated run script for service",
-		zap.String("identifier", string(identifier)),
-		zap.String("scriptPath", runScriptPath),
-		zap.Strings("command", config.Command))
+	pm.Logger.Infof("Generated run script for service %s at %s with command: %v", identifier, runScriptPath, config.Command)
 
 	return nil
 }

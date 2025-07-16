@@ -75,10 +75,7 @@ func (lm *LogManager) RegisterService(identifier constants.ServiceIdentifier, lo
 		CurrentLogFile: currentLogFile,
 	}
 
-	lm.Logger.Debug("Registered service for log rotation",
-		zap.String("identifier", string(identifier)),
-		zap.String("logPath", logPath),
-		zap.Int64("maxSize", maxSize))
+	lm.Logger.Debugf("Registered service for log rotation: %s (path: %s, maxSize: %d)", identifier, logPath, maxSize)
 }
 
 // UnregisterService removes a service from log rotation monitoring
@@ -87,7 +84,7 @@ func (lm *LogManager) UnregisterService(identifier constants.ServiceIdentifier) 
 	defer lm.mu.Unlock()
 
 	delete(lm.services, identifier)
-	lm.Logger.Debug("Unregistered service from log rotation", zap.String("identifier", string(identifier)))
+	lm.Logger.Debugf("Unregistered service from log rotation: %s", identifier)
 }
 
 // CheckAndRotate checks all registered services and rotates logs if they exceed size limits
@@ -101,9 +98,7 @@ func (lm *LogManager) CheckAndRotate(ctx context.Context, fsService filesystem.S
 
 	for identifier, info := range services {
 		if err := lm.rotateIfNeeded(ctx, identifier, info, fsService); err != nil {
-			lm.Logger.Error("Error during log rotation",
-				zap.String("identifier", string(identifier)),
-				zap.Error(err))
+			lm.Logger.Errorf("Error during log rotation for %s: %v", identifier, err)
 			// Continue with other services even if one fails
 		}
 	}
@@ -166,16 +161,11 @@ func (lm *LogManager) performRotation(ctx context.Context, identifier constants.
 		return fmt.Errorf("error renaming log file from %s to %s: %w", info.CurrentLogFile, rotatedPath, err)
 	}
 
-	lm.Logger.Info("Log file rotated",
-		zap.String("identifier", string(identifier)),
-		zap.String("rotatedFile", rotatedPath),
-		zap.Int64("size", currentSize))
+	lm.Logger.Infof("Log file rotated for %s: %s (size: %d bytes)", identifier, rotatedPath, currentSize)
 
 	// Clean up old log files (keep only last 10)
 	if err := lm.cleanupOldLogs(info.LogPath, fsService); err != nil {
-		lm.Logger.Warn("Error cleaning up old logs",
-			zap.String("identifier", string(identifier)),
-			zap.Error(err))
+		lm.Logger.Warnf("Error cleaning up old logs for %s: %v", identifier, err)
 		// Don't return error - rotation succeeded
 	}
 
@@ -215,12 +205,10 @@ func (lm *LogManager) cleanupOldLogs(logPath string, fsService filesystem.Servic
 	// Remove old files (keep first N)
 	for i := constants.DefaultLogFileRetention; i < len(logFiles); i++ {
 		if err := fsService.Remove(context.Background(), logFiles[i]); err != nil {
-			lm.Logger.Error("Error removing old log file",
-				zap.String("file", logFiles[i]),
-				zap.Error(err))
+			lm.Logger.Errorf("Error removing old log file %s: %v", logFiles[i], err)
 			// Continue with other files
 		} else {
-			lm.Logger.Debug("Removed old log file", zap.String("file", logFiles[i]))
+			lm.Logger.Debugf("Removed old log file: %s", logFiles[i])
 		}
 	}
 

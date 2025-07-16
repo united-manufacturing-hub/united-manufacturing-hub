@@ -33,7 +33,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/ipm/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/ipm/logging"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
-	"go.uber.org/zap"
 )
 
 // startService orchestrates the starting of a service process in the process manager.
@@ -43,43 +42,41 @@ import (
 // PID file, and returns an error to allow retry. If no process is running, it starts a new subprocess
 // and saves its PID atomically to prevent race conditions during process startup.
 func (pm *ProcessManager) startService(ctx context.Context, identifier constants.ServiceIdentifier, fsService filesystem.Service) error {
-	pm.Logger.Info("Starting service", zap.String("identifier", string(identifier)))
+	pm.Logger.Infof("Starting service: %s", identifier)
 
+	// Check for existing PID file and handle it
 	servicePath := string(identifier) // Convert identifier back to servicePath
 	pidFile := filepath.Join(pm.ServiceDirectory, "services", servicePath, constants.PidFileName)
 
-	// Check if there's already a PID file indicating a running process
+	// Check if a PID file already exists
 	if _, err := fsService.Stat(ctx, pidFile); err == nil {
-		pm.Logger.Info("Found existing PID file, terminating old process", zap.String("identifier", string(identifier)))
+		pm.Logger.Infof("Found existing PID file, terminating old process: %s", identifier)
 
 		// Terminate the existing process
 		if err := pm.terminateServiceProcess(ctx, identifier, servicePath, fsService); err != nil {
-			pm.Logger.Error("Error terminating existing process", zap.Error(err))
+			pm.Logger.Errorf("Error terminating existing process: %v", err)
 			return fmt.Errorf("error terminating existing process: %w", err)
 		}
 
-		// Remove the PID file
+		// Remove the PID file after termination
 		if err := fsService.Remove(ctx, pidFile); err != nil {
-			pm.Logger.Error("Error removing PID file", zap.Error(err))
-			return fmt.Errorf("error removing PID file: %w", err)
+			pm.Logger.Errorf("Error removing PID file: %v", err)
 		}
-
 		pm.Logger.Info("terminated existing process, continuing with start")
-		// Continue with start process after cleanup
 	}
 
-	// Get service configuration to determine what to execute
+	// Get service configuration
 	service, err := pm.getServiceConfig(identifier)
 	if err != nil {
 		return err
 	}
 
-	// Start the new process atomically
+	// Start the actual process
 	if err := pm.startProcessAtomically(ctx, identifier, service.Config, fsService); err != nil {
 		return err
 	}
 
-	pm.Logger.Info("Service started successfully", zap.String("identifier", string(identifier)))
+	pm.Logger.Infof("Service started successfully: %s", identifier)
 	return nil
 }
 
@@ -125,9 +122,7 @@ func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier
 			memoryLimitMB = 1
 		}
 
-		pm.Logger.Info("Applying memory limit to process",
-			zap.String("identifier", string(identifier)),
-			zap.Int64("memoryLimitBytes", memoryLimitBytes))
+		pm.Logger.Infof("Applying memory limit to process: %d bytes", memoryLimitBytes)
 
 		// Use exec to replace the shell process instead of creating a subprocess
 		// This eliminates one bash layer while still applying memory limits
@@ -169,9 +164,9 @@ func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier
 	pidData := []byte(strconv.Itoa(pid))
 	if err := fsService.WriteFile(ctx, pidFile, pidData, constants.ConfigFilePermission); err != nil {
 		// If writing PID fails, terminate the process to maintain consistency
-		pm.Logger.Error("Failed to write PID file, terminating process", zap.Int("pid", pid), zap.Error(err))
+		pm.Logger.Errorf("Failed to write PID file, terminating process (pid: %d): %v", pid, err)
 		if killErr := cmd.Process.Kill(); killErr != nil {
-			pm.Logger.Error("Failed to kill process after PID write failure", zap.Int("pid", pid), zap.Error(killErr))
+			pm.Logger.Errorf("Failed to kill process after PID write failure (pid: %d): %v", pid, killErr)
 		}
 		logLineWriter.Close()
 		return fmt.Errorf("error writing PID file: %w", err)
@@ -181,10 +176,12 @@ func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier
 	go pm.streamLogs(stdoutPipe, logLineWriter, "stdout", identifier)
 	go pm.streamLogs(stderrPipe, logLineWriter, "stderr", identifier)
 
-	// Store the LogLineWriter in the process manager for later access
-	pm.logWriters[identifier] = logLineWriter
+	// Store the LogLineWriter in the service instead of the separate map
+	service := pm.Services[identifier]
+	service.LogLineWriter = logLineWriter
+	pm.Services[identifier] = service
 
-	pm.Logger.Info("Process started and PID saved", zap.String("identifier", string(identifier)), zap.Int("pid", pid))
+	pm.Logger.Infof("Process started and PID saved: %s (pid: %d)", identifier, pid)
 	return nil
 }
 
@@ -205,22 +202,14 @@ func (pm *ProcessManager) streamLogs(pipe io.ReadCloser, logLineWriter *logging.
 
 		// Write to the LogLineWriter (both memory and file)
 		if err := logLineWriter.WriteLine(entry); err != nil {
-			pm.Logger.Error("Error writing log line",
-				zap.String("identifier", string(identifier)),
-				zap.String("streamType", streamType),
-				zap.Error(err))
+			pm.Logger.Errorf("Error writing log line: %v", err)
 			// Continue processing other lines even if one fails
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		pm.Logger.Error("Error scanning log stream",
-			zap.String("identifier", string(identifier)),
-			zap.String("streamType", streamType),
-			zap.Error(err))
+		pm.Logger.Errorf("Error scanning log stream: %v", err)
 	}
 
-	pm.Logger.Debug("Log stream ended",
-		zap.String("identifier", string(identifier)),
-		zap.String("streamType", streamType))
+	pm.Logger.Debugf("Log stream ended: %s (%s)", identifier, streamType)
 }

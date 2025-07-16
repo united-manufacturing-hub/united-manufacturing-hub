@@ -128,9 +128,7 @@ func (llw *LogLineWriter) WriteLine(entry process_shared.LogEntry) error {
 	if llw.currentFile != nil {
 		n, err := llw.currentFile.WriteString(formattedLine)
 		if err != nil {
-			llw.logger.Error("Failed to write to log file",
-				zap.String("identifier", string(llw.Identifier)),
-				zap.Error(err))
+			llw.logger.Errorf("Failed to write to log file for %s: %v", llw.Identifier, err)
 			return fmt.Errorf("failed to write to log file: %w", err)
 		}
 
@@ -139,18 +137,14 @@ func (llw *LogLineWriter) WriteLine(entry process_shared.LogEntry) error {
 
 		// Force flush to ensure data is written (important for crash recovery)
 		if err := llw.currentFile.Sync(); err != nil {
-			llw.logger.Warn("Failed to sync log file",
-				zap.String("identifier", string(llw.Identifier)),
-				zap.Error(err))
+			llw.logger.Warnf("Failed to sync log file for %s: %v", llw.Identifier, err)
 			// Don't return error for sync failures - the write succeeded
 		}
 
 		// Check if rotation is needed
 		if llw.currentSize > llw.maxFileSize {
 			if err := llw.rotateLogFile(); err != nil {
-				llw.logger.Error("Failed to rotate log file",
-					zap.String("identifier", string(llw.Identifier)),
-					zap.Error(err))
+				llw.logger.Errorf("Failed to rotate log file for %s: %v", llw.Identifier, err)
 				return fmt.Errorf("failed to rotate log file: %w", err)
 			}
 		}
@@ -167,9 +161,7 @@ func (llw *LogLineWriter) rotateLogFile() error {
 	// Close current file before rotation
 	if llw.currentFile != nil {
 		if err := llw.currentFile.Close(); err != nil {
-			llw.logger.Warn("Error closing log file during rotation",
-				zap.String("identifier", string(llw.Identifier)),
-				zap.Error(err))
+			llw.logger.Warnf("Error closing log file during rotation for %s: %v", llw.Identifier, err)
 		}
 		llw.currentFile = nil
 	}
@@ -185,9 +177,7 @@ func (llw *LogLineWriter) rotateLogFile() error {
 		return fmt.Errorf("failed to initialize new current file: %w", err)
 	}
 
-	llw.logger.Info("Log file rotated successfully",
-		zap.String("identifier", string(llw.Identifier)),
-		zap.Int64("previousSize", llw.currentSize))
+	llw.logger.Infof("Log file rotated successfully for %s (previous size: %d bytes)", llw.Identifier, llw.currentSize)
 
 	return nil
 }
@@ -204,9 +194,7 @@ func (llw *LogLineWriter) Close() error {
 	// Close current file if open
 	if llw.currentFile != nil {
 		if err := llw.currentFile.Close(); err != nil {
-			llw.logger.Error("Error closing log file",
-				zap.String("identifier", string(llw.Identifier)),
-				zap.Error(err))
+			llw.logger.Errorf("Error closing log file for %s: %v", llw.Identifier, err)
 			closeErr = err
 		}
 		llw.currentFile = nil

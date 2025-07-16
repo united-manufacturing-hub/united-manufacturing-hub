@@ -29,7 +29,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/ipm/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
-	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -41,22 +40,28 @@ import (
 // removed from the system. This prevents orphaned Services that could consume resources
 // or cause confusion in service management operations.
 func (pm *ProcessManager) removeService(ctx context.Context, identifier constants.ServiceIdentifier, fsService filesystem.Service) error {
-	pm.Logger.Info("Removing service", zap.String("identifier", string(identifier)))
+	pm.Logger.Infof("Removing service: %s", identifier)
 
 	servicePath := string(identifier) // Convert identifier back to servicePath
+
+	// Close the LogLineWriter for this service before removal
+	if service, exists := pm.Services[identifier]; exists && service.LogLineWriter != nil {
+		if err := service.LogLineWriter.Close(); err != nil {
+			pm.Logger.Errorf("Error closing LogLineWriter during service removal for %s: %v", identifier, err)
+		}
+	}
 
 	// Close the log file for this service to prevent file handle leaks
 	if pm.logManager != nil {
 		pm.logManager.UnregisterService(identifier)
 	} else {
-		pm.Logger.Warn("LogManager is nil - skipping service unregistration from log rotation",
-			zap.String("identifier", string(identifier)))
+		pm.Logger.Warnf("LogManager is nil - skipping service unregistration from log rotation for: %s", identifier)
 	}
 
 	// Attempt to terminate any running process gracefully
 	if err := pm.terminateServiceProcess(ctx, identifier, servicePath, fsService); err != nil {
 		// Log error but continue with cleanup - we want to remove the service directory regardless
-		pm.Logger.Error("Error terminating process, continuing with cleanup", zap.Error(err))
+		pm.Logger.Errorf("Error terminating process, continuing with cleanup: %v", err)
 	}
 
 	// Clean up the service directories (both logs and services)
@@ -64,7 +69,7 @@ func (pm *ProcessManager) removeService(ctx context.Context, identifier constant
 		return err
 	}
 
-	pm.Logger.Info("Service removed successfully", zap.String("identifier", string(identifier)))
+	pm.Logger.Infof("Service removed successfully: %s", identifier)
 	return nil
 }
 
@@ -75,7 +80,7 @@ func (pm *ProcessManager) removeService(ctx context.Context, identifier constant
 // temporarily without losing their configuration or historical data, enabling easy restart
 // operations later.
 func (pm *ProcessManager) stopService(ctx context.Context, identifier constants.ServiceIdentifier, fsService filesystem.Service) error {
-	pm.Logger.Info("Stopping service", zap.String("identifier", string(identifier)))
+	pm.Logger.Infof("Stopping service: %s", identifier)
 
 	// Check if the service exists in our services map
 	if _, exists := pm.Services[identifier]; !exists {
@@ -89,19 +94,19 @@ func (pm *ProcessManager) stopService(ctx context.Context, identifier constants.
 	if err := pm.terminateServiceProcess(ctx, identifier, servicePath, fsService); err != nil {
 		// For stop operations, we're more forgiving about termination errors
 		// If the process is already dead, that's fine - we just want it stopped
-		pm.Logger.Debug("Process termination had issues during stop, but continuing", zap.Error(err))
+		pm.Logger.Debugf("Process termination had issues during stop, but continuing: %v", err)
 	}
 
 	// Remove the PID file after termination attempt
 	if err := fsService.Remove(ctx, pidFile); err != nil {
 		// If the PID file doesn't exist, that's fine - the process might have cleaned up itself
 		if !os.IsNotExist(err) {
-			pm.Logger.Error("Error removing PID file", zap.Error(err))
+			pm.Logger.Errorf("Error removing PID file: %v", err)
 			return fmt.Errorf("error removing PID file: %w", err)
 		}
 	}
 
-	pm.Logger.Info("Service stopped successfully", zap.String("identifier", string(identifier)))
+	pm.Logger.Infof("Service stopped successfully: %s", identifier)
 	return nil
 }
 
@@ -123,7 +128,7 @@ func (pm *ProcessManager) terminateServiceProcess(ctx context.Context, identifie
 	// Find and terminate the process
 	process, err := os.FindProcess(pid)
 	if err != nil {
-		pm.Logger.Info("Process not running anymore, skipping termination", zap.Int("pid", pid))
+		pm.Logger.Infof("Process not running anymore, skipping termination: %d", pid)
 		return nil
 	}
 
@@ -141,7 +146,7 @@ func (pm *ProcessManager) readProcessPid(ctx context.Context, servicePath string
 	pidFile := filepath.Join(servicePath, constants.PidFileName)
 	pidBytes, err := fsService.ReadFile(ctx, pidFile)
 	if err != nil {
-		pm.Logger.Info("Process not running anymore, skipping termination", zap.String("pidFile", pidFile))
+		pm.Logger.Infof("Process not running anymore, skipping termination: %s", pidFile)
 		return 0, err
 	}
 
@@ -164,19 +169,19 @@ func (pm *ProcessManager) terminateProcess(ctx context.Context, identifier const
 	// First attempt: Send SIGTERM (graceful shutdown)
 	// Try to terminate the process group first (negative PID), then fall back to individual process
 	if err := syscall.Kill(-pid, syscall.SIGTERM); err != nil {
-		pm.Logger.Debug("Failed to send SIGTERM to process group, trying individual process", zap.Int("pid", pid), zap.Error(err))
+		pm.Logger.Debugf("Failed to send SIGTERM to process group (pid: %d), trying individual process: %v", pid, err)
 		if err := process.Signal(syscall.SIGTERM); err != nil {
-			pm.Logger.Error("Error sending SIGTERM, trying SIGKILL", zap.Int("pid", pid), zap.Error(err))
+			pm.Logger.Errorf("Error sending SIGTERM (pid: %d), trying SIGKILL: %v", pid, err)
 			return pm.forceKillProcess(identifier, process, pid)
 		}
 	} else {
-		pm.Logger.Debug("Sent SIGTERM to process group", zap.Int("pid", pid))
+		pm.Logger.Debugf("Sent SIGTERM to process group (pid: %d)", pid)
 	}
 
 	// Wait for graceful shutdown with timeout
 	processState, err := pm.waitForProcessExit(ctx, process, pid)
 	if err != nil {
-		pm.Logger.Error("Process did not exit gracefully, forcing termination", zap.Int("pid", pid), zap.Error(err))
+		pm.Logger.Errorf("Process did not exit gracefully (pid: %d), forcing termination: %v", pid, err)
 		return pm.forceKillProcess(identifier, process, pid)
 	}
 
@@ -196,10 +201,9 @@ func (pm *ProcessManager) terminateProcess(ctx context.Context, identifier const
 		pm.RecordExitEvent(identifier, exitCode, signal)
 	}
 
-	// Clean up the LogLineWriter for this service
-	pm.cleanupLogWriter(identifier)
+	// Don't clean up the LogLineWriter here - only when service is removed
 
-	pm.Logger.Info("Process terminated gracefully", zap.Int("pid", pid))
+	pm.Logger.Infof("Process terminated gracefully (pid: %d)", pid)
 	return nil
 }
 
@@ -214,7 +218,7 @@ func (pm *ProcessManager) terminateProcess(ctx context.Context, identifier const
 func (pm *ProcessManager) waitForProcessExit(ctx context.Context, process *os.Process, pid int) (*os.ProcessState, error) {
 	waitCtx, cancel, err := GenerateContext(ctx, constants.CleanupTimeReserve)
 	if err != nil {
-		pm.Logger.Error("Error generating wait context", zap.Error(err))
+		pm.Logger.Errorf("Error generating wait context: %v", err)
 		return nil, err
 	}
 	defer cancel()
@@ -252,13 +256,13 @@ func (pm *ProcessManager) waitForProcessExit(ctx context.Context, process *os.Pr
 func (pm *ProcessManager) forceKillProcess(identifier constants.ServiceIdentifier, process *os.Process, pid int) error {
 	// Try to kill the process group first (negative PID), then fall back to individual process
 	if err := syscall.Kill(-pid, syscall.SIGKILL); err != nil {
-		pm.Logger.Debug("Failed to send SIGKILL to process group, trying individual process", zap.Int("pid", pid), zap.Error(err))
+		pm.Logger.Debugf("Failed to send SIGKILL to process group (pid: %d), trying individual process: %v", pid, err)
 		if err := process.Signal(syscall.SIGKILL); err != nil {
-			pm.Logger.Error("Error sending SIGKILL to process", zap.Int("pid", pid), zap.Error(err))
+			pm.Logger.Errorf("Error sending SIGKILL to process (pid: %d): %v", pid, err)
 			return err
 		}
 	} else {
-		pm.Logger.Debug("Sent SIGKILL to process group", zap.Int("pid", pid))
+		pm.Logger.Debugf("Sent SIGKILL to process group (pid: %d)", pid)
 	}
 
 	// Record the exit event for force kill if we have a service identifier
@@ -267,24 +271,9 @@ func (pm *ProcessManager) forceKillProcess(identifier constants.ServiceIdentifie
 		pm.RecordExitEvent(identifier, -1, int(syscall.SIGKILL))
 	}
 
-	// Clean up the LogLineWriter for this service
-	pm.cleanupLogWriter(identifier)
+	// Don't clean up the LogLineWriter here - only when service is removed
 
-	pm.Logger.Info("Process force-killed", zap.Int("pid", pid))
-	return nil
-}
-
-// cleanupServiceDirectory removes the service directory and all its contents from the filesystem.
-// This function performs the final cleanup step in service removal, ensuring that all service
-// files, logs, configuration, and other data are completely removed from the system. This is
-// essential for preventing disk space accumulation and ensuring that removed Services don't
-// leave behind artifacts that could cause confusion or conflicts if a service with the same
-// name is created later. The function uses RemoveAll to ensure complete directory removal
-// regardless of the contents or subdirectory structure.
-func (pm *ProcessManager) cleanupServiceDirectory(ctx context.Context, servicePath string, fsService filesystem.Service) error {
-	if err := fsService.RemoveAll(ctx, servicePath); err != nil {
-		return fmt.Errorf("error removing pid file: %w", err)
-	}
+	pm.Logger.Infof("Process force-killed (pid: %d)", pid)
 	return nil
 }
 
@@ -296,7 +285,7 @@ func (pm *ProcessManager) cleanupServiceDirectories(ctx context.Context, service
 	// Clean up logs directory
 	logDir := filepath.Join(pm.ServiceDirectory, "logs", servicePath)
 	if err := fsService.RemoveAll(ctx, logDir); err != nil {
-		pm.Logger.Error("Error removing logs directory", zap.String("logDir", logDir), zap.Error(err))
+		pm.Logger.Errorf("Error removing logs directory %s: %v", logDir, err)
 		// Continue with services directory cleanup even if logs cleanup fails
 	}
 
@@ -306,10 +295,7 @@ func (pm *ProcessManager) cleanupServiceDirectories(ctx context.Context, service
 		return fmt.Errorf("error removing services directory: %w", err)
 	}
 
-	pm.Logger.Debug("Cleaned up service directories",
-		zap.String("servicePath", servicePath),
-		zap.String("logDir", logDir),
-		zap.String("serviceDir", serviceDir))
+	pm.Logger.Debugf("Cleaned up service directories for %s (logs: %s, services: %s)", servicePath, logDir, serviceDir)
 
 	return nil
 }
@@ -319,7 +305,7 @@ func (pm *ProcessManager) RecordExitEvent(identifier constants.ServiceIdentifier
 	// Check if service exists in our registry
 	service, exists := pm.Services[identifier]
 	if !exists {
-		pm.Logger.Debug("Service not found when recording exit event", zap.String("identifier", string(identifier)))
+		pm.Logger.Debugf("Service not found when recording exit event: %s", identifier)
 		return
 	}
 
@@ -341,9 +327,5 @@ func (pm *ProcessManager) RecordExitEvent(identifier constants.ServiceIdentifier
 	// Update service in the registry
 	pm.Services[identifier] = service
 
-	pm.Logger.Debug("Recorded exit event",
-		zap.String("identifier", string(identifier)),
-		zap.Int("exitCode", exitCode),
-		zap.Int("signal", signal),
-		zap.Time("timestamp", exitEvent.Timestamp))
+	pm.Logger.Debugf("Recorded exit event for %s: exit code %d, signal %d, timestamp %s", identifier, exitCode, signal, exitEvent.Timestamp.Format(time.RFC3339))
 }

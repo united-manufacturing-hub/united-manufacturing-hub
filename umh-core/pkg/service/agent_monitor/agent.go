@@ -17,9 +17,10 @@ package agent_monitor
 import (
 	"context"
 	"fmt"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"path/filepath"
 	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 
 	"go.uber.org/zap"
 
@@ -227,12 +228,12 @@ func (c *AgentMonitorService) getAgentLogs(ctx context.Context) ([]process_share
 
 	// Check if s6Service is initialized
 	if c.s6Service == nil {
-		return nil, fmt.Errorf("s6 service not initialized")
+		return nil, fmt.Errorf("process manager service not initialized")
 	}
 	// Use the S6 service to get logs
 	entries, err := c.s6Service.GetLogs(ctx, servicePath, c.fs)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get logs from S6 service: %w", err)
+		return nil, fmt.Errorf("failed to get logs from process manager service: %w", err)
 	}
 
 	return entries, nil

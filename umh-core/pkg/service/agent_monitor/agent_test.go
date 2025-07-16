@@ -199,7 +199,7 @@ var _ = Describe("Agent Monitor Service", func() {
 
 				// Verify the error is correctly propagated
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to get logs from S6 service"))
+				Expect(err.Error()).To(ContainSubstring("failed to get logs from process manager service"))
 				Expect(status).To(BeNil())
 			})
 		})
