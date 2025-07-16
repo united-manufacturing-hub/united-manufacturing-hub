@@ -196,6 +196,9 @@ func (pm *ProcessManager) terminateProcess(ctx context.Context, identifier const
 		pm.RecordExitEvent(identifier, exitCode, signal)
 	}
 
+	// Clean up the LogLineWriter for this service
+	pm.cleanupLogWriter(identifier)
+
 	pm.Logger.Info("Process terminated gracefully", zap.Int("pid", pid))
 	return nil
 }
@@ -263,6 +266,9 @@ func (pm *ProcessManager) forceKillProcess(identifier constants.ServiceIdentifie
 		// For force kill, exit code is -1 and signal is SIGKILL
 		pm.RecordExitEvent(identifier, -1, int(syscall.SIGKILL))
 	}
+
+	// Clean up the LogLineWriter for this service
+	pm.cleanupLogWriter(identifier)
 
 	pm.Logger.Info("Process force-killed", zap.Int("pid", pid))
 	return nil

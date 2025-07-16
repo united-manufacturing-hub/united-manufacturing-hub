@@ -22,8 +22,8 @@ import "time"
 // Directory and file structure constants
 const (
 	// Service directory structure
-	LogDirectoryName    = "log"
-	ConfigDirectoryName = "config"
+	LogDirectoryName     = "log"
+	ServiceDirectoryName = "services"
 
 	// Standard file names
 	PidFileName        = "run.pid"

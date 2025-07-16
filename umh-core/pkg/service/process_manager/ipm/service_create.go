@@ -184,6 +184,8 @@ func (pm *ProcessManager) generateRunScript(ctx context.Context, identifier cons
 		configIndex := strings.Index(arg, "/config/")
 		if configIndex != -1 {
 			arg = arg[configIndex:]
+			// Also strip the /config here
+			arg = strings.ReplaceAll(arg, "/config/", "")
 			arg = filepath.Join(pm.ServiceDirectory, "services", servicePath, arg)
 		}
 		// Simple shell escaping - wrap arguments in single quotes and escape any single quotes

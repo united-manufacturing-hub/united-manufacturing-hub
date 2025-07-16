@@ -18,16 +18,21 @@
 package ipm
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/ipm/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/ipm/logging"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"go.uber.org/zap"
 )
 
@@ -95,18 +100,16 @@ func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier
 		return fmt.Errorf("error ensuring log directory: %w", err)
 	}
 
-	// Register service with log manager for rotation monitoring
-	if pm.logManager != nil {
-		pm.logManager.RegisterService(identifier, logPath, config.LogFilesize)
-	} else {
-		pm.Logger.Warn("LogManager is nil - skipping service registration for log rotation",
-			zap.String("identifier", string(identifier)))
+	// Create memory buffer and log line writer for this service
+	memoryBuffer := logging.NewMemoryLogBuffer(constants.DefaultLogBufferSize)
+	logLineWriter, err := logging.NewLogLineWriter(identifier, logPath, pm.logManager, memoryBuffer, fsService)
+	if err != nil {
+		return fmt.Errorf("error creating log line writer: %w", err)
 	}
 
 	// Determine the command to execute - for now, assume there's a "run.sh" script
 	// TODO: This should be configurable in the service config
 	commandPath := filepath.Join(configPath, constants.RunScriptFileName)
-	currentLogFile := filepath.Join(logPath, constants.CurrentLogFileName)
 
 	var cmd *exec.Cmd
 
@@ -128,13 +131,11 @@ func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier
 
 		// Use exec to replace the shell process instead of creating a subprocess
 		// This eliminates one bash layer while still applying memory limits
-		shellCommand := fmt.Sprintf("ulimit -v %d && exec %s >> %s 2>&1", memoryLimitMB*1024, commandPath, currentLogFile)
+		shellCommand := fmt.Sprintf("ulimit -v %d && exec %s", memoryLimitMB*1024, commandPath)
 		cmd = exec.Command("/bin/bash", "-c", shellCommand)
 	} else {
-		// Direct execution without memory limits - cleanest approach
-		// Set up logging via shell redirection for simplicity
-		redirectedCommand := fmt.Sprintf("%s >> %s 2>&1", commandPath, currentLogFile)
-		cmd = exec.Command("/bin/bash", "-c", redirectedCommand)
+		// Direct execution without memory limits
+		cmd = exec.Command(commandPath)
 	}
 
 	// Set up process group for better process management
@@ -142,8 +143,22 @@ func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier
 		Setpgid: true, // Create new process group for better process management
 	}
 
+	// Set up pipes for stdout and stderr to capture logs
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		logLineWriter.Close()
+		return fmt.Errorf("error creating stdout pipe: %w", err)
+	}
+
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		logLineWriter.Close()
+		return fmt.Errorf("error creating stderr pipe: %w", err)
+	}
+
 	// Start the process
 	if err := cmd.Start(); err != nil {
+		logLineWriter.Close()
 		return fmt.Errorf("error starting process: %w", err)
 	}
 
@@ -158,9 +173,54 @@ func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier
 		if killErr := cmd.Process.Kill(); killErr != nil {
 			pm.Logger.Error("Failed to kill process after PID write failure", zap.Int("pid", pid), zap.Error(killErr))
 		}
+		logLineWriter.Close()
 		return fmt.Errorf("error writing PID file: %w", err)
 	}
 
+	// Start goroutines to stream logs from stdout and stderr to the LogLineWriter
+	go pm.streamLogs(stdoutPipe, logLineWriter, "stdout", identifier)
+	go pm.streamLogs(stderrPipe, logLineWriter, "stderr", identifier)
+
+	// Store the LogLineWriter in the process manager for later access
+	pm.logWriters[identifier] = logLineWriter
+
 	pm.Logger.Info("Process started and PID saved", zap.String("identifier", string(identifier)), zap.Int("pid", pid))
 	return nil
+}
+
+// streamLogs reads from the provided pipe and writes each line to the LogLineWriter.
+// This function runs in a goroutine and handles real-time log streaming from the process.
+func (pm *ProcessManager) streamLogs(pipe io.ReadCloser, logLineWriter *logging.LogLineWriter, streamType string, identifier constants.ServiceIdentifier) {
+	defer pipe.Close()
+
+	scanner := bufio.NewScanner(pipe)
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		// Create log entry with current timestamp
+		entry := process_shared.LogEntry{
+			Timestamp: time.Now(),
+			Content:   line,
+		}
+
+		// Write to the LogLineWriter (both memory and file)
+		if err := logLineWriter.WriteLine(entry); err != nil {
+			pm.Logger.Error("Error writing log line",
+				zap.String("identifier", string(identifier)),
+				zap.String("streamType", streamType),
+				zap.Error(err))
+			// Continue processing other lines even if one fails
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		pm.Logger.Error("Error scanning log stream",
+			zap.String("identifier", string(identifier)),
+			zap.String("streamType", streamType),
+			zap.Error(err))
+	}
+
+	pm.Logger.Debug("Log stream ended",
+		zap.String("identifier", string(identifier)),
+		zap.String("streamType", streamType))
 }

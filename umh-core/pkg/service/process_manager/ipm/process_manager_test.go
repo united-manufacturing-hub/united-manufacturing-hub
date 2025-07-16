@@ -478,7 +478,7 @@ var _ = Describe("ProcessManager", func() {
 			// Reconcile should fail due to filesystem error
 			err = pm.Reconcile(ctx, mockFS)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("error removing pid file"))
+			Expect(err.Error()).To(ContainSubstring("error removing services directory"))
 		})
 
 		It("should handle context cancellation during removal", func() {
@@ -1719,7 +1719,7 @@ var _ = Describe("ProcessManager", func() {
 
 			// Setup mock to simulate empty log file
 			identifier := constants.ServicePathToIdentifier(servicePath)
-			logFile := filepath.Join(pm.ServiceDirectory, string(identifier), "log", "current")
+			logFile := filepath.Join(pm.ServiceDirectory, string(identifier), constants.LogDirectoryName, constants.CurrentLogFileName)
 
 			mockFS := fsService.(*filesystem.MockFileSystem)
 			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
@@ -1759,7 +1759,7 @@ var _ = Describe("ProcessManager", func() {
 
 			// Setup mock to simulate log file with content
 			identifier := constants.ServicePathToIdentifier(servicePath)
-			logFile := filepath.Join(pm.ServiceDirectory, string(identifier), "log", "current")
+			logFile := filepath.Join(pm.ServiceDirectory, string(identifier), constants.LogDirectoryName, constants.CurrentLogFileName)
 
 			// Create sample log content in the format expected by the parser
 			logContent := `2025-01-15 10:30:45.123456789  Starting application
@@ -1814,7 +1814,7 @@ var _ = Describe("ProcessManager", func() {
 
 			// Setup mock to simulate log file with mixed content (some valid, some malformed)
 			identifier := constants.ServicePathToIdentifier(servicePath)
-			logFile := filepath.Join(pm.ServiceDirectory, string(identifier), "log", "current")
+			logFile := filepath.Join(pm.ServiceDirectory, string(identifier), constants.LogDirectoryName, constants.CurrentLogFileName)
 
 			logContent := `2025-01-15 10:30:45.123456789  Valid log entry
 malformed log entry without timestamp
@@ -1874,7 +1874,7 @@ just plain text
 
 			// Setup mock to simulate filesystem error when reading log file
 			identifier := constants.ServicePathToIdentifier(servicePath)
-			logFile := filepath.Join(pm.ServiceDirectory, string(identifier), "log", "current")
+			logFile := filepath.Join(pm.ServiceDirectory, string(identifier), constants.LogDirectoryName, constants.CurrentLogFileName)
 
 			mockFS := fsService.(*filesystem.MockFileSystem)
 			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
@@ -1916,7 +1916,7 @@ just plain text
 
 			// Setup mock to simulate filesystem error when checking file existence
 			identifier := constants.ServicePathToIdentifier(servicePath)
-			logFile := filepath.Join(pm.ServiceDirectory, string(identifier), "log", "current")
+			logFile := filepath.Join(pm.ServiceDirectory, string(identifier), constants.LogDirectoryName, constants.CurrentLogFileName)
 
 			mockFS := fsService.(*filesystem.MockFileSystem)
 			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
@@ -2064,8 +2064,8 @@ just plain text
 
 			// Verify directories were created on real filesystem
 			// Note: We use the identifier (not servicePath) because that's what ProcessManager uses internally
-			logDir := filepath.Join(tempDir, string(identifier), "log")
-			configDir := filepath.Join(tempDir, string(identifier), "config")
+			logDir := filepath.Join(tempDir, string(identifier), constants.LogDirectoryName)
+			configDir := filepath.Join(tempDir, string(identifier), constants.ServiceDirectoryName)
 
 			// Debug: Check if service directory exists at all
 			serviceDir := filepath.Join(tempDir, string(identifier))

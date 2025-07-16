@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -85,6 +86,12 @@ type ProcessManager struct {
 
 	// logManager manages log files with rotation
 	logManager *logging.LogManager
+
+	// logWriters stores LogLineWriter instances for active services
+	logWriters map[constants.ServiceIdentifier]*logging.LogLineWriter
+
+	// StartupCompleted is a flag that indicates if the startup process has completed
+	StartupCompleted atomic.Bool
 }
 
 type service struct {
@@ -116,6 +123,7 @@ func NewProcessManager(logger *zap.SugaredLogger, options ...ProcessManagerOptio
 		TaskQueue:        make([]Task, 0),
 		ServiceDirectory: DefaultServiceDirectory, // Default value
 		logManager:       logging.NewLogManager(logger),
+		logWriters:       make(map[constants.ServiceIdentifier]*logging.LogLineWriter),
 	}
 
 	// Apply options
@@ -479,37 +487,17 @@ func (pm *ProcessManager) GetLogs(ctx context.Context, servicePath string, fsSer
 		return nil, process_shared.ErrServiceNotExist
 	}
 
-	// Construct the path to the current log file
-	logDir := filepath.Join(pm.ServiceDirectory, "logs", servicePath)
-	currentLogFile := filepath.Join(logDir, constants.CurrentLogFileName)
-
-	// Check if the log file exists
-	exists, err := fsService.FileExists(ctx, currentLogFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check if log file exists: %w", err)
-	}
-	if !exists {
-		pm.Logger.Debug("Log file does not exist, returning empty logs", zap.String("logFile", currentLogFile))
-		return []process_shared.LogEntry{}, nil
+	// Check if we have an active LogLineWriter for this service
+	logWriter, ok := pm.logWriters[identifier]
+	if !ok || logWriter == nil {
+		return nil, fmt.Errorf("no active LogLineWriter found for service %s", servicePath)
 	}
 
-	// Read the log file content
-	logContent, err := fsService.ReadFile(ctx, currentLogFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read log file %s: %w", currentLogFile, err)
-	}
-
-	// Parse the log content using the same parser as S6
-	entries, err := process_shared.ParseLogsFromBytes(logContent)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse log content: %w", err)
-	}
-
-	pm.Logger.Debug("Retrieved logs for service",
+	// Get logs from the memory buffer
+	entries := logWriter.MemoryBuffer.GetEntries()
+	pm.Logger.Debug("Retrieved logs from memory buffer",
 		zap.String("servicePath", servicePath),
-		zap.String("logFile", currentLogFile),
 		zap.Int("entryCount", len(entries)))
-
 	return entries, nil
 }
 func (pm *ProcessManager) CleanServiceDirectory(ctx context.Context, path string, fsService filesystem.Service) error {
@@ -547,8 +535,112 @@ func (pm *ProcessManager) Reconcile(ctx context.Context, fsService filesystem.Se
 
 	pm.Logger.Debug("Starting reconciliation", zap.Int("queueLength", len(pm.TaskQueue)))
 
+	// Startup the process manager
+	if err := pm.startup(ctx, fsService); err != nil {
+		pm.Logger.Error("Failed to startup process manager", zap.Error(err))
+		return err
+	}
+
 	// Process all queued tasks
 	return pm.step(ctx, fsService)
+}
+
+func (pm *ProcessManager) startup(ctx context.Context, fsService filesystem.Service) error {
+	shouldStartup := pm.StartupCompleted.CompareAndSwap(false, true)
+	if !shouldStartup {
+		return nil
+	}
+
+	// Wipe the service directory
+	if err := pm.wipeServiceDirectory(ctx, fsService); err != nil {
+		pm.Logger.Error("Failed to wipe service directory", zap.Error(err))
+		pm.StartupCompleted.Store(false)
+		return nil
+	}
+	// Ensure services directory README.md exists on first run
+	if err := pm.ensureServicesReadme(ctx, fsService); err != nil {
+		pm.Logger.Error("Failed to create services README.md", zap.Error(err))
+		pm.StartupCompleted.Store(false)
+		// Continue with reconciliation even if README creation fails
+		return nil
+	}
+	pm.Logger.Info("Process manager startup completed")
+	pm.StartupCompleted.Store(true)
+	return nil
+}
+
+// wipeServiceDirectory wipes the service directory
+// It assumes we already hold the lock and will be called only once on startup
+func (pm *ProcessManager) wipeServiceDirectory(ctx context.Context, fsService filesystem.Service) error {
+	serviceDir := filepath.Join(pm.ServiceDirectory, constants.ServiceDirectoryName)
+	pm.Logger.Info("Wiping service directory", zap.String("servicePath", serviceDir))
+
+	// Check if the service directory exists
+	exists, err := fsService.PathExists(ctx, serviceDir)
+	if err != nil {
+		return fmt.Errorf("failed to check if service directory exists: %w", err)
+	}
+
+	// If the service directory exists, remove it
+	if exists {
+		if err := fsService.RemoveAll(ctx, serviceDir); err != nil {
+			return fmt.Errorf("failed to remove service directory: %w", err)
+		}
+	}
+
+	// Create the services directory
+	if err := fsService.EnsureDirectory(ctx, serviceDir); err != nil {
+		return fmt.Errorf("failed to ensure services directory exists: %w", err)
+	}
+	return nil
+}
+
+// ensureServicesReadme creates a README.md file in the services directory if it doesn't exist.
+// This file serves as documentation for users indicating that the contents are auto-generated.
+func (pm *ProcessManager) ensureServicesReadme(ctx context.Context, fsService filesystem.Service) error {
+
+	servicesDir := filepath.Join(pm.ServiceDirectory, "services")
+	readmePath := filepath.Join(servicesDir, "README.md")
+
+	// Check if README.md already exists
+	exists, err := fsService.FileExists(ctx, readmePath)
+	if err != nil {
+		return fmt.Errorf("failed to check if README.md exists: %w", err)
+	}
+
+	if exists {
+		// README.md already exists, nothing to do
+		return nil
+	}
+
+	// Ensure the services directory exists first
+	if err := fsService.EnsureDirectory(ctx, servicesDir); err != nil {
+		return fmt.Errorf("failed to ensure services directory exists: %w", err)
+	}
+
+	// Create the README content
+	readmeContent := `# Services Directory
+
+This directory contains auto-generated service configurations and files managed by the UMH Process Manager.
+
+**IMPORTANT**: All files and folders in this directory are automatically generated and maintained by the system. 
+
+- Any manual changes made to files in this directory will be ignored or overwritten.
+- Service configurations should be managed through the appropriate APIs or configuration tools.
+- Do not manually modify, add, or remove files in this directory.
+
+For more information about managing services, please refer to the UMH documentation.
+`
+
+	// Write the README.md file
+	if err := fsService.WriteFile(ctx, readmePath, []byte(readmeContent), constants.ConfigFilePermission); err != nil {
+
+		return fmt.Errorf("failed to write README.md: %w", err)
+	}
+
+	pm.Logger.Info("Created services directory README.md", zap.String("path", readmePath))
+
+	return nil
 }
 
 // Close closes all log files and performs cleanup
@@ -557,6 +649,20 @@ func (pm *ProcessManager) Close() error {
 	defer pm.mu.Unlock()
 
 	pm.Logger.Info("Closing ProcessManager and all log files")
+
+	// Close all LogLineWriter instances
+	for identifier, logWriter := range pm.logWriters {
+		if logWriter != nil {
+			if err := logWriter.Close(); err != nil {
+				pm.Logger.Error("Error closing LogLineWriter",
+					zap.String("identifier", string(identifier)),
+					zap.Error(err))
+			}
+		}
+	}
+
+	// Clear the logWriters map
+	pm.logWriters = make(map[constants.ServiceIdentifier]*logging.LogLineWriter)
 
 	// Close all log files
 	if pm.logManager != nil {
@@ -569,4 +675,16 @@ func (pm *ProcessManager) Close() error {
 	}
 
 	return nil
+}
+
+// cleanupLogWriter removes and closes the LogLineWriter for a service
+func (pm *ProcessManager) cleanupLogWriter(identifier constants.ServiceIdentifier) {
+	if logWriter, ok := pm.logWriters[identifier]; ok && logWriter != nil {
+		if err := logWriter.Close(); err != nil {
+			pm.Logger.Error("Error closing LogLineWriter during cleanup",
+				zap.String("identifier", string(identifier)),
+				zap.Error(err))
+		}
+		delete(pm.logWriters, identifier)
+	}
 }

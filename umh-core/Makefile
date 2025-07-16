@@ -78,7 +78,7 @@ NMAP_VERSION = 7.95-r1
 S6_OVERLAY_VERSION = 3.2.0.2
 REDPANDA_VERSION = 24.3.8
 ## Benthos version is a tag or a sha-<commit hash> (e.g. 0.9.4 or sha-a51a685) to be used in the docker image
-BENTHOS_UMH_VERSION = 0.10.0-alpha.1
+BENTHOS_UMH_VERSION = 0.10.0
 BUF_VERSION = 1.55.1
 PROTOC_GEN_GO_VERSION = 1.36.6
 
@@ -577,9 +577,9 @@ test-benthos-monitor: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 		ghcr.io/united-manufacturing-hub/united-manufacturing-hub/umh-core:staging
 
 # GraphQL API Demo: Complete GraphQL server with real-time simulator data
-# 
+#
 # USAGE: cd umh-core && make test-graphql
-# 
+#
 # This target starts UMH Core with GraphQL API enabled and built-in simulator providing real data.
 # Perfect for quick testing and development without requiring MQTT/Redis infrastructure.
 #
@@ -742,7 +742,7 @@ build-push: build push-platform
 dump-metrics:
 	curl -s http://localhost:8081/metrics > metrics.txt
 
-run: 
+run:
 	@echo "Running $(IMAGE_NAME):$(TAG)"
 	docker rm -f $(IMAGE_NAME)
 	docker run \
