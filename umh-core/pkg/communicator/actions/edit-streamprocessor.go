@@ -44,6 +44,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/streamprocessorserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/streamprocessor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
@@ -399,6 +400,12 @@ func (a *EditStreamProcessorAction) waitForComponentToBeActive(oldConfig config.
 
 					found = true
 					currentStateReason := fmt.Sprintf("current state: %s", instance.CurrentState)
+
+					// Cast the instance LastObservedState to a streamprocessor instance
+					spSnapshot, ok := instance.LastObservedState.(*streamprocessor.ObservedStateSnapshot)
+					if ok && spSnapshot != nil && spSnapshot.ServiceInfo.StatusReason != "" {
+						currentStateReason = spSnapshot.ServiceInfo.StatusReason
+					}
 
 					// Check if the stream processor is in an active state
 					if instance.CurrentState == "active" || instance.CurrentState == "idle" {

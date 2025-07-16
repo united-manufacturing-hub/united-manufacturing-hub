@@ -46,6 +46,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/streamprocessor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
@@ -315,7 +316,16 @@ func (a *DeployStreamProcessorAction) waitForComponentToAppear() (string, error)
 						return "", nil
 					}
 
-					stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("current state: %s", instance.CurrentState)
+					// Get more detailed status information from the stream processor snapshot
+					currentStateReason := fmt.Sprintf("current state: %s", instance.CurrentState)
+
+					// Cast the instance LastObservedState to a streamprocessor instance
+					spSnapshot, ok := instance.LastObservedState.(*streamprocessor.ObservedStateSnapshot)
+					if ok && spSnapshot != nil && spSnapshot.ServiceInfo.StatusReason != "" {
+						currentStateReason = spSnapshot.ServiceInfo.StatusReason
+					}
+
+					stateMessage := RemainingPrefixSec(remainingSeconds) + currentStateReason
 					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 						stateMessage, a.outboundChannel, models.DeployStreamProcessor)
 				}
