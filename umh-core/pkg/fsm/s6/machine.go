@@ -94,11 +94,6 @@ func (s *S6Instance) SetDesiredFSMState(state string) error {
 	return nil
 }
 
-// GetCurrentFSMState returns the current state of the FSM
-func (s *S6Instance) GetCurrentFSMState() string {
-	return s.baseFSMInstance.GetCurrentFSMState()
-}
-
 // GetDesiredFSMState returns the desired state of the FSM
 func (s *S6Instance) GetDesiredFSMState() string {
 	return s.baseFSMInstance.GetDesiredFSMState()

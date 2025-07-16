@@ -259,11 +259,15 @@ func (pm *ProcessManager) Status(ctx context.Context, servicePath string, fsServ
 	// Check if service exists in our registry
 	service, exists := pm.Services[identifier]
 	if !exists {
+		pm.Logger.Errorf("[StatusGenerator] Service %s does not exist", servicePath)
 		return process_shared.ServiceInfo{}, process_shared.ErrServiceNotExist
 	}
 
 	// Start with the current tracked status
 	info := service.History
+
+	// Remove the /run/services/ prefix from the servicePath
+	servicePath = strings.ReplaceAll(servicePath, "/run/service/", "")
 
 	// Update runtime status by checking actual process state
 	pidFile := filepath.Join(pm.ServiceDirectory, "services", servicePath, constants.PidFileName)
@@ -271,6 +275,7 @@ func (pm *ProcessManager) Status(ctx context.Context, servicePath string, fsServ
 	// Check if PID file exists
 	pidBytes, err := fsService.ReadFile(ctx, pidFile)
 	if err != nil {
+		pm.Logger.Errorf("[StatusGenerator] No PID file found for service %s: %v", servicePath, err)
 		// No PID file means service is down
 		info.Status = process_shared.ServiceDown
 		info.Pid = 0
@@ -283,7 +288,7 @@ func (pm *ProcessManager) Status(ctx context.Context, servicePath string, fsServ
 	// Parse PID from file
 	pid, err := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
 	if err != nil {
-		pm.Logger.Errorf("Invalid PID file content in %s: %v", pidFile, err)
+		pm.Logger.Errorf("[StatusGenerator] Invalid PID file content in %s: %v", pidFile, err)
 		info.Status = process_shared.ServiceDown
 		info.Pid = 0
 		info.Pgid = 0
@@ -294,6 +299,7 @@ func (pm *ProcessManager) Status(ctx context.Context, servicePath string, fsServ
 	// Check if process is actually running
 	process, err := os.FindProcess(pid)
 	if err != nil {
+		pm.Logger.Errorf("[StatusGenerator] Process not found for service %s: %v", servicePath, err)
 		// Process not found - service is down
 		info.Status = process_shared.ServiceDown
 		info.Pid = 0
@@ -306,6 +312,7 @@ func (pm *ProcessManager) Status(ctx context.Context, servicePath string, fsServ
 	// Signal 0 doesn't actually send a signal, just checks if process exists
 	err = process.Signal(syscall.Signal(0))
 	if err != nil {
+		pm.Logger.Errorf("[StatusGenerator] Process not responsive for service %s: %v", servicePath, err)
 		// Process is not responsive - service is down
 		info.Status = process_shared.ServiceDown
 		info.Pid = 0
@@ -321,11 +328,13 @@ func (pm *ProcessManager) Status(ctx context.Context, servicePath string, fsServ
 	// Get process group ID
 	pgid, err := syscall.Getpgid(pid)
 	if err == nil {
+		pm.Logger.Debugf("[StatusGenerator] Process group ID for service %s: %d", servicePath, pgid)
 		info.Pgid = pgid
 	}
 
 	// Get process start time for uptime calculation
 	if stat, err := fsService.Stat(ctx, pidFile); err == nil {
+		pm.Logger.Debugf("[StatusGenerator] Process start time for service %s: %v", servicePath, stat.ModTime())
 		pidFileModTime := stat.ModTime()
 		uptime := time.Since(pidFileModTime)
 		info.Uptime = int64(uptime.Seconds())
