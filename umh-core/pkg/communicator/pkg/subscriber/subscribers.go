@@ -58,8 +58,7 @@ func NewHandler(
 	systemSnapshotManager *fsm.SnapshotManager,
 	configManager config.ConfigManager,
 	logger *zap.SugaredLogger,
-	topicBrowserCache *topicbrowser.Cache,
-	topicBrowserSimulator *topicbrowser.Simulator,
+	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator,
 ) *Handler {
 	encoding.ChooseEncoder(encoding.EncodingCorev1)
 	s := &Handler{}
@@ -75,8 +74,7 @@ func NewHandler(
 		systemSnapshotManager,
 		configManager,
 		logger,
-		topicBrowserCache,
-		topicBrowserSimulator,
+		topicBrowserCommunicator,
 	)
 
 	return s

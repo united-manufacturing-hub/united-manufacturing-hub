@@ -38,15 +38,24 @@ import (
 )
 
 type Buffer struct {
-	Payload   []byte    // lz4-decompressed data - but not unmarshalled (protobuf)
-	Timestamp time.Time // timestamp from within the logs
+	Payload     []byte    // hex-decoded data (protobuf)
+	Timestamp   time.Time // timestamp from within the logs
+	SequenceNum uint64    // sequence number for tracking order
+}
+
+// RingBufferSnapshot represents a snapshot of the ring buffer with sequence tracking
+type RingBufferSnapshot struct {
+	Items            []*Buffer // buffers from newest to oldest
+	LatestSequence   uint64    // highest sequence number in the snapshot
+	EarliestSequence uint64    // lowest sequence number in the snapshot
 }
 
 type Ringbuffer struct {
-	buf      []*Buffer
-	writePos int // next write index
-	count    int // number of elements
-	mu       sync.Mutex
+	buf        []*Buffer
+	writePos   int // next write index
+	count      int // number of elements
+	mu         sync.Mutex
+	nextSeqNum uint64 // sequence number for the next item
 }
 
 func NewRingbuffer(capacity uint64) *Ringbuffer {
@@ -60,8 +69,24 @@ func NewRingbuffer(capacity uint64) *Ringbuffer {
 	}
 
 	return &Ringbuffer{
-		buf: make([]*Buffer, capacity),
+		buf:        make([]*Buffer, capacity),
+		nextSeqNum: 1, // Start from 1
 	}
+}
+
+// NewRingbufferWithDefaultCapacity creates a ring buffer with a default capacity suitable for topic browser usage
+func NewRingbufferWithDefaultCapacity() *Ringbuffer {
+	return NewRingbuffer(64) // Reasonable default for topic browser
+}
+
+// GetNextSequenceNum returns the next sequence number and increments the counter
+func (rb *Ringbuffer) GetNextSequenceNum() uint64 {
+	rb.mu.Lock()
+	defer rb.mu.Unlock()
+
+	seqNum := rb.nextSeqNum
+	rb.nextSeqNum++
+	return seqNum
 }
 
 // Add a Buffer to the Ringbuffer, overwrite if full.
@@ -93,7 +118,10 @@ func (rb *Ringbuffer) Get() []*Buffer {
 		buf := rb.buf[index]
 		if buf != nil {
 			// clone for new allocated memory
-			clone := &Buffer{Timestamp: buf.Timestamp}
+			clone := &Buffer{
+				Timestamp:   buf.Timestamp,
+				SequenceNum: buf.SequenceNum,
+			}
 			if buf.Payload != nil {
 				clone.Payload = make([]byte, len(buf.Payload))
 				copy(clone.Payload, buf.Payload)
@@ -103,6 +131,52 @@ func (rb *Ringbuffer) Get() []*Buffer {
 	}
 
 	return out
+}
+
+// GetSnapshot returns a structured snapshot of the ring buffer with sequence tracking
+func (rb *Ringbuffer) GetSnapshot() RingBufferSnapshot {
+	rb.mu.Lock()
+	defer rb.mu.Unlock()
+
+	items := make([]*Buffer, 0, rb.count)
+	var latestSeq, earliestSeq uint64
+
+	for i := range rb.count {
+		index := (rb.writePos - 1 - i + len(rb.buf)) % len(rb.buf)
+
+		buf := rb.buf[index]
+		if buf != nil {
+			// clone for new allocated memory
+			clone := &Buffer{
+				Timestamp:   buf.Timestamp,
+				SequenceNum: buf.SequenceNum,
+			}
+			if buf.Payload != nil {
+				clone.Payload = make([]byte, len(buf.Payload))
+				copy(clone.Payload, buf.Payload)
+			}
+			items = append(items, clone)
+
+			// Track sequence numbers
+			if i == 0 { // First item (newest)
+				latestSeq = buf.SequenceNum
+				earliestSeq = buf.SequenceNum
+			} else {
+				if buf.SequenceNum > latestSeq {
+					latestSeq = buf.SequenceNum
+				}
+				if buf.SequenceNum < earliestSeq {
+					earliestSeq = buf.SequenceNum
+				}
+			}
+		}
+	}
+
+	return RingBufferSnapshot{
+		Items:            items,
+		LatestSequence:   latestSeq,
+		EarliestSequence: earliestSeq,
+	}
 }
 
 // Two pools: one for Buffer structs, one for byte slices large enough to
@@ -138,6 +212,7 @@ func (rb *Ringbuffer) GetBuffers() []*Buffer {
 	for i, src := range snap {
 		dst := bufPool.Get().(*Buffer)
 		dst.Timestamp = src.Timestamp
+		dst.SequenceNum = src.SequenceNum
 
 		// Ensure capacity without reallocating every time.
 		bPtr := bytePool.Get().(*[]byte)

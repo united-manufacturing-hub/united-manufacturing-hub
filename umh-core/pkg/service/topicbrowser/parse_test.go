@@ -15,17 +15,39 @@
 package topicbrowser
 
 import (
+	"encoding/binary"
 	"encoding/hex"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/pierrec/lz4/v4"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
+
+// decompressLZ4 decompresses LZ4 data that was compressed with the format used by makeLZ4Hex
+// Format: [4 bytes original length][LZ4 compressed data]
+func decompressLZ4(compressedData []byte) ([]byte, error) {
+	if len(compressedData) < 4 {
+		return nil, lz4.ErrInvalidSourceShortBuffer
+	}
+
+	// Read the original length from the first 4 bytes
+	originalLen := binary.LittleEndian.Uint32(compressedData[:4])
+
+	// Decompress the LZ4 data starting from byte 4
+	decompressed := make([]byte, originalLen)
+	_, err := lz4.UncompressBlock(compressedData[4:], decompressed)
+	if err != nil {
+		return nil, err
+	}
+
+	return decompressed, nil
+}
 
 // benthos log from samples for topic_browser plugin
 const rawLog = `STARTSTARTSTART
