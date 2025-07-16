@@ -62,6 +62,8 @@ type RemovalProgress struct {
 	MainSuperviseDirectoryEmpty bool
 	// LogSuperviseDirectoryEmpty indicates that log service supervise directory is empty/gone
 	LogSuperviseDirectoryEmpty bool
+	// WaitedForS6Cleanup indicates that we've waited one FSM tick for S6 to complete final cleanup
+	WaitedForS6Cleanup bool
 	// ServiceDirRemoved indicates that the service directory has been successfully removed
 	ServiceDirRemoved bool
 	// LogDirRemoved indicates that the log directory has been successfully removed
@@ -81,7 +83,7 @@ func (artifacts *ServiceArtifacts) IsFullyRemoved() bool {
 		return false
 	}
 	p := artifacts.RemovalProgress
-	return p.ProcessesStopped && p.SupervisorsStopped && p.MainSupervisorCleanupConfirmed && p.LogSupervisorCleanupConfirmed && p.MainSuperviseDirectoryEmpty && p.LogSuperviseDirectoryEmpty && p.ServiceDirRemoved && p.LogDirRemoved
+	return p.ProcessesStopped && p.SupervisorsStopped && p.MainSupervisorCleanupConfirmed && p.LogSupervisorCleanupConfirmed && p.MainSuperviseDirectoryEmpty && p.LogSuperviseDirectoryEmpty && p.WaitedForS6Cleanup && p.ServiceDirRemoved && p.LogDirRemoved
 }
 
 // CreateArtifacts creates a complete S6 service atomically
@@ -329,6 +331,27 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *Service
 		}
 		progress.LogSuperviseDirectoryEmpty = true
 		s.logger.Debugf("Log supervise directory empty for service: %s", artifacts.ServiceDir)
+	}
+
+	// Step 2.5e: Wait one FSM tick for S6 to complete final cleanup (idempotent)
+	//
+	// RACE CONDITION FIX - PHASE 5: Final S6 cleanup grace period
+	// Even after supervise directories are empty, S6 may still have file handles open
+	// or be performing final internal cleanup operations. This step ensures we wait
+	// one FSM tick to give S6 time to fully release all resources.
+	//
+	// CRITICAL: This prevents "directory not empty" errors during RemoveAll operations.
+	// Without this step, RemoveAll can fail because S6 still has file descriptors open
+	// or is in the middle of final cleanup operations.
+	//
+	// FSM COMPATIBILITY:
+	// - No blocking: Simply marks the step as complete and returns
+	// - Incremental progress: Next FSM tick will proceed to directory removal
+	// - Fast: Completes immediately, actual wait happens between FSM ticks
+	if !progress.WaitedForS6Cleanup {
+		progress.WaitedForS6Cleanup = true
+		s.logger.Debugf("Waiting one FSM tick for S6 final cleanup for service: %s", artifacts.ServiceDir)
+		return nil // Return and wait for next FSM tick before attempting directory removal
 	}
 
 	// Step 3: Remove service directory (idempotent)
