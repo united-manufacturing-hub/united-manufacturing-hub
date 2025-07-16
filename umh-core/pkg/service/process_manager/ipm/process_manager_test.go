@@ -1033,7 +1033,7 @@ var _ = Describe("ProcessManager", func() {
 
 			// Setup mock to simulate a running process
 			identifier := servicePathToIdentifier(servicePath)
-			pidFile := filepath.Join(pm.serviceDirectory, string(identifier), pidFileName)
+			pidFile := filepath.Join(pm.serviceDirectory, string(identifier), PidFileName)
 			mockPid := "1234"
 
 			// Mock filesystem to return PID file content
@@ -1097,7 +1097,7 @@ var _ = Describe("ProcessManager", func() {
 
 			// Setup mock to simulate corrupted PID file
 			identifier := servicePathToIdentifier(servicePath)
-			pidFile := filepath.Join(pm.serviceDirectory, string(identifier), pidFileName)
+			pidFile := filepath.Join(pm.serviceDirectory, string(identifier), PidFileName)
 
 			// Mock filesystem to return invalid PID content
 			mockFS := fsService.(*filesystem.MockFileSystem)
@@ -1141,7 +1141,7 @@ var _ = Describe("ProcessManager", func() {
 
 			// Setup mock to simulate filesystem error when reading PID file
 			identifier := servicePathToIdentifier(servicePath)
-			pidFile := filepath.Join(pm.serviceDirectory, string(identifier), pidFileName)
+			pidFile := filepath.Join(pm.serviceDirectory, string(identifier), PidFileName)
 
 			// Mock filesystem to return error
 			mockFS := fsService.(*filesystem.MockFileSystem)

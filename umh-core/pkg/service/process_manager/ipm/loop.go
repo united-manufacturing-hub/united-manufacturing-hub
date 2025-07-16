@@ -1,3 +1,6 @@
+//go:build internal_process_manager
+// +build internal_process_manager
+
 // Copyright 2025 UMH Systems GmbH
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,17 +27,9 @@ import (
 )
 
 const (
-	// Directory structure constants
-	logDirectoryName    = "log"
-	configDirectoryName = "config"
-	pidFileName         = "run.pid"
-
-	// File permissions
-	configFilePermission = 0644
-
-	// Process termination constants
-	cleanupTimeReserve = 20 * time.Millisecond
-	stepTimeThreshold  = 10 * time.Millisecond
+	// Process termination constants - using common constants from constants.go
+	cleanupTimeReserve = CleanupTimeReserve
+	stepTimeThreshold  = StepTimeThreshold
 )
 
 // step processes queued service operations (create, remove, restart, etc.) in a time-bounded manner.

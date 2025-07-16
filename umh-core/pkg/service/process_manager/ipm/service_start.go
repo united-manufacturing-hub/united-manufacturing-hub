@@ -1,3 +1,6 @@
+//go:build internal_process_manager
+// +build internal_process_manager
+
 // Copyright 2025 UMH Systems GmbH
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -37,7 +40,7 @@ func (pm *ProcessManager) startService(ctx context.Context, identifier serviceId
 	pm.Logger.Info("Starting service", zap.String("identifier", string(identifier)))
 
 	servicePath := filepath.Join(pm.serviceDirectory, string(identifier))
-	pidFile := filepath.Join(servicePath, pidFileName)
+	pidFile := filepath.Join(servicePath, PidFileName)
 
 	// Check if there's already a PID file indicating a running process
 	if _, err := fsService.Stat(ctx, pidFile); err == nil {
@@ -82,9 +85,9 @@ func (pm *ProcessManager) startService(ctx context.Context, identifier serviceId
 // could cause management issues later.
 func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier serviceIdentifier, config process_manager_serviceconfig.ProcessManagerServiceConfig, fsService filesystem.Service) error {
 	servicePath := filepath.Join(pm.serviceDirectory, string(identifier))
-	configPath := filepath.Join(servicePath, configDirectoryName)
-	logPath := filepath.Join(servicePath, logDirectoryName)
-	pidFile := filepath.Join(servicePath, pidFileName)
+	configPath := filepath.Join(servicePath, ConfigDirectoryName)
+	logPath := filepath.Join(servicePath, LogDirectoryName)
+	pidFile := filepath.Join(servicePath, PidFileName)
 
 	// Ensure log directory exists
 	if err := fsService.EnsureDirectory(ctx, logPath); err != nil {
@@ -101,8 +104,8 @@ func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier
 
 	// Determine the command to execute - for now, assume there's a "run.sh" script
 	// TODO: This should be configurable in the service config
-	commandPath := filepath.Join(configPath, "run.sh")
-	currentLogFile := filepath.Join(logPath, "current")
+	commandPath := filepath.Join(configPath, RunScriptFileName)
+	currentLogFile := filepath.Join(logPath, CurrentLogFileName)
 
 	var cmd *exec.Cmd
 
@@ -148,7 +151,7 @@ func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier
 
 	// Atomically write the PID to the file
 	pidData := []byte(strconv.Itoa(pid))
-	if err := fsService.WriteFile(ctx, pidFile, pidData, configFilePermission); err != nil {
+	if err := fsService.WriteFile(ctx, pidFile, pidData, ConfigFilePermission); err != nil {
 		// If writing PID fails, terminate the process to maintain consistency
 		pm.Logger.Error("Failed to write PID file, terminating process", zap.Int("pid", pid), zap.Error(err))
 		if killErr := cmd.Process.Kill(); killErr != nil {

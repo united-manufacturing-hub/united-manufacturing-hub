@@ -1,3 +1,6 @@
+//go:build internal_process_manager
+// +build internal_process_manager
+
 // Copyright 2025 UMH Systems GmbH
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -79,7 +82,7 @@ func (pm *ProcessManager) stopService(ctx context.Context, identifier serviceIde
 	}
 
 	servicePath := filepath.Join(pm.serviceDirectory, string(identifier))
-	pidFile := filepath.Join(servicePath, pidFileName)
+	pidFile := filepath.Join(servicePath, PidFileName)
 
 	// Attempt to terminate the running process gracefully
 	if err := pm.terminateServiceProcess(ctx, identifier, servicePath, fsService); err != nil {
@@ -134,7 +137,7 @@ func (pm *ProcessManager) terminateServiceProcess(ctx context.Context, identifie
 // it indicates that the service is not running, which is valuable information for
 // service management operations.
 func (pm *ProcessManager) readProcessPid(ctx context.Context, servicePath string, fsService filesystem.Service) (int, error) {
-	pidFile := filepath.Join(servicePath, pidFileName)
+	pidFile := filepath.Join(servicePath, PidFileName)
 	pidBytes, err := fsService.ReadFile(ctx, pidFile)
 	if err != nil {
 		pm.Logger.Info("Process not running anymore, skipping termination", zap.String("pidFile", pidFile))
@@ -297,10 +300,9 @@ func (pm *ProcessManager) recordExitEvent(identifier serviceIdentifier, exitCode
 	// Add to exit history
 	service.history.ExitHistory = append(service.history.ExitHistory, exitEvent)
 
-	// Keep only the last 100 exit events to prevent unbounded memory growth
-	const maxExitEvents = 100
-	if len(service.history.ExitHistory) > maxExitEvents {
-		service.history.ExitHistory = service.history.ExitHistory[len(service.history.ExitHistory)-maxExitEvents:]
+	// Keep only the last N exit events to prevent unbounded memory growth
+	if len(service.history.ExitHistory) > MaxExitEvents {
+		service.history.ExitHistory = service.history.ExitHistory[len(service.history.ExitHistory)-MaxExitEvents:]
 	}
 
 	// Update service in the registry

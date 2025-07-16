@@ -1,3 +1,6 @@
+//go:build internal_process_manager
+// +build internal_process_manager
+
 // Copyright 2025 UMH Systems GmbH
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -55,14 +59,14 @@ func (lm *LogManager) RegisterService(identifier serviceIdentifier, logPath stri
 	lm.mu.Lock()
 	defer lm.mu.Unlock()
 
-	// Enforce size limits (4KB min, ~256MB max)
-	if maxSize < 4096 {
-		maxSize = 4096
-	} else if maxSize > 256*1024*1024 {
-		maxSize = 256 * 1024 * 1024
+	// Enforce size limits
+	if maxSize < MinLogFileSize {
+		maxSize = MinLogFileSize
+	} else if maxSize > MaxLogFileSize {
+		maxSize = MaxLogFileSize
 	}
 
-	currentLogFile := filepath.Join(logPath, "current")
+	currentLogFile := filepath.Join(logPath, CurrentLogFileName)
 
 	lm.services[identifier] = logInfo{
 		LogPath:        logPath,
@@ -120,14 +124,41 @@ func (lm *LogManager) rotateIfNeeded(ctx context.Context, identifier serviceIden
 		return nil
 	}
 
+	// Perform the actual rotation
+	return lm.performRotation(ctx, identifier, info, fsService, stat.Size())
+}
+
+// RotateLogFile forces rotation for a specific service, regardless of size.
+// This method is called by LogLineWriter when it detects that rotation is needed.
+func (lm *LogManager) RotateLogFile(identifier serviceIdentifier, fsService filesystem.Service) error {
+	lm.mu.RLock()
+	info, exists := lm.services[identifier]
+	lm.mu.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("service not registered: %s", identifier)
+	}
+
+	// Get current file size before rotation for logging
+	var currentSize int64
+	if stat, err := fsService.Stat(context.Background(), info.CurrentLogFile); err == nil {
+		currentSize = stat.Size()
+	}
+
+	// Perform the actual rotation
+	return lm.performRotation(context.Background(), identifier, info, fsService, currentSize)
+}
+
+// performRotation performs the actual log file rotation with TAI64N timestamping and cleanup.
+// This is the common implementation used by both rotateIfNeeded and RotateLogFile.
+func (lm *LogManager) performRotation(ctx context.Context, identifier serviceIdentifier, info logInfo, fsService filesystem.Service, currentSize int64) error {
 	// Generate TAI64N timestamp for the rotated file
 	tai64nString := tai64.FormatNano(time.Now())
-
 	// Remove the '@' prefix from the TAI64N string if present
 	tai64nString = strings.TrimPrefix(tai64nString, "@")
 
 	// Create rotated filename: TAI64N timestamp + .log extension
-	rotatedPath := filepath.Join(info.LogPath, tai64nString+".log")
+	rotatedPath := filepath.Join(info.LogPath, tai64nString+LogFileExtension)
 
 	// Rename current log file to rotated filename
 	if err := fsService.Rename(ctx, info.CurrentLogFile, rotatedPath); err != nil {
@@ -137,10 +168,60 @@ func (lm *LogManager) rotateIfNeeded(ctx context.Context, identifier serviceIden
 	lm.Logger.Info("Log file rotated",
 		zap.String("identifier", string(identifier)),
 		zap.String("rotatedFile", rotatedPath),
-		zap.Int64("size", stat.Size()))
+		zap.Int64("size", currentSize))
 
-	// Note: We don't need to create a new "current" file - the shell redirection will create it
-	// automatically when the process writes to it next
+	// Clean up old log files (keep only last 10)
+	if err := lm.cleanupOldLogs(info.LogPath, fsService); err != nil {
+		lm.Logger.Warn("Error cleaning up old logs",
+			zap.String("identifier", string(identifier)),
+			zap.Error(err))
+		// Don't return error - rotation succeeded
+	}
+
+	return nil
+}
+
+// cleanupOldLogs keeps only the 10 most recent log files in the specified directory.
+// It sorts log files by modification time and removes the oldest ones beyond the limit.
+func (lm *LogManager) cleanupOldLogs(logPath string, fsService filesystem.Service) error {
+	files, err := fsService.ReadDir(context.Background(), logPath)
+	if err != nil {
+		return fmt.Errorf("failed to read log directory: %w", err)
+	}
+
+	// Filter .log files (exclude "current")
+	var logFiles []string
+	for _, file := range files {
+		if strings.HasSuffix(file.Name(), LogFileExtension) && file.Name() != CurrentLogFileName {
+			logFiles = append(logFiles, filepath.Join(logPath, file.Name()))
+		}
+	}
+
+	if len(logFiles) <= DefaultLogFileRetention {
+		return nil // No cleanup needed
+	}
+
+	// Sort by modification time (newest first)
+	sort.Slice(logFiles, func(i, j int) bool {
+		statI, errI := fsService.Stat(context.Background(), logFiles[i])
+		statJ, errJ := fsService.Stat(context.Background(), logFiles[j])
+		if errI != nil || errJ != nil {
+			return false // Keep both files if we can't stat them
+		}
+		return statI.ModTime().After(statJ.ModTime())
+	})
+
+	// Remove old files (keep first N)
+	for i := DefaultLogFileRetention; i < len(logFiles); i++ {
+		if err := fsService.Remove(context.Background(), logFiles[i]); err != nil {
+			lm.Logger.Error("Error removing old log file",
+				zap.String("file", logFiles[i]),
+				zap.Error(err))
+			// Continue with other files
+		} else {
+			lm.Logger.Debug("Removed old log file", zap.String("file", logFiles[i]))
+		}
+	}
 
 	return nil
 }

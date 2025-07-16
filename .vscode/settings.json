@@ -1,4 +1,4 @@
 {
-    "go.buildTags": "test",
+    "go.buildTags": "test,internal_process_manager",
     "makefile.configureOnOpen": false
-} 
+}

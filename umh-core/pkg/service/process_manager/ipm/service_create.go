@@ -1,3 +1,6 @@
+//go:build internal_process_manager
+// +build internal_process_manager
+
 // Copyright 2025 UMH Systems GmbH
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -42,7 +45,7 @@ func (pm *ProcessManager) createService(ctx context.Context, identifier serviceI
 
 	// Check if there's an old PID file from a previous service instance
 	servicePath := filepath.Join(pm.serviceDirectory, string(identifier))
-	pidFile := filepath.Join(servicePath, pidFileName)
+	pidFile := filepath.Join(servicePath, PidFileName)
 
 	pm.Logger.Info("Checking for old PID file", zap.String("pidFile", pidFile))
 
@@ -102,8 +105,8 @@ func (pm *ProcessManager) createServiceDirectories(ctx context.Context, identifi
 	servicePath := filepath.Join(pm.serviceDirectory, string(identifier))
 
 	directories := []string{
-		filepath.Join(servicePath, logDirectoryName),
-		filepath.Join(servicePath, configDirectoryName),
+		filepath.Join(servicePath, LogDirectoryName),
+		filepath.Join(servicePath, ConfigDirectoryName),
 	}
 
 	for _, dir := range directories {
@@ -122,12 +125,12 @@ func (pm *ProcessManager) createServiceDirectories(ctx context.Context, identifi
 // necessary configuration data. Each file is written with appropriate permissions to maintain
 // security while allowing the service to read its configuration.
 func (pm *ProcessManager) writeServiceConfigFiles(ctx context.Context, identifier serviceIdentifier, config process_manager_serviceconfig.ProcessManagerServiceConfig, fsService filesystem.Service) error {
-	configDirectory := filepath.Join(pm.serviceDirectory, string(identifier), configDirectoryName)
+	configDirectory := filepath.Join(pm.serviceDirectory, string(identifier), ConfigDirectoryName)
 
 	// First, write all user-provided configuration files
 	for configFileName, configFileContent := range config.ConfigFiles {
 		configFilePath := filepath.Join(configDirectory, configFileName)
-		if err := fsService.WriteFile(ctx, configFilePath, []byte(configFileContent), configFilePermission); err != nil {
+		if err := fsService.WriteFile(ctx, configFilePath, []byte(configFileContent), ConfigFilePermission); err != nil {
 			return fmt.Errorf("error writing config file %s: %w", configFileName, err)
 		}
 	}
@@ -144,8 +147,8 @@ func (pm *ProcessManager) writeServiceConfigFiles(ctx context.Context, identifie
 // This script serves as the entry point for the service process and handles command execution
 // with proper argument passing and environment variable setup.
 func (pm *ProcessManager) generateRunScript(ctx context.Context, identifier serviceIdentifier, config process_manager_serviceconfig.ProcessManagerServiceConfig, fsService filesystem.Service) error {
-	configDirectory := filepath.Join(pm.serviceDirectory, string(identifier), configDirectoryName)
-	runScriptPath := filepath.Join(configDirectory, "run.sh")
+	configDirectory := filepath.Join(pm.serviceDirectory, string(identifier), ConfigDirectoryName)
+	runScriptPath := filepath.Join(configDirectory, RunScriptFileName)
 
 	// Build the shell script content
 	var scriptBuilder strings.Builder
@@ -188,7 +191,7 @@ func (pm *ProcessManager) generateRunScript(ctx context.Context, identifier serv
 
 	// Write the script file with executable permissions
 	scriptContent := scriptBuilder.String()
-	if err := fsService.WriteFile(ctx, runScriptPath, []byte(scriptContent), 0755); err != nil {
+	if err := fsService.WriteFile(ctx, runScriptPath, []byte(scriptContent), ScriptFilePermission); err != nil {
 		return fmt.Errorf("error writing run script: %w", err)
 	}
 

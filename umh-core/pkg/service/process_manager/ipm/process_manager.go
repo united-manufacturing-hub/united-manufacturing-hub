@@ -1,3 +1,6 @@
+//go:build internal_process_manager
+// +build internal_process_manager
+
 // Copyright 2025 UMH Systems GmbH
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -255,7 +258,7 @@ func (pm *ProcessManager) Status(ctx context.Context, servicePath string, fsServ
 
 	// Update runtime status by checking actual process state
 	serviceDir := filepath.Join(pm.serviceDirectory, string(identifier))
-	pidFile := filepath.Join(serviceDir, pidFileName)
+	pidFile := filepath.Join(serviceDir, PidFileName)
 
 	// Check if PID file exists
 	pidBytes, err := fsService.ReadFile(ctx, pidFile)
@@ -384,7 +387,7 @@ func (pm *ProcessManager) GetConfig(ctx context.Context, servicePath string, fsS
 	// Optionally validate that config files on disk match what we have stored
 	// This ensures consistency between in-memory state and filesystem
 	serviceDir := filepath.Join(pm.serviceDirectory, string(identifier))
-	configDir := filepath.Join(serviceDir, configDirectoryName)
+	configDir := filepath.Join(serviceDir, ConfigDirectoryName)
 
 	// Check if config directory exists
 	if exists, err := fsService.PathExists(ctx, configDir); err == nil && exists {
@@ -432,7 +435,7 @@ func (pm *ProcessManager) GetConfigFile(ctx context.Context, servicePath string,
 
 	// Optionally verify the file exists on disk and matches
 	serviceDir := filepath.Join(pm.serviceDirectory, string(identifier))
-	configFile := filepath.Join(serviceDir, configDirectoryName, configFileName)
+	configFile := filepath.Join(serviceDir, ConfigDirectoryName, configFileName)
 
 	if fileExists, err := fsService.FileExists(ctx, configFile); err == nil && fileExists {
 		// Read from disk to verify consistency
@@ -479,8 +482,8 @@ func (pm *ProcessManager) GetLogs(ctx context.Context, servicePath string, fsSer
 
 	// Construct the path to the current log file
 	serviceDir := filepath.Join(pm.serviceDirectory, string(identifier))
-	logDir := filepath.Join(serviceDir, logDirectoryName)
-	currentLogFile := filepath.Join(logDir, "current")
+	logDir := filepath.Join(serviceDir, LogDirectoryName)
+	currentLogFile := filepath.Join(logDir, CurrentLogFileName)
 
 	// Check if the log file exists
 	exists, err := fsService.FileExists(ctx, currentLogFile)
