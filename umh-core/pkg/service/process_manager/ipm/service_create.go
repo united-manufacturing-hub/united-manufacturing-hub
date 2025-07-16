@@ -45,8 +45,8 @@ func (pm *ProcessManager) createService(ctx context.Context, identifier constant
 	}
 
 	// Check if there's an old PID file from a previous service instance
-	servicePath := filepath.Join(pm.ServiceDirectory, string(identifier))
-	pidFile := filepath.Join(servicePath, constants.PidFileName)
+	servicePath := string(identifier) // Convert identifier back to servicePath
+	pidFile := filepath.Join(pm.ServiceDirectory, "services", servicePath, constants.PidFileName)
 
 	pm.Logger.Info("Checking for old PID file", zap.String("pidFile", pidFile))
 
@@ -103,11 +103,11 @@ func (pm *ProcessManager) getServiceConfig(identifier constants.ServiceIdentifie
 // while the config directory will contain all service-specific configuration files.
 // This separation ensures that service data is organized and accessible for debugging and monitoring.
 func (pm *ProcessManager) createServiceDirectories(ctx context.Context, identifier constants.ServiceIdentifier, fsService filesystem.Service) error {
-	servicePath := filepath.Join(pm.ServiceDirectory, string(identifier))
+	servicePath := string(identifier) // Convert identifier back to servicePath
 
 	directories := []string{
-		filepath.Join(servicePath, constants.LogDirectoryName),
-		filepath.Join(servicePath, constants.ConfigDirectoryName),
+		filepath.Join(pm.ServiceDirectory, "logs", servicePath),
+		filepath.Join(pm.ServiceDirectory, "services", servicePath),
 	}
 
 	for _, dir := range directories {
@@ -126,7 +126,8 @@ func (pm *ProcessManager) createServiceDirectories(ctx context.Context, identifi
 // necessary configuration data. Each file is written with appropriate permissions to maintain
 // security while allowing the service to read its configuration.
 func (pm *ProcessManager) writeServiceConfigFiles(ctx context.Context, identifier constants.ServiceIdentifier, config process_manager_serviceconfig.ProcessManagerServiceConfig, fsService filesystem.Service) error {
-	configDirectory := filepath.Join(pm.ServiceDirectory, string(identifier), constants.ConfigDirectoryName)
+	servicePath := string(identifier) // Convert identifier back to servicePath
+	configDirectory := filepath.Join(pm.ServiceDirectory, "services", servicePath)
 
 	// First, write all user-provided configuration files
 	for configFileName, configFileContent := range config.ConfigFiles {
@@ -148,7 +149,8 @@ func (pm *ProcessManager) writeServiceConfigFiles(ctx context.Context, identifie
 // This script serves as the entry point for the service process and handles command execution
 // with proper argument passing and environment variable setup.
 func (pm *ProcessManager) generateRunScript(ctx context.Context, identifier constants.ServiceIdentifier, config process_manager_serviceconfig.ProcessManagerServiceConfig, fsService filesystem.Service) error {
-	configDirectory := filepath.Join(pm.ServiceDirectory, string(identifier), constants.ConfigDirectoryName)
+	servicePath := string(identifier) // Convert identifier back to servicePath
+	configDirectory := filepath.Join(pm.ServiceDirectory, "services", servicePath)
 	runScriptPath := filepath.Join(configDirectory, constants.RunScriptFileName)
 
 	// Build the shell script content
@@ -182,7 +184,7 @@ func (pm *ProcessManager) generateRunScript(ctx context.Context, identifier cons
 		configIndex := strings.Index(arg, "/config/")
 		if configIndex != -1 {
 			arg = arg[configIndex:]
-			arg = filepath.Join(pm.ServiceDirectory, string(identifier), arg)
+			arg = filepath.Join(pm.ServiceDirectory, "services", servicePath, arg)
 		}
 		// Simple shell escaping - wrap arguments in single quotes and escape any single quotes
 		escapedArg := strings.ReplaceAll(arg, "'", "'\"'\"'")

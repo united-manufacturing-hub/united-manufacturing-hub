@@ -43,7 +43,7 @@ import (
 func (pm *ProcessManager) removeService(ctx context.Context, identifier constants.ServiceIdentifier, fsService filesystem.Service) error {
 	pm.Logger.Info("Removing service", zap.String("identifier", string(identifier)))
 
-	servicePath := filepath.Join(pm.ServiceDirectory, string(identifier))
+	servicePath := string(identifier) // Convert identifier back to servicePath
 
 	// Close the log file for this service to prevent file handle leaks
 	if pm.logManager != nil {
@@ -59,8 +59,8 @@ func (pm *ProcessManager) removeService(ctx context.Context, identifier constant
 		pm.Logger.Error("Error terminating process, continuing with cleanup", zap.Error(err))
 	}
 
-	// Clean up the service directory
-	if err := pm.cleanupServiceDirectory(ctx, servicePath, fsService); err != nil {
+	// Clean up the service directories (both logs and services)
+	if err := pm.cleanupServiceDirectories(ctx, servicePath, fsService); err != nil {
 		return err
 	}
 
@@ -82,8 +82,8 @@ func (pm *ProcessManager) stopService(ctx context.Context, identifier constants.
 		return fmt.Errorf("service %s not found", string(identifier))
 	}
 
-	servicePath := filepath.Join(pm.ServiceDirectory, string(identifier))
-	pidFile := filepath.Join(servicePath, constants.PidFileName)
+	servicePath := string(identifier) // Convert identifier back to servicePath
+	pidFile := filepath.Join(pm.ServiceDirectory, "services", servicePath, constants.PidFileName)
 
 	// Attempt to terminate the running process gracefully
 	if err := pm.terminateServiceProcess(ctx, identifier, servicePath, fsService); err != nil {
@@ -209,7 +209,7 @@ func (pm *ProcessManager) terminateProcess(ctx context.Context, identifier const
 // system responsiveness while allowing reasonable cleanup time.
 // Returns the exit status if the process exits normally, or an error if it times out.
 func (pm *ProcessManager) waitForProcessExit(ctx context.Context, process *os.Process, pid int) (*os.ProcessState, error) {
-	waitCtx, cancel, err := GenerateContext(ctx, cleanupTimeReserve)
+	waitCtx, cancel, err := GenerateContext(ctx, constants.CleanupTimeReserve)
 	if err != nil {
 		pm.Logger.Error("Error generating wait context", zap.Error(err))
 		return nil, err
@@ -279,6 +279,32 @@ func (pm *ProcessManager) cleanupServiceDirectory(ctx context.Context, servicePa
 	if err := fsService.RemoveAll(ctx, servicePath); err != nil {
 		return fmt.Errorf("error removing pid file: %w", err)
 	}
+	return nil
+}
+
+// cleanupServiceDirectories removes both the logs and services directories for a service.
+// This function handles the new directory structure where logs and services are in separate
+// top-level directories under ServiceDirectory. It ensures complete cleanup of all service
+// artifacts including logs, configuration files, and PID files.
+func (pm *ProcessManager) cleanupServiceDirectories(ctx context.Context, servicePath string, fsService filesystem.Service) error {
+	// Clean up logs directory
+	logDir := filepath.Join(pm.ServiceDirectory, "logs", servicePath)
+	if err := fsService.RemoveAll(ctx, logDir); err != nil {
+		pm.Logger.Error("Error removing logs directory", zap.String("logDir", logDir), zap.Error(err))
+		// Continue with services directory cleanup even if logs cleanup fails
+	}
+
+	// Clean up services directory (contains config files and PID file)
+	serviceDir := filepath.Join(pm.ServiceDirectory, "services", servicePath)
+	if err := fsService.RemoveAll(ctx, serviceDir); err != nil {
+		return fmt.Errorf("error removing services directory: %w", err)
+	}
+
+	pm.Logger.Debug("Cleaned up service directories",
+		zap.String("servicePath", servicePath),
+		zap.String("logDir", logDir),
+		zap.String("serviceDir", serviceDir))
+
 	return nil
 }
 

@@ -40,8 +40,8 @@ import (
 func (pm *ProcessManager) startService(ctx context.Context, identifier constants.ServiceIdentifier, fsService filesystem.Service) error {
 	pm.Logger.Info("Starting service", zap.String("identifier", string(identifier)))
 
-	servicePath := filepath.Join(pm.ServiceDirectory, string(identifier))
-	pidFile := filepath.Join(servicePath, constants.PidFileName)
+	servicePath := string(identifier) // Convert identifier back to servicePath
+	pidFile := filepath.Join(pm.ServiceDirectory, "services", servicePath, constants.PidFileName)
 
 	// Check if there's already a PID file indicating a running process
 	if _, err := fsService.Stat(ctx, pidFile); err == nil {
@@ -85,10 +85,10 @@ func (pm *ProcessManager) startService(ctx context.Context, identifier constants
 // is recorded, or neither happens, preventing orphaned processes or missing PID files that
 // could cause management issues later.
 func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier constants.ServiceIdentifier, config process_manager_serviceconfig.ProcessManagerServiceConfig, fsService filesystem.Service) error {
-	servicePath := filepath.Join(pm.ServiceDirectory, string(identifier))
-	configPath := filepath.Join(servicePath, constants.ConfigDirectoryName)
-	logPath := filepath.Join(servicePath, constants.LogDirectoryName)
-	pidFile := filepath.Join(servicePath, constants.PidFileName)
+	servicePath := string(identifier) // Convert identifier back to servicePath
+	configPath := filepath.Join(pm.ServiceDirectory, "services", servicePath)
+	logPath := filepath.Join(pm.ServiceDirectory, "logs", servicePath)
+	pidFile := filepath.Join(pm.ServiceDirectory, "services", servicePath, constants.PidFileName)
 
 	// Ensure log directory exists
 	if err := fsService.EnsureDirectory(ctx, logPath); err != nil {

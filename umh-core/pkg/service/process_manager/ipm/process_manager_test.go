@@ -128,8 +128,8 @@ var _ = Describe("ProcessManager", func() {
 			Expect(pm.TaskQueue).To(HaveLen(0))
 
 			// Verify directories were created
-			logDir := filepath.Join(ipm.DefaultServiceDirectory, servicePath, "log")
-			configDir := filepath.Join(ipm.DefaultServiceDirectory, servicePath, "config")
+			logDir := filepath.Join(ipm.DefaultServiceDirectory, "logs", servicePath)
+			configDir := filepath.Join(ipm.DefaultServiceDirectory, "services", servicePath)
 
 			logDirExists, err := fsService.PathExists(ctx, logDir)
 			Expect(err).ToNot(HaveOccurred())

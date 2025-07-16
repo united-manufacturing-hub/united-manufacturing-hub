@@ -17,15 +17,12 @@
 
 package constants
 
-import (
-	"fmt"
-
-	"github.com/zeebo/xxh3"
-)
+import "strings"
 
 type ServiceIdentifier string
 
 func ServicePathToIdentifier(servicePath string) ServiceIdentifier {
-	hash := xxh3.HashString(servicePath)
-	return ServiceIdentifier(fmt.Sprintf("%x", hash))
+	// Cut the leading /run/service/
+	servicePath = strings.TrimPrefix(servicePath, "/run/service/")
+	return ServiceIdentifier(servicePath)
 }

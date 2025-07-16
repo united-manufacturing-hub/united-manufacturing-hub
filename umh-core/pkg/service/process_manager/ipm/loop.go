@@ -27,12 +27,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const (
-	// Process termination constants - using common constants from constants.go
-	cleanupTimeReserve = constants.CleanupTimeReserve
-	stepTimeThreshold  = constants.StepTimeThreshold
-)
-
 // step processes queued service operations (create, remove, restart, etc.) in a time-bounded manner.
 // It operates under the assumption that the ProcessManager mutex is already locked by the caller.
 // The function processes one operation at a time and recursively calls itself if there's sufficient
@@ -48,7 +42,7 @@ func (pm *ProcessManager) step(ctx context.Context, fsService filesystem.Service
 	if !ok {
 		pm.Logger.Error("Context has no deadline, this should never happen")
 		return fmt.Errorf("context has no deadline")
-	} else if time.Until(deadline) <= stepTimeThreshold {
+	} else if time.Until(deadline) <= constants.StepTimeThreshold {
 		pm.Logger.Info("No time left, stopping")
 		return nil // No time left, stop
 	}

@@ -92,7 +92,7 @@ type service struct {
 	History process_shared.ServiceInfo
 }
 
-const DefaultServiceDirectory = "/data/ipm"
+const DefaultServiceDirectory = "/data"
 
 // ProcessManagerOption is a functional option for configuring ProcessManager
 type ProcessManagerOption func(*ProcessManager)
@@ -259,8 +259,7 @@ func (pm *ProcessManager) Status(ctx context.Context, servicePath string, fsServ
 	info := service.History
 
 	// Update runtime status by checking actual process state
-	serviceDir := filepath.Join(pm.ServiceDirectory, string(identifier))
-	pidFile := filepath.Join(serviceDir, constants.PidFileName)
+	pidFile := filepath.Join(pm.ServiceDirectory, "services", servicePath, constants.PidFileName)
 
 	// Check if PID file exists
 	pidBytes, err := fsService.ReadFile(ctx, pidFile)
@@ -388,8 +387,7 @@ func (pm *ProcessManager) GetConfig(ctx context.Context, servicePath string, fsS
 
 	// Optionally validate that config files on disk match what we have stored
 	// This ensures consistency between in-memory state and filesystem
-	serviceDir := filepath.Join(pm.ServiceDirectory, string(identifier))
-	configDir := filepath.Join(serviceDir, constants.ConfigDirectoryName)
+	configDir := filepath.Join(pm.ServiceDirectory, "services", servicePath)
 
 	// Check if config directory exists
 	if exists, err := fsService.PathExists(ctx, configDir); err == nil && exists {
@@ -436,8 +434,7 @@ func (pm *ProcessManager) GetConfigFile(ctx context.Context, servicePath string,
 	}
 
 	// Optionally verify the file exists on disk and matches
-	serviceDir := filepath.Join(pm.ServiceDirectory, string(identifier))
-	configFile := filepath.Join(serviceDir, constants.ConfigDirectoryName, configFileName)
+	configFile := filepath.Join(pm.ServiceDirectory, "services", servicePath, configFileName)
 
 	if fileExists, err := fsService.FileExists(ctx, configFile); err == nil && fileExists {
 		// Read from disk to verify consistency
@@ -483,8 +480,7 @@ func (pm *ProcessManager) GetLogs(ctx context.Context, servicePath string, fsSer
 	}
 
 	// Construct the path to the current log file
-	serviceDir := filepath.Join(pm.ServiceDirectory, string(identifier))
-	logDir := filepath.Join(serviceDir, constants.LogDirectoryName)
+	logDir := filepath.Join(pm.ServiceDirectory, "logs", servicePath)
 	currentLogFile := filepath.Join(logDir, constants.CurrentLogFileName)
 
 	// Check if the log file exists
