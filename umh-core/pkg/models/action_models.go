@@ -545,6 +545,7 @@ const (
 	ProtocolConverterWriteLogType LogType = "protocol-converter-write"
 	RedpandaLogType               LogType = "redpanda"
 	TopicBrowserLogType           LogType = "topic-browser"
+	StreamProcessorLogType        LogType = "stream-processor"
 )
 
 // GetLogsRequest contains the necessary fields for executing a `get-logs` action.
