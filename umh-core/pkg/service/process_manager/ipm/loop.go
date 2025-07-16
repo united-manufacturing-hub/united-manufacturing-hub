@@ -63,8 +63,8 @@ func (pm *ProcessManager) step(ctx context.Context, fsService filesystem.Service
 	}
 
 	// Check if there are any tasks to process
-	if len(pm.taskQueue) > 0 {
-		task := pm.taskQueue[0]
+	if len(pm.TaskQueue) > 0 {
+		task := pm.TaskQueue[0]
 		pm.Logger.Info("Processing task", zap.String("operation", task.Operation.String()), zap.String("identifier", string(task.Identifier)))
 
 		var err error
@@ -86,7 +86,7 @@ func (pm *ProcessManager) step(ctx context.Context, fsService filesystem.Service
 					Identifier: task.Identifier,
 					Operation:  OperationStart,
 				}
-				pm.taskQueue = append(pm.taskQueue, startTask)
+				pm.TaskQueue = append(pm.TaskQueue, startTask)
 				pm.Logger.Info("Restart: stop succeeded, queued start operation", zap.String("identifier", string(task.Identifier)))
 			} else {
 				pm.Logger.Error("Restart: stop failed, not queuing start operation", zap.String("identifier", string(task.Identifier)), zap.Error(err))
@@ -101,25 +101,25 @@ func (pm *ProcessManager) step(ctx context.Context, fsService filesystem.Service
 		}
 
 		// Remove the processed task from the queue
-		pm.taskQueue = pm.taskQueue[1:]
+		pm.TaskQueue = pm.TaskQueue[1:]
 	}
 
 	// Only recurse if there are more tasks to process
-	if len(pm.taskQueue) > 0 {
+	if len(pm.TaskQueue) > 0 {
 		return pm.step(ctx, fsService)
 	}
 
 	return nil
 }
 
-// generateContext creates a new context with a deadline that reserves the specified timeout duration.
+// GenerateContext creates a new context with a deadline that reserves the specified timeout duration.
 // This function is essential for implementing proper timeout management in nested operations.
 // By creating a context that expires before the parent context, it ensures that calling functions
 // have sufficient time to perform cleanup operations after the nested operation completes or times out.
 // This prevents cascading timeout failures and ensures that the overall operation can complete
 // within its allocated time budget. The function validates that sufficient time remains before
 // creating the new context, preventing operations from starting when they cannot complete successfully.
-func generateContext(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc, error) {
+func GenerateContext(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc, error) {
 	// Check if we have enough time on the ctx (if not, we will return an error)
 	if ctx.Err() != nil {
 		return nil, nil, ctx.Err()

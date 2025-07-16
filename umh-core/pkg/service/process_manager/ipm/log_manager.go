@@ -37,7 +37,7 @@ type LogManager struct {
 	mu     sync.RWMutex
 
 	// Track services and their log file sizes for rotation
-	services map[serviceIdentifier]logInfo
+	services map[ServiceIdentifier]logInfo
 }
 
 type logInfo struct {
@@ -50,12 +50,12 @@ type logInfo struct {
 func NewLogManager(logger *zap.SugaredLogger) *LogManager {
 	return &LogManager{
 		Logger:   logger,
-		services: make(map[serviceIdentifier]logInfo),
+		services: make(map[ServiceIdentifier]logInfo),
 	}
 }
 
 // RegisterService registers a service for log rotation monitoring
-func (lm *LogManager) RegisterService(identifier serviceIdentifier, logPath string, maxSize int64) {
+func (lm *LogManager) RegisterService(identifier ServiceIdentifier, logPath string, maxSize int64) {
 	lm.mu.Lock()
 	defer lm.mu.Unlock()
 
@@ -81,7 +81,7 @@ func (lm *LogManager) RegisterService(identifier serviceIdentifier, logPath stri
 }
 
 // UnregisterService removes a service from log rotation monitoring
-func (lm *LogManager) UnregisterService(identifier serviceIdentifier) {
+func (lm *LogManager) UnregisterService(identifier ServiceIdentifier) {
 	lm.mu.Lock()
 	defer lm.mu.Unlock()
 
@@ -92,7 +92,7 @@ func (lm *LogManager) UnregisterService(identifier serviceIdentifier) {
 // CheckAndRotate checks all registered services and rotates logs if they exceed size limits
 func (lm *LogManager) CheckAndRotate(ctx context.Context, fsService filesystem.Service) error {
 	lm.mu.RLock()
-	services := make(map[serviceIdentifier]logInfo)
+	services := make(map[ServiceIdentifier]logInfo)
 	for k, v := range lm.services {
 		services[k] = v
 	}
@@ -111,7 +111,7 @@ func (lm *LogManager) CheckAndRotate(ctx context.Context, fsService filesystem.S
 }
 
 // rotateIfNeeded checks if a log file needs rotation and performs it if necessary
-func (lm *LogManager) rotateIfNeeded(ctx context.Context, identifier serviceIdentifier, info logInfo, fsService filesystem.Service) error {
+func (lm *LogManager) rotateIfNeeded(ctx context.Context, identifier ServiceIdentifier, info logInfo, fsService filesystem.Service) error {
 	// Check if current log file exists and get its size
 	stat, err := fsService.Stat(ctx, info.CurrentLogFile)
 	if err != nil {
@@ -130,7 +130,7 @@ func (lm *LogManager) rotateIfNeeded(ctx context.Context, identifier serviceIden
 
 // RotateLogFile forces rotation for a specific service, regardless of size.
 // This method is called by LogLineWriter when it detects that rotation is needed.
-func (lm *LogManager) RotateLogFile(identifier serviceIdentifier, fsService filesystem.Service) error {
+func (lm *LogManager) RotateLogFile(identifier ServiceIdentifier, fsService filesystem.Service) error {
 	lm.mu.RLock()
 	info, exists := lm.services[identifier]
 	lm.mu.RUnlock()
@@ -151,7 +151,7 @@ func (lm *LogManager) RotateLogFile(identifier serviceIdentifier, fsService file
 
 // performRotation performs the actual log file rotation with TAI64N timestamping and cleanup.
 // This is the common implementation used by both rotateIfNeeded and RotateLogFile.
-func (lm *LogManager) performRotation(ctx context.Context, identifier serviceIdentifier, info logInfo, fsService filesystem.Service, currentSize int64) error {
+func (lm *LogManager) performRotation(ctx context.Context, identifier ServiceIdentifier, info logInfo, fsService filesystem.Service, currentSize int64) error {
 	// Generate TAI64N timestamp for the rotated file
 	tai64nString := tai64.FormatNano(time.Now())
 	// Remove the '@' prefix from the TAI64N string if present
@@ -234,7 +234,7 @@ func (lm *LogManager) CloseAll() error {
 	lm.Logger.Info("Closing LogManager")
 
 	// Clear the services map
-	lm.services = make(map[serviceIdentifier]logInfo)
+	lm.services = make(map[ServiceIdentifier]logInfo)
 
 	return nil
 }

@@ -36,10 +36,10 @@ import (
 // running processes. If a process is already running, it terminates the existing process, removes the
 // PID file, and returns an error to allow retry. If no process is running, it starts a new subprocess
 // and saves its PID atomically to prevent race conditions during process startup.
-func (pm *ProcessManager) startService(ctx context.Context, identifier serviceIdentifier, fsService filesystem.Service) error {
+func (pm *ProcessManager) startService(ctx context.Context, identifier ServiceIdentifier, fsService filesystem.Service) error {
 	pm.Logger.Info("Starting service", zap.String("identifier", string(identifier)))
 
-	servicePath := filepath.Join(pm.serviceDirectory, string(identifier))
+	servicePath := filepath.Join(pm.ServiceDirectory, string(identifier))
 	pidFile := filepath.Join(servicePath, PidFileName)
 
 	// Check if there's already a PID file indicating a running process
@@ -69,7 +69,7 @@ func (pm *ProcessManager) startService(ctx context.Context, identifier serviceId
 	}
 
 	// Start the new process atomically
-	if err := pm.startProcessAtomically(ctx, identifier, service.config, fsService); err != nil {
+	if err := pm.startProcessAtomically(ctx, identifier, service.Config, fsService); err != nil {
 		return err
 	}
 
@@ -83,8 +83,8 @@ func (pm *ProcessManager) startService(ctx context.Context, identifier serviceId
 // consistency. This atomic approach ensures that either both the process starts and its PID
 // is recorded, or neither happens, preventing orphaned processes or missing PID files that
 // could cause management issues later.
-func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier serviceIdentifier, config process_manager_serviceconfig.ProcessManagerServiceConfig, fsService filesystem.Service) error {
-	servicePath := filepath.Join(pm.serviceDirectory, string(identifier))
+func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier ServiceIdentifier, config process_manager_serviceconfig.ProcessManagerServiceConfig, fsService filesystem.Service) error {
+	servicePath := filepath.Join(pm.ServiceDirectory, string(identifier))
 	configPath := filepath.Join(servicePath, ConfigDirectoryName)
 	logPath := filepath.Join(servicePath, LogDirectoryName)
 	pidFile := filepath.Join(servicePath, PidFileName)

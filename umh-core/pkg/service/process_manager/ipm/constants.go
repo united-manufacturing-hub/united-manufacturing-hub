@@ -60,26 +60,12 @@ const (
 	DirectoryPermission  = 0755 // Standard directory permissions
 )
 
-// Process management constants
-const (
-	// Memory limits
-	MinMemoryLimitBytes = 1024 * 1024 // Minimum 1MB memory limit
-
-	// Process termination timeouts
-	GracefulShutdownTimeout = 10 * time.Second       // Time to wait for SIGTERM
-	ForceKillTimeout        = 5 * time.Second        // Time to wait before SIGKILL
-	ProcessCheckInterval    = 100 * time.Millisecond // Process status check interval
-)
-
 // Reconciliation and timing constants
 const (
 	// Step timing controls
 	CleanupTimeReserve = 20 * time.Millisecond // Reserve time for cleanup
 	StepTimeThreshold  = 10 * time.Millisecond // Minimum time to start new step
 
-	// Context and deadline management
-	DefaultReconcileTimeout = 30 * time.Second // Default reconciliation timeout
-	TaskProcessingTimeout   = 10 * time.Second // Individual task timeout
 )
 
 // Log formatting constants
@@ -89,7 +75,4 @@ const (
 	LogEntrySeparator  = "  "                            // Double space separator
 	LogFileExtension   = ".log"                          // Rotated log file extension
 
-	// Default log line characteristics for estimation
-	AverageLogLineLength = 80   // Estimated average log line length
-	MaxLogLineLength     = 4096 // Maximum reasonable log line length
 )

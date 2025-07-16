@@ -35,15 +35,15 @@ import (
 // file rotation automatically when size thresholds are exceeded and coordinates
 // with the LogManager for proper log file management.
 type LogLineWriter struct {
-	identifier   serviceIdentifier
-	logManager   *LogManager
-	memoryBuffer *MemoryLogBuffer
+	Identifier   ServiceIdentifier
+	LogManager   *LogManager
+	MemoryBuffer *MemoryLogBuffer
 	logger       *zap.SugaredLogger
-	fsService    filesystem.Service
+	FsService    filesystem.Service
 
 	mu          sync.Mutex
 	currentFile *os.File
-	logPath     string
+	LogPath     string
 	currentSize int64
 	maxFileSize int64
 }
@@ -53,7 +53,7 @@ type LogLineWriter struct {
 // the service with the log manager for rotation monitoring. The writer will
 // create the current log file if it doesn't exist and track its size for
 // rotation purposes.
-func NewLogLineWriter(identifier serviceIdentifier, logPath string, logManager *LogManager, memoryBuffer *MemoryLogBuffer, fsService filesystem.Service) (*LogLineWriter, error) {
+func NewLogLineWriter(identifier ServiceIdentifier, logPath string, logManager *LogManager, memoryBuffer *MemoryLogBuffer, fsService filesystem.Service) (*LogLineWriter, error) {
 	if logManager == nil {
 		return nil, fmt.Errorf("logManager cannot be nil")
 	}
@@ -62,12 +62,12 @@ func NewLogLineWriter(identifier serviceIdentifier, logPath string, logManager *
 	}
 
 	writer := &LogLineWriter{
-		identifier:   identifier,
-		logManager:   logManager,
-		memoryBuffer: memoryBuffer,
+		Identifier:   identifier,
+		LogManager:   logManager,
+		MemoryBuffer: memoryBuffer,
 		logger:       logManager.Logger, // Use the same logger as LogManager
-		fsService:    fsService,
-		logPath:      logPath,
+		FsService:    fsService,
+		LogPath:      logPath,
 		maxFileSize:  DefaultLogFileSize,
 	}
 
@@ -87,11 +87,11 @@ func NewLogLineWriter(identifier serviceIdentifier, logPath string, logManager *
 // to ensure the current file is ready for writing. It handles both new file
 // creation and existing file size detection for proper rotation tracking.
 func (llw *LogLineWriter) initCurrentFile() error {
-	currentLogFile := filepath.Join(llw.logPath, CurrentLogFileName)
+	currentLogFile := filepath.Join(llw.LogPath, CurrentLogFileName)
 
 	// Check if file exists and get its current size
 	var currentSize int64
-	if stat, err := llw.fsService.Stat(context.Background(), currentLogFile); err == nil {
+	if stat, err := llw.FsService.Stat(context.Background(), currentLogFile); err == nil {
 		currentSize = stat.Size()
 	}
 
@@ -117,7 +117,7 @@ func (llw *LogLineWriter) WriteLine(entry process_shared.LogEntry) error {
 	defer llw.mu.Unlock()
 
 	// Add to memory buffer first (this is fast and always succeeds)
-	llw.memoryBuffer.AddEntry(entry)
+	llw.MemoryBuffer.AddEntry(entry)
 
 	// Format entry for file writing
 	// Use the same format as S6 logs: "YYYY-MM-DD HH:MM:SS.NNNNNNNNN  content"
@@ -128,7 +128,7 @@ func (llw *LogLineWriter) WriteLine(entry process_shared.LogEntry) error {
 		n, err := llw.currentFile.WriteString(formattedLine)
 		if err != nil {
 			llw.logger.Error("Failed to write to log file",
-				zap.String("identifier", string(llw.identifier)),
+				zap.String("identifier", string(llw.Identifier)),
 				zap.Error(err))
 			return fmt.Errorf("failed to write to log file: %w", err)
 		}
@@ -139,7 +139,7 @@ func (llw *LogLineWriter) WriteLine(entry process_shared.LogEntry) error {
 		// Force flush to ensure data is written (important for crash recovery)
 		if err := llw.currentFile.Sync(); err != nil {
 			llw.logger.Warn("Failed to sync log file",
-				zap.String("identifier", string(llw.identifier)),
+				zap.String("identifier", string(llw.Identifier)),
 				zap.Error(err))
 			// Don't return error for sync failures - the write succeeded
 		}
@@ -148,7 +148,7 @@ func (llw *LogLineWriter) WriteLine(entry process_shared.LogEntry) error {
 		if llw.currentSize > llw.maxFileSize {
 			if err := llw.rotateLogFile(); err != nil {
 				llw.logger.Error("Failed to rotate log file",
-					zap.String("identifier", string(llw.identifier)),
+					zap.String("identifier", string(llw.Identifier)),
 					zap.Error(err))
 				return fmt.Errorf("failed to rotate log file: %w", err)
 			}
@@ -167,7 +167,7 @@ func (llw *LogLineWriter) rotateLogFile() error {
 	if llw.currentFile != nil {
 		if err := llw.currentFile.Close(); err != nil {
 			llw.logger.Warn("Error closing log file during rotation",
-				zap.String("identifier", string(llw.identifier)),
+				zap.String("identifier", string(llw.Identifier)),
 				zap.Error(err))
 		}
 		llw.currentFile = nil
@@ -175,7 +175,7 @@ func (llw *LogLineWriter) rotateLogFile() error {
 
 	// Use LogManager to perform the rotation
 	// This ensures consistent rotation behavior and cleanup
-	if err := llw.logManager.RotateLogFile(llw.identifier, llw.fsService); err != nil {
+	if err := llw.LogManager.RotateLogFile(llw.Identifier, llw.FsService); err != nil {
 		return fmt.Errorf("LogManager rotation failed: %w", err)
 	}
 
@@ -185,7 +185,7 @@ func (llw *LogLineWriter) rotateLogFile() error {
 	}
 
 	llw.logger.Info("Log file rotated successfully",
-		zap.String("identifier", string(llw.identifier)),
+		zap.String("identifier", string(llw.Identifier)),
 		zap.Int64("previousSize", llw.currentSize))
 
 	return nil
@@ -204,7 +204,7 @@ func (llw *LogLineWriter) Close() error {
 	if llw.currentFile != nil {
 		if err := llw.currentFile.Close(); err != nil {
 			llw.logger.Error("Error closing log file",
-				zap.String("identifier", string(llw.identifier)),
+				zap.String("identifier", string(llw.Identifier)),
 				zap.Error(err))
 			closeErr = err
 		}

@@ -23,9 +23,9 @@ import (
 	"github.com/zeebo/xxh3"
 )
 
-type serviceIdentifier string
+type ServiceIdentifier string
 
-func servicePathToIdentifier(servicePath string) serviceIdentifier {
+func ServicePathToIdentifier(servicePath string) ServiceIdentifier {
 	hash := xxh3.HashString(servicePath)
-	return serviceIdentifier(fmt.Sprintf("%x", hash))
+	return ServiceIdentifier(fmt.Sprintf("%x", hash))
 }
