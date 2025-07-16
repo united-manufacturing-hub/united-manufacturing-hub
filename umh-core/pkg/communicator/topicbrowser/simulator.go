@@ -118,13 +118,13 @@ func (s *Simulator) GenerateNewUnsBundle() []byte {
 func (s *Simulator) AddUnsBundleToSimObservedState(bundle []byte) {
 	s.simObservedStateMu.Lock()
 	defer s.simObservedStateMu.Unlock()
-	s.simObservedState.ServiceInfo.Status.Buffer = append(s.simObservedState.ServiceInfo.Status.Buffer, &topicbrowserservice.Buffer{
+	s.simObservedState.ServiceInfo.Status.BufferSnapshot.Items = append(s.simObservedState.ServiceInfo.Status.BufferSnapshot.Items, &topicbrowserservice.Buffer{
 		Payload:   bundle,
 		Timestamp: time.Now(),
 	})
 	// limit the buffer to 100 entries and delete the oldest entry if the buffer is full
-	if len(s.simObservedState.ServiceInfo.Status.Buffer) > 100 {
-		s.simObservedState.ServiceInfo.Status.Buffer = s.simObservedState.ServiceInfo.Status.Buffer[1:]
+	if len(s.simObservedState.ServiceInfo.Status.BufferSnapshot.Items) > 100 {
+		s.simObservedState.ServiceInfo.Status.BufferSnapshot.Items = s.simObservedState.ServiceInfo.Status.BufferSnapshot.Items[1:]
 	}
 }
 

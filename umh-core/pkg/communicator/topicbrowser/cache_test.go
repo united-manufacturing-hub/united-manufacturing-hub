@@ -329,8 +329,10 @@ func createMockObservedStateSnapshot(buffers []*topicbrowserservice.Buffer) *top
 	return &topicbrowserfsm.ObservedStateSnapshot{
 		ServiceInfo: topicbrowserservice.ServiceInfo{
 			Status: topicbrowserservice.Status{
-				Buffer: buffers,
-				Logs:   []process_shared.LogEntry{}, // Initia	lize with empty slice
+				BufferSnapshot: topicbrowserservice.RingBufferSnapshot{
+					Items: buffers,
+				},
+				Logs: []process_shared.LogEntry{}, // Initialize with empty slice
 			},
 			// Leave other fields as zero values
 		},

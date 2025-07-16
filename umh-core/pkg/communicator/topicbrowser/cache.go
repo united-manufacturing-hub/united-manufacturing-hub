@@ -15,6 +15,7 @@
 package topicbrowser
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -58,7 +59,7 @@ func (c *Cache) Update(obs *topicbrowserfsm.ObservedStateSnapshot) error {
 	// with this logic, we can avoid processing the same buffer multiple times becuase it will stay in the buffer for a while
 	latestProcessedTimestamp := c.lastCacheTimestamp
 	relevantBuffers := make([]*topicbrowserservice.Buffer, 0)
-	for _, buf := range obs.ServiceInfo.Status.Buffer {
+	for _, buf := range obs.ServiceInfo.Status.BufferSnapshot.Items {
 		if buf.Timestamp.After(c.lastCacheTimestamp) {
 			relevantBuffers = append(relevantBuffers, buf)
 			if buf.Timestamp.After(latestProcessedTimestamp) {
@@ -223,4 +224,82 @@ func (c *Cache) GetUnsMap() *tbproto.TopicMap {
 		unsMapCopy.Entries[k] = v
 	}
 	return unsMapCopy
+}
+
+// ProcessIncrementalUpdates processes new buffers from the topic browser FSM observed state
+// and returns detailed information about what was processed
+func (c *Cache) ProcessIncrementalUpdates(obs *topicbrowserfsm.ObservedStateSnapshot) (*ProcessingResult, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	result := &ProcessingResult{
+		DebugInfo: "processing incremental updates",
+	}
+
+	// determine the relevant buffer elements (UnsBundles) to process
+	// the relevant buffers are the ones that have a timestamp greater than the last cache timestamp
+	// with this logic, we can avoid processing the same buffer multiple times because it will stay in the buffer for a while
+	latestProcessedTimestamp := c.lastCacheTimestamp
+	relevantBuffers := make([]*topicbrowserservice.Buffer, 0)
+	for _, buf := range obs.ServiceInfo.Status.BufferSnapshot.Items {
+		if buf.Timestamp.After(c.lastCacheTimestamp) {
+			relevantBuffers = append(relevantBuffers, buf)
+			if buf.Timestamp.After(latestProcessedTimestamp) {
+				latestProcessedTimestamp = buf.Timestamp
+			}
+		}
+	}
+
+	result.LatestTimestamp = latestProcessedTimestamp
+	result.DebugInfo = fmt.Sprintf("found %d relevant buffers to process", len(relevantBuffers))
+
+	// process the relevant buffers
+	for _, buf := range relevantBuffers {
+		// Unmarshal the protobuf data (assuming it's already decompressed)
+		var ub tbproto.UnsBundle
+		if err := proto.Unmarshal(buf.Payload, &ub); err != nil {
+			// Log the unmarshal error with context and report to Sentry
+			log := logger.For(logger.ComponentCommunicator)
+			log.Errorf("Failed to unmarshal protobuf data in topic browser cache: %v", err)
+
+			context := map[string]interface{}{
+				"operation":   "unmarshal_protobuf",
+				"buffer_size": len(buf.Payload),
+				"timestamp":   buf.Timestamp,
+				"component":   "topic_browser_cache",
+			}
+			sentry.ReportIssueWithContext(err, sentry.IssueTypeError, log, context)
+
+			// Skip invalid protobuf data but continue processing
+			result.SkippedCount++
+			continue
+		}
+
+		// upsert the latest event by UnsTreeId (key)
+		// if the event is newer, we overwrite the existing event
+		// if the event is older, we skip it
+		for _, entry := range ub.Events.Entries {
+			existing, exists := c.eventMap[entry.UnsTreeId]
+			if !exists || entry.ProducedAtMs > existing.ProducedAtMs {
+				c.eventMap[entry.UnsTreeId] = entry
+			}
+		}
+
+		// upsert the uns map
+		for _, entry := range ub.UnsMap.Entries {
+			// generate a hash from the entry by calling HashUNSTableEntry
+			hash := HashUNSTableEntry(entry)
+			c.unsMap.Entries[hash] = entry
+		}
+
+		result.ProcessedCount++
+	}
+
+	// update the last cache timestamp
+	c.lastCacheTimestamp = latestProcessedTimestamp
+
+	result.DebugInfo = fmt.Sprintf("processed %d buffers, skipped %d buffers, latest timestamp: %s",
+		result.ProcessedCount, result.SkippedCount, result.LatestTimestamp.Format(time.RFC3339))
+
+	return result, nil
 }
