@@ -57,8 +57,8 @@ func (c *Cache) Update(obs *topicbrowserfsm.ObservedStateSnapshot) error {
 	// the relevant buffers are the ones that have a timestamp greater than the last cache timestamp
 	// with this logic, we can avoid processing the same buffer multiple times becuase it will stay in the buffer for a while
 	latestProcessedTimestamp := c.lastCacheTimestamp
-	relevantBuffers := make([]*topicbrowserservice.Buffer, 0)
-	for _, buf := range obs.ServiceInfo.Status.Buffer {
+	relevantBuffers := make([]*topicbrowserservice.BufferItem, 0)
+	for _, buf := range obs.ServiceInfo.Status.BufferSnapshot.Items {
 		if buf.Timestamp.After(c.lastCacheTimestamp) {
 			relevantBuffers = append(relevantBuffers, buf)
 			if buf.Timestamp.After(latestProcessedTimestamp) {

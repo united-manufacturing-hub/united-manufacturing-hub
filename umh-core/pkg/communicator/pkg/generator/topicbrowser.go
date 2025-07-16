@@ -152,7 +152,7 @@ func validateTopicCount(cache *topicbrowser.Cache) error {
 // validateBufferSize ensures the observed state buffer doesn't exceed safe limits
 func validateBufferSize(obs *topicbrowserfsm.ObservedStateSnapshot) error {
 	totalSize := int64(0)
-	for _, buf := range obs.ServiceInfo.Status.Buffer {
+	for _, buf := range obs.ServiceInfo.Status.BufferSnapshot.Items {
 		bundleSize := int64(len(buf.Payload))
 
 		// Check individual bundle size
@@ -238,7 +238,7 @@ func GetCachedBundle(cache *topicbrowser.Cache) []byte {
 func getPendingBundlesFromObservedState(obs *topicbrowserfsm.ObservedStateSnapshot, thresholdTimestamp time.Time, logger *zap.SugaredLogger) [][]byte {
 	var pendingBundles [][]byte
 
-	for _, buf := range obs.ServiceInfo.Status.Buffer {
+	for _, buf := range obs.ServiceInfo.Status.BufferSnapshot.Items {
 		// Only include buffers that are newer than the threshold timestamp
 		// This ensures we only send pending (unsent) bundles to subscribers
 		if buf.Timestamp.After(thresholdTimestamp) {
@@ -261,7 +261,7 @@ func getPendingBundlesFromObservedState(obs *topicbrowserfsm.ObservedStateSnapsh
 func getLatestTimestampFromObservedState(obs *topicbrowserfsm.ObservedStateSnapshot, thresholdTimestamp time.Time) time.Time {
 	var latestTimestamp time.Time
 
-	for _, buf := range obs.ServiceInfo.Status.Buffer {
+	for _, buf := range obs.ServiceInfo.Status.BufferSnapshot.Items {
 		// Find the latest timestamp that's newer than the threshold
 		// This helps track the most recent data that was processed
 		if buf.Timestamp.After(thresholdTimestamp) && buf.Timestamp.After(latestTimestamp) {
