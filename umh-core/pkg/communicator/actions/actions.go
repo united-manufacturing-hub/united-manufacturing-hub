@@ -196,11 +196,11 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 	case models.GetDataModel:
 		action = NewGetDataModelAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager)
 	case models.DeleteStreamProcessor:
-		action = NewDeleteStreamProcessorAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager) // TODO: add systemSnapshotManager
+		action = NewDeleteStreamProcessorAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
 	case models.EditStreamProcessor:
-		action = NewEditStreamProcessorAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager) // TODO: add systemSnapshotManager
+		action = NewEditStreamProcessorAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
 	case models.DeployStreamProcessor:
-		action = NewDeployStreamProcessorAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager) // TODO: add systemSnapshotManager
+		action = NewDeployStreamProcessorAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
 	case models.GetStreamProcessor:
 		action = NewGetStreamProcessorAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
 
