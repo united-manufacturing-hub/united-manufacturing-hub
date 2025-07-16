@@ -63,8 +63,8 @@ type ITopicBrowserService interface {
 }
 
 type Status struct {
-	BufferSnapshot RingBufferSnapshot // structured ring buffer snapshot with sequence tracking
-	Logs           []s6svc.LogEntry   // contain the structured s6 logs entries
+	BufferSnapshot RingBufferSnapshot        // structured ring buffer snapshot with sequence tracking
+	Logs           []process_shared.LogEntry // contain the structured s6 logs entries
 }
 
 // CopyLogs is a go-deepcopy override for the Logs field.
@@ -287,6 +287,7 @@ func (svc *Service) Status(
 
 	// Get logs
 	logs := benthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
+	zap.S().Infof("TB Log length: %d", len(logs))
 
 	// Parse the logs and decompress it via lz4, afterwards the data gets written
 	// into the ringbuffer

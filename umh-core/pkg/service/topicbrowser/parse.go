@@ -24,6 +24,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
+	"go.uber.org/zap"
 )
 
 const (
@@ -45,8 +46,7 @@ const (
 // ENDDATAENDDATAENDDATA
 // 1750091514783
 // ENDENDENDEND
-func extractRaw(entries []s6svc.LogEntry, lastProcessedTimestamp time.Time) (compressed []byte, epochMS int64, err error) {
-func extractRaw(entries []process_shared.LogEntry) (compressed []byte, epochMS int64, err error) {
+func extractRaw(entries []process_shared.LogEntry, lastProcessedTimestamp time.Time) (compressed []byte, epochMS int64, err error) {
 	var (
 		blockEndIndex = -1
 		dataEndIndex  = -1
@@ -139,19 +139,20 @@ func extractRaw(entries []process_shared.LogEntry) (compressed []byte, epochMS i
 	return result, epochMS, nil
 }
 
-func (svc *Service) parseBlock(entries []s6svc.LogEntry) error {
+func (svc *Service) parseBlock(entries []process_shared.LogEntry) error {
 	svc.processingMutex.RLock()
 	lastProcessedTimestamp := svc.lastProcessedTimestamp
 	svc.processingMutex.RUnlock()
 
 	hexBuf, epoch, err := extractRaw(entries, lastProcessedTimestamp)
 	if err != nil {
+		zap.S().Errorf("Error extracting raw block: %v", err)
 		return err // Propagate extraction error
 	}
 	if len(hexBuf) == 0 {
+		zap.S().Errorf("No new data to process")
 		return nil // No new data to process
 	}
-	/*
 
 	// Hex decode the payload
 	payload := make([]byte, hex.DecodedLen(len(hexBuf)))
@@ -162,6 +163,7 @@ func (svc *Service) parseBlock(entries []s6svc.LogEntry) error {
 		svc.processingMutex.Lock()
 		svc.lastProcessedTimestamp = time.UnixMilli(epoch)
 		svc.processingMutex.Unlock()
+		zap.S().Errorf("Skipping block with invalid hex data: %v", err)
 		return nil
 	}
 	payload = payload[:n] // Trim to actual decoded length
@@ -172,6 +174,7 @@ func (svc *Service) parseBlock(entries []s6svc.LogEntry) error {
 		svc.processingMutex.Lock()
 		svc.lastProcessedTimestamp = time.UnixMilli(epoch)
 		svc.processingMutex.Unlock()
+		zap.S().Errorf("Skipping block with invalid hex data: %v", err)
 		return nil
 	}
 
@@ -183,6 +186,7 @@ func (svc *Service) parseBlock(entries []s6svc.LogEntry) error {
 	}
 
 	// Add to ring buffer
+	svc.logger.Infof("Adding block to ring buffer: %d bytes", len(payload))
 	svc.ringbuffer.Add(item)
 
 	// Calculate time since last timestamp for debugging
