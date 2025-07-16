@@ -446,6 +446,7 @@ var _ = Describe("ProcessManager", func() {
 		It("should handle filesystem errors during directory removal", func() {
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "test"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 				},
@@ -483,6 +484,7 @@ var _ = Describe("ProcessManager", func() {
 		It("should handle context cancellation during removal", func() {
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "test"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 				},
@@ -1603,6 +1605,7 @@ var _ = Describe("ProcessManager", func() {
 		It("should return error for non-existent config file", func() {
 			servicePath := "test-service"
 			config := process_manager_serviceconfig.ProcessManagerServiceConfig{
+				Command: []string{"/bin/echo", "test"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
 				},
@@ -2023,7 +2026,6 @@ just plain text
 				Command: []string{"/bin/echo", "Hello World"},
 				ConfigFiles: map[string]string{
 					"config.yaml": "test: value",
-					"run.sh":      "#!/bin/bash\necho 'Hello World'",
 				},
 			}
 
@@ -2098,7 +2100,7 @@ just plain text
 
 			content, err = realFS.ReadFile(ctx, runScriptPath)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(string(content)).To(Equal("#!/bin/bash\necho 'Hello World'"))
+			Expect(string(content)).To(Equal("#!/bin/bash\n# Auto-generated run script for service\nset -e\n\n# Execute the service command\nexec '/bin/echo' 'Hello World'\n"))
 		})
 
 		It("should use custom service directory", func() {
