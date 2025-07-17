@@ -173,6 +173,24 @@ if [ "$PC_SERVICES_FOUND" = true ]; then
     else
         log_warn "Benthos config file not found at $BENTHOS_CONFIG_PATH"
     fi
+    
+    # Check nmap script configuration
+    log_info "Checking nmap script configuration..."
+    NMAP_SCRIPT_PATH="/run/service/nmap-connection-protocolconverter-gen/config/run_nmap.sh"
+    
+    if docker exec -it umh-core test -f "$NMAP_SCRIPT_PATH" 2>/dev/null; then
+        log_info "Nmap script file exists, checking for '1.1.1.1' string..."
+        
+        if docker exec -it umh-core grep -q "1.1.1.1" "$NMAP_SCRIPT_PATH" 2>/dev/null; then
+            log_info "✅ SUCCESS: Found '1.1.1.1' in nmap script configuration"
+        else
+            log_failure "⚠️  '1.1.1.1' string not found in nmap script configuration"
+            log_info "Nmap script content:"
+            docker exec -it umh-core cat "$NMAP_SCRIPT_PATH" 2>/dev/null || log_error "Failed to read nmap script file"
+        fi
+    else
+        log_warn "Nmap script file not found at $NMAP_SCRIPT_PATH"
+    fi
 fi
 
 # Step 5: Wait 5 seconds to stabilize
