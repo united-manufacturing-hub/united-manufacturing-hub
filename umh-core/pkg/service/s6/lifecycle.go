@@ -298,15 +298,69 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *Service
 	// - Fast: Typically completes in 1-2 FSM ticks after supervisor cleanup
 	if !progress.MainSuperviseDirectoryEmpty {
 		mainSuperviseDir := filepath.Join(artifacts.ServiceDir, "supervise")
-		if empty, err := s.isSuperviseDirectoryEmpty(ctx, mainSuperviseDir, fsService); err != nil {
-			s.logger.Debugf("Failed to check main supervise directory state: %v", err)
-			return fmt.Errorf("failed to check main supervise directory state: %w", err)
-		} else if !empty {
-			s.logger.Debugf("Main supervise directory not yet empty for service: %s", artifacts.ServiceDir)
-			return nil // Return and wait for next FSM tick
+		
+		// Check if supervisor process is still running
+		pidFile := filepath.Join(mainSuperviseDir, "pid")
+		pidExists, err := fsService.FileExists(ctx, pidFile)
+		if err != nil {
+			s.logger.Debugf("Failed to check main supervise PID file: %v", err)
+			return fmt.Errorf("failed to check main supervise PID file: %w", err)
 		}
+		
+		if pidExists {
+			// Read PID and check if process still exists
+			data, err := fsService.ReadFile(ctx, pidFile)
+			if err == nil {
+				pidStr := strings.TrimSpace(string(data))
+				if pidStr != "" {
+					if pid, err := strconv.Atoi(pidStr); err == nil {
+						// Check if process still exists (kill -0 doesn't send signal)
+						if err := syscall.Kill(pid, 0); err == nil {
+							// Process still exists, wait for it to exit
+							s.logger.Debugf("Main supervisor process %d still running for service: %s", pid, artifacts.ServiceDir)
+							return nil // Return and wait for next FSM tick
+						}
+					}
+				}
+			}
+		}
+		
+		// Supervisor process has exited, now try to remove the supervise directory
+		// Use aggressive removal approach - try to remove even if not empty
+		if err := fsService.RemoveAll(ctx, mainSuperviseDir); err != nil {
+			s.logger.Debugf("Failed to remove main supervise directory: %v", err)
+			// Try to force removal by changing permissions first
+			if chmodErr := fsService.Chmod(ctx, mainSuperviseDir, 0777); chmodErr == nil {
+				// Try removal again after changing permissions
+				if retryErr := fsService.RemoveAll(ctx, mainSuperviseDir); retryErr != nil {
+					s.logger.Debugf("Failed to remove main supervise directory after chmod: %v", retryErr)
+					// Try to remove individual files if directory removal still fails
+					if contents, listErr := fsService.ReadDir(ctx, mainSuperviseDir); listErr == nil {
+						for _, item := range contents {
+							itemPath := filepath.Join(mainSuperviseDir, item.Name())
+							// Try to change permissions on individual files
+							if fileChmodErr := fsService.Chmod(ctx, itemPath, 0777); fileChmodErr == nil {
+								if removeErr := fsService.Remove(ctx, itemPath); removeErr != nil {
+									s.logger.Debugf("Failed to remove supervise file %s: %v", itemPath, removeErr)
+								}
+							}
+						}
+						// Try directory removal again after file cleanup
+						if finalErr := fsService.RemoveAll(ctx, mainSuperviseDir); finalErr != nil {
+							s.logger.Debugf("Failed to remove main supervise directory after file cleanup: %v", finalErr)
+							return nil // Return and wait for next FSM tick
+						}
+					} else {
+						return nil // Return and wait for next FSM tick
+					}
+				}
+			} else {
+				return nil // Return and wait for next FSM tick
+			}
+		}
+		
 		progress.MainSuperviseDirectoryEmpty = true
-		s.logger.Debugf("Main supervise directory empty for service: %s", artifacts.ServiceDir)
+		s.logger.Debugf("Main supervise directory removed for service: %s", artifacts.ServiceDir)
 	}
 
 	// Step 2.5d: Check if log service supervise directory is empty/gone (idempotent)
@@ -320,15 +374,69 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *Service
 	// - Fast: Typically completes in 1-2 FSM ticks after supervisor cleanup
 	if !progress.LogSuperviseDirectoryEmpty {
 		logSuperviseDir := filepath.Join(artifacts.ServiceDir, "log", "supervise")
-		if empty, err := s.isSuperviseDirectoryEmpty(ctx, logSuperviseDir, fsService); err != nil {
-			s.logger.Debugf("Failed to check log supervise directory state: %v", err)
-			return fmt.Errorf("failed to check log supervise directory state: %w", err)
-		} else if !empty {
-			s.logger.Debugf("Log supervise directory not yet empty for service: %s", artifacts.ServiceDir)
-			return nil // Return and wait for next FSM tick
+		
+		// Check if supervisor process is still running
+		pidFile := filepath.Join(logSuperviseDir, "pid")
+		pidExists, err := fsService.FileExists(ctx, pidFile)
+		if err != nil {
+			s.logger.Debugf("Failed to check log supervise PID file: %v", err)
+			return fmt.Errorf("failed to check log supervise PID file: %w", err)
 		}
+		
+		if pidExists {
+			// Read PID and check if process still exists
+			data, err := fsService.ReadFile(ctx, pidFile)
+			if err == nil {
+				pidStr := strings.TrimSpace(string(data))
+				if pidStr != "" {
+					if pid, err := strconv.Atoi(pidStr); err == nil {
+						// Check if process still exists (kill -0 doesn't send signal)
+						if err := syscall.Kill(pid, 0); err == nil {
+							// Process still exists, wait for it to exit
+							s.logger.Debugf("Log supervisor process %d still running for service: %s", pid, artifacts.ServiceDir)
+							return nil // Return and wait for next FSM tick
+						}
+					}
+				}
+			}
+		}
+		
+		// Supervisor process has exited, now try to remove the supervise directory
+		// Use aggressive removal approach - try to remove even if not empty
+		if err := fsService.RemoveAll(ctx, logSuperviseDir); err != nil {
+			s.logger.Debugf("Failed to remove log supervise directory: %v", err)
+			// Try to force removal by changing permissions first
+			if chmodErr := fsService.Chmod(ctx, logSuperviseDir, 0777); chmodErr == nil {
+				// Try removal again after changing permissions
+				if retryErr := fsService.RemoveAll(ctx, logSuperviseDir); retryErr != nil {
+					s.logger.Debugf("Failed to remove log supervise directory after chmod: %v", retryErr)
+					// Try to remove individual files if directory removal still fails
+					if contents, listErr := fsService.ReadDir(ctx, logSuperviseDir); listErr == nil {
+						for _, item := range contents {
+							itemPath := filepath.Join(logSuperviseDir, item.Name())
+							// Try to change permissions on individual files
+							if fileChmodErr := fsService.Chmod(ctx, itemPath, 0777); fileChmodErr == nil {
+								if removeErr := fsService.Remove(ctx, itemPath); removeErr != nil {
+									s.logger.Debugf("Failed to remove supervise file %s: %v", itemPath, removeErr)
+								}
+							}
+						}
+						// Try directory removal again after file cleanup
+						if finalErr := fsService.RemoveAll(ctx, logSuperviseDir); finalErr != nil {
+							s.logger.Debugf("Failed to remove log supervise directory after file cleanup: %v", finalErr)
+							return nil // Return and wait for next FSM tick
+						}
+					} else {
+						return nil // Return and wait for next FSM tick
+					}
+				}
+			} else {
+				return nil // Return and wait for next FSM tick
+			}
+		}
+		
 		progress.LogSuperviseDirectoryEmpty = true
-		s.logger.Debugf("Log supervise directory empty for service: %s", artifacts.ServiceDir)
+		s.logger.Debugf("Log supervise directory removed for service: %s", artifacts.ServiceDir)
 	}
 
 	// Step 3: Remove service directory (idempotent)
