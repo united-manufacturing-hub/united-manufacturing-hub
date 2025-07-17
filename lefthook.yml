@@ -56,7 +56,9 @@ pre-commit:
       glob: "**/*.go"
       root: "umh-core"
       run: |
+        echo "Running govet for s6_process_manager"
         go vet -tags='test s6_process_manager' ./...
+        echo "Running govet for internal_process_manager"
         go vet -tags='test internal_process_manager' ./...
 
     - name: gofmt
