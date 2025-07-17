@@ -1,0 +1,101 @@
+agent:
+    metricsPort: 8080
+    communicator:
+        apiUrl: https://management.umh.app/api
+        authToken: 2612d72310709935cc58b692b502d54446a236256e62e2a14942d2c2adcc614e
+    releaseChannel: nightly
+    location:
+        0: UMH-Systems-GmbH---Dev-Team
+        1: abc
+        2: ""
+        3: ""
+        4: ""
+        5: ""
+        6: ""
+templates:
+    protocolConverter:
+        test-ferdinand:
+            connection:
+                nmap:
+                    target: '{{ .IP }}'
+                    port: '{{ .PORT }}'
+            dataflowcomponent_read:
+                benthos:
+                    input:
+                        generate:
+                            auto_replay_nacks: true
+                            batch_size: 1
+                            count: 0
+                            interval: 1s
+                            mapping: root = "hello world"
+                    pipeline:
+                        processors:
+                            - tag_processor:
+                                defaults: |-
+                                    msg.meta.location_path = "{{ .location_path }}";
+                                    msg.meta.data_contract = "_historian";
+                                    msg.meta.tag_name = "my_data";
+                                    msg.payload = msg.payload; //does not modify the payload
+                                    return msg;
+                    buffer:
+                        none: {}
+        test-ferdinand-kep:
+            connection:
+                nmap:
+                    target: '{{ .IP }}'
+                    port: '{{ .PORT }}'
+            dataflowcomponent_read:
+                benthos:
+                    input:
+                        opcua:
+                            endpoint: opc.tcp://{{ .IP }}:{{ .PORT }}
+                            nodeIDs:
+                                - i=84
+                            password: ""
+                            subscribeEnabled: true
+                            useHeartbeat: true
+                            username: ""
+                    pipeline:
+                        processors:
+                            - tag_processor:
+                                advancedProcessing: return msg;
+                                conditions:
+                                    - if: msg.meta.opcua_attr_nodeid === "ns=4;i=6211"
+                                      then: |
+                                        msg.payload = parseFloat(msg.payload) + 273.15;
+                                        msg.meta.tag_name = "CurrentTemperatureKelvin";
+                                        msg.meta.unit = "Kelvin";
+                                        return msg;
+                                defaults: |
+                                    msg.meta.location_path = "{{ .location_path }}";
+                                    msg.meta.data_contract = "_historian";
+                                    msg.meta.tag_name = msg.meta.opcua_tag_name;
+                                    msg.payload = msg.payload;
+                                    msg.meta.virtual_path = msg.meta.opcua_tag_path;
+                                    return msg;
+                    buffer:
+                        none: {}
+protocolConverter:
+    - name: test-ferdinand
+      desiredState: active
+      protocolConverterServiceConfig:
+        variables:
+            IP: 1.1.1.1
+            PORT: "80"
+        location:
+            "0": UMH-Systems-GmbH---Dev-Team
+        templateRef: test-ferdinand
+    - name: test-ferdinand-kep
+      desiredState: active
+      protocolConverterServiceConfig:
+        variables:
+            IP: 10.13.37.102
+            PORT: "49320"
+        location:
+            "0": UMH-Systems-GmbH---Dev-Team
+        templateRef: test-ferdinand-kep
+internal:
+    redpanda:
+        desiredState: active
+    topicbrowser:
+        desiredState: active
