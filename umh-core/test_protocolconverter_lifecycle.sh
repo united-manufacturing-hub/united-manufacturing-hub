@@ -73,9 +73,9 @@ MAKE_PID=$!
 
 # Give the container time to start
 log_info "Waiting for container to start..."
-# Wait up to 30 seconds for the container to appear in docker ps
+# Wait up to 60 seconds for the container to appear in docker ps
 CONTAINER_FOUND=false
-for i in {1..30}; do
+for i in {1..60}; do
     if docker ps | grep -q umh-core; then
         CONTAINER_FOUND=true
         break
