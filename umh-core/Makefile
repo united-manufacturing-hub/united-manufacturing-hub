@@ -376,6 +376,7 @@ test-empty: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 		-p 4195:4195 \
 		-p 6060:6060 \
 		-p 40000:40000 \
+		-d \
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
