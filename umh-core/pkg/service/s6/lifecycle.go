@@ -592,7 +592,7 @@ func (s *DefaultService) stopServiceCleanly(ctx context.Context, servicePath str
 // unsuperviseService removes the service from S6 supervision using s6-svunlink
 // This is step 2 of the skarnet sequence for proper service removal
 // s6-svunlink removes the service from s6-svscan supervision and waits for supervisor processes to exit
-// Now includes timeout handling with -t parameter and retry logic for exit code 111
+// Now includes timeout handling with -t parameter and verification that supervision actually ended
 func (s *DefaultService) unsuperviseService(ctx context.Context, servicePath string, fsService filesystem.Service) error {
 	scanDir := filepath.Dir(servicePath)      // e.g., /run/service
 	serviceName := filepath.Base(servicePath) // e.g., benthos-hello-world
@@ -614,10 +614,65 @@ func (s *DefaultService) unsuperviseService(ctx context.Context, servicePath str
 
 	_, err := s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svunlink", args...)
 	if err != nil {
-		return fmt.Errorf("failed to unsupervise service %s: %w", servicePath, err)
+		return fmt.Errorf("s6-svunlink command failed for service %s: %w", servicePath, err)
+	}
+
+	// Verify that supervision actually ended by checking the lock file
+	// This follows the same logic as s6-svstat to detect if supervisor is still running
+	if err := s.verifySupervisionEnded(ctx, servicePath, fsService); err != nil {
+		return fmt.Errorf("supervision verification failed for service %s: %w", servicePath, err)
 	}
 
 	s.logger.Debugf("Successfully unsupervised service %s (including log subdirectory)", servicePath)
+	return nil
+}
+
+// verifySupervisionEnded checks if supervision has actually ended using the same logic as s6-svstat
+// Returns nil if supervision has ended, error if supervisor is still running or check failed
+func (s *DefaultService) verifySupervisionEnded(ctx context.Context, servicePath string, fsService filesystem.Service) error {
+	// Check main service supervision
+	if err := s.checkSingleSupervisionEnded(ctx, servicePath, fsService); err != nil {
+		return fmt.Errorf("main service supervision still active: %w", err)
+	}
+
+	// Check log service supervision
+	logServicePath := filepath.Join(servicePath, "log")
+	if err := s.checkSingleSupervisionEnded(ctx, logServicePath, fsService); err != nil {
+		return fmt.Errorf("log service supervision still active: %w", err)
+	}
+
+	return nil
+}
+
+// checkSingleSupervisionEnded checks if supervision has ended for a single service path
+// Uses the same logic as s6_svc_ok() and s6-svstat to detect supervisor presence
+func (s *DefaultService) checkSingleSupervisionEnded(ctx context.Context, servicePath string, fsService filesystem.Service) error {
+	lockFile := filepath.Join(servicePath, "supervise", "lock")
+
+	// Check if lock file exists
+	exists, err := fsService.PathExists(ctx, lockFile)
+	if err != nil {
+		return fmt.Errorf("failed to check lock file %s: %w", lockFile, err)
+	}
+
+	if !exists {
+		// Lock file doesn't exist - supervision has ended
+		s.logger.Debugf("Lock file %s does not exist - supervision ended", lockFile)
+		return nil
+	}
+
+	// Lock file exists - check if it's locked (meaning supervisor is still running)
+	// We use flock command with -n (non-blocking) to test if the file is locked
+	// Exit code 1 means file is locked (supervisor running), 0 means not locked
+	_, err = fsService.ExecuteCommand(ctx, "flock", "-n", lockFile, "true")
+	if err != nil {
+		// flock failed - this typically means the file is locked by supervisor
+		s.logger.Debugf("Lock file %s is locked (supervisor still running): %v", lockFile, err)
+		return fmt.Errorf("supervisor still running (lock file %s is locked)", lockFile)
+	}
+
+	// flock succeeded - file is not locked, supervision has ended
+	s.logger.Debugf("Lock file %s exists but is not locked - supervision ended", lockFile)
 	return nil
 }
 
