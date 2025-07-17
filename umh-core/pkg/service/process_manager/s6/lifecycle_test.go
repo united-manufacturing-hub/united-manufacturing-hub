@@ -1,4 +1,4 @@
-//go:build s6_process_manager
+//go:build !internal_process_manager
 
 // Copyright 2025 UMH Systems GmbH
 //
@@ -18,12 +18,13 @@ package s6
 import (
 	"context"
 	"fmt"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

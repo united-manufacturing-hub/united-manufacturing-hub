@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build s6_process_manager
+//go:build !internal_process_manager
 
 package process_manager
 

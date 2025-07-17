@@ -1,4 +1,4 @@
-//go:build s6_process_manager
+//go:build !internal_process_manager
 
 // Copyright 2025 UMH Systems GmbH
 //
