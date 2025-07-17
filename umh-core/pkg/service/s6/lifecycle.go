@@ -21,9 +21,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"path/filepath"
-	"strconv"
 	"strings"
-	"syscall"
 	"text/template"
 	"time"
 
@@ -47,25 +45,15 @@ type ServiceArtifacts struct {
 	RemovalProgress *RemovalProgress
 }
 
-// RemovalProgress tracks the state of removal operations for incremental idempotent removal
+// RemovalProgress tracks the state of removal operations using the skarnet sequence
 // Each field represents a step that has been completed and verified
 type RemovalProgress struct {
-	// ProcessesStopped indicates that S6 processes have been terminated
-	ProcessesStopped bool
-	// SupervisorsStopped indicates that S6 supervisor processes have been killed
-	SupervisorsStopped bool
-	// MainSupervisorCleanupConfirmed indicates that main service supervisor cleanup is complete
-	MainSupervisorCleanupConfirmed bool
-	// LogSupervisorCleanupConfirmed indicates that log service supervisor cleanup is complete
-	LogSupervisorCleanupConfirmed bool
-	// MainSuperviseDirectoryEmpty indicates that main service supervise directory is empty/gone
-	MainSuperviseDirectoryEmpty bool
-	// LogSuperviseDirectoryEmpty indicates that log service supervise directory is empty/gone
-	LogSuperviseDirectoryEmpty bool
-	// ServiceDirRemoved indicates that the service directory has been successfully removed
-	ServiceDirRemoved bool
-	// LogDirRemoved indicates that the log directory has been successfully removed
-	LogDirRemoved bool
+	// ServiceStopped indicates that s6-svc -wD -d has completed for both main and log services
+	ServiceStopped bool
+	// ServiceUnsupervised indicates that s6-svunlink has completed and supervisors have exited
+	ServiceUnsupervised bool
+	// DirectoriesRemoved indicates that both service and log directories have been removed
+	DirectoriesRemoved bool
 }
 
 // InitRemovalProgress initializes removal progress tracking if not already present
@@ -75,13 +63,13 @@ func (artifacts *ServiceArtifacts) InitRemovalProgress() {
 	}
 }
 
-// IsFullyRemoved checks if all removal steps have been completed
+// IsFullyRemoved checks if all removal steps have been completed using the skarnet sequence
 func (artifacts *ServiceArtifacts) IsFullyRemoved() bool {
 	if artifacts.RemovalProgress == nil {
 		return false
 	}
 	p := artifacts.RemovalProgress
-	return p.ProcessesStopped && p.SupervisorsStopped && p.MainSupervisorCleanupConfirmed && p.LogSupervisorCleanupConfirmed && p.MainSuperviseDirectoryEmpty && p.LogSuperviseDirectoryEmpty && p.ServiceDirRemoved && p.LogDirRemoved
+	return p.ServiceStopped && p.ServiceUnsupervised && p.DirectoriesRemoved
 }
 
 // CreateArtifacts creates a complete S6 service atomically
@@ -165,12 +153,16 @@ func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string
 	return artifacts, nil
 }
 
-// RemoveArtifacts removes service artifacts using an incremental, idempotent approach:
-// - Uses unified lifecycle mutex to prevent concurrent operations
-// - Tracks removal progress in artifacts to continue from where it left off
-// - Each call is fast (<100ms) to respect FSM context timeouts
-// - Fully idempotent - safe to call repeatedly during the removal process
-// - Returns nil only when nothing is left
+// RemoveArtifacts removes service artifacts using the skarnet 3-step sequence
+// This is the official S6 author's recommended approach for safe service removal:
+// 1. Stop service cleanly (s6-svc -wD -d) - waits for finish scripts
+// 2. Unsupervise service (s6-svunlink) - removes from supervision and waits for supervisor exit
+// 3. Remove directories - safe filesystem cleanup
+//
+// Each step includes timeout handling using S6's native timeout parameters (-T/-t)
+// and leverages S6's idempotent nature for safe operation.
+// Retries for exit code 111 (timeout/system call failure) are handled automatically
+// by the calling FSM system until the operation succeeds.
 func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *ServiceArtifacts, fsService filesystem.Service) error {
 	if s == nil {
 		return fmt.Errorf("lifecycle manager is nil")
@@ -195,192 +187,59 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *Service
 
 	progress := artifacts.RemovalProgress
 
-	// Step 1: Stop S6 processes (idempotent)
-	if !progress.ProcessesStopped {
+	// Step 1: Stop service cleanly using s6-svc -wD -d (idempotent)
+	if !progress.ServiceStopped {
 		serviceExists, _ := fsService.PathExists(ctx, artifacts.ServiceDir)
 		if serviceExists {
-			if err := s.terminateProcesses(ctx, artifacts, fsService); err != nil {
-				s.logger.Debugf("Failed to terminate processes during removal: %v", err)
-				return fmt.Errorf("failed to terminate processes: %w", err)
+			if err := s.stopServiceCleanly(ctx, artifacts.ServiceDir, fsService); err != nil {
+				s.logger.Debugf("Failed to stop service cleanly during removal: %v", err)
+				return fmt.Errorf("failed to stop service cleanly: %w", err)
 			}
 		}
-		progress.ProcessesStopped = true
-		s.logger.Debugf("Processes stopped for service: %s", artifacts.ServiceDir)
+		progress.ServiceStopped = true
+		s.logger.Debugf("Service stopped cleanly: %s", artifacts.ServiceDir)
 	}
 
-	// Step 2: Stop supervisor processes (idempotent)
-	if !progress.SupervisorsStopped {
+	// Step 2: Unsupervise service using s6-svunlink (idempotent)
+	if !progress.ServiceUnsupervised {
 		serviceExists, _ := fsService.PathExists(ctx, artifacts.ServiceDir)
 		if serviceExists {
-			if err := s.killSupervisors(ctx, artifacts, fsService); err != nil {
-				s.logger.Debugf("Failed to kill supervisors during removal: %v", err)
-				return fmt.Errorf("failed to kill supervisors: %w", err)
+			if err := s.unsuperviseService(ctx, artifacts.ServiceDir, fsService); err != nil {
+				s.logger.Debugf("Failed to unsupervise service during removal: %v", err)
+				return fmt.Errorf("failed to unsupervise service: %w", err)
 			}
 		}
-		progress.SupervisorsStopped = true
-		s.logger.Debugf("Supervisors stopped for service: %s", artifacts.ServiceDir)
+		progress.ServiceUnsupervised = true
+		s.logger.Debugf("Service unsupervised: %s", artifacts.ServiceDir)
 	}
 
-	// Step 2.5a: Confirm main service supervisor cleanup is complete (idempotent)
-	//
-	// RACE CONDITION FIX - PHASE 1: Main Service Supervisor
-	// This step solves a race condition where we check both supervisors together.
-	// Timeline analysis showed main service supervisor cleanup can complete while
-	// log service supervisor is still cleaning up, causing false positives.
-	//
-	// DEPENDENCY ORDER:
-	// Main service depends on log service for logging, so we check main service first.
-	// If main service supervisor cleanup is complete, we can proceed to check log service.
-	//
-	// FSM COMPATIBILITY:
-	// - No blocking: Returns immediately if cleanup not ready
-	// - Incremental progress: Each FSM tick checks if ready to proceed
-	// - Fast: Typically completes in 5-10ms (1-2 FSM ticks)
-	if !progress.MainSupervisorCleanupConfirmed {
+	// Step 3: Remove directories (idempotent)
+	if !progress.DirectoriesRemoved {
+		// Remove service directory (includes log subdirectory)
 		serviceExists, _ := fsService.PathExists(ctx, artifacts.ServiceDir)
 		if serviceExists {
-			if confirmed, err := s.isSingleSupervisorCleanupComplete(ctx, artifacts.ServiceDir, fsService); err != nil {
-				s.logger.Debugf("Failed to check main supervisor cleanup: %v", err)
-				return fmt.Errorf("failed to check main supervisor cleanup: %w", err)
-			} else if !confirmed {
-				s.logger.Debugf("Main supervisor cleanup not yet complete for service: %s", artifacts.ServiceDir)
-				return nil // Return and wait for next FSM tick
-			}
-		}
-		progress.MainSupervisorCleanupConfirmed = true
-		s.logger.Debugf("Main supervisor cleanup confirmed for service: %s", artifacts.ServiceDir)
-	}
-
-	// Step 2.5b: Confirm log service supervisor cleanup is complete (idempotent)
-	//
-	// RACE CONDITION FIX - PHASE 2: Log Service Supervisor
-	// This step ensures the log service supervisor has also completed cleanup.
-	// Log service supervisor can take longer as it may need to flush remaining log data.
-	//
-	// DEPENDENCY ORDER:
-	// Log service is independent, so we check it after main service cleanup is confirmed.
-	// This ensures proper cleanup order: dependent (main) first, then dependency (log).
-	//
-	// FSM COMPATIBILITY:
-	// - No blocking: Returns immediately if cleanup not ready
-	// - Incremental progress: Each FSM tick checks if ready to proceed
-	// - Fast: Typically completes in 5-10ms (1-2 FSM ticks)
-	if !progress.LogSupervisorCleanupConfirmed {
-		logServiceDir := filepath.Join(artifacts.ServiceDir, "log")
-		serviceExists, _ := fsService.PathExists(ctx, logServiceDir)
-		if serviceExists {
-			if confirmed, err := s.isSingleSupervisorCleanupComplete(ctx, logServiceDir, fsService); err != nil {
-				s.logger.Debugf("Failed to check log supervisor cleanup: %v", err)
-				return fmt.Errorf("failed to check log supervisor cleanup: %w", err)
-			} else if !confirmed {
-				s.logger.Debugf("Log supervisor cleanup not yet complete for service: %s", artifacts.ServiceDir)
-				return nil // Return and wait for next FSM tick
-			}
-		}
-		progress.LogSupervisorCleanupConfirmed = true
-		s.logger.Debugf("Log supervisor cleanup confirmed for service: %s", artifacts.ServiceDir)
-	}
-
-	// Step 2.5c: Check if main service supervise directory is empty/gone (idempotent)
-	//
-	// RACE CONDITION FIX - PHASE 3: Wait for S6 to clean up supervise directories
-	// Even after supervisor processes terminate and IsFinishing=false, S6 needs a brief moment
-	// to finish cleaning up the supervise directory files (pid, status, control, lock, etc.).
-	//
-	// DETERMINISTIC APPROACH:
-	// Instead of blindly waiting one tick, we actively check that the supervise directory
-	// is actually empty or gone before proceeding with removal. This ensures we only
-	// attempt directory removal when it's actually safe to do so.
-	//
-	// FSM COMPATIBILITY:
-	// - No blocking: Returns immediately if directory not empty yet
-	// - Incremental progress: Each FSM tick checks actual directory state
-	// - Fast: Typically completes in 1-2 FSM ticks after supervisor cleanup
-	if !progress.MainSuperviseDirectoryEmpty {
-		mainSuperviseDir := filepath.Join(artifacts.ServiceDir, "supervise")
-		if empty, err := s.isSuperviseDirectoryEmpty(ctx, mainSuperviseDir, fsService); err != nil {
-			s.logger.Debugf("Failed to check main supervise directory state: %v", err)
-			return fmt.Errorf("failed to check main supervise directory state: %w", err)
-		} else if !empty {
-			s.logger.Debugf("Main supervise directory not yet empty for service: %s", artifacts.ServiceDir)
-			return nil // Return and wait for next FSM tick
-		}
-		progress.MainSuperviseDirectoryEmpty = true
-		s.logger.Debugf("Main supervise directory empty for service: %s", artifacts.ServiceDir)
-	}
-
-	// Step 2.5d: Check if log service supervise directory is empty/gone (idempotent)
-	//
-	// RACE CONDITION FIX - PHASE 4: Wait for S6 to clean up log supervise directory
-	// Same as main service, but for the log service supervise directory.
-	//
-	// FSM COMPATIBILITY:
-	// - No blocking: Returns immediately if directory not empty yet
-	// - Incremental progress: Each FSM tick checks actual directory state
-	// - Fast: Typically completes in 1-2 FSM ticks after supervisor cleanup
-	if !progress.LogSuperviseDirectoryEmpty {
-		logSuperviseDir := filepath.Join(artifacts.ServiceDir, "log", "supervise")
-		if empty, err := s.isSuperviseDirectoryEmpty(ctx, logSuperviseDir, fsService); err != nil {
-			s.logger.Debugf("Failed to check log supervise directory state: %v", err)
-			return fmt.Errorf("failed to check log supervise directory state: %w", err)
-		} else if !empty {
-			s.logger.Debugf("Log supervise directory not yet empty for service: %s", artifacts.ServiceDir)
-			return nil // Return and wait for next FSM tick
-		}
-		progress.LogSuperviseDirectoryEmpty = true
-		s.logger.Debugf("Log supervise directory empty for service: %s", artifacts.ServiceDir)
-	}
-
-	// Step 3: Remove service directory (idempotent)
-	if !progress.ServiceDirRemoved {
-		serviceExists, _ := fsService.PathExists(ctx, artifacts.ServiceDir)
-		if serviceExists {
+			s.logDirectoryContentsIfNotEmpty(ctx, artifacts.ServiceDir, "service directory", fsService)
 			if err := fsService.RemoveAll(ctx, artifacts.ServiceDir); err != nil {
-				// DEBUG: List directory contents when removal fails to troubleshoot what's blocking removal
-				if contents, listErr := fsService.ReadDir(ctx, artifacts.ServiceDir); listErr == nil {
-					s.logger.Debugf("Failed to remove service directory %s, contents still present:", artifacts.ServiceDir)
-					for _, item := range contents {
-						itemPath := filepath.Join(artifacts.ServiceDir, item.Name())
-						if item.IsDir() {
-							// For directories, also list their contents
-							if subContents, subErr := fsService.ReadDir(ctx, itemPath); subErr == nil {
-								subItems := make([]string, len(subContents))
-								for i, subItem := range subContents {
-									subItems[i] = subItem.Name()
-								}
-								s.logger.Debugf("  DIR  %s/ -> [%s]", item.Name(), strings.Join(subItems, ", "))
-							} else {
-								s.logger.Debugf("  DIR  %s/ -> (cannot read: %v)", item.Name(), subErr)
-							}
-						} else {
-							s.logger.Debugf("  FILE %s", item.Name())
-						}
-					}
-				} else {
-					s.logger.Debugf("Failed to remove service directory %s, cannot list contents: %v", artifacts.ServiceDir, listErr)
-				}
 				s.logger.Debugf("Failed to remove service directory: %v", err)
 				return fmt.Errorf("failed to remove service directory: %w", err)
 			}
 		}
-		progress.ServiceDirRemoved = true
-		s.logger.Debugf("Service directory removed: %s", artifacts.ServiceDir)
-	}
 
-	// Step 4: Remove log directory (idempotent)
-	if !progress.LogDirRemoved {
+		// Remove external log directory
 		logExists, _ := fsService.PathExists(ctx, artifacts.LogDir)
 		if logExists {
+			s.logDirectoryContentsIfNotEmpty(ctx, artifacts.LogDir, "log directory", fsService)
 			if err := fsService.RemoveAll(ctx, artifacts.LogDir); err != nil {
 				s.logger.Debugf("Failed to remove log directory: %v", err)
 				return fmt.Errorf("failed to remove log directory: %w", err)
 			}
 		}
-		progress.LogDirRemoved = true
-		s.logger.Debugf("Log directory removed: %s", artifacts.LogDir)
+
+		progress.DirectoriesRemoved = true
+		s.logger.Debugf("Directories removed: service=%s, log=%s", artifacts.ServiceDir, artifacts.LogDir)
 	}
 
-	s.logger.Debugf("Successfully completed all removal steps for service artifacts: %+v", artifacts)
+	s.logger.Debugf("Successfully completed skarnet sequence for service artifacts: %+v", artifacts)
 	return nil
 }
 
@@ -675,195 +534,95 @@ func (s *DefaultService) createDownFiles(ctx context.Context, artifacts *Service
 	return nil
 }
 
-// terminateProcesses attempts immediate termination of services and their supervisors
-// This is called during force removal scenarios where graceful termination has already failed.
-// Uses s6-svc -xd which brings down the service AND exits the supervisor immediately - no grace period.
-func (s *DefaultService) terminateProcesses(ctx context.Context, artifacts *ServiceArtifacts, fsService filesystem.Service) error {
+// stopServiceCleanly stops the service using S6's recommended approach
+// Uses s6-svc -wD -d for clean shutdown and waits for finish scripts to complete
+// This is step 1 of the skarnet sequence for proper service removal
+// Now includes timeout handling with -T parameter and retry logic for exit code 111
+func (s *DefaultService) stopServiceCleanly(ctx context.Context, servicePath string, fsService filesystem.Service) error {
 	servicePaths := []string{
-		artifacts.ServiceDir,
-		filepath.Join(artifacts.ServiceDir, "log"),
+		servicePath,                       // Main service
+		filepath.Join(servicePath, "log"), // Log service subdirectory
 	}
 
 	var lastErr error
 
-	for _, servicePath := range servicePaths {
-		// Use -xd flag: brings down service and exits supervisor immediately
-		// This ensures supervisor processes don't remain after service termination
-		if _, err := s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-xd", servicePath); err != nil {
-			s.logger.Debugf("Failed to terminate service and supervisor for %s: %v", servicePath, err)
+	for _, svcPath := range servicePaths {
+		// Check if service path exists before attempting to stop
+		exists, err := fsService.PathExists(ctx, svcPath)
+		if err != nil {
+			s.logger.Debugf("Failed to check if service path exists %s: %v", svcPath, err)
 			lastErr = err
+			continue
+		}
 
-			// If s6-svc fails, fall back to direct supervisor process killing
-			// This handles cases where S6 commands are unresponsive
-			if killErr := s.killSupervisorProcess(ctx, servicePath, fsService); killErr != nil {
-				s.logger.Debugf("Failed to kill supervisor process directly for %s: %v", servicePath, killErr)
-				// Keep the s6-svc error as the primary error since it's more specific
-			}
+		if !exists {
+			s.logger.Debugf("Service path does not exist, skipping: %s", svcPath)
+			continue
+		}
+
+		// Calculate timeout for this command
+		timeoutMs := s.calculateS6Timeout(ctx)
+
+		// Use s6-svc with optional timeout parameter
+		// -w: wait for state change
+		// -D: wait for the service to be down and finish script to complete
+		// -d: send the service the "down" signal
+		var args []string
+		if timeoutMs > 0 {
+			// -T: timeout in milliseconds
+			args = []string{"-T", fmt.Sprintf("%d", timeoutMs), "-wD", "-d", svcPath}
+		} else {
+			// No timeout specified, use S6 default behavior
+			args = []string{"-wD", "-d", svcPath}
+		}
+
+		_, err = s.ExecuteS6Command(ctx, svcPath, fsService, "s6-svc", args...)
+		if err != nil {
+			s.logger.Debugf("Failed to cleanly stop service %s: %v", svcPath, err)
+			lastErr = err
+			// Continue trying other services even if one fails
+		} else {
+			s.logger.Debugf("Successfully stopped service: %s", svcPath)
 		}
 	}
 
 	return lastErr
 }
 
-// Note: parseStatusFile logic has been moved to status.go as parseS6StatusFile
-// This centralizes all S6 status parsing logic in one place
+// unsuperviseService removes the service from S6 supervision using s6-svunlink
+// This is step 2 of the skarnet sequence for proper service removal
+// s6-svunlink removes the service from s6-svscan supervision and waits for supervisor processes to exit
+// Now includes timeout handling with -t parameter and retry logic for exit code 111
+func (s *DefaultService) unsuperviseService(ctx context.Context, servicePath string, fsService filesystem.Service) error {
+	scanDir := filepath.Dir(servicePath)      // e.g., /run/service
+	serviceName := filepath.Base(servicePath) // e.g., benthos-hello-world
 
-// isSingleSupervisorCleanupComplete checks if a single S6 supervisor cleanup is complete
-// This function checks one specific service path (either main service or log service)
-// instead of checking both together, preventing false positives in cleanup detection.
-//
-// CRITICAL DESIGN: This function uses S6's own internal state tracking to detect
-// when a specific supervisor has completed its cleanup sequence.
-//
-// S6 CLEANUP LIFECYCLE (from source code analysis):
-// 1. Service dies → uplastup_z() called
-// 2. S6 sets flagfinishing=1 (cleanup begins)
-// 3. S6 spawns ./finish script (5sec timeout by default)
-// 4. S6 cleans internal state, closes file handles
-// 5. S6 calls set_down_and_ready() → flagfinishing=0 (cleanup complete)
-//
-// DETECTION METHODS:
-// Method 1 (Primary): Check S6 status file flagfinishing flag
-// Method 2 (Fallback): Check supervisor PID file
-func (s *DefaultService) isSingleSupervisorCleanupComplete(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
-	superviseDir := filepath.Join(servicePath, "supervise")
+	// Calculate timeout for this command
+	timeoutMs := s.calculateS6Timeout(ctx)
 
-	// Check if supervise directory exists
-	exists, err := fsService.PathExists(ctx, superviseDir)
+	// Use s6-svunlink with optional timeout parameter
+	// s6-svunlink removes the entire service tree from supervision
+	// This handles both main service and log subdirectory supervisors
+	var args []string
+	if timeoutMs > 0 {
+		// -t: timeout in milliseconds
+		args = []string{"-t", fmt.Sprintf("%d", timeoutMs), scanDir, serviceName}
+	} else {
+		// No timeout specified, use S6 default behavior
+		args = []string{scanDir, serviceName}
+	}
+
+	_, err := s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svunlink", args...)
 	if err != nil {
-		return false, fmt.Errorf("failed to check supervise directory %s: %w", superviseDir, err)
+		return fmt.Errorf("failed to unsupervise service %s: %w", servicePath, err)
 	}
 
-	if !exists {
-		// No supervise directory means cleanup is complete
-		return true, nil
-	}
-
-	// Method 1: Check S6 status file for IsFinishing flag
-	statusFile := filepath.Join(superviseDir, "status")
-	statusExists, err := fsService.FileExists(ctx, statusFile)
-	if err != nil {
-		return false, fmt.Errorf("failed to check status file %s: %w", statusFile, err)
-	}
-
-	if statusExists {
-		// Parse status file directly using centralized parser
-		statusData, err := parseS6StatusFile(ctx, statusFile, fsService)
-		if err != nil {
-			// Can't read status, assume cleanup in progress
-			return false, nil
-		}
-
-		// If IsFinishing=true, supervisor is still cleaning up
-		if statusData.IsFinishing {
-			return false, nil
-		}
-
-		// If process is still running (PID != 0), cleanup not complete
-		if statusData.Pid != 0 {
-			return false, nil
-		}
-	}
-
-	// Method 2: Check if supervisor process is still running via PID file
-	pidFile := filepath.Join(superviseDir, "pid")
-	pidExists, err := fsService.FileExists(ctx, pidFile)
-	if err != nil {
-		return false, fmt.Errorf("failed to check PID file %s: %w", pidFile, err)
-	}
-
-	if pidExists {
-		// Read PID and check if process exists
-		data, err := fsService.ReadFile(ctx, pidFile)
-		if err != nil {
-			// Can't read PID file, assume cleanup in progress
-			return false, nil
-		}
-
-		pidStr := strings.TrimSpace(string(data))
-		if pidStr != "" {
-			pid, err := strconv.Atoi(pidStr)
-			if err == nil {
-				// Check if process still exists (kill -0 doesn't send signal)
-				if err := syscall.Kill(pid, 0); err == nil {
-					// Process still exists, cleanup not complete
-					return false, nil
-				}
-			}
-		}
-	}
-
-	// Single supervisor has completed cleanup
-	return true, nil
-}
-
-// isSuperviseDirectoryEmpty checks if a supervise directory is empty or doesn't exist
-// Returns true if the directory doesn't exist or is empty, false if it contains files
-func (s *DefaultService) isSuperviseDirectoryEmpty(ctx context.Context, superviseDir string, fsService filesystem.Service) (bool, error) {
-	// Check if directory exists
-	exists, err := fsService.PathExists(ctx, superviseDir)
-	if err != nil {
-		return false, fmt.Errorf("failed to check supervise directory %s: %w", superviseDir, err)
-	}
-
-	if !exists {
-		// Directory doesn't exist, so it's "empty"
-		return true, nil
-	}
-
-	// Directory exists, check if it's empty
-	contents, err := fsService.ReadDir(ctx, superviseDir)
-	if err != nil {
-		return false, fmt.Errorf("failed to read supervise directory %s: %w", superviseDir, err)
-	}
-
-	// Directory is empty if it has no contents
-	isEmpty := len(contents) == 0
-
-	if !isEmpty {
-		// Debug log the contents that are preventing removal
-		s.logger.Debugf("Supervise directory %s still contains %d files/directories", superviseDir, len(contents))
-		for _, item := range contents {
-			s.logger.Debugf("  - %s", item.Name())
-		}
-	}
-
-	return isEmpty, nil
-}
-
-// killSupervisorProcess directly kills supervisor process when S6 commands fail
-// This is a last resort when s6-svc -xd doesn't work (e.g., corrupted supervise state)
-func (s *DefaultService) killSupervisorProcess(ctx context.Context, servicePath string, fsService filesystem.Service) error {
-	supervisePidFile := filepath.Join(servicePath, "supervise", "pid")
-	data, err := fsService.ReadFile(ctx, supervisePidFile)
-	if err != nil {
-		return err // No pid file means no supervisor to kill
-	}
-
-	pidStr := strings.TrimSpace(string(data))
-	if pidStr == "" {
-		return fmt.Errorf("empty pid file for %s", servicePath)
-	}
-
-	// Try SIGTERM first for clean shutdown
-	if _, err := fsService.ExecuteCommand(ctx, "kill", "-TERM", pidStr); err != nil {
-		s.logger.Debugf("Failed to send SIGTERM to supervisor %s: %v", pidStr, err)
-	}
-
-	// Wait briefly, then use SIGKILL if process still exists
-	select {
-	case <-time.After(gracePeriodForTermination):
-		// Process didn't terminate gracefully, use SIGKILL
-		if _, err := fsService.ExecuteCommand(ctx, "kill", "-KILL", pidStr); err != nil {
-			return fmt.Errorf("failed to kill supervisor process %s: %w", pidStr, err)
-		}
-		s.logger.Debugf("Sent SIGKILL to supervisor process %s", pidStr)
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-
+	s.logger.Debugf("Successfully unsupervised service %s (including log subdirectory)", servicePath)
 	return nil
 }
+
+// Note: parseStatusFile logic has been moved to status.go as parseS6StatusFile
+// This centralizes all S6 status parsing logic in one place
 
 // removeFileFromArtifacts removes a file from the artifacts tracking
 func (s *DefaultService) removeFileFromArtifacts(filePath string) {
@@ -895,4 +654,52 @@ func (s *DefaultService) addFileToArtifacts(filePath string) {
 
 	// Add to CreatedFiles slice
 	s.artifacts.CreatedFiles = append(s.artifacts.CreatedFiles, filePath)
+}
+
+// calculateS6Timeout calculates the timeout for S6 commands based on remaining context time
+// Uses S6_TIMEOUT_PERCENTAGE of remaining context time
+func (s *DefaultService) calculateS6Timeout(ctx context.Context) int {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		// No deadline set, return 0 to let S6 use its default behavior
+		return 0
+	}
+
+	remainingTime := time.Until(deadline)
+	if remainingTime <= 0 {
+		// Context already expired, return 0
+		return 0
+	}
+
+	// Calculate percentage-based timeout
+	timeoutDuration := time.Duration(float64(remainingTime) * constants.S6_TIMEOUT_PERCENTAGE)
+
+	// Convert to milliseconds for S6 -T parameter
+	timeoutMs := int(timeoutDuration / time.Millisecond)
+
+	s.logger.Debugf("S6 timeout calculated: %dms (remaining: %v, percentage: %.1f%%)",
+		timeoutMs, remainingTime, constants.S6_TIMEOUT_PERCENTAGE*100)
+
+	return timeoutMs
+}
+
+// logDirectoryContentsIfNotEmpty logs the contents of a directory if it's not empty
+func (s *DefaultService) logDirectoryContentsIfNotEmpty(ctx context.Context, dirPath string, dirType string, fsService filesystem.Service) {
+	entries, err := fsService.ReadDir(ctx, dirPath)
+	if err != nil {
+		s.logger.Debugf("Could not read %s contents before removal: %v", dirType, err)
+		return
+	}
+
+	if len(entries) > 0 {
+		var contents []string
+		for _, entry := range entries {
+			if entry.IsDir() {
+				contents = append(contents, entry.Name()+"/")
+			} else {
+				contents = append(contents, entry.Name())
+			}
+		}
+		s.logger.Debugf("Removing non-empty %s %s containing: %v", dirType, dirPath, contents)
+	}
 }

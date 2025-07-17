@@ -195,6 +195,8 @@ func (s *DefaultService) buildFullServiceInfo(ctx context.Context, servicePath s
 		info.ReadyTime = int64(now.Sub(statusData.ReadyTime).Seconds())
 	}
 
+	s.logger.Debugf("ServiceInfo %s: %+v", servicePath, info)
+
 	// --- Add business logic fields (down files, exit history) ---
 
 	// Determine if service is "wanted up": if no "down" file exists
