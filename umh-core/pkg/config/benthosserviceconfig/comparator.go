@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+
+	"go.uber.org/zap"
 )
 
 // Comparator handles the comparison of Benthos configurations
@@ -39,8 +41,8 @@ func (c *Comparator) ConfigsEqual(desired, observed BenthosServiceConfig) (isEqu
 	normObserved := c.normalizer.NormalizeConfig(observed)
 	defer func() {
 		if !isEqual {
-			fmt.Printf("Normalized desired: %+v\n", normDesired)
-			fmt.Printf("Normalized observed: %+v\n", normObserved)
+			zap.S().Debugf("Normalized desired: %+v\n", normDesired)
+			zap.S().Debugf("Normalized observed: %+v\n", normObserved)
 		}
 	}()
 

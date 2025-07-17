@@ -49,10 +49,10 @@ func handleLogPipe(reader io.Reader, readyChan chan struct{}) {
 		}
 	}()
 
-	// Use the process manager to handle log writing
-	err := ipm.HandleMainApplicationLogs(reader, readyChan)
+	// Use the process manager to create a dummy service for umh-core logging
+	err := ipm.CreateUMHCoreLoggingService(reader, readyChan)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to handle main application logs: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Failed to create umh-core logging service: %v\n", err)
 	}
 }
 

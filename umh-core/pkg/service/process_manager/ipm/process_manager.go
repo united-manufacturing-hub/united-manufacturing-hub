@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/process_manager_serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/ipm/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/ipm/logging"
@@ -110,6 +111,17 @@ func WithServiceDirectory(dir string) ProcessManagerOption {
 	return func(pm *ProcessManager) {
 		pm.ServiceDirectory = dir
 	}
+}
+
+var initOnce sync.Once
+var instance *ProcessManager
+
+func NewProcessManagerInstance(options ...ProcessManagerOption) *ProcessManager {
+	initOnce.Do(func() {
+		serviceLogger := logger.For(logger.ComponentS6Service)
+		instance = NewProcessManager(serviceLogger, options...)
+	})
+	return instance
 }
 
 // NewProcessManager creates a new ProcessManager with the given options
@@ -628,41 +640,64 @@ func (pm *ProcessManager) Close() error {
 	return nil
 }
 
-// HandleMainApplicationLogs creates a log writer for the main application and processes logs from the provided reader
-func HandleMainApplicationLogs(reader io.Reader, readyChan chan struct{}) error {
-	// Create a simple zap logger for the log pipe handler
-	zapLogger, _ := zap.NewDevelopment()
-	logger := zapLogger.Sugar()
-	defer zapLogger.Sync()
-
-	// Set up the logging infrastructure for main application logs
+// CreateUMHCoreLoggingService creates a dummy service for umh-core logging and processes logs from the provided reader
+func CreateUMHCoreLoggingService(reader io.Reader, readyChan chan struct{}) error {
+	// Create a ProcessManager instance to manage the umh-core service
+	pm := NewProcessManagerInstance()
 	fsService := filesystem.NewDefaultService()
-	logManager := logging.NewLogManager(logger)
-	memoryBuffer := logging.NewMemoryLogBuffer(constants.DefaultLogBufferSize)
 
-	// Create log directory for main application logs
-	logPath := filepath.Join("/data", "logs", "umh-core")
-	if err := fsService.EnsureDirectory(context.Background(), logPath); err != nil {
-		return fmt.Errorf("failed to create main log directory: %w", err)
+	// Create service configuration for umh-core dummy service
+	serviceConfig := process_manager_serviceconfig.ProcessManagerServiceConfig{
+		Command:     []string{"sleep", "infinity"},
+		Env:         map[string]string{},
+		ConfigFiles: map[string]string{},
+		LogFilesize: constants.DefaultLogFileSize,
+		MemoryLimit: 0, // No memory limit for dummy service
 	}
 
-	// Create LogLineWriter for main application logs
-	logWriter, err := logging.NewLogLineWriter(
-		constants.ServiceIdentifier("umh-core"),
-		logPath,
-		logManager,
-		memoryBuffer,
-		fsService,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create log writer: %w", err)
+	// Create the service in the process manager
+	servicePath := "/run/service/umh-core"
+	if err := pm.Create(context.Background(), servicePath, serviceConfig, fsService); err != nil {
+		return fmt.Errorf("failed to create umh-core service: %w", err)
 	}
-	defer logWriter.Close()
+
+	// Get the service from the registry to access its LogLineWriter
+	serviceIdentifier := constants.ServicePathToIdentifier(servicePath)
+	service, exists := pm.Services[serviceIdentifier]
+	if !exists {
+		return fmt.Errorf("umh-core service not found in registry")
+	}
+
+	// If LogLineWriter doesn't exist yet, we need to create it
+	if service.LogLineWriter == nil {
+		// Create log directory
+		logPath := filepath.Join(pm.ServiceDirectory, "logs", "umh-core")
+		if err := fsService.EnsureDirectory(context.Background(), logPath); err != nil {
+			return fmt.Errorf("failed to create umh-core log directory: %w", err)
+		}
+
+		// Create LogLineWriter
+		memoryBuffer := logging.NewMemoryLogBuffer(constants.DefaultLogBufferSize)
+		logWriter, err := logging.NewLogLineWriter(
+			serviceIdentifier,
+			logPath,
+			pm.logManager,
+			memoryBuffer,
+			fsService,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to create log writer: %w", err)
+		}
+
+		// Update service with LogLineWriter
+		service.LogLineWriter = logWriter
+		pm.Services[serviceIdentifier] = service
+	}
 
 	// Signal that the log handler is ready
 	close(readyChan)
 
-	// Process log lines from the pipe using bufio.Scanner
+	// Process log lines from the pipe using the service's LogLineWriter
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -671,8 +706,8 @@ func HandleMainApplicationLogs(reader io.Reader, readyChan chan struct{}) error 
 				Timestamp: time.Now(),
 				Content:   line,
 			}
-			if err := logWriter.WriteLine(entry); err != nil {
-				logger.Errorf("Failed to write log entry: %v", err)
+			if err := service.LogLineWriter.WriteLine(entry); err != nil {
+				pm.Logger.Errorf("Failed to write log entry: %v", err)
 			}
 		}
 	}

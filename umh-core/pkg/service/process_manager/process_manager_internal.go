@@ -17,20 +17,10 @@
 package process_manager
 
 import (
-	"sync"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/ipm"
 )
 
-var initOnce sync.Once
-var instance Service
-
 // NewDefaultService creates a new default IPM service
 func NewDefaultService() Service {
-	serviceLogger := logger.For(logger.ComponentS6Service)
-	initOnce.Do(func() {
-		instance = ipm.NewProcessManager(serviceLogger)
-	})
-	return instance
+	return ipm.NewProcessManagerInstance()
 }
