@@ -449,7 +449,7 @@ func (m *MockNmapService) SetServicePortState(serviceName string, state string, 
 		},
 		{
 			Timestamp: now,
-			Content:   "NMAP_COMMAND: nmap -n -Pn -p 80 example.com -v",
+			Content:   "NMAP_COMMAND: nmap -n -Pn -sT -p 80 example.com -v",
 		},
 		{
 			Timestamp: now,

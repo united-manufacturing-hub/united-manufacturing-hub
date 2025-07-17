@@ -18,12 +18,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
@@ -82,8 +83,9 @@ func (s *NmapService) generateNmapScript(config *nmapserviceconfig.NmapServiceCo
 		return "", fmt.Errorf("config is nil")
 	}
 
-	// Build the nmap command - fixed format with -n -Pn -p PORT TARGET -v
-	nmapCmd := fmt.Sprintf("nmap -n -Pn -p %d %s -v", config.Port, config.Target)
+	// Build the nmap command - fixed format with -n -Pn -sT -p PORT TARGET -v
+	// Using -sT for TCP connect scan (doesn't require raw sockets/CAP_NET_RAW)
+	nmapCmd := fmt.Sprintf("nmap -n -Pn -sT -p %d %s -v", config.Port, config.Target)
 
 	// Create the script content with a loop that executes nmap every second
 	// Log output in a structured format that we can parse later
@@ -152,7 +154,7 @@ func (s *NmapService) GetConfig(ctx context.Context, filesystemService filesyste
 	result := nmapserviceconfig.NmapServiceConfig{}
 
 	// Extract target
-	targetRegex := regexp.MustCompile(`nmap -n -Pn -p \d+ ([^ ]+) -v`)
+	targetRegex := regexp.MustCompile(`nmap -n -Pn -sT -p \d+ ([^ ]+) -v`)
 	if matches := targetRegex.FindStringSubmatch(string(scriptData)); len(matches) > 1 {
 		result.Target = matches[1]
 	}

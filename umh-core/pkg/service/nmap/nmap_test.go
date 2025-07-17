@@ -73,7 +73,7 @@ var _ = Describe("Nmap Service", func() {
 				script, err := service.generateNmapScript(config)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(script).To(ContainSubstring("#!/bin/sh"))
-				Expect(script).To(ContainSubstring("nmap -n -Pn -p 80 localhost -v"))
+				Expect(script).To(ContainSubstring("nmap -n -Pn -sT -p 80 localhost -v"))
 				Expect(script).To(ContainSubstring("NMAP_SCAN_START"))
 				Expect(script).To(ContainSubstring("NMAP_TIMESTAMP"))
 				Expect(script).To(ContainSubstring("NMAP_EXIT_CODE"))
@@ -151,7 +151,7 @@ var _ = Describe("Nmap Service", func() {
 				// Verify the config was updated
 				s6cfg, err := service.GenerateS6ConfigForNmap(updatedCfg, s6Service)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(s6cfg.ConfigFiles["run_nmap.sh"]).To(ContainSubstring("nmap -n -Pn -p 8080 example.com -v"))
+				Expect(s6cfg.ConfigFiles["run_nmap.sh"]).To(ContainSubstring("nmap -n -Pn -sT -p 8080 example.com -v"))
 			})
 
 			It("should return error when service doesn't exist", func() {
@@ -199,8 +199,8 @@ while true; do
   echo "NMAP_SCAN_START"
   echo "NMAP_TIMESTAMP: $(date -Iseconds)"
   SCAN_START=$(date +%s.%N)
-  echo "NMAP_COMMAND: nmap -n -Pn -p 8080 test-host.local -v"
-  nmap -n -Pn -p 8080 test-host.local -v
+  echo "NMAP_COMMAND: nmap -n -Pn -sT -p 8080 test-host.local -v"
+  nmap -n -Pn -sT -p 8080 test-host.local -v
   EXIT_CODE=$?
   SCAN_END=$(date +%s.%N)
   SCAN_DURATION=$(echo "$SCAN_END - $SCAN_START" | bc)
@@ -244,7 +244,7 @@ done`
 					},
 					{
 						Timestamp: time.Now(),
-						Content:   "NMAP_COMMAND: nmap -n -Pn -p 80 example.com -v",
+						Content:   "NMAP_COMMAND: nmap -n -Pn -sT -p 80 example.com -v",
 					},
 					{
 						Timestamp: time.Now(),
@@ -311,7 +311,7 @@ done`
 			It("should parse scan results correctly using helper", func() {
 				rawLogs := `2025-05-27 09:29:59.576902049  NMAP_SCAN_START
 2025-05-27 09:29:59.577869966  NMAP_TIMESTAMP: 2025-05-27T09:29:59+00:00
-2025-05-27 09:29:59.578415299  NMAP_COMMAND: nmap -n -Pn -p 8080 localhost -v
+2025-05-27 09:29:59.578415299  NMAP_COMMAND: nmap -n -Pn -sT -p 8080 localhost -v
 2025-05-27 09:29:59.582778091  Starting Nmap 7.95 ( https://nmap.org ) at 2025-05-27 09:29 UTC
 2025-05-27 09:29:59.619361132  Initiating Connect Scan at 09:29
 2025-05-27 09:29:59.619495299  Scanning localhost (127.0.0.1) [1 port]
@@ -348,7 +348,7 @@ done`
 2025-05-27 11:34:24.545443669  NMAP_SCAN_END
 2025-05-27 11:34:25.548278878  NMAP_SCAN_START
 2025-05-27 11:34:25.549245169  NMAP_TIMESTAMP: 2025-05-27T11:34:25+00:00
-2025-05-27 11:34:25.549834961  NMAP_COMMAND: nmap -n -Pn -p 8080 localhost -v
+2025-05-27 11:34:25.549834961  NMAP_COMMAND: nmap -n -Pn -sT -p 8080 localhost -v
 2025-05-27 11:34:25.556032003  Starting Nmap 7.95 ( https://nmap.org ) at 2025-05-27 11:34 UTC
 2025-05-27 11:34:25.593831253  Initiating Connect Scan at 11:34
 2025-05-27 11:34:25.594110253  Scanning localhost (127.0.0.1) [1 port]
@@ -368,7 +368,7 @@ done`
 2025-05-27 11:34:25.598109794  NMAP_SCAN_END
 2025-05-27 11:34:26.600001795  NMAP_SCAN_START
 2025-05-27 11:34:26.601069045  NMAP_TIMESTAMP: 2025-05-27T11:34:26+00:00
-2025-05-27 11:34:26.601508920  NMAP_COMMAND: nmap -n -Pn -p 8080 localhost -v
+2025-05-27 11:34:26.601508920  NMAP_COMMAND: nmap -n -Pn -sT -p 8080 localhost -v
 2025-05-27 11:34:26.605778670  Starting Nmap 7.95 ( https://nmap.org ) at 2025-05-27 11:34 UTC
 2025-05-27 11:34:26.656555253  Initiating Connect Scan at 11:34
 2025-05-27 11:34:26.657079128  Scanning localhost (127.0.0.1) [1 port]
@@ -388,7 +388,7 @@ done`
 2025-05-27 11:34:26.676876878  NMAP_SCAN_END
 2025-05-27 11:34:27.680137920  NMAP_SCAN_START
 2025-05-27 11:34:27.681254962  NMAP_TIMESTAMP: 2025-05-27T11:34:27+00:00
-2025-05-27 11:34:27.682408004  NMAP_COMMAND: nmap -n -Pn -p 8080 localhost -v
+2025-05-27 11:34:27.682408004  NMAP_COMMAND: nmap -n -Pn -sT -p 8080 localhost -v
 2025-05-27 11:34:27.689312920  Starting Nmap 7.95 ( https://nmap.org ) at 2025-05-27 11:34 UTC
 2025-05-27 11:34:27.746081045  Initiating Connect Scan at 11:34
 2025-05-27 11:34:27.746506129  Scanning localhost (127.0.0.1) [1 port]
@@ -408,7 +408,7 @@ done`
 2025-05-27 11:34:27.752372337  NMAP_SCAN_END
 2025-05-27 11:34:28.754622213  NMAP_SCAN_START
 2025-05-27 11:34:28.756162879  NMAP_TIMESTAMP: 2025-05-27T11:34:28+00:00
-2025-05-27 11:34:28.758028879  NMAP_COMMAND: nmap -n -Pn -p 8080 localhost -v
+2025-05-27 11:34:28.758028879  NMAP_COMMAND: nmap -n -Pn -sT -p 8080 localhost -v
 2025-05-27 11:34:28.764159338  Starting Nmap 7.95 ( https://nmap.org ) at 2025-05-27 11:34 UTC
 2025-05-27 11:34:28.806071004  Initiating Connect Scan at 11:34
 2025-05-27 11:34:28.806162754  Scanning localhost (127.0.0.1) [1 port]
@@ -428,7 +428,7 @@ done`
 2025-05-27 11:34:28.811116921  NMAP_SCAN_END
 2025-05-27 11:34:29.816124546  NMAP_SCAN_START
 2025-05-27 11:34:29.817692796  NMAP_TIMESTAMP: 2025-05-27T11:34:29+00:00
-2025-05-27 11:34:29.818496213  NMAP_COMMAND: nmap -n -Pn -p 8080 localhost -v
+2025-05-27 11:34:29.818496213  NMAP_COMMAND: nmap -n -Pn -sT -p 8080 localhost -v
 2025-05-27 11:34:29.825612296  Starting Nmap 7.95 ( https://nmap.org ) at 2025-05-27 11:34 UTC
 2025-05-27 11:34:29.860800088  Initiating Connect Scan at 11:34
 2025-05-27 11:34:29.860994338  Scanning localhost (127.0.0.1) [1 port]
@@ -448,7 +448,7 @@ done`
 2025-05-27 11:34:29.864420713  NMAP_SCAN_END
 2025-05-27 11:34:30.867514505  NMAP_SCAN_START
 2025-05-27 11:34:30.868255047  NMAP_TIMESTAMP: 2025-05-27T11:34:30+00:00
-2025-05-27 11:34:30.868953089  NMAP_COMMAND: nmap -n -Pn -p 8080 localhost -v
+2025-05-27 11:34:30.868953089  NMAP_COMMAND: nmap -n -Pn -sT -p 8080 localhost -v
 2025-05-27 11:34:30.872808297  Starting Nmap 7.95 ( https://nmap.org ) at 2025-05-27 11:34 UTC
 2025-05-27 11:34:30.900431505  Initiating Connect Scan at 11:34
 2025-05-27 11:34:30.900505089  Scanning localhost (127.0.0.1) [1 port]
@@ -468,7 +468,7 @@ done`
 2025-05-27 11:34:30.903295422  NMAP_SCAN_END
 2025-05-27 11:34:31.904449381  NMAP_SCAN_START
 2025-05-27 11:34:31.905455839  NMAP_TIMESTAMP: 2025-05-27T11:34:31+00:00
-2025-05-27 11:34:31.905992589  NMAP_COMMAND: nmap -n -Pn -p 8080 localhost -v
+2025-05-27 11:34:31.905992589  NMAP_COMMAND: nmap -n -Pn -sT -p 8080 localhost -v
 2025-05-27 11:34:31.910073589  Starting Nmap 7.95 ( https://nmap.org ) at 2025-05-27 11:34 UTC
 2025-05-27 11:34:31.949354506  Initiating Connect Scan at 11:34
 2025-05-27 11:34:31.949459756  Scanning localhost (127.0.0.1) [1 port]
@@ -488,7 +488,7 @@ done`
 2025-05-27 11:34:31.953114548  NMAP_SCAN_END
 2025-05-27 11:34:32.954848298  NMAP_SCAN_START
 2025-05-27 11:34:32.956201131  NMAP_TIMESTAMP: 2025-05-27T11:34:32+00:00
-2025-05-27 11:34:32.956995298  NMAP_COMMAND: nmap -n -Pn -p 8080 localhost -v
+2025-05-27 11:34:32.956995298  NMAP_COMMAND: nmap -n -Pn -sT -p 8080 localhost -v
 2025-05-27 11:34:32.961301923  Starting Nmap 7.95 ( https://nmap.org ) at 2025-05-27 11:34 UTC
 2025-05-27 11:34:32.993875548  Initiating Connect Scan at 11:34
 2025-05-27 11:34:32.993918215  Scanning localhost (127.0.0.1) [1 port]
@@ -508,7 +508,7 @@ done`
 2025-05-27 11:34:32.996539256  NMAP_SCAN_END
 2025-05-27 11:34:34.000670298  NMAP_SCAN_START
 2025-05-27 11:34:34.001160507  NMAP_TIMESTAMP: 2025-05-27T11:34:34+00:00
-2025-05-27 11:34:34.002239798  NMAP_COMMAND: nmap -n -Pn -p 8080 localhost -v
+2025-05-27 11:34:34.002239798  NMAP_COMMAND: nmap -n -Pn -sT -p 8080 localhost -v
 2025-05-27 11:34:34.006276090  Starting Nmap 7.95 ( https://nmap.org ) at 2025-05-27 11:34 UTC
 2025-05-27 11:34:34.036303007  Initiating Connect Scan at 11:34
 2025-05-27 11:34:34.036353048  Scanning localhost (127.0.0.1) [1 port]
@@ -528,7 +528,7 @@ done`
 2025-05-27 11:34:34.038973840  NMAP_SCAN_END
 2025-05-27 11:34:35.041277216  NMAP_SCAN_START
 2025-05-27 11:34:35.042263174  NMAP_TIMESTAMP: 2025-05-27T11:34:35+00:00
-2025-05-27 11:34:35.042762632  NMAP_COMMAND: nmap -n -Pn -p 8080 localhost -v
+2025-05-27 11:34:35.042762632  NMAP_COMMAND: nmap -n -Pn -sT -p 8080 localhost -v
 2025-05-27 11:34:35.046832424  Starting Nmap 7.95 ( https://nmap.org ) at 2025-05-27 11:34 UTC
 2025-05-27 11:34:35.080530216  Initiating Connect Scan at 11:34
 2025-05-27 11:34:35.080688466  Scanning localhost (127.0.0.1) [1 port]
@@ -548,7 +548,7 @@ done`
 2025-05-27 11:34:35.084771257  NMAP_SCAN_END
 2025-05-27 11:34:36.086178716  NMAP_SCAN_START
 2025-05-27 11:34:36.086969174  NMAP_TIMESTAMP: 2025-05-27T11:34:36+00:00
-2025-05-27 11:34:36.087380591  NMAP_COMMAND: nmap -n -Pn -p 8080 localhost -v
+2025-05-27 11:34:36.087380591  NMAP_COMMAND: nmap -n -Pn -sT -p 8080 localhost -v
 2025-05-27 11:34:36.092114341  Starting Nmap 7.95 ( https://nmap.org ) at 2025-05-27 11:34 UTC
 2025-05-27 11:34:36.132607549  Initiating Connect Scan at 11:34
 2025-05-27 11:34:36.132764133  Scanning localhost (127.0.0.1) [1 port]
@@ -568,7 +568,7 @@ done`
 2025-05-27 11:34:36.135746966  NMAP_SCAN_END
 2025-05-27 11:34:37.137163258  NMAP_SCAN_START
 2025-05-27 11:34:37.138189967  NMAP_TIMESTAMP: 2025-05-27T11:34:37+00:00
-2025-05-27 11:34:37.139050008  NMAP_COMMAND: nmap -n -Pn -p 8080 localhost -v
+2025-05-27 11:34:37.139050008  NMAP_COMMAND: nmap -n -Pn -sT -p 8080 localhost -v
 2025-05-27 11:34:37.143792633  Starting Nmap 7.95 ( https://nmap.org ) at 2025-05-27 11:34 UTC
 2025-05-27 11:34:37.182596550  Initiating Connect Scan at 11:34
 2025-05-27 11:34:37.182680550  Scanning localhost (127.0.0.1) [1 port]
@@ -588,7 +588,7 @@ done`
 2025-05-27 11:34:37.186298508  NMAP_SCAN_END
 2025-05-27 11:34:38.187599300  NMAP_SCAN_START
 2025-05-27 11:34:38.189017759  NMAP_TIMESTAMP: 2025-05-27T11:34:38+00:00
-2025-05-27 11:34:38.189682259  NMAP_COMMAND: nmap -n -Pn -p 8080 localhost -v
+2025-05-27 11:34:38.189682259  NMAP_COMMAND: nmap -n -Pn -sT -p 8080 localhost -v
 2025-05-27 11:34:38.195296717  Starting Nmap 7.95 ( https://nmap.org ) at 2025-05-27 11:34 UTC
 2025-05-27 11:34:38.235209800  Initiating Connect Scan at 11:34
 2025-05-27 11:34:38.235300884  Scanning localhost (127.0.0.1) [1 port]
@@ -608,7 +608,7 @@ done`
 2025-05-27 11:34:38.238811884  NMAP_SCAN_END
 2025-05-27 11:34:39.242201343  NMAP_SCAN_START
 2025-05-27 11:34:39.243654259  NMAP_TIMESTAMP: 2025-05-27T11:34:39+00:00
-2025-05-27 11:34:39.244388634  NMAP_COMMAND: nmap -n -Pn -p 8080 localhost -v
+2025-05-27 11:34:39.244388634  NMAP_COMMAND: nmap -n -Pn -sT -p 8080 localhost -v
 2025-05-27 11:34:39.250140509  Starting Nmap 7.95 ( https://nmap.org ) at 2025-05-27 11:34 UTC
 2025-05-27 11:34:39.283769801  Initiating Connect Scan at 11:34
 2025-05-27 11:34:39.283852551  Scanning localhost (127.0.0.1) [1 port]
@@ -650,7 +650,7 @@ done`
 					},
 					{
 						Timestamp: time.Now(),
-						Content:   "NMAP_COMMAND: nmap -n -Pn -p 81 example.com -v",
+						Content:   "NMAP_COMMAND: nmap -n -Pn -sT -p 81 example.com -v",
 					},
 					{
 						Timestamp: time.Now(),

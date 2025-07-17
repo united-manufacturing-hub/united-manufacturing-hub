@@ -133,8 +133,7 @@ ARG DEBUG=false
 ARG DLV_VERSION=MUST_BE_SET_BY_MAKEFILE
 RUN if [ "$DEBUG" = "true" ]; then \
     apk add --no-cache go && \ 
-    go install github.com/go-delve/delve/cmd/dlv@${DLV_VERSION} && \
-    find / -name "dlv"; \
+    go install github.com/go-delve/delve/cmd/dlv@${DLV_VERSION}; \
     fi
 
 RUN chmod +x /usr/local/bin/umh-core && \
@@ -169,5 +168,15 @@ ENV S6_KEEP_ENV=1 \
 VOLUME ["/data"]
 
 #ENTRYPOINT ["/init"]
-# Run our program directly
-CMD ["/usr/local/bin/umh-core"]
+# Run our program directly or via delve debugger based on DEBUG flag
+RUN if [ "$DEBUG" = "true" ]; then \
+    echo '#!/bin/sh' > /usr/local/bin/docker-entrypoint.sh && \
+    echo 'exec /root/go/bin/dlv --headless --listen=:40000 --api-version=2 --accept-multiclient exec /usr/local/bin/umh-core' >> /usr/local/bin/docker-entrypoint.sh && \
+    chmod +x /usr/local/bin/docker-entrypoint.sh; \
+    else \
+    echo '#!/bin/sh' > /usr/local/bin/docker-entrypoint.sh && \
+    echo 'exec /usr/local/bin/umh-core' >> /usr/local/bin/docker-entrypoint.sh && \
+    chmod +x /usr/local/bin/docker-entrypoint.sh; \
+    fi
+
+CMD ["/usr/local/bin/docker-entrypoint.sh"]
