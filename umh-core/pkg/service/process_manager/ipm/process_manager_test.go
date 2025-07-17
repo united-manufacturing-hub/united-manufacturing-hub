@@ -110,11 +110,12 @@ var _ = Describe("ProcessManager", func() {
 
 			// Verify service was added to services map
 			identifier := constants.ServicePathToIdentifier(servicePath)
-			service, exists := pm.Services[identifier]
+			service, exists := pm.Services.Load(identifier)
 			Expect(exists).To(BeTrue())
-			Expect(service.Config).To(Equal(config))
-			Expect(service.History.Status).To(Equal(process_shared.ServiceUnknown))
-			Expect(service.History.ExitHistory).To(HaveLen(0))
+			ipmService := service.(ipm.IpmService)
+			Expect(ipmService.Config).To(Equal(config))
+			Expect(ipmService.History.Status).To(Equal(process_shared.ServiceUnknown))
+			Expect(ipmService.History.ExitHistory).To(HaveLen(0))
 
 			// Verify task was queued
 			Expect(pm.TaskQueue).To(HaveLen(1))
@@ -288,7 +289,7 @@ var _ = Describe("ProcessManager", func() {
 
 			// Service should still be in the services map
 			identifier := constants.ServicePathToIdentifier(servicePath)
-			_, exists := pm.Services[identifier]
+			_, exists := pm.Services.Load(identifier)
 			Expect(exists).To(BeTrue())
 
 			// Simulate PID file being removed after cleanup
@@ -323,7 +324,7 @@ var _ = Describe("ProcessManager", func() {
 
 			// Verify service was created
 			identifier := constants.ServicePathToIdentifier(servicePath)
-			_, exists := pm.Services[identifier]
+			_, exists := pm.Services.Load(identifier)
 			Expect(exists).To(BeTrue())
 
 			// Setup mock filesystem to simulate no .pid file (process not running)
@@ -344,7 +345,7 @@ var _ = Describe("ProcessManager", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// Verify service was removed from services map
-			_, exists = pm.Services[identifier]
+			_, exists = pm.Services.Load(identifier)
 			Expect(exists).To(BeFalse())
 
 			// Verify service was processed (should be empty after Reconcile() execution)
@@ -370,7 +371,7 @@ var _ = Describe("ProcessManager", func() {
 
 			// Verify service was created
 			identifier := constants.ServicePathToIdentifier(servicePath)
-			_, exists := pm.Services[identifier]
+			_, exists := pm.Services.Load(identifier)
 			Expect(exists).To(BeTrue())
 
 			// Setup mock filesystem to simulate .pid file with non-existent process
@@ -391,7 +392,7 @@ var _ = Describe("ProcessManager", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// Verify service was removed from services map
-			_, exists = pm.Services[identifier]
+			_, exists = pm.Services.Load(identifier)
 			Expect(exists).To(BeFalse())
 		})
 
@@ -431,7 +432,7 @@ var _ = Describe("ProcessManager", func() {
 
 			// Verify service was removed from services map
 			identifier := constants.ServicePathToIdentifier(servicePath)
-			_, exists := pm.Services[identifier]
+			_, exists := pm.Services.Load(identifier)
 			Expect(exists).To(BeFalse())
 		})
 
@@ -703,7 +704,7 @@ var _ = Describe("ProcessManager", func() {
 
 			// Verify service still exists in services map (only process is stopped, not removed)
 			identifier := constants.ServicePathToIdentifier(servicePath)
-			_, exists := pm.Services[identifier]
+			_, exists := pm.Services.Load(identifier)
 			Expect(exists).To(BeTrue())
 		})
 
@@ -736,7 +737,7 @@ var _ = Describe("ProcessManager", func() {
 
 			// Verify service still exists in services map (only process is stopped, not removed)
 			identifier := constants.ServicePathToIdentifier(servicePath)
-			_, exists := pm.Services[identifier]
+			_, exists := pm.Services.Load(identifier)
 			Expect(exists).To(BeTrue())
 		})
 
@@ -766,7 +767,7 @@ var _ = Describe("ProcessManager", func() {
 
 			// Verify service still exists in services map
 			identifier := constants.ServicePathToIdentifier(servicePath)
-			_, exists := pm.Services[identifier]
+			_, exists := pm.Services.Load(identifier)
 			Expect(exists).To(BeTrue())
 		})
 
@@ -871,7 +872,7 @@ var _ = Describe("ProcessManager", func() {
 
 			// Verify service still exists in services map
 			identifier := constants.ServicePathToIdentifier(servicePath)
-			_, exists := pm.Services[identifier]
+			_, exists := pm.Services.Load(identifier)
 			Expect(exists).To(BeTrue())
 		})
 
@@ -900,7 +901,7 @@ var _ = Describe("ProcessManager", func() {
 
 			// Verify service still exists in services map
 			identifier := constants.ServicePathToIdentifier(servicePath)
-			_, exists := pm.Services[identifier]
+			_, exists := pm.Services.Load(identifier)
 			Expect(exists).To(BeTrue())
 		})
 
@@ -2058,9 +2059,10 @@ just plain text
 
 			// Verify service was added to services map
 			identifier := constants.ServicePathToIdentifier(servicePath)
-			service, exists := pm.Services[identifier]
+			service, exists := pm.Services.Load(identifier)
 			Expect(exists).To(BeTrue())
-			Expect(service.Config).To(Equal(config))
+			ipmService := service.(ipm.IpmService)
+			Expect(ipmService.Config).To(Equal(config))
 
 			// Verify directories were created on real filesystem
 			// Note: We use the identifier (not servicePath) because that's what ProcessManager uses internally

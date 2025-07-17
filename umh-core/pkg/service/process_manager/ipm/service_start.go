@@ -177,9 +177,14 @@ func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier
 	go pm.streamLogs(stderrPipe, logLineWriter, "stderr", identifier)
 
 	// Store the LogLineWriter in the service instead of the separate map
-	service := pm.Services[identifier]
+	serviceValue, exists := pm.Services.Load(identifier)
+	if !exists {
+		logLineWriter.Close()
+		return fmt.Errorf("service %s not found in registry", identifier)
+	}
+	service := serviceValue.(IpmService)
 	service.LogLineWriter = logLineWriter
-	pm.Services[identifier] = service
+	pm.Services.Store(identifier, service)
 
 	pm.Logger.Infof("Process started and PID saved: %s (pid: %d)", identifier, pid)
 	return nil

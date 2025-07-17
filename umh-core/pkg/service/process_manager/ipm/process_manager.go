@@ -79,7 +79,7 @@ type ProcessManager struct {
 	Logger *zap.SugaredLogger
 	mu     sync.Mutex
 
-	Services map[constants.ServiceIdentifier]ipmService
+	Services sync.Map // map[constants.ServiceIdentifier]IpmService
 
 	// TaskQueue is a list of pending operations to be processed
 	TaskQueue []Task
@@ -94,7 +94,7 @@ type ProcessManager struct {
 	StartupCompleted atomic.Bool
 }
 
-type ipmService struct {
+type IpmService struct {
 	Config  process_manager_serviceconfig.ProcessManagerServiceConfig
 	History process_shared.ServiceInfo
 	// LogLineWriter handles logging for this service (nil if never started)
@@ -132,7 +132,7 @@ func NewProcessManager(logger *zap.SugaredLogger, options ...ProcessManagerOptio
 
 	pm := &ProcessManager{
 		Logger:           logger,
-		Services:         make(map[constants.ServiceIdentifier]ipmService),
+		Services:         sync.Map{},
 		TaskQueue:        make([]Task, 0),
 		ServiceDirectory: DefaultServiceDirectory, // Default value
 		logManager:       logging.NewLogManager(logger),
@@ -147,134 +147,133 @@ func NewProcessManager(logger *zap.SugaredLogger, options ...ProcessManagerOptio
 }
 
 func (pm *ProcessManager) Create(ctx context.Context, servicePath string, config process_manager_serviceconfig.ProcessManagerServiceConfig, fsService filesystem.Service) error {
-	pm.mu.Lock()
-	defer pm.mu.Unlock()
 	pm.Logger.Infof("Creating process manager service: %s, config: %+v", servicePath, config)
 
 	identifier := constants.ServicePathToIdentifier(servicePath)
 	// Add to services map (return err if already exists)
-	if _, ok := pm.Services[identifier]; ok {
+	if _, ok := pm.Services.Load(identifier); ok {
 		return fmt.Errorf("service %s already exists", servicePath)
 	}
 
-	pm.Services[identifier] = ipmService{
+	pm.Services.Store(identifier, IpmService{
 		Config: config,
 		History: process_shared.ServiceInfo{
 			Status:      process_shared.ServiceUnknown,
 			ExitHistory: make([]process_shared.ExitEvent, 0),
 		},
-	}
+	})
 
-	// Add to task queue
+	// Add to task queue - only lock around this operation
+	pm.mu.Lock()
 	pm.TaskQueue = append(pm.TaskQueue, Task{
 		Identifier: identifier,
 		Operation:  OperationCreate,
 	})
+	pm.mu.Unlock()
 
 	// Tasks are queued and will be processed by Reconcile
 	return nil
 }
 
 func (pm *ProcessManager) Remove(ctx context.Context, servicePath string, fsService filesystem.Service) error {
-	pm.mu.Lock()
-	defer pm.mu.Unlock()
 	pm.Logger.Infof("Removing process manager service: %s", servicePath)
 
 	identifier := constants.ServicePathToIdentifier(servicePath)
 	// Remove from services map (return err if not exists)
-	if _, ok := pm.Services[identifier]; !ok {
+	if _, ok := pm.Services.Load(identifier); !ok {
 		return fmt.Errorf("service %s does not exist", servicePath)
 	}
 
 	// Remove from services map (this is safe as for removal we only need the serviceIdentifier)
-	delete(pm.Services, identifier)
+	pm.Services.Delete(identifier)
 
-	// Add to task queue
+	// Add to task queue - only lock around this operation
+	pm.mu.Lock()
 	pm.TaskQueue = append(pm.TaskQueue, Task{
 		Identifier: identifier,
 		Operation:  OperationRemove,
 	})
+	pm.mu.Unlock()
 
 	// Tasks are queued and will be processed by Reconcile
 	return nil
 }
 
 func (pm *ProcessManager) Start(ctx context.Context, servicePath string, fsService filesystem.Service) error {
-	pm.mu.Lock()
-	defer pm.mu.Unlock()
 	pm.Logger.Infof("Starting process manager service: %s", servicePath)
 
 	identifier := constants.ServicePathToIdentifier(servicePath)
 	// Validate that service exists before queuing
-	if _, ok := pm.Services[identifier]; !ok {
+	if _, ok := pm.Services.Load(identifier); !ok {
 		return fmt.Errorf("service %s not found", servicePath)
 	}
 
-	// Add to task queue
+	// Add to task queue - only lock around this operation
+	pm.mu.Lock()
 	pm.TaskQueue = append(pm.TaskQueue, Task{
 		Identifier: identifier,
 		Operation:  OperationStart,
 	})
+	pm.mu.Unlock()
 
 	// Tasks are queued and will be processed by Reconcile
 	return nil
 }
 
 func (pm *ProcessManager) Stop(ctx context.Context, servicePath string, fsService filesystem.Service) error {
-	pm.mu.Lock()
-	defer pm.mu.Unlock()
 	pm.Logger.Infof("Stopping process manager service: %s", servicePath)
 
 	identifier := constants.ServicePathToIdentifier(servicePath)
 	// Validate that service exists before queuing
-	if _, ok := pm.Services[identifier]; !ok {
+	if _, ok := pm.Services.Load(identifier); !ok {
 		return fmt.Errorf("service %s not found", servicePath)
 	}
 
-	// Add to task queue
+	// Add to task queue - only lock around this operation
+	pm.mu.Lock()
 	pm.TaskQueue = append(pm.TaskQueue, Task{
 		Identifier: identifier,
 		Operation:  OperationStop,
 	})
+	pm.mu.Unlock()
 
 	// Tasks are queued and will be processed by Reconcile
 	return nil
 }
 
 func (pm *ProcessManager) Restart(ctx context.Context, servicePath string, fsService filesystem.Service) error {
-	pm.mu.Lock()
-	defer pm.mu.Unlock()
 	pm.Logger.Infof("Restarting process manager service: %s", servicePath)
 
 	identifier := constants.ServicePathToIdentifier(servicePath)
 	// Validate that service exists before queuing
-	if _, ok := pm.Services[identifier]; !ok {
+	if _, ok := pm.Services.Load(identifier); !ok {
 		return fmt.Errorf("service %s not found", servicePath)
 	}
 
-	// Add to task queue
+	// Add to task queue - only lock around this operation
+	pm.mu.Lock()
 	pm.TaskQueue = append(pm.TaskQueue, Task{
 		Identifier: identifier,
 		Operation:  OperationRestart,
 	})
+	pm.mu.Unlock()
 
 	// Tasks are queued and will be processed by Reconcile
 	return nil
 }
 
 func (pm *ProcessManager) Status(ctx context.Context, servicePath string, fsService filesystem.Service) (process_shared.ServiceInfo, error) {
-	pm.mu.Lock()
-	defer pm.mu.Unlock()
 	pm.Logger.Debugf("Getting status of process manager service: %s", servicePath)
 
 	identifier := constants.ServicePathToIdentifier(servicePath)
 
 	// Check if service exists in our registry
-	service, exists := pm.Services[identifier]
+	serviceValue, exists := pm.Services.Load(identifier)
 	if !exists {
 		pm.Logger.Errorf("[StatusGenerator] Service %s does not exist", servicePath)
 		return process_shared.ServiceInfo{}, process_shared.ErrServiceNotExist
 	}
+	service := serviceValue.(IpmService)
 
 	// Start with the current tracked status
 	info := service.History
@@ -363,52 +362,51 @@ func (pm *ProcessManager) Status(ctx context.Context, servicePath string, fsServ
 	info.IsWantingUp = true
 
 	// Update the tracked status in our registry
-	service.History = info
-	pm.Services[identifier] = service
+	pm.Services.Store(identifier, IpmService{
+		Config:        service.Config,
+		History:       info,
+		LogLineWriter: service.LogLineWriter,
+	})
 
 	return info, nil
 }
 
 func (pm *ProcessManager) ExitHistory(ctx context.Context, superviseDir string, fsService filesystem.Service) ([]process_shared.ExitEvent, error) {
-	pm.mu.Lock()
-	defer pm.mu.Unlock()
 	pm.Logger.Debugf("Getting exit history of process manager service: %s", superviseDir)
 
 	// For IPM, superviseDir is actually the servicePath since IPM doesn't use separate supervise directories
 	identifier := constants.ServicePathToIdentifier(superviseDir)
 
 	// Check if service exists in our registry
-	service, exists := pm.Services[identifier]
+	serviceValue, exists := pm.Services.Load(identifier)
 	if !exists {
 		return nil, process_shared.ErrServiceNotExist
 	}
+	service := serviceValue.(IpmService)
 
 	// Return the exit history from the service info
 	return service.History.ExitHistory, nil
 }
 
 func (pm *ProcessManager) ServiceExists(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
-	pm.mu.Lock()
-	defer pm.mu.Unlock()
 	pm.Logger.Debugf("Checking if process manager service exists: %s", servicePath)
 
 	identifier := constants.ServicePathToIdentifier(servicePath)
-	_, exists := pm.Services[identifier]
+	_, exists := pm.Services.Load(identifier)
 	return exists, nil
 }
 
 func (pm *ProcessManager) GetConfig(ctx context.Context, servicePath string, fsService filesystem.Service) (process_manager_serviceconfig.ProcessManagerServiceConfig, error) {
-	pm.mu.Lock()
-	defer pm.mu.Unlock()
 	pm.Logger.Debugf("Getting config of process manager service: %s", servicePath)
 
 	identifier := constants.ServicePathToIdentifier(servicePath)
 
 	// Check if service exists in our registry
-	service, exists := pm.Services[identifier]
+	serviceValue, exists := pm.Services.Load(identifier)
 	if !exists {
 		return process_manager_serviceconfig.ProcessManagerServiceConfig{}, process_shared.ErrServiceNotExist
 	}
+	service := serviceValue.(IpmService)
 
 	// For IPM, we return the stored configuration directly
 	// This is simpler than S6 which needs to parse scripts
@@ -420,17 +418,16 @@ func (pm *ProcessManager) GetConfig(ctx context.Context, servicePath string, fsS
 }
 
 func (pm *ProcessManager) GetConfigFile(ctx context.Context, servicePath string, configFileName string, fsService filesystem.Service) ([]byte, error) {
-	pm.mu.Lock()
-	defer pm.mu.Unlock()
 	pm.Logger.Debugf("Getting config file of process manager service: %s, file: %s", servicePath, configFileName)
 
 	identifier := constants.ServicePathToIdentifier(servicePath)
 
 	// Check if service exists in our registry
-	service, exists := pm.Services[identifier]
+	serviceValue, exists := pm.Services.Load(identifier)
 	if !exists {
 		return nil, process_shared.ErrServiceNotExist
 	}
+	service := serviceValue.(IpmService)
 
 	// Check if the config file exists in our stored configuration
 	fileContent, exists := service.Config.ConfigFiles[configFileName]
@@ -444,17 +441,16 @@ func (pm *ProcessManager) GetConfigFile(ctx context.Context, servicePath string,
 }
 
 func (pm *ProcessManager) GetLogs(_ context.Context, servicePath string, _ filesystem.Service) ([]process_shared.LogEntry, error) {
-	pm.mu.Lock()
-	defer pm.mu.Unlock()
 	pm.Logger.Debugf("Getting logs of process manager service: %s", servicePath)
 
 	identifier := constants.ServicePathToIdentifier(servicePath)
 
 	// Check if service exists in our registry and get its LogLineWriter
-	service, exists := pm.Services[identifier]
+	serviceValue, exists := pm.Services.Load(identifier)
 	if !exists {
 		return nil, process_shared.ErrServiceNotExist
 	}
+	service := serviceValue.(IpmService)
 
 	logWriter := service.LogLineWriter
 	if logWriter == nil {
@@ -469,16 +465,12 @@ func (pm *ProcessManager) GetLogs(_ context.Context, servicePath string, _ files
 	return entries, nil
 }
 func (pm *ProcessManager) CleanServiceDirectory(ctx context.Context, path string, fsService filesystem.Service) error {
-	pm.mu.Lock()
-	defer pm.mu.Unlock()
 	pm.Logger.Infof("Cleaning process manager service directory: %s", path)
 	// We don't use this here, so we return nil
 	return nil
 }
 
 func (pm *ProcessManager) ForceRemove(ctx context.Context, servicePath string, fsService filesystem.Service) error {
-	pm.mu.Lock()
-	defer pm.mu.Unlock()
 	pm.Logger.Infof("Force removing process manager service: %s", servicePath)
 
 	// We don't use this here, so we return nil
@@ -486,8 +478,6 @@ func (pm *ProcessManager) ForceRemove(ctx context.Context, servicePath string, f
 }
 
 func (pm *ProcessManager) EnsureSupervision(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
-	pm.mu.Lock()
-	defer pm.mu.Unlock()
 	pm.Logger.Infof("Ensuring supervision of process manager service: %s", servicePath)
 
 	// We don't use this here, so we return true and nil (supervision is always ensured)
@@ -619,13 +609,15 @@ func (pm *ProcessManager) Close() error {
 	pm.Logger.Info("Closing ProcessManager and all log files")
 
 	// Close all LogLineWriter instances
-	for identifier, service := range pm.Services {
+	pm.Services.Range(func(key, value interface{}) bool {
+		service := value.(IpmService)
 		if service.LogLineWriter != nil {
 			if err := service.LogLineWriter.Close(); err != nil {
-				pm.Logger.Errorf("Error closing LogLineWriter for %s: %v", identifier, err)
+				pm.Logger.Errorf("Error closing LogLineWriter for %s: %v", key, err)
 			}
 		}
-	}
+		return true
+	})
 
 	// Close all log files
 	if pm.logManager != nil {
@@ -663,10 +655,11 @@ func CreateUMHCoreLoggingService(reader io.Reader, readyChan chan struct{}) erro
 
 	// Get the service from the registry to access its LogLineWriter
 	serviceIdentifier := constants.ServicePathToIdentifier(servicePath)
-	service, exists := pm.Services[serviceIdentifier]
+	serviceValue, exists := pm.Services.Load(serviceIdentifier)
 	if !exists {
 		return fmt.Errorf("umh-core service not found in registry")
 	}
+	service := serviceValue.(IpmService)
 
 	// If LogLineWriter doesn't exist yet, we need to create it
 	if service.LogLineWriter == nil {
@@ -691,7 +684,7 @@ func CreateUMHCoreLoggingService(reader io.Reader, readyChan chan struct{}) erro
 
 		// Update service with LogLineWriter
 		service.LogLineWriter = logWriter
-		pm.Services[serviceIdentifier] = service
+		pm.Services.Store(serviceIdentifier, service)
 	}
 
 	// Signal that the log handler is ready

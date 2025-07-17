@@ -45,9 +45,12 @@ func (pm *ProcessManager) removeService(ctx context.Context, identifier constant
 	servicePath := string(identifier) // Convert identifier back to servicePath
 
 	// Close the LogLineWriter for this service before removal
-	if service, exists := pm.Services[identifier]; exists && service.LogLineWriter != nil {
-		if err := service.LogLineWriter.Close(); err != nil {
-			pm.Logger.Errorf("Error closing LogLineWriter during service removal for %s: %v", identifier, err)
+	if serviceValue, exists := pm.Services.Load(identifier); exists {
+		service := serviceValue.(IpmService)
+		if service.LogLineWriter != nil {
+			if err := service.LogLineWriter.Close(); err != nil {
+				pm.Logger.Errorf("Error closing LogLineWriter during service removal for %s: %v", identifier, err)
+			}
 		}
 	}
 
@@ -83,7 +86,7 @@ func (pm *ProcessManager) stopService(ctx context.Context, identifier constants.
 	pm.Logger.Infof("Stopping service: %s", identifier)
 
 	// Check if the service exists in our services map
-	if _, exists := pm.Services[identifier]; !exists {
+	if _, exists := pm.Services.Load(identifier); !exists {
 		return fmt.Errorf("service %s not found", string(identifier))
 	}
 
@@ -143,7 +146,7 @@ func (pm *ProcessManager) terminateServiceProcess(ctx context.Context, identifie
 // it indicates that the service is not running, which is valuable information for
 // service management operations.
 func (pm *ProcessManager) readProcessPid(ctx context.Context, servicePath string, fsService filesystem.Service) (int, error) {
-	pidFile := filepath.Join(servicePath, constants.PidFileName)
+	pidFile := filepath.Join(pm.ServiceDirectory, "services", servicePath, constants.PidFileName)
 	pidBytes, err := fsService.ReadFile(ctx, pidFile)
 	if err != nil {
 		pm.Logger.Infof("Process not running anymore, skipping termination: %s", pidFile)
@@ -303,11 +306,12 @@ func (pm *ProcessManager) cleanupServiceDirectories(ctx context.Context, service
 // RecordExitEvent records an exit event in the service history
 func (pm *ProcessManager) RecordExitEvent(identifier constants.ServiceIdentifier, exitCode int, signal int) {
 	// Check if service exists in our registry
-	service, exists := pm.Services[identifier]
+	serviceValue, exists := pm.Services.Load(identifier)
 	if !exists {
 		pm.Logger.Debugf("Service not found when recording exit event: %s", identifier)
 		return
 	}
+	service := serviceValue.(IpmService)
 
 	// Create exit event
 	exitEvent := process_shared.ExitEvent{
@@ -325,7 +329,7 @@ func (pm *ProcessManager) RecordExitEvent(identifier constants.ServiceIdentifier
 	}
 
 	// Update service in the registry
-	pm.Services[identifier] = service
+	pm.Services.Store(identifier, service)
 
 	pm.Logger.Debugf("Recorded exit event for %s: exit code %d, signal %d, timestamp %s", identifier, exitCode, signal, exitEvent.Timestamp.Format(time.RFC3339))
 }

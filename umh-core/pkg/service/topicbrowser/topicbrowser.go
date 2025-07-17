@@ -287,6 +287,7 @@ func (svc *Service) Status(
 	// into the ringbuffer
 	err = svc.parseBlock(logs)
 	if err != nil {
+		zap.S().Errorf("failed to parse block from logs: %v", err)
 		return ServiceInfo{}, fmt.Errorf("failed to parse block from logs: %w", err)
 	}
 

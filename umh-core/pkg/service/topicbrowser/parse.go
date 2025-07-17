@@ -27,6 +27,7 @@ import (
 	"github.com/pierrec/lz4/v4"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
+	"go.uber.org/zap"
 )
 
 // 10MiB
@@ -109,6 +110,7 @@ func extractRaw(entries []process_shared.LogEntry) (compressed []byte, epochMS i
 func (svc *Service) parseBlock(entries []process_shared.LogEntry) error {
 	hexBuf, epoch, err := extractRaw(entries)
 	if err != nil || len(hexBuf) == 0 {
+		zap.S().Errorf("failed to extract raw from logs: %v", err)
 		return err // nil or extractor error
 	}
 
@@ -125,8 +127,10 @@ func (svc *Service) parseBlock(entries []process_shared.LogEntry) error {
 	payload := hexBuf
 
 	if len(payload) > maxPayloadBytes {
+		zap.S().Errorf("payload %d bytes exceed max %d limit", len(payload), maxPayloadBytes)
 		return fmt.Errorf("payload %d bytes exceed max %d limit", len(payload), maxPayloadBytes)
 	}
+	zap.S().Infof("parsed block with %d bytes", len(hexBuf))
 
 	svc.ringbuffer.Add(&Buffer{
 		Payload:   payload,

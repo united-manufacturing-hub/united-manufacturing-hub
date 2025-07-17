@@ -87,12 +87,13 @@ func (pm *ProcessManager) createService(ctx context.Context, identifier constant
 // that have been properly registered in the ProcessManager. While this should never fail
 // under normal circumstances (since we only add identifiers to queues for existing Services),
 // it provides a defensive programming measure against race conditions or programming errors.
-func (pm *ProcessManager) getServiceConfig(identifier constants.ServiceIdentifier) (ipmService, error) {
-	service, exists := pm.Services[identifier]
+func (pm *ProcessManager) getServiceConfig(identifier constants.ServiceIdentifier) (IpmService, error) {
+	serviceValue, exists := pm.Services.Load(identifier)
 	if !exists {
 		// This should never happen as we only add services to the list that exist
-		return service, fmt.Errorf("service %s not found", identifier)
+		return IpmService{}, fmt.Errorf("service %s not found", identifier)
 	}
+	service := serviceValue.(IpmService)
 	return service, nil
 }
 
