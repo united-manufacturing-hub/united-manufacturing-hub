@@ -246,10 +246,20 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 			return nil
 		}
 
-		// 2. Directory exists but we have no artifacts → inconsistent state
+		// 2. Directory exists but we have no artifacts → orphaned directory from restart
 		if s.artifacts == nil {
-			s.logger.Debugf("Service %s exists but has no artifacts, failing to trigger FSM removal", servicePath)
-			return fmt.Errorf("service directory exists but artifacts is nil - inconsistent state")
+			s.logger.Debugf("Service %s exists but has no artifacts (orphaned from restart), removing and recreating", servicePath)
+			// Remove the orphaned directory immediately - we can't track what files were created
+			if err := fsService.RemoveAll(ctx, servicePath); err != nil {
+				return fmt.Errorf("failed to remove orphaned service directory: %w", err)
+			}
+			// Proceed with fresh creation
+			artifacts, err := s.CreateArtifacts(ctx, servicePath, config, fsService)
+			if err != nil {
+				return err
+			}
+			s.artifacts = artifacts
+			return nil
 		}
 
 		// 3. Directory exists and we have artifacts → check health
