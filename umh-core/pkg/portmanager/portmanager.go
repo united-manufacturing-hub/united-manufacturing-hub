@@ -64,14 +64,11 @@ type DefaultPortManager struct {
 var (
 	defaultPortManagerInstance *DefaultPortManager
 	defaultPortManagerOnce     sync.Once
-	defaultPortManagerMutex    sync.RWMutex
 )
 
 // GetDefaultPortManager returns the singleton instance of DefaultPortManager.
 // If the instance hasn't been initialized yet, it returns nil.
 func GetDefaultPortManager() *DefaultPortManager {
-	defaultPortManagerMutex.RLock()
-	defer defaultPortManagerMutex.RUnlock()
 	return defaultPortManagerInstance
 }
 
@@ -80,15 +77,10 @@ func GetDefaultPortManager() *DefaultPortManager {
 // Otherwise, it creates and initializes the singleton instance.
 func NewDefaultPortManager() *DefaultPortManager {
 	defaultPortManagerOnce.Do(func() {
-		defaultPortManagerMutex.Lock()
-		defer defaultPortManagerMutex.Unlock()
 		defaultPortManagerInstance = &DefaultPortManager{
 			instanceToPorts: make(map[string]uint16),
 		}
 	})
-
-	defaultPortManagerMutex.RLock()
-	defer defaultPortManagerMutex.RUnlock()
 	return defaultPortManagerInstance
 }
 
@@ -227,8 +219,6 @@ func (pm *DefaultPortManager) PostReconcile(ctx context.Context) error {
 
 // ResetDefaultPortManager resets the singleton instance for testing purposes
 func ResetDefaultPortManager() {
-	defaultPortManagerMutex.Lock()
-	defer defaultPortManagerMutex.Unlock()
 	defaultPortManagerInstance = nil
 	defaultPortManagerOnce = sync.Once{}
 }

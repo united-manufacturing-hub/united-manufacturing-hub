@@ -189,7 +189,7 @@ download-docker-binaries:
 
 	@echo "All required files are present and up to date"
 
-.PHONY: build build-pprof build-debug
+.PHONY: vet build build-pprof build-debug
 COMMON_ARGS = \
 	--platform linux/$(TARGETARCH) \
 	--build-arg GOLANG_VERSION=$(GOLANG_VERSION) \

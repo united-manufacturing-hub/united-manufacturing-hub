@@ -32,6 +32,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -167,6 +168,7 @@ type ConnectionService struct {
 	nmapService      nmap.INmapService
 	nmapConfigs      []config.NmapConfig
 	recentNmapStates map[string][]string
+	statesMutex      sync.RWMutex // protects recentNmapStates
 }
 
 // ConnectionServiceOption is a function that configures a ConnectionService.
@@ -201,6 +203,7 @@ func NewDefaultConnectionService(connectionName string, opts ...ConnectionServic
 		nmapService:      nmap.NewDefaultNmapService(connectionName),
 		nmapConfigs:      []config.NmapConfig{},
 		recentNmapStates: make(map[string][]string),
+		statesMutex:      sync.RWMutex{},
 	}
 
 	// Apply options
@@ -613,6 +616,9 @@ func (c *ConnectionService) updateRecentScans(connName string, state string) {
 	// TODO(perf): replace slice with constant-size ring-buffer for O(1) append
 	// Consider using container/ring or a simple array with head index
 
+	c.statesMutex.Lock()
+	defer c.statesMutex.Unlock()
+
 	// Initialize if this is the first scan for this connection
 	if _, exists := c.recentNmapStates[connName]; !exists {
 		c.recentNmapStates[connName] = make([]string, 0, constants.MaxRecentStates)
@@ -642,6 +648,9 @@ func (c *ConnectionService) updateRecentScans(connName string, state string) {
 // Note: if the FSM is not running we store the synthetic "unknown" state;
 // it anchors the flakiness window without marking the connection flaky.
 func (c *ConnectionService) isConnectionFlaky(connName string) bool {
+	c.statesMutex.RLock()
+	defer c.statesMutex.RUnlock()
+
 	scans, exists := c.recentNmapStates[connName]
 
 	if !exists || len(scans) < 3 {
@@ -668,11 +677,16 @@ func (c *ConnectionService) isConnectionFlaky(connName string) bool {
 
 // GetRecentStatesCount returns the number of recent scan results for a connection
 func (s *ConnectionService) GetRecentStatesCount(name string) int {
+	s.statesMutex.RLock()
+	defer s.statesMutex.RUnlock()
 	return len(s.recentNmapStates[name])
 }
 
 // GetRecentStatesAtIndex returns the scan at the specified index for a connection
 func (s *ConnectionService) GetRecentStatesAtIndex(name string, index int) (*string, bool) {
+	s.statesMutex.RLock()
+	defer s.statesMutex.RUnlock()
+
 	if states, ok := s.recentNmapStates[name]; ok && len(states) > index {
 		return &states[index], true
 	}

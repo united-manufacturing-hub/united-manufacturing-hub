@@ -17,7 +17,6 @@
 package serviceregistry
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
@@ -26,41 +25,23 @@ import (
 
 var (
 	globalRegistry *Registry
-	initialized    bool
-	initMutex      sync.Mutex
+	initOnce       sync.Once
 )
 
-func NewRegistry() (*Registry, error) {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-
-	if initialized {
-		panic("NewRegistry called more than once - registry must be initialized once and explicitly passed between components")
-	}
-
-	minPort := uint16(9000)
-	maxPort := uint16(9999)
-	pm, portErr := portmanager.NewDefaultPortManager(minPort, maxPort)
-	if portErr != nil {
-		return nil, fmt.Errorf("failed to create port manager: %w", portErr)
-	}
-
-	fs := filesystem.NewDefaultService()
-	registry := &Registry{
-		PortManager: pm,
-		FileSystem:  fs,
-	}
-
-	globalRegistry = registry
-	initialized = true
-	return registry, nil
+func NewRegistry() *Registry {
+	initOnce.Do(func() {
+		pm := portmanager.NewDefaultPortManager()
+		fs := filesystem.NewDefaultService()
+		globalRegistry = &Registry{
+			PortManager: pm,
+			FileSystem:  fs,
+		}
+	})
+	return globalRegistry
 }
 
 // GetGlobalRegistry returns the global registry instance.
 // This function is used to be called inside the manager.CreateSnapshot which might not have the service registry dependency injected.
 func GetGlobalRegistry() *Registry {
-	if !initialized || globalRegistry == nil {
-		panic("GetGlobalRegistry called before registry was initialized")
-	}
-	return globalRegistry
+	return NewRegistry()
 }

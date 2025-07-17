@@ -36,42 +36,28 @@ var _ = Describe("PortManager", func() {
 	})
 
 	Describe("NewDefaultPortManager", func() {
-		DescribeTable("initialization scenarios",
-			func(minPort, maxPort uint16, shouldSucceed bool) {
-				pm, err := NewDefaultPortManager(minPort, maxPort)
-				if shouldSucceed {
-					Expect(err).NotTo(HaveOccurred())
-					Expect(pm.minPort).To(Equal(minPort))
-					Expect(pm.maxPort).To(Equal(maxPort))
-					Expect(pm.nextPort).To(Equal(minPort))
-				} else {
-					Expect(err).To(HaveOccurred())
-					Expect(pm).To(BeNil())
-				}
-			},
-			Entry("valid range", uint16(8000), uint16(9000), true),
-			//Entry("invalid min port (negative)", uint16(-1), uint16(9000), false), // This is not allowed, uint16 is unsigned
-			//Entry("invalid max port (negative)", uint16(8000), uint16(-1), false), // This is not allowed, uint16 is unsigned
-			Entry("min port greater than max port", uint16(9000), uint16(8000), false),
-			Entry("min port equals max port", uint16(8000), uint16(8000), false),
-			Entry("min port too low (privileged)", uint16(80), uint16(9000), false),
-			//Entry("max port too high", uint16(8000), uint16(70000), false), // This is not allowed, uint16 max is 65535
-		)
+		It("creates a new port manager successfully", func() {
+			pm := NewDefaultPortManager()
+			Expect(pm).NotTo(BeNil())
+			Expect(pm.instanceToPorts).NotTo(BeNil())
+		})
+
+		It("returns the same singleton instance on subsequent calls", func() {
+			pm1 := NewDefaultPortManager()
+			pm2 := NewDefaultPortManager()
+			Expect(pm1).To(BeIdenticalTo(pm2))
+		})
 	})
 
 	Describe("AllocatePort", func() {
 		Context("basic allocation", func() {
 			It("allocates a port successfully", func() {
-				pm, err := NewDefaultPortManager(8000, 9000)
-				Expect(err).NotTo(HaveOccurred())
+				pm := NewDefaultPortManager()
 
 				instance := "test-instance"
 				port, err := pm.AllocatePort(instance)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(port).To(Equal(uint16(8000)))
-
-				// Verify internal state
-				Expect(pm.nextPort).To(Equal(uint16(8001)))
+				Expect(port).To(BeNumerically(">", 0))
 
 				gotPort, exists := pm.GetPort(instance)
 				Expect(exists).To(BeTrue())
@@ -79,8 +65,7 @@ var _ = Describe("PortManager", func() {
 			})
 
 			It("returns the same port for an existing instance", func() {
-				pm, err := NewDefaultPortManager(8000, 9000)
-				Expect(err).NotTo(HaveOccurred())
+				pm := NewDefaultPortManager()
 
 				instance := "test-instance"
 				port1, err := pm.AllocatePort(instance)
@@ -92,66 +77,26 @@ var _ = Describe("PortManager", func() {
 				Expect(port2).To(Equal(port1))
 			})
 
-			It("returns an error when all ports are allocated", func() {
-				// Small range to make testing easier
-				minPort := uint16(8000)
-				maxPort := uint16(8002)
-				pm, err := NewDefaultPortManager(minPort, maxPort)
+			It("allocates different ports for different instances", func() {
+				pm := NewDefaultPortManager()
+
+				port1, err := pm.AllocatePort("instance-1")
 				Expect(err).NotTo(HaveOccurred())
 
-				// Allocate all ports
-				for i := 0; i < int(maxPort)-int(minPort)+1; i++ {
-					instance := fmt.Sprintf("instance-%d", i)
-					_, err := pm.AllocatePort(instance)
-					Expect(err).NotTo(HaveOccurred())
-				}
-
-				// Try to allocate one more port
-				_, err = pm.AllocatePort("one-too-many")
-				Expect(err).To(HaveOccurred())
-			})
-
-			It("handles port wraparound correctly", func() {
-				minPort := uint16(8000)
-				maxPort := uint16(8002)
-				pm, err := NewDefaultPortManager(minPort, maxPort)
+				port2, err := pm.AllocatePort("instance-2")
 				Expect(err).NotTo(HaveOccurred())
 
-				// Fill all ports
-				ports := make(map[uint16]string)
-				for i := 0; i <= int(maxPort)-int(minPort); i++ {
-					instName := fmt.Sprintf("instance-%d", i+1)
-					port, err := pm.AllocatePort(instName)
-					Expect(err).NotTo(HaveOccurred())
-					ports[port] = instName
-				}
-
-				// Release the first port
-				err = pm.ReleasePort("instance-1")
-				Expect(err).NotTo(HaveOccurred())
-
-				// Force nextPort to wrap around
-				pm.nextPort = maxPort + 1
-
-				// Allocate a port after wraparound
-				port, err := pm.AllocatePort("new-instance")
-				Expect(err).NotTo(HaveOccurred())
-
-				// Actual implementation may continue past maxPort or use a different algorithm
-				// Just verify we got a valid port
-				Expect(port).To(BeNumerically(">=", minPort))
-				Expect(port).To(BeNumerically("<=", maxPort))
+				Expect(port1).NotTo(Equal(port2))
 			})
 		})
 	})
 
 	Describe("ReleasePort", func() {
 		It("releases an allocated port", func() {
-			pm, err := NewDefaultPortManager(8000, 9000)
-			Expect(err).NotTo(HaveOccurred())
+			pm := NewDefaultPortManager()
 
 			instance := "test-instance"
-			_, err = pm.AllocatePort(instance)
+			_, err := pm.AllocatePort(instance)
 			Expect(err).NotTo(HaveOccurred())
 
 			err = pm.ReleasePort(instance)
@@ -160,32 +105,19 @@ var _ = Describe("PortManager", func() {
 			// Verify the port is released
 			_, exists := pm.GetPort(instance)
 			Expect(exists).To(BeFalse())
-
-			// Verify we can allocate a port again
-			// Note: The implementation may not reuse the exact same port immediately
-			// It depends on the allocation strategy
-			newPort, err := pm.AllocatePort("another-instance")
-			Expect(err).NotTo(HaveOccurred())
-
-			// Update test to match actual implementation behavior
-			// We just need to ensure we got a valid port, not necessarily the same one
-			Expect(newPort).To(BeNumerically(">=", pm.minPort))
-			Expect(newPort).To(BeNumerically("<=", pm.maxPort))
 		})
 
 		It("returns an error for non-existent instance", func() {
-			pm, err := NewDefaultPortManager(8000, 9000)
-			Expect(err).NotTo(HaveOccurred())
+			pm := NewDefaultPortManager()
 
-			err = pm.ReleasePort("non-existent")
+			err := pm.ReleasePort("non-existent")
 			Expect(err).To(HaveOccurred())
 		})
 	})
 
 	Describe("GetPort", func() {
 		It("returns the correct port for an existing instance", func() {
-			pm, err := NewDefaultPortManager(8000, 9000)
-			Expect(err).NotTo(HaveOccurred())
+			pm := NewDefaultPortManager()
 
 			instance := "test-instance"
 			expectedPort, err := pm.AllocatePort(instance)
@@ -197,8 +129,7 @@ var _ = Describe("PortManager", func() {
 		})
 
 		It("returns false for a non-existent instance", func() {
-			pm, err := NewDefaultPortManager(8000, 9000)
-			Expect(err).NotTo(HaveOccurred())
+			pm := NewDefaultPortManager()
 
 			gotPort, exists := pm.GetPort("non-existent")
 			Expect(exists).To(BeFalse())
@@ -208,12 +139,11 @@ var _ = Describe("PortManager", func() {
 
 	Describe("ReservePort", func() {
 		It("reserves an available port", func() {
-			pm, err := NewDefaultPortManager(8000, 9000)
-			Expect(err).NotTo(HaveOccurred())
+			pm := NewDefaultPortManager()
 
 			instance := "test-instance"
 			portToReserve := uint16(8500)
-			err = pm.ReservePort(instance, portToReserve)
+			err := pm.ReservePort(instance, portToReserve)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the port is reserved
@@ -222,23 +152,11 @@ var _ = Describe("PortManager", func() {
 			Expect(gotPort).To(Equal(portToReserve))
 		})
 
-		It("returns an error for port outside range", func() {
-			pm, err := NewDefaultPortManager(8000, 9000)
-			Expect(err).NotTo(HaveOccurred())
-
-			err = pm.ReservePort("test-instance", 7000)
-			Expect(err).To(HaveOccurred())
-
-			err = pm.ReservePort("test-instance", 10000)
-			Expect(err).To(HaveOccurred())
-		})
-
 		It("returns an error when port is already in use", func() {
-			pm, err := NewDefaultPortManager(8000, 9000)
-			Expect(err).NotTo(HaveOccurred())
+			pm := NewDefaultPortManager()
 
 			portToReserve := uint16(8500)
-			err = pm.ReservePort("instance-1", portToReserve)
+			err := pm.ReservePort("instance-1", portToReserve)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Try to reserve the same port for another instance
@@ -247,12 +165,11 @@ var _ = Describe("PortManager", func() {
 		})
 
 		It("returns an error when instance already has a different port", func() {
-			pm, err := NewDefaultPortManager(8000, 9000)
-			Expect(err).NotTo(HaveOccurred())
+			pm := NewDefaultPortManager()
 
 			instance := "test-instance"
 			port1 := uint16(8500)
-			err = pm.ReservePort(instance, port1)
+			err := pm.ReservePort(instance, port1)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Try to reserve a different port for the same instance
@@ -262,12 +179,11 @@ var _ = Describe("PortManager", func() {
 		})
 
 		It("succeeds when reserving same port for same instance", func() {
-			pm, err := NewDefaultPortManager(8000, 9000)
-			Expect(err).NotTo(HaveOccurred())
+			pm := NewDefaultPortManager()
 
 			instance := "test-instance"
 			port := uint16(8500)
-			err = pm.ReservePort(instance, port)
+			err := pm.ReservePort(instance, port)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reserve the same port for the same instance again
@@ -276,22 +192,16 @@ var _ = Describe("PortManager", func() {
 		})
 
 		It("returns an error for invalid ports", func() {
-			pm, err := NewDefaultPortManager(8000, 9000)
-			Expect(err).NotTo(HaveOccurred())
+			pm := NewDefaultPortManager()
 
-			err = pm.ReservePort("test-instance", 0)
+			err := pm.ReservePort("test-instance", 0)
 			Expect(err).To(HaveOccurred())
-
-			// This is not allowed (statically), as uint16 is unsigned
-			//err = pm.ReservePort("test-instance", uint16(-1))
-			//Expect(err).To(HaveOccurred())
 		})
 	})
 
 	Describe("Concurrent operations", func() {
 		It("handles concurrent allocations safely", func() {
-			pm, err := NewDefaultPortManager(8000, 9000)
-			Expect(err).NotTo(HaveOccurred())
+			pm := NewDefaultPortManager()
 
 			numGoroutines := 100
 			var wg sync.WaitGroup
@@ -316,11 +226,12 @@ var _ = Describe("PortManager", func() {
 
 			// Check results
 			allocatedPorts := make(map[uint16]string)
+			successCount := 0
 			for i, err := range errors {
 				if err == nil {
+					successCount++
 					port := ports[i]
-					Expect(port).To(BeNumerically(">=", pm.minPort))
-					Expect(port).To(BeNumerically("<=", pm.maxPort))
+					Expect(port).To(BeNumerically(">", 0))
 
 					// Verify no port duplications
 					instance, exists := allocatedPorts[port]
@@ -332,13 +243,13 @@ var _ = Describe("PortManager", func() {
 			}
 
 			// Verify we have allocated correctly
+			Expect(successCount).To(Equal(numGoroutines))
 			allocatedCount := len(pm.instanceToPorts)
-			Expect(allocatedCount).To(BeNumerically("<=", numGoroutines))
+			Expect(allocatedCount).To(Equal(numGoroutines))
 		})
 
 		It("handles mixed concurrent operations safely", func() {
-			pm, err := NewDefaultPortManager(8000, 9000)
-			Expect(err).NotTo(HaveOccurred())
+			pm := NewDefaultPortManager()
 
 			numGoroutines := 50
 			var wg sync.WaitGroup
@@ -358,7 +269,7 @@ var _ = Describe("PortManager", func() {
 					defer GinkgoRecover()
 					defer wg.Done()
 					instance := fmt.Sprintf("new-instance-%d", id)
-					_, err := pm.AllocatePort(instance) // Ignore errors, we might run out of ports
+					_, err := pm.AllocatePort(instance)
 					Expect(err).NotTo(HaveOccurred())
 				}(i)
 			}
@@ -369,12 +280,12 @@ var _ = Describe("PortManager", func() {
 					defer GinkgoRecover()
 					defer wg.Done()
 					instance := fmt.Sprintf("reserve-instance-%d", id)
-					port := uint16(8000 + id%1000)        // Ensure we stay in range
-					err := pm.ReservePort(instance, port) // Ignore errors, some might fail
+					port := uint16(8000 + id)             // Use different ports to avoid conflicts
+					err := pm.ReservePort(instance, port) // Some might fail due to port conflicts
 					if err != nil {
-						// Error is expected - should be "port already in use" or "instance already has port"
+						// Error is expected - should be "port is not available" or "instance already has port"
 						Expect(err.Error()).To(Or(
-							ContainSubstring("already in use"),
+							ContainSubstring("not available"),
 							ContainSubstring("already has port"),
 						))
 					}
@@ -398,26 +309,23 @@ var _ = Describe("PortManager", func() {
 
 	Describe("PreReconcile", func() {
 		It("allocates ports for new instances", func() {
-			pm, err := NewDefaultPortManager(8000, 9000)
-			Expect(err).NotTo(HaveOccurred())
+			pm := NewDefaultPortManager()
 
 			// Test with multiple instances
 			instanceNames := []string{"instance-1", "instance-2", "instance-3"}
-			err = pm.PreReconcile(context.Background(), instanceNames)
+			err := pm.PreReconcile(context.Background(), instanceNames)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify ports were allocated
 			for _, name := range instanceNames {
 				port, exists := pm.GetPort(name)
 				Expect(exists).To(BeTrue())
-				Expect(port).To(BeNumerically(">=", pm.minPort))
-				Expect(port).To(BeNumerically("<=", pm.maxPort))
+				Expect(port).To(BeNumerically(">", 0))
 			}
 		})
 
 		It("handles instances that already have ports", func() {
-			pm, err := NewDefaultPortManager(8000, 9000)
-			Expect(err).NotTo(HaveOccurred())
+			pm := NewDefaultPortManager()
 
 			// Pre-allocate a port
 			existingInstance := "existing-instance"
@@ -437,29 +345,15 @@ var _ = Describe("PortManager", func() {
 			// Verify new instance got a port
 			port, exists = pm.GetPort("new-instance")
 			Expect(exists).To(BeTrue())
-			Expect(port).To(BeNumerically(">=", pm.minPort))
-			Expect(port).To(BeNumerically("<=", pm.maxPort))
-		})
-
-		It("handles port exhaustion", func() {
-			// Create a port manager with very limited ports
-			pm, err := NewDefaultPortManager(8000, 8001)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Try to allocate more ports than available
-			instanceNames := []string{"instance-1", "instance-2", "instance-3"}
-			err = pm.PreReconcile(context.Background(), instanceNames)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("port allocation failed"))
+			Expect(port).To(BeNumerically(">", 0))
 		})
 	})
 
 	Describe("PostReconcile", func() {
 		It("completes without error", func() {
-			pm, err := NewDefaultPortManager(8000, 9000)
-			Expect(err).NotTo(HaveOccurred())
+			pm := NewDefaultPortManager()
 
-			err = pm.PostReconcile(context.Background())
+			err := pm.PostReconcile(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
