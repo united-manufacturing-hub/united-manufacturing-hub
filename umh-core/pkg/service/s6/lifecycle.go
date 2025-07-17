@@ -303,7 +303,7 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *Service
 			return fmt.Errorf("failed to check main supervise directory state: %w", err)
 		} else if !empty {
 			s.logger.Debugf("Main supervise directory not yet empty for service: %s", artifacts.ServiceDir)
-			return nil // Return and wait for next FSM tick
+			return fmt.Errorf("main supervise directory not yet empty for service: %s", artifacts.ServiceDir)
 		}
 		progress.MainSuperviseDirectoryEmpty = true
 		s.logger.Debugf("Main supervise directory empty for service: %s", artifacts.ServiceDir)
@@ -325,7 +325,7 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *Service
 			return fmt.Errorf("failed to check log supervise directory state: %w", err)
 		} else if !empty {
 			s.logger.Debugf("Log supervise directory not yet empty for service: %s", artifacts.ServiceDir)
-			return nil // Return and wait for next FSM tick
+			return fmt.Errorf("log supervise directory not yet empty for service: %s", artifacts.ServiceDir)
 		}
 		progress.LogSuperviseDirectoryEmpty = true
 		s.logger.Debugf("Log supervise directory empty for service: %s", artifacts.ServiceDir)
@@ -763,9 +763,13 @@ func (s *DefaultService) isSingleSupervisorCleanupComplete(ctx context.Context, 
 		if statusData.Pid != 0 {
 			return false, nil
 		}
+
+		// Status file exists and shows cleanup is complete
+		return true, nil
 	}
 
 	// Method 2: Check if supervisor process is still running via PID file
+	// NOTE: PID files may not exist in S6, so we handle this case gracefully
 	pidFile := filepath.Join(superviseDir, "pid")
 	pidExists, err := fsService.FileExists(ctx, pidFile)
 	if err != nil {
@@ -793,7 +797,10 @@ func (s *DefaultService) isSingleSupervisorCleanupComplete(ctx context.Context, 
 		}
 	}
 
-	// Single supervisor has completed cleanup
+	// If we reach here, either:
+	// 1. Status file doesn't exist (supervisor already cleaned up)
+	// 2. PID file doesn't exist or process is dead
+	// In both cases, we consider cleanup complete
 	return true, nil
 }
 
