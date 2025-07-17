@@ -89,7 +89,7 @@ func (llw *LogLineWriter) initCurrentFile() error {
 
 	// Check if file exists and get its current size
 	var currentSize int64
-	if stat, err := llw.FsService.Stat(context.Background(), currentLogFile); err == nil {
+	if stat, err := llw.FsService.Stat(context.Background(), currentLogFile); err == nil && stat != nil {
 		currentSize = stat.Size()
 	}
 

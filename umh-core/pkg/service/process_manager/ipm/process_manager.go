@@ -342,7 +342,7 @@ func (pm *ProcessManager) Status(ctx context.Context, servicePath string, fsServ
 	}
 
 	// Get process start time for uptime calculation
-	if stat, err := fsService.Stat(ctx, pidFile); err == nil {
+	if stat, err := fsService.Stat(ctx, pidFile); err == nil && stat != nil {
 		pm.Logger.Debugf("[StatusGenerator] Process start time for service %s: %v", servicePath, stat.ModTime())
 		pidFileModTime := stat.ModTime()
 		uptime := time.Since(pidFileModTime)
@@ -633,6 +633,9 @@ func (pm *ProcessManager) Close() error {
 func CreateUMHCoreLoggingService(reader io.Reader, readyChan chan struct{}) error {
 	// Create a ProcessManager instance to manage the umh-core service
 	pm := NewProcessManagerInstance()
+	if pm == nil {
+		return fmt.Errorf("failed to create ProcessManager instance")
+	}
 	fsService := filesystem.NewDefaultService()
 
 	// Create service configuration for umh-core dummy service

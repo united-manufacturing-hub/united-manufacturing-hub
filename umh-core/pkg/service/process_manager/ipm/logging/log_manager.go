@@ -107,7 +107,7 @@ func (lm *LogManager) CheckAndRotate(ctx context.Context, fsService filesystem.S
 func (lm *LogManager) rotateIfNeeded(ctx context.Context, identifier constants.ServiceIdentifier, info logInfo, fsService filesystem.Service) error {
 	// Check if current log file exists and get its size
 	stat, err := fsService.Stat(ctx, info.CurrentLogFile)
-	if err != nil {
+	if err != nil || stat == nil {
 		// File doesn't exist yet, nothing to rotate
 		return nil
 	}
@@ -134,7 +134,7 @@ func (lm *LogManager) RotateLogFile(identifier constants.ServiceIdentifier, fsSe
 
 	// Get current file size before rotation for logging
 	var currentSize int64
-	if stat, err := fsService.Stat(context.Background(), info.CurrentLogFile); err == nil {
+	if stat, err := fsService.Stat(context.Background(), info.CurrentLogFile); err == nil && stat != nil {
 		currentSize = stat.Size()
 	}
 
