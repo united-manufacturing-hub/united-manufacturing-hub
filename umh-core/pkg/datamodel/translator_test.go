@@ -103,7 +103,7 @@ var _ = Describe("Translator", func() {
 					},
 				},
 				expectedSchemas:  1,
-				expectedSubjects: []string{"_pump_data_v1_timeseries-number"},
+				expectedSubjects: []string{"_pump_data_v1-timeseries-number"},
 				expectedPaths: map[string][]string{
 					"timeseries-number": {"count", "vibration.x-axis", "vibration.y-axis"},
 				},
@@ -124,8 +124,8 @@ var _ = Describe("Translator", func() {
 				},
 				expectedSchemas: 2,
 				expectedSubjects: []string{
-					"_pump_data_v1_timeseries-number",
-					"_pump_data_v1_timeseries-string",
+					"_pump_data_v1-timeseries-number",
+					"_pump_data_v1-timeseries-string",
 				},
 				expectedPaths: map[string][]string{
 					"timeseries-number": {"count"},
@@ -144,7 +144,7 @@ var _ = Describe("Translator", func() {
 					},
 				},
 				expectedSchemas:  1,
-				expectedSubjects: []string{"_motor_data_v2_timeseries-number"},
+				expectedSubjects: []string{"_motor_data_v2-timeseries-number"},
 				expectedPaths: map[string][]string{
 					"timeseries-number": {"temperature"},
 				},
@@ -207,7 +207,7 @@ var _ = Describe("Translator", func() {
 
 			Expect(err).To(BeNil())
 
-			subjectName := "_pump_data_v1_timeseries-number"
+			subjectName := "_pump_data_v1-timeseries-number"
 			jsonBytes, err := result.GetSchemaAsJSON(subjectName)
 			Expect(err).To(BeNil())
 			Expect(jsonBytes).ToNot(BeEmpty())
@@ -273,8 +273,8 @@ var _ = Describe("Translator", func() {
 
 				if tc.verifyDefaultFields {
 					// Verify both default payload shapes were used successfully
-					numberSubject := "_pump_data_v1_timeseries-number"
-					stringSubject := "_pump_data_v1_timeseries-string"
+					numberSubject := "_pump_data_v1-timeseries-number"
+					stringSubject := "_pump_data_v1-timeseries-string"
 
 					numberSchema, numberExists := result.Schemas[numberSubject]
 					stringSchema, stringExists := result.Schemas[stringSubject]
@@ -311,7 +311,7 @@ var _ = Describe("Translator", func() {
 
 				if tc.verifyCustomFields {
 					// Verify the custom payload shape was used (not the default)
-					subjectName := "_pump_data_v1_timeseries-number"
+					subjectName := "_pump_data_v1-timeseries-number"
 					schema, exists := result.Schemas[subjectName]
 					Expect(exists).To(BeTrue())
 

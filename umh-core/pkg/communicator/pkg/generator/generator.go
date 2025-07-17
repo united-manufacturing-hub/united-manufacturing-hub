@@ -122,6 +122,13 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 		dfcData = append(dfcData, protocolConverterDfcs...)
 	}
 
+	// --- stream processors (multiple instances) as DFCs --------------------------
+	streamProcessorMgr, ok := fsm.FindManager(snapshot, constants.StreamProcessorManagerName)
+	if ok {
+		streamProcessorDfcs := StreamProcessorsFromSnapshot(streamProcessorMgr, s.logger)
+		dfcData = append(dfcData, streamProcessorDfcs...)
+	}
+
 	// --- topic browser -------------------------------------------------------------
 	topicBrowserData := &models.TopicBrowser{}
 

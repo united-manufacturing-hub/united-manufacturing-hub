@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/monitor"
+	redpanda_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
 	redpanda_monitor_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
@@ -143,14 +144,27 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 	}
 
 	// Reconcile the s6Manager
-	s6Err, s6Reconciled := r.service.ReconcileManager(ctx, services, snapshot.Tick)
+	s6Err, s6Reconciled := r.service.ReconcileManager(ctx, services, snapshot)
 	if s6Err != nil {
-		if r.baseFSMInstance.IsDeadlineExceededAndHandle(s6Err, snapshot.Tick, "s6Manager reconciliation") {
+		// Check if the error is from schema registry
+		if redpanda_service.IsSchemaRegistryError(s6Err) {
+			// For schema registry errors, only set the error if we're in running states
+			if r.IsRunning() {
+				r.baseFSMInstance.SetError(s6Err, snapshot.Tick)
+				r.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
+				return nil, false
+			}
+			// If not in running state, just log the error but don't set it in the FSM
+			r.baseFSMInstance.GetLogger().Debugf("schema registry error while not in running state (%s), ignoring: %s", r.GetCurrentFSMState(), s6Err)
+		} else {      
+		  if r.baseFSMInstance.IsDeadlineExceededAndHandle(s6Err, snapshot.Tick, "s6Manager reconciliation") {
+			  return nil, false
+	  	}
+			// For non-schema registry errors, always set the error
+			r.baseFSMInstance.SetError(s6Err, snapshot.Tick)
+			r.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
 			return nil, false
 		}
-		r.baseFSMInstance.SetError(s6Err, snapshot.Tick)
-		r.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
-		return nil, false
 	}
 
 	// If either Redpanda state, S6 state or the internal redpanda state via the Admin API was reconciled, we return reconciled so that nothing happens anymore in this tick
