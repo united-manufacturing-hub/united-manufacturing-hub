@@ -22,6 +22,9 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# Test status tracking
+TEST_FAILED=false
+
 # Function to print colored output
 log_info() {
     echo -e "${GREEN}[INFO]${NC} $1"
@@ -33,6 +36,11 @@ log_warn() {
 
 log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
+}
+
+log_failure() {
+    echo -e "${RED}[FAILURE]${NC} $1"
+    TEST_FAILED=true
 }
 
 # Function to cleanup on exit
@@ -158,7 +166,7 @@ if [ "$PC_SERVICES_FOUND" = true ]; then
         if docker exec -it umh-core grep -q "generate" "$BENTHOS_CONFIG_PATH" 2>/dev/null; then
             log_info "✅ SUCCESS: Found 'generate' in benthos configuration"
         else
-            log_warn "⚠️  'generate' string not found in benthos configuration"
+            log_failure "⚠️  'generate' string not found in benthos configuration"
             log_info "Benthos config content:"
             docker exec -it umh-core cat "$BENTHOS_CONFIG_PATH" 2>/dev/null || log_error "Failed to read config file"
         fi
@@ -187,7 +195,7 @@ if [ "$PC_LOGS_FOUND" = true ] || [ "$PC_SERVICES_FOUND" = true ]; then
     if [ -z "$PC_LOGS_AFTER" ]; then
         log_info "✅ SUCCESS: Protocol converter log directories have been cleaned up"
     else
-        log_warn "⚠️  Protocol converter log directories still exist:"
+        log_failure "⚠️  Protocol converter log directories still exist:"
         echo "$PC_LOGS_AFTER" | while read -r dir; do
             log_warn "  - $dir"
         done
@@ -201,7 +209,7 @@ if [ "$PC_LOGS_FOUND" = true ] || [ "$PC_SERVICES_FOUND" = true ]; then
     if [ -z "$PC_SERVICES_AFTER" ]; then
         log_info "✅ SUCCESS: Protocol converter services have been removed from /run/service"
     else
-        log_warn "⚠️  Protocol converter services still exist in /run/service:"
+        log_failure "⚠️  Protocol converter services still exist in /run/service:"
         echo "$PC_SERVICES_AFTER" | while read -r service; do
             log_warn "  - $service"
         done
@@ -225,6 +233,31 @@ if [ -d "data/logs" ]; then
     done
 else
     log_info "  No logs directory found"
+fi
+
+# Final test status and log copying
+if [ "$TEST_FAILED" = true ]; then
+    log_failure "=========================================="
+    log_failure "TEST FAILED: One or more checks failed!"
+    log_failure "=========================================="
+    
+    # Copy umh-core logs for investigation
+    log_info "Copying umh-core logs to last_logs.txt for investigation..."
+    if [ -f "data/logs/umh-core/current" ]; then
+        cp "data/logs/umh-core/current" "last_logs.txt"
+        log_info "Logs copied to umh-core/last_logs.txt"
+    else
+        log_warn "umh-core/data/logs/umh-core/current not found, cannot copy logs"
+        # Try alternative log locations
+        if [ -d "data/logs/umh-core" ]; then
+            log_info "Available files in data/logs/umh-core:"
+            ls -la data/logs/umh-core/ | while read -r file; do
+                log_info "  - $file"
+            done
+        fi
+    fi
+else
+    log_info "✅ ALL TESTS PASSED!"
 fi
 
 log_info "Protocol converter lifecycle test completed!" 
