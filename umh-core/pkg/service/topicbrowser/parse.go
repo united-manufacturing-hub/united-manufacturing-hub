@@ -17,7 +17,6 @@ package topicbrowser
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"strconv"
@@ -27,7 +26,7 @@ import (
 
 	"github.com/pierrec/lz4/v4"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 )
 
 // 10MiB
@@ -107,21 +106,23 @@ func extractRaw(entries []process_shared.LogEntry) (compressed []byte, epochMS i
 	return raw, epochMS, nil
 }
 
-func (svc *Service) parseBlock(entries []s6svc.LogEntry) error {
+func (svc *Service) parseBlock(entries []process_shared.LogEntry) error {
 	hexBuf, epoch, err := extractRaw(entries)
 	if err != nil || len(hexBuf) == 0 {
 		return err // nil or extractor error
 	}
 
-	compressed := make([]byte, hex.DecodedLen(len(hexBuf)))
-	if _, err := hex.Decode(compressed, hexBuf); err != nil {
-		return fmt.Errorf("hex decode: %w", err)
-	}
+	/*
+		compressed := make([]byte, hex.DecodedLen(len(hexBuf)))
+		if _, err := hex.Decode(compressed, hexBuf); err != nil {
+			return fmt.Errorf("hex decode: %w", err)
+		}
 
-	payload, err := decompressLZ4(compressed)
-	if err != nil {
-		return err
-	}
+		payload, err := decompressLZ4(compressed)
+		if err != nil {
+			return err
+		}*/
+	payload := hexBuf
 
 	if len(payload) > maxPayloadBytes {
 		return fmt.Errorf("payload %d bytes exceed max %d limit", len(payload), maxPayloadBytes)
