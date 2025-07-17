@@ -1,6 +1,3 @@
-//go:build internal_process_manager
-// +build internal_process_manager
-
 // Copyright 2025 UMH Systems GmbH
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -141,19 +138,19 @@ func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier
 	// Set up pipes for stdout and stderr to capture logs
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
-		logLineWriter.Close()
+		_ = logLineWriter.Close()
 		return fmt.Errorf("error creating stdout pipe: %w", err)
 	}
 
 	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
-		logLineWriter.Close()
+		_ = logLineWriter.Close()
 		return fmt.Errorf("error creating stderr pipe: %w", err)
 	}
 
 	// Start the process
 	if err := cmd.Start(); err != nil {
-		logLineWriter.Close()
+		_ = logLineWriter.Close()
 		return fmt.Errorf("error starting process: %w", err)
 	}
 
@@ -168,7 +165,7 @@ func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier
 		if killErr := cmd.Process.Kill(); killErr != nil {
 			pm.Logger.Errorf("Failed to kill process after PID write failure (pid: %d): %v", pid, killErr)
 		}
-		logLineWriter.Close()
+		_ = logLineWriter.Close()
 		return fmt.Errorf("error writing PID file: %w", err)
 	}
 
@@ -179,7 +176,7 @@ func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier
 	// Store the LogLineWriter in the service instead of the separate map
 	serviceValue, exists := pm.Services.Load(identifier)
 	if !exists {
-		logLineWriter.Close()
+		_ = logLineWriter.Close()
 		return fmt.Errorf("service %s not found in registry", identifier)
 	}
 	service := serviceValue.(IpmService)
@@ -193,7 +190,6 @@ func (pm *ProcessManager) startProcessAtomically(ctx context.Context, identifier
 // streamLogs reads from the provided pipe and writes each line to the LogLineWriter.
 // This function runs in a goroutine and handles real-time log streaming from the process.
 func (pm *ProcessManager) streamLogs(pipe io.ReadCloser, logLineWriter *logging.LogLineWriter, streamType string, identifier constants.ServiceIdentifier) {
-	defer pipe.Close()
 
 	scanner := bufio.NewScanner(pipe)
 	for scanner.Scan() {
@@ -215,6 +211,6 @@ func (pm *ProcessManager) streamLogs(pipe io.ReadCloser, logLineWriter *logging.
 	if err := scanner.Err(); err != nil {
 		pm.Logger.Errorf("Error scanning log stream: %v", err)
 	}
-
+	_ = pipe.Close()
 	pm.Logger.Debugf("Log stream ended: %s (%s)", identifier, streamType)
 }

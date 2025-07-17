@@ -99,7 +99,6 @@ func (pm *DefaultPortManager) AllocatePort(instanceName string) (uint16, error) 
 	if err != nil {
 		return 0, fmt.Errorf("failed to get port from OS: %w", err)
 	}
-	defer listener.Close()
 
 	// Extract the port from the listener's address
 	addr := listener.Addr().(*net.TCPAddr)
@@ -108,6 +107,7 @@ func (pm *DefaultPortManager) AllocatePort(instanceName string) (uint16, error) 
 	// Store the allocated port
 	pm.instanceToPorts[instanceName] = port
 
+	_ = listener.Close()
 	return port, nil
 }
 
@@ -159,7 +159,7 @@ func (pm *DefaultPortManager) ReservePort(instanceName string, port uint16) erro
 	if err != nil {
 		return fmt.Errorf("port %d is not available: %w", port, err)
 	}
-	listener.Close()
+	_ = listener.Close()
 
 	// Reserve the port
 	pm.instanceToPorts[instanceName] = port
@@ -192,7 +192,7 @@ func (pm *DefaultPortManager) PreReconcile(ctx context.Context, instanceNames []
 		// Extract the port from the listener's address
 		addr := listener.Addr().(*net.TCPAddr)
 		port := uint16(addr.Port)
-		listener.Close()
+		_ = listener.Close()
 
 		// Store the allocated port
 		pm.instanceToPorts[name] = port
