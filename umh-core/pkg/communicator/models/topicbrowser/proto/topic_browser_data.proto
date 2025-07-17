@@ -21,10 +21,9 @@
 // (Communicator → Front-End) use plain JSON, not this protobuf.
 //
 // Typical flow
-// ────────────
-//    ┌───────────┐   UnsBundle  (Block LZ4 + hex)   ┌─────────────┐
-//    │ tag_proc. │ ───────────────────────────►│   FSM       │
-//    └───────────┘                             └─────────────┘
+//    ┌───────────┐   UnsBundle  (Protobuf + hex)   ┌─────────────┐
+//    │ tag_proc. │ ────────────────────────────────►│   FSM       │
+//    └───────────┘                                  └─────────────┘
 //      UnsBundle.events[*] : EventTableEntry         (~ring-100)
 //      UnsBundle.uns_map   : TopicInfo (complete state)
 //
@@ -32,9 +31,9 @@
 
 syntax = "proto3";
 
-package umh.events;
+package umh.topic.proto;
 
-option go_package = "./;topic_browser_plugin";
+option go_package = ".;proto";
 
 import "google/protobuf/wrappers.proto";
 
@@ -249,4 +248,3 @@ message UnsBundle {
   TopicMap uns_map  = 1; // Map of all topics if new or changed topics or a metadata was changed
   EventTable events = 2; // Events associated with these topics
 }
-
