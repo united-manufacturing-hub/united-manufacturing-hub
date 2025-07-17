@@ -545,6 +545,7 @@ const (
 	ProtocolConverterWriteLogType LogType = "protocol-converter-write"
 	RedpandaLogType               LogType = "redpanda"
 	TopicBrowserLogType           LogType = "topic-browser"
+	StreamProcessorLogType        LogType = "stream-processor"
 )
 
 // GetLogsRequest contains the necessary fields for executing a `get-logs` action.
@@ -565,9 +566,10 @@ type GetLogsResponse struct {
 type MetricResourceType string
 
 const (
-	DFCMetricResourceType          MetricResourceType = "dfc"
-	RedpandaMetricResourceType     MetricResourceType = "redpanda"
-	TopicBrowserMetricResourceType MetricResourceType = "topic-browser"
+	DFCMetricResourceType             MetricResourceType = "dfc"
+	RedpandaMetricResourceType        MetricResourceType = "redpanda"
+	TopicBrowserMetricResourceType    MetricResourceType = "topic-browser"
+	StreamProcessorMetricResourceType MetricResourceType = "stream-processor"
 )
 
 // GetMetricsRequest contains the necessary fields for executing a `get-metrics` action.

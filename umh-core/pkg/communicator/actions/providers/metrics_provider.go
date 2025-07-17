@@ -17,10 +17,12 @@ package providers
 import (
 	"fmt"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/streamprocessor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
@@ -44,6 +46,8 @@ func (p *DefaultMetricsProvider) GetMetrics(payload models.GetMetricsRequest, sn
 		return getRedpandaMetrics(snapshot)
 	case models.TopicBrowserMetricResourceType:
 		return getTopicBrowserMetrics(snapshot)
+	case models.StreamProcessorMetricResourceType:
+		return getStreamProcessorMetrics(payload.UUID, snapshot)
 	default:
 		return models.GetMetricsResponse{}, fmt.Errorf("unsupported metric type: %s", payload.Type)
 	}
@@ -173,13 +177,8 @@ func getRedpandaMetrics(snapshot fsm.SystemSnapshot) (models.GetMetricsResponse,
 
 // getTopicBrowserMetrics retrieves metrics from the topic browser instance and converts them
 // to a standardized format matching the Get-Metrics API response structure.
-// Currently uses an empty observed state for testing purposes.
 func getTopicBrowserMetrics(snapshot fsm.SystemSnapshot) (models.GetMetricsResponse, error) {
 	res := models.GetMetricsResponse{Metrics: []models.Metric{}}
-
-	// TODO: This currently uses an empty observed state for testing purposes.
-	// This will need to be changed to retrieve the actual observed state from the system snapshot
-	// when the topic browser FSM is properly integrated.
 
 	// Create empty observed state for now
 	inst, ok := fsm.FindInstance(snapshot, constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
@@ -274,6 +273,15 @@ const (
 	TopicBrowserMetricComponentTypeInput     = "input"
 	TopicBrowserMetricComponentTypeOutput    = "output"
 	TopicBrowserMetricComponentTypeProcessor = "processor"
+
+	// Stream Processor paths
+	StreamProcessorInputPath  = "root.input"
+	StreamProcessorOutputPath = "root.output"
+
+	// Stream Processor metric component types
+	StreamProcessorMetricComponentTypeInput     = "input"
+	StreamProcessorMetricComponentTypeOutput    = "output"
+	StreamProcessorMetricComponentTypeProcessor = "processor"
 )
 
 type MetricEntry struct {
@@ -286,4 +294,89 @@ func addMetrics(res *models.GetMetricsResponse, componentType string, path strin
 	for _, entry := range entries {
 		res.Metrics = append(res.Metrics, models.Metric{ValueType: entry.ValueType, Value: entry.Value, ComponentType: componentType, Path: path, Name: entry.Name})
 	}
+}
+
+// getStreamProcessorMetrics retrieves metrics from the stream processor instance and converts them
+// to a standardized format matching the Get-Metrics API response structure.
+func getStreamProcessorMetrics(uuid string, snapshot fsm.SystemSnapshot) (models.GetMetricsResponse, error) {
+	res := models.GetMetricsResponse{Metrics: []models.Metric{}}
+
+	// Create empty observed state for now
+	inst, ok := fsm.FindManager(snapshot, constants.StreamProcessorManagerName)
+	if !ok || inst == nil {
+		return res, fmt.Errorf("failed to find the %s instance", models.StreamProcessorMetricResourceType)
+	}
+	streamProcessorInstances := inst.GetInstances()
+	var observedState *streamprocessor.ObservedStateSnapshot
+	found := false
+	for _, instance := range streamProcessorInstances {
+		if dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID).String() == uuid {
+			var ok bool
+			observedState, ok = instance.LastObservedState.(*streamprocessor.ObservedStateSnapshot)
+			if !ok || observedState == nil {
+				return res, fmt.Errorf("stream processor instance %s has no observed state", instance.ID)
+			}
+			found = true
+			break
+		}
+	}
+	if !found {
+		return res, fmt.Errorf("stream processor instance %s not found", uuid)
+	}
+
+	if observedState == nil {
+		return res, fmt.Errorf("stream processor instance has nil observed state")
+	}
+
+	// Extract benthos metrics from the observed state
+	metrics := observedState.ServiceInfo.DFCObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
+
+	// Process Input metrics (same structure as DFC since topic browser uses benthos)
+	inputMetrics := metrics.Input
+	addMetrics(&res, StreamProcessorMetricComponentTypeInput, StreamProcessorInputPath,
+		MetricEntry{Name: "connection_failed", Value: inputMetrics.ConnectionFailed, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "connection_lost", Value: inputMetrics.ConnectionLost, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "connection_up", Value: inputMetrics.ConnectionUp, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "received", Value: inputMetrics.Received, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "latency_ns_p50", Value: inputMetrics.LatencyNS.P50, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "latency_ns_p90", Value: inputMetrics.LatencyNS.P90, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "latency_ns_p99", Value: inputMetrics.LatencyNS.P99, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "latency_ns_sum", Value: inputMetrics.LatencyNS.Sum, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "latency_ns_count", Value: inputMetrics.LatencyNS.Count, ValueType: models.MetricValueTypeNumber},
+	)
+
+	// Process Output metrics
+	outputMetrics := metrics.Output
+	addMetrics(&res, StreamProcessorMetricComponentTypeOutput, StreamProcessorOutputPath,
+		MetricEntry{Name: "batch_sent", Value: outputMetrics.BatchSent, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "connection_failed", Value: outputMetrics.ConnectionFailed, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "connection_lost", Value: outputMetrics.ConnectionLost, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "connection_up", Value: outputMetrics.ConnectionUp, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "error", Value: outputMetrics.Error, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "sent", Value: outputMetrics.Sent, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "latency_ns_p50", Value: outputMetrics.LatencyNS.P50, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "latency_ns_p90", Value: outputMetrics.LatencyNS.P90, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "latency_ns_p99", Value: outputMetrics.LatencyNS.P99, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "latency_ns_sum", Value: outputMetrics.LatencyNS.Sum, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "latency_ns_count", Value: outputMetrics.LatencyNS.Count, ValueType: models.MetricValueTypeNumber},
+	)
+
+	// Process processor metrics
+	for path, proc := range metrics.Process.Processors {
+		addMetrics(&res, StreamProcessorMetricComponentTypeProcessor, path,
+			MetricEntry{Name: "label", Value: proc.Label, ValueType: models.MetricValueTypeString},
+			MetricEntry{Name: "received", Value: proc.Received, ValueType: models.MetricValueTypeNumber},
+			MetricEntry{Name: "batch_received", Value: proc.BatchReceived, ValueType: models.MetricValueTypeNumber},
+			MetricEntry{Name: "sent", Value: proc.Sent, ValueType: models.MetricValueTypeNumber},
+			MetricEntry{Name: "batch_sent", Value: proc.BatchSent, ValueType: models.MetricValueTypeNumber},
+			MetricEntry{Name: "error", Value: proc.Error, ValueType: models.MetricValueTypeNumber},
+			MetricEntry{Name: "latency_ns_p50", Value: proc.LatencyNS.P50, ValueType: models.MetricValueTypeNumber},
+			MetricEntry{Name: "latency_ns_p90", Value: proc.LatencyNS.P90, ValueType: models.MetricValueTypeNumber},
+			MetricEntry{Name: "latency_ns_p99", Value: proc.LatencyNS.P99, ValueType: models.MetricValueTypeNumber},
+			MetricEntry{Name: "latency_ns_sum", Value: proc.LatencyNS.Sum, ValueType: models.MetricValueTypeNumber},
+			MetricEntry{Name: "latency_ns_count", Value: proc.LatencyNS.Count, ValueType: models.MetricValueTypeNumber},
+		)
+	}
+
+	return res, nil
 }

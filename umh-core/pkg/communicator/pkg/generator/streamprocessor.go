@@ -15,63 +15,92 @@
 package generator
 
 import (
-	"context"
+	"fmt"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/streamprocessor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
 
-// StreamProcessorsFromConfig extracts stream processors from the config and converts them to DFCs.
-// TODO: This is a temporary solution. Once the stream processor FSM is ready, replace this with
-// the proper snapshot-based method similar to ProtocolConvertersFromSnapshot.
-func StreamProcessorsFromConfig(
-	ctx context.Context,
-	configManager config.ConfigManager,
+// StreamProcessorsFromSnapshot converts an optional ManagerSnapshot — potentially
+// holding **many** stream processor instances — into a slice of models.Dfc with type "stream-processor".
+//
+// If mgr is nil or no instance could be converted, an empty slice is
+// returned.
+func StreamProcessorsFromSnapshot(
+	mgr fsm.ManagerSnapshot,
 	log *zap.SugaredLogger,
 ) []models.Dfc {
-	config, err := configManager.GetConfig(ctx, 0)
-	if err != nil {
-		log.Warnf("Failed to get config for stream processors: %v", err)
+
+	if mgr == nil {
 		return []models.Dfc{}
 	}
 
 	var out []models.Dfc
-	for _, sp := range config.StreamProcessor {
-		dfc := buildStreamProcessorAsDfc(sp, log)
-		out = append(out, dfc)
+	for _, inst := range mgr.GetInstances() {
+		if sp, err := buildStreamProcessorAsDfc(*inst); err == nil {
+			out = append(out, sp)
+		}
 	}
-
 	return out
 }
 
-// buildStreamProcessorAsDfc converts a StreamProcessorConfig to a models.Dfc with hardcoded health.
+// buildStreamProcessorAsDfc translates one Stream Processor FSMInstanceSnapshot into a models.Dfc
+// with type "stream-processor". It returns an error when the observed state cannot be interpreted.
 func buildStreamProcessorAsDfc(
-	sp config.StreamProcessorConfig,
-	log *zap.SugaredLogger,
-) models.Dfc {
-	// Generate UUID from stream processor name using deterministic method
-	spUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(sp.Name)
+	instance fsm.FSMInstanceSnapshot,
+) (models.Dfc, error) {
 
-	// Use hardcoded health as requested
+	observed, ok := instance.LastObservedState.(*streamprocessor.ObservedStateSnapshot)
+	if !ok || observed == nil {
+		return models.Dfc{}, fmt.Errorf("observed state %T is not ObservedStateSnapshot", instance.LastObservedState)
+	}
+
+	// ---- health ---------------------------------------------------------
+	healthCat := models.Neutral
+	switch instance.CurrentState {
+	case streamprocessor.OperationalStateActive:
+		healthCat = models.Active
+	case streamprocessor.OperationalStateDegradedRedpanda,
+		streamprocessor.OperationalStateDegradedDFC,
+		streamprocessor.OperationalStateDegradedOther:
+		healthCat = models.Degraded
+	case streamprocessor.OperationalStateIdle:
+		healthCat = models.Neutral
+	}
+
+	// Generate UUID from the stream processor name
+	uuid := dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID)
+
 	health := &models.Health{
-		Message:       "Stream processor is configured",
-		ObservedState: "configured",
-		DesiredState:  "running",
-		Category:      models.Neutral,
+		Message:       fmt.Sprintf("Stream processor %s", instance.CurrentState),
+		ObservedState: instance.CurrentState,
+		DesiredState:  instance.DesiredState,
+		Category:      healthCat,
 	}
 
-	// Create DFC with stream processor type (using "custom" for now as there's no specific stream processor type)
+	// Create DFC with stream processor type
 	dfc := models.Dfc{
-		Name:          &sp.Name,
-		UUID:          spUUID.String(),
+		Name:          &instance.ID,
+		UUID:          uuid.String(),
 		Health:        health,
-		Type:          models.DfcTypeStreamProcessor, // Using custom type for stream processors
-		Metrics:       &models.DfcMetrics{},          // Empty metrics for now
-		Connections:   []models.Connection{},         // No connections for stream processors
-		IsInitialized: false,                         // Hardcoded as false since FSM is not ready
+		Type:          models.DfcTypeStreamProcessor,
+		Metrics:       nil,
+		Connections:   []models.Connection{}, // Stream processors don't have direct connections
+		IsInitialized: true,
 	}
 
-	return dfc
+	svcInfo := observed.ServiceInfo
+	if m := svcInfo.DFCObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState; m != nil &&
+		m.Input.LastCount > 0 {
+
+		dfc.Metrics = &models.DfcMetrics{
+			AvgInputThroughputPerMinuteInMsgSec: m.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds(),
+		}
+	}
+
+	return dfc, nil
 }

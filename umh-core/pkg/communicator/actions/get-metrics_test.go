@@ -42,15 +42,17 @@ var _ = Describe("GetMetricsAction", func() {
 	var (
 		mockProvider *MockMetricsProvider
 
-		action          *actions.GetMetricsAction
-		userEmail       string
-		actionUUID      uuid.UUID
-		instanceUUID    uuid.UUID
-		outboundChannel chan *models.UMHMessage
-		dfcName         string
-		dfcUUID         uuid.UUID
-		snapshotManager *fsm.SnapshotManager
-		log             = zap.NewNop().Sugar()
+		action              *actions.GetMetricsAction
+		userEmail           string
+		actionUUID          uuid.UUID
+		instanceUUID        uuid.UUID
+		outboundChannel     chan *models.UMHMessage
+		dfcName             string
+		dfcUUID             uuid.UUID
+		streamProcessorName string
+		streamProcessorUUID uuid.UUID
+		snapshotManager     *fsm.SnapshotManager
+		log                 = zap.NewNop().Sugar()
 	)
 
 	BeforeEach(func() {
@@ -102,6 +104,25 @@ var _ = Describe("GetMetricsAction", func() {
 							},
 						},
 					}, nil
+				case models.StreamProcessorMetricResourceType:
+					return models.GetMetricsResponse{
+						Metrics: []models.Metric{
+							{
+								Name:          "input_received",
+								Path:          "root.input",
+								ComponentType: "input",
+								ValueType:     models.MetricValueTypeNumber,
+								Value:         float64(200),
+							},
+							{
+								Name:          "output_sent",
+								Path:          "root.output",
+								ComponentType: "output",
+								ValueType:     models.MetricValueTypeNumber,
+								Value:         float64(190),
+							},
+						},
+					}, nil
 				default:
 					return models.GetMetricsResponse{}, fmt.Errorf("unsupported metric type: %s", payload.Type)
 				}
@@ -114,6 +135,8 @@ var _ = Describe("GetMetricsAction", func() {
 		outboundChannel = make(chan *models.UMHMessage, 10)
 		dfcName = "test-dfc"
 		dfcUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(dfcName)
+		streamProcessorName = "test-stream-processor"
+		streamProcessorUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(streamProcessorName)
 		snapshotManager = fsm.NewSnapshotManager()
 
 		// Add a mock DFC instance to test the error handling when the DFC is not found
@@ -126,6 +149,15 @@ var _ = Describe("GetMetricsAction", func() {
 							ID:                dfcName,
 							CurrentState:      "active",
 							LastObservedState: &dfc.DataflowComponentObservedStateSnapshot{},
+						},
+					},
+				},
+				constants.StreamProcessorManagerName: &actions.MockManagerSnapshot{
+					Instances: map[string]*fsm.FSMInstanceSnapshot{
+						streamProcessorName: {
+							ID:                streamProcessorName,
+							CurrentState:      "active",
+							LastObservedState: nil, // Mock for testing
 						},
 					},
 				},
@@ -166,6 +198,18 @@ var _ = Describe("GetMetricsAction", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(action.GetParsedPayload().Type).To(Equal(models.RedpandaMetricResourceType))
 		})
+
+		It("should parse valid payload with UUID for Stream Processor metrics", func() {
+			payload := map[string]interface{}{
+				"type": "stream-processor",
+				"uuid": streamProcessorUUID.String(),
+			}
+
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(action.GetParsedPayload().Type).To(Equal(models.StreamProcessorMetricResourceType))
+			Expect(action.GetParsedPayload().UUID).To(Equal(streamProcessorUUID.String()))
+		})
 	})
 
 	Describe("Validate", func() {
@@ -187,7 +231,7 @@ var _ = Describe("GetMetricsAction", func() {
 
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("metric type must be set and must be one of the following: dfc, redpanda"))
+			Expect(err.Error()).To(ContainSubstring("metric type must be set and must be one of the following: dfc, redpanda, topic-browser, stream-processor"))
 		})
 
 		It("should return an error if the uuid is missing on DFC metrics type", func() {
@@ -199,6 +243,17 @@ var _ = Describe("GetMetricsAction", func() {
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("uuid must be set to retrieve metrics for a DFC"))
+		})
+
+		It("should return an error if the uuid is missing on Stream Processor metrics type", func() {
+			payload := map[string]interface{}{"type": "stream-processor"}
+
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = action.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("uuid must be set to retrieve metrics for a Stream Processor"))
 		})
 
 		It("should return an error if the uuid is invalid", func() {
@@ -222,6 +277,9 @@ var _ = Describe("GetMetricsAction", func() {
 			if metricType == models.DFCMetricResourceType {
 				payload["uuid"] = dfcUUID.String()
 			}
+			if metricType == models.StreamProcessorMetricResourceType {
+				payload["uuid"] = streamProcessorUUID.String()
+			}
 
 			err := action.Parse(payload)
 			Expect(err).NotTo(HaveOccurred())
@@ -244,7 +302,8 @@ var _ = Describe("GetMetricsAction", func() {
 			}
 		},
 			Entry("dfc", models.DFCMetricResourceType),
-			Entry("redpanda", models.RedpandaMetricResourceType))
+			Entry("redpanda", models.RedpandaMetricResourceType),
+			Entry("stream-processor", models.StreamProcessorMetricResourceType))
 
 		It("should handle metrics provider errors gracefully", func() {
 			// Setup mock provider to return an error
@@ -279,6 +338,9 @@ var _ = Describe("GetMetricsAction", func() {
 			if metricType == models.DFCMetricResourceType {
 				payload["uuid"] = dfcUUID.String()
 			}
+			if metricType == models.StreamProcessorMetricResourceType {
+				payload["uuid"] = streamProcessorUUID.String()
+			}
 
 			err := action.Parse(payload)
 			Expect(err).NotTo(HaveOccurred())
@@ -293,6 +355,7 @@ var _ = Describe("GetMetricsAction", func() {
 		},
 			Entry("dfc", models.DFCMetricResourceType),
 			Entry("redpanda", models.RedpandaMetricResourceType),
+			Entry("stream-processor", models.StreamProcessorMetricResourceType),
 		)
 
 		It("should return an error when a non-existent DFC UUID is provided", func() {
