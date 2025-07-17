@@ -15,6 +15,7 @@
 package logger
 
 import (
+	"io"
 	"os"
 	"strings"
 	"sync"
@@ -111,7 +112,7 @@ func timeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
 }
 
 // New creates a new zap logger with the specified log level and format
-func New(logLevel string, logFormat LogFormat) *zap.Logger {
+func New(logLevel string, logFormat LogFormat, logPipe io.Writer) *zap.Logger {
 	level := getLogLevel(LogLevel(logLevel))
 
 	// Configure encoder
@@ -157,7 +158,7 @@ func New(logLevel string, logFormat LogFormat) *zap.Logger {
 	// Core configuration
 	core := zapcore.NewCore(
 		encoder,
-		zapcore.AddSync(os.Stdout),
+		zapcore.AddSync(logPipe),
 		zap.NewAtomicLevelAt(level),
 	)
 
@@ -168,11 +169,14 @@ func New(logLevel string, logFormat LogFormat) *zap.Logger {
 }
 
 // Initialize sets up the global logger with the specified log level using zap.ReplaceGlobals()
-func Initialize() {
+func Initialize(logPipe io.Writer) {
 	loggerMutex.Do(func() {
+		if logPipe == nil {
+			panic("logPipe must not be nil on logger initialization")
+		}
 		logLevel := getEnv("LOGGING_LEVEL", string(ProductionLevel))
 		logFormat := getLogFormat(FormatPretty) // Default to human-readable pretty format
-		logger := New(logLevel, logFormat)
+		logger := New(logLevel, logFormat, logPipe)
 
 		// Log initialization information
 		logger.Info("Logger initialized",
@@ -187,17 +191,17 @@ func Initialize() {
 }
 
 // GetLogger returns the global logger, initializing it if needed
-func GetLogger() *zap.Logger {
+func GetLogger(logPipe io.Writer) *zap.Logger {
 	if !initialized {
-		Initialize()
+		Initialize(logPipe)
 	}
 	return zap.L()
 }
 
 // GetSugaredLogger returns the global sugared logger, initializing it if needed
-func GetSugaredLogger() *zap.SugaredLogger {
+func GetSugaredLogger(logPipe io.Writer) *zap.SugaredLogger {
 	if !initialized {
-		Initialize()
+		Initialize(logPipe)
 	}
 	return zap.S()
 }
@@ -210,7 +214,7 @@ func Sync() error {
 // For creates a named logger for a specific component
 func For(component string) *zap.SugaredLogger {
 	if !initialized {
-		Initialize()
+		Initialize(nil)
 	}
 	return zap.S().Named(component)
 }

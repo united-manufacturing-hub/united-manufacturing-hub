@@ -18,6 +18,7 @@
 package ipm
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"os"
@@ -627,115 +628,59 @@ func (pm *ProcessManager) Close() error {
 	return nil
 }
 
-// SetupUMHCoreLogging sets up stdout/stderr capture for the umh-core process itself
-// This creates a virtual service entry that allows GetLogs to return captured stdout/stderr
-func (pm *ProcessManager) SetupUMHCoreLogging(ctx context.Context, fsService filesystem.Service) (*UMHCoreLogger, error) {
-	pm.mu.Lock()
-	defer pm.mu.Unlock()
+// HandleMainApplicationLogs creates a log writer for the main application and processes logs from the provided reader
+func HandleMainApplicationLogs(reader io.Reader, readyChan chan struct{}) error {
+	// Create a simple zap logger for the log pipe handler
+	zapLogger, _ := zap.NewDevelopment()
+	logger := zapLogger.Sugar()
+	defer zapLogger.Sync()
 
-	// Create identifier for umh-core virtual service
-	identifier := constants.ServiceIdentifier("umh-core")
-
-	// Set up log directory for umh-core
-	logPath := filepath.Join(pm.ServiceDirectory, "logs", string(identifier))
-	if err := fsService.EnsureDirectory(ctx, logPath); err != nil {
-		return nil, fmt.Errorf("error ensuring umh-core log directory: %w", err)
-	}
-
-	// Create memory buffer and log line writer
+	// Set up the logging infrastructure for main application logs
+	fsService := filesystem.NewDefaultService()
+	logManager := logging.NewLogManager(logger)
 	memoryBuffer := logging.NewMemoryLogBuffer(constants.DefaultLogBufferSize)
-	logLineWriter, err := logging.NewLogLineWriter(identifier, logPath, pm.logManager, memoryBuffer, fsService)
+
+	// Create log directory for main application logs
+	logPath := filepath.Join("/data", "logs", "umh-core")
+	if err := fsService.EnsureDirectory(context.Background(), logPath); err != nil {
+		return fmt.Errorf("failed to create main log directory: %w", err)
+	}
+
+	// Create LogLineWriter for main application logs
+	logWriter, err := logging.NewLogLineWriter(
+		constants.ServiceIdentifier("umh-core"),
+		logPath,
+		logManager,
+		memoryBuffer,
+		fsService,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("error creating log line writer for umh-core: %w", err)
+		return fmt.Errorf("failed to create log writer: %w", err)
 	}
+	defer logWriter.Close()
 
-	// Create virtual service entry for umh-core
-	umhCoreService := ipmService{
-		Config: process_manager_serviceconfig.ProcessManagerServiceConfig{
-			Command: []string{"sleep", "infinity"}, // Sleep forever without CPU usage
-		},
-		History: process_shared.ServiceInfo{
-			Status:      process_shared.ServiceUp, // Always consider umh-core as running
-			ExitHistory: make([]process_shared.ExitEvent, 0),
-		},
-		LogLineWriter: logLineWriter,
-	}
+	// Signal that the log handler is ready
+	close(readyChan)
 
-	// Register the virtual service
-	pm.Services[identifier] = umhCoreService
-
-	// Register with log manager for rotation
-	pm.logManager.RegisterService(identifier, logPath, constants.DefaultLogFileSize)
-
-	pm.Logger.Info("UMH Core logging setup completed - stdout/stderr will be captured")
-
-	return NewUMHCoreLogger(os.Stdout, memoryBuffer, logLineWriter), nil
-}
-
-// EnableStdoutCapture redirects os.Stdout to capture logs for the umh-core virtual service
-// Returns the original stdout and a cleanup function
-func (pm *ProcessManager) EnableStdoutCapture(ctx context.Context, fsService filesystem.Service) (*os.File, func(), error) {
-	umhCoreLogger, err := pm.SetupUMHCoreLogging(ctx, fsService)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to setup umh-core logging: %w", err)
-	}
-
-	// Store original stdout
-	originalStdout := os.Stdout
-
-	// Create a pipe to capture stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create pipe: %w", err)
-	}
-
-	// Replace os.Stdout with the write end of the pipe
-	os.Stdout = w
-
-	// Start a goroutine to read from the pipe and forward to both original stdout and our logger
-	go func() {
-		defer r.Close()
-
-		// Create a multi-writer to send output to both original stdout and our logger
-		multiWriter := io.MultiWriter(originalStdout, umhCoreLogger)
-
-		// Copy everything from the pipe to both destinations
-		if _, copyErr := io.Copy(multiWriter, r); copyErr != nil {
-			// Can't log this error normally since we're capturing stdout
-			// The error will be visible when stdout is restored
-		}
-	}()
-
-	cleanup := func() {
-		// Close the write end to stop the goroutine
-		w.Close()
-		// Restore original stdout
-		os.Stdout = originalStdout
-	}
-
-	pm.Logger.Info("Stdout capture enabled - all stdout will be logged to umh-core service")
-
-	return originalStdout, cleanup, nil
-}
-
-// DisableStdoutCapture cleans up the umh-core virtual service
-// The cleanup function returned by EnableStdoutCapture should be called to restore stdout
-func (pm *ProcessManager) DisableStdoutCapture() error {
-	pm.mu.Lock()
-	defer pm.mu.Unlock()
-
-	// Clean up umh-core virtual service
-	identifier := constants.ServiceIdentifier("umh-core")
-	if service, exists := pm.Services[identifier]; exists {
-		if service.LogLineWriter != nil {
-			if err := service.LogLineWriter.Close(); err != nil {
-				pm.Logger.Errorf("Error closing umh-core LogLineWriter: %v", err)
+	// Process log lines from the pipe using bufio.Scanner
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line != "" {
+			entry := process_shared.LogEntry{
+				Timestamp: time.Now(),
+				Content:   line,
+			}
+			if err := logWriter.WriteLine(entry); err != nil {
+				logger.Errorf("Failed to write log entry: %v", err)
 			}
 		}
-		delete(pm.Services, identifier)
-		pm.logManager.UnregisterService(identifier)
 	}
 
-	pm.Logger.Info("Stdout capture disabled")
+	// Check for scanner errors
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("error reading from log pipe: %w", err)
+	}
+
 	return nil
 }

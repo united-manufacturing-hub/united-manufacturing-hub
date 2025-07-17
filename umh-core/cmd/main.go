@@ -17,6 +17,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
@@ -35,26 +36,56 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/ipm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version"
 	"go.uber.org/zap"
 )
 
+// handleLogPipe reads from the log pipe and writes to rotating log files
+func handleLogPipe(reader io.Reader, readyChan chan struct{}) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Fprintf(os.Stderr, "Log pipe handler panicked: %v\n", r)
+		}
+	}()
+
+	// Use the process manager to handle log writing
+	err := ipm.HandleMainApplicationLogs(reader, readyChan)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to handle main application logs: %v\n", err)
+	}
+}
+
 func main() {
-	// Initialize the global logger first thing
-	logger.Initialize()
+
+	// Create a new pipe for logs (that we will use with process_manager)
+	logPipeReader, logPipeWriter, err := os.Pipe()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to create log pipe: %v", err))
+	}
+
+	// Initialize the global logger with the pipe writer
+	logger.Initialize(logPipeWriter)
+
+	// Ensure pipe writer is closed when main exits
+	defer func() {
+		if err := logPipeWriter.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to close log pipe writer: %v\n", err)
+		}
+	}()
+
+	// Start a goroutine to handle logs from the pipe
+	readyChan := make(chan struct{})
+	go handleLogPipe(logPipeReader, readyChan)
+
+	// Wait for log handler to be ready before continuing
+	<-readyChan
 
 	// Initialize Sentry
 	sentry.InitSentry(version.GetAppVersion(), true)
 
 	// Get a logger for the main component
 	log := logger.For(logger.ComponentCore)
-
-	// Set up stdout capture for umh-core service logs EARLY (before any significant logging)
-	// This only works with the internal process manager
-	setupStdoutCapture(log)
 
 	// Log using the component logger with structured fields
 	log.Info("Starting umh-core...")
@@ -296,38 +327,4 @@ func enableBackendConnection(config *config.FullConfig, communicationState *comm
 	}
 
 	logger.Info("Backend connection enabled")
-}
-
-// setupStdoutCapture enables stdout capture for the umh-core service when using internal process manager
-func setupStdoutCapture(log *zap.SugaredLogger) {
-	// Only enable if we're using the internal process manager
-	pmService := process_manager.NewDefaultService()
-
-	// Try to cast to IPM ProcessManager to access stdout capture functionality
-	if ipmService, ok := pmService.(*ipm.ProcessManager); ok {
-		// Create filesystem service
-		fs := filesystem.NewDefaultService()
-
-		// Set up stdout capture with a timeout
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		originalStdout, cleanup, err := ipmService.EnableStdoutCapture(ctx, fs)
-		if err != nil {
-			log.Warnf("Failed to enable stdout capture: %v", err)
-			return
-		}
-
-		log.Info("Stdout capture enabled - umh-core logs will be available via GetLogs API")
-
-		// Store cleanup function for later use (we could add this to a global cleanup handler)
-		_ = originalStdout // Keep reference to original stdout if needed
-		_ = cleanup        // Store cleanup function for shutdown
-
-		// Note: cleanup is not called here as we want stdout capture to remain active
-		// for the lifetime of the application. In a production system, you might want
-		// to register cleanup with a shutdown handler.
-	} else {
-		log.Debug("Process manager is not IPM, stdout capture not available")
-	}
 }
