@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
@@ -94,6 +95,18 @@ func (s *S6Instance) RemoveInstance(ctx context.Context, filesystemService files
 			s.baseFSMInstance.GetLogger().Debugf("S6 service %s already removed", s.baseFSMInstance.GetID())
 			return nil
 		}
+		
+		// Check if the error is due to missing tracked files - if so, fall back to ForceRemove
+		if strings.Contains(err.Error(), "has no tracked files") || strings.Contains(err.Error(), "use ForceRemove()") {
+			s.baseFSMInstance.GetLogger().Warnf("S6 service %s has no tracked files for normal removal, falling back to ForceRemove", s.baseFSMInstance.GetID())
+			forceErr := s.service.ForceRemove(ctx, s.servicePath, filesystemService)
+			if forceErr != nil {
+				return fmt.Errorf("failed to force remove service directory for %s: %w", s.baseFSMInstance.GetID(), forceErr)
+			}
+			s.baseFSMInstance.GetLogger().Debugf("S6 service %s force removed successfully", s.baseFSMInstance.GetID())
+			return nil
+		}
+		
 		return fmt.Errorf("failed to remove service directory for %s: %w", s.baseFSMInstance.GetID(), err)
 	}
 
