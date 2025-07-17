@@ -45,7 +45,8 @@ type BaseFSMInstance struct {
 	fsm *fsm.FSM
 
 	// Callbacks for state transitions
-	callbacks map[string]fsm.Callback
+	callbacks   map[string]fsm.Callback
+	callbacksMu sync.RWMutex // protects callbacks map
 
 	// backoffManager is the backoff manager for handling error retries and permanent failures
 	backoffManager *backoff.BackoffManager
@@ -118,7 +119,10 @@ func NewBaseFSMInstance(cfg BaseFSMInstanceConfig, backoffConfig backoff.Config,
 		fsm.Callbacks{
 			"enter_state": func(ctx context.Context, e *fsm.Event) {
 				// Call registered callback for this state if exists
-				if cb, ok := baseInstance.callbacks["enter_"+e.Dst]; ok {
+				baseInstance.callbacksMu.RLock()
+				cb, ok := baseInstance.callbacks["enter_"+e.Dst]
+				baseInstance.callbacksMu.RUnlock()
+				if ok {
 					cb(ctx, e)
 				}
 			},
@@ -148,7 +152,9 @@ func NewBaseFSMInstance(cfg BaseFSMInstanceConfig, backoffConfig backoff.Config,
 
 // AddCallback adds a callback for a given event name
 func (s *BaseFSMInstance) AddCallback(eventName string, callback fsm.Callback) {
+	s.callbacksMu.Lock()
 	s.callbacks[eventName] = callback
+	s.callbacksMu.Unlock()
 }
 
 // GetError returns the last error that occurred during a transition
@@ -288,7 +294,10 @@ func (s *BaseFSMInstance) Remove(ctx context.Context) error {
 	// (3) Not there yet – arm a one-shot callback that will fire the
 	//     event the moment we enter <preRemove>.
 	const cb = "auto_remove_once"
-	if _, ok := s.callbacks[cb]; !ok {
+	s.callbacksMu.RLock()
+	_, exists := s.callbacks[cb]
+	s.callbacksMu.RUnlock()
+	if !exists {
 		s.AddCallback("enter_"+preRemove, func(ctx context.Context, e *fsm.Event) {
 			err := s.SendEvent(ctx, LifecycleEventRemove)
 			if err != nil {
@@ -300,7 +309,9 @@ func (s *BaseFSMInstance) Remove(ctx context.Context) error {
 				s.SetError(perr, 0)
 				sentry.ReportFSMErrorf(s.logger, s.cfg.ID, "BaseFSM", "permanent_failure", "auto-remove of %s failed: %v", s.cfg.ID, err)
 			}
+			s.callbacksMu.Lock()
 			delete(s.callbacks, cb) // detach – run only once
+			s.callbacksMu.Unlock()
 		})
 	}
 
