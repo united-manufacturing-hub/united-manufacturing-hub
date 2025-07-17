@@ -15,6 +15,7 @@
 package communication_state
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -55,8 +56,6 @@ type CommunicationState struct {
 	// TopicBrowserSimulator is used to access the simulated topic browser state if the agent is running in simulator mode
 	// it is accessed by the generator to generate the topic browser part of the status message
 	TopicBrowserSimulator *topicbrowser.Simulator
-	// TopicBrowserSimulatorEnabled tracks whether simulator mode is enabled
-	TopicBrowserSimulatorEnabled bool
 }
 
 // NewCommunicationState creates a new CommunicationState with initialized mutex
@@ -156,55 +155,52 @@ func (c *CommunicationState) InitialiseAndStartRouter() {
 	c.Router.Start()
 }
 
-// InitializeTopicBrowserSimulator initializes the topic browser simulator
-// The cache update logic has been moved to the subscriber notification pipeline
-// to eliminate the redundant ticker (architectural improvement)
-func (c *CommunicationState) InitializeTopicBrowserSimulator(runSimulator bool) {
-	c.TopicBrowserSimulatorEnabled = runSimulator
+// StartTopicBrowserCacheUpdater starts the topic browser cache updater
+// it is used to update the topic browser cache with the observed state of the topic browser
+// it is also used to run the simulator if the agent is running in simulator mode
+func (c *CommunicationState) StartTopicBrowserCacheUpdater(systemSnapshotManager *fsm.SnapshotManager, ctx context.Context, runSimulator bool) {
+
+	c.TopicBrowserSimulator = topicbrowser.NewSimulator()
 
 	if runSimulator {
-		c.TopicBrowserSimulator = topicbrowser.NewSimulator()
 		c.TopicBrowserSimulator.InitializeSimulator()
 	}
-}
 
-// UpdateTopicBrowserCache updates the topic browser cache with the latest observed state
-// This is called from the subscriber notification pipeline to consolidate the ticker logic
-func (c *CommunicationState) UpdateTopicBrowserCache() error {
-	if c.TopicBrowserSimulatorEnabled {
-		c.TopicBrowserSimulator.Tick()
-		result, err := c.TopicBrowserCache.ProcessIncrementalUpdates(c.TopicBrowserSimulator.GetSimObservedState())
-		if err != nil {
-			c.Logger.Errorf("Failed to update topic browser cache: %v", err)
-			return err
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		for {
+			select {
+			case <-ctx.Done():
+				ticker.Stop()
+				return
+			case <-ticker.C:
+				if runSimulator {
+					c.TopicBrowserSimulator.Tick()
+					err := c.TopicBrowserCache.Update(c.TopicBrowserSimulator.GetSimObservedState())
+					if err != nil {
+						c.Logger.Errorf("Failed to update topic browser cache: %v", err)
+					}
+				} else {
+					// get observed state from system snapshot manager
+					tbInstance, ok := fsm.FindInstance(c.SystemSnapshotManager.GetDeepCopySnapshot(), constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
+					if !ok || tbInstance == nil {
+						c.Logger.Error("Topic browser instance not found")
+						continue
+					}
+					tbObservedState, ok := tbInstance.LastObservedState.(*topicbrowserfsm.ObservedStateSnapshot)
+					if !ok || tbObservedState == nil {
+						c.Logger.Error("Topic browser observed state not found")
+						continue
+					}
+					err := c.TopicBrowserCache.Update(tbObservedState)
+					if err != nil {
+						c.Logger.Errorf("Failed to update topic browser cache: %v", err)
+					}
+				}
+
+			}
 		}
-		// Update sent timestamp if we processed new data
-		if !result.LatestTimestamp.IsZero() {
-			c.TopicBrowserCache.SetLastSentTimestamp(result.LatestTimestamp)
-		}
-	} else {
-		// get observed state from system snapshot manager
-		tbInstance, ok := fsm.FindInstance(c.SystemSnapshotManager.GetDeepCopySnapshot(), constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
-		if !ok || tbInstance == nil {
-			c.Logger.Error("Topic browser instance not found")
-			return nil // Not an error, just not ready yet
-		}
-		tbObservedState, ok := tbInstance.LastObservedState.(*topicbrowserfsm.ObservedStateSnapshot)
-		if !ok || tbObservedState == nil {
-			c.Logger.Error("Topic browser observed state not found")
-			return nil // Not an error, just not ready yet
-		}
-		result, err := c.TopicBrowserCache.ProcessIncrementalUpdates(tbObservedState)
-		if err != nil {
-			c.Logger.Errorf("Failed to update topic browser cache: %v", err)
-			return err
-		}
-		// Update sent timestamp if we processed new data
-		if !result.LatestTimestamp.IsZero() {
-			c.TopicBrowserCache.SetLastSentTimestamp(result.LatestTimestamp)
-		}
-	}
-	return nil
+	}()
 }
 
 // InitialiseAndStartSubscriberHandler creates a new subscriber handler and starts it
@@ -234,14 +230,6 @@ func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 		return
 	}
 
-	// Create topic browser communicator (replace cache and simulator)
-	var topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator
-	if c.TopicBrowserSimulatorEnabled {
-		topicBrowserCommunicator = topicbrowser.NewTopicBrowserCommunicatorWithSimulator(c.Logger)
-	} else {
-		topicBrowserCommunicator = topicbrowser.NewTopicBrowserCommunicator(c.Logger)
-	}
-
 	c.SubscriberHandler = subscriber.NewHandler(
 		c.Watchdog,
 		c.Pusher,
@@ -253,7 +241,8 @@ func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 		systemSnapshotManager,
 		configManager,
 		c.Logger,
-		topicBrowserCommunicator,
+		c.TopicBrowserCache,
+		c.TopicBrowserSimulator,
 	)
 	if c.SubscriberHandler == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create subscriber handler")

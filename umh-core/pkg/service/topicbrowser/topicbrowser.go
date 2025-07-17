@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -63,8 +62,8 @@ type ITopicBrowserService interface {
 }
 
 type Status struct {
-	BufferSnapshot RingBufferSnapshot        // structured ring buffer snapshot with sequence tracking
-	Logs           []process_shared.LogEntry // contain the structured s6 logs entries
+	Buffer []*Buffer                 // contains the ringbuffer sorted from newest to oldest
+	Logs   []process_shared.LogEntry // contain the structured s6 logs entries
 }
 
 // CopyLogs is a go-deepcopy override for the Logs field.
@@ -77,7 +76,7 @@ func (st *Status) CopyLogs(src []process_shared.LogEntry) error {
 	return nil
 }
 
-// CopyBufferSnapshot is a go-deepcopy override for the BufferSnapshot field.
+// CopyBuffer is a go-deepcopy override for the Buffer field.
 //
 // go-deepcopy looks for a method with the signature
 //
@@ -89,16 +88,16 @@ func (st *Status) CopyLogs(src []process_shared.LogEntry) error {
 //
 // Why this is safe:
 //
-//  1. The ringbuffer service returns a fresh RingBufferSnapshot on every call, never reusing
-//     or mutating a previously returned snapshot (see Ringbuffer.GetSnapshot() method).
+//  1. The ringbuffer service returns a fresh []*Buffer on every call, never reusing
+//     or mutating a previously returned slice (see Ringbuffer.Get() method).
 //  2. Buffer is treated as immutable after the snapshot is taken.
 //
 // If either assumption changes, delete this method to fall back to the default
 // deep-copy (O(n) but safe for mutable slices).
 //
 // See also: https://github.com/tiendc/go-deepcopy?tab=readme-ov-file#copy-struct-fields-via-struct-methods
-func (st *Status) CopyBufferSnapshot(src RingBufferSnapshot) error {
-	st.BufferSnapshot = src
+func (st *Status) CopyBuffer(src []*Buffer) error {
+	st.Buffer = src
 	return nil
 }
 
@@ -131,8 +130,8 @@ type ServiceInfo struct {
 // shallow copies instead of expensive deep copies.
 func (si *ServiceInfo) CopyStatus(src Status) error {
 	// Use the Status struct's own copy logic which handles Buffer and Logs efficiently
-	si.Status.BufferSnapshot = src.BufferSnapshot // Shallow copy (handled by Status.CopyBufferSnapshot)
-	si.Status.Logs = src.Logs                     // Shallow copy (handled by Status.CopyLogs)
+	si.Status.Buffer = src.Buffer // Shallow copy (handled by Status.CopyBuffer)
+	si.Status.Logs = src.Logs     // Shallow copy (handled by Status.CopyLogs)
 	return nil
 }
 
@@ -146,10 +145,6 @@ type Service struct {
 
 	tbName     string // normally a service can handle multiple instances, the service monitor here is different and can only handle one instance
 	ringbuffer *Ringbuffer
-
-	// Block processing tracking
-	lastProcessedTimestamp time.Time
-	processingMutex        sync.RWMutex
 }
 
 // ServiceOption is a function that configures a Service.
@@ -172,13 +167,12 @@ func WithManager(mgr *benthosfsm.BenthosManager) ServiceOption {
 func NewDefaultService(tbName string, opts ...ServiceOption) *Service {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentTopicBrowserService, tbName)
 	service := &Service{
-		logger:                 logger.For(managerName),
-		benthosManager:         benthosfsm.NewBenthosManager(managerName),
-		benthosService:         benthossvc.NewDefaultBenthosService(tbName),
-		benthosConfigs:         []config.BenthosConfig{},
-		tbName:                 tbName,
-		ringbuffer:             NewRingbufferWithDefaultCapacity(),
-		lastProcessedTimestamp: time.Time{}, // Start from beginning
+		logger:         logger.For(managerName),
+		benthosManager: benthosfsm.NewBenthosManager(managerName),
+		benthosService: benthossvc.NewDefaultBenthosService(tbName),
+		benthosConfigs: []config.BenthosConfig{},
+		tbName:         tbName,
+		ringbuffer:     NewRingbuffer(8), // NOTE: adjustable, no real reason for 8
 	}
 
 	// Apply options
@@ -310,8 +304,8 @@ func (svc *Service) Status(
 		InvalidMetrics:        invalidMetrics,
 		StatusReason:          statusReason,
 		Status: Status{
-			BufferSnapshot: svc.ringbuffer.GetSnapshot(),
-			Logs:           logs,
+			Buffer: svc.ringbuffer.Get(),
+			Logs:   logs,
 		},
 	}, nil
 }
@@ -643,11 +637,4 @@ func (svc *Service) redpandaProcessingActivity(observedState rpfsm.RedpandaObser
 		return true
 	}
 	return false
-}
-
-// ResetBlockProcessing resets the block processing state (useful for testing or restart scenarios)
-func (svc *Service) ResetBlockProcessing() {
-	svc.processingMutex.Lock()
-	defer svc.processingMutex.Unlock()
-	svc.lastProcessedTimestamp = time.Time{}
 }

@@ -189,7 +189,8 @@ var _ = Describe("Subscribe and Receive Test", func() {
 			systemSnapshotManager,
 			config.NewMockConfigManager(),
 			logger.For(logger.ComponentCommunicator),
-			topicbrowser.NewTopicBrowserCommunicatorWithSimulator(logger.For(logger.ComponentCommunicator)),
+			topicbrowser.NewCache(),
+			topicbrowser.NewSimulator(),
 		)
 		subHandler.StartNotifier()
 

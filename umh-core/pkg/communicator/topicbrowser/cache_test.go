@@ -15,8 +15,9 @@
 package topicbrowser_test
 
 import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/process_manager/process_shared"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -329,10 +330,8 @@ func createMockObservedStateSnapshot(buffers []*topicbrowserservice.Buffer) *top
 	return &topicbrowserfsm.ObservedStateSnapshot{
 		ServiceInfo: topicbrowserservice.ServiceInfo{
 			Status: topicbrowserservice.Status{
-				BufferSnapshot: topicbrowserservice.RingBufferSnapshot{
-					Items: buffers,
-				},
-				Logs: []process_shared.LogEntry{}, // Initialize with empty slice
+				Buffer: buffers,
+				Logs:   []process_shared.LogEntry{}, // Initia	lize with empty slice
 			},
 			// Leave other fields as zero values
 		},
