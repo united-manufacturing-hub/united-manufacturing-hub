@@ -18,8 +18,6 @@ import (
 	"bytes"
 	"cmp"
 	"context"
-	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"os/exec"
@@ -32,7 +30,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cactus/tai64"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -198,10 +195,8 @@ type DefaultService struct {
 	logger     *zap.SugaredLogger
 	logCursors sync.Map // map[string]*logState (key = abs log path)
 
-	// Lifecycle management with expert-recommended concurrency protection
+	// Lifecycle management with concurrency protection
 	mu        sync.Mutex        // serializes all state-changing calls
-	creating  bool              // true when Create() is in progress
-	removing  bool              // true when Remove()/ForceRemove() is in progress
 	artifacts *ServiceArtifacts // cached artifacts for the service
 }
 
@@ -214,14 +209,14 @@ func NewDefaultService() Service {
 }
 
 // withLifecycleGuard serializes all state-changing operations to prevent race conditions
-// This addresses the expert-identified issue of concurrent Create/Remove/ForceRemove operations
+// This addresses concurrent Create/Remove/ForceRemove operations
 func (s *DefaultService) withLifecycleGuard(fn func() error) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return fn()
 }
 
-// Create creates the S6 service with specific configuration using expert-recommended patterns:
+// Create creates the S6 service with specific configuration using proven patterns:
 // - Unified lifecycle mutex prevents concurrent Create/Remove/ForceRemove operations
 // - Uses lifecycle manager for atomic creation with EXDEV protection
 // - Simplified 3-path approach with health checks
@@ -234,19 +229,6 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 	s.logger.Debugf("Creating S6 service %s", servicePath)
 
 	return s.withLifecycleGuard(func() error {
-		// Check for conflicting operations
-		if s.removing {
-			return fmt.Errorf("service %s is being removed", servicePath)
-		}
-		if s.creating {
-			// Another Create is busy (rare) - idempotent; nothing to do
-			s.logger.Debugf("Service %s creation already in progress", servicePath)
-			return nil
-		}
-
-		s.creating = true
-		defer func() { s.creating = false }()
-
 		// No need to ensure artifacts here - they'll be created by CreateArtifacts
 
 		// 1. Directory doesn't exist → create it fresh
@@ -264,10 +246,20 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 			return nil
 		}
 
-		// 2. Directory exists but we have no artifacts → inconsistent state
+		// 2. Directory exists but we have no artifacts → orphaned directory from restart
 		if s.artifacts == nil {
-			s.logger.Debugf("Service %s exists but has no artifacts, failing to trigger FSM removal", servicePath)
-			return fmt.Errorf("service directory exists but artifacts is nil - inconsistent state")
+			s.logger.Debugf("Service %s exists but has no artifacts (orphaned from restart), removing and recreating", servicePath)
+			// Remove the orphaned directory immediately - we can't track what files were created
+			if err := fsService.RemoveAll(ctx, servicePath); err != nil {
+				return fmt.Errorf("failed to remove orphaned service directory: %w", err)
+			}
+			// Proceed with fresh creation
+			artifacts, err := s.CreateArtifacts(ctx, servicePath, config, fsService)
+			if err != nil {
+				return err
+			}
+			s.artifacts = artifacts
+			return nil
 		}
 
 		// 3. Directory exists and we have artifacts → check health
@@ -314,7 +306,7 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 	})
 }
 
-// Remove removes S6 service artifacts using expert-recommended fast, idempotent approach:
+// Remove removes S6 service artifacts using a fast, idempotent approach:
 // - Uses unified lifecycle mutex to prevent concurrent operations
 // - Implements rename-then-delete pattern for immediate S6 scanner visibility removal
 // - Returns quickly (<1 second) to respect FSM context timeouts
@@ -334,16 +326,6 @@ func (s *DefaultService) Remove(ctx context.Context, servicePath string, fsServi
 	s.logger.Debugf("Removing S6 service %s", servicePath)
 
 	return s.withLifecycleGuard(func() error {
-		// Check for conflicting operations
-		if s.removing {
-			// Already tearing down - idempotent
-			s.logger.Debugf("Service %s removal already in progress", servicePath)
-			return nil
-		}
-
-		s.removing = true
-		defer func() { s.removing = false }()
-
 		// If we have tracked artifacts, use them for proper removal
 		if s.artifacts != nil && len(s.artifacts.CreatedFiles) > 0 {
 			return s.RemoveArtifacts(ctx, s.artifacts, fsService)
@@ -522,7 +504,8 @@ func (s *DefaultService) Status(ctx context.Context, servicePath string, fsServi
 		return info, ErrServiceNotExist // This is a temporary thing that can happen in bufered filesystems, when s6 did not yet have time to create the directory
 	}
 
-	// Read the status file.
+	// Parse the status file using centralized parser from status.go
+	// This eliminates code duplication and uses the same parsing logic everywhere
 	statusFile := filepath.Join(superviseDir, S6SuperviseStatusFile)
 	exists, err = fsService.FileExists(ctx, statusFile)
 	if err != nil {
@@ -531,180 +514,15 @@ func (s *DefaultService) Status(ctx context.Context, servicePath string, fsServi
 	if !exists {
 		return info, ErrServiceNotExist // This is a temporary thing that can happen in bufered filesystems, when s6 did not yet have time to create the file
 	}
-	statusData, err := fsService.ReadFile(ctx, statusFile)
+
+	// Use centralized S6 status parser
+	statusData, err := parseS6StatusFile(ctx, statusFile, fsService)
 	if err != nil {
-		return info, fmt.Errorf("failed to read status file: %w", err)
+		return info, fmt.Errorf("failed to parse status file: %w", err)
 	}
 
-	// Check if the status file has the expected size
-	if len(statusData) != S6StatusFileSize {
-		return info, fmt.Errorf("invalid status file size: got %d bytes, expected %d: %w",
-			len(statusData), S6StatusFileSize, ErrInvalidStatus)
-	}
-
-	// --- Parse the two TAI64N timestamps ---
-
-	// Stamp: bytes [0:12] - When status last changed
-	stampBytes := statusData[S6StatusChangedOffset : S6StatusChangedOffset+12]
-	stampHex := "@" + hex.EncodeToString(stampBytes)
-	stampTime, err := tai64.Parse(stampHex)
-	if err != nil {
-		return info, fmt.Errorf("failed to parse stamp (%s): %w", stampHex, err)
-	}
-
-	// Readystamp: bytes [12:24] - When service was last ready
-	readyStampBytes := statusData[S6StatusReadyOffset : S6StatusReadyOffset+12]
-	readyStampHex := "@" + hex.EncodeToString(readyStampBytes)
-	readyTime, err := tai64.Parse(readyStampHex)
-	if err != nil {
-		return info, fmt.Errorf("failed to parse readystamp (%s): %w", readyStampHex, err)
-	}
-
-	// --- Parse integer fields using big-endian encoding ---
-
-	// PID: bytes [24:32] (8 bytes)
-	pid := binary.BigEndian.Uint64(statusData[S6StatusPidOffset : S6StatusPidOffset+8])
-
-	// PGID: bytes [32:40] (8 bytes)
-	pgid := binary.BigEndian.Uint64(statusData[S6StatusPgidOffset : S6StatusPgidOffset+8])
-
-	// Wait status: bytes [40:42] (2 bytes)
-	wstat := binary.BigEndian.Uint16(statusData[S6StatusWstatOffset : S6StatusWstatOffset+2])
-
-	// --- Parse flags (1 byte at offset 42) ---
-	flags := statusData[S6StatusFlagsOffset]
-	flagPaused := (flags & S6FlagPaused) != 0
-	flagFinishing := (flags & S6FlagFinishing) != 0
-	flagWantUp := (flags & S6FlagWantUp) != 0
-	flagReady := (flags & S6FlagReady) != 0
-
-	// --- Determine service status ---
-	now := time.Now().UTC()
-	if pid != 0 && !flagFinishing {
-		info.Status = ServiceUp
-		info.Pid = int(pid)
-		info.Pgid = int(pgid)
-		// uptime is measured from the stamp timestamp
-		info.Uptime = int64(now.Sub(stampTime).Seconds())
-		info.ReadyTime = int64(now.Sub(readyTime).Seconds())
-	} else {
-		info.Status = ServiceDown
-		// Interpret wstat as a wait status.
-		// We convert to syscall.WaitStatus so that we can check if the process exited normally.
-		ws := syscall.WaitStatus(wstat)
-		if ws.Exited() {
-			info.ExitCode = ws.ExitStatus()
-		} else if ws.Signaled() {
-			// You may choose to record the signal number as a negative exit code.
-			info.ExitCode = -int(ws.Signal())
-		} else {
-			info.ExitCode = int(wstat)
-		}
-		info.DownTime = int64(now.Sub(stampTime).Seconds())
-		info.ReadyTime = int64(now.Sub(readyTime).Seconds())
-	}
-
-	// Store the timestamps
-	info.LastChangedAt = stampTime
-	info.LastReadyAt = readyTime
-
-	// Store the flags
-	info.IsPaused = flagPaused
-	info.IsFinishing = flagFinishing
-	info.IsWantingUp = flagWantUp
-	info.IsReady = flagReady
-
-	// Determine if service is "wanted up": if no "down" file exists.
-	downFile := filepath.Join(servicePath, "down")
-	downExists, _ := fsService.FileExists(ctx, downFile)
-	info.WantUp = !downExists
-
-	// Optionally update exit history.
-	history, histErr := s.ExitHistory(ctx, superviseDir, fsService)
-	if histErr == nil {
-		info.ExitHistory = history
-	} else {
-		return info, fmt.Errorf("failed to get exit history: %w", histErr)
-	}
-
-	// s.logger.Debugf("Status for S6 service %s: %+v", servicePath, info)
-
-	return info, nil
-}
-
-// ExitHistory retrieves the service exit history by reading the dtally file ("death_tally")
-// directly from the supervise directory instead of invoking s6-svdt.
-// The dtally file is a binary file containing a sequence of dtally records.
-// Each record has the following structure:
-//   - Bytes [0:12]: TAI64N timestamp (12 bytes)
-//   - Byte 12:      Exit code (1 byte)
-//   - Byte 13:      Signal number (1 byte)
-//
-// If the file size is not a multiple of the record size, it is considered corrupted.
-// In that case, you may choose to truncate the file (as the C code does) or return an error.
-func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, fsService filesystem.Service) ([]ExitEvent, error) {
-	// Build the full path to the dtally file.
-	dtallyFile := filepath.Join(superviseDir, S6DtallyFileName)
-
-	// Check if the dtally file exists.
-	exists, err := fsService.FileExists(ctx, dtallyFile)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		// If the dtally file does not exist, no exit history is available.
-		return nil, nil
-	}
-
-	// Read the entire dtally file.
-	data, err := fsService.ReadFile(ctx, dtallyFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read dtally file: %w", err)
-	}
-	if data == nil { // Empty history file
-		return nil, nil
-	}
-
-	// Verify that the file size is a multiple of the dtally record size.
-	if len(data)%S6_DTALLY_PACK != 0 {
-		// The file is considered corrupted or partially written.
-		// In the C code, a truncation is attempted in this case.
-		// Here, we return an error.
-		return nil, fmt.Errorf("dtally file size (%d bytes) is not a multiple of record size (%d)", len(data), S6_DTALLY_PACK)
-	}
-
-	// Calculate the number of records.
-	numRecords := len(data) / S6_DTALLY_PACK
-	var history []ExitEvent
-
-	// Process each dtally record.
-	for i := 0; i < numRecords; i++ {
-		offset := i * S6_DTALLY_PACK
-		record := data[offset : offset+S6_DTALLY_PACK]
-
-		// Unpack the TAI64N timestamp (first 12 bytes) and convert it to a time.Time.
-		// The timestamp is encoded as 12 bytes, which we first convert to a hex string,
-		// then prepend "@" (as required by the tai64.Parse function) and parse.
-		tai64Str := "@" + hex.EncodeToString(record[:12])
-		parsedTime, err := tai64.Parse(tai64Str)
-		if err != nil {
-			// If parsing fails, skip this record.
-			continue
-		}
-
-		// Unpack the exit code (13th byte).
-		exitCode := int(record[12])
-		signalNumber := int(record[13])
-
-		history = append(history, ExitEvent{
-			Timestamp: parsedTime,
-			ExitCode:  exitCode,
-			Signal:    signalNumber,
-		})
-	}
-
-	// s.logger.Debugf("Exit history for S6 service %s: %+v", superviseDir, history)
-	return history, nil
+	// Build full ServiceInfo using the parsed data
+	return s.buildFullServiceInfo(ctx, servicePath, statusData, fsService)
 }
 
 // ServiceExists checks if the service directory exists
@@ -980,52 +798,6 @@ func parseCommandLine(cmdLine string) ([]string, error) {
 	return cmdParts, nil
 }
 
-// These constants define file locations and offsets for direct S6 supervision file access
-
-const (
-	// Source: https://github.com/skarnet/s6/blob/main/src/include/s6/supervise.h
-	// S6SuperviseStatusFile is the status file in the supervise directory.
-	S6SuperviseStatusFile = "status"
-
-	// S6 status file format (43 bytes total):
-	// Byte range | Description
-	// -----------|------------
-	// 0-11       | TAI64N timestamp when status last changed (12 bytes)
-	// 12-23      | TAI64N timestamp when service was last ready (12 bytes)
-	// 24-31      | Process ID (big-endian uint64, 8 bytes)
-	// 32-39      | Process group ID (big-endian uint64, 8 bytes)
-	// 40-41      | Wait status (big-endian uint16, 2 bytes)
-	// 42         | Flags byte (1 byte: bit 0=paused, bit 1=finishing, bit 2=want up, bit 3=ready)
-
-	// Source: https://github.com/skarnet/s6/blob/main/src/libs6/s6_svstatus_unpack.c
-
-	// Offsets in the status file:
-	S6StatusChangedOffset = 0  // TAI64N timestamp when status last changed (12 bytes)
-	S6StatusReadyOffset   = 12 // TAI64N timestamp when service was last ready (12 bytes)
-	S6StatusPidOffset     = 24 // Process ID (uint64, 8 bytes)
-	S6StatusPgidOffset    = 32 // Process group ID (uint64, 8 bytes)
-	S6StatusWstatOffset   = 40 // Wait status (uint16, 2 bytes)
-	S6StatusFlagsOffset   = 42 // Flags byte (1 byte)
-
-	// Flags in the flags byte:
-	S6FlagPaused    = 0x01 // Service is paused
-	S6FlagFinishing = 0x02 // Service is shutting down
-	S6FlagWantUp    = 0x04 // Service wants to be up
-	S6FlagReady     = 0x08 // Service is ready
-
-	// Expected size of the status file:
-	S6StatusFileSize = 43 // bytes
-)
-
-// Constants for dtally file processing.
-// S6DtallyFileName is the filename for the death tally file.
-// S6_DTALLY_PACK is the size of a single dtally record (TAI64N timestamp + exitcode + signal).
-const (
-	S6DtallyFileName = "death_tally"
-	// As TAIN_PACK is 12 bytes, then each dtally record is 12 + 1 + 1 = 14 bytes.
-	S6_DTALLY_PACK = 14
-)
-
 // CleanS6ServiceDirectory cleans the S6 service directory except for the known services
 func (s *DefaultService) CleanS6ServiceDirectory(ctx context.Context, path string, fsService filesystem.Service) error {
 	if ctx == nil {
@@ -1154,7 +926,7 @@ func (s *DefaultService) GetS6ConfigFile(ctx context.Context, servicePath string
 	return content, nil
 }
 
-// ForceRemove performs aggressive cleanup for stuck S6 services using expert-recommended patterns:
+// ForceRemove performs aggressive cleanup for stuck S6 services using comprehensive patterns:
 // - Uses unified lifecycle mutex to prevent concurrent operations
 // - Implements comprehensive process termination and supervisor killing
 // - Performs timeout-aware recursive deletion
@@ -1181,10 +953,6 @@ func (s *DefaultService) ForceRemove(
 	s.logger.Warnf("Force removing S6 service %s", servicePath)
 
 	return s.withLifecycleGuard(func() error {
-		// Set removing flag regardless of current state
-		s.removing = true
-		defer func() { s.removing = false }()
-
 		// ForceRemove doesn't need tracked files - it does aggressive cleanup
 		// Create minimal artifacts for cleanup operations
 		serviceName := filepath.Base(servicePath)
@@ -1635,7 +1403,7 @@ func (s *DefaultService) findLatestRotatedFile(entries []string) string {
 	return latestFile
 }
 
-// CheckHealth performs expert-recommended tri-state health check with lifecycle manager:
+// CheckHealth performs tri-state health check with lifecycle manager:
 // - Uses cached artifacts to avoid repeated path calculations
 // - Implements proper separation of observation from action
 // - Optional s6-svok integration for runtime health verification
