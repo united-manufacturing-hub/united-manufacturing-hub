@@ -233,6 +233,20 @@ if [ "$PC_LOGS_FOUND" = true ] || [ "$PC_SERVICES_FOUND" = true ]; then
         done
         log_info "This might indicate a service cleanup issue"
     fi
+    
+    # Check if benthos processes are still running
+    log_info "Checking if benthos processes are still running..."
+    BENTHOS_PROCESSES=$(docker exec -it umh-core ps auxsf 2>/dev/null | grep "protocolconverter-gen" | grep -v grep || true)
+    
+    if [ -z "$BENTHOS_PROCESSES" ]; then
+        log_info "✅ SUCCESS: No benthos protocol converter processes found running"
+    else
+        log_failure "⚠️  Benthos protocol converter processes still running:"
+        echo "$BENTHOS_PROCESSES" | while IFS= read -r process; do
+            log_warn "  - $process"
+        done
+        log_failure "This indicates a process cleanup issue - processes should be terminated when services are removed"
+    fi
 else
     log_warn "No protocol converter logs or services were found initially, skipping config replacement step"
 fi
