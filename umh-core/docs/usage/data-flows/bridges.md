@@ -41,7 +41,7 @@ protocolConverter:
       location:
         2: "area-name"    # Appended to agent.location
         3: "device-id"
-      template:
+      config:
         connection:
           # Health monitoring configuration
         dataflowcomponent_read:
@@ -66,7 +66,7 @@ protocolConverter:
       location:
         2: "production-line"  # Area
         3: "device-name"      # Work cell
-      template:
+      config:
         connection:
           nmap:
             target: "{{ .IP }}"
@@ -121,7 +121,7 @@ protocolConverter:
       location:
         2: "assembly-line"
         3: "controller"
-      template:
+      config:
         connection:
           nmap:
             target: "{{ .IP }}"

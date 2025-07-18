@@ -15,7 +15,7 @@ protocolConverter:
   - name: uns-to-mqtt
     desiredState: active
     protocolConverterServiceConfig:
-      template:
+      config:
         dataflowcomponent_write:
           benthos:
             input:

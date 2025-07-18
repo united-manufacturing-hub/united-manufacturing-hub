@@ -135,7 +135,7 @@ protocolConverter:
   protocolConverterServiceConfig:
     location:
       2: press1 
-    template:
+    config:
       connection:
         nmap:
           target: "{{ .IP }}"
@@ -235,7 +235,7 @@ UMH Core supports 50+ industrial protocols via Benthos-UMH. For complete, up-to-
 protocolConverter:
   - name: device-bridge
     protocolConverterServiceConfig:
-      template:
+      config:
         dataflowcomponent_read:
           benthos:
             input:
