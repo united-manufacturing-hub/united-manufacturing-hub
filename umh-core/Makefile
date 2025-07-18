@@ -260,6 +260,9 @@ test: vet nilaway lint
 unit-test: vet nilaway lint
 	ginkgo -r -v --tags=test --label-filter='!integration && !redpanda-extended && !tls' --fail-fast ./...
 
+unit-test-fail-slow: vet nilaway lint
+	ginkgo -r -v --tags=test --label-filter='!integration && !redpanda-extended && !tls' ./...
+
 benchmark:
 	@echo "Running benchmarks..."
 	go test -bench=. -benchmem ./...

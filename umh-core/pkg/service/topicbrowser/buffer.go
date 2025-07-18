@@ -15,18 +15,32 @@
 // This file implements an in-memory, fixed-size ring buffer that
 // temporarily stores log payloads coming from the Benthos-UMH pipeline.
 //
-// The payloads have already been LZ4-decompressed but remain protobuf-encoded;
+// The payloads have already been hex-decoded but remain protobuf-encoded;
 // de-marshalling is done later by the consumer.  By interposing this buffer
 // between Benthos and the communicator, we guarantee a continuous, loss-free
 // stream of data even when the reader lags briefly.
+// Package topicbrowser provides a high‑throughput parser plus an in‑process,
+// fixed‑size ring buffer for Benthos‑UMH logs.
 //
-// Why a ring buffer?
-//   • Consistent replay — The consumer can always resume from the exact item it
-//     last processed: reads return a snapshot in newest-to-oldest order.
-//   • Bounded memory — Capacity is fixed, so memory usage is predictable; when
-//     full, the oldest element is overwritten rather than allocating more.
-//   • Low overhead — Mutex-protected pointer swaps avoid per-message allocation
-//     churn while remaining goroutine-safe.
+// ─── Data & Ownership Flow ──────────────────────────────────────────────
+//
+//   s6 log  →  parseBlock()  →  Ringbuffer.Add()  →  GetSnapshot()
+//
+// 1. parseBlock concatenates hex lines into a scratch slice taken from
+//    parseBufferPool, decodes the hex directly into a *BufferItem* obtained
+//    from bufferItemPool, then hands that BufferItem to the ring buffer.
+// 2. The ring buffer owns the BufferItem until it is overwritten.
+// 3. GetSnapshot exposes *read‑only* pointers; consumers must call
+//    PutBufferItems once they are finished so the structs can be reused.
+//
+//  ▸ BufferItem is **immutable** after creation.
+//  ▸ Overwritten items are **not** returned automatically to the pool to
+//    avoid use‑after‑free while snapshots might still be in flight.
+//  ▸ parseBufferPool buffers are always returned immediately.
+//
+// Concurrency guarantees: Add and GetSnapshot are mutex‑protected and safe to
+// call from multiple goroutines; BufferItems obtained from snapshots are
+// safe for concurrent *read* access only.
 //
 
 package topicbrowser
@@ -35,23 +49,40 @@ import (
 	"math"
 	"sync"
 	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 )
 
-type Buffer struct {
-	Payload   []byte    // lz4-decompressed data - but not unmarshalled (protobuf)
-	Timestamp time.Time // timestamp from within the logs
+// BufferItem is an immutable unit stored in the ring buffer.
+// Payload is still protobuf‑encoded but hex‑decoded.
+type BufferItem struct {
+	Payload     []byte    // hex-decoded data - but not unmarshalled (protobuf)
+	Timestamp   time.Time // timestamp from within the logs
+	SequenceNum uint64    // monotonically increasing sequence number for tracking
 }
 
 type Ringbuffer struct {
-	buf      []*Buffer
-	writePos int // next write index
-	count    int // number of elements
-	mu       sync.Mutex
+	buf         []*BufferItem
+	writePos    int    // next write index
+	count       int    // number of elements
+	sequenceNum uint64 // monotonically increasing sequence number
+	mu          sync.Mutex
+}
+
+// RingBufferSnapshot provides a consistent view of the ring buffer state
+type RingBufferSnapshot struct {
+	LastSequenceNum uint64        // Latest sequence number
+	Items           []*BufferItem // Current buffer contents, newest-to-oldest
+}
+
+// NewRingbufferWithDefaultCapacity creates a ring buffer with the standard production capacity
+func NewRingbufferWithDefaultCapacity() *Ringbuffer {
+	return NewRingbuffer(constants.RingBufferCapacity)
 }
 
 func NewRingbuffer(capacity uint64) *Ringbuffer {
 	const (
-		defaultCap = 8
+		defaultCap = constants.RingBufferCapacity
 		maxCap     = uint64(math.MaxInt64)
 	)
 
@@ -60,16 +91,20 @@ func NewRingbuffer(capacity uint64) *Ringbuffer {
 	}
 
 	return &Ringbuffer{
-		buf: make([]*Buffer, capacity),
+		buf: make([]*BufferItem, capacity),
 	}
 }
 
-// Add a Buffer to the Ringbuffer, overwrite if full.
-// It takes a pointer as input for performance optimizations. The data can get
-// really big, that is being loaded into the buffer.
-func (rb *Ringbuffer) Add(buf *Buffer) {
+// Add writes buf at the current position (overwriting oldest if full).
+// Overwritten items are NOT returned to bufferItemPool; the consumer that
+// still holds a snapshot may be reading them.
+func (rb *Ringbuffer) Add(buf *BufferItem) {
 	rb.mu.Lock()
 	defer rb.mu.Unlock()
+
+	// Assign sequence number to buffer
+	rb.sequenceNum++
+	buf.SequenceNum = rb.sequenceNum
 
 	rb.buf[rb.writePos] = buf
 	rb.writePos = (rb.writePos + 1) % len(rb.buf)
@@ -79,91 +114,22 @@ func (rb *Ringbuffer) Add(buf *Buffer) {
 	}
 }
 
-// Get the current Buffers from newest to oldest
-// Allocates new memory before returning the buffer to exclude modified data afterwards.
-func (rb *Ringbuffer) Get() []*Buffer {
-	rb.mu.Lock()
-	defer rb.mu.Unlock()
-
-	out := make([]*Buffer, 0, rb.count)
-
-	for i := range rb.count {
-		index := (rb.writePos - 1 - i + len(rb.buf)) % len(rb.buf)
-
-		buf := rb.buf[index]
-		if buf != nil {
-			// clone for new allocated memory
-			clone := &Buffer{Timestamp: buf.Timestamp}
-			if buf.Payload != nil {
-				clone.Payload = make([]byte, len(buf.Payload))
-				copy(clone.Payload, buf.Payload)
-			}
-			out = append(out, clone)
-		}
-	}
-
-	return out
+// bufferItemPool recycles BufferItem shells.  See package docs for limits.
+var bufferItemPool = sync.Pool{
+	New: func() any {
+		return &BufferItem{}
+	},
 }
 
-// Two pools: one for Buffer structs, one for byte slices large enough to
-// hold typical payloads (capacity grows on demand).
-var (
-	bufPool = sync.Pool{
-		New: func() any { return new(Buffer) },
-	}
-	bytePool = sync.Pool{
-		New: func() any {
-			b := make([]byte, 0)
-			return &b
-		},
-	}
-)
-
-// Get the current Buffers from newest to oldest
-// to reduce load on GC call PutBuffers afterwards
-func (rb *Ringbuffer) GetBuffers() []*Buffer {
-	rb.mu.Lock()
-	defer rb.mu.Unlock()
-
-	snap := make([]*Buffer, 0, rb.count)
-	for i := 0; i < rb.count; i++ {
-		idx := (rb.writePos - 1 - i + len(rb.buf)) % len(rb.buf)
-		if b := rb.buf[idx]; b != nil {
-			snap = append(snap, b)
-		}
-	}
-
-	clones := make([]*Buffer, len(snap))
-
-	for i, src := range snap {
-		dst := bufPool.Get().(*Buffer)
-		dst.Timestamp = src.Timestamp
-
-		// Ensure capacity without reallocating every time.
-		bPtr := bytePool.Get().(*[]byte)
-		if cap(*bPtr) < len(src.Payload) {
-			*bPtr = make([]byte, len(src.Payload))
-		}
-		slice := (*bPtr)[:len(src.Payload)]
-		copy(slice, src.Payload)
-
-		dst.Payload = slice
-
-		clones[i] = dst
-	}
-	return clones
-}
-
-// PutBuffers allows callers to recycle clones obtained from CloneSlice.
-func PutBuffers(bs []*Buffer) {
-	for _, b := range bs {
-		if b.Payload != nil {
-			tmp := b.Payload[:0]
-			bytePool.Put(&tmp) // put pointer, not value
-		}
-
-		b.Payload = nil
-		bufPool.Put(b)
+// PutBufferItems must be called by every consumer of GetSnapshot() when
+// finished. It zeroes the structs and returns them to bufferItemPool.
+func PutBufferItems(items []*BufferItem) {
+	for _, item := range items {
+		// Clear the item and return to pool
+		item.Payload = nil
+		item.Timestamp = time.Time{}
+		item.SequenceNum = 0
+		bufferItemPool.Put(item)
 	}
 }
 
@@ -172,4 +138,34 @@ func (rb *Ringbuffer) Len() int {
 	defer rb.mu.Unlock()
 	n := rb.count
 	return n
+}
+
+// Cap returns the fixed capacity of the ring buffer
+func (rb *Ringbuffer) Cap() int {
+	return len(rb.buf)
+}
+
+// GetSnapshot returns a consistent snapshot of the ring buffer state
+// This is the primary interface for consumers to get ring buffer data
+func (rb *Ringbuffer) GetSnapshot() RingBufferSnapshot {
+	rb.mu.Lock()
+	defer rb.mu.Unlock()
+
+	return RingBufferSnapshot{
+		LastSequenceNum: rb.sequenceNum,
+		Items:           rb.getBuffersInternal(),
+	}
+}
+
+// getBuffersInternal returns shared references to buffer items (newest to oldest)
+// This is used internally by GetSnapshot and assumes mutex is already held
+func (rb *Ringbuffer) getBuffersInternal() []*BufferItem {
+	result := make([]*BufferItem, 0, rb.count)
+	for i := 0; i < rb.count; i++ {
+		idx := (rb.writePos - 1 - i + len(rb.buf)) % len(rb.buf)
+		if b := rb.buf[idx]; b != nil {
+			result = append(result, b) // Share the reference, no copying
+		}
+	}
+	return result
 }

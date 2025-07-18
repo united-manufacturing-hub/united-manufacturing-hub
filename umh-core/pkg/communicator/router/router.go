@@ -122,17 +122,11 @@ func (r *Router) handleSub(message *models.UMHMessage, messageContent models.UMH
 		return
 	}
 
-	subscribePayload := models.SubscribeMessagePayload{
-		Resubscribed: false,
-	}
+	var subscribePayload models.SubscribeMessagePayload
 	if messageContent.Payload != nil {
-		payloadMap, ok := messageContent.Payload.(map[string]interface{})
-		if !ok {
-			r.routerLogger.Warnf("Warning: Could not assert payload to map[string]interface{}. Actual type: %T, Value: %v", messageContent.Payload, messageContent.Payload)
-		} else {
-			if err := maptostruct.MapToStruct(payloadMap, &subscribePayload); err != nil {
-				r.routerLogger.Warnf("Failed to convert payload into SubscribeMessagePayload: %v", err)
-			}
+		// Try direct type assertion first
+		if payload, ok := messageContent.Payload.(models.SubscribeMessagePayload); ok {
+			subscribePayload = payload
 		}
 	}
 
