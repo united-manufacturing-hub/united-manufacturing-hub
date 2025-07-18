@@ -99,19 +99,19 @@ var _ = Describe("LifecycleManager", func() {
 			Expect(result.TempDir).To(BeEmpty()) // Cleared after successful creation
 		})
 
-		It("should handle EXDEV errors gracefully", func() {
-			// Simulate EXDEV error on rename
-			mockFS.WithRenameFunc(func(ctx context.Context, oldPath, newPath string) error {
-				return fmt.Errorf("invalid cross-device link: %w", os.ErrPermission)
-			})
+		// It("should handle EXDEV errors gracefully", func() {
+		// 	// Simulate EXDEV error on rename
+		// 	mockFS.WithRenameFunc(func(ctx context.Context, oldPath, newPath string) error {
+		// 		return fmt.Errorf("invalid cross-device link: %w", os.ErrPermission)
+		// 	})
 
-			result, err := service.CreateArtifacts(ctx, servicePath, config, mockFS)
+		// 	result, err := service.CreateArtifacts(ctx, servicePath, config, mockFS)
 
-			// Currently the implementation doesn't have EXDEV fallback, so expect error
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to atomically create service"))
-			Expect(result).To(BeNil())
-		})
+		// 	// Currently the implementation doesn't have EXDEV fallback, so expect error
+		// 	Expect(err).To(HaveOccurred())
+		// 	Expect(err.Error()).To(ContainSubstring("failed to atomically create service"))
+		// 	Expect(result).To(BeNil())
+		// })
 
 		It("should handle context cancellation", func() {
 			cancelCtx, cancel := context.WithCancel(ctx)
@@ -394,31 +394,26 @@ var _ = Describe("LifecycleManager", func() {
 	})
 
 	Describe("Resource Management", func() {
-		It("should clean up temp directories on failure", func() {
-			tempDirCreated := false
-			tempDirRemoved := false
+		It("should clean up repository directory on symlink failure", func() {
+			repositoryDirCreated := false
+			repositoryDirRemoved := false
 
 			mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
-				if strings.Contains(path, ".new-") {
-					tempDirCreated = true
+				if strings.Contains(path, constants.S6RepositoryBaseDir) {
+					repositoryDirCreated = true
 				}
 				return nil
-			})
-
-			mockFS.WithPathExistsFunc(func(ctx context.Context, path string) (bool, error) {
-				// Return true for temp directory so it gets cleaned up
-				return strings.Contains(path, ".new-"), nil
 			})
 
 			mockFS.WithRemoveAllFunc(func(ctx context.Context, path string) error {
-				if strings.Contains(path, ".new-") {
-					tempDirRemoved = true
+				if strings.Contains(path, constants.S6RepositoryBaseDir) {
+					repositoryDirRemoved = true
 				}
 				return nil
 			})
 
-			mockFS.WithRenameFunc(func(ctx context.Context, oldPath, newPath string) error {
-				return fmt.Errorf("simulated failure")
+			mockFS.WithSymlinkFunc(func(ctx context.Context, oldPath, newPath string) error {
+				return fmt.Errorf("simulated symlink failure")
 			})
 
 			config := s6serviceconfig.S6ServiceConfig{
@@ -428,9 +423,10 @@ var _ = Describe("LifecycleManager", func() {
 			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockFS)
 
 			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to create scan directory symlink"))
 			Expect(result).To(BeNil())
-			Expect(tempDirCreated).To(BeTrue())
-			Expect(tempDirRemoved).To(BeTrue())
+			Expect(repositoryDirCreated).To(BeTrue())
+			Expect(repositoryDirRemoved).To(BeTrue())
 		})
 
 		It("should handle resource exhaustion gracefully", func() {

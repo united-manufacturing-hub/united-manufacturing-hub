@@ -378,7 +378,6 @@ test-empty: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 		-p 40000:40000 \
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
-		-e LOGGING_LEVEL=INFO \
 		$(IMAGE_NAME):$(TAG)
 
 test-clean-install: stop-and-remove-umh-core-latest $(BUILD_TARGET)
