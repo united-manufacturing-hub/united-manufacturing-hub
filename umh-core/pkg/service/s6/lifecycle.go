@@ -17,8 +17,6 @@ package s6
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -33,13 +31,15 @@ import (
 // ServiceArtifacts represents the essential paths for an S6 service
 // Tracks only essential root paths to minimize I/O operations and improve performance
 type ServiceArtifacts struct {
-	// ServiceDir is the main service directory (e.g., /data/services/foo)
+	// ServiceDir is the scan directory symlink path (e.g., /run/service/foo)
 	ServiceDir string
+	// RepositoryDir is the repository directory path (e.g., /data/services/foo)
+	RepositoryDir string
 	// LogDir is the external log directory (e.g., /data/logs/foo)
 	LogDir string
-	// TempDir is populated only during Create() for atomic operations
+	// TempDir is populated only during Create() for atomic operations (DEPRECATED: no longer used with symlink approach)
 	TempDir string
-	// CreatedFiles tracks all files created during service creation for health checks
+	// CreatedFiles tracks all files created during service creation for health checks (paths point to repository files)
 	CreatedFiles []string
 	// RemovalProgress tracks what has been completed during removal for idempotent incremental removal
 	RemovalProgress *RemovalProgress
@@ -48,11 +48,13 @@ type ServiceArtifacts struct {
 // RemovalProgress tracks the state of removal operations using the skarnet sequence
 // Each field represents a step that has been completed and verified
 type RemovalProgress struct {
+	// SymlinkRemoved indicates that the symlink has been removed from scan directory
+	SymlinkRemoved bool
 	// ServiceStopped indicates that s6-svc -wD -d has completed for both main and log services
 	ServiceStopped bool
 	// ServiceUnsupervised indicates that s6-svunlink has completed and supervisors have exited
 	ServiceUnsupervised bool
-	// DirectoriesRemoved indicates that both service and log directories have been removed
+	// DirectoriesRemoved indicates that both repository and log directories have been removed
 	DirectoriesRemoved bool
 }
 
@@ -69,80 +71,61 @@ func (artifacts *ServiceArtifacts) IsFullyRemoved() bool {
 		return false
 	}
 	p := artifacts.RemovalProgress
-	return p.ServiceStopped && p.ServiceUnsupervised && p.DirectoriesRemoved
+	return p.SymlinkRemoved && p.ServiceStopped && p.ServiceUnsupervised && p.DirectoriesRemoved
 }
 
-// CreateArtifacts creates a complete S6 service atomically
-// Uses proven atomic creation patterns:
-// - EXDEV-safe temp directory (sibling of target) to avoid cross-device link errors
-// - Atomic rename operation to prevent partially created services
-// - .complete sentinel file to detect creation completion
+// CreateArtifacts creates a complete S6 service using the symlink approach
+// Uses symlink-based atomic creation:
+// - Creates service files directly in repository directory
+// - Creates atomic symlink to make service visible to scanner
 // - S6 scanner notification to trigger supervision setup
 func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, fsService filesystem.Service) (*ServiceArtifacts, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
 
-	// Check if target already exists and remove it if needed
-	if exists, _ := fsService.PathExists(ctx, servicePath); exists {
-		if err := fsService.RemoveAll(ctx, servicePath); err != nil {
-			return nil, fmt.Errorf("failed to remove existing service directory: %w", err)
-		}
-	}
+	serviceName := filepath.Base(servicePath)
+	repositoryDir := filepath.Join(constants.S6RepositoryBaseDir, serviceName)
 
 	// Create artifacts structure
-	serviceName := filepath.Base(servicePath)
 	artifacts := &ServiceArtifacts{
-		ServiceDir: servicePath,
-		LogDir:     filepath.Join(constants.S6LogBaseDir, serviceName),
-		TempDir:    "", // Only populated during creation
+		ServiceDir:    servicePath,   // Scan directory symlink path
+		RepositoryDir: repositoryDir, // Repository directory path
+		LogDir:        filepath.Join(constants.S6LogBaseDir, serviceName),
+		TempDir:       "", // No longer used with symlink approach
 	}
 
-	// Create temp directory within S6BaseDir with dot prefix
-	// S6 scanner ignores directories starting with dots, ensuring no interference
-	tempID := s.generateUniqueID()
-	artifacts.TempDir = filepath.Join(constants.S6BaseDir, ".new-"+tempID)
-
-	// Setup cleanup function for failure cases
-	cleanupTemp := func() {
-		if artifacts.TempDir != "" {
-			if tempExists, _ := fsService.PathExists(ctx, artifacts.TempDir); tempExists {
-				if cleanupErr := fsService.RemoveAll(ctx, artifacts.TempDir); cleanupErr != nil {
-					s.logger.Warnf("Failed to clean up temp directory %s: %v", artifacts.TempDir, cleanupErr)
-				}
-			}
+	// Remove existing symlink if present
+	if exists, _ := fsService.PathExists(ctx, servicePath); exists {
+		if err := fsService.RemoveAll(ctx, servicePath); err != nil {
+			return nil, fmt.Errorf("failed to remove existing symlink: %w", err)
 		}
 	}
 
-	// Create all files in temp directory first
-	createdFiles, err := s.createS6FilesInTemp(ctx, artifacts.TempDir, servicePath, config, fsService)
+	// Remove existing repository if present
+	if exists, _ := fsService.PathExists(ctx, repositoryDir); exists {
+		if err := fsService.RemoveAll(ctx, repositoryDir); err != nil {
+			return nil, fmt.Errorf("failed to remove existing repository: %w", err)
+		}
+	}
+
+	// Create service files directly in repository location
+	createdFiles, err := s.createS6FilesInRepository(ctx, repositoryDir, config, fsService)
 	if err != nil {
-		cleanupTemp()
+		// Clean up on failure
+		fsService.RemoveAll(ctx, repositoryDir)
 		return nil, fmt.Errorf("failed to create service files: %w", err)
 	}
 
-	// Add .complete sentinel file for atomic completion detection
-	sentinelPath := filepath.Join(artifacts.TempDir, ".complete")
-	if err := fsService.WriteFile(ctx, sentinelPath, []byte("ok"), 0644); err != nil {
-		cleanupTemp()
-		return nil, fmt.Errorf("failed to create sentinel file: %w", err)
-	}
-	createdFiles = append(createdFiles, ".complete")
-
-	// Atomically rename temp directory to final location
-	if err := fsService.Rename(ctx, artifacts.TempDir, servicePath); err != nil {
-		cleanupTemp()
-		return nil, fmt.Errorf("failed to atomically create service: %w", err)
+	// NOW create the atomic symlink - this makes the service visible to scanner
+	if err := fsService.Symlink(ctx, repositoryDir, servicePath); err != nil {
+		// Clean up repository on symlink failure
+		fsService.RemoveAll(ctx, repositoryDir)
+		return nil, fmt.Errorf("failed to create scan directory symlink: %w", err)
 	}
 
-	// Store the created files in artifacts (now in final location)
-	artifacts.CreatedFiles = make([]string, len(createdFiles))
-	for i, file := range createdFiles {
-		artifacts.CreatedFiles[i] = filepath.Join(servicePath, file)
-	}
-
-	// Clear temp directory since rename succeeded
-	artifacts.TempDir = ""
+	// Store the created files in artifacts (repository paths)
+	artifacts.CreatedFiles = createdFiles
 
 	// Notify S6 scanner of new service
 	if _, err := s.EnsureSupervision(ctx, servicePath, fsService); err != nil {
@@ -153,11 +136,11 @@ func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string
 	return artifacts, nil
 }
 
-// RemoveArtifacts removes service artifacts using the skarnet 3-step sequence
-// This is the official S6 author's recommended approach for safe service removal:
+// RemoveArtifacts removes service artifacts using the symlink-aware skarnet sequence
+// This approach follows the proper skarnet sequence, then removes the symlink with directories:
 // 1. Stop service cleanly (s6-svc -wD -d) - waits for finish scripts
 // 2. Unsupervise service (s6-svunlink) - removes from supervision and waits for supervisor exit
-// 3. Remove directories - safe filesystem cleanup
+// 3. Remove symlink from scan directory + Remove repository and log directories
 //
 // Each step includes timeout handling using S6's native timeout parameters (-T/-t)
 // and leverages S6's idempotent nature for safe operation.
@@ -187,10 +170,10 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *Service
 
 	progress := artifacts.RemovalProgress
 
-	// Step 1: Stop service cleanly using s6-svc -wD -d (idempotent)
+	// Step 1: Stop service cleanly using s6-svc -wD -d (idempotent, targeting scan directory symlink)
 	if !progress.ServiceStopped {
-		serviceExists, _ := fsService.PathExists(ctx, artifacts.ServiceDir)
-		if serviceExists {
+		symlinkExists, _ := fsService.PathExists(ctx, artifacts.ServiceDir)
+		if symlinkExists {
 			if err := s.stopServiceCleanly(ctx, artifacts.ServiceDir, fsService); err != nil {
 				s.logger.Debugf("Failed to stop service cleanly during removal: %v", err)
 				return fmt.Errorf("failed to stop service cleanly: %w", err)
@@ -200,10 +183,10 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *Service
 		s.logger.Debugf("Service stopped cleanly: %s", artifacts.ServiceDir)
 	}
 
-	// Step 2: Unsupervise service using s6-svunlink (idempotent)
+	// Step 2: Unsupervise service using s6-svunlink (idempotent, targeting scan directory symlink)
 	if !progress.ServiceUnsupervised {
-		serviceExists, _ := fsService.PathExists(ctx, artifacts.ServiceDir)
-		if serviceExists {
+		symlinkExists, _ := fsService.PathExists(ctx, artifacts.ServiceDir)
+		if symlinkExists {
 			if err := s.unsuperviseService(ctx, artifacts.ServiceDir, fsService); err != nil {
 				s.logger.Debugf("Failed to unsupervise service during removal: %v", err)
 				return fmt.Errorf("failed to unsupervise service: %w", err)
@@ -213,15 +196,24 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *Service
 		s.logger.Debugf("Service unsupervised: %s", artifacts.ServiceDir)
 	}
 
-	// Step 3: Remove directories (idempotent)
+	// Step 3: Remove symlink + repository and log directories (idempotent)
 	if !progress.DirectoriesRemoved {
-		// Remove service directory (includes log subdirectory)
-		serviceExists, _ := fsService.PathExists(ctx, artifacts.ServiceDir)
-		if serviceExists {
-			s.logDirectoryContentsIfNotEmpty(ctx, artifacts.ServiceDir, "service directory", fsService)
+		// Remove symlink from scan directory
+		symlinkExists, _ := fsService.PathExists(ctx, artifacts.ServiceDir)
+		if symlinkExists {
 			if err := fsService.RemoveAll(ctx, artifacts.ServiceDir); err != nil {
-				s.logger.Debugf("Failed to remove service directory: %v", err)
-				return fmt.Errorf("failed to remove service directory: %w", err)
+				s.logger.Debugf("Failed to remove scan directory symlink: %v", err)
+				return fmt.Errorf("failed to remove scan directory symlink: %w", err)
+			}
+		}
+
+		// Remove repository directory (actual service files)
+		repoExists, _ := fsService.PathExists(ctx, artifacts.RepositoryDir)
+		if repoExists {
+			s.logDirectoryContentsIfNotEmpty(ctx, artifacts.RepositoryDir, "repository directory", fsService)
+			if err := fsService.RemoveAll(ctx, artifacts.RepositoryDir); err != nil {
+				s.logger.Debugf("Failed to remove repository directory: %v", err)
+				return fmt.Errorf("failed to remove repository directory: %w", err)
 			}
 		}
 
@@ -236,10 +228,11 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *Service
 		}
 
 		progress.DirectoriesRemoved = true
-		s.logger.Debugf("Directories removed: service=%s, log=%s", artifacts.ServiceDir, artifacts.LogDir)
+		progress.SymlinkRemoved = true // Mark symlink as removed since it's part of directory removal
+		s.logger.Debugf("Directories removed: symlink=%s, repository=%s, log=%s", artifacts.ServiceDir, artifacts.RepositoryDir, artifacts.LogDir)
 	}
 
-	s.logger.Debugf("Successfully completed skarnet sequence for service artifacts: %+v", artifacts)
+	s.logger.Debugf("Successfully completed symlink-aware skarnet sequence for service artifacts: %+v", artifacts)
 	return nil
 }
 
@@ -283,9 +276,31 @@ func (s *DefaultService) CheckArtifactsHealth(ctx context.Context, artifacts *Se
 		}
 	}
 
-	// Check supervise directory consistency
-	superviseMain := filepath.Join(artifacts.ServiceDir, "supervise")
-	superviseLog := filepath.Join(artifacts.ServiceDir, "log", "supervise")
+	// Check symlink integrity (scan directory -> repository)
+	symlinkExists, err := fsService.PathExists(ctx, artifacts.ServiceDir)
+	if err != nil {
+		s.logger.Debugf("Health check: I/O error checking symlink %s: %v", artifacts.ServiceDir, err)
+		return HealthUnknown, err
+	}
+	if !symlinkExists {
+		s.logger.Debugf("Health check: missing symlink %s", artifacts.ServiceDir)
+		return HealthBad, nil
+	}
+
+	// Check repository directory exists
+	repoExists, err := fsService.PathExists(ctx, artifacts.RepositoryDir)
+	if err != nil {
+		s.logger.Debugf("Health check: I/O error checking repository %s: %v", artifacts.RepositoryDir, err)
+		return HealthUnknown, err
+	}
+	if !repoExists {
+		s.logger.Debugf("Health check: missing repository directory %s", artifacts.RepositoryDir)
+		return HealthBad, nil
+	}
+
+	// Check supervise directory consistency (in repository location)
+	superviseMain := filepath.Join(artifacts.RepositoryDir, "supervise")
+	superviseLog := filepath.Join(artifacts.RepositoryDir, "log", "supervise")
 
 	mainExists, mainErr := fsService.PathExists(ctx, superviseMain)
 	logExists, logErr := fsService.PathExists(ctx, superviseLog)
@@ -306,42 +321,33 @@ func (s *DefaultService) CheckArtifactsHealth(ctx context.Context, artifacts *Se
 	return HealthOK, nil
 }
 
-// generateUniqueID creates a unique identifier for temp directories
-func (s *DefaultService) generateUniqueID() string {
-	b := make([]byte, 8)
-	if _, err := rand.Read(b); err != nil {
-		// Fallback to timestamp-based ID if crypto/rand fails
-		return fmt.Sprintf("%d", time.Now().UnixNano())
-	}
-	return hex.EncodeToString(b)
-}
-
-// createS6FilesInTemp creates the service files in the temp directory
-func (s *DefaultService) createS6FilesInTemp(ctx context.Context, tempDir string, servicePath string, config s6serviceconfig.S6ServiceConfig, fsService filesystem.Service) ([]string, error) {
+// createS6FilesInRepository creates the service files directly in the repository directory
+func (s *DefaultService) createS6FilesInRepository(ctx context.Context, repositoryDir string, config s6serviceconfig.S6ServiceConfig, fsService filesystem.Service) ([]string, error) {
 	var createdFiles []string
+
 	// Create service directory structure
-	if err := fsService.EnsureDirectory(ctx, tempDir); err != nil {
-		return nil, fmt.Errorf("failed to create service directory: %w", err)
+	if err := fsService.EnsureDirectory(ctx, repositoryDir); err != nil {
+		return nil, fmt.Errorf("failed to create repository directory: %w", err)
 	}
 
 	// Create down file to prevent automatic startup
-	downFilePath := filepath.Join(tempDir, "down")
+	downFilePath := filepath.Join(repositoryDir, "down")
 	if err := fsService.WriteFile(ctx, downFilePath, []byte{}, 0644); err != nil {
 		return nil, fmt.Errorf("failed to create down file: %w", err)
 	}
-	createdFiles = append(createdFiles, "down")
+	createdFiles = append(createdFiles, downFilePath)
 
 	// Create type file (required for s6-rc)
-	typeFile := filepath.Join(tempDir, "type")
+	typeFile := filepath.Join(repositoryDir, "type")
 	if err := fsService.WriteFile(ctx, typeFile, []byte("longrun"), 0644); err != nil {
 		return nil, fmt.Errorf("failed to create type file: %w", err)
 	}
-	createdFiles = append(createdFiles, "type")
+	createdFiles = append(createdFiles, typeFile)
 
 	// Create log service
-	serviceName := filepath.Base(servicePath)
+	serviceName := filepath.Base(repositoryDir)
 	logDir := filepath.Join(constants.S6LogBaseDir, serviceName)
-	logServicePath := filepath.Join(tempDir, "log")
+	logServicePath := filepath.Join(repositoryDir, "log")
 
 	if err := fsService.EnsureDirectory(ctx, logServicePath); err != nil {
 		return nil, fmt.Errorf("failed to create log service directory: %w", err)
@@ -352,14 +358,14 @@ func (s *DefaultService) createS6FilesInTemp(ctx context.Context, tempDir string
 	if err := fsService.WriteFile(ctx, logTypeFile, []byte("longrun"), 0644); err != nil {
 		return nil, fmt.Errorf("failed to create log service type file: %w", err)
 	}
-	createdFiles = append(createdFiles, "log/type")
+	createdFiles = append(createdFiles, logTypeFile)
 
 	// Create log service down file to prevent automatic startup during creation
 	logDownFile := filepath.Join(logServicePath, "down")
 	if err := fsService.WriteFile(ctx, logDownFile, []byte{}, 0644); err != nil {
 		return nil, fmt.Errorf("failed to create log service down file: %w", err)
 	}
-	createdFiles = append(createdFiles, "log/down")
+	createdFiles = append(createdFiles, logDownFile)
 
 	// Create log run script immediately after other log service files to avoid race conditions
 	logRunContent, err := getLogRunScript(config, logDir)
@@ -371,27 +377,27 @@ func (s *DefaultService) createS6FilesInTemp(ctx context.Context, tempDir string
 	if err := fsService.WriteFile(ctx, logRunPath, []byte(logRunContent), 0755); err != nil {
 		return nil, fmt.Errorf("failed to write log run script: %w", err)
 	}
-	createdFiles = append(createdFiles, "log/run")
+	createdFiles = append(createdFiles, logRunPath)
 
-	// Create main service run script using proven template system with the correct final service path
+	// Create main service run script using proven template system
 	if len(config.Command) > 0 {
-		if err := s.createS6RunScript(ctx, tempDir, fsService, config.Command, config.Env, config.MemoryLimit, servicePath); err != nil {
+		if err := s.createS6RunScript(ctx, repositoryDir, fsService, config.Command, config.Env, config.MemoryLimit, repositoryDir); err != nil {
 			return nil, fmt.Errorf("failed to create S6 run script: %w", err)
 		}
-		createdFiles = append(createdFiles, "run")
+		createdFiles = append(createdFiles, filepath.Join(repositoryDir, "run"))
 	} else {
 		return nil, fmt.Errorf("no command specified for service")
 	}
 
 	// Create config files using proven function
-	configFiles, err := s.createS6ConfigFiles(ctx, tempDir, fsService, config.ConfigFiles)
+	configFiles, err := s.createS6ConfigFiles(ctx, repositoryDir, fsService, config.ConfigFiles)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create S6 config files: %w", err)
 	}
 	createdFiles = append(createdFiles, configFiles...)
 
 	// Create dependencies
-	dependenciesDPath := filepath.Join(tempDir, "dependencies.d")
+	dependenciesDPath := filepath.Join(repositoryDir, "dependencies.d")
 	if err := fsService.EnsureDirectory(ctx, dependenciesDPath); err != nil {
 		return nil, fmt.Errorf("failed to create dependencies.d directory: %w", err)
 	}
@@ -400,7 +406,7 @@ func (s *DefaultService) createS6FilesInTemp(ctx context.Context, tempDir string
 	if err := fsService.WriteFile(ctx, baseDepFile, []byte{}, 0644); err != nil {
 		return nil, fmt.Errorf("failed to create base dependency file: %w", err)
 	}
-	createdFiles = append(createdFiles, "dependencies.d/base")
+	createdFiles = append(createdFiles, baseDepFile)
 
 	return createdFiles, nil
 }

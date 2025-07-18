@@ -17,9 +17,10 @@ package constants
 import "time"
 
 const (
-	S6BaseDir       = "/run/service"
-	S6ConfigDirName = "config"
-	S6LogBaseDir    = "/data/logs"
+	S6BaseDir           = "/run/service"   // Scan directory (contains symlinks)
+	S6RepositoryBaseDir = "/data/services" // Repository directory (contains actual service files)
+	S6ConfigDirName     = "config"
+	S6LogBaseDir        = "/data/logs"
 )
 
 var (

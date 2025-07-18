@@ -1610,3 +1610,8 @@ func (bs *BufferedService) Rename(ctx context.Context, oldPath, newPath string) 
 
 	return nil
 }
+
+// Symlink creates a symbolic link by delegating to the base service
+func (bs *BufferedService) Symlink(ctx context.Context, target, linkPath string) error {
+	return bs.base.Symlink(ctx, target, linkPath)
+}
