@@ -23,11 +23,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-const (
-	// gracePeriodForTermination is the grace period to wait between SIGTERM and SIGKILL
-	gracePeriodForTermination = 500 * time.Millisecond
-)
-
 // ForceCleanup performs aggressive cleanup for stuck services
 // Uses comprehensive cleanup approach:
 // - Process termination and supervisor killing
