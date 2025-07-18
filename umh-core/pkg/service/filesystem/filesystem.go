@@ -94,7 +94,8 @@ type Service interface {
 // BUFFER REUSE: Each buffer is completely overwritten by io.ReadFull before being appended to result
 var chunkBufferPool = sync.Pool{
 	New: func() interface{} {
-		return make([]byte, constants.S6FileReadChunkSize)
+		chunk := make([]byte, constants.S6FileReadChunkSize)
+		return &chunk
 	},
 }
 
@@ -258,7 +259,13 @@ func (s *DefaultService) ReadFileRange(
 
 		// BUFFER POOL USAGE: Get reusable 1MB buffer to minimize allocations
 		// The buffer gets completely overwritten by io.ReadFull each time
-		smallBuf := chunkBufferPool.Get().([]byte)
+		smallBuf := chunkBufferPool.Get().(*[]byte)
+		// Sanity check (can't happen unless code changes)
+		if smallBuf == nil {
+			resCh <- result{nil, 0, fmt.Errorf("smallBuf is nil")}
+			return
+		}
+
 		defer chunkBufferPool.Put(smallBuf)
 
 		for {
@@ -273,12 +280,12 @@ func (s *DefaultService) ReadFileRange(
 			}
 
 			// Read chunk: io.ReadFull either reads exactly len(smallBuf) bytes OR returns error
-			n, err := io.ReadFull(f, smallBuf)
+			n, err := io.ReadFull(f, *smallBuf)
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
 				if n > 0 {
 					// PARTIAL READ: Use smallBuf[:n] to avoid appending garbage data
 					// This is why buf contains NO EXTRA ZEROS - we only append actual file data
-					buf = append(buf, smallBuf[:n]...)
+					buf = append(buf, (*smallBuf)[:n]...)
 				}
 				break
 			}
@@ -289,7 +296,7 @@ func (s *DefaultService) ReadFileRange(
 
 			// FULL READ SUCCESS: io.ReadFull guarantees smallBuf contains exactly 1MB of file data
 			// No slicing needed here - the entire buffer contains valid data
-			buf = append(buf, smallBuf...)
+			buf = append(buf, *smallBuf...)
 		}
 
 		// FINAL RESULT: buf contains only actual file data, newSize = next read offset
