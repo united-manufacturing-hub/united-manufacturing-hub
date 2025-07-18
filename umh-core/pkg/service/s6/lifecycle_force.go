@@ -18,19 +18,13 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-const (
-	// gracePeriodForTermination is the grace period to wait between SIGTERM and SIGKILL
-	gracePeriodForTermination = 500 * time.Millisecond
-)
-
 // ForceCleanup performs aggressive cleanup for stuck services
-// Uses expert-recommended patterns:
+// Uses comprehensive cleanup approach:
 // - Process termination and supervisor killing
 // - Comprehensive artifact removal
 func (s *DefaultService) ForceCleanup(ctx context.Context, artifacts *ServiceArtifacts, fsService filesystem.Service) error {
@@ -49,25 +43,28 @@ func (s *DefaultService) ForceCleanup(ctx context.Context, artifacts *ServiceArt
 	s.logger.Warnf("Force cleaning service artifacts: service=%s, files=%d",
 		filepath.Base(artifacts.ServiceDir), len(artifacts.CreatedFiles))
 
-	// Create down files first
+	// Create down files first to ensure services stay down
 	if err := s.createDownFiles(ctx, artifacts, fsService); err != nil {
 		s.logger.Warnf("Failed to create down files: %v", err)
 		// Continue with cleanup even if down files fail
 	}
 
-	// Best-effort process termination
-	if err := s.terminateProcesses(ctx, artifacts, fsService); err != nil {
-		s.logger.Warnf("Failed to terminate processes: %v", err)
-		// Continue with cleanup even if process termination fails
+	// Try the full skarnet sequence first as a best-effort approach
+	s.logger.Debugf("Attempting skarnet sequence for force cleanup")
+
+	// Step 1: Stop service cleanly
+	if err := s.stopServiceCleanly(ctx, artifacts.ServiceDir, fsService); err != nil {
+		s.logger.Warnf("Failed to stop service cleanly during force cleanup: %v", err)
+		// Continue with cleanup even if stopping fails
 	}
 
-	// Kill supervise processes
-	if err := s.killSupervisors(ctx, artifacts, fsService); err != nil {
-		s.logger.Warnf("Failed to kill supervisor processes: %v", err)
-		// Continue with cleanup even if supervisor killing fails
+	// Step 2: Try to unsupervise service (may fail if service is corrupted)
+	if err := s.unsuperviseService(ctx, artifacts.ServiceDir, fsService); err != nil {
+		s.logger.Warnf("Failed to unsupervise service during force cleanup: %v", err)
+		// Continue with direct directory removal if unsupervise fails
 	}
 
-	// Remove directories with timeout awareness
+	// Step 3: Remove directories with timeout awareness (fallback approach)
 	if err := s.removeDirectoryWithTimeout(ctx, artifacts.ServiceDir, fsService); err != nil {
 		s.logger.Warnf("Failed to remove service directory: %v", err)
 	}
@@ -88,55 +85,18 @@ func (s *DefaultService) ForceCleanup(ctx context.Context, artifacts *ServiceArt
 	return nil
 }
 
-// killSupervisors kills s6-supervise processes
-func (s *DefaultService) killSupervisors(ctx context.Context, artifacts *ServiceArtifacts, fsService filesystem.Service) error {
-	supervisePaths := []string{
-		filepath.Join(artifacts.ServiceDir, "supervise"),
-		filepath.Join(artifacts.ServiceDir, "log", "supervise"),
-	}
-
-	var lastErr error
-	for _, supervisePath := range supervisePaths {
-		pidFile := filepath.Join(supervisePath, "pid")
-		if data, err := fsService.ReadFile(ctx, pidFile); err == nil && len(data) > 0 {
-			if pidStr := strings.TrimSpace(string(data)); pidStr != "" {
-				// Try SIGTERM first for graceful shutdown
-				if _, err := fsService.ExecuteCommand(ctx, "kill", "-TERM", pidStr); err != nil {
-					s.logger.Debugf("Failed to send SIGTERM to supervisor process %s: %v", pidStr, err)
-					lastErr = err
-				} else {
-					s.logger.Debugf("Sent SIGTERM to supervisor process %s", pidStr)
-				}
-
-				// Wait for graceful shutdown with timeout
-				select {
-				case <-time.After(gracePeriodForTermination):
-					// Process didn't terminate gracefully, use SIGKILL
-					if _, err := fsService.ExecuteCommand(ctx, "kill", "-KILL", pidStr); err != nil {
-						s.logger.Debugf("Failed to send SIGKILL to supervisor process %s: %v", pidStr, err)
-						lastErr = err
-					} else {
-						s.logger.Debugf("Sent SIGKILL to supervisor process %s after %v grace period", pidStr, gracePeriodForTermination)
-					}
-				case <-ctx.Done():
-					// Context cancelled, exit early
-					return ctx.Err()
-				}
-			}
-		}
-	}
-
-	return lastErr
-}
-
 // removeDirectoryWithTimeout removes a directory with timeout awareness
 // this has a high context time and should ONLY be called during
 // force cleanup operations where thoroughness is prioritized over speed.
 func (s *DefaultService) removeDirectoryWithTimeout(ctx context.Context, path string, fsService filesystem.Service) error {
+	// Log directory contents if not empty
+	s.logDirectoryContentsIfNotEmpty(ctx, path, "directory", fsService)
+
 	// Use a short timeout for chunk-based deletion
+	// Use background context to ensure we get the full timeout regardless of outer context
 	const chunkTimeout = 750 * time.Millisecond
 
-	chunkCtx, cancel := context.WithTimeout(ctx, chunkTimeout)
+	chunkCtx, cancel := context.WithTimeout(context.Background(), chunkTimeout)
 	defer cancel()
 
 	if err := fsService.RemoveAll(chunkCtx, path); err != nil {

@@ -49,7 +49,7 @@ From the Console you can :
         protocolConverterServiceConfig:
           location:
             2: "machine-7"
-          template:
+          config:
             connection:
               nmap:
                 target:   "{{ .IP }}"

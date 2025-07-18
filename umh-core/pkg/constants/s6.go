@@ -17,9 +17,10 @@ package constants
 import "time"
 
 const (
-	S6BaseDir       = "/run/service"
-	S6ConfigDirName = "config"
-	S6LogBaseDir    = "/data/logs"
+	S6BaseDir           = "/run/service"   // Scan directory (contains symlinks)
+	S6RepositoryBaseDir = "/data/services" // Repository directory (contains actual service files)
+	S6ConfigDirName     = "config"
+	S6LogBaseDir        = "/data/logs"
 )
 
 var (
@@ -46,4 +47,13 @@ const (
 	// S6FileReadChunkSize is the buffer size used for reading files in chunks
 	// Set to 1MB for optimal I/O performance while maintaining reasonable memory usage
 	S6FileReadChunkSize = 1024 * 1024
+)
+
+const (
+	// S6 Command Timeout Configuration
+	// These constants control timeout behavior for S6 commands with -T and -t parameters
+
+	// S6_TIMEOUT_PERCENTAGE defines what percentage of remaining context time to allocate to S6 commands
+	// Using 50% as recommended by skarnet documentation for safe retry behavior
+	S6_TIMEOUT_PERCENTAGE = 0.5
 )

@@ -18,7 +18,7 @@ protocolConverter:
       location:
         2: "line-1"
         3: "pump-01"
-      template:
+      config:
         connection:
           nmap:
             target: "{{ .IP }}"

@@ -45,17 +45,18 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 		service = &DefaultService{logger: logger.For("test")}
 		mockFS = filesystem.NewMockFileSystem()
 		artifacts = &ServiceArtifacts{
-			ServiceDir: filepath.Join(constants.S6BaseDir, "test-service"),
-			LogDir:     filepath.Join(constants.S6LogBaseDir, "test-service"),
+			ServiceDir:    filepath.Join(constants.S6BaseDir, "test-service"),
+			RepositoryDir: filepath.Join(constants.S6RepositoryBaseDir, "test-service"),
+			LogDir:        filepath.Join(constants.S6LogBaseDir, "test-service"),
 			CreatedFiles: []string{
-				filepath.Join(constants.S6BaseDir, "test-service", "down"),
-				filepath.Join(constants.S6BaseDir, "test-service", "type"),
-				filepath.Join(constants.S6BaseDir, "test-service", "log", "type"),
-				filepath.Join(constants.S6BaseDir, "test-service", "log", "down"),
-				filepath.Join(constants.S6BaseDir, "test-service", "log", "run"),
-				filepath.Join(constants.S6BaseDir, "test-service", "run"),
-				filepath.Join(constants.S6BaseDir, "test-service", "dependencies.d", "base"),
-				filepath.Join(constants.S6BaseDir, "test-service", ".complete"),
+				filepath.Join(constants.S6RepositoryBaseDir, "test-service", "down"),
+				filepath.Join(constants.S6RepositoryBaseDir, "test-service", "type"),
+				filepath.Join(constants.S6RepositoryBaseDir, "test-service", "log", "type"),
+				filepath.Join(constants.S6RepositoryBaseDir, "test-service", "log", "down"),
+				filepath.Join(constants.S6RepositoryBaseDir, "test-service", "log", "run"),
+				filepath.Join(constants.S6RepositoryBaseDir, "test-service", "run"),
+				filepath.Join(constants.S6RepositoryBaseDir, "test-service", "dependencies.d", "base"),
+				filepath.Join(constants.S6RepositoryBaseDir, "test-service", ".complete"),
 			},
 		}
 		config = s6serviceconfig.S6ServiceConfig{
@@ -164,14 +165,14 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				return nil
 			})
 
-			mockFS.WithRenameFunc(func(ctx context.Context, oldPath, newPath string) error {
-				return fmt.Errorf("directory not empty: another process created files")
+			mockFS.WithSymlinkFunc(func(ctx context.Context, oldPath, newPath string) error {
+				return fmt.Errorf("simulated symlink failure")
 			})
 
 			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockFS)
 
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to atomically create service"))
+			Expect(err.Error()).To(ContainSubstring("failed to create scan directory symlink"))
 			Expect(result).To(BeNil())
 		})
 	})
@@ -375,7 +376,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 
 	Describe("Recovery and Cleanup Edge Cases", func() {
 		It("should handle cleanup failure during failed creation", func() {
-			tempDirExists := true
+			repositoryExists := true
 			cleanupFailed := false
 
 			mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
@@ -390,11 +391,11 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			})
 
 			mockFS.WithPathExistsFunc(func(ctx context.Context, path string) (bool, error) {
-				return strings.Contains(path, ".new-") && tempDirExists, nil
+				return strings.Contains(path, constants.S6RepositoryBaseDir) && repositoryExists, nil
 			})
 
 			mockFS.WithRemoveAllFunc(func(ctx context.Context, path string) error {
-				if strings.Contains(path, ".new-") {
+				if strings.Contains(path, constants.S6RepositoryBaseDir) {
 					cleanupFailed = true
 					return fmt.Errorf("cleanup failed: device busy")
 				}
@@ -404,7 +405,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockFS)
 
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("simulated write failure"))
+			Expect(err.Error()).To(ContainSubstring("failed to remove existing repository"))
 			Expect(result).To(BeNil())
 			Expect(cleanupFailed).To(BeTrue()) // Cleanup was attempted
 		})
@@ -614,8 +615,8 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 		})
 
 		It("should handle filesystem corruption", func() {
-			mockFS.WithRenameFunc(func(ctx context.Context, oldPath, newPath string) error {
-				return fmt.Errorf("input/output error")
+			mockFS.WithSymlinkFunc(func(ctx context.Context, oldPath, newPath string) error {
+				return fmt.Errorf("simulated symlink failure")
 			})
 
 			config := s6serviceconfig.S6ServiceConfig{
@@ -625,7 +626,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockFS)
 
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("input/output error"))
+			Expect(err.Error()).To(ContainSubstring("simulated symlink failure"))
 			Expect(result).To(BeNil())
 		})
 

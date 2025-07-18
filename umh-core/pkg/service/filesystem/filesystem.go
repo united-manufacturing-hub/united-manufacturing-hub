@@ -79,6 +79,11 @@ type Service interface {
 	// Rename renames (moves) a file or directory from oldPath to newPath.
 	// This operation is atomic on the same filesystem mount.
 	Rename(ctx context.Context, oldPath, newPath string) error
+
+	// Symlink creates a symbolic link from linkPath to target.
+	// linkPath is the path where the symlink will be created.
+	// target is the path that the symlink will point to.
+	Symlink(ctx context.Context, target, linkPath string) error
 }
 
 // DefaultService is the default implementation of FileSystemService
@@ -537,6 +542,32 @@ func (s *DefaultService) Rename(ctx context.Context, oldPath, newPath string) er
 	case err := <-errCh:
 		if err != nil {
 			return fmt.Errorf("failed to rename file %s to %s: %w", oldPath, newPath, err)
+		}
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// Symlink creates a symbolic link from linkPath to target.
+func (s *DefaultService) Symlink(ctx context.Context, target, linkPath string) error {
+	if err := s.checkContext(ctx); err != nil {
+		return fmt.Errorf("failed to check context: %w", err)
+	}
+
+	// Create a channel for results
+	errCh := make(chan error, 1)
+
+	// Run file operation in goroutine
+	go func() {
+		errCh <- os.Symlink(target, linkPath)
+	}()
+
+	// Wait for either completion or context cancellation
+	select {
+	case err := <-errCh:
+		if err != nil {
+			return fmt.Errorf("failed to create symlink %s -> %s: %w", linkPath, target, err)
 		}
 		return nil
 	case <-ctx.Done():
