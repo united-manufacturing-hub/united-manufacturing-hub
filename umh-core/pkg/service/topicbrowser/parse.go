@@ -257,6 +257,7 @@ func (svc *Service) parseBlock(entries []s6svc.LogEntry) error {
 		item.Payload = item.Payload[:payloadSize]
 	}
 
+	//now := time.Now()
 	if _, err := hex.Decode(item.Payload, hexBuf); err != nil {
 		// Return to pool on error
 		bufferItemPool.Put(item)
@@ -274,7 +275,10 @@ func (svc *Service) parseBlock(entries []s6svc.LogEntry) error {
 
 		return nil // Continue processing next block
 	}
-
+	/*
+		decodedIn := time.Since(now)
+		zap.S().Infof("decoded block in %s, block size (pre-hex): %d, block size (post-hex): %d", decodedIn, len(hexBuf), len(item.Payload))
+	*/
 	// Set timestamp and transfer ownership to ring buffer
 	item.Timestamp = time.UnixMilli(epoch)
 	svc.ringbuffer.Add(item)
