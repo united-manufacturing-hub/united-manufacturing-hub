@@ -29,7 +29,7 @@ pre-push:
       root: "umh-core"
       run: |
         go install go.uber.org/nilaway/cmd/nilaway@latest
-        nilaway -exclude-pkgs="github.com/prometheus/prometheus/util/textparse,github.com/onsi/ginkgo/v2" -exclude-errors-in-files="integration/" ./...
+        nilaway -exclude-pkgs="github.com/prometheus/prometheus/util/textparse,github.com/onsi/ginkgo/v2,go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp,github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda" -exclude-errors-in-files="integration/" ./...
 
     - name: golangci-lint
       glob: "**/*.go"
@@ -68,7 +68,7 @@ pre-commit:
     - name: fix-license-header
       glob: "**/*.go"
       run: |
-        docker run -it --rm -v $(pwd):/github/workspace apache/skywalking-eyes header fix
+        docker run -it --rm -v $(pwd):/github/workspace apache/skywalking-eyes header fix {staged_files}
         git update-index --again
 
         

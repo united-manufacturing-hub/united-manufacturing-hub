@@ -1534,7 +1534,7 @@ func (bs *BufferedService) readFileIncrementally(absPath string, previousSize in
 	return append(previousContent, newContent...), nil
 }
 
-// ReadFileRange reads the file starting at byte offset “from” and returns:
+// ReadFileRange reads the file starting at byte offset "from" and returns:
 //   - chunk   – the data that was read (nil if nothing new)
 //   - newSize – the file size **after** the read (use it as next offset)
 func (bs *BufferedService) ReadFileRange(ctx context.Context, path string, from int64) ([]byte, int64, error) {
@@ -1544,4 +1544,74 @@ func (bs *BufferedService) ReadFileRange(ctx context.Context, path string, from 
 // Glob is a wrapper around filepath.Glob that respects the context
 func (bs *BufferedService) Glob(ctx context.Context, pattern string) ([]string, error) {
 	panic("not implemented")
+}
+
+// Rename renames (moves) a file or directory from oldPath to newPath
+func (bs *BufferedService) Rename(ctx context.Context, oldPath, newPath string) error {
+	bs.mu.Lock()
+	defer bs.mu.Unlock()
+
+	// Check if source exists in memory
+	srcState, exists := bs.files[oldPath]
+	if !exists {
+		return fmt.Errorf("source path does not exist: %s", oldPath)
+	}
+
+	// Check if source is marked as removed
+	if chg, inChg := bs.changed[oldPath]; inChg && chg.removed {
+		return fmt.Errorf("source path is marked for removal: %s", oldPath)
+	}
+
+	// Check if destination already exists
+	if _, exists := bs.files[newPath]; exists {
+		// Check if destination is marked as removed
+		if chg, inChg := bs.changed[newPath]; !inChg || !chg.removed {
+			return fmt.Errorf("destination path already exists: %s", newPath)
+		}
+	}
+
+	// Perform the rename in memory
+	bs.files[newPath] = srcState
+	delete(bs.files, oldPath)
+
+	// Handle any existing changes for the old path
+	if chg, inChg := bs.changed[oldPath]; inChg {
+		// Move the changes to the new path
+		bs.changed[newPath] = chg
+		delete(bs.changed, oldPath)
+	}
+
+	// If we're dealing with a directory, we need to rename all child paths
+	if srcState.isDir {
+		oldPrefix := oldPath
+		if !strings.HasSuffix(oldPrefix, string(os.PathSeparator)) {
+			oldPrefix += string(os.PathSeparator)
+		}
+		newPrefix := newPath
+		if !strings.HasSuffix(newPrefix, string(os.PathSeparator)) {
+			newPrefix += string(os.PathSeparator)
+		}
+
+		// Rename all child paths
+		for childPath := range bs.files {
+			if strings.HasPrefix(childPath, oldPrefix) {
+				newChildPath := newPrefix + childPath[len(oldPrefix):]
+				bs.files[newChildPath] = bs.files[childPath]
+				delete(bs.files, childPath)
+
+				// Move any changes as well
+				if chg, inChg := bs.changed[childPath]; inChg {
+					bs.changed[newChildPath] = chg
+					delete(bs.changed, childPath)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// Symlink creates a symbolic link by delegating to the base service
+func (bs *BufferedService) Symlink(ctx context.Context, target, linkPath string) error {
+	return bs.base.Symlink(ctx, target, linkPath)
 }

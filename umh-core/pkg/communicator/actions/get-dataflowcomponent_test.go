@@ -265,6 +265,7 @@ var _ = Describe("GetDataFlowComponent", func() {
 			Expect(response).To(HaveKey(testComponentUUID))
 			Expect(response[testComponentUUID].Name).To(Equal(testComponentID))
 			Expect(response[testComponentUUID].Meta.Type).To(Equal("custom"))
+			Expect(response[testComponentUUID].State).To(Equal("active"))
 
 			// Verify the component details
 			component := response[testComponentUUID]

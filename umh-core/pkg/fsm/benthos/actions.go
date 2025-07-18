@@ -203,8 +203,15 @@ func (b *BenthosInstance) getServiceStatus(ctx context.Context, services service
 // UpdateObservedStateOfInstance updates the observed state of the service
 func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
+		if b.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "UpdateObservedStateOfInstance") {
+			return nil
+		}
 		return ctx.Err()
 	}
+
+	// Use the context passed from reconcileExternalChanges, which already has proper timeout allocation
+	// This context was created with CreateUpdateObservedStateContextWithMinimum to ensure
+	// it has either 80% of manager time OR the minimum required time, whichever is larger
 
 	start := time.Now()
 	info, err := b.getServiceStatus(ctx, services, snapshot.Tick, snapshot.SnapshotTime)

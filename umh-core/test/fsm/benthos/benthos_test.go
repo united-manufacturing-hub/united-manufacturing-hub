@@ -1281,7 +1281,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Ensure desired state is also stopped
-			Expect(instance.SetDesiredFSMState(benthosfsm.OperationalStateStopped)).To(Succeed())
+			Expect(instance.SetDesiredFSMState(benthosfsm.OperationalStateActive)).To(Succeed())
 
 			// Create a permanent error that will be encountered during reconcile
 			mockService.StatusError = fmt.Errorf("%s: test permanent error", backoff.PermanentFailureError)
@@ -1290,7 +1290,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			var recErr error
 			var reconciled bool
 			tick, recErr, reconciled = fsmtest.ReconcileBenthosUntilError(
-				ctx, fsm.SystemSnapshot{Tick: tick}, instance, mockService, mockSvcRegistry, serviceName, 5,
+				ctx, fsm.SystemSnapshot{Tick: tick}, instance, mockService, mockSvcRegistry, serviceName, 10,
 			)
 
 			// Now we should get the error

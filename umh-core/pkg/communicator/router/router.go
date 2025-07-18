@@ -96,7 +96,7 @@ func (r *Router) router() {
 			}
 			switch messageContent.MessageType {
 			case models.Subscribe:
-				r.handleSub(message, watcherUUID)
+				r.handleSub(message, messageContent, watcherUUID)
 			case models.Action:
 				r.handleAction(messageContent, message, watcherUUID)
 			default:
@@ -109,13 +109,28 @@ func (r *Router) router() {
 	}
 }
 
-func (r *Router) handleSub(message *models.UMHMessage, watcherUUID uuid.UUID) {
+// handleSub handles the subscribe message
+// if the payload contains a "resubscribed" field, it will just "unexpire" the subscriber (reset the TTL)
+// otherwise it will add the subscriber to the registry
+// this is an optimization to avoid sending a "new subscriber" message, containing the cached uns data with at least
+// one event for every topic, to the frontend when the user is already subscribed
+// we should avoid unnecessary new subscriber message generation because of its high memory and cpu usage
+func (r *Router) handleSub(message *models.UMHMessage, messageContent models.UMHMessageContent, watcherUUID uuid.UUID) {
 	if r.subHandler == nil {
 		r.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 		r.routerLogger.Warnf("Subscribe handler not yet initialized")
 		return
 	}
-	r.subHandler.AddSubscriber(message.Email)
+
+	var subscribePayload models.SubscribeMessagePayload
+	if messageContent.Payload != nil {
+		// Try direct type assertion first
+		if payload, ok := messageContent.Payload.(models.SubscribeMessagePayload); ok {
+			subscribePayload = payload
+		}
+	}
+
+	r.subHandler.AddOrRefreshSubscriber(message.Email, subscribePayload.Resubscribed)
 }
 
 func (r *Router) handleAction(messageContent models.UMHMessageContent, message *models.UMHMessage, watcherUUID uuid.UUID) {

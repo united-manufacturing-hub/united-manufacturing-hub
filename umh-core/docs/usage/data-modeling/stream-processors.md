@@ -1,50 +1,75 @@
 # Stream Processors
 
-> 🚧 **Roadmap Item** - Stream processors implement data contracts by transforming raw data into structured, validated information according to your data models.
+> 🚧 **Roadmap Item** - Stream processors transform raw data into structured, validated information according to your data models using reusable template configurations.
 
-Stream processors are the runtime components that bring data models and contracts to life. They consume raw data from your industrial systems, apply transformations according to your data models, and output structured data that complies with your data contracts.
+Stream processors are the runtime components that bring data models to life. They consume raw data from your industrial systems, apply transformations according to your data models, and output structured data. Stream processors work directly with data models through templates, not through data contracts.
 
 ## Overview
 
 Stream processors bridge the gap between raw industrial data and structured business information:
 
 - **Input**: Raw sensor data, PLC values, device messages
-- **Processing**: Transformation, validation, contextualization  
-- **Output**: Structured data compliant with data contracts
-- **Storage**: Automatic routing to configured sinks
+- **Processing**: Transformation, validation, contextualization according to data models
+- **Output**: Structured data compliant with data models
+- **Templates**: Reusable configurations with variable substitution
+- **Auto-validation**: If data contracts exist for the model, output is automatically validated and routed to contract bridges
 
 ```yaml
+# Template definition
+templates:
+  streamProcessors:
+    motor_template:
+      model:
+        name: pump
+        version: v1
+      sources:               # alias → raw topic
+        press: "${{ .location_path }}._raw.${{ .abc }}"
+        tF: "${{ .location_path }}._raw.tempF"
+        r: "${{ .location_path }}._raw.run"
+      mapping:               # field → JS / constant / alias
+        dynamic:
+          pressure: "press"
+          temperature: "(tF-32)*5/9" # 🚧 **Roadmap Item** - JS expressions 
+          running: "r"
+          motor:
+            rpm: "press"
+        static:
+          serialNumber: "${{ .sn }}"
+
+# Stream processor instances
 streamprocessors:
-  - name: processor_name
-    contract: _contract_name:v1
+  - name: motor_assembly
+    _templateRef: "motor_template"
     location:
-      level0: enterprise
-      level1: site
-      level2: area
-      level3: asset
-    sources:
-      var1: "umh.v1.path.to.raw.data"
-    mapping:
-      model_field: "var1 * 2"
+      0: corpA
+      1: plant-A
+    variables:
+      abc: "assembly"
+      sn: "SN-P42-008"
+  - name: motor_qualitycheck
+    _templateRef: "motor_template"
+    variables:
+      abc: "qualitycheck"
+      sn: "SN-P42-213"
 ```
 
 ## Key Concepts
 
-### Contract Binding
+### Template Reference
 
-Each stream processor implements exactly one data contract:
+Each stream processor references a reusable template:
 
 ```yaml
 streamprocessors:
   - name: pump41_sp
-    contract: _pump:v1  # Binds to this contract
+    _templateRef: "pump_template"
 ```
 
-This binding ensures:
-- Output data matches the contract's data model structure
-- Data is routed to the contract's configured sinks
-- Validation occurs against the contract's schema
-- Retention policies are applied automatically
+This template reference ensures:
+- Output data matches the template's data model structure
+- Validation occurs against the model's schema
+- Template variables provide instance-specific configuration
+- **Automatic integration**: If data contracts exist for the same model, output is automatically validated and routed to contract bridges
 
 ### Location Hierarchy
 
@@ -52,11 +77,11 @@ Stream processors define their position in the hierarchical organization (common
 
 ```yaml
 location:
-  level0: corpA        # Enterprise (mandatory)
-  level1: plant-A      # Site/Region (optional)
-  level2: line-4       # Area/Zone (optional)
-  level3: pump41       # Work Unit (optional)
-  level4: motor        # Work Center (optional)
+  0: corpA        # Enterprise (mandatory)
+  1: plant-A      # Site/Region (optional)
+  2: line-4       # Area/Zone (optional)
+  3: pump41       # Work Unit (optional)
+  4: motor        # Work Center (optional)
 ```
 
 This creates UNS topics like:
@@ -85,7 +110,7 @@ mapping:
   pressure: "press"                    # Direct pass-through
   temperature: "(temp - 32) * 5 / 9"  # Fahrenheit to Celsius
   total_power: "power1 + power2"      # Derived calculation
-  serial_number: "'SN-P41-007'"       # Static metadata
+  serialNumber: "'SN-P41-007'"       # Static metadata
 ```
 
 ## Simple Example
@@ -97,33 +122,36 @@ Transform Fahrenheit readings to Celsius:
 ```yaml
 # Data model (from data-models.md)
 datamodels:
-  - name: Temperature
-    version: v1
-    structure:
-      temperature_in_c:
-        type: timeseries
+  temperature:
+    description: "Temperature sensor model"
+    versions:
+      v1:
+        structure:
+          temperatureInC:
+            _payloadshape: timeseries-number
 
 # Data contract (from data-contracts.md)  
 datacontracts:
-  - name: _temperature
-    version: v1
-    model: Temperature:v1
-    sinks:
-      timescaledb: true
+  - name: _temperature_v1
+    model:
+      name: temperature
+      version: v1
+    default_bridges:
+      - type: timescaledb
+        retention_in_days: 365
 
 # Stream processor implementation
 streamprocessors:
   - name: furnaceTemp_sp
-    contract: _temperature:v1
+    _templateRef: "temperature_template"
     location:
-      level0: corpA
-      level1: plant-A
-      level2: line-4
-      level3: furnace1
-    sources:
-      tF: "umh.v1.corpA.plant-A.line-4.furnace1._raw.temperature_F"
-    mapping:
-      temperature_in_c: "(tF - 32) * 5 / 9"
+      0: corpA
+      1: plant-A
+      2: line-4
+      3: furnace1
+    variables:
+      temp_sensor: "temperature_F"
+      sn: "SN-F1-001"
 ```
 
 **Result:**
@@ -139,30 +167,15 @@ streamprocessors:
 # Stream processor for pump with motor sub-model
 streamprocessors:
   - name: pump41_sp
-    contract: _pump:v1
+    _templateRef: "pump_template"
     location:
-      level0: corpA
-      level1: plant-A
-      level2: line-4
-      level3: pump41
-    sources:
-      p: "umh.v1.corpA.plant-A.line-4.pump41.deviceX._raw.press"
-      tF: "umh.v1.corpA.plant-A.line-4.pump41.deviceX._raw.tempF"
-      r: "umh.v1.corpA.plant-A.line-4.pump41.deviceX._raw.run"
-      v: "umh.v1.corpA.plant-A.line-4.pump41.deviceX._raw.vib"
-      c: "umh.v1.corpA.plant-A.line-4.pump41._raw.motor_current"
-      s: "umh.v1.corpA.plant-A.line-4.pump41._raw.motor_speed"
-      l1: "umh.v1.corpA.plant-A.line-4.pump41._raw.power_l1"
-      l2: "umh.v1.corpA.plant-A.line-4.pump41._raw.power_l2"
-    mapping:
-      pressure: "p"
-      temperature: "(tF - 32)*5/9"
-      running: "r"
-      diagnostics.vibration: "v"
-      motor.current: "c"
-      motor.rpm: "s"
-      total_power: "l1 + l2"
-      serial_number: "'SN-P41-007'"
+      0: corpA
+      1: plant-A
+      2: line-4
+      3: pump41
+    variables:
+      abc: "deviceX"
+      sn: "SN-P41-007"
 ```
 
 **Generated Topics:**
@@ -182,9 +195,10 @@ umh.v1.corpA.plant-A.line-4.pump41._pump.serial_number
 Stream processors provide built-in validation:
 
 ### Schema Validation
-- Output must match the bound data model structure
+- Output must match the referenced data model structure
 - Field types validated against payload shapes
 - Constraint checking (min/max, allowed values)
+- **Additional validation**: If data contracts exist for the model, output is automatically validated against contract requirements
 
 ### Runtime Validation
 ```yaml

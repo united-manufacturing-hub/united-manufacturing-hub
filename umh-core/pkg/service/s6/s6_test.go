@@ -27,7 +27,6 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -421,9 +420,7 @@ var _ = Describe("S6 Service", func() {
 		BeforeEach(func() {
 			ctx = context.Background()
 			mockFS = filesystem.NewMockFileSystem()
-			svc = &DefaultService{
-				logger: logger.For("test"),
-			}
+			svc = NewDefaultService().(*DefaultService)
 			svcPath = filepath.Join(constants.S6BaseDir, "my-service")
 			logDir = filepath.Join(constants.S6LogBaseDir, "my-service")
 
@@ -437,14 +434,39 @@ var _ = Describe("S6 Service", func() {
 				return pathExists(p), nil
 			})
 
+			mockFS.WithRenameFunc(func(ctx context.Context, oldPath, newPath string) error {
+				// simulate rename operation (immediate visibility removal)
+				if pathExists(oldPath) {
+					exists.Delete(oldPath)
+					exists.Store(newPath, true)
+				}
+				return nil
+			})
+
 			mockFS.WithRemoveAllFunc(func(ctx context.Context, p string) error {
-				// simulate deletion
+				// simulate deletion (background cleanup)
 				exists.Delete(p)
 				return nil
 			})
 		})
 
 		It("removes both service and log directory (normal case)", func() {
+			// Simulate a service with tracked files
+			svc.artifacts = &ServiceArtifacts{
+				ServiceDir: svcPath,
+				LogDir:     logDir,
+				CreatedFiles: []string{
+					filepath.Join(svcPath, "down"),
+					filepath.Join(svcPath, "type"),
+					filepath.Join(svcPath, "log", "type"),
+					filepath.Join(svcPath, "log", "down"),
+					filepath.Join(svcPath, "log", "run"),
+					filepath.Join(svcPath, "run"),
+					filepath.Join(svcPath, "dependencies.d", "base"),
+					filepath.Join(svcPath, ".complete"),
+				},
+			}
+
 			err := svc.Remove(ctx, svcPath, mockFS)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(pathExists(svcPath)).To(BeFalse())
@@ -452,6 +474,22 @@ var _ = Describe("S6 Service", func() {
 		})
 
 		It("is successful when only the log dir had to be removed", func() {
+			// Simulate a service with tracked files
+			svc.artifacts = &ServiceArtifacts{
+				ServiceDir: svcPath,
+				LogDir:     logDir,
+				CreatedFiles: []string{
+					filepath.Join(svcPath, "down"),
+					filepath.Join(svcPath, "type"),
+					filepath.Join(svcPath, "log", "type"),
+					filepath.Join(svcPath, "log", "down"),
+					filepath.Join(svcPath, "log", "run"),
+					filepath.Join(svcPath, "run"),
+					filepath.Join(svcPath, "dependencies.d", "base"),
+					filepath.Join(svcPath, ".complete"),
+				},
+			}
+
 			exists.Delete(svcPath) // service dir already gone
 
 			err := svc.Remove(ctx, svcPath, mockFS)
@@ -460,6 +498,22 @@ var _ = Describe("S6 Service", func() {
 		})
 
 		It("is idempotent (everything already gone)", func() {
+			// Simulate a service with tracked files
+			svc.artifacts = &ServiceArtifacts{
+				ServiceDir: svcPath,
+				LogDir:     logDir,
+				CreatedFiles: []string{
+					filepath.Join(svcPath, "down"),
+					filepath.Join(svcPath, "type"),
+					filepath.Join(svcPath, "log", "type"),
+					filepath.Join(svcPath, "log", "down"),
+					filepath.Join(svcPath, "log", "run"),
+					filepath.Join(svcPath, "run"),
+					filepath.Join(svcPath, "dependencies.d", "base"),
+					filepath.Join(svcPath, ".complete"),
+				},
+			}
+
 			exists = sync.Map{} // nothing exists
 
 			removeCalls := 0
@@ -474,12 +528,31 @@ var _ = Describe("S6 Service", func() {
 		})
 
 		It("returns an error when deletion fails", func() {
+			// Simulate a service with tracked files
+			svc.artifacts = &ServiceArtifacts{
+				ServiceDir: svcPath,
+				LogDir:     logDir,
+				CreatedFiles: []string{
+					filepath.Join(svcPath, "down"),
+					filepath.Join(svcPath, "type"),
+					filepath.Join(svcPath, "log", "type"),
+					filepath.Join(svcPath, "log", "down"),
+					filepath.Join(svcPath, "log", "run"),
+					filepath.Join(svcPath, "run"),
+					filepath.Join(svcPath, "dependencies.d", "base"),
+					filepath.Join(svcPath, ".complete"),
+				},
+			}
+
 			boom := fmt.Errorf("IO error")
-			mockFS.WithRemoveAllFunc(func(ctx context.Context, p string) error {
-				if p == svcPath {
+			mockFS.WithRemoveAllFunc(func(ctx context.Context, path string) error {
+				if path == svcPath {
 					return boom // fail removing service dir
 				}
-				exists.Delete(p)
+				// simulate successful removal for other paths
+				if pathExists(path) {
+					exists.Delete(path)
+				}
 				return nil
 			})
 

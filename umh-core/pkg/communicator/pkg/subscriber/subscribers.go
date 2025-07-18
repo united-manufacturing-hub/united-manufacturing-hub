@@ -43,6 +43,7 @@ type Handler struct {
 	disableHardwareStatusCheck bool // nolint:unused // will be used in the future
 	systemSnapshotManager      *fsm.SnapshotManager
 	configManager              config.ConfigManager
+	topicBrowserCommunicator   *topicbrowser.TopicBrowserCommunicator
 	logger                     *zap.SugaredLogger
 }
 
@@ -57,8 +58,7 @@ func NewHandler(
 	systemSnapshotManager *fsm.SnapshotManager,
 	configManager config.ConfigManager,
 	logger *zap.SugaredLogger,
-	topicBrowserCache *topicbrowser.Cache,
-	topicBrowserSimulator *topicbrowser.Simulator,
+	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator,
 ) *Handler {
 	s := &Handler{}
 	s.subscriberRegistry = subscribers.NewRegistry(cull, ttl)
@@ -67,14 +67,14 @@ func NewHandler(
 	s.instanceUUID = instanceUUID
 	s.systemSnapshotManager = systemSnapshotManager
 	s.configManager = configManager
+	s.topicBrowserCommunicator = topicBrowserCommunicator
 	s.logger = logger
 	s.StatusCollector = generator.NewStatusCollector(
 		dog,
 		systemSnapshotManager,
 		configManager,
 		logger,
-		topicBrowserCache,
-		topicBrowserSimulator,
+		topicBrowserCommunicator,
 	)
 
 	return s
@@ -84,8 +84,8 @@ func (s *Handler) StartNotifier() {
 	go s.notifySubscribers()
 }
 
-func (s *Handler) AddSubscriber(identifier string) {
-	s.subscriberRegistry.Add(identifier)
+func (s *Handler) AddOrRefreshSubscriber(identifier string, bootstrapped bool) {
+	s.subscriberRegistry.AddOrRefresh(identifier, bootstrapped)
 	s.dog.SetHasSubscribers(true)
 }
 
@@ -114,17 +114,26 @@ func (s *Handler) notify() {
 		return
 	}
 
+	// Update Topic Browser cache before generating status messages (Phase 2 architectural improvement)
+	// This consolidates the cache update logic into the single notification ticker
+	err := s.StatusCollector.UpdateTopicBrowserCache()
+	if err != nil {
+		s.logger.Warnf("Failed to update topic browser cache: %v", err)
+		// Continue with status generation even if cache update fails
+	}
+
 	ctx, cncl := tools.Get1SecondContext()
 	defer cncl()
 
 	notified := 0
-	baseStatusMessage := s.StatusCollector.GenerateStatusMessage(true)
+	baseStatusMessage := s.StatusCollector.GenerateStatusMessage(ctx, true)
+
 	s.subscriberRegistry.ForEach(func(email string, bootstrapped bool) {
 		// Generate personalized status message based on bootstrap state
 		statusMessage := baseStatusMessage
 		if !bootstrapped {
 			// If the subscriber is not bootstrapped, we need to generate a new status message
-			statusMessage = s.StatusCollector.GenerateStatusMessage(false)
+			statusMessage = s.StatusCollector.GenerateStatusMessage(ctx, false)
 		}
 
 		if ctx.Err() != nil {
@@ -160,4 +169,9 @@ func (s *Handler) notify() {
 
 		notified++
 	})
+
+	// Mark data as sent for tracking purposes
+	if notified > 0 && s.topicBrowserCommunicator != nil {
+		s.topicBrowserCommunicator.MarkDataAsSent(time.Now())
+	}
 }

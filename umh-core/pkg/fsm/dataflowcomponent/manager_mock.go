@@ -110,7 +110,7 @@ func NewDataflowComponentManagerWithMockedServices(name string) (*DataflowCompon
 			if !ok {
 				return 0, fmt.Errorf("instance is not a DataflowComponentInstance")
 			}
-			return dataflowComponentInstance.GetExpectedMaxP95ExecutionTimePerInstance(), nil
+			return dataflowComponentInstance.GetMinimumRequiredTime(), nil
 		},
 	)
 

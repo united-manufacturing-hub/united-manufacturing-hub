@@ -226,10 +226,15 @@ func (i *TopicBrowserInstance) WantsToBeStopped() bool {
 func (i *TopicBrowserInstance) PrintState() {
 	i.baseFSMInstance.GetLogger().Debugf("Current state: %s", i.baseFSMInstance.GetCurrentFSMState())
 	i.baseFSMInstance.GetLogger().Debugf("Desired state: %s", i.baseFSMInstance.GetDesiredFSMState())
-	i.baseFSMInstance.GetLogger().Debugf("Observed state: %+v", i.ObservedState)
+	i.baseFSMInstance.GetLogger().Debugf("Benthos: %s (active: %t), Redpanda: %s (active: %t), Status: %s",
+		i.ObservedState.ServiceInfo.BenthosFSMState,
+		i.ObservedState.ServiceInfo.BenthosProcessing,
+		i.ObservedState.ServiceInfo.RedpandaFSMState,
+		i.ObservedState.ServiceInfo.RedpandaProcessing,
+		i.ObservedState.ServiceInfo.StatusReason)
 }
 
-// GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance
-func (i *TopicBrowserInstance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
-	return constants.TopicBrowserExpectedMaxP95ExecutionTimePerInstance
+// GetMinimumRequiredTime returns the minimum required time for this instance
+func (i *TopicBrowserInstance) GetMinimumRequiredTime() time.Duration {
+	return constants.TopicBrowserUpdateObservedStateTimeout
 }

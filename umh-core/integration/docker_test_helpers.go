@@ -290,13 +290,13 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 	//  Configure CFS bandwidth for the test
 	// ----------------------------------------
 
-	// Length of one CFS “accounting window” (cpu.cfs_period_us).
+	// Length of one CFS "accounting window" (cpu.cfs_period_us).
 	// 20 000 µs = 20 ms  →  the longest time the container can be throttled
 	// if it burns its entire quota in one burst.
 	cpuPeriod := uint(20_000) // 20 ms
 
 	// Total CPU-time the container may consume inside **one** period
-	// (cpu.cfs_quota_us).  quota = cpus × period, so if ‘cpus’ is 2 you
+	// (cpu.cfs_quota_us).  quota = cpus × period, so if 'cpus' is 2 you
 	// grant 40 ms every 20 ms → an average of 2 fully-loaded logical cores.
 	cpuQuota := uint(cpus) * cpuPeriod
 
@@ -383,7 +383,9 @@ func getTmpDir() string {
 	tmpDir := "/tmp"
 	// If we are in a devcontainer, use the workspace as tmp dir
 	if os.Getenv("REMOTE_CONTAINERS") != "" || os.Getenv("CODESPACE_NAME") != "" || os.Getenv("USER") == "vscode" {
-		tmpDir = "/workspaces/united-manufacturing-hub/umh-core/tmp"
+		// Use the current working directory to determine the correct tmp path
+		currentDir := GetCurrentDir()
+		tmpDir = filepath.Join(currentDir, "tmp")
 	}
 	return tmpDir
 }

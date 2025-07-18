@@ -26,7 +26,7 @@ protocolConverter:
     protocolConverterServiceConfig:
       location:
         2: "machine-7"
-      template:
+      config:
         connection:
           nmap:
             target:   "{{ .HOST }}"

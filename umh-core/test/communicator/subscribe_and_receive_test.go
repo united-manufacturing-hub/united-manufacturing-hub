@@ -178,6 +178,10 @@ var _ = Describe("Subscribe and Receive Test", func() {
 		// Initialize subscriber handler
 		ttl := 5 * time.Minute
 		cull := 1 * time.Minute
+
+		// Create topic browser communicator with simulator for testing
+		topicBrowserCommunicator := topicbrowser.NewTopicBrowserCommunicatorWithSimulator(logger.For(logger.ComponentCommunicator))
+
 		subHandler = subscriber.NewHandler(
 			dog,
 			state.Pusher,
@@ -189,8 +193,7 @@ var _ = Describe("Subscribe and Receive Test", func() {
 			systemSnapshotManager,
 			config.NewMockConfigManager(),
 			logger.For(logger.ComponentCommunicator),
-			topicbrowser.NewCache(),
-			topicbrowser.NewSimulator(),
+			topicBrowserCommunicator,
 		)
 		subHandler.StartNotifier()
 
@@ -239,7 +242,7 @@ var _ = Describe("Subscribe and Receive Test", func() {
 
 			// If it's a subscribe message, add the subscriber
 			if decodedContent.MessageType == models.Subscribe {
-				subHandler.AddSubscriber(msg.Email)
+				subHandler.AddOrRefreshSubscriber(msg.Email, false)
 				GinkgoWriter.Printf("Added subscriber: %s\n", msg.Email)
 			}
 		}

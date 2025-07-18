@@ -180,10 +180,12 @@ func (c *ConnectionInstance) IsStopped() bool {
 func (c *ConnectionInstance) PrintState() {
 	c.baseFSMInstance.GetLogger().Debugf("Current state: %s", c.baseFSMInstance.GetCurrentFSMState())
 	c.baseFSMInstance.GetLogger().Debugf("Desired state: %s", c.baseFSMInstance.GetDesiredFSMState())
-	c.baseFSMInstance.GetLogger().Debugf("Observed state: %+v", c.ObservedState)
+	c.baseFSMInstance.GetLogger().Debugf("Nmap FSM: %s, IsFlaky: %t",
+		c.ObservedState.ServiceInfo.NmapFSMState,
+		c.ObservedState.ServiceInfo.IsFlaky)
 }
 
-// GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance
-func (c *ConnectionInstance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
-	return constants.ConnectionExpectedMaxP95ExecutionTimePerInstance
+// GetMinimumRequiredTime returns the minimum required time for this instance
+func (c *ConnectionInstance) GetMinimumRequiredTime() time.Duration {
+	return constants.ConnectionUpdateObservedStateTimeout
 }

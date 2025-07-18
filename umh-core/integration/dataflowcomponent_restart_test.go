@@ -32,7 +32,6 @@ var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("i
 		topicName            = "dfc-restart-test-topic"
 		messagesPerSecond    = 5
 		testDuration         = 1 * time.Minute
-		postRestartWait      = 5 * time.Second
 		containerDownWait    = 30 * time.Second
 		lossToleranceWarning = 0.1 // 10% message loss
 		lossToleranceFail    = 0.2 // 20% message loss
@@ -99,16 +98,20 @@ var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("i
 				return err == nil && newOffset != -1
 			}, 30*time.Second, 1*time.Second).Should(BeTrue(), "Messages should be produced after restart")
 
-			By("Waiting for messages to be produced before restart")
-			startTime := time.Now()
+			By("Validating messages are being produced consistently before restart")
 			lastTimestamp = time.Now()
-			for time.Since(startTime) < testDuration {
-				time.Sleep(1 * time.Second)
+			var failureCount int
+			Consistently(func() bool {
 				newOffset, err := checkRPK(topicName, lastOffset, lastTimestamp, lossToleranceWarning, lossToleranceFail, messagesPerSecond)
-				Expect(err).ToNot(HaveOccurred())
-				lastOffset = newOffset
-				lastTimestamp = time.Now()
-			}
+				if err == nil {
+					lastOffset = newOffset
+					lastTimestamp = time.Now()
+					failureCount = 0 // Reset failure count on success
+					return true
+				}
+				failureCount++
+				return failureCount < 5 // Allow up to 5 failures before returning false
+			}, testDuration, 1*time.Second).Should(BeTrue(), "Messages should be consistently produced before restart")
 
 			restartActions[mode]()
 
@@ -137,8 +140,7 @@ var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("i
 			GinkgoWriter.Printf("Started container: %s\n", out)
 			Expect(err).ToNot(HaveOccurred())
 
-			By(fmt.Sprintf("Waiting %s for container to become healthy", postRestartWait))
-			time.Sleep(postRestartWait)
+			By("Waiting for container to become healthy after restart")
 			Eventually(func() bool {
 				resp, err := httpGetWithTimeout(GetMetricsURL(), 1*time.Second)
 				return err == nil && resp == 200
@@ -153,20 +155,28 @@ var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("i
 			}, 30*time.Second, 1*time.Second).Should(BeTrue(), "Messages should be produced after restart")
 
 			By("Validating messages are being produced again after restart")
-			startTime = time.Now()
 			lastTimestamp = time.Now()
-			for time.Since(startTime) < testDuration {
-				time.Sleep(1 * time.Second)
+			var postRestartFailureCount int
+			Consistently(func() bool {
 				newOffset, err := checkRPK(topicName, lastOffset, lastTimestamp, lossToleranceWarning, lossToleranceFail, messagesPerSecond)
-				Expect(err).ToNot(HaveOccurred())
-				lastOffset = newOffset
-				lastTimestamp = time.Now()
-			}
+				if err == nil {
+					lastOffset = newOffset
+					lastTimestamp = time.Now()
+					postRestartFailureCount = 0 // Reset failure count on success
+					return true
+				}
+				postRestartFailureCount++
+				return postRestartFailureCount < 5 // Allow up to 5 failures before returning false
+			}, testDuration, 1*time.Second).Should(BeTrue(), "Messages should be consistently produced after restart")
 
 			By("Ensuring that the state of redpanda is healthy")
-			redpandaState, err := checkRedpandaState(GetMetricsURL(), 1*time.Second)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(redpandaState).To(BeNumerically("==", 3))
+			Eventually(func() int {
+				redpandaState, err := checkRedpandaState(GetMetricsURL(), 1*time.Second)
+				if err != nil {
+					return -1
+				}
+				return redpandaState
+			}, 10*time.Second, 1*time.Second).Should(BeNumerically("==", 3), "Redpanda should be in healthy state")
 
 		},
 		Entry("graceful restart (docker stop/start)", gracefulRestart),

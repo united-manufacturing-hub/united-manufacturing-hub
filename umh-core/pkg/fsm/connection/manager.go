@@ -84,7 +84,7 @@ func NewConnectionManager(name string) *ConnectionManager {
 			if !ok {
 				return 0, fmt.Errorf("instance is not a ConnectionInstance")
 			}
-			return connectionInstance.GetExpectedMaxP95ExecutionTimePerInstance(), nil
+			return connectionInstance.GetMinimumRequiredTime(), nil
 		},
 	)
 	metrics.InitErrorCounter(metrics.ComponentConnectionManager, name)

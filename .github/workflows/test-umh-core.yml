@@ -106,7 +106,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: logs-${{ strategy.matrix.instance }}
+          name: logs-${{ matrix.instance }}.zip
           path: /tmp/logs
           retention-days: 1
 

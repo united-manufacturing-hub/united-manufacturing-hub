@@ -84,7 +84,7 @@ func NewTopicBrowserManagerWithMockedServices(name string) (*Manager, *topicbrow
 			if !ok {
 				return 0, fmt.Errorf("instance is not a TopicBrowserInstance")
 			}
-			return topicBrowserInstance.GetExpectedMaxP95ExecutionTimePerInstance(), nil
+			return topicBrowserInstance.GetMinimumRequiredTime(), nil
 		},
 	)
 

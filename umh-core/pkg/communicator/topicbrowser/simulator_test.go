@@ -45,18 +45,18 @@ var _ = Describe("Simulator", func() {
 
 			observedState := simulator.GetSimObservedState()
 			Expect(observedState).NotTo(BeNil())
-			Expect(observedState.ServiceInfo.Status.Buffer).To(BeEmpty())
+			Expect(observedState.ServiceInfo.Status.BufferSnapshot.Items).To(BeEmpty())
 		})
 
 		It("should initialize with simulator enabled", func() {
 			// Test that tick actually generates data (indicating simulator is enabled)
 			initialState := simulator.GetSimObservedState()
-			initialBufferLen := len(initialState.ServiceInfo.Status.Buffer)
+			initialBufferLen := len(initialState.ServiceInfo.Status.BufferSnapshot.Items)
 
 			simulator.Tick()
 
 			newState := simulator.GetSimObservedState()
-			Expect(len(newState.ServiceInfo.Status.Buffer)).To(Equal(initialBufferLen + 1))
+			Expect(len(newState.ServiceInfo.Status.BufferSnapshot.Items)).To(Equal(initialBufferLen + 1))
 		})
 	})
 
@@ -174,15 +174,15 @@ var _ = Describe("Simulator", func() {
 	Describe("AddUnsBundleToSimObservedState", func() {
 		It("should add bundle to observed state buffer", func() {
 			initialState := simulator.GetSimObservedState()
-			initialCount := len(initialState.ServiceInfo.Status.Buffer)
+			initialCount := len(initialState.ServiceInfo.Status.BufferSnapshot.Items)
 
 			bundle := simulator.GenerateNewUnsBundle()
 			simulator.AddUnsBundleToSimObservedState(bundle)
 
 			newState := simulator.GetSimObservedState()
-			Expect(len(newState.ServiceInfo.Status.Buffer)).To(Equal(initialCount + 1))
+			Expect(len(newState.ServiceInfo.Status.BufferSnapshot.Items)).To(Equal(initialCount + 1))
 
-			addedBuffer := newState.ServiceInfo.Status.Buffer[len(newState.ServiceInfo.Status.Buffer)-1]
+			addedBuffer := newState.ServiceInfo.Status.BufferSnapshot.Items[len(newState.ServiceInfo.Status.BufferSnapshot.Items)-1]
 			Expect(addedBuffer.Payload).To(Equal(bundle))
 			Expect(addedBuffer.Timestamp.Unix()).To(BeNumerically("~", time.Now().Unix(), 1))
 		})
@@ -195,7 +195,7 @@ var _ = Describe("Simulator", func() {
 			}
 
 			state := simulator.GetSimObservedState()
-			Expect(len(state.ServiceInfo.Status.Buffer)).To(Equal(bufferLimit))
+			Expect(len(state.ServiceInfo.Status.BufferSnapshot.Items)).To(Equal(bufferLimit))
 		})
 
 		It("should remove oldest entries when buffer exceeds limit", func() {
@@ -212,7 +212,7 @@ var _ = Describe("Simulator", func() {
 			state := simulator.GetSimObservedState()
 
 			// First bundle should be gone
-			for _, buffer := range state.ServiceInfo.Status.Buffer {
+			for _, buffer := range state.ServiceInfo.Status.BufferSnapshot.Items {
 				Expect(buffer.Payload).NotTo(Equal(firstBundle))
 			}
 		})
@@ -237,7 +237,7 @@ var _ = Describe("Simulator", func() {
 
 			state := simulator.GetSimObservedState()
 			expectedCount := numGoroutines * bundlesPerGoroutine
-			Expect(len(state.ServiceInfo.Status.Buffer)).To(Equal(expectedCount))
+			Expect(len(state.ServiceInfo.Status.BufferSnapshot.Items)).To(Equal(expectedCount))
 		})
 	})
 
@@ -251,8 +251,8 @@ var _ = Describe("Simulator", func() {
 
 			state := simulator.GetSimObservedState()
 			Expect(state).NotTo(BeNil())
-			Expect(state.ServiceInfo.Status.Buffer).NotTo(BeNil())
-			Expect(state.ServiceInfo.Status.Buffer).To(HaveLen(bufferLimit))
+			Expect(state.ServiceInfo.Status.BufferSnapshot.Items).NotTo(BeNil())
+			Expect(state.ServiceInfo.Status.BufferSnapshot.Items).To(HaveLen(bufferLimit))
 		})
 
 		It("should be thread-safe for concurrent reads", func() {
@@ -415,12 +415,12 @@ var _ = Describe("Simulator", func() {
 	Describe("Tick", func() {
 		It("should increment ticker and add bundle when enabled", func() {
 			initialState := simulator.GetSimObservedState()
-			initialCount := len(initialState.ServiceInfo.Status.Buffer)
+			initialCount := len(initialState.ServiceInfo.Status.BufferSnapshot.Items)
 
 			simulator.Tick()
 
 			newState := simulator.GetSimObservedState()
-			Expect(len(newState.ServiceInfo.Status.Buffer)).To(Equal(initialCount + 1))
+			Expect(len(newState.ServiceInfo.Status.BufferSnapshot.Items)).To(Equal(initialCount + 1))
 		})
 
 		It("should increment ticker value in generated bundles", func() {
@@ -443,7 +443,7 @@ var _ = Describe("Simulator", func() {
 
 		It("should work correctly with multiple ticks", func() {
 			initialState := simulator.GetSimObservedState()
-			initialCount := len(initialState.ServiceInfo.Status.Buffer)
+			initialCount := len(initialState.ServiceInfo.Status.BufferSnapshot.Items)
 
 			numTicks := 5
 			for i := 0; i < numTicks; i++ {
@@ -451,7 +451,7 @@ var _ = Describe("Simulator", func() {
 			}
 
 			finalState := simulator.GetSimObservedState()
-			Expect(len(finalState.ServiceInfo.Status.Buffer)).To(Equal(initialCount + numTicks))
+			Expect(len(finalState.ServiceInfo.Status.BufferSnapshot.Items)).To(Equal(initialCount + numTicks))
 		})
 	})
 
@@ -465,7 +465,7 @@ var _ = Describe("Simulator", func() {
 			state := simulator.GetSimObservedState()
 
 			// Verify all bundles can be unmarshaled and contain valid data
-			for _, buffer := range state.ServiceInfo.Status.Buffer {
+			for _, buffer := range state.ServiceInfo.Status.BufferSnapshot.Items {
 				var unsBundle tbproto.UnsBundle
 				Expect(proto.Unmarshal(buffer.Payload, &unsBundle)).To(Succeed())
 

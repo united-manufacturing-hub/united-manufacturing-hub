@@ -48,12 +48,15 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 			n.baseFSMInstance.GetLogger().Errorf("error reconciling nmap instance %s: %s", instanceName, err)
 			n.PrintState()
 			// Add metrics for error
-			metrics.IncErrorCount(metrics.ComponentNmapInstance, instanceName)
+			metrics.IncErrorCountAndLog(metrics.ComponentNmapInstance, instanceName, err, n.baseFSMInstance.GetLogger())
 		}
 	}()
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
+		if n.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "start of reconciliation") {
+			return nil, false
+		}
 		return ctx.Err(), false
 	}
 
@@ -88,9 +91,14 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 	}
 
 	// Step 2: Detect external changes.
-	if err := n.reconcileExternalChanges(ctx, services, snapshot); err != nil {
+	if err = n.reconcileExternalChanges(ctx, services, snapshot); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, nmap_service.ErrServiceNotExist) {
+
+			if n.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
+				return nil, false
+			}
+
 			n.baseFSMInstance.SetError(err, snapshot.Tick)
 			n.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
 
@@ -100,7 +108,6 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 			// complete logs from which it parses.
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
-		//nolint:ineffassign
 		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition}
 	}
 
@@ -112,6 +119,10 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 			return nil, false
 		}
 
+		if n.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileStateTransition") {
+			return nil, false
+		}
+
 		n.baseFSMInstance.SetError(err, snapshot.Tick)
 		n.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
@@ -120,8 +131,11 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 	// Reconcile the s6Manager
 	s6Err, s6Reconciled := n.monitorService.ReconcileManager(ctx, services, snapshot.Tick)
 	if s6Err != nil {
+		if n.baseFSMInstance.IsDeadlineExceededAndHandle(s6Err, snapshot.Tick, "monitorService reconciliation") {
+			return nil, false
+		}
 		n.baseFSMInstance.SetError(s6Err, snapshot.Tick)
-		n.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
+		n.baseFSMInstance.GetLogger().Errorf("error reconciling monitorService: %s", s6Err)
 		return nil, false
 	}
 
@@ -144,9 +158,12 @@ func (n *NmapInstance) reconcileExternalChanges(ctx context.Context, services se
 		metrics.ObserveReconcileTime(metrics.ComponentNmapInstance, n.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
 	}()
 
-	observedStateCtx, cancel := context.WithTimeout(ctx, constants.S6UpdateObservedStateTimeout)
+	// Create context for UpdateObservedStateOfInstance with minimum timeout guarantee
+	// This ensures we get either 80% of available time OR the minimum required time, whichever is larger
+	updateCtx, cancel := constants.CreateUpdateObservedStateContextWithMinimum(ctx, constants.NmapUpdateObservedStateTimeout)
 	defer cancel()
-	err := n.UpdateObservedStateOfInstance(observedStateCtx, services, snapshot)
+
+	err := n.UpdateObservedStateOfInstance(updateCtx, services, snapshot)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}

@@ -61,6 +61,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -93,7 +94,7 @@ type DeployDataflowComponentAction struct {
 	payload  models.CDFCPayload
 	name     string // human-readable component name
 	metaType string // "custom" for now – future-proofing for other component kinds
-
+	state    string // the desired state of the component
 	// ─── Runtime observation & synchronisation ───────────────────────────────
 	systemSnapshotManager *fsm.SnapshotManager // Snapshot Manager holds the latest system snapshot
 
@@ -125,8 +126,9 @@ func NewDeployDataflowComponentAction(userEmail string, actionUUID uuid.UUID, in
 //
 // The function returns appropriate errors for missing required fields or unsupported component types.
 func (a *DeployDataflowComponentAction) Parse(payload interface{}) error {
-	// First parse the top level structure using shared function
+
 	topLevel, err := ParseDataflowComponentTopLevel(payload)
+
 	if err != nil {
 		return err
 	}
@@ -134,6 +136,10 @@ func (a *DeployDataflowComponentAction) Parse(payload interface{}) error {
 	a.name = topLevel.Name
 	a.metaType = topLevel.Meta.Type
 	a.ignoreHealthCheck = topLevel.IgnoreHealthCheck
+	a.state = topLevel.State
+	if err := ValidateDataFlowComponentState(a.state); err != nil {
+		return err
+	}
 
 	// Handle different component types
 	switch a.metaType {
@@ -144,7 +150,6 @@ func (a *DeployDataflowComponentAction) Parse(payload interface{}) error {
 		}
 		a.payload = payload
 	case "protocolConverter", "dataBridge", "streamProcessor":
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, "component type not supported", a.outboundChannel, models.DeployDataFlowComponent)
 		return fmt.Errorf("component type %s not yet supported", a.metaType)
 	default:
 		return fmt.Errorf("unsupported component type: %s", a.metaType)
@@ -208,7 +213,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	}
 
 	// Create the DataFlowComponentConfig using shared function
-	dfc := CreateDataFlowComponentConfig(a.name, benthosConfig)
+	dfc := CreateDataFlowComponentConfig(a.name, a.state, benthosConfig)
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("deploy", a.name)+"adding to configuration", a.outboundChannel, models.DeployDataFlowComponent)
 	// Update the location in the configuration
@@ -224,13 +229,13 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	// check against observedState as well
 	if a.systemSnapshotManager != nil { // skipping this for the unit tests
 		if a.ignoreHealthCheck {
-			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("deploy", a.name)+"configuration updated; but ignoring the health check", a.outboundChannel, models.EditDataFlowComponent)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("deploy", a.name)+"configuration updated; but ignoring the health check", a.outboundChannel, models.DeployDataFlowComponent)
 		} else {
-			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("deploy", a.name)+"configuration updated; waiting to become active", a.outboundChannel, models.DeployDataFlowComponent)
-			errCode, err := a.waitForComponentToBeActive(ctx)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("deploy", a.name)+"configuration updated; waiting to become ready", a.outboundChannel, models.DeployDataFlowComponent)
+			errCode, err := a.waitForComponentToBeReady(ctx)
 			if err != nil {
-				errorMsg := Label("deploy", a.name) + fmt.Sprintf("failed to wait for dataflow component to be active: %v", err)
-				// waitForComponentToBeActive gives us the error code, which we then forward to the frontend using the SendActionReplyV2 function
+				errorMsg := Label("deploy", a.name) + fmt.Sprintf("failed to wait for dataflow component to be ready: %v", err)
+				// waitForComponentToBeReady gives us the error code, which we then forward to the frontend using the SendActionReplyV2 function
 				// the error code is a string that can be used to identify the error reason
 				// the main reason for this is to allow the frontend to determine whether it should offer a retry option or not
 				SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, errCode, nil, a.outboundChannel, models.DeployDataFlowComponent, nil)
@@ -240,7 +245,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	}
 
 	// return success message, but do not send it as this is done by the caller
-	successMsg := Label("deploy", a.name) + "component successfully deployed and activated"
+	successMsg := Label("deploy", a.name) + "component successfully deployed"
 
 	return successMsg, nil, nil
 }
@@ -260,16 +265,16 @@ func (a *DeployDataflowComponentAction) GetParsedPayload() models.CDFCPayload {
 	return a.payload
 }
 
-// waitForComponentToBeActive polls live FSM state until the new component
-// becomes active or the timeout hits (→ delete unless ignoreHealthCheck).
+// waitForComponentToBeReady polls live FSM state until the new component
+// reaches the desired state or the timeout hits (→ delete unless ignoreHealthCheck).
 // the function returns the error code and and the error message via an error object
 // the error code is a string that is sent to the frontend to allow it to determine if the action can be retried or not
 // the error message is sent to the frontend to allow the user to see the error message
-func (a *DeployDataflowComponentAction) waitForComponentToBeActive(ctx context.Context) (string, error) {
+func (a *DeployDataflowComponentAction) waitForComponentToBeReady(ctx context.Context) (string, error) {
 	// checks the system snapshot
 	// 1. waits for the instance to appear in the system snapshot
 	// 2. takes the logs of the instance and sends them to the user in 1-second intervals
-	// 3. waits for the instance to be in state "active"
+	// 3. waits for the instance to reach the desired state
 	// 4. takes the residual logs of the instance and sends them to the user
 	// 5. returns nil
 
@@ -292,17 +297,18 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive(ctx context.C
 
 		select {
 		case <-timeout:
-			stateMessage := Label("deploy", a.name) + "timeout reached. it did not become active in time. removing"
+			stateMessage := Label("deploy", a.name) + "timeout reached. it did not reach the desired state in time. removing"
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage,
 				a.outboundChannel, models.DeployDataFlowComponent)
-			ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
-			defer cancel()
-			err := a.configManager.AtomicDeleteDataflowcomponent(ctx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name))
+			// Create a fresh context for cleanup operation since the original ctx has timed out
+			cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+			defer cleanupCancel()
+			err := a.configManager.AtomicDeleteDataflowcomponent(cleanupCtx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name))
 			if err != nil {
 				a.actionLogger.Errorf("failed to remove dataflowcomponent %s: %v", a.name, err)
-				return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component '%s' failed to activate within timeout but could not be removed: %v. Please check system load and consider removing the component manually", a.name, err)
+				return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component '%s' failed to reach desired state within timeout but could not be removed: %v. Please check system load and consider removing the component manually", a.name, err)
 			}
-			return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component '%s' was removed because it did not become active within the timeout period. Please check system load or component configuration and try again", a.name)
+			return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component '%s' was removed because it did not reach the desired state within the timeout period. Please check system load or component configuration and try again", a.name)
 
 		case <-ticker.C:
 
@@ -326,8 +332,17 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive(ctx context.C
 							a.outboundChannel, models.DeployDataFlowComponent)
 						continue
 					}
-					if instance.CurrentState == "active" || instance.CurrentState == "idle" {
-						stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("component successfully activated with state '%s', configuration verified", instance.CurrentState)
+					// Compare current state with the desired state
+					var acceptedStates []string
+					switch a.state {
+					case dataflowcomponent.OperationalStateActive:
+						acceptedStates = []string{dataflowcomponent.OperationalStateActive, dataflowcomponent.OperationalStateIdle}
+					case dataflowcomponent.OperationalStateStopped:
+						acceptedStates = []string{dataflowcomponent.OperationalStateStopped}
+					}
+
+					if slices.Contains(acceptedStates, instance.CurrentState) {
+						stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("completed. is in state '%s' with correct configuration", instance.CurrentState)
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage,
 							a.outboundChannel, models.DeployDataFlowComponent)
 						return "", nil
@@ -352,7 +367,10 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive(ctx context.C
 					// as these errors require configuration changes to resolve.
 					if CheckBenthosLogLinesForConfigErrors(logs) {
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("deploy", a.name)+"configuration error detected. Removing component...", a.outboundChannel, models.DeployDataFlowComponent)
-						err := a.configManager.AtomicDeleteDataflowcomponent(ctx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name))
+						// Create a fresh context for cleanup operation since the original ctx may be expired or close to expiring
+						cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+						defer cleanupCancel()
+						err := a.configManager.AtomicDeleteDataflowcomponent(cleanupCtx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name))
 						if err != nil {
 							a.actionLogger.Errorf("failed to remove dataflowcomponent %s: %v", a.name, err)
 							return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' has invalid configuration but could not be removed: %v. Please check your logs and consider removing the component manually", a.name, err)
@@ -375,5 +393,4 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive(ctx context.C
 			}
 		}
 	}
-
 }

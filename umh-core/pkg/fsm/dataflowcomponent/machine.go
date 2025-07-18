@@ -155,10 +155,12 @@ func (d *DataflowComponentInstance) IsStopped() bool {
 func (d *DataflowComponentInstance) PrintState() {
 	d.baseFSMInstance.GetLogger().Debugf("Current state: %s", d.baseFSMInstance.GetCurrentFSMState())
 	d.baseFSMInstance.GetLogger().Debugf("Desired state: %s", d.baseFSMInstance.GetDesiredFSMState())
-	d.baseFSMInstance.GetLogger().Debugf("Observed state: %+v", d.ObservedState)
+	d.baseFSMInstance.GetLogger().Debugf("Benthos FSM: %s, Status: %s",
+		d.ObservedState.ServiceInfo.BenthosFSMState,
+		d.ObservedState.ServiceInfo.StatusReason)
 }
 
-// GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance
-func (d *DataflowComponentInstance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
-	return constants.DataflowComponentExpectedMaxP95ExecutionTimePerInstance
+// GetMinimumRequiredTime returns the minimum required time for this instance
+func (d *DataflowComponentInstance) GetMinimumRequiredTime() time.Duration {
+	return constants.DataflowComponentUpdateObservedStateTimeout
 }

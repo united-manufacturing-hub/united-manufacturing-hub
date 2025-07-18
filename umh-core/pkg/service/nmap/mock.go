@@ -17,6 +17,7 @@ package nmap
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -30,6 +31,9 @@ import (
 
 // MockNmapService is a mock implementation of the INmapService interface for testing
 type MockNmapService struct {
+	// Mutex to protect concurrent access to shared maps
+	mu sync.RWMutex
+
 	// Configs keeps track of registered services
 	Configs map[string]*nmapserviceconfig.NmapServiceConfig
 
@@ -95,6 +99,9 @@ type ServiceStateFlags struct {
 
 // SetServiceState sets all state flags for a service at once
 func (m *MockNmapService) SetServiceState(serviceName string, flags ServiceStateFlags) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	// Ensure ServiceInfo exists for this service
 	if _, exists := m.ServiceStates[serviceName]; !exists {
 		m.ServiceStates[serviceName] = &ServiceInfo{
@@ -125,6 +132,9 @@ func (m *MockNmapService) SetServiceState(serviceName string, flags ServiceState
 
 // GetServiceState gets the state flags for a service
 func (m *MockNmapService) GetServiceState(serviceName string) *ServiceStateFlags {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if flags, exists := m.stateFlags[serviceName]; exists {
 		return flags
 	}
@@ -181,6 +191,9 @@ func (m *MockNmapService) GetConfig(ctx context.Context, filesystemService files
 func (m *MockNmapService) Status(ctx context.Context, filesystemService filesystem.Service, nmapName string, tick uint64) (ServiceInfo, error) {
 	m.StatusCalled = true
 
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	// Check if the service exists in the ExistingServices map
 	if exists, ok := m.ExistingServices[nmapName]; !ok || !exists {
 		return ServiceInfo{}, ErrServiceNotExist
@@ -213,6 +226,9 @@ func (m *MockNmapService) AddNmapToS6Manager(ctx context.Context, cfg *nmapservi
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	if m.AddServiceError != nil {
 		return m.AddServiceError
@@ -390,6 +406,9 @@ func (m *MockNmapService) ServiceExists(ctx context.Context, filesystemService f
 
 // SetStatusInfo sets a mock status for a given service
 func (m *MockNmapService) SetStatusInfo(serviceName string, status ServiceInfo) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.ServiceStates[serviceName] = &status
 	m.ExistingServices[serviceName] = true
 }

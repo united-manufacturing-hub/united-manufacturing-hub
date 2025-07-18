@@ -1,6 +1,6 @@
 # Consuming Data
 
-> 🚧 **Roadmap Item** – Enhanced consumer tooling, Topic Browser, and REST API are under development.
+> **Topic Browser** – Real-time exploration of Unified Namespace topics via Management Console UI or GraphQL API.
 
 Consuming data from the Unified Namespace involves subscribing to specific topics or patterns and processing the standardized message formats. UMH Core provides multiple consumption methods for different use cases.
 
@@ -15,7 +15,7 @@ protocolConverter:
   - name: uns-to-mqtt
     desiredState: active
     protocolConverterServiceConfig:
-      template:
+      config:
         dataflowcomponent_write:
           benthos:
             input:
@@ -66,20 +66,35 @@ dataFlow:
             table: "sensor_data"
 ```
 
-### 3. REST API Access 🚧
+### 3. Topic Browser Access
 
-Query live UNS data via HTTP endpoints:
+**Management Console UI (Recommended):**
+- Navigate to Unified Namespace → Topic Browser
+- Visual topic tree with live updates
+- Stores up to 100 events per topic
+- Built-in search and filtering
+- Aggregates all UMH instances
 
+For detailed usage instructions, see [Topic Browser](./topic-browser.md).
+
+**GraphQL API (Programmatic):**
 ```bash
-# Get namespace tree structure
-curl -X GET "https://umh-core:8080/api/v1/uns/tree" \
-  -H "Authorization: Bearer $JWT_TOKEN"
+# Basic topic query
+curl -X POST http://localhost:8090/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query": "{ topics(limit: 5) { topic metadata { key value } } }"}'
 
-# Get latest values for specific path
-curl -X GET "https://umh-core:8080/api/v1/uns/values" \
-  -H "Authorization: Bearer $JWT_TOKEN" \
-  -d '{"path": "umh.v1.acme.plant1.line4.pump01._raw.*"}'
+# Filter by data contract
+curl -X POST http://localhost:8090/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query": "{ topics(filter: { meta: [{ key: \"data_contract\", eq: \"_temperature\" }] }) { topic } }"}'
 ```
+
+**Default Configuration:**
+- GraphQL enabled by default (`agent.graphql.enabled: true`) on port 8090 (`agent.graphql.port: 8090`)
+- Topic Browser service runs automatically (`internal.topicBrowser.desiredState: active`)
+- Each UMH instance has its own Topic Browser
+- Management Console combines all instances
 
 ## Topic Patterns with UNS Input
 
@@ -251,7 +266,7 @@ pipeline:
   processors:
     - mapping: |
         # Structured contracts have specific field names
-        root.temperature_celsius = this.temperature_in_c
+        root.temperature_celsius = this.temperatureInC
         root.timestamp = this.timestamp_ms
         # Additional metadata from data model constraints
         root.unit = "°C"
@@ -273,14 +288,16 @@ UMH Core uses UNS input/output instead of direct Kafka access because:
 
 This aligns with UMH Core's philosophy of embedding Redpanda as an internal implementation detail rather than exposing it directly to users.
 
-## Topic Browser 🚧
+## Topic Browser
 
-The upcoming Topic Browser provides a visual interface to explore and consume UNS data:
+The Topic Browser provides real-time exploration of UNS topics and data:
 
-* Real-time topic tree visualization
-* Live value monitoring
-* Historical data queries
-* Export to various formats
+* **Management Console UI** - Visual topic tree with live updates
+* **GraphQL API** - Programmatic access for automation and integration
+* **Advanced Filtering** - Search by topic patterns, metadata, and content
+* **Multi-Instance Support** - Each UMH instance has its own Topic Browser
+
+For detailed usage instructions, see [Topic Browser Guide](./topic-browser.md).
 
 ## Next Steps
 

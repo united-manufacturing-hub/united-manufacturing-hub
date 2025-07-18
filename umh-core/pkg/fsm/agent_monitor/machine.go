@@ -132,7 +132,7 @@ func (a *AgentInstance) PrintState() {
 		a.baseFSMInstance.GetID(), a.GetCurrentFSMState(), a.GetDesiredFSMState())
 }
 
-// GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance
-func (a *AgentInstance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
-	return constants.AgentExpectedMaxP95ExecutionTimePerInstance
+// GetMinimumRequiredTime returns the minimum required time for this instance
+func (a *AgentInstance) GetMinimumRequiredTime() time.Duration {
+	return constants.AgentMonitorUpdateObservedStateTimeout
 }

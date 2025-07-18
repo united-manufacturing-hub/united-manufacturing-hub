@@ -92,7 +92,7 @@ func NewNmapManager(name string) *NmapManager {
 			if !ok {
 				return 0, fmt.Errorf("instance is not a NmapInstance")
 			}
-			return ni.GetExpectedMaxP95ExecutionTimePerInstance(), nil
+			return ni.GetMinimumRequiredTime(), nil
 		},
 	)
 	metrics.InitErrorCounter(metrics.ComponentNmapManager, name)

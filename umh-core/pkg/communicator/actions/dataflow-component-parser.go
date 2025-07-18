@@ -40,6 +40,7 @@ type DataflowComponentTopLevelPayload struct {
 	} `json:"meta"`
 	IgnoreHealthCheck bool        `json:"ignoreHealthCheck"`
 	Payload           interface{} `json:"payload"`
+	State             string      `json:"state"`
 }
 
 // ParseDataflowComponentTopLevel parses the top-level payload structure for dataflow components
@@ -321,11 +322,11 @@ func CreateBenthosConfigFromCDFCPayload(payload models.CDFCPayload, componentNam
 }
 
 // CreateDataFlowComponentConfig creates a DataFlowComponentConfig from a normalized BenthosConfig
-func CreateDataFlowComponentConfig(name string, benthosConfig dataflowcomponentserviceconfig.BenthosConfig) config.DataFlowComponentConfig {
+func CreateDataFlowComponentConfig(name string, state string, benthosConfig dataflowcomponentserviceconfig.BenthosConfig) config.DataFlowComponentConfig {
 	return config.DataFlowComponentConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            name,
-			DesiredFSMState: "active",
+			DesiredFSMState: state,
 		},
 		DataFlowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 			BenthosConfig: benthosConfig,
@@ -506,12 +507,23 @@ func BuildCommonDataFlowComponentPropertiesFromConfig(dfcConfig dataflowcomponen
 	return dfc_payload, nil
 }
 
-// check if the name has spaces or special characters
-func ValidateProtocolConverterName(name string) error {
+// ValidateComponentName validates that a component name contains only valid characters
+// and is not empty. Valid characters are letters (a-z, A-Z), numbers (0-9), and hyphens (-).
+func ValidateComponentName(name string) error {
+	if name == "" {
+		return errors.New("name cannot be empty")
+	}
 	for _, char := range name {
 		if (char < 'a' || char > 'z') && (char < 'A' || char > 'Z') && (char < '0' || char > '9') && char != '-' {
 			return errors.New("name can only contain letters (a-z, A-Z) and numbers (0-9) and hyphens (-)")
 		}
+	}
+	return nil
+}
+
+func ValidateDataFlowComponentState(state string) error {
+	if state != dataflowcomponent.OperationalStateStopped && state != dataflowcomponent.OperationalStateActive {
+		return fmt.Errorf("invalid state: %s", state)
 	}
 	return nil
 }
