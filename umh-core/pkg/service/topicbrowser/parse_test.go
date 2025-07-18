@@ -29,17 +29,17 @@ import (
 
 // benthos log from samples for topic_browser plugin
 const rawLog = `STARTSTARTSTART
-f68c0afa0f0a92050a106532373539323530663831323635613912fd040a0a656e74657270726973651206706c616e7431120d6d616368696e696e67417265611208636e632d6c696e651204636e63351206706c633132331a0a5f686973746f7269616e2206617869732e792a0576616c756532160a0c7669727475616c5f706174681206617869732e79325c0a05746f7069631253756d682e76312e7e00122e7d00192e7c00142e7b00622e636e63352e7900162e7800122e7700142e7600ff170a627269646765645f62791208756d685f636f726532640a0d6b61666b615f6d73675f6b65797e0043d2110a087461675f6e616d6512059100ff03450a0d6c6f636174696f6e5f706174681234f00021f20d32160a105f696e697469616c4d6574616461746112027b7d32230a12d800f31074696d657374616d705f6d73120d31373530373034323230353738321b0a0b2500f30a6f706963120c756d682e6d6573736167657332600a09756d681b000f160142f6031b0a0d646174615f636f6e7472616374120abe01ff080a82050a103537303737353432323137656333646212ed950221098d02c30a617869732e717569636b2a8a01185de9001f50e9002206b80002760253717569636b7a020fe600094232610a0da701047f020f80003f145958030f5b003f1c3ec4021f2dc4021a0f1703011b1a1e0407b0010fec02060fdc03050f04030e3f39343404030aff090add050a103864366434303137623665333433396212c8058502200f1a050202dd00f80a77726f6e672a106f6e5f707572706f73655f77726f6e67326f98021f62bd01220f1505046d77726f6e672e71000f30010c7c3139393738327331050f9a0051146bc4020f6d00510f9a05340f5902090fe7020402f8010fe70205171c45060e2e020f0503050f7f04095f12b8490a896805006f10012ad1040a3a00091f0afb032c1f0a1e01091f0ab304471f0a7901036e717569636b0a8f041f0aa0054f1f0a76030c6f32303934340ade01041f0abc064b1f0a8b02044812347b22580826223a5808f7213834322c2276616c7565223a2268656c6c6f20776f726c64227d3890d6e9f0f9325218080228aad5e9f0f9321a0d0a0b23000f8c02080fb701090fa500040fa302300f9f08080f9101050fce01120fe002480f11024c0f2303630f2d04090f8c020a2f37338c02101fc98c021c0f0401000f0e02050f3f04750f0b032f0f290c070f2504050f6b050a0fa7024c0f6103480f1604090f8c025f0fd9012d0f88014c0f2d01090f20020a0f5103680fec020a0f5902480f5704000f4d06120f7f03040f8c020a2f39381805101fe21805310f9e10020fb7084d0f5a02090fc201480fb502050fc701120f2b06500fda020a0f4a042d0feb03090f8c025f0f8e00090f5f0c490fd9024c0fa5012d0f9003050f3103090f9902500f3903050f1305000fc4020a0f6903110f8c020b1f391805101fe318051c0f5d01090ffa00050fa901050f60024c0f7101000fff01500fb701110f31100b0f18032d0f1204480f8a04090f8c02092f3930bc0c111fe78c021c0f8e00090fc90b060f5e012d0fe502050f1903090f8a02630f65020a0fa702120f4a02480ffc034b0f8c020a2f31341805101ff28c02390f4801480fd204750f1703050ffb02000f2a03090fb603450f0c030a0f8c02682f32318c02101ff98c021c0fd0004b0f8b142e0f1302000fc602500fa102050f1a020a0f2605120fb402050f9f060a0f0503090f2f04470f18050a1f32300a112f81d66014012e85065b1c6f10022aa4050af81b5d0f5d18060feb1b611f0aeb1b591f0aeb1b330f9c0a0b0f11030c6f31383935370adc1b0a0f9909060f2f03209c77726f6e67123f7b22411c0bae191f2ce11904ff0131383930327d38cdc6e9f0f9325a410a4a002d0f0803080f39010d4f39393738c201350f0303050f62010a0fab025a0f0402070f9b17080f57020b0f5105035f77726f6e67fc03630ffa045d0f0803298f393930317d38cace08032f7f393930317d0a958527006f10012add040a19274a280a6074010fe725410f1e052b4f393537370005060ffd03340f0428520f6607060fdc09000f2329040f92210a0fa808075f3139353136340b0525b9cb941f2ffccaa808010f9802070fb900180fc101050f1b020a0fde01340f3501090ffb01540fc203ad0fbb02050fa2070c5f32303537389802074f32303531e4120625a2d3980220e1d29802002c22b068656c6c6f20776f726c64
+0ac2260aea030a106561363132363366626232303663306512d5030a13656e74657270726973652d6f662d6b696e67731a0a5f686973746f7269616e2a096d795f646174615f3432400a0d6b61666b615f6d73675f6b6579122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f3432380a05746f706963122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f3432390a0a627269646765645f6279122b70726f746f636f6c2d636f6e7665727465722d756e696d706c656d656e7465642d67656e65726174652d31321b0a0d646174615f636f6e7472616374120a5f686973746f7269616e32240a0d6c6f636174696f6e5f706174681213656e74657270726973652d6f662d6b696e677332150a087461675f6e616d6512096d795f646174615f3432230a126b61666b615f74696d657374616d705f6d73120d3137353138383839343138393932160a105f696e697469616c4d6574616461746112027b7d321b0a0b6b61666b615f746f706963120c756d682e6d65737361676573323c0a09756d685f746f706963122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f340aea030a103764616531383835383865363162356212d5030a13656e74657270726973652d6f662d6b696e67731a0a5f686973746f7269616e2a096d795f646174615f3632380a05746f706963122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f3632230a126b61666b615f74696d657374616d705f6d73120d31373531383838393433373233321b0a0b6b61666b615f746f706963120c756d682e6d6573736167657332150a087461675f6e616d6512096d795f646174615f3632240a0d6c6f636174696f6e5f706174681213656e74657270726973652d6f662d6b696e677332160a105f696e697469616c4d6574616461746112027b7d323c0a09756d685f746f706963122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f3632400a0d6b61666b615f6d73675f6b6579122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f36321b0a0d646174615f636f6e7472616374120a5f686973746f7269616e32390a0a627269646765645f6279122b70726f746f636f6c2d636f6e7665727465722d756e696d706c656d656e7465642d67656e65726174652d310aea030a103739653737646562623130376431393912d5030a13656e74657270726973652d6f662d6b696e67731a0a5f686973746f7269616e2a096d795f646174615f3732160a105f696e697469616c4d6574616461746112027b7d32380a05746f706963122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f3732240a0d6c6f636174696f6e5f706174681213656e74657270726973652d6f662d6b696e6773323c0a09756d685f746f706963122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f37321b0a0d646174615f636f6e7472616374120a5f686973746f7269616e32150a087461675f6e616d6512096d795f646174615f37321b0a0b6b61666b615f746f706963120c756d682e6d6573736167657332390a0a627269646765645f6279122b70726f746f636f6c2d636f6e7665727465722d756e696d706c656d656e7465642d67656e65726174652d3132400a0d6b61666b615f6d73675f6b6579122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f3732230a126b61666b615f74696d657374616d705f6d73120d313735313838383934343637380aea030a106562643431383765643836313936656312d5030a13656e74657270726973652d6f662d6b696e67731a0a5f686973746f7269616e2a096d795f646174615f39323c0a09756d685f746f706963122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f3932160a105f696e697469616c4d6574616461746112027b7d321b0a0d646174615f636f6e7472616374120a5f686973746f7269616e32230a126b61666b615f74696d657374616d705f6d73120d3137353138383839343637333532400a0d6b61666b615f6d73675f6b6579122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f3932380a05746f706963122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f3932150a087461675f6e616d6512096d795f646174615f3932390a0a627269646765645f6279122b70726f746f636f6c2d636f6e7665727465722d756e696d706c656d656e7465642d67656e65726174652d31321b0a0b6b61666b615f746f706963120c756d682e6d6573736167657332240a0d6c6f636174696f6e5f706174681213656e74657270726973652d6f662d6b696e67730aea030a103663616533373937633863386230623512d5030a13656e74657270726973652d6f662d6b696e67731a0a5f686973746f7269616e2a096d795f646174615f30321b0a0b6b61666b615f746f706963120c756d682e6d6573736167657332400a0d6b61666b615f6d73675f6b6579122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f3032380a05746f706963122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f3032390a0a627269646765645f6279122b70726f746f636f6c2d636f6e7665727465722d756e696d706c656d656e7465642d67656e65726174652d3132230a126b61666b615f74696d657374616d705f6d73120d3137353138383839343738313232150a087461675f6e616d6512096d795f646174615f3032160a105f696e697469616c4d6574616461746112027b7d32240a0d6c6f636174696f6e5f706174681213656e74657270726973652d6f662d6b696e6773321b0a0d646174615f636f6e7472616374120a5f686973746f7269616e323c0a09756d685f746f706963122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f300aea030a106361303037336238636436643634383112d5030a13656e74657270726973652d6f662d6b696e67731a0a5f686973746f7269616e2a096d795f646174615f3232240a0d6c6f636174696f6e5f706174681213656e74657270726973652d6f662d6b696e677332390a0a627269646765645f6279122b70726f746f636f6c2d636f6e7665727465722d756e696d706c656d656e7465642d67656e65726174652d31321b0a0d646174615f636f6e7472616374120a5f686973746f7269616e32380a05746f706963122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f3232150a087461675f6e616d6512096d795f646174615f3232400a0d6b61666b615f6d73675f6b6579122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f32323c0a09756d685f746f706963122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f3232160a105f696e697469616c4d6574616461746112027b7d321b0a0b6b61666b615f746f706963120c756d682e6d6573736167657332230a126b61666b615f74696d657374616d705f6d73120d313735313838383933393638320aea030a103230653838363263343265303635393712d5030a13656e74657270726973652d6f662d6b696e67731a0a5f686973746f7269616e2a096d795f646174615f33321b0a0b6b61666b615f746f706963120c756d682e6d65737361676573321b0a0d646174615f636f6e7472616374120a5f686973746f7269616e32160a105f696e697469616c4d6574616461746112027b7d32150a087461675f6e616d6512096d795f646174615f3332390a0a627269646765645f6279122b70726f746f636f6c2d636f6e7665727465722d756e696d706c656d656e7465642d67656e65726174652d31323c0a09756d685f746f706963122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f3332400a0d6b61666b615f6d73675f6b6579122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f3332380a05746f706963122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f3332230a126b61666b615f74696d657374616d705f6d73120d3137353138383839343037303232240a0d6c6f636174696f6e5f706174681213656e74657270726973652d6f662d6b696e67730aea030a103635626165343039373630666164653612d5030a13656e74657270726973652d6f662d6b696e67731a0a5f686973746f7269616e2a096d795f646174615f38323c0a09756d685f746f706963122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f38321b0a0d646174615f636f6e7472616374120a5f686973746f7269616e321b0a0b6b61666b615f746f706963120c756d682e6d6573736167657332150a087461675f6e616d6512096d795f646174615f3832400a0d6b61666b615f6d73675f6b6579122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f3832380a05746f706963122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f3832390a0a627269646765645f6279122b70726f746f636f6c2d636f6e7665727465722d756e696d706c656d656e7465642d67656e65726174652d3132230a126b61666b615f74696d657374616d705f6d73120d3137353138383839343537313032160a105f696e697469616c4d6574616461746112027b7d32240a0d6c6f636174696f6e5f706174681213656e74657270726973652d6f662d6b696e67730aea030a106632666563363535346535363763353512d5030a13656e74657270726973652d6f662d6b696e67731a0a5f686973746f7269616e2a096d795f646174615f35323c0a09756d685f746f706963122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f35321b0a0b6b61666b615f746f706963120c756d682e6d6573736167657332240a0d6c6f636174696f6e5f706174681213656e74657270726973652d6f662d6b696e677332390a0a627269646765645f6279122b70726f746f636f6c2d636f6e7665727465722d756e696d706c656d656e7465642d67656e65726174652d3132400a0d6b61666b615f6d73675f6b6579122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f3532160a105f696e697469616c4d6574616461746112027b7d32380a05746f706963122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f3532230a126b61666b615f74696d657374616d705f6d73120d31373531383838393432373130321b0a0d646174615f636f6e7472616374120a5f686973746f7269616e32150a087461675f6e616d6512096d795f646174615f350aea030a103162653037636534396663356437613712d5030a13656e74657270726973652d6f662d6b696e67731a0a5f686973746f7269616e2a096d795f646174615f3132390a0a627269646765645f6279122b70726f746f636f6c2d636f6e7665727465722d756e696d706c656d656e7465642d67656e65726174652d3132380a05746f706963122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f3132400a0d6b61666b615f6d73675f6b6579122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f3132240a0d6c6f636174696f6e5f706174681213656e74657270726973652d6f662d6b696e677332150a087461675f6e616d6512096d795f646174615f3132160a105f696e697469616c4d6574616461746112027b7d323c0a09756d685f746f706963122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f3132230a126b61666b615f74696d657374616d705f6d73120d31373531383838393438373933321b0a0d646174615f636f6e7472616374120a5f686973746f7269616e321b0a0b6b61666b615f746f706963120c756d682e6d65737361676573128b040a88040a103162653037636534396663356437613710012ad4030a400a0d6b61666b615f6d73675f6b6579122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f310a1b0a0d646174615f636f6e7472616374120a5f686973746f7269616e0a150a087461675f6e616d6512096d795f646174615f310a380a05746f706963122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f310a3c0a09756d685f746f706963122f756d682e76312e656e74657270726973652d6f662d6b696e67732e5f686973746f7269616e2e6d795f646174615f310a160a105f696e697469616c4d6574616461746112027b7d0a1b0a0b6b61666b615f746f706963120c756d682e6d657373616765730a230a126b61666b615f74696d657374616d705f6d73120d313735313838383934383739330a240a0d6c6f636174696f6e5f706174681213656e74657270726973652d6f662d6b696e67730a390a0a627269646765645f6279122b70726f746f636f6c2d636f6e7665727465722d756e696d706c656d656e7465642d67656e65726174652d3112297b2274696d657374616d705f6d73223a313735313838383934383638362c2276616c7565223a32317d38b9dcdfa5fe325214080128cedbdfa5fe321209090000000000003540
 ENDDATAENDDATAENDDATA
-1750704221069
+1751888949547
 ENDENDENDEND`
 
 // --------------------------------------------------------------------------
 
 var _ = Describe("extractRaw / parseBlock", func() {
 	var (
-		payload    []byte // uncompressed bytes
 		compressed []byte // hex line from rawLog
+		payload    []byte // expected decoded payload
 		epochMS    int64  // timestamp parsed from rawLog
 		rb         *Ringbuffer
 		service    *Service
@@ -53,11 +53,8 @@ var _ = Describe("extractRaw / parseBlock", func() {
 		epochMS, err = strconv.ParseInt(tsLine, 10, 64)
 		Expect(err).NotTo(HaveOccurred())
 
-		// decode and decompress so we know the expected payload
-		compressedBytes, err := hex.DecodeString(hexLine)
-		Expect(err).NotTo(HaveOccurred())
-
-		payload, err = decompressLZ4(compressedBytes)
+		// decode hex to get the expected payload
+		payload, err = hex.DecodeString(hexLine)
 		Expect(err).NotTo(HaveOccurred())
 
 		compressed = []byte(hexLine)
@@ -66,14 +63,14 @@ var _ = Describe("extractRaw / parseBlock", func() {
 		service = &Service{ringbuffer: rb}
 	})
 
-	Context("extraction and decompression", func() {
-		It("extracts, decompresses and stores the block", func() {
+	Context("extraction and hex-decoding", func() {
+		It("extracts, hex-decodes and stores the block", func() {
 			logs := buildLogs(true, string(compressed), epochMS)
 
 			Expect(service.parseBlock(logs)).To(Succeed())
 			Expect(rb.Len()).To(Equal(1))
 
-			got := rb.Get()[0]
+			got := rb.GetSnapshot().Items[0]
 			Expect(got.Payload).To(Equal(payload))
 			Expect(got.Timestamp).To(Equal(time.UnixMilli(epochMS)))
 		})
@@ -92,23 +89,54 @@ var _ = Describe("extractRaw / parseBlock", func() {
 	})
 
 	Context("missing timestamp line", func() {
-		It("fails with a clear error", func() {
+		It("skips block with missing timestamp and continues processing", func() {
 			logs := buildLogs(false, string(compressed), epochMS)
 
+			// Should succeed by skipping the bad block
 			err := service.parseBlock(logs)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("timestamp line is missing"))
-			Expect(rb.Len()).To(Equal(0))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(rb.Len()).To(Equal(0)) // Block was skipped, nothing added
 		})
 	})
 
-	Context("corrupt compressed data", func() {
-		It("propagates the decompression error", func() {
-			logs := buildLogs(true, "not-lz4-bytes", epochMS)
+	Context("corrupt hex data", func() {
+		It("skips block with corrupt hex and continues processing", func() {
+			logs := buildLogs(true, "not-hex-bytes", epochMS)
 
+			// Should succeed by skipping the bad block
 			err := service.parseBlock(logs)
-			Expect(err).To(HaveOccurred())
-			Expect(rb.Len()).To(Equal(0))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(rb.Len()).To(Equal(0)) // Block was skipped, nothing added
+		})
+	})
+
+	Context("resilient processing", func() {
+		It("continues processing good blocks after skipping bad ones", func() {
+			baseTime := time.UnixMilli(1735732800000) // 2025-01-01T12:00:00.000Z
+
+			// Create mixed logs: good block, bad block, good block
+			goodLogs1 := buildLogsWithTimestamps(true, string(compressed), baseTime.UnixMilli())
+			badLogs := buildLogsWithTimestamps(true, "invalid-hex", baseTime.Add(5*time.Minute).UnixMilli())
+			goodLogs2 := buildLogsWithTimestamps(true, string(compressed), baseTime.Add(10*time.Minute).UnixMilli())
+
+			allLogs := append(append(goodLogs1, badLogs...), goodLogs2...)
+
+			service.ResetBlockProcessing()
+
+			// Process first good block
+			Expect(service.parseBlock(allLogs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(1)) // First block processed
+			Expect(service.lastProcessedTimestamp).To(Equal(baseTime))
+
+			// Process bad block - should be skipped
+			Expect(service.parseBlock(allLogs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(1))                                                   // Still only one block, bad block skipped
+			Expect(service.lastProcessedTimestamp).To(Equal(baseTime.Add(5 * time.Minute))) // Timestamp advanced
+
+			// Process second good block
+			Expect(service.parseBlock(allLogs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(2)) // Second good block processed
+			Expect(service.lastProcessedTimestamp).To(Equal(baseTime.Add(10 * time.Minute)))
 		})
 	})
 
@@ -125,16 +153,215 @@ var _ = Describe("extractRaw / parseBlock", func() {
 			Expect(service.parseBlock(logs)).To(Succeed())
 			Expect(rb.Len()).To(Equal(1))
 
-			got := rb.Get()[0]
-
-			// NOTE: uncomment for showing decompressed data
-			// GinkgoWriter.Printf("\n[DEBUG] uncompressed (%d bytes):\n%s\n\n",
-			//	len(got.Payload), string(got.Payload))
+			got := rb.GetSnapshot().Items[0]
 
 			Expect(got.Timestamp).To(Equal(time.UnixMilli(epochMS)))
 			Expect(got.Payload).To(Equal(payload))
 			// check if e.g. the "umh_topic" exists in the payload
 			Expect(string(got.Payload)).To(ContainSubstring("umh_topic"))
+		})
+	})
+
+	Context("duplicate block processing prevention", func() {
+		It("does not process the same block multiple times", func() {
+			logs := buildLogs(true, string(compressed), epochMS)
+
+			// First call should process the block
+			Expect(service.parseBlock(logs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(1))
+
+			// Second call with same logs should not add another block
+			Expect(service.parseBlock(logs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(1)) // Still only 1 block
+
+			// Third call should also not add another block
+			Expect(service.parseBlock(logs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(1)) // Still only 1 block
+		})
+
+		It("processes new blocks when they appear", func() {
+			logs1 := buildLogsWithTimestamps(true, string(compressed), epochMS)
+			logs2 := append(logs1, buildLogsWithTimestamps(true, string(compressed), epochMS+1000)...)
+
+			// Process first block
+			Expect(service.parseBlock(logs1)).To(Succeed())
+			Expect(rb.Len()).To(Equal(1))
+
+			// Process with both blocks - should add the second block
+			Expect(service.parseBlock(logs2)).To(Succeed())
+			Expect(rb.Len()).To(Equal(2))
+		})
+	})
+
+	Context("timestamp-based tracking", func() {
+		It("processes from beginning when lastProcessedTimestamp is zero", func() {
+			// Ensure service starts with zero timestamp
+			service.ResetBlockProcessing()
+			Expect(service.lastProcessedTimestamp.IsZero()).To(BeTrue())
+
+			logs := buildLogsWithTimestamps(true, string(compressed), epochMS)
+
+			Expect(service.parseBlock(logs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(1))
+
+			// Verify the timestamp was updated
+			Expect(service.lastProcessedTimestamp).To(Equal(time.UnixMilli(epochMS)))
+		})
+
+		It("only processes blocks with timestamps after lastProcessedTimestamp", func() {
+			baseTime := time.UnixMilli(1735732800000) // 2025-01-01T12:00:00.000Z
+
+			// Create logs with different timestamps
+			logs1 := buildLogsWithTimestamps(true, string(compressed), baseTime.UnixMilli())
+			logs2 := buildLogsWithTimestamps(true, string(compressed), baseTime.Add(5*time.Minute).UnixMilli())
+			logs3 := buildLogsWithTimestamps(true, string(compressed), baseTime.Add(10*time.Minute).UnixMilli())
+
+			allLogs := append(append(logs1, logs2...), logs3...)
+
+			// Process first block
+			service.ResetBlockProcessing()
+			Expect(service.parseBlock(logs1)).To(Succeed())
+			Expect(rb.Len()).To(Equal(1))
+			Expect(service.lastProcessedTimestamp).To(Equal(baseTime))
+
+			// Process all logs - should find and process the next unprocessed block (logs2)
+			Expect(service.parseBlock(allLogs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(2)) // 1 original + 1 new
+			Expect(service.lastProcessedTimestamp).To(Equal(baseTime.Add(5 * time.Minute)))
+
+			// Process again to get the third block (logs3)
+			Expect(service.parseBlock(allLogs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(3)) // 1 original + 2 new
+			Expect(service.lastProcessedTimestamp).To(Equal(baseTime.Add(10 * time.Minute)))
+		})
+
+		It("handles ring buffer wrap scenario correctly", func() {
+			baseTime := time.UnixMilli(1735732800000) // 2025-01-01T12:00:00.000Z
+
+			// Simulate processing many blocks to reach ring buffer capacity
+			service.ResetBlockProcessing()
+
+			// Process first batch of logs
+			logs1 := buildLogsWithTimestamps(true, string(compressed), baseTime.UnixMilli())
+			logs2 := buildLogsWithTimestamps(true, string(compressed), baseTime.Add(5*time.Minute).UnixMilli())
+			firstBatch := append(logs1, logs2...)
+
+			Expect(service.parseBlock(firstBatch)).To(Succeed())
+			Expect(rb.Len()).To(Equal(1)) // Only processes one block per call
+			Expect(service.lastProcessedTimestamp).To(Equal(baseTime))
+
+			// Process again to get the second block
+			Expect(service.parseBlock(firstBatch)).To(Succeed())
+			Expect(rb.Len()).To(Equal(2))
+			Expect(service.lastProcessedTimestamp).To(Equal(baseTime.Add(5 * time.Minute)))
+
+			// Now simulate ring buffer wrap by creating new logs that would appear
+			// in a wrapped ring buffer but with newer timestamps
+			logs3 := buildLogsWithTimestamps(true, string(compressed), baseTime.Add(15*time.Minute).UnixMilli())
+			logs4 := buildLogsWithTimestamps(true, string(compressed), baseTime.Add(20*time.Minute).UnixMilli())
+
+			// Create a "wrapped" scenario where the log entries are in a different order
+			// but the timestamp-based search should still find the correct entries
+			wrappedLogs := append(append(logs3, logs4...), firstBatch...)
+
+			Expect(service.parseBlock(wrappedLogs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(3)) // First new block processed
+			Expect(service.lastProcessedTimestamp).To(Equal(baseTime.Add(15 * time.Minute)))
+
+			// Process again to get the fourth block
+			Expect(service.parseBlock(wrappedLogs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(4)) // Should have processed both new blocks
+			Expect(service.lastProcessedTimestamp).To(Equal(baseTime.Add(20 * time.Minute)))
+		})
+
+		It("handles duplicate timestamps correctly", func() {
+			baseTime := time.UnixMilli(1735732800000) // 2025-01-01T12:00:00.000Z
+
+			// Create two blocks with the same timestamp but different content
+			logs1 := buildLogsWithTimestamps(true, string(compressed), baseTime.UnixMilli())
+			logs2 := buildLogsWithTimestamps(true, "deadbeef", baseTime.UnixMilli())
+
+			allLogs := append(logs1, logs2...)
+
+			service.ResetBlockProcessing()
+			Expect(service.parseBlock(allLogs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(1)) // First block processed
+
+			// Process again - since second block has same timestamp, it won't be processed
+			Expect(service.parseBlock(allLogs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(1)) // Still only one block (timestamp-based tracking prevents duplicate timestamps)
+		})
+
+		It("skips processing when no newer entries exist", func() {
+			baseTime := time.UnixMilli(1735732800000) // 2025-01-01T12:00:00.000Z
+
+			// Process initial block
+			logs := buildLogsWithTimestamps(true, string(compressed), baseTime.UnixMilli())
+			service.ResetBlockProcessing()
+			Expect(service.parseBlock(logs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(1))
+
+			// Process same logs again - should not add anything
+			Expect(service.parseBlock(logs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(1)) // No new blocks added
+
+			// Add an older block - should not be processed
+			olderLogs := buildLogsWithTimestamps(true, string(compressed), baseTime.Add(-5*time.Minute).UnixMilli())
+			allLogsWithOlder := append(olderLogs, logs...)
+
+			Expect(service.parseBlock(allLogsWithOlder)).To(Succeed())
+			Expect(rb.Len()).To(Equal(1)) // Still no new blocks added
+		})
+
+		It("handles S6 ring buffer wrap at 10k entries correctly", func() {
+			// This test simulates the exact scenario that was failing:
+			// S6 ring buffer reaches 10,000 entries and wraps, but topic browser
+			// can still find new blocks using timestamp-based tracking
+
+			baseTime := time.UnixMilli(1735732800000) // 2025-01-01T12:00:00.000Z
+			service.ResetBlockProcessing()
+
+			// Simulate having processed many entries before reaching the wrap point
+			// Set lastProcessedTimestamp to a specific time
+			service.lastProcessedTimestamp = baseTime.Add(60 * time.Minute)
+
+			// Create a log slice that simulates a wrapped S6 ring buffer
+			// In a real scenario, this would be 10,000 entries, but we'll use fewer for testing
+			var wrappedLogs []s6svc.LogEntry
+
+			// Add some "old" entries that were from earlier processing (before wrap)
+			for i := 0; i < 5; i++ {
+				oldTime := baseTime.Add(time.Duration(i*10) * time.Minute)
+				wrappedLogs = append(wrappedLogs, buildLogsWithTimestamps(true, string(compressed), oldTime.UnixMilli())...)
+			}
+
+			// Add some entries that were processed right before the wrap
+			alreadyProcessedTime := baseTime.Add(55 * time.Minute)
+			wrappedLogs = append(wrappedLogs, buildLogsWithTimestamps(true, string(compressed), alreadyProcessedTime.UnixMilli())...)
+
+			// Add NEW entries that appeared after the wrap and should be processed
+			newTime1 := baseTime.Add(65 * time.Minute) // 5 minutes after lastProcessedTimestamp
+			newTime2 := baseTime.Add(70 * time.Minute) // 10 minutes after lastProcessedTimestamp
+			wrappedLogs = append(wrappedLogs, buildLogsWithTimestamps(true, string(compressed), newTime1.UnixMilli())...)
+			wrappedLogs = append(wrappedLogs, buildLogsWithTimestamps(true, string(compressed), newTime2.UnixMilli())...)
+
+			// Process the wrapped log buffer - should find first new block
+			Expect(service.parseBlock(wrappedLogs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(1)) // First new block processed
+
+			// Process again to get the second new block
+			Expect(service.parseBlock(wrappedLogs)).To(Succeed())
+			Expect(rb.Len()).To(Equal(2)) // Both new blocks processed
+
+			// Verify that the service tracked the latest timestamp
+			Expect(service.lastProcessedTimestamp).To(Equal(newTime2))
+
+			// Verify the blocks in the ring buffer have the correct timestamps
+			snapshot := rb.GetSnapshot()
+			Expect(snapshot.Items).To(HaveLen(2))
+			// The actual order depends on which block was found first by the search algorithm
+			timestamps := []time.Time{snapshot.Items[0].Timestamp, snapshot.Items[1].Timestamp}
+			Expect(timestamps).To(ContainElements(newTime1, newTime2))
 		})
 	})
 })
@@ -153,5 +380,23 @@ func buildLogs(includeTimestamp bool, dataLine string, epochMS int64) []s6svc.Lo
 		logs = append(logs, s6svc.LogEntry{Content: strconv.FormatInt(epochMS, 10)})
 	}
 	logs = append(logs, s6svc.LogEntry{Content: constants.BLOCK_END_MARKER})
+	return logs
+}
+
+// buildLogsWithTimestamps creates a synthetic Benthos log block for tests with explicit timestamps.
+// It wraps the supplied hex-encoded data line between BLOCK_START / DATA_END / BLOCK_END
+// markers and sets the given timestamp on all log entries. This is useful for testing
+// timestamp-based processing logic.
+func buildLogsWithTimestamps(includeTimestamp bool, dataLine string, epochMS int64) []s6svc.LogEntry {
+	timestamp := time.UnixMilli(epochMS)
+	logs := []s6svc.LogEntry{
+		{Content: constants.BLOCK_START_MARKER, Timestamp: timestamp},
+		{Content: dataLine, Timestamp: timestamp},
+		{Content: constants.DATA_END_MARKER, Timestamp: timestamp},
+	}
+	if includeTimestamp {
+		logs = append(logs, s6svc.LogEntry{Content: strconv.FormatInt(epochMS, 10), Timestamp: timestamp})
+	}
+	logs = append(logs, s6svc.LogEntry{Content: constants.BLOCK_END_MARKER, Timestamp: timestamp})
 	return logs
 }
