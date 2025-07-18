@@ -21,8 +21,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
@@ -84,6 +86,16 @@ type Service interface {
 	// linkPath is the path where the symlink will be created.
 	// target is the path that the symlink will point to.
 	Symlink(ctx context.Context, target, linkPath string) error
+}
+
+// chunkBufferPool provides reusable buffers for efficient file reading
+// CONCURRENCY SAFETY: sync.Pool is thread-safe and handles concurrent Get/Put operations
+// MEMORY EFFICIENCY: Reuses 1MB buffers across goroutines to reduce GC pressure
+// BUFFER REUSE: Each buffer is completely overwritten by io.ReadFull before being appended to result
+var chunkBufferPool = sync.Pool{
+	New: func() interface{} {
+		return make([]byte, constants.S6FileReadChunkSize)
+	},
 }
 
 // DefaultService is the default implementation of FileSystemService
@@ -168,6 +180,18 @@ func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, err
 // ReadFileRange reads the file starting at byte offset "from" and returns:
 //   - chunk   – the data that was read (nil if nothing new)
 //   - newSize – the file size **after** the read (use it as next offset)
+//
+// PERFORMANCE OPTIMIZATIONS:
+// 1. MEMORY EFFICIENT: Pre-allocates result buffer to avoid repeated allocations during append()
+// 2. BUFFER POOLING: Reuses 1MB working buffers via sync.Pool to reduce GC pressure
+// 3. CONTEXT AWARE: Checks deadline before each chunk, returns SUCCESS (not timeout) if insufficient time
+// 4. CHUNKED I/O: Reads in 1MB chunks for optimal I/O performance while maintaining memory control
+//
+// CORRECTNESS GUARANTEES:
+// - Result buffer contains ONLY actual file data (no padding/zeros)
+// - newSize is always the correct next read offset (original_from + bytes_read)
+// - Graceful degradation: partial reads return success, allowing incremental progress
+// - Thread-safe: Buffer pool handles concurrent access safely
 func (s *DefaultService) ReadFileRange(
 	ctx context.Context,
 	path string,
@@ -218,13 +242,58 @@ func (s *DefaultService) ReadFileRange(
 			return
 		}
 
-		buf := make([]byte, size-from)
-		if _, err = io.ReadFull(f, buf); err != nil {
-			resCh <- result{nil, 0, err}
+		// CONTEXT-AWARE TIMING: Check remaining time before each chunk to avoid timeout failures
+		// If less than timeBuffer remains, gracefully exit with partial data instead of timing out
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			resCh <- result{nil, 0, fmt.Errorf("context deadline not set")}
 			return
 		}
+		timeBuffer := time.Until(deadline) / 2
 
-		resCh <- result{buf, size, nil}
+		// MEMORY PREALLOCATION: Pre-allocate capacity but start with zero length
+		// This avoids repeated allocations during append() while not wasting memory
+		expectedSize := size - from
+		buf := make([]byte, 0, expectedSize)
+
+		// BUFFER POOL USAGE: Get reusable 1MB buffer to minimize allocations
+		// The buffer gets completely overwritten by io.ReadFull each time
+		smallBuf := chunkBufferPool.Get().([]byte)
+		defer chunkBufferPool.Put(smallBuf)
+
+		for {
+			// GRACEFUL EARLY EXIT: Check if enough time remains for another chunk
+			// Returns SUCCESS with partial data instead of TIMEOUT failure
+			if deadline, ok := ctx.Deadline(); ok {
+				if remaining := time.Until(deadline); remaining < timeBuffer {
+					// NEWSIZE CALCULATION: from + bytes_read = next offset to read from
+					resCh <- result{buf, from + int64(len(buf)), nil}
+					return
+				}
+			}
+
+			// Read chunk: io.ReadFull either reads exactly len(smallBuf) bytes OR returns error
+			n, err := io.ReadFull(f, smallBuf)
+			if err == io.EOF || err == io.ErrUnexpectedEOF {
+				if n > 0 {
+					// PARTIAL READ: Use smallBuf[:n] to avoid appending garbage data
+					// This is why buf contains NO EXTRA ZEROS - we only append actual file data
+					buf = append(buf, smallBuf[:n]...)
+				}
+				break
+			}
+			if err != nil {
+				resCh <- result{nil, 0, err}
+				return
+			}
+
+			// FULL READ SUCCESS: io.ReadFull guarantees smallBuf contains exactly 1MB of file data
+			// No slicing needed here - the entire buffer contains valid data
+			buf = append(buf, smallBuf...)
+		}
+
+		// FINAL RESULT: buf contains only actual file data, newSize = next read offset
+		resCh <- result{buf, from + int64(len(buf)), nil}
 	}()
 
 	select {
