@@ -24,6 +24,7 @@ import (
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/graphql"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -57,6 +58,9 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// Configure encoder for communication
+	encoding.ChooseEncoder(encoding.EncodingCorev1)
 
 	// Load the config
 	configManager, err := config.NewFileConfigManagerWithBackoff()
