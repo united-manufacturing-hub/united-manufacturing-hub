@@ -35,6 +35,19 @@ func NewInstance(
 	s6BaseDir string,
 	config config.StreamProcessorConfig,
 ) *Instance {
+
+	var degradedStates = []string{
+		OperationalStateDegradedRedpanda,
+		OperationalStateDegradedDFC,
+		OperationalStateDegradedOther,
+	}
+
+	var runningStates = []string{
+		OperationalStateIdle,
+		OperationalStateActive,
+	}
+	runningStates = append(runningStates, degradedStates...)
+
 	cfg := internal_fsm.BaseFSMInstanceConfig{
 		ID:                           config.Name,
 		DesiredFSMState:              OperationalStateStopped,
@@ -87,35 +100,22 @@ func NewInstance(
 				}, Dst: OperationalStateIdle,
 			},
 
-			//	active/idle -> degraded rp/dfc/other
+			//	active/idle/degraded -> degraded rp/dfc/other (allow transitions between degraded states)
 			{
-				Name: EventRedpandaDegraded, Src: []string{
-					OperationalStateActive,
-					OperationalStateIdle,
-				}, Dst: OperationalStateDegradedRedpanda,
+				Name: EventRedpandaDegraded, Src: runningStates, Dst: OperationalStateDegradedRedpanda,
 			},
 
 			{
-				Name: EventDFCDegraded, Src: []string{
-					OperationalStateActive,
-					OperationalStateIdle,
-				}, Dst: OperationalStateDegradedDFC,
+				Name: EventDFCDegraded, Src: runningStates, Dst: OperationalStateDegradedDFC,
 			},
 
 			{
-				Name: EventDegradedOther, Src: []string{
-					OperationalStateActive,
-					OperationalStateIdle,
-				}, Dst: OperationalStateDegradedOther,
+				Name: EventDegradedOther, Src: runningStates, Dst: OperationalStateDegradedOther,
 			},
 
 			// degraded -> idle
 			{
-				Name: EventRecovered, Src: []string{
-					OperationalStateDegradedRedpanda,
-					OperationalStateDegradedDFC,
-					OperationalStateDegradedOther,
-				}, Dst: OperationalStateIdle,
+				Name: EventRecovered, Src: degradedStates, Dst: OperationalStateIdle,
 			},
 
 			// starting -> startingFailed
