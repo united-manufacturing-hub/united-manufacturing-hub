@@ -196,10 +196,11 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 	}
 
 	// --- stream processors (multiple instances) as DFCs --------------------------
-	// TODO: This is temporary. Once the stream processor FSM is ready, replace this with
-	// the proper snapshot-based method similar to protocol converters above.
-	streamProcessorDfcs := StreamProcessorsFromConfig(ctx, s.configManager, s.logger)
-	dfcData = append(dfcData, streamProcessorDfcs...)
+	streamProcessorMgr, ok := fsm.FindManager(snapshot, constants.StreamProcessorManagerName)
+	if ok {
+		streamProcessorDfcs := StreamProcessorsFromSnapshot(streamProcessorMgr, s.logger)
+		dfcData = append(dfcData, streamProcessorDfcs...)
+	}
 
 	// --- topic browser -------------------------------------------------------------
 	topicBrowserData := &models.TopicBrowser{}
