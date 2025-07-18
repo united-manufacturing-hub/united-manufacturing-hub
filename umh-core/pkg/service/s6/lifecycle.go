@@ -113,14 +113,14 @@ func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string
 	createdFiles, err := s.createS6FilesInRepository(ctx, repositoryDir, config, fsService)
 	if err != nil {
 		// Clean up on failure
-		fsService.RemoveAll(ctx, repositoryDir)
+		_ = fsService.RemoveAll(ctx, repositoryDir)
 		return nil, fmt.Errorf("failed to create service files: %w", err)
 	}
 
 	// NOW create the atomic symlink - this makes the service visible to scanner
 	if err := fsService.Symlink(ctx, repositoryDir, servicePath); err != nil {
 		// Clean up repository on symlink failure
-		fsService.RemoveAll(ctx, repositoryDir)
+		_ = fsService.RemoveAll(ctx, repositoryDir)
 		return nil, fmt.Errorf("failed to create scan directory symlink: %w", err)
 	}
 
