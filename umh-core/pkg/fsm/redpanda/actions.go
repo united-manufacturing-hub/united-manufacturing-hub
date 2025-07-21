@@ -696,7 +696,7 @@ func (r *RedpandaInstance) IsSchemaRegistryReachable(ctx context.Context) (bool,
 	if resp == nil {
 		return false, "received nil response from schema registry"
 	}
-	defer resp.Body.Close()
+	resp.Body.Close()
 	// It should return either a 2XX or a 4XX status code
 	if resp.StatusCode >= 200 && resp.StatusCode < 500 {
 		r.baseFSMInstance.GetLogger().Debugf("Schema registry reachable")
