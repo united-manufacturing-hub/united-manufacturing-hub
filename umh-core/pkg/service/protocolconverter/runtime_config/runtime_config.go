@@ -82,7 +82,16 @@ func BuildRuntimeConfig(
 			fmt.Errorf("nil spec")
 	}
 
-	pcLocation := spec.Location
+	var pcLocation map[string]string
+	pcLocation = make(map[string]string, len(spec.Location))
+
+	// Quickly copy spec.Location to pcLocation if it exists
+	// For loop is quicker then invoking deepcopy
+	if spec.Location != nil {
+		for k, v := range spec.Location {
+			pcLocation[k] = v
+		}
+	}
 
 	//----------------------------------------------------------------------
 	// 1. Merge & normalise *location* map
@@ -96,7 +105,7 @@ func BuildRuntimeConfig(
 
 	// 1b) extend with PC-local additions (never overwrite agent keys)
 	for k, v := range pcLocation {
-		if _, exists := loc[k]; !exists {
+		if agentValue, exists := loc[k]; !exists || agentValue == "" {
 			loc[k] = v
 		}
 	}

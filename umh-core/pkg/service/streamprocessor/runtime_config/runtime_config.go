@@ -67,7 +67,7 @@ func BuildRuntimeConfig(
 
 	// 1b) extend with PC-local additions (never overwrite agent keys)
 	for k, v := range spLocation {
-		if _, exists := loc[k]; !exists {
+		if agentValue, exists := loc[k]; !exists || agentValue == "" {
 			loc[k] = v
 		}
 	}
