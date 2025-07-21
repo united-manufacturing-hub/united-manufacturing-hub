@@ -675,18 +675,12 @@ func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *protoco
 		return dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, fmt.Errorf("invalid DFC type: %s", a.dfcType.String())
 	}
 
-	// Get the current system snapshot to access agent location
 	systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
 
-	// Extract agent location from system snapshot, same as in actions.go
-	// convertIntMapToStringMap converts map[int]string to map[string]string
 	agentLocation := convertIntMapToStringMap(systemSnapshot.CurrentConfig.Agent.Location)
 
-	// Use the same pattern as actions.go
 	pcName := a.name
 
-	// Use BuildRuntimeConfig to render with the same variable processing logic
-	// Match the exact signature used in actions.go
 	runtimeConfig, err := runtime_config.BuildRuntimeConfig(
 		modifiedSpec,
 		agentLocation,
