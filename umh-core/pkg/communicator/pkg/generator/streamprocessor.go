@@ -98,7 +98,7 @@ func buildStreamProcessorAsDfc(
 		m.Input.LastCount > 0 {
 
 		dfc.Metrics = &models.DfcMetrics{
-			AvgInputThroughputPerMinuteInMsgSec: m.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds(),
+			AvgInputThroughputPerMinuteInMsgSec: m.Output.MessagesPerTick / constants.DefaultTickerTime.Seconds(),
 		}
 	}
 
