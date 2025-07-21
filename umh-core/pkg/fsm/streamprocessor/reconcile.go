@@ -93,32 +93,37 @@ func (i *Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, s
 	}
 
 	// Step 2: Detect external changes.
-	if err = i.reconcileExternalChanges(ctx, services, snapshot); err != nil {
-		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
-		if !errors.Is(err, spsvc.ErrServiceNotExist) && !errors.Is(err, s6.ErrServiceNotExist) {
-			// errors.Is(err, s6.ErrServiceNotExist)
-			// Consider a special case for DFC FSM here
-			// While creating for the first time, reconcileExternalChanges function will throw an error such as
-			// s6 service not found in the path since DFC fsm is relying on BenthosFSM and Benthos in turn relies on S6 fsm
-			// Inorder for DFC fsm to start, benthosManager.Reconcile should be called and this is called at the end of the function
-			// So set the err to nil in this case
-			// An example error: "failed to update observed state: failed to get observed DataflowComponent config: failed to get benthos config: failed to get benthos config file for service benthos-dataflow-hello-world-dfc: service does not exist"
+	if i.baseFSMInstance.IsRemoving() {
+		// Skip external changes detection during removal - config files may be deleted
+		i.baseFSMInstance.GetLogger().Debugf("Skipping external changes detection during removal")
+	} else {
+		if err = i.reconcileExternalChanges(ctx, services, snapshot); err != nil {
+			// If the service is not running, we don't want to return an error here, because we want to continue reconciling
+			if !errors.Is(err, spsvc.ErrServiceNotExist) && !errors.Is(err, s6.ErrServiceNotExist) {
+				// errors.Is(err, s6.ErrServiceNotExist)
+				// Consider a special case for DFC FSM here
+				// While creating for the first time, reconcileExternalChanges function will throw an error such as
+				// s6 service not found in the path since DFC fsm is relying on BenthosFSM and Benthos in turn relies on S6 fsm
+				// Inorder for DFC fsm to start, benthosManager.Reconcile should be called and this is called at the end of the function
+				// So set the err to nil in this case
+				// An example error: "failed to update observed state: failed to get observed DataflowComponent config: failed to get benthos config: failed to get benthos config file for service benthos-dataflow-hello-world-dfc: service does not exist"
 
-			i.baseFSMInstance.SetError(err, snapshot.Tick)
-			i.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
+				i.baseFSMInstance.SetError(err, snapshot.Tick)
+				i.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
 
-			if errors.Is(err, context.DeadlineExceeded) {
-				// Healthchecks occasionally take longer (sometimes up to 70ms),
-				// resulting in context.DeadlineExceeded errors. In this case, we want to
-				// mark the reconciliation as complete for this tick since we've likely
-				// already consumed significant time. We return reconciled=true to prevent
-				// further reconciliation attempts in the current tick.
-				return nil, true // We don't want to return an error here, as this can happen in normal operations
+				if errors.Is(err, context.DeadlineExceeded) {
+					// Healthchecks occasionally take longer (sometimes up to 70ms),
+					// resulting in context.DeadlineExceeded errors. In this case, we want to
+					// mark the reconciliation as complete for this tick since we've likely
+					// already consumed significant time. We return reconciled=true to prevent
+					// further reconciliation attempts in the current tick.
+					return nil, true // We don't want to return an error here, as this can happen in normal operations
+				}
+				return nil, false // We don't want to return an error here, because we want to continue reconciling
 			}
-			return nil, false // We don't want to return an error here, because we want to continue reconciling
-		}
 
-		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
+			err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
+		}
 	}
 
 	// Step 3: Attempt to reconcile the state.
