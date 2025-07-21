@@ -287,9 +287,13 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 			// 1. DFC configs may transition from empty -> populated as templates are rendered
 			// 2. Empty DFCs should remain stopped, populated DFCs should be started
 			// 3. This ensures we don't start broken Benthos instances with empty configs
+			//
+			// CRITICAL FIX: Pass the newly rendered runtime config to avoid race conditions
+			// Previously, EvaluateDFCDesiredStates() used cached configs which might not reflect
+			// the latest updates when UpdateInManager() hasn't propagated to underlying services yet.
 			if p.baseFSMInstance.GetDesiredFSMState() == OperationalStateActive {
 				p.baseFSMInstance.GetLogger().Debugf("re-evaluating DFC desired states and will be active")
-				err := p.service.EvaluateDFCDesiredStates(p.baseFSMInstance.GetID(), "active")
+				err := p.service.EvaluateDFCDesiredStatesWithConfig(p.baseFSMInstance.GetID(), "active", &p.runtimeConfig)
 				if err != nil {
 					p.baseFSMInstance.GetLogger().Debugf("Failed to re-evaluate DFC states after config update: %v", err)
 					// Don't fail the entire update - this is a best-effort re-evaluation

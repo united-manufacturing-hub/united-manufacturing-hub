@@ -103,6 +103,9 @@ type MockProtocolConverterService struct {
 	*/
 	DfcService  *dataflowcomponent.MockDataFlowComponentService
 	ConnService *connection.MockConnectionService
+
+	// Error for EvaluateDFCDesiredStates
+	EvaluateDFCDesiredStatesError error
 }
 
 // Ensure MockProtocolConverterService implements IProtocolConverterService
@@ -123,13 +126,14 @@ type ConverterStateFlags struct {
 // NewMockProtocolConverterService creates a new mock DataFlowComponent service
 func NewMockProtocolConverterService() *MockProtocolConverterService {
 	return &MockProtocolConverterService{
-		ConverterStates:    make(map[string]*ServiceInfo),
-		ExistingComponents: make(map[string]bool),
-		dfcConfigs:         make([]config.DataFlowComponentConfig, 0),
-		connConfigs:        make([]config.ConnectionConfig, 0),
-		stateFlags:         make(map[string]*ConverterStateFlags),
-		DfcService:         dataflowcomponent.NewMockDataFlowComponentService(),
-		ConnService:        connection.NewMockConnectionService(),
+		ConverterStates:               make(map[string]*ServiceInfo),
+		ExistingComponents:            make(map[string]bool),
+		dfcConfigs:                    make([]config.DataFlowComponentConfig, 0),
+		connConfigs:                   make([]config.ConnectionConfig, 0),
+		stateFlags:                    make(map[string]*ConverterStateFlags),
+		DfcService:                    dataflowcomponent.NewMockDataFlowComponentService(),
+		ConnService:                   connection.NewMockConnectionService(),
+		EvaluateDFCDesiredStatesError: nil, // Initialize with nil
 	}
 }
 
@@ -536,46 +540,15 @@ func (m *MockProtocolConverterService) ReconcileManager(ctx context.Context, ser
 }
 
 // EvaluateDFCDesiredStates mocks the DFC state evaluation logic.
-// This method exists because protocol converters must re-evaluate DFC states
-// when configs change during reconciliation (unlike other FSMs that set states once).
+// It simulates checking if DFCs should be active or stopped based on protocol converter state.
+// Currently, it just returns the configured error (if any).
 func (m *MockProtocolConverterService) EvaluateDFCDesiredStates(protConvName string, protocolConverterDesiredState string) error {
-	// Mock implementation - just update the configs like the real implementation would
-	underlyingReadName := fmt.Sprintf("read-protocolconverter-%s", protConvName)
-	underlyingWriteName := fmt.Sprintf("write-protocolconverter-%s", protConvName)
+	return m.EvaluateDFCDesiredStatesError
+}
 
-	// Find and update read DFC config
-	for i, config := range m.dfcConfigs {
-		if config.Name == underlyingReadName {
-			if protocolConverterDesiredState == "stopped" {
-				m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateStopped
-			} else {
-				// Only start the DFC, if it has been configured
-				if len(m.dfcConfigs[i].DataFlowComponentServiceConfig.BenthosConfig.Input) > 0 {
-					m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateActive
-				} else {
-					m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateStopped
-				}
-			}
-			break
-		}
-	}
-
-	// Find and update write DFC config
-	for i, config := range m.dfcConfigs {
-		if config.Name == underlyingWriteName {
-			if protocolConverterDesiredState == "stopped" {
-				m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateStopped
-			} else {
-				// Only start the DFC, if it has been configured
-				if len(m.dfcConfigs[i].DataFlowComponentServiceConfig.BenthosConfig.Input) > 0 {
-					m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateActive
-				} else {
-					m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateStopped
-				}
-			}
-			break
-		}
-	}
-
-	return nil
+// EvaluateDFCDesiredStatesWithConfig mocks the DFC state evaluation logic with runtime config.
+// It simulates the race-condition-free version that uses the provided runtime config.
+// Currently, it just returns the configured error (if any).
+func (m *MockProtocolConverterService) EvaluateDFCDesiredStatesWithConfig(protConvName string, protocolConverterDesiredState string, runtimeConfig *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime) error {
+	return m.EvaluateDFCDesiredStatesError
 }
