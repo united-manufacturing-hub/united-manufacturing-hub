@@ -82,8 +82,7 @@ func BuildRuntimeConfig(
 			fmt.Errorf("nil spec")
 	}
 
-	var pcLocation map[string]string
-	pcLocation = make(map[string]string, len(spec.Location))
+	pcLocation := make(map[string]string, len(spec.Location))
 
 	// Quickly copy spec.Location to pcLocation if it exists
 	// For loop is quicker then invoking deepcopy
