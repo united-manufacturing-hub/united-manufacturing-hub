@@ -48,12 +48,15 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 			p.baseFSMInstance.GetLogger().Errorf("error reconciling protocolconverter instance %s: %v", protocolConverterInstanceName, err)
 			p.PrintState()
 			// Add metrics for error
-			metrics.IncErrorCount(metrics.ComponentProtocolConverterInstance, protocolConverterInstanceName)
+			metrics.IncErrorCountAndLog(metrics.ComponentProtocolConverterInstance, protocolConverterInstanceName, err, p.baseFSMInstance.GetLogger())
 		}
 	}()
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
+		if p.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "start of reconciliation") {
+			return nil, false
+		}
 		return ctx.Err(), false
 	}
 
@@ -92,33 +95,38 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 		return nil, false
 	}
 
-	// Step 2: Detect external changes.
-	if err = p.reconcileExternalChanges(ctx, services, snapshot); err != nil {
-		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
-		if !errors.Is(err, protocolconvertersvc.ErrServiceNotExist) && !errors.Is(err, s6.ErrServiceNotExist) {
-			// errors.Is(err, s6.ErrServiceNotExist)
-			// Consider a special case for DFC FSM here
-			// While creating for the first time, reconcileExternalChanges function will throw an error such as
-			// s6 service not found in the path since DFC fsm is relying on BenthosFSM and Benthos in turn relies on S6 fsm
-			// Inorder for DFC fsm to start, benthosManager.Reconcile should be called and this is called at the end of the function
-			// So set the err to nil in this case
-			// An example error: "failed to update observed state: failed to get observed DataflowComponent config: failed to get benthos config: failed to get benthos config file for service benthos-dataflow-hello-world-dfc: service does not exist"
+	// Step 2: Detect external changes - skip during removal
+	if p.baseFSMInstance.IsRemoving() {
+		// Skip external changes detection during removal - config files may be deleted
+		p.baseFSMInstance.GetLogger().Debugf("Skipping external changes detection during removal")
+	} else {
+		if err = p.reconcileExternalChanges(ctx, services, snapshot); err != nil {
+			// If the service is not running, we don't want to return an error here, because we want to continue reconciling
+			if !errors.Is(err, protocolconvertersvc.ErrServiceNotExist) && !errors.Is(err, s6.ErrServiceNotExist) {
+				// errors.Is(err, s6.ErrServiceNotExist)
+				// Consider a special case for DFC FSM here
+				// While creating for the first time, reconcileExternalChanges function will throw an error such as
+				// s6 service not found in the path since DFC fsm is relying on BenthosFSM and Benthos in turn relies on S6 fsm
+				// Inorder for DFC fsm to start, benthosManager.Reconcile should be called and this is called at the end of the function
+				// So set the err to nil in this case
+				// An example error: "failed to update observed state: failed to get observed DataflowComponent config: failed to get benthos config: failed to get benthos config file for service benthos-dataflow-hello-world-dfc: service does not exist"
 
-			if errors.Is(err, context.DeadlineExceeded) {
-				// Context deadline exceeded should be retried with backoff, not ignored
+				if errors.Is(err, context.DeadlineExceeded) {
+					// Context deadline exceeded should be retried with backoff, not ignored
+					p.baseFSMInstance.SetError(err, snapshot.Tick)
+					p.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileExternalChanges, will retry with backoff")
+					err = nil // Clear error so reconciliation continues
+					return nil, false
+				}
+
 				p.baseFSMInstance.SetError(err, snapshot.Tick)
-				p.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileExternalChanges, will retry with backoff")
-				err = nil // Clear error so reconciliation continues
-				return nil, false
+				p.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
+
+				return nil, false // We don't want to return an error here, because we want to continue reconciling
 			}
 
-			p.baseFSMInstance.SetError(err, snapshot.Tick)
-			p.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
-
-			return nil, false // We don't want to return an error here, because we want to continue reconciling
+			err = nil
 		}
-
-		err = nil
 	}
 
 	// Step 3: Attempt to reconcile the state.
@@ -127,6 +135,13 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
 		if errors.Is(err, standarderrors.ErrInstanceRemoved) {
+			return nil, false
+		}
+
+		if errors.Is(err, context.DeadlineExceeded) {
+			// Context deadline exceeded should be retried with backoff, not ignored
+			p.baseFSMInstance.SetError(err, snapshot.Tick)
+			p.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileStateTransition, will retry with backoff")
 			return nil, false
 		}
 
@@ -140,9 +155,15 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
-	// Reconcile the DFC and Connection manager
+	// Reconcile the manager
 	managerErr, managerReconciled := p.service.ReconcileManager(ctx, services, snapshot.Tick)
 	if managerErr != nil {
+		if errors.Is(managerErr, context.DeadlineExceeded) {
+			// Context deadline exceeded should be retried with backoff, not ignored
+			p.baseFSMInstance.SetError(managerErr, snapshot.Tick)
+			p.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in manager reconciliation, will retry with backoff")
+			return nil, false
+		}
 		p.baseFSMInstance.SetError(managerErr, snapshot.Tick)
 		p.baseFSMInstance.GetLogger().Errorf("error reconciling manager: %s", managerErr)
 		return nil, false

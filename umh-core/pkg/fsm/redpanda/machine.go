@@ -80,6 +80,7 @@ func NewRedpandaInstance(
 		baseFSMInstance:       internal_fsm.NewBaseFSMInstance(cfg, backoffConfig, logger),
 		service:               redpanda_service.NewDefaultRedpandaService(config.Name),
 		config:                config.RedpandaServiceConfig,
+		schemaRegistry:        redpanda_service.NewSchemaRegistry(),
 		PreviousObservedState: RedpandaObservedState{},
 	}
 
@@ -148,6 +149,14 @@ func (r *RedpandaInstance) IsStopped() bool {
 	return r.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopped
 }
 
+// IsRunning returns true if the instance is in any running state (active, idle, or degraded)
+func (r *RedpandaInstance) IsRunning() bool {
+	currentState := r.baseFSMInstance.GetCurrentFSMState()
+	return currentState == OperationalStateActive ||
+		currentState == OperationalStateIdle ||
+		currentState == OperationalStateDegraded
+}
+
 // WantsToBeStopped returns true if the instance wants to be stopped
 func (r *RedpandaInstance) WantsToBeStopped() bool {
 	return r.baseFSMInstance.GetDesiredFSMState() == OperationalStateStopped
@@ -157,7 +166,9 @@ func (r *RedpandaInstance) WantsToBeStopped() bool {
 func (r *RedpandaInstance) PrintState() {
 	r.baseFSMInstance.GetLogger().Debugf("Current state: %s", r.baseFSMInstance.GetCurrentFSMState())
 	r.baseFSMInstance.GetLogger().Debugf("Desired state: %s", r.baseFSMInstance.GetDesiredFSMState())
-	r.baseFSMInstance.GetLogger().Debugf("Observed state: %+v", r.PreviousObservedState)
+	r.baseFSMInstance.GetLogger().Debugf("S6: %s, Status: %s",
+		r.PreviousObservedState.ServiceInfo.S6FSMState,
+		r.PreviousObservedState.ServiceInfo.StatusReason)
 }
 
 // TODO: Add Redpanda-specific health check methods

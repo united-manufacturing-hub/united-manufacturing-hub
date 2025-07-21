@@ -68,7 +68,7 @@ type IRedpandaService interface {
 	ForceRemoveRedpanda(ctx context.Context, filesystemService filesystem.Service, redpandaName string) error
 	// ServiceExists checks if a Redpanda service exists
 	ServiceExists(ctx context.Context, filesystemService filesystem.Service, redpandaName string) bool
-	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
+	ReconcileManager(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (error, bool)
 	// IsLogsFine reports true when recent Redpanda logs (within logWindow) contain
 	// no critical error patterns.
 	//
@@ -181,6 +181,8 @@ type RedpandaService struct {
 
 	redpandaMonitorManager *redpanda_monitor_fsm.RedpandaMonitorManager
 	redpandaMonitorConfigs []config.RedpandaMonitorConfig
+
+	schemaRegistryManager ISchemaRegistry
 }
 
 // RedpandaServiceOption is a function that modifies a RedpandaService
@@ -222,6 +224,13 @@ func WithMonitorManager(monitorManager *redpanda_monitor_fsm.RedpandaMonitorMana
 	}
 }
 
+// WithSchemaRegistryManager sets a custom schema registry manager for the RedpandaService
+func WithSchemaRegistryManager(schemaRegistryManager ISchemaRegistry) RedpandaServiceOption {
+	return func(s *RedpandaService) {
+		s.schemaRegistryManager = schemaRegistryManager
+	}
+}
+
 // NewDefaultRedpandaService creates a new default Redpanda service
 // name is the name of the Redpanda service as defined in the UMH config
 func NewDefaultRedpandaService(redpandaName string, opts ...RedpandaServiceOption) *RedpandaService {
@@ -233,6 +242,7 @@ func NewDefaultRedpandaService(redpandaName string, opts ...RedpandaServiceOptio
 		httpClient:             httpclient.NewDefaultHTTPClient(),
 		baseDir:                constants.DefaultRedpandaBaseDir,
 		redpandaMonitorManager: redpanda_monitor_fsm.NewRedpandaMonitorManager(redpandaName),
+		schemaRegistryManager:  NewSchemaRegistry(),
 	}
 
 	// Apply options
@@ -840,7 +850,7 @@ func (s *RedpandaService) StopRedpanda(ctx context.Context, redpandaName string)
 
 // ReconcileManager reconciles the Redpanda manager
 // This basically just calls the Reconcile method of the S6 manager, resulting in a (re)start of the Redpanda service with the latest configuration
-func (s *RedpandaService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (err error, reconciled bool) {
+func (s *RedpandaService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (err error, reconciled bool) {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized"), false
 	}
@@ -851,12 +861,12 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, services service
 
 	// Create a snapshot from the full config
 	// Note: therefore, the S6 manager will not have access to the full observed state
-	snapshot := fsm.SystemSnapshot{
+	s6Snapshot := fsm.SystemSnapshot{
 		CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: s.s6ServiceConfigs}},
-		Tick:          tick,
+		Tick:          snapshot.Tick,
 	}
 
-	s6Err, s6Reconciled := s.s6Manager.Reconcile(ctx, snapshot, services)
+	s6Err, s6Reconciled := s.s6Manager.Reconcile(ctx, s6Snapshot, services)
 	if s6Err != nil {
 		return s6Err, false
 	}
@@ -865,12 +875,24 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, services service
 
 	redpandaMonitorSnapshot := fsm.SystemSnapshot{
 		CurrentConfig: config.FullConfig{Internal: config.InternalConfig{RedpandaMonitor: s.redpandaMonitorConfigs}},
-		Tick:          tick,
+		Tick:          snapshot.Tick,
 	}
 
 	monitorErr, monitorReconciled := s.redpandaMonitorManager.Reconcile(ctx, redpandaMonitorSnapshot, services)
 	if monitorErr != nil {
 		return fmt.Errorf("failed to reconcile redpanda monitor: %w", monitorErr), false
+	}
+
+	// Extract schema registry data from the SystemSnapshot
+	// This replaces the previous approach of using yaml:"-" tags in RedpandaConfig
+	dataModels := snapshot.CurrentConfig.DataModels
+	dataContracts := snapshot.CurrentConfig.DataContracts
+	payloadShapes := snapshot.CurrentConfig.PayloadShapes
+
+	schemaRegistryErr := s.schemaRegistryManager.Reconcile(ctx, dataModels, dataContracts, payloadShapes)
+	if schemaRegistryErr != nil {
+		// Only log them, don't return an error
+		zap.S().Errorf("failed to reconcile schema registry: %v", schemaRegistryErr)
 	}
 
 	// If either was reconciled, indicate that reconciliation occurred

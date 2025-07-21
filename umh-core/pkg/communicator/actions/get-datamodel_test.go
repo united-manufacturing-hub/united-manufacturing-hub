@@ -34,6 +34,14 @@ func createGetDataModelPayload(name string) map[string]interface{} {
 	}
 }
 
+// Helper function for get datamodel action with enriched tree
+func createGetDataModelPayloadWithEnrichment(name string, getEnrichedTree bool) map[string]interface{} {
+	return map[string]interface{}{
+		"name":            name,
+		"getEnrichedTree": getEnrichedTree,
+	}
+}
+
 var _ = Describe("GetDataModelAction", func() {
 	var (
 		action             *actions.GetDataModelAction
@@ -317,6 +325,155 @@ var _ = Describe("GetDataModelAction", func() {
 				Expect(structure).To(HaveKey("simple"))
 				Expect(structure["level1"].Subfields).To(HaveKey("level2"))
 				Expect(structure["level1"].Subfields["level2"].Subfields).To(HaveKey("level3"))
+			})
+		})
+	})
+})
+
+var _ = Describe("GetDataModelAction - Enriched Tree", func() {
+	var (
+		action             *actions.GetDataModelAction
+		mockConfigManager  *config.MockConfigManager
+		outboundChannel    chan *models.UMHMessage
+		userEmail          string
+		actionUUID         uuid.UUID
+		instanceUUID       uuid.UUID
+		motorModel         config.DataModelsConfig
+		pumpModel          config.DataModelsConfig
+		existingFullConfig config.FullConfig
+	)
+
+	BeforeEach(func() {
+		mockConfigManager = config.NewMockConfigManager()
+		outboundChannel = make(chan *models.UMHMessage, 10) // Buffer to prevent blocking
+		userEmail = "test@example.com"
+		actionUUID = uuid.New()
+		instanceUUID = uuid.New()
+
+		// Create a motor model
+		motorModel = config.DataModelsConfig{
+			Name: "motor",
+			Versions: map[string]config.DataModelVersion{
+				"v1": {
+					Structure: map[string]config.Field{
+						"current": {
+							PayloadShape: "timeseries-number",
+						},
+						"rpm": {
+							PayloadShape: "timeseries-number",
+						},
+					},
+				},
+			},
+		}
+
+		// Create a pump model that references the motor model
+		pumpModel = config.DataModelsConfig{
+			Name: "pump",
+			Versions: map[string]config.DataModelVersion{
+				"v1": {
+					Structure: map[string]config.Field{
+						"pressure": {
+							PayloadShape: "timeseries-number",
+						},
+						"motor": {
+							ModelRef: &config.ModelRef{
+								Name:    "motor",
+								Version: "v1",
+							},
+						},
+					},
+				},
+			},
+		}
+
+		existingFullConfig = config.FullConfig{
+			DataModels: []config.DataModelsConfig{motorModel, pumpModel},
+		}
+
+		mockConfigManager = mockConfigManager.WithConfig(existingFullConfig)
+
+		action = actions.NewGetDataModelAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfigManager)
+	})
+
+	Describe("Execute with getEnrichedTree=true", func() {
+		Context("with model containing refModel fields", func() {
+			BeforeEach(func() {
+				payload := createGetDataModelPayloadWithEnrichment("pump", true)
+				err := action.Parse(payload)
+				Expect(err).ToNot(HaveOccurred())
+				err = action.Validate()
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("should enrich refModel fields with actual model data", func() {
+				result, metadata, err := action.Execute()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(metadata).To(BeNil())
+
+				response, ok := result.(models.GetDataModelResponse)
+				Expect(ok).To(BeTrue())
+				Expect(response.Name).To(Equal("pump"))
+				Expect(response.Versions).To(HaveLen(1))
+
+				// Check version v1
+				v1, exists := response.Versions["v1"]
+				Expect(exists).To(BeTrue())
+
+				// The structure should have the motor field with both _refModel and enriched fields
+				structure := v1.Structure
+				Expect(structure).To(HaveKey("pressure"))
+				Expect(structure).To(HaveKey("motor"))
+
+				// Check that the motor field has the refModel
+				motorField := structure["motor"]
+				Expect(motorField.ModelRef).ToNot(BeNil())
+				Expect(motorField.ModelRef.Name).To(Equal("motor"))
+				Expect(motorField.ModelRef.Version).To(Equal("v1"))
+
+				// Check that the motor field has enriched subfields
+				Expect(motorField.Subfields).ToNot(BeNil())
+				Expect(motorField.Subfields).To(HaveKey("current"))
+				Expect(motorField.Subfields).To(HaveKey("rpm"))
+
+				// Verify the enriched fields have the correct payload shapes
+				Expect(motorField.Subfields["current"].PayloadShape).To(Equal("timeseries-number"))
+				Expect(motorField.Subfields["rpm"].PayloadShape).To(Equal("timeseries-number"))
+			})
+		})
+
+		Context("with getEnrichedTree=false", func() {
+			BeforeEach(func() {
+				payload := createGetDataModelPayloadWithEnrichment("pump", false)
+				err := action.Parse(payload)
+				Expect(err).ToNot(HaveOccurred())
+				err = action.Validate()
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("should not enrich refModel fields", func() {
+				result, metadata, err := action.Execute()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(metadata).To(BeNil())
+
+				response, ok := result.(models.GetDataModelResponse)
+				Expect(ok).To(BeTrue())
+				Expect(response.Name).To(Equal("pump"))
+
+				// Check version v1
+				v1, exists := response.Versions["v1"]
+				Expect(exists).To(BeTrue())
+
+				structure := v1.Structure
+				motorField := structure["motor"]
+
+				// Should have refModel but no enriched subfields
+				Expect(motorField.ModelRef).ToNot(BeNil())
+				Expect(motorField.ModelRef.Name).To(Equal("motor"))
+				Expect(motorField.ModelRef.Version).To(Equal("v1"))
+
+				// Should not have enriched subfields
+				Expect(motorField.Subfields).To(BeNil())
 			})
 		})
 	})

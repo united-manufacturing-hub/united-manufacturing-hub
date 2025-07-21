@@ -17,9 +17,10 @@ package constants
 import "time"
 
 const (
-	S6BaseDir       = "/run/service"
-	S6ConfigDirName = "config"
-	S6LogBaseDir    = "/data/logs"
+	S6BaseDir           = "/run/service"   // Scan directory (contains symlinks)
+	S6RepositoryBaseDir = "/data/services" // Repository directory (contains actual service files)
+	S6ConfigDirName     = "config"
+	S6LogBaseDir        = "/data/logs"
 )
 
 var (
@@ -31,9 +32,11 @@ var (
 const (
 	// S6 Operation Timeouts - Foundation Service (Level 0)
 	// S6 is the foundation service with no dependencies
-	S6UpdateObservedStateTimeout = 6 * time.Millisecond
-	S6RemoveTimeout              = 10 * time.Millisecond
-	S6MaxLines                   = 10000
+	// Increased from 6ms to 15ms to handle scaling test load (benthos-scaling integration test)
+	S6UpdateObservedStateTimeout = 15 * time.Millisecond
+	// Increased from 10ms to 20ms to handle scaling test load
+	S6RemoveTimeout = 20 * time.Millisecond
+	S6MaxLines      = 10000
 
 	// S6FileReadTimeBuffer is the minimum time buffer required before attempting to read a file chunk
 	// This is half of DefaultTickerTime to ensure graceful early exit from file operations
@@ -44,4 +47,13 @@ const (
 	// S6FileReadChunkSize is the buffer size used for reading files in chunks
 	// Set to 1MB for optimal I/O performance while maintaining reasonable memory usage
 	S6FileReadChunkSize = 1024 * 1024
+)
+
+const (
+	// S6 Command Timeout Configuration
+	// These constants control timeout behavior for S6 commands with -T and -t parameters
+
+	// S6_TIMEOUT_PERCENTAGE defines what percentage of remaining context time to allocate to S6 commands
+	// Using 50% as recommended by skarnet documentation for safe retry behavior
+	S6_TIMEOUT_PERCENTAGE = 0.5
 )

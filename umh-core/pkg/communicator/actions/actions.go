@@ -195,6 +195,14 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 		action = NewEditDataModelAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager)
 	case models.GetDataModel:
 		action = NewGetDataModelAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager)
+	case models.DeleteStreamProcessor:
+		action = NewDeleteStreamProcessorAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
+	case models.EditStreamProcessor:
+		action = NewEditStreamProcessorAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
+	case models.DeployStreamProcessor:
+		action = NewDeployStreamProcessorAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
+	case models.GetStreamProcessor:
+		action = NewGetStreamProcessorAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
 
 	default:
 		log.Errorf("Unknown action type: %s", payload.ActionType)
@@ -295,6 +303,7 @@ func sendActionReplyInternal(instanceUUID uuid.UUID, userEmail string, actionUUI
 		sentry.ReportIssuef(sentry.IssueTypeError, logger.For(logger.ComponentCommunicator), "Error generating umh message: %v", err)
 		return err
 	}
+
 	outboundChannel <- &umhMessage
 
 	return nil

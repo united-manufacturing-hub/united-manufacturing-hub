@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/monitor"
+	redpanda_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
 	redpanda_monitor_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
@@ -46,15 +47,18 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, redpandaInstanceName, time.Since(start))
 		if err != nil {
-			r.baseFSMInstance.GetLogger().Errorf("error reconciling Redpanda instance %s: %w", redpandaInstanceName, err)
+			r.baseFSMInstance.GetLogger().Errorf("error reconciling redpanda instance %s: %s", redpandaInstanceName, err)
 			r.PrintState()
 			// Add metrics for error
-			metrics.IncErrorCount(metrics.ComponentRedpandaInstance, redpandaInstanceName)
+			metrics.IncErrorCountAndLog(metrics.ComponentRedpandaInstance, redpandaInstanceName, err, r.baseFSMInstance.GetLogger())
 		}
 	}()
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
+		if r.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "start of reconciliation") {
+			return nil, false
+		}
 		return ctx.Err(), false
 	}
 
@@ -89,35 +93,36 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 		return nil, false
 	}
 
-	// Step 2: Detect external changes.
+	// Step 2: Detect external changes - skip during removal
 	var externalReconciled bool
-	err, externalReconciled = r.reconcileExternalChanges(ctx, services, snapshot)
-	if err != nil {
-		// I am using strings.Contains as i cannot get it working with errors.Is
-		isExpectedError := strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNotExist.Error()) ||
-			strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNoLogFile.Error()) ||
-			strings.Contains(err.Error(), monitor.ErrServiceConnectionRefused.Error()) ||
-			strings.Contains(err.Error(), monitor.ErrServiceConnectionTimedOut.Error()) ||
-			strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNoSectionsFound.Error()) ||
-			strings.Contains(err.Error(), monitor.ErrServiceStopped.Error()) // This is expected when the service is stopped or stopping, no need to fetch logs, metrics, etc.
+	if r.baseFSMInstance.IsRemoving() {
+		// Skip external changes detection during removal - config files may be deleted
+		r.baseFSMInstance.GetLogger().Debugf("Skipping external changes detection during removal")
+	} else {
+		err, externalReconciled = r.reconcileExternalChanges(ctx, services, snapshot)
+		if err != nil {
+			// I am using strings.Contains as i cannot get it working with errors.Is
+			isExpectedError := strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNotExist.Error()) ||
+				strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNoLogFile.Error()) ||
+				strings.Contains(err.Error(), monitor.ErrServiceConnectionRefused.Error()) ||
+				strings.Contains(err.Error(), monitor.ErrServiceConnectionTimedOut.Error()) ||
+				strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNoSectionsFound.Error()) ||
+				strings.Contains(err.Error(), monitor.ErrServiceStopped.Error()) // This is expected when the service is stopped or stopping, no need to fetch logs, metrics, etc.
 
-		if !isExpectedError {
+			if !isExpectedError {
 
-			if errors.Is(err, context.DeadlineExceeded) {
-				// Context deadline exceeded should be retried with backoff, not ignored
+				if r.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
+					return nil, false
+				}
+
 				r.baseFSMInstance.SetError(err, snapshot.Tick)
-				r.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileExternalChanges, will retry with backoff")
-				err = nil // Clear error so reconciliation continues
-				return nil, false
+				r.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
+				return nil, false // We don't want to return an error here, because we want to continue reconciling
 			}
 
-			r.baseFSMInstance.SetError(err, snapshot.Tick)
-			r.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
-			return nil, false // We don't want to return an error here, because we want to continue reconciling
+			//nolint:ineffassign
+			err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
 		}
-
-		//nolint:ineffassign
-		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
 	}
 
 	// Step 3: Attempt to reconcile the state.
@@ -129,17 +134,37 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 			return nil, false
 		}
 
+		if r.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileStateTransition") {
+			return nil, false
+		}
+
 		r.baseFSMInstance.SetError(err, snapshot.Tick)
 		r.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
 	// Reconcile the s6Manager
-	s6Err, s6Reconciled := r.service.ReconcileManager(ctx, services, snapshot.Tick)
+	s6Err, s6Reconciled := r.service.ReconcileManager(ctx, services, snapshot)
 	if s6Err != nil {
-		r.baseFSMInstance.SetError(s6Err, snapshot.Tick)
-		r.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
-		return nil, false
+		// Check if the error is from schema registry
+		if redpanda_service.IsSchemaRegistryError(s6Err) {
+			// For schema registry errors, only set the error if we're in running states
+			if r.IsRunning() {
+				r.baseFSMInstance.SetError(s6Err, snapshot.Tick)
+				r.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
+				return nil, false
+			}
+			// If not in running state, just log the error but don't set it in the FSM
+			r.baseFSMInstance.GetLogger().Debugf("schema registry error while not in running state (%s), ignoring: %s", r.GetCurrentFSMState(), s6Err)
+		} else {      
+		  if r.baseFSMInstance.IsDeadlineExceededAndHandle(s6Err, snapshot.Tick, "s6Manager reconciliation") {
+			  return nil, false
+	  	}
+			// For non-schema registry errors, always set the error
+			r.baseFSMInstance.SetError(s6Err, snapshot.Tick)
+			r.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
+			return nil, false
+		}
 	}
 
 	// If either Redpanda state, S6 state or the internal redpanda state via the Admin API was reconciled, we return reconciled so that nothing happens anymore in this tick

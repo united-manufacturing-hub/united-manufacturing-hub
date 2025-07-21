@@ -45,12 +45,15 @@ func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sys
 			b.baseFSMInstance.GetLogger().Errorf("error reconciling benthos monitor instance %s: %s", instanceName, err)
 			b.PrintState()
 			// Add metrics for error
-			metrics.IncErrorCount(metrics.ComponentBenthosMonitor, instanceName)
+			metrics.IncErrorCountAndLog(metrics.ComponentBenthosMonitor, instanceName, err, b.baseFSMInstance.GetLogger())
 		}
 	}()
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
+		if b.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "start of reconciliation") {
+			return nil, false
+		}
 		return ctx.Err(), false
 	}
 
@@ -140,6 +143,12 @@ func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sys
 
 	s6Err, s6Reconciled := b.monitorService.ReconcileManager(ctx, services, snapshot.Tick)
 	if s6Err != nil {
+		if errors.Is(s6Err, context.DeadlineExceeded) {
+			// Context deadline exceeded should be retried with backoff, not ignored
+			b.baseFSMInstance.SetError(s6Err, snapshot.Tick)
+			b.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in s6Manager reconciliation, will retry with backoff")
+			return nil, false
+		}
 		b.baseFSMInstance.SetError(s6Err, snapshot.Tick)
 		b.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
 		return nil, false

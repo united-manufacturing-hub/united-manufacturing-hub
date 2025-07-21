@@ -9,3 +9,9 @@
 
 # .DS_Store from macos
 .DS_Store
+
+# Claude artifacts
+compass_artifact*
+
+# Test results
+*.result.txt

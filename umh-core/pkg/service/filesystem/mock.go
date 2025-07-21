@@ -45,6 +45,7 @@ type MockFileSystem struct {
 	ChownFunc           func(ctx context.Context, path string, user string, group string) error
 	GlobFunc            func(ctx context.Context, pattern string) ([]string, error)
 	RenameFunc          func(ctx context.Context, oldPath, newPath string) error
+	SymlinkFunc         func(ctx context.Context, target, linkPath string) error
 	mutex               sync.Mutex
 }
 
@@ -467,6 +468,29 @@ func (m *MockFileSystem) Rename(ctx context.Context, oldPath, newPath string) er
 	return nil
 }
 
+// Symlink creates a symbolic link from linkPath to target
+func (m *MockFileSystem) Symlink(ctx context.Context, target, linkPath string) error {
+	if m.SymlinkFunc != nil {
+		return m.SymlinkFunc(ctx, target, linkPath)
+	}
+
+	shouldFail, delay := m.simulateRandomBehavior("Symlink:" + target + ":" + linkPath)
+
+	if delay > 0 {
+		select {
+		case <-time.After(delay):
+			// Delay completed
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	if shouldFail {
+		return errors.New("simulated failure in Symlink")
+	}
+	return nil
+}
+
 // WithEnsureDirectoryFunc sets a custom implementation for EnsureDirectory
 func (m *MockFileSystem) WithEnsureDirectoryFunc(fn func(ctx context.Context, path string) error) *MockFileSystem {
 	m.EnsureDirectoryFunc = fn
@@ -560,6 +584,12 @@ func (m *MockFileSystem) WithGlobFunc(fn func(ctx context.Context, pattern strin
 // WithRenameFunc sets a custom implementation for Rename
 func (m *MockFileSystem) WithRenameFunc(fn func(ctx context.Context, oldPath, newPath string) error) *MockFileSystem {
 	m.RenameFunc = fn
+	return m
+}
+
+// WithSymlinkFunc sets a custom implementation for Symlink
+func (m *MockFileSystem) WithSymlinkFunc(fn func(ctx context.Context, target, linkPath string) error) *MockFileSystem {
+	m.SymlinkFunc = fn
 	return m
 }
 

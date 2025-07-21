@@ -45,15 +45,18 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentConnectionInstance, connectionInstanceName, time.Since(start))
 		if err != nil {
-			c.baseFSMInstance.GetLogger().Errorf("error reconciling connection instance %s: %v", connectionInstanceName, err)
+			c.baseFSMInstance.GetLogger().Errorf("error reconciling connection instance %s: %s", connectionInstanceName, err)
 			c.PrintState()
 			// Add metrics for error
-			metrics.IncErrorCount(metrics.ComponentConnectionInstance, connectionInstanceName)
+			metrics.IncErrorCountAndLog(metrics.ComponentConnectionInstance, connectionInstanceName, err, c.baseFSMInstance.GetLogger())
 		}
 	}()
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
+		if c.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "start of reconciliation") {
+			return nil, false
+		}
 		return ctx.Err(), false
 	}
 
@@ -92,24 +95,25 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 		return nil, false
 	}
 
-	// Step 2: Detect external changes.
-	if err = c.reconcileExternalChanges(ctx, services, snapshot); err != nil {
-		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
-		if !errors.Is(err, connectionsvc.ErrServiceNotExist) {
+	// Step 2: Detect external changes - skip during removal
+	if c.baseFSMInstance.IsRemoving() {
+		// Skip external changes detection during removal - config files may be deleted
+		c.baseFSMInstance.GetLogger().Debugf("Skipping external changes detection during removal")
+	} else {
+		if err = c.reconcileExternalChanges(ctx, services, snapshot); err != nil {
+			// If the service is not running, we don't want to return an error here, because we want to continue reconciling
+			if !errors.Is(err, connectionsvc.ErrServiceNotExist) {
 
-			if errors.Is(err, context.DeadlineExceeded) {
-				// Context deadline exceeded should be retried with backoff, not ignored
+				if c.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
+					return nil, false
+				}
 				c.baseFSMInstance.SetError(err, snapshot.Tick)
-				c.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileExternalChanges, will retry with backoff")
-				err = nil // Clear error so reconciliation continues
-				return nil, false
+				c.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
+				return nil, false // We don't want to return an error here, because we want to continue reconciling
 			}
-			c.baseFSMInstance.SetError(err, snapshot.Tick)
-			c.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
-			return nil, false // We don't want to return an error here, because we want to continue reconciling
-		}
 
-		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
+			err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
+		}
 	}
 
 	// Step 3: Attempt to reconcile the state.
@@ -121,6 +125,10 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 			return nil, false
 		}
 
+		if c.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileStateTransition") {
+			return nil, false
+		}
+
 		c.baseFSMInstance.SetError(err, snapshot.Tick)
 		c.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
@@ -129,6 +137,9 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 	// Reconcile the benthosManager
 	nmapErr, nmapReconciled := c.service.ReconcileManager(ctx, services, snapshot.Tick)
 	if nmapErr != nil {
+		if c.baseFSMInstance.IsDeadlineExceededAndHandle(nmapErr, snapshot.Tick, "nmapManager reconciliation") {
+			return nil, false
+		}
 		c.baseFSMInstance.SetError(nmapErr, snapshot.Tick)
 		c.baseFSMInstance.GetLogger().Errorf("error reconciling nmapManager: %s", nmapErr)
 		return nil, false

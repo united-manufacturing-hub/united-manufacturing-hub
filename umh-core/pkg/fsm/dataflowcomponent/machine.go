@@ -155,7 +155,9 @@ func (d *DataflowComponentInstance) IsStopped() bool {
 func (d *DataflowComponentInstance) PrintState() {
 	d.baseFSMInstance.GetLogger().Debugf("Current state: %s", d.baseFSMInstance.GetCurrentFSMState())
 	d.baseFSMInstance.GetLogger().Debugf("Desired state: %s", d.baseFSMInstance.GetDesiredFSMState())
-	d.baseFSMInstance.GetLogger().Debugf("Observed state: %+v", d.ObservedState)
+	d.baseFSMInstance.GetLogger().Debugf("Benthos FSM: %s, Status: %s",
+		d.ObservedState.ServiceInfo.BenthosFSMState,
+		d.ObservedState.ServiceInfo.StatusReason)
 }
 
 // GetMinimumRequiredTime returns the minimum required time for this instance
