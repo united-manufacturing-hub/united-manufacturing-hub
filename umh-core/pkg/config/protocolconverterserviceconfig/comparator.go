@@ -50,11 +50,11 @@ func (c *Comparator) ConfigsEqual(desired, observed ProtocolConverterServiceConf
 	comparatorVariable := variables.NewComparator()
 
 	connectionEqual := reflect.DeepEqual(connectionD, connectionO)
+	dfcReadEqual := comparatorDFC.ConfigsEqual(dfcReadD, dfcReadO)
+	dfcWriteEqual := comparatorDFC.ConfigsEqual(dfcWriteD, dfcWriteO)
+	variablesEqual := comparatorVariable.ConfigsEqual(desired.Variables, observed.Variables)
 
-	return connectionEqual &&
-		comparatorDFC.ConfigsEqual(dfcReadD, dfcReadO) &&
-		comparatorDFC.ConfigsEqual(dfcWriteD, dfcWriteO) &&
-		comparatorVariable.ConfigsEqual(desired.Variables, observed.Variables)
+	return connectionEqual && dfcReadEqual && dfcWriteEqual && variablesEqual
 }
 
 // ConfigDiff returns a human-readable string describing differences between configs
