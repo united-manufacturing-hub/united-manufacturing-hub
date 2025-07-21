@@ -135,8 +135,7 @@ ARG DEBUG=false
 ARG DLV_VERSION=MUST_BE_SET_BY_MAKEFILE
 RUN if [ "$DEBUG" = "true" ]; then \
     apk add --no-cache go && \ 
-    go install github.com/go-delve/delve/cmd/dlv@${DLV_VERSION} && \
-    find / -name "dlv"; \
+    go install github.com/go-delve/delve/cmd/dlv@${DLV_VERSION}; \
     fi
 
 RUN chmod +x /usr/local/bin/umh-core && \
