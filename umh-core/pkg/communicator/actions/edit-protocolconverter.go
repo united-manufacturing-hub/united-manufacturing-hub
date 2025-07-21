@@ -38,9 +38,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/tiendc/go-deepcopy"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
@@ -664,8 +666,14 @@ func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *protoco
 	// Get the observed spec config
 	specConfig := pcSnapshot.ObservedProtocolConverterSpecConfig
 
-	// Create a modified spec config that includes our desired DFC config
-	modifiedSpec := specConfig
+	// Create a deep copy to avoid mutating the original observed state
+	var modifiedSpec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+	err := deepcopy.Copy(&modifiedSpec, &specConfig)
+	if err != nil {
+		return dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, fmt.Errorf("failed to deep copy spec config: %w", err)
+	}
+
+	// Now safely modify the copy without affecting the original
 	switch a.dfcType {
 	case DFCTypeRead:
 		modifiedSpec.Config.DataflowComponentReadServiceConfig = a.desiredDFCConfig
