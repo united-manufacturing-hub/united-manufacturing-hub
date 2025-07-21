@@ -22,6 +22,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/streamprocessorserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/topicbrowserserviceconfig"
 
 	"github.com/tiendc/go-deepcopy"
@@ -29,15 +30,50 @@ import (
 
 type FullConfig struct {
 	Agent             AgentConfig               `yaml:"agent"`                       // Agent config, requires restart to take effect
-	Templates         TemplatesConfig           `yaml:"templates,omitempty"`         // Templates section with enforced structure for protocol converters
+	Templates         TemplatesConfig           `yaml:"templates,omitempty"`         // Templates section with enforced structure for protocol converter
+	PayloadShapes     map[string]PayloadShape   `yaml:"payloadShapes,omitempty"`     // PayloadShapes section with enforced structure for payload shapes
+	DataModels        []DataModelsConfig        `yaml:"dataModels,omitempty"`        // DataModels section with enforced structure for data models
+	DataContracts     []DataContractsConfig     `yaml:"dataContracts,omitempty"`     // DataContracts section with enforced structure for data contracts
 	DataFlow          []DataFlowComponentConfig `yaml:"dataFlow,omitempty"`          // DataFlow components to manage, can be updated while running
 	ProtocolConverter []ProtocolConverterConfig `yaml:"protocolConverter,omitempty"` // ProtocolConverter config, can be updated while runnnig
+	StreamProcessor   []StreamProcessorConfig   `yaml:"streamProcessor,omitempty"`   // StreamProcessor config, can be updated while running
 	Internal          InternalConfig            `yaml:"internal,omitempty"`          // Internal config, not to be used by the user, only to be used for testing internal components
 }
 
 // TemplatesConfig defines the structure for the templates section
 type TemplatesConfig struct {
 	ProtocolConverter map[string]interface{} `yaml:"protocolConverter,omitempty"` // Array of protocol converter templates
+	StreamProcessor   map[string]interface{} `yaml:"streamProcessor,omitempty"`   // Array of stream processor templates
+}
+
+// DataModelsConfig defines the structure for the data models section
+type DataModelsConfig struct {
+	Name        string                      `yaml:"name"`                  // name of the data model
+	Description string                      `yaml:"description,omitempty"` // description of the data model
+	Versions    map[string]DataModelVersion `yaml:"version"`               // version of the data model (1, 2, etc.)
+}
+
+// DataContractsConfig defines the structure for the data contracts section
+type DataContractsConfig struct {
+	Name           string                   `yaml:"name"`                      // name of the data contract
+	Model          *ModelRef                `yaml:"model,omitempty"`           // reference to the data model
+	DefaultBridges []map[string]interface{} `yaml:"default_bridges,omitempty"` // placeholder for default bridges configuration
+}
+
+type DataModelVersion struct {
+	Structure map[string]Field `yaml:"structure"` // structure of the data model (fields)
+}
+
+// ModelRef represents a reference to another data model
+type ModelRef struct {
+	Name    string `yaml:"name"`    // name of the referenced data model
+	Version string `yaml:"version"` // version of the referenced data model
+}
+
+type Field struct {
+	PayloadShape string           `yaml:"_payloadshape,omitempty"` // type of the field (timeseries only for now)
+	ModelRef     *ModelRef        `yaml:"_refModel,omitempty"`     // this is a special field that is used to reference another data model to be used as a type for this field
+	Subfields    map[string]Field `yaml:",inline"`                 // subfields of the field (allow recursive definition of fields)
 }
 
 type InternalConfig struct {
@@ -152,6 +188,25 @@ func (d *ProtocolConverterConfig) HasAnchors() bool { return d.hasAnchors }
 // AnchorName returns the anchor name of the ProtocolConverterConfig, see templating.go
 func (d *ProtocolConverterConfig) AnchorName() string { return d.anchorName }
 
+// StreamProcessorConfig contains configuration for creating a StreamProcessor
+type StreamProcessorConfig struct {
+	// For the FSM
+	FSMInstanceConfig `yaml:",inline"`
+
+	StreamProcessorServiceConfig streamprocessorserviceconfig.StreamProcessorServiceConfigSpec `yaml:"streamProcessorServiceConfig"`
+
+	// private marker – not (un)marshalled
+	// explanation see templating.go
+	hasAnchors bool   `yaml:"-"`
+	anchorName string `yaml:"-"`
+}
+
+// HasAnchors returns true if the StreamProcessorConfig has anchors, see templating.go
+func (d *StreamProcessorConfig) HasAnchors() bool { return d.hasAnchors }
+
+// AnchorName returns the anchor name of the StreamProcessorConfig, see templating.go
+func (d *StreamProcessorConfig) AnchorName() string { return d.anchorName }
+
 // NmapConfig contains configuration for creating a Nmap service
 type NmapConfig struct {
 	// For the FSM
@@ -202,12 +257,28 @@ type TopicBrowserConfig struct {
 	TopicBrowserServiceConfig topicbrowserserviceconfig.Config `yaml:"serviceConfig,omitempty"`
 }
 
+// PayloadShape defines the structure for a single payload shape
+type PayloadShape struct {
+	Description string                  `yaml:"description,omitempty"` // description of the payload shape
+	Fields      map[string]PayloadField `yaml:"fields"`                // fields of the payload shape
+}
+
+// PayloadField represents a field within a payload shape with recursive structure support
+type PayloadField struct {
+	Type      string                  `yaml:"_type,omitempty"` // type of the field (number, string, etc.)
+	Subfields map[string]PayloadField `yaml:",inline"`         // subfields for recursive definition (inline to allow direct field access)
+}
+
 // Clone creates a deep copy of FullConfig
 func (c FullConfig) Clone() FullConfig {
 	clone := FullConfig{
 		Agent:             c.Agent,
+		PayloadShapes:     make(map[string]PayloadShape),
+		DataModels:        make([]DataModelsConfig, len(c.DataModels)),
+		DataContracts:     make([]DataContractsConfig, len(c.DataContracts)),
 		DataFlow:          make([]DataFlowComponentConfig, len(c.DataFlow)),
 		ProtocolConverter: make([]ProtocolConverterConfig, len(c.ProtocolConverter)),
+		StreamProcessor:   make([]StreamProcessorConfig, len(c.StreamProcessor)),
 		Templates:         TemplatesConfig{},
 		Internal:          InternalConfig{},
 	}
@@ -222,11 +293,27 @@ func (c FullConfig) Clone() FullConfig {
 	if err != nil {
 		return FullConfig{}
 	}
+	err = deepcopy.Copy(&clone.PayloadShapes, &c.PayloadShapes)
+	if err != nil {
+		return FullConfig{}
+	}
+	err = deepcopy.Copy(&clone.DataModels, &c.DataModels)
+	if err != nil {
+		return FullConfig{}
+	}
+	err = deepcopy.Copy(&clone.DataContracts, &c.DataContracts)
+	if err != nil {
+		return FullConfig{}
+	}
 	err = deepcopy.Copy(&clone.DataFlow, &c.DataFlow)
 	if err != nil {
 		return FullConfig{}
 	}
 	err = deepcopy.Copy(&clone.ProtocolConverter, &c.ProtocolConverter)
+	if err != nil {
+		return FullConfig{}
+	}
+	err = deepcopy.Copy(&clone.StreamProcessor, &c.StreamProcessor)
 	if err != nil {
 		return FullConfig{}
 	}

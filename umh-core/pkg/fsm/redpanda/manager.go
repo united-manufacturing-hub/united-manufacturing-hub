@@ -53,6 +53,7 @@ func NewRedpandaManager(name string) *RedpandaManager {
 			redpandaConfig := fullConfig.Internal.Redpanda
 			// Force redpanda name to be "redpanda"
 			redpandaConfig.Name = constants.RedpandaServiceName
+
 			return []config.RedpandaConfig{redpandaConfig}, nil
 		},
 		// Get name from Redpanda config
@@ -85,6 +86,7 @@ func NewRedpandaManager(name string) *RedpandaManager {
 				return fmt.Errorf("instance is not a RedpandaInstance")
 			}
 			RedpandaInstance.config = cfg.RedpandaServiceConfig
+
 			return nil
 		},
 		// Get expected max p95 execution time per instance
@@ -93,7 +95,7 @@ func NewRedpandaManager(name string) *RedpandaManager {
 			if !ok {
 				return 0, fmt.Errorf("instance is not a RedpandaInstance")
 			}
-			return redpandaInstance.GetExpectedMaxP95ExecutionTimePerInstance(), nil
+			return redpandaInstance.GetMinimumRequiredTime(), nil
 		},
 	)
 

@@ -273,7 +273,7 @@ var _ = Describe("GetLogsAction", func() {
 
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("uuid must be set to retrieve logs for a DFC or Protocol Converter"))
+			Expect(err.Error()).To(ContainSubstring("uuid must be set to retrieve logs for a DFC, Protocol Converter, or Stream Processor"))
 		})
 
 		It("should return an error if the uuid is missing on Protocol Converter log types", func() {
@@ -286,7 +286,7 @@ var _ = Describe("GetLogsAction", func() {
 
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("uuid must be set to retrieve logs for a DFC or Protocol Converter"))
+			Expect(err.Error()).To(ContainSubstring("uuid must be set to retrieve logs for a DFC, Protocol Converter, or Stream Processor"))
 
 			payload = map[string]interface{}{
 				"type":      models.ProtocolConverterWriteLogType,
@@ -297,7 +297,7 @@ var _ = Describe("GetLogsAction", func() {
 
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("uuid must be set to retrieve logs for a DFC or Protocol Converter"))
+			Expect(err.Error()).To(ContainSubstring("uuid must be set to retrieve logs for a DFC, Protocol Converter, or Stream Processor"))
 		})
 
 		It("should return an error if the uuid is invalid", func() {

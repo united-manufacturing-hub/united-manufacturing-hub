@@ -43,12 +43,15 @@ func (a *AgentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsh
 			a.baseFSMInstance.GetLogger().Errorf("error reconciling agent instance %s: %s", instanceName, err)
 			a.PrintState()
 			// Add metrics for error
-			metrics.IncErrorCount(metrics.ComponentAgentMonitor, instanceName)
+			metrics.IncErrorCountAndLog(metrics.ComponentAgentMonitor, instanceName, err, a.baseFSMInstance.GetLogger())
 		}
 	}()
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
+		if a.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "start of reconciliation") {
+			return nil, false
+		}
 		return ctx.Err(), false
 	}
 
@@ -72,18 +75,10 @@ func (a *AgentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsh
 		return nil, false
 	}
 
-	// 2) Update observed state (i.e., fetch agent metrics) with a timeout
-	updateCtx, cancel := context.WithTimeout(ctx, constants.AgentMonitorUpdateObservedStateTimeout)
-	defer cancel()
-
-	if err := a.updateObservedState(updateCtx, snapshot); err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
-			// Updating the observed state can sometimes take longer,
-			// resulting in context.DeadlineExceeded errors. In this case, we want to
-			// mark the reconciliation as complete for this tick since we've likely
-			// already consumed significant time.
-			a.baseFSMInstance.GetLogger().Warnf("Timeout while updating observed state for agent instance %s", instanceName)
-			return nil, true
+	// Step 2: Detect external changes
+	if err = a.reconcileExternalChanges(ctx, services, snapshot); err != nil {
+		if a.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
+			return nil, false
 		}
 
 		// For other errors, set the error for backoff
@@ -105,13 +100,8 @@ func (a *AgentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsh
 			return nil, false
 		}
 
-		if errors.Is(err, context.DeadlineExceeded) {
-			// Updating the observed state can sometimes take longer,
-			// resulting in context.DeadlineExceeded errors. In this case, we want to
-			// mark the reconciliation as complete for this tick since we've likely
-			// already consumed significant time. We return reconciled=true to prevent
-			// further reconciliation attempts in the current tick.
-			return nil, true // We don't want to return an error here, as this can happen in normal operations
+		if a.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileStateTransition") {
+			return nil, false
 		}
 
 		a.baseFSMInstance.SetError(err, snapshot.Tick)
@@ -123,6 +113,26 @@ func (a *AgentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsh
 	a.baseFSMInstance.ResetState()
 
 	return nil, reconciled
+}
+
+// reconcileExternalChanges checks if the AgentInstance service status has changed
+// externally and updates the observed state accordingly
+func (a *AgentInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentAgentMonitor, a.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
+	}()
+
+	// Create context for UpdateObservedStateOfInstance with minimum timeout guarantee
+	// This ensures we get either 80% of available time OR the minimum required time, whichever is larger
+	updateCtx, cancel := constants.CreateUpdateObservedStateContextWithMinimum(ctx, constants.AgentMonitorUpdateObservedStateTimeout)
+	defer cancel()
+
+	err := a.UpdateObservedStateOfInstance(updateCtx, services, snapshot)
+	if err != nil {
+		return fmt.Errorf("failed to update observed state: %w", err)
+	}
+	return nil
 }
 
 // printSystemState prints the full system state in a human-readable format
@@ -223,18 +233,6 @@ func (a *AgentInstance) reconcileStateTransition(ctx context.Context, services s
 	}
 
 	return fmt.Errorf("invalid state: %s", currentState), false
-}
-
-// updateObservedState queries agent_monitor.Service for new metrics
-func (a *AgentInstance) updateObservedState(ctx context.Context, snapshot fsm.SystemSnapshot) error {
-	// get the config from the config manager
-	status, err := a.monitorService.Status(ctx, snapshot) // TODO: where to get the config? it needs to be passed somehow from the manager
-	if err != nil {
-		return fmt.Errorf("failed to get agent metrics: %w", err)
-	}
-	// Save to observed state
-	a.ObservedState.ServiceInfo = status
-	return nil
 }
 
 // reconcileOperationalStates handles states related to instance operations (starting/stopping)

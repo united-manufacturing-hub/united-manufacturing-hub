@@ -81,14 +81,18 @@ func (a *GetMetricsAction) Parse(payload interface{}) (err error) {
 func (a *GetMetricsAction) Validate() (err error) {
 	a.actionLogger.Info("Validating the payload")
 
-	allowedMetricTypes := []models.MetricResourceType{models.DFCMetricResourceType, models.RedpandaMetricResourceType}
+	allowedMetricTypes := []models.MetricResourceType{models.DFCMetricResourceType, models.RedpandaMetricResourceType, models.TopicBrowserMetricResourceType, models.StreamProcessorMetricResourceType}
 	if !slices.Contains(allowedMetricTypes, a.payload.Type) {
-		return errors.New("metric type must be set and must be one of the following: dfc, redpanda")
+		return errors.New("metric type must be set and must be one of the following: dfc, redpanda, topic-browser, stream-processor")
 	}
 
-	if a.payload.Type == models.DFCMetricResourceType {
+	if a.payload.Type == models.DFCMetricResourceType || a.payload.Type == models.StreamProcessorMetricResourceType {
 		if a.payload.UUID == "" {
-			return errors.New("uuid must be set to retrieve metrics for a DFC")
+			if a.payload.Type == models.DFCMetricResourceType {
+				return errors.New("uuid must be set to retrieve metrics for a DFC")
+			} else {
+				return errors.New("uuid must be set to retrieve metrics for a Stream Processor")
+			}
 		}
 
 		_, err = uuid.Parse(a.payload.UUID)

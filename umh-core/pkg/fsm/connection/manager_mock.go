@@ -90,7 +90,7 @@ func NewConnectionManagerWithMockedServices(name string) (*ConnectionManager, *c
 			if !ok {
 				return 0, fmt.Errorf("instance is not a ConnectionInstance")
 			}
-			return connectionInstance.GetExpectedMaxP95ExecutionTimePerInstance(), nil
+			return connectionInstance.GetMinimumRequiredTime(), nil
 		},
 	)
 

@@ -76,6 +76,20 @@ type ConfigManager interface {
 	AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc ProtocolConverterConfig) (ProtocolConverterConfig, error)
 	// AtomicDeleteProtocolConverter deletes a protocol converter from the config atomically
 	AtomicDeleteProtocolConverter(ctx context.Context, componentUUID uuid.UUID) error
+	// AtomicAddStreamProcessor adds a stream processor to the config atomically
+	AtomicAddStreamProcessor(ctx context.Context, sp StreamProcessorConfig) error
+	// AtomicEditStreamProcessor edits a stream processor in the config atomically
+	AtomicEditStreamProcessor(ctx context.Context, sp StreamProcessorConfig) (StreamProcessorConfig, error)
+	// AtomicDeleteStreamProcessor deletes a stream processor from the config atomically
+	AtomicDeleteStreamProcessor(ctx context.Context, name string) error
+	// AtomicAddDataModel adds a data model to the config atomically
+	AtomicAddDataModel(ctx context.Context, name string, dmVersion DataModelVersion, description string) error
+	// AtomicEditDataModel edits (append-only) a data model by adding a new version
+	AtomicEditDataModel(ctx context.Context, name string, dmVersion DataModelVersion, description string) error
+	// AtomicDeleteDataModel deletes a data model from the config atomically
+	AtomicDeleteDataModel(ctx context.Context, name string) error
+	// AtomicAddDataContract adds a data contract to the config atomically
+	AtomicAddDataContract(ctx context.Context, dataContract DataContractsConfig) error
 	// GetConfigAsString returns the current config as a string
 	// This function is used in the get-config-file action to retrieve the raw config file
 	// without any yaml parsing applied. This allows to display yaml anchors and change them
@@ -197,6 +211,10 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 		config.Agent.ReleaseChannel = configOverride.Agent.ReleaseChannel
 	}
 
+	if configOverride.Agent.AllowInsecureTLS {
+		config.Agent.AllowInsecureTLS = configOverride.Agent.AllowInsecureTLS
+	}
+
 	if configOverride.Agent.Location != nil {
 		location := configOverride.Agent.Location
 		if location[0] != "" {
@@ -294,7 +312,7 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	// ---------- FAST PATH ----------
 	m.cacheMu.RLock()
 	if !m.cacheModTime.IsZero() && info.ModTime().Equal(m.cacheModTime) {
-		cfg := m.cacheConfig // return cached struct
+		cfg := m.cacheConfig.Clone() // Use deep copy to prevent race conditions with slices/maps
 		m.cacheMu.RUnlock()
 		return cfg, nil
 	}

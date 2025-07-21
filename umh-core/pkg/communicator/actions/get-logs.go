@@ -22,12 +22,15 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/agent_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/streamprocessor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -100,14 +103,15 @@ func (a *GetLogsAction) Validate() (err error) {
 		models.ProtocolConverterWriteLogType,
 		models.RedpandaLogType,
 		models.TopicBrowserLogType,
+		models.StreamProcessorLogType,
 	}
 	if !slices.Contains(allowedLogTypes, a.payload.Type) {
-		return errors.New("log type must be set and must be one of the following: agent, dfc, protocol-converter-read, protocol-converter-write, redpanda, topic-browser")
+		return errors.New("log type must be set and must be one of the following: agent, dfc, protocol-converter-read, protocol-converter-write, redpanda, topic-browser, stream-processor")
 	}
 
-	if a.payload.Type == models.DFCLogType || a.payload.Type == models.ProtocolConverterReadLogType || a.payload.Type == models.ProtocolConverterWriteLogType {
+	if a.payload.Type == models.DFCLogType || a.payload.Type == models.ProtocolConverterReadLogType || a.payload.Type == models.ProtocolConverterWriteLogType || a.payload.Type == models.StreamProcessorLogType {
 		if a.payload.UUID == "" {
-			return errors.New("uuid must be set to retrieve logs for a DFC or Protocol Converter")
+			return errors.New("uuid must be set to retrieve logs for a DFC, Protocol Converter, or Stream Processor")
 		}
 
 		_, err = uuid.Parse(a.payload.UUID)
@@ -224,10 +228,37 @@ func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
 			res.Logs = mapS6LogsToSlice(observedState.ServiceInfo.DataflowComponentWriteObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs, reqStartTime)
 		}
 	case models.TopicBrowserLogType:
-		// TODO: Implement topic browser logs
-		err := errors.New("topic-browser logs are not implemented yet")
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
-		return nil, nil, err
+		tbInstance, ok := fsm.FindInstance(systemSnapshot, constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
+		if !ok || tbInstance == nil {
+			err := logsRetrievalError(fmt.Errorf("topic browser instance not found"), logType)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
+			return nil, nil, err
+		}
+
+		observedState, ok := tbInstance.LastObservedState.(*topicbrowser.ObservedStateSnapshot)
+		if !ok || observedState == nil {
+			err := logsRetrievalError(fmt.Errorf("invalid observed state type for topic browser instance %s", tbInstance.ID), logType)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
+			return nil, nil, err
+		}
+
+		res.Logs = mapS6LogsToSlice(observedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs, reqStartTime)
+	case models.StreamProcessorLogType:
+		streamProcessorInstance, ok := FindStreamProcessorInstanceByUUID(systemSnapshot, a.payload.UUID)
+		if !ok || streamProcessorInstance == nil {
+			err := logsRetrievalError(fmt.Errorf("stream processor instance not found"), logType)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
+			return nil, nil, err
+		}
+
+		observedState, ok := streamProcessorInstance.LastObservedState.(*streamprocessor.ObservedStateSnapshot)
+		if !ok || observedState == nil {
+			err := logsRetrievalError(fmt.Errorf("invalid observed state type for stream processor instance %s", streamProcessorInstance.ID), logType)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
+			return nil, nil, err
+		}
+
+		res.Logs = mapS6LogsToSlice(observedState.ServiceInfo.DFCObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs, reqStartTime)
 	}
 
 	return res, nil, nil
@@ -235,6 +266,22 @@ func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
 
 func (a *GetLogsAction) getUserEmail() string {
 	return a.userEmail
+}
+
+// FindStreamProcessorInstanceByUUID finds a stream processor instance by its UUID (generated from the name)
+func FindStreamProcessorInstanceByUUID(systemSnapshot fsm.SystemSnapshot, uuid string) (*fsm.FSMInstanceSnapshot, bool) {
+	streamProcessorManager, ok := fsm.FindManager(systemSnapshot, constants.StreamProcessorManagerName)
+	if !ok {
+		return nil, false
+	}
+
+	streamProcessorInstances := streamProcessorManager.GetInstances()
+	for _, instance := range streamProcessorInstances {
+		if dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID).String() == uuid {
+			return instance, true
+		}
+	}
+	return nil, false
 }
 
 func (a *GetLogsAction) getUuid() uuid.UUID {

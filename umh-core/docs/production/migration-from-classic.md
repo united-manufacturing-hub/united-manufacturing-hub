@@ -73,7 +73,7 @@ protocolConverter:
       location:
         2: "production-line"
         3: "device-name"
-      template:
+      config:
         dataflowcomponent_read:
           benthos:
             input:
@@ -189,7 +189,7 @@ protocolConverter:
   - name: classic-bridge
     desiredState: active
     protocolConverterServiceConfig:
-      template:
+      config:
         dataflowcomponent_read:
           benthos:
             input:

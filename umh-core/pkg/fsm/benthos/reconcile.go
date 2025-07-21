@@ -41,18 +41,22 @@ import (
 func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
 	start := time.Now()
 	benthosInstanceName := b.baseFSMInstance.GetID()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentBenthosInstance, benthosInstanceName, time.Since(start))
 		if err != nil {
-			b.baseFSMInstance.GetLogger().Errorf("error reconciling Benthos instance %s: %v", benthosInstanceName, err)
+			b.baseFSMInstance.GetLogger().Errorf("error reconciling benthos instance %s: %s", benthosInstanceName, err)
 			b.PrintState()
 			// Add metrics for error
-			metrics.IncErrorCount(metrics.ComponentBenthosInstance, benthosInstanceName)
+			metrics.IncErrorCountAndLog(metrics.ComponentBenthosInstance, benthosInstanceName, err, b.baseFSMInstance.GetLogger())
 		}
 	}()
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
+		if b.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "start of reconciliation") {
+			return nil, false
+		}
 		return ctx.Err(), false
 	}
 
@@ -88,27 +92,26 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 		return nil, false
 	}
 
-	// Step 2: Detect external changes.
-	if err := b.reconcileExternalChanges(ctx, services, snapshot); err != nil {
-		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
-		if !errors.Is(err, benthos_service.ErrServiceNotExist) {
+	// Step 2: Detect external changes - skip during removal
+	if b.baseFSMInstance.IsRemoving() {
+		// Skip external changes detection during removal - config files may be deleted
+		b.baseFSMInstance.GetLogger().Debugf("Skipping external changes detection during removal")
+	} else {
+		if err = b.reconcileExternalChanges(ctx, services, snapshot); err != nil {
+			// If the service is not running, we don't want to return an error here, because we want to continue reconciling
+			if !errors.Is(err, benthos_service.ErrServiceNotExist) {
 
-			if errors.Is(err, context.DeadlineExceeded) {
-				// Healthchecks occasionally take longer (sometimes up to 70ms),
-				// resulting in context.DeadlineExceeded errors. In this case, we want to
-				// mark the reconciliation as complete for this tick since we've likely
-				// already consumed significant time. We return reconciled=true to prevent
-				// further reconciliation attempts in the current tick.
-				return nil, true // We don't want to return an error here, as this can happen in normal operations
+				if b.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
+					return nil, false
+				}
+
+				b.baseFSMInstance.SetError(err, snapshot.Tick)
+				b.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
+				return nil, false // We don't want to return an error here, because we want to continue reconciling
 			}
 
-			b.baseFSMInstance.SetError(err, snapshot.Tick)
-			b.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
-			return nil, false // We don't want to return an error here, because we want to continue reconciling
+			err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
 		}
-
-		//nolint:ineffassign
-		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
 	}
 
 	// Step 3: Attempt to reconcile the state.
@@ -120,6 +123,10 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 			return nil, false
 		}
 
+		if b.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileStateTransition") {
+			return nil, false
+		}
+
 		b.baseFSMInstance.SetError(err, snapshot.Tick)
 		b.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
@@ -128,10 +135,14 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 	// Reconcile the s6Manager
 	s6Err, s6Reconciled := b.service.ReconcileManager(ctx, services, snapshot.Tick)
 	if s6Err != nil {
+		if b.baseFSMInstance.IsDeadlineExceededAndHandle(s6Err, snapshot.Tick, "s6Manager reconciliation") {
+			return nil, false
+		}
 		b.baseFSMInstance.SetError(s6Err, snapshot.Tick)
 		b.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
 		return nil, false
 	}
+
 	// If either Benthos state or S6 state was reconciled, we return reconciled so that nothing happens anymore in this tick
 	// nothing should happen as we might have already taken up some significant time of the avaialble time per tick, so better
 	// to be on the safe side and let the rest handle in another tick
@@ -151,12 +162,12 @@ func (b *BenthosInstance) reconcileExternalChanges(ctx context.Context, services
 		metrics.ObserveReconcileTime(metrics.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
 	}()
 
-	// Fetching the observed state can sometimes take longer, but we need to ensure when reconciling a lot of instances
-	// that a single status of a single instance does not block the whole reconciliation
-	observedStateCtx, cancel := context.WithTimeout(ctx, constants.BenthosUpdateObservedStateTimeout)
+	// Create context for UpdateObservedStateOfInstance with minimum timeout guarantee
+	// This ensures we get either 80% of available time OR the minimum required time, whichever is larger
+	updateCtx, cancel := constants.CreateUpdateObservedStateContextWithMinimum(ctx, constants.BenthosUpdateObservedStateTimeout)
 	defer cancel()
 
-	err := b.UpdateObservedStateOfInstance(observedStateCtx, services, snapshot)
+	err := b.UpdateObservedStateOfInstance(updateCtx, services, snapshot)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}
@@ -380,6 +391,20 @@ func (b *BenthosInstance) reconcileRunningStates(ctx context.Context, services s
 			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("recovering: %s", reason)
 			return b.baseFSMInstance.SendEvent(ctx, EventRecovered), true
 		}
+
+		// CRITICAL FIX: If degraded because S6 is not running, attempt to restart it
+		s6Running, _ := b.IsBenthosS6Running()
+		if !s6Running {
+			b.baseFSMInstance.GetLogger().Debugf("S6 service stopped while in degraded state, attempting to restart")
+			err := b.StartInstance(ctx, services.GetFileSystem())
+			if err != nil {
+				b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("degraded: failed to restart service: %v", err)
+				return err, false
+			}
+			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = "degraded: restarting service"
+			return nil, false // Don't transition yet, wait for restart to take effect
+		}
+
 		b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("degraded: %s", reason)
 		return nil, false
 	default:

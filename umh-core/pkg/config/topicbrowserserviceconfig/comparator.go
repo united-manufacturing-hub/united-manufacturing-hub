@@ -15,9 +15,8 @@
 package topicbrowserserviceconfig
 
 import (
-	"fmt"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
+	"go.uber.org/zap"
 )
 
 // Comparator handles the comparison of Topic Browser configurations
@@ -41,8 +40,8 @@ func (c *Comparator) ConfigsEqual(desired, observed Config) (isEqual bool) {
 	normObserved := c.normalizer.NormalizeConfig(observed)
 	defer func() {
 		if !isEqual {
-			fmt.Printf("Normalized desired: %+v\n", normDesired)
-			fmt.Printf("Normalized observed: %+v\n", normObserved)
+			zap.S().Infof("Normalized desired:  %+v", normDesired)
+			zap.S().Infof("Normalized observed: %+v", normObserved)
 		}
 	}()
 

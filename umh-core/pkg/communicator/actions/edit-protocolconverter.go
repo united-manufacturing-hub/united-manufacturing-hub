@@ -194,7 +194,7 @@ func (a *EditProtocolConverterAction) Validate() error {
 		return errors.New("missing or invalid protocol converter UUID")
 	}
 
-	if err := ValidateProtocolConverterName(a.name); err != nil {
+	if err := ValidateComponentName(a.name); err != nil {
 		return err
 	}
 
@@ -277,7 +277,7 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 		}
 
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-			"Protocol converter successfully updated and activated", a.outboundChannel, models.EditProtocolConverter)
+			"Protocol converter successfully updated", a.outboundChannel, models.EditProtocolConverter)
 	}
 
 	newUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name)

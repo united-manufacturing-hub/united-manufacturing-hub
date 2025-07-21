@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -187,6 +188,9 @@ func (r *RedpandaInstance) GetServiceStatus(ctx context.Context, filesystemServi
 // UpdateObservedStateOfInstance updates the observed state of the service
 func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
+		if r.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "UpdateObservedStateOfInstance") {
+			return nil
+		}
 		return ctx.Err()
 	}
 
@@ -419,6 +423,28 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 		}
 	}
 
+	// Reconcile schema registry when Redpanda is running
+	// This ensures that JSON schemas derived from DataModels and DataContracts are synchronized with the registry
+	if IsRunningState(currentState) && IsRunningState(desiredState) {
+		// Get the configuration data from the RedpandaInstance
+		// These are set by the RedpandaManager during configuration extraction
+		dataModels := r.getDataModels()
+		dataContracts := r.getDataContracts()
+		payloadShapes := r.getPayloadShapes()
+
+		// Only reconcile if we have data models or contracts to process
+		if len(dataModels) > 0 || len(dataContracts) > 0 {
+			r.baseFSMInstance.GetLogger().Debugf("Reconciling schema registry with %d data models and %d data contracts", len(dataModels), len(dataContracts))
+
+			err := r.schemaRegistry.Reconcile(ctx, dataModels, dataContracts, payloadShapes)
+			if err != nil {
+				return fmt.Errorf("failed to reconcile schema registry: %w", err)
+			}
+
+			r.baseFSMInstance.GetLogger().Debugf("Schema registry reconciliation completed successfully")
+		}
+	}
+
 	return nil
 }
 
@@ -619,20 +645,68 @@ func (r *RedpandaInstance) IsRedpandaWithProcessingActivity() (bool, string) {
 //
 //	ok     – true when the message is found, false otherwise.
 //	reason – empty when ok is true; otherwise a brief explanation.
-func (r *RedpandaInstance) IsRedpandaStarted() (bool, string) {
+func (r *RedpandaInstance) IsRedpandaStarted(ctx context.Context) (bool, string) {
 	if r.PreviousObservedState.ServiceInfo.RedpandaStatus.Logs == nil {
 		return false, "no logs found"
 	}
 
+	var hasSuccessMessage bool
 	// Check if the success message is in the logs
 	for _, log := range r.PreviousObservedState.ServiceInfo.RedpandaStatus.Logs {
 		if strings.Contains(log.Content, "Successfully started Redpanda!") {
-			return true, ""
+			hasSuccessMessage = true
 		}
 	}
-	return false, "no success message found in logs"
+
+	// Validate that we can reach the cluster's schema registry (curl localhost:8081/subjects)
+	hasSchemaRegistryReachable, schemaRegistryReason := r.IsSchemaRegistryReachable(ctx)
+
+	if !hasSuccessMessage {
+		return false, "no success message found in logs"
+	}
+
+	if !hasSchemaRegistryReachable {
+		return false, fmt.Sprintf("schema registry not reachable: %s", schemaRegistryReason)
+	}
+
+	return true, ""
 }
 
 func (r *RedpandaInstance) GetBaseFSMInstanceForTest() *internalfsm.BaseFSMInstance {
 	return r.baseFSMInstance
+}
+
+func (r *RedpandaInstance) IsSchemaRegistryReachable(ctx context.Context) (bool, string) {
+	// Create a short ctx (20ms)
+	ctx, cancel := context.WithTimeout(ctx, constants.SchemaRegistryTimeout)
+	defer cancel()
+
+	// Try to reach the schema registry (HEAD would be faster, but is buggy (it sends an 0x00 byte at the start of the response))
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://localhost:%d/subjects", constants.SchemaRegistryPort), nil)
+	if err != nil {
+		return false, fmt.Sprintf("failed to create HEAD request: %v", err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+
+	if err != nil {
+		return false, fmt.Sprintf("failed to reach schema registry: %v", err)
+	}
+	if resp == nil {
+		return false, "received nil response from schema registry"
+	}
+	if resp.Body != nil {
+		err = resp.Body.Close()
+		if err != nil {
+			r.baseFSMInstance.GetLogger().Warnf("failed to close schema registry response body: %v", err)
+		}
+	}
+	// It should return either a 2XX or a 4XX status code
+	if resp.StatusCode >= 200 && resp.StatusCode < 500 {
+		r.baseFSMInstance.GetLogger().Debugf("Schema registry reachable")
+		return true, ""
+	}
+
+	return false, fmt.Sprintf("schema registry returned status code %d", resp.StatusCode)
 }

@@ -114,7 +114,7 @@ func (a *DeployProtocolConverterAction) Validate() error {
 		return errors.New("missing required field Connection.Port")
 	}
 
-	if err := ValidateProtocolConverterName(a.payload.Name); err != nil {
+	if err := ValidateComponentName(a.payload.Name); err != nil {
 		return err
 	}
 

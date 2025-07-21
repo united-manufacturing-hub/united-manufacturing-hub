@@ -1,6 +1,6 @@
 # GraphQL Browse API
 
-A production-ready GraphQL API for browsing topics and events from the United Manufacturing Hub topic browser cache.
+A production-ready GraphQL API for browsing topics and events from the United Manufacturing Hub Topic Browser cache.
 
 ## Features
 
@@ -101,6 +101,31 @@ input MetaExpr {
   eq: String          # Exact value match
 }
 ```
+
+#### Good Quick start for filtering
+
+{
+  topics(filter: { text: "gen_2" , meta: [{ key: "tag_name", eq: "my_data_gen_2" }]}, limit: 10) {
+    topic
+    metadata {
+      key
+      value
+    }
+    lastEvent {
+      ... on TimeSeriesEvent {
+        producedAt
+        scalarType
+        stringValue
+        numericValue
+        booleanValue
+      }
+      ... on RelationalEvent {
+        producedAt
+        json
+      }
+    }
+  }
+}
 
 ## Usage Examples
 

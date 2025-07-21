@@ -16,6 +16,7 @@ package metrics
 
 import (
 	"net/http"
+	"runtime"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -23,6 +24,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	"go.uber.org/zap"
 )
 
 const (
@@ -38,6 +40,7 @@ const (
 	ComponentDataFlowCompManager      = "dataflow_component_manager"
 	ComponentConnectionManager        = "connection_manager"
 	ComponentProtocolConverterManager = "protocol_converter_manager"
+	ComponentStreamProcessorManager   = "stream_processor_manager"
 	ComponentTopicBrowserManager      = "topic_browser_manager"
 	// Instances
 	ComponentBaseFSMInstance           = "base_fsm_instance"
@@ -48,6 +51,7 @@ const (
 	ComponentDataflowComponentInstance = "dataflow_component_instance"
 	ComponentConnectionInstance        = "connection_instance"
 	ComponentProtocolConverterInstance = "protocol_converter_instance"
+	ComponentStreamProcessorInstance   = "stream_processor_instance"
 	ComponentAgentMonitor              = "agent_monitor"
 	ComponentBenthosMonitor            = "benthos_monitor"
 	ComponentRedpandaMonitor           = "redpanda_monitor"
@@ -147,6 +151,26 @@ func SetupMetricsEndpoint(addr string) *http.Server {
 	}()
 
 	return server
+}
+
+// printDetailedStackTrace prints a detailed stack trace with more information
+func printDetailedStackTrace() {
+	// Get stack trace for all goroutines with a large buffer
+	buf := make([]byte, 1024*1024) // Allocate 1MB buffer
+	n := runtime.Stack(buf, true)
+
+	// Print the full stack trace
+	logger.For("stacktrace").Debugf("=== DETAILED STACK TRACE ===\n%s", string(buf[:n]))
+}
+
+// IncErrorCountAndLog increments the error counter for a component and logs a debug message if a logger is provided
+func IncErrorCountAndLog(component, instance string, err error, logger *zap.SugaredLogger) {
+	IncErrorCount(component, instance)
+	if logger != nil {
+		// Display detailed stacktrace
+		printDetailedStackTrace()
+		logger.Debugf("Component %s instance %s reconciliation failed: %v", component, instance, err)
+	}
 }
 
 // IncErrorCount increments the error counter for a component

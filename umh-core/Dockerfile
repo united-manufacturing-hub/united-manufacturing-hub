@@ -11,52 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 # --- Build Stage ---
 ARG GOLANG_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG ALPINE_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG NMAP_VERSION=MUST_BE_SET_BY_MAKEFILE
-FROM golang:${GOLANG_VERSION}-alpine as build
-ARG S6_OVERLAY_VERSION=MUST_BE_SET_BY_MAKEFILE
-ARG BENTHOS_UMH_VERSION=MUST_BE_SET_BY_MAKEFILE
-ARG REDPANDA_VERSION=MUST_BE_SET_BY_MAKEFILE
-ARG DEBUG=false
-ARG PPROF=false
-WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub
-
-# Set app version with a default value - can be overridden at build time
-ARG APP_VERSION=MUST_BE_SET_BY_MAKEFILE
-RUN apk add --no-cache gcc musl-dev
-# Copy go.mod first for better caching
-COPY ./go.mod ./umh-core/
-WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core
-COPY . .
-RUN echo "GOOS: ${GOOS:-$(go env GOOS)}, GOARCH: ${GOARCH:-$(go env GOARCH)}"
-RUN echo "Go version: $(go version)"
-RUN if [ "$DEBUG" = "true" ]; then \
-    CGO_ENABLED=0 go build \
-    -gcflags="all=-N -l" \
-    -ldflags "-X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
-    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \
-    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.RedpandaVersion=${REDPANDA_VERSION} \
-    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version.AppVersion=${APP_VERSION}" \
-    -o /go/bin/umh-core cmd/main.go; \
-    elif [ "$PPROF" = "true" ]; then \
-    CGO_ENABLED=0 go build -mod=vendor -tags pprof \
-    -ldflags "-s -w \
-    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
-    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \
-    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.RedpandaVersion=${REDPANDA_VERSION} \
-    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version.AppVersion=${APP_VERSION}" \
-    -o /go/bin/umh-core cmd/main.go; \
-    else \
-    CGO_ENABLED=0 go build -mod=vendor  \
-    -ldflags "-s -w \
-    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
-    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \
-    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.RedpandaVersion=${REDPANDA_VERSION} \
-    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version.AppVersion=${APP_VERSION}" \
-    -o /go/bin/umh-core cmd/main.go; \
-    fi
 
 # --- Cache Stage ---
 FROM scratch as cache
@@ -64,6 +23,7 @@ COPY .docker-cache/s6-overlay/ /s6-overlay/
 COPY .docker-cache/benthos/ /benthos/
 COPY .docker-cache/redpanda/amd64/ /redpanda/amd64/
 COPY .docker-cache/redpanda/arm64/ /redpanda/arm64/
+
 
 # --- Downloader Stage (using cached files) ---
 FROM alpine:${ALPINE_VERSION} as downloader
@@ -114,6 +74,49 @@ RUN apk add --no-cache nmap=${NMAP_VERSION}
 # Cleanup all the files we don't need
 RUN rm -rf /s6-overlay /benthos /redpanda 
 
+FROM golang:${GOLANG_VERSION}-alpine as build
+ARG S6_OVERLAY_VERSION=MUST_BE_SET_BY_MAKEFILE
+ARG BENTHOS_UMH_VERSION=MUST_BE_SET_BY_MAKEFILE
+ARG REDPANDA_VERSION=MUST_BE_SET_BY_MAKEFILE
+ARG DEBUG=false
+ARG PPROF=false
+WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub
+
+# Set app version with a default value - can be overridden at build time
+ARG APP_VERSION=MUST_BE_SET_BY_MAKEFILE
+RUN apk add --no-cache gcc musl-dev
+# Copy go.mod first for better caching
+COPY ./go.mod ./umh-core/
+WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core
+COPY . .
+RUN echo "GOOS: ${GOOS:-$(go env GOOS)}, GOARCH: ${GOARCH:-$(go env GOARCH)}"
+RUN echo "Go version: $(go version)"
+RUN if [ "$DEBUG" = "true" ]; then \
+    CGO_ENABLED=0 go build \
+    -gcflags="all=-N -l" \
+    -ldflags "-X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.RedpandaVersion=${REDPANDA_VERSION} \
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version.AppVersion=${APP_VERSION}" \
+    -o /go/bin/umh-core cmd/main.go; \
+    elif [ "$PPROF" = "true" ]; then \
+    CGO_ENABLED=0 go build -mod=vendor -tags pprof \
+    -ldflags "-s -w \
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.RedpandaVersion=${REDPANDA_VERSION} \
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version.AppVersion=${APP_VERSION}" \
+    -o /go/bin/umh-core cmd/main.go; \
+    else \
+    CGO_ENABLED=0 go build -mod=vendor  \
+    -ldflags "-s -w \
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.RedpandaVersion=${REDPANDA_VERSION} \
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version.AppVersion=${APP_VERSION}" \
+    -o /go/bin/umh-core cmd/main.go; \
+    fi
+
 # --- Final Stage ---
 FROM alpine:${ALPINE_VERSION} as runner
 # Copy everything from the downloader stage
@@ -132,8 +135,7 @@ ARG DEBUG=false
 ARG DLV_VERSION=MUST_BE_SET_BY_MAKEFILE
 RUN if [ "$DEBUG" = "true" ]; then \
     apk add --no-cache go && \ 
-    go install github.com/go-delve/delve/cmd/dlv@${DLV_VERSION} && \
-    find / -name "dlv"; \
+    go install github.com/go-delve/delve/cmd/dlv@${DLV_VERSION}; \
     fi
 
 RUN chmod +x /usr/local/bin/umh-core && \
@@ -164,7 +166,8 @@ ENV S6_KEEP_ENV=1 \
     S6_SERVICES_READYTIME=50 \
     S6_SYNC_DISKS=1 \
     # Important: This needs to be T (ISO 8861) as our time parser expects this format
-    S6_LOGGING_SCRIPT="n5 s100000000 T"
+    S6_LOGGING_SCRIPT="n5 s10000000 T" \
+    PATH="/opt/redpanda/bin:$PATH"
 VOLUME ["/data"]
 
 ENTRYPOINT ["/init"]

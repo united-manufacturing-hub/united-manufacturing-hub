@@ -24,12 +24,17 @@ import (
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/graphql"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/streamprocessor"
+	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -56,6 +61,9 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// Configure encoder for communication
+	encoding.ChooseEncoder(encoding.EncodingCorev1)
 
 	// Load the config
 	configManager, err := config.NewFileConfigManagerWithBackoff()
@@ -103,9 +111,9 @@ func main() {
 		topicbrowser.NewCache(),
 	)
 
-	// Start the topic browser cache updater independent of the backend connection (e.g., for HTTP endpoints)
-	// it updates the TopicBrowserCache based on the observed state of the topic browser service once per second
-	communicationState.StartTopicBrowserCacheUpdater(systemSnapshotManager, ctx, configData.Agent.Simulator)
+	// Initialize the topic browser simulator (cache update logic moved to subscriber notification pipeline)
+	// This eliminates the redundant ticker and consolidates the architecture
+	communicationState.InitializeTopicBrowserSimulator(configData.Agent.Simulator)
 
 	// Start the GraphQL server if enabled
 	var graphqlServer *graphql.Server
@@ -212,6 +220,18 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 						// Extract StatusReason from LastObservedState based on manager type
 						if instance.LastObservedState != nil {
 							switch managerName {
+							case "BenthosManagerCore":
+								if benthosSnapshot, ok := instance.LastObservedState.(*benthos.BenthosObservedStateSnapshot); ok {
+									statusReason = benthosSnapshot.ServiceInfo.BenthosStatus.StatusReason
+								}
+							case "StreamProcessorManagerCore":
+								if spSnapshot, ok := instance.LastObservedState.(*streamprocessor.ObservedStateSnapshot); ok {
+									statusReason = spSnapshot.ServiceInfo.StatusReason
+								}
+							case "TopicBrowserManagerCore":
+								if tbSnapshot, ok := instance.LastObservedState.(*topicbrowserfsm.ObservedStateSnapshot); ok {
+									statusReason = tbSnapshot.ServiceInfo.StatusReason
+								}
 							case "DataFlowCompManagerCore":
 								if dfcSnapshot, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot); ok {
 									statusReason = dfcSnapshot.ServiceInfo.StatusReason
@@ -219,6 +239,10 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 							case "ProtocolConverterManagerCore":
 								if pcSnapshot, ok := instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot); ok {
 									statusReason = pcSnapshot.ServiceInfo.StatusReason
+								}
+							case "RedpandaManagerCore":
+								if redpandaSnapshot, ok := instance.LastObservedState.(*redpanda.RedpandaObservedStateSnapshot); ok {
+									statusReason = redpandaSnapshot.ServiceInfoSnapshot.StatusReason
 								}
 							}
 						}

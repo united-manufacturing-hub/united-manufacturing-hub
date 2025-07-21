@@ -26,15 +26,9 @@ const (
 )
 
 const (
-	RedpandaUpdateObservedStateTimeout = 20 * time.Millisecond
-)
-const (
-	// RedpandaExpectedMaxP95ExecutionTimePerInstance represents the maximum expected time for a Redpanda instance
-	// to update its observed state. We reserve 50ms of buffer time to ensure the total execution time stays
-	// under the alerting threshold. The system has a 100ms max ticker time with an 80% (80ms) alerting threshold.
-	// By setting this to RedpandaUpdateObservedStateTimeout + 35ms, we ensure that Redpanda operations
-	// complete with enough margin to avoid triggering alerts during normal operation.
-	RedpandaExpectedMaxP95ExecutionTimePerInstance = RedpandaUpdateObservedStateTimeout + time.Millisecond*35 // needs to be higher than S6ExpectedMaxP95ExecutionTimePerInstance
+	// Redpanda Operation Timeouts - Level 1 Service (depends on S6)
+	// RedpandaUpdateObservedStateTimeout is the timeout for updating the observed state
+	RedpandaUpdateObservedStateTimeout = 40 * time.Millisecond
 )
 
 var (
@@ -62,4 +56,9 @@ const (
 	DefaultRedpandaTopicDefaultTopicCompressionAlgorithm = "snappy"
 	DefaultRedpandaTopicDefaultTopicCleanupPolicy        = "compact"
 	DefaultRedpandaTopicDefaultTopicSegmentMs            = 3600000 // 1 hour in milliseconds
+)
+
+const (
+	SchemaRegistryPort    = 8081
+	SchemaRegistryTimeout = 20 * time.Millisecond
 )

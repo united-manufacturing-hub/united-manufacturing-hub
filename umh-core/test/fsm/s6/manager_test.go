@@ -606,17 +606,19 @@ var _ = Describe("S6Manager", func() {
 			mockService, ok := s6Instance.GetService().(*s6service.MockService)
 			Expect(ok).To(BeTrue(), "Service is not a mock service")
 
-			// Configure the mock service to fail with a permanent error
+			// Configure the mock service to fail with a permanent error during removal
+			// Note: Using RemoveError instead of GetConfigError because the S6 FSM now
+			// continues reconciling when observed state updates fail (to prevent deadlocks)
 			permanentErrorMsg := backoff.PermanentFailureError + ": critical configuration error"
-			mockService.GetConfigError = fmt.Errorf("%s", permanentErrorMsg)
+			mockService.RemoveError = fmt.Errorf("%s", permanentErrorMsg)
 
-			// Run several reconciliations to allow the error to be detected and handled
-			nextTick, err = fsmtest.RunMultipleReconciliations(ctx, manager, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: serviceConfig}}, Tick: tick}, mockSvcRegistry, 5)
+			// Set config to empty to trigger removal (which will fail with permanent error)
+			emptyConfig := []config.S6FSMConfig{}
+
+			// Wait for the instance to be removed due to permanent error
+			nextTick, err = fsmtest.WaitForManagerInstanceRemoval(ctx, manager, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: emptyConfig}}, Tick: tick}, mockSvcRegistry, serviceName, 30)
 			tick = nextTick
-
-			// Verify the instance has been removed due to permanent error
-			_, exists = manager.GetInstance(serviceName)
-			Expect(exists).To(BeFalse(), "Instance should be removed after permanent error")
+			Expect(err).NotTo(HaveOccurred(), "Instance should be removed after permanent error")
 		})
 	})
 
@@ -761,18 +763,31 @@ var _ = Describe("S6Manager", func() {
 			mockService, ok := s6Instance.GetService().(*s6service.MockService)
 			Expect(ok).To(BeTrue(), "Service is not a mock service")
 
-			// Configure permanent error for the failing service
+			// Configure permanent error for the failing service during removal
+			// Note: Using RemoveError instead of GetConfigError because the S6 FSM now
+			// continues reconciling when observed state updates fail (to prevent deadlocks)
 			permanentErrorMsg := backoff.PermanentFailureError + ": critical configuration error"
-			mockService.GetConfigError = fmt.Errorf("%s", permanentErrorMsg)
+			mockService.RemoveError = fmt.Errorf("%s", permanentErrorMsg)
 
-			// Run reconciliation multiple times to allow error handling
-			nextTick, err = fsmtest.RunMultipleReconciliations(ctx, manager, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: multiServiceConfig}}, Tick: tick}, mockSvcRegistry,
-				5)
+			// Update config to remove the failing service (which will fail with permanent error)
+			configWithOnlyStable := []config.S6FSMConfig{
+				{
+					FSMInstanceConfig: config.FSMInstanceConfig{
+						Name:            stableServiceName,
+						DesiredFSMState: s6fsm.OperationalStateStopped,
+					},
+					S6ServiceConfig: s6serviceconfig.S6ServiceConfig{
+						Command:     []string{"/bin/sh", "-c", "echo stable-service"},
+						Env:         map[string]string{"TYPE": "stable"},
+						ConfigFiles: map[string]string{},
+					},
+				},
+			}
+
+			// Wait for the failing service to be removed due to permanent error
+			nextTick, err = fsmtest.WaitForManagerInstanceRemoval(ctx, manager, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: configWithOnlyStable}}, Tick: tick}, mockSvcRegistry, failingServiceName, 30)
 			tick = nextTick
-
-			// Verify failing service is removed
-			_, exists = manager.GetInstance(failingServiceName)
-			Expect(exists).To(BeFalse(), "Failing service should have been removed")
+			Expect(err).NotTo(HaveOccurred(), "Failing service should have been removed")
 
 			// Verify stable service still exists and is in correct state
 			stableInstance, exists := manager.GetInstance(stableServiceName)

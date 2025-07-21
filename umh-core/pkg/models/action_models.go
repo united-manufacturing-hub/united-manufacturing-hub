@@ -107,6 +107,11 @@ type ActionMessagePayload struct {
 	ActionUUID    uuid.UUID   `json:"actionUUID"`
 }
 
+// SubscribeMessagePayload is the format for sending a message with type "subscribe".
+type SubscribeMessagePayload struct {
+	Resubscribed bool `json:"resubscribed,omitempty"`
+}
+
 // ActionType is a custom string type to ensure type safety for specifying different action types.
 type ActionType string
 
@@ -190,6 +195,22 @@ const (
 	GetConfigFile ActionType = "get-config-file"
 	// SetConfigFile represents the action type for updating the configuration file
 	SetConfigFile ActionType = "set-config-file"
+	// AddDataModel represents the action type for adding a data model
+	AddDataModel ActionType = "add-datamodel"
+	// DeleteDataModel represents the action type for deleting a data model
+	DeleteDataModel ActionType = "delete-datamodel"
+	// EditDataModel represents the action type for editing a data model
+	EditDataModel ActionType = "edit-datamodel"
+	// GetDataModel represents the action type for retrieving a data model
+	GetDataModel ActionType = "get-datamodel"
+	// DeployStreamProcessor represents the action type for deploying a stream processor
+	DeployStreamProcessor ActionType = "deploy-stream-processor"
+	// EditStreamProcessor represents the action type for editing a stream processor
+	EditStreamProcessor ActionType = "edit-stream-processor"
+	// DeleteStreamProcessor represents the action type for deleting a stream processor
+	DeleteStreamProcessor ActionType = "delete-stream-processor"
+	// GetStreamProcessor represents the action type for getting a stream processor
+	GetStreamProcessor ActionType = "get-stream-processor"
 )
 
 // TestNetworkConnectionPayload contains the necessary fields for executing a TestNetworkConnection action.
@@ -426,6 +447,9 @@ type GetDataflowcomponentResponseContent struct {
 
 	// Payload corresponds to the JSON schema field "payload".
 	Payload Payload `json:"payload" yaml:"payload" mapstructure:"payload"`
+
+	// State corresponds to the JSON schema field "state".
+	State string `json:"state" yaml:"state" mapstructure:"state"`
 }
 
 type Payload interface{}
@@ -521,6 +545,7 @@ const (
 	ProtocolConverterWriteLogType LogType = "protocol-converter-write"
 	RedpandaLogType               LogType = "redpanda"
 	TopicBrowserLogType           LogType = "topic-browser"
+	StreamProcessorLogType        LogType = "stream-processor"
 )
 
 // GetLogsRequest contains the necessary fields for executing a `get-logs` action.
@@ -541,8 +566,10 @@ type GetLogsResponse struct {
 type MetricResourceType string
 
 const (
-	DFCMetricResourceType      MetricResourceType = "dfc"
-	RedpandaMetricResourceType MetricResourceType = "redpanda"
+	DFCMetricResourceType             MetricResourceType = "dfc"
+	RedpandaMetricResourceType        MetricResourceType = "redpanda"
+	TopicBrowserMetricResourceType    MetricResourceType = "topic-browser"
+	StreamProcessorMetricResourceType MetricResourceType = "stream-processor"
 )
 
 // GetMetricsRequest contains the necessary fields for executing a `get-metrics` action.
@@ -591,6 +618,63 @@ type SetConfigFileResponse struct {
 	Content          string `json:"content"`
 	LastModifiedTime string `json:"lastModifiedTime"`
 	Success          bool   `json:"success"`
+}
+
+type DataModelVersion struct {
+	Structure map[string]Field `yaml:"structure"` // structure of the data model (fields)
+}
+
+// ModelRef represents a reference to another data model
+type ModelRef struct {
+	Name    string `yaml:"name"`    // name of the referenced data model
+	Version string `yaml:"version"` // version of the referenced data model
+}
+
+type Field struct {
+	PayloadShape string           `yaml:"_payloadshape,omitempty"` // payload shape of the field
+	ModelRef     *ModelRef        `yaml:"_refModel,omitempty"`     // this is a special field that is used to reference another data model to be used as a type for this field
+	Subfields    map[string]Field `yaml:",inline"`                 // subfields of the field (allow recursive definition of fields)
+}
+
+// AddDataModelPayload contains the necessary fields for executing an AddDataModel action.
+type AddDataModelPayload struct {
+	Name             string           `json:"name" binding:"required"`             // Name of the data model
+	Description      string           `json:"description,omitempty"`               // Description of the data model
+	EncodedStructure string           `json:"encodedStructure" binding:"required"` // Encoded structure of the data model
+	Structure        map[string]Field `json:"-"`                                   // Data model version (not used in the action, but filled by the action)
+}
+
+// DeleteDataModelPayload contains the necessary fields for executing a DeleteDataModel action.
+type DeleteDataModelPayload struct {
+	Name string `json:"name" binding:"required"` // Name of the data model to delete
+}
+
+// EditDataModelPayload contains the necessary fields for executing an EditDataModel action.
+type EditDataModelPayload struct {
+	Name             string           `json:"name" binding:"required"`             // Name of the data model to edit
+	Description      string           `json:"description,omitempty"`               // Description of the data model
+	EncodedStructure string           `json:"encodedStructure" binding:"required"` // Encoded structure of the data model
+	Structure        map[string]Field `json:"-"`                                   // Data model version (not used in the action, but filled by the action)
+}
+
+// GetDataModelPayload contains the necessary fields for executing a GetDataModel action.
+type GetDataModelPayload struct {
+	Name            string `json:"name" binding:"required"`   // Name of the data model to retrieve
+	GetEnrichedTree bool   `json:"getEnrichedTree,omitempty"` // Whether to fill refModel fields with actual model data
+}
+
+// GetDataModelVersion represents a version of a data model with base64-encoded structure
+type GetDataModelVersion struct {
+	Description      string           `json:"description,omitempty"` // Description of the data model version
+	EncodedStructure string           `json:"encodedStructure"`      // Base64-encoded structure of the data model version
+	Structure        map[string]Field `json:"-"`                     // Data model version structure (not sent in response, but used internally)
+}
+
+// GetDataModelResponse contains the response for a GetDataModel action.
+type GetDataModelResponse struct {
+	Name        string                         `json:"name"`                  // Name of the data model
+	Description string                         `json:"description,omitempty"` // Description of the data model
+	Versions    map[string]GetDataModelVersion `json:"versions"`              // All versions of the data model
 }
 
 // Deprecated: Use GetMetricsRequest instead.
@@ -708,4 +792,59 @@ type ProtocolConverter struct {
 type ProtocolConverterMeta struct {
 	ProcessingMode string `json:"processingMode"`
 	Protocol       string `json:"protocol"`
+}
+
+// StreamProcessorModelRef represents a reference to a data model
+type StreamProcessorModelRef struct {
+	Name    string `json:"name" binding:"required"`    // name of the referenced data model
+	Version string `json:"version" binding:"required"` // version of the referenced data model
+}
+
+// StreamProcessorVariable represents a template variable
+type StreamProcessorVariable struct {
+	Label string `json:"label" yaml:"label" mapstructure:"label"`
+	Value string `json:"value" yaml:"value" mapstructure:"value"`
+}
+
+// StreamProcessorTemplateInfo contains template information
+type StreamProcessorTemplateInfo struct {
+	IsTemplated bool                      `json:"isTemplated" yaml:"isTemplated" mapstructure:"isTemplated"`
+	Variables   []StreamProcessorVariable `json:"variables" yaml:"variables" mapstructure:"variables"`
+	RootUUID    uuid.UUID                 `json:"rootUUID" yaml:"rootUUID" mapstructure:"rootUUID"`
+}
+
+// StreamProcessorConfig represents the configuration for a stream processor
+type StreamProcessorConfig struct {
+	Sources StreamProcessorSourceMapping `yaml:"sources"` // source alias to UNS topic mapping
+	Mapping StreamProcessorMapping       `yaml:"mapping"` // field mappings
+}
+
+// StreamProcessorSourceMapping represents the source mapping (alias to UNS topic)
+type StreamProcessorSourceMapping map[string]string
+
+// StreamProcessorMapping represents field mappings with support for nested structures
+// where the key is the output field name and the value is either:
+// - A string transformation expression (e.g., "source_alias * 2")
+// - A nested map[string]interface{} for complex field structures
+type StreamProcessorMapping map[string]interface{}
+
+// StreamProcessor represents a stream processor configuration
+type StreamProcessor struct {
+	UUID          *uuid.UUID                   `json:"uuid" binding:"required"`
+	Name          string                       `json:"name" binding:"required"`
+	Location      map[int]string               `json:"location"`
+	Model         StreamProcessorModelRef      `json:"model" binding:"required"`
+	EncodedConfig string                       `json:"encodedConfig" binding:"required"` // base64-encoded YAML structure containing sources and mappings
+	Config        *StreamProcessorConfig       `json:"-"`                                // parsed configuration (not used in the action, but filled by the action)
+	TemplateInfo  *StreamProcessorTemplateInfo `json:"templateInfo"`
+}
+
+// GetStreamProcessorPayload contains the necessary fields for getting a stream processor.
+type GetStreamProcessorPayload struct {
+	UUID uuid.UUID `json:"uuid" binding:"required"`
+}
+
+// DeleteStreamProcessorPayload contains the UUID of the stream processor to delete.
+type DeleteStreamProcessorPayload struct {
+	UUID string `json:"uuid" binding:"required"`
 }
