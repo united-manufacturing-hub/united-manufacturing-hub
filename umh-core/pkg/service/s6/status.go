@@ -195,8 +195,6 @@ func (s *DefaultService) buildFullServiceInfo(ctx context.Context, servicePath s
 		info.ReadyTime = int64(now.Sub(statusData.ReadyTime).Seconds())
 	}
 
-	s.logger.Debugf("ServiceInfo %s: %+v", servicePath, info)
-
 	// --- Add business logic fields (down files, exit history) ---
 
 	// Determine if service is "wanted up": if no "down" file exists
@@ -287,7 +285,6 @@ func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, f
 		})
 	}
 
-	// s.logger.Debugf("Exit history for S6 service %s: %+v", superviseDir, history)
 	return history, nil
 }
 
