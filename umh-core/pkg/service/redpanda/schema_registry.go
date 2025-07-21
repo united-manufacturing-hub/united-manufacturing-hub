@@ -719,7 +719,7 @@ func (s *SchemaRegistry) lookup(ctx context.Context) (err error, changePhase boo
 	}
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
-			fmt.Printf("Warning: Failed to close schema registry response body: %v\n", closeErr)
+			zap.S().Warnf("Failed to close schema registry response body: %v", closeErr)
 		}
 	}()
 
@@ -911,7 +911,7 @@ func (s *SchemaRegistry) removeUnknown(ctx context.Context) (err error, changePh
 	}
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
-			fmt.Printf("Warning: Failed to close response body: %v\n", closeErr)
+			zap.S().Warnf("Failed to close response body: %v", closeErr)
 		}
 	}()
 
@@ -1056,7 +1056,7 @@ func (s *SchemaRegistry) addNew(ctx context.Context) (err error, changePhase boo
 	}
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
-			fmt.Printf("Warning: Failed to close response body: %v\n", closeErr)
+			zap.S().Warnf("Failed to close response body: %v\n", closeErr)
 		}
 	}()
 
