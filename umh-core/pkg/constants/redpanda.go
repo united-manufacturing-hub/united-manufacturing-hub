@@ -57,3 +57,8 @@ const (
 	DefaultRedpandaTopicDefaultTopicCleanupPolicy        = "compact"
 	DefaultRedpandaTopicDefaultTopicSegmentMs            = 3600000 // 1 hour in milliseconds
 )
+
+const (
+	SchemaRegistryPort    = 8081
+	SchemaRegistryTimeout = 20 * time.Millisecond
+)

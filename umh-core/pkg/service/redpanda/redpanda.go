@@ -883,16 +883,34 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, services service
 		return fmt.Errorf("failed to reconcile redpanda monitor: %w", monitorErr), false
 	}
 
-	// Extract schema registry data from the SystemSnapshot
-	// This replaces the previous approach of using yaml:"-" tags in RedpandaConfig
-	dataModels := snapshot.CurrentConfig.DataModels
-	dataContracts := snapshot.CurrentConfig.DataContracts
-	payloadShapes := snapshot.CurrentConfig.PayloadShapes
+	// Only reconcile the schema registry if redpanda itself is running
+	hasRunningRedpanda := false
+	for _, s6Config := range s.s6ServiceConfigs {
+		// Check if this service has a desired state of running
+		if s6Config.DesiredFSMState == s6fsm.OperationalStateRunning {
+			// Also verify it's actually running by checking the current FSM state
+			currentState, err := s.s6Manager.GetCurrentFSMState(s6Config.Name)
+			if err == nil && currentState == s6fsm.OperationalStateRunning {
+				hasRunningRedpanda = true
+				break
+			}
+		}
+	}
 
-	schemaRegistryErr := s.schemaRegistryManager.Reconcile(ctx, dataModels, dataContracts, payloadShapes)
-	if schemaRegistryErr != nil {
-		// Only log them, don't return an error
-		zap.S().Errorf("failed to reconcile schema registry: %v", schemaRegistryErr)
+	if hasRunningRedpanda {
+		// Extract schema registry data from the SystemSnapshot
+		// This replaces the previous approach of using yaml:"-" tags in RedpandaConfig
+		dataModels := snapshot.CurrentConfig.DataModels
+		dataContracts := snapshot.CurrentConfig.DataContracts
+		payloadShapes := snapshot.CurrentConfig.PayloadShapes
+
+		schemaRegistryErr := s.schemaRegistryManager.Reconcile(ctx, dataModels, dataContracts, payloadShapes)
+		if schemaRegistryErr != nil {
+			// Only log them, don't return an error
+			zap.S().Warnf("failed to reconcile schema registry: %v", schemaRegistryErr)
+		}
+	} else {
+		s.logger.Debugf("Skipping schema registry reconciliation - no running redpanda services")
 	}
 
 	// If either was reconciled, indicate that reconciliation occurred

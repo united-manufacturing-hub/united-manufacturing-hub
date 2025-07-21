@@ -156,10 +156,10 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 			}
 			// If not in running state, just log the error but don't set it in the FSM
 			r.baseFSMInstance.GetLogger().Debugf("schema registry error while not in running state (%s), ignoring: %s", r.GetCurrentFSMState(), s6Err)
-		} else {      
-		  if r.baseFSMInstance.IsDeadlineExceededAndHandle(s6Err, snapshot.Tick, "s6Manager reconciliation") {
-			  return nil, false
-	  	}
+		} else {
+			if r.baseFSMInstance.IsDeadlineExceededAndHandle(s6Err, snapshot.Tick, "s6Manager reconciliation") {
+				return nil, false
+			}
 			// For non-schema registry errors, always set the error
 			r.baseFSMInstance.SetError(s6Err, snapshot.Tick)
 			r.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
@@ -305,7 +305,7 @@ func (r *RedpandaInstance) reconcileStartingStates(ctx context.Context, services
 		}
 
 		// Check if "Successfully started Redpanda!" is found in logs
-		started, reasonStarted := r.IsRedpandaStarted()
+		started, reasonStarted := r.IsRedpandaStarted(ctx)
 		if !started {
 			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reasonStarted)
 			return nil, false

@@ -17,6 +17,8 @@ package nmapserviceconfig
 import (
 	"fmt"
 	"strings"
+
+	"go.uber.org/zap"
 )
 
 // Comparator handles the comparison of Nmap configurations
@@ -38,8 +40,8 @@ func (c *Comparator) ConfigsEqual(desired, observed NmapServiceConfig) (isEqual 
 	normObserved := c.normalizer.NormalizeConfig(observed)
 	defer func() {
 		if !isEqual {
-			fmt.Printf("Normalized desired: %+v\n", normDesired)
-			fmt.Printf("Normalized observed: %+v\n", normObserved)
+			zap.S().Infof("Normalized desired:  %+v", normDesired)
+			zap.S().Infof("Normalized observed: %+v", normObserved)
 		}
 	}()
 
