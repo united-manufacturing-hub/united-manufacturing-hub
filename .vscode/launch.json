@@ -11,7 +11,16 @@
             "request": "attach",
             "mode": "remote",
             "host": "localhost",
-            "port": 40000
+            "port": 40000,
+            "stopOnEntry": false,
+            "substitutePath": [
+                {
+                    "from": "${workspaceFolder}/umh-core",
+                    "to": "/go/src/github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core"
+                }
+            ],
+            "showLog": true,
+            "trace": "verbose"
         },
         {
             "name": "Debug Actions Unit Tests",
