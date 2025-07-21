@@ -249,12 +249,6 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 //   - Timeout scenarios handled gracefully with partial success logging
 //   - Manager-specific errors include manager name for debugging
 //   - System continues operation even if individual managers fail
-//
-// Performance Monitoring:
-//   - Detailed logging with [PARALLEL] prefix for debugging parallel execution
-//   - Time efficiency calculations for each manager
-//   - Warning alerts when managers approach time budget limits
-//   - Metrics collection for reconciliation times and error rates
 func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	// Get the config
 	if c.configManager == nil {
@@ -547,16 +541,12 @@ func (c *ControlLoop) Stop(ctx context.Context) error {
 //   - Execution time is measured and logged for performance monitoring
 //   - Time budget warnings are issued when managers approach limits (using LoopControlLoopTimeFactor)
 //   - Thread-safe manager time tracking for system-wide visibility
-//   - Parallel execution context logging with [PARALLEL] prefix for debugging
 //
 // The function returns:
 //   - bool: whether the manager performed reconciliation work
 //   - error: any error encountered during execution, wrapped with manager context
 func (c *ControlLoop) reconcileManager(ctx context.Context, manager fsm.FSMManager[any], executedManagers *[]string, executedManagersMutex *sync.RWMutex, newSnapshot fsm.SystemSnapshot) (bool, error) {
 	managerName := manager.GetManagerName()
-
-	// Add parallel execution context logging
-	c.logger.Debugf("[PARALLEL] Starting manager %s (goroutine)", managerName)
 
 	executedManagersMutex.Lock()
 	*executedManagers = append(*executedManagers, managerName)
@@ -566,30 +556,6 @@ func (c *ControlLoop) reconcileManager(ctx context.Context, manager fsm.FSMManag
 	managerStart := time.Now()
 	err, reconciled := manager.Reconcile(ctx, newSnapshot, c.services)
 	executionTime := time.Since(managerStart)
-
-	// Get remaining time for logging
-	var remaining time.Duration
-	if deadline, ok := ctx.Deadline(); ok {
-		remaining = time.Until(deadline)
-	}
-
-	// Detailed performance logging
-	if remaining > 0 {
-		efficiencyPercent := float64(remaining-executionTime) / float64(remaining) * 100
-		c.logger.Debugf("[PARALLEL] Manager %s completed - Duration: %v, Reconciled: %v, Time efficiency: %.2f%%",
-			managerName, executionTime, reconciled, efficiencyPercent)
-
-		// Warning for potential time budget violations using the constant
-		timeBudgetThreshold := time.Duration(float64(remaining) * constants.LoopControlLoopTimeFactor)
-		if executionTime > timeBudgetThreshold {
-			utilizationPercent := float64(executionTime) / float64(remaining) * 100
-			c.logger.Warnf("[PARALLEL] Manager %s approaching time budget limit: %v/%v (%.1f%%) - threshold: %v",
-				managerName, executionTime, remaining, utilizationPercent, timeBudgetThreshold)
-		}
-	} else {
-		c.logger.Debugf("[PARALLEL] Manager %s completed - Duration: %v, Reconciled: %v",
-			managerName, executionTime, reconciled)
-	}
 
 	c.managerTimesMutex.Lock()
 	c.managerTimes[managerName] = executionTime
