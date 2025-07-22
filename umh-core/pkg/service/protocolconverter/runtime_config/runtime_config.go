@@ -82,7 +82,15 @@ func BuildRuntimeConfig(
 			fmt.Errorf("nil spec")
 	}
 
-	pcLocation := spec.Location
+	pcLocation := make(map[string]string, len(spec.Location))
+
+	// Quickly copy spec.Location to pcLocation if it exists
+	// For loop is quicker then invoking deepcopy
+	if spec.Location != nil {
+		for k, v := range spec.Location {
+			pcLocation[k] = v
+		}
+	}
 
 	//----------------------------------------------------------------------
 	// 1. Merge & normalise *location* map
@@ -96,7 +104,7 @@ func BuildRuntimeConfig(
 
 	// 1b) extend with PC-local additions (never overwrite agent keys)
 	for k, v := range pcLocation {
-		if _, exists := loc[k]; !exists {
+		if agentValue, exists := loc[k]; !exists || agentValue == "" {
 			loc[k] = v
 		}
 	}
@@ -148,11 +156,18 @@ func BuildRuntimeConfig(
 	//----------------------------------------------------------------------
 	// 2. Assemble the **complete** variable bundle
 	//----------------------------------------------------------------------
-	vb := spec.Variables // start with user bundle (flat)
-	if vb.User == nil {
+	vb := spec.Variables
+	// Deep copy the User map to avoid mutating the original
+	if vb.User != nil {
+		userCopy := make(map[string]any, len(vb.User)+2) // +2 for location keys
+		for k, v := range vb.User {
+			userCopy[k] = v
+		}
+		vb.User = userCopy
+	} else {
 		vb.User = map[string]any{}
 	}
-	vb.User["location"] = loc // merged map
+	vb.User["location"] = loc
 	vb.User["location_path"] = locationPath
 
 	if len(globalVars) != 0 {

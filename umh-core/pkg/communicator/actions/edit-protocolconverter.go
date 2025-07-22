@@ -38,14 +38,17 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/tiendc/go-deepcopy"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter/runtime_config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"go.uber.org/zap"
 )
@@ -660,20 +663,52 @@ func (a *EditProtocolConverterAction) compareProtocolConverterDFCConfig(pcSnapsh
 // renderDesiredDFCConfig renders the template variables in the desired DFC config
 // using the actual runtime values from the protocol converter observed state
 func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *protocolconverter.ProtocolConverterObservedStateSnapshot) (dataflowcomponentserviceconfig.DataflowComponentServiceConfig, error) {
-	// Get the observed spec config to extract the variables
+	// Get the observed spec config
 	specConfig := pcSnapshot.ObservedProtocolConverterSpecConfig
 
-	// Build the variable scope from the spec config's variables
-	// This includes user, global, and internal variables that were used to render the observed config
-	variableScope := specConfig.Variables.Flatten()
-
-	// Render the desired DFC config using the same variables that were used for the observed config
-	renderedConfig, err := config.RenderTemplate(a.desiredDFCConfig, variableScope)
+	// Create a deep copy to avoid mutating the original observed state
+	var modifiedSpec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+	err := deepcopy.Copy(&modifiedSpec, &specConfig)
 	if err != nil {
-		return dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, fmt.Errorf("failed to render desired DFC config: %w", err)
+		return dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, fmt.Errorf("failed to deep copy spec config: %w", err)
 	}
 
-	return renderedConfig, nil
+	// Now safely modify the copy without affecting the original
+	switch a.dfcType {
+	case DFCTypeRead:
+		modifiedSpec.Config.DataflowComponentReadServiceConfig = a.desiredDFCConfig
+	case DFCTypeWrite:
+		modifiedSpec.Config.DataflowComponentWriteServiceConfig = a.desiredDFCConfig
+	default:
+		return dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, fmt.Errorf("invalid DFC type: %s", a.dfcType.String())
+	}
+
+	systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
+
+	agentLocation := convertIntMapToStringMap(systemSnapshot.CurrentConfig.Agent.Location)
+
+	pcName := a.name
+
+	runtimeConfig, err := runtime_config.BuildRuntimeConfig(
+		modifiedSpec,
+		agentLocation,
+		nil,             // TODO: add global vars
+		"unimplemented", // TODO: add node name
+		pcName,
+	)
+	if err != nil {
+		return dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, fmt.Errorf("failed to build runtime config: %w", err)
+	}
+
+	// Return the appropriate DFC config
+	switch a.dfcType {
+	case DFCTypeRead:
+		return runtimeConfig.DataflowComponentReadServiceConfig, nil
+	case DFCTypeWrite:
+		return runtimeConfig.DataflowComponentWriteServiceConfig, nil
+	default:
+		return dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, fmt.Errorf("invalid DFC type: %s", a.dfcType.String())
+	}
 }
 
 // convertPipelineToMap converts CommonDataFlowComponentPipelineConfig to map[string]DfcDataConfig
