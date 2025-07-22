@@ -702,7 +702,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["global_var"]).To(Equal("global-value"))
 
 			// 3. Verify bridged_by header
-			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["bridged_by"]).To(Equal("protocol-converter-test-node-test-pc"))
+			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["bridged_by"]).To(Equal("protocol-converter_test-node_test-pc"))
 
 			// 4. Verify location merging
 			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["location_0"]).To(Equal("factory"))
@@ -773,12 +773,12 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Test with special characters
 			runtimeCfg, err := runtime_config.BuildRuntimeConfig(spec, nil, nil, "test@node", "test.pc")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["bridged_by"]).To(Equal("protocol-converter-test-node-test-pc"))
+			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["bridged_by"]).To(Equal("protocol-converter_test-node_test-pc"))
 
 			// Test with multiple special characters
 			runtimeCfg, err = runtime_config.BuildRuntimeConfig(spec, nil, nil, "test@node#1", "test.pc@2")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["bridged_by"]).To(Equal("protocol-converter-test-node-1-test-pc-2"))
+			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["bridged_by"]).To(Equal("protocol-converter_test-node-1_test-pc-2"))
 		})
 	})
 })
