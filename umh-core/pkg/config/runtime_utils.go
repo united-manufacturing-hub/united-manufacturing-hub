@@ -40,6 +40,13 @@ func (ct ComponentType) String() string {
 	return string(ct)
 }
 
+// At the top of the file, alongside your imports:
+var (
+    reNonAlnum  = regexp.MustCompile(`[^a-zA-Z0-9]`)
+    reMultiDash = regexp.MustCompile(`-{2,}`)
+)
+
+
 // GenerateBridgedBy creates a sanitized bridged_by header for UMH components.
 // It takes a component type, node name, and component name and returns a properly
 // formatted and sanitized identifier.
@@ -73,15 +80,22 @@ func GenerateBridgedBy(componentType ComponentType, nodeName, componentName stri
 		nodeName = "unknown"
 	}
 
-	reNonAlnum := regexp.MustCompile(`[^a-zA-Z0-9]`)
-	componentTypeStr := strings.Trim(reNonAlnum.ReplaceAllString(componentType.String(), "-"), "-")
-	nodeNameStr := strings.Trim(reNonAlnum.ReplaceAllString(nodeName, "-"), "-")
-	componentNameStr := strings.Trim(reNonAlnum.ReplaceAllString(componentName, "-"), "-")
+	componentTypeStr := strings.Trim(
+		reNonAlnum.ReplaceAllString(componentType.String(), "-"),
+		"-",
+	)
+	nodeNameStr := strings.Trim(
+		reNonAlnum.ReplaceAllString(nodeName, "-"),
+		"-",
+	)
+	componentNameStr := strings.Trim(
+		reNonAlnum.ReplaceAllString(componentName, "-"),
+		"-",
+	)
 
 	bridgeName := fmt.Sprintf("%s_%s_%s", componentTypeStr, nodeNameStr, componentNameStr)
 
 	// Collapse multiple consecutive dashes into single dashes
-	reMultiDash := regexp.MustCompile(`-{2,}`)
 	bridgeName = reMultiDash.ReplaceAllString(bridgeName, "-")
 
 	// Trim leading and trailing dashes
