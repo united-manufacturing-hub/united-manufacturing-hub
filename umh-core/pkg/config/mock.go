@@ -84,6 +84,8 @@ func NewMockConfigManager() *MockConfigManager {
 
 // GetDataFlowConfig returns the DataFlow component configurations
 func (m *MockConfigManager) GetDataFlowConfig() []DataFlowComponentConfig {
+	m.mutexReadOrWrite.Lock()
+	defer m.mutexReadOrWrite.Unlock()
 	return m.Config.DataFlow
 }
 
@@ -152,6 +154,8 @@ func (m *MockConfigManager) writeConfig(ctx context.Context, cfg FullConfig) err
 
 // WithConfig configures the mock to return the given config
 func (m *MockConfigManager) WithConfig(cfg FullConfig) *MockConfigManager {
+	m.mutexReadOrWrite.Lock()
+	defer m.mutexReadOrWrite.Unlock()
 	m.Config = cfg
 	return m
 }

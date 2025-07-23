@@ -258,10 +258,10 @@ test: vet nilaway lint
 	go test -v -tags=test ./...
 
 unit-test: vet nilaway lint
-	ginkgo -r -v --tags=test --label-filter='!integration && !redpanda-extended && !tls' --fail-fast ./...
+	ginkgo -r -v --tags=test --race --label-filter='!integration && !redpanda-extended && !tls' --fail-fast ./...
 
 unit-test-fail-slow: vet nilaway lint
-	ginkgo -r -v --tags=test --label-filter='!integration && !redpanda-extended && !tls' ./...
+	ginkgo -r -v --tags=test --race --label-filter='!integration && !redpanda-extended && !tls' ./...
 
 benchmark:
 	@echo "Running benchmarks..."
@@ -563,9 +563,9 @@ test-benthos-monitor: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 		ghcr.io/united-manufacturing-hub/united-manufacturing-hub/umh-core:staging
 
 # GraphQL API Demo: Complete GraphQL server with real-time simulator data
-# 
+#
 # USAGE: cd umh-core && make test-graphql
-# 
+#
 # This target starts UMH Core with GraphQL API enabled and built-in simulator providing real data.
 # Perfect for quick testing and development without requiring MQTT/Redis infrastructure.
 #
@@ -728,7 +728,7 @@ build-push: build push-platform
 dump-metrics:
 	curl -s http://localhost:8081/metrics > metrics.txt
 
-run: 
+run:
 	@echo "Running $(IMAGE_NAME):$(TAG)"
 	docker rm -f $(IMAGE_NAME)
 	docker run \
