@@ -21,6 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/streamprocessor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
@@ -48,6 +49,8 @@ func (p *DefaultMetricsProvider) GetMetrics(payload models.GetMetricsRequest, sn
 		return getTopicBrowserMetrics(snapshot)
 	case models.StreamProcessorMetricResourceType:
 		return getStreamProcessorMetrics(payload.UUID, snapshot)
+	case models.ProtocolConverterMetricResourceType:
+		return getProtocolConverterMetrics(payload.UUID, snapshot)
 	default:
 		return models.GetMetricsResponse{}, fmt.Errorf("unsupported metric type: %s", payload.Type)
 	}
@@ -282,6 +285,15 @@ const (
 	StreamProcessorMetricComponentTypeInput     = "input"
 	StreamProcessorMetricComponentTypeOutput    = "output"
 	StreamProcessorMetricComponentTypeProcessor = "processor"
+
+	// Protocol Converter paths
+	ProtocolConverterInputPath  = "root.input"
+	ProtocolConverterOutputPath = "root.output"
+
+	// Protocol Converter metric component types
+	ProtocolConverterMetricComponentTypeInput     = "input"
+	ProtocolConverterMetricComponentTypeOutput    = "output"
+	ProtocolConverterMetricComponentTypeProcessor = "processor"
 )
 
 type MetricEntry struct {
@@ -364,6 +376,91 @@ func getStreamProcessorMetrics(uuid string, snapshot fsm.SystemSnapshot) (models
 	// Process processor metrics
 	for path, proc := range metrics.Process.Processors {
 		addMetrics(&res, StreamProcessorMetricComponentTypeProcessor, path,
+			MetricEntry{Name: "label", Value: proc.Label, ValueType: models.MetricValueTypeString},
+			MetricEntry{Name: "received", Value: proc.Received, ValueType: models.MetricValueTypeNumber},
+			MetricEntry{Name: "batch_received", Value: proc.BatchReceived, ValueType: models.MetricValueTypeNumber},
+			MetricEntry{Name: "sent", Value: proc.Sent, ValueType: models.MetricValueTypeNumber},
+			MetricEntry{Name: "batch_sent", Value: proc.BatchSent, ValueType: models.MetricValueTypeNumber},
+			MetricEntry{Name: "error", Value: proc.Error, ValueType: models.MetricValueTypeNumber},
+			MetricEntry{Name: "latency_ns_p50", Value: proc.LatencyNS.P50, ValueType: models.MetricValueTypeNumber},
+			MetricEntry{Name: "latency_ns_p90", Value: proc.LatencyNS.P90, ValueType: models.MetricValueTypeNumber},
+			MetricEntry{Name: "latency_ns_p99", Value: proc.LatencyNS.P99, ValueType: models.MetricValueTypeNumber},
+			MetricEntry{Name: "latency_ns_sum", Value: proc.LatencyNS.Sum, ValueType: models.MetricValueTypeNumber},
+			MetricEntry{Name: "latency_ns_count", Value: proc.LatencyNS.Count, ValueType: models.MetricValueTypeNumber},
+		)
+	}
+
+	return res, nil
+}
+
+// getProtocolConverterMetrics retrieves metrics from the protocol converter instance and converts them
+// to a standardized format matching the Get-Metrics API response structure.
+func getProtocolConverterMetrics(uuid string, snapshot fsm.SystemSnapshot) (models.GetMetricsResponse, error) {
+	res := models.GetMetricsResponse{Metrics: []models.Metric{}}
+
+	// Find the protocol converter manager
+	inst, ok := fsm.FindManager(snapshot, constants.ProtocolConverterManagerName)
+	if !ok || inst == nil {
+		return res, fmt.Errorf("failed to find the %s manager", models.ProtocolConverterMetricResourceType)
+	}
+	protocolConverterInstances := inst.GetInstances()
+	var observedState *protocolconverter.ProtocolConverterObservedStateSnapshot
+	found := false
+	for _, instance := range protocolConverterInstances {
+		if dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID).String() == uuid {
+			var ok bool
+			observedState, ok = instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot)
+			if !ok || observedState == nil {
+				return res, fmt.Errorf("protocol converter instance %s has no observed state", instance.ID)
+			}
+			found = true
+			break
+		}
+	}
+	if !found {
+		return res, fmt.Errorf("protocol converter instance %s not found", uuid)
+	}
+
+	if observedState == nil {
+		return res, fmt.Errorf("protocol converter instance has nil observed state")
+	}
+
+	// Extract benthos metrics from the read DFC (using read DFC as primary metrics source)
+	metrics := observedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
+
+	// Process Input metrics (same structure as DFC since protocol converter uses benthos)
+	inputMetrics := metrics.Input
+	addMetrics(&res, ProtocolConverterMetricComponentTypeInput, ProtocolConverterInputPath,
+		MetricEntry{Name: "connection_failed", Value: inputMetrics.ConnectionFailed, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "connection_lost", Value: inputMetrics.ConnectionLost, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "connection_up", Value: inputMetrics.ConnectionUp, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "received", Value: inputMetrics.Received, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "latency_ns_p50", Value: inputMetrics.LatencyNS.P50, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "latency_ns_p90", Value: inputMetrics.LatencyNS.P90, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "latency_ns_p99", Value: inputMetrics.LatencyNS.P99, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "latency_ns_sum", Value: inputMetrics.LatencyNS.Sum, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "latency_ns_count", Value: inputMetrics.LatencyNS.Count, ValueType: models.MetricValueTypeNumber},
+	)
+
+	// Process Output metrics
+	outputMetrics := metrics.Output
+	addMetrics(&res, ProtocolConverterMetricComponentTypeOutput, ProtocolConverterOutputPath,
+		MetricEntry{Name: "batch_sent", Value: outputMetrics.BatchSent, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "connection_failed", Value: outputMetrics.ConnectionFailed, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "connection_lost", Value: outputMetrics.ConnectionLost, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "connection_up", Value: outputMetrics.ConnectionUp, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "error", Value: outputMetrics.Error, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "sent", Value: outputMetrics.Sent, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "latency_ns_p50", Value: outputMetrics.LatencyNS.P50, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "latency_ns_p90", Value: outputMetrics.LatencyNS.P90, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "latency_ns_p99", Value: outputMetrics.LatencyNS.P99, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "latency_ns_sum", Value: outputMetrics.LatencyNS.Sum, ValueType: models.MetricValueTypeNumber},
+		MetricEntry{Name: "latency_ns_count", Value: outputMetrics.LatencyNS.Count, ValueType: models.MetricValueTypeNumber},
+	)
+
+	// Process processor metrics
+	for path, proc := range metrics.Process.Processors {
+		addMetrics(&res, ProtocolConverterMetricComponentTypeProcessor, path,
 			MetricEntry{Name: "label", Value: proc.Label, ValueType: models.MetricValueTypeString},
 			MetricEntry{Name: "received", Value: proc.Received, ValueType: models.MetricValueTypeNumber},
 			MetricEntry{Name: "batch_received", Value: proc.BatchReceived, ValueType: models.MetricValueTypeNumber},
