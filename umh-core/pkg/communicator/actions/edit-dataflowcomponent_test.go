@@ -830,7 +830,9 @@ buffer:
 			Expect(metadata).To(BeNil())
 
 			// Verify the failure message content
+			mu.Lock()
 			decodedMessage, err := encoding.DecodeMessageFromUMHInstanceToUser(messages[1].Content)
+			mu.Unlock()
 			Expect(err).NotTo(HaveOccurred())
 
 			// Extract the ActionReplyPayload from the decoded message

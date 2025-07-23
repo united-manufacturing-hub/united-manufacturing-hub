@@ -84,15 +84,13 @@ func NewMockConfigManager() *MockConfigManager {
 
 // GetDataFlowConfig returns the DataFlow component configurations
 func (m *MockConfigManager) GetDataFlowConfig() []DataFlowComponentConfig {
-	m.mutexReadOrWrite.Lock()
-	defer m.mutexReadOrWrite.Unlock()
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
 	return m.Config.DataFlow
 }
 
-// GetConfig implements the ConfigManager interface
-func (m *MockConfigManager) GetConfig(ctx context.Context, tick uint64) (FullConfig, error) {
-	m.mutexReadOrWrite.Lock()
-	defer m.mutexReadOrWrite.Unlock()
+// getConfigInternal returns the config without locking - for use by atomic methods that already hold the lock
+func (m *MockConfigManager) getConfigInternal(ctx context.Context, tick uint64) (FullConfig, error) {
 	m.GetConfigCalled = true
 
 	if m.ConfigDelay > 0 {
@@ -104,7 +102,20 @@ func (m *MockConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 		}
 	}
 
-	return m.Config, m.ConfigError
+	// Return a deep copy of the config to avoid data races
+	// The atomic operations should work on a copy and only update the original via writeConfig
+	configCopy := m.Config
+	configCopy.DataFlow = make([]DataFlowComponentConfig, len(m.Config.DataFlow))
+	copy(configCopy.DataFlow, m.Config.DataFlow)
+
+	return configCopy, m.ConfigError
+}
+
+// GetConfig implements the ConfigManager interface
+func (m *MockConfigManager) GetConfig(ctx context.Context, tick uint64) (FullConfig, error) {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+	return m.getConfigInternal(ctx, tick)
 }
 
 // GetFileSystemService returns the mock filesystem service
@@ -154,8 +165,8 @@ func (m *MockConfigManager) writeConfig(ctx context.Context, cfg FullConfig) err
 
 // WithConfig configures the mock to return the given config
 func (m *MockConfigManager) WithConfig(cfg FullConfig) *MockConfigManager {
-	m.mutexReadOrWrite.Lock()
-	defer m.mutexReadOrWrite.Unlock()
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
 	m.Config = cfg
 	return m
 }
@@ -276,7 +287,7 @@ func (m *MockConfigManager) AtomicSetLocation(ctx context.Context, location mode
 	defer m.mutexReadAndWrite.Unlock()
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	config, err := m.getConfigInternal(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
@@ -348,7 +359,7 @@ func (m *MockConfigManager) AtomicAddDataflowcomponent(ctx context.Context, dfc 
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	config, err := m.getConfigInternal(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
@@ -376,7 +387,7 @@ func (m *MockConfigManager) AtomicDeleteDataflowcomponent(ctx context.Context, c
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	config, err := m.getConfigInternal(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
@@ -421,7 +432,7 @@ func (m *MockConfigManager) AtomicEditDataflowcomponent(ctx context.Context, com
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	config, err := m.getConfigInternal(ctx, 0)
 	if err != nil {
 		return DataFlowComponentConfig{}, fmt.Errorf("failed to get config: %w", err)
 	}
@@ -464,7 +475,7 @@ func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	config, err := m.getConfigInternal(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
@@ -517,7 +528,7 @@ func (m *MockConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	config, err := m.getConfigInternal(ctx, 0)
 	if err != nil {
 		return ProtocolConverterConfig{}, fmt.Errorf("failed to get config: %w", err)
 	}
@@ -612,7 +623,7 @@ func (m *MockConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	config, err := m.getConfigInternal(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
@@ -667,7 +678,7 @@ func (m *MockConfigManager) AtomicAddStreamProcessor(ctx context.Context, sp Str
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	config, err := m.getConfigInternal(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
@@ -720,7 +731,7 @@ func (m *MockConfigManager) AtomicEditStreamProcessor(ctx context.Context, sp St
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	config, err := m.getConfigInternal(ctx, 0)
 	if err != nil {
 		return StreamProcessorConfig{}, fmt.Errorf("failed to get config: %w", err)
 	}
@@ -807,7 +818,7 @@ func (m *MockConfigManager) AtomicDeleteStreamProcessor(ctx context.Context, nam
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	config, err := m.getConfigInternal(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
@@ -861,7 +872,7 @@ func (m *MockConfigManager) AtomicAddDataModel(ctx context.Context, name string,
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	config, err := m.getConfigInternal(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
@@ -902,7 +913,7 @@ func (m *MockConfigManager) AtomicEditDataModel(ctx context.Context, name string
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	config, err := m.getConfigInternal(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
@@ -965,7 +976,7 @@ func (m *MockConfigManager) AtomicDeleteDataModel(ctx context.Context, name stri
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	config, err := m.getConfigInternal(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
@@ -1006,7 +1017,7 @@ func (m *MockConfigManager) AtomicAddDataContract(ctx context.Context, dataContr
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	config, err := m.getConfigInternal(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
