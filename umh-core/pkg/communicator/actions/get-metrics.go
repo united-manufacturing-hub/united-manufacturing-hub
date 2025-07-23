@@ -81,20 +81,32 @@ func (a *GetMetricsAction) Parse(payload interface{}) (err error) {
 func (a *GetMetricsAction) Validate() (err error) {
 	a.actionLogger.Info("Validating the payload")
 
-	allowedMetricTypes := []models.MetricResourceType{models.DFCMetricResourceType, models.RedpandaMetricResourceType, models.TopicBrowserMetricResourceType, models.StreamProcessorMetricResourceType}
+	allowedMetricTypes := []models.MetricResourceType{models.DFCMetricResourceType, models.RedpandaMetricResourceType, models.TopicBrowserMetricResourceType, models.StreamProcessorMetricResourceType, models.ProtocolConverterMetricResourceType}
 	if !slices.Contains(allowedMetricTypes, a.payload.Type) {
-		return errors.New("metric type must be set and must be one of the following: dfc, redpanda, topic-browser, stream-processor")
+		return errors.New("metric type must be set and must be one of the following: dfc, redpanda, topic-browser, stream-processor, protocol-converter")
 	}
 
-	if a.payload.Type == models.DFCMetricResourceType || a.payload.Type == models.StreamProcessorMetricResourceType {
+	switch a.payload.Type {
+	case models.DFCMetricResourceType:
 		if a.payload.UUID == "" {
-			if a.payload.Type == models.DFCMetricResourceType {
-				return errors.New("uuid must be set to retrieve metrics for a DFC")
-			} else {
-				return errors.New("uuid must be set to retrieve metrics for a Stream Processor")
-			}
+			return errors.New("uuid must be set to retrieve metrics for a DFC")
 		}
-
+		_, err = uuid.Parse(a.payload.UUID)
+		if err != nil {
+			return fmt.Errorf("invalid UUID format: %v", err)
+		}
+	case models.StreamProcessorMetricResourceType:
+		if a.payload.UUID == "" {
+			return errors.New("uuid must be set to retrieve metrics for a Stream Processor")
+		}
+		_, err = uuid.Parse(a.payload.UUID)
+		if err != nil {
+			return fmt.Errorf("invalid UUID format: %v", err)
+		}
+	case models.ProtocolConverterMetricResourceType:
+		if a.payload.UUID == "" {
+			return errors.New("uuid must be set to retrieve metrics for a Protocol Converter")
+		}
 		_, err = uuid.Parse(a.payload.UUID)
 		if err != nil {
 			return fmt.Errorf("invalid UUID format: %v", err)
