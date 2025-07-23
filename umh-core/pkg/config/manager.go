@@ -581,6 +581,8 @@ func (m *FileConfigManagerWithBackoff) GetLastError() error {
 }
 
 // AtomicSetLocation sets the location in the config atomically
+// This function updates the agent location and propagates the changes to all
+// other components (ProtocolConverter, StreamProcessor) to maintain consistency.
 func (m *FileConfigManager) AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
@@ -613,6 +615,38 @@ func (m *FileConfigManager) AtomicSetLocation(ctx context.Context, location mode
 	}
 	if location.WorkCell != nil {
 		config.Agent.Location[4] = *location.WorkCell
+	}
+
+	// Convert the agent location to string map for use in other components
+	agentLocationStr := make(map[string]string)
+	for k, v := range config.Agent.Location {
+		agentLocationStr[fmt.Sprintf("%d", k)] = v
+	}
+
+	// Update all ProtocolConverter locations to match the agent location
+	for i := range config.ProtocolConverter {
+		if config.ProtocolConverter[i].ProtocolConverterServiceConfig.Location == nil {
+			config.ProtocolConverter[i].ProtocolConverterServiceConfig.Location = make(map[string]string)
+		}
+
+		// Update each level in the protocol converter location with the agent location
+		// Only update levels that exist in the agent location
+		for levelStr, value := range agentLocationStr {
+			config.ProtocolConverter[i].ProtocolConverterServiceConfig.Location[levelStr] = value
+		}
+	}
+
+	// Update all StreamProcessor locations to match the agent location
+	for i := range config.StreamProcessor {
+		if config.StreamProcessor[i].StreamProcessorServiceConfig.Location == nil {
+			config.StreamProcessor[i].StreamProcessorServiceConfig.Location = make(map[string]string)
+		}
+
+		// Update each level in the stream processor location with the agent location
+		// Only update levels that exist in the agent location
+		for levelStr, value := range agentLocationStr {
+			config.StreamProcessor[i].StreamProcessorServiceConfig.Location[levelStr] = value
+		}
 	}
 
 	// write the config

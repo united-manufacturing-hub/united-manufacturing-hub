@@ -247,14 +247,33 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 		}
 	}
 
-	// Store the spec config
-	p.ObservedState.ObservedProtocolConverterSpecConfig = p.specConfig
+	// Merge agent location with protocol converter location for the observed spec config
+	// This ensures the system snapshot shows the effective location that includes agent location inheritance
+	agentLocationStr := convertIntMapToStringMap(snapshot.CurrentConfig.Agent.Location)
+	mergedLocation := make(map[string]string)
+
+	// 1a) copy agent levels (authoritative)
+	for k, v := range agentLocationStr {
+		mergedLocation[k] = v
+	}
+
+	// 1b) extend with PC-local additions (never overwrite agent keys)
+	for k, v := range p.specConfig.Location {
+		if agentValue, exists := mergedLocation[k]; !exists || agentValue == "" {
+			mergedLocation[k] = v
+		}
+	}
+
+	// Update the spec config with the merged location before storing in observed state
+	observedSpecConfig := p.specConfig
+	observedSpecConfig.Location = mergedLocation
+	p.ObservedState.ObservedProtocolConverterSpecConfig = observedSpecConfig
 
 	// Now render the config
 	start = time.Now()
 	p.runtimeConfig, err = runtime_config.BuildRuntimeConfig(
 		p.specConfig,
-		convertIntMapToStringMap(snapshot.CurrentConfig.Agent.Location),
+		agentLocationStr,
 		nil,             // TODO: add global vars
 		"unimplemented", // TODO: add node name
 		p.baseFSMInstance.GetID(),
