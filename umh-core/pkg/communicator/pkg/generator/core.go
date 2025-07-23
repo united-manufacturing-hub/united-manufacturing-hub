@@ -28,6 +28,7 @@ func DeriveCoreHealth(
 	agentHealth *models.Health,
 	containerHealth *models.Health,
 	redpandaHealth *models.Health,
+	topicBrowserHealth *models.Health,
 	releaseHealth *models.Health,
 	dfcs []models.Dfc,
 	logger *zap.SugaredLogger,
@@ -48,6 +49,11 @@ func DeriveCoreHealth(
 	// Redpanda health check - both active and neutral (idle) states are acceptable
 	if redpandaHealth != nil && redpandaHealth.Category != models.Active && redpandaHealth.Category != models.Neutral {
 		unhealthyComponents = append(unhealthyComponents, fmt.Sprintf("Redpanda: %s", redpandaHealth.Message))
+	}
+
+	// Topic Browser health check - both active and neutral (idle) states are acceptable
+	if topicBrowserHealth != nil && topicBrowserHealth.Category != models.Active && topicBrowserHealth.Category != models.Neutral {
+		unhealthyComponents = append(unhealthyComponents, fmt.Sprintf("TopicBrowser: %s", topicBrowserHealth.Message))
 	}
 
 	// Release health check - only consider degraded as unhealthy
