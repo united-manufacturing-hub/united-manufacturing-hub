@@ -24,7 +24,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
@@ -171,7 +170,7 @@ func (m *MockNmapService) GenerateS6ConfigForNmap(nmapConfig *nmapserviceconfig.
 }
 
 // GetConfig returns the mock config
-func (m *MockNmapService) GetConfig(ctx context.Context, filesystemService filesystem.Service, nmapName string) (nmapserviceconfig.NmapServiceConfig, error) {
+func (m *MockNmapService) GetConfig(ctx context.Context, services serviceregistry.Provider, nmapName string) (nmapserviceconfig.NmapServiceConfig, error) {
 	if ctx.Err() != nil {
 		return nmapserviceconfig.NmapServiceConfig{}, ctx.Err()
 	}
@@ -188,7 +187,7 @@ func (m *MockNmapService) GetConfig(ctx context.Context, filesystemService files
 }
 
 // Status returns the mock status
-func (m *MockNmapService) Status(ctx context.Context, filesystemService filesystem.Service, nmapName string, tick uint64) (ServiceInfo, error) {
+func (m *MockNmapService) Status(ctx context.Context, services serviceregistry.Provider, nmapName string, tick uint64) (ServiceInfo, error) {
 	m.StatusCalled = true
 
 	m.mu.RLock()
@@ -325,7 +324,7 @@ func (m *MockNmapService) RemoveNmapFromS6Manager(ctx context.Context, nmapName 
 	return nil
 }
 
-func (m *MockNmapService) ForceRemoveNmap(ctx context.Context, filesystemService filesystem.Service, nmapName string) error {
+func (m *MockNmapService) ForceRemoveNmap(ctx context.Context, services serviceregistry.Provider, nmapName string) error {
 	m.ForceRemoveNmapCalled = true
 	return m.ForceRemoveNmapError
 }
@@ -398,7 +397,7 @@ func (m *MockNmapService) ReconcileManager(ctx context.Context, services service
 }
 
 // ServiceExists mocks checking if a service exists
-func (m *MockNmapService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, nmapName string) bool {
+func (m *MockNmapService) ServiceExists(ctx context.Context, services serviceregistry.Provider, nmapName string) bool {
 
 	m.ServiceExistsCalled = true
 	return m.ServiceExistsResult

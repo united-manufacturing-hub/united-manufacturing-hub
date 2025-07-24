@@ -30,7 +30,6 @@ import (
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/monitor"
 	redpanda_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
@@ -49,10 +48,10 @@ import (
 //     setting error state and scheduling a retry/backoff.
 
 // CreateInstance attempts to add the Redpanda to the S6 manager.
-func (r *RedpandaInstance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (r *RedpandaInstance) CreateInstance(ctx context.Context, services serviceregistry.Provider) error {
 	r.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding Redpanda service %s to S6 manager ...", r.baseFSMInstance.GetID())
 
-	err := r.service.AddRedpandaToS6Manager(ctx, &r.config, filesystemService, r.baseFSMInstance.GetID())
+	err := r.service.AddRedpandaToS6Manager(ctx, &r.config, services, r.baseFSMInstance.GetID())
 	if err != nil {
 		if err == redpanda_service.ErrServiceAlreadyExists {
 			r.baseFSMInstance.GetLogger().Debugf("Redpanda service %s already exists in S6 manager", r.baseFSMInstance.GetID())
@@ -67,7 +66,7 @@ func (r *RedpandaInstance) CreateInstance(ctx context.Context, filesystemService
 
 // RemoveInstance attempts to remove the Redpanda from the S6 manager.
 // It requires the service to be stopped before removal.
-func (r *RedpandaInstance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (r *RedpandaInstance) RemoveInstance(ctx context.Context, services serviceregistry.Provider) error {
 	r.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing Redpanda service %s from S6 manager ...", r.baseFSMInstance.GetID())
 
 	// Remove the Redpanda from the S6 manager
@@ -85,7 +84,7 @@ func (r *RedpandaInstance) RemoveInstance(ctx context.Context, filesystemService
 }
 
 // StartInstance attempts to start the redpanda by setting the desired state to running for the given instance
-func (r *RedpandaInstance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (r *RedpandaInstance) StartInstance(ctx context.Context, services serviceregistry.Provider) error {
 	r.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting Redpanda service %s ...", r.baseFSMInstance.GetID())
 
 	// TODO: Add pre-start validation
@@ -102,7 +101,7 @@ func (r *RedpandaInstance) StartInstance(ctx context.Context, filesystemService 
 }
 
 // StopInstance attempts to stop the Redpanda by setting the desired state to stopped for the given instance
-func (r *RedpandaInstance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (r *RedpandaInstance) StopInstance(ctx context.Context, services serviceregistry.Provider) error {
 	r.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping Redpanda service %s ...", r.baseFSMInstance.GetID())
 
 	// Set the desired state to stopped for the given instance
@@ -118,15 +117,15 @@ func (r *RedpandaInstance) StopInstance(ctx context.Context, filesystemService f
 
 // CheckForCreation checks whether the creation was successful
 // For Redpanda, this is a no-op as we don't need to check anything
-func (r *RedpandaInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+func (r *RedpandaInstance) CheckForCreation(ctx context.Context, services serviceregistry.Provider) bool {
 	return true
 }
 
 // getServiceStatus gets the status of the Redpanda service
 // its main purpose is to habdle the edge cases where the service is not yet created or not yet running
-func (r *RedpandaInstance) GetServiceStatus(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) (redpanda_service.ServiceInfo, error) {
+func (r *RedpandaInstance) GetServiceStatus(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) (redpanda_service.ServiceInfo, error) {
 
-	info, err := r.service.Status(ctx, filesystemService, r.baseFSMInstance.GetID(), tick, loopStartTime)
+	info, err := r.service.Status(ctx, services, r.baseFSMInstance.GetID(), tick, loopStartTime)
 	if err != nil {
 		// If there's an error getting the service status, we need to distinguish between cases
 
@@ -201,7 +200,7 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 	if desiredState == OperationalStateStopped || currentState == OperationalStateStopped || currentState == OperationalStateStopping {
 		// For stopped instances, just check if the S6 service exists but don't do health checks
 		// This minimal information is sufficient for reconciliation
-		exists := r.service.ServiceExists(ctx, services.GetFileSystem(), r.baseFSMInstance.GetID())
+		exists := r.service.ServiceExists(ctx, services, r.baseFSMInstance.GetID())
 		if !exists {
 			// If the service doesn't exist, nothing more to do
 			r.PreviousObservedState = RedpandaObservedState{}
@@ -222,7 +221,7 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 
 	g.Go(func() error {
 		start := time.Now()
-		info, err := r.GetServiceStatus(gctx, services.GetFileSystem(), snapshot.Tick, snapshot.SnapshotTime)
+		info, err := r.GetServiceStatus(gctx, services, snapshot.Tick, snapshot.SnapshotTime)
 		metrics.ObserveReconcileTime(logger.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
 		if err == nil {
 			// Store the raw service info
@@ -246,7 +245,7 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 	g.Go(func() error {
 		start := time.Now()
 		// This GetConfig requires the tick parameter, which will be used to calculate the metrics state
-		observedConfig, err := r.service.GetConfig(gctx, services.GetFileSystem(), r.baseFSMInstance.GetID(), snapshot.Tick, snapshot.SnapshotTime)
+		observedConfig, err := r.service.GetConfig(gctx, services, r.baseFSMInstance.GetID(), snapshot.Tick, snapshot.SnapshotTime)
 		metrics.ObserveReconcileTime(logger.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".getConfig", time.Since(start))
 
 		if err == nil {
@@ -319,7 +318,7 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 	// Use new ConfigsEqual function that handles Redpanda defaults properly
 	if !redpandaserviceconfig.ConfigsEqual(r.config, r.PreviousObservedState.ObservedRedpandaServiceConfig) {
 		// Check if the service exists before attempting to update
-		if r.service.ServiceExists(ctx, services.GetFileSystem(), r.baseFSMInstance.GetID()) {
+		if r.service.ServiceExists(ctx, services, r.baseFSMInstance.GetID()) {
 			r.baseFSMInstance.GetLogger().Debugf("Observed Redpanda config is different from desired config, updating S6 configuration")
 
 			// Use the new ConfigDiff function for better debug output

@@ -213,7 +213,7 @@ done`
 				mockS6.GetS6ConfigFileResult = []byte(scriptContent)
 				mockS6.ServiceExistsResult = true
 
-				config, err := service.GetConfig(ctx, mockSvcRegistry.GetFileSystem(), nmapName)
+				config, err := service.GetConfig(ctx, mockSvcRegistry, nmapName)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(config.Target).To(Equal("test-host.local"))
 				Expect(config.Port).To(Equal(uint16(8080)))
@@ -223,7 +223,7 @@ done`
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel() // Cancel immediately
 
-				_, err := service.GetConfig(ctx, mockSvcRegistry.GetFileSystem(), nmapName)
+				_, err := service.GetConfig(ctx, mockSvcRegistry, nmapName)
 				Expect(err).To(Equal(context.Canceled))
 			})
 		})
@@ -731,7 +731,7 @@ done`
 				ctx := context.Background()
 				mockS6.ServiceExistsResult = false
 
-				_, err := service.Status(ctx, mockSvcRegistry.GetFileSystem(), "nonexistent", tick)
+				_, err := service.Status(ctx, mockSvcRegistry, "nonexistent", tick)
 				Expect(err).To(Equal(ErrServiceNotExist))
 			})
 		})
@@ -802,7 +802,7 @@ done`
 			ctx := context.Background()
 
 			// Call ForceRemoveNmap
-			err := service.ForceRemoveNmap(ctx, mockServices.GetFileSystem(), nmapName)
+			err := service.ForceRemoveNmap(ctx, mockServices, nmapName)
 
 			// Verify no error
 			Expect(err).NotTo(HaveOccurred())
@@ -824,7 +824,7 @@ done`
 			mockS6Service.ForceRemoveError = mockError
 
 			// Call ForceRemoveNmap
-			err := service.ForceRemoveNmap(ctx, mockServices.GetFileSystem(), nmapName)
+			err := service.ForceRemoveNmap(ctx, mockServices, nmapName)
 
 			// Verify error is propagated
 			Expect(err).To(MatchError(mockError))

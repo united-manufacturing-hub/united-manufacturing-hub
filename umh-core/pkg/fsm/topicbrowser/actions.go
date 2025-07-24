@@ -28,43 +28,42 @@ import (
 	rpfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	logger "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	tbsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
-// CreateInstance attempts to add the Topic Browser to the manager.
-func (i *TopicBrowserInstance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
-	i.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding Topic Browser service %s to S6 manager ...", i.baseFSMInstance.GetID())
+// CreateInstance attempts to add the topic browser to the Benthos manager.
+func (i *TopicBrowserInstance) CreateInstance(ctx context.Context, services serviceregistry.Provider) error {
+	i.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding topic browser service %s to Benthos manager ...", i.baseFSMInstance.GetID())
 
 	// Generate the benthos config from the topic browser config
 	// Since it is static, we can just generate it here
 	benthosConfig, err := i.service.GenerateConfig(i.baseFSMInstance.GetID())
 	if err != nil {
-		return fmt.Errorf("failed to generate benthos config for Topic Browser service %s: %w", i.baseFSMInstance.GetID(), err)
+		return fmt.Errorf("failed to generate benthos config for topic browser service %s: %w", i.baseFSMInstance.GetID(), err)
 	}
 
-	err = i.service.AddToManager(ctx, filesystemService, &benthosConfig, i.baseFSMInstance.GetID())
+	err = i.service.AddToManager(ctx, services, &benthosConfig, i.baseFSMInstance.GetID())
 	if err != nil {
-		if err == tbsvc.ErrServiceAlreadyExists {
-			i.baseFSMInstance.GetLogger().Debugf("Topic Browser service %s already exists in S6 manager", i.baseFSMInstance.GetID())
+		if errors.Is(err, tbsvc.ErrServiceAlreadyExists) {
+			i.baseFSMInstance.GetLogger().Debugf("Topic browser service %s already exists in Benthos manager", i.baseFSMInstance.GetID())
 			return nil // do not throw an error, as each action is expected to be idempotent
 		}
-		return fmt.Errorf("failed to add Topic Browser service %s to S6 manager: %w", i.baseFSMInstance.GetID(), err)
+		return fmt.Errorf("failed to add topic browser service %s to Benthos manager: %w", i.baseFSMInstance.GetID(), err)
 	}
 
-	i.baseFSMInstance.GetLogger().Debugf("Topic Browser service %s added to S6 manager", i.baseFSMInstance.GetID())
+	i.baseFSMInstance.GetLogger().Debugf("Topic browser service %s added to Benthos manager", i.baseFSMInstance.GetID())
 	return nil
 }
 
-// RemoveInstance attempts to remove the DataflowComponent from the Benthos manager.
+// RemoveInstance attempts to remove the topic browser from the Benthos manager.
 // It requires the service to be stopped before removal.
-func (i *TopicBrowserInstance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
-	i.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing Topic Browser service %s from Benthos manager ...", i.baseFSMInstance.GetID())
+func (i *TopicBrowserInstance) RemoveInstance(ctx context.Context, services serviceregistry.Provider) error {
+	i.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing topic browser service %s from Benthos manager ...", i.baseFSMInstance.GetID())
 
-	// Remove the initiateDataflowComponent from the Benthos manager
-	err := i.service.RemoveFromManager(ctx, filesystemService, i.baseFSMInstance.GetID())
+	// Remove the topic browser from the Benthos manager
+	err := i.service.RemoveFromManager(ctx, services, i.baseFSMInstance.GetID())
 	switch {
 	// ---------------------------------------------------------------
 	// happy paths
@@ -102,38 +101,40 @@ func (i *TopicBrowserInstance) RemoveInstance(ctx context.Context, filesystemSer
 }
 
 // StartInstance attempts to start the topic browser by setting the desired state to running for the given instance
-func (i *TopicBrowserInstance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
-	i.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting Topic Browser service %s ...", i.baseFSMInstance.GetID())
+func (i *TopicBrowserInstance) StartInstance(ctx context.Context, services serviceregistry.Provider) error {
+	i.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting topic browser service %s ...", i.baseFSMInstance.GetID())
+
+	// TODO: Add pre-start validation
 
 	// Set the desired state to running for the given instance
-	err := i.service.Start(ctx, filesystemService, i.baseFSMInstance.GetID())
+	err := i.service.Start(ctx, services, i.baseFSMInstance.GetID())
 	if err != nil {
 		// if the service is not there yet but we attempt to start it, we need to throw an error
-		return fmt.Errorf("failed to start Topic Browser service %s: %w", i.baseFSMInstance.GetID(), err)
+		return fmt.Errorf("failed to start topic browser service %s: %w", i.baseFSMInstance.GetID(), err)
 	}
 
-	i.baseFSMInstance.GetLogger().Debugf("Topic Browser service %s start command executed", i.baseFSMInstance.GetID())
+	i.baseFSMInstance.GetLogger().Debugf("Topic browser service %s start command executed", i.baseFSMInstance.GetID())
 	return nil
 }
 
-// StopInstance attempts to stop the Topic Browser by setting the desired state to stopped for the given instance
-func (i *TopicBrowserInstance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
-	i.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping Topic Browser service %s ...", i.baseFSMInstance.GetID())
+// StopInstance attempts to stop the topic browser by setting the desired state to stopped for the given instance
+func (i *TopicBrowserInstance) StopInstance(ctx context.Context, services serviceregistry.Provider) error {
+	i.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping topic browser service %s ...", i.baseFSMInstance.GetID())
 
 	// Set the desired state to stopped for the given instance
-	err := i.service.Stop(ctx, filesystemService, i.baseFSMInstance.GetID())
+	err := i.service.Stop(ctx, services, i.baseFSMInstance.GetID())
 	if err != nil {
 		// if the service is not there yet but we attempt to stop it, we need to throw an error
-		return fmt.Errorf("failed to stop Topic Browser service %s: %w", i.baseFSMInstance.GetID(), err)
+		return fmt.Errorf("failed to stop topic browser service %s: %w", i.baseFSMInstance.GetID(), err)
 	}
 
-	i.baseFSMInstance.GetLogger().Debugf("Topic Browser service %s stop command executed", i.baseFSMInstance.GetID())
+	i.baseFSMInstance.GetLogger().Debugf("Topic browser service %s stop command executed", i.baseFSMInstance.GetID())
 	return nil
 }
 
-// CheckForCreation checks if the Topic Browser service should be created
-// NOTE: check if we really need this or just set true locally
-func (i *TopicBrowserInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+// CheckForCreation checks whether the creation was successful
+// For topic browser, this is a no-op as we don't need to check anything
+func (i *TopicBrowserInstance) CheckForCreation(ctx context.Context, services serviceregistry.Provider) bool {
 	return true
 }
 
@@ -200,7 +201,7 @@ func (i *TopicBrowserInstance) UpdateObservedStateOfInstance(ctx context.Context
 
 	// Fetch the actual Benthos config from the service
 	start = time.Now()
-	observedConfig, err := i.service.GetConfig(ctx, services.GetFileSystem(), i.baseFSMInstance.GetID())
+	observedConfig, err := i.service.GetConfig(ctx, services, i.baseFSMInstance.GetID())
 	metrics.ObserveReconcileTime(logger.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".getConfig", time.Since(start))
 	if err == nil {
 		// Only update if we successfully got the config
@@ -224,7 +225,7 @@ func (i *TopicBrowserInstance) UpdateObservedStateOfInstance(ctx context.Context
 			i.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
 			// Update the config in the Benthos manager
-			err := i.service.UpdateInManager(ctx, services.GetFileSystem(), &i.ObservedState.ObservedServiceConfig.BenthosConfig, i.baseFSMInstance.GetID())
+			err := i.service.UpdateInManager(ctx, services, &i.ObservedState.ObservedServiceConfig.BenthosConfig, i.baseFSMInstance.GetID())
 			if err != nil {
 				return fmt.Errorf("failed to update TopicBrowser service configuration: %w", err)
 			}

@@ -29,7 +29,6 @@ import (
 	redpandafsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	redpandasvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
@@ -248,7 +247,7 @@ func BuildProtocolConverterServiceInfo(
 // GetConfig mocks getting the ProtocolConverter configuration
 func (m *MockProtocolConverterService) GetConfig(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	protConvName string,
 ) (
 	protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
@@ -291,7 +290,7 @@ func (m *MockProtocolConverterService) Status(
 // AddToManager mocks adding a ProtocolConverter to the Connection & DFC manager
 func (m *MockProtocolConverterService) AddToManager(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
 	protConvName string,
 ) error {
@@ -344,7 +343,7 @@ func (m *MockProtocolConverterService) AddToManager(
 // UpdateInManager mocks updating a ProtocolConverter in Connection & DFC manager
 func (m *MockProtocolConverterService) UpdateInManager(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
 	protConvName string,
 ) error {
@@ -404,7 +403,7 @@ func (m *MockProtocolConverterService) UpdateInManager(
 // RemoveFromManager mocks removing a DataFlowComponent from the Benthos manager
 func (m *MockProtocolConverterService) RemoveFromManager(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	protConvName string,
 ) error {
 	m.RemoveFromManagerCalled = true
@@ -444,7 +443,7 @@ func (m *MockProtocolConverterService) RemoveFromManager(
 }
 
 // StartProtocolConverter mocks starting a ProtocolConverter
-func (m *MockProtocolConverterService) StartProtocolConverter(ctx context.Context, filesystemService filesystem.Service, protConvName string) error {
+func (m *MockProtocolConverterService) StartProtocolConverter(ctx context.Context, services serviceregistry.Provider, protConvName string) error {
 	m.StartCalled = true
 
 	underlyingName := fmt.Sprintf("protocolconverter-%s", protConvName)
@@ -481,7 +480,7 @@ func (m *MockProtocolConverterService) StartProtocolConverter(ctx context.Contex
 // StopProtocolConverter mocks stopping a ProtocolConverter
 func (m *MockProtocolConverterService) StopProtocolConverter(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	protConvName string,
 ) error {
 	m.StopCalled = true
@@ -518,13 +517,13 @@ func (m *MockProtocolConverterService) StopProtocolConverter(
 }
 
 // ForceRemoveProtocolConverter mocks force removing a ProtocolConverter
-func (m *MockProtocolConverterService) ForceRemoveProtocolConverter(ctx context.Context, filesystemService filesystem.Service, protConvName string) error {
+func (m *MockProtocolConverterService) ForceRemoveProtocolConverter(ctx context.Context, services serviceregistry.Provider, protConvName string) error {
 	m.ForceRemoveCalled = true
 	return m.ForceRemoveError
 }
 
 // ServiceExists mocks checking if a ProtocolConverter exists
-func (m *MockProtocolConverterService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, protConvName string) bool {
+func (m *MockProtocolConverterService) ServiceExists(ctx context.Context, services serviceregistry.Provider, protConvName string) bool {
 	m.ServiceExistsCalled = true
 	return m.ServiceExistsResult
 }

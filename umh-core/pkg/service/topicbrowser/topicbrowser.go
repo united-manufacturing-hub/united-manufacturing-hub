@@ -30,7 +30,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
@@ -41,19 +40,19 @@ type ITopicBrowserService interface {
 	// GenerateConfig generates a topic browser config
 	GenerateConfig(tbName string) (benthossvccfg.BenthosServiceConfig, error)
 	// GetConfig returns the actual DataFlowComponent config from the Benthos service
-	GetConfig(ctx context.Context, filesystemService filesystem.Service, tbName string) (benthossvccfg.BenthosServiceConfig, error)
+	GetConfig(ctx context.Context, services serviceregistry.Provider, tbName string) (benthossvccfg.BenthosServiceConfig, error)
 	// Status returns information about the topic browser health
 	Status(ctx context.Context, services serviceregistry.Provider, tbName string, snapshot fsm.SystemSnapshot) (ServiceInfo, error)
 	// AddToManager registers a new topic browser
-	AddToManager(ctx context.Context, filesystemService filesystem.Service, cfg *benthossvccfg.BenthosServiceConfig, tbName string) error
+	AddToManager(ctx context.Context, services serviceregistry.Provider, cfg *benthossvccfg.BenthosServiceConfig, tbName string) error
 	// UpdateInManager modifies an existing topic browser configuration.
-	UpdateInManager(ctx context.Context, filesystemService filesystem.Service, cfg *benthossvccfg.BenthosServiceConfig, tbName string) error
+	UpdateInManager(ctx context.Context, services serviceregistry.Provider, cfg *benthossvccfg.BenthosServiceConfig, tbName string) error
 	// RemoveFromManager deletes a topic browser configuration.
-	RemoveFromManager(ctx context.Context, filesystemService filesystem.Service, tbName string) error
+	RemoveFromManager(ctx context.Context, services serviceregistry.Provider, tbName string) error
 	// Start begins the monitoring of a topic browser.
-	Start(ctx context.Context, filesystemService filesystem.Service, tbName string) error
+	Start(ctx context.Context, services serviceregistry.Provider, tbName string) error
 	// Stop stops the monitoring of a topic browser.
-	Stop(ctx context.Context, filesystemService filesystem.Service, tbName string) error
+	Stop(ctx context.Context, services serviceregistry.Provider, tbName string) error
 	// ForceRemove removes a topic browser instance
 	ForceRemove(ctx context.Context, services serviceregistry.Provider, tbName string) error
 	// ServiceExists checks if a topic browser with the given name exists.
@@ -196,7 +195,7 @@ func (svc *Service) getName(tbName string) string {
 
 // GetConfig returns the actual Benthos config from the Benthos service
 // Expects benthosName (e.g. "topicbrowser-myservice") as defined in the UMH config
-func (svc *Service) GetConfig(ctx context.Context, filesystemService filesystem.Service, tbName string) (benthossvccfg.BenthosServiceConfig, error) {
+func (svc *Service) GetConfig(ctx context.Context, services serviceregistry.Provider, tbName string) (benthossvccfg.BenthosServiceConfig, error) {
 	if ctx.Err() != nil {
 		return benthossvccfg.BenthosServiceConfig{}, ctx.Err()
 	}
@@ -204,7 +203,7 @@ func (svc *Service) GetConfig(ctx context.Context, filesystemService filesystem.
 	benthosName := svc.getName(tbName)
 
 	// Get the Benthos config
-	benthosCfg, err := svc.benthosService.GetConfig(ctx, filesystemService, benthosName)
+	benthosCfg, err := svc.benthosService.GetConfig(ctx, services, benthosName)
 	if err != nil {
 		return benthossvccfg.BenthosServiceConfig{}, fmt.Errorf("failed to get benthos config: %w", err)
 	}
@@ -321,7 +320,7 @@ func (svc *Service) Status(
 // AddToManager registers a new topic browser to the benthos manager.
 func (svc *Service) AddToManager(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	cfg *benthossvccfg.BenthosServiceConfig,
 	tbName string,
 ) error {
@@ -369,7 +368,7 @@ func (svc *Service) AddToManager(
 // UpdateInManager modifies an existing topic browser configuration.
 func (svc *Service) UpdateInManager(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	cfg *benthossvccfg.BenthosServiceConfig,
 	tbName string,
 ) error {
@@ -423,7 +422,7 @@ func (svc *Service) UpdateInManager(
 // This stops monitoring the topic browser and removes all configuration.
 func (svc *Service) RemoveFromManager(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	tbName string,
 ) error {
 	if svc.benthosManager == nil {
@@ -465,7 +464,7 @@ func (svc *Service) RemoveFromManager(
 // Start starts a topic browser
 func (svc *Service) Start(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	tbName string,
 ) error {
 	if svc.benthosManager == nil {
@@ -498,7 +497,7 @@ func (svc *Service) Start(
 // Stop stops a Topic Browser
 func (svc *Service) Stop(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	tbName string,
 ) error {
 	if svc.benthosManager == nil {
@@ -572,7 +571,7 @@ func (svc *Service) ServiceExists(
 
 	benthosName := svc.getName(tbName)
 
-	return svc.benthosService.ServiceExists(ctx, services.GetFileSystem(), benthosName)
+	return svc.benthosService.ServiceExists(ctx, services, benthosName)
 }
 
 // ForceRemove removes a topic browser from the s6 manager
@@ -586,7 +585,7 @@ func (svc *Service) ForceRemove(
 	}
 
 	// Then force remove from Benthos manager
-	return svc.benthosService.ForceRemoveBenthos(ctx, services.GetFileSystem(), svc.getName(tbName))
+	return svc.benthosService.ForceRemoveBenthos(ctx, services, svc.getName(tbName))
 }
 
 // checks for invalid metric states e.g.:

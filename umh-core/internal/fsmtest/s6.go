@@ -164,7 +164,7 @@ func SetupS6InstanceWithState(
 // Parameters:
 //   - ctx: Context for cancellation
 //   - instance: The S6Instance to reconcile
-//   - filesystemService: The filesystem service to use for reconciliation
+//   - services: The service registry provider for accessing core services including filesystem
 //   - targetState: The desired state to reach
 //   - maxAttempts: Maximum number of reconcile cycles to attempt
 //   - snapshot: The snapshot to use for reconciliation
@@ -233,7 +233,7 @@ func ResetInstanceError(instance *s6fsm.S6Instance, snapshot fsm.SystemSnapshot,
 // Parameters:
 //   - ctx: Context for cancellation
 //   - instance: The S6Instance to stabilize
-//   - filesystemService: The filesystem service to use for reconciliation
+//   - services: The service registry provider for accessing core services including filesystem
 //   - targetState: The desired state to reach
 //   - maxAttempts: Maximum number of reconcile cycles to attempt
 //   - startTick: The starting tick value for reconciliation
@@ -270,7 +270,7 @@ func StabilizeS6Instance(
 // Parameters:
 //   - ctx: Context for cancellation
 //   - instance: The S6Instance to test
-//   - filesystemService: The filesystem service to use for reconciliation
+//   - services: The service registry provider for accessing core services including filesystem
 //   - fromState: The initial state to configure
 //   - toState: The target state to reach
 //   - maxAttempts: Maximum number of reconcile cycles to attempt
@@ -349,7 +349,7 @@ func SetupS6Instance(
 // Parameters:
 //   - ctx: Context for cancellation
 //   - instance: The S6Instance to verify
-//   - filesystemService: The filesystem service to use for reconciliation
+//   - services: The service registry provider for accessing core services including filesystem
 //   - expectedState: The state the instance should remain in
 //   - reconcileCount: Number of reconciliation cycles to perform
 //   - snapshot: The snapshot to use for reconciliation
@@ -400,7 +400,7 @@ func VerifyStableState(
 //   - ctx: Context for cancellation
 //   - snapshot: System snapshot containing the current tick
 //   - instance: The S6Instance to reconcile
-//   - filesystemService: The filesystem service to use for reconciliation
+//   - services: The service registry provider for accessing core services including filesystem
 //   - maxAttempts: Maximum number of reconcile cycles to attempt
 //
 // Returns:

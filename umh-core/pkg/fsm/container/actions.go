@@ -20,7 +20,6 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -31,7 +30,7 @@ import (
 // CreateInstance is called when the FSM transitions from to_be_created -> creating.
 // For container monitoring, this is a no-op as there's no actual container to create.
 // This function is present for structural consistency with other FSM packages.
-func (c *ContainerInstance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (c *ContainerInstance) CreateInstance(ctx context.Context, services serviceregistry.Provider) error {
 	c.baseFSMInstance.GetLogger().Debugf("Creating container monitor instance %s (no-op)", c.baseFSMInstance.GetID())
 	return nil
 }
@@ -39,7 +38,7 @@ func (c *ContainerInstance) CreateInstance(ctx context.Context, filesystemServic
 // RemoveInstance is called when the FSM transitions to removing.
 // For container monitoring, this is a no-op as we don't need to remove any resources.
 // This function is present for structural consistency with other FSM packages.
-func (c *ContainerInstance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (c *ContainerInstance) RemoveInstance(ctx context.Context, services serviceregistry.Provider) error {
 	c.baseFSMInstance.GetLogger().Debugf("Removing container monitor instance %s (no-op)", c.baseFSMInstance.GetID())
 	return nil
 }
@@ -49,21 +48,21 @@ func (c *ContainerInstance) RemoveInstance(ctx context.Context, filesystemServic
 
 // StartInstance is called when the container monitoring should be enabled.
 // Currently this is a no-op as the monitoring service runs independently.
-func (c *ContainerInstance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (c *ContainerInstance) StartInstance(ctx context.Context, services serviceregistry.Provider) error {
 	c.baseFSMInstance.GetLogger().Infof("Enabling monitoring for %s (no-op)", c.baseFSMInstance.GetID())
 	return nil
 }
 
 // StopInstance is called when the container monitoring should be disabled.
 // Currently this is a no-op as the monitoring service runs independently.
-func (c *ContainerInstance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (c *ContainerInstance) StopInstance(ctx context.Context, services serviceregistry.Provider) error {
 	c.baseFSMInstance.GetLogger().Infof("Disabling monitoring for %s (no-op)", c.baseFSMInstance.GetID())
 	return nil
 }
 
 // CheckForCreation checks whether the creation was successful
 // For container monitoring, this is a no-op as we don't need to check anything
-func (c *ContainerInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+func (c *ContainerInstance) CheckForCreation(ctx context.Context, services serviceregistry.Provider) bool {
 	return true
 }
 

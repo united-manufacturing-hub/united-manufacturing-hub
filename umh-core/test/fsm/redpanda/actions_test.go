@@ -26,9 +26,9 @@ import (
 	config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	redpandaserviceconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/monitor"
 	redpanda_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -36,15 +36,15 @@ import (
 
 var _ = Describe("RedpandaInstance getServiceStatus", func() {
 	var (
-		instance    *redpanda.RedpandaInstance
-		mockService *redpanda_service.MockRedpandaService
-		fsMock      filesystem.Service
-		ctx         context.Context
+		instance        *redpanda.RedpandaInstance
+		mockService     *redpanda_service.MockRedpandaService
+		mockSvcRegistry serviceregistry.Provider
+		ctx             context.Context
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		fsMock = filesystem.NewDefaultService()
+		mockSvcRegistry = serviceregistry.NewMockRegistry()
 
 		// Create a new RedpandaInstance
 		cfg := config.RedpandaConfig{
@@ -84,25 +84,25 @@ var _ = Describe("RedpandaInstance getServiceStatus", func() {
 
 		It("should return the error in LifecycleStateToBeCreated", func() {
 			instance.GetBaseFSMInstanceForTest().SetCurrentFSMState(internalfsm.LifecycleStateToBeCreated)
-			_, err := instance.GetServiceStatus(ctx, fsMock, 1, time.Now())
+			_, err := instance.GetServiceStatus(ctx, mockSvcRegistry, 1, time.Now())
 			Expect(err).To(Equal(redpanda_service.ErrServiceNotExist))
 		})
 
 		It("should return the error in LifecycleStateCreating", func() {
 			instance.GetBaseFSMInstanceForTest().SetCurrentFSMState(internalfsm.LifecycleStateCreating)
-			_, err := instance.GetServiceStatus(ctx, fsMock, 1, time.Now())
+			_, err := instance.GetServiceStatus(ctx, mockSvcRegistry, 1, time.Now())
 			Expect(err).To(Equal(redpanda_service.ErrServiceNotExist))
 		})
 
 		It("should not return error in LifecycleStateRemoving", func() {
 			instance.GetBaseFSMInstanceForTest().SetCurrentFSMState(internalfsm.LifecycleStateRemoving)
-			_, err := instance.GetServiceStatus(ctx, fsMock, 1, time.Now())
+			_, err := instance.GetServiceStatus(ctx, mockSvcRegistry, 1, time.Now())
 			Expect(err).To(BeNil())
 		})
 
 		It("should not return error in LifecycleStateRemoved", func() {
 			instance.GetBaseFSMInstanceForTest().SetCurrentFSMState(internalfsm.LifecycleStateRemoved)
-			_, err := instance.GetServiceStatus(ctx, fsMock, 1, time.Now())
+			_, err := instance.GetServiceStatus(ctx, mockSvcRegistry, 1, time.Now())
 			Expect(err).To(BeNil())
 		})
 
@@ -118,7 +118,7 @@ var _ = Describe("RedpandaInstance getServiceStatus", func() {
 
 			for _, state := range states {
 				instance.GetBaseFSMInstanceForTest().SetCurrentFSMState(state)
-				_, err := instance.GetServiceStatus(ctx, fsMock, 1, time.Now())
+				_, err := instance.GetServiceStatus(ctx, mockSvcRegistry, 1, time.Now())
 				Expect(err).To(BeNil())
 			}
 		})
@@ -143,7 +143,7 @@ var _ = Describe("RedpandaInstance getServiceStatus", func() {
 
 		It("should return ServiceInfo with failed health checks in Active state", func() {
 			instance.GetBaseFSMInstanceForTest().SetCurrentFSMState(redpanda.OperationalStateActive)
-			info, err := instance.GetServiceStatus(ctx, fsMock, 1, time.Now())
+			info, err := instance.GetServiceStatus(ctx, mockSvcRegistry, 1, time.Now())
 			Expect(err).To(BeNil())
 			Expect(info.RedpandaStatus.HealthCheck.IsLive).To(BeFalse())
 			Expect(info.RedpandaStatus.HealthCheck.IsReady).To(BeFalse())
@@ -151,7 +151,7 @@ var _ = Describe("RedpandaInstance getServiceStatus", func() {
 
 		It("should return ServiceInfo with failed health checks in Idle state", func() {
 			instance.GetBaseFSMInstanceForTest().SetCurrentFSMState(redpanda.OperationalStateIdle)
-			info, err := instance.GetServiceStatus(ctx, fsMock, 1, time.Now())
+			info, err := instance.GetServiceStatus(ctx, mockSvcRegistry, 1, time.Now())
 			Expect(err).To(BeNil())
 			Expect(info.RedpandaStatus.HealthCheck.IsLive).To(BeFalse())
 			Expect(info.RedpandaStatus.HealthCheck.IsReady).To(BeFalse())
@@ -167,7 +167,7 @@ var _ = Describe("RedpandaInstance getServiceStatus", func() {
 
 			for _, state := range states {
 				instance.GetBaseFSMInstanceForTest().SetCurrentFSMState(state)
-				info, err := instance.GetServiceStatus(ctx, fsMock, 1, time.Now())
+				info, err := instance.GetServiceStatus(ctx, mockSvcRegistry, 1, time.Now())
 				Expect(err).To(BeNil())
 				// ServiceInfo should be returned as-is in these states
 				Expect(info).To(Equal(redpanda_service.ServiceInfo{}))
@@ -183,7 +183,7 @@ var _ = Describe("RedpandaInstance getServiceStatus", func() {
 
 			for _, state := range states {
 				instance.GetBaseFSMInstanceForTest().SetCurrentFSMState(state)
-				info, err := instance.GetServiceStatus(ctx, fsMock, 1, time.Now())
+				info, err := instance.GetServiceStatus(ctx, mockSvcRegistry, 1, time.Now())
 				Expect(err).To(BeNil())
 				// ServiceInfo should be returned as-is in these states
 				Expect(info).To(Equal(redpanda_service.ServiceInfo{}))
@@ -218,7 +218,7 @@ var _ = Describe("RedpandaInstance getServiceStatus", func() {
 
 			for _, state := range lifecycleStates {
 				instance.GetBaseFSMInstanceForTest().SetCurrentFSMState(state)
-				info, err := instance.GetServiceStatus(ctx, fsMock, 1, time.Now())
+				info, err := instance.GetServiceStatus(ctx, mockSvcRegistry, 1, time.Now())
 				Expect(err).To(BeNil())
 				Expect(info.RedpandaStatus.HealthCheck.IsLive).To(BeFalse())
 				Expect(info.RedpandaStatus.HealthCheck.IsReady).To(BeFalse())
@@ -234,7 +234,7 @@ var _ = Describe("RedpandaInstance getServiceStatus", func() {
 
 			for _, state := range nonRunningStates {
 				instance.GetBaseFSMInstanceForTest().SetCurrentFSMState(state)
-				info, err := instance.GetServiceStatus(ctx, fsMock, 1, time.Now())
+				info, err := instance.GetServiceStatus(ctx, mockSvcRegistry, 1, time.Now())
 				Expect(err).To(BeNil())
 				Expect(info.RedpandaStatus.HealthCheck.IsLive).To(BeFalse())
 				Expect(info.RedpandaStatus.HealthCheck.IsReady).To(BeFalse())
@@ -250,7 +250,7 @@ var _ = Describe("RedpandaInstance getServiceStatus", func() {
 
 			for _, state := range runningStates {
 				instance.GetBaseFSMInstanceForTest().SetCurrentFSMState(state)
-				_, err := instance.GetServiceStatus(ctx, fsMock, 1, time.Now())
+				_, err := instance.GetServiceStatus(ctx, mockSvcRegistry, 1, time.Now())
 				Expect(err).To(Equal(monitor.ErrServiceConnectionRefused))
 			}
 		})
@@ -278,7 +278,7 @@ var _ = Describe("RedpandaInstance getServiceStatus", func() {
 
 			for _, state := range states {
 				instance.GetBaseFSMInstanceForTest().SetCurrentFSMState(state)
-				_, err := instance.GetServiceStatus(ctx, fsMock, 1, time.Now())
+				_, err := instance.GetServiceStatus(ctx, mockSvcRegistry, 1, time.Now())
 				Expect(err).To(MatchError("generic error"))
 			}
 		})
@@ -314,7 +314,7 @@ var _ = Describe("RedpandaInstance getServiceStatus", func() {
 
 			for _, state := range states {
 				instance.GetBaseFSMInstanceForTest().SetCurrentFSMState(state)
-				info, err := instance.GetServiceStatus(ctx, fsMock, 1, time.Now())
+				info, err := instance.GetServiceStatus(ctx, mockSvcRegistry, 1, time.Now())
 				Expect(err).To(BeNil())
 				Expect(info.RedpandaStatus.HealthCheck.IsLive).To(BeTrue())
 				Expect(info.RedpandaStatus.HealthCheck.IsReady).To(BeTrue())

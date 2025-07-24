@@ -85,7 +85,7 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 				func(ctx context.Context) error {
 					// Force removal when other approaches fail - bypasses state transitions
 					// and directly deletes files and resources
-					return b.service.ForceRemoveBenthos(ctx, services.GetFileSystem(), benthosInstanceName)
+					return b.service.ForceRemoveBenthos(ctx, services, benthosInstanceName)
 				},
 			)
 		}
@@ -240,7 +240,7 @@ func (b *BenthosInstance) reconcileTransitionToActive(ctx context.Context, servi
 	switch {
 	// If we're stopped, we need to start first
 	case currentState == OperationalStateStopped:
-		err := b.StartInstance(ctx, services.GetFileSystem())
+		err := b.StartInstance(ctx, services)
 		if err != nil {
 			return err, false
 		}
@@ -396,7 +396,7 @@ func (b *BenthosInstance) reconcileRunningStates(ctx context.Context, services s
 		s6Running, _ := b.IsBenthosS6Running()
 		if !s6Running {
 			b.baseFSMInstance.GetLogger().Debugf("S6 service stopped while in degraded state, attempting to restart")
-			err := b.StartInstance(ctx, services.GetFileSystem())
+			err := b.StartInstance(ctx, services)
 			if err != nil {
 				b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("degraded: failed to restart service: %v", err)
 				return err, false
@@ -423,7 +423,7 @@ func (b *BenthosInstance) reconcileTransitionToStopped(ctx context.Context, serv
 	// If we're in any operational state except Stopped or Stopping, initiate stop
 	if currentState != OperationalStateStopped && currentState != OperationalStateStopping {
 		// Attempt to initiate a stop
-		if err := b.StopInstance(ctx, services.GetFileSystem()); err != nil {
+		if err := b.StopInstance(ctx, services); err != nil {
 			return err, false
 		}
 		// Send event to transition to Stopping

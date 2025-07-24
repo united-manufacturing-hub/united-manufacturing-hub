@@ -102,7 +102,7 @@ var _ = Describe("DataFlowComponentService", func() {
 
 		It("should add a new component to the benthos manager", func() {
 			// Act
-			err := service.AddDataFlowComponentToBenthosManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, componentName)
+			err := service.AddDataFlowComponentToBenthosManager(ctx, mockSvcRegistry, cfg, componentName)
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
@@ -120,11 +120,11 @@ var _ = Describe("DataFlowComponentService", func() {
 
 		It("should return error when component already exists", func() {
 			// Add the component first
-			err := service.AddDataFlowComponentToBenthosManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, componentName)
+			err := service.AddDataFlowComponentToBenthosManager(ctx, mockSvcRegistry, cfg, componentName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Try to add it again
-			err = service.AddDataFlowComponentToBenthosManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, componentName)
+			err = service.AddDataFlowComponentToBenthosManager(ctx, mockSvcRegistry, cfg, componentName)
 
 			// Assert
 			Expect(err).To(MatchError(ErrServiceAlreadyExists))
@@ -132,7 +132,7 @@ var _ = Describe("DataFlowComponentService", func() {
 
 		It("should set up the component for reconciliation with the benthos manager", func() {
 			// Act
-			err := service.AddDataFlowComponentToBenthosManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, componentName)
+			err := service.AddDataFlowComponentToBenthosManager(ctx, mockSvcRegistry, cfg, componentName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reconcile to ensure the component is passed to benthos manager
@@ -177,7 +177,7 @@ var _ = Describe("DataFlowComponentService", func() {
 				WithBenthosManager(manager))
 
 			// Add the component to the service
-			err := statusService.AddDataFlowComponentToBenthosManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, componentName)
+			err := statusService.AddDataFlowComponentToBenthosManager(ctx, mockSvcRegistry, cfg, componentName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Get the benthos name that will be used
@@ -220,7 +220,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			ConfigureBenthosManagerForState(mockBenthosService, benthosName, benthosfsmmanager.OperationalStateActive)
 
 			// Start it
-			err = statusService.StartDataFlowComponent(ctx, mockSvcRegistry.GetFileSystem(), componentName)
+			err = statusService.StartDataFlowComponent(ctx, mockSvcRegistry, componentName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Wait for the instance to reach running state
@@ -244,7 +244,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			Expect(reconciled).To(BeFalse())
 
 			// Call Status
-			status, err := statusService.Status(ctx, mockSvcRegistry.GetFileSystem(), componentName, tick)
+			status, err := statusService.Status(ctx, mockSvcRegistry, componentName, tick)
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
@@ -262,7 +262,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			mockBenthosService.ExistingServices = make(map[string]bool)
 
 			// Call Status for a non-existent component
-			_, err := statusService.Status(ctx, mockSvcRegistry.GetFileSystem(), componentName, tick)
+			_, err := statusService.Status(ctx, mockSvcRegistry, componentName, tick)
 
 			// Assert - check for "does not exist" in the error message
 			Expect(err).To(HaveOccurred())
@@ -302,13 +302,13 @@ var _ = Describe("DataFlowComponentService", func() {
 			}
 
 			// Add the component first
-			err := service.AddDataFlowComponentToBenthosManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, componentName)
+			err := service.AddDataFlowComponentToBenthosManager(ctx, mockSvcRegistry, cfg, componentName)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should update an existing component", func() {
 			// Act - update the component
-			err := service.UpdateDataFlowComponentInBenthosManager(ctx, mockSvcRegistry.GetFileSystem(), updatedCfg, componentName)
+			err := service.UpdateDataFlowComponentInBenthosManager(ctx, mockSvcRegistry, updatedCfg, componentName)
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
@@ -329,7 +329,7 @@ var _ = Describe("DataFlowComponentService", func() {
 
 		It("should return error when component doesn't exist", func() {
 			// Act - try to update a non-existent component
-			err := service.UpdateDataFlowComponentInBenthosManager(ctx, mockSvcRegistry.GetFileSystem(), updatedCfg, "non-existent")
+			err := service.UpdateDataFlowComponentInBenthosManager(ctx, mockSvcRegistry, updatedCfg, "non-existent")
 
 			// Assert
 			Expect(err).To(MatchError(ErrServiceNotExists))
@@ -354,13 +354,13 @@ var _ = Describe("DataFlowComponentService", func() {
 			}
 
 			// Add the component first
-			err := service.AddDataFlowComponentToBenthosManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, componentName)
+			err := service.AddDataFlowComponentToBenthosManager(ctx, mockSvcRegistry, cfg, componentName)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should start a component by changing its desired state", func() {
 			// First stop the component
-			err := service.StopDataFlowComponent(ctx, mockSvcRegistry.GetFileSystem(), componentName)
+			err := service.StopDataFlowComponent(ctx, mockSvcRegistry, componentName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the desired state was changed to stopped
@@ -376,7 +376,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			Expect(foundStopped).To(BeTrue())
 
 			// Now start the component
-			err = service.StartDataFlowComponent(ctx, mockSvcRegistry.GetFileSystem(), componentName)
+			err = service.StartDataFlowComponent(ctx, mockSvcRegistry, componentName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the desired state was changed to active
@@ -393,11 +393,11 @@ var _ = Describe("DataFlowComponentService", func() {
 
 		It("should return error when trying to start/stop non-existent component", func() {
 			// Try to start a non-existent component
-			err := service.StartDataFlowComponent(ctx, mockSvcRegistry.GetFileSystem(), "non-existent")
+			err := service.StartDataFlowComponent(ctx, mockSvcRegistry, "non-existent")
 			Expect(err).To(MatchError(ErrServiceNotExists))
 
 			// Try to stop a non-existent component
-			err = service.StopDataFlowComponent(ctx, mockSvcRegistry.GetFileSystem(), "non-existent")
+			err = service.StopDataFlowComponent(ctx, mockSvcRegistry, "non-existent")
 			Expect(err).To(MatchError(ErrServiceNotExists))
 		})
 	})
@@ -420,7 +420,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			}
 
 			// Add the component first
-			err := service.AddDataFlowComponentToBenthosManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, componentName)
+			err := service.AddDataFlowComponentToBenthosManager(ctx, mockSvcRegistry, cfg, componentName)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -429,7 +429,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			initialCount := len(service.benthosConfigs)
 
 			// Act - remove the component
-			err := service.RemoveDataFlowComponentFromBenthosManager(ctx, mockSvcRegistry.GetFileSystem(), componentName)
+			err := service.RemoveDataFlowComponentFromBenthosManager(ctx, mockSvcRegistry, componentName)
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
@@ -458,7 +458,7 @@ var _ = Describe("DataFlowComponentService", func() {
 					},
 				},
 			}
-			err := service.AddDataFlowComponentToBenthosManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, componentName)
+			err := service.AddDataFlowComponentToBenthosManager(ctx, mockSvcRegistry, cfg, componentName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Use the real mock from the FSM package
@@ -500,7 +500,7 @@ var _ = Describe("DataFlowComponentService", func() {
 					},
 				},
 			}
-			err := testService.AddDataFlowComponentToBenthosManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, testComponentName)
+			err := testService.AddDataFlowComponentToBenthosManager(ctx, mockSvcRegistry, cfg, testComponentName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// First reconcile - this will just create the instance in the manager

@@ -25,7 +25,6 @@ import (
 	dfcfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	redpandafsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	redpandasvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
@@ -183,7 +182,7 @@ func BuildServiceInfo(
 // GetConfig mocks getting the actual deployed StreamProcessor config
 func (m *MockService) GetConfig(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	spName string,
 ) (streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime, error) {
 	m.GetConfigCalled = true
@@ -223,7 +222,7 @@ func (m *MockService) Status(
 // AddToManager mocks adding a StreamProcessor to the  DFC manager
 func (m *MockService) AddToManager(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	cfg *dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
 	spName string,
 ) error {
@@ -264,7 +263,7 @@ func (m *MockService) AddToManager(
 // UpdateInManager mocks updating a Stream Processor  DFC manager
 func (m *MockService) UpdateInManager(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	cfg *dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
 	spName string,
 ) error {
@@ -303,7 +302,7 @@ func (m *MockService) UpdateInManager(
 // RemoveFromManager mocks removing a Stream Processor from the DFC manager
 func (m *MockService) RemoveFromManager(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	spName string,
 ) error {
 	m.RemoveFromManagerCalled = true
@@ -335,7 +334,7 @@ func (m *MockService) RemoveFromManager(
 // Start mocks starting a Steram Processor
 func (m *MockService) Start(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	spName string,
 ) error {
 	m.StartCalled = true
@@ -363,7 +362,7 @@ func (m *MockService) Start(
 // Stop mocks stopping a StreamProcessor
 func (m *MockService) Stop(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	spName string,
 ) error {
 	m.StopCalled = true
@@ -391,7 +390,7 @@ func (m *MockService) Stop(
 // ForceRemove mocks force removing a StreamProcessor
 func (m *MockService) ForceRemove(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	spName string,
 ) error {
 	m.ForceRemoveCalled = true
@@ -401,8 +400,8 @@ func (m *MockService) ForceRemove(
 // ServiceExists mocks checking if a StreamProcessor exists
 func (m *MockService) ServiceExists(
 	ctx context.Context,
-	filesystemService filesystem.Service,
-	spname string,
+	services serviceregistry.Provider,
+	spName string,
 ) bool {
 	m.ServiceExistsCalled = true
 	return m.ServiceExistsResult

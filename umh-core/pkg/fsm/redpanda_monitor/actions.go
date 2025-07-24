@@ -24,14 +24,13 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	redpanda_monitor_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
 // CreateInstance is called when the FSM transitions from to_be_created -> creating.
-func (r *RedpandaMonitorInstance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (r *RedpandaMonitorInstance) CreateInstance(ctx context.Context, services serviceregistry.Provider) error {
 	r.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding Redpanda Monitor service %s to S6 manager ...", r.baseFSMInstance.GetID())
 
 	r.baseFSMInstance.GetLogger().Debugf("Adding Redpanda Monitor service %s to S6 manager", r.baseFSMInstance.GetID())
@@ -51,7 +50,7 @@ func (r *RedpandaMonitorInstance) CreateInstance(ctx context.Context, filesystem
 
 // RemoveInstance is called when the FSM transitions to removing.
 // It requires the service to be stopped before removal.
-func (r *RedpandaMonitorInstance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (r *RedpandaMonitorInstance) RemoveInstance(ctx context.Context, services serviceregistry.Provider) error {
 	r.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing Redpanda Monitor service %s from S6 manager ...", r.baseFSMInstance.GetID())
 
 	// Remove the Redpanda from the S6 manager
@@ -97,7 +96,7 @@ func (r *RedpandaMonitorInstance) RemoveInstance(ctx context.Context, filesystem
 
 // StartInstance is called when the agent monitoring should be enabled.
 // Currently this is a no-op as the monitoring service runs independently.
-func (r *RedpandaMonitorInstance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (r *RedpandaMonitorInstance) StartInstance(ctx context.Context, services serviceregistry.Provider) error {
 	r.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting Redpanda Monitor service %s ...", r.baseFSMInstance.GetID())
 
 	// TODO: Add pre-start validation
@@ -115,7 +114,7 @@ func (r *RedpandaMonitorInstance) StartInstance(ctx context.Context, filesystemS
 
 // StopInstance is called when the agent monitoring should be disabled.
 // Currently this is a no-op as the monitoring service runs independently.
-func (r *RedpandaMonitorInstance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (r *RedpandaMonitorInstance) StopInstance(ctx context.Context, services serviceregistry.Provider) error {
 	r.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping Redpanda Monitor service %s ...", r.baseFSMInstance.GetID())
 
 	// Set the desired state to stopped for the given instance
@@ -129,7 +128,7 @@ func (r *RedpandaMonitorInstance) StopInstance(ctx context.Context, filesystemSe
 }
 
 // CheckForCreation checks if the instance has been created
-func (r *RedpandaMonitorInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+func (r *RedpandaMonitorInstance) CheckForCreation(ctx context.Context, services serviceregistry.Provider) bool {
 	// No need to check anything specific for redpanda monitor
 	// Creation is considered complete immediately
 	return true
@@ -145,7 +144,7 @@ func (r *RedpandaMonitorInstance) UpdateObservedStateOfInstance(ctx context.Cont
 	}
 
 	start := time.Now()
-	info, err := r.monitorService.Status(ctx, services.GetFileSystem(), snapshot.Tick)
+	info, err := r.monitorService.Status(ctx, services, snapshot.Tick)
 	if err != nil {
 		return err
 	}

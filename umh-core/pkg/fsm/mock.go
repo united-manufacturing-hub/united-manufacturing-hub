@@ -36,7 +36,7 @@ func NewMockFSMManager() *MockFSMManager {
 }
 
 // Reconcile implements the FSMManager interface
-// The filesystemService parameter is not used in this mock implementation,
+// The services parameter is not used in this mock implementation,
 // but is included to match the interface signature.
 func (m *MockFSMManager) Reconcile(ctx context.Context, snapshot SystemSnapshot, services serviceregistry.Provider) (error, bool) {
 	m.mutex.Lock()

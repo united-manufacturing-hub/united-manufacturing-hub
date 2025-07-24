@@ -27,7 +27,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 
@@ -355,28 +354,28 @@ func (s *BaseFSMInstance) GetLastError() error {
 }
 
 // Create provides a default implementation that can be overridden
-func (s *BaseFSMInstance) Create(ctx context.Context, filesystemService filesystem.Service) error {
+func (s *BaseFSMInstance) Create(ctx context.Context, services serviceregistry.Provider) error {
 	return fmt.Errorf("create action not implemented for %s", s.cfg.ID)
 }
 
 // Remove for FSMActions interface provides a default implementation that can be overridden
 // It's a separate implementation from the existing Remove method which handles removing through state transitions
-func (s *BaseFSMInstance) RemoveAction(ctx context.Context, filesystemService filesystem.Service) error {
+func (s *BaseFSMInstance) RemoveAction(ctx context.Context, services serviceregistry.Provider) error {
 	return fmt.Errorf("remove action not implemented for %s", s.cfg.ID)
 }
 
 // Start provides a default implementation that can be overridden
-func (s *BaseFSMInstance) Start(ctx context.Context, filesystemService filesystem.Service) error {
+func (s *BaseFSMInstance) Start(ctx context.Context, services serviceregistry.Provider) error {
 	return fmt.Errorf("start action not implemented for %s", s.cfg.ID)
 }
 
 // Stop provides a default implementation that can be overridden
-func (s *BaseFSMInstance) Stop(ctx context.Context, filesystemService filesystem.Service) error {
+func (s *BaseFSMInstance) Stop(ctx context.Context, services serviceregistry.Provider) error {
 	return fmt.Errorf("stop action not implemented for %s", s.cfg.ID)
 }
 
 // UpdateObservedState provides a default implementation that can be overridden
-func (s *BaseFSMInstance) UpdateObservedState(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
+func (s *BaseFSMInstance) UpdateObservedState(ctx context.Context, services serviceregistry.Provider, tick uint64) error {
 	return fmt.Errorf("updateObservedState action not implemented for %s", s.cfg.ID)
 }
 
@@ -454,9 +453,9 @@ func (s *BaseFSMInstance) ReconcileLifecycleStates(
 	ctx context.Context,
 	services serviceregistry.Provider,
 	currentState string,
-	createInstance func(ctx context.Context, filesystemService filesystem.Service) error,
-	removeInstance func(ctx context.Context, filesystemService filesystem.Service) error,
-	checkForCreation func(ctx context.Context, filesystemService filesystem.Service) bool,
+	createInstance func(ctx context.Context, services serviceregistry.Provider) error,
+	removeInstance func(ctx context.Context, services serviceregistry.Provider) error,
+	checkForCreation func(ctx context.Context, services serviceregistry.Provider) bool,
 ) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
@@ -475,18 +474,18 @@ func (s *BaseFSMInstance) ReconcileLifecycleStates(
 	// Independent what the desired state is, we always need to reconcile the lifecycle states first
 	switch currentState {
 	case LifecycleStateToBeCreated:
-		if err := createInstance(ctx, services.GetFileSystem()); err != nil {
+		if err := createInstance(ctx, services); err != nil {
 			return err, false
 		}
 		return s.SendEvent(ctx, LifecycleEventCreate), true
 	case LifecycleStateCreating:
 		// Check if the service is created
-		if !checkForCreation(ctx, services.GetFileSystem()) {
+		if !checkForCreation(ctx, services) {
 			return nil, false // Don't transition state yet, retry next reconcile
 		}
 		return s.SendEvent(ctx, LifecycleEventCreateDone), true
 	case LifecycleStateRemoving:
-		if err := removeInstance(ctx, services.GetFileSystem()); err != nil {
+		if err := removeInstance(ctx, services); err != nil {
 			// Treat “removal still in progress” as a *non-error* so that the reconcile
 			// loop continues; the FSM stays in `removing` until RemoveInstance returns
 			// nil or a hard error.

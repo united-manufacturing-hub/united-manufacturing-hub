@@ -20,7 +20,7 @@ import (
 	"sync"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // MockService is a mock implementation of the S6 Service interface for testing
@@ -97,7 +97,7 @@ func NewMockService() *MockService {
 }
 
 // Create mocks creating an S6 service
-func (m *MockService) Create(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, filesystemService filesystem.Service) error {
+func (m *MockService) Create(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, services serviceregistry.Provider) error {
 	m.CreateCalled = true
 
 	m.mu.Lock()
@@ -108,7 +108,7 @@ func (m *MockService) Create(ctx context.Context, servicePath string, config s6s
 }
 
 // Remove mocks removing an S6 service
-func (m *MockService) Remove(ctx context.Context, servicePath string, filesystemService filesystem.Service) error {
+func (m *MockService) Remove(ctx context.Context, servicePath string, services serviceregistry.Provider) error {
 	m.RemoveCalled = true
 
 	m.mu.Lock()
@@ -120,7 +120,7 @@ func (m *MockService) Remove(ctx context.Context, servicePath string, filesystem
 }
 
 // Start mocks starting an S6 service
-func (m *MockService) Start(ctx context.Context, servicePath string, filesystemService filesystem.Service) error {
+func (m *MockService) Start(ctx context.Context, servicePath string, services serviceregistry.Provider) error {
 	m.StartCalled = true
 
 	m.mu.Lock()
@@ -138,7 +138,7 @@ func (m *MockService) Start(ctx context.Context, servicePath string, filesystemS
 }
 
 // Stop mocks stopping an S6 service
-func (m *MockService) Stop(ctx context.Context, servicePath string, filesystemService filesystem.Service) error {
+func (m *MockService) Stop(ctx context.Context, servicePath string, services serviceregistry.Provider) error {
 	m.StopCalled = true
 
 	m.mu.Lock()
@@ -156,7 +156,7 @@ func (m *MockService) Stop(ctx context.Context, servicePath string, filesystemSe
 }
 
 // Restart mocks restarting an S6 service
-func (m *MockService) Restart(ctx context.Context, servicePath string, filesystemService filesystem.Service) error {
+func (m *MockService) Restart(ctx context.Context, servicePath string, services serviceregistry.Provider) error {
 	m.RestartCalled = true
 
 	if !m.ExistingServices[servicePath] {
@@ -175,7 +175,7 @@ func (m *MockService) Restart(ctx context.Context, servicePath string, filesyste
 }
 
 // Status mocks getting the status of an S6 service
-func (m *MockService) Status(ctx context.Context, servicePath string, filesystemService filesystem.Service) (ServiceInfo, error) {
+func (m *MockService) Status(ctx context.Context, servicePath string, services serviceregistry.Provider) (ServiceInfo, error) {
 	m.StatusCalled = true
 
 	if state, exists := m.ServiceStates[servicePath]; exists {
@@ -186,7 +186,7 @@ func (m *MockService) Status(ctx context.Context, servicePath string, filesystem
 }
 
 // ServiceExists mocks checking if an S6 service exists
-func (m *MockService) ServiceExists(ctx context.Context, servicePath string, filesystemService filesystem.Service) (bool, error) {
+func (m *MockService) ServiceExists(ctx context.Context, servicePath string, services serviceregistry.Provider) (bool, error) {
 	m.ServiceExistsCalled = true
 	if exists := m.ExistingServices[servicePath]; exists {
 		return true, m.ServiceExistsError
@@ -195,43 +195,43 @@ func (m *MockService) ServiceExists(ctx context.Context, servicePath string, fil
 }
 
 // GetConfig mocks getting the config of an S6 service
-func (m *MockService) GetConfig(ctx context.Context, servicePath string, filesystemService filesystem.Service) (s6serviceconfig.S6ServiceConfig, error) {
+func (m *MockService) GetConfig(ctx context.Context, servicePath string, services serviceregistry.Provider) (s6serviceconfig.S6ServiceConfig, error) {
 	m.GetConfigCalled = true
 	return m.GetConfigResult, m.GetConfigError
 }
 
-func (m *MockService) ExitHistory(ctx context.Context, servicePath string, filesystemService filesystem.Service) ([]ExitEvent, error) {
+func (m *MockService) ExitHistory(ctx context.Context, servicePath string, services serviceregistry.Provider) ([]ExitEvent, error) {
 	m.ExitHistoryCalled = true
 	return m.ExitHistoryResult, m.ExitHistoryError
 }
 
 // CleanS6ServiceDirectory implements the Service interface
-func (m *MockService) CleanS6ServiceDirectory(ctx context.Context, path string, filesystemService filesystem.Service) error {
+func (m *MockService) CleanS6ServiceDirectory(ctx context.Context, path string, services serviceregistry.Provider) error {
 	m.CleanS6ServiceDirectoryCalled = true
 	return m.CleanS6ServiceDirectoryResult
 }
 
 // GetS6ConfigFile is a mock method
-func (m *MockService) GetS6ConfigFile(ctx context.Context, servicePath string, configFileName string, filesystemService filesystem.Service) ([]byte, error) {
+func (m *MockService) GetS6ConfigFile(ctx context.Context, servicePath string, configFileName string, services serviceregistry.Provider) ([]byte, error) {
 	m.GetS6ConfigFileCalled = true
 	return m.GetS6ConfigFileResult, m.GetS6ConfigFileError
 }
 
 // ForceRemove is a mock method
-func (m *MockService) ForceRemove(ctx context.Context, servicePath string, filesystemService filesystem.Service) error {
+func (m *MockService) ForceRemove(ctx context.Context, servicePath string, services serviceregistry.Provider) error {
 	m.ForceRemoveCalled = true
 	m.ForceRemovePath = servicePath
 	return m.ForceRemoveError
 }
 
-func (m *MockService) GetLogs(ctx context.Context, servicePath string, filesystemService filesystem.Service) ([]LogEntry, error) {
+func (m *MockService) GetLogs(ctx context.Context, servicePath string, services serviceregistry.Provider) ([]LogEntry, error) {
 	m.GetLogsCalled = true
 
 	return m.GetLogsResult, m.GetLogsError
 }
 
 // EnsureSupervision is a mock implementation that checks if supervise dir exists
-func (m *MockService) EnsureSupervision(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
+func (m *MockService) EnsureSupervision(ctx context.Context, servicePath string, services serviceregistry.Provider) (bool, error) {
 	// Check if we should return an error
 	if m.ErrorMode {
 		return false, fmt.Errorf("mock error")

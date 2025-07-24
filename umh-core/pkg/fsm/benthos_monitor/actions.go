@@ -25,13 +25,12 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	benthos_monitor_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
 // CreateInstance is called when the FSM transitions from to_be_created -> creating.
-func (b *BenthosMonitorInstance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (b *BenthosMonitorInstance) CreateInstance(ctx context.Context, services serviceregistry.Provider) error {
 	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding Benthos Monitor service %s to S6 manager ...", b.baseFSMInstance.GetID())
 
 	b.baseFSMInstance.GetLogger().Debugf("Adding Benthos Monitor service %s to S6 manager with port %d", b.baseFSMInstance.GetID(), b.config.MetricsPort)
@@ -51,7 +50,7 @@ func (b *BenthosMonitorInstance) CreateInstance(ctx context.Context, filesystemS
 
 // RemoveInstance is called when the FSM transitions to removing.
 // It requires the service to be stopped before removal.
-func (b *BenthosMonitorInstance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (b *BenthosMonitorInstance) RemoveInstance(ctx context.Context, services serviceregistry.Provider) error {
 	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing Benthos Monitor service %s from S6 manager ...", b.baseFSMInstance.GetID())
 
 	// Remove the Benthos from the S6 manager
@@ -97,7 +96,7 @@ func (b *BenthosMonitorInstance) RemoveInstance(ctx context.Context, filesystemS
 
 // StartInstance is called when the agent monitoring should be enabled.
 // Currently this is a no-op as the monitoring service runs independently.
-func (b *BenthosMonitorInstance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (b *BenthosMonitorInstance) StartInstance(ctx context.Context, services serviceregistry.Provider) error {
 	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting Benthos Monitor service %s ...", b.baseFSMInstance.GetID())
 
 	// TODO: Add pre-start validation
@@ -115,7 +114,7 @@ func (b *BenthosMonitorInstance) StartInstance(ctx context.Context, filesystemSe
 
 // StopInstance is called when the agent monitoring should be disabled.
 // Currently this is a no-op as the monitoring service runs independently.
-func (b *BenthosMonitorInstance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (b *BenthosMonitorInstance) StopInstance(ctx context.Context, services serviceregistry.Provider) error {
 	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping Benthos Monitor service %s ...", b.baseFSMInstance.GetID())
 
 	// Set the desired state to stopped for the given instance
@@ -129,7 +128,7 @@ func (b *BenthosMonitorInstance) StopInstance(ctx context.Context, filesystemSer
 }
 
 // CheckForCreation checks if the Benthos Monitor service should be created
-func (b *BenthosMonitorInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+func (b *BenthosMonitorInstance) CheckForCreation(ctx context.Context, services serviceregistry.Provider) bool {
 	return true
 }
 

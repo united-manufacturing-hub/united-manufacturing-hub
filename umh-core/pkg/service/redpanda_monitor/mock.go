@@ -23,7 +23,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
@@ -233,7 +232,7 @@ func (m *MockRedpandaMonitorService) GenerateS6ConfigForRedpandaMonitor(s6Servic
 }
 
 // Status mocks getting the status of a Redpanda Monitor service
-func (m *MockRedpandaMonitorService) Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error) {
+func (m *MockRedpandaMonitorService) Status(ctx context.Context, services serviceregistry.Provider, tick uint64) (ServiceInfo, error) {
 	m.StatusCalled = true
 
 	// Check for context cancellation
@@ -407,7 +406,7 @@ func (m *MockRedpandaMonitorService) ReconcileManager(ctx context.Context, servi
 }
 
 // ServiceExists mocks checking if a Redpanda Monitor service exists
-func (m *MockRedpandaMonitorService) ServiceExists(ctx context.Context, filesystemService filesystem.Service) bool {
+func (m *MockRedpandaMonitorService) ServiceExists(ctx context.Context, services serviceregistry.Provider) bool {
 	m.ServiceExistsCalled = true
 
 	// Check for context cancellation
@@ -461,7 +460,7 @@ func (m *MockRedpandaMonitorService) SetMockLogs(logs []s6service.LogEntry) {
 }
 
 // ForceRemoveRedpandaMonitor mocks force removing a Redpanda Monitor instance
-func (m *MockRedpandaMonitorService) ForceRemoveRedpandaMonitor(ctx context.Context, filesystemService filesystem.Service) error {
+func (m *MockRedpandaMonitorService) ForceRemoveRedpandaMonitor(ctx context.Context, services serviceregistry.Provider) error {
 	m.ForceRemoveRedpandaMonitorCalled = true
 
 	return m.ForceRemoveRedpandaMonitorError

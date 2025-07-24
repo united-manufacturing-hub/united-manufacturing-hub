@@ -24,7 +24,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
@@ -140,7 +139,7 @@ func (m *MockConnectionService) GenerateNmapConfigForConnection(connectionConfig
 }
 
 // GetConfig mocks getting the Connection configuration
-func (m *MockConnectionService) GetConfig(ctx context.Context, filesystemService filesystem.Service, connectionName string) (connectionserviceconfig.ConnectionServiceConfig, error) {
+func (m *MockConnectionService) GetConfig(ctx context.Context, services serviceregistry.Provider, connectionName string) (connectionserviceconfig.ConnectionServiceConfig, error) {
 	m.GetConfigCalled = true
 
 	// If error is set, return it
@@ -153,7 +152,7 @@ func (m *MockConnectionService) GetConfig(ctx context.Context, filesystemService
 }
 
 // Status mocks getting the status of a Connection
-func (m *MockConnectionService) Status(ctx context.Context, filesystemService filesystem.Service, connectionName string, tick uint64) (ServiceInfo, error) {
+func (m *MockConnectionService) Status(ctx context.Context, services serviceregistry.Provider, connectionName string, tick uint64) (ServiceInfo, error) {
 	m.StatusCalled = true
 
 	// Check if the connection exists in the ExistingConnections map
@@ -172,7 +171,7 @@ func (m *MockConnectionService) Status(ctx context.Context, filesystemService fi
 }
 
 // AddConnectionToNmapManager mocks adding a Connection to the Nmap manager
-func (m *MockConnectionService) AddConnectionToNmapManager(ctx context.Context, filesystemService filesystem.Service, cfg *connectionserviceconfig.ConnectionServiceConfig, connectionName string) error {
+func (m *MockConnectionService) AddConnectionToNmapManager(ctx context.Context, services serviceregistry.Provider, cfg *connectionserviceconfig.ConnectionServiceConfig, connectionName string) error {
 	m.AddConnectionToNmapManagerCalled = true
 
 	nmapName := fmt.Sprintf("connection-%s", connectionName)
@@ -203,7 +202,7 @@ func (m *MockConnectionService) AddConnectionToNmapManager(ctx context.Context, 
 }
 
 // UpdateConnectionInNmapManager mocks updating a Connection in the Nmap manager
-func (m *MockConnectionService) UpdateConnectionInNmapManager(ctx context.Context, filesystemService filesystem.Service, cfg *connectionserviceconfig.ConnectionServiceConfig, connectionName string) error {
+func (m *MockConnectionService) UpdateConnectionInNmapManager(ctx context.Context, services serviceregistry.Provider, cfg *connectionserviceconfig.ConnectionServiceConfig, connectionName string) error {
 	m.UpdateConnectionInNmapManagerCalled = true
 
 	nmapName := fmt.Sprintf("connection-%s", connectionName)
@@ -237,7 +236,7 @@ func (m *MockConnectionService) UpdateConnectionInNmapManager(ctx context.Contex
 }
 
 // RemoveConnectionFromNmapManager mocks removing a Connection from the Nmap manager
-func (m *MockConnectionService) RemoveConnectionFromNmapManager(ctx context.Context, filesystemService filesystem.Service, connectionName string) error {
+func (m *MockConnectionService) RemoveConnectionFromNmapManager(ctx context.Context, services serviceregistry.Provider, connectionName string) error {
 	m.RemoveConnectionFromNmapManagerCalled = true
 
 	nmapName := fmt.Sprintf("connection-%s", connectionName)
@@ -265,7 +264,7 @@ func (m *MockConnectionService) RemoveConnectionFromNmapManager(ctx context.Cont
 }
 
 // StartDataFlowComponent mocks starting a Connection
-func (m *MockConnectionService) StartConnection(ctx context.Context, filesystemService filesystem.Service, connectionName string) error {
+func (m *MockConnectionService) StartConnection(ctx context.Context, services serviceregistry.Provider, connectionName string) error {
 	m.StartConnectionCalled = true
 
 	nmapName := fmt.Sprintf("connection-%s", connectionName)
@@ -289,7 +288,7 @@ func (m *MockConnectionService) StartConnection(ctx context.Context, filesystemS
 }
 
 // StopConnection mocks stopping a Connection
-func (m *MockConnectionService) StopConnection(ctx context.Context, filesystemService filesystem.Service, connectionName string) error {
+func (m *MockConnectionService) StopConnection(ctx context.Context, services serviceregistry.Provider, connectionName string) error {
 	m.StopConnectionCalled = true
 
 	nmapName := fmt.Sprintf("connection-%s", connectionName)
@@ -313,13 +312,13 @@ func (m *MockConnectionService) StopConnection(ctx context.Context, filesystemSe
 }
 
 // ForceRemoveConnection mocks force removing a Connection
-func (m *MockConnectionService) ForceRemoveConnection(ctx context.Context, filesystemService filesystem.Service, connectionName string) error {
+func (m *MockConnectionService) ForceRemoveConnection(ctx context.Context, services serviceregistry.Provider, connectionName string) error {
 	m.ForceRemoveConnectionCalled = true
 	return m.ForceRemoveConnectionError
 }
 
 // ServiceExists mocks checking if a DataFlowComponent exists
-func (m *MockConnectionService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, connectionName string) bool {
+func (m *MockConnectionService) ServiceExists(ctx context.Context, services serviceregistry.Provider, connectionName string) bool {
 	m.ServiceExistsCalled = true
 	return m.ServiceExistsResult
 }

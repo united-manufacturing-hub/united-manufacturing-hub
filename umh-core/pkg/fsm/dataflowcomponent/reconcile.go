@@ -88,7 +88,7 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 				func(ctx context.Context) error {
 					// Force removal when other approaches fail - bypasses state transitions
 					// and directly deletes files and resources
-					return d.service.ForceRemoveDataFlowComponent(ctx, services.GetFileSystem(), dataflowComponentInstanceName)
+					return d.service.ForceRemoveDataFlowComponent(ctx, services, dataflowComponentInstanceName)
 				},
 			)
 		}
@@ -262,7 +262,7 @@ func (d *DataflowComponentInstance) reconcileTransitionToActive(ctx context.Cont
 	switch {
 	// If we're stopped, we need to start first
 	case currentState == OperationalStateStopped:
-		err := d.StartInstance(ctx, services.GetFileSystem())
+		err := d.StartInstance(ctx, services)
 		if err != nil {
 			return err, false
 		}
@@ -405,7 +405,7 @@ func (d *DataflowComponentInstance) reconcileTransitionToStopped(ctx context.Con
 		d.ObservedState.ServiceInfo.StatusReason = "stopping"
 		return nil, false
 	default:
-		if err := d.StopInstance(ctx, services.GetFileSystem()); err != nil {
+		if err := d.StopInstance(ctx, services); err != nil {
 			return err, false
 		}
 		// Send event to transition to Stopping

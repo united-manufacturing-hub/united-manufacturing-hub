@@ -29,7 +29,6 @@ import (
 	redpandafsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	spsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/streamprocessor"
 	runtime_config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/streamprocessor/runtime_config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
@@ -61,14 +60,14 @@ import (
 // ⚠️  Do **not** assume the underlying Dataflow components are
 // already configured when this function returns – they will be updated in
 // the next reconciliation cycle.
-func (i *Instance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (i *Instance) CreateInstance(ctx context.Context, services serviceregistry.Provider) error {
 	i.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding Stream Processor service %s to DFC  manager ...", i.baseFSMInstance.GetID())
 
 	// AddToManager intentionally receives an empty runtime config because template
 	// rendering requires SystemSnapshot data not available at creation time.
 	// The first UpdateObservedStateOfInstance() call will render and push the real config.
 	// At creation time, i.dfcRuntimeConfig will be empty (zero value), which is what we want.
-	err := i.service.AddToManager(ctx, filesystemService, &i.dfcRuntimeConfig, i.baseFSMInstance.GetID())
+	err := i.service.AddToManager(ctx, services, &i.dfcRuntimeConfig, i.baseFSMInstance.GetID())
 	if err != nil {
 		if errors.Is(err, spsvc.ErrServiceAlreadyExists) {
 			i.baseFSMInstance.GetLogger().Debugf("Stream Processor service %s already exists in DFC  manager", i.baseFSMInstance.GetID())
@@ -83,11 +82,11 @@ func (i *Instance) CreateInstance(ctx context.Context, filesystemService filesys
 
 // RemoveInstance attempts to remove the StreamProcessor from the Benthos and DFC manager.
 // It requires the service to be stopped before removal.
-func (i *Instance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (i *Instance) RemoveInstance(ctx context.Context, services serviceregistry.Provider) error {
 	i.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing Stream Processor service %s from DFC  manager ...", i.baseFSMInstance.GetID())
 
 	// Remove the Stream Processor from the DFC manager
-	err := i.service.RemoveFromManager(ctx, filesystemService, i.baseFSMInstance.GetID())
+	err := i.service.RemoveFromManager(ctx, services, i.baseFSMInstance.GetID())
 	switch {
 	// ---------------------------------------------------------------
 	// happy paths
@@ -125,13 +124,13 @@ func (i *Instance) RemoveInstance(ctx context.Context, filesystemService filesys
 }
 
 // StartInstance to start the Stream Processor by setting the desired state to running for the given instance
-func (i *Instance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (i *Instance) StartInstance(ctx context.Context, services serviceregistry.Provider) error {
 	i.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting Stream Processor service %s ...", i.baseFSMInstance.GetID())
 
 	// TODO: Add pre-start validation
 
 	// Set the desired state to running for the given instance
-	err := i.service.Start(ctx, filesystemService, i.baseFSMInstance.GetID())
+	err := i.service.Start(ctx, services, i.baseFSMInstance.GetID())
 	if err != nil {
 		// if the service is not there yet but we attempt to start it, we need to throw an error
 		return fmt.Errorf("failed to start Stream Processor service %s: %w", i.baseFSMInstance.GetID(), err)
@@ -142,11 +141,11 @@ func (i *Instance) StartInstance(ctx context.Context, filesystemService filesyst
 }
 
 // StopInstance attempts to stop the DataflowComponent by setting the desired state to stopped for the given instance
-func (i *Instance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (i *Instance) StopInstance(ctx context.Context, services serviceregistry.Provider) error {
 	i.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping Stream Processor service %s ...", i.baseFSMInstance.GetID())
 
 	// Set the desired state to stopped for the given instance
-	err := i.service.Stop(ctx, filesystemService, i.baseFSMInstance.GetID())
+	err := i.service.Stop(ctx, services, i.baseFSMInstance.GetID())
 	if err != nil {
 		// if the service is not there yet but we attempt to stop it, we need to throw an error
 		return fmt.Errorf("failed to stop Stream Processor service %s: %w", i.baseFSMInstance.GetID(), err)
@@ -158,7 +157,7 @@ func (i *Instance) StopInstance(ctx context.Context, filesystemService filesyste
 
 // CheckForCreation checks whether the creation was successful
 // For DataflowComponent, this is a no-op as we don't need to check anything
-func (i *Instance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+func (i *Instance) CheckForCreation(ctx context.Context, services serviceregistry.Provider) bool {
 	return true
 }
 
@@ -227,7 +226,7 @@ func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services s
 
 	// Fetch the actual StreamProcessor config from the service
 	start = time.Now()
-	observedConfig, err := i.service.GetConfig(ctx, services.GetFileSystem(), i.baseFSMInstance.GetID())
+	observedConfig, err := i.service.GetConfig(ctx, services, i.baseFSMInstance.GetID())
 	metrics.ObserveReconcileTime(logger.ComponentStreamProcessorInstance, i.baseFSMInstance.GetID()+".getConfig", time.Since(start))
 	if err == nil {
 		// Only update if we successfully got the config
@@ -285,14 +284,14 @@ func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services s
 	// Compare StreamProcessor configs for detecting changes
 	if !streamprocessorserviceconfig.ConfigsEqualRuntime(i.runtimeConfig, i.ObservedState.ObservedRuntimeConfig) {
 		// Check if the service exists before attempting to update
-		if i.service.ServiceExists(ctx, services.GetFileSystem(), i.baseFSMInstance.GetID()) {
+		if i.service.ServiceExists(ctx, services, i.baseFSMInstance.GetID()) {
 			i.baseFSMInstance.GetLogger().Debugf("Observed StreamProcessor config is different from desired config, updating StreamProcessor configuration")
 
 			diffStr := streamprocessorserviceconfig.ConfigDiffRuntime(i.runtimeConfig, i.ObservedState.ObservedRuntimeConfig)
 			i.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
 			// Update the config in the DFC manager with the rendered DFC config
-			err := i.service.UpdateInManager(ctx, services.GetFileSystem(), &i.dfcRuntimeConfig, i.baseFSMInstance.GetID())
+			err := i.service.UpdateInManager(ctx, services, &i.dfcRuntimeConfig, i.baseFSMInstance.GetID())
 			if err != nil {
 				return fmt.Errorf("failed to update Stream Processor service configuration: %w", err)
 			}

@@ -42,7 +42,6 @@ import (
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
@@ -57,7 +56,7 @@ type IConnectionService interface {
 	GenerateNmapConfigForConnection(connectionConfig *connectionserviceconfig.ConnectionServiceConfig, connectionName string) (nmapserviceconfig.NmapServiceConfig, error)
 
 	// GetConfig returns the actual Connection config from the Nmap service
-	GetConfig(ctx context.Context, filesystemService filesystem.Service, connectionName string) (connectionserviceconfig.ConnectionServiceConfig, error)
+	GetConfig(ctx context.Context, services serviceregistry.Provider, connectionName string) (connectionserviceconfig.ConnectionServiceConfig, error)
 
 	// Status returns information about the connection health for the specified connection.
 	// The connName corresponds to the name defined in the configuration.
@@ -72,7 +71,7 @@ type IConnectionService interface {
 	// - If the connection doesn't exist
 	// - If there's an underlying Nmap error
 	// - If the context is canceled
-	Status(ctx context.Context, filesystemService filesystem.Service, connName string, tick uint64) (ServiceInfo, error)
+	Status(ctx context.Context, services serviceregistry.Provider, connName string, tick uint64) (ServiceInfo, error)
 
 	// AddConnectionToNmapManager registers a new connection in the Nmap Manager.
 	// The connName is a unique identifier used to reference this connection.
@@ -86,7 +85,7 @@ type IConnectionService interface {
 	// to apply the changes.
 	//
 	// Returns an error if the connection already exists or if registration fails.
-	AddConnectionToNmapManager(ctx context.Context, filesystemService filesystem.Service, cfg *connectionserviceconfig.ConnectionServiceConfig, connName string) error
+	AddConnectionToNmapManager(ctx context.Context, services serviceregistry.Provider, cfg *connectionserviceconfig.ConnectionServiceConfig, connName string) error
 
 	// UpdateConnectionInNmapManager modifies an existing connection configuration.
 	// This can be used to change the target hostname, port, or protocol.
@@ -99,7 +98,7 @@ type IConnectionService interface {
 	// to apply the changes.
 	//
 	// Returns an error if the connection doesn't exist or if update fails.
-	UpdateConnectionInNmapManager(ctx context.Context, filesystemService filesystem.Service, cfg *connectionserviceconfig.ConnectionServiceConfig, connName string) error
+	UpdateConnectionInNmapManager(ctx context.Context, services serviceregistry.Provider, cfg *connectionserviceconfig.ConnectionServiceConfig, connName string) error
 
 	// RemoveConnectionFromNmapManager deletes a connection configuration.
 	// This stops monitoring the connection and removes all configuration.
@@ -109,28 +108,28 @@ type IConnectionService interface {
 	// to apply the changes.
 	//
 	// Returns an error if the connection doesn't exist or removal fails.
-	RemoveConnectionFromNmapManager(ctx context.Context, filesystemService filesystem.Service, connName string) error
+	RemoveConnectionFromNmapManager(ctx context.Context, services serviceregistry.Provider, connName string) error
 
 	// StartConnection begins the monitoring of a connection.
 	// This initiates periodic scanning of the target using Nmap.
 	//
 	// Returns an error if the connection doesn't exist or start fails.
-	StartConnection(ctx context.Context, filesystemService filesystem.Service, connName string) error
+	StartConnection(ctx context.Context, services serviceregistry.Provider, connName string) error
 
 	// StopConnection stops the monitoring of a connection.
 	// This halts scanning but retains the configuration for later restart.
 	//
 	// Returns an error if the connection doesn't exist or stop fails.
-	StopConnection(ctx context.Context, filesystemService filesystem.Service, connName string) error
+	StopConnection(ctx context.Context, services serviceregistry.Provider, connName string) error
 
 	// ForceRemoveConnection removes a Connection instance
-	ForceRemoveConnection(ctx context.Context, filesystemService filesystem.Service, connName string) error
+	ForceRemoveConnection(ctx context.Context, services serviceregistry.Provider, connName string) error
 
 	// ServiceExists checks if a connection with the given name exists.
 	// Used by the FSM to determine appropriate transitions.
 	//
 	// Returns true if the connection exists, false otherwise.
-	ServiceExists(ctx context.Context, filesystemService filesystem.Service, connName string) bool
+	ServiceExists(ctx context.Context, services serviceregistry.Provider, connName string) bool
 
 	// ReconcileManager synchronizes all connections on each tick.
 	// This is typically called in a loop by the FSM system.
@@ -229,7 +228,7 @@ func (c *ConnectionService) GenerateNmapConfigForConnection(connectionConfig *co
 // GetConfig returns the actual Connection config from the nmap service
 func (c *ConnectionService) GetConfig(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	connectionName string,
 ) (connectionserviceconfig.ConnectionServiceConfig, error) {
 	if ctx.Err() != nil {
@@ -239,7 +238,7 @@ func (c *ConnectionService) GetConfig(
 	nmapName := c.getNmapName(connectionName)
 
 	// Get the Nmap config
-	nmapCfg, err := c.nmapService.GetConfig(ctx, filesystemService, nmapName)
+	nmapCfg, err := c.nmapService.GetConfig(ctx, services, nmapName)
 	if err != nil {
 		return connectionserviceconfig.ConnectionServiceConfig{}, fmt.Errorf("failed to get nmap config: %w", err)
 	}
@@ -256,7 +255,7 @@ func (c *ConnectionService) GetConfig(
 // the FSM reconciliation system's timing mechanism.
 func (c *ConnectionService) Status(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	connName string,
 	tick uint64,
 ) (ServiceInfo, error) {
@@ -268,7 +267,7 @@ func (c *ConnectionService) Status(
 	if ctx.Err() != nil {
 		return ServiceInfo{}, ctx.Err()
 	}
-	if !c.ServiceExists(ctx, filesystemService, connName) {
+	if !c.ServiceExists(ctx, services, connName) {
 		return ServiceInfo{}, ErrServiceNotExist
 	}
 
@@ -314,7 +313,7 @@ func (c *ConnectionService) Status(
 // Returns an error if the connection already exists or if registration fails.
 func (c *ConnectionService) AddConnectionToNmapManager(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	cfg *connectionserviceconfig.ConnectionServiceConfig,
 	connectionName string,
 ) error {
@@ -370,7 +369,7 @@ func (c *ConnectionService) AddConnectionToNmapManager(
 // Returns an error if the connection doesn't exist or if update fails.
 func (c *ConnectionService) UpdateConnectionInNmapManager(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	cfg *connectionserviceconfig.ConnectionServiceConfig,
 	connectionName string,
 ) error {
@@ -428,7 +427,7 @@ func (c *ConnectionService) UpdateConnectionInNmapManager(
 // Returns an error if the connection doesn't exist or removal fails.
 func (c *ConnectionService) RemoveConnectionFromNmapManager(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	connectionName string,
 ) error {
 	if c.nmapManager == nil {
@@ -472,7 +471,7 @@ func (c *ConnectionService) RemoveConnectionFromNmapManager(
 // Expects nmapName (e.g. "connection-myservice") as defined in the UMH config
 func (c *ConnectionService) StartConnection(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	connectionName string,
 ) error {
 	if c.nmapManager == nil {
@@ -506,7 +505,7 @@ func (c *ConnectionService) StartConnection(
 // Expects nmapName (e.g. "connection-myservice") as defined in the UMH config
 func (c *ConnectionService) StopConnection(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	connectionName string,
 ) error {
 	if c.nmapManager == nil {
@@ -577,7 +576,7 @@ func (c *ConnectionService) ReconcileManager(
 // Returns true if the connection exists, false otherwise.
 func (c *ConnectionService) ServiceExists(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	connectionName string,
 ) bool {
 	if ctx.Err() != nil {
@@ -586,14 +585,14 @@ func (c *ConnectionService) ServiceExists(
 	nmapName := c.getNmapName(connectionName)
 
 	// Check if the actual service exists
-	return c.nmapService.ServiceExists(ctx, filesystemService, nmapName)
+	return c.nmapService.ServiceExists(ctx, services, nmapName)
 }
 
 // ForceRemoveConnection removes a Connection from the Nmap manager
 // Expects nmapName (e.g. "connection-myservice") as defined in the UMH config
 func (c *ConnectionService) ForceRemoveConnection(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	connectionName string,
 ) error {
 	if ctx.Err() != nil {
@@ -601,7 +600,7 @@ func (c *ConnectionService) ForceRemoveConnection(
 	}
 
 	// force remove from Nmap manager
-	return c.nmapService.ForceRemoveNmap(ctx, filesystemService, c.getNmapName(connectionName))
+	return c.nmapService.ForceRemoveNmap(ctx, services, c.getNmapName(connectionName))
 }
 
 // updateRecentScans adds a new scan result to the history for flakiness detection.

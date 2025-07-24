@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/agent_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // CustomMockS6Service extends s6.MockService to track the servicePath parameter passed to GetLogs
@@ -37,9 +38,9 @@ type CustomMockS6Service struct {
 }
 
 // GetLogs overrides the mock implementation to track the servicePath parameter
-func (m *CustomMockS6Service) GetLogs(ctx context.Context, servicePath string, fs filesystem.Service) ([]s6.LogEntry, error) {
+func (m *CustomMockS6Service) GetLogs(ctx context.Context, servicePath string, services serviceregistry.Provider) ([]s6.LogEntry, error) {
 	m.lastServicePath = servicePath
-	return m.MockService.GetLogs(ctx, servicePath, fs)
+	return m.MockService.GetLogs(ctx, servicePath, services)
 }
 
 // NewCustomMockS6Service creates a new custom mock S6 service
@@ -122,7 +123,8 @@ var _ = Describe("Agent Monitor Service", func() {
 
 		Context("when everything works correctly", func() {
 			It("should return the agent status with all expected fields", func() {
-				status, err := service.Status(ctx, mockSnapshot)
+				mockServices := serviceregistry.NewMockRegistry()
+				status, err := service.Status(ctx, mockSnapshot, mockServices)
 
 				Expect(err).NotTo(HaveOccurred())
 				Expect(status).NotTo(BeNil())
@@ -158,7 +160,8 @@ var _ = Describe("Agent Monitor Service", func() {
 				snapshotWithNilLoc := mockSnapshot
 				snapshotWithNilLoc.CurrentConfig = configWithNilLoc
 
-				status, err := service.Status(ctx, snapshotWithNilLoc)
+				mockServices := serviceregistry.NewMockRegistry()
+				status, err := service.Status(ctx, snapshotWithNilLoc, mockServices)
 
 				Expect(err).NotTo(HaveOccurred())
 				Expect(status).NotTo(BeNil())
@@ -173,8 +176,8 @@ var _ = Describe("Agent Monitor Service", func() {
 			})
 
 			It("should return an error", func() {
-
-				status, err := service.Status(ctx, mockSnapshot)
+				mockServices := serviceregistry.NewMockRegistry()
+				status, err := service.Status(ctx, mockSnapshot, mockServices)
 
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to retrieve logs"))
@@ -193,8 +196,8 @@ var _ = Describe("Agent Monitor Service", func() {
 				cancel()
 
 				// Call the function under test
-
-				status, err := service.Status(canceledCtx, mockSnapshot)
+				mockServices := serviceregistry.NewMockRegistry()
+				status, err := service.Status(canceledCtx, mockSnapshot, mockServices)
 
 				// Verify the error is correctly propagated
 				Expect(err).To(HaveOccurred())
@@ -213,7 +216,8 @@ var _ = Describe("Agent Monitor Service", func() {
 
 		Context("when logs are available", func() {
 			It("should return log entries from S6 service", func() {
-				status, err := service.Status(ctx, mockSnapshot)
+				mockServices := serviceregistry.NewMockRegistry()
+				status, err := service.Status(ctx, mockSnapshot, mockServices)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(status.AgentLogs).To(HaveLen(2))
 				Expect(status.AgentLogs[0].Content).To(ContainSubstring("INFO"))
@@ -221,7 +225,8 @@ var _ = Describe("Agent Monitor Service", func() {
 			})
 
 			It("should use the correct service path", func() {
-				_, err := service.Status(ctx, mockSnapshot)
+				mockServices := serviceregistry.NewMockRegistry()
+				_, err := service.Status(ctx, mockSnapshot, mockServices)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(mockS6.GetLogsCalled).To(BeTrue())
 				// If we had access to mockS6's internal call parameters,
@@ -235,7 +240,8 @@ var _ = Describe("Agent Monitor Service", func() {
 			})
 
 			It("should return the error", func() {
-				status, err := service.Status(ctx, mockSnapshot)
+				mockServices := serviceregistry.NewMockRegistry()
+				status, err := service.Status(ctx, mockSnapshot, mockServices)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to get logs from S6 service"))
 				Expect(status).To(BeNil())
@@ -250,7 +256,8 @@ var _ = Describe("Agent Monitor Service", func() {
 				// Set up mock to return context.Canceled
 				mockS6.GetLogsError = context.Canceled
 
-				status, err := service.Status(canceledCtx, mockSnapshot)
+				mockServices := serviceregistry.NewMockRegistry()
+				status, err := service.Status(canceledCtx, mockSnapshot, mockServices)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to get logs from S6 service"))
 				Expect(err.Error()).To(ContainSubstring("context canceled"))
@@ -268,8 +275,8 @@ var _ = Describe("Agent Monitor Service", func() {
 
 		It("should return release info with channel from config", func() {
 			// Since getReleaseInfo is an unexported method, test it implicitly through GetStatus
-
-			status, err := service.Status(ctx, mockSnapshot)
+			mockServices := serviceregistry.NewMockRegistry()
+			status, err := service.Status(ctx, mockSnapshot, mockServices)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(status.Release).NotTo(BeNil())
@@ -283,15 +290,15 @@ var _ = Describe("Agent Monitor Service", func() {
 			alternativeSnapshot := mockSnapshot
 			alternativeSnapshot.CurrentConfig = alternativeCfg
 
-			status, err = service.Status(ctx, alternativeSnapshot)
+			status, err = service.Status(ctx, alternativeSnapshot, mockServices)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(status.Release.Channel).To(Equal("testing"))
 		})
 
 		It("should include version information", func() {
-
-			status, err := service.Status(ctx, mockSnapshot)
+			mockServices := serviceregistry.NewMockRegistry()
+			status, err := service.Status(ctx, mockSnapshot, mockServices)
 
 			Expect(err).NotTo(HaveOccurred())
 
@@ -317,7 +324,8 @@ var _ = Describe("Agent Monitor Service", func() {
 			service = agent_monitor.NewAgentMonitorService(agent_monitor.WithFilesystemService(mockFS), agent_monitor.WithS6Service(customMockS6))
 
 			// Call the method under test through Status
-			_, err := service.Status(ctx, mockSnapshot)
+			mockServices := serviceregistry.NewMockRegistry()
+			_, err := service.Status(ctx, mockSnapshot, mockServices)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the correct path was used

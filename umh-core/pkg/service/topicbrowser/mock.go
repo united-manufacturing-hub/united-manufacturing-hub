@@ -25,7 +25,6 @@ import (
 	rpfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	rpsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
 	rpmonitor "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
@@ -173,7 +172,7 @@ func (m *MockService) GenerateConfig(tbName string) (benthossvccfg.BenthosServic
 }
 
 // GetConfig mocks getting the topic browser configuration
-func (m *MockService) GetConfig(ctx context.Context, filesystemService filesystem.Service, tbName string) (benthossvccfg.BenthosServiceConfig, error) {
+func (m *MockService) GetConfig(ctx context.Context, services serviceregistry.Provider, tbName string) (benthossvccfg.BenthosServiceConfig, error) {
 	m.GetConfigCalled = true
 
 	// If error is set, return it
@@ -211,7 +210,7 @@ func (m *MockService) Status(
 // AddToManager mocks adding a TopicBrowser to the Benthos manager
 func (m *MockService) AddToManager(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	cfg *benthossvccfg.BenthosServiceConfig,
 	tbName string,
 ) error {
@@ -247,7 +246,7 @@ func (m *MockService) AddToManager(
 // UpdateInManager mocks updating a TopicBrowser in the Benthos manager
 func (m *MockService) UpdateInManager(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	cfg *benthossvccfg.BenthosServiceConfig,
 	tbName string,
 ) error {
@@ -286,7 +285,7 @@ func (m *MockService) UpdateInManager(
 // RemoveFromManager mocks removing a TopicBrowser from the Benthos manager
 func (m *MockService) RemoveFromManager(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	tbName string,
 ) error {
 	m.RemoveFromManagerCalled = true
@@ -318,7 +317,7 @@ func (m *MockService) RemoveFromManager(
 // Start mocks starting a Topic Browser
 func (m *MockService) Start(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	tbName string,
 ) error {
 	m.StartCalled = true
@@ -346,7 +345,7 @@ func (m *MockService) Start(
 // Stop mocks stopping a Topic Browser
 func (m *MockService) Stop(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	tbName string,
 ) error {
 	m.StopCalled = true

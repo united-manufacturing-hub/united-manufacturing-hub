@@ -83,7 +83,7 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 				func(ctx context.Context) error {
 					// Force removal as a last resort when normal state transitions can't work
 					// This directly removes the s6 service directory from the filesystem
-					return s.service.ForceRemove(ctx, s.servicePath, services.GetFileSystem())
+					return s.service.ForceRemove(ctx, s.servicePath, services)
 				},
 			)
 		}
@@ -246,7 +246,7 @@ func (s *S6Instance) reconcileTransitionToRunning(ctx context.Context, services 
 
 	if currentState == OperationalStateStopped {
 		// Attempt to initiate start
-		if err := s.StartInstance(ctx, services.GetFileSystem()); err != nil {
+		if err := s.StartInstance(ctx, services); err != nil {
 			return err, true
 		}
 		// Send event to transition from Stopped/Failed to Starting
@@ -277,7 +277,7 @@ func (s *S6Instance) reconcileTransitionToStopped(ctx context.Context, services 
 
 	if currentState == OperationalStateRunning || currentState == OperationalStateStarting {
 		// Attempt to initiate a stop
-		if err := s.StopInstance(ctx, services.GetFileSystem()); err != nil {
+		if err := s.StopInstance(ctx, services); err != nil {
 			return err, true
 		}
 		// Send event to transition to Stopping

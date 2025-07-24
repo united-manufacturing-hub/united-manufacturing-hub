@@ -49,7 +49,7 @@ var _ = Describe("Benthos Service", func() {
 		tick = 0
 		mockSvcRegistry = serviceregistry.NewMockRegistry()
 		// Add the service to the S6 manager
-		err := service.AddBenthosToS6Manager(context.Background(), mockSvcRegistry.GetFileSystem(), &benthosserviceconfig.BenthosServiceConfig{
+		err := service.AddBenthosToS6Manager(context.Background(), mockSvcRegistry, &benthosserviceconfig.BenthosServiceConfig{
 			MetricsPort: 4195,
 			LogLevel:    "info",
 		}, benthosName)
@@ -512,7 +512,7 @@ var _ = Describe("Benthos Service", func() {
 				cancelledCtx, cancel := context.WithCancel(context.Background())
 				cancel() // Cancel immediately
 
-				_, err := service.GetConfig(cancelledCtx, mockSvcRegistry.GetFileSystem(), benthosName)
+				_, err := service.GetConfig(cancelledCtx, mockSvcRegistry, benthosName)
 				Expect(err).To(Equal(context.Canceled))
 			})
 		})
@@ -568,7 +568,7 @@ var _ = Describe("Benthos Service", func() {
 			mockS6Service.ServiceExistsResult = true
 
 			// Add the service to the S6 manager
-			err := service.AddBenthosToS6Manager(ctx, mockSvcRegistry.GetFileSystem(), &benthosserviceconfig.BenthosServiceConfig{
+			err := service.AddBenthosToS6Manager(ctx, mockSvcRegistry, &benthosserviceconfig.BenthosServiceConfig{
 				MetricsPort: 4195,
 				LogLevel:    "info",
 			}, benthosName)
@@ -628,7 +628,7 @@ var _ = Describe("Benthos Service", func() {
 
 			// Start the service
 			By("Starting the Benthos service")
-			err := service.StartBenthos(ctx, mockSvcRegistry.GetFileSystem(), benthosName)
+			err := service.StartBenthos(ctx, mockSvcRegistry, benthosName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Mock the GetConfig return values - first return initialConfig
@@ -663,7 +663,7 @@ var _ = Describe("Benthos Service", func() {
 
 			// Update the service configuration
 			By("Updating the Benthos service configuration")
-			err = service.UpdateBenthosInS6Manager(ctx, mockSvcRegistry.GetFileSystem(), updatedConfig, benthosName)
+			err = service.UpdateBenthosInS6Manager(ctx, mockSvcRegistry, updatedConfig, benthosName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Second reconciliation - detects the config change and triggers restart
@@ -711,7 +711,7 @@ logger:
 			Expect(info.BenthosStatus.HealthCheck.IsReady).To(BeTrue())
 
 			// Get the config via the service and validate it reflects the updated configuration
-			cfg, err := service.GetConfig(ctx, mockSvcRegistry.GetFileSystem(), benthosName)
+			cfg, err := service.GetConfig(ctx, mockSvcRegistry, benthosName)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cfg.Input).NotTo(BeNil(), "Config Input should not be nil")
 			Expect(cfg.Input["mqtt"]).NotTo(BeNil(), "MQTT config should not be nil")
@@ -791,7 +791,7 @@ logger:
 			mockSvcRegistry = serviceregistry.NewMockRegistry()
 
 			// Add the service to the S6 manager
-			err := service.AddBenthosToS6Manager(ctx, mockSvcRegistry.GetFileSystem(), &benthosserviceconfig.BenthosServiceConfig{
+			err := service.AddBenthosToS6Manager(ctx, mockSvcRegistry, &benthosserviceconfig.BenthosServiceConfig{
 				MetricsPort: 4195,
 				LogLevel:    "info",
 			}, benthosName)
@@ -1013,7 +1013,7 @@ logger:
 
 		It("should call S6 ForceRemove with the correct service path", func() {
 			// Call ForceRemoveBenthos
-			err := service.ForceRemoveBenthos(context.Background(), mockSvcRegistry.GetFileSystem(), benthosName)
+			err := service.ForceRemoveBenthos(context.Background(), mockSvcRegistry, benthosName)
 
 			// Verify no error
 			Expect(err).NotTo(HaveOccurred())
@@ -1033,7 +1033,7 @@ logger:
 			mockS6Service.ForceRemoveError = mockError
 
 			// Call ForceRemoveBenthos
-			err := service.ForceRemoveBenthos(context.Background(), mockSvcRegistry.GetFileSystem(), benthosName)
+			err := service.ForceRemoveBenthos(context.Background(), mockSvcRegistry, benthosName)
 
 			// Verify error is propagated
 			Expect(err).To(MatchError(mockError))

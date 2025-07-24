@@ -20,7 +20,6 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -31,7 +30,7 @@ import (
 // CreateInstance is called when the FSM transitions from to_be_created -> creating.
 // For agent monitoring, this is a no-op as there's no actual agent to create.
 // This function is present for structural consistency with other FSM packages.
-func (a *AgentInstance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (a *AgentInstance) CreateInstance(ctx context.Context, services serviceregistry.Provider) error {
 	a.baseFSMInstance.GetLogger().Debugf("Creating agent monitor instance %s (no-op)", a.baseFSMInstance.GetID())
 	return nil
 }
@@ -39,7 +38,7 @@ func (a *AgentInstance) CreateInstance(ctx context.Context, filesystemService fi
 // RemoveInstance is called when the FSM transitions to removing.
 // For agent monitoring, this is a no-op as we don't need to remove any resources.
 // This function is present for structural consistency with other FSM packages.
-func (a *AgentInstance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (a *AgentInstance) RemoveInstance(ctx context.Context, services serviceregistry.Provider) error {
 	a.baseFSMInstance.GetLogger().Debugf("Removing agent monitor instance %s (no-op)", a.baseFSMInstance.GetID())
 	return nil
 }
@@ -49,21 +48,21 @@ func (a *AgentInstance) RemoveInstance(ctx context.Context, filesystemService fi
 
 // StartInstance is called when the agent monitoring should be enabled.
 // Currently this is a no-op as the monitoring service runs independently.
-func (a *AgentInstance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (a *AgentInstance) StartInstance(ctx context.Context, services serviceregistry.Provider) error {
 	a.baseFSMInstance.GetLogger().Infof("Enabling agent monitoring for %s (no-op)", a.baseFSMInstance.GetID())
 	return nil
 }
 
 // StopInstance is called when the agent monitoring should be disabled.
 // Currently this is a no-op as the monitoring service runs independently.
-func (a *AgentInstance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (a *AgentInstance) StopInstance(ctx context.Context, services serviceregistry.Provider) error {
 	a.baseFSMInstance.GetLogger().Infof("Disabling agent monitoring for %s (no-op)", a.baseFSMInstance.GetID())
 	return nil
 }
 
 // CheckForCreation is called when the FSM transitions to creating.
 // For agent monitoring, this is a no-op as we don't need to check anything
-func (a *AgentInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+func (a *AgentInstance) CheckForCreation(ctx context.Context, services serviceregistry.Provider) bool {
 	return true
 }
 
@@ -78,7 +77,7 @@ func (a *AgentInstance) UpdateObservedStateOfInstance(ctx context.Context, servi
 	}
 
 	// get the config from the config manager
-	status, err := a.monitorService.Status(ctx, snapshot)
+	status, err := a.monitorService.Status(ctx, snapshot, services)
 	if err != nil {
 		return fmt.Errorf("failed to get agent metrics: %w", err)
 	}
