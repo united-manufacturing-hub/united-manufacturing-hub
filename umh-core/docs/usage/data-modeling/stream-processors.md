@@ -27,14 +27,12 @@ templates:
         tF: "${{ .location_path }}._raw.tempF"
         r: "${{ .location_path }}._raw.run"
       mapping:               # field → JS / constant / alias
-        dynamic:
-          pressure: "press"
-          temperature: "(tF-32)*5/9" # JavaScript expressions for data transformation 
-          running: "r"
-          motor:
-            rpm: "press"
-        static:
-          serialNumber: "${{ .sn }}"
+        pressure: "press"
+        temperature: "(tF-32)*5/9" # JavaScript expressions for data transformation 
+        running: "r"
+        motor:
+          rpm: "press"
+        serialNumber: "${{ .sn }}"
 
 # Stream processor instances
 streamprocessors:

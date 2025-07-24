@@ -61,11 +61,9 @@ templates:
         press: "${{ .location_path }}._raw.${{ .pressure_sensor }}"
         temp: "${{ .location_path }}._raw.tempF"
       mapping:
-        dynamic:
-          pressure: "press"
-          temperature: "(temp-32)*5/9"
-        static:
-          serialNumber: "${{ .sn }}"
+        pressure: "press"
+        temperature: "(temp-32)*5/9"
+        serialNumber: "${{ .sn }}"
 
 streamprocessors:
   - name: pump41_sp
@@ -98,12 +96,10 @@ templates:
       sources:
         var_name: "${{ .location_path }}._raw.${{ .variable_name }}"
       mapping:
-        dynamic:
-          model_field: "javascript_expression"
-          folder:
-            sub_field: "javascript_expression"
-        static:
-          metadata_field: "${{ .variable_name }}"
+        model_field: "javascript_expression"
+        folder:
+          sub_field: "javascript_expression"
+        metadata_field: "${{ .variable_name }}"
 ```
 
 ### Stream Processor Definition
@@ -154,11 +150,9 @@ templates:
       sources:
         temp: "${{ .location_path }}._raw.${{ .sensor_name }}"
       mapping:
-        dynamic:
-          temperatureInC: "(temp - 32) * 5 / 9"
-        static:
-          sensor_id: "${{ .sensor_id }}"
-          location: "${{ .location_description }}"
+        temperatureInC: "(temp - 32) * 5 / 9"
+        sensor_id: "${{ .sensor_id }}"
+        location: "${{ .location_description }}"
 ```
 
 **Built-in Variables:**
@@ -177,27 +171,26 @@ JavaScript expressions evaluated at runtime:
 
 ```yaml
 mapping:
-  dynamic:
-    # Direct pass-through
-    pressure: "press"
-    
-    # Unit conversions
-    temperature: "(temp - 32) * 5 / 9"
-    
-    # Calculations
-    total_power: "l1 + l2 + l3"
-    
-    # Conditional logic
-    status: "temp > 100 ? 'hot' : 'normal'"
-    
-    # Sub-model fields (nested YAML)
-    motor:
-      current: "motor_current_var"
-      rpm: "motor_speed_var"
-    
-    # Folder fields
-    diagnostics:
-      vibration: "vibration_var"
+  # Direct pass-through
+  pressure: "press"
+  
+  # Unit conversions
+  temperature: "(temp - 32) * 5 / 9"
+  
+  # Calculations
+  total_power: "l1 + l2 + l3"
+  
+  # Conditional logic
+  status: "temp > 100 ? 'hot' : 'normal'"
+  
+  # Sub-model fields (nested YAML)
+  motor:
+    current: "motor_current_var"
+    rpm: "motor_speed_var"
+  
+  # Folder fields
+  diagnostics:
+    vibration: "vibration_var"
 ```
 
 #### Static Mapping
@@ -205,10 +198,9 @@ Template variables resolved at deployment time:
 
 ```yaml
 mapping:
-  static:
-    serialNumber: "${{ .sn }}"
-    firmware_version: "${{ .firmware_ver }}"
-    installation_date: "${{ .install_date }}"
+  serialNumber: "${{ .sn }}"
+  firmware_version: "${{ .firmware_ver }}"
+  installation_date: "${{ .install_date }}"
 ```
 
 ## Complete Examples
@@ -251,10 +243,8 @@ templates:
       sources:
         temp: "${{ .location_path }}._raw.${{ .temp_sensor }}"
       mapping:
-        dynamic:
-          temperatureInC: "(temp - 32) * 5 / 9"
-        static:
-          sensorId: "${{ .sn }}"
+        temperatureInC: "(temp - 32) * 5 / 9"
+        sensorId: "${{ .sn }}"
 
 streamprocessors:
   - name: furnaceTemp_sp
@@ -352,18 +342,16 @@ templates:
         l1: "${{ .location_path }}._raw.power_l1"
         l2: "${{ .location_path }}._raw.power_l2"
       mapping:
-        dynamic:
-          pressure: "press"
-          temperature: "(temp - 32) * 5 / 9"
-          running: "run"
-          diagnostics:
-            vibration: "vib"
-          motor:
-            current: "current"
-            rpm: "rpm"
-          total_power: "l1 + l2"
-        static:
-          serialNumber: "${{ .sn }}"
+        pressure: "press"
+        temperature: "(temp - 32) * 5 / 9"
+        running: "run"
+        diagnostics:
+          vibration: "vib"
+        motor:
+          current: "current"
+          rpm: "rpm"
+        total_power: "l1 + l2"
+        serialNumber: "${{ .sn }}"
 
 streamprocessors:
   - name: pump41_sp
@@ -417,9 +405,8 @@ Stream processors provide built-in validation at multiple levels:
 ```yaml
 # Error scenarios and handling
 mapping:
-  dynamic:
-    invalid_field: "someVar"  # Error: not defined in model
-    temperature: "temp / 0"   # Runtime error: skips message
+  invalid_field: "someVar"  # Error: not defined in model
+  temperature: "temp / 0"   # Runtime error: skips message
 ```
 
 ### Error Scenarios
