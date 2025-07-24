@@ -229,7 +229,7 @@ Stream processors are deployed through:
 
 For detailed information on using the Management Console interface, see:
 
-**[Stream Processor Implementation → Management Console](../data-flows/stream-processor-upcoming.md#management-console)**
+**[Stream Processor Implementation → Management Console](../data-flows/stream-processor.md#management-console)**
 
 The console provides:
 - Visual data model builder
@@ -278,7 +278,7 @@ The console provides:
 
 For complete implementation details, configuration syntax, and Management Console usage:
 
-**[Data Flows → Stream Processor Implementation](../data-flows/stream-processor-upcoming.md)**
+**[Data Flows → Stream Processor Implementation](../data-flows/stream-processor.md)**
 
 Additional references:
 - [Data Models](data-models.md) - Defining data structures

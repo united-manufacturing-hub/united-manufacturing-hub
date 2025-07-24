@@ -370,4 +370,4 @@ streamProcessors:
 
 - [Data Models](data-models.md) - Defining reusable data structures
 - [Stream Processors](stream-processors.md) - Implementing contract instances
-- [Stream Processor Implementation](../data-flows/stream-processor-upcoming.md) - Detailed runtime configuration 
+- [Stream Processor Implementation](../data-flows/stream-processor.md) - Detailed runtime configuration 
