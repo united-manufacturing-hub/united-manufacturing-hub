@@ -1,6 +1,6 @@
 # Stream Processors
 
-> 🚧 **Roadmap Item** - Stream processors transform raw data into structured, validated information according to your data models using reusable template configurations.
+Stream processors transform raw data into structured, validated information according to your data models using reusable template configurations.
 
 Stream processors are the runtime components that bring data models to life. They consume raw data from your industrial systems, apply transformations according to your data models, and output structured data. Stream processors work directly with data models through templates, not through data contracts.
 
@@ -29,7 +29,7 @@ templates:
       mapping:               # field → JS / constant / alias
         dynamic:
           pressure: "press"
-          temperature: "(tF-32)*5/9" # 🚧 **Roadmap Item** - JS expressions 
+          temperature: "(tF-32)*5/9" # JavaScript expressions for data transformation 
           running: "r"
           motor:
             rpm: "press"

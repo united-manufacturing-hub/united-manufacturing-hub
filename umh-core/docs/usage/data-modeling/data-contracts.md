@@ -1,6 +1,6 @@
 # Data Contracts
 
-> 🚧 **Roadmap Item** - Data contracts bind data models to storage, retention, and processing policies, ensuring consistent data handling across your industrial systems.
+Data contracts bind data models to storage, retention, and processing policies, ensuring consistent data handling across your industrial systems.
 
 Data contracts define the operational aspects of your data models - where data gets stored, how long it's retained, and what processing rules apply. They bridge the gap between logical data structure (models) and physical data management.
 

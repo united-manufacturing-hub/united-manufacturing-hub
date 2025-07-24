@@ -1,6 +1,6 @@
 # Data Modeling
 
-> 🚧 **Roadmap Item** - Unified data-modelling builds on our existing data contract foundation to provide a comprehensive approach to industrial data modeling.
+Unified data-modelling builds on our existing data contract foundation to provide a comprehensive approach to industrial data modeling.
 
 UMH Core's unified data-modelling system provides a structured approach to defining, validating, and processing industrial data. It bridges the gap between raw sensor data and meaningful business information through a clear hierarchy of components.
 

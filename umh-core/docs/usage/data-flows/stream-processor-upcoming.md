@@ -1,6 +1,6 @@
-# Stream Processor Implementation
+# Stream Processors
 
-> 🚧 **Roadmap Item** - Stream processors transform messages already inside the Unified Namespace using the unified data-modelling system.
+Stream processors transform messages already inside the Unified Namespace using the unified data-modelling system.
 
 Stream processors implement the runtime execution of [data models and contracts](../data-modeling/README.md), providing real-time data transformation and contextualization within the UNS. This document covers the technical implementation details, configuration syntax, and Management Console interface.
 

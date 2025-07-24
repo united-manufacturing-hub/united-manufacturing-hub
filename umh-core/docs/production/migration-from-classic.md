@@ -216,8 +216,8 @@ protocolConverter:
 
 After completing the basic migration:
 
-1. **[Data Modeling](../usage/data-modeling/README.md)** 🚧 - Implement structured data contracts
-2. **[Stream Processors](../usage/data-flows/stream-processors.md)** 🚧 - Transform raw data to business models  
+1. **[Data Modeling](../usage/data-modeling/README.md)** - Implement structured data contracts
+2. **[Stream Processors](../usage/data-flows/stream-processor-upcoming.md)** - Transform raw data to business models  
 3. **[Production Deployment](../production/README.md)** - Scale and secure your UMH Core deployment 
 
 ### Tag Groups Migration
