@@ -1,6 +1,6 @@
 # Stream Processors
 
-> 🚧 **Roadmap Item** - Stream processors transform raw data into structured, validated information according to your data models using reusable template configurations.
+Stream processors transform raw data into structured, validated information according to your data models using reusable template configurations.
 
 Stream processors are the runtime components that bring data models to life. They consume raw data from your industrial systems, apply transformations according to your data models, and output structured data. Stream processors work directly with data models through templates, not through data contracts.
 
@@ -27,14 +27,12 @@ templates:
         tF: "${{ .location_path }}._raw.tempF"
         r: "${{ .location_path }}._raw.run"
       mapping:               # field → JS / constant / alias
-        dynamic:
-          pressure: "press"
-          temperature: "(tF-32)*5/9" # 🚧 **Roadmap Item** - JS expressions 
-          running: "r"
-          motor:
-            rpm: "press"
-        static:
-          serialNumber: "${{ .sn }}"
+        pressure: "press"
+        temperature: "(tF-32)*5/9" # JavaScript expressions for data transformation 
+        running: "r"
+        motor:
+          rpm: "press"
+        serialNumber: "${{ .sn }}"
 
 # Stream processor instances
 streamprocessors:
@@ -229,7 +227,7 @@ Stream processors are deployed through:
 
 For detailed information on using the Management Console interface, see:
 
-**[Stream Processor Implementation → Management Console](../data-flows/stream-processor-upcoming.md#management-console)**
+**[Stream Processor Implementation → Management Console](../data-flows/stream-processor.md#management-console)**
 
 The console provides:
 - Visual data model builder
@@ -278,7 +276,7 @@ The console provides:
 
 For complete implementation details, configuration syntax, and Management Console usage:
 
-**[Data Flows → Stream Processor Implementation](../data-flows/stream-processor-upcoming.md)**
+**[Data Flows → Stream Processor Implementation](../data-flows/stream-processor.md)**
 
 Additional references:
 - [Data Models](data-models.md) - Defining data structures
