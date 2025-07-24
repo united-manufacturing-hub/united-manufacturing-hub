@@ -21,7 +21,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
@@ -36,9 +35,9 @@ type INmapService interface {
 	// GenerateS6ConfigForNmap generates a S6 config for a given nmap instance
 	GenerateS6ConfigForNmap(nmapConfig *nmapserviceconfig.NmapServiceConfig, s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error)
 	// GetConfig returns the actual nmap config from the S6 service
-	GetConfig(ctx context.Context, filesystemService filesystem.Service, nmapName string) (nmapserviceconfig.NmapServiceConfig, error)
+	GetConfig(ctx context.Context, services serviceregistry.Provider, nmapName string) (nmapserviceconfig.NmapServiceConfig, error)
 	// Status checks the status of a nmap service
-	Status(ctx context.Context, filesystemService filesystem.Service, nmapName string, tick uint64) (ServiceInfo, error)
+	Status(ctx context.Context, services serviceregistry.Provider, nmapName string, tick uint64) (ServiceInfo, error)
 	// AddNmapToS6Manager adds a nmap instance to the S6 manager
 	AddNmapToS6Manager(ctx context.Context, cfg *nmapserviceconfig.NmapServiceConfig, nmapName string) error
 	// UpdateNmapInS6Manager updates an existing nmap instance in the S6 manager
@@ -46,13 +45,13 @@ type INmapService interface {
 	// RemoveNmapFromS6Manager removes a nmap instance from the S6 manager
 	RemoveNmapFromS6Manager(ctx context.Context, nmapName string) error
 	// korceRemoveNmap removes a Nmap instance from the s6 manager
-	ForceRemoveNmap(ctx context.Context, filesystemService filesystem.Service, nmapName string) error
+	ForceRemoveNmap(ctx context.Context, services serviceregistry.Provider, nmapName string) error
 	// StartNmap starts a nmap instance
 	StartNmap(ctx context.Context, nmapName string) error
 	// StopNmap stops a nmap instance
 	StopNmap(ctx context.Context, nmapName string) error
 	// ServiceExists checks if a nmap service exists
-	ServiceExists(ctx context.Context, filesystemService filesystem.Service, nmapName string) bool
+	ServiceExists(ctx context.Context, services serviceregistry.Provider, nmapName string) bool
 	// ReconcileManager reconciles the nmap manager
 	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
 }

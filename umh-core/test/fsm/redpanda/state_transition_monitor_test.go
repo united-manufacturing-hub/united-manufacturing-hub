@@ -214,7 +214,7 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 			By("reconciliation should put the service into creating")
 			tick = reconcileMonitorUntilState(ctx, monitorService, mockSvcRegistry, tick, s6.LifecycleStateCreating)
 			// Verify initial state
-			serviceInfo, err = monitorService.Status(ctx, mockSvcRegistry.GetFileSystem(), tick)
+			serviceInfo, err = monitorService.Status(ctx, mockSvcRegistry, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(serviceInfo.S6FSMState).To(Equal(s6.LifecycleStateCreating))
 			Expect(serviceInfo.RedpandaStatus.IsRunning).To(BeFalse())
@@ -223,7 +223,7 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 			By("reconciliation should put the service into stopped")
 			tick = reconcileMonitorUntilState(ctx, monitorService, mockSvcRegistry, tick, s6fsm.OperationalStateStopped)
 			// Verify state
-			serviceInfo, err = monitorService.Status(ctx, mockSvcRegistry.GetFileSystem(), tick)
+			serviceInfo, err = monitorService.Status(ctx, mockSvcRegistry, tick)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("service is stopped"))
 			Expect(serviceInfo.S6FSMState).To(Equal(s6fsm.OperationalStateStopped))
@@ -257,7 +257,7 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 			tick = reconcileMonitorUntilState(ctx, monitorService, mockSvcRegistry, tick, s6fsm.OperationalStateRunning)
 
 			// Verify service is running
-			serviceInfo, err = monitorService.Status(ctx, mockSvcRegistry.GetFileSystem(), tick)
+			serviceInfo, err = monitorService.Status(ctx, mockSvcRegistry, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(serviceInfo.S6FSMState).To(Equal(s6fsm.OperationalStateRunning))
 			Expect(serviceInfo.RedpandaStatus.IsRunning).To(BeTrue())
@@ -271,7 +271,7 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 			tick = reconcileMonitorUntilState(ctx, monitorService, mockSvcRegistry, tick, s6fsm.OperationalStateStopped)
 
 			// Verify service is stopped
-			serviceInfo, err = monitorService.Status(ctx, mockSvcRegistry.GetFileSystem(), tick)
+			serviceInfo, err = monitorService.Status(ctx, mockSvcRegistry, tick)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("service is stopped"))
 			Expect(serviceInfo.S6FSMState).To(Equal(s6fsm.OperationalStateStopped))
@@ -303,7 +303,7 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 			Expect(err).NotTo(HaveOccurred())
 			tick = reconcileMonitorUntilState(ctx, monitorService, mockSvcRegistry, tick, s6fsm.OperationalStateRunning)
 
-			serviceInfo, err = monitorService.Status(ctx, mockSvcRegistry.GetFileSystem(), tick)
+			serviceInfo, err = monitorService.Status(ctx, mockSvcRegistry, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(serviceInfo.S6FSMState).To(Equal(s6fsm.OperationalStateRunning))
 			Expect(serviceInfo.RedpandaStatus.IsRunning).To(BeTrue())
@@ -319,7 +319,7 @@ func reconcileMonitorUntilState(ctx context.Context, monitorService *redpanda_mo
 		tick++
 
 		// Check state
-		serviceInfo, err := monitorService.Status(ctx, services.GetFileSystem(), tick)
+		serviceInfo, err := monitorService.Status(ctx, services, tick)
 		// If the expected state is stopped, we might expect an error
 		if err != nil {
 			Expect(err.Error()).To(ContainSubstring("service is stopped"))
@@ -340,7 +340,7 @@ func ensureMonitorState(ctx context.Context, monitorService *redpanda_monitor.Re
 		tick++
 
 		// Check state
-		serviceInfo, err := monitorService.Status(ctx, services.GetFileSystem(), tick)
+		serviceInfo, err := monitorService.Status(ctx, services, tick)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(serviceInfo.S6FSMState).To(Equal(expectedState))
 	}

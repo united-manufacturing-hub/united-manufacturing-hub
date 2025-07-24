@@ -1365,7 +1365,7 @@ func (s *BenthosMonitorService) Status(ctx context.Context, services serviceregi
 
 	// Get logs
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
-	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, services.GetFileSystem())
+	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, services)
 	if err != nil {
 		return ServiceInfo{}, fmt.Errorf("failed to get logs: %w", err)
 	}
@@ -1563,7 +1563,7 @@ func (s *BenthosMonitorService) ServiceExists(ctx context.Context, services serv
 		return false
 	}
 
-	exists, err := s.s6Service.ServiceExists(ctx, filepath.Join(constants.S6BaseDir, s.GetS6ServiceName()), services.GetFileSystem())
+	exists, err := s.s6Service.ServiceExists(ctx, filepath.Join(constants.S6BaseDir, s.GetS6ServiceName()), services)
 	if err != nil {
 		return false
 	}

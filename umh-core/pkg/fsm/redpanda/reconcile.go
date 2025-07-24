@@ -86,7 +86,7 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 				func(ctx context.Context) error {
 					// Force removal when other approaches fail - bypasses state transitions
 					// and directly deletes files and resources
-					return r.service.ForceRemoveRedpanda(ctx, services.GetFileSystem(), r.baseFSMInstance.GetID())
+					return r.service.ForceRemoveRedpanda(ctx, services, r.baseFSMInstance.GetID())
 				},
 			)
 		}
@@ -268,7 +268,7 @@ func (r *RedpandaInstance) reconcileTransitionToActive(ctx context.Context, serv
 	switch {
 	// If we're stopped, we need to start first
 	case currentState == OperationalStateStopped:
-		err := r.StartInstance(ctx, services.GetFileSystem())
+		err := r.StartInstance(ctx, services)
 		if err != nil {
 			return err, false
 		}
@@ -368,7 +368,7 @@ func (r *RedpandaInstance) reconcileRunningStates(ctx context.Context, services 
 		s6Running, _ := r.IsRedpandaS6Running()
 		if !s6Running {
 			r.baseFSMInstance.GetLogger().Debugf("S6 service stopped while in degraded state, attempting to restart")
-			err := r.StartInstance(ctx, services.GetFileSystem())
+			err := r.StartInstance(ctx, services)
 			if err != nil {
 				r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("degraded: failed to restart service: %v", err)
 				return err, false
@@ -395,7 +395,7 @@ func (r *RedpandaInstance) reconcileTransitionToStopped(ctx context.Context, ser
 	// If we're in any operational state except Stopped or Stopping, initiate stop
 	if currentState != OperationalStateStopped && currentState != OperationalStateStopping {
 		// Attempt to initiate a stop
-		if err := r.StopInstance(ctx, services.GetFileSystem()); err != nil {
+		if err := r.StopInstance(ctx, services); err != nil {
 			return err, false
 		}
 		// Send event to transition to Stopping

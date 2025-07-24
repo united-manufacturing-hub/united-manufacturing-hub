@@ -39,7 +39,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
@@ -223,14 +222,14 @@ func (rms *RedpandaMonitorStatus) CopyLogs(src []s6service.LogEntry) error {
 
 type IRedpandaMonitorService interface {
 	GenerateS6ConfigForRedpandaMonitor(s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error)
-	Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error)
+	Status(ctx context.Context, services serviceregistry.Provider, tick uint64) (ServiceInfo, error)
 	AddRedpandaMonitorToS6Manager(ctx context.Context) error
 	RemoveRedpandaMonitorFromS6Manager(ctx context.Context) error
 	StartRedpandaMonitor(ctx context.Context) error
 	StopRedpandaMonitor(ctx context.Context) error
 	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
-	ServiceExists(ctx context.Context, filesystemService filesystem.Service) bool
-	ForceRemoveRedpandaMonitor(ctx context.Context, filesystemService filesystem.Service) error
+	ServiceExists(ctx context.Context, services serviceregistry.Provider) bool
+	ForceRemoveRedpandaMonitor(ctx context.Context, services serviceregistry.Provider) error
 }
 
 // Ensure RedpandaMonitorService implements IRedpandaMonitorService
@@ -644,7 +643,6 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 }
 
 func (s *RedpandaMonitorService) processMetricsDataBytes(metricsDataBytes []byte, tick uint64) (*RedpandaMetrics, error) {
-
 	gzr, err := gzip.NewReader(hex.NewDecoder(bytes.NewReader(metricsDataBytes)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
@@ -869,7 +867,6 @@ func (s *RedpandaMonitorService) parseReadynessData(readynessDataBytes []byte) (
 }
 
 func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigDataBytes []byte, tick uint64) (*ClusterConfig, error) {
-
 	clusterConfigDataString := string(clusterConfigDataBytes)
 	// Strip any newlines
 	clusterConfigDataString = strings.ReplaceAll(clusterConfigDataString, "\n", "")
@@ -1097,7 +1094,7 @@ func getLabel(m *dto.Metric, name string) string {
 }
 
 // Status checks the status of a redpanda service
-func (s *RedpandaMonitorService) Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error) {
+func (s *RedpandaMonitorService) Status(ctx context.Context, services serviceregistry.Provider, tick uint64) (ServiceInfo, error) {
 	if ctx.Err() != nil {
 		return ServiceInfo{}, ctx.Err()
 	}
@@ -1149,7 +1146,7 @@ func (s *RedpandaMonitorService) Status(ctx context.Context, filesystemService f
 
 	// Get logs
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
-	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, filesystemService)
+	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, services)
 	if err != nil {
 		return ServiceInfo{
 			S6ObservedState: s6State,
@@ -1314,7 +1311,7 @@ func (s *RedpandaMonitorService) ReconcileManager(ctx context.Context, services 
 }
 
 // ServiceExists checks if a redpanda instance exists
-func (s *RedpandaMonitorService) ServiceExists(ctx context.Context, filesystemService filesystem.Service) bool {
+func (s *RedpandaMonitorService) ServiceExists(ctx context.Context, services serviceregistry.Provider) bool {
 	if s.s6Manager == nil {
 		return false
 	}
@@ -1323,7 +1320,7 @@ func (s *RedpandaMonitorService) ServiceExists(ctx context.Context, filesystemSe
 		return false
 	}
 
-	exists, err := s.s6Service.ServiceExists(ctx, filepath.Join(constants.S6BaseDir, s.GetS6ServiceName()), filesystemService)
+	exists, err := s.s6Service.ServiceExists(ctx, filepath.Join(constants.S6BaseDir, s.GetS6ServiceName()), services)
 	if err != nil {
 		return false
 	}
@@ -1334,10 +1331,10 @@ func (s *RedpandaMonitorService) ServiceExists(ctx context.Context, filesystemSe
 // ForceRemoveRedpandaMonitor removes a Redpanda monitor from the S6 manager
 // This should only be called if the Redpanda monitor is in a permanent failure state
 // and the instance itself cannot be stopped or removed
-func (s *RedpandaMonitorService) ForceRemoveRedpandaMonitor(ctx context.Context, filesystemService filesystem.Service) error {
+func (s *RedpandaMonitorService) ForceRemoveRedpandaMonitor(ctx context.Context, services serviceregistry.Provider) error {
 	s6ServiceName := s.GetS6ServiceName()
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
-	return s.s6Service.ForceRemove(ctx, s6ServicePath, filesystemService)
+	return s.s6Service.ForceRemove(ctx, s6ServicePath, services)
 }
 
 func ParseRedpandaIntegerlikeValue(value interface{}) (int64, error) {

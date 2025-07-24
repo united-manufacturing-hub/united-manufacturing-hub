@@ -274,7 +274,7 @@ func (i *TopicBrowserInstance) reconcileTransitionToActive(ctx context.Context, 
 	switch {
 	// If we're stopped, we need to start first
 	case currentState == OperationalStateStopped:
-		err := i.StartInstance(ctx, services.GetFileSystem())
+		err := i.StartInstance(ctx, services)
 		if err != nil {
 			return err, false
 		}
@@ -448,7 +448,7 @@ func (i *TopicBrowserInstance) reconcileTransitionToStopped(ctx context.Context,
 		i.ObservedState.ServiceInfo.StatusReason = "stopping"
 		return nil, false
 	default:
-		if err := i.StopInstance(ctx, services.GetFileSystem()); err != nil {
+		if err := i.StopInstance(ctx, services); err != nil {
 			return err, false
 		}
 		// Send event to transition to Stopping

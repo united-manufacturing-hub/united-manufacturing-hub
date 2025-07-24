@@ -88,7 +88,7 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 				func(ctx context.Context) error {
 					// Force removal when other approaches fail - bypasses state transitions
 					// and directly deletes files and resources
-					return p.service.ForceRemoveProtocolConverter(ctx, services.GetFileSystem(), protocolConverterInstanceName)
+					return p.service.ForceRemoveProtocolConverter(ctx, services, protocolConverterInstanceName)
 				},
 			)
 		}
@@ -266,7 +266,7 @@ func (p *ProtocolConverterInstance) reconcileTransitionToActive(ctx context.Cont
 	// If we're stopped, we need to start first
 	if currentState == OperationalStateStopped {
 		// Attempt to initiate start
-		if err := p.StartInstance(ctx, services.GetFileSystem()); err != nil {
+		if err := p.StartInstance(ctx, services); err != nil {
 			return err, false
 		}
 		p.ObservedState.ServiceInfo.StatusReason = "started"
@@ -588,7 +588,7 @@ func (p *ProtocolConverterInstance) reconcileTransitionToStopped(ctx context.Con
 		p.ObservedState.ServiceInfo.StatusReason = "stopping"
 		return nil, false
 	default:
-		if err := p.StopInstance(ctx, services.GetFileSystem()); err != nil {
+		if err := p.StopInstance(ctx, services); err != nil {
 			return err, false
 		}
 		// Send event to transition to Stopping

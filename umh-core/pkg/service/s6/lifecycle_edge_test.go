@@ -29,21 +29,25 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 var _ = Describe("LifecycleManager Edge Cases", func() {
 	var (
-		ctx       context.Context
-		service   *DefaultService
-		mockFS    *filesystem.MockFileSystem
-		artifacts *ServiceArtifacts
-		config    s6serviceconfig.S6ServiceConfig
+		ctx          context.Context
+		service      *DefaultService
+		mockFS       *filesystem.MockFileSystem
+		mockServices *serviceregistry.Registry
+		artifacts    *ServiceArtifacts
+		config       s6serviceconfig.S6ServiceConfig
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
 		service = &DefaultService{logger: logger.For("test")}
 		mockFS = filesystem.NewMockFileSystem()
+		mockServices = serviceregistry.NewMockRegistry()
+		mockServices.FileSystem = mockFS
 		artifacts = &ServiceArtifacts{
 			ServiceDir:    filepath.Join(constants.S6BaseDir, "test-service"),
 			RepositoryDir: filepath.Join(constants.S6RepositoryBaseDir, "test-service"),
@@ -86,7 +90,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				return true, nil
 			})
 
-			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
+			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockServices)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(health).To(Equal(HealthBad)) // Missing completion file = bad state
@@ -97,7 +101,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				return false, fmt.Errorf("I/O error: disk read error")
 			})
 
-			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
+			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockServices)
 
 			Expect(err).To(HaveOccurred())
 			Expect(health).To(Equal(HealthUnknown)) // I/O error = unknown state, retry
@@ -116,7 +120,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				return true, nil
 			})
 
-			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
+			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockServices)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(health).To(Equal(HealthBad)) // Partial structure = bad state
@@ -149,7 +153,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				return nil
 			})
 
-			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockFS)
+			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockServices)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("text file busy"))
@@ -169,7 +173,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				return fmt.Errorf("simulated symlink failure")
 			})
 
-			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockFS)
+			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockServices)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to create scan directory symlink"))
@@ -186,7 +190,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				return nil
 			})
 
-			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockFS)
+			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockServices)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("permission denied"))
@@ -205,7 +209,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				return true, nil
 			})
 
-			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
+			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockServices)
 
 			Expect(err).To(HaveOccurred())
 			Expect(health).To(Equal(HealthUnknown)) // Permission error = unknown, retry
@@ -226,7 +230,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				return true, nil
 			})
 
-			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
+			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockServices)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(health).To(Equal(HealthBad)) // Inconsistent supervise = bad state
@@ -245,7 +249,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				return true, nil
 			})
 
-			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
+			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockServices)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(health).To(Equal(HealthBad)) // Missing type file = bad state
@@ -267,7 +271,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				return nil
 			})
 
-			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockFS)
+			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockServices)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("no space left on device"))
@@ -282,7 +286,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				return nil
 			})
 
-			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockFS)
+			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockServices)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("inode table full"))
@@ -295,7 +299,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			slowCtx, cancel := context.WithCancel(ctx)
 			cancel() // Cancel context immediately
 
-			result, err := service.CreateArtifacts(slowCtx, artifacts.ServiceDir, config, mockFS)
+			result, err := service.CreateArtifacts(slowCtx, artifacts.ServiceDir, config, mockServices)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(Equal(context.Canceled))
@@ -337,7 +341,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				return nil
 			})
 
-			err := service.RemoveArtifacts(ctx, artifacts, mockFS)
+			err := service.RemoveArtifacts(ctx, artifacts, mockServices)
 
 			Expect(err).NotTo(HaveOccurred()) // Should succeed despite concurrent modifications
 		})
@@ -352,7 +356,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				return true, nil
 			})
 
-			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
+			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockServices)
 
 			Expect(err).To(HaveOccurred())
 			Expect(health).To(Equal(HealthUnknown)) // Network error = unknown, retry
@@ -366,7 +370,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				return nil
 			})
 
-			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockFS)
+			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockServices)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("operation timed out"))
@@ -402,7 +406,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				return nil
 			})
 
-			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockFS)
+			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockServices)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to remove existing repository"))
@@ -427,7 +431,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				return []byte{}, nil
 			})
 
-			err := service.ForceCleanup(ctx, artifacts, mockFS)
+			err := service.ForceCleanup(ctx, artifacts, mockServices)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("force cleanup incomplete"))
@@ -446,7 +450,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				return strings.HasSuffix(path, "/run") && !strings.Contains(path, "/log/"), nil
 			})
 
-			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
+			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockServices)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(health).To(Equal(HealthBad)) // Partial creation = bad state
@@ -468,7 +472,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				return false, nil
 			})
 
-			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
+			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockServices)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(health).To(Equal(HealthOK)) // All files present = healthy
@@ -485,7 +489,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				return false, fmt.Errorf("input/output error")
 			})
 
-			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
+			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockServices)
 
 			Expect(err).To(HaveOccurred())
 			Expect(health).To(Equal(HealthUnknown))
@@ -500,7 +504,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				return false, fmt.Errorf("permission denied")
 			})
 
-			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
+			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockServices)
 
 			Expect(err).To(HaveOccurred())
 			Expect(health).To(Equal(HealthUnknown))
@@ -515,7 +519,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				return false, fmt.Errorf("network is unreachable")
 			})
 
-			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
+			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockServices)
 
 			Expect(err).To(HaveOccurred())
 			Expect(health).To(Equal(HealthUnknown))
@@ -531,7 +535,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				return !strings.HasSuffix(path, "/run"), nil
 			})
 
-			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
+			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockServices)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(health).To(Equal(HealthBad))
@@ -546,7 +550,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				Command: []string{"echo", "test"},
 			}
 
-			result, err := service.CreateArtifacts(ctx, servicePath, config, mockFS)
+			result, err := service.CreateArtifacts(ctx, servicePath, config, mockServices)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.ServiceDir).To(Equal(servicePath))
@@ -559,7 +563,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				Command: []string{"echo", "test"},
 			}
 
-			result, err := service.CreateArtifacts(ctx, servicePath, config, mockFS)
+			result, err := service.CreateArtifacts(ctx, servicePath, config, mockServices)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.ServiceDir).To(Equal(servicePath))
@@ -574,7 +578,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				},
 			}
 
-			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockFS)
+			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockServices)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.ServiceDir).To(Equal(artifacts.ServiceDir))
@@ -591,7 +595,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				Command: []string{"echo", "test"},
 			}
 
-			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockFS)
+			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockServices)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("no space left on device"))
@@ -607,7 +611,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				Command: []string{"echo", "test"},
 			}
 
-			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockFS)
+			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockServices)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("permission denied"))
@@ -623,7 +627,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				Command: []string{"echo", "test"},
 			}
 
-			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockFS)
+			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockServices)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("simulated symlink failure"))
@@ -640,7 +644,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				return true, nil
 			})
 
-			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
+			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockServices)
 
 			Expect(err).To(HaveOccurred())
 			Expect(health).To(Equal(HealthUnknown))
@@ -663,7 +667,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockFS)
+					result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockServices)
 					mu.Lock()
 					results = append(results, result)
 					errors = append(errors, err)
@@ -694,7 +698,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					err := service.RemoveArtifacts(ctx, artifacts, mockFS)
+					err := service.RemoveArtifacts(ctx, artifacts, mockServices)
 					mu.Lock()
 					errors = append(errors, err)
 					mu.Unlock()
@@ -717,7 +721,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				return !strings.HasSuffix(path, "/type"), nil
 			})
 
-			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
+			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockServices)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(health).To(Equal(HealthBad))
@@ -734,7 +738,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				return strings.HasSuffix(path, "/run"), nil
 			})
 
-			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
+			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockServices)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(health).To(Equal(HealthBad))

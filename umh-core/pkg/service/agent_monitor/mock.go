@@ -22,6 +22,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // MockService is a mock implementation of the agent monitor Service interface
@@ -52,7 +53,7 @@ func NewMockService(fs filesystem.Service) *MockService {
 }
 
 // Status is a mock implementation of Service.Status
-func (m *MockService) Status(ctx context.Context, snapshot fsm.SystemSnapshot) (*ServiceInfo, error) {
+func (m *MockService) Status(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (*ServiceInfo, error) {
 	m.GetStatusCalled = true
 
 	if m.GetStatusError != nil {

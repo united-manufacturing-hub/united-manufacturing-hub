@@ -30,7 +30,6 @@ import (
 	redpandafsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter/runtime_config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
@@ -62,13 +61,13 @@ import (
 // ⚠️  Do **not** assume the underlying Connection / Dataflow components are
 // already configured when this function returns – they will be updated in
 // the next reconciliation cycle.
-func (p *ProtocolConverterInstance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (p *ProtocolConverterInstance) CreateInstance(ctx context.Context, services serviceregistry.Provider) error {
 	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding ProtocolConverter service %s to DFC and Connection manager ...", p.baseFSMInstance.GetID())
 
 	// AddToManager intentionally receives an empty runtime config because template
 	// rendering requires SystemSnapshot data not available at creation time.
 	// The first UpdateObservedStateOfInstance() call will render and push the real config.
-	err := p.service.AddToManager(ctx, filesystemService, &p.runtimeConfig, p.baseFSMInstance.GetID())
+	err := p.service.AddToManager(ctx, services, &p.runtimeConfig, p.baseFSMInstance.GetID())
 	if err != nil {
 		if errors.Is(err, protocolconvertersvc.ErrServiceAlreadyExists) {
 			p.baseFSMInstance.GetLogger().Debugf("ProtocolConverter service %s already exists in DFC and Connection manager", p.baseFSMInstance.GetID())
@@ -83,11 +82,11 @@ func (p *ProtocolConverterInstance) CreateInstance(ctx context.Context, filesyst
 
 // RemoveInstance attempts to remove the ProtocolConverter from the Benthos and connection manager.
 // It requires the service to be stopped before removal.
-func (p *ProtocolConverterInstance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (p *ProtocolConverterInstance) RemoveInstance(ctx context.Context, services serviceregistry.Provider) error {
 	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing ProtocolConverter service %s from DFC and Connection manager ...", p.baseFSMInstance.GetID())
 
 	// Remove the initiateDataflowComponent from the Benthos manager
-	err := p.service.RemoveFromManager(ctx, filesystemService, p.baseFSMInstance.GetID())
+	err := p.service.RemoveFromManager(ctx, services, p.baseFSMInstance.GetID())
 	switch {
 	// ---------------------------------------------------------------
 	// happy paths
@@ -125,13 +124,13 @@ func (p *ProtocolConverterInstance) RemoveInstance(ctx context.Context, filesyst
 }
 
 // StartInstance to start the DataflowComponent by setting the desired state to running for the given instance
-func (p *ProtocolConverterInstance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (p *ProtocolConverterInstance) StartInstance(ctx context.Context, services serviceregistry.Provider) error {
 	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting ProtocolConverter service %s ...", p.baseFSMInstance.GetID())
 
 	// TODO: Add pre-start validation
 
 	// Set the desired state to running for the given instance
-	err := p.service.StartProtocolConverter(ctx, filesystemService, p.baseFSMInstance.GetID())
+	err := p.service.StartProtocolConverter(ctx, services, p.baseFSMInstance.GetID())
 	if err != nil {
 		// if the service is not there yet but we attempt to start it, we need to throw an error
 		return fmt.Errorf("failed to start ProtocolConverter service %s: %w", p.baseFSMInstance.GetID(), err)
@@ -142,11 +141,11 @@ func (p *ProtocolConverterInstance) StartInstance(ctx context.Context, filesyste
 }
 
 // StopInstance attempts to stop the DataflowComponent by setting the desired state to stopped for the given instance
-func (p *ProtocolConverterInstance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (p *ProtocolConverterInstance) StopInstance(ctx context.Context, services serviceregistry.Provider) error {
 	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping ProtocolConverter service %s ...", p.baseFSMInstance.GetID())
 
 	// Set the desired state to stopped for the given instance
-	err := p.service.StopProtocolConverter(ctx, filesystemService, p.baseFSMInstance.GetID())
+	err := p.service.StopProtocolConverter(ctx, services, p.baseFSMInstance.GetID())
 	if err != nil {
 		// if the service is not there yet but we attempt to stop it, we need to throw an error
 		return fmt.Errorf("failed to stop ProtocolConverter service %s: %w", p.baseFSMInstance.GetID(), err)
@@ -158,7 +157,7 @@ func (p *ProtocolConverterInstance) StopInstance(ctx context.Context, filesystem
 
 // CheckForCreation checks whether the creation was successful
 // For DataflowComponent, this is a no-op as we don't need to check anything
-func (p *ProtocolConverterInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+func (p *ProtocolConverterInstance) CheckForCreation(ctx context.Context, services serviceregistry.Provider) bool {
 	return true
 }
 
@@ -232,7 +231,7 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 
 	// Fetch the actual Benthos config from the service
 	start = time.Now()
-	observedConfig, err := p.service.GetConfig(ctx, services.GetFileSystem(), p.baseFSMInstance.GetID())
+	observedConfig, err := p.service.GetConfig(ctx, services, p.baseFSMInstance.GetID())
 	metrics.ObserveReconcileTime(logger.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".getConfig", time.Since(start))
 	if err == nil {
 		// Only update if we successfully got the config
@@ -287,14 +286,14 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 
 	if !protocolconverterserviceconfig.ConfigsEqualRuntime(p.runtimeConfig, p.ObservedState.ObservedProtocolConverterRuntimeConfig) {
 		// Check if the service exists before attempting to update
-		if p.service.ServiceExists(ctx, services.GetFileSystem(), p.baseFSMInstance.GetID()) {
+		if p.service.ServiceExists(ctx, services, p.baseFSMInstance.GetID()) {
 			p.baseFSMInstance.GetLogger().Debugf("Observed ProtocolConverter config is different from desired config, updating ProtocolConverter configuration")
 
 			diffStr := protocolconverterserviceconfig.ConfigDiffRuntime(p.runtimeConfig, p.ObservedState.ObservedProtocolConverterRuntimeConfig)
 			p.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
 			// Update the config in the Benthos manager
-			err := p.service.UpdateInManager(ctx, services.GetFileSystem(), &p.runtimeConfig, p.baseFSMInstance.GetID())
+			err := p.service.UpdateInManager(ctx, services, &p.runtimeConfig, p.baseFSMInstance.GetID())
 			if err != nil {
 				return fmt.Errorf("failed to update ProtocolConverter service configuration: %w", err)
 			}

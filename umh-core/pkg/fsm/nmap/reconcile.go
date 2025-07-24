@@ -82,7 +82,7 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 				func(ctx context.Context) error {
 					// Force removal as a last resort when normal state transitions can't work
 					// This directly removes files and resources
-					return n.monitorService.ForceRemoveNmap(ctx, services.GetFileSystem(), instanceName)
+					return n.monitorService.ForceRemoveNmap(ctx, services, instanceName)
 				},
 			)
 		}
@@ -236,7 +236,7 @@ func (n *NmapInstance) reconcileTransitionToActive(ctx context.Context, services
 	switch {
 	// If we're stopped, we need to start first
 	case currentState == OperationalStateStopped:
-		err := n.StartInstance(ctx, services.GetFileSystem())
+		err := n.StartInstance(ctx, services)
 		if err != nil {
 			return err, false
 		}
@@ -269,7 +269,7 @@ func (n *NmapInstance) reconcileTransitionToStopped(ctx context.Context, service
 
 	// If not yet stopped and not already stopping, stop instance.
 	if currentState != OperationalStateStopped && currentState != OperationalStateStopping {
-		if err := n.StopInstance(ctx, services.GetFileSystem()); err != nil {
+		if err := n.StopInstance(ctx, services); err != nil {
 			return err, true
 		}
 		return n.baseFSMInstance.SendEvent(ctx, EventStop), true

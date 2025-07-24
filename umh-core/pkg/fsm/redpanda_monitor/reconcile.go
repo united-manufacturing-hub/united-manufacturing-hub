@@ -33,7 +33,7 @@ import (
 )
 
 // Reconcile periodically checks if the FSM needs state transitions based on metrics
-// The filesystemService parameter allows for filesystem operations during reconciliation,
+// The services parameter provides access to core services including filesystem operations during reconciliation,
 // enabling the method to read configuration or state information from the filesystem.
 // Currently not used in this implementation but added for consistency with the interface.
 func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
@@ -82,7 +82,7 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 				func(ctx context.Context) error {
 					// Force removal when other approaches fail - bypasses state transitions
 					// and directly deletes files and resources
-					return b.monitorService.ForceRemoveRedpandaMonitor(ctx, services.GetFileSystem())
+					return b.monitorService.ForceRemoveRedpandaMonitor(ctx, services)
 				},
 			)
 		}
@@ -245,7 +245,7 @@ func (b *RedpandaMonitorInstance) reconcileTransitionToActive(ctx context.Contex
 	switch {
 	// If we're stopped, we need to start first
 	case currentState == OperationalStateStopped:
-		err := b.StartInstance(ctx, services.GetFileSystem())
+		err := b.StartInstance(ctx, services)
 		if err != nil {
 			return err, false
 		}
@@ -329,7 +329,7 @@ func (b *RedpandaMonitorInstance) reconcileTransitionToStopped(ctx context.Conte
 		return b.baseFSMInstance.SendEvent(ctx, EventStopDone), true
 	default:
 		// For any other state, initiate stop
-		err := b.StopInstance(ctx, services.GetFileSystem())
+		err := b.StopInstance(ctx, services)
 		if err != nil {
 			return err, false
 		}

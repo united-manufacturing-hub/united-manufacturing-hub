@@ -25,6 +25,7 @@ import (
 
 	"github.com/cactus/tai64"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // S6StatusData holds the parsed binary data from S6's 43-byte status file
@@ -158,7 +159,9 @@ func parseS6StatusFile(ctx context.Context, statusFilePath string, fsService fil
 // buildFullServiceInfo converts S6StatusData into a complete ServiceInfo
 // This adds the high-level business logic (down files, exit history, etc.)
 // that's needed for the full Status() method but not for cleanup detection
-func (s *DefaultService) buildFullServiceInfo(ctx context.Context, servicePath string, statusData *S6StatusData, fsService filesystem.Service) (ServiceInfo, error) {
+func (s *DefaultService) buildFullServiceInfo(ctx context.Context, servicePath string, statusData *S6StatusData, services serviceregistry.Provider) (ServiceInfo, error) {
+	// Get filesystem service from service registry
+	fsService := services.GetFileSystem()
 	// Start with basic info from the binary status data
 	info := ServiceInfo{
 		Status:        ServiceUnknown,
@@ -204,7 +207,7 @@ func (s *DefaultService) buildFullServiceInfo(ctx context.Context, servicePath s
 
 	// Add exit history from the supervise directory
 	superviseDir := filepath.Join(servicePath, "supervise")
-	history, histErr := s.ExitHistory(ctx, superviseDir, fsService)
+	history, histErr := s.ExitHistory(ctx, superviseDir, services)
 	if histErr == nil {
 		info.ExitHistory = history
 	} else {
@@ -224,7 +227,9 @@ func (s *DefaultService) buildFullServiceInfo(ctx context.Context, servicePath s
 //
 // If the file size is not a multiple of the record size, it is considered corrupted.
 // In that case, you may choose to truncate the file (as the C code does) or return an error.
-func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, fsService filesystem.Service) ([]ExitEvent, error) {
+func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, services serviceregistry.Provider) ([]ExitEvent, error) {
+	// Get filesystem service from service registry
+	fsService := services.GetFileSystem()
 	// Build the full path to the dtally file.
 	dtallyFile := filepath.Join(superviseDir, S6DtallyFileName)
 
