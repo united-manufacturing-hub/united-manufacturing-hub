@@ -9,6 +9,7 @@
     * [Topic Convention](usage/unified-namespace/topic-convention.md)
     * [Producing Data](usage/unified-namespace/producing-data.md)
     * [Consuming Data](usage/unified-namespace/consuming-data.md)
+    * [Topic Browser](usage/unified-namespace/topic-browser.md)
   * [Data Flows](usage/data-flows/README.md)
     * [Overview](usage/data-flows/overview.md)
     * [Bridges](usage/data-flows/bridges.md)
@@ -17,6 +18,8 @@
   * [Data Modeling](usage/data-modeling/README.md)
     * [Data Models](usage/data-modeling/data-models.md)
     * [Data Contracts](usage/data-modeling/data-contracts.md)
+    * [Payload Shapes](usage/data-modeling/payload-shapes.md)
+    * [Stream Processors](usage/data-modeling/stream-processors.md)
 * [Production](production/README.md)
   * [Updating](production/updating.md)
   * [Sizing Guide](production/sizing-guide.md)
@@ -29,6 +32,8 @@
   * [State Machines](reference/state-machines.md)
   * [Environment Variables](reference/environment-variables.md)
   * [Variables](reference/variables.md)
+  * [HTTP API Reference](reference/http-api/README.md)
+    * [Topic Browser GraphQL API](reference/http-api/topic-browser-graphql.md)
 * [UMH Core vs UMH Classic](umh-core-vs-classic-faq.md)
 
 ## UMH Classic
