@@ -294,7 +294,7 @@ const BLOCK_START_MARKER = "BEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBE
 const METRICS_END_MARKER = "METRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSEND"
 
 // CLUSTERCONFIG_END_MARKER marks the end of the cluster config data and the beginning of the timestamp data.
-const CLUSTERCONFIG_END_MARKER = "CONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGEND"
+const CLUSTERCONFIG_END_MARKER = "CONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGEND"
 
 // READYNESS_END_MARKER marks the end of the readyness data and the beginning of the timestamp data.
 const READYNESS_END_MARKER = "READYNESSENDREADYNESSENDREADYNESSENDREADYNESSENDREADYNESSENDREADYNESSENDREADYNESSENDREADYNESSENDREADYNESSENDREADYNESSEND"
@@ -643,7 +643,6 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 }
 
 func (s *RedpandaMonitorService) processMetricsDataBytes(metricsDataBytes []byte, tick uint64) (*RedpandaMetrics, error) {
-
 	gzr, err := gzip.NewReader(hex.NewDecoder(bytes.NewReader(metricsDataBytes)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
@@ -868,7 +867,6 @@ func (s *RedpandaMonitorService) parseReadynessData(readynessDataBytes []byte) (
 }
 
 func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigDataBytes []byte, tick uint64) (*ClusterConfig, error) {
-
 	clusterConfigDataString := string(clusterConfigDataBytes)
 	// Strip any newlines
 	clusterConfigDataString = strings.ReplaceAll(clusterConfigDataString, "\n", "")
