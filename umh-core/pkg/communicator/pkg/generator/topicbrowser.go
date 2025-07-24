@@ -15,7 +15,11 @@
 package generator
 
 import (
+	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
@@ -26,6 +30,7 @@ func GenerateTopicBrowserFromCommunicator(
 	communicator *topicbrowser.TopicBrowserCommunicator,
 	isBootstrapped bool,
 	logger *zap.SugaredLogger,
+	inst *fsm.FSMInstanceSnapshot,
 ) *models.TopicBrowser {
 	if communicator == nil {
 		logger.Error("Topic browser communicator is nil")
@@ -53,15 +58,59 @@ func GenerateTopicBrowserFromCommunicator(
 		}
 	}
 
-	// Convert subscriber data to models.TopicBrowser
-	return &models.TopicBrowser{
-		Health: &models.Health{
+	// generate health from instance
+	var health *models.Health
+	if inst != nil {
+		health, err = buildTopicBrowserAsDfc(*inst, logger)
+		if err != nil {
+			logger.Errorf("Failed to build topic browser as DFC: %v", err)
+		}
+	} else {
+		health = &models.Health{
 			Message:       "Topic browser operational",
 			ObservedState: "running",
 			DesiredState:  "running",
 			Category:      models.Active,
-		},
+		}
+	}
+
+	// Convert subscriber data to models.TopicBrowser
+	return &models.TopicBrowser{
+		Health:     health,
 		TopicCount: subscriberData.TopicCount,
 		UnsBundles: subscriberData.UnsBundles,
 	}
+}
+
+func buildTopicBrowserAsDfc(
+	instance fsm.FSMInstanceSnapshot,
+	logger *zap.SugaredLogger,
+) (*models.Health, error) {
+
+	observed, ok := instance.LastObservedState.(*topicbrowserfsm.ObservedStateSnapshot)
+	if !ok {
+		return nil, fmt.Errorf("last observed state is not a topic browser observed state snapshot")
+	}
+
+	serviceInfo := observed.ServiceInfo
+
+	healthCat := models.Neutral
+	switch serviceInfo.BenthosFSMState {
+	case topicbrowserfsm.OperationalStateActive:
+		healthCat = models.Active
+	case topicbrowserfsm.OperationalStateDegradedBenthos,
+		topicbrowserfsm.OperationalStateDegradedRedpanda:
+		healthCat = models.Degraded
+	case topicbrowserfsm.OperationalStateIdle,
+		topicbrowserfsm.OperationalStateStarting,
+		topicbrowserfsm.OperationalStateStopping:
+		healthCat = models.Neutral
+	}
+
+	return &models.Health{
+		Message:       serviceInfo.StatusReason,
+		ObservedState: instance.CurrentState,
+		DesiredState:  "active",
+		Category:      healthCat,
+	}, nil
 }

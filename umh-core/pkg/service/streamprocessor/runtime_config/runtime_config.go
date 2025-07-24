@@ -136,7 +136,15 @@ func BuildRuntimeConfig(
 	}
 
 	//----------------------------------------------------------------------
-	// 3. Render both configs
+	// 3. bridged_by header
+	//----------------------------------------------------------------------
+	if nodeName == "" {
+		nodeName = "unknown"
+	}
+	vb.Internal["bridged_by"] = config.GenerateBridgedBy(config.ComponentTypeStreamProcessor, nodeName, spName)
+
+	//----------------------------------------------------------------------
+	// 4. Render both configs
 	//----------------------------------------------------------------------
 	scope := vb.Flatten()
 

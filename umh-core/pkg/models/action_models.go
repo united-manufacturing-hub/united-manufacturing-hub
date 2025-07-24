@@ -566,10 +566,11 @@ type GetLogsResponse struct {
 type MetricResourceType string
 
 const (
-	DFCMetricResourceType             MetricResourceType = "dfc"
-	RedpandaMetricResourceType        MetricResourceType = "redpanda"
-	TopicBrowserMetricResourceType    MetricResourceType = "topic-browser"
-	StreamProcessorMetricResourceType MetricResourceType = "stream-processor"
+	DFCMetricResourceType               MetricResourceType = "dfc"
+	RedpandaMetricResourceType          MetricResourceType = "redpanda"
+	TopicBrowserMetricResourceType      MetricResourceType = "topic-browser"
+	StreamProcessorMetricResourceType   MetricResourceType = "stream-processor"
+	ProtocolConverterMetricResourceType MetricResourceType = "protocol-converter"
 )
 
 // GetMetricsRequest contains the necessary fields for executing a `get-metrics` action.

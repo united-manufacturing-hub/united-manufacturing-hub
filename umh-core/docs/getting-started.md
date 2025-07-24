@@ -118,7 +118,7 @@ If you're behind a corporate proxy, follow the steps in [corporate-firewalls.md]
 
 * **Add a real producer** – point an OPC UA input at your PLC and let the `tag_processor` contextualize your data. See [Producing Data](usage/unified-namespace/producing-data.md) 🚧 for examples.
 * **Add a consumer** – create a second protocol converter that reads from `umh.v1.plant-A.lineA.machine-7._raw.random_int` and writes to MQTT or TimescaleDB. See [Consuming Data](usage/unified-namespace/consuming-data.md) 🚧 for patterns.
-* **Structure your data** – move beyond `_raw` contracts to explicit [Data Models](usage/data-modeling/README.md) 🚧 for enterprise-scale analytics.
+* **Structure your data** – move beyond `_raw` contracts to explicit [Data Models](usage/data-modeling/README.md) for enterprise-scale analytics.
 * **Scale your deployment** – follow the [Production](production/README.md) guides for sizing, security, and monitoring.
 
 ## Understanding the Configuration

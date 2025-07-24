@@ -17,7 +17,6 @@ package runtime_config
 import (
 	"fmt"
 	"reflect"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -185,28 +184,13 @@ func BuildRuntimeConfig(
 	if nodeName == "" {
 		nodeName = "unknown"
 	}
-	vb.Internal["bridged_by"] = generateProtocolConverterBridgedBy(nodeName, pcName)
+	vb.Internal["bridged_by"] = config.GenerateBridgedBy(config.ComponentTypeProtocolConverter, nodeName, pcName)
 
 	//----------------------------------------------------------------------
 	// 4. Render all three sub-templates
 	//----------------------------------------------------------------------
 	scope := vb.Flatten()
 	return renderConfig(spec, scope) // unexported helper that enforces UNS
-}
-
-// ---------------------------------------------------------------------
-// Helper: derive a sanitised bridged_by value
-// ---------------------------------------------------------------------
-func generateProtocolConverterBridgedBy(nodeName, pcName string) string {
-	bridgeName := fmt.Sprintf("protocol-converter-%s-%s", nodeName, pcName)
-
-	reNonAlnum := regexp.MustCompile(`[^a-zA-Z0-9]`)
-	bridgeName = reNonAlnum.ReplaceAllString(bridgeName, "-")
-
-	reMultiDash := regexp.MustCompile(`-{2,}`)
-	bridgeName = reMultiDash.ReplaceAllString(bridgeName, "-")
-
-	return strings.Trim(bridgeName, "-")
 }
 
 // renderConfig turns the **author-facing** specification (*Spec*) into the
@@ -238,7 +222,7 @@ func generateProtocolConverterBridgedBy(nodeName, pcName string) string {
 //
 //   - Connection
 //
-//   - read-DFC   (with UNS **output** enforced via GetDFCReadServiceConfig)
+//   - read-DFC   (with UNS **output** enforced via GetDFCServiceConfig)
 //
 //   - write-DFC  (with UNS **input**  enforced via GetDFCWriteServiceConfig)
 //

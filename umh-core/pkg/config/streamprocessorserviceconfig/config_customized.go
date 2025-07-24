@@ -75,7 +75,9 @@ func (c StreamProcessorServiceConfigSpec) GetDFCServiceConfig(spName string) dat
 
 	// Always set UNS output
 	dfcReadConfig.BenthosConfig.Output = map[string]any{
-		"uns": map[string]any{},
+		"uns": map[string]any{
+			"bridged_by": "{{ .internal.bridged_by }}",
+		},
 	}
 
 	return dfcReadConfig

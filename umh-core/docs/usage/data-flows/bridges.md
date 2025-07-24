@@ -298,7 +298,7 @@ This approach abstracts away Kafka/Redpanda complexity and aligns with UMH Core'
 ## Related Documentation
 
 * [**Stand-alone Flows**](stand-alone-flow.md) - Alternative for custom processing
-* [**Data Modeling**](../data-modeling/) 🚧 - Structure bridge data with models
+* [**Data Modeling**](../data-modeling/) - Structure bridge data with models
 * [**Configuration Reference**](../../reference/configuration-reference.md) - Complete YAML syntax
 * [**State Machines**](../../reference/state-machines.md) - Bridge state management details
 

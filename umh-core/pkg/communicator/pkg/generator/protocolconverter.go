@@ -92,7 +92,7 @@ func buildProtocolConverterAsDfc(
 			UUID: dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID + "-connection").String(), // Derive connection UUID from PC UUID
 			URI:  fmt.Sprintf("%s:%d", observed.ObservedProtocolConverterRuntimeConfig.ConnectionServiceConfig.NmapServiceConfig.Target, observed.ObservedProtocolConverterRuntimeConfig.ConnectionServiceConfig.NmapServiceConfig.Port),
 			Health: &models.Health{
-				Message:       observed.ServiceInfo.StatusReason,
+				Message:       observed.ServiceInfo.ConnectionFSMState,
 				ObservedState: observed.ServiceInfo.ConnectionFSMState,
 				DesiredState:  "up", // Connection desired state is typically "up"
 				Category:      getHealthCategoryFromState(observed.ServiceInfo.ConnectionFSMState),

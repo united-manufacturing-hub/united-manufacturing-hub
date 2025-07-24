@@ -200,7 +200,7 @@ pipeline:
 
 **Data Contract Guidelines:**
 - Use `_raw` for simple sensor data and initial device integration
-- Use explicit contracts (e.g., `_temperature`, `_pump`) with [data models](../usage/data-modeling/README.md) 🚧 for structured enterprise data
+- Use explicit contracts (e.g., `_temperature`, `_pump`) with [data models](../usage/data-modeling/README.md) for structured enterprise data
 - **Migration from UMH Classic:** See [Migration from UMH Classic to UMH Core](../production/migration-from-classic.md) for `_historian` contract migration instructions
 
 For detailed documentation, see [Benthos-UMH Tag Processor](https://docs.umh.app/benthos-umh/processing/tag-processor).
@@ -303,7 +303,7 @@ internal:
 
 - **[Bridges](../usage/data-flows/bridges.md)** - Device connectivity patterns
 - **[Stand-alone Flows](../usage/data-flows/stand-alone-flow.md)** - Custom data processing
-- **[Data Modeling](../usage/data-modeling/README.md)** 🚧 - Structure your industrial data
+- **[Data Modeling](../usage/data-modeling/README.md)** - Structure your industrial data
 - **[State Machines](state-machines.md)** - Component lifecycle management
 
 ## External References

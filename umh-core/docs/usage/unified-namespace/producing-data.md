@@ -109,7 +109,7 @@ For choosing between Bridges and Stand-alone Flows, see the [complete comparison
 ## Next Steps
 
 * [**Consuming Data**](consuming-data.md) 🚧 - Process UNS messages
-* [**Data Modeling**](../data-modeling/) 🚧 - Structure your data with explicit models
+* [**Data Modeling**](../data-modeling/) - Structure your data with explicit models
 * [**Configuration Reference**](../../reference/configuration-reference.md) - Complete YAML syntax
 
 ## Learn More

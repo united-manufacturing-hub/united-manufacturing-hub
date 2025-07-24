@@ -1,6 +1,6 @@
 # Payload Shapes
 
-> 🚧 **Roadmap Item** - Payload shapes define reusable JSON schemas for field values in industrial data models.
+Payload shapes define reusable JSON schemas for field values in industrial data models.
 
 Payload shapes define the JSON schema for field values. They provide reusable templates for common data structures in industrial systems, ensuring consistency across your data models.
 

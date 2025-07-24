@@ -206,7 +206,7 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 	topicBrowserData := &models.TopicBrowser{}
 
 	if s.topicBrowserCommunicator.IsSimulatorEnabled() {
-		topicBrowserData = GenerateTopicBrowserFromCommunicator(s.topicBrowserCommunicator, isBootstrapped, s.logger)
+		topicBrowserData = GenerateTopicBrowserFromCommunicator(s.topicBrowserCommunicator, isBootstrapped, s.logger, nil)
 	} else {
 		inst, ok := fsm.FindInstance(snapshot, constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
 		if !ok {
@@ -214,7 +214,7 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 		} else if inst == nil || inst.LastObservedState == nil {
 			s.logger.Error("Topic browser instance has nil observed state or is nil")
 		} else {
-			topicBrowserData = GenerateTopicBrowserFromCommunicator(s.topicBrowserCommunicator, isBootstrapped, s.logger)
+			topicBrowserData = GenerateTopicBrowserFromCommunicator(s.topicBrowserCommunicator, isBootstrapped, s.logger, inst)
 		}
 	}
 
@@ -260,6 +260,7 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 					"action-delete-protocol-converter",
 					"action-edit-protocol-converter",
 					"protocol-converter-logs",
+					"protocol-converter-metrics",
 				},
 			},
 		},
@@ -270,6 +271,7 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 		statusMessage.Core.Agent.Health,
 		statusMessage.Core.Container.Health,
 		statusMessage.Core.Redpanda.Health,
+		statusMessage.Core.TopicBrowser.Health,
 		statusMessage.Core.Release.Health,
 		dfcData,
 		s.logger,
