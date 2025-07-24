@@ -17,6 +17,7 @@ package streamprocessor
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
@@ -32,6 +33,9 @@ import (
 
 // MockService is a mock implementation of the IStreamProcessorService interface for testing
 type MockService struct {
+	// Mutex to protect concurrent access to shared fields
+	mu sync.RWMutex
+
 	GenerateConfigError    error
 	GetConfigError         error
 	StatusError            error
@@ -189,6 +193,9 @@ func (m *MockService) GetConfig(
 	filesystemService filesystem.Service,
 	spName string,
 ) (streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
 	m.GetConfigCalled = true
 
 	// If error is set, return it
@@ -207,20 +214,32 @@ func (m *MockService) Status(
 	snapshot fsm.SystemSnapshot,
 	spName string,
 ) (ServiceInfo, error) {
+	m.mu.Lock()
 	m.StatusCalled = true
+	statusError := m.StatusError
+	statusResult := m.StatusResult
+	m.mu.Unlock()
 
 	// Check if the component exists in the ExistingComponents map
-	if exists, ok := m.ExistingComponents[spName]; !ok || !exists {
+	m.mu.RLock()
+	exists, ok := m.ExistingComponents[spName]
+	m.mu.RUnlock()
+	
+	if !ok || !exists {
 		return ServiceInfo{}, ErrServiceNotExist
 	}
 
 	// If we have a state already stored, return it
-	if state, exists := m.States[spName]; exists {
-		return *state, m.StatusError
+	m.mu.RLock()
+	state, exists := m.States[spName]
+	m.mu.RUnlock()
+	
+	if exists {
+		return *state, statusError
 	}
 
 	// If no state is stored, return the default mock result
-	return m.StatusResult, m.StatusError
+	return statusResult, statusError
 }
 
 // AddToManager mocks adding a StreamProcessor to the  DFC manager
@@ -230,6 +249,9 @@ func (m *MockService) AddToManager(
 	cfg *dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
 	spName string,
 ) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
 	m.AddToManagerCalled = true
 
 	underlyingName := fmt.Sprintf("streamprocessor-%s", spName)
@@ -271,6 +293,9 @@ func (m *MockService) UpdateInManager(
 	cfg *dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
 	spName string,
 ) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
 	m.UpdateInManagerCalled = true
 
 	underlyingName := fmt.Sprintf("streamprocessor-%s", spName)
@@ -309,6 +334,9 @@ func (m *MockService) RemoveFromManager(
 	filesystemService filesystem.Service,
 	spName string,
 ) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
 	m.RemoveFromManagerCalled = true
 
 	underlyingName := fmt.Sprintf("streamprocessor-%s", spName)
@@ -341,6 +369,9 @@ func (m *MockService) Start(
 	filesystemService filesystem.Service,
 	spName string,
 ) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
 	m.StartCalled = true
 
 	underlyingName := fmt.Sprintf("streamprocessor-%s", spName)
@@ -369,6 +400,9 @@ func (m *MockService) Stop(
 	filesystemService filesystem.Service,
 	spName string,
 ) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
 	m.StopCalled = true
 
 	underlyingName := fmt.Sprintf("streamprocessor-%s", spName)
@@ -397,6 +431,9 @@ func (m *MockService) ForceRemove(
 	filesystemService filesystem.Service,
 	spName string,
 ) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
 	m.ForceRemoveCalled = true
 	return m.ForceRemoveError
 }
@@ -407,6 +444,9 @@ func (m *MockService) ServiceExists(
 	filesystemService filesystem.Service,
 	spname string,
 ) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
 	m.ServiceExistsCalled = true
 	return m.ServiceExistsResult
 }
@@ -417,6 +457,9 @@ func (m *MockService) ReconcileManager(
 	services serviceregistry.Provider,
 	tick uint64,
 ) (error, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
 	m.ReconcileManagerCalled = true
 	return m.ReconcileManagerError, m.ReconcileManagerReconciled
 }
