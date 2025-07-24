@@ -49,6 +49,13 @@ pre-push:
           exit 1
         fi
 
+    - name: staticheck
+      glob: "**/*.go"
+      root: "umh-core"
+      run: |
+        staticcheck -f stylish ./...
+
+
 pre-commit:
   parallel: true
   jobs:
@@ -71,4 +78,3 @@ pre-commit:
         docker run -it --rm -v $(pwd):/github/workspace apache/skywalking-eyes header fix {staged_files}
         git update-index --again
 
-        

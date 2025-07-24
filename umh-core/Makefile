@@ -59,6 +59,7 @@ GINKGO_VERSION = v2.23.4
 NILWAY_VERSION = latest
 GOLANGCI_LINT_VERSION = v2.1.6
 DLV_VERSION = v1.25.0
+STATIC_CHECK_VERSION = 2025.1.1
 
 # Default values for build arguments
 GOLANG_VERSION = 1.24.4
@@ -88,6 +89,7 @@ install:
 	go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
 	go install github.com/evilmartians/lefthook@latest
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+	go install honnef.co/go/tools/cmd/staticcheck@$(STATIC_CHECK_VERSION)
 
 download-docker-binaries:
 	@mkdir -p .docker-cache/s6-overlay .docker-cache/benthos .docker-cache/redpanda
