@@ -55,6 +55,12 @@ pre-push:
       run: |
         staticcheck -f stylish ./...
 
+    - name: field-alignment
+      glob: "**/*.go"
+      root: "umh-core"
+      run: |
+        betteralign -test false ./...
+      
 
 pre-commit:
   parallel: true
