@@ -16,6 +16,7 @@ package actions_test
 
 import (
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -44,6 +45,7 @@ var _ = Describe("EditDataflowComponent", func() {
 		componentUUID   uuid.UUID
 		stateMocker     *actions.StateMocker
 		messages        []*models.UMHMessage
+		mu              sync.Mutex
 	)
 
 	// Setup before each test
@@ -106,7 +108,7 @@ var _ = Describe("EditDataflowComponent", func() {
 
 		action = actions.NewEditDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockManagerSnapshot)
 
-		go actions.ConsumeOutboundMessages(outboundChannel, &messages, true)
+		go actions.ConsumeOutboundMessages(outboundChannel, &messages, &mu, true)
 
 	})
 
@@ -378,7 +380,7 @@ var _ = Describe("EditDataflowComponent", func() {
 							"processors": map[string]interface{}{
 								"proc1": map[string]interface{}{
 									"type": "yaml",
-									"data": "type: mapping\nprocs: [missing: bracket}", // Invalid YAML
+									"data": "type: mapping\nprocs: [missing: bracket", // Invalid YAML - missing closing bracket
 								},
 							},
 						},
@@ -828,7 +830,9 @@ buffer:
 			Expect(metadata).To(BeNil())
 
 			// Verify the failure message content
+			mu.Lock()
 			decodedMessage, err := encoding.DecodeMessageFromUMHInstanceToUser(messages[1].Content)
+			mu.Unlock()
 			Expect(err).NotTo(HaveOccurred())
 
 			// Extract the ActionReplyPayload from the decoded message

@@ -34,10 +34,10 @@ type MockSchemaRegistry struct {
 
 // MockSchemaVersion represents a schema version in the mock registry
 type MockSchemaVersion struct {
-	ID      int    `json:"id"`
-	Version int    `json:"version"`
 	Schema  string `json:"schema"`
 	Subject string `json:"subject"`
+	ID      int    `json:"id"`
+	Version int    `json:"version"`
 }
 
 // NoOpSchemaRegistry is a mock implementation that does nothing

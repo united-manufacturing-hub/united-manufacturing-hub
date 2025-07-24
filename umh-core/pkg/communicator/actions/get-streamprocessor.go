@@ -72,24 +72,24 @@ import (
 // ----------------------------------------------------------------------------
 
 type GetStreamProcessorAction struct {
+	configManager config.ConfigManager // currently unused but kept for symmetry
+
+	// ─── Plumbing ────────────────────────────────────────────────────────────
+	outboundChannel chan *models.UMHMessage
+
+	// ─── Runtime observation ────────────────────────────────────────────────
+	systemSnapshotManager *fsm.SnapshotManager
+
+	// ─── Utilities ──────────────────────────────────────────────────────────
+	actionLogger *zap.SugaredLogger
 
 	// ─── Request metadata ────────────────────────────────────────────────────
 	userEmail    string
 	actionUUID   uuid.UUID
 	instanceUUID uuid.UUID
 
-	// ─── Plumbing ────────────────────────────────────────────────────────────
-	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager // currently unused but kept for symmetry
-
-	// ─── Runtime observation ────────────────────────────────────────────────
-	systemSnapshotManager *fsm.SnapshotManager
-
 	// ─── Parsed request payload ─────────────────────────────────────────────
 	payload models.GetStreamProcessorPayload
-
-	// ─── Utilities ──────────────────────────────────────────────────────────
-	actionLogger *zap.SugaredLogger
 }
 
 // NewGetStreamProcessorAction creates a new GetStreamProcessorAction with the provided parameters.

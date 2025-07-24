@@ -23,10 +23,10 @@ var (
 // RedpandaServiceConfig represents the configuration for a Redpanda service
 // TopicConfig represents the topic-related configuration for Redpanda
 type TopicConfig struct {
-	DefaultTopicRetentionMs          int64  `yaml:"defaultTopicRetentionMs,omitempty"`
-	DefaultTopicRetentionBytes       int64  `yaml:"defaultTopicRetentionBytes,omitempty"`
 	DefaultTopicCompressionAlgorithm string `yaml:"defaultTopicCompressionAlgorithm,omitempty"`
 	DefaultTopicCleanupPolicy        string `yaml:"defaultTopicCleanupPolicy,omitempty"`
+	DefaultTopicRetentionMs          int64  `yaml:"defaultTopicRetentionMs,omitempty"`
+	DefaultTopicRetentionBytes       int64  `yaml:"defaultTopicRetentionBytes,omitempty"`
 	DefaultTopicSegmentMs            int64  `yaml:"defaultTopicSegmentMs,omitempty"`
 }
 
@@ -38,10 +38,10 @@ type ResourcesConfig struct {
 
 // RedpandaServiceConfig represents the configuration for a Redpanda service
 type RedpandaServiceConfig struct {
+	BaseDir string `yaml:"baseDir,omitempty"`
 	// Redpanda-specific configuration
 	Topic     TopicConfig     `yaml:"topic,omitempty"`
 	Resources ResourcesConfig `yaml:"resources,omitempty"`
-	BaseDir   string          `yaml:"baseDir,omitempty"`
 }
 
 // Equal checks if two RedpandaServiceConfigs are equal

@@ -31,14 +31,14 @@ import (
 // EditInstanceAction implements the Action interface for editing instance properties.
 // Currently, it supports updating the location hierarchy (enterprise, site, area, line, workCell).
 type EditInstanceAction struct {
+	configManager         config.ConfigManager
+	outboundChannel       chan *models.UMHMessage
+	location              *models.EditInstanceLocationModel
+	actionLogger          *zap.SugaredLogger
+	systemSnapshotManager *fsm.SnapshotManager
 	userEmail             string
 	actionUUID            uuid.UUID
 	instanceUUID          uuid.UUID
-	outboundChannel       chan *models.UMHMessage
-	location              *models.EditInstanceLocationModel
-	configManager         config.ConfigManager
-	actionLogger          *zap.SugaredLogger
-	systemSnapshotManager *fsm.SnapshotManager
 }
 
 // NewEditInstanceAction creates a new EditInstanceAction with the provided parameters.

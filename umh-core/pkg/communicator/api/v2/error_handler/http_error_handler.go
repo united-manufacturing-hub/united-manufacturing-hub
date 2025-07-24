@@ -46,15 +46,15 @@ HTTPErrorHandler Design Philosophy:
 
 // HTTPErrorContext contains all relevant information about an HTTP error
 type HTTPErrorContext struct {
-	Method      string
-	Endpoint    string
-	StatusCode  int
+	Timestamp   time.Time
 	Error       error
 	RequestBody interface{}
-	Response    []byte
-	Timestamp   time.Time
 	Headers     map[string][]string // Response headers
-	Duration    time.Duration       // Request duration
+	Method      string
+	Endpoint    string
+	Response    []byte
+	StatusCode  int
+	Duration    time.Duration // Request duration
 }
 
 // transientErrorCodes defines HTTP status codes that typically indicate temporary issues.

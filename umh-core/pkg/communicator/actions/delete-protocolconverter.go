@@ -56,23 +56,24 @@ import (
 // the respective method to avoid lock contention and race conditions.
 // ----------------------------------------------------------------------------
 type DeleteProtocolConverterAction struct {
+	configManager config.ConfigManager // abstraction over config store
+
+	// ─── Plumbing ────────────────────────────────────────────────────────────
+	outboundChannel chan *models.UMHMessage // channel for progress events
+
+	// ─── Runtime observation ────────────────────────────────────────────────
+	systemSnapshotManager *fsm.SnapshotManager
+
+	// ─── Utilities ──────────────────────────────────────────────────────────
+	actionLogger *zap.SugaredLogger
 	// ─── Request metadata ────────────────────────────────────────────────────
 	userEmail    string    // used for feedback messages
 	actionUUID   uuid.UUID // unique ID of *this* action instance
 	instanceUUID uuid.UUID // ID of the UMH instance we operate on
 
-	// ─── Plumbing ────────────────────────────────────────────────────────────
-	outboundChannel chan *models.UMHMessage // channel for progress events
-	configManager   config.ConfigManager    // abstraction over config store
-
-	// ─── Runtime observation ────────────────────────────────────────────────
-	systemSnapshotManager *fsm.SnapshotManager
-
 	// ─── Business data ──────────────────────────────────────────────────────
 	componentUUID uuid.UUID // the component slated for deletion
 
-	// ─── Utilities ──────────────────────────────────────────────────────────
-	actionLogger *zap.SugaredLogger
 }
 
 // NewDeleteProtocolConverterAction returns an *empty* action instance prepared

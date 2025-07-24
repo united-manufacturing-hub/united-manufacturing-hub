@@ -83,7 +83,10 @@ func (h HealthStatus) String() string {
 
 // ServiceInfo contains information about an S6 service
 type ServiceInfo struct {
+	LastChangedAt time.Time     // Timestamp when the service status last changed
+	LastReadyAt   time.Time     // Timestamp when the service was last ready
 	Status        ServiceStatus // Current status of the service
+	ExitHistory   []ExitEvent   // History of exit codes
 	Uptime        int64         // Seconds the service has been up
 	DownTime      int64         // Seconds the service has been down
 	ReadyTime     int64         // Seconds the service has been ready
@@ -95,9 +98,6 @@ type ServiceInfo struct {
 	IsFinishing   bool          // Whether the service is shutting down
 	IsWantingUp   bool          // Whether the service wants to be up (based on flags)
 	IsReady       bool          // Whether the service is ready
-	ExitHistory   []ExitEvent   // History of exit codes
-	LastChangedAt time.Time     // Timestamp when the service status last changed
-	LastReadyAt   time.Time     // Timestamp when the service was last ready
 }
 
 // ExitEvent represents a service exit event
@@ -171,20 +171,21 @@ type Service interface {
 //
 //	how to linearise the ring when we copy it out.
 type logState struct {
-	// mu guards every field in the struct (single-writer, multi-reader)
-	mu sync.Mutex
+
+	// logs is the backing array that holds *at most* S6MaxLines entries.
+	// Allocated once; after that, entries are overwritten in place.
+	logs []LogEntry
 	// inode is the inode of the file when we last touched it; changes ⇒ rotation
 	inode uint64
 	// offset is the next byte to read on disk (monotonically increases until
 	// rotation or truncation)
 	offset int64
 
-	// logs is the backing array that holds *at most* S6MaxLines entries.
-	// Allocated once; after that, entries are overwritten in place.
-	logs []LogEntry
 	// head is the index of the slot where the **next** entry will be written.
 	// When head wraps from max-1 to 0, `full` is set to true.
 	head int
+	// mu guards every field in the struct (single-writer, multi-reader)
+	mu sync.Mutex
 	// full is true once the buffer has wrapped at least once; used to decide
 	// how to linearise the ring when we copy it out.
 	full bool
@@ -193,11 +194,11 @@ type logState struct {
 // DefaultService is the default implementation of the S6 Service interface
 type DefaultService struct {
 	logger     *zap.SugaredLogger
-	logCursors sync.Map // map[string]*logState (key = abs log path)
+	artifacts  *ServiceArtifacts // cached artifacts for the service
+	logCursors sync.Map          // map[string]*logState (key = abs log path)
 
 	// Lifecycle management with concurrency protection
-	mu        sync.Mutex        // serializes all state-changing calls
-	artifacts *ServiceArtifacts // cached artifacts for the service
+	mu sync.Mutex // serializes all state-changing calls
 }
 
 // NewDefaultService creates a new default S6 service

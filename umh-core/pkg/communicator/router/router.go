@@ -33,17 +33,17 @@ import (
 
 type Router struct {
 	dog                   watchdog.Iface
+	configManager         config.ConfigManager
 	inboundChannel        chan *models.UMHMessage
 	outboundChannel       chan *models.UMHMessage
-	instanceUUID          uuid.UUID
-	releaseChannel        config.ReleaseChannel
 	clientConnections     map[string]*ClientConnection
-	clientConnectionsLock sync.RWMutex
 	subHandler            *subscriber.Handler
 	systemSnapshotManager *fsm.SnapshotManager
-	configManager         config.ConfigManager
 	actionLogger          *zap.SugaredLogger
 	routerLogger          *zap.SugaredLogger
+	releaseChannel        config.ReleaseChannel
+	clientConnectionsLock sync.RWMutex
+	instanceUUID          uuid.UUID
 }
 
 type ClientConnection struct {

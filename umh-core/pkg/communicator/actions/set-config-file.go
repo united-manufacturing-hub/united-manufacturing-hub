@@ -32,23 +32,24 @@ import (
 )
 
 type SetConfigFileAction struct {
-	// ─── Request metadata ────────────────────────────────────────────────────
-	userEmail    string
-	actionUUID   uuid.UUID
-	instanceUUID uuid.UUID
+	configManager config.ConfigManager
 
 	// ─── Plumbing ────────────────────────────────────────────────────────────
 	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager
 
 	// ─── Runtime observation ────────────────────────────────────────────────
 	systemSnapshotManager *fsm.SnapshotManager
 
+	// ─── Utilities ──────────────────────────────────────────────────────────
+	actionLogger *zap.SugaredLogger
+
 	// ─── Request payload ───────────────────────────────────────────────────
 	payload models.SetConfigFilePayload
 
-	// ─── Utilities ──────────────────────────────────────────────────────────
-	actionLogger *zap.SugaredLogger
+	// ─── Request metadata ────────────────────────────────────────────────────
+	userEmail    string
+	actionUUID   uuid.UUID
+	instanceUUID uuid.UUID
 }
 
 // NewSetConfigFileAction creates a new SetConfigFileAction with the provided parameters.

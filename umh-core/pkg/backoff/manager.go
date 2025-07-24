@@ -46,8 +46,6 @@ func (t *TickClock) Now() time.Time {
 
 // BackoffManager handles error backoff with exponential retries and permanent failure detection
 type BackoffManager struct {
-	// Mutex for thread safety
-	mu sync.RWMutex
 
 	// The last error that occurred
 	lastError error
@@ -55,19 +53,25 @@ type BackoffManager struct {
 	// The backoff policy
 	backoff backoff.BackOff
 
+	// Logger
+	logger *zap.SugaredLogger
+
 	// Tick-based backoff properties
 	suspendedUntilTick uint64
 	ticksToWait        uint64
 
+	// Mutex for thread safety
+	mu sync.RWMutex
+
 	// Flag indicating permanent failure state (max retries exceeded)
 	permanentFailure bool
-
-	// Logger
-	logger *zap.SugaredLogger
 }
 
 // Config holds configuration for creating a new BackoffManager
 type Config struct {
+
+	// Logger
+	Logger *zap.SugaredLogger
 	// Initial backoff interval in ticks
 	InitialInterval uint64
 
@@ -76,9 +80,6 @@ type Config struct {
 
 	// Maximum number of retries before permanent failure
 	MaxRetries uint64
-
-	// Logger
-	Logger *zap.SugaredLogger
 }
 
 // DefaultConfig returns a Config with sensible defaults

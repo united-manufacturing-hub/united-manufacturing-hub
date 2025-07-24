@@ -144,29 +144,29 @@ type IConnectionService interface {
 // It uses separate boolean flags for different health aspects instead of
 // a single status value, making it easier to check specific conditions.
 type ServiceInfo struct {
-	// NmapObservedState contains information about the Nmap service
-	NmapObservedState nmapfsm.NmapObservedState
 	// NmapFSMState contains the current state of the Nmap FSM
 	NmapFSMState string
-	// IsFlaky indicates intermittent connectivity based on recent scan history.
-	// A connection is considered flaky if it alternates between open/closed states
-	// within the recent history window (default: last 60 scans).
-	IsFlaky bool
+	// NmapObservedState contains information about the Nmap service
+	NmapObservedState nmapfsm.NmapObservedState
 	// LastChange stores the tick when the status last changed.
 	// This timestamp uses the FSM tick counter rather than wall clock time
 	// to ensure consistency with the FSM reconciliation system.
 	LastChange uint64
+	// IsFlaky indicates intermittent connectivity based on recent scan history.
+	// A connection is considered flaky if it alternates between open/closed states
+	// within the recent history window (default: last 60 scans).
+	IsFlaky bool
 }
 
 // ConnectionService implements IConnectionService using Nmap as the underlying
 // connectivity probe mechanism. It maintains a history of recent states to detect
 // flaky connections and provides a higher-level abstraction over raw Nmap results.
 type ConnectionService struct {
+	nmapService      nmap.INmapService
 	logger           *zap.SugaredLogger
 	nmapManager      *nmapfsm.NmapManager
-	nmapService      nmap.INmapService
-	nmapConfigs      []config.NmapConfig
 	recentNmapStates map[string][]string
+	nmapConfigs      []config.NmapConfig
 }
 
 // ConnectionServiceOption is a function that configures a ConnectionService.

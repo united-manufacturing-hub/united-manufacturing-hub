@@ -90,18 +90,19 @@ type IStreamProcessorService interface {
 
 // ServiceInfo holds information about the StreamProcessor underlying health states.
 type ServiceInfo struct {
-	// DFCObservedState mirrors the DFC manager.
-	DFCObservedState dfcfsm.DataflowComponentObservedState
-	DFCFSMState      string
+	DFCFSMState string
 
-	// RedpandaObservedState is included so a stream processor can degrade
-	// itself when the message bus is down.
-	RedpandaObservedState redpandafsm.RedpandaObservedState
-	RedpandaFSMState      string
+	RedpandaFSMState string
 
 	// StatusReason is a short human string (log excerpt, metrics finding, …)
 	// explaining *why* the converter is not "green".
 	StatusReason string
+
+	// RedpandaObservedState is included so a stream processor can degrade
+	// itself when the message bus is down.
+	RedpandaObservedState redpandafsm.RedpandaObservedState
+	// DFCObservedState mirrors the DFC manager.
+	DFCObservedState dfcfsm.DataflowComponentObservedState
 }
 
 // Service implements IStreamProcessorService using it's underlying components

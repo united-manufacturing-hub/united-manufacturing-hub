@@ -43,17 +43,18 @@ import (
 // DeleteDataModelAction implements the Action interface for deleting an existing Data Model.
 // All fields are immutable after construction to avoid race conditions.
 type DeleteDataModelAction struct {
-	userEmail    string
-	actionUUID   uuid.UUID
-	instanceUUID uuid.UUID
+	configManager config.ConfigManager
 
 	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager
+
+	actionLogger *zap.SugaredLogger
+	userEmail    string
 
 	// Parsed request payload (only populated after Parse)
 	payload models.DeleteDataModelPayload
 
-	actionLogger *zap.SugaredLogger
+	actionUUID   uuid.UUID
+	instanceUUID uuid.UUID
 }
 
 // NewDeleteDataModelAction returns an un-parsed action instance.

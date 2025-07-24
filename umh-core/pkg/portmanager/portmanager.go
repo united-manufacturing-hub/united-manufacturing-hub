@@ -52,14 +52,15 @@ type PortManager interface {
 // DefaultPortManager is a thread-safe implementation of PortManager
 // that keeps track of ports in a simple in-memory store
 type DefaultPortManager struct {
-	// mutex to protect concurrent access to maps
-	mutex sync.RWMutex
 
 	// instanceToPorts maps instance names to their allocated ports
 	instanceToPorts map[string]uint16
 
 	// portToInstances maps ports to instance names
 	portToInstances map[uint16]string
+
+	// mutex to protect concurrent access to maps
+	mutex sync.RWMutex
 
 	// configuration
 	minPort  uint16

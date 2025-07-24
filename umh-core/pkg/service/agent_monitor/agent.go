@@ -44,8 +44,12 @@ type IAgentMonitorService interface {
 // ServiceInfo contains both raw metrics and health assessments
 type ServiceInfo struct {
 	// General: Location, Latency, Agent Logs, Agent Metrics
-	Location map[int]string  `json:"location"`
-	Latency  *models.Latency `json:"latency"`
+	Location     map[int]string         `json:"location"`
+	Latency      *models.Latency        `json:"latency"`
+	AgentMetrics map[string]interface{} `json:"agentMetrics,omitempty"`
+	// Release: Channel, Version, Supported Feature
+	Release *models.Release `json:"release"`
+
 	// AgentLogs contains the structured s6 log entries emitted by the
 	// agent service.
 	//
@@ -63,10 +67,7 @@ type ServiceInfo struct {
 	//
 	// Therefore we override the default behaviour and copy only the 3-word
 	// slice header (24 B on amd64) — see CopyAgentLogs below.
-	AgentLogs    []s6.LogEntry          `json:"agentLogs"`
-	AgentMetrics map[string]interface{} `json:"agentMetrics,omitempty"`
-	// Release: Channel, Version, Supported Feature
-	Release *models.Release `json:"release"`
+	AgentLogs []s6.LogEntry `json:"agentLogs"`
 
 	// Health: Overall, Latency, Release
 	OverallHealth models.HealthCategory `json:"overallHealth"`
@@ -101,11 +102,11 @@ func (si *ServiceInfo) CopyAgentLogs(src []s6.LogEntry) error {
 
 // AgentMonitorService implements the Service interface
 type AgentMonitorService struct {
+	lastCollectedAt time.Time
 	fs              filesystem.Service
 	s6Service       s6.Service
 	logger          *zap.SugaredLogger
 	instanceName    string
-	lastCollectedAt time.Time
 }
 
 // NewAgentMonitorService creates a new agent monitor service instance

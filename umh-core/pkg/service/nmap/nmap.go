@@ -40,11 +40,11 @@ import (
 
 // NmapService is the implementation of the INmapService interface
 type NmapService struct {
+	s6Service        s6service.Service
 	logger           *zap.SugaredLogger
 	s6Manager        *s6fsm.S6Manager
-	s6Service        s6service.Service
-	s6ServiceConfigs []config.S6FSMConfig
 	lastScanResult   *NmapScanResult // Cache for scan results
+	s6ServiceConfigs []config.S6FSMConfig
 }
 
 // NmapServiceOption is a function that modifies a NmapService

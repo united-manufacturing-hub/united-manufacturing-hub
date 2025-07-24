@@ -30,6 +30,35 @@ import (
 
 // MockDataFlowComponentService is a mock implementation of the IDataFlowComponentService interface for testing
 type MockDataFlowComponentService struct {
+	GenerateBenthosConfigForDataFlowComponentError error
+	GetConfigError                                 error
+	StatusError                                    error
+	AddDataFlowComponentToBenthosManagerError      error
+	UpdateDataFlowComponentInBenthosManagerError   error
+	RemoveDataFlowComponentFromBenthosManagerError error
+	StartDataFlowComponentError                    error
+	StopDataFlowComponentError                     error
+	ForceRemoveDataFlowComponentError              error
+	ReconcileManagerError                          error
+
+	// Benthos service mock
+	BenthosService benthosservice.IBenthosService
+
+	// For more complex testing scenarios
+	ComponentStates    map[string]*ServiceInfo
+	ExistingComponents map[string]bool
+
+	// State control for FSM testing
+	stateFlags map[string]*ComponentStateFlags
+
+	GetConfigResult dataflowcomponentserviceconfig.DataflowComponentServiceConfig
+	BenthosConfigs  []config.BenthosConfig
+
+	// Return values for each method
+	GenerateBenthosConfigForDataFlowComponentResult benthosserviceconfig.BenthosServiceConfig
+
+	StatusResult ServiceInfo
+
 	// Tracks calls to methods
 	GenerateBenthosConfigForDataFlowComponentCalled bool
 	GetConfigCalled                                 bool
@@ -43,33 +72,8 @@ type MockDataFlowComponentService struct {
 	ServiceExistsCalled                             bool
 	ReconcileManagerCalled                          bool
 
-	// Return values for each method
-	GenerateBenthosConfigForDataFlowComponentResult benthosserviceconfig.BenthosServiceConfig
-	GenerateBenthosConfigForDataFlowComponentError  error
-	GetConfigResult                                 dataflowcomponentserviceconfig.DataflowComponentServiceConfig
-	GetConfigError                                  error
-	StatusResult                                    ServiceInfo
-	StatusError                                     error
-	AddDataFlowComponentToBenthosManagerError       error
-	UpdateDataFlowComponentInBenthosManagerError    error
-	RemoveDataFlowComponentFromBenthosManagerError  error
-	StartDataFlowComponentError                     error
-	StopDataFlowComponentError                      error
-	ForceRemoveDataFlowComponentError               error
-	ServiceExistsResult                             bool
-	ReconcileManagerError                           error
-	ReconcileManagerReconciled                      bool
-
-	// For more complex testing scenarios
-	ComponentStates    map[string]*ServiceInfo
-	ExistingComponents map[string]bool
-	BenthosConfigs     []config.BenthosConfig
-
-	// State control for FSM testing
-	stateFlags map[string]*ComponentStateFlags
-
-	// Benthos service mock
-	BenthosService benthosservice.IBenthosService
+	ServiceExistsResult        bool
+	ReconcileManagerReconciled bool
 }
 
 // Ensure MockDataFlowComponentService implements IDataFlowComponentService
@@ -77,8 +81,8 @@ var _ IDataFlowComponentService = (*MockDataFlowComponentService)(nil)
 
 // ComponentStateFlags contains all the state flags needed for FSM testing
 type ComponentStateFlags struct {
-	IsBenthosRunning                 bool
 	BenthosFSMState                  string
+	IsBenthosRunning                 bool
 	IsBenthosProcessingMetricsActive bool
 }
 

@@ -35,26 +35,26 @@ import (
 )
 
 type CommunicationState struct {
+	ConfigManager         config.ConfigManager
 	LoginResponse         *v2.LoginResponse
 	LoginResponseMu       *sync.RWMutex
 	mu                    *sync.RWMutex
 	Watchdog              *watchdog.Watchdog
 	InboundChannel        chan *models.UMHMessage
-	InsecureTLS           bool
 	Puller                *pull.Puller
 	Pusher                *push.Pusher
 	SubscriberHandler     *subscriber.Handler
 	OutboundChannel       chan *models.UMHMessage
 	Router                *router.Router
-	ReleaseChannel        config.ReleaseChannel
 	SystemSnapshotManager *fsm.SnapshotManager
-	ConfigManager         config.ConfigManager
-	ApiUrl                string
 	Logger                *zap.SugaredLogger
 	TopicBrowserCache     *topicbrowser.Cache
 	// TopicBrowserSimulator is used to access the simulated topic browser state if the agent is running in simulator mode
 	// it is accessed by the generator to generate the topic browser part of the status message
 	TopicBrowserSimulator *topicbrowser.Simulator
+	ReleaseChannel        config.ReleaseChannel
+	ApiUrl                string
+	InsecureTLS           bool
 	// TopicBrowserSimulatorEnabled tracks whether simulator mode is enabled
 	TopicBrowserSimulatorEnabled bool
 }

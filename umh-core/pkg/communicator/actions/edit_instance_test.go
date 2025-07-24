@@ -202,7 +202,7 @@ var _ = Describe("EditInstance", func() {
 			Expect(messages).To(HaveLen(2))
 
 			// Verify that GetConfig wasn't called
-			Expect(mockConfig.GetConfigCalled).To(BeFalse())
+			Expect(mockConfig.IsGetConfigCalled()).To(BeFalse())
 		})
 
 		It("should update location successfully", func() {
@@ -239,7 +239,7 @@ var _ = Describe("EditInstance", func() {
 			Expect(messages).To(HaveLen(2))
 
 			// Verify GetConfig was called
-			Expect(mockConfig.GetConfigCalled).To(BeTrue())
+			Expect(mockConfig.IsGetConfigCalled()).To(BeTrue())
 
 			// Check that config was updated correctly
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

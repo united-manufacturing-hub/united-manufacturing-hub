@@ -40,15 +40,15 @@ type ServiceInfo struct {
 	Memory *models.Memory // Keep existing Memory metrics
 	Disk   *models.Disk   // Keep existing Disk metrics
 
+	// Existing fields
+	Hwid         string
+	Architecture models.ContainerArchitecture
+
 	// Health assessments using existing models.HealthCategory
 	OverallHealth models.HealthCategory
 	CPUHealth     models.HealthCategory
 	MemoryHealth  models.HealthCategory
 	DiskHealth    models.HealthCategory
-
-	// Existing fields
-	Hwid         string
-	Architecture models.ContainerArchitecture
 }
 
 // Service defines the interface for container monitoring
@@ -64,7 +64,7 @@ type ContainerMonitorService struct {
 	instanceName    string
 	lastCollectedAt time.Time
 	hwid            string
-	architecture    models.ContainerArchitecture // nolint:unused // will be used in the future
+	architecture    models.ContainerArchitecture //nolint:unused // will be used in the future
 	dataPath        string                       // Path to check for disk metrics and HWID file
 }
 

@@ -50,22 +50,22 @@ import (
 // DeleteStreamProcessorAction implements the Action interface for deleting
 // stream processor configurations.
 type DeleteStreamProcessorAction struct {
-	userEmail    string
-	actionUUID   uuid.UUID
-	instanceUUID uuid.UUID
+	configManager config.ConfigManager
 
 	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager
-
-	// Parsed request payload (only populated after Parse)
-	streamProcessorUUID uuid.UUID
-	name                string
-	ignoreHealthCheck   bool
 
 	// Runtime observation for health checks
 	systemSnapshotManager *fsm.SnapshotManager
 
 	actionLogger *zap.SugaredLogger
+	userEmail    string
+	name         string
+	actionUUID   uuid.UUID
+	instanceUUID uuid.UUID
+
+	// Parsed request payload (only populated after Parse)
+	streamProcessorUUID uuid.UUID
+	ignoreHealthCheck   bool
 }
 
 // NewDeleteStreamProcessorAction returns an un-parsed action instance.

@@ -63,8 +63,8 @@ type ITopicBrowserService interface {
 }
 
 type Status struct {
-	BufferSnapshot RingBufferSnapshot // structured ring buffer snapshot with sequence tracking
 	Logs           []s6svc.LogEntry   // contain the structured s6 logs entries
+	BufferSnapshot RingBufferSnapshot // structured ring buffer snapshot with sequence tracking
 }
 
 // CopyLogs is a go-deepcopy override for the Logs field.
@@ -103,21 +103,24 @@ func (st *Status) CopyBufferSnapshot(src RingBufferSnapshot) error {
 }
 
 type ServiceInfo struct {
-	// benthos state information
-	BenthosObservedState benthosfsm.BenthosObservedState
-	BenthosFSMState      string
+	BenthosFSMState string
 
-	// redpanda state information
-	RedpandaObservedState rpfsm.RedpandaObservedState
-	RedpandaFSMState      string
+	RedpandaFSMState string
+
+	StatusReason string
 
 	// topic browser status
 	Status Status
+
+	// redpanda state information
+	RedpandaObservedState rpfsm.RedpandaObservedState
+	// benthos state information
+	BenthosObservedState benthosfsm.BenthosObservedState
+
 	// processing activities
 	BenthosProcessing  bool // is benthos active
 	RedpandaProcessing bool // is redpanda active
 	InvalidMetrics     bool // if there is invalid metrics e.g. redpanda has no output but benthos has input
-	StatusReason       string
 }
 
 // CopyStatus is a go-deepcopy override for the Status field.
@@ -138,18 +141,19 @@ func (si *ServiceInfo) CopyStatus(src Status) error {
 
 // Service implements ITopicBrowserService
 type Service struct {
-	logger *zap.SugaredLogger
-
-	benthosManager *benthosfsm.BenthosManager
-	benthosService benthossvc.IBenthosService
-	benthosConfigs []config.BenthosConfig
-
-	tbName     string // normally a service can handle multiple instances, the service monitor here is different and can only handle one instance
-	ringbuffer *Ringbuffer
 
 	// Block processing tracking
 	lastProcessedTimestamp time.Time
-	processingMutex        sync.RWMutex
+	benthosService         benthossvc.IBenthosService
+	logger                 *zap.SugaredLogger
+
+	benthosManager *benthosfsm.BenthosManager
+	ringbuffer     *Ringbuffer
+
+	tbName         string // normally a service can handle multiple instances, the service monitor here is different and can only handle one instance
+	benthosConfigs []config.BenthosConfig
+
+	processingMutex sync.RWMutex
 }
 
 // ServiceOption is a function that configures a Service.

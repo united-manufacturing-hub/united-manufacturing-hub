@@ -48,9 +48,9 @@ import (
 
 // Metrics contains information about the metrics of the Benthos service
 type Metrics struct {
-	Input   InputMetrics   `json:"input,omitempty"`
-	Output  OutputMetrics  `json:"output,omitempty"`
 	Process ProcessMetrics `json:"process,omitempty"`
+	Output  OutputMetrics  `json:"output,omitempty"`
+	Input   InputMetrics   `json:"input,omitempty"`
 }
 
 // InputMetrics contains input-specific metrics
@@ -101,16 +101,16 @@ type Latency struct {
 // HealthCheck contains information about the health of the Benthos service
 // https://docs.redpanda.com/redpanda-connect/guides/monitoring/
 type HealthCheck struct {
-	// IsLive is true if the Benthos service is live
-	IsLive bool
-	// IsReady is true if the Benthos service is ready to process data
-	IsReady bool
 	// Version contains the version of the Benthos service
 	Version string
 	// ReadyError contains any error message from the ready check
 	ReadyError string `json:"ready_error,omitempty"`
 	// ConnectionStatuses contains the detailed connection status of inputs and outputs
 	ConnectionStatuses []connStatus `json:"connection_statuses,omitempty"`
+	// IsLive is true if the Benthos service is live
+	IsLive bool
+	// IsReady is true if the Benthos service is ready to process data
+	IsReady bool
 }
 
 // versionResponse represents the JSON structure returned by the /version endpoint
@@ -128,44 +128,42 @@ type readyResponse struct {
 type connStatus struct {
 	Label     string `json:"label"`
 	Path      string `json:"path"`
-	Connected bool   `json:"connected"`
 	Error     string `json:"error,omitempty"`
+	Connected bool   `json:"connected"`
 }
 
 // BenthosMetrics contains information about the metrics of the Benthos service
 type BenthosMetrics struct {
-	// Metrics contains the metrics of the Benthos service
-	Metrics Metrics
 	// MetricsState contains the state of the metrics
 	MetricsState *BenthosMetricsState
+	// Metrics contains the metrics of the Benthos service
+	Metrics Metrics
 }
 
 // ServiceInfo contains information about a benthos service
 type ServiceInfo struct {
-	// S6ObservedState contains information about the S6 benthos_monitor service
-	S6ObservedState s6fsm.S6ObservedState
 	// S6FSMState contains the current state of the S6 FSM of the benthos_monitorservice
 	S6FSMState string
 	// BenthosStatus contains information about the status of the benthos service
 	BenthosStatus BenthosMonitorStatus
+	// S6ObservedState contains information about the S6 benthos_monitor service
+	S6ObservedState s6fsm.S6ObservedState
 }
 
 // BenthosMonitorStatus contains information about the status of the Benthos service
 type BenthosMetricsScan struct {
-	// HealthCheck contains information about the health of the Benthos service
-	HealthCheck HealthCheck
-	// Metrics contains information about the metrics of the Benthos service
-	BenthosMetrics *BenthosMetrics
 	// LastUpdatedAt contains the last time the metrics were updated
 	LastUpdatedAt time.Time
+	// Metrics contains information about the metrics of the Benthos service
+	BenthosMetrics *BenthosMetrics
+	// HealthCheck contains information about the health of the Benthos service
+	HealthCheck HealthCheck
 }
 
 type BenthosMonitorStatus struct {
 	// LastScan contains the result of the last scan
 	// If this is nil, we never had a successfull scan
 	LastScan *BenthosMetricsScan
-	// IsRunning indicates whether the benthos_monitor service is running
-	IsRunning bool
 	// Logs contains the structured s6 log entries emitted by the
 	// benthos_monitor service.
 	//
@@ -184,6 +182,8 @@ type BenthosMonitorStatus struct {
 	// Therefore we override the default behaviour and copy only the 3-word
 	// slice header (24 B on amd64) — see CopyLogs below.
 	Logs []s6service.LogEntry
+	// IsRunning indicates whether the benthos_monitor service is running
+	IsRunning bool
 }
 
 // CopyLogs is a go-deepcopy override for the Logs field.

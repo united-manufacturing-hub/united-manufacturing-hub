@@ -21,8 +21,8 @@ import (
 
 type DeployCustomDataFlowComponentPayload struct {
 	Name              string                         `json:"name" binding:"required"`
-	Payload           DeployDataFlowComponentPayload `json:"payload" binding:"required"`
 	Meta              CdcfMeta                       `json:"meta"`
+	Payload           DeployDataFlowComponentPayload `json:"payload" binding:"required"`
 	IgnoreHealthCheck bool                           `json:"ignoreHealthCheck"`
 }
 
@@ -31,12 +31,12 @@ type DeployDataFlowComponentPayload struct {
 }
 
 type CDFCPayload struct {
+	Pipeline        map[string]DfcDataConfig `json:"pipeline"`
 	Inputs          DfcDataConfig            `json:"inputs"`
 	Outputs         DfcDataConfig            `json:"outputs"`
-	Pipeline        map[string]DfcDataConfig `json:"pipeline"`
 	Inject          string                   `json:"inject"`
-	IgnoreErrors    bool                     `json:"ignoreErrors"`
 	BenthosImageTag string                   `json:"benthosImageTag"`
+	IgnoreErrors    bool                     `json:"ignoreErrors"`
 }
 
 type DfcDataConfig struct {
@@ -50,11 +50,11 @@ type CdcfMeta struct {
 
 // EditInstanceLocation holds the location information for the instance
 type EditInstanceLocationModel struct {
-	Enterprise string  `json:"enterprise"`
 	Site       *string `json:"site,omitempty"`
 	Area       *string `json:"area,omitempty"`
 	Line       *string `json:"line,omitempty"`
 	WorkCell   *string `json:"workCell,omitempty"`
+	Enterprise string  `json:"enterprise"`
 }
 
 type MessageMetadata struct {
@@ -77,10 +77,10 @@ const (
 // UMHInstance contains the UUID of the UMH instance.
 // Email identifies the user.
 type UMHMessage struct {
+	Metadata     *MessageMetadata `json:"metadata"`
 	Email        string           `json:"email"`
 	Content      string           `json:"content"`
 	InstanceUUID uuid.UUID        `json:"umhInstance"`
-	Metadata     *MessageMetadata `json:"metadata"`
 }
 
 // Define MessageType as a custom type for better type safety
@@ -232,20 +232,20 @@ const (
 // EditMqttBrokerPayload contains the necessary fields for setting the MQTT broker details.
 type EditMqttBrokerPayload struct {
 	IP          string    `json:"ip" binding:"required"`
-	Port        uint32    `json:"port" binding:"required"`
 	Username    string    `json:"username" binding:"required"`
 	Password    string    `json:"password" binding:"required"`
 	LastUpdated uint64    `json:"lastUpdated"`
+	Port        uint32    `json:"port" binding:"required"`
 	UUID        uuid.UUID `json:"uuid" binding:"required"`
 }
 
 // EditInstanceLocationAction contains the necessary fields for setting the location of the UMH instance.
 type EditInstanceLocationAction struct {
-	Enterprise string  `json:"enterprise" binding:"required"`
 	Site       *string `json:"site"`
 	Area       *string `json:"area"`
 	Line       *string `json:"line"`
 	WorkCell   *string `json:"workCell"`
+	Enterprise string  `json:"enterprise" binding:"required"`
 }
 
 // GetProtocolConverterPayload contains the necessary fields for getting a protocol converter.
@@ -255,13 +255,13 @@ type GetProtocolConverterPayload struct {
 
 // DeployConnectionPayload contains the necessary fields for executing a DeployConnection action.
 type DeployConnectionPayload struct {
+	Location *ConnectionLocation      `json:"location"`
 	Name     string                   `json:"name" binding:"required"`
 	IP       string                   `json:"ip" binding:"required"`
 	Type     DatasourceConnectionType `json:"datasource" binding:"required"`
 	Notes    string                   `json:"notes"`
 	Port     uint32                   `json:"port" binding:"required"`
 	Uuid     uuid.UUID                `json:"uuid" binding:"required"`
-	Location *ConnectionLocation      `json:"location"`
 }
 
 type GetConfigurationPayload struct {
@@ -270,8 +270,8 @@ type GetConfigurationPayload struct {
 }
 
 type UpdateConfigurationPayload struct {
-	ConfigType string                 `json:"configType" binding:"required"`
 	Config     map[string]interface{} `json:"config" binding:"required"`
+	ConfigType string                 `json:"configType" binding:"required"`
 }
 
 type ConnectionLocation struct {
@@ -289,8 +289,8 @@ type EditConnectionPayload struct {
 	Type     *DatasourceConnectionType `json:"datasource,omitempty"`
 	Notes    *string                   `json:"notes,omitempty"`
 	Port     *uint32                   `json:"port,omitempty"`
-	Uuid     uuid.UUID                 `json:"uuid" binding:"required"`
 	Location *ConnectionLocation       `json:"location,omitempty"`
+	Uuid     uuid.UUID                 `json:"uuid" binding:"required"`
 }
 
 // DeleteConnectionPayload only contains the UUID to identify the connection to delete.
@@ -332,17 +332,17 @@ type UpgradeCompanionPayload struct {
 }
 
 type DeployProtocolConverterPayload struct {
-	Type           Protocol          `json:"type" binding:"required"`
-	Name           string            `json:"name" binding:"required"`
-	ConnectionUUID uuid.UUID         `json:"connectionUUID" binding:"required"`
-	UUID           uuid.UUID         `json:"uuid" binding:"required"`
-	IgnoreErrors   bool              `json:"ignoreErrors,omitempty"`
-	Metadata       map[string]string `json:"metadata,omitempty"`
+	Metadata map[string]string `json:"metadata,omitempty"`
 
 	// Generic only
-	InputYaml     *string `json:"inputYaml,omitempty"`
-	ProcessorYaml *string `json:"processorYaml,omitempty"`
-	InjectYaml    *string `json:"injectYaml,omitempty"`
+	InputYaml      *string   `json:"inputYaml,omitempty"`
+	ProcessorYaml  *string   `json:"processorYaml,omitempty"`
+	InjectYaml     *string   `json:"injectYaml,omitempty"`
+	Type           Protocol  `json:"type" binding:"required"`
+	Name           string    `json:"name" binding:"required"`
+	ConnectionUUID uuid.UUID `json:"connectionUUID" binding:"required"`
+	UUID           uuid.UUID `json:"uuid" binding:"required"`
+	IgnoreErrors   bool      `json:"ignoreErrors,omitempty"`
 }
 
 type DeleteProtocolConverterPayload struct {
@@ -350,16 +350,16 @@ type DeleteProtocolConverterPayload struct {
 }
 
 type EditProtocolConverterPayload struct {
-	UUID uuid.UUID `json:"uuid" binding:"required"`
-
-	Name         *string           `json:"name,omitempty"`
-	IgnoreErrors bool              `json:"ignoreErrors,omitempty"`
-	Metadata     map[string]string `json:"metadata,omitempty"`
+	Name     *string           `json:"name,omitempty"`
+	Metadata map[string]string `json:"metadata,omitempty"`
 
 	// Generic only
-	InputYaml     *string `json:"inputYaml,omitempty"`
-	ProcessorYaml *string `json:"processorYaml,omitempty"`
-	InjectYaml    *string `json:"injectYaml,omitempty"`
+	InputYaml     *string   `json:"inputYaml,omitempty"`
+	ProcessorYaml *string   `json:"processorYaml,omitempty"`
+	InjectYaml    *string   `json:"injectYaml,omitempty"`
+	UUID          uuid.UUID `json:"uuid" binding:"required"`
+
+	IgnoreErrors bool `json:"ignoreErrors,omitempty"`
 }
 
 // ActionReplyState specifies the current state of an action.
@@ -378,16 +378,22 @@ const (
 
 // ActionReplyMessagePayload contains the fields required for an action reply message.
 type ActionReplyMessagePayload struct {
-	ActionReplyState   ActionReplyState `json:"actionReplyState" binding:"required"`
-	ActionReplyPayload interface{}      `json:"actionReplyPayload" binding:"required"`
-	ActionUUID         uuid.UUID        `json:"actionUUID" binding:"required"`
+	ActionReplyPayload interface{} `json:"actionReplyPayload" binding:"required"`
 	// ActionContext is an optional field that can be used to provide additional context for the action.
-	ActionContext map[string]interface{} `json:"actionContext,omitempty"`
+	ActionContext    map[string]interface{} `json:"actionContext,omitempty"`
+	ActionReplyState ActionReplyState       `json:"actionReplyState" binding:"required"`
+	ActionUUID       uuid.UUID              `json:"actionUUID" binding:"required"`
 }
 
 // this is the structure of the action that the frontend sends in the first place
 type CustomDFCPayload struct {
 	CustomDataFlowComponent struct {
+		Pipeline struct {
+			Processors map[string]struct {
+				Type string `json:"type"`
+				Data string `json:"data"`
+			} `json:"processors"`
+		} `json:"pipeline"`
 		Inputs struct {
 			Type string `json:"type"`
 			Data string `json:"data"`
@@ -399,12 +405,6 @@ type CustomDFCPayload struct {
 		Inject struct {
 			Data string `json:"data"`
 		} `json:"rawYAML"`
-		Pipeline struct {
-			Processors map[string]struct {
-				Type string `json:"type"`
-				Data string `json:"data"`
-			} `json:"processors"`
-		} `json:"pipeline"`
 	} `json:"customDataFlowComponent"`
 }
 
@@ -414,33 +414,25 @@ type DeleteDFCPayload struct {
 }
 
 type EditDataflowcomponentRequestSchemaJson struct {
-	BasedOnUuid string `json:"basedOnUuid" yaml:"basedOnUuid" mapstructure:"basedOnUuid"`
-
 	IgnoreHealthCheck *bool `json:"ignoreHealthCheck,omitempty" yaml:"ignoreHealthCheck,omitempty" mapstructure:"ignoreHealthCheck,omitempty"`
+
+	BasedOnUuid string `json:"basedOnUuid" yaml:"basedOnUuid" mapstructure:"basedOnUuid"`
 
 	Meta CdcfMeta `json:"meta" yaml:"meta" mapstructure:"meta"`
 
 	Name string `json:"name" yaml:"name" mapstructure:"name"`
 
-	Payload DeployDataFlowComponentPayload `json:"payload" yaml:"payload" mapstructure:"payload"`
-
 	UUID string `json:"uuid" yaml:"uuid" mapstructure:"uuid"`
+
+	Payload DeployDataFlowComponentPayload `json:"payload" yaml:"payload" mapstructure:"payload"`
 }
 
 type GetDataflowcomponentResponse map[string]GetDataflowcomponentResponseContent
 
 type GetDataflowcomponentResponseContent struct {
-	// CreationTime corresponds to the JSON schema field "creationTime".
-	CreationTime float64 `json:"creationTime" yaml:"creationTime" mapstructure:"creationTime"`
-
-	// Creator corresponds to the JSON schema field "creator".
-	Creator string `json:"creator" yaml:"creator" mapstructure:"creator"`
 
 	// Meta corresponds to the JSON schema field "meta".
 	Meta CommonDataFlowComponentMeta `json:"meta" yaml:"meta" mapstructure:"meta"`
-
-	// Name corresponds to the JSON schema field "name".
-	Name string `json:"name" yaml:"name" mapstructure:"name"`
 
 	// ParentDFC corresponds to the JSON schema field "parentDFC".
 	ParentDFC interface{} `json:"parentDFC,omitempty" yaml:"parentDFC,omitempty" mapstructure:"parentDFC,omitempty"`
@@ -448,20 +440,27 @@ type GetDataflowcomponentResponseContent struct {
 	// Payload corresponds to the JSON schema field "payload".
 	Payload Payload `json:"payload" yaml:"payload" mapstructure:"payload"`
 
+	// Creator corresponds to the JSON schema field "creator".
+	Creator string `json:"creator" yaml:"creator" mapstructure:"creator"`
+
+	// Name corresponds to the JSON schema field "name".
+	Name string `json:"name" yaml:"name" mapstructure:"name"`
+
 	// State corresponds to the JSON schema field "state".
 	State string `json:"state" yaml:"state" mapstructure:"state"`
+	// CreationTime corresponds to the JSON schema field "creationTime".
+	CreationTime float64 `json:"creationTime" yaml:"creationTime" mapstructure:"creationTime"`
 }
 
 type Payload interface{}
 
 type CommonDataFlowComponentMeta struct {
+	AdditionalProperties interface{}
 	// Key value pairs of additional metadata
 	AdditionalMetadata map[string]interface{} `json:"additionalMetadata,omitempty" yaml:"additionalMetadata,omitempty" mapstructure:"additionalMetadata,omitempty"`
 
 	// The type of the dataflow component
 	Type string `json:"type" yaml:"type" mapstructure:"type"`
-
-	AdditionalProperties interface{}
 }
 
 type GetDataflowcomponentRequestSchemaJson struct {
@@ -474,23 +473,24 @@ type CommonDataFlowComponentCDFCPropertiesPayload struct {
 }
 
 type CommonDataFlowComponentCDFCProperties struct {
+
+	// Pipeline corresponds to the JSON schema field "pipeline".
+	Pipeline CommonDataFlowComponentPipelineConfig `json:"pipeline" yaml:"pipeline" mapstructure:"pipeline"`
+
 	// BenthosImageTag corresponds to the JSON schema field "benthosImageTag".
 	BenthosImageTag *CommonDataFlowComponentBenthosImageTagConfig `json:"benthosImageTag,omitempty" yaml:"benthosImageTag,omitempty" mapstructure:"benthosImageTag,omitempty"`
 
 	// this is only here to make the json schema happy
 	IgnoreErrors *bool `json:"ignoreErrors,omitempty" yaml:"ignoreErrors,omitempty" mapstructure:"ignoreErrors,omitempty"`
 
+	// RawYAML corresponds to the JSON schema field "rawYAML".
+	RawYAML *CommonDataFlowComponentRawYamlConfig `json:"rawYAML,omitempty" yaml:"rawYAML,omitempty" mapstructure:"rawYAML,omitempty"`
+
 	// Inputs corresponds to the JSON schema field "inputs".
 	Inputs CommonDataFlowComponentInputConfig `json:"inputs" yaml:"inputs" mapstructure:"inputs"`
 
 	// Outputs corresponds to the JSON schema field "outputs".
 	Outputs CommonDataFlowComponentOutputConfig `json:"outputs" yaml:"outputs" mapstructure:"outputs"`
-
-	// Pipeline corresponds to the JSON schema field "pipeline".
-	Pipeline CommonDataFlowComponentPipelineConfig `json:"pipeline" yaml:"pipeline" mapstructure:"pipeline"`
-
-	// RawYAML corresponds to the JSON schema field "rawYAML".
-	RawYAML *CommonDataFlowComponentRawYamlConfig `json:"rawYAML,omitempty" yaml:"rawYAML,omitempty" mapstructure:"rawYAML,omitempty"`
 }
 
 type CommonDataFlowComponentBenthosImageTagConfig struct {
@@ -550,13 +550,13 @@ const (
 
 // GetLogsRequest contains the necessary fields for executing a `get-logs` action.
 type GetLogsRequest struct {
-	// StartTime represents the time frame to start the logs from in unix milliseconds
-	StartTime int64 `json:"startTime"`
 	// Type represents the type of the logs to retrieve
 	Type LogType `json:"type"`
 	// UUID represents the identifier of the entity to retrieve the logs for.
 	// This is optional and only used for DFC and Protocol Converter logs.
 	UUID string `json:"uuid"`
+	// StartTime represents the time frame to start the logs from in unix milliseconds
+	StartTime int64 `json:"startTime"`
 }
 
 type GetLogsResponse struct {
@@ -632,17 +632,17 @@ type ModelRef struct {
 }
 
 type Field struct {
-	PayloadShape string           `yaml:"_payloadshape,omitempty"` // payload shape of the field
 	ModelRef     *ModelRef        `yaml:"_refModel,omitempty"`     // this is a special field that is used to reference another data model to be used as a type for this field
 	Subfields    map[string]Field `yaml:",inline"`                 // subfields of the field (allow recursive definition of fields)
+	PayloadShape string           `yaml:"_payloadshape,omitempty"` // payload shape of the field
 }
 
 // AddDataModelPayload contains the necessary fields for executing an AddDataModel action.
 type AddDataModelPayload struct {
+	Structure        map[string]Field `json:"-"`                                   // Data model version (not used in the action, but filled by the action)
 	Name             string           `json:"name" binding:"required"`             // Name of the data model
 	Description      string           `json:"description,omitempty"`               // Description of the data model
 	EncodedStructure string           `json:"encodedStructure" binding:"required"` // Encoded structure of the data model
-	Structure        map[string]Field `json:"-"`                                   // Data model version (not used in the action, but filled by the action)
 }
 
 // DeleteDataModelPayload contains the necessary fields for executing a DeleteDataModel action.
@@ -652,10 +652,10 @@ type DeleteDataModelPayload struct {
 
 // EditDataModelPayload contains the necessary fields for executing an EditDataModel action.
 type EditDataModelPayload struct {
+	Structure        map[string]Field `json:"-"`                                   // Data model version (not used in the action, but filled by the action)
 	Name             string           `json:"name" binding:"required"`             // Name of the data model to edit
 	Description      string           `json:"description,omitempty"`               // Description of the data model
 	EncodedStructure string           `json:"encodedStructure" binding:"required"` // Encoded structure of the data model
-	Structure        map[string]Field `json:"-"`                                   // Data model version (not used in the action, but filled by the action)
 }
 
 // GetDataModelPayload contains the necessary fields for executing a GetDataModel action.
@@ -666,16 +666,16 @@ type GetDataModelPayload struct {
 
 // GetDataModelVersion represents a version of a data model with base64-encoded structure
 type GetDataModelVersion struct {
+	Structure        map[string]Field `json:"-"`                     // Data model version structure (not sent in response, but used internally)
 	Description      string           `json:"description,omitempty"` // Description of the data model version
 	EncodedStructure string           `json:"encodedStructure"`      // Base64-encoded structure of the data model version
-	Structure        map[string]Field `json:"-"`                     // Data model version structure (not sent in response, but used internally)
 }
 
 // GetDataModelResponse contains the response for a GetDataModel action.
 type GetDataModelResponse struct {
+	Versions    map[string]GetDataModelVersion `json:"versions"`              // All versions of the data model
 	Name        string                         `json:"name"`                  // Name of the data model
 	Description string                         `json:"description,omitempty"` // Description of the data model
-	Versions    map[string]GetDataModelVersion `json:"versions"`              // All versions of the data model
 }
 
 // Deprecated: Use GetMetricsRequest instead.
@@ -708,11 +708,11 @@ type ActionReplyResponseSchemaJsonActionReplyPayloadV2 struct {
 	// Machine-readable error code (e.g., 'ERR_CONFIG_CHANGED').
 	ErrorCode *string `json:"errorCode,omitempty" yaml:"errorCode,omitempty" mapstructure:"errorCode,omitempty"`
 
-	// Human-readable error message.
-	Message string `json:"message" yaml:"message" mapstructure:"message"`
-
 	// Additional payload for the action reply.
 	Payload ActionReplyResponseSchemaJsonActionReplyPayloadV2Payload `json:"payload,omitempty" yaml:"payload,omitempty" mapstructure:"payload,omitempty"`
+
+	// Human-readable error message.
+	Message string `json:"message" yaml:"message" mapstructure:"message"`
 }
 
 type ActionReplyResponseSchemaJsonActionReplyState string
@@ -762,10 +762,10 @@ type ProtocolConverterConnection struct {
 }
 
 type ProtocolConverterDFC struct {
-	IgnoreErrors *bool                                 `json:"ignoreErrors,omitempty" yaml:"ignoreErrors,omitempty" mapstructure:"ignoreErrors,omitempty"`
-	Inputs       CommonDataFlowComponentInputConfig    `json:"inputs" yaml:"inputs" mapstructure:"inputs"`
 	Pipeline     CommonDataFlowComponentPipelineConfig `json:"pipeline" yaml:"pipeline" mapstructure:"pipeline"`
+	IgnoreErrors *bool                                 `json:"ignoreErrors,omitempty" yaml:"ignoreErrors,omitempty" mapstructure:"ignoreErrors,omitempty"`
 	RawYAML      *CommonDataFlowComponentRawYamlConfig `json:"rawYAML,omitempty" yaml:"rawYAML,omitempty" mapstructure:"rawYAML,omitempty"`
+	Inputs       CommonDataFlowComponentInputConfig    `json:"inputs" yaml:"inputs" mapstructure:"inputs"`
 }
 
 type ProtocolConverterVariable struct {
@@ -774,20 +774,20 @@ type ProtocolConverterVariable struct {
 }
 
 type ProtocolConverterTemplateInfo struct {
-	IsTemplated bool                        `json:"isTemplated" yaml:"isTemplated" mapstructure:"isTemplated"`
 	Variables   []ProtocolConverterVariable `json:"variables" yaml:"variables" mapstructure:"variables"`
 	RootUUID    uuid.UUID                   `json:"rootUUID" yaml:"rootUUID" mapstructure:"rootUUID"`
+	IsTemplated bool                        `json:"isTemplated" yaml:"isTemplated" mapstructure:"isTemplated"`
 }
 
 type ProtocolConverter struct {
 	UUID         *uuid.UUID                     `json:"uuid" binding:"required"`
-	Name         string                         `json:"name" binding:"required"`
 	Location     map[int]string                 `json:"location"`
-	Connection   ProtocolConverterConnection    `json:"connection"`
 	ReadDFC      *ProtocolConverterDFC          `json:"readDFC"`
 	WriteDFC     *ProtocolConverterDFC          `json:"writeDFC"`
 	TemplateInfo *ProtocolConverterTemplateInfo `json:"templateInfo"`
 	Meta         *ProtocolConverterMeta         `json:"meta"`
+	Name         string                         `json:"name" binding:"required"`
+	Connection   ProtocolConverterConnection    `json:"connection"`
 }
 
 type ProtocolConverterMeta struct {
@@ -809,9 +809,9 @@ type StreamProcessorVariable struct {
 
 // StreamProcessorTemplateInfo contains template information
 type StreamProcessorTemplateInfo struct {
-	IsTemplated bool                      `json:"isTemplated" yaml:"isTemplated" mapstructure:"isTemplated"`
 	Variables   []StreamProcessorVariable `json:"variables" yaml:"variables" mapstructure:"variables"`
 	RootUUID    uuid.UUID                 `json:"rootUUID" yaml:"rootUUID" mapstructure:"rootUUID"`
+	IsTemplated bool                      `json:"isTemplated" yaml:"isTemplated" mapstructure:"isTemplated"`
 }
 
 // StreamProcessorConfig represents the configuration for a stream processor
@@ -832,12 +832,12 @@ type StreamProcessorMapping map[string]interface{}
 // StreamProcessor represents a stream processor configuration
 type StreamProcessor struct {
 	UUID          *uuid.UUID                   `json:"uuid" binding:"required"`
-	Name          string                       `json:"name" binding:"required"`
 	Location      map[int]string               `json:"location"`
-	Model         StreamProcessorModelRef      `json:"model" binding:"required"`
-	EncodedConfig string                       `json:"encodedConfig" binding:"required"` // base64-encoded YAML structure containing sources and mappings
-	Config        *StreamProcessorConfig       `json:"-"`                                // parsed configuration (not used in the action, but filled by the action)
+	Config        *StreamProcessorConfig       `json:"-"` // parsed configuration (not used in the action, but filled by the action)
 	TemplateInfo  *StreamProcessorTemplateInfo `json:"templateInfo"`
+	Model         StreamProcessorModelRef      `json:"model" binding:"required"`
+	Name          string                       `json:"name" binding:"required"`
+	EncodedConfig string                       `json:"encodedConfig" binding:"required"` // base64-encoded YAML structure containing sources and mappings
 }
 
 // GetStreamProcessorPayload contains the necessary fields for getting a stream processor.

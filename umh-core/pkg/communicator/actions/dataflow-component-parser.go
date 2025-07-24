@@ -34,13 +34,13 @@ import (
 
 // DataflowComponentTopLevelPayload represents the top-level structure for dataflow component payloads
 type DataflowComponentTopLevelPayload struct {
-	Name string `json:"name"`
-	Meta struct {
+	Payload interface{} `json:"payload"`
+	Name    string      `json:"name"`
+	Meta    struct {
 		Type string `json:"type"`
 	} `json:"meta"`
-	IgnoreHealthCheck bool        `json:"ignoreHealthCheck"`
-	Payload           interface{} `json:"payload"`
-	State             string      `json:"state"`
+	State             string `json:"state"`
+	IgnoreHealthCheck bool   `json:"ignoreHealthCheck"`
 }
 
 // ParseDataflowComponentTopLevel parses the top-level payload structure for dataflow components

@@ -26,9 +26,9 @@ import (
 // S6ObservedStateSnapshot is a deep-copyable snapshot of S6ObservedState
 type S6ObservedStateSnapshot struct {
 	Config                  config.S6FSMConfig
-	LastStateChange         int64
-	ServiceInfo             s6.ServiceInfo
 	ObservedS6ServiceConfig s6serviceconfig.S6ServiceConfig
+	ServiceInfo             s6.ServiceInfo
+	LastStateChange         int64
 }
 
 // IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface

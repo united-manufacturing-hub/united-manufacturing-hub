@@ -69,14 +69,14 @@ type ProtocolConverterServiceConfigTemplate struct {
 //   - `ConnectionServiceConfig` has all template variables resolved with proper types.
 type ProtocolConverterServiceConfigRuntime struct {
 
-	// ConnectionServiceConfig is the fully rendered connection configuration
-	// with all template variables resolved and proper types enforced.
-	ConnectionServiceConfig connectionserviceconfig.ConnectionServiceConfigRuntime `yaml:"connection"`
-
 	// DataflowComponentReadServiceConfig and DataflowComponentWriteServiceConfig
 	// remain unchanged as they don't need the template/runtime split yet.
 	DataflowComponentReadServiceConfig  dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataflowcomponent_read"`
 	DataflowComponentWriteServiceConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataflowcomponent_write"`
+
+	// ConnectionServiceConfig is the fully rendered connection configuration
+	// with all template variables resolved and proper types enforced.
+	ConnectionServiceConfig connectionserviceconfig.ConnectionServiceConfigRuntime `yaml:"connection"`
 }
 
 // ProtocolConverterServiceConfigSpec is the **user‑facing** wrapper that binds a
@@ -96,10 +96,10 @@ type ProtocolConverterServiceConfigRuntime struct {
 //
 // Spec → (render) → Runtime → FSM.
 type ProtocolConverterServiceConfigSpec struct {
-	Config      ProtocolConverterServiceConfigTemplate `yaml:"config,omitempty"`
 	Variables   variables.VariableBundle               `yaml:"variables,omitempty"`
 	Location    map[string]string                      `yaml:"location,omitempty"`
 	TemplateRef string                                 `yaml:"templateRef,omitempty"`
+	Config      ProtocolConverterServiceConfigTemplate `yaml:"config,omitempty"`
 }
 
 // Equal checks if two ProtocolConverterServiceConfigs are equal

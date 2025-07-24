@@ -34,8 +34,8 @@ type Record struct {
 // DataPoint is the individual data point that is stored in the archive
 // Its abstraction is very similar to a time series database's data point
 type DataPoint struct {
-	Record Record    // The record that is stored
 	Time   time.Time // The time that the event occurred
+	Record Record    // The record that is stored
 }
 
 // ArchiveStorer is the interface for the archive storage service
@@ -56,8 +56,8 @@ type ArchiveStoreCloser interface {
 type QueryOptions struct {
 	StartTime time.Time
 	EndTime   time.Time
-	Limit     int
 	States    []string
+	Limit     int
 	SortDesc  bool
 }
 

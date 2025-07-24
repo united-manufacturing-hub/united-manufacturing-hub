@@ -40,8 +40,6 @@ type SourceMapping map[string]string
 // This template form allows stream processor parameters to be templated
 // using expressions like "{{ .abc }}" which are resolved during rendering.
 type StreamProcessorServiceConfigTemplate struct {
-	// Model defines which data model this stream processor implements
-	Model ModelRef `yaml:"model"`
 
 	// Sources defines the mapping of source aliases to UNS topics with template support
 	Sources SourceMapping `yaml:"sources,omitempty"`
@@ -49,6 +47,8 @@ type StreamProcessorServiceConfigTemplate struct {
 	// Mapping defines how source values are transformed into model fields
 
 	Mapping map[string]interface{} `yaml:"mapping,omitempty"`
+	// Model defines which data model this stream processor implements
+	Model ModelRef `yaml:"model"`
 }
 
 // StreamProcessorServiceConfigRuntime is the **fully rendered** form of a
@@ -61,8 +61,6 @@ type StreamProcessorServiceConfigTemplate struct {
 //   - Model reference must point to a valid data model.
 //   - All source mappings must be resolved to valid UNS topics.
 type StreamProcessorServiceConfigRuntime struct {
-	// Model defines which data model this stream processor implements
-	Model ModelRef `yaml:"model"`
 
 	// Sources defines the resolved mapping of source aliases to UNS topics
 	Sources SourceMapping `yaml:"sources"`
@@ -73,6 +71,8 @@ type StreamProcessorServiceConfigRuntime struct {
 	// "dynamic" mappings are mappings that are triggered by incoming messages in the specified source topic
 	// "static" mappings are mappings that are triggered by the stream processor itself (e.g. a static value)
 	Mapping map[string]interface{} `yaml:"mapping"`
+	// Model defines which data model this stream processor implements
+	Model ModelRef `yaml:"model"`
 }
 
 // StreamProcessorServiceConfigSpec is the **user‑facing** wrapper that binds a

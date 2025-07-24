@@ -25,24 +25,6 @@ import (
 
 // MockService is a mock implementation of the S6 Service interface for testing
 type MockService struct {
-	// Mutex to protect concurrent access to shared maps
-	mu sync.RWMutex
-
-	// Tracks calls to methods
-	CreateCalled                  bool
-	RemoveCalled                  bool
-	StartCalled                   bool
-	StopCalled                    bool
-	RestartCalled                 bool
-	StatusCalled                  bool
-	ExitHistoryCalled             bool
-	ServiceExistsCalled           bool
-	GetConfigCalled               bool
-	CleanS6ServiceDirectoryCalled bool
-	GetS6ConfigFileCalled         bool
-	ForceRemoveCalled             bool
-	GetLogsCalled                 bool
-	GetStructuredLogsCalled       bool
 
 	// Return values for each method
 	CreateError                  error
@@ -65,21 +47,43 @@ type MockService struct {
 	StartResult                   error
 	StopResult                    error
 	RestartResult                 error
-	StatusResult                  ServiceInfo
-	ExitHistoryResult             []ExitEvent
-	ServiceExistsResult           bool
-	GetConfigResult               s6serviceconfig.S6ServiceConfig
 	CleanS6ServiceDirectoryResult error
-	GetS6ConfigFileResult         []byte
 	ForceRemoveResult             error
-	GetLogsResult                 []LogEntry
-
-	// Used parameters for each method (only if needed for certain tests)
-	ForceRemovePath string
 
 	// For more complex testing scenarios
 	ServiceStates    map[string]ServiceInfo
 	ExistingServices map[string]bool
+
+	// Used parameters for each method (only if needed for certain tests)
+	ForceRemovePath string
+
+	ExitHistoryResult     []ExitEvent
+	GetS6ConfigFileResult []byte
+	GetLogsResult         []LogEntry
+
+	GetConfigResult s6serviceconfig.S6ServiceConfig
+	StatusResult    ServiceInfo
+
+	// Mutex to protect concurrent access to shared maps
+	mu sync.RWMutex
+
+	// Tracks calls to methods
+	CreateCalled                  bool
+	RemoveCalled                  bool
+	StartCalled                   bool
+	StopCalled                    bool
+	RestartCalled                 bool
+	StatusCalled                  bool
+	ExitHistoryCalled             bool
+	ServiceExistsCalled           bool
+	GetConfigCalled               bool
+	CleanS6ServiceDirectoryCalled bool
+	GetS6ConfigFileCalled         bool
+	ForceRemoveCalled             bool
+	GetLogsCalled                 bool
+	GetStructuredLogsCalled       bool
+
+	ServiceExistsResult bool
 	// New fields for EnsureSupervision
 	MockExists bool
 	ErrorMode  bool
