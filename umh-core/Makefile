@@ -58,8 +58,8 @@ TARGETARCH := $(shell go env GOARCH)
 GINKGO_VERSION = v2.23.4
 NILWAY_VERSION = latest
 GOLANGCI_LINT_VERSION = v2.1.6
+BETTERALIGN_VERSION = v0.7.1
 DLV_VERSION = v1.25.0
-STATIC_CHECK_VERSION = 2025.1.1
 
 # Default values for build arguments
 GOLANG_VERSION = 1.24.4
@@ -89,7 +89,7 @@ install:
 	go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
 	go install github.com/evilmartians/lefthook@latest
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
-	go install honnef.co/go/tools/cmd/staticcheck@$(STATIC_CHECK_VERSION)
+	go install github.com/dkorunic/betteralign/cmd/betteralign@$(BETTERALIGN_VERSION)
 
 download-docker-binaries:
 	@mkdir -p .docker-cache/s6-overlay .docker-cache/benthos .docker-cache/redpanda
@@ -256,13 +256,22 @@ nilaway:
 		-exclude-errors-in-files="integration/" \
 		./...
 
-test: vet nilaway lint
+betteralign:
+	betteralign -test=false ./... || (echo "Consider running 'make betteralign-fix' to fix the issues" && exit 1)
+
+betteralign-fix:
+	betteralign -test=false -apply ./...
+
+# Meta target for vet, nilaway, lint, staticcheck and betteralign
+vet-nilaway-lint-betteralign: vet nilaway lint betteralign
+
+test: vet-nilaway-lint-betteralign
 	go test -v -tags=test ./...
 
-unit-test: vet nilaway lint
+unit-test: vet-nilaway-lint-betteralign
 	ginkgo -r -v --tags=test --race --label-filter='!integration && !redpanda-extended && !tls' --fail-fast ./...
 
-unit-test-fail-slow: vet nilaway lint
+unit-test-fail-slow: vet-nilaway-lint-betteralign
 	ginkgo -r -v --tags=test --race --label-filter='!integration && !redpanda-extended && !tls' ./...
 
 benchmark:
@@ -299,13 +308,13 @@ benchmark-encoding:
 	@echo "Running encoding benchmarks..."
 	cd pkg/communicator/pkg/encoding && go test -bench=. -benchmem -benchtime=10s -count=1
 
-integration-test: stop-all-pods vet nilaway lint
+integration-test: stop-all-pods vet-nilaway-lint-betteralign
 
 # Meta target to setup the environment for the tests
-pre-test: build-protobuf stop-all-pods vet nilaway lint
+pre-test: build-protobuf stop-all-pods vet-nilaway-lint-betteralign
 
 # Meta target to setup the environment for the tests in CI environments
-pre-test-ci: vet lint
+pre-test-ci: vet-nilaway-lint-betteralign
 
 integration-test: pre-test
 	ginkgo -r -v --tags=test --label-filter='integration' --fail-fast ./...

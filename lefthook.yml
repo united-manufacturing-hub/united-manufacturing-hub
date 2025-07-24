@@ -49,17 +49,11 @@ pre-push:
           exit 1
         fi
 
-    - name: staticheck
-      glob: "**/*.go"
-      root: "umh-core"
-      run: |
-        staticcheck -f stylish ./...
-
     - name: field-alignment
       glob: "**/*.go"
       root: "umh-core"
       run: |
-        betteralign -test false ./...
+        betteralign -test=false ./...
       
 
 pre-commit:

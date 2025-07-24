@@ -44,7 +44,7 @@ type Handler struct {
 	topicBrowserCommunicator   *topicbrowser.TopicBrowserCommunicator
 	logger                     *zap.SugaredLogger
 	instanceUUID               uuid.UUID
-	disableHardwareStatusCheck bool // nolint:unused // will be used in the future
+	disableHardwareStatusCheck bool //nolint:unused // will be used in the future
 }
 
 func NewHandler(
