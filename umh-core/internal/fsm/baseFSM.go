@@ -36,10 +36,6 @@ import (
 
 // BaseFSMInstance implements the public fsm.FSM interface
 type BaseFSMInstance struct {
-	cfg BaseFSMInstanceConfig
-
-	// mu is a mutex for protecting concurrent access to fields
-	mu sync.RWMutex
 
 	// fsm is the finite state machine that manages instance state
 	fsm *fsm.FSM
@@ -53,12 +49,16 @@ type BaseFSMInstance struct {
 	// logger is the logger for the FSM
 	logger *zap.SugaredLogger
 
-	// transientStreakCounter is the number of ticks a FSM has remained in a transient state
-	transientStreakCounter uint64
-
 	// lastObservedLifecycleState is the last state that was observed by the FSM
 	// Note: this is only temporary and should be replaced by a generalized implementation of the archive storage
 	lastObservedLifecycleState string
+	cfg                        BaseFSMInstanceConfig
+
+	// transientStreakCounter is the number of ticks a FSM has remained in a transient state
+	transientStreakCounter uint64
+
+	// mu is a mutex for protecting concurrent access to fields
+	mu sync.RWMutex
 }
 
 type BaseFSMInstanceConfig struct {

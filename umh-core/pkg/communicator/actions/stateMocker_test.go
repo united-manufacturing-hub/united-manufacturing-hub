@@ -134,11 +134,11 @@ var _ = Describe("StateMocker", func() {
 
 			// Set up a transition sequence: starting -> active
 			stateMocker.SetTransitionSequence(componentName, []struct {
-				TickOffset int
 				State      string
+				TickOffset int
 			}{
-				{1, startingState}, // Start in "starting" state
-				{3, desiredState},  // After 2 ticks, move to "active" state
+				{startingState, 1}, // Start in "starting" state
+				{desiredState, 3},  // After 2 ticks, move to "active" state
 			})
 
 			// Initial update

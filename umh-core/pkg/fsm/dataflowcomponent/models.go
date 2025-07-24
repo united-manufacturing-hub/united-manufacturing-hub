@@ -97,11 +97,11 @@ func IsRunningState(state string) bool {
 
 // DataflowComponentObservedState contains the observed runtime state of a DataflowComponent instance
 type DataflowComponentObservedState struct {
-	// ServiceInfo contains information about the S6 service
-	ServiceInfo dataflowcomponentsvc.ServiceInfo
 
 	// ObservedDataflowComponentConfig contains the observed DataflowComponent service config
 	ObservedDataflowComponentConfig dataflowcomponentconfig.DataflowComponentServiceConfig
+	// ServiceInfo contains information about the S6 service
+	ServiceInfo dataflowcomponentsvc.ServiceInfo
 }
 
 // IsObservedState implements the ObservedState interface
@@ -114,20 +114,21 @@ var _ publicfsm.FSMInstance = (*DataflowComponentInstance)(nil)
 
 // DataflowComponentInstance is a state-machine managed instance of a DataflowComponent service.
 type DataflowComponentInstance struct {
+
+	// service is the DataflowComponent service implementation to use
+	// It has a manager that manages the benthos service instances
+	service dataflowcomponentsvc.IDataFlowComponentService
+
 	baseFSMInstance *internalfsm.BaseFSMInstance
+
+	// config contains all the configuration for this service
+	config dataflowcomponentconfig.DataflowComponentServiceConfig
 
 	// ObservedState represents the observed state of the service
 	// ObservedState contains all metrics, logs, etc.
 	// that are updated at the beginning of Reconcile and then used to
 	// determine the next state
 	ObservedState DataflowComponentObservedState
-
-	// service is the DataflowComponent service implementation to use
-	// It has a manager that manages the benthos service instances
-	service dataflowcomponentsvc.IDataFlowComponentService
-
-	// config contains all the configuration for this service
-	config dataflowcomponentconfig.DataflowComponentServiceConfig
 }
 
 // GetLastObservedState returns the last known state of the instance

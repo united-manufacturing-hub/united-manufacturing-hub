@@ -43,6 +43,33 @@ import (
 //	// Test your code that uses IConnectionService
 //	status, err := myComponent.DoSomethingWithConnection(mockService, "test-conn")
 type MockConnectionService struct {
+	GenerateNmapConfigConnectionError    error
+	GetConfigError                       error
+	StatusError                          error
+	AddConnectionToNmapManagerError      error
+	UpdateConnectionInNmapManagerError   error
+	RemoveConnectionFromNmapManagerError error
+	StartConnectionError                 error
+	StopConnectionError                  error
+	ForceRemoveConnectionError           error
+	ReconcileManagerError                error
+
+	// Nmap service mock
+	NmapService nmap.INmapService
+
+	// For more complex testing scenarios
+	ConnectionStates    map[string]*ServiceInfo
+	ExistingConnections map[string]bool
+	RecentNmapStates    map[string][]string
+
+	// State control for FSM testing
+	stateFlags map[string]*ConnectionStateFlags
+
+	// Return values for each method
+	GenerateNmapConfigForConnectionResult nmapserviceconfig.NmapServiceConfig
+	GetConfigResult                       connectionserviceconfig.ConnectionServiceConfig
+	NmapConfigs                           []config.NmapConfig
+	StatusResult                          ServiceInfo
 	// Tracks calls to methods
 	GenerateNmapConfigForConnectionCalled bool
 	GetConfigCalled                       bool
@@ -56,43 +83,17 @@ type MockConnectionService struct {
 	ServiceExistsCalled                   bool
 	ReconcileManagerCalled                bool
 
-	// Return values for each method
-	GenerateNmapConfigForConnectionResult nmapserviceconfig.NmapServiceConfig
-	GenerateNmapConfigConnectionError     error
-	GetConfigResult                       connectionserviceconfig.ConnectionServiceConfig
-	GetConfigError                        error
-	StatusResult                          ServiceInfo
-	StatusError                           error
-	AddConnectionToNmapManagerError       error
-	UpdateConnectionInNmapManagerError    error
-	RemoveConnectionFromNmapManagerError  error
-	StartConnectionError                  error
-	StopConnectionError                   error
-	ForceRemoveConnectionError            error
-	ServiceExistsResult                   bool
-	ReconcileManagerError                 error
-	ReconcileManagerReconciled            bool
-	IsConnectionFlakyResult               bool
-
-	// For more complex testing scenarios
-	ConnectionStates    map[string]*ServiceInfo
-	ExistingConnections map[string]bool
-	NmapConfigs         []config.NmapConfig
-	RecentNmapStates    map[string][]string
-
-	// State control for FSM testing
-	stateFlags map[string]*ConnectionStateFlags
-
-	// Nmap service mock
-	NmapService nmap.INmapService
+	ServiceExistsResult        bool
+	ReconcileManagerReconciled bool
+	IsConnectionFlakyResult    bool
 }
 
 var _ IConnectionService = (*MockConnectionService)(nil)
 
 // ConnectionStateFlags contains all the state flags needed for FSM testing
 type ConnectionStateFlags struct {
-	IsNmapRunning bool
 	NmapFSMState  string
+	IsNmapRunning bool
 	IsFlaky       bool
 }
 
