@@ -299,10 +299,14 @@ func (b *BenthosInstance) IsBenthosS6Running() (bool, string) {
 //	reason – empty when ok is true; otherwise a short operator-friendly
 //	         explanation.
 func (b *BenthosInstance) IsBenthosS6Stopped() (bool, string) {
-	if b.ObservedState.ServiceInfo.S6FSMState == s6fsm.OperationalStateStopped {
+	fsmState := b.ObservedState.ServiceInfo.S6FSMState
+	if fsmState == s6fsm.OperationalStateStopped {
 		return true, ""
 	}
-	return false, fmt.Sprintf("s6 is not stopped, current state: %s", b.ObservedState.ServiceInfo.S6FSMState)
+	if fsmState == "" {
+		fsmState = "[empty]"
+	}
+	return false, fmt.Sprintf("s6 is not stopped, current state: %s", fsmState)
 }
 
 // IsBenthosConfigLoaded reports true once Benthos uptime is at least
