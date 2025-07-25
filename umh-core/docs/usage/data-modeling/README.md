@@ -1,6 +1,6 @@
 # Data Modeling
 
-> 🚧 **Roadmap Item** - Unified data-modelling builds on our existing data contract foundation to provide a comprehensive approach to industrial data modeling.
+Unified data-modelling builds on our existing data contract foundation to provide a comprehensive approach to industrial data modeling.
 
 UMH Core's unified data-modelling system provides a structured approach to defining, validating, and processing industrial data. It bridges the gap between raw sensor data and meaningful business information through a clear hierarchy of components.
 
@@ -112,7 +112,7 @@ Database: Auto-created TimescaleDB hypertable
 1. **[Define Data Models](data-models.md)** - Create reusable data structures
 2. **[Create Data Contracts](data-contracts.md)** - Bind models to storage and retention policies  
 3. **[Deploy Stream Processors](stream-processors.md)** - Implement real-time data transformation
-4. **[Configure in Management Console](../data-flows/stream-processor-upcoming.md#management-console)** - Use the web interface for deployment
+4. **[Configure in Management Console](../data-flows/stream-processor.md#management-console)** - Use the web interface for deployment
 
 ## Architecture Context
 
@@ -127,6 +127,6 @@ For deeper technical background on why this hybrid approach is necessary, see ou
 
 ## Related Documentation
 
-- [Stream Processors Implementation](../data-flows/stream-processor-upcoming.md) - Detailed runtime configuration
+- [Stream Processors Implementation](../data-flows/stream-processor.md) - Detailed runtime configuration
 - [Unified Namespace](../unified-namespace/README.md) - Topic structure and payload formats
 - [Data Flows Overview](../data-flows/README.md) - Integration with other flow types 

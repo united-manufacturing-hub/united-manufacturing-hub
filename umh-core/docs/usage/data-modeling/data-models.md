@@ -1,6 +1,6 @@
 # Data Models
 
-> 🚧 **Roadmap Item** - Data models provide reusable, hierarchical data structures for industrial assets and processes.
+Data models provide reusable, hierarchical data structures for industrial assets and processes.
 
 Data models define the structure and schema of your industrial data. They act as reusable templates that can be instantiated across multiple assets, ensuring consistency and enabling powerful sub-model composition.
 

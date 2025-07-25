@@ -301,7 +301,7 @@ For detailed usage instructions, see [Topic Browser Guide](./topic-browser.md).
 
 ## Next Steps
 
-* [**Data Modeling**](../data-modeling/) 🚧 - Structure complex data consumption with explicit models
+* [**Data Modeling**](../data-modeling/) - Structure complex data consumption with explicit models
 * [**Data Flows Overview**](../data-flows/) - Advanced processing patterns
 * [**Configuration Reference**](../../reference/configuration-reference.md) - Complete consumer configuration
 

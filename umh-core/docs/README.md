@@ -28,12 +28,12 @@ Instance
    │   ├─ Read Flow ✅   # read side - Available now
    │   └─ Write Flow 🚧  # write side - Roadmap Item
    │   └─ Connection ✅  # monitors the network connection - Available now
-   ├─ Stream Processors 🚧  # Roadmap - transforms messages inside UNS
+   ├─ Stream Processors ✅  # transforms messages inside UNS
    └─ Stand-alone Flows ✅  # Available now
 ```
 
 * **Bridge** – connects external systems to the UNS with health monitoring. See [Bridges](usage/data-flows/bridges.md) for details. _(Read flows available ✅, Write flows in development 🚧)_
-* **Stream Processor** 🚧 – transforms messages already inside the UNS. _(Roadmap item)_
+* **Stream Processor** ✅ – transforms messages already inside the UNS. _(Available now)_
 * **Stand-alone Flow** ✅ – point-to-point when UNS buffering isn't wanted. _(Available now)_
 * **Connection** ✅ - a continuous network check whether the external system is available. _(Available now)_
 
@@ -60,13 +60,13 @@ _Every message first lands in the Unified Namespace, giving you replay, bufferin
 1. [**Quick Setup**](getting-started.md) - Get UMH Core running in minutes
 2. [**Unified Namespace Guide**](usage/unified-namespace/) - Understand the core messaging architecture
 3. [**Connect Your First Device**](usage/unified-namespace/producing-data.md) 🚧 - Bridge industrial protocols to the UNS
-4. [**Data Modeling**](usage/data-modeling/) 🚧 - Structure your industrial data for enterprise-scale analytics
+4. [**Data Modeling**](usage/data-modeling/) - Structure your industrial data for enterprise-scale analytics
 
 ## Documentation Structure
 
 * [**Usage Guides**](usage/) - Step-by-step implementation guides
   * [**Unified Namespace**](usage/unified-namespace/) - Core messaging architecture
-  * [**Data Modeling**](usage/data-modeling/) 🚧 - Enterprise data structuring
+  * [**Data Modeling**](usage/data-modeling/) - Enterprise data structuring
   * [**Data Flows**](usage/data-flows/) - Connect and process data streams
 * [**Production Deployment**](production/) - Scaling, security, and operations
 * [**Reference Documentation**](reference/) - Complete API and configuration reference
