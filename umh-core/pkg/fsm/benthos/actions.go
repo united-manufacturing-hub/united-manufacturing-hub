@@ -299,7 +299,7 @@ func (b *BenthosInstance) IsBenthosS6Running() (bool, string) {
 //	reason – empty when ok is true; otherwise a short operator-friendly
 //	         explanation.
 func (b *BenthosInstance) IsBenthosS6Stopped() (bool, string) {
-	if b.ObservedState.ServiceInfo.S6FSMState == s6fsm.OperationalStateStopped {
+	if b.ObservedState.ServiceInfo.S6FSMState == s6fsm.OperationalStateStopped || b.ObservedState.ServiceInfo.S6FSMState == "" {
 		return true, ""
 	}
 	return false, fmt.Sprintf("s6 is not stopped, current state: %s", b.ObservedState.ServiceInfo.S6FSMState)
