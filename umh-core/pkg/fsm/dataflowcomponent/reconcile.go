@@ -402,7 +402,13 @@ func (d *DataflowComponentInstance) reconcileTransitionToStopped(ctx context.Con
 			d.ObservedState.ServiceInfo.StatusReason = "stopped"
 			return d.baseFSMInstance.SendEvent(ctx, EventStopDone), true
 		}
-		d.ObservedState.ServiceInfo.StatusReason = "stopping"
+
+		benthosStatusReason := d.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.StatusReason
+		if benthosStatusReason == "" {
+			benthosStatusReason = "[empty]"
+		}
+
+		d.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("stopping: %s", benthosStatusReason)
 		return nil, false
 	default:
 		if err := d.StopInstance(ctx, services.GetFileSystem()); err != nil {
