@@ -132,6 +132,8 @@ type EditDataflowComponentAction struct {
 	// Caches for rollback: we hold the freshly generated config and the old one
 	dfc       config.DataFlowComponentConfig // desired (new) config
 	oldConfig config.DataFlowComponentConfig // backup of the original config
+
+	configChangeAt time.Time
 }
 
 // NewEditDataflowComponentAction returns an *un‑parsed* action instance.  The
@@ -468,6 +470,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("edit", a.name)+"updating configuration", a.outboundChannel, models.EditDataFlowComponent)
+	a.configChangeAt = time.Now()
 	a.oldConfig, err = a.configManager.AtomicEditDataflowcomponent(ctx, a.oldComponentUUID, dfc)
 	if err != nil {
 		errorMsg := Label("edit", a.name) + fmt.Sprintf("failed to edit dataflow component: %v", err)
@@ -625,9 +628,11 @@ func (a *EditDataflowComponentAction) waitForComponentToBeReady(ctx context.Cont
 							// send the benthos logs to the user
 							logs = dfcSnapshot.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
 
+							// clear the logs that are older than the config change timestamp
+							logs = filterLogsByTimestamp(logs, a.configChangeAt)
+
 							// only send the logs that have not been sent yet
 							if len(logs) > len(lastLogs) {
-
 								lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditDataFlowComponent, remainingSeconds)
 							}
 							// CheckBenthosLogLinesForConfigErrors is used to detect fatal configuration errors that would cause

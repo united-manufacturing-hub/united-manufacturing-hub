@@ -762,13 +762,3 @@ func (a *EditProtocolConverterAction) GetProtocolConverterUUID() uuid.UUID {
 func (a *EditProtocolConverterAction) GetDFCType() string {
 	return a.dfcType.String()
 }
-
-func filterLogsByTimestamp(logs []s6.LogEntry, configChangeAt time.Time) []s6.LogEntry {
-	result := make([]s6.LogEntry, 0)
-	for _, log := range logs {
-		if log.Timestamp.After(configChangeAt) {
-			result = append(result, log)
-		}
-	}
-	return result
-}
