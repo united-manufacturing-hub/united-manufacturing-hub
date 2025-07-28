@@ -127,7 +127,7 @@ func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string
 	// Store the created files in artifacts (repository paths)
 	artifacts.CreatedFiles = createdFiles
 
-	s.LastConfigChangeAt = time.Now().UTC()
+	setLastConfigChangeAt(servicePath, time.Now())
 
 	// Notify S6 scanner of new service
 	if _, err := s.EnsureSupervision(ctx, servicePath, fsService); err != nil {

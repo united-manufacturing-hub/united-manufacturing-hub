@@ -40,6 +40,26 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 )
 
+// Global map to store last config change timestamps keyed by service path
+// This ensures timestamps are shared across all S6 service instances operating on the same service
+// TODO: This is to be replaced with the archive storage when it is implemented
+var (
+	configChangeTimestamps = sync.Map{} // map[string]time.Time
+)
+
+// setLastConfigChangeAt sets the last config change timestamp for a service path
+func setLastConfigChangeAt(servicePath string, timestamp time.Time) {
+	configChangeTimestamps.Store(servicePath, timestamp)
+}
+
+// getLastConfigChangeAt gets the last config change timestamp for a service path
+func getLastConfigChangeAt(servicePath string) time.Time {
+	if timestamp, ok := configChangeTimestamps.Load(servicePath); ok {
+		return timestamp.(time.Time)
+	}
+	return time.Time{} // zero time if not found
+}
+
 // ServiceStatus represents the status of an S6 service
 type ServiceStatus string
 
@@ -199,9 +219,6 @@ type DefaultService struct {
 	// Lifecycle management with concurrency protection
 	mu        sync.Mutex        // serializes all state-changing calls
 	artifacts *ServiceArtifacts // cached artifacts for the service
-
-	// Last config change timestamp
-	LastConfigChangeAt time.Time // Timestamp when the service config last changed
 }
 
 // NewDefaultService creates a new default S6 service
@@ -1197,14 +1214,14 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	}
 
 	// filter the logs to only include logs since last deployment time
-	if !s.LastConfigChangeAt.IsZero() {
+	if !getLastConfigChangeAt(servicePath).IsZero() {
 		filtered := out[:0] // reuse slice to avoid allocation
 		for _, entry := range out {
-			if entry.Timestamp.After(s.LastConfigChangeAt) {
+			if entry.Timestamp.After(getLastConfigChangeAt(servicePath)) {
 				filtered = append(filtered, entry)
 			}
 		}
-		out = filtered
+		return filtered, nil
 	}
 
 	return out, nil
