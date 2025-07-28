@@ -562,11 +562,11 @@ var _ = Describe("S6 Service", func() {
 	})
 })
 
-// TestLastConfigChangeAtSharedAcrossInstances verifies that the LastConfigChangeAt timestamp
+// TestLastDeploymentTimeSharedAcrossInstances verifies that the LastDeploymentTime timestamp
 // is properly shared across different S6 service instances operating on the same service path.
 // This addresses the issue where different components (like BenthosService and S6 FSM) create
 // their own S6 service instances but need to share configuration change timestamps.
-var _ = Describe("LastConfigChangeAt Sharing", func() {
+var _ = Describe("LastDeploymentTime Sharing", func() {
 	It("should share timestamps across different service instances", func() {
 		servicePath := "/data/services/test-shared-service"
 
@@ -575,8 +575,8 @@ var _ = Describe("LastConfigChangeAt Sharing", func() {
 		setLastDeployedTime(servicePath, testTime)
 
 		// Verify that the timestamp can be retrieved correctly
-		timestamp1 := getLastDeployedTime(servicePath)
-		timestamp2 := getLastDeployedTime(servicePath)
+		timestamp1 := getLastDeploymentTime(servicePath)
+		timestamp2 := getLastDeploymentTime(servicePath)
 
 		Expect(timestamp1).To(Equal(timestamp2))
 		Expect(timestamp1).To(Equal(testTime))
@@ -584,7 +584,7 @@ var _ = Describe("LastConfigChangeAt Sharing", func() {
 
 		// Test that a different service path has a different (zero) timestamp
 		differentPath := "/data/services/different-service"
-		differentTimestamp := getLastDeployedTime(differentPath)
+		differentTimestamp := getLastDeploymentTime(differentPath)
 		Expect(differentTimestamp).To(BeZero())
 	})
 })

@@ -52,8 +52,8 @@ func setLastDeployedTime(servicePath string, timestamp time.Time) {
 	configChangeTimestamps.Store(servicePath, timestamp)
 }
 
-// getLastDeployedTime gets the last config change timestamp for a service path
-func getLastDeployedTime(servicePath string) time.Time {
+// getLastDeploymentTime gets the last config change timestamp for a service path
+func getLastDeploymentTime(servicePath string) time.Time {
 	if timestamp, ok := configChangeTimestamps.Load(servicePath); ok {
 		return timestamp.(time.Time)
 	}
@@ -118,7 +118,7 @@ type ServiceInfo struct {
 	ExitHistory        []ExitEvent   // History of exit codes
 	LastChangedAt      time.Time     // Timestamp when the service status last changed
 	LastReadyAt        time.Time     // Timestamp when the service was last ready
-	LastConfigChangeAt time.Time     // Timestamp when the service config last changed
+	LastDeploymentTime time.Time     // Timestamp when the service config last changed
 }
 
 // ExitEvent represents a service exit event
@@ -1214,14 +1214,17 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	}
 
 	// filter the logs to only include logs since last deployment time
-	if !getLastDeployedTime(servicePath).IsZero() {
-		filtered := out[:0] // reuse slice to avoid allocation
-		for _, entry := range out {
-			if entry.Timestamp.After(getLastDeployedTime(servicePath)) {
-				filtered = append(filtered, entry)
+	if !getLastDeploymentTime(servicePath).IsZero() {
+		lastDeployed := getLastDeploymentTime(servicePath)
+		for i, entry := range out {
+			if entry.Timestamp.After(lastDeployed) {
+				// Found first entry after deployment - return this and all subsequent entries
+				// since they're chronologically sorted
+				return out[i:], nil
 			}
 		}
-		return filtered, nil
+		// No entries found after deployment time
+		return nil, nil
 	}
 
 	return out, nil
