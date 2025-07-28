@@ -111,6 +111,8 @@ type EditProtocolConverterAction struct {
 	atomicEditUUID uuid.UUID
 
 	actionLogger *zap.SugaredLogger
+
+	configChangeAt time.Time
 }
 
 // NewEditProtocolConverterAction returns an un-parsed action instance.
@@ -434,6 +436,7 @@ func (a *EditProtocolConverterAction) persistConfig(atomicEditUUID uuid.UUID, ne
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
 
+	a.configChangeAt = time.Now()
 	oldConfig, err := a.configManager.AtomicEditProtocolConverter(ctx, atomicEditUUID, newSpec)
 	if err != nil {
 		return config.ProtocolConverterConfig{}, fmt.Errorf("failed to update protocol converter: %w", err)
@@ -556,6 +559,9 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 
 						// send the benthos logs to the user
 						logs = pcSnapshot.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
+
+						// clear the logs that are older than the config change timestamp
+						logs = filterLogsByTimestamp(logs, a.configChangeAt)
 
 						// only send the logs that have not been sent yet
 						if len(logs) > len(lastLogs) {
@@ -755,4 +761,14 @@ func (a *EditProtocolConverterAction) GetProtocolConverterUUID() uuid.UUID {
 // GetDFCType returns the DFC type (read/write) - exposed for testing purposes.
 func (a *EditProtocolConverterAction) GetDFCType() string {
 	return a.dfcType.String()
+}
+
+func filterLogsByTimestamp(logs []s6.LogEntry, configChangeAt time.Time) []s6.LogEntry {
+	result := make([]s6.LogEntry, 0)
+	for _, log := range logs {
+		if log.Timestamp.After(configChangeAt) {
+			result = append(result, log)
+		}
+	}
+	return result
 }

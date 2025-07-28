@@ -422,8 +422,10 @@ func (b *BenthosInstance) IsBenthosRunningForSomeTimeWithoutErrors(currentTime t
 		return false, fmt.Sprintf("uptime %d s (< %d s threshold)", currentUptime, constants.BenthosTimeUntilRunningInSeconds)
 	}
 
+	lastConfigChangeAt := b.ObservedState.ServiceInfo.S6ObservedState.ServiceInfo.LastConfigChangeAt
+
 	// Check if there are any issues in the Benthos logs
-	logsFine, reason := b.IsBenthosLogsFine(currentTime, logWindow)
+	logsFine, reason := b.IsBenthosLogsFine(currentTime, logWindow, lastConfigChangeAt)
 	if !logsFine {
 		return false, reason
 	}
@@ -444,8 +446,8 @@ func (b *BenthosInstance) IsBenthosRunningForSomeTimeWithoutErrors(currentTime t
 //
 //	ok     – true when logs look clean, false otherwise.
 //	reason – empty when ok is true; otherwise the first offending log line.
-func (b *BenthosInstance) IsBenthosLogsFine(currentTime time.Time, logWindow time.Duration) (bool, string) {
-	logsFine, logEntry := b.service.IsLogsFine(b.ObservedState.ServiceInfo.BenthosStatus.BenthosLogs, currentTime, logWindow)
+func (b *BenthosInstance) IsBenthosLogsFine(currentTime time.Time, logWindow time.Duration, lastConfigChangeAt time.Time) (bool, string) {
+	logsFine, logEntry := b.service.IsLogsFine(b.ObservedState.ServiceInfo.BenthosStatus.BenthosLogs, currentTime, logWindow, lastConfigChangeAt)
 	if !logsFine {
 		return false, fmt.Sprintf("log issue: [%s] %s", logEntry.Timestamp.Format(time.RFC3339), logEntry.Content)
 	}
@@ -481,7 +483,8 @@ func (b *BenthosInstance) IsBenthosDegraded(currentTime time.Time, logWindow tim
 		return true, reason
 	}
 
-	logsFine, reason := b.IsBenthosLogsFine(currentTime, logWindow)
+	lastConfigChangeAt := b.ObservedState.ServiceInfo.S6ObservedState.ServiceInfo.LastConfigChangeAt
+	logsFine, reason := b.IsBenthosLogsFine(currentTime, logWindow, lastConfigChangeAt)
 	if !logsFine {
 		return true, reason
 	}

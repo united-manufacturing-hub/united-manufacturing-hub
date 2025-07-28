@@ -196,7 +196,7 @@ var _ = Describe("Benthos Service", func() {
 
 		Context("IsLogsFine", func() {
 			It("should return true when there are no logs", func() {
-				Expect(service.IsLogsFine([]s6service.LogEntry{}, currentTime, logWindow)).To(BeTrue())
+				Expect(service.IsLogsFine([]s6service.LogEntry{}, currentTime, logWindow, time.Time{})).To(BeTrue())
 			})
 
 			It("should detect official Benthos error logs", func() {
@@ -206,7 +206,7 @@ var _ = Describe("Benthos Service", func() {
 						Content:   `level=error msg="failed to connect to broker"`,
 					},
 				}
-				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow, time.Time{})
 				Expect(isLogsFine).To(BeFalse())
 			})
 
@@ -225,7 +225,7 @@ var _ = Describe("Benthos Service", func() {
 						Content:   `level=warning msg="unable to reach endpoint"`,
 					},
 				}
-				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow, time.Time{})
 				Expect(isLogsFine).To(BeFalse())
 			})
 
@@ -240,7 +240,7 @@ var _ = Describe("Benthos Service", func() {
 						Content:   `level=warning msg="message batch partially processed"`,
 					},
 				}
-				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow, time.Time{})
 				Expect(isLogsFine).To(BeTrue())
 			})
 
@@ -251,7 +251,7 @@ var _ = Describe("Benthos Service", func() {
 						Content:   `configuration file read error: file not found`,
 					},
 				}
-				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow, time.Time{})
 				Expect(isLogsFine).To(BeFalse())
 			})
 
@@ -262,7 +262,7 @@ var _ = Describe("Benthos Service", func() {
 						Content:   `failed to create logger: invalid log level`,
 					},
 				}
-				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow, time.Time{})
 				Expect(isLogsFine).To(BeFalse())
 			})
 
@@ -277,7 +277,7 @@ var _ = Describe("Benthos Service", func() {
 						Content:   `shutting down due to linter errors`,
 					},
 				}
-				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow, time.Time{})
 				Expect(isLogsFine).To(BeFalse())
 			})
 
@@ -296,7 +296,7 @@ var _ = Describe("Benthos Service", func() {
 						Content:   `level=info msg="Error rate metrics collected"`,
 					},
 				}
-				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow, time.Time{})
 				Expect(isLogsFine).To(BeTrue())
 			})
 
@@ -315,7 +315,7 @@ var _ = Describe("Benthos Service", func() {
 						Content:   `level=info msg="Documentation: Config lint error examples"`,
 					},
 				}
-				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow, time.Time{})
 				Expect(isLogsFine).To(BeTrue())
 			})
 
@@ -338,7 +338,7 @@ var _ = Describe("Benthos Service", func() {
 						Content:   `level=error msg="failed to connect"`,
 					},
 				}
-				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow, time.Time{})
 				Expect(isLogsFine).To(BeFalse())
 			})
 
@@ -357,7 +357,7 @@ var _ = Describe("Benthos Service", func() {
 						Content:   `random text with warning and error keywords`,
 					},
 				}
-				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow, time.Time{})
 				Expect(isLogsFine).To(BeTrue())
 			})
 
@@ -372,7 +372,7 @@ var _ = Describe("Benthos Service", func() {
 						Content:   `level=error msg="Old error that should be ignored"`,
 					},
 				}
-				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow, time.Time{})
 				Expect(isLogsFine).To(BeTrue())
 			})
 
@@ -383,7 +383,7 @@ var _ = Describe("Benthos Service", func() {
 						Content:   `level=error msg=TEST @service=benthos label="" path=root.pipeline.processors.0`,
 					},
 				}
-				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow, time.Time{})
 				Expect(isLogsFine).To(BeFalse())
 				//Note: there are no quotes around msg
 				// these can be produced using the log processor: https://docs.redpanda.com/redpanda-connect/components/processors/log/
@@ -836,7 +836,7 @@ logger:
 			Expect(err).ToNot(HaveOccurred())
 
 			// Check if logs are fine - this should return false with our error logs
-			isLogsFine, _ := service.IsLogsFine(info.BenthosStatus.BenthosLogs, currentTime, logWindow)
+			isLogsFine, _ := service.IsLogsFine(info.BenthosStatus.BenthosLogs, currentTime, logWindow, time.Time{})
 			Expect(isLogsFine).To(BeFalse(), "Service with error logs should be identified as having issues")
 		})
 
@@ -947,7 +947,7 @@ logger:
 				Expect(err).NotTo(HaveOccurred())
 
 				// Check logs status
-				isLogsFine, _ := service.IsLogsFine(info.BenthosStatus.BenthosLogs, currentTime, logWindow)
+				isLogsFine, _ := service.IsLogsFine(info.BenthosStatus.BenthosLogs, currentTime, logWindow, time.Time{})
 				if testCase.expectBad {
 					Expect(isLogsFine).To(BeFalse(), "Should detect problems in logs")
 				} else {
@@ -987,7 +987,7 @@ logger:
 			Expect(err).NotTo(HaveOccurred())
 
 			// Check if logs are fine
-			isLogsFine, _ := service.IsLogsFine(info.BenthosStatus.BenthosLogs, currentTime, logWindow)
+			isLogsFine, _ := service.IsLogsFine(info.BenthosStatus.BenthosLogs, currentTime, logWindow, time.Time{})
 			Expect(isLogsFine).To(BeFalse(), "Service with error logs should be identified as having issues")
 
 			// Verify that the instance health is properly reflected
