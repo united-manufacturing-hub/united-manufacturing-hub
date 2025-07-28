@@ -941,7 +941,7 @@ func (s *BenthosService) ReconcileManager(ctx context.Context, services servicer
 }
 
 // IsLogsFine reports true when recent Benthos logs (within the supplied
-// window) contain no critical errors or warnings.
+// window and after the last config change) contain no critical errors or warnings.
 //
 // It returns:
 //
