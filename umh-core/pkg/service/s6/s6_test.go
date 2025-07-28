@@ -572,11 +572,11 @@ var _ = Describe("LastConfigChangeAt Sharing", func() {
 
 		// Manually set a timestamp for the service path to simulate a config change
 		testTime := time.Now()
-		setLastConfigChangeAt(servicePath, testTime)
+		setLastDeployedTime(servicePath, testTime)
 
 		// Verify that the timestamp can be retrieved correctly
-		timestamp1 := getLastConfigChangeAt(servicePath)
-		timestamp2 := getLastConfigChangeAt(servicePath)
+		timestamp1 := getLastDeployedTime(servicePath)
+		timestamp2 := getLastDeployedTime(servicePath)
 
 		Expect(timestamp1).To(Equal(timestamp2))
 		Expect(timestamp1).To(Equal(testTime))
@@ -584,7 +584,7 @@ var _ = Describe("LastConfigChangeAt Sharing", func() {
 
 		// Test that a different service path has a different (zero) timestamp
 		differentPath := "/data/services/different-service"
-		differentTimestamp := getLastConfigChangeAt(differentPath)
+		differentTimestamp := getLastDeployedTime(differentPath)
 		Expect(differentTimestamp).To(BeZero())
 	})
 })

@@ -47,13 +47,13 @@ var (
 	configChangeTimestamps = sync.Map{} // map[string]time.Time
 )
 
-// setLastConfigChangeAt sets the last config change timestamp for a service path
-func setLastConfigChangeAt(servicePath string, timestamp time.Time) {
+// setLastDeployedTime sets the last config change timestamp for a service path
+func setLastDeployedTime(servicePath string, timestamp time.Time) {
 	configChangeTimestamps.Store(servicePath, timestamp)
 }
 
-// getLastConfigChangeAt gets the last config change timestamp for a service path
-func getLastConfigChangeAt(servicePath string) time.Time {
+// getLastDeployedTime gets the last config change timestamp for a service path
+func getLastDeployedTime(servicePath string) time.Time {
 	if timestamp, ok := configChangeTimestamps.Load(servicePath); ok {
 		return timestamp.(time.Time)
 	}
@@ -1214,10 +1214,10 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	}
 
 	// filter the logs to only include logs since last deployment time
-	if !getLastConfigChangeAt(servicePath).IsZero() {
+	if !getLastDeployedTime(servicePath).IsZero() {
 		filtered := out[:0] // reuse slice to avoid allocation
 		for _, entry := range out {
-			if entry.Timestamp.After(getLastConfigChangeAt(servicePath)) {
+			if entry.Timestamp.After(getLastDeployedTime(servicePath)) {
 				filtered = append(filtered, entry)
 			}
 		}

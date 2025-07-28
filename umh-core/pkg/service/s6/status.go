@@ -170,7 +170,7 @@ func (s *DefaultService) buildFullServiceInfo(ctx context.Context, servicePath s
 		IsReady:            statusData.IsReady,
 		LastChangedAt:      statusData.StampTime,
 		LastReadyAt:        statusData.ReadyTime,
-		LastConfigChangeAt: getLastConfigChangeAt(servicePath),
+		LastConfigChangeAt: getLastDeployedTime(servicePath),
 	}
 
 	// --- Determine service status and calculate time fields ---
