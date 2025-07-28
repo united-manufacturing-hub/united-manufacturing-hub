@@ -127,6 +127,7 @@ func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string
 	// Store the created files in artifacts (repository paths)
 	artifacts.CreatedFiles = createdFiles
 
+	// set the last deployed time for the service to filter the logs and only show the logs since the last deployment
 	setLastDeployedTime(servicePath, time.Now())
 
 	// Notify S6 scanner of new service
