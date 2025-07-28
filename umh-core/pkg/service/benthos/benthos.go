@@ -89,7 +89,7 @@ type IBenthosService interface {
 	//
 	//	ok    – true when logs look clean, false otherwise.
 	//	entry – zero value when ok is true; otherwise the first offending log line.
-	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration, lastConfigChangeAt time.Time) (bool, s6service.LogEntry)
+	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) (bool, s6service.LogEntry)
 	// IsMetricsErrorFree reports true when Benthos metrics contain no error
 	// counters.
 	//
@@ -941,7 +941,7 @@ func (s *BenthosService) ReconcileManager(ctx context.Context, services servicer
 }
 
 // IsLogsFine reports true when recent Benthos logs (within the supplied
-// window and after the last config change) contain no critical errors or warnings.
+// window) contain no critical errors or warnings.
 //
 // It returns:
 //
@@ -951,7 +951,6 @@ func (s *BenthosService) IsLogsFine(
 	logs []s6service.LogEntry,
 	now time.Time,
 	window time.Duration,
-	lastConfigChangeAt time.Time,
 ) (bool, s6service.LogEntry) {
 
 	if len(logs) == 0 {
@@ -964,7 +963,7 @@ func (s *BenthosService) IsLogsFine(
 	}
 
 	for _, l := range logs {
-		if l.Timestamp.Before(cutoff) || (l.Timestamp.Before(lastConfigChangeAt)) {
+		if l.Timestamp.Before(cutoff) {
 			continue // outside the window
 		}
 

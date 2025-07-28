@@ -1196,6 +1196,17 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 		copy(out, st.logs[:st.head])
 	}
 
+	// filter the logs to only include logs since last deployment time
+	if !s.LastConfigChangeAt.IsZero() {
+		filtered := out[:0] // reuse slice to avoid allocation
+		for _, entry := range out {
+			if entry.Timestamp.After(s.LastConfigChangeAt) {
+				filtered = append(filtered, entry)
+			}
+		}
+		out = filtered
+	}
+
 	return out, nil
 }
 
