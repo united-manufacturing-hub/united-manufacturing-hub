@@ -32,8 +32,8 @@ const (
 	// MaxTopicCount limits the number of topics to prevent memory exhaustion
 	MaxTopicCount = 1_000_000
 
-	// MaxBundleSize limits individual bundle size to 10MB
-	MaxBundleSize = 10 * 1024 * 1024
+	// MaxBundleSize limits individual bundle size to 50MB
+	MaxBundleSize = 50 * 1024 * 1024
 
 	// MaxBufferSize limits total buffer size to 100MB
 	MaxBufferSize = 100 * 1024 * 1024
