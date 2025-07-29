@@ -161,15 +161,16 @@ func parseS6StatusFile(ctx context.Context, statusFilePath string, fsService fil
 func (s *DefaultService) buildFullServiceInfo(ctx context.Context, servicePath string, statusData *S6StatusData, fsService filesystem.Service) (ServiceInfo, error) {
 	// Start with basic info from the binary status data
 	info := ServiceInfo{
-		Status:        ServiceUnknown,
-		Pid:           statusData.Pid,
-		Pgid:          statusData.Pgid,
-		IsPaused:      statusData.IsPaused,
-		IsFinishing:   statusData.IsFinishing,
-		IsWantingUp:   statusData.IsWantingUp,
-		IsReady:       statusData.IsReady,
-		LastChangedAt: statusData.StampTime,
-		LastReadyAt:   statusData.ReadyTime,
+		Status:             ServiceUnknown,
+		Pid:                statusData.Pid,
+		Pgid:               statusData.Pgid,
+		IsPaused:           statusData.IsPaused,
+		IsFinishing:        statusData.IsFinishing,
+		IsWantingUp:        statusData.IsWantingUp,
+		IsReady:            statusData.IsReady,
+		LastChangedAt:      statusData.StampTime,
+		LastReadyAt:        statusData.ReadyTime,
+		LastDeploymentTime: getLastDeploymentTime(servicePath),
 	}
 
 	// --- Determine service status and calculate time fields ---
