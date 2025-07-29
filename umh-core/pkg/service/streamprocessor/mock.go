@@ -17,7 +17,6 @@ package streamprocessor
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
@@ -59,10 +58,6 @@ type MockService struct {
 	dfcConfigs              []config.DataFlowComponentConfig
 
 	StatusResult ServiceInfo
-
-	// mu protects concurrent access to Called fields and shared maps
-	mu sync.RWMutex
-
 	// Tracks calls to methods
 	GenerateConfigCalled     bool
 	GetConfigCalled          bool
@@ -193,9 +188,7 @@ func (m *MockService) GetConfig(
 	filesystemService filesystem.Service,
 	spName string,
 ) (streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime, error) {
-	m.mu.Lock()
 	m.GetConfigCalled = true
-	m.mu.Unlock()
 
 	// If error is set, return it
 	if m.GetConfigError != nil {
@@ -213,22 +206,15 @@ func (m *MockService) Status(
 	snapshot fsm.SystemSnapshot,
 	spName string,
 ) (ServiceInfo, error) {
-	m.mu.RLock()
 	m.StatusCalled = true
-	// Check if the component exists in the ExistingComponents map
-	exists, ok := m.ExistingComponents[spName]
-	var state *ServiceInfo
-	if exists, stateExists := m.States[spName]; stateExists {
-		state = exists
-	}
-	m.mu.RUnlock()
 
-	if !ok || !exists {
+	// Check if the component exists in the ExistingComponents map
+	if exists, ok := m.ExistingComponents[spName]; !ok || !exists {
 		return ServiceInfo{}, ErrServiceNotExist
 	}
 
 	// If we have a state already stored, return it
-	if state != nil {
+	if state, exists := m.States[spName]; exists {
 		return *state, m.StatusError
 	}
 
@@ -243,9 +229,6 @@ func (m *MockService) AddToManager(
 	cfg *dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
 	spName string,
 ) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	m.AddToManagerCalled = true
 
 	underlyingName := fmt.Sprintf("streamprocessor-%s", spName)
@@ -266,71 +249,65 @@ func (m *MockService) AddToManager(
 			Name:            underlyingName,
 			DesiredFSMState: dfcfsm.OperationalStateActive,
 		},
-		DataFlowComponentServiceConfig: *cfg,
+		DataFlowComponentServiceConfig: m.GenerateConfigResultDFC,
 	}
 
-	// Add the config to the list of configs
+	// Add the dfcConfig to the list of dfcConfigs
 	m.dfcConfigs = append(m.dfcConfigs, dfcConfig)
 
-	// Also create a State for this component
-	m.States[spName] = BuildServiceInfo(
-		spName,
-		StateFlags{},
-		m.DfcService,
-	)
+	// Return error after successful setup if configured (simulating creation failure)
+	if m.AddToManagerError != nil {
+		return m.AddToManagerError
+	}
 
-	return m.AddToManagerError
+	return nil
 }
 
-// UpdateInManager mocks updating a StreamProcessor in the DFC manager
+// UpdateInManager mocks updating a Stream Processor  DFC manager
 func (m *MockService) UpdateInManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
 	cfg *dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
 	spName string,
 ) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	m.UpdateInManagerCalled = true
 
 	underlyingName := fmt.Sprintf("streamprocessor-%s", spName)
 
-	// Find the DFC index
+	// Check if the component exists
+	dfcFound := false
 	dfcIndex := -1
 	for i, dfcConfig := range m.dfcConfigs {
 		if dfcConfig.Name == underlyingName {
+			dfcFound = true
 			dfcIndex = i
 			break
 		}
 	}
 
-	if dfcIndex == -1 {
+	if !dfcFound {
 		return ErrServiceNotExist
 	}
 
 	// Update the DFCConfig
-	currentDesiredState := m.dfcConfigs[dfcIndex].DesiredFSMState
+	currentDesiredStateDFC := m.dfcConfigs[dfcIndex].DesiredFSMState
 	m.dfcConfigs[dfcIndex] = config.DataFlowComponentConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            underlyingName,
-			DesiredFSMState: currentDesiredState,
+			DesiredFSMState: currentDesiredStateDFC,
 		},
-		DataFlowComponentServiceConfig: *cfg,
+		DataFlowComponentServiceConfig: m.GenerateConfigResultDFC,
 	}
 
 	return m.UpdateInManagerError
 }
 
-// RemoveFromManager mocks removing a StreamProcessor from the DFC manager
+// RemoveFromManager mocks removing a Stream Processor from the DFC manager
 func (m *MockService) RemoveFromManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
 	spName string,
 ) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	m.RemoveFromManagerCalled = true
 
 	underlyingName := fmt.Sprintf("streamprocessor-%s", spName)
@@ -357,35 +334,30 @@ func (m *MockService) RemoveFromManager(
 	return m.RemoveFromManagerError
 }
 
-// Start mocks starting a StreamProcessor
+// Start mocks starting a Steram Processor
 func (m *MockService) Start(
 	ctx context.Context,
 	filesystemService filesystem.Service,
 	spName string,
 ) error {
-	m.mu.Lock()
 	m.StartCalled = true
-	m.mu.Unlock()
 
 	underlyingName := fmt.Sprintf("streamprocessor-%s", spName)
 
-	// Find the DFC config
-	dfcIndex := -1
+	dfcFound := false
+
+	// Set the desired state to active for the given processor
 	for i, dfcConfig := range m.dfcConfigs {
 		if dfcConfig.Name == underlyingName {
-			dfcIndex = i
+			m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateActive
+			dfcFound = true
 			break
 		}
 	}
 
-	if dfcIndex == -1 {
+	if !dfcFound {
 		return ErrServiceNotExist
 	}
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	// Update the DFCConfig to have the running state
-	m.dfcConfigs[dfcIndex].DesiredFSMState = dfcfsm.OperationalStateActive
 
 	return m.StartError
 }
@@ -396,29 +368,24 @@ func (m *MockService) Stop(
 	filesystemService filesystem.Service,
 	spName string,
 ) error {
-	m.mu.Lock()
 	m.StopCalled = true
-	m.mu.Unlock()
 
 	underlyingName := fmt.Sprintf("streamprocessor-%s", spName)
 
-	// Find the DFC config
-	dfcIndex := -1
+	dfcFound := false
+
+	// Set the desired state to stopped for the given component
 	for i, dfcConfig := range m.dfcConfigs {
 		if dfcConfig.Name == underlyingName {
-			dfcIndex = i
+			m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateStopped
+			dfcFound = true
 			break
 		}
 	}
 
-	if dfcIndex == -1 {
+	if !dfcFound {
 		return ErrServiceNotExist
 	}
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	// Update the DFCConfig to have the stopped state
-	m.dfcConfigs[dfcIndex].DesiredFSMState = dfcfsm.OperationalStateIdle
 
 	return m.StopError
 }
@@ -429,10 +396,7 @@ func (m *MockService) ForceRemove(
 	filesystemService filesystem.Service,
 	spName string,
 ) error {
-	m.mu.Lock()
 	m.ForceRemoveCalled = true
-	m.mu.Unlock()
-
 	return m.ForceRemoveError
 }
 
@@ -440,14 +404,10 @@ func (m *MockService) ForceRemove(
 func (m *MockService) ServiceExists(
 	ctx context.Context,
 	filesystemService filesystem.Service,
-	spName string,
+	spname string,
 ) bool {
-	m.mu.RLock()
 	m.ServiceExistsCalled = true
-	result := m.ServiceExistsResult
-	m.mu.RUnlock()
-
-	return result
+	return m.ServiceExistsResult
 }
 
 // ReconcileManager mocks reconciling the StreamProcessor manager
@@ -456,13 +416,8 @@ func (m *MockService) ReconcileManager(
 	services serviceregistry.Provider,
 	tick uint64,
 ) (error, bool) {
-	m.mu.Lock()
 	m.ReconcileManagerCalled = true
-	result := m.ReconcileManagerReconciled
-	err := m.ReconcileManagerError
-	m.mu.Unlock()
-
-	return err, result
+	return m.ReconcileManagerError, m.ReconcileManagerReconciled
 }
 
 // EvaluateDFCDesiredStates mocks the DFC state evaluation logic.
