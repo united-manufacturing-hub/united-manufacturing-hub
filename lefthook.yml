@@ -53,7 +53,6 @@ pre-push:
       root: "umh-core"
       run: |
         make betteralign
-      
 
 pre-commit:
   parallel: true
