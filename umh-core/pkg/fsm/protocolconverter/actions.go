@@ -20,7 +20,10 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
@@ -213,15 +216,6 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 		return ctx.Err()
 	}
 
-	start := time.Now()
-	info, err := p.getServiceStatus(ctx, services, snapshot)
-	if err != nil {
-		return fmt.Errorf("error while getting service status: %w", err)
-	}
-	metrics.ObserveReconcileTime(logger.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
-	// Store the raw service info
-	p.ObservedState.ServiceInfo = info
-
 	currentState := p.baseFSMInstance.GetCurrentFSMState()
 	desiredState := p.baseFSMInstance.GetDesiredFSMState()
 	// If both desired and current state are stopped, we can return immediately
@@ -230,21 +224,51 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 		return nil
 	}
 
-	// Fetch the actual Benthos config from the service
-	start = time.Now()
-	observedConfig, err := p.service.GetConfig(ctx, services.GetFileSystem(), p.baseFSMInstance.GetID())
-	metrics.ObserveReconcileTime(logger.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".getConfig", time.Since(start))
-	if err == nil {
-		// Only update if we successfully got the config
-		p.ObservedState.ObservedProtocolConverterRuntimeConfig = observedConfig
-	} else {
-		if strings.Contains(err.Error(), protocolconvertersvc.ErrServiceNotExist.Error()) {
-			// Log the error but don't fail - this might happen during creation when the config file doesn't exist yet
-			p.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
-			return nil
-		} else {
-			return fmt.Errorf("failed to get observed ProtocolConverter config: %w", err)
+	// Start an errgroup with the same context so if one sub-task
+	// fails or the context is canceled, all sub-tasks are signaled to stop.
+	g, gctx := errgroup.WithContext(ctx)
+	observedStateMu := sync.Mutex{}
+
+	// Fetch service status in parallel
+	g.Go(func() error {
+		start := time.Now()
+		info, err := p.getServiceStatus(gctx, services, snapshot)
+		metrics.ObserveReconcileTime(logger.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
+		if err != nil {
+			return fmt.Errorf("error while getting service status: %w", err)
 		}
+		// Store the raw service info
+		observedStateMu.Lock()
+		p.ObservedState.ServiceInfo = info
+		observedStateMu.Unlock()
+		return nil
+	})
+
+	// Fetch the actual Benthos config in parallel
+	g.Go(func() error {
+		start := time.Now()
+		observedConfig, err := p.service.GetConfig(gctx, services.GetFileSystem(), p.baseFSMInstance.GetID())
+		metrics.ObserveReconcileTime(logger.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".getConfig", time.Since(start))
+		if err == nil {
+			// Only update if we successfully got the config
+			observedStateMu.Lock()
+			p.ObservedState.ObservedProtocolConverterRuntimeConfig = observedConfig
+			observedStateMu.Unlock()
+		} else {
+			if strings.Contains(err.Error(), protocolconvertersvc.ErrServiceNotExist.Error()) {
+				// Log the error but don't fail - this might happen during creation when the config file doesn't exist yet
+				p.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
+				return nil
+			} else {
+				return fmt.Errorf("failed to get observed ProtocolConverter config: %w", err)
+			}
+		}
+		return nil
+	})
+
+	// Wait for all parallel operations to complete
+	if err := g.Wait(); err != nil {
+		return err
 	}
 
 	// Merge agent location with protocol converter location for the observed spec config
@@ -270,7 +294,8 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 	p.ObservedState.ObservedProtocolConverterSpecConfig = observedSpecConfig
 
 	// Now render the config
-	start = time.Now()
+	start := time.Now()
+	var err error
 	p.runtimeConfig, err = runtime_config.BuildRuntimeConfig(
 		p.specConfig,
 		agentLocationStr,

@@ -21,6 +21,8 @@ import (
 	"strings"
 	"time"
 
+	"sync"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -28,6 +30,7 @@ import (
 	nmap_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
+	"golang.org/x/sync/errgroup"
 )
 
 // The functions in this file define heavier, possibly fail-prone operations
@@ -164,41 +167,61 @@ func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, servic
 		return nil
 	}
 
-	start := time.Now()
-	svcInfo, err := n.monitorService.Status(ctx, services.GetFileSystem(), n.config.Name, snapshot.Tick)
-	if err != nil {
-		if strings.Contains(err.Error(), nmap_service.ErrServiceNotExist.Error()) {
-			// Log the error but don't fail - this might happen during creation when nmap doesn't exist yet
-			n.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
-			return nil
-		} else {
-			return fmt.Errorf("failed to get nmap metrics: %w", err)
+	// Start an errgroup with the same context so if one sub-task
+	// fails or the context is canceled, all sub-tasks are signaled to stop.
+	g, gctx := errgroup.WithContext(ctx)
+	observedStateMu := sync.Mutex{}
+
+	// Fetch service status in parallel
+	g.Go(func() error {
+		start := time.Now()
+		svcInfo, err := n.monitorService.Status(gctx, services.GetFileSystem(), n.config.Name, snapshot.Tick)
+		metrics.ObserveReconcileTime(logger.ComponentNmapInstance, n.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
+		if err != nil {
+			if strings.Contains(err.Error(), nmap_service.ErrServiceNotExist.Error()) {
+				// Log the error but don't fail - this might happen during creation when nmap doesn't exist yet
+				n.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
+				return nil
+			} else {
+				return fmt.Errorf("failed to get nmap metrics: %w", err)
+			}
 		}
-	}
-	metrics.ObserveReconcileTime(logger.ComponentNmapInstance, n.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
 
-	// Stores the raw service info
-	n.ObservedState.ServiceInfo = svcInfo
-
-	if n.ObservedState.LastStateChange == 0 {
-		n.ObservedState.LastStateChange = time.Now().Unix()
-	}
-
-	// Fetch the actual Nmap config from the service
-	start = time.Now()
-	observedConfig, err := n.monitorService.GetConfig(ctx, services.GetFileSystem(), n.baseFSMInstance.GetID())
-	metrics.ObserveReconcileTime(logger.ComponentNmapInstance, n.baseFSMInstance.GetID()+".getConfig", time.Since(start))
-	if err == nil {
-		// Only update if we successfully got the config
-		n.ObservedState.ObservedNmapServiceConfig = observedConfig
-	} else {
-		if strings.Contains(err.Error(), nmap_service.ErrServiceNotExist.Error()) {
-			// Log the error but don't fail - this might happen during creation when the config file doesn't exist yet
-			n.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
-			return nil
-		} else {
-			return fmt.Errorf("failed to get observed Nmap config: %w", err)
+		// Stores the raw service info
+		observedStateMu.Lock()
+		n.ObservedState.ServiceInfo = svcInfo
+		if n.ObservedState.LastStateChange == 0 {
+			n.ObservedState.LastStateChange = time.Now().Unix()
 		}
+		observedStateMu.Unlock()
+		return nil
+	})
+
+	// Fetch the actual Nmap config in parallel
+	g.Go(func() error {
+		start := time.Now()
+		observedConfig, err := n.monitorService.GetConfig(gctx, services.GetFileSystem(), n.baseFSMInstance.GetID())
+		metrics.ObserveReconcileTime(logger.ComponentNmapInstance, n.baseFSMInstance.GetID()+".getConfig", time.Since(start))
+		if err == nil {
+			// Only update if we successfully got the config
+			observedStateMu.Lock()
+			n.ObservedState.ObservedNmapServiceConfig = observedConfig
+			observedStateMu.Unlock()
+		} else {
+			if strings.Contains(err.Error(), nmap_service.ErrServiceNotExist.Error()) {
+				// Log the error but don't fail - this might happen during creation when the config file doesn't exist yet
+				n.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
+				return nil
+			} else {
+				return fmt.Errorf("failed to get observed Nmap config: %w", err)
+			}
+		}
+		return nil
+	})
+
+	// Wait for all parallel operations to complete
+	if err := g.Wait(); err != nil {
+		return err
 	}
 
 	// Detect a config change - but let the S6 manager handle the actual reconciliation

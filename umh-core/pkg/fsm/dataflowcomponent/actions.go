@@ -21,6 +21,8 @@ import (
 	"strings"
 	"time"
 
+	"sync"
+
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -31,6 +33,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
+	"golang.org/x/sync/errgroup"
 )
 
 // The functions in this file define heavier, possibly fail-prone operations
@@ -184,15 +187,6 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 		return ctx.Err()
 	}
 
-	start := time.Now()
-	info, err := d.getServiceStatus(ctx, services.GetFileSystem(), snapshot.Tick)
-	if err != nil {
-		return fmt.Errorf("error while getting service status: %w", err)
-	}
-	metrics.ObserveReconcileTime(logger.ComponentDataFlowComponentInstance, d.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
-	// Store the raw service info
-	d.ObservedState.ServiceInfo = info
-
 	currentState := d.baseFSMInstance.GetCurrentFSMState()
 	desiredState := d.baseFSMInstance.GetDesiredFSMState()
 	// If both desired and current state are stopped, we can return immediately
@@ -201,21 +195,51 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 		return nil
 	}
 
-	// Fetch the actual Benthos config from the service
-	start = time.Now()
-	observedConfig, err := d.service.GetConfig(ctx, services.GetFileSystem(), d.baseFSMInstance.GetID())
-	metrics.ObserveReconcileTime(logger.ComponentDataFlowComponentInstance, d.baseFSMInstance.GetID()+".getConfig", time.Since(start))
-	if err == nil {
-		// Only update if we successfully got the config
-		d.ObservedState.ObservedDataflowComponentConfig = observedConfig
-	} else {
-		if strings.Contains(err.Error(), dataflowcomponentservice.ErrServiceNotExists.Error()) {
-			// Log the error but don't fail - this might happen during creation when the config file doesn't exist yet
-			d.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
-			return nil
-		} else {
-			return fmt.Errorf("failed to get observed DataflowComponent config: %w", err)
+	// Start an errgroup with the same context so if one sub-task
+	// fails or the context is canceled, all sub-tasks are signaled to stop.
+	g, gctx := errgroup.WithContext(ctx)
+	observedStateMu := sync.Mutex{}
+
+	// Fetch service status in parallel
+	g.Go(func() error {
+		start := time.Now()
+		info, err := d.getServiceStatus(gctx, services.GetFileSystem(), snapshot.Tick)
+		metrics.ObserveReconcileTime(logger.ComponentDataFlowComponentInstance, d.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
+		if err != nil {
+			return fmt.Errorf("error while getting service status: %w", err)
 		}
+		// Store the raw service info
+		observedStateMu.Lock()
+		d.ObservedState.ServiceInfo = info
+		observedStateMu.Unlock()
+		return nil
+	})
+
+	// Fetch the actual Benthos config in parallel
+	g.Go(func() error {
+		start := time.Now()
+		observedConfig, err := d.service.GetConfig(gctx, services.GetFileSystem(), d.baseFSMInstance.GetID())
+		metrics.ObserveReconcileTime(logger.ComponentDataFlowComponentInstance, d.baseFSMInstance.GetID()+".getConfig", time.Since(start))
+		if err == nil {
+			// Only update if we successfully got the config
+			observedStateMu.Lock()
+			d.ObservedState.ObservedDataflowComponentConfig = observedConfig
+			observedStateMu.Unlock()
+		} else {
+			if strings.Contains(err.Error(), dataflowcomponentservice.ErrServiceNotExists.Error()) {
+				// Log the error but don't fail - this might happen during creation when the config file doesn't exist yet
+				d.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
+				return nil
+			} else {
+				return fmt.Errorf("failed to get observed DataflowComponent config: %w", err)
+			}
+		}
+		return nil
+	})
+
+	// Wait for all parallel operations to complete
+	if err := g.Wait(); err != nil {
+		return err
 	}
 
 	if !dataflowcomponentserviceconfig.ConfigsEqual(d.config, d.ObservedState.ObservedDataflowComponentConfig) {

@@ -19,7 +19,10 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sync"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -162,27 +165,47 @@ func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, services
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".updateObservedState", time.Since(start))
 	}()
 
-	observedStateCtx, cancel := context.WithTimeout(ctx, constants.S6UpdateObservedStateTimeout)
-	defer cancel()
+	// Start an errgroup with the same context so if one sub-task
+	// fails or the context is canceled, all sub-tasks are signaled to stop.
+	g, gctx := errgroup.WithContext(ctx)
+	observedStateMu := sync.Mutex{}
 
-	//nolint:gosec
-	serviceInfo, err := s.service.Status(observedStateCtx, s.servicePath, services.GetFileSystem())
-	if err != nil {
-		return fmt.Errorf("failed to get service status: %w", err)
+	// Fetch service status in parallel
+	g.Go(func() error {
+		observedStateCtx, cancel := context.WithTimeout(gctx, constants.S6UpdateObservedStateTimeout)
+		defer cancel()
+
+		//nolint:gosec
+		serviceInfo, err := s.service.Status(observedStateCtx, s.servicePath, services.GetFileSystem())
+		if err != nil {
+			return fmt.Errorf("failed to get service status: %w", err)
+		}
+
+		observedStateMu.Lock()
+		s.ObservedState.ServiceInfo = serviceInfo
+		if s.ObservedState.LastStateChange == 0 {
+			s.ObservedState.LastStateChange = time.Now().Unix()
+		}
+		observedStateMu.Unlock()
+		return nil
+	})
+
+	// Fetch the actual service config in parallel
+	g.Go(func() error {
+		config, err := s.service.GetConfig(gctx, s.servicePath, services.GetFileSystem())
+		if err != nil {
+			return fmt.Errorf("failed to get service config: %w", err)
+		}
+		observedStateMu.Lock()
+		s.ObservedState.ObservedS6ServiceConfig = config
+		observedStateMu.Unlock()
+		return nil
+	})
+
+	// Wait for all parallel operations to complete
+	if err := g.Wait(); err != nil {
+		return err
 	}
-
-	s.ObservedState.ServiceInfo = serviceInfo
-
-	if s.ObservedState.LastStateChange == 0 {
-		s.ObservedState.LastStateChange = time.Now().Unix()
-	}
-
-	// Fetch the actual service config from s6
-	config, err := s.service.GetConfig(ctx, s.servicePath, services.GetFileSystem())
-	if err != nil {
-		return fmt.Errorf("failed to get service config: %w", err)
-	}
-	s.ObservedState.ObservedS6ServiceConfig = config
 
 	// the easiest way to do this is causing this instance to be removed, which will trigger a re-create by the manager
 	if !reflect.DeepEqual(s.ObservedState.ObservedS6ServiceConfig, s.config.S6ServiceConfig) {

@@ -21,6 +21,8 @@ import (
 	"strings"
 	"time"
 
+	"sync"
+
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	benthosserviceconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -32,6 +34,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
+	"golang.org/x/sync/errgroup"
 )
 
 // The functions in this file define heavier, possibly fail-prone operations
@@ -213,15 +216,6 @@ func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, ser
 	// This context was created with CreateUpdateObservedStateContextWithMinimum to ensure
 	// it has either 80% of manager time OR the minimum required time, whichever is larger
 
-	start := time.Now()
-	info, err := b.getServiceStatus(ctx, services, snapshot.Tick, snapshot.SnapshotTime)
-	if err != nil {
-		return err
-	}
-	metrics.ObserveReconcileTime(logger.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
-	// Store the raw service info
-	b.ObservedState.ServiceInfo = info
-
 	currentState := b.baseFSMInstance.GetCurrentFSMState()
 	desiredState := b.baseFSMInstance.GetDesiredFSMState()
 	// If both desired and current state are stopped, we can return immediately
@@ -230,21 +224,51 @@ func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, ser
 		return nil
 	}
 
-	// Fetch the actual Benthos config from the service
-	start = time.Now()
-	observedConfig, err := b.service.GetConfig(ctx, services.GetFileSystem(), b.baseFSMInstance.GetID())
-	metrics.ObserveReconcileTime(logger.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".getConfig", time.Since(start))
-	if err == nil {
-		// Only update if we successfully got the config
-		b.ObservedState.ObservedBenthosServiceConfig = observedConfig
-	} else {
-		if strings.Contains(err.Error(), benthos_service.ErrServiceNotExist.Error()) {
-			// Log the error but don't fail - this might happen during creation when the config file doesn't exist yet
-			b.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
-			return nil
-		} else {
-			return fmt.Errorf("failed to get observed Benthos config: %w", err)
+	// Start an errgroup with the same context so if one sub-task
+	// fails or the context is canceled, all sub-tasks are signaled to stop.
+	g, gctx := errgroup.WithContext(ctx)
+	observedStateMu := sync.Mutex{}
+
+	// Fetch service status in parallel
+	g.Go(func() error {
+		start := time.Now()
+		info, err := b.getServiceStatus(gctx, services, snapshot.Tick, snapshot.SnapshotTime)
+		metrics.ObserveReconcileTime(logger.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
+		if err != nil {
+			return err
 		}
+		// Store the raw service info
+		observedStateMu.Lock()
+		b.ObservedState.ServiceInfo = info
+		observedStateMu.Unlock()
+		return nil
+	})
+
+	// Fetch the actual Benthos config in parallel
+	g.Go(func() error {
+		start := time.Now()
+		observedConfig, err := b.service.GetConfig(gctx, services.GetFileSystem(), b.baseFSMInstance.GetID())
+		metrics.ObserveReconcileTime(logger.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".getConfig", time.Since(start))
+		if err == nil {
+			// Only update if we successfully got the config
+			observedStateMu.Lock()
+			b.ObservedState.ObservedBenthosServiceConfig = observedConfig
+			observedStateMu.Unlock()
+		} else {
+			if strings.Contains(err.Error(), benthos_service.ErrServiceNotExist.Error()) {
+				// Log the error but don't fail - this might happen during creation when the config file doesn't exist yet
+				b.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
+				return nil
+			} else {
+				return fmt.Errorf("failed to get observed Benthos config: %w", err)
+			}
+		}
+		return nil
+	})
+
+	// Wait for all parallel operations to complete
+	if err := g.Wait(); err != nil {
+		return err
 	}
 
 	// Detect a config change - but let the S6 manager handle the actual reconciliation

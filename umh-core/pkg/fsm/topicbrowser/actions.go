@@ -21,6 +21,8 @@ import (
 	"strings"
 	"time"
 
+	"sync"
+
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/topicbrowserserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -32,6 +34,7 @@ import (
 	tbsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
+	"golang.org/x/sync/errgroup"
 )
 
 // CreateInstance attempts to add the Topic Browser to the manager.
@@ -189,30 +192,51 @@ func (i *TopicBrowserInstance) UpdateObservedStateOfInstance(ctx context.Context
 		return nil
 	}
 
-	start := time.Now()
-	info, err := i.getServiceStatus(ctx, services, snapshot)
-	if err != nil {
-		return fmt.Errorf("error while getting service status: %w", err)
-	}
-	metrics.ObserveReconcileTime(logger.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
-	// Store the raw service info
-	i.ObservedState.ServiceInfo = info
+	// Start an errgroup with the same context so if one sub-task
+	// fails or the context is canceled, all sub-tasks are signaled to stop.
+	g, gctx := errgroup.WithContext(ctx)
+	observedStateMu := sync.Mutex{}
 
-	// Fetch the actual Benthos config from the service
-	start = time.Now()
-	observedConfig, err := i.service.GetConfig(ctx, services.GetFileSystem(), i.baseFSMInstance.GetID())
-	metrics.ObserveReconcileTime(logger.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".getConfig", time.Since(start))
-	if err == nil {
-		// Only update if we successfully got the config
-		i.ObservedState.ObservedServiceConfig.BenthosConfig = observedConfig
-	} else {
-		if strings.Contains(err.Error(), tbsvc.ErrServiceNotExist.Error()) {
-			// Log the error but don't fail - this might happen during creation when the config file doesn't exist yet
-			i.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
-			return nil
-		} else {
-			return fmt.Errorf("failed to get observed TopicBrowser config: %w", err)
+	// Fetch service status in parallel
+	g.Go(func() error {
+		start := time.Now()
+		info, err := i.getServiceStatus(gctx, services, snapshot)
+		metrics.ObserveReconcileTime(logger.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
+		if err != nil {
+			return fmt.Errorf("error while getting service status: %w", err)
 		}
+		// Store the raw service info
+		observedStateMu.Lock()
+		i.ObservedState.ServiceInfo = info
+		observedStateMu.Unlock()
+		return nil
+	})
+
+	// Fetch the actual Benthos config in parallel
+	g.Go(func() error {
+		start := time.Now()
+		observedConfig, err := i.service.GetConfig(gctx, services.GetFileSystem(), i.baseFSMInstance.GetID())
+		metrics.ObserveReconcileTime(logger.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".getConfig", time.Since(start))
+		if err == nil {
+			// Only update if we successfully got the config
+			observedStateMu.Lock()
+			i.ObservedState.ObservedServiceConfig.BenthosConfig = observedConfig
+			observedStateMu.Unlock()
+		} else {
+			if strings.Contains(err.Error(), tbsvc.ErrServiceNotExist.Error()) {
+				// Log the error but don't fail - this might happen during creation when the config file doesn't exist yet
+				i.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
+				return nil
+			} else {
+				return fmt.Errorf("failed to get observed TopicBrowser config: %w", err)
+			}
+		}
+		return nil
+	})
+
+	// Wait for all parallel operations to complete
+	if err := g.Wait(); err != nil {
+		return err
 	}
 
 	if !topicbrowserserviceconfig.ConfigsEqual(i.config, i.ObservedState.ObservedServiceConfig) {
