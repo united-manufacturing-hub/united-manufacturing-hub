@@ -288,10 +288,10 @@ func (m *MockProtocolConverterService) Status(
 	snapshot fsm.SystemSnapshot,
 	protConvName string,
 ) (ServiceInfo, error) {
-	m.StatusCalled = true
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.StatusCalled = true
 
 	// Check if the component exists in the ExistingComponents map
 	if exists, ok := m.ExistingComponents[protConvName]; !ok || !exists {
@@ -314,10 +314,10 @@ func (m *MockProtocolConverterService) AddToManager(
 	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
 	protConvName string,
 ) error {
-	m.AddToManagerCalled = true
-
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	m.AddToManagerCalled = true
 
 	underlyingName := fmt.Sprintf("protocolconverter-%s", protConvName)
 
@@ -370,10 +370,10 @@ func (m *MockProtocolConverterService) UpdateInManager(
 	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
 	protConvName string,
 ) error {
-	m.UpdateInManagerCalled = true
-
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	m.UpdateInManagerCalled = true
 
 	underlyingName := fmt.Sprintf("protocolconverter-%s", protConvName)
 
@@ -432,10 +432,10 @@ func (m *MockProtocolConverterService) RemoveFromManager(
 	filesystemService filesystem.Service,
 	protConvName string,
 ) error {
-	m.RemoveFromManagerCalled = true
-
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	m.RemoveFromManagerCalled = true
 
 	underlyingName := fmt.Sprintf("protocolconverter-%s", protConvName)
 
@@ -473,10 +473,10 @@ func (m *MockProtocolConverterService) RemoveFromManager(
 
 // StartProtocolConverter mocks starting a ProtocolConverter
 func (m *MockProtocolConverterService) StartProtocolConverter(ctx context.Context, filesystemService filesystem.Service, protConvName string) error {
-	m.StartCalled = true
-
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	m.StartCalled = true
 
 	underlyingName := fmt.Sprintf("protocolconverter-%s", protConvName)
 
@@ -515,10 +515,10 @@ func (m *MockProtocolConverterService) StopProtocolConverter(
 	filesystemService filesystem.Service,
 	protConvName string,
 ) error {
-	m.StopCalled = true
-
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	m.StopCalled = true
 
 	underlyingName := fmt.Sprintf("protocolconverter-%s", protConvName)
 
@@ -562,10 +562,10 @@ func (m *MockProtocolConverterService) ForceRemoveProtocolConverter(ctx context.
 
 // ServiceExists mocks checking if a ProtocolConverter exists
 func (m *MockProtocolConverterService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, protConvName string) bool {
-	m.ServiceExistsCalled = true
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.ServiceExistsCalled = true
 
 	return m.ServiceExistsResult
 }
