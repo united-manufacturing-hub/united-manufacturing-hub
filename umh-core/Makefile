@@ -252,7 +252,8 @@ lint:
 nilaway:
 	# See lefthook.yaml for more details
 	nilaway \
-		-exclude-pkgs="github.com/prometheus/prometheus/util/textparse,github.com/onsi/ginkgo/v2,go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp,github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda" \
+		-include-pkgs="github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core" \
+		-exclude-pkgs="github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda" \
 		-exclude-errors-in-files="integration/" \
 		./...
 
