@@ -1214,6 +1214,10 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	}
 
 	// filter the logs to only include logs since last deployment time
+	// We linearly search the array for the first entry after the last deployment time
+	// This is O(n) but the benchmark shows that the performance impact is negligible
+	// compared to the cost of reading the log file (11μs per call for 10.000 lines)
+	// this is why we decided agains using a cached index that comes with a high complexity
 	if !getLastDeploymentTime(servicePath).IsZero() {
 		lastDeployed := getLastDeploymentTime(servicePath)
 		for i, entry := range out {
