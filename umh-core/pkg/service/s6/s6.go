@@ -103,7 +103,11 @@ func (h HealthStatus) String() string {
 
 // ServiceInfo contains information about an S6 service
 type ServiceInfo struct {
+	LastChangedAt      time.Time     // Timestamp when the service status last changed
+	LastReadyAt        time.Time     // Timestamp when the service was last ready
+	LastDeploymentTime time.Time     // Timestamp when the service config last changed
 	Status             ServiceStatus // Current status of the service
+	ExitHistory        []ExitEvent   // History of exit codes
 	Uptime             int64         // Seconds the service has been up
 	DownTime           int64         // Seconds the service has been down
 	ReadyTime          int64         // Seconds the service has been ready
@@ -115,10 +119,6 @@ type ServiceInfo struct {
 	IsFinishing        bool          // Whether the service is shutting down
 	IsWantingUp        bool          // Whether the service wants to be up (based on flags)
 	IsReady            bool          // Whether the service is ready
-	ExitHistory        []ExitEvent   // History of exit codes
-	LastChangedAt      time.Time     // Timestamp when the service status last changed
-	LastReadyAt        time.Time     // Timestamp when the service was last ready
-	LastDeploymentTime time.Time     // Timestamp when the service config last changed
 }
 
 // ExitEvent represents a service exit event
