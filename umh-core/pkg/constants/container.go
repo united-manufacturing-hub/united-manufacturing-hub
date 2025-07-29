@@ -25,7 +25,7 @@ const (
 
 // Container Operation Timeouts - Level 1 Service (depends on S6)
 // ContainerUpdateObservedStateTimeout is the timeout for updating the observed state
-const ContainerUpdateObservedStateTimeout = 10 * time.Millisecond
+const ContainerUpdateObservedStateTimeout = 40 * time.Millisecond
 
 // Health assessment thresholds
 const (

@@ -18,17 +18,17 @@ import "time"
 
 const (
 	// Used to set the context timeout for updating the observed state of a DataflowComponent instance
-	DataflowComponentUpdateObservedStateTimeout = time.Millisecond * 10
+	DataflowComponentUpdateObservedStateTimeout = 40 * time.Millisecond
 )
 
 const (
 	// WaitTimeBeforeMarkingStartFailed is the time before marking a DataflowComponent instance as Startfailed if the underlying benthos has not started and stable
 	// Benthos takes some time to start usually and we give an enough buffer time of 15 seconds
 	// Default value is 15 seconds
-	WaitTimeBeforeMarkingStartFailed = time.Second * 15
+	WaitTimeBeforeMarkingStartFailed = 60 * time.Second
 )
 
 const (
 	// Time to wait for a dataflowcomponent to be active in the action
-	DataflowComponentWaitForActiveTimeout = time.Second * 30
+	DataflowComponentWaitForActiveTimeout = 120 * time.Second
 )

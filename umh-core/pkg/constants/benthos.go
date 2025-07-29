@@ -21,14 +21,14 @@ const (
 	BenthosConfigDirName  = "config"
 	BenthosLogBaseDir     = "/data/logs"
 	BenthosConfigFileName = "benthos.yaml"
-	BenthosLogWindow      = time.Minute * 10
+	BenthosLogWindow      = 40 * time.Minute
 )
 
 const (
 	// Benthos Operation Timeouts - Level 1 Service (depends on S6)
 	// Benthos depends on S6 for service management
-	BenthosUpdateObservedStateTimeout = 10 * time.Millisecond
-	BenthosRemoveTimeout              = 10 * time.Millisecond
+	BenthosUpdateObservedStateTimeout = 40 * time.Millisecond
+	BenthosRemoveTimeout              = 40 * time.Millisecond
 	BenthosMaxLines                   = 10000
 )
 
@@ -44,7 +44,7 @@ var (
 )
 
 const (
-	BenthosMaxMetricsAndConfigAge = time.Second * 10
+	BenthosMaxMetricsAndConfigAge = 40 * time.Second
 )
 
 const (
@@ -69,5 +69,5 @@ const (
 	// advance the state machine.
 	//
 	// Change this constant if you need a different stability window.
-	BenthosHealthCheckStableDurationInTicks = uint64(5 * time.Second / DefaultTickerTime) // 5 seconds
+	BenthosHealthCheckStableDurationInTicks = uint64(20 * time.Second / DefaultTickerTime) // 20 seconds
 )

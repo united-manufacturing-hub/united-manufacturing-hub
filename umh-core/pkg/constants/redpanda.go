@@ -22,13 +22,13 @@ const (
 )
 
 const (
-	RedpandaLogWindow = 10 * time.Minute
+	RedpandaLogWindow = 40 * time.Minute
 )
 
 const (
 	// Redpanda Operation Timeouts - Level 1 Service (depends on S6)
 	// RedpandaUpdateObservedStateTimeout is the timeout for updating the observed state
-	RedpandaUpdateObservedStateTimeout = 40 * time.Millisecond
+	RedpandaUpdateObservedStateTimeout = 160 * time.Millisecond
 )
 
 var (
@@ -42,12 +42,12 @@ const (
 )
 
 const (
-	RedpandaMaxMetricsAndConfigAge = 10 * time.Second
+	RedpandaMaxMetricsAndConfigAge = 40 * time.Second
 )
 
 const (
 	AdminAPIPort    = 9644
-	AdminAPITimeout = 25 * time.Millisecond
+	AdminAPITimeout = 100 * time.Millisecond
 )
 
 const (
@@ -60,5 +60,5 @@ const (
 
 const (
 	SchemaRegistryPort    = 8081
-	SchemaRegistryTimeout = 20 * time.Millisecond
+	SchemaRegistryTimeout = 80 * time.Millisecond
 )

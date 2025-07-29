@@ -17,7 +17,7 @@ package constants
 import "time"
 
 const (
-	ExpectedMaxP95ExecutionTimePerEvent     = 1 * time.Millisecond
+	ExpectedMaxP95ExecutionTimePerEvent     = 4 * time.Millisecond
 	DefaultMaxTicksToRemainInTransientState = 600 // If a FSM remains in a transient state for more than this number of ticks, it will be considered stuck and will trigger a remove / force remove
 )
 

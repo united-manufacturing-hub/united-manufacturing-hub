@@ -19,7 +19,7 @@ import "time"
 const (
 	// FilesystemSlowReadThreshold defines when a file read operation is considered slow
 	// and should be logged for debugging purposes.
-	FilesystemSlowReadThreshold = time.Millisecond * 5
+	FilesystemSlowReadThreshold = 20 * time.Millisecond
 
 	// FilesystemWorkerMultiplier is used to determine the number of worker goroutines
 	// for file operations based on CPU count. Since file reading is I/O bound,

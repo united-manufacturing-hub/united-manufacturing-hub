@@ -21,7 +21,7 @@ import (
 
 const (
 	// DefaultTickerTime is the default time between ticks
-	DefaultTickerTime = 100 * time.Millisecond
+	DefaultTickerTime = 400 * time.Millisecond
 
 	// Time budget percentages for parallel execution
 	// These percentages are applied to whatever context time budget is available,
@@ -42,7 +42,7 @@ const (
 	// detector will log warnings and record metrics.
 	// Starvation will take place for example when adding hundreds of new services
 	// at once.
-	StarvationThreshold = 15 * time.Second
+	StarvationThreshold = 60 * time.Second
 
 	// Default names
 	DefaultManagerName  = "Core"
