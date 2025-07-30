@@ -26,7 +26,6 @@ var (
 	instanceNotFoundRegex = regexp.MustCompile(`instance (\S+) not found`)
 	s6ServiceExistsRegex  = regexp.MustCompile(`S6 service (\S+) (?:exists|already exists)`)
 	s6ServiceNotExistRegex = regexp.MustCompile(`S6 service (\S+) does not exist`)
-	reconcileErrorRegex   = regexp.MustCompile(`error reconciling external changes:.*instance (\S+) not found`)
 	backoffSuspendRegex   = regexp.MustCompile(`Suspending operations for (\d+) ticks.*instance (\S+) not found`)
 )
 
@@ -68,7 +67,7 @@ func (a *LogAnalyzer) AnalyzeOrphanedServices() {
 		// Check for backoff suspensions
 		if match := backoffSuspendRegex.FindStringSubmatch(entry.Message); match != nil {
 			ticks := 0
-			fmt.Sscanf(match[1], "%d", &ticks)
+			_, _ = fmt.Sscanf(match[1], "%d", &ticks)
 			instanceName := match[2]
 			if orphan, exists := orphans[instanceName]; exists {
 				if ticks > orphan.BackoffTicks {
@@ -239,6 +238,9 @@ func (a *LogAnalyzer) ShowInstanceNotFoundTimeline() {
 
 func (a *LogAnalyzer) findTickForTimestamp(t time.Time) int {
 	for tick, tickData := range a.TickMap {
+		if tickData == nil {
+			continue
+		}
 		if t.After(tickData.Timestamp.Add(-time.Second)) &&
 		   t.Before(tickData.Timestamp.Add(time.Second)) {
 			return tick

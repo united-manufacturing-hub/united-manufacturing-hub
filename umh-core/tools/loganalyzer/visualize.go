@@ -49,7 +49,10 @@ func (a *LogAnalyzer) ShowVisualTimeline(startTick, endTick int) {
 	fmt.Println()
 
 	for _, fsmName := range fsmNames {
-		history := a.FSMHistories[fsmName]
+		history, ok := a.FSMHistories[fsmName]
+		if !ok || history == nil {
+			continue
+		}
 		fmt.Printf("%-*s ", maxNameLen, truncateName(fsmName, maxNameLen))
 		
 		currentState := getInitialState(history)
@@ -90,10 +93,10 @@ func (a *LogAnalyzer) ShowVisualTimeline(startTick, endTick int) {
 }
 
 func getInitialState(history *FSMHistory) string {
-	if len(history.Transitions) > 0 {
-		return history.Transitions[0].FromState
+	if history == nil || len(history.Transitions) == 0 {
+		return ""
 	}
-	return ""
+	return history.Transitions[0].FromState
 }
 
 func getStateSymbol(state string) string {
@@ -138,6 +141,9 @@ func (a *LogAnalyzer) ShowConcurrentActivity() {
 	tickActivity := make(map[int][]string)
 	
 	for fsmName, history := range a.FSMHistories {
+		if history == nil {
+			continue
+		}
 		for _, transition := range history.Transitions {
 			if tickActivity[transition.Tick] == nil {
 				tickActivity[transition.Tick] = make([]string, 0)

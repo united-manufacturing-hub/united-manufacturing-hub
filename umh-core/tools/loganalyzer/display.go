@@ -33,7 +33,10 @@ func (a *LogAnalyzer) ShowTickTimeline(startTick, endTick int) {
 	sort.Ints(ticks)
 
 	for _, tick := range ticks {
-		tickData := a.TickMap[tick]
+		tickData, ok := a.TickMap[tick]
+		if !ok || tickData == nil {
+			continue
+		}
 		fmt.Printf("Tick %d (%s):\n", tick, tickData.Timestamp.Format("15:04:05.000"))
 		
 		fsmEvents := make([]LogEntry, 0)
@@ -68,9 +71,10 @@ func (a *LogAnalyzer) ShowTickTimeline(startTick, endTick int) {
 			fmt.Println("  FSM Transitions:")
 			for _, event := range fsmEvents {
 				status := "✓"
-				if event.EntryType == EntryTypeFSMAttempt {
+				switch event.EntryType {
+				case EntryTypeFSMAttempt:
 					status = "→"
-				} else if event.EntryType == EntryTypeFSMFailed {
+				case EntryTypeFSMFailed:
 					status = "✗"
 				}
 				toState := event.ToState
@@ -130,7 +134,7 @@ func (a *LogAnalyzer) ShowFSMHistory(fsmName string) {
 			fmt.Printf("State: %s\n", transition.FromState)
 		}
 		
-		arrow := "→"
+		var arrow string
 		if transition.Success {
 			arrow = "✓→"
 			currentState = transition.ToState
@@ -170,7 +174,10 @@ func (a *LogAnalyzer) ListFSMs() {
 	fmt.Println(strings.Repeat("-", maxNameLen+30))
 	
 	for _, name := range fsms {
-		history := a.FSMHistories[name]
+		history, ok := a.FSMHistories[name]
+		if !ok || history == nil {
+			continue
+		}
 		lastState := "unknown"
 		
 		for i := len(history.Transitions) - 1; i >= 0; i-- {
@@ -193,7 +200,7 @@ func (a *LogAnalyzer) FindStuckFSMs() {
 	stuck := make([]string, 0)
 	
 	for name, history := range a.FSMHistories {
-		if len(history.Transitions) == 0 {
+		if history == nil || len(history.Transitions) == 0 {
 			continue
 		}
 
@@ -217,7 +224,10 @@ func (a *LogAnalyzer) FindStuckFSMs() {
 	}
 	
 	for _, name := range stuck {
-		history := a.FSMHistories[name]
+		history, ok := a.FSMHistories[name]
+		if !ok || history == nil || len(history.Transitions) == 0 {
+			continue
+		}
 		lastTransition := history.Transitions[len(history.Transitions)-1]
 		
 		fmt.Printf("FSM: %s\n", name)
@@ -229,6 +239,9 @@ func (a *LogAnalyzer) FindStuckFSMs() {
 }
 
 func countRecentFailures(history *FSMHistory) int {
+	if history == nil {
+		return 0
+	}
 	count := 0
 	for i := len(history.Transitions) - 1; i >= 0; i-- {
 		if !history.Transitions[i].Success {
@@ -251,6 +264,9 @@ func (a *LogAnalyzer) ShowSummary() {
 	failedTransitions := 0
 	
 	for _, history := range a.FSMHistories {
+		if history == nil {
+			continue
+		}
 		for _, transition := range history.Transitions {
 			totalTransitions++
 			if !transition.Success {
@@ -295,12 +311,14 @@ func (a *LogAnalyzer) ShowSummary() {
 		}
 		sort.Ints(ticks)
 		
-		firstTick := a.TickMap[ticks[0]]
-		lastTick := a.TickMap[ticks[len(ticks)-1]]
+		firstTick, ok1 := a.TickMap[ticks[0]]
+		lastTick, ok2 := a.TickMap[ticks[len(ticks)-1]]
 		
-		fmt.Printf("\nOverall Time Range: %s - %s\n", 
-			firstTick.Timestamp.Format("15:04:05"),
-			lastTick.Timestamp.Format("15:04:05"))
+		if ok1 && ok2 && firstTick != nil && lastTick != nil {
+			fmt.Printf("\nOverall Time Range: %s - %s\n", 
+				firstTick.Timestamp.Format("15:04:05"),
+				lastTick.Timestamp.Format("15:04:05"))
+		}
 		fmt.Printf("Overall Tick Range: %d - %d\n", ticks[0], ticks[len(ticks)-1])
 	}
 }

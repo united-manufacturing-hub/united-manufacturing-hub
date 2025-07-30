@@ -48,7 +48,7 @@ func ParseLogFile(filename string) (*LogAnalyzer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open log file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	analyzer := &LogAnalyzer{
 		Entries:      make([]LogEntry, 0),

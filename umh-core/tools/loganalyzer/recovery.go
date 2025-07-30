@@ -71,6 +71,9 @@ func (a *LogAnalyzer) findFSMsAtTime(t time.Time) map[string]string {
 	states := make(map[string]string)
 	
 	for fsmName, history := range a.FSMHistories {
+		if history == nil {
+			continue
+		}
 		var lastState string
 		for _, transition := range history.Transitions {
 			if transition.Timestamp.Before(t) && transition.Success {
