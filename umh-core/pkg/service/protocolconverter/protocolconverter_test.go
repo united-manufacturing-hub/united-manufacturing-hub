@@ -401,18 +401,21 @@ var _ = Describe("DataFlowComponentService", func() {
 			err := service.StartProtocolConverter(ctx, mockSvcRegistry.GetFileSystem(), protConvName)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Verify the desired state was changed to started
+			// Verify the connection desired state was changed to up
 			underlyingDFCReadName := service.getUnderlyingDFCReadName(protConvName)
 			underlyingConnectionName := service.getUnderlyingConnectionName(protConvName)
-			var foundDfcActive, foundConnUp bool
+			
+			// DFCs should remain stopped until FSM reaches starting_dfc state
+			// This prevents DFCs from producing messages before connection is established
+			var foundDfcStopped, foundConnUp bool
 			for _, config := range service.dataflowComponentConfig {
 				if config.Name == underlyingDFCReadName {
-					foundDfcActive = true
-					Expect(config.DesiredFSMState).To(Equal(dfcfsm.OperationalStateActive))
+					foundDfcStopped = true
+					Expect(config.DesiredFSMState).To(Equal(dfcfsm.OperationalStateStopped))
 					break
 				}
 			}
-			Expect(foundDfcActive).To(BeTrue())
+			Expect(foundDfcStopped).To(BeTrue())
 
 			for _, config := range service.connectionConfig {
 				if config.Name == underlyingConnectionName {
@@ -423,29 +426,30 @@ var _ = Describe("DataFlowComponentService", func() {
 			}
 			Expect(foundConnUp).To(BeTrue())
 
-			// Now start the component
+			// Call StartProtocolConverter again - should be idempotent
 			err = service.StartProtocolConverter(ctx, mockSvcRegistry.GetFileSystem(), protConvName)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Verify the desired state was changed to active
-			var foundDfcStopped, foundConnStopped bool
+			// Verify the states remain the same (idempotent operation)
+			var foundDfcStillStopped, foundConnStillUp bool
 			for _, config := range service.dataflowComponentConfig {
 				if config.Name == underlyingDFCReadName {
-					foundDfcStopped = true
-					Expect(config.DesiredFSMState).To(Equal(dfcfsm.OperationalStateActive))
+					foundDfcStillStopped = true
+					// DFC should still be stopped - only starts when FSM reaches starting_dfc
+					Expect(config.DesiredFSMState).To(Equal(dfcfsm.OperationalStateStopped))
 					break
 				}
 			}
-			Expect(foundDfcStopped).To(BeTrue())
+			Expect(foundDfcStillStopped).To(BeTrue())
 
 			for _, config := range service.connectionConfig {
 				if config.Name == underlyingConnectionName {
-					foundConnStopped = true
+					foundConnStillUp = true
 					Expect(config.DesiredFSMState).To(Equal(connfsm.OperationalStateUp))
 					break
 				}
 			}
-			Expect(foundConnStopped).To(BeTrue())
+			Expect(foundConnStillUp).To(BeTrue())
 		})
 
 		It("should return error when trying to start/stop non-existent protocolConverter", func() {

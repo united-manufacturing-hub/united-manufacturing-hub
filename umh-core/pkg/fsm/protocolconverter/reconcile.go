@@ -265,13 +265,10 @@ func (p *ProtocolConverterInstance) reconcileTransitionToActive(ctx context.Cont
 
 	// If we're stopped, we need to start first
 	if currentState == OperationalStateStopped {
-		// BACKWARD COMPATIBILITY: Keep the StartInstance call for now
-		// The grey state fix is handled by the FSM-state-aware EvaluateDFCDesiredStates logic
-		if err := p.StartInstance(ctx, services.GetFileSystem()); err != nil {
-			return err, false
-		}
-		p.ObservedState.ServiceInfo.StatusReason = "started"
 		// Send event to transition from Stopped to StartingConnection
+		// The connection will be started by StartConnectionInstance in the starting_connection state
+		// This prevents DFCs from starting before the connection is established
+		p.ObservedState.ServiceInfo.StatusReason = "starting"
 		return p.baseFSMInstance.SendEvent(ctx, EventStart), true
 	}
 

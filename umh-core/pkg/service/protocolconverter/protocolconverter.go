@@ -689,12 +689,13 @@ func (p *ProtocolConverterService) RemoveFromManager(
 //  3. DFC configs may transition from empty -> populated or populated -> empty as templates
 //     are processed, requiring state re-evaluation
 //
-// FSM-STATE-AWARE LOGIC (CRITICAL FOR PREVENTING GREY STATES):
+// FSM-STATE-AWARE LOGIC (CRITICAL FOR PREVENTING DATA LOSS AND CONFUSION):
 // - If protocol converter desired state is stopped: all DFCs -> stopped (regardless of FSM state)  
 // - If protocol converter desired state is active:
 //   - DFCs -> active only if: (1) they have non-empty input configs AND (2) connection is confirmed up
 //   - Connection confirmed up means: currentFSMState is "starting_dfc", "idle", "active", or "degraded_*"
-//   - This prevents grey/neutral states where Benthos starts before connection is established
+//   - This prevents the issue where DFCs start producing messages before the connection is established,
+//     causing Benthos to buffer data that can't be delivered to the target system
 //
 // Called from:
 // 1. StartProtocolConverter() - during initial activation (FSM state: "starting_connection")
@@ -721,18 +722,18 @@ func (p *ProtocolConverterService) EvaluateDFCDesiredStates(protConvName string,
 			} else {
 				// Only start the DFC if it has been configured AND connection is confirmed up
 				if len(p.dataflowComponentConfig[i].DataFlowComponentServiceConfig.BenthosConfig.Input) > 0 {
-					// CRITICAL FIX: Only set DFC to active when FSM state indicates connection is up
-					// This prevents grey/neutral states where Benthos starts before connection is established
+					// CRITICAL: Only set DFC to active when FSM state indicates connection is up
+					// This prevents the issue where DFCs start producing messages before the connection
+					// is established, causing Benthos to buffer data that can't be delivered to the target
 					// NOTE: Hardcoded strings to avoid circular import with pkg/fsm/protocolconverter
 					// These correspond to: OperationalStateStartingDFC, OperationalStateIdle, OperationalStateActive
 					if currentFSMState == "starting_dfc" || 
 					   currentFSMState == "idle" || 
 					   currentFSMState == "active" ||
-					   currentFSMState == "service_call" || // BACKWARD COMPATIBILITY: Direct service calls maintain old behavior
 					   strings.HasPrefix(currentFSMState, "degraded") {
 						p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateActive
 					} else {
-						// Connection not confirmed up yet - keep DFC stopped to prevent grey states
+						// Connection not confirmed up yet - keep DFC stopped
 						p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateStopped
 					}
 				} else {
@@ -752,18 +753,18 @@ func (p *ProtocolConverterService) EvaluateDFCDesiredStates(protConvName string,
 			} else {
 				// Only start the DFC if it has been configured AND connection is confirmed up
 				if len(p.dataflowComponentConfig[i].DataFlowComponentServiceConfig.BenthosConfig.Input) > 0 {
-					// CRITICAL FIX: Only set DFC to active when FSM state indicates connection is up
-					// This prevents grey/neutral states where Benthos starts before connection is established
+					// CRITICAL: Only set DFC to active when FSM state indicates connection is up
+					// This prevents the issue where DFCs start producing messages before the connection
+					// is established, causing Benthos to buffer data that can't be delivered to the target
 					// NOTE: Hardcoded strings to avoid circular import with pkg/fsm/protocolconverter
 					// These correspond to: OperationalStateStartingDFC, OperationalStateIdle, OperationalStateActive
 					if currentFSMState == "starting_dfc" || 
 					   currentFSMState == "idle" || 
 					   currentFSMState == "active" ||
-					   currentFSMState == "service_call" || // BACKWARD COMPATIBILITY: Direct service calls maintain old behavior
 					   strings.HasPrefix(currentFSMState, "degraded") {
 						p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateActive
 					} else {
-						// Connection not confirmed up yet - keep DFC stopped to prevent grey states
+						// Connection not confirmed up yet - keep DFC stopped
 						p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateStopped
 					}
 				} else {
@@ -828,9 +829,9 @@ func (p *ProtocolConverterService) StartProtocolConverter(
 	// Evaluate and set DFC states based on current configs
 	// NOTE: This is different from other FSMs - we don't just set all DFCs to active,
 	// we check if they have valid configs first (see EvaluateDFCDesiredStates docstring)
-	// NOTE: For backward compatibility, we pass "service_call" as FSM state to indicate
-	// this is a direct service call that should maintain old behavior (not FSM reconciliation)
-	return p.EvaluateDFCDesiredStates(protConvName, "active", "service_call")
+	// Since this is typically called from stopped state, pass "stopped" as the FSM state
+	// This means DFCs won't start immediately - they'll start when the FSM reaches starting_dfc state
+	return p.EvaluateDFCDesiredStates(protConvName, "active", "stopped")
 }
 
 // Stop stops a ProtocolConverter
