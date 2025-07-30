@@ -195,10 +195,7 @@ func (pm *DefaultPortManager) AllocatePort(instanceName string) (uint16, error) 
 		}
 
 		// Close the listener immediately
-		if err := listener.Close(); err != nil {
-			// Failed to close, but we'll still use the port
-			// This shouldn't normally happen
-		}
+		_ = listener.Close() // Ignore close errors since we've verified port availability
 
 		// Successfully allocated the port, store the mappings
 		pm.instanceToPorts[instanceName] = port
