@@ -81,7 +81,7 @@ func buildProtocolConverterAsDfc(
 
 	// Create connection info for protocol converter
 	var connections []models.Connection
-	if observed.ObservedProtocolConverterRuntimeConfig.ConnectionServiceConfig.NmapServiceConfig.Target != "" {
+	if observed.ObservedProtocolConverterSpecConfig.Config.ConnectionServiceConfig.NmapTemplate.Target != "" {
 		var lastLatencyMs float64
 		if observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ServiceInfo.NmapStatus.LastScan != nil {
 			lastLatencyMs = observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ServiceInfo.NmapStatus.LastScan.PortResult.LatencyMs
@@ -90,7 +90,7 @@ func buildProtocolConverterAsDfc(
 		connection := models.Connection{
 			Name: instance.ID + "-connection",
 			UUID: dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID + "-connection").String(), // Derive connection UUID from PC UUID
-			URI:  fmt.Sprintf("%s:%d", observed.ObservedProtocolConverterRuntimeConfig.ConnectionServiceConfig.NmapServiceConfig.Target, observed.ObservedProtocolConverterRuntimeConfig.ConnectionServiceConfig.NmapServiceConfig.Port),
+			URI:  fmt.Sprintf("%s:%s", observed.ObservedProtocolConverterSpecConfig.Config.ConnectionServiceConfig.NmapTemplate.Target, observed.ObservedProtocolConverterSpecConfig.Config.ConnectionServiceConfig.NmapTemplate.Port),
 			Health: &models.Health{
 				Message:       observed.ServiceInfo.ConnectionFSMState,
 				ObservedState: observed.ServiceInfo.ConnectionFSMState,
@@ -102,16 +102,9 @@ func buildProtocolConverterAsDfc(
 		connections = append(connections, connection)
 	}
 
-	// var templatePort string
-	// if observed.ObservedProtocolConverterTemplateConfig.ConnectionServiceConfig.NmapTemplate != nil {
-	// 	templatePort = observed.ObservedProtocolConverterTemplateConfig.ConnectionServiceConfig.NmapTemplate.Port
-	// } else {
-	// 	templatePort = "not found"
-	// }
-
 	//check if the protocol converter is initialized by checking if a read dfc is present
 	isInitialized := false
-	input := observed.ObservedProtocolConverterRuntimeConfig.DataflowComponentReadServiceConfig.BenthosConfig.Input
+	input := observed.ObservedProtocolConverterSpecConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input
 	if len(input) > 0 {
 		isInitialized = true
 	}
