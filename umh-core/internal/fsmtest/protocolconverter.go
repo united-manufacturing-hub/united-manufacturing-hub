@@ -576,7 +576,8 @@ func ResetProtocolConverterInstanceError(mockService *protocolconvertersvc.MockP
 	mockService.AddToManagerError = nil
 	mockService.UpdateInManagerError = nil
 	mockService.RemoveFromManagerError = nil
-	mockService.StartError = nil
+	mockService.StartConnectionError = nil
+	mockService.StartDFCError = nil
 	mockService.StopError = nil
 	mockService.ForceRemoveError = nil
 	mockService.ReconcileManagerError = nil
