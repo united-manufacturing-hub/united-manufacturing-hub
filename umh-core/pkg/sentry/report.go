@@ -17,6 +17,7 @@ package sentry
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/getsentry/sentry-go"
@@ -209,6 +210,68 @@ func Recover() *sentry.EventID {
 // Flush wraps sentry-go's Flush function to ensure events are sent before program exit
 func Flush(timeout time.Duration) bool {
 	return sentry.Flush(timeout)
+}
+
+// GlobalPanicRecovery sets up global panic recovery for main()
+// Use with: defer sentry.GlobalPanicRecovery(log)()
+func GlobalPanicRecovery(log *zap.SugaredLogger) func() {
+	return func() {
+		if r := recover(); r != nil {
+			// Log the panic locally first
+			if log != nil {
+				log.Errorf("GLOBAL PANIC RECOVERED: %v", r)
+			} else {
+				fmt.Fprintf(os.Stderr, "GLOBAL PANIC RECOVERED: %v\n", r)
+			}
+
+			// Capture the panic with Sentry using our custom function
+			ReportIssueWithContext(
+				fmt.Errorf("panic: %v", r),
+				IssueTypeFatal,
+				log,
+				map[string]interface{}{
+					"panic_value": fmt.Sprintf("%v", r),
+					"location":    "main_goroutine",
+				},
+			)
+
+			// Give Sentry time to send the event before the program exits
+			Flush(time.Second * 5)
+
+			// Re-panic to maintain normal crash behavior
+			panic(r)
+		}
+	}
+}
+
+// HandleGlobalPanic is a simpler alternative - call directly with defer
+// Use with: defer sentry.HandleGlobalPanic(log)
+func HandleGlobalPanic(log *zap.SugaredLogger) {
+	if r := recover(); r != nil {
+		// Log the panic locally first
+		if log != nil {
+			log.Errorf("GLOBAL PANIC RECOVERED: %v", r)
+		} else {
+			fmt.Fprintf(os.Stderr, "GLOBAL PANIC RECOVERED: %v\n", r)
+		}
+
+		// Capture the panic with Sentry using our custom function
+		ReportIssueWithContext(
+			fmt.Errorf("panic: %v", r),
+			IssueTypeFatal,
+			log,
+			map[string]interface{}{
+				"panic_value": fmt.Sprintf("%v", r),
+				"location":    "main_goroutine",
+			},
+		)
+
+		// Give Sentry time to send the event before the program exits
+		Flush(time.Second * 5)
+
+		// Re-panic to maintain normal crash behavior
+		panic(r)
+	}
 }
 
 // SafeGo launches a goroutine with automatic panic recovery

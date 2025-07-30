@@ -54,33 +54,7 @@ func main() {
 	log := logger.For(logger.ComponentCore)
 
 	// Set up global panic recovery to catch any unhandled panics
-	defer func() {
-		if r := recover(); r != nil {
-			// Log the panic locally first
-			if log != nil {
-				log.Errorf("GLOBAL PANIC RECOVERED: %v", r)
-			} else {
-				fmt.Fprintf(os.Stderr, "GLOBAL PANIC RECOVERED: %v\n", r)
-			}
-
-			// Capture the panic with Sentry using our custom function
-			sentry.ReportIssueWithContext(
-				fmt.Errorf("panic: %v", r),
-				sentry.IssueTypeFatal,
-				log,
-				map[string]interface{}{
-					"panic_value": fmt.Sprintf("%v", r),
-					"location":    "main_goroutine",
-				},
-			)
-
-			// Give Sentry time to send the event before the program exits
-			sentry.Flush(time.Second * 5)
-
-			// Re-panic to maintain normal crash behavior
-			panic(r)
-		}
-	}()
+	defer sentry.HandleGlobalPanic(log)
 
 	// Log using the component logger with structured fields
 	log.Info("Starting umh-core...")

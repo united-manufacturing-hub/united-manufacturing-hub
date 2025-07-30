@@ -138,12 +138,11 @@ func main() {
     // Initialize Sentry first
     sentry.InitSentry(version.GetAppVersion(), true)
     
-    // Set up global panic recovery
-    defer func() {
-        if eventID := sentry.Recover(); eventID != nil {
-            sentry.Flush(time.Second * 5)
-        }
-    }()
+    // Get a logger for the main component
+    log := logger.For(logger.ComponentCore)
+    
+    // Set up global panic recovery - clean and simple!
+    defer sentry.HandleGlobalPanic(log)
     
     // Your application code...
 }

@@ -180,13 +180,6 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 			// Increment tick counter on each iteration
 			c.currentTick++
 
-			// DEBUGGING: Add controlled panic to test restart scenario
-			crashTick := uint64(1000)
-			if c.currentTick == crashTick {
-				c.logger.Errorf("DEBUGGING: Simulating agent crash at cycle %d for restart testing", crashTick)
-				panic(fmt.Sprintf("Simulated crash at cycle %d for testing restart recovery", crashTick))
-			}
-
 			// Measure reconcile time
 			start := time.Now()
 
