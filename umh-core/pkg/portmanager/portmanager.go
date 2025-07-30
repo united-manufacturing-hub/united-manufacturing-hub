@@ -18,6 +18,7 @@ package portmanager
 import (
 	"context"
 	"fmt"
+	"net"
 	"sync"
 )
 
@@ -50,22 +51,14 @@ type PortManager interface {
 }
 
 // DefaultPortManager is a thread-safe implementation of PortManager
-// that keeps track of ports in a simple in-memory store
+// that uses OS port allocation (port 0) to get available ports from the OS
 type DefaultPortManager struct {
 
 	// instanceToPorts maps instance names to their allocated ports
 	instanceToPorts map[string]uint16
 
-	// portToInstances maps ports to instance names
+	// portToInstances maps ports to instance names for reverse lookup
 	portToInstances map[uint16]string
-
-	// mutex to protect concurrent access to maps
-	mutex sync.RWMutex
-
-	// configuration
-	minPort  uint16
-	maxPort  uint16
-	nextPort uint16
 }
 
 // Global singleton instance of DefaultPortManager
@@ -83,100 +76,50 @@ func GetDefaultPortManager() *DefaultPortManager {
 	return defaultPortManagerInstance
 }
 
-// initDefaultPortManager initializes the singleton DefaultPortManager with the given port range.
+// initDefaultPortManager initializes the singleton DefaultPortManager.
 // It ensures the DefaultPortManager is initialized only once.
-// Returns error if initialization fails or if it was already initialized with different parameters.
-func initDefaultPortManager(minPort, maxPort uint16) (*DefaultPortManager, error) {
-	var initErr error
-
+func initDefaultPortManager() *DefaultPortManager {
 	defaultPortManagerOnce.Do(func() {
 		defaultPortManagerMutex.Lock()
 		defer defaultPortManagerMutex.Unlock()
 
-		manager, err := newDefaultPortManager(minPort, maxPort)
-		if err != nil {
-			initErr = err
-			return
-		}
+		manager := newDefaultPortManager()
 		defaultPortManagerInstance = manager
 	})
 
-	if initErr != nil {
-		return nil, initErr
-	}
-
-	// Check if already initialized with different parameters
+	// Get the initialized instance
 	defaultPortManagerMutex.RLock()
 	defer defaultPortManagerMutex.RUnlock()
-	inst := defaultPortManagerInstance
-	if inst == nil {
-		return nil, fmt.Errorf("port manager failed to initialize previously; call InitDefaultPortManager again with valid parameters")
-	}
-
-	if inst.minPort != minPort || inst.maxPort != maxPort {
-		return defaultPortManagerInstance, fmt.Errorf(
-			"port manager already initialized with different range (%d-%d)",
-			inst.minPort, inst.maxPort,
-		)
-	}
-
-	return inst, nil
+	return defaultPortManagerInstance
 }
 
-// NewDefaultPortManager creates a new DefaultPortManager with the given port range.
+// NewDefaultPortManager creates a new DefaultPortManager using OS port allocation.
 // If a singleton instance already exists, it returns that instance.
 // Otherwise, it creates and initializes the singleton instance.
-func NewDefaultPortManager(minPort, maxPort uint16) (*DefaultPortManager, error) {
-	// First validate inputs before checking the singleton
-	if minPort <= 0 || maxPort <= 0 {
-		return nil, fmt.Errorf("port range must be positive")
-	}
-	if minPort >= maxPort {
-		return nil, fmt.Errorf("minPort must be less than maxPort")
-	}
-	if minPort < 1024 {
-		return nil, fmt.Errorf("minPort must be at least 1024 (non-privileged)")
-	}
-
-	// Only check existing singleton if inputs are valid
+func NewDefaultPortManager() (*DefaultPortManager, error) {
+	// Check if singleton already exists
 	if existing := GetDefaultPortManager(); existing != nil {
-		// Return the existing instance along with a warning if parameters don't match
-		if existing.minPort != minPort || existing.maxPort != maxPort {
-			return existing, fmt.Errorf(
-				"warning: using existing port manager with different range (%d-%d) than requested (%d-%d)",
-				existing.minPort, existing.maxPort, minPort, maxPort,
-			)
-		}
 		return existing, nil
 	}
 
 	// Initialize singleton if it doesn't exist
-	return initDefaultPortManager(minPort, maxPort)
+	instance := initDefaultPortManager()
+	if instance == nil {
+		return nil, fmt.Errorf("failed to initialize port manager")
+	}
+	return instance, nil
 }
 
 // newDefaultPortManager is an internal function that creates a new DefaultPortManager instance
-// without using the singleton pattern. This is used by InitDefaultPortManager.
-func newDefaultPortManager(minPort, maxPort uint16) (*DefaultPortManager, error) {
-	if minPort <= 0 || maxPort <= 0 {
-		return nil, fmt.Errorf("port range must be positive")
-	}
-	if minPort >= maxPort {
-		return nil, fmt.Errorf("minPort must be less than maxPort")
-	}
-	if minPort < 1024 {
-		return nil, fmt.Errorf("minPort must be at least 1024 (non-privileged)")
-	}
-
+// without using the singleton pattern. This is used by initDefaultPortManager.
+func newDefaultPortManager() *DefaultPortManager {
 	return &DefaultPortManager{
 		instanceToPorts: make(map[string]uint16),
 		portToInstances: make(map[uint16]string),
-		minPort:         minPort,
-		maxPort:         maxPort,
-		nextPort:        minPort,
-	}, nil
+	}
 }
 
-// AllocatePort allocates the next available port for a given instance
+// AllocatePort allocates an available port for a given instance using OS port allocation
 func (pm *DefaultPortManager) AllocatePort(instanceName string) (uint16, error) {
 	pm.mutex.Lock()
 	defer pm.mutex.Unlock()
@@ -186,44 +129,26 @@ func (pm *DefaultPortManager) AllocatePort(instanceName string) (uint16, error) 
 		return port, nil
 	}
 
-	// Find an available port
-	startingPort := pm.nextPort
-	if startingPort < pm.minPort {
-		startingPort = pm.minPort
-	}
-	if startingPort > pm.maxPort {
-		startingPort = pm.maxPort
+	// Use OS port allocation (port 0) to get an available port
+	listener, err := net.Listen("tcp", ":0")
+	if err != nil {
+		return 0, fmt.Errorf("failed to allocate port: %w", err)
 	}
 
-	port := startingPort
+	// Extract the port from the listener's address
+	addr := listener.Addr().(*net.TCPAddr)
+	port := uint16(addr.Port)
 
-	for {
-		// Check if this port is available
-		if _, exists := pm.portToInstances[port]; !exists {
-			// Found an available port, allocate it
-			pm.instanceToPorts[instanceName] = port
-			pm.portToInstances[port] = instanceName
-
-			// Update next port for the next allocation
-			pm.nextPort = port + 1
-			if pm.nextPort > pm.maxPort {
-				pm.nextPort = pm.minPort
-			}
-
-			return port, nil
-		}
-
-		// Try the next port
-		port++
-		if port > pm.maxPort {
-			port = pm.minPort
-		}
-
-		// If we've checked all ports, none are available
-		if port == startingPort {
-			return 0, fmt.Errorf("no available ports in range %d-%d", pm.minPort, pm.maxPort)
-		}
+	// Close the listener immediately to allow external apps to use the port
+	if err := listener.Close(); err != nil {
+		return 0, fmt.Errorf("failed to close listener for port %d: %w", port, err)
 	}
+
+	// Store the mappings
+	pm.instanceToPorts[instanceName] = port
+	pm.portToInstances[port] = instanceName
+
+	return port, nil
 }
 
 // ReleasePort releases a port previously allocated to an instance
@@ -236,10 +161,8 @@ func (pm *DefaultPortManager) ReleasePort(instanceName string) error {
 		return fmt.Errorf("instance %s has no allocated port", instanceName)
 	}
 
-	// Remove the instance-to-port mapping
+	// Remove the mappings
 	delete(pm.instanceToPorts, instanceName)
-
-	// Remove the port-to-instance mapping
 	delete(pm.portToInstances, port)
 
 	return nil
@@ -259,14 +182,11 @@ func (pm *DefaultPortManager) ReservePort(instanceName string, port uint16) erro
 	if port <= 0 {
 		return fmt.Errorf("invalid port: %d (must be positive)", port)
 	}
-	if port < pm.minPort || port > pm.maxPort {
-		return fmt.Errorf("port %d is outside the allowed range (%d-%d)", port, pm.minPort, pm.maxPort)
-	}
 
 	pm.mutex.Lock()
 	defer pm.mutex.Unlock()
 
-	// Check if port is already in use
+	// Check if port is already in use by our port manager
 	if existingInstance, exists := pm.portToInstances[port]; exists {
 		if existingInstance != instanceName {
 			return fmt.Errorf("port %d is already in use by instance %s", port, existingInstance)
@@ -284,7 +204,19 @@ func (pm *DefaultPortManager) ReservePort(instanceName string, port uint16) erro
 		return nil
 	}
 
-	// Reserve the port
+	// Try to bind to the specific port to verify it's available
+	addr := fmt.Sprintf(":%d", port)
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("port %d is not available: %w", port, err)
+	}
+
+	// Close the listener immediately to allow external apps to use the port
+	if err := listener.Close(); err != nil {
+		return fmt.Errorf("failed to close listener for port %d: %w", port, err)
+	}
+
+	// Successfully reserved the port
 	pm.instanceToPorts[instanceName] = port
 	pm.portToInstances[port] = instanceName
 
@@ -293,63 +225,25 @@ func (pm *DefaultPortManager) ReservePort(instanceName string, port uint16) erro
 
 // PreReconcile implements the PreReconcile method for DefaultPortManager
 func (pm *DefaultPortManager) PreReconcile(ctx context.Context, instanceNames []string) error {
-	pm.mutex.Lock()
-	defer pm.mutex.Unlock()
-
 	// Track any errors during allocation
 	var errs []error
 
 	// Try to allocate ports for all instances that don't have one
 	for _, name := range instanceNames {
 		// Skip if instance already has a port
-		if _, exists := pm.instanceToPorts[name]; exists {
+		pm.mutex.RLock()
+		_, exists := pm.instanceToPorts[name]
+		pm.mutex.RUnlock()
+
+		if exists {
 			continue
 		}
 
-		// Try to allocate a port
-		port := pm.nextPort
-		if port < pm.minPort {
-			port = pm.minPort
-		}
-		if port > pm.maxPort {
-			port = pm.maxPort
-		}
-
-		startingPort := port
-		allocated := false
-
-		// Try to find an available port
-		for {
-			if _, exists := pm.portToInstances[port]; !exists {
-				// Found an available port, allocate it
-				pm.instanceToPorts[name] = port
-				pm.portToInstances[port] = name
-
-				// Update next port for the next allocation
-				pm.nextPort = port + 1
-				if pm.nextPort > pm.maxPort {
-					pm.nextPort = pm.minPort
-				}
-
-				allocated = true
-				break
-			}
-
-			// Try the next port
-			port++
-			if port > pm.maxPort {
-				port = pm.minPort
-			}
-
-			// If we've checked all ports, none are available
-			if port == startingPort {
-				errs = append(errs, fmt.Errorf("no available ports for instance %s", name))
-				break
-			}
-		}
-
-		if !allocated {
-			errs = append(errs, fmt.Errorf("failed to allocate port for instance %s", name))
+		// Allocate a port using our standard allocation method
+		// This will handle the locking internally
+		_, err := pm.AllocatePort(name)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to allocate port for instance %s: %w", name, err))
 		}
 	}
 
