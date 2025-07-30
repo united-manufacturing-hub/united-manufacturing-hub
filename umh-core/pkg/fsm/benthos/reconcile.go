@@ -101,6 +101,12 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 				return nil, false
 			}
 
+			// Check if this is a permanent error that should trigger removal
+			if backoff.IsPermanentFailureError(err) {
+				b.baseFSMInstance.SetError(err, snapshot.Tick)
+				return nil, false
+			}
+
 			// Log the error but always continue reconciling - we need reconcileStateTransition to run
 			// to restore services after restart, even if we can't read their status yet
 			b.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)

@@ -505,14 +505,18 @@ var _ = Describe("StreamProcessorManager", func() {
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
 
-			// Verify instance exists and progressed to creating state
-			// Config validation errors occur during reconciliation, not lifecycle transitions
+			// Verify instance exists and continues reconciling despite config errors
+			// With the new behavior, it transitions to operational states rather than
+			// getting stuck in creating state
 			instances := manager.GetInstances()
 			Expect(instances).To(HaveLen(1))
 			inst, exists := instances[fmt.Sprintf("streamprocessor-%s", processorName)]
 			Expect(exists).To(BeTrue())
-			// Should progress to creating state, config errors occur during reconciliation
-			Expect(inst.GetCurrentFSMState()).To(Equal("creating"))
+			// Should progress past creating state with the new reconciliation behavior
+			currentState := inst.GetCurrentFSMState()
+			Expect(currentState).ToNot(Equal("creating"))
+			// It might be in stopped or starting_redpanda state
+			Expect(currentState).To(Or(Equal("stopped"), Equal("starting_redpanda")))
 		})
 
 		It("should recover from temporary service failures", func() {
