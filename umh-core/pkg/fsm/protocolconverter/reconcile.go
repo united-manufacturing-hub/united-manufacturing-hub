@@ -267,7 +267,7 @@ func (p *ProtocolConverterInstance) reconcileTransitionToActive(ctx context.Cont
 	if currentState == OperationalStateStopped {
 		// Send event to transition from Stopped to StartingConnection
 		// The connection will be started by StartConnectionInstance in the starting_connection state
-		// This prevents DFCs from starting before the connection is established
+		// This prevents Benthos from connecting and sending data when the connection is flaky or filtered
 		p.ObservedState.ServiceInfo.StatusReason = "starting"
 		return p.baseFSMInstance.SendEvent(ctx, EventStart), true
 	}
