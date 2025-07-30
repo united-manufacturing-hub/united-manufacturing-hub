@@ -308,7 +308,7 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 			// 3. This ensures we don't start broken Benthos instances with empty configs
 			if p.baseFSMInstance.GetDesiredFSMState() == OperationalStateActive {
 				p.baseFSMInstance.GetLogger().Debugf("re-evaluating DFC desired states and will be active")
-				err := p.service.EvaluateDFCDesiredStates(p.baseFSMInstance.GetID(), "active")
+				err := p.service.EvaluateDFCDesiredStates(p.baseFSMInstance.GetID(), "active", p.baseFSMInstance.GetCurrentFSMState()) // NOTE: Hardcoded to avoid circular import
 				if err != nil {
 					p.baseFSMInstance.GetLogger().Debugf("Failed to re-evaluate DFC states after config update: %v", err)
 					// Don't fail the entire update - this is a best-effort re-evaluation

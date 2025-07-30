@@ -538,7 +538,7 @@ func (m *MockProtocolConverterService) ReconcileManager(ctx context.Context, ser
 // EvaluateDFCDesiredStates mocks the DFC state evaluation logic.
 // This method exists because protocol converters must re-evaluate DFC states
 // when configs change during reconciliation (unlike other FSMs that set states once).
-func (m *MockProtocolConverterService) EvaluateDFCDesiredStates(protConvName string, protocolConverterDesiredState string) error {
+func (m *MockProtocolConverterService) EvaluateDFCDesiredStates(protConvName string, protocolConverterDesiredState string, currentFSMState string) error {
 	// Mock implementation - just update the configs like the real implementation would
 	underlyingReadName := fmt.Sprintf("read-protocolconverter-%s", protConvName)
 	underlyingWriteName := fmt.Sprintf("write-protocolconverter-%s", protConvName)
