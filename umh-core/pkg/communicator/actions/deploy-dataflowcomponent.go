@@ -81,25 +81,28 @@ import (
 // avoid race conditions – transient state lives in local variables only.
 // -----------------------------------------------------------------------------
 type DeployDataflowComponentAction struct {
+	configManager config.ConfigManager // abstraction over the central configuration store
+
+	outboundChannel chan *models.UMHMessage // channel used to send progress events back to the UI
+
+	// ─── Runtime observation & synchronisation ───────────────────────────────
+	systemSnapshotManager *fsm.SnapshotManager // Snapshot Manager holds the latest system snapshot
+
+	actionLogger *zap.SugaredLogger
+
 	userEmail string // e-mail of the human that triggered the action
+
+	name     string // human-readable component name
+	metaType string // "custom" for now – future-proofing for other component kinds
+	state    string // the desired state of the component
+
+	// Parsed request payload (only populated after Parse)
+	payload models.CDFCPayload
 
 	actionUUID   uuid.UUID // unique ID of *this* action instance
 	instanceUUID uuid.UUID // ID of the UMH instance this action operates on
 
-	outboundChannel chan *models.UMHMessage // channel used to send progress events back to the UI
-
-	configManager config.ConfigManager // abstraction over the central configuration store
-
-	// Parsed request payload (only populated after Parse)
-	payload  models.CDFCPayload
-	name     string // human-readable component name
-	metaType string // "custom" for now – future-proofing for other component kinds
-	state    string // the desired state of the component
-	// ─── Runtime observation & synchronisation ───────────────────────────────
-	systemSnapshotManager *fsm.SnapshotManager // Snapshot Manager holds the latest system snapshot
-
 	ignoreHealthCheck bool // if true → no delete on timeout
-	actionLogger      *zap.SugaredLogger
 }
 
 // NewDeployDataflowComponentAction returns an *un-parsed* action instance.

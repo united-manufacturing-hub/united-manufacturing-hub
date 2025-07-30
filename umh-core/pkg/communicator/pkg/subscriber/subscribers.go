@@ -35,16 +35,16 @@ import (
 )
 
 type Handler struct {
-	subscriberRegistry         *subscribers.Registry
 	dog                        watchdog.Iface
-	pusher                     *push.Pusher
-	instanceUUID               uuid.UUID
-	StatusCollector            *generator.StatusCollectorType
-	disableHardwareStatusCheck bool // nolint:unused // will be used in the future
-	systemSnapshotManager      *fsm.SnapshotManager
 	configManager              config.ConfigManager
+	subscriberRegistry         *subscribers.Registry
+	pusher                     *push.Pusher
+	StatusCollector            *generator.StatusCollectorType
+	systemSnapshotManager      *fsm.SnapshotManager
 	topicBrowserCommunicator   *topicbrowser.TopicBrowserCommunicator
 	logger                     *zap.SugaredLogger
+	instanceUUID               uuid.UUID
+	disableHardwareStatusCheck bool // nolint:unused // will be used in the future
 }
 
 func NewHandler(

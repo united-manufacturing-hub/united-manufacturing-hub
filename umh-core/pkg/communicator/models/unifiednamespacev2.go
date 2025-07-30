@@ -247,13 +247,13 @@ type UnsTableEntry struct {
 type EventTable map[int]EventTableEntry
 
 type EventTableEntry struct {
-	UnsTreeId       string      `json:"unsTreeId"`
 	Value           interface{} `json:"value"`
-	TimestampMs     int64       `json:"timestamp_ms"`
-	Error           string      `json:"error"`
-	RawKafkaMessage EventKafka  `json:"rawKafkaMessage"`
 	Origin          *string     `json:"origin"`
+	UnsTreeId       string      `json:"unsTreeId"`
+	Error           string      `json:"error"`
 	Bridges         []string    `json:"bridges"`
+	RawKafkaMessage EventKafka  `json:"rawKafkaMessage"`
+	TimestampMs     int64       `json:"timestamp_ms"`
 }
 
 func HashUNSTableEntry(enterpriseName, siteName, areaName, lineName, workCellName, originId, schemaName, eventGroup, eventName string) string {

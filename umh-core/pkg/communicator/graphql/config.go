@@ -27,9 +27,9 @@ var (
 
 // ServerConfig holds configuration for the GraphQL server
 type ServerConfig struct {
+	CORSOrigins []string `json:"cors_origins"`
 	Port        int      `json:"port"`
 	Debug       bool     `json:"debug"`
-	CORSOrigins []string `json:"cors_origins"`
 }
 
 // DefaultServerConfig returns default configuration values

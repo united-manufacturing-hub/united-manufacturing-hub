@@ -16,15 +16,15 @@ package redpanda_monitor
 
 // ComponentThroughput tracks throughput metrics for a single component
 type ComponentThroughput struct {
+	// Window stores the last N message counts for calculating sliding window average
+	// Do not deep-copy this field as it is not needed
+	Window []MessageCount `copy:"-"`
 	// LastTick is the last tick when metrics were updated
 	LastTick uint64
 	// LastCount is the last message count seen
 	LastCount int64
 	// BytesPerTick is the number of messages processed per tick (averaged over window)
 	BytesPerTick float64
-	// Window stores the last N message counts for calculating sliding window average
-	// Do not deep-copy this field as it is not needed
-	Window []MessageCount `copy:"-"`
 }
 
 // MessageCount stores a count at a specific tick

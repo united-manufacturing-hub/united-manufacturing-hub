@@ -34,21 +34,7 @@ import (
 
 // MockConfigManager is a mock implementation of ConfigManager for testing
 type MockConfigManager struct {
-	GetConfigCalled                     bool
-	AddDataflowcomponentCalled          bool
-	DeleteDataflowcomponentCalled       bool
-	EditDataflowcomponentCalled         bool
-	AtomicAddProtocolConverterCalled    bool
-	AtomicEditProtocolConverterCalled   bool
-	AtomicDeleteProtocolConverterCalled bool
-	AtomicAddStreamProcessorCalled      bool
-	AtomicEditStreamProcessorCalled     bool
-	AtomicDeleteStreamProcessorCalled   bool
-	AtomicAddDataModelCalled            bool
-	AtomicEditDataModelCalled           bool
-	AtomicDeleteDataModelCalled         bool
-	AtomicAddDataContractCalled         bool
-	Config                              FullConfig
+	CacheModTime                        time.Time
 	ConfigError                         error
 	AddDataflowcomponentError           error
 	DeleteDataflowcomponentError        error
@@ -63,15 +49,29 @@ type MockConfigManager struct {
 	AtomicEditDataModelError            error
 	AtomicDeleteDataModelError          error
 	AtomicAddDataContractError          error
-	ConfigAsString                      string
 	GetConfigAsStringError              error
-	GetConfigAsStringCalled             bool
+	MockFileSystem                      *filesystem.MockFileSystem
+	logger                              *zap.SugaredLogger
+	ConfigAsString                      string
+	Config                              FullConfig
 	ConfigDelay                         time.Duration
 	mutexReadOrWrite                    sync.Mutex
 	mutexReadAndWrite                   sync.Mutex
-	MockFileSystem                      *filesystem.MockFileSystem
-	CacheModTime                        time.Time
-	logger                              *zap.SugaredLogger
+	GetConfigCalled                     bool
+	AddDataflowcomponentCalled          bool
+	DeleteDataflowcomponentCalled       bool
+	EditDataflowcomponentCalled         bool
+	AtomicAddProtocolConverterCalled    bool
+	AtomicEditProtocolConverterCalled   bool
+	AtomicDeleteProtocolConverterCalled bool
+	AtomicAddStreamProcessorCalled      bool
+	AtomicEditStreamProcessorCalled     bool
+	AtomicDeleteStreamProcessorCalled   bool
+	AtomicAddDataModelCalled            bool
+	AtomicEditDataModelCalled           bool
+	AtomicDeleteDataModelCalled         bool
+	AtomicAddDataContractCalled         bool
+	GetConfigAsStringCalled             bool
 }
 
 // NewMockConfigManager creates a new MockConfigManager instance

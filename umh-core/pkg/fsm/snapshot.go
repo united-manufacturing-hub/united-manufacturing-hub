@@ -33,14 +33,14 @@ type ObservedStateSnapshot interface {
 
 // FSMInstanceSnapshot contains the immutable state of an FSM instance
 type FSMInstanceSnapshot struct {
+	LastErrorTime     time.Time
+	CreatedAt         time.Time
+	LastUpdatedAt     time.Time
+	LastObservedState ObservedStateSnapshot
 	ID                string
 	CurrentState      string
 	DesiredState      string
 	LastError         string
-	LastErrorTime     time.Time
-	LastObservedState ObservedStateSnapshot
-	CreatedAt         time.Time
-	LastUpdatedAt     time.Time
 }
 
 // ManagerSnapshot defines the interface for manager-specific snapshots
@@ -60,14 +60,14 @@ type ManagerSnapshot interface {
 
 // BaseManagerSnapshot contains the basic immutable state common to all manager types
 type BaseManagerSnapshot struct {
-	Name           string
+	SnapshotTime   time.Time
 	Instances      map[string]*FSMInstanceSnapshot // this needs to be a pointer to avoid unexported fields when doing deep copies
+	Name           string
 	ManagerTick    uint64
 	NextAddTick    uint64
 	NextUpdateTick uint64
 	NextRemoveTick uint64
 	NextStateTick  uint64
-	SnapshotTime   time.Time
 }
 
 // GetName returns the name of the manager
@@ -96,17 +96,17 @@ func (s *BaseManagerSnapshot) GetManagerTick() uint64 {
 
 // SystemSnapshot contains a thread-safe snapshot of the entire system state
 type SystemSnapshot struct {
-	CurrentConfig config.FullConfig
-	Managers      map[string]ManagerSnapshot
 	SnapshotTime  time.Time
+	Managers      map[string]ManagerSnapshot
 	ConfigHash    string
+	CurrentConfig config.FullConfig
 	Tick          uint64
 }
 
 // SnapshotManager manages thread-safe creation, storage, and retrieval of system snapshots
 type SnapshotManager struct {
-	mu           sync.RWMutex
 	lastSnapshot *SystemSnapshot
+	mu           sync.RWMutex
 }
 
 // NewSnapshotManager creates a new snapshot manager

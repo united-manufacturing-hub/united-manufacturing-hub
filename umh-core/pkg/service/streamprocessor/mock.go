@@ -32,6 +32,33 @@ import (
 
 // MockService is a mock implementation of the IStreamProcessorService interface for testing
 type MockService struct {
+	GenerateConfigError    error
+	GetConfigError         error
+	StatusError            error
+	AddToManagerError      error
+	UpdateInManagerError   error
+	RemoveFromManagerError error
+	StartError             error
+	StopError              error
+	ForceRemoveError       error
+	ReconcileManagerError  error
+
+	// For more complex testing scenarios
+	States             map[string]*ServiceInfo
+	ExistingComponents map[string]bool
+
+	// State control for FSM testing
+	stateFlags map[string]*StateFlags
+
+	DfcService      *dataflowcomponent.MockDataFlowComponentService
+	GetConfigResult streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime
+
+	// Return values for each method
+	GenerateConfigResultDFC dataflowcomponentserviceconfig.DataflowComponentServiceConfig
+	dfcConfigs              []config.DataFlowComponentConfig
+
+	StatusResult ServiceInfo
+
 	// Tracks calls to methods
 	GenerateConfigCalled     bool
 	GetConfigCalled          bool
@@ -46,32 +73,8 @@ type MockService struct {
 	ReconcileManagerCalled   bool
 	BuildRuntimeConfigCalled bool
 
-	// Return values for each method
-	GenerateConfigResultDFC    dataflowcomponentserviceconfig.DataflowComponentServiceConfig
-	GenerateConfigError        error
-	GetConfigResult            streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime
-	GetConfigError             error
-	StatusResult               ServiceInfo
-	StatusError                error
-	AddToManagerError          error
-	UpdateInManagerError       error
-	RemoveFromManagerError     error
-	StartError                 error
-	StopError                  error
-	ForceRemoveError           error
 	ServiceExistsResult        bool
-	ReconcileManagerError      error
 	ReconcileManagerReconciled bool
-
-	// For more complex testing scenarios
-	States             map[string]*ServiceInfo
-	ExistingComponents map[string]bool
-	dfcConfigs         []config.DataFlowComponentConfig
-
-	// State control for FSM testing
-	stateFlags map[string]*StateFlags
-
-	DfcService *dataflowcomponent.MockDataFlowComponentService
 }
 
 // Ensure MockService implements IStreamProcessorService
@@ -79,13 +82,13 @@ var _ IStreamProcessorService = (*MockService)(nil)
 
 // StateFlags contains all the state flags needed for FSM testing
 type StateFlags struct {
-	IsDFCRunning       bool
-	IsConnectionUp     bool
-	IsRedpandaRunning  bool
 	DfcFSMReadState    string
 	DfcFSMWriteState   string
 	ConnectionFSMState string
 	RedpandaFSMState   string
+	IsDFCRunning       bool
+	IsConnectionUp     bool
+	IsRedpandaRunning  bool
 }
 
 // NewMockService creates a new mock StreamProcessor service

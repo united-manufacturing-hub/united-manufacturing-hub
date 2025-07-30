@@ -104,34 +104,36 @@ import (
 // -----------------------------------------------------------------------------
 
 type EditDataflowComponentAction struct {
-	userEmail string // e‑mail of the human that triggered the action (used for replies)
-
-	actionUUID   uuid.UUID // unique ID of *this* action instance
-	instanceUUID uuid.UUID // ID of the UMH instance this action operates on
+	configManager config.ConfigManager // abstraction over the central configuration store
 
 	outboundChannel chan *models.UMHMessage // channel used to send progress events back to the UI
 
-	configManager config.ConfigManager // abstraction over the central configuration store
+	// ─── Runtime observation & synchronisation ───────────────────────────────
+	systemSnapshotManager *fsm.SnapshotManager // manager that holds the latest system snapshot
 
-	// Parsed request payload (only populated after Parse)
-	payload  models.CDFCPayload
+	actionLogger *zap.SugaredLogger
+
+	userEmail string // e‑mail of the human that triggered the action (used for replies)
+
 	name     string // human‑readable component name (may change during an edit)
 	metaType string // "custom" for now – future‑proofing for other component kinds
 	state    string // the desired state of the component
+
+	// Parsed request payload (only populated after Parse)
+	payload models.CDFCPayload
+
+	// Caches for rollback: we hold the freshly generated config and the old one
+	dfc       config.DataFlowComponentConfig // desired (new) config
+	oldConfig config.DataFlowComponentConfig // backup of the original config
+
+	actionUUID   uuid.UUID // unique ID of *this* action instance
+	instanceUUID uuid.UUID // ID of the UMH instance this action operates on
 
 	// ─── UUID choreography ────────────────────────────────────────────────────
 	oldComponentUUID uuid.UUID // UUID of the pre‑existing component (taken from the request)
 	newComponentUUID uuid.UUID // deterministic UUID derived from the *new* name
 
-	// ─── Runtime observation & synchronisation ───────────────────────────────
-	systemSnapshotManager *fsm.SnapshotManager // manager that holds the latest system snapshot
-
 	ignoreHealthCheck bool // if true -> no rollback on timeout
-	actionLogger      *zap.SugaredLogger
-
-	// Caches for rollback: we hold the freshly generated config and the old one
-	dfc       config.DataFlowComponentConfig // desired (new) config
-	oldConfig config.DataFlowComponentConfig // backup of the original config
 }
 
 // NewEditDataflowComponentAction returns an *un‑parsed* action instance.  The
@@ -161,14 +163,14 @@ func NewEditDataflowComponentAction(userEmail string, actionUUID uuid.UUID, inst
 func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
 	//First parse the top level structure
 	type TopLevelPayload struct {
-		Name string `json:"name"`
-		Meta struct {
+		Payload interface{} `json:"payload"`
+		Name    string      `json:"name"`
+		Meta    struct {
 			Type string `json:"type"`
 		} `json:"meta"`
-		Payload           interface{} `json:"payload"`
-		UUID              string      `json:"uuid"`
-		IgnoreHealthCheck bool        `json:"ignoreHealthCheck"`
-		State             string      `json:"state"`
+		UUID              string `json:"uuid"`
+		State             string `json:"state"`
+		IgnoreHealthCheck bool   `json:"ignoreHealthCheck"`
 	}
 
 	// Parse the top level payload

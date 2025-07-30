@@ -27,10 +27,6 @@ import (
 
 // Deprecated: Use GetMetricsAction instead. Kept for backward compatibility.
 type GetDataflowcomponentMetricsAction struct {
-	// ─── Request metadata ────────────────────────────────────────────────────
-	userEmail    string
-	actionUUID   uuid.UUID
-	instanceUUID uuid.UUID
 
 	// ─── Plumbing ────────────────────────────────────────────────────────────
 	outboundChannel chan *models.UMHMessage
@@ -38,11 +34,16 @@ type GetDataflowcomponentMetricsAction struct {
 	// ─── Runtime observation ────────────────────────────────────────────────
 	systemSnapshotManager *fsm.SnapshotManager
 
+	// ─── Utilities ──────────────────────────────────────────────────────────
+	actionLogger *zap.SugaredLogger
+	// ─── Request metadata ────────────────────────────────────────────────────
+	userEmail string
+
 	// ─── Parsed request payload ─────────────────────────────────────────────
 	payload models.GetDataflowcomponentMetricsRequest //nolint:staticcheck // Deprecated but kept for back compat
 
-	// ─── Utilities ──────────────────────────────────────────────────────────
-	actionLogger *zap.SugaredLogger
+	actionUUID   uuid.UUID
+	instanceUUID uuid.UUID
 }
 
 func NewGetDataflowcomponentMetricsAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, systemSnapshotManager *fsm.SnapshotManager) *GetDataflowcomponentMetricsAction {
