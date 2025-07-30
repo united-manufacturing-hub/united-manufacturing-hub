@@ -72,8 +72,6 @@ type IProtocolConverterService interface {
 	// RemoveFromManager removes a ProtocolConverter from the Connection & DFC manager
 	RemoveFromManager(ctx context.Context, filesystemService filesystem.Service, protConvName string) error
 
-	// Start starts a ProtocolConverter
-	StartProtocolConverter(ctx context.Context, filesystemService filesystem.Service, protConvName string) error
 
 	// StartConnection starts only the connection component of a ProtocolConverter
 	// This is used during the "starting_connection" FSM state
@@ -698,7 +696,7 @@ func (p *ProtocolConverterService) RemoveFromManager(
 //     causing Benthos to buffer data that can't be delivered to the target system
 //
 // Called from:
-// 1. StartProtocolConverter() - during initial activation (FSM state: "starting_connection")
+// 1. StartDFC() - during "starting_dfc" FSM state
 // 2. StopProtocolConverter() - during shutdown (FSM state: "stopping")  
 // 3. UpdateObservedStateOfInstance() - when config changes are detected (FSM state: varies)
 //
@@ -783,56 +781,6 @@ func (p *ProtocolConverterService) EvaluateDFCDesiredStates(protConvName string,
 	return nil
 }
 
-// StartProtocolConverter starts a ProtocolConverter by setting connection to "up" and
-// evaluating which DFCs should be active based on their current configurations.
-//
-// UNIQUE BEHAVIOR: Unlike other FSM start methods that simply set desired states to active,
-// protocol converters must check DFC config content because:
-// - DFCs start with template configs that may be empty initially
-// - Only DFCs with non-empty input configs should be started
-// - Empty DFCs remain stopped to avoid creating broken Benthos instances
-//
-// This conditional starting is handled by EvaluateDFCDesiredStates.
-func (p *ProtocolConverterService) StartProtocolConverter(
-	ctx context.Context,
-	filesystemService filesystem.Service,
-	protConvName string,
-) error {
-	if p.connectionManager == nil {
-		return errors.New("connection manager not initialized")
-	}
-
-	if p.dataflowComponentManager == nil {
-		return errors.New("dataflowcomponent manager not initialized")
-	}
-
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-
-	connectionName := p.getUnderlyingConnectionName(protConvName)
-
-	// Find and update our cached config
-	connFound := false
-	for i, config := range p.connectionConfig {
-		if config.Name == connectionName {
-			p.connectionConfig[i].DesiredFSMState = connectionfsm.OperationalStateUp
-			connFound = true
-			break
-		}
-	}
-
-	if !connFound {
-		return ErrServiceNotExist
-	}
-
-	// Evaluate and set DFC states based on current configs
-	// NOTE: This is different from other FSMs - we don't just set all DFCs to active,
-	// we check if they have valid configs first (see EvaluateDFCDesiredStates docstring)
-	// Since this is typically called from stopped state, pass "stopped" as the FSM state
-	// This means DFCs won't start immediately - they'll start when the FSM reaches starting_dfc state
-	return p.EvaluateDFCDesiredStates(protConvName, "active", "stopped")
-}
 
 // Stop stops a ProtocolConverter
 // Expects protConvName (e.g. "protocolconverter-myservice") as defined in the UMH config

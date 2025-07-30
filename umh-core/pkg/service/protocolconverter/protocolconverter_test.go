@@ -396,27 +396,15 @@ var _ = Describe("DataFlowComponentService", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("should start a protocolConverter by changing its desired state", func() {
-			// First stop the component
-			err := service.StartProtocolConverter(ctx, mockSvcRegistry.GetFileSystem(), protConvName)
+		It("should start connection only when StartConnection is called", func() {
+			// Start the connection
+			err := service.StartConnection(ctx, mockSvcRegistry.GetFileSystem(), protConvName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the connection desired state was changed to up
-			underlyingDFCReadName := service.getUnderlyingDFCReadName(protConvName)
 			underlyingConnectionName := service.getUnderlyingConnectionName(protConvName)
 			
-			// DFCs should remain stopped until FSM reaches starting_dfc state
-			// This prevents DFCs from producing messages before connection is established
-			var foundDfcStopped, foundConnUp bool
-			for _, config := range service.dataflowComponentConfig {
-				if config.Name == underlyingDFCReadName {
-					foundDfcStopped = true
-					Expect(config.DesiredFSMState).To(Equal(dfcfsm.OperationalStateStopped))
-					break
-				}
-			}
-			Expect(foundDfcStopped).To(BeTrue())
-
+			var foundConnUp bool
 			for _, config := range service.connectionConfig {
 				if config.Name == underlyingConnectionName {
 					foundConnUp = true
@@ -426,22 +414,12 @@ var _ = Describe("DataFlowComponentService", func() {
 			}
 			Expect(foundConnUp).To(BeTrue())
 
-			// Call StartProtocolConverter again - should be idempotent
-			err = service.StartProtocolConverter(ctx, mockSvcRegistry.GetFileSystem(), protConvName)
+			// Call StartConnection again - should be idempotent
+			err = service.StartConnection(ctx, mockSvcRegistry.GetFileSystem(), protConvName)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Verify the states remain the same (idempotent operation)
-			var foundDfcStillStopped, foundConnStillUp bool
-			for _, config := range service.dataflowComponentConfig {
-				if config.Name == underlyingDFCReadName {
-					foundDfcStillStopped = true
-					// DFC should still be stopped - only starts when FSM reaches starting_dfc
-					Expect(config.DesiredFSMState).To(Equal(dfcfsm.OperationalStateStopped))
-					break
-				}
-			}
-			Expect(foundDfcStillStopped).To(BeTrue())
-
+			// Verify the state remains the same (idempotent operation)
+			var foundConnStillUp bool
 			for _, config := range service.connectionConfig {
 				if config.Name == underlyingConnectionName {
 					foundConnStillUp = true
@@ -452,9 +430,34 @@ var _ = Describe("DataFlowComponentService", func() {
 			Expect(foundConnStillUp).To(BeTrue())
 		})
 
+		It("should start DFCs only when StartDFC is called", func() {
+			// Start the DFCs
+			err := service.StartDFC(ctx, mockSvcRegistry.GetFileSystem(), protConvName)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify the DFC desired state was changed based on config
+			underlyingDFCReadName := service.getUnderlyingDFCReadName(protConvName)
+			
+			// DFC should be active since it has input config
+			var foundDfcActive bool
+			for _, config := range service.dataflowComponentConfig {
+				if config.Name == underlyingDFCReadName {
+					foundDfcActive = true
+					// DFC has input config, so should be active when StartDFC is called with "starting_dfc" state
+					Expect(config.DesiredFSMState).To(Equal(dfcfsm.OperationalStateActive))
+					break
+				}
+			}
+			Expect(foundDfcActive).To(BeTrue())
+		})
+
 		It("should return error when trying to start/stop non-existent protocolConverter", func() {
-			// Try to start a non-existent protocolConverter
-			err := service.StartProtocolConverter(ctx, mockSvcRegistry.GetFileSystem(), "non-existent")
+			// Try to start connection for non-existent protocolConverter
+			err := service.StartConnection(ctx, mockSvcRegistry.GetFileSystem(), "non-existent")
+			Expect(err).To(MatchError(ErrServiceNotExist))
+
+			// Try to start DFC for non-existent protocolConverter
+			err = service.StartDFC(ctx, mockSvcRegistry.GetFileSystem(), "non-existent")
 			Expect(err).To(MatchError(ErrServiceNotExist))
 
 			// Try to stop a non-existent protocolConverter

@@ -57,7 +57,6 @@ type MockProtocolConverterService struct {
 	AddToManagerCalled       bool
 	UpdateInManagerCalled    bool
 	RemoveFromManagerCalled  bool
-	StartCalled              bool
 	StartConnectionCalled    bool
 	StartDFCCalled           bool
 	StopCalled               bool
@@ -77,7 +76,6 @@ type MockProtocolConverterService struct {
 	AddToManagerError              error
 	UpdateInManagerError           error
 	RemoveFromManagerError         error
-	StartError                     error
 	StartConnectionError           error
 	StartDFCError                  error
 	StopError                      error
@@ -447,40 +445,6 @@ func (m *MockProtocolConverterService) RemoveFromManager(
 	return m.RemoveFromManagerError
 }
 
-// StartProtocolConverter mocks starting a ProtocolConverter
-func (m *MockProtocolConverterService) StartProtocolConverter(ctx context.Context, filesystemService filesystem.Service, protConvName string) error {
-	m.StartCalled = true
-
-	underlyingName := fmt.Sprintf("protocolconverter-%s", protConvName)
-
-	dfcFound := false
-
-	// Set the desired state to active for the given component
-	for i, dfcConfig := range m.dfcConfigs {
-		if dfcConfig.Name == underlyingName {
-			m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateActive
-			dfcFound = true
-			break
-		}
-	}
-
-	connFound := false
-
-	// Set the desired state to active for the given component
-	for i, connConfig := range m.connConfigs {
-		if connConfig.Name == underlyingName {
-			m.connConfigs[i].DesiredFSMState = connfsm.OperationalStateUp
-			connFound = true
-			break
-		}
-	}
-
-	if !dfcFound || !connFound {
-		return ErrServiceNotExist
-	}
-
-	return m.StartError
-}
 
 // StartConnection mocks starting only the connection component of a ProtocolConverter
 func (m *MockProtocolConverterService) StartConnection(ctx context.Context, filesystemService filesystem.Service, protConvName string) error {

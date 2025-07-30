@@ -124,20 +124,11 @@ func (p *ProtocolConverterInstance) RemoveInstance(ctx context.Context, filesyst
 	}
 }
 
-// StartInstance to start the DataflowComponent by setting the desired state to running for the given instance
+// StartInstance is required by the FSMInstance interface but is now a no-op.
+// The actual startup is handled by granular methods StartConnectionInstance and StartDFCInstance
+// which are called from the reconciliation loop based on FSM state transitions.
 func (p *ProtocolConverterInstance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
-	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting ProtocolConverter service %s ...", p.baseFSMInstance.GetID())
-
-	// TODO: Add pre-start validation
-
-	// Set the desired state to running for the given instance
-	err := p.service.StartProtocolConverter(ctx, filesystemService, p.baseFSMInstance.GetID())
-	if err != nil {
-		// if the service is not there yet but we attempt to start it, we need to throw an error
-		return fmt.Errorf("failed to start ProtocolConverter service %s: %w", p.baseFSMInstance.GetID(), err)
-	}
-
-	p.baseFSMInstance.GetLogger().Debugf("ProtocolConverter service %s start command executed", p.baseFSMInstance.GetID())
+	p.baseFSMInstance.GetLogger().Debugf("StartInstance called but is now a no-op - startup handled by granular methods")
 	return nil
 }
 
