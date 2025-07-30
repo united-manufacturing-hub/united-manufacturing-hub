@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
-	"strings"
 	"sync"
 	"time"
 
@@ -45,11 +44,6 @@ import (
 type ObservedState interface {
 	// IsObservedState is a marker method to ensure type safety
 	IsObservedState()
-}
-
-// ServiceRecoveryManager defines the interface for managers that support service recovery
-type ServiceRecoveryManager interface {
-	attemptServiceRecovery(ctx context.Context, serviceName string, services serviceregistry.Provider) error
 }
 
 // FSMInstance defines the interface for a finite state machine instance.
@@ -135,10 +129,6 @@ type BaseFSMManager[C any] struct {
 	nextRemoveTick uint64 // Earliest tick another instance may begin removal
 	nextStateTick  uint64 // Earliest tick another desired‑state change may happen
 
-	// Recovery functionality
-	discoveryPerformed bool   // Track if discovery has been performed to avoid repeated scanning
-	baseDir            string // Base directory for FSM instance files (needed for discovery)
-
 	// These methods are implemented by each concrete manager
 	extractConfigs         func(config config.FullConfig) ([]C, error)
 	getName                func(C) (string, error)
@@ -185,8 +175,6 @@ func NewBaseFSMManager[C any](
 		nextUpdateTick:         0,
 		nextRemoveTick:         0,
 		nextStateTick:          0,
-		discoveryPerformed:     false,
-		baseDir:                baseDir,
 		extractConfigs:         extractConfigs,
 		getName:                getName,
 		getDesiredState:        getDesiredState,
@@ -350,13 +338,6 @@ func (m *BaseFSMManager[C]) Reconcile(
 			return nil, false
 		}
 		return ctx.Err(), false
-	}
-
-	// Step 0: Perform service discovery on first reconcile to recover from agent restarts
-	// This helps recover services that were running before agent crash/restart
-	if err := m.PerformServiceDiscovery(ctx, services); err != nil {
-		m.logger.Warnf("Service discovery failed for %s: %v", m.managerName, err)
-		// Don't fail reconciliation for discovery errors - just log and continue
 	}
 
 	// Step 1: Extract the specific configs from the full config
@@ -638,7 +619,6 @@ func (m *BaseFSMManager[C]) Reconcile(
 		instanceCaptured := instance
 
 		started := errorgroup.TryGo(func() error {
-			defer sentry.RecoverAndReport()
 			if innerCtx.Err() != nil {
 				m.logger.Debugf("Context is already cancelled, skipping instance %s", nameCaptured)
 				return nil
@@ -717,125 +697,6 @@ func (m *BaseFSMManager[C]) GetCurrentFSMState(serviceName string) (string, erro
 		return instance.GetCurrentFSMState(), nil
 	}
 	return "", fmt.Errorf("instance %s not found", serviceName)
-}
-
-// PerformServiceDiscovery scans the baseDir for existing services and attempts to
-// recover FSM instances for services that are running but not in the instances map.
-// This is called during agent recovery after crashes or restarts.
-func (m *BaseFSMManager[C]) PerformServiceDiscovery(ctx context.Context, services serviceregistry.Provider) error {
-	// Only perform discovery once to avoid repeated scanning
-	if m.discoveryPerformed {
-		return nil
-	}
-
-	// Skip discovery if baseDir is not set or is a special path
-	if m.baseDir == "" || m.baseDir == "/dev/null" {
-		m.discoveryPerformed = true
-		return nil
-	}
-
-	m.logger.Infof("Performing service discovery in %s", m.baseDir)
-
-	start := time.Now()
-	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentBaseFSMManager, m.managerName+".serviceDiscovery", time.Since(start))
-	}()
-
-	// Check if base directory exists
-	exists, err := services.GetFileSystem().PathExists(ctx, m.baseDir)
-	if err != nil {
-		m.logger.Warnf("Failed to check if base directory exists: %v", err)
-		m.discoveryPerformed = true
-		return nil // Don't fail startup for this
-	}
-	if !exists {
-		m.logger.Debugf("Base directory %s does not exist, skipping discovery", m.baseDir)
-		m.discoveryPerformed = true
-		return nil
-	}
-
-	// Read directory entries
-	entries, err := services.GetFileSystem().ReadDir(ctx, m.baseDir)
-	if err != nil {
-		m.logger.Warnf("Failed to read base directory %s: %v", m.baseDir, err)
-		m.discoveryPerformed = true
-		return nil // Don't fail startup for this
-	}
-
-	recoveredCount := 0
-	for _, entry := range entries {
-		// Only process directories
-		if !entry.IsDir() {
-			continue
-		}
-
-		serviceName := entry.Name()
-
-		// Skip if we already have this instance
-		if _, exists := m.instances[serviceName]; exists {
-			m.logger.Debugf("Service %s already exists in instances, skipping", serviceName)
-			continue
-		}
-
-		// Skip known system services that shouldn't be managed by this manager
-		if m.shouldSkipServiceDuringDiscovery(serviceName) {
-			m.logger.Debugf("Skipping system service %s during discovery", serviceName)
-			continue
-		}
-
-		m.logger.Infof("Attempting to recover service: %s", serviceName)
-
-		// Attempt to recover this service - this is manager-specific logic
-		// Since Go doesn't have virtual method dispatch, we'll use an interface approach
-		if recoveryManager, ok := interface{}(m).(ServiceRecoveryManager); ok {
-			if err := recoveryManager.attemptServiceRecovery(ctx, serviceName, services); err != nil {
-				m.logger.Warnf("Failed to recover service %s: %v", serviceName, err)
-				continue
-			}
-		} else {
-			m.logger.Debugf("Manager %s does not support service recovery", m.managerName)
-			continue
-		}
-
-		recoveredCount++
-	}
-
-	m.logger.Infof("Service discovery completed. Recovered %d services from %s", recoveredCount, m.baseDir)
-	m.discoveryPerformed = true
-	return nil
-}
-
-// shouldSkipServiceDuringDiscovery returns true for services that should not be recovered
-// during discovery (system services, special directories, etc.)
-func (m *BaseFSMManager[C]) shouldSkipServiceDuringDiscovery(serviceName string) bool {
-	// Skip s6 system services and special directories
-	systemServices := []string{
-		"s6-linux-init-shutdownd",
-		"s6rc-fdholder",
-		"s6rc-oneshot-runner",
-		"syslogd",
-		"syslogd-log",
-		"umh-core",
-		".s6-svscan",
-		"user",
-		"s6-rc",
-		"log-user-service",
-	}
-
-	for _, sysService := range systemServices {
-		if serviceName == sysService {
-			return true
-		}
-	}
-
-	// Skip standard s6 naming patterns for system services
-	if strings.HasSuffix(serviceName, "-log") ||
-		strings.HasSuffix(serviceName, "-prepare") ||
-		strings.HasSuffix(serviceName, "-log-prepare") {
-		return true
-	}
-
-	return false
 }
 
 // CreateSnapshot creates a ManagerSnapshot from the current manager state
