@@ -30,6 +30,7 @@ import (
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/monitor"
 	redpanda_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
@@ -287,11 +288,11 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 
 	// Run g.Wait() in a separate goroutine.
 	// This allows us to use a select statement to return early if the context is canceled.
-	go func() {
+	sentry.SafeGo(func() {
 		// g.Wait() blocks until all goroutines launched with g.Go() have returned.
 		// It returns the first non-nil error, if any.
 		errc <- g.Wait()
-	}()
+	})
 
 	// Use a select statement to wait for either the g.Wait() result or the context's cancellation.
 	select {

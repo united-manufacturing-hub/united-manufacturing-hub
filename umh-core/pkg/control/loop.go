@@ -180,6 +180,13 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 			// Increment tick counter on each iteration
 			c.currentTick++
 
+			// DEBUGGING: Add controlled panic to test restart scenario
+			crashTick := uint64(1000)
+			if c.currentTick == crashTick {
+				c.logger.Errorf("DEBUGGING: Simulating agent crash at cycle %d for restart testing", crashTick)
+				panic(fmt.Sprintf("Simulated crash at cycle %d for testing restart recovery", crashTick))
+			}
+
 			// Measure reconcile time
 			start := time.Now()
 
@@ -387,6 +394,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 		capturedManager := c.managers[i]
 
 		started := errorgroup.TryGo(func() error {
+			defer sentry.RecoverAndReport()
 			// It might be that .Go is blocked until the ctx is already cancelled, in that case we just return
 			if innerCtx.Err() != nil {
 				c.logger.Debugf("Context is already cancelled, skipping manager %s", capturedManager.GetManagerName())
@@ -410,9 +418,9 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 		}
 	}
 	waitErrorChannel := make(chan error, 1)
-	go func() {
+	sentry.SafeGo(func() {
 		waitErrorChannel <- errorgroup.Wait()
-	}()
+	})
 
 	select {
 	case wgErr := <-waitErrorChannel:

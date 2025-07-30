@@ -577,11 +577,11 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 
 		// Run g.Wait() in a separate goroutine.
 		// This allows us to use a select statement to return early if the context is canceled.
-		go func() {
+		sentry.SafeGo(func() {
 			// g.Wait() blocks until all goroutines launched with g.Go() have returned.
 			// It returns the first non-nil error, if any.
 			errc <- g.Wait()
-		}()
+		})
 
 		// Use a select statement to wait for either the g.Wait() result or the context's cancellation.
 		select {
