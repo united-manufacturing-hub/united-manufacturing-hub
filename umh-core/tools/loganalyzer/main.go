@@ -1,3 +1,17 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package main
 
 import (
@@ -73,8 +87,10 @@ func runCommand(analyzer *LogAnalyzer, command, fsmName string, startTick, endTi
 func runInteractive(analyzer *LogAnalyzer) {
 	reader := bufio.NewReader(os.Stdin)
 	
-	fmt.Println("\n=== UMH Core Log Analyzer ===")
-	fmt.Println("Type 'help' for available commands or 'quit' to exit\n")
+	fmt.Println("")
+	fmt.Println("=== UMH Core Log Analyzer ===")
+	fmt.Println("Type 'help' for available commands or 'quit' to exit")
+	fmt.Println("")
 
 	for {
 		fmt.Print("> ")
@@ -175,9 +191,9 @@ func runInteractive(analyzer *LogAnalyzer) {
 }
 
 func showHelp() {
-	fmt.Println(`
-Available Commands:
-  summary              - Show overall analysis summary
+	fmt.Println("")
+	fmt.Println("Available Commands:")
+	fmt.Print(`  summary              - Show overall analysis summary
   timeline [start end] - Show tick timeline (default: 1-100)
   fsm <name>          - Show history of a specific FSM
   list-fsms           - List all FSMs

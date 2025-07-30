@@ -1,3 +1,17 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package main
 
 import (
@@ -9,7 +23,9 @@ import (
 
 // AnalyzeRecovery analyzes FSM recovery issues between sessions
 func (a *LogAnalyzer) AnalyzeRecovery() {
-	fmt.Println("\n=== Recovery Analysis ===\n")
+	fmt.Println("")
+	fmt.Println("=== Recovery Analysis ===")
+	fmt.Println("")
 	
 	if len(a.Sessions) < 2 {
 		fmt.Println("Single session detected. No recovery analysis needed.")
@@ -17,7 +33,8 @@ func (a *LogAnalyzer) AnalyzeRecovery() {
 	}
 	
 	// Analyze FSM states at end of first session and start of second
-	fmt.Println("Checking FSM states across restart...\n")
+	fmt.Println("Checking FSM states across restart...")
+	fmt.Println("")
 	
 	// Find FSMs that were active before restart
 	activeBeforeRestart := a.findFSMsAtTime(a.Sessions[0].EndTime.Add(-time.Second))
@@ -161,7 +178,9 @@ func (a *LogAnalyzer) CompareSessionStates() {
 		return
 	}
 	
-	fmt.Println("\n=== Session State Comparison ===\n")
+	fmt.Println("")
+	fmt.Println("=== Session State Comparison ===")
+	fmt.Println("")
 	
 	// Get final states from first session
 	session1End := a.Sessions[0].EndTime.Add(-time.Second)
