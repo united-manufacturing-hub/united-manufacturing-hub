@@ -18,8 +18,13 @@ package portmanager
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"net"
+	"os"
+	"strconv"
+	"strings"
 	"sync"
+	"time"
 )
 
 // PortManager is an interface that defines methods for managing ports
@@ -51,7 +56,7 @@ type PortManager interface {
 }
 
 // DefaultPortManager is a thread-safe implementation of PortManager
-// that uses OS port allocation (port 0) to get available ports from the OS
+// that randomly selects ports from the OS ephemeral port range
 type DefaultPortManager struct {
 
 	// instanceToPorts maps instance names to their allocated ports
@@ -59,6 +64,16 @@ type DefaultPortManager struct {
 
 	// portToInstances maps ports to instance names for reverse lookup
 	portToInstances map[uint16]string
+
+	// allocatedPorts tracks all ports we've allocated to avoid duplicates
+	allocatedPorts map[uint16]bool
+
+	// ephemeral port range for random selection
+	minPort uint16
+	maxPort uint16
+
+	// random number generator
+	rand *rand.Rand
 }
 
 // Global singleton instance of DefaultPortManager
@@ -110,16 +125,45 @@ func NewDefaultPortManager() (*DefaultPortManager, error) {
 	return instance, nil
 }
 
+// getEphemeralPortRange returns the OS ephemeral port range.
+// On Linux, it reads from /proc/sys/net/ipv4/ip_local_port_range.
+// Falls back to default range 32768-65535 if unable to read from OS.
+func getEphemeralPortRange() (uint16, uint16) {
+	// Try to read from Linux proc filesystem
+	data, err := os.ReadFile("/proc/sys/net/ipv4/ip_local_port_range")
+	if err == nil {
+		content := strings.TrimSpace(string(data))
+		parts := strings.Fields(content)
+		if len(parts) == 2 {
+			if min, err1 := strconv.Atoi(parts[0]); err1 == nil {
+				if max, err2 := strconv.Atoi(parts[1]); err2 == nil {
+					return uint16(min), uint16(max)
+				}
+			}
+		}
+	}
+
+	// Fallback to typical ephemeral port range
+	return 32768, 65535
+}
+
 // newDefaultPortManager is an internal function that creates a new DefaultPortManager instance
 // without using the singleton pattern. This is used by initDefaultPortManager.
 func newDefaultPortManager() *DefaultPortManager {
+	minPort, maxPort := getEphemeralPortRange()
+
 	return &DefaultPortManager{
 		instanceToPorts: make(map[string]uint16),
 		portToInstances: make(map[uint16]string),
+		allocatedPorts:  make(map[uint16]bool),
+		minPort:         minPort,
+		maxPort:         maxPort,
+		rand:            rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 
-// AllocatePort allocates an available port for a given instance using OS port allocation
+// AllocatePort allocates an available port for a given instance using random selection
+// from the OS ephemeral port range with collision detection and retries
 func (pm *DefaultPortManager) AllocatePort(instanceName string) (uint16, error) {
 	pm.mutex.Lock()
 	defer pm.mutex.Unlock()
@@ -129,26 +173,42 @@ func (pm *DefaultPortManager) AllocatePort(instanceName string) (uint16, error) 
 		return port, nil
 	}
 
-	// Use OS port allocation (port 0) to get an available port
-	listener, err := net.Listen("tcp", ":0")
-	if err != nil {
-		return 0, fmt.Errorf("failed to allocate port: %w", err)
+	// Try up to 5 times to find an available port
+	const maxRetries = 5
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		// Generate a random port in the ephemeral range
+		portRange := pm.maxPort - pm.minPort + 1
+		randomOffset := pm.rand.Intn(int(portRange))
+		port := pm.minPort + uint16(randomOffset)
+
+		// Skip if we've already allocated this port
+		if pm.allocatedPorts[port] {
+			continue
+		}
+
+		// Try to bind to the port to verify it's available
+		addr := fmt.Sprintf(":%d", port)
+		listener, err := net.Listen("tcp", addr)
+		if err != nil {
+			// Port not available, try another one
+			continue
+		}
+
+		// Close the listener immediately
+		if err := listener.Close(); err != nil {
+			// Failed to close, but we'll still use the port
+			// This shouldn't normally happen
+		}
+
+		// Successfully allocated the port, store the mappings
+		pm.instanceToPorts[instanceName] = port
+		pm.portToInstances[port] = instanceName
+		pm.allocatedPorts[port] = true
+
+		return port, nil
 	}
 
-	// Extract the port from the listener's address
-	addr := listener.Addr().(*net.TCPAddr)
-	port := uint16(addr.Port)
-
-	// Close the listener immediately to allow external apps to use the port
-	if err := listener.Close(); err != nil {
-		return 0, fmt.Errorf("failed to close listener for port %d: %w", port, err)
-	}
-
-	// Store the mappings
-	pm.instanceToPorts[instanceName] = port
-	pm.portToInstances[port] = instanceName
-
-	return port, nil
+	return 0, fmt.Errorf("failed to allocate port for instance %s after %d attempts", instanceName, maxRetries)
 }
 
 // ReleasePort releases a port previously allocated to an instance
@@ -164,6 +224,7 @@ func (pm *DefaultPortManager) ReleasePort(instanceName string) error {
 	// Remove the mappings
 	delete(pm.instanceToPorts, instanceName)
 	delete(pm.portToInstances, port)
+	delete(pm.allocatedPorts, port)
 
 	return nil
 }
@@ -219,6 +280,7 @@ func (pm *DefaultPortManager) ReservePort(instanceName string, port uint16) erro
 	// Successfully reserved the port
 	pm.instanceToPorts[instanceName] = port
 	pm.portToInstances[port] = instanceName
+	pm.allocatedPorts[port] = true
 
 	return nil
 }
