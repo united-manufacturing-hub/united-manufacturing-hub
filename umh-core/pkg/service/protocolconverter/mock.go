@@ -58,6 +58,8 @@ type MockProtocolConverterService struct {
 	UpdateInManagerCalled    bool
 	RemoveFromManagerCalled  bool
 	StartCalled              bool
+	StartConnectionCalled    bool
+	StartDFCCalled           bool
 	StopCalled               bool
 	ForceRemoveCalled        bool
 	ServiceExistsCalled      bool
@@ -76,6 +78,8 @@ type MockProtocolConverterService struct {
 	UpdateInManagerError           error
 	RemoveFromManagerError         error
 	StartError                     error
+	StartConnectionError           error
+	StartDFCError                  error
 	StopError                      error
 	ForceRemoveError               error
 	ServiceExistsResult            bool
@@ -476,6 +480,42 @@ func (m *MockProtocolConverterService) StartProtocolConverter(ctx context.Contex
 	}
 
 	return m.StartError
+}
+
+// StartConnection mocks starting only the connection component of a ProtocolConverter
+func (m *MockProtocolConverterService) StartConnection(ctx context.Context, filesystemService filesystem.Service, protConvName string) error {
+	m.StartConnectionCalled = true
+
+	underlyingName := fmt.Sprintf("protocolconverter-%s", protConvName)
+	connFound := false
+
+	// Set the desired state to up for the connection
+	for i, connConfig := range m.connConfigs {
+		if connConfig.Name == underlyingName {
+			m.connConfigs[i].DesiredFSMState = connfsm.OperationalStateUp
+			connFound = true
+			break
+		}
+	}
+
+	if !connFound {
+		return ErrServiceNotExist
+	}
+
+	return m.StartConnectionError
+}
+
+// StartDFC mocks starting only the DFC components of a ProtocolConverter
+func (m *MockProtocolConverterService) StartDFC(ctx context.Context, filesystemService filesystem.Service, protConvName string) error {
+	m.StartDFCCalled = true
+
+	// Use EvaluateDFCDesiredStates to handle the conditional DFC starting logic
+	err := m.EvaluateDFCDesiredStates(protConvName, "active", "starting_dfc")
+	if err != nil {
+		return err
+	}
+
+	return m.StartDFCError
 }
 
 // StopProtocolConverter mocks stopping a ProtocolConverter

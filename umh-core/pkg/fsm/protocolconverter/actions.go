@@ -141,6 +141,38 @@ func (p *ProtocolConverterInstance) StartInstance(ctx context.Context, filesyste
 	return nil
 }
 
+// StartConnectionInstance starts only the connection component of a ProtocolConverter.
+// This method is used during the "starting_connection" FSM state and only brings
+// the connection to "up" state without touching DFCs.
+func (p *ProtocolConverterInstance) StartConnectionInstance(ctx context.Context, filesystemService filesystem.Service) error {
+	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting Connection for ProtocolConverter service %s ...", p.baseFSMInstance.GetID())
+
+	// Start only the connection component
+	err := p.service.StartConnection(ctx, filesystemService, p.baseFSMInstance.GetID())
+	if err != nil {
+		return fmt.Errorf("failed to start connection for ProtocolConverter service %s: %w", p.baseFSMInstance.GetID(), err)
+	}
+
+	p.baseFSMInstance.GetLogger().Debugf("ProtocolConverter service %s connection start command executed", p.baseFSMInstance.GetID())
+	return nil
+}
+
+// StartDFCInstance starts only the DFC components of a ProtocolConverter.
+// This method evaluates which DFCs should be active based on their configurations
+// and is used during the "starting_dfc" FSM state.
+func (p *ProtocolConverterInstance) StartDFCInstance(ctx context.Context, filesystemService filesystem.Service) error {
+	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting DFCs for ProtocolConverter service %s ...", p.baseFSMInstance.GetID())
+
+	// Start the DFC components with conditional evaluation
+	err := p.service.StartDFC(ctx, filesystemService, p.baseFSMInstance.GetID())
+	if err != nil {
+		return fmt.Errorf("failed to start DFCs for ProtocolConverter service %s: %w", p.baseFSMInstance.GetID(), err)
+	}
+
+	p.baseFSMInstance.GetLogger().Debugf("ProtocolConverter service %s DFC start command executed", p.baseFSMInstance.GetID())
+	return nil
+}
+
 // StopInstance attempts to stop the DataflowComponent by setting the desired state to stopped for the given instance
 func (p *ProtocolConverterInstance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping ProtocolConverter service %s ...", p.baseFSMInstance.GetID())

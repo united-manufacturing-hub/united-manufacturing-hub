@@ -265,12 +265,13 @@ func (p *ProtocolConverterInstance) reconcileTransitionToActive(ctx context.Cont
 
 	// If we're stopped, we need to start first
 	if currentState == OperationalStateStopped {
-		// Attempt to initiate start
+		// BACKWARD COMPATIBILITY: Keep the StartInstance call for now
+		// The grey state fix is handled by the FSM-state-aware EvaluateDFCDesiredStates logic
 		if err := p.StartInstance(ctx, services.GetFileSystem()); err != nil {
 			return err, false
 		}
 		p.ObservedState.ServiceInfo.StatusReason = "started"
-		// Send event to transition from Stopped to Starting
+		// Send event to transition from Stopped to StartingConnection
 		return p.baseFSMInstance.SendEvent(ctx, EventStart), true
 	}
 
@@ -298,7 +299,13 @@ func (p *ProtocolConverterInstance) reconcileStartingStates(ctx context.Context,
 
 	switch currentState {
 	case OperationalStateStartingConnection:
-		// First we need to ensure the S6 service is started
+		// Start the connection component first
+		if err := p.StartConnectionInstance(ctx, services.GetFileSystem()); err != nil {
+			p.baseFSMInstance.GetLogger().Debugf("Failed to start connection: %v", err)
+			return err, false
+		}
+
+		// Check if connection is up before proceeding
 		running, reason := p.IsConnectionUp()
 		if !running {
 			p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reason)
@@ -343,6 +350,12 @@ func (p *ProtocolConverterInstance) reconcileStartingStates(ctx context.Context,
 		if !existing {
 			p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reason)
 			return p.baseFSMInstance.SendEvent(ctx, EventStartFailedDFCMissing), true
+		}
+
+		// Start the DFC components now that prerequisites are met
+		if err := p.StartDFCInstance(ctx, services.GetFileSystem()); err != nil {
+			p.baseFSMInstance.GetLogger().Debugf("Failed to start DFC: %v", err)
+			return err, false
 		}
 
 		// Now check whether the DFC is healthy
