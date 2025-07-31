@@ -74,14 +74,14 @@ type IDataFlowComponentService interface {
 
 // ServiceInfo contains information about a DataFlowComponent service
 type ServiceInfo struct {
-	// BenthosObservedState contains information about the Benthos service
-	BenthosObservedState benthosfsmmanager.BenthosObservedState
 
 	// BenthosFSMState contains the current state of the Benthos FSM
 	BenthosFSMState string
 
 	// StatusReason contains the reason for the current status
 	StatusReason string
+	// BenthosObservedState contains information about the Benthos service
+	BenthosObservedState benthosfsmmanager.BenthosObservedState
 }
 
 // DataFlowComponentService is the default implementation of the IDataFlowComponentService interface

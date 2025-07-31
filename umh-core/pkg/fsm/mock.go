@@ -24,10 +24,10 @@ import (
 
 // MockFSMManager is a mock implementation of FSMManager for testing
 type MockFSMManager struct {
-	ReconcileCalled bool
 	ReconcileError  error
 	ReconcileDelay  time.Duration
 	mutex           sync.Mutex
+	ReconcileCalled bool
 }
 
 // NewMockFSMManager creates a new MockFSMManager instance

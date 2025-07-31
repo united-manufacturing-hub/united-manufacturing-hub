@@ -34,8 +34,8 @@ import (
 type Simulator struct {
 	simObservedState   *topicbrowserfsm.ObservedStateSnapshot
 	simObservedStateMu *sync.RWMutex
-	ticker             int
 	topics             map[string]*tbproto.TopicInfo
+	ticker             int
 	simulatorEnabled   bool
 }
 

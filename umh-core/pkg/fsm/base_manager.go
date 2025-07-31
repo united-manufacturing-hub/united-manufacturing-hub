@@ -116,9 +116,18 @@ type FSMManager[C any] interface {
 // - Configuration updates: Detecting and applying configuration changes
 // - Error handling: Standardized error reporting and metrics collection
 type BaseFSMManager[C any] struct {
-	instances   map[string]FSMInstance
-	logger      *zap.SugaredLogger
-	managerName string
+	instances map[string]FSMInstance
+	logger    *zap.SugaredLogger
+
+	// These methods are implemented by each concrete manager
+	extractConfigs         func(config config.FullConfig) ([]C, error)
+	getName                func(C) (string, error)
+	getDesiredState        func(C) (string, error)
+	createInstance         func(C) (FSMInstance, error)
+	compareConfig          func(FSMInstance, C) (bool, error)
+	setConfig              func(FSMInstance, C) error
+	getMinimumRequiredTime func(FSMInstance) (time.Duration, error)
+	managerName            string
 
 	// Manager-specific tick counter
 	managerTick uint64
@@ -129,14 +138,6 @@ type BaseFSMManager[C any] struct {
 	nextRemoveTick uint64 // Earliest tick another instance may begin removal
 	nextStateTick  uint64 // Earliest tick another desired‑state change may happen
 
-	// These methods are implemented by each concrete manager
-	extractConfigs         func(config config.FullConfig) ([]C, error)
-	getName                func(C) (string, error)
-	getDesiredState        func(C) (string, error)
-	createInstance         func(C) (FSMInstance, error)
-	compareConfig          func(FSMInstance, C) (bool, error)
-	setConfig              func(FSMInstance, C) error
-	getMinimumRequiredTime func(FSMInstance) (time.Duration, error)
 }
 
 // NewBaseFSMManager creates a new base manager with dependencies injected.

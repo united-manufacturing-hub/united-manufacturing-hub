@@ -33,6 +33,35 @@ import (
 
 // MockService is a mock implementation of the ITopicBrowserService interface for testing
 type MockService struct {
+	GenerateConfigError    error
+	GetConfigError         error
+	StatusError            error
+	AddToManagerError      error
+	UpdateInManagerError   error
+	RemoveFromManagerError error
+	StartError             error
+	StopError              error
+	ForceRemoveError       error
+	ReconcileManagerError  error
+
+	// Benthos service mock
+	BenthosService benthossvc.IBenthosService
+
+	// For more complex testing scenarios
+	States   map[string]*ServiceInfo
+	Existing map[string]bool
+
+	// State control for FSM testing
+	stateFlags map[string]*StateFlags
+
+	BenthosConfigs []config.BenthosConfig
+
+	// Return values for each method
+	GenerateConfigResult benthossvccfg.BenthosServiceConfig
+	GetConfigResult      benthossvccfg.BenthosServiceConfig
+
+	StatusResult ServiceInfo
+
 	// Tracks calls to methods
 	GenerateConfigCalled    bool
 	GetConfigCalled         bool
@@ -46,33 +75,8 @@ type MockService struct {
 	ServiceExistsCalled     bool
 	ReconcileManagerCalled  bool
 
-	// Return values for each method
-	GenerateConfigResult       benthossvccfg.BenthosServiceConfig
-	GenerateConfigError        error
-	GetConfigResult            benthossvccfg.BenthosServiceConfig
-	GetConfigError             error
-	StatusResult               ServiceInfo
-	StatusError                error
-	AddToManagerError          error
-	UpdateInManagerError       error
-	RemoveFromManagerError     error
-	StartError                 error
-	StopError                  error
-	ForceRemoveError           error
 	ServiceExistsResult        bool
-	ReconcileManagerError      error
 	ReconcileManagerReconciled bool
-
-	// For more complex testing scenarios
-	States         map[string]*ServiceInfo
-	Existing       map[string]bool
-	BenthosConfigs []config.BenthosConfig
-
-	// State control for FSM testing
-	stateFlags map[string]*StateFlags
-
-	// Benthos service mock
-	BenthosService benthossvc.IBenthosService
 }
 
 // Ensure MockService implements ITopicBrowserService

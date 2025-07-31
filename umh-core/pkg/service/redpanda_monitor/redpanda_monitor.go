@@ -56,10 +56,10 @@ import (
 
 // Metrics contains information about the metrics of the Redpanda service
 type Metrics struct {
+	Topic          TopicMetrics
 	Infrastructure InfrastructureMetrics
 	Cluster        ClusterMetrics
 	Throughput     ThroughputMetrics
-	Topic          TopicMetrics
 }
 
 // InfrastructureMetrics contains information about the infrastructure metrics of the Redpanda service
@@ -117,14 +117,14 @@ type TopicMetrics struct {
 // HealthCheck contains information about the health of the Redpanda service
 // https://docs.redpanda.com/redpanda-connect/guides/monitoring/
 type HealthCheck struct {
-	// IsLive is true if the Redpanda service is live
-	IsLive bool
-	// IsReady is true if the Redpanda service is ready to process data
-	IsReady bool
 	// Version contains the version of the Redpanda service
 	Version string
 	// ReadyError contains any error message from the ready check
 	ReadyError string `json:"ready_error,omitempty"`
+	// IsLive is true if the Redpanda service is live
+	IsLive bool
+	// IsReady is true if the Redpanda service is ready to process data
+	IsReady bool
 }
 
 type ClusterConfig struct {
@@ -132,41 +132,41 @@ type ClusterConfig struct {
 }
 
 type TopicConfig struct {
-	DefaultTopicRetentionMs          int64
-	DefaultTopicRetentionBytes       int64
 	DefaultTopicCompressionAlgorithm string
 	DefaultTopicCleanupPolicy        string
+	DefaultTopicRetentionMs          int64
+	DefaultTopicRetentionBytes       int64
 	DefaultTopicSegmentMs            int64
 }
 
 // RedpandaMetrics contains information about the metrics of the Redpanda service
 type RedpandaMetrics struct {
-	// Metrics contains the metrics of the Redpanda service
-	Metrics Metrics
 	// MetricsState contains the last observed state of the metrics
 	MetricsState *RedpandaMetricsState
+	// Metrics contains the metrics of the Redpanda service
+	Metrics Metrics
 }
 
 // ServiceInfo contains information about a redpanda service
 type ServiceInfo struct {
-	// S6ObservedState contains information about the S6 redpanda_monitor service
-	S6ObservedState s6fsm.S6ObservedState
 	// S6FSMState contains the current state of the S6 FSM of the redpanda_monitor service
 	S6FSMState string
 	// RedpandaStatus contains information about the status of the redpanda service
 	RedpandaStatus RedpandaMonitorStatus
+	// S6ObservedState contains information about the S6 redpanda_monitor service
+	S6ObservedState s6fsm.S6ObservedState
 }
 
 // RedpandaMonitorScan contains information about the status of the Redpanda service
 type RedpandaMetricsScan struct {
-	// HealthCheck contains information about the health of the Redpanda service
-	HealthCheck HealthCheck
+	// LastUpdatedAt contains the last time the metrics were updated
+	LastUpdatedAt time.Time
 	// Metrics contains information about the metrics of the Redpanda service
 	RedpandaMetrics *RedpandaMetrics
 	// ClusterConfig contains information about the cluster config of the Redpanda service
 	ClusterConfig *ClusterConfig
-	// LastUpdatedAt contains the last time the metrics were updated
-	LastUpdatedAt time.Time
+	// HealthCheck contains information about the health of the Redpanda service
+	HealthCheck HealthCheck
 }
 
 // RedpandaMonitorStatus contains status information about the redpanda service
@@ -174,8 +174,6 @@ type RedpandaMonitorStatus struct {
 	// LastScan contains the result of the last scan
 	// If this is nil, we never had a successfull scan
 	LastScan *RedpandaMetricsScan
-	// IsRunning indicates whether the redpanda_monitor service is running
-	IsRunning bool
 	// Logs contains the structured s6 log entries emitted by the
 	// redpanda_monitor service.
 	//
@@ -194,6 +192,8 @@ type RedpandaMonitorStatus struct {
 	// Therefore we override the default behaviour and copy only the 3-word
 	// slice header (24 B on amd64) — see CopyLogs below.
 	Logs []s6service.LogEntry
+	// IsRunning indicates whether the redpanda_monitor service is running
+	IsRunning bool
 }
 
 // CopyLogs is a go-deepcopy override for the Logs field.
@@ -237,20 +237,20 @@ type IRedpandaMonitorService interface {
 var _ IRedpandaMonitorService = (*RedpandaMonitorService)(nil)
 
 type RedpandaMonitorService struct {
-	logger          *zap.SugaredLogger
-	metricsState    *RedpandaMetricsState
-	s6Manager       *s6fsm.S6Manager
-	s6Service       s6service.Service
-	s6ServiceConfig *config.S6FSMConfig // There can only be one instance of this service (as there is also only one redpanda instance)
-	redpandaName    string              // normally a service can handle multiple instances, the service monitor here is different and can only handle one instance
+	previousLastUpdatedAt time.Time
+	s6Service             s6service.Service
+	logger                *zap.SugaredLogger
+	metricsState          *RedpandaMetricsState
+	s6Manager             *s6fsm.S6Manager
+	s6ServiceConfig       *config.S6FSMConfig // There can only be one instance of this service (as there is also only one redpanda instance)
+	previousMetrics       *RedpandaMetrics
+	previousClusterConfig *ClusterConfig
+	redpandaName          string // normally a service can handle multiple instances, the service monitor here is different and can only handle one instance
 
 	// Cache metrics/clusterconfig/timestamp data
 	previousMetricsDataByteHash       uint64
 	previousClusterConfigDataByteHash uint64
 	previousTimestampDataByteHash     uint64
-	previousMetrics                   *RedpandaMetrics
-	previousClusterConfig             *ClusterConfig
-	previousLastUpdatedAt             time.Time
 	// cacheMutex is used to synchronize access to above cache variables
 	cacheMutex sync.Mutex
 }
