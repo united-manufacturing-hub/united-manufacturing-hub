@@ -405,7 +405,7 @@ func (d *DataflowComponentInstance) reconcileTransitionToStopped(ctx context.Con
 
 		benthosStatusReason := d.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.StatusReason
 		if benthosStatusReason == "" {
-			benthosStatusReason = "[empty]"
+			benthosStatusReason = "not existing"
 		}
 
 		d.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("stopping: %s", benthosStatusReason)
