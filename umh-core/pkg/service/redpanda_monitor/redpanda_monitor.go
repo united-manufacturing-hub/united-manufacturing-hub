@@ -552,6 +552,7 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 
 	if metricsChanged {
 		g.Go(func() error {
+			defer sentry.RecoverAndReport()
 			var err error
 			metrics, err = s.processMetricsDataBytes(metricsDataBytes, tick)
 			return err
@@ -562,6 +563,7 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 
 	if clusterConfigChanged {
 		g.Go(func() error {
+			defer sentry.RecoverAndReport()
 			var err error
 			clusterConfig, err = s.processClusterConfigDataBytes(clusterConfigDataBytes, tick)
 			return err
