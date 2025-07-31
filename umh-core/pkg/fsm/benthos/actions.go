@@ -303,6 +303,7 @@ func (b *BenthosInstance) IsBenthosS6Stopped() (bool, string) {
 	// Empty string occurs when a service crashes (e.g., due to invalid config) and gets
 	// completely removed from S6, leaving no state. This is effectively "stopped" from
 	// the FSM perspective and allows proper recovery from corrupted states (see ENG-3243).
+
 	fsmState := b.ObservedState.ServiceInfo.S6FSMState
 	switch fsmState {
 	case "":
