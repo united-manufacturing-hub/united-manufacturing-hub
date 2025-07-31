@@ -19,18 +19,18 @@ import (
 )
 
 type LogEntry struct {
-	Timestamp   time.Time
-	Level       string
-	Source      string
-	Component   string
-	Message     string
-	TickNumber  int
-	FSMName     string
-	FromState   string
-	ToState     string
-	Event       string
+	Timestamp    time.Time
+	Level        string
+	Source       string
+	Component    string
+	Message      string
+	FSMName      string
+	FromState    string
+	ToState      string
+	Event        string
 	DesiredState string
-	EntryType   EntryType
+	TickNumber   int
+	EntryType    EntryType
 }
 
 type EntryType int
@@ -49,9 +49,9 @@ const (
 )
 
 type TickData struct {
-	Number    int
 	Timestamp time.Time
 	Events    []LogEntry
+	Number    int
 }
 
 type FSMHistory struct {
@@ -60,23 +60,23 @@ type FSMHistory struct {
 }
 
 type FSMTransition struct {
-	Tick         int
 	Timestamp    time.Time
 	FromState    string
 	ToState      string
 	Event        string
 	DesiredState string
+	Tick         int
 	Success      bool
 }
 
 type LogAnalyzer struct {
-	Entries      []LogEntry
 	TickMap      map[int]*TickData
 	FSMHistories map[string]*FSMHistory
-	CurrentTick  int
+	Entries      []LogEntry
 	Errors       []LogEntry
 	Starts       []time.Time
 	Sessions     []SessionInfo
+	CurrentTick  int
 }
 
 type SessionInfo struct {
