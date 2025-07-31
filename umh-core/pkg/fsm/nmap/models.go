@@ -119,12 +119,12 @@ func IsRunningState(state string) bool {
 
 // NmapObservedState holds the last known nmap metrics and health status
 type NmapObservedState struct {
-	// LastStateChange is the timestamp of the last observed state change
-	LastStateChange int64
-	// We store the nmap data from nmap_monitor.GetStatus
-	ServiceInfo nmap.ServiceInfo
 	// ObservedNmapServiceConfig contains the observed Nmap service config
 	ObservedNmapServiceConfig nmapserviceconfig.NmapServiceConfig
+	// We store the nmap data from nmap_monitor.GetStatus
+	ServiceInfo nmap.ServiceInfo
+	// LastStateChange is the timestamp of the last observed state change
+	LastStateChange int64
 }
 
 // Ensure it implements the ObservedState interface
@@ -135,18 +135,19 @@ var _ publicfsm.FSMInstance = (*NmapInstance)(nil)
 
 // NmapInstance holds the FSM instance and references to the container monitor service.
 type NmapInstance struct {
-	// This embeds the "BaseFSMInstance" which handles lifecycle states,
-	// desired state, removal, etc.
-	baseFSMInstance *internal_fsm.BaseFSMInstance
-
-	// ObservedState: last known nmap metrics, updated in reconcile
-	ObservedState NmapObservedState
 
 	// The nmap service used to gather metrics
 	monitorService nmap.INmapService
 
+	// This embeds the "BaseFSMInstance" which handles lifecycle states,
+	// desired state, removal, etc.
+	baseFSMInstance *internal_fsm.BaseFSMInstance
+
 	// Possibly store config needed for nmap monitoring
 	config config.NmapConfig
+
+	// ObservedState: last known nmap metrics, updated in reconcile
+	ObservedState NmapObservedState
 }
 
 type PortState string

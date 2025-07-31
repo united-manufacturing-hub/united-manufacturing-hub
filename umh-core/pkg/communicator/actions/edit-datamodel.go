@@ -51,21 +51,23 @@ import (
 // EditDataModelAction implements the Action interface for editing an existing Data Model.
 // All fields are immutable after construction to avoid race conditions.
 type EditDataModelAction struct {
-	userEmail    string
-	actionUUID   uuid.UUID
-	instanceUUID uuid.UUID
-
-	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager
 
 	// Parsed request payload (only populated after Parse)
 	payload models.EditDataModelPayload
 
-	actionLogger *zap.SugaredLogger
+	configManager config.ConfigManager
 
 	// Shared context for the entire action lifecycle (validate + execute)
-	ctx    context.Context
-	cancel context.CancelFunc
+	ctx context.Context
+
+	outboundChannel chan *models.UMHMessage
+
+	actionLogger *zap.SugaredLogger
+
+	cancel       context.CancelFunc
+	userEmail    string
+	actionUUID   uuid.UUID
+	instanceUUID uuid.UUID
 }
 
 // NewEditDataModelAction returns an un-parsed action instance.

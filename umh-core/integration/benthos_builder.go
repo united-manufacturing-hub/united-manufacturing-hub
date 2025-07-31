@@ -22,9 +22,9 @@ import (
 
 // BenthosBuilder is used to build configuration with Benthos services
 type BenthosBuilder struct {
-	full config.FullConfig
 	// Map to track which services are active by name
 	activeBenthos map[string]bool
+	full          config.FullConfig
 }
 
 // NewBenthosBuilder creates a new builder for Benthos configurations

@@ -34,13 +34,13 @@ import (
 )
 
 type Puller struct {
-	inboundMessageChannel chan *models.UMHMessage
-	shallRun              atomic.Bool
 	jwt                   atomic.Value
 	dog                   watchdog.Iface
-	insecureTLS           bool
-	apiURL                string
+	inboundMessageChannel chan *models.UMHMessage
 	logger                *zap.SugaredLogger
+	apiURL                string
+	shallRun              atomic.Bool
+	insecureTLS           bool
 }
 
 func NewPuller(jwt string, dog watchdog.Iface, inboundChannel chan *models.UMHMessage, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) *Puller {

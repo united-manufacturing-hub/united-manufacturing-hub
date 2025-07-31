@@ -66,13 +66,14 @@ const (
 
 // S6ObservedState represents the state of the service as observed externally
 type S6ObservedState struct {
-	// LastStateChange is the timestamp of the last observed state change
-	LastStateChange int64
-	// ServiceInfo contains the actual service info from s6
-	ServiceInfo s6svc.ServiceInfo
 
 	// ObservedS6ServiceConfig contains the actual service config from s6
 	ObservedS6ServiceConfig s6serviceconfig.S6ServiceConfig
+	// ServiceInfo contains the actual service info from s6
+	ServiceInfo s6svc.ServiceInfo
+
+	// LastStateChange is the timestamp of the last observed state change
+	LastStateChange int64
 }
 
 // IsObservedState implements the ObservedState interface
@@ -85,22 +86,23 @@ var _ publicfsm.FSMInstance = (*S6Instance)(nil)
 
 // S6Instance represents a single S6 service instance with a state machine
 type S6Instance struct {
+
+	// service is the S6 service implementation to use
+	service s6svc.Service
+
 	baseFSMInstance *internalfsm.BaseFSMInstance
+
+	// servicePath is the path to the s6 service directory
+	servicePath string
+
+	// config contains all the configuration for this service
+	config config.S6FSMConfig
 
 	// ObservedState represents the observed state of the service
 	// ObservedState contains all metrics, logs, etc.
 	// that are updated at the beginning of Reconcile and then used to
 	// determine the next state
 	ObservedState S6ObservedState
-
-	// servicePath is the path to the s6 service directory
-	servicePath string
-
-	// service is the S6 service implementation to use
-	service s6svc.Service
-
-	// config contains all the configuration for this service
-	config config.S6FSMConfig
 }
 
 // GetError returns a structured error with backoff information
