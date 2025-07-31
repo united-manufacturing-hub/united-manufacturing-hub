@@ -40,15 +40,15 @@ type ServiceInfo struct {
 	Memory *models.Memory // Keep existing Memory metrics
 	Disk   *models.Disk   // Keep existing Disk metrics
 
+	// Existing fields
+	Hwid         string
+	Architecture models.ContainerArchitecture
+
 	// Health assessments using existing models.HealthCategory
 	OverallHealth models.HealthCategory
 	CPUHealth     models.HealthCategory
 	MemoryHealth  models.HealthCategory
 	DiskHealth    models.HealthCategory
-
-	// Existing fields
-	Hwid         string
-	Architecture models.ContainerArchitecture
 }
 
 // Service defines the interface for container monitoring

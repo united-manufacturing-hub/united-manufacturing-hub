@@ -51,21 +51,23 @@ import (
 // AddDataModelAction implements the Action interface for adding a new Data Model.
 // All fields are immutable after construction to avoid race conditions.
 type AddDataModelAction struct {
-	userEmail    string
-	actionUUID   uuid.UUID
-	instanceUUID uuid.UUID
-
-	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager
 
 	// Parsed request payload (only populated after Parse)
 	payload models.AddDataModelPayload
 
-	actionLogger *zap.SugaredLogger
+	configManager config.ConfigManager
 
 	// Shared context for the entire action lifecycle (validate + execute)
-	ctx    context.Context
-	cancel context.CancelFunc
+	ctx context.Context
+
+	outboundChannel chan *models.UMHMessage
+
+	actionLogger *zap.SugaredLogger
+
+	cancel       context.CancelFunc
+	userEmail    string
+	actionUUID   uuid.UUID
+	instanceUUID uuid.UUID
 }
 
 // NewAddDataModelAction returns an un-parsed action instance.

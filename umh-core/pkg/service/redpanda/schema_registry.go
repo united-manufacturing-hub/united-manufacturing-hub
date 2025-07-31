@@ -71,14 +71,14 @@ type SchemaRegistryPhase string
 // All metrics are thread-safe and updated atomically during reconciliation operations.
 // Use these metrics to track system health, performance, and operational status.
 type SchemaRegistryMetrics struct {
+	LastOperationTime    time.Time
 	CurrentPhase         SchemaRegistryPhase
+	LastError            string
 	TotalReconciliations int64
 	SuccessfulOperations int64
 	FailedOperations     int64
 	SubjectsToAdd        int
 	SubjectsToRemove     int
-	LastOperationTime    time.Time
-	LastError            string
 }
 
 // urlBuilder provides optimized URL construction to avoid repeated allocations
@@ -164,36 +164,38 @@ type ISchemaRegistry interface {
 //   - Typical operation time: <100ms for small schema sets
 //   - Memory usage: O(n) where n is number of schemas
 type SchemaRegistry struct {
-	// Concurrency protection
-	mu sync.RWMutex
-
-	// Core state
-	currentPhase SchemaRegistryPhase
-	httpClient   http.Client
-	logger       *zap.SugaredLogger
+	lastOperationTime time.Time
+	logger            *zap.SugaredLogger
 
 	// Translation
 	translator *datamodel.Translator
-
-	// Phase-specific data
-	rawSubjectsData  []byte        // Raw HTTP response from lookup
-	registrySubjects []SubjectName // Decoded subjects from registry
 
 	// Comparison results (populated during reconcile with current expectedSubjects)
 	missingInRegistry           map[SubjectName]JSONSchemaDefinition // Subject -> schema (we have, registry doesn't)
 	inRegistryButUnknownLocally map[SubjectName]bool                 // Registry has, we don't expect
 
+	httpClient http.Client
+
+	// Core state
+	currentPhase SchemaRegistryPhase
+
 	// Operation tracking and metrics
 	currentOperationSubject SubjectName // Which subject being processed
-	totalReconciliations    int64
-	successfulOperations    int64
-	failedOperations        int64
-	lastOperationTime       time.Time
 	lastError               string
 	schemaRegistryAddress   string
 
 	// Performance optimizations
 	urlBuilder urlBuilder // Reused for URL construction to avoid allocations
+
+	// Phase-specific data
+	rawSubjectsData  []byte        // Raw HTTP response from lookup
+	registrySubjects []SubjectName // Decoded subjects from registry
+
+	totalReconciliations int64
+	successfulOperations int64
+	failedOperations     int64
+	// Concurrency protection
+	mu sync.RWMutex
 }
 
 // Schema registry reconciliation phases

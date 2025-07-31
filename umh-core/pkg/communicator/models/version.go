@@ -29,6 +29,6 @@ type Version struct {
 }
 
 type Changelog struct {
-	Full  []string `definitions:"full"`
 	Short string   `definitions:"short"`
+	Full  []string `definitions:"full"`
 }

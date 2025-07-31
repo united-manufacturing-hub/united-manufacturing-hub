@@ -83,34 +83,37 @@ func (d DFCType) IsValid() bool {
 // EditProtocolConverterAction implements the Action interface for editing
 // protocol converter configurations, particularly for adding DFC configurations.
 type EditProtocolConverterAction struct {
-	userEmail    string
-	actionUUID   uuid.UUID
-	instanceUUID uuid.UUID
-
-	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager
-
-	// Parsed request payload (only populated after Parse)
-	protocolConverterUUID uuid.UUID
-	name                  string // protocol converter name (optional for updates)
-	dfcPayload            models.CDFCPayload
-	dfcType               DFCType
-	vb                    []models.ProtocolConverterVariable
-	ignoreHealthCheck     bool
-	location              map[int]string
-	connectionPort        string
-	connectionIP          string
-
-	// Runtime observation for health checks
-	systemSnapshotManager *fsm.SnapshotManager
 
 	// Desired DFC config for comparison during health checks
 	desiredDFCConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 
+	configManager config.ConfigManager
+
+	outboundChannel chan *models.UMHMessage
+	location        map[int]string
+
+	// Runtime observation for health checks
+	systemSnapshotManager *fsm.SnapshotManager
+
+	actionLogger   *zap.SugaredLogger
+	dfcPayload     models.CDFCPayload
+	userEmail      string
+	name           string // protocol converter name (optional for updates)
+	dfcType        DFCType
+	connectionPort string
+	connectionIP   string
+
+	vb           []models.ProtocolConverterVariable
+	actionUUID   uuid.UUID
+	instanceUUID uuid.UUID
+
+	// Parsed request payload (only populated after Parse)
+	protocolConverterUUID uuid.UUID
+
 	// Atomic edit UUID used for configuration updates and rollbacks
 	atomicEditUUID uuid.UUID
 
-	actionLogger *zap.SugaredLogger
+	ignoreHealthCheck bool
 }
 
 // NewEditProtocolConverterAction returns an un-parsed action instance.
