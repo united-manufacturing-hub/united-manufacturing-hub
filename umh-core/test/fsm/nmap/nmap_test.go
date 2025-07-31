@@ -543,7 +543,16 @@ var _ = Describe("NmapInstance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("should attempt forced removal when not in a terminal state with a permanent error", func() {
+		It("should continue reconciling despite permanent errors in UpdateObservedState when in starting state", func() {
+			// ARCHITECTURAL DECISION: We now continue reconciling even when UpdateObservedState
+			// encounters permanent errors, regardless of whether we're in a terminal or non-terminal state.
+			// This enables force-kill recovery scenarios where S6 services exist on filesystem 
+			// but FSM managers lose their in-memory mappings.
+			// 
+			// The trade-off: We prioritize system recovery over immediate error handling.
+			// Permanent errors in UpdateObservedState no longer trigger automatic FSM removal,
+			// allowing the system to restore services after unexpected shutdowns/restarts.
+
 			// 1) Get to stopped state using proper transitions
 			var err error
 
@@ -584,25 +593,28 @@ var _ = Describe("NmapInstance FSM", func() {
 			)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Create a permanent error that will be encountered during reconcile
+			// Create a permanent error that will be encountered during UpdateObservedState
 			mockService.StatusError = fmt.Errorf("%s: test permanent error", backoff.PermanentFailureError)
 
-			// Use the helper function to reconcile until error
-			var recErr error
-			var reconciled bool
-			tick, recErr, reconciled = fsmtest.ReconcileNmapUntilError(
-				ctx, fsm.SystemSnapshot{Tick: tick}, instance, mockService, mockServices, serviceName, 20,
-			)
+			// Attempt single reconciliation - should continue despite the error
+			snapshot := fsm.SystemSnapshot{Tick: tick}
+			recErr, _ := instance.Reconcile(ctx, snapshot, mockServices)
 
-			// Verify force removal was attempted
-			Expect(mockService.ForceRemoveNmapCalled).To(BeTrue())
+			// With the new architecture, reconcile should NOT return an error for UpdateObservedState failures
+			Expect(recErr).NotTo(HaveOccurred(), "Reconcile should continue despite UpdateObservedState errors")
 
-			// Now we should get the error
-			Expect(recErr).To(HaveOccurred())
-			Expect(recErr.Error()).To(ContainSubstring(backoff.PermanentFailureError))
-			Expect(reconciled).To(BeTrue())
+			// FSM should maintain its desired state and continue operating
+			Expect(instance.GetDesiredFSMState()).To(Equal(nmap.OperationalStateOpen))
+			// The current state should remain in starting or may progress
+			currentState := instance.GetCurrentFSMState()
+			Expect(nmap.IsStartingState(currentState) || nmap.IsRunningState(currentState)).To(BeTrue(), 
+				"FSM should maintain starting state or progress despite UpdateObservedState errors")
+
+			// Force removal should NOT be attempted since we continue reconciling
+			Expect(mockService.ForceRemoveNmapCalled).To(BeFalse(), "Force removal should not be triggered for UpdateObservedState errors")
 
 			// Clear error for other tests
+			mockService.StatusError = nil
 		})
 	})
 
