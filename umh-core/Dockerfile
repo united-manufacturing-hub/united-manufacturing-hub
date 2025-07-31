@@ -91,6 +91,7 @@ WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub/umh
 COPY . .
 RUN echo "GOOS: ${GOOS:-$(go env GOOS)}, GOARCH: ${GOARCH:-$(go env GOARCH)}"
 RUN echo "Go version: $(go version)"
+# CGO_ENABLED=1 is needed for the race detector to work
 RUN if [ "$DEBUG" = "true" ]; then \
     CGO_ENABLED=1 go build \
     -race \
