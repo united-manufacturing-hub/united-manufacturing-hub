@@ -29,7 +29,6 @@ import (
 	logger "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	benthos_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
@@ -46,10 +45,10 @@ import (
 //     setting error state and scheduling a retry/backoff.
 
 // CreateInstance attempts to add the Benthos to the S6 manager.
-func (b *BenthosInstance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (b *BenthosInstance) CreateInstance(ctx context.Context, services serviceregistry.Provider) error {
 	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding Benthos service %s to S6 manager ...", b.baseFSMInstance.GetID())
 
-	err := b.service.AddBenthosToS6Manager(ctx, filesystemService, &b.config, b.baseFSMInstance.GetID())
+	err := b.service.AddBenthosToS6Manager(ctx, services, &b.config, b.baseFSMInstance.GetID())
 	if err != nil {
 		if err == benthos_service.ErrServiceAlreadyExists {
 			b.baseFSMInstance.GetLogger().Debugf("Benthos service %s already exists in S6 manager", b.baseFSMInstance.GetID())
@@ -75,14 +74,14 @@ func (b *BenthosInstance) CreateInstance(ctx context.Context, filesystemService 
 //     decorator can suspend operations.
 func (b *BenthosInstance) RemoveInstance(
 	ctx context.Context,
-	fs filesystem.Service,
+	services serviceregistry.Provider,
 ) error {
 	b.baseFSMInstance.GetLogger().
 		Infof("Removing Benthos service %s from S6 manager …",
 			b.baseFSMInstance.GetID())
 
 	err := b.service.RemoveBenthosFromS6Manager(
-		ctx, fs, b.baseFSMInstance.GetID())
+		ctx, services, b.baseFSMInstance.GetID())
 
 	switch {
 	// ---------------------------------------------------------------
@@ -124,13 +123,13 @@ func (b *BenthosInstance) RemoveInstance(
 }
 
 // StartInstance attempts to start the benthos by setting the desired state to running for the given instance
-func (b *BenthosInstance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (b *BenthosInstance) StartInstance(ctx context.Context, services serviceregistry.Provider) error {
 	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting Benthos service %s ...", b.baseFSMInstance.GetID())
 
 	// TODO: Add pre-start validation
 
 	// Set the desired state to running for the given instance
-	err := b.service.StartBenthos(ctx, filesystemService, b.baseFSMInstance.GetID())
+	err := b.service.StartBenthos(ctx, services, b.baseFSMInstance.GetID())
 	if err != nil {
 		// if the service is not there yet but we attempt to start it, we need to throw an error
 		return fmt.Errorf("failed to start Benthos service %s: %w", b.baseFSMInstance.GetID(), err)
@@ -141,11 +140,11 @@ func (b *BenthosInstance) StartInstance(ctx context.Context, filesystemService f
 }
 
 // StopInstance attempts to stop the Benthos by setting the desired state to stopped for the given instance
-func (b *BenthosInstance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (b *BenthosInstance) StopInstance(ctx context.Context, services serviceregistry.Provider) error {
 	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping Benthos service %s ...", b.baseFSMInstance.GetID())
 
 	// Set the desired state to stopped for the given instance
-	err := b.service.StopBenthos(ctx, filesystemService, b.baseFSMInstance.GetID())
+	err := b.service.StopBenthos(ctx, services, b.baseFSMInstance.GetID())
 	if err != nil {
 		// if the service is not there yet but we attempt to stop it, we need to throw an error
 		return fmt.Errorf("failed to stop Benthos service %s: %w", b.baseFSMInstance.GetID(), err)
@@ -156,7 +155,7 @@ func (b *BenthosInstance) StopInstance(ctx context.Context, filesystemService fi
 }
 
 // CheckForCreation checks if the Benthos service should be created
-func (b *BenthosInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+func (b *BenthosInstance) CheckForCreation(ctx context.Context, services serviceregistry.Provider) bool {
 	return true
 }
 
@@ -232,7 +231,7 @@ func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, ser
 
 	// Fetch the actual Benthos config from the service
 	start = time.Now()
-	observedConfig, err := b.service.GetConfig(ctx, services.GetFileSystem(), b.baseFSMInstance.GetID())
+	observedConfig, err := b.service.GetConfig(ctx, services, b.baseFSMInstance.GetID())
 	metrics.ObserveReconcileTime(logger.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".getConfig", time.Since(start))
 	if err == nil {
 		// Only update if we successfully got the config
@@ -251,7 +250,7 @@ func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, ser
 	// Use new ConfigsEqual function that handles Benthos defaults properly
 	if !benthosserviceconfig.ConfigsEqual(b.config, b.ObservedState.ObservedBenthosServiceConfig) {
 		// Check if the service exists before attempting to update
-		if b.service.ServiceExists(ctx, services.GetFileSystem(), b.baseFSMInstance.GetID()) {
+		if b.service.ServiceExists(ctx, services, b.baseFSMInstance.GetID()) {
 			b.baseFSMInstance.GetLogger().Debugf("Observed Benthos config is different from desired config, updating S6 configuration")
 
 			// Use the new ConfigDiff function for better debug output
@@ -259,7 +258,7 @@ func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, ser
 			b.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
 			// Update the config in the S6 manager
-			err := b.service.UpdateBenthosInS6Manager(ctx, services.GetFileSystem(), &b.config, b.baseFSMInstance.GetID())
+			err := b.service.UpdateBenthosInS6Manager(ctx, services, &b.config, b.baseFSMInstance.GetID())
 			if err != nil {
 				return fmt.Errorf("failed to update Benthos service configuration: %w", err)
 			}

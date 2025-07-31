@@ -17,27 +17,26 @@ package fsm
 import (
 	"context"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // FSMActions defines the standard lifecycle actions that all FSM instances should implement
 type FSMInstanceActions interface {
 	// CreateInstance initiates the creation of a managed instance
-	CreateInstance(ctx context.Context, filesystemService filesystem.Service) error
+	CreateInstance(ctx context.Context, services serviceregistry.Provider) error
 
 	// RemoveInstance initiates the removal of a managed instance
-	RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error
+	RemoveInstance(ctx context.Context, services serviceregistry.Provider) error
 
 	// StartInstance initiates the starting of a managed instance
-	StartInstance(ctx context.Context, filesystemService filesystem.Service) error
+	StartInstance(ctx context.Context, services serviceregistry.Provider) error
 
 	// StopInstance initiates the stopping of a managed instance
-	StopInstance(ctx context.Context, filesystemService filesystem.Service) error
+	StopInstance(ctx context.Context, services serviceregistry.Provider) error
 
 	// UpdateObservedStateOfInstance updates the observed state of the instance
 	UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot SystemSnapshot) error
 
 	// CheckForCreation checks if the instance should be created
-	CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool
+	CheckForCreation(ctx context.Context, services serviceregistry.Provider) bool
 }

@@ -162,7 +162,7 @@ func setUpMockConnectionInstance(
 //   - ctx: Context for cancellation
 //   - instance: The ConnectionInstance to reconcile
 //   - mockService: The mock service to use
-//   - filesystemService: The filesystem service to use
+//   - services: The service registry provider for accessing core services including filesystem
 //   - serviceName: The name of the service instance
 //   - fromState: Starting state to verify before transition
 //   - toState: Target state to reach
@@ -219,7 +219,7 @@ func TestConnectionStateTransition(
 //   - snapshot: The system snapshot to use
 //   - instance: The ConnectionInstance to reconcile
 //   - mockService: The mock service to use
-//   - filesystemService: The filesystem service to use
+//   - services: The service registry provider for accessing core services including filesystem
 //   - serviceName: The name of the service instance
 //   - expectedState: The state the instance should remain in
 //   - numCycles: Number of reconcile cycles to perform
@@ -298,7 +298,7 @@ func CreateMockConnectionInstance(
 //   - snapshot: The system snapshot to use
 //   - instance: The ConnectionInstance to stabilize
 //   - mockService: The mock service to use
-//   - filesystemService: The filesystem service to use
+//   - services: The service registry provider for accessing core services including filesystem
 //   - serviceName: The name of the service
 //   - targetState: The desired state to reach
 //   - maxAttempts: Maximum number of reconcile cycles to attempt
@@ -345,7 +345,7 @@ func StabilizeConnectionInstance(
 //   - ctx: Context for cancellation
 //   - snapshot: The system snapshot to use
 //   - instance: The ConnectionInstance to monitor
-//   - filesystemService: The filesystem service to use
+//   - services: The service registry provider for accessing core services including filesystem
 //   - targetState: The desired state to wait for
 //   - maxAttempts: Maximum number of reconcile cycles to attempt
 //
@@ -391,7 +391,7 @@ func WaitForConnectionDesiredState(
 //   - snapshot: The system snapshot to use
 //   - instance: The ConnectionInstance to reconcile
 //   - mockService: The mock service that may produce an error
-//   - filesystemService: The filesystem service to use
+//   - services: The service registry provider for accessing core services including filesystem
 //   - serviceName: The name of the service
 //   - maxAttempts: Maximum number of reconcile cycles to attempt
 //

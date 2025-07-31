@@ -97,7 +97,7 @@ func NewProtocolConverterManager(name string) *ProtocolConverterManager {
 }
 
 // Reconcile calls the base manager's Reconcile method
-// The filesystemService parameter allows for filesystem operations during reconciliation,
+// The services parameter provides access to core services including filesystem operations during reconciliation,
 // enabling the method to read configuration or state information from the filesystem.
 func (m *ProtocolConverterManager) Reconcile(ctx context.Context, snapshot public_fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool) {
 	start := time.Now()

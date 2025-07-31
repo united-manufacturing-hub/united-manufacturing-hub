@@ -106,7 +106,7 @@ var _ = Describe("StreamProcessorService", func() {
 
 		It("should add a new streamprocessor to the underlying DFC manager", func() {
 			// Act
-			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &dfcConfig, spName)
+			err := service.AddToManager(ctx, mockSvcRegistry, &dfcConfig, spName)
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
@@ -171,11 +171,11 @@ var _ = Describe("StreamProcessorService", func() {
 
 		It("should return error when the streamprocessor already exists", func() {
 			// Add the StreamProcessor first
-			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &dfcConfig, spName)
+			err := service.AddToManager(ctx, mockSvcRegistry, &dfcConfig, spName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Try to add it again
-			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &dfcConfig, spName)
+			err = service.AddToManager(ctx, mockSvcRegistry, &dfcConfig, spName)
 
 			// Assert
 			Expect(err).To(MatchError(ErrServiceAlreadyExists))
@@ -220,7 +220,7 @@ var _ = Describe("StreamProcessorService", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Add the component to the service first
-			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &dfcConfig, spName)
+			err = service.AddToManager(ctx, mockSvcRegistry, &dfcConfig, spName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Set up the mock DFC service to return the config we expect
@@ -229,7 +229,7 @@ var _ = Describe("StreamProcessorService", func() {
 
 		It("should retrieve the streamprocessor config by converting from DFC config", func() {
 			// Act
-			result, err := service.GetConfig(ctx, mockSvcRegistry.GetFileSystem(), spName)
+			result, err := service.GetConfig(ctx, mockSvcRegistry, spName)
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
@@ -248,7 +248,7 @@ var _ = Describe("StreamProcessorService", func() {
 			mockDfc.GetConfigError = ErrServiceNotExist
 
 			// Act
-			_, err := service.GetConfig(ctx, mockSvcRegistry.GetFileSystem(), "non-existent")
+			_, err := service.GetConfig(ctx, mockSvcRegistry, "non-existent")
 
 			// Assert
 			Expect(err).To(MatchError(ContainSubstring("failed to get read dataflowcomponent config")))
@@ -319,13 +319,13 @@ var _ = Describe("StreamProcessorService", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Add the component first
-			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &initialDFCConfig, spName)
+			err = service.AddToManager(ctx, mockSvcRegistry, &initialDFCConfig, spName)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should update an existing streamprocessor configuration", func() {
 			// Act
-			err := service.UpdateInManager(ctx, mockSvcRegistry.GetFileSystem(), &updatedDFCConfig, spName)
+			err := service.UpdateInManager(ctx, mockSvcRegistry, &updatedDFCConfig, spName)
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
@@ -340,7 +340,7 @@ var _ = Describe("StreamProcessorService", func() {
 
 		It("should return error when trying to update non-existent service", func() {
 			// Act
-			err := service.UpdateInManager(ctx, mockSvcRegistry.GetFileSystem(), &updatedDFCConfig, "non-existent")
+			err := service.UpdateInManager(ctx, mockSvcRegistry, &updatedDFCConfig, "non-existent")
 
 			// Assert
 			Expect(err).To(MatchError(ErrServiceNotExist))
@@ -384,21 +384,21 @@ var _ = Describe("StreamProcessorService", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Add the component
-			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &dfcConfig, spName)
+			err = service.AddToManager(ctx, mockSvcRegistry, &dfcConfig, spName)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should handle start/stop/remove operations", func() {
 			// Start
-			err := service.Start(ctx, mockSvcRegistry.GetFileSystem(), spName)
+			err := service.Start(ctx, mockSvcRegistry, spName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Stop
-			err = service.Stop(ctx, mockSvcRegistry.GetFileSystem(), spName)
+			err = service.Stop(ctx, mockSvcRegistry, spName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Remove
-			err = service.RemoveFromManager(ctx, mockSvcRegistry.GetFileSystem(), spName)
+			err = service.RemoveFromManager(ctx, mockSvcRegistry, spName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the service was removed

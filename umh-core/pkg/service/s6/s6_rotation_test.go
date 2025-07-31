@@ -27,6 +27,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // mockFileInfoWithSys is a custom mock FileInfo that implements Sys() to return syscall.Stat_t
@@ -79,18 +80,21 @@ func (m *mockFileInfoWithSys) Sys() interface{} {
 // - Robust error handling with graceful fallbacks
 var _ = Describe("S6 Log Rotation", func() {
 	var (
-		service     *DefaultService
-		fsService   filesystem.Service
-		tempDir     string
-		logDir      string
-		serviceName string
-		ctx         context.Context
-		entries     []string
+		service      *DefaultService
+		fsService    filesystem.Service
+		mockServices *serviceregistry.Registry
+		tempDir      string
+		logDir       string
+		serviceName  string
+		ctx          context.Context
+		entries      []string
 	)
 
 	BeforeEach(func() {
 		service = NewDefaultService().(*DefaultService)
 		fsService = filesystem.NewMockFileSystem()
+		mockServices = serviceregistry.NewMockRegistry()
+		mockServices.FileSystem = fsService
 		ctx = context.Background()
 
 		// Create temporary directory structure that matches S6 expectations
@@ -437,7 +441,7 @@ var _ = Describe("S6 Log Rotation", func() {
 				return nil, 0, os.ErrNotExist
 			})
 
-			entries, err := service.GetLogs(ctx, servicePath, fsService)
+			entries, err := service.GetLogs(ctx, servicePath, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(entries).To(HaveLen(1))
 			Expect(entries[0].Content).To(Equal("initial message"))
@@ -500,7 +504,7 @@ var _ = Describe("S6 Log Rotation", func() {
 			})
 
 			// First call
-			entries, err := service.GetLogs(ctx, servicePath, fsService)
+			entries, err := service.GetLogs(ctx, servicePath, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(entries).To(HaveLen(1))
 
@@ -508,7 +512,7 @@ var _ = Describe("S6 Log Rotation", func() {
 			currentContent = combinedContent
 
 			// Second call should get both messages
-			entries, err = service.GetLogs(ctx, servicePath, fsService)
+			entries, err = service.GetLogs(ctx, servicePath, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(entries).To(HaveLen(2)) // Both messages in ring buffer
 			Expect(entries[0].Content).To(Equal("initial message"))
@@ -571,7 +575,7 @@ var _ = Describe("S6 Log Rotation", func() {
 			})
 
 			// First call to establish state
-			entries, err := service.GetLogs(ctx, servicePath, fsService)
+			entries, err := service.GetLogs(ctx, servicePath, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(entries).To(HaveLen(1))
 
@@ -581,7 +585,7 @@ var _ = Describe("S6 Log Rotation", func() {
 
 			// Should handle missing rotated file gracefully and read current file
 			// s6 correctly preserves the existing entry AND adds the new one
-			entries, err = service.GetLogs(ctx, servicePath, fsService)
+			entries, err = service.GetLogs(ctx, servicePath, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(entries).To(HaveLen(2))
 			Expect(entries[0].Content).To(Equal("initial message"))
@@ -664,7 +668,7 @@ var _ = Describe("S6 Log Rotation", func() {
 			})
 
 			// First call to establish state
-			entries, err := service.GetLogs(ctx, servicePath, fsService)
+			entries, err := service.GetLogs(ctx, servicePath, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(entries).To(HaveLen(1))
 
@@ -675,7 +679,7 @@ var _ = Describe("S6 Log Rotation", func() {
 
 			// Should find rotated file and combine with current
 			// s6 correctly preserves the existing entry AND adds the rotated + current content
-			entries, err = service.GetLogs(ctx, servicePath, fsService)
+			entries, err = service.GetLogs(ctx, servicePath, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(entries).To(HaveLen(3))
 
@@ -773,14 +777,14 @@ var _ = Describe("S6 Log Rotation", func() {
 			})
 
 			// Phase 1: First call - should get 1 entry
-			entries, err := service.GetLogs(ctx, servicePath, fsService)
+			entries, err := service.GetLogs(ctx, servicePath, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(entries).To(HaveLen(1))
 			Expect(entries[0].Content).To(Equal("entry 1"))
 
 			// Phase 2: Add more content, same inode - should get 2 entries
 			currentContent = phase2Content
-			entries, err = service.GetLogs(ctx, servicePath, fsService)
+			entries, err = service.GetLogs(ctx, servicePath, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(entries).To(HaveLen(2))
 			Expect(entries[0].Content).To(Equal("entry 1"))
@@ -788,7 +792,7 @@ var _ = Describe("S6 Log Rotation", func() {
 
 			// Phase 3: Add more content, same inode - should get 3 entries
 			currentContent = phase3Content
-			entries, err = service.GetLogs(ctx, servicePath, fsService)
+			entries, err = service.GetLogs(ctx, servicePath, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(entries).To(HaveLen(3))
 			Expect(entries[0].Content).To(Equal("entry 1"))
@@ -803,7 +807,7 @@ var _ = Describe("S6 Log Rotation", func() {
 
 			// EXPECTED s6 BEHAVIOR: Ring buffer resets on rotation (by design), but
 			// all entries are preserved by reading from both rotated + current files
-			entries, err = service.GetLogs(ctx, servicePath, fsService)
+			entries, err = service.GetLogs(ctx, servicePath, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 
 			// VERIFICATION: Total entry count should be preserved during rotation

@@ -30,20 +30,24 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 var _ = Describe("LifecycleManager", func() {
 	var (
-		ctx       context.Context
-		service   *DefaultService
-		mockFS    *filesystem.MockFileSystem
-		artifacts *ServiceArtifacts
+		ctx          context.Context
+		service      *DefaultService
+		mockFS       *filesystem.MockFileSystem
+		mockServices *serviceregistry.Registry
+		artifacts    *ServiceArtifacts
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
 		service = &DefaultService{logger: logger.For("test")}
 		mockFS = filesystem.NewMockFileSystem()
+		mockServices = serviceregistry.NewMockRegistry()
+		mockServices.FileSystem = mockFS
 		artifacts = &ServiceArtifacts{
 			ServiceDir: filepath.Join(constants.S6BaseDir, "test-service"),
 			LogDir:     filepath.Join(constants.S6LogBaseDir, "test-service"),
@@ -90,7 +94,7 @@ var _ = Describe("LifecycleManager", func() {
 		})
 
 		It("should create artifacts with all required components", func() {
-			result, err := service.CreateArtifacts(ctx, servicePath, config, mockFS)
+			result, err := service.CreateArtifacts(ctx, servicePath, config, mockServices)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
@@ -105,7 +109,7 @@ var _ = Describe("LifecycleManager", func() {
 		// 		return fmt.Errorf("invalid cross-device link: %w", os.ErrPermission)
 		// 	})
 
-		// 	result, err := service.CreateArtifacts(ctx, servicePath, config, mockFS)
+		// 	result, err := service.CreateArtifacts(ctx, servicePath, config, mockServices)
 
 		// 	// Currently the implementation doesn't have EXDEV fallback, so expect error
 		// 	Expect(err).To(HaveOccurred())
@@ -117,7 +121,7 @@ var _ = Describe("LifecycleManager", func() {
 			cancelCtx, cancel := context.WithCancel(ctx)
 			cancel() // Cancel immediately
 
-			result, err := service.CreateArtifacts(cancelCtx, servicePath, config, mockFS)
+			result, err := service.CreateArtifacts(cancelCtx, servicePath, config, mockServices)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(Equal(context.Canceled))
@@ -130,7 +134,7 @@ var _ = Describe("LifecycleManager", func() {
 				"../../../etc/passwd": "malicious content",
 			}
 
-			result, err := service.CreateArtifacts(ctx, servicePath, maliciousConfig, mockFS)
+			result, err := service.CreateArtifacts(ctx, servicePath, maliciousConfig, mockServices)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid config filename"))
@@ -186,7 +190,7 @@ var _ = Describe("LifecycleManager", func() {
 		})
 
 		It("should directly remove directories when using tracked files", func() {
-			err := service.RemoveArtifacts(ctx, artifacts, mockFS)
+			err := service.RemoveArtifacts(ctx, artifacts, mockServices)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(removeAllCalls)).To(BeNumerically(">=", 1))
@@ -202,7 +206,7 @@ var _ = Describe("LifecycleManager", func() {
 			// Clear existing paths
 			existingPaths = sync.Map{}
 
-			err := service.RemoveArtifacts(ctx, artifacts, mockFS)
+			err := service.RemoveArtifacts(ctx, artifacts, mockServices)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(renameCalls)).To(Equal(0))
@@ -214,13 +218,13 @@ var _ = Describe("LifecycleManager", func() {
 			defer cancel()
 			time.Sleep(2 * time.Nanosecond) // Ensure timeout
 
-			err := service.RemoveArtifacts(deadlineCtx, artifacts, mockFS)
+			err := service.RemoveArtifacts(deadlineCtx, artifacts, mockServices)
 
 			Expect(err).To(Equal(context.DeadlineExceeded))
 		})
 
 		It("should handle nil artifacts", func() {
-			err := service.RemoveArtifacts(ctx, nil, mockFS)
+			err := service.RemoveArtifacts(ctx, nil, mockServices)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("artifacts is nil"))
@@ -228,7 +232,7 @@ var _ = Describe("LifecycleManager", func() {
 
 		It("should handle nil lifecycle manager", func() {
 			var nilService *DefaultService
-			err := nilService.RemoveArtifacts(ctx, artifacts, mockFS)
+			err := nilService.RemoveArtifacts(ctx, artifacts, mockServices)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("lifecycle manager is nil"))
@@ -272,7 +276,7 @@ var _ = Describe("LifecycleManager", func() {
 		})
 
 		It("should perform aggressive cleanup with process termination", func() {
-			err := service.ForceCleanup(ctx, artifacts, mockFS)
+			err := service.ForceCleanup(ctx, artifacts, mockServices)
 
 			Expect(err).NotTo(HaveOccurred())
 
@@ -287,13 +291,13 @@ var _ = Describe("LifecycleManager", func() {
 			// Clear existing paths
 			existingPaths = sync.Map{}
 
-			err := service.ForceCleanup(ctx, artifacts, mockFS)
+			err := service.ForceCleanup(ctx, artifacts, mockServices)
 
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should handle nil artifacts", func() {
-			err := service.ForceCleanup(ctx, nil, mockFS)
+			err := service.ForceCleanup(ctx, nil, mockServices)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("artifacts is nil"))
@@ -323,7 +327,7 @@ var _ = Describe("LifecycleManager", func() {
 		})
 
 		It("should return HealthOK for healthy artifacts", func() {
-			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
+			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockServices)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(health).To(Equal(HealthOK))
@@ -335,7 +339,7 @@ var _ = Describe("LifecycleManager", func() {
 				return !strings.HasSuffix(path, "/run"), nil
 			})
 
-			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
+			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockServices)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(health).To(Equal(HealthBad))
@@ -346,7 +350,7 @@ var _ = Describe("LifecycleManager", func() {
 				return !strings.HasSuffix(path, ".complete"), nil
 			})
 
-			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
+			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockServices)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(health).To(Equal(HealthBad))
@@ -357,14 +361,14 @@ var _ = Describe("LifecycleManager", func() {
 				return false, fmt.Errorf("filesystem error")
 			})
 
-			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
+			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockServices)
 
 			Expect(err).To(HaveOccurred())
 			Expect(health).To(Equal(HealthUnknown))
 		})
 
 		It("should handle nil artifacts", func() {
-			health, err := service.CheckArtifactsHealth(ctx, nil, mockFS)
+			health, err := service.CheckArtifactsHealth(ctx, nil, mockServices)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("artifacts is nil"))
@@ -385,7 +389,7 @@ var _ = Describe("LifecycleManager", func() {
 				Command: []string{"echo", "test"},
 			}
 
-			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockFS)
+			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockServices)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("permission denied"))
@@ -420,7 +424,7 @@ var _ = Describe("LifecycleManager", func() {
 				Command: []string{"echo", "test"},
 			}
 
-			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockFS)
+			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockServices)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to create scan directory symlink"))
@@ -439,7 +443,7 @@ var _ = Describe("LifecycleManager", func() {
 				Command: []string{"echo", "test"},
 			}
 
-			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockFS)
+			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockServices)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("no space left on device"))

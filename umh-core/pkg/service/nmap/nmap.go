@@ -31,7 +31,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
@@ -133,7 +132,7 @@ func (s *NmapService) GenerateS6ConfigForNmap(nmapConfig *nmapserviceconfig.Nmap
 }
 
 // GetConfig returns the actual nmap config from the S6 service
-func (s *NmapService) GetConfig(ctx context.Context, filesystemService filesystem.Service, nmapName string) (nmapserviceconfig.NmapServiceConfig, error) {
+func (s *NmapService) GetConfig(ctx context.Context, services serviceregistry.Provider, nmapName string) (nmapserviceconfig.NmapServiceConfig, error) {
 	if ctx.Err() != nil {
 		return nmapserviceconfig.NmapServiceConfig{}, ctx.Err()
 	}
@@ -142,7 +141,7 @@ func (s *NmapService) GetConfig(ctx context.Context, filesystemService filesyste
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
 
 	// Get the script file
-	scriptData, err := s.s6Service.GetS6ConfigFile(ctx, s6ServicePath, "run_nmap.sh", filesystemService)
+	scriptData, err := s.s6Service.GetS6ConfigFile(ctx, s6ServicePath, "run_nmap.sh", services)
 	if err != nil {
 		return nmapserviceconfig.NmapServiceConfig{}, fmt.Errorf("failed to get nmap config file for service %s: %w", s6ServiceName, err)
 	}
@@ -263,7 +262,7 @@ func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port uint16) *Nma
 }
 
 // Status checks the status of a nmap service
-func (s *NmapService) Status(ctx context.Context, filesystemService filesystem.Service, nmapName string, tick uint64) (ServiceInfo, error) {
+func (s *NmapService) Status(ctx context.Context, services serviceregistry.Provider, nmapName string, tick uint64) (ServiceInfo, error) {
 	if ctx.Err() != nil {
 		return ServiceInfo{}, ctx.Err()
 	}
@@ -316,7 +315,7 @@ func (s *NmapService) Status(ctx context.Context, filesystemService filesystem.S
 
 	// Get logs
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
-	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, filesystemService)
+	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, services)
 	if err != nil {
 		if errors.Is(err, s6service.ErrServiceNotExist) {
 			return ServiceInfo{}, ErrServiceNotExist
@@ -332,7 +331,7 @@ func (s *NmapService) Status(ctx context.Context, filesystemService filesystem.S
 	}
 
 	// Get the current config to know which port we're scanning
-	config, err := s.GetConfig(ctx, filesystemService, nmapName)
+	config, err := s.GetConfig(ctx, services, nmapName)
 	if err != nil {
 		return ServiceInfo{}, fmt.Errorf("failed to get config: %w", err)
 	}
@@ -563,11 +562,11 @@ func (s *NmapService) ReconcileManager(ctx context.Context, services serviceregi
 }
 
 // ServiceExists checks if a nmap service exists
-func (s *NmapService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, nmapName string) bool {
+func (s *NmapService) ServiceExists(ctx context.Context, services serviceregistry.Provider, nmapName string) bool {
 	s6ServiceName := s.getS6ServiceName(nmapName)
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
 
-	exists, err := s.s6Service.ServiceExists(ctx, s6ServicePath, filesystemService)
+	exists, err := s.s6Service.ServiceExists(ctx, s6ServicePath, services)
 	if err != nil {
 		return false
 	}
@@ -581,10 +580,10 @@ func (s *NmapService) ServiceExists(ctx context.Context, filesystemService files
 // Expects nmapName (e.g. "myservice") as defined in the UMH config
 func (s *NmapService) ForceRemoveNmap(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	nmapName string,
 ) error {
 	s6ServiceName := s.getS6ServiceName(nmapName)
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
-	return s.s6Service.ForceRemove(ctx, s6ServicePath, filesystemService)
+	return s.s6Service.ForceRemove(ctx, s6ServicePath, services)
 }

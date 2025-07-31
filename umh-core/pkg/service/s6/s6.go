@@ -34,7 +34,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -139,35 +139,35 @@ type LogEntry struct {
 // Service defines the interface for interacting with S6 services
 type Service interface {
 	// Create creates the service with specific configuration
-	Create(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, fsService filesystem.Service) error
+	Create(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, services serviceregistry.Provider) error
 	// Remove removes the service directory structure
-	Remove(ctx context.Context, servicePath string, fsService filesystem.Service) error
+	Remove(ctx context.Context, servicePath string, services serviceregistry.Provider) error
 	// Start starts the service
-	Start(ctx context.Context, servicePath string, fsService filesystem.Service) error
+	Start(ctx context.Context, servicePath string, services serviceregistry.Provider) error
 	// Stop stops the service
-	Stop(ctx context.Context, servicePath string, fsService filesystem.Service) error
+	Stop(ctx context.Context, servicePath string, services serviceregistry.Provider) error
 	// Restart restarts the service
-	Restart(ctx context.Context, servicePath string, fsService filesystem.Service) error
+	Restart(ctx context.Context, servicePath string, services serviceregistry.Provider) error
 	// Status gets the current status of the service
-	Status(ctx context.Context, servicePath string, fsService filesystem.Service) (ServiceInfo, error)
+	Status(ctx context.Context, servicePath string, services serviceregistry.Provider) (ServiceInfo, error)
 	// ExitHistory gets the exit history of the service
-	ExitHistory(ctx context.Context, superviseDir string, fsService filesystem.Service) ([]ExitEvent, error)
+	ExitHistory(ctx context.Context, superviseDir string, services serviceregistry.Provider) ([]ExitEvent, error)
 	// ServiceExists checks if the service directory exists
-	ServiceExists(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error)
+	ServiceExists(ctx context.Context, servicePath string, services serviceregistry.Provider) (bool, error)
 	// GetConfig gets the actual service config from s6
-	GetConfig(ctx context.Context, servicePath string, fsService filesystem.Service) (s6serviceconfig.S6ServiceConfig, error)
+	GetConfig(ctx context.Context, servicePath string, services serviceregistry.Provider) (s6serviceconfig.S6ServiceConfig, error)
 	// CleanS6ServiceDirectory cleans the S6 service directory, removing non-standard services
-	CleanS6ServiceDirectory(ctx context.Context, path string, fsService filesystem.Service) error
+	CleanS6ServiceDirectory(ctx context.Context, path string, services serviceregistry.Provider) error
 	// GetS6ConfigFile retrieves a config file for a service
-	GetS6ConfigFile(ctx context.Context, servicePath string, configFileName string, fsService filesystem.Service) ([]byte, error)
+	GetS6ConfigFile(ctx context.Context, servicePath string, configFileName string, services serviceregistry.Provider) ([]byte, error)
 	// ForceRemove removes a service from the S6 manager
-	ForceRemove(ctx context.Context, servicePath string, fsService filesystem.Service) error
+	ForceRemove(ctx context.Context, servicePath string, services serviceregistry.Provider) error
 	// GetLogs gets the logs of the service
-	GetLogs(ctx context.Context, servicePath string, fsService filesystem.Service) ([]LogEntry, error)
+	GetLogs(ctx context.Context, servicePath string, services serviceregistry.Provider) ([]LogEntry, error)
 	// EnsureSupervision checks if the supervise directory exists for a service and notifies
 	// s6-svscan if it doesn't, to trigger supervision setup.
 	// Returns true if supervise directory exists (ready for supervision), false otherwise.
-	EnsureSupervision(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error)
+	EnsureSupervision(ctx context.Context, servicePath string, services serviceregistry.Provider) (bool, error)
 }
 
 // logState is the per-log-file cursor used by GetLogs.
@@ -241,7 +241,7 @@ func (s *DefaultService) withLifecycleGuard(fn func() error) error {
 // - Unified lifecycle mutex prevents concurrent Create/Remove/ForceRemove operations
 // - Uses lifecycle manager for atomic creation with EXDEV protection
 // - Simplified 3-path approach with health checks
-func (s *DefaultService) Create(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, fsService filesystem.Service) error {
+func (s *DefaultService) Create(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, services serviceregistry.Provider) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".create", time.Since(start))
@@ -250,6 +250,9 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 	s.logger.Debugf("Creating S6 service %s", servicePath)
 
 	return s.withLifecycleGuard(func() error {
+		// Get filesystem service from service registry
+		fsService := services.GetFileSystem()
+
 		// No need to ensure artifacts here - they'll be created by CreateArtifacts
 
 		// 1. Directory doesn't exist → create it fresh
@@ -259,7 +262,7 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 		}
 		if !exists {
 			s.logger.Debugf("Service %s doesn't exist, creating fresh", servicePath)
-			artifacts, err := s.CreateArtifacts(ctx, servicePath, config, fsService)
+			artifacts, err := s.CreateArtifacts(ctx, servicePath, config, services)
 			if err != nil {
 				return err
 			}
@@ -275,7 +278,7 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 				return fmt.Errorf("failed to remove orphaned service directory: %w", err)
 			}
 			// Proceed with fresh creation
-			artifacts, err := s.CreateArtifacts(ctx, servicePath, config, fsService)
+			artifacts, err := s.CreateArtifacts(ctx, servicePath, config, services)
 			if err != nil {
 				return err
 			}
@@ -284,16 +287,16 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 		}
 
 		// 3. Directory exists and we have artifacts → check health
-		health, err := s.CheckArtifactsHealth(ctx, s.artifacts, fsService)
+		health, err := s.CheckArtifactsHealth(ctx, s.artifacts, services)
 		if err != nil && health != HealthUnknown {
 			return fmt.Errorf("failed to check service health: %w", err)
 		}
 		if health == HealthBad {
 			s.logger.Debugf("Service %s is unhealthy, removing and recreating", servicePath)
-			if err := s.ForceCleanup(ctx, s.artifacts, fsService); err != nil {
+			if err := s.ForceCleanup(ctx, s.artifacts, services); err != nil {
 				return fmt.Errorf("failed to remove unhealthy service: %w", err)
 			}
-			artifacts, err := s.CreateArtifacts(ctx, servicePath, config, fsService)
+			artifacts, err := s.CreateArtifacts(ctx, servicePath, config, services)
 			if err != nil {
 				return err
 			}
@@ -302,7 +305,7 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 		}
 
 		// 4. Directory exists and is healthy → check config
-		currentConfig, err := s.GetConfig(ctx, servicePath, fsService)
+		currentConfig, err := s.GetConfig(ctx, servicePath, services)
 		if err != nil {
 			return fmt.Errorf("failed to get current config: %w", err)
 		}
@@ -315,10 +318,10 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 
 		// 6. Different config → remove and recreate
 		s.logger.Debugf("Service %s config changed, removing and recreating", servicePath)
-		if err := s.RemoveArtifacts(ctx, s.artifacts, fsService); err != nil {
+		if err := s.RemoveArtifacts(ctx, s.artifacts, services); err != nil {
 			return fmt.Errorf("failed to remove service for recreation: %w", err)
 		}
-		artifacts, err := s.CreateArtifacts(ctx, servicePath, config, fsService)
+		artifacts, err := s.CreateArtifacts(ctx, servicePath, config, services)
 		if err != nil {
 			return err
 		}
@@ -333,7 +336,7 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 // - Returns quickly (<1 second) to respect FSM context timeouts
 // - Fully idempotent - safe to call when directories are partially removed
 // - Returns nil only when nothing is left
-func (s *DefaultService) Remove(ctx context.Context, servicePath string, fsService filesystem.Service) error {
+func (s *DefaultService) Remove(ctx context.Context, servicePath string, services serviceregistry.Provider) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service,
@@ -349,7 +352,7 @@ func (s *DefaultService) Remove(ctx context.Context, servicePath string, fsServi
 	return s.withLifecycleGuard(func() error {
 		// If we have tracked artifacts, use them for proper removal
 		if s.artifacts != nil && len(s.artifacts.CreatedFiles) > 0 {
-			return s.RemoveArtifacts(ctx, s.artifacts, fsService)
+			return s.RemoveArtifacts(ctx, s.artifacts, services)
 		}
 
 		// No tracked files - service is in an inconsistent state
@@ -360,14 +363,16 @@ func (s *DefaultService) Remove(ctx context.Context, servicePath string, fsServi
 }
 
 // Start starts the S6 service
-func (s *DefaultService) Start(ctx context.Context, servicePath string, fsService filesystem.Service) error {
+func (s *DefaultService) Start(ctx context.Context, servicePath string, services serviceregistry.Provider) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".start", time.Since(start))
 	}()
 
 	s.logger.Debugf("Starting S6 service %s", servicePath)
-	exists, err := s.ServiceExists(ctx, servicePath, fsService)
+	// Get filesystem service from service registry
+	fsService := services.GetFileSystem()
+	exists, err := s.ServiceExists(ctx, servicePath, services)
 	if err != nil {
 		return fmt.Errorf("failed to check if service exists: %w", err)
 	}
@@ -398,14 +403,14 @@ func (s *DefaultService) Start(ctx context.Context, servicePath string, fsServic
 
 	// First start the log service
 	logServicePath := filepath.Join(servicePath, "log")
-	_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-u", logServicePath)
+	_, err = s.ExecuteS6Command(ctx, servicePath, services, "s6-svc", "-u", logServicePath)
 	if err != nil {
 		s.logger.Warnf("Failed to start log service: %v", err)
 		return fmt.Errorf("failed to start log service: %w", err)
 	}
 
 	// Then start the main service to prevent a race condition
-	_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-u", servicePath)
+	_, err = s.ExecuteS6Command(ctx, servicePath, services, "s6-svc", "-u", servicePath)
 	if err != nil {
 		s.logger.Warnf("Failed to start service: %v", err)
 		return fmt.Errorf("failed to start service: %w", err)
@@ -416,14 +421,16 @@ func (s *DefaultService) Start(ctx context.Context, servicePath string, fsServic
 }
 
 // Stop stops the S6 service
-func (s *DefaultService) Stop(ctx context.Context, servicePath string, fsService filesystem.Service) error {
+func (s *DefaultService) Stop(ctx context.Context, servicePath string, services serviceregistry.Provider) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".stop", time.Since(start))
 	}()
 
 	s.logger.Debugf("Stopping S6 service %s", servicePath)
-	exists, err := s.ServiceExists(ctx, servicePath, fsService)
+	// Get filesystem service from service registry
+	fsService := services.GetFileSystem()
+	exists, err := s.ServiceExists(ctx, servicePath, services)
 	if err != nil {
 		return fmt.Errorf("failed to check if service exists: %w", err)
 	}
@@ -432,7 +439,7 @@ func (s *DefaultService) Stop(ctx context.Context, servicePath string, fsService
 	}
 
 	// Stop the service first
-	_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-d", servicePath)
+	_, err = s.ExecuteS6Command(ctx, servicePath, services, "s6-svc", "-d", servicePath)
 	if err != nil {
 		s.logger.Warnf("Failed to stop service: %v", err)
 		return fmt.Errorf("failed to stop service: %w", err)
@@ -440,7 +447,7 @@ func (s *DefaultService) Stop(ctx context.Context, servicePath string, fsService
 
 	// Also stop the log service separately
 	logServicePath := filepath.Join(servicePath, "log")
-	_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-d", logServicePath)
+	_, err = s.ExecuteS6Command(ctx, servicePath, services, "s6-svc", "-d", logServicePath)
 	if err != nil {
 		s.logger.Warnf("Failed to stop log service: %v", err)
 		return fmt.Errorf("failed to stop log service: %w", err)
@@ -470,14 +477,14 @@ func (s *DefaultService) Stop(ctx context.Context, servicePath string, fsService
 }
 
 // Restart restarts the S6 service
-func (s *DefaultService) Restart(ctx context.Context, servicePath string, fsService filesystem.Service) error {
+func (s *DefaultService) Restart(ctx context.Context, servicePath string, services serviceregistry.Provider) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".restart", time.Since(start))
 	}()
 
 	s.logger.Debugf("Restarting S6 service %s", servicePath)
-	exists, err := s.ServiceExists(ctx, servicePath, fsService)
+	exists, err := s.ServiceExists(ctx, servicePath, services)
 	if err != nil {
 		return fmt.Errorf("failed to check if service exists: %w", err)
 	}
@@ -485,7 +492,7 @@ func (s *DefaultService) Restart(ctx context.Context, servicePath string, fsServ
 		return ErrServiceNotExist
 	}
 
-	_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-r", servicePath)
+	_, err = s.ExecuteS6Command(ctx, servicePath, services, "s6-svc", "-r", servicePath)
 	if err != nil {
 		s.logger.Warnf("Failed to restart service: %v", err)
 		return fmt.Errorf("failed to restart service: %w", err)
@@ -495,14 +502,17 @@ func (s *DefaultService) Restart(ctx context.Context, servicePath string, fsServ
 	return nil
 }
 
-func (s *DefaultService) Status(ctx context.Context, servicePath string, fsService filesystem.Service) (ServiceInfo, error) {
+func (s *DefaultService) Status(ctx context.Context, servicePath string, services serviceregistry.Provider) (ServiceInfo, error) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".status", time.Since(start))
 	}()
 
+	// Get filesystem service from service registry
+	fsService := services.GetFileSystem()
+
 	// First, check that the service exists.
-	exists, err := s.ServiceExists(ctx, servicePath, fsService)
+	exists, err := s.ServiceExists(ctx, servicePath, services)
 	if err != nil {
 		return ServiceInfo{}, fmt.Errorf("failed to check if service exists: %w", err)
 	}
@@ -543,16 +553,18 @@ func (s *DefaultService) Status(ctx context.Context, servicePath string, fsServi
 	}
 
 	// Build full ServiceInfo using the parsed data
-	return s.buildFullServiceInfo(ctx, servicePath, statusData, fsService)
+	return s.buildFullServiceInfo(ctx, servicePath, statusData, services)
 }
 
 // ServiceExists checks if the service directory exists
-func (s *DefaultService) ServiceExists(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
+func (s *DefaultService) ServiceExists(ctx context.Context, servicePath string, services serviceregistry.Provider) (bool, error) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".serviceExists", time.Since(start))
 	}()
 
+	// Get filesystem service from service registry
+	fsService := services.GetFileSystem()
 	exists, err := fsService.PathExists(ctx, servicePath)
 	if err != nil {
 		return false, fmt.Errorf("failed to check if S6 service exists: %w", err)
@@ -567,8 +579,10 @@ func (s *DefaultService) ServiceExists(ctx context.Context, servicePath string, 
 }
 
 // GetConfig gets the actual service config from s6
-func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsService filesystem.Service) (s6serviceconfig.S6ServiceConfig, error) {
-	exists, err := s.ServiceExists(ctx, servicePath, fsService)
+func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, services serviceregistry.Provider) (s6serviceconfig.S6ServiceConfig, error) {
+	// Get filesystem service from service registry
+	fsService := services.GetFileSystem()
+	exists, err := s.ServiceExists(ctx, servicePath, services)
 	if err != nil {
 		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to check if service exists: %w", err)
 	}
@@ -820,13 +834,16 @@ func parseCommandLine(cmdLine string) ([]string, error) {
 }
 
 // CleanS6ServiceDirectory cleans the S6 service directory except for the known services
-func (s *DefaultService) CleanS6ServiceDirectory(ctx context.Context, path string, fsService filesystem.Service) error {
+func (s *DefaultService) CleanS6ServiceDirectory(ctx context.Context, path string, services serviceregistry.Provider) error {
 	if ctx == nil {
 		return fmt.Errorf("context is nil")
 	}
 	if ctx.Err() != nil {
 		return fmt.Errorf("context is done: %w", ctx.Err())
 	}
+
+	// Get filesystem service from service registry
+	fsService := services.GetFileSystem()
 
 	// Get the list of entries in the S6 service directory
 	entries, err := fsService.ReadDir(ctx, path)
@@ -912,13 +929,16 @@ func (s *DefaultService) IsKnownService(name string) bool {
 
 // GetS6ConfigFile retrieves the specified config file for a service
 // servicePath should be the full path including S6BaseDir
-func (s *DefaultService) GetS6ConfigFile(ctx context.Context, servicePath string, configFileName string, fsService filesystem.Service) ([]byte, error) {
+func (s *DefaultService) GetS6ConfigFile(ctx context.Context, servicePath string, configFileName string, services serviceregistry.Provider) ([]byte, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
 
+	// Get filesystem service from service registry
+	fsService := services.GetFileSystem()
+
 	// Check if the service exists with the full path
-	exists, err := s.ServiceExists(ctx, servicePath, fsService)
+	exists, err := s.ServiceExists(ctx, servicePath, services)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check if service exists: %w", err)
 	}
@@ -956,7 +976,7 @@ func (s *DefaultService) GetS6ConfigFile(ctx context.Context, servicePath string
 func (s *DefaultService) ForceRemove(
 	ctx context.Context,
 	servicePath string,
-	fsService filesystem.Service,
+	services serviceregistry.Provider,
 ) error {
 	start := time.Now()
 	defer func() {
@@ -984,7 +1004,7 @@ func (s *DefaultService) ForceRemove(
 		}
 
 		// Use lifecycle manager for aggressive cleanup
-		return s.ForceCleanup(ctx, artifacts, fsService)
+		return s.ForceCleanup(ctx, artifacts, services)
 	})
 }
 
@@ -1076,16 +1096,19 @@ func (s *DefaultService) appendToRingBuffer(entries []LogEntry, st *logState) {
 //
 // Errors are returned early and unwrapped where they occur so callers
 // see the root cause (e.g. "file disappeared", "permission denied").
-func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsService filesystem.Service) ([]LogEntry, error) {
+func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, services serviceregistry.Provider) ([]LogEntry, error) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".getLogs", time.Since(start))
 	}()
 
+	// Get filesystem service from service registry
+	fsService := services.GetFileSystem()
+
 	serviceName := filepath.Base(servicePath)
 
 	// Check if the service exists first
-	exists, err := s.ServiceExists(ctx, servicePath, fsService)
+	exists, err := s.ServiceExists(ctx, servicePath, services)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check if service exists: %w", err)
 	}
@@ -1346,13 +1369,16 @@ func parseLogLine(line string) LogEntry {
 // EnsureSupervision checks if the supervise directory exists for a service and notifies
 // s6-svscan if it doesn't, to trigger supervision setup.
 // Returns true if supervise directory exists (ready for supervision), false otherwise.
-func (s *DefaultService) EnsureSupervision(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
+func (s *DefaultService) EnsureSupervision(ctx context.Context, servicePath string, services serviceregistry.Provider) (bool, error) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".ensureSupervision", time.Since(start))
 	}()
 
-	exists, err := s.ServiceExists(ctx, servicePath, fsService)
+	// Get filesystem service from service registry
+	fsService := services.GetFileSystem()
+
+	exists, err := s.ServiceExists(ctx, servicePath, services)
 	if err != nil {
 		return false, fmt.Errorf("failed to check if service exists: %w", err)
 	}
@@ -1369,7 +1395,7 @@ func (s *DefaultService) EnsureSupervision(ctx context.Context, servicePath stri
 	if !exists {
 		s.logger.Debugf("Supervise directory not found for %s, notifying s6-svscan", servicePath)
 
-		_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svscanctl", "-a", constants.S6BaseDir)
+		_, err = s.ExecuteS6Command(ctx, servicePath, services, "s6-svscanctl", "-a", constants.S6BaseDir)
 		if err != nil {
 			return false, fmt.Errorf("failed to notify s6-svscan: %w", err)
 		}
@@ -1389,7 +1415,9 @@ func (s *DefaultService) EnsureSupervision(ctx context.Context, servicePath stri
 //   - Exit code 126: Permission error or similar, returns ErrS6ProgramNotExecutable
 //   - Exit code 127: Command not found, returns ErrS6ProgramNotFound
 //   - Other exit codes: Returns a descriptive error with the exit code and output
-func (s *DefaultService) ExecuteS6Command(ctx context.Context, servicePath string, fsService filesystem.Service, name string, args ...string) (string, error) {
+func (s *DefaultService) ExecuteS6Command(ctx context.Context, servicePath string, services serviceregistry.Provider, name string, args ...string) (string, error) {
+	// Get filesystem service from service registry
+	fsService := services.GetFileSystem()
 	output, err := fsService.ExecuteCommand(ctx, name, args...)
 	if err != nil {
 		// Check exit codes using errors.As to handle wrapped errors
@@ -1450,7 +1478,7 @@ func (s *DefaultService) findLatestRotatedFile(entries []string) string {
 //   - HealthUnknown: probe failed due to I/O errors, timeouts, etc. - retry next tick
 //   - HealthOK: service directory is healthy and complete
 //   - HealthBad: service directory is definitely broken - triggers FSM transition
-func (s *DefaultService) CheckHealth(ctx context.Context, servicePath string, fsService filesystem.Service) (HealthStatus, error) {
+func (s *DefaultService) CheckHealth(ctx context.Context, servicePath string, services serviceregistry.Provider) (HealthStatus, error) {
 	// Context already cancelled → Unknown, never Bad
 	if ctx.Err() != nil {
 		return HealthUnknown, ctx.Err()
@@ -1464,5 +1492,5 @@ func (s *DefaultService) CheckHealth(ctx context.Context, servicePath string, fs
 	}
 
 	// Use lifecycle manager for comprehensive health check
-	return s.CheckArtifactsHealth(ctx, artifacts, fsService)
+	return s.CheckArtifactsHealth(ctx, artifacts, services)
 }

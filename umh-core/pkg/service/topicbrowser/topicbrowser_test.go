@@ -103,7 +103,7 @@ var _ = Describe("TopicBrowserService", func() {
 
 		It("should add a new topic browser to the benthos manager", func() {
 			// Act
-			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, tbName)
+			err := service.AddToManager(ctx, mockSvcRegistry, cfg, tbName)
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
@@ -121,11 +121,11 @@ var _ = Describe("TopicBrowserService", func() {
 
 		It("should return error when topicbrowser already exists", func() {
 			// Add the topic browser first
-			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, tbName)
+			err := service.AddToManager(ctx, mockSvcRegistry, cfg, tbName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Try to add it again
-			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, tbName)
+			err = service.AddToManager(ctx, mockSvcRegistry, cfg, tbName)
 
 			// Assert
 			Expect(err).To(MatchError(ErrServiceAlreadyExists))
@@ -133,7 +133,7 @@ var _ = Describe("TopicBrowserService", func() {
 
 		It("should set up the topic browser for reconciliation with the benthos manager", func() {
 			// Act
-			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, tbName)
+			err := service.AddToManager(ctx, mockSvcRegistry, cfg, tbName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reconcile to ensure the topic browser is passed to benthos manager
@@ -190,7 +190,7 @@ var _ = Describe("TopicBrowserService", func() {
 				WithManager(manager))
 
 			// Add the topic browser to the service
-			err := statusService.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, tbName)
+			err := statusService.AddToManager(ctx, mockSvcRegistry, cfg, tbName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Get the benthos name that will be used
@@ -244,7 +244,7 @@ var _ = Describe("TopicBrowserService", func() {
 			ConfigureBenthosManagerForState(mockBenthosService, benthosName, benthosfsm.OperationalStateActive)
 
 			// Start it
-			err = statusService.Start(ctx, mockSvcRegistry.GetFileSystem(), tbName)
+			err = statusService.Start(ctx, mockSvcRegistry, tbName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Wait for the instance to reach active state
@@ -379,13 +379,13 @@ var _ = Describe("TopicBrowserService", func() {
 			}
 
 			// Add the component first
-			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, tbName)
+			err := service.AddToManager(ctx, mockSvcRegistry, cfg, tbName)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should update an existing topic browser", func() {
 			// Act - update the topic browser
-			err := service.UpdateInManager(ctx, mockSvcRegistry.GetFileSystem(), updatedCfg, tbName)
+			err := service.UpdateInManager(ctx, mockSvcRegistry, updatedCfg, tbName)
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
@@ -406,7 +406,7 @@ var _ = Describe("TopicBrowserService", func() {
 
 		It("should return error when topic browser doesn't exist", func() {
 			// Act - try to update a non-existent component
-			err := service.UpdateInManager(ctx, mockSvcRegistry.GetFileSystem(), updatedCfg, "non-existent")
+			err := service.UpdateInManager(ctx, mockSvcRegistry, updatedCfg, "non-existent")
 
 			// Assert
 			Expect(err).To(MatchError(ErrServiceNotExist))
@@ -441,13 +441,13 @@ var _ = Describe("TopicBrowserService", func() {
 			}
 
 			// Add the component first
-			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, tbName)
+			err := service.AddToManager(ctx, mockSvcRegistry, cfg, tbName)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should start a topic browser by changing its desired state", func() {
 			// First stop the topic browser
-			err := service.Stop(ctx, mockSvcRegistry.GetFileSystem(), tbName)
+			err := service.Stop(ctx, mockSvcRegistry, tbName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the desired state was changed to stopped
@@ -463,7 +463,7 @@ var _ = Describe("TopicBrowserService", func() {
 			Expect(foundStopped).To(BeTrue())
 
 			// Now start the topic browser
-			err = service.Start(ctx, mockSvcRegistry.GetFileSystem(), tbName)
+			err = service.Start(ctx, mockSvcRegistry, tbName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the desired state was changed to active
@@ -480,11 +480,11 @@ var _ = Describe("TopicBrowserService", func() {
 
 		It("should return error when trying to start/stop non-existent topic browser", func() {
 			// Try to start a non-existent topic browser
-			err := service.Start(ctx, mockSvcRegistry.GetFileSystem(), "non-existent")
+			err := service.Start(ctx, mockSvcRegistry, "non-existent")
 			Expect(err).To(MatchError(ErrServiceNotExist))
 
 			// Try to stop a non-existent component
-			err = service.Stop(ctx, mockSvcRegistry.GetFileSystem(), "non-existent")
+			err = service.Stop(ctx, mockSvcRegistry, "non-existent")
 			Expect(err).To(MatchError(ErrServiceNotExist))
 		})
 	})
@@ -517,7 +517,7 @@ var _ = Describe("TopicBrowserService", func() {
 			}
 
 			// Add the topic browser first
-			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, tbName)
+			err := service.AddToManager(ctx, mockSvcRegistry, cfg, tbName)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -526,7 +526,7 @@ var _ = Describe("TopicBrowserService", func() {
 			initialCount := len(service.benthosConfigs)
 
 			// Act - remove the component
-			err := service.RemoveFromManager(ctx, mockSvcRegistry.GetFileSystem(), tbName)
+			err := service.RemoveFromManager(ctx, mockSvcRegistry, tbName)
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
@@ -568,7 +568,7 @@ var _ = Describe("TopicBrowserService", func() {
 				LogLevel: constants.DefaultBenthosLogLevel,
 			}
 
-			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, tbName)
+			err := service.AddToManager(ctx, mockSvcRegistry, cfg, tbName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Use the real mock from the FSM package
@@ -623,7 +623,7 @@ var _ = Describe("TopicBrowserService", func() {
 				LogLevel: constants.DefaultBenthosLogLevel,
 			}
 
-			err := testService.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, testComponentName)
+			err := testService.AddToManager(ctx, mockSvcRegistry, cfg, testComponentName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// First reconcile - this will just create the instance in the manager

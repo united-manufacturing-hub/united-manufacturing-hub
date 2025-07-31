@@ -31,7 +31,7 @@ import (
 )
 
 // Reconcile periodically checks if the FSM needs state transitions based on metrics
-// The filesystemService parameter allows for filesystem operations during reconciliation,
+// The services parameter provides access to core services including filesystem operations during reconciliation,
 // enabling the method to read configuration or state information from the filesystem.
 // Currently not used in this implementation but added for consistency with the interface.
 func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
@@ -286,7 +286,7 @@ func (c *ContainerInstance) reconcileTransitionToActive(ctx context.Context, ser
 	switch {
 	// If we're stopped, we need to start first
 	case currentState == OperationalStateStopped:
-		err := c.StartInstance(ctx, services.GetFileSystem())
+		err := c.StartInstance(ctx, services)
 		if err != nil {
 			return err, false
 		}
@@ -370,7 +370,7 @@ func (c *ContainerInstance) reconcileTransitionToStopped(ctx context.Context, se
 		return c.baseFSMInstance.SendEvent(ctx, EventStopDone), true
 	default:
 		// For any other state, initiate stop
-		err := c.StopInstance(ctx, services.GetFileSystem())
+		err := c.StopInstance(ctx, services)
 		if err != nil {
 			return err, false
 		}

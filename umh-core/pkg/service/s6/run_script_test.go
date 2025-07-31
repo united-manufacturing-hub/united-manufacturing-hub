@@ -28,12 +28,14 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	filesystem "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"go.uber.org/zap"
 )
 
 var _ = Describe("S6 Run Script", func() {
 	var (
 		mockFS        *filesystem.MockFileSystem
+		mockServices  *serviceregistry.Registry
 		s6Service     *DefaultService
 		ctx           context.Context
 		servicePath   string
@@ -47,6 +49,8 @@ var _ = Describe("S6 Run Script", func() {
 	BeforeEach(func() {
 		ctx = context.Background()
 		mockFS = filesystem.NewMockFileSystem()
+		mockServices = serviceregistry.NewMockRegistry()
+		mockServices.FileSystem = mockFS
 		zapLogger, err := zap.NewDevelopment()
 		Expect(err).NotTo(HaveOccurred())
 		logger = zapLogger.Sugar()
@@ -140,7 +144,7 @@ var _ = Describe("S6 Run Script", func() {
 			// doesn't need to use ReadDir by relying on file existence checks
 
 			// Get the config using service
-			readConfig, err := s6Service.GetConfig(ctx, servicePath, mockFS)
+			readConfig, err := s6Service.GetConfig(ctx, servicePath, mockServices)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the round-trip results match
@@ -243,7 +247,7 @@ var _ = Describe("S6 Run Script", func() {
 			// doesn't need to use ReadDir by relying on file existence checks
 
 			// Get the config using service
-			readConfig, err := s6Service.GetConfig(ctx, servicePath, mockFS)
+			readConfig, err := s6Service.GetConfig(ctx, servicePath, mockServices)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the round-trip results match
@@ -312,7 +316,7 @@ var _ = Describe("S6 Run Script", func() {
 			})
 
 			// Get the config using service
-			readConfig, err := s6Service.GetConfig(ctx, servicePath, mockFS)
+			readConfig, err := s6Service.GetConfig(ctx, servicePath, mockServices)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify command parsing works correctly
@@ -347,7 +351,7 @@ var _ = Describe("S6 Run Script", func() {
 					return true, nil
 				})
 
-				_, err := s6Service.GetConfig(ctx, servicePath, mockFS)
+				_, err := s6Service.GetConfig(ctx, servicePath, mockServices)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("run script not found"))
 			})
@@ -367,7 +371,7 @@ var _ = Describe("S6 Run Script", func() {
 					return []byte{}, os.ErrNotExist
 				})
 
-				_, err := s6Service.GetConfig(ctx, servicePath, mockFS)
+				_, err := s6Service.GetConfig(ctx, servicePath, mockServices)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("permission denied"))
 			})
@@ -381,7 +385,7 @@ var _ = Describe("S6 Run Script", func() {
 					return false, nil
 				})
 
-				_, err := s6Service.GetConfig(ctx, invalidServicePath, mockFS)
+				_, err := s6Service.GetConfig(ctx, invalidServicePath, mockServices)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("service does not exist"))
 			})

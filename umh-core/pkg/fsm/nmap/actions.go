@@ -24,7 +24,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	nmap_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
@@ -42,7 +41,7 @@ import (
 //     setting error state and scheduling a retry/backoff.
 
 // CreateInstance is called when the FSM transitions from to_be_created -> creating.
-func (n *NmapInstance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (n *NmapInstance) CreateInstance(ctx context.Context, services serviceregistry.Provider) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentNmapInstance, n.baseFSMInstance.GetID()+".initiateS6Create", time.Since(start))
@@ -67,7 +66,7 @@ func (n *NmapInstance) CreateInstance(ctx context.Context, filesystemService fil
 
 // RemoveInstance attempts to remove the Nmap service.
 // It requires the service to be stopped before removal.
-func (n *NmapInstance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (n *NmapInstance) RemoveInstance(ctx context.Context, services serviceregistry.Provider) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentNmapInstance, n.baseFSMInstance.GetID()+".initiateS6Remove", time.Since(start))
@@ -114,7 +113,7 @@ func (n *NmapInstance) RemoveInstance(ctx context.Context, filesystemService fil
 }
 
 // StartInstance attempts to start the Nmap by setting the desired state to running for the given instance
-func (n *NmapInstance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (n *NmapInstance) StartInstance(ctx context.Context, services serviceregistry.Provider) error {
 	n.baseFSMInstance.GetLogger().Infof("Starting Action: Starting Nmap service %s ...", n.baseFSMInstance.GetID())
 
 	err := n.monitorService.StartNmap(ctx, n.baseFSMInstance.GetID())
@@ -128,7 +127,7 @@ func (n *NmapInstance) StartInstance(ctx context.Context, filesystemService file
 }
 
 // StopInstance attempts to stop the Nmap by setting the desired state to stopped for the given instance
-func (n *NmapInstance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (n *NmapInstance) StopInstance(ctx context.Context, services serviceregistry.Provider) error {
 	n.baseFSMInstance.GetLogger().Infof("Starting Action: Stopping Nmap service %s ...", n.baseFSMInstance.GetID())
 	// Set the desired state to stopped for the given instance
 	err := n.monitorService.StopNmap(ctx, n.baseFSMInstance.GetID())
@@ -143,7 +142,7 @@ func (n *NmapInstance) StopInstance(ctx context.Context, filesystemService files
 
 // CheckForCreation checks whether the creation was successful
 // For Nmap, this is a no-op as we don't need to check anything
-func (n *NmapInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+func (n *NmapInstance) CheckForCreation(ctx context.Context, services serviceregistry.Provider) bool {
 	return true
 }
 
@@ -165,7 +164,7 @@ func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, servic
 	}
 
 	start := time.Now()
-	svcInfo, err := n.monitorService.Status(ctx, services.GetFileSystem(), n.config.Name, snapshot.Tick)
+	svcInfo, err := n.monitorService.Status(ctx, services, n.config.Name, snapshot.Tick)
 	if err != nil {
 		if strings.Contains(err.Error(), nmap_service.ErrServiceNotExist.Error()) {
 			// Log the error but don't fail - this might happen during creation when nmap doesn't exist yet
@@ -186,7 +185,7 @@ func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, servic
 
 	// Fetch the actual Nmap config from the service
 	start = time.Now()
-	observedConfig, err := n.monitorService.GetConfig(ctx, services.GetFileSystem(), n.baseFSMInstance.GetID())
+	observedConfig, err := n.monitorService.GetConfig(ctx, services, n.baseFSMInstance.GetID())
 	metrics.ObserveReconcileTime(logger.ComponentNmapInstance, n.baseFSMInstance.GetID()+".getConfig", time.Since(start))
 	if err == nil {
 		// Only update if we successfully got the config
@@ -205,7 +204,7 @@ func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, servic
 	// Use new ConfigsEqual function that handles Nmap defaults properly
 	if !n.config.NmapServiceConfig.Equal(n.ObservedState.ObservedNmapServiceConfig) {
 		// Check if the service exists before attempting to update
-		if n.monitorService.ServiceExists(ctx, services.GetFileSystem(), n.baseFSMInstance.GetID()) {
+		if n.monitorService.ServiceExists(ctx, services, n.baseFSMInstance.GetID()) {
 			n.baseFSMInstance.GetLogger().Debugf("Observed Nmap config is different from desired config, updating S6 configuration")
 
 			// Update the config in the S6 manager

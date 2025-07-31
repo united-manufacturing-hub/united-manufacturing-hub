@@ -30,7 +30,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -63,8 +62,8 @@ type FSMInstance interface {
 	// Reconcile moves the instance toward its desired state
 	// Returns an error if reconciliation fails, and a boolean indicating
 	// whether a change was made to the instance's state
-	// The filesystemService parameter is used to read and write to the filesystem.
-	// Specifically it is used so that we only need to read in the entire file system once, and then can pass it to all the managers and instances, who can then save on I/O operations.
+	// The services parameter provides access to core services including filesystem operations.
+	// Specifically it is used so that we only need to access services once, and then can pass it to all the managers and instances, who can then access needed services efficiently.
 	Reconcile(ctx context.Context, snapshot SystemSnapshot, services serviceregistry.Provider) (error, bool)
 	// Remove initiates the removal process for this instance
 	Remove(ctx context.Context) error
@@ -87,8 +86,8 @@ type FSMManager[C any] interface {
 	GetInstance(name string) (FSMInstance, bool)
 	// Reconcile ensures that all instances are moving toward their desired state
 	// The tick parameter provides a counter to track operation rate limiting
-	// The filesystemService parameter is used to read and write to the filesystem.
-	// Specifically it is used so that we only need to read in the entire file system once, and then can pass it to all the managers and instances, who can then save on I/O operations.
+	// The services parameter provides access to core services including filesystem operations.
+	// Specifically it is used so that we only need to access services once, and then can pass it to all the managers and instances, who can then access needed services efficiently.
 	Reconcile(ctx context.Context, snapshot SystemSnapshot, services serviceregistry.Provider) (error, bool)
 	// GetManagerName returns the name of this manager for logging and metrics
 	GetManagerName() string
@@ -785,7 +784,7 @@ func (m *BaseFSMManager[C]) schedule(base uint64) uint64 {
 // # Inputs
 //
 //   - inst  – any FSMInstance that was just reconciled.
-//   - filesystemService - service used for file operations if a force remove is needed
+//   - services - service registry providing access to core services including filesystem operations if a force remove is needed
 //
 // # Logic
 //
@@ -834,11 +833,11 @@ func (m *BaseFSMManager[C]) maybeEscalateRemoval(ctx context.Context, inst FSMIn
 	case internalfsm.LifecycleStateRemoving:
 		// Instance is stuck in removing state - try force removal if possible
 		if forceRemover, ok := inst.(interface {
-			ForceRemove(context.Context, filesystem.Service) error
+			ForceRemove(context.Context, serviceregistry.Provider) error
 		}); ok {
 			// Run force removal in a detached goroutine to avoid blocking the main reconciliation loop
 			go func() {
-				err := forceRemover.ForceRemove(ctx, services.GetFileSystem())
+				err := forceRemover.ForceRemove(ctx, services)
 				if err != nil {
 					sentry.ReportFSMErrorf(
 						m.logger,
@@ -868,11 +867,11 @@ func (m *BaseFSMManager[C]) maybeEscalateRemoval(ctx context.Context, inst FSMIn
 				err,
 			)
 			if forceRemover, ok := inst.(interface {
-				ForceRemove(context.Context, filesystem.Service) error
+				ForceRemove(context.Context, serviceregistry.Provider) error
 			}); ok {
 				// Run force removal in a detached goroutine to avoid blocking the main reconciliation loop
 				go func() {
-					err := forceRemover.ForceRemove(ctx, services.GetFileSystem())
+					err := forceRemover.ForceRemove(ctx, services)
 					if err != nil {
 						sentry.ReportFSMErrorf(
 							m.logger,

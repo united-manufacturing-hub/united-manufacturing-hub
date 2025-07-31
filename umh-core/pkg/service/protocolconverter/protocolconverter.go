@@ -31,7 +31,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
 	dfc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 	"go.uber.org/zap"
@@ -55,7 +54,7 @@ type IProtocolConverterService interface {
 	// The resulting **ProtocolConverterServiceConfigRuntime** reflects the state
 	// the FSM is *really* running with and therefore forms the "live" side of the
 	// reconcile equation:
-	GetConfig(ctx context.Context, filesystemService filesystem.Service, protConvName string) (protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, error)
+	GetConfig(ctx context.Context, services serviceregistry.Provider, protConvName string) (protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, error)
 
 	// Status aggregates health from Connection, DFC and Redpanda into a single
 	// snapshot.  The returned structure is **read-only** – callers must not
@@ -63,26 +62,26 @@ type IProtocolConverterService interface {
 	Status(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot, protConvName string) (ServiceInfo, error)
 
 	// AddToManager adds a ProtocolConverter to the Connection & DFC manager
-	AddToManager(ctx context.Context, filesystemService filesystem.Service, protConvCfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, protConvName string) error
+	AddToManager(ctx context.Context, services serviceregistry.Provider, protConvCfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, protConvName string) error
 
 	// UpdateInManager updates an existing ProtocolConverter in the Connection & DFC manager
-	UpdateInManager(ctx context.Context, filesystemService filesystem.Service, protConvCfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, protConvName string) error
+	UpdateInManager(ctx context.Context, services serviceregistry.Provider, protConvCfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, protConvName string) error
 
 	// RemoveFromManager removes a ProtocolConverter from the Connection & DFC manager
-	RemoveFromManager(ctx context.Context, filesystemService filesystem.Service, protConvName string) error
+	RemoveFromManager(ctx context.Context, services serviceregistry.Provider, protConvName string) error
 
 	// Start starts a ProtocolConverter
-	StartProtocolConverter(ctx context.Context, filesystemService filesystem.Service, protConvName string) error
+	StartProtocolConverter(ctx context.Context, services serviceregistry.Provider, protConvName string) error
 
 	// Stop stops a ProtocolConverter
-	StopProtocolConverter(ctx context.Context, filesystemService filesystem.Service, protConvName string) error
+	StopProtocolConverter(ctx context.Context, services serviceregistry.Provider, protConvName string) error
 
 	// ForceRemove removes a ProtocolConverter from the Connetion & DFC manager
-	ForceRemoveProtocolConverter(ctx context.Context, filesystemService filesystem.Service, protConvName string) error
+	ForceRemoveProtocolConverter(ctx context.Context, services serviceregistry.Provider, protConvName string) error
 
 	// ServiceExists checks if a connection and a dataflowcomponent with the given name exist.
 	// If only one of the services exists, it returns false.
-	ServiceExists(ctx context.Context, filesystemService filesystem.Service, protConvName string) bool
+	ServiceExists(ctx context.Context, services serviceregistry.Provider, protConvName string) bool
 
 	// ReconcileManager is the heart-beat: on every tick it feeds the *desired*
 	// slices into the child-managers, lets them run one state-machine cycle and
@@ -262,7 +261,7 @@ func (p *ProtocolConverterService) getUnderlyingDFCWriteName(protConvName string
 // reconcile equation:
 func (p *ProtocolConverterService) GetConfig(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	protConvName string,
 ) (protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, error) {
 	if ctx.Err() != nil {
@@ -274,17 +273,17 @@ func (p *ProtocolConverterService) GetConfig(
 	underlyingDFCWriteName := p.getUnderlyingDFCWriteName(protConvName)
 
 	// Get the Connection config
-	connConfig, err := p.connectionService.GetConfig(ctx, filesystemService, underlyingConnectionName)
+	connConfig, err := p.connectionService.GetConfig(ctx, services, underlyingConnectionName)
 	if err != nil {
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("failed to get connection config: %w", err)
 	}
 
-	dfcReadConfig, err := p.dataflowComponentService.GetConfig(ctx, filesystemService, underlyingDFCReadName)
+	dfcReadConfig, err := p.dataflowComponentService.GetConfig(ctx, services, underlyingDFCReadName)
 	if err != nil {
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("failed to get read dataflowcomponent config: %w", err)
 	}
 
-	dfcWriteConfig, err := p.dataflowComponentService.GetConfig(ctx, filesystemService, underlyingDFCWriteName)
+	dfcWriteConfig, err := p.dataflowComponentService.GetConfig(ctx, services, underlyingDFCWriteName)
 	if err != nil {
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("failed to get write dataflowcomponent config: %w", err)
 	}
@@ -311,7 +310,7 @@ func (p *ProtocolConverterService) Status(
 	if ctx.Err() != nil {
 		return ServiceInfo{}, ctx.Err()
 	}
-	if !p.ServiceExists(ctx, services.GetFileSystem(), protConvName) {
+	if !p.ServiceExists(ctx, services, protConvName) {
 		return ServiceInfo{}, ErrServiceNotExist
 	}
 
@@ -418,7 +417,7 @@ func (p *ProtocolConverterService) Status(
 // AddToManager registers a new protocolconverter in the Connection & DFC service.
 func (p *ProtocolConverterService) AddToManager(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
 	protConvName string,
 ) error {
@@ -490,7 +489,7 @@ func (p *ProtocolConverterService) AddToManager(
 // UpdateInManager modifies an existing protocolconverter configuration.
 func (p *ProtocolConverterService) UpdateInManager(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
 	protConvName string,
 ) error {
@@ -599,7 +598,7 @@ func (p *ProtocolConverterService) UpdateInManager(
 // RemoveFromManager deletes a protocolconverter configuration.
 func (p *ProtocolConverterService) RemoveFromManager(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	protConvName string,
 ) error {
 	if p.connectionManager == nil {
@@ -752,7 +751,7 @@ func (p *ProtocolConverterService) EvaluateDFCDesiredStates(protConvName string,
 // This conditional starting is handled by EvaluateDFCDesiredStates.
 func (p *ProtocolConverterService) StartProtocolConverter(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	protConvName string,
 ) error {
 	if p.connectionManager == nil {
@@ -793,7 +792,7 @@ func (p *ProtocolConverterService) StartProtocolConverter(
 // Expects protConvName (e.g. "protocolconverter-myservice") as defined in the UMH config
 func (p *ProtocolConverterService) StopProtocolConverter(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	protConvName string,
 ) error {
 	if p.connectionManager == nil {
@@ -889,7 +888,7 @@ func (p *ProtocolConverterService) ReconcileManager(
 // If only one of the services exists, it returns false.
 func (p *ProtocolConverterService) ServiceExists(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	protConvName string,
 ) bool {
 	if ctx.Err() != nil {
@@ -901,9 +900,9 @@ func (p *ProtocolConverterService) ServiceExists(
 	dfcWriteName := p.getUnderlyingDFCWriteName(protConvName)
 
 	// Check if the actual service exists
-	connExists := p.connectionService.ServiceExists(ctx, filesystemService, connectionName)
-	dfcReadExists := p.dataflowComponentService.ServiceExists(ctx, filesystemService, dfcReadName)
-	dfcWriteExists := p.dataflowComponentService.ServiceExists(ctx, filesystemService, dfcWriteName)
+	connExists := p.connectionService.ServiceExists(ctx, services, connectionName)
+	dfcReadExists := p.dataflowComponentService.ServiceExists(ctx, services, dfcReadName)
+	dfcWriteExists := p.dataflowComponentService.ServiceExists(ctx, services, dfcWriteName)
 
 	// if one of the services doesn't exist we should return that
 	return connExists && (dfcReadExists || dfcWriteExists)
@@ -913,7 +912,7 @@ func (p *ProtocolConverterService) ServiceExists(
 // Expects protConvName (e.g. "protocolconverter-myservice") as defined in the UMH config
 func (c *ProtocolConverterService) ForceRemoveProtocolConverter(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	protConvName string,
 ) error {
 	if ctx.Err() != nil {
@@ -925,7 +924,7 @@ func (c *ProtocolConverterService) ForceRemoveProtocolConverter(
 	dfcWriteName := c.getUnderlyingDFCWriteName(protConvName)
 
 	// force remove from Connection manager
-	err := c.connectionService.ForceRemoveConnection(ctx, filesystemService, connectionName)
+	err := c.connectionService.ForceRemoveConnection(ctx, services, connectionName)
 	if err != nil {
 		return err
 	}
@@ -935,12 +934,12 @@ func (c *ProtocolConverterService) ForceRemoveProtocolConverter(
 	// If a component doesn't exist (ErrServiceNotExists), we log the error but continue
 	// with removing the other component. Only return an error if it's a different failure
 	// (like permission issues or system errors).
-	err = c.dataflowComponentService.ForceRemoveDataFlowComponent(ctx, filesystemService, dfcReadName)
+	err = c.dataflowComponentService.ForceRemoveDataFlowComponent(ctx, services, dfcReadName)
 	if err != nil && !errors.Is(err, dfc.ErrServiceNotExists) {
 		return err
 	}
 
-	err = c.dataflowComponentService.ForceRemoveDataFlowComponent(ctx, filesystemService, dfcWriteName)
+	err = c.dataflowComponentService.ForceRemoveDataFlowComponent(ctx, services, dfcWriteName)
 	if err != nil && !errors.Is(err, dfc.ErrServiceNotExists) {
 		return err
 	}

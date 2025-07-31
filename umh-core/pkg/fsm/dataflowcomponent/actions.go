@@ -28,7 +28,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	dataflowcomponentservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
@@ -45,10 +44,10 @@ import (
 //     setting error state and scheduling a retry/backoff.
 
 // CreateInstance attempts to add the DataflowComponent to the Benthos manager.
-func (d *DataflowComponentInstance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (d *DataflowComponentInstance) CreateInstance(ctx context.Context, services serviceregistry.Provider) error {
 	d.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding DataflowComponent service %s to Benthos manager ...", d.baseFSMInstance.GetID())
 
-	err := d.service.AddDataFlowComponentToBenthosManager(ctx, filesystemService, &d.config, d.baseFSMInstance.GetID())
+	err := d.service.AddDataFlowComponentToBenthosManager(ctx, services, &d.config, d.baseFSMInstance.GetID())
 	if err != nil {
 		if errors.Is(err, dataflowcomponentservice.ErrServiceAlreadyExists) {
 			d.baseFSMInstance.GetLogger().Debugf("DataflowComponent service %s already exists in Benthos manager", d.baseFSMInstance.GetID())
@@ -63,11 +62,11 @@ func (d *DataflowComponentInstance) CreateInstance(ctx context.Context, filesyst
 
 // RemoveInstance attempts to remove the DataflowComponent from the Benthos manager.
 // It requires the service to be stopped before removal.
-func (b *DataflowComponentInstance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (b *DataflowComponentInstance) RemoveInstance(ctx context.Context, services serviceregistry.Provider) error {
 	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing DataflowComponent service %s from Benthos manager ...", b.baseFSMInstance.GetID())
 
 	// Remove the initiateDataflowComponent from the Benthos manager
-	err := b.service.RemoveDataFlowComponentFromBenthosManager(ctx, filesystemService, b.baseFSMInstance.GetID())
+	err := b.service.RemoveDataFlowComponentFromBenthosManager(ctx, services, b.baseFSMInstance.GetID())
 	switch {
 	// ---------------------------------------------------------------
 	// happy paths
@@ -105,13 +104,13 @@ func (b *DataflowComponentInstance) RemoveInstance(ctx context.Context, filesyst
 }
 
 // StartInstance to start the DataflowComponent by setting the desired state to running for the given instance
-func (d *DataflowComponentInstance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (d *DataflowComponentInstance) StartInstance(ctx context.Context, services serviceregistry.Provider) error {
 	d.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting DataflowComponent service %s ...", d.baseFSMInstance.GetID())
 
 	// TODO: Add pre-start validation
 
 	// Set the desired state to running for the given instance
-	err := d.service.StartDataFlowComponent(ctx, filesystemService, d.baseFSMInstance.GetID())
+	err := d.service.StartDataFlowComponent(ctx, services, d.baseFSMInstance.GetID())
 	if err != nil {
 		// if the service is not there yet but we attempt to start it, we need to throw an error
 		return fmt.Errorf("failed to start DataflowComponent service %s: %w", d.baseFSMInstance.GetID(), err)
@@ -122,11 +121,11 @@ func (d *DataflowComponentInstance) StartInstance(ctx context.Context, filesyste
 }
 
 // StopInstance attempts to stop the DataflowComponent by setting the desired state to stopped for the given instance
-func (d *DataflowComponentInstance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
+func (d *DataflowComponentInstance) StopInstance(ctx context.Context, services serviceregistry.Provider) error {
 	d.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping DataflowComponent service %s ...", d.baseFSMInstance.GetID())
 
 	// Set the desired state to stopped for the given instance
-	err := d.service.StopDataFlowComponent(ctx, filesystemService, d.baseFSMInstance.GetID())
+	err := d.service.StopDataFlowComponent(ctx, services, d.baseFSMInstance.GetID())
 	if err != nil {
 		// if the service is not there yet but we attempt to stop it, we need to throw an error
 		return fmt.Errorf("failed to stop DataflowComponent service %s: %w", d.baseFSMInstance.GetID(), err)
@@ -138,14 +137,14 @@ func (d *DataflowComponentInstance) StopInstance(ctx context.Context, filesystem
 
 // CheckForCreation checks whether the creation was successful
 // For DataflowComponent, this is a no-op as we don't need to check anything
-func (d *DataflowComponentInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+func (d *DataflowComponentInstance) CheckForCreation(ctx context.Context, services serviceregistry.Provider) bool {
 	return true
 }
 
 // getServiceStatus gets the status of the DataflowComponent service
 // its main purpose is to handle the edge cases where the service is not yet created or not yet running
-func (d *DataflowComponentInstance) getServiceStatus(ctx context.Context, filesystemService filesystem.Service, tick uint64) (dataflowcomponentservice.ServiceInfo, error) {
-	info, err := d.service.Status(ctx, filesystemService, d.baseFSMInstance.GetID(), tick)
+func (d *DataflowComponentInstance) getServiceStatus(ctx context.Context, services serviceregistry.Provider, tick uint64) (dataflowcomponentservice.ServiceInfo, error) {
+	info, err := d.service.Status(ctx, services, d.baseFSMInstance.GetID(), tick)
 	if err != nil {
 		// If there's an error getting the service status, we need to distinguish between cases
 
@@ -185,7 +184,7 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 	}
 
 	start := time.Now()
-	info, err := d.getServiceStatus(ctx, services.GetFileSystem(), snapshot.Tick)
+	info, err := d.getServiceStatus(ctx, services, snapshot.Tick)
 	if err != nil {
 		return fmt.Errorf("error while getting service status: %w", err)
 	}
@@ -203,7 +202,7 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 
 	// Fetch the actual Benthos config from the service
 	start = time.Now()
-	observedConfig, err := d.service.GetConfig(ctx, services.GetFileSystem(), d.baseFSMInstance.GetID())
+	observedConfig, err := d.service.GetConfig(ctx, services, d.baseFSMInstance.GetID())
 	metrics.ObserveReconcileTime(logger.ComponentDataFlowComponentInstance, d.baseFSMInstance.GetID()+".getConfig", time.Since(start))
 	if err == nil {
 		// Only update if we successfully got the config
@@ -220,14 +219,14 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 
 	if !dataflowcomponentserviceconfig.ConfigsEqual(d.config, d.ObservedState.ObservedDataflowComponentConfig) {
 		// Check if the service exists before attempting to update
-		if d.service.ServiceExists(ctx, services.GetFileSystem(), d.baseFSMInstance.GetID()) {
+		if d.service.ServiceExists(ctx, services, d.baseFSMInstance.GetID()) {
 			d.baseFSMInstance.GetLogger().Debugf("Observed DataflowComponent config is different from desired config, updating Benthos configuration")
 
 			diffStr := dataflowcomponentserviceconfig.ConfigDiff(d.config, d.ObservedState.ObservedDataflowComponentConfig)
 			d.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
 			// Update the config in the Benthos manager
-			err := d.service.UpdateDataFlowComponentInBenthosManager(ctx, services.GetFileSystem(), &d.config, d.baseFSMInstance.GetID())
+			err := d.service.UpdateDataFlowComponentInBenthosManager(ctx, services, &d.config, d.baseFSMInstance.GetID())
 			if err != nil {
 				return fmt.Errorf("failed to update DataflowComponent service configuration: %w", err)
 			}
