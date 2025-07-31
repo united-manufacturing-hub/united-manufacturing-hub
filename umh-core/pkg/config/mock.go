@@ -59,6 +59,7 @@ type MockConfigManager struct {
 	mutexReadOrWrite                    sync.Mutex
 	mutexReadAndWrite                   sync.Mutex
 	GetConfigCalled                     int32 // Use atomic int32 for thread safety (0=false, 1=true)
+	GetConfigCalled                     bool
 	AddDataflowcomponentCalled          bool
 	DeleteDataflowcomponentCalled       bool
 	EditDataflowcomponentCalled         bool

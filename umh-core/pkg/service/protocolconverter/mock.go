@@ -93,7 +93,6 @@ type MockProtocolConverterService struct {
 
 	// mu protects concurrent access to ExistingComponents and ConverterStates maps
 	mu sync.RWMutex
-
 	// Tracks calls to methods
 	GenerateConfigCalled     bool
 	GetConfigCalled          bool

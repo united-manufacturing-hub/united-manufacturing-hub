@@ -62,7 +62,6 @@ type MockDataFlowComponentService struct {
 
 	// Protects all shared state
 	mu sync.RWMutex
-
 	// Tracks calls to methods
 	GenerateBenthosConfigForDataFlowComponentCalled bool
 	GetConfigCalled                                 bool

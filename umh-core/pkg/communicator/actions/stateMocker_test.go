@@ -137,8 +137,8 @@ var _ = Describe("StateMocker", func() {
 				State      string
 				TickOffset int
 			}{
-				{startingState, 1}, // Start in "starting" state
-				{desiredState, 3},  // After 2 ticks, move to "active" state
+				{State: startingState, TickOffset: 1}, // Start in "starting" state
+				{State: desiredState, TickOffset: 3},  // After 2 ticks, move to "active" state
 			})
 
 			// Initial update

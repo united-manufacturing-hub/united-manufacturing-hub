@@ -97,12 +97,12 @@ type IRedpandaService interface {
 
 // ServiceInfo contains information about a Redpanda service
 type ServiceInfo struct {
+	// RedpandaStatus contains information about the status of the Redpanda service
+	RedpandaStatus RedpandaStatus
 	// S6FSMState contains the current state of the S6 FSM
 	S6FSMState string
 	// StatusReason contains the reason for the current state of the Redpanda service
 	StatusReason string
-	// RedpandaStatus contains information about the status of the Redpanda service
-	RedpandaStatus RedpandaStatus
 	// S6ObservedState contains information about the S6 service
 	S6ObservedState s6fsm.S6ObservedState
 }

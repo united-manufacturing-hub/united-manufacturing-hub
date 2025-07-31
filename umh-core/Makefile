@@ -259,9 +259,15 @@ nilaway:
 
 betteralign:
 	betteralign -test=false ./... || (echo "Consider running 'make betteralign-fix' to fix the issues" && exit 1)
-
 betteralign-fix:
 	betteralign -test=false -apply ./...
+
+betteralign-fix-all:
+	@echo "Running betteralign-fix in loop until exit code is not 3..."
+	@while betteralign -test=false -apply ./...; [ $$? -eq 3 ]; do \
+		echo "betteralign-fix returned exit code 3, running again..."; \
+	done
+	@echo "betteralign-fix-all completed"
 
 # Meta target for vet, nilaway, lint, staticcheck and betteralign
 vet-nilaway-lint-betteralign: vet nilaway lint betteralign

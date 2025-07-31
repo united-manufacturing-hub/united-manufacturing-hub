@@ -44,7 +44,6 @@ import (
 //	// Test your code that uses IConnectionService
 //	status, err := myComponent.DoSomethingWithConnection(mockService, "test-conn")
 type MockConnectionService struct {
-	// Errors (8 bytes each on 64-bit)
 	GenerateNmapConfigConnectionError    error
 	GetConfigError                       error
 	StatusError                          error

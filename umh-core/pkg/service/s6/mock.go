@@ -62,7 +62,6 @@ type MockService struct {
 	GetLogsResult         []LogEntry
 
 	GetConfigResult s6serviceconfig.S6ServiceConfig
-
 	StatusResult ServiceInfo
 
 	// Mutex to protect concurrent access to shared maps
