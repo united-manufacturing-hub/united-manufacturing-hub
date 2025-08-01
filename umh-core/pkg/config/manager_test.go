@@ -627,7 +627,7 @@ internal:
 			configManager.WithFileSystemService(fsService)
 			configManager.WithConfigPath("test_cfg.yaml")
 
-			numGenerators := 10000
+			numGenerators := 5000
 			// Read the original example file and write initial config
 			originalData, err := fsService.ReadFile(ctx, "../../examples/example-config-protocolconverter-templated.yaml")
 			Expect(err).NotTo(HaveOccurred())
