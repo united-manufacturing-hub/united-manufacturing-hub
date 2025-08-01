@@ -617,7 +617,8 @@ internal:
 
 		AfterEach(func() {
 			// delete the test_cfg.yaml file
-			fsService.Remove(ctx, "test_cfg.yaml")
+			err := fsService.Remove(ctx, "test_cfg.yaml")
+			Expect(err).NotTo(HaveOccurred())
 			cancel()
 		})
 
