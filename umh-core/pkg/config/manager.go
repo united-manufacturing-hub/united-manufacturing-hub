@@ -144,8 +144,7 @@ type FileConfigManager struct {
 	cacheMu sync.RWMutex // guards the two fields below
 
 	// ---------- background refresh state ----------
-	refreshMu         sync.Mutex // guards refreshInProgress
-	refreshInProgress bool       // true if a background refresh goroutine is running
+	refreshMu sync.Mutex // prevents concurrent background refreshes
 }
 
 // NewFileConfigManager creates a new FileConfigManager
@@ -360,15 +359,12 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	m.cacheMu.RUnlock()
 
 	// ---------- SLOW PATH (file changed) ----------
-	// Check if a refresh is already in progress
-	m.refreshMu.Lock()
-	refreshInProgress := m.refreshInProgress
-	if !refreshInProgress && hasCache {
+	// Check if a refresh is already in progress using TryLock
+	if m.refreshMu.TryLock() && hasCache {
 		// Start background refresh only if we have a cached config to return
-		m.refreshInProgress = true
 		go m.backgroundRefresh(info.ModTime())
+		// Note: mutex will be unlocked in backgroundRefresh
 	}
-	m.refreshMu.Unlock()
 
 	// If we have a cached config, return it while background refresh runs
 	if hasCache {
@@ -393,11 +389,7 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 
 // backgroundRefresh runs the config refresh logic in a background goroutine
 func (m *FileConfigManager) backgroundRefresh(modTime time.Time) {
-	defer func() {
-		m.refreshMu.Lock()
-		m.refreshInProgress = false
-		m.refreshMu.Unlock()
-	}()
+	defer m.refreshMu.Unlock() // unlock the mutex we acquired with TryLock
 
 	// Create a background context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ConfigGetConfigTimeout)
