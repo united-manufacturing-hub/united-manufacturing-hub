@@ -33,6 +33,37 @@ import (
 
 // MockBenthosService is a mock implementation of the IBenthosService interface for testing
 type MockBenthosService struct {
+	GenerateS6ConfigForBenthosError error
+	GetConfigError                  error
+	StatusError                     error
+	AddBenthosToS6ManagerError      error
+	UpdateBenthosInS6ManagerError   error
+	RemoveBenthosFromS6ManagerError error
+	StartBenthosError               error
+	StopBenthosError                error
+	ReconcileManagerError           error
+	ForceRemoveBenthosError         error
+
+	// HTTP client for mocking HTTP requests
+	HTTPClient httpclient.HTTPClient
+
+	// S6 service mock
+	S6Service s6service.Service
+	// For more complex testing scenarios
+	ServiceStates    map[string]*ServiceInfo
+	ExistingServices map[string]bool
+
+	// State control for FSM testing
+	stateFlags map[string]*ServiceStateFlags
+
+	S6ServiceConfigs []config.S6FSMConfig
+
+	GetConfigResult benthosserviceconfig.BenthosServiceConfig
+	// Return values for each method
+	GenerateS6ConfigForBenthosResult s6serviceconfig.S6ServiceConfig
+
+	StatusResult ServiceInfo
+
 	// Mutex to protect concurrent access to shared maps
 	mu sync.RWMutex
 
@@ -59,35 +90,8 @@ type MockBenthosService struct {
 	IsMetricsErrorFreeCalled                       bool
 	ServiceExistsCalled                            bool
 	ForceRemoveBenthosCalled                       bool
-	// Return values for each method
-	GenerateS6ConfigForBenthosResult s6serviceconfig.S6ServiceConfig
-	GenerateS6ConfigForBenthosError  error
-	GetConfigResult                  benthosserviceconfig.BenthosServiceConfig
-	GetConfigError                   error
-	StatusResult                     ServiceInfo
-	StatusError                      error
-	AddBenthosToS6ManagerError       error
-	UpdateBenthosInS6ManagerError    error
-	RemoveBenthosFromS6ManagerError  error
-	StartBenthosError                error
-	StopBenthosError                 error
-	ReconcileManagerError            error
-	ReconcileManagerReconciled       bool
-	ServiceExistsResult              bool
-	ForceRemoveBenthosError          error
-	// For more complex testing scenarios
-	ServiceStates    map[string]*ServiceInfo
-	ExistingServices map[string]bool
-	S6ServiceConfigs []config.S6FSMConfig
-
-	// State control for FSM testing
-	stateFlags map[string]*ServiceStateFlags
-
-	// HTTP client for mocking HTTP requests
-	HTTPClient httpclient.HTTPClient
-
-	// S6 service mock
-	S6Service s6service.Service
+	ReconcileManagerReconciled                     bool
+	ServiceExistsResult                            bool
 }
 
 // Ensure MockBenthosService implements IBenthosService
@@ -95,6 +99,7 @@ var _ IBenthosService = (*MockBenthosService)(nil)
 
 // ServiceStateFlags contains all the state flags needed for FSM testing
 type ServiceStateFlags struct {
+	S6FSMState             string
 	IsS6Running            bool
 	IsConfigLoaded         bool
 	IsHealthchecksPassed   bool
@@ -102,7 +107,6 @@ type ServiceStateFlags struct {
 	HasProcessingActivity  bool
 	IsDegraded             bool
 	IsS6Stopped            bool
-	S6FSMState             string
 }
 
 // NewMockBenthosService creates a new mock Benthos service

@@ -54,30 +54,31 @@ import (
 // EditStreamProcessorAction implements the Action interface for editing
 // stream processor configurations.
 type EditStreamProcessorAction struct {
-	userEmail    string
-	actionUUID   uuid.UUID
-	instanceUUID uuid.UUID
+	configManager config.ConfigManager
 
 	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager
-
-	// Parsed request payload (only populated after Parse)
-	streamProcessorUUID uuid.UUID
-	name                string // stream processor name
-	model               models.StreamProcessorModelRef
-	sources             map[string]string
-	mapping             map[string]interface{}
-	vb                  []models.StreamProcessorVariable
-	ignoreHealthCheck   bool
-	location            map[int]string
+	sources         map[string]string
+	mapping         map[string]interface{}
+	location        map[int]string
 
 	// Runtime observation for health checks
 	systemSnapshotManager *fsm.SnapshotManager
 
+	actionLogger *zap.SugaredLogger
+	model        models.StreamProcessorModelRef
+	userEmail    string
+	name         string // stream processor name
+	vb           []models.StreamProcessorVariable
+	actionUUID   uuid.UUID
+	instanceUUID uuid.UUID
+
+	// Parsed request payload (only populated after Parse)
+	streamProcessorUUID uuid.UUID
+
 	// Atomic edit UUID used for configuration updates and rollbacks
 	atomicEditUUID uuid.UUID
 
-	actionLogger *zap.SugaredLogger
+	ignoreHealthCheck bool
 }
 
 // NewEditStreamProcessorAction returns an un-parsed action instance.
