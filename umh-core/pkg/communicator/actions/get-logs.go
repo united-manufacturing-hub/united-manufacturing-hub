@@ -38,23 +38,25 @@ import (
 )
 
 type GetLogsAction struct {
-	// ─── Request metadata ────────────────────────────────────────────────────
-	userEmail    string
-	actionUUID   uuid.UUID
-	instanceUUID uuid.UUID
+	configManager config.ConfigManager // Unused, but kept for symmetry with other actions
 
 	// ─── Plumbing ────────────────────────────────────────────────────────────
 	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager // Unused, but kept for symmetry with other actions
 
 	// ─── Runtime observation ────────────────────────────────────────────────
 	systemSnapshotManager *fsm.SnapshotManager
 
+	// ─── Utilities ──────────────────────────────────────────────────────────
+	actionLogger *zap.SugaredLogger
+
+	// ─── Request metadata ────────────────────────────────────────────────────
+	userEmail string
+
 	// ─── Parsed request payload ─────────────────────────────────────────────
 	payload models.GetLogsRequest
 
-	// ─── Utilities ──────────────────────────────────────────────────────────
-	actionLogger *zap.SugaredLogger
+	actionUUID   uuid.UUID
+	instanceUUID uuid.UUID
 }
 
 // NewGetLogsAction creates a new GetLogsAction with the provided parameters.

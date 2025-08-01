@@ -80,15 +80,15 @@ import (
 
 // Watchdog is a simple watchdog for goroutines
 type Watchdog struct {
-	registeredHeartbeats      map[string]*Heartbeat
-	registeredHeartbeatsMutex sync.Mutex
-	badHeartbeatChan          chan uuid.UUID
-	hasSubscribers            atomic.Bool
 	ctx                       context.Context
+	registeredHeartbeats      map[string]*Heartbeat
+	badHeartbeatChan          chan uuid.UUID
 	ticker                    *time.Ticker
-	watchdogID                uuid.UUID
-	warningsAreErrors         atomic.Bool
 	logger                    *zap.SugaredLogger
+	registeredHeartbeatsMutex sync.Mutex
+	hasSubscribers            atomic.Bool
+	warningsAreErrors         atomic.Bool
+	watchdogID                uuid.UUID
 }
 
 // NewWatchdog creates a new Watchdog
@@ -132,8 +132,8 @@ func (s *Watchdog) Start() {
 
 				// Check all heartbeats and collect the overdue ones
 				var overdueHeartbeat *struct {
-					name           string
 					hb             *Heartbeat
+					name           string
 					secondsOverdue int64
 				}
 
@@ -151,8 +151,8 @@ func (s *Watchdog) Start() {
 						if (onlyIfHasSub && hasSubs) || !onlyIfHasSub {
 							// Found an overdue heartbeat
 							overdueHeartbeat = &struct {
-								name           string
 								hb             *Heartbeat
+								name           string
 								secondsOverdue int64
 							}{
 								name:           name,
@@ -205,16 +205,16 @@ const (
 
 // Heartbeat is a heartbeat
 type Heartbeat struct {
-	uniqueIdentifier     uuid.UUID
-	lastReportedStatus   atomic.Int32
-	lastHeatbeatTime     atomic.Int64
 	file                 string
+	lastHeatbeatTime     atomic.Int64
 	line                 int
-	warningCount         atomic.Uint32
 	warningsUntilFailure uint64
 	timeout              uint64
-	onlyIfSubscribers    bool
 	heartbeatsReceived   atomic.Uint64
+	lastReportedStatus   atomic.Int32
+	warningCount         atomic.Uint32
+	uniqueIdentifier     uuid.UUID
+	onlyIfSubscribers    bool
 }
 
 // RegisterHeartbeat registers a new heartbeat

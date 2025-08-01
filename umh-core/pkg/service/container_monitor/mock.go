@@ -22,9 +22,6 @@ import (
 
 // MockService is a mock implementation of the container monitor Service interface
 type MockService struct {
-	// Tracks calls to methods
-	GetStatusCalled bool
-	GetHealthCalled bool
 
 	// Return values for each method
 	GetStatusError error
@@ -36,6 +33,9 @@ type MockService struct {
 
 	// For more complex testing scenarios
 	healthState models.HealthCategory
+	// Tracks calls to methods
+	GetStatusCalled bool
+	GetHealthCalled bool
 }
 
 // NewMockService creates a new mock service instance

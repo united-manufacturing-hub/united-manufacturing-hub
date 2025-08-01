@@ -16,6 +16,7 @@ package actions
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
@@ -26,9 +27,12 @@ import (
 
 // ConsumeOutboundMessages processes messages from the outbound channel
 // This method is used for testing purposes to consume messages that would normally be sent to the user
-func ConsumeOutboundMessages(outboundChannel chan *models.UMHMessage, messages *[]*models.UMHMessage, logMessages bool) {
+func ConsumeOutboundMessages(outboundChannel chan *models.UMHMessage, messages *[]*models.UMHMessage, messagesMutex *sync.Mutex, logMessages bool) {
 	for msg := range outboundChannel {
+		messagesMutex.Lock()
 		*messages = append(*messages, msg)
+		messagesMutex.Unlock()
+
 		decodedMessage, err := encoding.DecodeMessageFromUMHInstanceToUser(msg.Content)
 		if err != nil {
 			zap.S().Error("error decoding message", zap.Error(err))

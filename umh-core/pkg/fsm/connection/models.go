@@ -92,11 +92,11 @@ func IsRunningState(state string) bool {
 
 // ConnectionObservedState contains the observed runtime state of a Connection instance
 type ConnectionObservedState struct {
-	// ServiceInfo contains information about the S6 service
-	ServiceInfo connection.ServiceInfo
 
 	// ObservedConnectionConfig contains the observed Connection service config
 	ObservedConnectionConfig connectionserviceconfig.ConnectionServiceConfig
+	// ServiceInfo contains information about the S6 service
+	ServiceInfo connection.ServiceInfo
 }
 
 // IsObservedState implements the ObservedState interface
@@ -109,20 +109,21 @@ var _ publicfsm.FSMInstance = (*ConnectionInstance)(nil)
 
 // ConnectionInstance is a state-machine managed instance of a Connection service.
 type ConnectionInstance struct {
+
+	// service is the Connection service implementation to use
+	// It has a manager that manages the benthos service instances
+	service connection.IConnectionService
+
 	baseFSMInstance *internalfsm.BaseFSMInstance
+
+	// config contains all the configuration for this service
+	config connectionserviceconfig.ConnectionServiceConfig
 
 	// ObservedState represents the observed state of the service
 	// ObservedState contains all metrics, logs, etc.
 	// that are updated at the beginning of Reconcile and then used to
 	// determine the next state
 	ObservedState ConnectionObservedState
-
-	// service is the Connection service implementation to use
-	// It has a manager that manages the benthos service instances
-	service connection.IConnectionService
-
-	// config contains all the configuration for this service
-	config connectionserviceconfig.ConnectionServiceConfig
 }
 
 // GetLastObservedState returns the last known state of the instance

@@ -30,6 +30,10 @@ import (
 // CompressionThreshold is the size in bytes above which messages will be compressed
 const CompressionThreshold = 1024 // 1KB
 
+// Mutex for the encoder/decoder pools
+var encoderMutex sync.Mutex
+var decoderMutex sync.Mutex
+
 var (
 	// Global encoder/decoder pools
 	encoderPool = sync.Pool{
@@ -163,6 +167,9 @@ func isCompressed(data []byte) bool {
 // EncodeMessageFromUserToUMHInstance converts and encodes a UMHMessageContent object to Base64 String.
 // Note: only the inner payload will later be encrypted, not the whole message.
 func EncodeMessageFromUserToUMHInstance(UMHMessage models.UMHMessageContent) (string, error) {
+	encoderMutex.Lock()
+	defer encoderMutex.Unlock()
+
 	messageBytes, err := safejson.Marshal(UMHMessage)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to marshal UMHMessage: %v (%+v)", err, UMHMessage)
@@ -174,6 +181,9 @@ func EncodeMessageFromUserToUMHInstance(UMHMessage models.UMHMessageContent) (st
 // EncodeMessageFromUMHInstanceToUser converts and encodes a UMHMessageContent object to Base64 String.
 // Note: only the inner payload will later be encrypted, not the whole message.
 func EncodeMessageFromUMHInstanceToUser(UMHMessage models.UMHMessageContent) (string, error) {
+	encoderMutex.Lock()
+	defer encoderMutex.Unlock()
+
 	messageBytes, err := safejson.Marshal(UMHMessage)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to marshal UMHMessage: %v (%+v)", err, UMHMessage)
@@ -275,10 +285,16 @@ func decodeBase64AndUnmarshal(base64Message string) (models.UMHMessageContent, e
 
 // DecodeMessageFromUserToUMHInstance decodes a Base64 String to a UMHMessageContent object.
 func DecodeMessageFromUserToUMHInstance(base64Message string) (models.UMHMessageContent, error) {
+	decoderMutex.Lock()
+	defer decoderMutex.Unlock()
+
 	return decodeBase64AndUnmarshal(base64Message)
 }
 
 // DecodeMessageFromUMHInstanceToUser decodes a Base64 String to a UMHMessageContent object.
 func DecodeMessageFromUMHInstanceToUser(base64Message string) (models.UMHMessageContent, error) {
+	decoderMutex.Lock()
+	defer decoderMutex.Unlock()
+
 	return decodeBase64AndUnmarshal(base64Message)
 }

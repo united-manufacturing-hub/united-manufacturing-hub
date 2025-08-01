@@ -24,9 +24,9 @@ import (
 
 // DataFlowComponentBuilder is used to build configuration with DataFlowComponent services
 type DataFlowComponentBuilder struct {
-	full config.FullConfig
 	// Map to track which components are active by name
 	activeComponents map[string]bool
+	full             config.FullConfig
 }
 
 // NewDataFlowComponentBuilder creates a new builder for DataFlowComponent configurations

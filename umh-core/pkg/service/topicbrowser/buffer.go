@@ -56,8 +56,8 @@ import (
 // BufferItem is an immutable unit stored in the ring buffer.
 // Payload is still protobuf‑encoded but hex‑decoded.
 type BufferItem struct {
-	Payload     []byte    // hex-decoded data - but not unmarshalled (protobuf)
 	Timestamp   time.Time // timestamp from within the logs
+	Payload     []byte    // hex-decoded data - but not unmarshalled (protobuf)
 	SequenceNum uint64    // monotonically increasing sequence number for tracking
 }
 
@@ -71,8 +71,8 @@ type Ringbuffer struct {
 
 // RingBufferSnapshot provides a consistent view of the ring buffer state
 type RingBufferSnapshot struct {
-	LastSequenceNum uint64        // Latest sequence number
 	Items           []*BufferItem // Current buffer contents, newest-to-oldest
+	LastSequenceNum uint64        // Latest sequence number
 }
 
 // NewRingbufferWithDefaultCapacity creates a ring buffer with the standard production capacity

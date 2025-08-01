@@ -33,8 +33,8 @@ import (
 )
 
 type DeadLetter struct {
-	messages      []models.UMHMessage
 	cookies       map[string]string
+	messages      []models.UMHMessage
 	retryAttempts int
 }
 
@@ -48,16 +48,16 @@ func DefaultBackoffPolicy() *tools.Backoff {
 }
 
 type Pusher struct {
-	instanceUUID           uuid.UUID
-	outboundMessageChannel chan *models.UMHMessage
-	deadletterCh           chan DeadLetter
 	dog                    watchdog.Iface
 	jwt                    atomic.Value
-	watcherUUID            uuid.UUID
+	outboundMessageChannel chan *models.UMHMessage
+	deadletterCh           chan DeadLetter
 	backoff                *tools.Backoff
-	insecureTLS            bool
-	apiURL                 string
 	logger                 *zap.SugaredLogger
+	apiURL                 string
+	instanceUUID           uuid.UUID
+	watcherUUID            uuid.UUID
+	insecureTLS            bool
 }
 
 func NewPusher(instanceUUID uuid.UUID, jwt string, dog watchdog.Iface, outboundChannel chan *models.UMHMessage, deadletterCh chan DeadLetter, backoff *tools.Backoff, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) *Pusher {
@@ -90,6 +90,16 @@ func (p *Pusher) Push(message models.UMHMessage) {
 			p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 		}
 	}
+
+	// Recover from panic
+	// This is primarly for tests, where the outboundMessageChannel is closed.
+	defer func() {
+		if r := recover(); r != nil {
+			zap.S().Errorf("Panic in Push: %v", r)
+			p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
+		}
+	}()
+
 	p.outboundMessageChannel <- &models.UMHMessage{
 		InstanceUUID: p.instanceUUID,
 		Content:      message.Content,

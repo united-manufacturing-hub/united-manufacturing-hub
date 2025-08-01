@@ -34,6 +34,41 @@ import (
 
 // MockRedpandaService is a mock implementation of the IRedpandaService interface for testing
 type MockRedpandaService struct {
+	GenerateS6ConfigForRedpandaError error
+	GetConfigError                   error
+	StatusError                      error
+	AddRedpandaToS6ManagerError      error
+	UpdateRedpandaInS6ManagerError   error
+	RemoveRedpandaFromS6ManagerError error
+	StartRedpandaError               error
+	StopRedpandaError                error
+	ReconcileManagerError            error
+	ForceRemoveRedpandaError         error
+	UpdateRedpandaClusterConfigError error
+
+	// HTTP client for mocking HTTP requests
+	HTTPClient httpclient.HTTPClient
+
+	// S6 service mock
+	S6Service s6service.Service
+
+	// Configuration to return on method calls
+	FileSystemMock filesystem.Service // Mock filesystem service
+	// For more complex testing scenarios
+	ServiceState *ServiceInfo
+
+	// State control for FSM testing
+	stateFlags *ServiceStateFlags
+
+	S6ServiceConfigs []config.S6FSMConfig
+
+	// Return values for each method
+	GenerateS6ConfigForRedpandaResult s6serviceconfig.S6ServiceConfig
+
+	GetConfigResult redpandaserviceconfig.RedpandaServiceConfig
+
+	StatusResult ServiceInfo
+
 	// Tracks calls to methods
 	GenerateS6ConfigForRedpandaCalled bool
 	GetConfigCalled                   bool
@@ -51,39 +86,9 @@ type MockRedpandaService struct {
 	ForceRemoveRedpandaCalled         bool
 	UpdateRedpandaClusterConfigCalled bool
 
-	// Return values for each method
-	GenerateS6ConfigForRedpandaResult s6serviceconfig.S6ServiceConfig
-	GenerateS6ConfigForRedpandaError  error
-	GetConfigResult                   redpandaserviceconfig.RedpandaServiceConfig
-	GetConfigError                    error
-	StatusResult                      ServiceInfo
-	StatusError                       error
-	AddRedpandaToS6ManagerError       error
-	UpdateRedpandaInS6ManagerError    error
-	RemoveRedpandaFromS6ManagerError  error
-	StartRedpandaError                error
-	StopRedpandaError                 error
-	ReconcileManagerError             error
-	ReconcileManagerReconciled        bool
-	ServiceExistsResult               bool
-	ForceRemoveRedpandaError          error
-	UpdateRedpandaClusterConfigError  error
-	// For more complex testing scenarios
-	ServiceState      *ServiceInfo
-	ServiceExistsFlag bool
-	S6ServiceConfigs  []config.S6FSMConfig
-
-	// State control for FSM testing
-	stateFlags *ServiceStateFlags
-
-	// HTTP client for mocking HTTP requests
-	HTTPClient httpclient.HTTPClient
-
-	// S6 service mock
-	S6Service s6service.Service
-
-	// Configuration to return on method calls
-	FileSystemMock filesystem.Service // Mock filesystem service
+	ReconcileManagerReconciled bool
+	ServiceExistsResult        bool
+	ServiceExistsFlag          bool
 }
 
 // Ensure MockRedpandaService implements IRedpandaService
@@ -91,6 +96,7 @@ var _ IRedpandaService = (*MockRedpandaService)(nil)
 
 // ServiceStateFlags contains all the state flags needed for FSM testing
 type ServiceStateFlags struct {
+	S6FSMState             string
 	IsS6Running            bool
 	IsConfigLoaded         bool
 	IsHealthchecksPassed   bool
@@ -98,7 +104,6 @@ type ServiceStateFlags struct {
 	HasProcessingActivity  bool
 	IsDegraded             bool
 	IsS6Stopped            bool
-	S6FSMState             string
 }
 
 // NewMockRedpandaService creates a new mock Redpanda service

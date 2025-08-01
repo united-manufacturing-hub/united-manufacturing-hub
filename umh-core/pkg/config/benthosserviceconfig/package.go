@@ -25,16 +25,17 @@ var (
 // BenthosServiceConfig represents the configuration for a Benthos service
 type BenthosServiceConfig struct {
 	// Benthos-specific configuration
-	Input              map[string]interface{}   `yaml:"input"`
-	Pipeline           map[string]interface{}   `yaml:"pipeline,omitempty"`
-	Output             map[string]interface{}   `yaml:"output"`
+	Input    map[string]interface{} `yaml:"input"`
+	Pipeline map[string]interface{} `yaml:"pipeline,omitempty"`
+	Output   map[string]interface{} `yaml:"output"`
+	Buffer   map[string]interface{} `yaml:"buffer,omitempty"`
+
+	LogLevel           string                   `yaml:"log_level,omitempty"`
 	CacheResources     []map[string]interface{} `yaml:"cache_resources,omitempty"`
 	RateLimitResources []map[string]interface{} `yaml:"rate_limit_resources,omitempty"`
-	Buffer             map[string]interface{}   `yaml:"buffer,omitempty"`
 
 	// Advanced configuration
 	MetricsPort uint16 `yaml:"metrics_port"`
-	LogLevel    string `yaml:"log_level,omitempty"`
 }
 
 // DefaultTopicBrowserBenthosServiceConfig is the default Benthos service config for the topic browser

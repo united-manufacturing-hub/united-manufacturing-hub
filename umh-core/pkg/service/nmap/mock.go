@@ -31,14 +31,43 @@ import (
 
 // MockNmapService is a mock implementation of the INmapService interface for testing
 type MockNmapService struct {
-	// Mutex to protect concurrent access to shared maps
-	mu sync.RWMutex
+
+	// Error to return for various operations
+	GenerateS6ConfigForNmapError  error
+	GenerateS6ConfigForNmapResult error
+	GetConfigError                error
+	StatusError                   error
+	AddServiceError               error
+	UpdateServiceError            error
+	RemoveServiceError            error
+	StartServiceError             error
+	StopServiceError              error
+	ReconcileManagerError         error
+	ForceRemoveNmapError          error
+
+	// S6 service mock
+	S6Service s6service.Service
 
 	// Configs keeps track of registered services
 	Configs map[string]*nmapserviceconfig.NmapServiceConfig
 
 	// StateMap keeps track of desired states
 	StateMap map[string]string
+
+	// For more complex testing scenarios
+	ServiceStates    map[string]*ServiceInfo
+	ExistingServices map[string]bool
+
+	// State control for FSM testing
+	stateFlags map[string]*ServiceStateFlags
+
+	GetConfigResult  nmapserviceconfig.NmapServiceConfig
+	S6ServiceConfigs []config.S6FSMConfig
+
+	StatusResult ServiceInfo
+
+	// Mutex to protect concurrent access to shared maps
+	mu sync.RWMutex
 
 	// Tracks called methods
 	GenerateS6ConfigForNmapCalled bool
@@ -53,35 +82,10 @@ type MockNmapService struct {
 	ServiceExistsCalled           bool
 	ForceRemoveNmapCalled         bool
 
-	// Error to return for various operations
-	GenerateS6ConfigForNmapError  error
-	GenerateS6ConfigForNmapResult error
-	GetConfigError                error
-	GetConfigResult               nmapserviceconfig.NmapServiceConfig
-	StatusError                   error
-	StatusResult                  ServiceInfo
-	AddServiceError               error
-	UpdateServiceError            error
-	RemoveServiceError            error
-	StartServiceError             error
-	StopServiceError              error
-	ReconcileManagerError         error
-	ReconcileManagerReconciled    bool
-	ForceRemoveNmapError          error
-	ServiceExistsError            bool // if true, ServiceExists returns false
-	ServiceExistsResult           bool
-	ShouldErrScanFailed           bool
-
-	// For more complex testing scenarios
-	ServiceStates    map[string]*ServiceInfo
-	ExistingServices map[string]bool
-	S6ServiceConfigs []config.S6FSMConfig
-
-	// State control for FSM testing
-	stateFlags map[string]*ServiceStateFlags
-
-	// S6 service mock
-	S6Service s6service.Service
+	ReconcileManagerReconciled bool
+	ServiceExistsError         bool // if true, ServiceExists returns false
+	ServiceExistsResult        bool
+	ShouldErrScanFailed        bool
 }
 
 // Ensure MockNmapService implements INmapService
@@ -89,12 +93,12 @@ var _ INmapService = (*MockNmapService)(nil)
 
 // ServiceStateFlags contains all the state flags needed for FSM testing
 type ServiceStateFlags struct {
+	PortState   string
+	S6FSMState  string
 	IsS6Running bool
 	IsRunning   bool
 	IsDegraded  bool
 	IsS6Stopped bool
-	PortState   string
-	S6FSMState  string
 }
 
 // SetServiceState sets all state flags for a service at once

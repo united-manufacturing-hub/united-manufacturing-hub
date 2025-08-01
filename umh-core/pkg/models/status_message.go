@@ -16,8 +16,8 @@ package models
 
 // StatusMessage represents the complete system state including core components and plugins.
 type StatusMessage struct {
-	Core    Core                   `json:"core"`
 	Plugins map[string]interface{} `json:"plugins"` // Extension point for future plugins
+	Core    Core                   `json:"core"`
 }
 
 type Core struct {
@@ -191,49 +191,49 @@ type Redpanda struct {
 }
 
 type TopicBrowser struct {
-	Health     *Health `json:"health"`
-	TopicCount int     `json:"topicCount"`
+	Health *Health `json:"health"`
 	// UnsBundles is a map because there might be the case that the topic browser service generated more than one uns bundle
 	// inbetween two runs of the status message generation. In this case, we need to send the uns bundles in the order they were generated
 	// to not lose any data. The order is maintained by the index of the map.
 	// The uns bundles are compressed protobuf data of protobuf type tbproto.UnsBundle.
 	// also, if we send the status message to a new subscriber, we want to send the cached uns bundle first and then the new uns bundles
 	UnsBundles map[int][]byte `json:"unsBundles"`
+	TopicCount int            `json:"topicCount"`
 }
 
 type EventsTable struct {
-	Bridges         []string    `json:"bridges"`
-	Error           string      `json:"error"`
+	Value           interface{} `json:"value"`
 	Origin          *string     `json:"origin"`
+	Error           string      `json:"error"`
+	UnsTreeID       string      `json:"unsTreeId"`
+	Bridges         []string    `json:"bridges"`
 	RawKafkaMessage EventKafka  `json:"rawKafkaMessage"`
 	TimestampMS     float64     `json:"timestamp_ms"`
-	UnsTreeID       string      `json:"unsTreeId"`
-	Value           interface{} `json:"value"`
 }
 
 type EventKafka struct {
-	Destination            []string          `json:"destination"`
 	Headers                map[string]string `json:"headers"`
-	KafkaInsertedTimestamp float64           `json:"kafkaInsertedTimestamp"`
 	Key                    string            `json:"key"`
 	LastPayload            string            `json:"lastPayload"`
-	MessagesPerMinute      float64           `json:"messagesPerMinute"`
-	Origin                 []string          `json:"origin"`
 	Topic                  string            `json:"topic"`
+	Destination            []string          `json:"destination"`
+	Origin                 []string          `json:"origin"`
+	KafkaInsertedTimestamp float64           `json:"kafkaInsertedTimestamp"`
+	MessagesPerMinute      float64           `json:"messagesPerMinute"`
 }
 
 type UnsTable struct {
 	Area       *string  `json:"area,omitempty"`
-	Enterprise string   `json:"enterprise"`
 	EventGroup *string  `json:"eventGroup,omitempty"`
 	EventTag   *string  `json:"eventTag,omitempty"`
-	Instances  []string `json:"instances,omitempty"`
 	IsError    *bool    `json:"isError,omitempty"`
 	Line       *string  `json:"line,omitempty"`
 	OriginID   *string  `json:"originId,omitempty"`
 	Schema     *string  `json:"schema,omitempty"`
 	Site       *string  `json:"site,omitempty"`
 	WorkCell   *string  `json:"workCell,omitempty"`
+	Enterprise string   `json:"enterprise"`
+	Instances  []string `json:"instances,omitempty"`
 }
 
 type Version struct {

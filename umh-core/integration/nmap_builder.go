@@ -22,9 +22,9 @@ import (
 
 // NmapBuilder is used to build configuration with Nmap service
 type NmapBuilder struct {
-	full config.FullConfig
 	// Map to track which services are active by name
 	activeNmap map[string]bool
+	full       config.FullConfig
 }
 
 // NewNmapBuilder creates a new builder for Benthos configurations

@@ -30,6 +30,29 @@ import (
 
 // MockRedpandaMonitorService is a mock implementation of the IRedpandaMonitorService interface for testing
 type MockRedpandaMonitorService struct {
+	LastScanTime                            time.Time
+	GenerateS6ConfigForRedpandaMonitorError error
+	StatusError                             error
+	AddRedpandaToS6ManagerError             error
+	UpdateRedpandaMonitorInS6ManagerError   error
+	RemoveRedpandaFromS6ManagerError        error
+	ForceRemoveRedpandaMonitorError         error
+	StartRedpandaError                      error
+	StopRedpandaError                       error
+	ReconcileManagerError                   error
+	// For more complex testing scenarios
+	ServiceState    *ServiceInfo
+	S6ServiceConfig *config.S6FSMConfig
+
+	// State control for FSM testing
+	stateFlags *ServiceStateFlags
+
+	// Mock metrics state
+	metricsState *RedpandaMetricsState
+	// Return values for each method
+	GenerateS6ConfigForRedpandaMonitorResult s6serviceconfig.S6ServiceConfig
+	StatusResult                             ServiceInfo
+	UpdateLastPort                           uint16
 	// Tracks calls to methods
 	GenerateS6ConfigForRedpandaMonitorCalled bool
 	StatusCalled                             bool
@@ -41,32 +64,9 @@ type MockRedpandaMonitorService struct {
 	ReconcileManagerCalled                   bool
 	ServiceExistsCalled                      bool
 	ForceRemoveRedpandaMonitorCalled         bool
-	// Return values for each method
-	GenerateS6ConfigForRedpandaMonitorResult s6serviceconfig.S6ServiceConfig
-	GenerateS6ConfigForRedpandaMonitorError  error
-	StatusResult                             ServiceInfo
-	StatusError                              error
-	AddRedpandaToS6ManagerError              error
-	UpdateRedpandaMonitorInS6ManagerError    error
-	RemoveRedpandaFromS6ManagerError         error
-	ForceRemoveRedpandaMonitorError          error
-	StartRedpandaError                       error
-	StopRedpandaError                        error
-	ReconcileManagerError                    error
 	ReconcileManagerReconciled               bool
 	ServiceExistsResult                      bool
-	UpdateLastPort                           uint16
-	LastScanTime                             time.Time
-	// For more complex testing scenarios
-	ServiceState      *ServiceInfo
-	ServiceExistsFlag bool
-	S6ServiceConfig   *config.S6FSMConfig
-
-	// State control for FSM testing
-	stateFlags *ServiceStateFlags
-
-	// Mock metrics state
-	metricsState *RedpandaMetricsState
+	ServiceExistsFlag                        bool
 }
 
 // Ensure MockRedpandaMonitorService implements IRedpandaMonitorService
@@ -74,9 +74,9 @@ var _ IRedpandaMonitorService = (*MockRedpandaMonitorService)(nil)
 
 // ServiceStateFlags contains all the state flags needed for FSM testing
 type ServiceStateFlags struct {
+	S6FSMState      string
 	IsRunning       bool
 	IsMetricsActive bool
-	S6FSMState      string
 }
 
 // NewMockRedpandaMonitorService creates a new mock Redpanda monitor service

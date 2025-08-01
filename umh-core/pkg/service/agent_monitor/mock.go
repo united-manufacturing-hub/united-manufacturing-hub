@@ -26,18 +26,19 @@ import (
 
 // MockService is a mock implementation of the agent monitor Service interface
 type MockService struct {
-	// Tracks calls to methods
-	GetStatusCalled bool
 
 	// Return values for each method
 	GetStatusError error
+
+	fs filesystem.Service
 
 	// Results for each method
 	GetStatusResult *ServiceInfo
 
 	// For more complex testing scenarios
 	healthState models.HealthCategory
-	fs          filesystem.Service
+	// Tracks calls to methods
+	GetStatusCalled bool
 }
 
 // NewMockService creates a new mock service instance

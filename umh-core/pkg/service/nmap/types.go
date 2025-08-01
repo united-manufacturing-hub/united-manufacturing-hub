@@ -61,24 +61,24 @@ type INmapService interface {
 type NmapScanResult struct {
 	// Timestamp of the scan
 	Timestamp time.Time `json:"timestamp"`
-	// Port result
-	PortResult PortResult `json:"portResult"`
-	// Overall scan metrics
-	Metrics ScanMetrics `json:"metrics"`
 	// Raw output from nmap
 	RawOutput string `json:"rawOutput"`
 	// Error message if scan failed
 	Error string `json:"error,omitempty"`
+	// Port result
+	PortResult PortResult `json:"portResult"`
+	// Overall scan metrics
+	Metrics ScanMetrics `json:"metrics"`
 }
 
 // PortResult contains the result for a specific port
 type PortResult struct {
-	// Port number
-	Port uint16 `json:"port"`
 	// State (open/closed/filtered)
 	State string `json:"state"`
 	// Latency in milliseconds
 	LatencyMs float64 `json:"latencyMs"`
+	// Port number
+	Port uint16 `json:"port"`
 }
 
 // ScanMetrics contains overall metrics for the scan
@@ -89,20 +89,18 @@ type ScanMetrics struct {
 
 // ServiceInfo contains information about an nmap service
 type ServiceInfo struct {
-	// S6ObservedState contains information about the S6 service
-	S6ObservedState s6fsm.S6ObservedState
 	// S6FSMState contains the current state of the S6 FSM
 	S6FSMState string
 	// NmapStatus contains information about the status of the nmap service
 	NmapStatus NmapServiceInfo
+	// S6ObservedState contains information about the S6 service
+	S6ObservedState s6fsm.S6ObservedState
 }
 
 // NmapServiceInfo contains status information about the nmap service
 type NmapServiceInfo struct {
 	// LastScan contains the result of the last scan
 	LastScan *NmapScanResult
-	// IsRunning indicates whether the nmap service is running
-	IsRunning bool
 	// Logs contains the structured s6 log entries emitted by the
 	// nmap service.
 	//
@@ -121,6 +119,8 @@ type NmapServiceInfo struct {
 	// Therefore we override the default behaviour and copy only the 3-word
 	// slice header (24 B on amd64) — see CopyLogs below.
 	Logs []s6service.LogEntry
+	// IsRunning indicates whether the nmap service is running
+	IsRunning bool
 }
 
 // CopyLogs is a go-deepcopy override for the Logs field.

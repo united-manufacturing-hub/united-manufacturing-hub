@@ -26,8 +26,6 @@ import (
 
 // MockFileSystem is a mock implementation of the filesystem.Service interface
 type MockFileSystem struct {
-	FailureRate         float64 // 0.0 to 1.0
-	DelayRange          time.Duration
 	FailedOperations    map[string]bool
 	ReadFileFunc        func(ctx context.Context, path string) ([]byte, error)
 	ReadFileRangeFunc   func(ctx context.Context, path string, from int64) ([]byte, int64, error)
@@ -46,6 +44,8 @@ type MockFileSystem struct {
 	GlobFunc            func(ctx context.Context, pattern string) ([]string, error)
 	RenameFunc          func(ctx context.Context, oldPath, newPath string) error
 	SymlinkFunc         func(ctx context.Context, target, linkPath string) error
+	FailureRate         float64 // 0.0 to 1.0
+	DelayRange          time.Duration
 	mutex               sync.Mutex
 }
 

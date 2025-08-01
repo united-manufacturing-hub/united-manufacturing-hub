@@ -81,16 +81,16 @@ import (
 // This single-threaded design ensures deterministic behavior while the
 // time-sliced approach allows responsive handling of multiple components.
 type ControlLoop struct {
-	tickerTime        time.Duration
-	managers          []fsm.FSMManager[any]
 	configManager     config.ConfigManager
 	logger            *zap.SugaredLogger
 	starvationChecker *starvationchecker.StarvationChecker
-	currentTick       uint64
 	snapshotManager   *fsm.SnapshotManager
 	managerTimes      map[string]time.Duration // Tracks execution time for each manager
-	managerTimesMutex sync.RWMutex
 	services          *serviceregistry.Registry
+	managers          []fsm.FSMManager[any]
+	tickerTime        time.Duration
+	currentTick       uint64
+	managerTimesMutex sync.RWMutex
 }
 
 // NewControlLoop creates a new control loop with all necessary managers.

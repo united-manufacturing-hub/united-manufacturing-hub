@@ -196,9 +196,6 @@ type BufferedService struct {
 	// base is the underlying filesystem service that actually performs disk I/O.
 	base Service
 
-	// mu guards all maps below
-	mu sync.Mutex
-
 	// files stores the "current in-memory snapshot."
 	// Key: absolute path on disk.
 	// Value: fileState describing content, modTime when we read it, etc.
@@ -208,20 +205,21 @@ type BufferedService struct {
 	// If a file is in changed[], we plan to write it out in SyncToDisk(). If removed==true, we plan to remove it.
 	changed map[string]fileChange
 
+	// currentUser caches the current user info for permission checks
+	currentUser *user.User
+
 	// syncDirs is a list of directories that should be synced from disk.
 	syncDirs []string
-
-	// maxFileSize is a threshold for reading big logs. If a file is bigger, we skip it. It should not happen as logs have a 1MB limit.
-	maxFileSize int64
 
 	// pathsToIgnore is a list of paths to skip during sync
 	pathsToIgnore []string
 
-	// verifyPermissions determines if we should check permission information
-	verifyPermissions bool
+	// appendOnlyDirs contains directories where files are append-only (like logs)
+	// For these, we'll use incremental reading instead of full re-reads
+	appendOnlyDirs []string
 
-	// currentUser caches the current user info for permission checks
-	currentUser *user.User
+	// maxFileSize is a threshold for reading big logs. If a file is bigger, we skip it. It should not happen as logs have a 1MB limit.
+	maxFileSize int64
 
 	// fileReadWorkers is the number of workers for parallel file reading
 	// If not set (zero), it will be calculated based on CPU count
@@ -230,22 +228,24 @@ type BufferedService struct {
 	// slowReadThreshold is the duration threshold to log slow file reads
 	slowReadThreshold time.Duration
 
-	// appendOnlyDirs contains directories where files are append-only (like logs)
-	// For these, we'll use incremental reading instead of full re-reads
-	appendOnlyDirs []string
+	// mu guards all maps below
+	mu sync.Mutex
+
+	// verifyPermissions determines if we should check permission information
+	verifyPermissions bool
 }
 
 // fileState holds in-memory data and metadata for a single file or directory
 type fileState struct {
-	isDir    bool
-	content  []byte // might be empty if we skipped reading (e.g. large file)
 	modTime  time.Time
-	fileMode os.FileMode
+	content  []byte // might be empty if we skipped reading (e.g. large file)
 	size     int64
 	uid      int    // cached user id of owner
 	gid      int    // cached group id of owner
 	lastSize int64  // tracks last known size for incremental reading
 	inode    uint64 // tracks inode number to detect file replacement
+	fileMode os.FileMode
+	isDir    bool
 }
 
 // fileChange represents a pending user-level change: either an updated content or a removal
@@ -637,14 +637,14 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 		// Setup worker pool for file content reading
 		// Define job and result types
 		type fileReadJob struct {
-			absPath string
 			cf      *CachedFile
+			absPath string
 		}
 
 		type fileReadResult struct {
-			absPath string
-			state   *fileState
 			err     error
+			state   *fileState
+			absPath string
 		}
 
 		// Count files to properly size channels
@@ -1433,10 +1433,10 @@ func hasPrefix(s, prefix string) bool {
 
 // memFileInfo is a trivial in-memory file info
 type memFileInfo struct {
+	mtime time.Time
 	name  string
 	size  int64
 	mode  os.FileMode
-	mtime time.Time
 	dir   bool
 }
 
@@ -1449,9 +1449,9 @@ func (m *memFileInfo) Sys() interface{}   { return nil }
 
 // memDirEntry is a trivial in-memory dir entry
 type memDirEntry struct {
+	info  os.FileInfo
 	name  string
 	isDir bool
-	info  os.FileInfo
 }
 
 func (m *memDirEntry) Name() string               { return m.name }

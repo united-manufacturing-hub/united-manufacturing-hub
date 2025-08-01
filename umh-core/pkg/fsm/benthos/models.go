@@ -111,11 +111,11 @@ func IsRunningState(state string) bool {
 
 // BenthosObservedState contains the observed runtime state of a Benthos instance
 type BenthosObservedState struct {
-	// ServiceInfo contains information about the S6 service
-	ServiceInfo benthossvc.ServiceInfo
 
 	// ObservedBenthosServiceConfig contains the observed Benthos service config
 	ObservedBenthosServiceConfig benthosserviceconfig.BenthosServiceConfig
+	// ServiceInfo contains information about the S6 service
+	ServiceInfo benthossvc.ServiceInfo
 }
 
 // IsObservedState implements the ObservedState interface
@@ -128,20 +128,21 @@ var _ publicfsm.FSMInstance = (*BenthosInstance)(nil)
 
 // BenthosInstance is a state-machine managed instance of a Benthos service
 type BenthosInstance struct {
+
+	// service is the Benthos service implementation to use
+	// It has a manager that manages the S6 service instances
+	service benthossvc.IBenthosService
+
 	baseFSMInstance *internalfsm.BaseFSMInstance
+
+	// config contains all the configuration for this service
+	config benthosserviceconfig.BenthosServiceConfig
 
 	// ObservedState represents the observed state of the service
 	// ObservedState contains all metrics, logs, etc.
 	// that are updated at the beginning of Reconcile and then used to
 	// determine the next state
 	ObservedState BenthosObservedState
-
-	// service is the Benthos service implementation to use
-	// It has a manager that manages the S6 service instances
-	service benthossvc.IBenthosService
-
-	// config contains all the configuration for this service
-	config benthosserviceconfig.BenthosServiceConfig
 
 	// healthChecksPassingSince tracks when health checks started passing continuously
 	// Used for debouncing health check status changes

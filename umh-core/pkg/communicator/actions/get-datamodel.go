@@ -46,17 +46,18 @@ import (
 // GetDataModelAction implements the Action interface for retrieving an existing Data Model.
 // All fields are immutable after construction to avoid race conditions.
 type GetDataModelAction struct {
-	userEmail    string
-	actionUUID   uuid.UUID
-	instanceUUID uuid.UUID
+	configManager config.ConfigManager
 
 	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager
+
+	actionLogger *zap.SugaredLogger
+	userEmail    string
 
 	// Parsed request payload (only populated after Parse)
 	payload models.GetDataModelPayload
 
-	actionLogger *zap.SugaredLogger
+	actionUUID   uuid.UUID
+	instanceUUID uuid.UUID
 }
 
 // NewGetDataModelAction returns an un-parsed action instance.

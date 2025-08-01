@@ -143,15 +143,16 @@ func IsRunningState(state string) bool {
 
 // ProtocolConverterObservedState contains the observed runtime state of a ProtocolConverter instance
 type ProtocolConverterObservedState struct {
-	// ServiceInfo contains information about the ProtocolConverter service
-	ServiceInfo protocolconvertersvc.ServiceInfo
-
-	// ObservedProtocolConverterRuntimeConfig contains the observed ProtocolConverter service config
-	ObservedProtocolConverterRuntimeConfig protocolconverterconfig.ProtocolConverterServiceConfigRuntime
 
 	// ObservedProtocolConverterSpecConfig contains the observed ProtocolConverter service config spec with variables
 	// it is here for the purpose of the UI to display the variables and the location
 	ObservedProtocolConverterSpecConfig protocolconverterconfig.ProtocolConverterServiceConfigSpec
+
+	// ObservedProtocolConverterRuntimeConfig contains the observed ProtocolConverter service config
+	ObservedProtocolConverterRuntimeConfig protocolconverterconfig.ProtocolConverterServiceConfigRuntime
+
+	// ServiceInfo contains information about the ProtocolConverter service
+	ServiceInfo protocolconvertersvc.ServiceInfo
 }
 
 // IsObservedState implements the ObservedState interface
@@ -164,17 +165,12 @@ var _ publicfsm.FSMInstance = (*ProtocolConverterInstance)(nil)
 
 // ProtocolConverterInstance is a state-machine managed instance of a ProtocolConverter service.
 type ProtocolConverterInstance struct {
-	baseFSMInstance *internalfsm.BaseFSMInstance
-
-	// ObservedState represents the observed state of the service
-	// ObservedState contains all metrics, logs, etc.
-	// that are updated at the beginning of Reconcile and then used to
-	// determine the next state
-	ObservedState ProtocolConverterObservedState
 
 	// service is the ProtocolConverter service implementation to use
 	// It has a manager that manages the protocolconverter service instances
 	service protocolconvertersvc.IProtocolConverterService
+
+	baseFSMInstance *internalfsm.BaseFSMInstance
 
 	// specConfig contains all the configuration spec for this service
 	specConfig protocolconverterconfig.ProtocolConverterServiceConfigSpec
@@ -185,6 +181,12 @@ type ProtocolConverterInstance struct {
 	// once the instance has access to SystemSnapshot (agent location,
 	// global variables, node name, …).
 	runtimeConfig protocolconverterconfig.ProtocolConverterServiceConfigRuntime
+
+	// ObservedState represents the observed state of the service
+	// ObservedState contains all metrics, logs, etc.
+	// that are updated at the beginning of Reconcile and then used to
+	// determine the next state
+	ObservedState ProtocolConverterObservedState
 }
 
 // GetLastObservedState returns the last known state of the instance

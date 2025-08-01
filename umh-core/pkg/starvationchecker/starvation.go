@@ -41,13 +41,13 @@ import (
 // - Increments Prometheus metrics for monitoring and alerting
 // - Logs warnings with the starvation duration
 type StarvationChecker struct {
-	starvationThreshold time.Duration
 	lastReconcileTime   time.Time
-	mutex               sync.RWMutex
-	logger              *zap.SugaredLogger
 	ctx                 context.Context
+	logger              *zap.SugaredLogger
 	cancel              context.CancelFunc
 	wg                  sync.WaitGroup
+	starvationThreshold time.Duration
+	mutex               sync.RWMutex
 }
 
 // NewStarvationChecker creates a starvation checker that monitors control loop health.

@@ -25,11 +25,11 @@ import (
 
 // NmapObservedStateSnapshot is a copy of the current metrics so the manager can store snapshots.
 type NmapObservedStateSnapshot struct {
-	Config config.NmapConfig
-	// LastStateChange is not needed for Nmap but impl for consistency
-	LastStateChange           int64
-	ServiceInfo               nmap_service.ServiceInfo
+	Config                    config.NmapConfig
 	ObservedNmapServiceConfig nmapserviceconfig.NmapServiceConfig
+	ServiceInfo               nmap_service.ServiceInfo
+	// LastStateChange is not needed for Nmap but impl for consistency
+	LastStateChange int64
 }
 
 // Ensure it satisfies fsm.ObservedStateSnapshot

@@ -16,6 +16,7 @@ package actions_test
 
 import (
 	"errors"
+	"sync"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
@@ -41,6 +42,7 @@ var _ = Describe("DeleteStreamProcessor", func() {
 		messages        []*models.UMHMessage
 		spName          string
 		spUUID          uuid.UUID
+		mu              sync.Mutex
 	)
 
 	// Setup before each test
@@ -115,7 +117,7 @@ var _ = Describe("DeleteStreamProcessor", func() {
 
 		action = actions.NewDeleteStreamProcessorAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, nil)
 
-		go actions.ConsumeOutboundMessages(outboundChannel, &messages, true)
+		go actions.ConsumeOutboundMessages(outboundChannel, &messages, &mu, true)
 	})
 
 	// Cleanup after each test

@@ -25,10 +25,10 @@ import (
 
 // RedpandaBuilder is used to build configuration with Redpanda services
 type RedpandaBuilder struct {
-	full config.FullConfig
 	// Map to track which services are active by name
 	activeRedpanda map[string]bool
 	activeBenthos  map[string]bool
+	full           config.FullConfig
 }
 
 // NewRedpandaBuilder creates a new builder for Redpanda configurations

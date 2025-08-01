@@ -99,27 +99,31 @@ type IProtocolConverterService interface {
 
 // ServiceInfo holds information about the ProtocolConverters underlying health states.
 type ServiceInfo struct {
-	// ConnectionObservedState is the last sample from the connection manager.
-	ConnectionObservedState connectionfsm.ConnectionObservedState
+
 	// ConnectionFSMState is the *current* FSM state string (e.g. "up", "stopped").
 	ConnectionFSMState string
 
-	// DataflowComponentReadObservedState mirrors the DFC manager.
-	DataflowComponentReadObservedState dfcfsm.DataflowComponentObservedState
-	DataflowComponentReadFSMState      string
+	DataflowComponentReadFSMState string
 
-	// DataflowComponentWriteObservedState mirrors the DFC manager.
-	DataflowComponentWriteObservedState dfcfsm.DataflowComponentObservedState
-	DataflowComponentWriteFSMState      string
+	DataflowComponentWriteFSMState string
 
-	// RedpandaObservedState is included so a protocol-converter can degrade
-	// itself when the message bus is down.
-	RedpandaObservedState redpandafsm.RedpandaObservedState
-	RedpandaFSMState      string
+	RedpandaFSMState string
 
 	// StatusReason is a short human string (log excerpt, metrics finding, …)
 	// explaining *why* the converter is not "green".
 	StatusReason string
+
+	// RedpandaObservedState is included so a protocol-converter can degrade
+	// itself when the message bus is down.
+	RedpandaObservedState redpandafsm.RedpandaObservedState
+	// ConnectionObservedState is the last sample from the connection manager.
+	ConnectionObservedState connectionfsm.ConnectionObservedState
+
+	// DataflowComponentReadObservedState mirrors the DFC manager.
+	DataflowComponentReadObservedState dfcfsm.DataflowComponentObservedState
+
+	// DataflowComponentWriteObservedState mirrors the DFC manager.
+	DataflowComponentWriteObservedState dfcfsm.DataflowComponentObservedState
 }
 
 // ProtocolConverterService implements IProtocolConverterService using it's
