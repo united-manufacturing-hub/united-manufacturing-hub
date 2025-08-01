@@ -26,7 +26,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	nmap_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
@@ -92,23 +91,16 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 
 	// Step 2: Detect external changes.
 	if err = n.reconcileExternalChanges(ctx, services, snapshot); err != nil {
-		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
-		if !errors.Is(err, nmap_service.ErrServiceNotExist) {
-
-			if n.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
-				return nil, false
-			}
-
-			n.baseFSMInstance.SetError(err, snapshot.Tick)
-			n.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
-
-			// We want to return the error here, to stop reconciling since this would
-			// lead the fsm going into degraded. But Nmap-scans are triggered once per second
-			// and each tick is 100ms, therefore it could fail, because it doesn't get
-			// complete logs from which it parses.
-			return nil, false // We don't want to return an error here, because we want to continue reconciling
+		if n.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
+			return nil, false
 		}
-		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition}
+
+		// Log the error but always continue reconciling - we need reconcileStateTransition to run
+		// to restore services after restart, even if we can't read their status yet
+		n.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)
+		
+		// For all other errors, just continue reconciling without setting backoff
+		err = nil
 	}
 
 	// Step 3: Attempt to reconcile the state.

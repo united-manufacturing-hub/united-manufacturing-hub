@@ -1176,7 +1176,15 @@ var _ = Describe("ProtocolConverter FSM", func() {
 	//  CONFIGURATION VALIDATION
 	// =========================================================================
 	Context("Configuration Validation", func() {
-		It("should get stuck in creating state with error message when config is invalid", func() {
+		It("should continue reconciling despite configuration validation errors in UpdateObservedState", func() {
+			// ARCHITECTURAL DECISION: We now continue reconciling even when UpdateObservedState
+			// encounters configuration validation errors. This enables force-kill recovery scenarios 
+			// where S6 services exist on filesystem but FSM managers lose their in-memory mappings.
+			// 
+			// The trade-off: Configuration errors during UpdateObservedState no longer block FSM progression.
+			// Invalid configurations will be logged but won't prevent the system from attempting
+			// to restore services after unexpected shutdowns/restarts.
+
 			var err error
 
 			// Create an instance with invalid port configuration
@@ -1190,19 +1198,17 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(finalTick).To(BeNumerically(">", tick))
 
-			// The instance should get stuck in creating state
+			// With the new architecture, the FSM should continue reconciling despite config errors
+			// The instance should progress to stopped state (since no service can be created with invalid config)
 			currentState := invalidInstance.GetCurrentFSMState()
-			Expect(currentState).To(Equal(internalfsm.LifecycleStateCreating))
+			Expect(currentState).To(Equal(protocolconverterfsm.OperationalStateStopped), 
+				"FSM should progress to stopped state despite configuration validation errors in UpdateObservedState")
 
-			// The observed state should contain the configuration error in StatusReason
-			observedState := invalidInstance.GetLastObservedState()
-			Expect(observedState).NotTo(BeNil())
-			if pcObservedState, ok := observedState.(protocolconverterfsm.ProtocolConverterObservedState); ok {
-				Expect(pcObservedState.ServiceInfo.StatusReason).To(ContainSubstring("config error"))
-				Expect(pcObservedState.ServiceInfo.StatusReason).To(ContainSubstring("invalid syntax"))
-			} else {
-				Fail("Could not cast observed state to ProtocolConverterObservedState")
-			}
+			// The desired state should remain as intended
+			Expect(invalidInstance.GetDesiredFSMState()).To(Equal(protocolconverterfsm.OperationalStateStopped))
+
+			// Configuration validation errors should be logged but not block progression
+			// This enables the system to recover even when configs become temporarily invalid
 		})
 
 		It("should fail during startup when connection target is unreachable", func() {

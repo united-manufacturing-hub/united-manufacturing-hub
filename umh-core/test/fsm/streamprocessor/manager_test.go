@@ -490,7 +490,16 @@ var _ = Describe("StreamProcessorManager", func() {
 			Expect(inst.GetCurrentFSMState()).To(Equal("starting_redpanda"))
 		})
 
-		It("should handle missing DFC dependencies gracefully", func() {
+		It("should continue reconciling despite missing DFC dependencies in UpdateObservedState", func() {
+			// ARCHITECTURAL DECISION: We now continue reconciling even when UpdateObservedState
+			// encounters configuration validation errors like missing DFC dependencies.
+			// This enables force-kill recovery scenarios where S6 services exist on filesystem 
+			// but FSM managers lose their in-memory mappings.
+			// 
+			// The trade-off: Configuration errors during UpdateObservedState (like missing DFC deps)
+			// no longer block FSM progression. Missing dependencies will be logged but won't 
+			// prevent the system from attempting to restore services after unexpected shutdowns/restarts.
+
 			processorName := "test-missing-dfc"
 			cfg := config.FullConfig{
 				StreamProcessor: []config.StreamProcessorConfig{
@@ -505,14 +514,20 @@ var _ = Describe("StreamProcessorManager", func() {
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
 
-			// Verify instance exists and progressed to creating state
-			// Config validation errors occur during reconciliation, not lifecycle transitions
+			// Verify instance exists and continues reconciling despite missing DFC dependencies
 			instances := manager.GetInstances()
 			Expect(instances).To(HaveLen(1))
 			inst, exists := instances[fmt.Sprintf("streamprocessor-%s", processorName)]
 			Expect(exists).To(BeTrue())
-			// Should progress to creating state, config errors occur during reconciliation
-			Expect(inst.GetCurrentFSMState()).To(Equal("creating"))
+			
+			// With the new architecture, the FSM should continue reconciling despite config errors
+			// The instance should progress beyond creating state despite the missing DFC dependency
+			currentState := inst.GetCurrentFSMState()
+			Expect(spfsm.IsStartingState(currentState) || spfsm.IsRunningState(currentState) || currentState == spfsm.OperationalStateStopped).To(BeTrue(), 
+				"FSM should progress beyond creating state despite missing DFC dependencies in UpdateObservedState")
+
+			// Missing DFC dependencies should be logged but not block progression
+			// This enables the system to recover even when dependencies become temporarily unavailable
 		})
 
 		It("should recover from temporary service failures", func() {

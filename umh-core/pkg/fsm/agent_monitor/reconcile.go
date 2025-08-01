@@ -81,9 +81,12 @@ func (a *AgentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsh
 			return nil, false
 		}
 
-		// For other errors, set the error for backoff
-		a.baseFSMInstance.SetError(err, snapshot.Tick)
-		return nil, false
+		// Log the error but always continue reconciling - we need reconcileStateTransition to run
+		// to restore services after restart, even if we can't read their status yet
+		a.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)
+		
+		// For all other errors, just continue reconciling without setting backoff
+		err = nil
 	}
 
 	// Print system state every 100 ticks

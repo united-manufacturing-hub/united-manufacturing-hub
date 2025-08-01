@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
@@ -26,9 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/monitor"
 	redpanda_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
-	redpanda_monitor_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
@@ -101,27 +98,17 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 	} else {
 		err, externalReconciled = r.reconcileExternalChanges(ctx, services, snapshot)
 		if err != nil {
-			// I am using strings.Contains as i cannot get it working with errors.Is
-			isExpectedError := strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNotExist.Error()) ||
-				strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNoLogFile.Error()) ||
-				strings.Contains(err.Error(), monitor.ErrServiceConnectionRefused.Error()) ||
-				strings.Contains(err.Error(), monitor.ErrServiceConnectionTimedOut.Error()) ||
-				strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNoSectionsFound.Error()) ||
-				strings.Contains(err.Error(), monitor.ErrServiceStopped.Error()) // This is expected when the service is stopped or stopping, no need to fetch logs, metrics, etc.
-
-			if !isExpectedError {
-
-				if r.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
-					return nil, false
-				}
-
-				r.baseFSMInstance.SetError(err, snapshot.Tick)
-				r.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
-				return nil, false // We don't want to return an error here, because we want to continue reconciling
+			if r.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
+				return nil, false
 			}
 
+			// Log the error but always continue reconciling - we need reconcileStateTransition to run
+			// to restore services after restart, even if we can't read their status yet
+			r.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)
+			
+			// For all other errors, just continue reconciling without setting backoff
 			//nolint:ineffassign
-			err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
+			err = nil
 		}
 	}
 

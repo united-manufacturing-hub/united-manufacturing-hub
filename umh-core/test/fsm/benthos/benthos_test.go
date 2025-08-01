@@ -1181,8 +1181,18 @@ var _ = Describe("BenthosInstance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("should attempt self-removal when encountering a permanent error", func() {
-			// Step 1: Progress to active state through proper state transitions
+		It("should continue reconciling despite permanent errors in UpdateObservedState", func() {
+			// ARCHITECTURAL DECISION: We now continue reconciling even when UpdateObservedState
+			// encounters permanent errors. This enables force-kill recovery scenarios where
+			// S6 services exist on filesystem but FSM managers lose their in-memory mappings.
+			// 
+			// The trade-off: We prioritize system recovery over immediate error handling.
+			// Permanent errors in UpdateObservedState no longer trigger automatic FSM removal,
+			// allowing the system to restore services after unexpected shutdowns/restarts.
+			//
+			// This test verifies that FSMs remain operational and continue state transitions
+			// even when encountering persistent errors during observed state updates.
+
 			var err error
 
 			// First get to stopped state
@@ -1240,17 +1250,34 @@ var _ = Describe("BenthosInstance FSM", func() {
 			// Create a permanent error in StatusError
 			mockService.StatusError = fmt.Errorf("%s: test permanent error", backoff.PermanentFailureError)
 
-			// Wait for the FSM to detect the error and change desired state to stopped
-			tick, err = fsmtest.WaitForBenthosDesiredState(
-				ctx, fsm.SystemSnapshot{Tick: tick}, instance, mockSvcRegistry, benthosfsm.OperationalStateStopped, 10,
-			)
-			Expect(err).NotTo(HaveOccurred(), "Instance should change desired state to stopped after permanent error")
+			// With the new architecture, the FSM should continue reconciling despite the permanent error
+			// Run several reconciliation cycles to verify it doesn't get stuck or crash
+			snapshot := fsm.SystemSnapshot{Tick: tick}
+			for i := 0; i < 5; i++ {
+				err, _ := instance.Reconcile(ctx, snapshot, mockSvcRegistry)
+				Expect(err).NotTo(HaveOccurred(), "Reconciliation should continue despite permanent UpdateObservedState errors")
+				tick++
+				snapshot.Tick = tick
+			}
+
+			// FSM should maintain its desired state and continue operating
+			Expect(instance.GetCurrentFSMState()).To(Equal(benthosfsm.OperationalStateActive))
+			Expect(instance.GetDesiredFSMState()).To(Equal(benthosfsm.OperationalStateActive))
+
 
 			// Clear error for other tests
 			mockService.StatusError = nil
 		})
 
-		It("should attempt forced removal when in a terminal state with a permanent error", func() {
+		It("should continue reconciling despite permanent errors in UpdateObservedState", func() {
+			// ARCHITECTURAL DECISION: We now continue reconciling even when UpdateObservedState
+			// encounters permanent errors. This enables force-kill recovery scenarios where
+			// S6 services exist on filesystem but FSM managers lose their in-memory mappings.
+			// 
+			// The trade-off: We prioritize system recovery over immediate error handling.
+			// Permanent errors in UpdateObservedState no longer trigger automatic FSM removal,
+			// allowing the system to restore services after unexpected shutdowns/restarts.
+
 			// 1) Get to stopped state using proper transitions
 			var err error
 
@@ -1280,31 +1307,46 @@ var _ = Describe("BenthosInstance FSM", func() {
 			)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Ensure desired state is also stopped
+			// Set desired state to active to trigger reconciliation
 			Expect(instance.SetDesiredFSMState(benthosfsm.OperationalStateActive)).To(Succeed())
 
-			// Create a permanent error that will be encountered during reconcile
+			// Create a permanent error that will be encountered during UpdateObservedState
 			mockService.StatusError = fmt.Errorf("%s: test permanent error", backoff.PermanentFailureError)
 
-			// Use the helper function to reconcile until error
+			// Attempt reconciliation - should continue despite the error
 			var recErr error
-			var reconciled bool
-			tick, recErr, reconciled = fsmtest.ReconcileBenthosUntilError(
-				ctx, fsm.SystemSnapshot{Tick: tick}, instance, mockService, mockSvcRegistry, serviceName, 10,
-			)
+			snapshot := fsm.SystemSnapshot{Tick: tick}
+			
+			// Single reconcile attempt should succeed despite the UpdateObservedState error
+			recErr, _ = instance.Reconcile(ctx, snapshot, mockSvcRegistry)
+			
+			// With the new architecture, reconcile should NOT return an error for UpdateObservedState failures
+			Expect(recErr).NotTo(HaveOccurred(), "Reconcile should continue despite UpdateObservedState errors")
 
-			// Now we should get the error
-			Expect(recErr).To(HaveOccurred())
-			Expect(recErr.Error()).To(ContainSubstring(backoff.PermanentFailureError))
-			Expect(reconciled).To(BeTrue(), "Should have reconciled during error handling")
+			// FSM should continue reconciling toward the desired state despite UpdateObservedState errors
+			// Since we set desired state to active and continue reconciling, the FSM should progress toward starting
+			Expect(instance.GetDesiredFSMState()).To(Equal(benthosfsm.OperationalStateActive))
+			// The current state may have progressed from stopped to starting since reconciliation continues
+			currentState := instance.GetCurrentFSMState()
+			Expect(currentState).To(Or(Equal(benthosfsm.OperationalStateStopped), Equal(benthosfsm.OperationalStateStarting)), 
+				"FSM should either remain stopped or progress to starting despite UpdateObservedState errors")
 
-			// Verify force removal was attempted
-			Expect(mockService.ForceRemoveBenthosCalled).To(BeTrue())
+			// Force removal should NOT be attempted since we continue reconciling
+			Expect(mockService.ForceRemoveBenthosCalled).To(BeFalse(), "Force removal should not be triggered for UpdateObservedState errors")
 
 			// Clear error for other tests
-			mockService.RemoveBenthosFromS6ManagerError = nil
+			mockService.StatusError = nil
 		})
-		It("should attempt forced removal when not in a terminal state with a permanent error", func() {
+		It("should continue reconciling despite permanent errors in UpdateObservedState when in starting state", func() {
+			// ARCHITECTURAL DECISION: We now continue reconciling even when UpdateObservedState
+			// encounters permanent errors, regardless of whether we're in a terminal or non-terminal state.
+			// This enables force-kill recovery scenarios where S6 services exist on filesystem 
+			// but FSM managers lose their in-memory mappings.
+			// 
+			// The trade-off: We prioritize system recovery over immediate error handling.
+			// Permanent errors in UpdateObservedState no longer trigger automatic FSM removal,
+			// allowing the system to restore services after unexpected shutdowns/restarts.
+
 			// 1) Get to stopped state using proper transitions
 			var err error
 
@@ -1358,26 +1400,140 @@ var _ = Describe("BenthosInstance FSM", func() {
 			)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Create a permanent error that will be encountered during reconcile
+			// Create a permanent error that will be encountered during UpdateObservedState
 			mockService.StatusError = fmt.Errorf("%s: test permanent error", backoff.PermanentFailureError)
+
+			// Attempt single reconciliation - should continue despite the error
+			snapshot := fsm.SystemSnapshot{Tick: tick}
+			recErr, _ := instance.Reconcile(ctx, snapshot, mockSvcRegistry)
+
+			// With the new architecture, reconcile should NOT return an error for UpdateObservedState failures
+			Expect(recErr).NotTo(HaveOccurred(), "Reconcile should continue despite UpdateObservedState errors")
+
+			// FSM should maintain its desired state and continue operating
+			Expect(instance.GetDesiredFSMState()).To(Equal(benthosfsm.OperationalStateActive))
+			// The current state should remain in starting config loading or may progress
+			currentState := instance.GetCurrentFSMState()
+			Expect(benthosfsm.IsStartingState(currentState) || benthosfsm.IsRunningState(currentState)).To(BeTrue(), 
+				"FSM should maintain starting state or progress despite UpdateObservedState errors")
+
+			// Force removal should NOT be attempted since we continue reconciling
+			Expect(mockService.ForceRemoveBenthosCalled).To(BeFalse(), "Force removal should not be triggered for UpdateObservedState errors")
+
+			// Clear error for other tests
+			mockService.StatusError = nil
+		})
+	})
+
+	// -------------------------------------------------------------------------
+	//  STATE TRANSITION ERROR HANDLING TESTS
+	// -------------------------------------------------------------------------
+	Context("State Transition Error Handling", func() {
+		It("should attempt forced removal when encountering permanent errors in state transitions", func() {
+			// This test verifies that permanent errors in state transition actions (not UpdateObservedState)
+			// still trigger the traditional forced removal behavior. This ensures the distinction between:
+			// - UpdateObservedState errors (ignored for recovery) 
+			// - State transition errors (still trigger removal)
+
+			// 1) Get to stopped state using proper transitions
+			var err error
+
+			// First progress to creating state
+			tick, err = fsmtest.TestBenthosStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
+				internalfsm.LifecycleStateToBeCreated,
+				internalfsm.LifecycleStateCreating,
+				5,
+				tick,
+				time.Now(),
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Setup service in stopped state
+			mockService.ServiceStates[serviceName] = &benthossvc.ServiceInfo{S6FSMState: s6fsm.OperationalStateStopped}
+			mockService.ExistingServices[serviceName] = true
+
+			// Progress to stopped state
+			tick, err = fsmtest.TestBenthosStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
+				internalfsm.LifecycleStateCreating,
+				benthosfsm.OperationalStateStopped,
+				5,
+				tick,
+				time.Now(),
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Set desired state to active to trigger start transition
+			Expect(instance.SetDesiredFSMState(benthosfsm.OperationalStateActive)).To(Succeed())
+
+			// Create a permanent error in StartBenthos action (NOT StatusError)
+			mockService.StartBenthosError = fmt.Errorf("%s: test permanent error", backoff.PermanentFailureError)
 
 			// Use the helper function to reconcile until error
 			var recErr error
 			var reconciled bool
 			tick, recErr, reconciled = fsmtest.ReconcileBenthosUntilError(
-				ctx, fsm.SystemSnapshot{Tick: tick}, instance, mockService, mockSvcRegistry, serviceName, 20,
+				ctx, fsm.SystemSnapshot{Tick: tick}, instance, mockService, mockSvcRegistry, serviceName, 10,
 			)
 
-			// Verify force removal was attempted
-			Expect(mockService.ForceRemoveBenthosCalled).To(BeTrue())
-
-			// Now we should get the error
+			// Should get the error since it's in state transition, not UpdateObservedState
 			Expect(recErr).To(HaveOccurred())
 			Expect(recErr.Error()).To(ContainSubstring(backoff.PermanentFailureError))
-			Expect(reconciled).To(BeTrue())
+			Expect(reconciled).To(BeTrue(), "Should have reconciled during error handling")
+
+			// Verify force removal was attempted for state transition errors
+			Expect(mockService.ForceRemoveBenthosCalled).To(BeTrue())
 
 			// Clear error for other tests
-			mockService.RemoveBenthosFromS6ManagerError = nil
+			mockService.StartBenthosError = nil
+		})
+
+		It("should validate architectural principle that UpdateObservedState errors don't block reconciliation", func() {
+			// This test validates the key architectural principle:
+			// UpdateObservedState errors (like StatusError) should continue reconciling (not block FSM progression)
+			// This enables force-kill recovery scenarios where S6 services exist on filesystem 
+			// but FSM managers lose their in-memory mappings.
+			//
+			// Note: The first test in this context already proved that state transition errors 
+			// (like StartError) still trigger forced removal as expected.
+
+			var err error
+
+			// Setup FSM in stopped state
+			tick, err = fsmtest.TestBenthosStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
+				internalfsm.LifecycleStateToBeCreated,
+				benthosfsm.OperationalStateStopped,
+				5,
+				tick,
+				time.Now(),
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Inject permanent error in UpdateObservedState (StatusError)
+			mockService.StatusError = fmt.Errorf("%s: test permanent error", backoff.PermanentFailureError)
+			
+			// Set desired state to trigger reconciliation
+			Expect(instance.SetDesiredFSMState(benthosfsm.OperationalStateActive)).To(Succeed())
+
+			// Multiple reconciliation attempts should continue despite StatusError
+			for i := 0; i < 5; i++ {
+				recErr, _ := instance.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick}, mockSvcRegistry)
+				Expect(recErr).NotTo(HaveOccurred(), "StatusError should not block reconciliation")
+				tick++
+			}
+
+			// FSM should progress toward desired state despite UpdateObservedState errors
+			currentState := instance.GetCurrentFSMState()
+			Expect(benthosfsm.IsStartingState(currentState) || benthosfsm.IsRunningState(currentState)).To(BeTrue(), 
+				"FSM should progress despite UpdateObservedState errors")
+
+			// Force removal should NOT have been called for UpdateObservedState errors
+			Expect(mockService.ForceRemoveBenthosCalled).To(BeFalse(), "UpdateObservedState errors should not trigger forced removal")
+
+			// Clear error for other tests
+			mockService.StatusError = nil
 		})
 	})
 

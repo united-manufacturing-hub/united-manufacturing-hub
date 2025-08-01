@@ -24,7 +24,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	connectionsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 
@@ -101,18 +100,16 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 		c.baseFSMInstance.GetLogger().Debugf("Skipping external changes detection during removal")
 	} else {
 		if err = c.reconcileExternalChanges(ctx, services, snapshot); err != nil {
-			// If the service is not running, we don't want to return an error here, because we want to continue reconciling
-			if !errors.Is(err, connectionsvc.ErrServiceNotExist) {
-
-				if c.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
-					return nil, false
-				}
-				c.baseFSMInstance.SetError(err, snapshot.Tick)
-				c.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
-				return nil, false // We don't want to return an error here, because we want to continue reconciling
+			if c.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
+				return nil, false
 			}
 
-			err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
+			// Log the error but always continue reconciling - we need reconcileStateTransition to run
+			// to restore services after restart, even if we can't read their status yet
+			c.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)
+			
+			// For all other errors, just continue reconciling without setting backoff
+			err = nil
 		}
 	}
 
