@@ -151,7 +151,7 @@ type FileConfigManager struct {
 // NewFileConfigManager creates a new FileConfigManager
 // Note: This should only be used in tests or if you need a custom config manager.
 // Prefer NewFileConfigManagerWithBackoff() for application use.
-func NewFileConfigManager(systemCtx context.Context) *FileConfigManager {
+func NewFileConfigManager() *FileConfigManager {
 
 	configPath := DefaultConfigPath
 	logger := logger.For(logger.ComponentConfigManager)
@@ -165,23 +165,21 @@ func NewFileConfigManager(systemCtx context.Context) *FileConfigManager {
 	}
 
 	// Initial cache population - try to load config during initialization
-	// Handle nil context from tests
-	if systemCtx != nil {
-		initCtx, cancel := context.WithTimeout(systemCtx, constants.ConfigGetConfigTimeout)
-		defer cancel()
 
-		config, err := fc.readAndParseConfig(initCtx)
-		if err != nil {
-			logger.Warnf("Failed to load initial config during init: %v - cache will be empty", err)
-			// Don't fail initialization, but cache will be empty
-		} else {
-			// Populate cache with initial config
-			info, statErr := fc.fsService.Stat(initCtx, fc.configPath)
-			if statErr == nil && info != nil {
-				fc.cacheConfig = config
-				fc.cacheModTime = info.ModTime()
-				logger.Debugf("Initial config cache populated successfully")
-			}
+	initCtx, cancel := context.WithTimeout(context.Background(), constants.ConfigGetConfigTimeout)
+	defer cancel()
+
+	config, err := fc.readAndParseConfig(initCtx)
+	if err != nil {
+		logger.Warnf("Failed to load initial config during init: %v - cache will be empty", err)
+		// Don't fail initialization, but cache will be empty
+	} else {
+		// Populate cache with initial config
+		info, statErr := fc.fsService.Stat(initCtx, fc.configPath)
+		if statErr == nil && info != nil {
+			fc.cacheConfig = config
+			fc.cacheModTime = info.ModTime()
+			logger.Debugf("Initial config cache populated successfully")
 		}
 	}
 
@@ -495,7 +493,7 @@ func NewFileConfigManagerWithBackoff(systemCtx context.Context) (*FileConfigMana
 	}
 
 	once.Do(func() {
-		configManager := NewFileConfigManager(systemCtx)
+		configManager := NewFileConfigManager()
 		logger := logger.For(logger.ComponentConfigManager)
 
 		// Create backoff manager with default settings

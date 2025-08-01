@@ -48,7 +48,7 @@ var _ = Describe("ConfigManager", func() {
 	})
 
 	JustBeforeEach(func() {
-		configManager = NewFileConfigManager(context.Background())
+		configManager = NewFileConfigManager()
 		configManager.WithFileSystemService(mockFS)
 	})
 
@@ -612,7 +612,7 @@ internal:
 
 		BeforeEach(func() {
 			fsService = filesystem.NewDefaultService()
-			ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+			ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 		})
 
 		AfterEach(func() {

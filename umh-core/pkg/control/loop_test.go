@@ -395,7 +395,7 @@ var _ = Describe("ControlLoop", func() {
 					WithDelayRange(30 * time.Millisecond)
 
 				// Set up a config manager that uses the mock file system
-				fileConfigManager := config.NewFileConfigManager(ctx)
+				fileConfigManager := config.NewFileConfigManager()
 				fileConfigManager.WithFileSystemService(mockFS)
 
 				// Replace the control loop's config manager
