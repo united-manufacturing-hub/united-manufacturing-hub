@@ -124,3 +124,120 @@ Error: Error checking if service exists for benthos-benthos-2: failed to check i
 ```
 
 This makes it much easier to analyze and group related errors in Sentry.
+
+## Panic Recovery
+
+The package provides automatic panic recovery to catch unexpected crashes:
+
+### Global Panic Recovery
+
+Set up in your main function to catch any unhandled panics:
+
+```go
+func main() {
+    // Initialize Sentry first
+    sentry.InitSentry(version.GetAppVersion(), true)
+    
+    // Get a logger for the main component
+    log := logger.For(logger.ComponentCore)
+    
+    // Set up global panic recovery - clean and simple!
+    defer sentry.HandleGlobalPanic(log)
+    
+    // Your application code...
+}
+```
+
+### Goroutine Panic Recovery
+
+For individual goroutines, you have two options:
+
+#### Option 1: Recover and Continue (Recommended for workers)
+
+```go
+func myWorkerGoroutine() {
+    defer sentry.RecoverAndReport()
+    
+    // Your goroutine code that might panic...
+    // If a panic occurs, it's logged to Sentry and execution continues
+}
+```
+
+#### Option 2: Report and Crash (For critical failures)
+
+```go
+func myCriticalGoroutine() {
+    defer sentry.RecoverReportAndRePanic()
+    
+    // Your goroutine code...
+    // If a panic occurs, it's logged to Sentry then the program crashes
+}
+```
+
+#### Custom Recovery
+
+For more control, use the full pattern:
+
+```go
+func myWorkerGoroutine() {
+    defer func() {
+        if eventID := sentry.Recover(); eventID != nil {
+            sentry.Flush(time.Second * 2)
+        }
+    }()
+    
+    // Your goroutine code...
+}
+```
+
+## Safe Goroutine Launching
+
+For even easier panic-safe goroutine management, use the `SafeGo` functions instead of the `go` keyword:
+
+### Basic Safe Goroutines
+
+```go
+// Instead of: go myFunction()
+sentry.SafeGo(myFunction)
+
+// Or with anonymous functions
+sentry.SafeGo(func() {
+    // Your goroutine code that might panic...
+    doSomethingRisky()
+})
+```
+
+### Safe Goroutines with Context
+
+```go
+// For functions that need context
+sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
+    // Your context-aware goroutine code...
+    processDataWithContext(ctx, data)
+})
+
+// Real-world example
+sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
+    ticker := time.NewTicker(5 * time.Second)
+    defer ticker.Stop()
+    
+    for {
+        select {
+        case <-ctx.Done():
+            return
+        case <-ticker.C:
+            // This work is now panic-safe
+            doPeriodicWork()
+        }
+    }
+})
+```
+
+### Benefits of SafeGo
+
+- **Automatic panic recovery**: No need to remember `defer sentry.RecoverAndReport()`
+- **Consistent across codebase**: Replace `go` with `sentry.SafeGo` everywhere
+- **Zero overhead when no panic occurs**: Only adds recovery, no performance impact
+- **Centralized error handling**: All goroutine panics go through the same recovery path
+
+When a panic occurs, it will be automatically captured and sent to Sentry with full stack traces and context information.
