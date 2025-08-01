@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -249,7 +250,7 @@ agent:
     0: Enterprise
     1: Site
 `
-				config, err := ParseConfig([]byte(validYAML), false)
+				config, err := ParseConfig([]byte(validYAML), ctx, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(config.Internal.Services).To(HaveLen(1))
@@ -263,14 +264,14 @@ agent:
 			})
 
 			It("should handle empty input", func() {
-				config, err := ParseConfig([]byte{}, false)
+				config, err := ParseConfig([]byte{}, ctx, false)
 				Expect(err).To(HaveOccurred())
 				Expect(config).To(Equal(FullConfig{}))
 			})
 
 			It("should handle empty but valid YAML", func() {
 				emptyYAML := "---\n"
-				config, err := ParseConfig([]byte(emptyYAML), false)
+				config, err := ParseConfig([]byte(emptyYAML), ctx, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(config).To(Equal(FullConfig{}))
 			})
@@ -281,7 +282,7 @@ internal: {
   services: [
     { name: service1, desiredState: running,
 `
-				_, err := ParseConfig([]byte(malformedYAML), false)
+				_, err := ParseConfig([]byte(malformedYAML), ctx, false)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("did not find expected node content"))
 			})
@@ -296,7 +297,7 @@ internal:
   unknownSection:
     key: value
 `
-				_, err := ParseConfig([]byte(yamlWithUnknownFields), false)
+				_, err := ParseConfig([]byte(yamlWithUnknownFields), ctx, false)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to decode config"))
 			})
@@ -314,7 +315,7 @@ internal:
 agent:
   location: null
 `
-				config, err := ParseConfig([]byte(yamlWithNulls), false)
+				config, err := ParseConfig([]byte(yamlWithNulls), ctx, false)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(config.Internal.Services).To(HaveLen(1))
 				Expect(config.Internal.Services[0].Name).To(Equal("service1"))
@@ -339,7 +340,7 @@ internal:
         configFiles:
           "file with spaces.txt": "content with multiple\nlines\nand \"quotes\""
 `
-				config, err := ParseConfig([]byte(complexYAML), false)
+				config, err := ParseConfig([]byte(complexYAML), ctx, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(config.Internal.Services).To(HaveLen(1))
@@ -384,7 +385,7 @@ internal:
 					data, err := fsService.ReadFile(ctx, filepath.Join("../../examples", file.Name()))
 					Expect(err).NotTo(HaveOccurred())
 
-					_, err = ParseConfig(data, false)
+					_, err = ParseConfig(data, ctx, false)
 					Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to parse %s", file.Name()))
 				}
 			})
@@ -394,7 +395,7 @@ internal:
 				data, err := fsService.ReadFile(ctx, "../../examples/example-config-protocolconverter-templated.yaml")
 				Expect(err).NotTo(HaveOccurred())
 
-				config, err := ParseConfig(data, true)
+				config, err := ParseConfig(data, ctx, true)
 				Expect(err).NotTo(HaveOccurred())
 
 				// The example should have at least one protocol converter using a template
@@ -426,7 +427,7 @@ internal:
 				Expect(err).NotTo(HaveOccurred())
 
 				// Parse the config with anchor extraction enabled
-				config, err := ParseConfig(originalData, true)
+				config, err := ParseConfig(originalData, ctx, true)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Verify we have the expected structure
@@ -466,7 +467,7 @@ internal:
 				Expect(writtenData).NotTo(BeEmpty())
 
 				// Parse the written data to verify it's still valid
-				writtenConfig, err := ParseConfig(writtenData, true)
+				writtenConfig, err := ParseConfig(writtenData, ctx, true)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Verify the structure is preserved
@@ -496,7 +497,7 @@ internal:
 				Expect(err).NotTo(HaveOccurred())
 
 				// Parse the config with anchor extraction enabled
-				config, err := ParseConfig(originalData, true)
+				config, err := ParseConfig(originalData, ctx, true)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Verify we have the expected structure
@@ -562,7 +563,7 @@ internal:
 				Expect(writtenData).NotTo(BeEmpty())
 
 				// Parse the written data to verify it's still valid
-				writtenConfig, err := ParseConfig(writtenData, true)
+				writtenConfig, err := ParseConfig(writtenData, ctx, true)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Verify the structure is preserved
@@ -599,6 +600,108 @@ internal:
 				Expect(directProcessor.StreamProcessorServiceConfig.Config.Model.Name).To(Equal("motor"))
 				Expect(directProcessor.StreamProcessorServiceConfig.Variables.User).To(HaveKeyWithValue("STATUS", "operational"))
 			})
+		})
+	})
+
+	Describe("Background refresh with large config", func() {
+		var (
+			fsService filesystem.Service
+			ctx       context.Context
+			cancel    context.CancelFunc
+		)
+
+		BeforeEach(func() {
+			fsService = filesystem.NewDefaultService()
+			ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+		})
+
+		AfterEach(func() {
+			// delete the test_cfg.yaml file
+			err := fsService.Remove(ctx, "test_cfg.yaml")
+			Expect(err).NotTo(HaveOccurred())
+			cancel()
+		})
+
+		It("should update config via background refresh when file changes", func() {
+			// Setup filesystem and config path
+			configManager.WithFileSystemService(fsService)
+			configManager.WithConfigPath("test_cfg.yaml")
+
+			numGenerators := 5000
+			// Read the original example file and write initial config
+			originalData, err := fsService.ReadFile(ctx, "../../examples/example-config-protocolconverter-templated.yaml")
+			Expect(err).NotTo(HaveOccurred())
+
+			// Parse and write initial config
+			config, err := ParseConfig(originalData, ctx, true)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = configManager.writeConfig(ctx, config)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Get initial config to populate cache
+			_, err = configManager.GetConfig(ctx, 0)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Generate large config with numGenerators processors
+			largeConfig, err := GenerateConfig(numGenerators, configManager)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Write the large config to trigger background refresh
+			err = configManager.writeConfig(ctx, largeConfig)
+			Expect(err).NotTo(HaveOccurred())
+
+			// ctx2, cancel2 := context.WithTimeout(context.Background(), 1*time.Second)
+			// _, err = configManager.GetConfig(ctx2, 0)
+			// Expect(err).To(HaveOccurred())
+			// cancel2()
+
+			// Poll GetConfig until background refresh picks up the changes
+			start := time.Now()
+			var finalConfig FullConfig
+			const maxWaitTime = 10 * time.Second
+
+			Eventually(func() int {
+				// Check if we've exceeded max wait time
+				if time.Since(start) > maxWaitTime {
+					return -1 // Signal timeout
+				}
+
+				var err error
+				newCtx, cancel := context.WithTimeout(context.Background(), constants.ConfigGetConfigTimeout)
+				finalConfig, err = configManager.GetConfig(newCtx, 0)
+				cancel()
+				if err != nil {
+					return -1
+				}
+
+				// Count processors in the updated config
+				processorCount := 0
+				if len(finalConfig.ProtocolConverter) > 0 {
+					pipeline := finalConfig.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline
+					if processors, ok := pipeline["processors"].(map[string]any); ok {
+						processorCount = len(processors)
+					}
+				}
+
+				return processorCount
+			}, "10s", "100ms").Should(Equal(numGenerators), "Background refresh should update config with %d processors", numGenerators)
+
+			// Verify the final config actually contains the expected processors
+			Expect(len(finalConfig.ProtocolConverter)).To(BeNumerically(">=", 1))
+			pipeline := finalConfig.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline
+			processors, ok := pipeline["processors"].(map[string]any)
+			Expect(ok).To(BeTrue())
+			Expect(len(processors)).To(Equal(numGenerators))
+
+			// Measure final GetConfig performance
+			perfStart := time.Now()
+			_, err = configManager.GetConfig(ctx, 0)
+			Expect(err).NotTo(HaveOccurred())
+			duration := time.Since(perfStart)
+
+			fmt.Printf("GetConfig duration with %d processors: %v\n", numGenerators, duration)
+			Expect(duration).To(BeNumerically("<", constants.ConfigBackgroundRefreshTimeout))
 		})
 	})
 })

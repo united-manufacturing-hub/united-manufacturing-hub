@@ -139,7 +139,7 @@ func (m *MockConfigManager) writeConfig(ctx context.Context, cfg FullConfig) err
 	}
 
 	// Convert spec to YAML using the same logic as the real implementation
-	yamlConfig, err := convertSpecToYaml(cfg)
+	yamlConfig, err := convertSpecToYaml(cfg, ctx)
 	if err != nil {
 		return fmt.Errorf("failed to convert spec to yaml: %w", err)
 	}
@@ -1152,11 +1152,11 @@ func (m *MockConfigManager) WriteYAMLConfigFromString(ctx context.Context, confi
 	}
 
 	// First parse the config with strict validation to detect syntax errors and schema problems
-	parsedConfig, err := ParseConfig([]byte(config), false)
+	parsedConfig, err := ParseConfig([]byte(config), ctx, false)
 	if err != nil {
 		// If strict parsing fails, try again with allowUnknownFields=true
 		// This allows YAML anchors and other custom fields
-		parsedConfig, err = ParseConfig([]byte(config), true)
+		parsedConfig, err = ParseConfig([]byte(config), ctx, true)
 		if err != nil {
 			return fmt.Errorf("failed to parse config: %w", err)
 		}

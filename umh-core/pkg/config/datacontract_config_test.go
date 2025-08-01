@@ -108,7 +108,7 @@ dataContracts:
 				Expect(writtenData).NotTo(BeEmpty())
 
 				// Parse the written data to verify it contains the data contract
-				writtenConfig, err := ParseConfig(writtenData, false)
+				writtenConfig, err := ParseConfig(writtenData, ctx, false)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(writtenConfig.DataContracts).To(HaveLen(1))
 				Expect(writtenConfig.DataContracts[0].Name).To(Equal("test-contract"))

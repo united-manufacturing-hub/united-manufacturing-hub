@@ -15,6 +15,7 @@
 package runtime_config_test
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -45,7 +46,8 @@ var _ = Describe("BuildRuntimeConfig", func() {
 		Expect(err).NotTo(HaveOccurred(), "Failed to read example config file")
 
 		// Use the config manager's parseConfig function to properly handle templates and anchors
-		fullConfig, err := config.ParseConfig(data, true) // Allow unknown fields for template handling
+		ctx := context.Background()
+		fullConfig, err := config.ParseConfig(data, ctx, true) // Allow unknown fields for template handling
 		Expect(err).NotTo(HaveOccurred(), "Failed to parse example config")
 
 		// Extract the first protocol converter (temperature-sensor-pc)

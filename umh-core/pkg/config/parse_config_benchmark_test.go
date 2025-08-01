@@ -15,6 +15,7 @@
 package config
 
 import (
+	"context"
 	"os"
 	"testing"
 )
@@ -27,9 +28,10 @@ func BenchmarkParseConfig_100(b *testing.B) {
 	}
 
 	b.ResetTimer()
+	ctx := context.Background()
 
 	for i := 0; i < b.N; i++ {
-		_, err := ParseConfig(cfg, false)
+		_, err := ParseConfig(cfg, ctx, false)
 		if err != nil {
 			b.Fatalf("parseConfig failed: %v", err)
 		}
@@ -44,9 +46,10 @@ func BenchmarkParseConfig_Comm(b *testing.B) {
 	}
 
 	b.ResetTimer()
+	ctx := context.Background()
 
 	for i := 0; i < b.N; i++ {
-		_, err := ParseConfig(cfg, false)
+		_, err := ParseConfig(cfg, ctx, false)
 		if err != nil {
 			b.Fatalf("parseConfig failed: %v", err)
 		}
