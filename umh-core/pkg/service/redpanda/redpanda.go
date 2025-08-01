@@ -82,7 +82,7 @@ type IRedpandaService interface {
 	// It returns:
 	//   ok     – true when metrics are error‑free, false otherwise.
 	//   reason – empty when ok is true; otherwise a short explanation (e.g.
-	//            "storage free space alert: <free>/<total> bytes").
+	//            "Redpanda storage free space alert: <free>/<total> bytes").
 	IsMetricsErrorFree(metrics redpanda_monitor.Metrics) (bool, string)
 	// HasProcessingActivity reports true when Redpanda metrics state indicates
 	// active input/output throughput.
@@ -955,15 +955,15 @@ func (s *RedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time
 //
 //	ok     – true when metrics are error‑free, false otherwise.
 //	reason – empty when ok is true; otherwise a short explanation (e.g.
-//	         "storage free space alert: <free>/<total> bytes").
+//	         "Redpanda storage free space alert: <free>/<total> bytes").
 func (s *RedpandaService) IsMetricsErrorFree(metrics redpanda_monitor.Metrics) (bool, string) {
 	// Check output errors
 	if metrics.Infrastructure.Storage.FreeSpaceAlert {
-		return false, fmt.Sprintf("storage free space alert: %d free bytes (total: %d bytes)", metrics.Infrastructure.Storage.FreeBytes, metrics.Infrastructure.Storage.TotalBytes)
+		return false, fmt.Sprintf("Redpanda storage free space alert: %d free bytes (total: %d bytes)", metrics.Infrastructure.Storage.FreeBytes, metrics.Infrastructure.Storage.TotalBytes)
 	}
 
 	if metrics.Cluster.UnavailableTopics > 0 {
-		return false, fmt.Sprintf("unavailable topics: %d", metrics.Cluster.UnavailableTopics)
+		return false, fmt.Sprintf("Redpanda unavailable topics: %d", metrics.Cluster.UnavailableTopics)
 	}
 
 	return true, ""
