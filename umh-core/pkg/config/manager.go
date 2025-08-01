@@ -326,10 +326,14 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	// Allow half of the timeout for the read operation
 	readFileCtx, cancel := context.WithTimeout(ctx, constants.ConfigGetConfigTimeout/2)
 	defer cancel()
+	fmt.Println("Reading file: ", m.configPath)
+	start := time.Now()
 	data, err := m.fsService.ReadFile(readFileCtx, m.configPath)
 	if err != nil {
 		return FullConfig{}, fmt.Errorf("failed to read config file: %w", err)
 	}
+	duration := time.Since(start)
+	fmt.Println("Read file duration: ", duration)
 	// This ensures that there is at least half of the timeout left for the parse operation
 
 	// Check if context is already cancelled
@@ -479,6 +483,11 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 
 	m.logger.Infof("Successfully wrote config to %s", m.configPath)
 	return nil
+}
+
+func (m *FileConfigManager) WithConfigPath(configPath string) *FileConfigManager {
+	m.configPath = configPath
+	return m
 }
 
 // ParseConfig parses YAML configuration data into a FullConfig struct with optional validation.

@@ -20,11 +20,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"gopkg.in/yaml.v3"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -599,6 +602,68 @@ internal:
 				Expect(directProcessor.StreamProcessorServiceConfig.Config.Model.Name).To(Equal("motor"))
 				Expect(directProcessor.StreamProcessorServiceConfig.Variables.User).To(HaveKeyWithValue("STATUS", "operational"))
 			})
+		})
+	})
+
+	Describe("GetConfig timing", func() {
+		var (
+			fsService filesystem.Service
+			ctx       context.Context
+			cancel    context.CancelFunc
+		)
+
+		BeforeEach(func() {
+			fsService = filesystem.NewDefaultService()
+			ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+		})
+
+		AfterEach(func() {
+			cancel()
+		})
+
+		It("should generate and read a large config", func() {
+			// Read the original example file
+			originalData, err := fsService.ReadFile(ctx, "../../examples/example-config-protocolconverter-templated.yaml")
+			Expect(err).NotTo(HaveOccurred())
+
+			// Write the config using the config manager
+			configManager.WithFileSystemService(fsService)
+
+			configManager.WithConfigPath("test_cfg.yaml")
+
+			// Parse the config with anchor extraction enabled
+			config, err := ParseConfig(originalData, true)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Write the config
+			err = configManager.writeConfig(ctx, config)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Generate a large config with 10000 processors
+			largeConfig, err := GenerateConfig(10000, configManager)
+			Expect(err).NotTo(HaveOccurred())
+
+			// yaml stringify the config
+			yamlString, err := yaml.Marshal(largeConfig)
+			Expect(err).NotTo(HaveOccurred())
+
+			// count the number of lines in the yaml string
+			lines := strings.Split(string(yamlString), "\n")
+			numLines := len(lines)
+			// Expect(numLines).To(BeNumerically(">=", 10000))
+
+			// Parse the config
+			// use writeConfig to write the config to a file
+			err = configManager.writeConfig(ctx, largeConfig)
+
+			// Read the config
+			start := time.Now()
+			_, err = configManager.GetConfig(ctx, 0)
+			Expect(err).NotTo(HaveOccurred())
+			duration := time.Since(start)
+			fmt.Println("Duration: ", duration, " for ", numLines, " lines")
+			Expect(duration).To(BeNumerically("<", constants.ConfigGetConfigTimeout))
+
 		})
 	})
 })
