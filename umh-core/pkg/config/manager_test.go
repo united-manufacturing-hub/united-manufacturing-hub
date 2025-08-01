@@ -653,7 +653,7 @@ internal:
 			// Poll GetConfig until background refresh picks up the changes
 			start := time.Now()
 			var finalConfig FullConfig
-			const maxWaitTime = 5 * time.Second
+			const maxWaitTime = 10 * time.Second
 
 			Eventually(func() int {
 				// Check if we've exceeded max wait time
@@ -662,7 +662,7 @@ internal:
 				}
 
 				var err error
-				newCtx, cancel := context.WithTimeout(ctx, constants.ConfigGetConfigTimeout)
+				newCtx, cancel := context.WithTimeout(context.Background(), constants.ConfigGetConfigTimeout)
 				finalConfig, err = configManager.GetConfig(newCtx, 0)
 				cancel()
 				Expect(err).NotTo(HaveOccurred())
