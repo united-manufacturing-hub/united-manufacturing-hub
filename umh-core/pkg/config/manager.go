@@ -142,6 +142,10 @@ type FileConfigManager struct {
 
 	// ---------- in-memory cache (read-only after RLock) ----------
 	cacheMu sync.RWMutex // guards the two fields below
+
+	// ---------- background refresh state ----------
+	refreshMu         sync.Mutex // guards refreshInProgress
+	refreshInProgress bool       // true if a background refresh goroutine is running
 }
 
 // NewFileConfigManager creates a new FileConfigManager
@@ -160,35 +164,26 @@ func NewFileConfigManager(systemCtx context.Context) *FileConfigManager {
 		mutexReadOrWrite:  *ctxrwmutex.NewCtxRWMutex(),
 	}
 
-	cfg, err := fc.GetConfigFromFile(context.Background(), 0)
-	if err != nil {
-		cfg = FullConfig{}
-	}
+	// Initial cache population - try to load config during initialization
+	// Handle nil context from tests
+	if systemCtx != nil {
+		initCtx, cancel := context.WithTimeout(systemCtx, constants.ConfigGetConfigTimeout)
+		defer cancel()
 
-	fc.cacheConfig = cfg
-
-	// asynchronously update the cache config every second
-	go func() {
-		ticker := time.NewTicker(1 * time.Second)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-systemCtx.Done():
-				logger.Info("Finishing cache config update")
-				return
-			case <-ticker.C:
-				ctx, cancel := context.WithTimeout(systemCtx, 5*time.Second)
-				cfg, err := fc.GetConfigFromFile(ctx, 0)
-				cancel()
-				if err != nil {
-					logger.Error("Error getting config: ", err)
-					continue
-				}
-				fc.cacheConfig = cfg
+		config, err := fc.readAndParseConfig(initCtx)
+		if err != nil {
+			logger.Warnf("Failed to load initial config during init: %v - cache will be empty", err)
+			// Don't fail initialization, but cache will be empty
+		} else {
+			// Populate cache with initial config
+			info, statErr := fc.fsService.Stat(initCtx, fc.configPath)
+			if statErr == nil && info != nil {
+				fc.cacheConfig = config
+				fc.cacheModTime = info.ModTime()
+				logger.Debugf("Initial config cache populated successfully")
 			}
 		}
-	}()
+	}
 
 	return fc
 }
@@ -276,9 +271,9 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 	return config, nil
 }
 
-func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullConfig, error) {
-	return m.cacheConfig, nil
-}
+// func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullConfig, error) {
+// 	return m.cacheConfig, nil
+// }
 
 // GetConfig returns the current configuration.
 //
@@ -301,7 +296,7 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 // Because the cache is keyed on ModTime, every observable write to the
 // file (which always updates mtime) causes the next reader to parse fresh
 // bytes, so external callers still see a "latest-on-call" behaviour.
-func (m *FileConfigManager) GetConfigFromFile(ctx context.Context, tick uint64) (FullConfig, error) {
+func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullConfig, error) {
 	// we use a read lock here, because we only read the config file
 	err := m.mutexReadOrWrite.RLock(ctx)
 	if err != nil {
@@ -355,13 +350,77 @@ func (m *FileConfigManager) GetConfigFromFile(ctx context.Context, tick uint64) 
 		m.cacheMu.RUnlock()
 		return cfg, nil
 	}
-	m.cacheMu.RUnlock()
-	// ---------- SLOW PATH (file changed) ----------
 
+	// File has changed - check if we should start background refresh
+	currentCacheConfig := m.cacheConfig.Clone()
+	hasCache := !m.cacheModTime.IsZero()
+	m.cacheMu.RUnlock()
+
+	// ---------- SLOW PATH (file changed) ----------
+	// Check if a refresh is already in progress
+	m.refreshMu.Lock()
+	refreshInProgress := m.refreshInProgress
+	if !refreshInProgress && hasCache {
+		// Start background refresh only if we have a cached config to return
+		m.refreshInProgress = true
+		go m.backgroundRefresh(info.ModTime())
+	}
+	m.refreshMu.Unlock()
+
+	// If we have a cached config, return it while background refresh runs
+	if hasCache {
+		return currentCacheConfig, nil
+	}
+
+	// No cached config - fall back to synchronous read (e.g., during tests or init failure)
+	config, err := m.readAndParseConfig(ctx)
+	if err != nil {
+		return FullConfig{}, err
+	}
+
+	// Update cache with the loaded config
+	m.cacheMu.Lock()
+	m.cacheConfig = config
+	m.cacheModTime = info.ModTime()
+	m.cacheMu.Unlock()
+
+	return config, nil
+}
+
+// backgroundRefresh runs the config refresh logic in a background goroutine
+func (m *FileConfigManager) backgroundRefresh(modTime time.Time) {
+	defer func() {
+		m.refreshMu.Lock()
+		m.refreshInProgress = false
+		m.refreshMu.Unlock()
+	}()
+
+	// Create a background context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), constants.ConfigGetConfigTimeout)
+	defer cancel()
+
+	config, err := m.readAndParseConfig(ctx)
+	if err != nil {
+		m.logger.Warnf("Background config refresh failed: %v", err)
+		return
+	}
+
+	// Update cache atomically
+	m.cacheMu.Lock()
+	m.cacheConfig = config
+	m.cacheModTime = modTime
+	m.cacheMu.Unlock()
+
+	m.logger.Debugf("Background config refresh completed successfully")
+}
+
+// readAndParseConfig contains the shared logic for reading and parsing the config file
+func (m *FileConfigManager) readAndParseConfig(ctx context.Context) (FullConfig, error) {
 	// Read the file
 	// Allow half of the timeout for the read operation
 	readFileCtx, cancel := context.WithTimeout(ctx, constants.ConfigGetConfigTimeout/2)
 	defer cancel()
+
 	fmt.Println("Reading file: ", m.configPath)
 	start := time.Now()
 	data, err := m.fsService.ReadFile(readFileCtx, m.configPath)
@@ -370,7 +429,6 @@ func (m *FileConfigManager) GetConfigFromFile(ctx context.Context, tick uint64) 
 	}
 	duration := time.Since(start)
 	fmt.Println("Read file duration: ", duration)
-	// This ensures that there is at least half of the timeout left for the parse operation
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
@@ -408,11 +466,9 @@ func (m *FileConfigManager) GetConfigFromFile(ctx context.Context, tick uint64) 
 		config.Agent.ReleaseChannel = "n/a"
 	}
 
-	// update all cache fields atomically in a single critical section
+	// Also update the raw config cache
 	m.cacheMu.Lock()
 	m.cacheRawConfig = string(data)
-	m.cacheModTime = info.ModTime()
-	m.cacheConfig = config
 	m.cacheMu.Unlock()
 
 	return config, nil

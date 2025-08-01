@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -602,66 +603,94 @@ internal:
 		})
 	})
 
-	// Describe("GetConfig timing", func() {
-	// 	var (
-	// 		fsService filesystem.Service
-	// 		ctx       context.Context
-	// 		cancel    context.CancelFunc
-	// 	)
+	Describe("Background refresh with large config", func() {
+		var (
+			fsService filesystem.Service
+			ctx       context.Context
+			cancel    context.CancelFunc
+		)
 
-	// 	BeforeEach(func() {
-	// 		fsService = filesystem.NewDefaultService()
-	// 		ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
-	// 	})
+		BeforeEach(func() {
+			fsService = filesystem.NewDefaultService()
+			ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+		})
 
-	// 	AfterEach(func() {
-	// 		cancel()
-	// 	})
+		AfterEach(func() {
+			// delete the test_cfg.yaml file
+			fsService.Remove(ctx, "test_cfg.yaml")
+			cancel()
+		})
 
-	// 	It("should generate and read a large config", func() {
-	// 		// Read the original example file
-	// 		originalData, err := fsService.ReadFile(ctx, "../../examples/example-config-protocolconverter-templated.yaml")
-	// 		Expect(err).NotTo(HaveOccurred())
+		It("should update config via background refresh when file changes", func() {
+			// Setup filesystem and config path
+			configManager.WithFileSystemService(fsService)
+			configManager.WithConfigPath("test_cfg.yaml")
 
-	// 		// Write the config using the config manager
-	// 		configManager.WithFileSystemService(fsService)
+			// Read the original example file and write initial config
+			originalData, err := fsService.ReadFile(ctx, "../../examples/example-config-protocolconverter-templated.yaml")
+			Expect(err).NotTo(HaveOccurred())
 
-	// 		configManager.WithConfigPath("test_cfg.yaml")
+			// Parse and write initial config
+			config, err := ParseConfig(originalData, true)
+			Expect(err).NotTo(HaveOccurred())
 
-	// 		// Parse the config with anchor extraction enabled
-	// 		config, err := ParseConfig(originalData, true)
-	// 		Expect(err).NotTo(HaveOccurred())
+			err = configManager.writeConfig(ctx, config)
+			Expect(err).NotTo(HaveOccurred())
 
-	// 		// Write the config
-	// 		err = configManager.writeConfig(ctx, config)
-	// 		Expect(err).NotTo(HaveOccurred())
+			// Get initial config to populate cache
+			_, err = configManager.GetConfig(ctx, 0)
+			Expect(err).NotTo(HaveOccurred())
 
-	// 		// Generate a large config with 10000 processors
-	// 		largeConfig, err := GenerateConfig(10000, configManager)
-	// 		Expect(err).NotTo(HaveOccurred())
+			// Generate large config with 10000 processors
+			largeConfig, err := GenerateConfig(10000, configManager)
+			Expect(err).NotTo(HaveOccurred())
 
-	// 		// yaml stringify the config
-	// 		yamlString, err := yaml.Marshal(largeConfig)
-	// 		Expect(err).NotTo(HaveOccurred())
+			// Write the large config to trigger background refresh
+			err = configManager.writeConfig(ctx, largeConfig)
+			Expect(err).NotTo(HaveOccurred())
 
-	// 		// count the number of lines in the yaml string
-	// 		lines := strings.Split(string(yamlString), "\n")
-	// 		numLines := len(lines)
-	// 		// Expect(numLines).To(BeNumerically(">=", 10000))
+			// Poll GetConfig until background refresh picks up the changes
+			start := time.Now()
+			var finalConfig FullConfig
+			const maxWaitTime = 5 * time.Second
 
-	// 		// Parse the config
-	// 		// use writeConfig to write the config to a file
-	// 		err = configManager.writeConfig(ctx, largeConfig)
-	// 		Expect(err).NotTo(HaveOccurred())
+			Eventually(func() int {
+				// Check if we've exceeded max wait time
+				if time.Since(start) > maxWaitTime {
+					return -1 // Signal timeout
+				}
 
-	// 		// Read the config
-	// 		start := time.Now()
-	// 		_, err = configManager.GetConfig(ctx, 0)
-	// 		Expect(err).NotTo(HaveOccurred())
-	// 		duration := time.Since(start)
-	// 		fmt.Println("Duration: ", duration, " for ", numLines, " lines")
-	// 		Expect(duration).To(BeNumerically("<", constants.ConfigGetConfigTimeout))
+				var err error
+				finalConfig, err = configManager.GetConfig(ctx, 0)
+				Expect(err).NotTo(HaveOccurred())
 
-	// 	})
-	// })
+				// Count processors in the updated config
+				processorCount := 0
+				if len(finalConfig.ProtocolConverter) > 0 {
+					pipeline := finalConfig.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline
+					if processors, ok := pipeline["processors"].(map[string]any); ok {
+						processorCount = len(processors)
+					}
+				}
+
+				return processorCount
+			}, "5s", "100ms").Should(Equal(10000), "Background refresh should update config with 10000 processors")
+
+			// Verify the final config actually contains the expected processors
+			Expect(len(finalConfig.ProtocolConverter)).To(BeNumerically(">=", 1))
+			pipeline := finalConfig.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline
+			processors, ok := pipeline["processors"].(map[string]any)
+			Expect(ok).To(BeTrue())
+			Expect(len(processors)).To(Equal(10000))
+
+			// Measure final GetConfig performance
+			perfStart := time.Now()
+			_, err = configManager.GetConfig(ctx, 0)
+			Expect(err).NotTo(HaveOccurred())
+			duration := time.Since(perfStart)
+
+			fmt.Printf("GetConfig duration with 10000 processors: %v\n", duration)
+			Expect(duration).To(BeNumerically("<", constants.ConfigGetConfigTimeout))
+		})
+	})
 })
