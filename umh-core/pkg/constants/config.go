@@ -21,6 +21,9 @@ const (
 	// This timeout is not blocking the reconciliation becuase the config retrieval is async
 	ConfigGetConfigTimeout = time.Millisecond * 80
 
+	// ConfigBackgroundRefreshTimeout defines the maximum time allowed for refreshing the config in the background
+	ConfigBackgroundRefreshTimeout = time.Second * 5
+
 	// AmountReadersForConfigFile defines the amount of readers that can read the config file at the same time
 	// It is more a safety net to prevent a single reader from blocking the config file
 	// The actual number does not really matter, it should be "high enough"

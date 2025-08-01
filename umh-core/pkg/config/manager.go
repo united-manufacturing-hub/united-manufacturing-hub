@@ -393,7 +393,7 @@ func (m *FileConfigManager) backgroundRefresh(modTime time.Time) {
 
 	start := time.Now()
 	// Create a background context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	ctx, cancel := context.WithTimeout(context.Background(), constants.ConfigBackgroundRefreshTimeout)
 	defer cancel()
 
 	config, rawConfig, err := m.readAndParseConfig(ctx)
