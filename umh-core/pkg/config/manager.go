@@ -162,27 +162,30 @@ func NewFileConfigManager(systemCtx context.Context) *FileConfigManager {
 
 	cfg, err := fc.GetConfigFromFile(context.Background(), 0)
 	if err != nil {
-		panic(err)
+		cfg = FullConfig{}
 	}
 
 	fc.cacheConfig = cfg
 
 	// asynchronously update the cache config every second
 	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+
 		for {
 			select {
 			case <-systemCtx.Done():
-				fmt.Println("Finishing cache config update")
+				logger.Info("Finishing cache config update")
 				return
-			default:
-				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			case <-ticker.C:
+				ctx, cancel := context.WithTimeout(systemCtx, 5*time.Second)
 				cfg, err := fc.GetConfigFromFile(ctx, 0)
+				cancel()
 				if err != nil {
-					fmt.Println("Error getting config: ", err)
+					logger.Error("Error getting config: ", err)
+					continue
 				}
 				fc.cacheConfig = cfg
-				time.Sleep(1 * time.Second)
-				cancel()
 			}
 		}
 	}()
