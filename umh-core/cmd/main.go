@@ -66,7 +66,7 @@ func main() {
 	encoding.ChooseEncoder(encoding.EncodingCorev1)
 
 	// Load the config
-	configManager, err := config.NewFileConfigManagerWithBackoff()
+	configManager, err := config.NewFileConfigManagerWithBackoff(ctx)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to create config manager: %w", err)
 		os.Exit(1)

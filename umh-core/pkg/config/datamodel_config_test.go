@@ -43,7 +43,7 @@ var _ = Describe("DataModel Configuration", func() {
 	})
 
 	JustBeforeEach(func() {
-		configManager = NewFileConfigManager()
+		configManager = NewFileConfigManager(ctx)
 		configManager.WithFileSystemService(mockFS)
 	})
 

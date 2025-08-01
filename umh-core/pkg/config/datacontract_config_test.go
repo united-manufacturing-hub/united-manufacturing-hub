@@ -34,7 +34,7 @@ var _ = Describe("DataContract Configuration", func() {
 
 	BeforeEach(func() {
 		mockFS = filesystem.NewMockFileSystem()
-		configManager = NewFileConfigManager()
+		configManager = NewFileConfigManager(ctx)
 		configManager.WithFileSystemService(mockFS)
 		ctx = context.Background()
 	})

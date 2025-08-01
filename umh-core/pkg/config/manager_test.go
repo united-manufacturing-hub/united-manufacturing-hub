@@ -50,7 +50,7 @@ var _ = Describe("ConfigManager", func() {
 	})
 
 	JustBeforeEach(func() {
-		configManager = NewFileConfigManager()
+		configManager = NewFileConfigManager(ctx)
 		configManager.WithFileSystemService(mockFS)
 	})
 

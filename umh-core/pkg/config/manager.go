@@ -147,18 +147,47 @@ type FileConfigManager struct {
 // NewFileConfigManager creates a new FileConfigManager
 // Note: This should only be used in tests or if you need a custom config manager.
 // Prefer NewFileConfigManagerWithBackoff() for application use.
-func NewFileConfigManager() *FileConfigManager {
+func NewFileConfigManager(systemCtx context.Context) *FileConfigManager {
 
 	configPath := DefaultConfigPath
 	logger := logger.For(logger.ComponentConfigManager)
 
-	return &FileConfigManager{
+	fc := &FileConfigManager{
 		configPath:        configPath,
 		fsService:         filesystem.NewDefaultService(),
 		logger:            logger,
 		mutexAtomicUpdate: *ctxmutex.NewCtxMutex(),
 		mutexReadOrWrite:  *ctxrwmutex.NewCtxRWMutex(),
 	}
+
+	cfg, err := fc.GetConfigFromFile(context.Background(), 0)
+	if err != nil {
+		panic(err)
+	}
+
+	fc.cacheConfig = cfg
+
+	// asynchronously update the cache config every second
+	go func() {
+		for {
+			select {
+			case <-systemCtx.Done():
+				fmt.Println("Finishing cache config update")
+				return
+			default:
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				cfg, err := fc.GetConfigFromFile(ctx, 0)
+				if err != nil {
+					fmt.Println("Error getting config: ", err)
+				}
+				fc.cacheConfig = cfg
+				time.Sleep(1 * time.Second)
+				cancel()
+			}
+		}
+	}()
+
+	return fc
 }
 
 // WithFileSystemService allows setting a custom filesystem service
@@ -244,6 +273,10 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 	return config, nil
 }
 
+func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullConfig, error) {
+	return m.cacheConfig, nil
+}
+
 // GetConfig returns the current configuration.
 //
 // The function first takes a shared read lock so multiple callers can run
@@ -265,7 +298,7 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 // Because the cache is keyed on ModTime, every observable write to the
 // file (which always updates mtime) causes the next reader to parse fresh
 // bytes, so external callers still see a "latest-on-call" behaviour.
-func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullConfig, error) {
+func (m *FileConfigManager) GetConfigFromFile(ctx context.Context, tick uint64) (FullConfig, error) {
 	// we use a read lock here, because we only read the config file
 	err := m.mutexReadOrWrite.RLock(ctx)
 	if err != nil {
@@ -395,7 +428,7 @@ type FileConfigManagerWithBackoff struct {
 }
 
 // NewFileConfigManagerWithBackoff creates a new FileConfigManagerWithBackoff with exponential backoff
-func NewFileConfigManagerWithBackoff() (*FileConfigManagerWithBackoff, error) {
+func NewFileConfigManagerWithBackoff(systemCtx context.Context) (*FileConfigManagerWithBackoff, error) {
 
 	if instance != nil {
 		return nil, fmt.Errorf("config manager already initialized, only one instance is allowed")
@@ -403,7 +436,7 @@ func NewFileConfigManagerWithBackoff() (*FileConfigManagerWithBackoff, error) {
 	}
 
 	once.Do(func() {
-		configManager := NewFileConfigManager()
+		configManager := NewFileConfigManager(systemCtx)
 		logger := logger.For(logger.ComponentConfigManager)
 
 		// Create backoff manager with default settings
@@ -509,17 +542,23 @@ func ParseConfig(data []byte, allowUnknownFields bool) (FullConfig, error) {
 	var rawConfig FullConfig
 
 	// First decode the YAML into the raw config structure using standard YAML functions
+	startDecode := time.Now()
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(!allowUnknownFields) // Only reject unknown keys if allowUnknownFields is false
 	if err := dec.Decode(&rawConfig); err != nil {
 		return FullConfig{}, fmt.Errorf("failed to decode config: %w", err)
 	}
+	durationDecode := time.Since(startDecode)
+	fmt.Println("Decode duration: ", durationDecode)
 
+	startConvert := time.Now()
 	// Process templateRef resolution for protocol converters
 	processedConfig, err := convertYamlToSpec(rawConfig)
 	if err != nil {
 		return FullConfig{}, fmt.Errorf("failed to resolve protocol converter template references: %w", err)
 	}
+	durationConvert := time.Since(startConvert)
+	fmt.Println("Convert duration: ", durationConvert)
 
 	return processedConfig, nil
 }
