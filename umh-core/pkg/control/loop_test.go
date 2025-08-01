@@ -156,7 +156,7 @@ var _ = Describe("ControlLoop", func() {
 			err := controlLoop.Reconcile(ctx, tick)
 			tick++
 			Expect(err).NotTo(HaveOccurred())
-			Expect(mockConfig.GetConfigCalled).To(BeTrue())
+			Expect(mockConfig.IsGetConfigCalled()).To(BeTrue())
 			Expect(mockManager.ReconcileCalled).To(BeTrue())
 		})
 
@@ -166,7 +166,7 @@ var _ = Describe("ControlLoop", func() {
 			err := controlLoop.Reconcile(ctx, tick)
 			tick++
 			Expect(err).NotTo(HaveOccurred())
-			Expect(mockConfig.GetConfigCalled).To(BeTrue())
+			Expect(mockConfig.IsGetConfigCalled()).To(BeTrue())
 			Expect(mockManager.ReconcileCalled).To(BeFalse())
 		})
 
@@ -176,7 +176,7 @@ var _ = Describe("ControlLoop", func() {
 			err := controlLoop.Reconcile(ctx, 0)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("manager MockFSMManager reconciliation failed: reconcile error"))
-			Expect(mockConfig.GetConfigCalled).To(BeTrue())
+			Expect(mockConfig.IsGetConfigCalled()).To(BeTrue())
 			Expect(mockManager.ReconcileCalled).To(BeTrue())
 		})
 
@@ -221,7 +221,7 @@ var _ = Describe("ControlLoop", func() {
 			go func() {
 				// Wait until we've seen at least 2 calls
 				for {
-					if trackingConfig.GetConfigCalled {
+					if trackingConfig.IsGetConfigCalled() {
 						atomic.AddInt32(&callCount, 1)
 						trackingConfig.ResetCalls() // Reset for next call detection
 
@@ -314,7 +314,7 @@ var _ = Describe("ControlLoop", func() {
 				// Wait for the GetConfigCalled to be true again after we cleared the error
 				for i := 0; i < 50; i++ { // Try for ~50ms
 					// If GetConfigCalled becomes true after we cleared the error
-					if timeoutConfig.GetConfigCalled {
+					if timeoutConfig.IsGetConfigCalled() {
 						atomic.AddInt32(&callCount, 1)
 						continuedExecution <- struct{}{}
 						return

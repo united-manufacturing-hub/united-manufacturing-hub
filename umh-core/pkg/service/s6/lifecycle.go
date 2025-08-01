@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync"
 	"text/template"
 	"time"
 
@@ -43,6 +44,8 @@ type ServiceArtifacts struct {
 	TempDir string
 	// CreatedFiles tracks all files created during service creation for health checks (paths point to repository files)
 	CreatedFiles []string
+	// RemovalProgressMutex secures concurrent access to RemovalProgress
+	RemovalProgressMu sync.RWMutex
 }
 
 // RemovalProgress tracks the state of removal operations using the skarnet sequence
@@ -60,6 +63,8 @@ type RemovalProgress struct {
 
 // InitRemovalProgress initializes removal progress tracking if not already present
 func (artifacts *ServiceArtifacts) InitRemovalProgress() {
+	artifacts.RemovalProgressMu.Lock()
+	defer artifacts.RemovalProgressMu.Unlock()
 	if artifacts.RemovalProgress == nil {
 		artifacts.RemovalProgress = &RemovalProgress{}
 	}
@@ -67,6 +72,8 @@ func (artifacts *ServiceArtifacts) InitRemovalProgress() {
 
 // IsFullyRemoved checks if all removal steps have been completed using the skarnet sequence
 func (artifacts *ServiceArtifacts) IsFullyRemoved() bool {
+	artifacts.RemovalProgressMu.RLock()
+	defer artifacts.RemovalProgressMu.RUnlock()
 	if artifacts.RemovalProgress == nil {
 		return false
 	}
@@ -171,6 +178,9 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *Service
 		return nil
 	}
 
+	// This requires a Write Lock, as progress is just a ptr to artifacts.RemovalProgress
+	artifacts.RemovalProgressMu.Lock()
+	defer artifacts.RemovalProgressMu.Unlock()
 	progress := artifacts.RemovalProgress
 
 	// Step 1: Stop service cleanly using s6-svc -wD -d (idempotent, targeting scan directory symlink)

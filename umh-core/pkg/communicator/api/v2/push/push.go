@@ -90,6 +90,16 @@ func (p *Pusher) Push(message models.UMHMessage) {
 			p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 		}
 	}
+
+	// Recover from panic
+	// This is primarly for tests, where the outboundMessageChannel is closed.
+	defer func() {
+		if r := recover(); r != nil {
+			zap.S().Errorf("Panic in Push: %v", r)
+			p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
+		}
+	}()
+
 	p.outboundMessageChannel <- &models.UMHMessage{
 		InstanceUUID: p.instanceUUID,
 		Content:      message.Content,
