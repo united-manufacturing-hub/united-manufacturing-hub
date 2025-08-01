@@ -655,6 +655,7 @@ internal:
 			// Parse the config
 			// use writeConfig to write the config to a file
 			err = configManager.writeConfig(ctx, largeConfig)
+			Expect(err).NotTo(HaveOccurred())
 
 			// Read the config
 			start := time.Now()
