@@ -701,7 +701,7 @@ internal:
 			duration := time.Since(perfStart)
 
 			fmt.Printf("GetConfig duration with %d processors: %v\n", numGenerators, duration)
-			Expect(duration).To(BeNumerically("<", constants.ConfigGetConfigTimeout))
+			Expect(duration).To(BeNumerically("<", constants.ConfigBackgroundRefreshTimeout))
 		})
 	})
 })
