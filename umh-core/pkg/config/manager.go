@@ -431,7 +431,7 @@ func (m *FileConfigManager) readAndParseConfig(ctx context.Context) (FullConfig,
 		return FullConfig{}, "", ctx.Err()
 	}
 
-	config, err := ParseConfig(data, false)
+	config, err := ParseConfig(data, ctx, false)
 	if err != nil {
 		return FullConfig{}, "", fmt.Errorf("failed to parse config file: %w", err)
 	}
@@ -538,7 +538,7 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 	}
 
 	// here we need to serialize the (spec) config to the yaml-representation of the config
-	yamlConfig, err := convertSpecToYaml(config)
+	yamlConfig, err := convertSpecToYaml(config, ctx)
 	if err != nil {
 		return fmt.Errorf("failed to convert spec to yaml: %w", err)
 	}
@@ -589,7 +589,7 @@ func (m *FileConfigManager) WithConfigPath(configPath string) *FileConfigManager
 //
 // Note: This function is exported primarily for use in runtime_config_test to provide
 // comprehensive test coverage of the configuration parsing functionality.
-func ParseConfig(data []byte, allowUnknownFields bool) (FullConfig, error) {
+func ParseConfig(data []byte, ctx context.Context, allowUnknownFields bool) (FullConfig, error) {
 	var rawConfig FullConfig
 
 	// First decode the YAML into the raw config structure using standard YAML functions
@@ -600,7 +600,7 @@ func ParseConfig(data []byte, allowUnknownFields bool) (FullConfig, error) {
 	}
 
 	// Process templateRef resolution for protocol converters
-	processedConfig, err := convertYamlToSpec(rawConfig)
+	processedConfig, err := convertYamlToSpec(rawConfig, ctx)
 	if err != nil {
 		return FullConfig{}, fmt.Errorf("failed to resolve protocol converter template references: %w", err)
 	}
@@ -1026,11 +1026,11 @@ func (m *FileConfigManagerWithBackoff) UpdateAndGetCacheModTime(ctx context.Cont
 // otherwise be processed through the template system.
 func (m *FileConfigManager) WriteYAMLConfigFromString(ctx context.Context, configStr string, expectedModTime string) error {
 	// First parse the config with strict validation to detect syntax errors and schema problems
-	_, err := ParseConfig([]byte(configStr), false)
+	_, err := ParseConfig([]byte(configStr), ctx, false)
 	if err != nil {
 		// If strict parsing fails, try again with allowUnknownFields=true
 		// This allows YAML anchors and other custom fields
-		_, err = ParseConfig([]byte(configStr), true)
+		_, err = ParseConfig([]byte(configStr), ctx, true)
 		if err != nil {
 			return fmt.Errorf("failed to parse config: %w", err)
 		}
