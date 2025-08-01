@@ -17,6 +17,7 @@ package actions_test
 import (
 	"encoding/base64"
 	"errors"
+	"sync"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
@@ -49,6 +50,7 @@ var _ = Describe("EditStreamProcessor", func() {
 		spVariables     []models.StreamProcessorVariable
 		spLocation      map[int]string
 		encodedConfig   string
+		mu              sync.Mutex
 	)
 
 	// Setup before each test
@@ -163,7 +165,7 @@ var _ = Describe("EditStreamProcessor", func() {
 
 		action = actions.NewEditStreamProcessorAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, nil)
 
-		go actions.ConsumeOutboundMessages(outboundChannel, &messages, true)
+		go actions.ConsumeOutboundMessages(outboundChannel, &messages, &mu, true)
 	})
 
 	// Cleanup after each test

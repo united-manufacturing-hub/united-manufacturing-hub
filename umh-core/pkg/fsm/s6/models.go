@@ -69,6 +69,7 @@ type S6ObservedState struct {
 
 	// ObservedS6ServiceConfig contains the actual service config from s6
 	ObservedS6ServiceConfig s6serviceconfig.S6ServiceConfig
+
 	// ServiceInfo contains the actual service info from s6
 	ServiceInfo s6svc.ServiceInfo
 
