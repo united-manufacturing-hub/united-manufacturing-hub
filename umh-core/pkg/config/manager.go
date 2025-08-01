@@ -169,7 +169,7 @@ func NewFileConfigManager() *FileConfigManager {
 	initCtx, cancel := context.WithTimeout(context.Background(), constants.ConfigGetConfigTimeout)
 	defer cancel()
 
-	config, err := fc.readAndParseConfig(initCtx)
+	config, rawConfig, err := fc.readAndParseConfig(initCtx)
 	if err != nil {
 		logger.Warnf("Failed to load initial config during init: %v - cache will be empty", err)
 		// Don't fail initialization, but cache will be empty
@@ -177,8 +177,13 @@ func NewFileConfigManager() *FileConfigManager {
 		// Populate cache with initial config
 		info, statErr := fc.fsService.Stat(initCtx, fc.configPath)
 		if statErr == nil && info != nil {
+			// Acquire lock to prevent race conditions during initialization
+			// Update all cache fields atomically
+			fc.cacheMu.Lock()
 			fc.cacheConfig = config
+			fc.cacheRawConfig = rawConfig
 			fc.cacheModTime = info.ModTime()
+			fc.cacheMu.Unlock()
 			logger.Debugf("Initial config cache populated successfully")
 		}
 	}
@@ -371,14 +376,15 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	}
 
 	// No cached config - fall back to synchronous read (e.g., during tests or init failure)
-	config, err := m.readAndParseConfig(ctx)
+	config, rawConfig, err := m.readAndParseConfig(ctx)
 	if err != nil {
 		return FullConfig{}, err
 	}
 
-	// Update cache with the loaded config
+	// Update cache with the loaded config atomically
 	m.cacheMu.Lock()
 	m.cacheConfig = config
+	m.cacheRawConfig = rawConfig
 	m.cacheModTime = info.ModTime()
 	m.cacheMu.Unlock()
 
@@ -397,7 +403,7 @@ func (m *FileConfigManager) backgroundRefresh(modTime time.Time) {
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ConfigGetConfigTimeout)
 	defer cancel()
 
-	config, err := m.readAndParseConfig(ctx)
+	config, rawConfig, err := m.readAndParseConfig(ctx)
 	if err != nil {
 		m.logger.Warnf("Background config refresh failed: %v", err)
 		return
@@ -406,6 +412,7 @@ func (m *FileConfigManager) backgroundRefresh(modTime time.Time) {
 	// Update cache atomically
 	m.cacheMu.Lock()
 	m.cacheConfig = config
+	m.cacheRawConfig = rawConfig
 	m.cacheModTime = modTime
 	m.cacheMu.Unlock()
 
@@ -413,41 +420,38 @@ func (m *FileConfigManager) backgroundRefresh(modTime time.Time) {
 }
 
 // readAndParseConfig contains the shared logic for reading and parsing the config file
-func (m *FileConfigManager) readAndParseConfig(ctx context.Context) (FullConfig, error) {
+// Returns both the parsed config and the raw data to allow atomic cache updates
+func (m *FileConfigManager) readAndParseConfig(ctx context.Context) (FullConfig, string, error) {
 	// Read the file
 	// Allow half of the timeout for the read operation
 	readFileCtx, cancel := context.WithTimeout(ctx, constants.ConfigGetConfigTimeout/2)
 	defer cancel()
 
-	fmt.Println("Reading file: ", m.configPath)
-	start := time.Now()
 	data, err := m.fsService.ReadFile(readFileCtx, m.configPath)
 	if err != nil {
-		return FullConfig{}, fmt.Errorf("failed to read config file: %w", err)
+		return FullConfig{}, "", fmt.Errorf("failed to read config file: %w", err)
 	}
-	duration := time.Since(start)
-	fmt.Println("Read file duration: ", duration)
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
-		return FullConfig{}, ctx.Err()
+		return FullConfig{}, "", ctx.Err()
 	}
 
 	config, err := ParseConfig(data, false)
 	if err != nil {
-		return FullConfig{}, fmt.Errorf("failed to parse config file: %w", err)
+		return FullConfig{}, "", fmt.Errorf("failed to parse config file: %w", err)
 	}
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
-		return FullConfig{}, ctx.Err()
+		return FullConfig{}, "", ctx.Err()
 	}
 
 	// If the config is empty, return an error
 	// Note: sometimes it can happen that due to a filesystem error or maybe in the tests due to docker cp, the file is empty
 	// In this case we want to return an error, which is then ignored by the control loop and will retry in the next cycle
 	if reflect.DeepEqual(config, FullConfig{}) {
-		return FullConfig{}, fmt.Errorf("config file is empty: %s", m.configPath)
+		return FullConfig{}, "", fmt.Errorf("config file is empty: %s", m.configPath)
 	}
 
 	// Validate the location map
@@ -464,12 +468,8 @@ func (m *FileConfigManager) readAndParseConfig(ctx context.Context) (FullConfig,
 		config.Agent.ReleaseChannel = "n/a"
 	}
 
-	// Also update the raw config cache
-	m.cacheMu.Lock()
-	m.cacheRawConfig = string(data)
-	m.cacheMu.Unlock()
-
-	return config, nil
+	// Return both config and raw data for atomic cache update by caller
+	return config, string(data), nil
 }
 
 // FileConfigManagerWithBackoff wraps a FileConfigManager and implements backoff for GetConfig errors
@@ -599,23 +599,17 @@ func ParseConfig(data []byte, allowUnknownFields bool) (FullConfig, error) {
 	var rawConfig FullConfig
 
 	// First decode the YAML into the raw config structure using standard YAML functions
-	startDecode := time.Now()
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(!allowUnknownFields) // Only reject unknown keys if allowUnknownFields is false
 	if err := dec.Decode(&rawConfig); err != nil {
 		return FullConfig{}, fmt.Errorf("failed to decode config: %w", err)
 	}
-	durationDecode := time.Since(startDecode)
-	fmt.Println("Decode duration: ", durationDecode)
 
-	startConvert := time.Now()
 	// Process templateRef resolution for protocol converters
 	processedConfig, err := convertYamlToSpec(rawConfig)
 	if err != nil {
 		return FullConfig{}, fmt.Errorf("failed to resolve protocol converter template references: %w", err)
 	}
-	durationConvert := time.Since(startConvert)
-	fmt.Println("Convert duration: ", durationConvert)
 
 	return processedConfig, nil
 }
