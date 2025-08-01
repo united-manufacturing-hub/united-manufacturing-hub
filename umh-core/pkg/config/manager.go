@@ -485,7 +485,7 @@ type FileConfigManagerWithBackoff struct {
 }
 
 // NewFileConfigManagerWithBackoff creates a new FileConfigManagerWithBackoff with exponential backoff
-func NewFileConfigManagerWithBackoff(systemCtx context.Context) (*FileConfigManagerWithBackoff, error) {
+func NewFileConfigManagerWithBackoff() (*FileConfigManagerWithBackoff, error) {
 
 	if instance != nil {
 		return nil, fmt.Errorf("config manager already initialized, only one instance is allowed")
