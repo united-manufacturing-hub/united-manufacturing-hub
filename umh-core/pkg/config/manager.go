@@ -360,7 +360,7 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 
 	// ---------- SLOW PATH (file changed) ----------
 	// Check if a refresh is already in progress using TryLock
-	if m.refreshMu.TryLock() && hasCache {
+	if m.refreshMu.TryLock() {
 		// Start background refresh only if we have a cached config to return
 		go m.backgroundRefresh(info.ModTime())
 		// Note: mutex will be unlocked in backgroundRefresh
@@ -391,8 +391,9 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 func (m *FileConfigManager) backgroundRefresh(modTime time.Time) {
 	defer m.refreshMu.Unlock() // unlock the mutex we acquired with TryLock
 
+	start := time.Now()
 	// Create a background context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), constants.ConfigGetConfigTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
 	config, rawConfig, err := m.readAndParseConfig(ctx)
@@ -408,7 +409,8 @@ func (m *FileConfigManager) backgroundRefresh(modTime time.Time) {
 	m.cacheModTime = modTime
 	m.cacheMu.Unlock()
 
-	m.logger.Debugf("Background config refresh completed successfully")
+	duration := time.Since(start)
+	m.logger.Infof("Background config refresh completed successfully in %s", duration)
 }
 
 // readAndParseConfig contains the shared logic for reading and parsing the config file

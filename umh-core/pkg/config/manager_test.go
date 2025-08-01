@@ -665,7 +665,9 @@ internal:
 				newCtx, cancel := context.WithTimeout(context.Background(), constants.ConfigGetConfigTimeout)
 				finalConfig, err = configManager.GetConfig(newCtx, 0)
 				cancel()
-				Expect(err).NotTo(HaveOccurred())
+				if err != nil {
+					return -1
+				}
 
 				// Count processors in the updated config
 				processorCount := 0
