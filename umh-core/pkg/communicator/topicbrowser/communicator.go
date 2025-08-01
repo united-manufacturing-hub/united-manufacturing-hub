@@ -32,11 +32,11 @@ const (
 	// MaxTopicCount limits the number of topics to prevent memory exhaustion
 	MaxTopicCount = 1_000_000
 
-	// MaxBundleSize limits individual bundle size to 10MB
-	MaxBundleSize = 10 * 1024 * 1024
+	// MaxBundleSize limits individual bundle size to 50MB
+	MaxBundleSize = 50 * 1024 * 1024
 
-	// MaxBufferSize limits total buffer size to 100MB
-	MaxBufferSize = 100 * 1024 * 1024
+	// MaxBufferSize limits total buffer size to 200MB (3x 50MB bundles with safety margin)
+	MaxBufferSize = 200 * 1024 * 1024
 )
 
 // validateBufferSizeFromSnapshot ensures the buffer snapshot doesn't exceed safe limits
@@ -63,33 +63,34 @@ func validateBufferSizeFromSnapshot(snapshot topicbrowserservice.RingBufferSnaps
 
 // SubscriberData contains data prepared for topic browser subscribers (UI clients)
 type SubscriberData struct {
-	UnsBundles      map[int][]byte // Ready-to-send data indexed by position (0=cache, 1+=incremental)
-	TopicCount      int            // Current number of topics in cache
 	LatestTimestamp time.Time      // Latest timestamp in this subscriber batch
+	UnsBundles      map[int][]byte // Ready-to-send data indexed by position (0=cache, 1+=incremental)
 	Summary         string         // Human-readable summary for debugging
+	TopicCount      int            // Current number of topics in cache
 }
 
 // TopicBrowserCommunicator manages topic browser data flow from ring buffer to UI subscribers
 // It handles both the internal cache state and the communication/subscriber management
 type TopicBrowserCommunicator struct {
-	mu sync.RWMutex
+	lastSentTimestamp time.Time // Last timestamp sent to subscribers
 
 	// 📊 INTERNAL CACHE STATE: The actual topic browser data storage
-	eventMap              map[string]*tbproto.EventTableEntry // Latest event per topic (key = UnsTreeId)
-	unsMap                *tbproto.TopicMap                   // Topic metadata
-	lastProcessedSequence uint64                              // Last processed buffer sequence number
-
-	// 📡 COMMUNICATION STATE: Subscriber and delivery management
-	pendingToSend     []*topicbrowserservice.BufferItem // Processed buffers not yet sent to subscribers
-	lastSentTimestamp time.Time                         // Last timestamp sent to subscribers
+	eventMap map[string]*tbproto.EventTableEntry // Latest event per topic (key = UnsTreeId)
+	unsMap   *tbproto.TopicMap                   // Topic metadata
 
 	// 🎭 SIMULATOR (Optional): For testing/demo purposes
-	simulator        *Simulator
-	simulatorEnabled bool
+	simulator *Simulator
+	logger    *zap.SugaredLogger // Component-specific logging
+
+	// 📡 COMMUNICATION STATE: Subscriber and delivery management
+	pendingToSend         []*topicbrowserservice.BufferItem // Processed buffers not yet sent to subscribers
+	lastProcessedSequence uint64                            // Last processed buffer sequence number
 
 	// 🔧 CONFIGURATION
-	maxPendingBuffers int                // Cleanup threshold for old pending buffers
-	logger            *zap.SugaredLogger // Component-specific logging
+	maxPendingBuffers int // Cleanup threshold for old pending buffers
+	mu                sync.RWMutex
+
+	simulatorEnabled bool
 }
 
 // NewTopicBrowserCommunicator creates a communicator for real FSM data processing

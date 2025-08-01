@@ -40,6 +40,26 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 )
 
+// Global map to store last config change timestamps keyed by service path
+// This ensures timestamps are shared across all S6 service instances operating on the same service
+// TODO: This is to be replaced with the archive storage when it is implemented
+var (
+	configChangeTimestamps = sync.Map{} // map[string]time.Time
+)
+
+// setLastDeployedTime sets the last config change timestamp for a service path
+func setLastDeployedTime(servicePath string, timestamp time.Time) {
+	configChangeTimestamps.Store(servicePath, timestamp)
+}
+
+// getLastDeploymentTime gets the last config change timestamp for a service path
+func getLastDeploymentTime(servicePath string) time.Time {
+	if timestamp, ok := configChangeTimestamps.Load(servicePath); ok {
+		return timestamp.(time.Time)
+	}
+	return time.Time{} // zero time if not found
+}
+
 // ServiceStatus represents the status of an S6 service
 type ServiceStatus string
 
@@ -83,21 +103,22 @@ func (h HealthStatus) String() string {
 
 // ServiceInfo contains information about an S6 service
 type ServiceInfo struct {
-	Status        ServiceStatus // Current status of the service
-	Uptime        int64         // Seconds the service has been up
-	DownTime      int64         // Seconds the service has been down
-	ReadyTime     int64         // Seconds the service has been ready
-	Pid           int           // Process ID if service is up
-	Pgid          int           // Process group ID if service is up
-	ExitCode      int           // Exit code if service is down
-	WantUp        bool          // Whether the service wants to be up (based on existence of down file)
-	IsPaused      bool          // Whether the service is paused
-	IsFinishing   bool          // Whether the service is shutting down
-	IsWantingUp   bool          // Whether the service wants to be up (based on flags)
-	IsReady       bool          // Whether the service is ready
-	ExitHistory   []ExitEvent   // History of exit codes
-	LastChangedAt time.Time     // Timestamp when the service status last changed
-	LastReadyAt   time.Time     // Timestamp when the service was last ready
+	LastChangedAt      time.Time     // Timestamp when the service status last changed
+	LastReadyAt        time.Time     // Timestamp when the service was last ready
+	LastDeploymentTime time.Time     // Timestamp when the service config last changed
+	Status             ServiceStatus // Current status of the service
+	ExitHistory        []ExitEvent   // History of exit codes
+	Uptime             int64         // Seconds the service has been up
+	DownTime           int64         // Seconds the service has been down
+	ReadyTime          int64         // Seconds the service has been ready
+	Pid                int           // Process ID if service is up
+	Pgid               int           // Process group ID if service is up
+	ExitCode           int           // Exit code if service is down
+	WantUp             bool          // Whether the service wants to be up (based on existence of down file)
+	IsPaused           bool          // Whether the service is paused
+	IsFinishing        bool          // Whether the service is shutting down
+	IsWantingUp        bool          // Whether the service wants to be up (based on flags)
+	IsReady            bool          // Whether the service is ready
 }
 
 // ExitEvent represents a service exit event
@@ -171,20 +192,21 @@ type Service interface {
 //
 //	how to linearise the ring when we copy it out.
 type logState struct {
-	// mu guards every field in the struct (single-writer, multi-reader)
-	mu sync.Mutex
+
+	// logs is the backing array that holds *at most* S6MaxLines entries.
+	// Allocated once; after that, entries are overwritten in place.
+	logs []LogEntry
 	// inode is the inode of the file when we last touched it; changes ⇒ rotation
 	inode uint64
 	// offset is the next byte to read on disk (monotonically increases until
 	// rotation or truncation)
 	offset int64
 
-	// logs is the backing array that holds *at most* S6MaxLines entries.
-	// Allocated once; after that, entries are overwritten in place.
-	logs []LogEntry
 	// head is the index of the slot where the **next** entry will be written.
 	// When head wraps from max-1 to 0, `full` is set to true.
 	head int
+	// mu guards every field in the struct (single-writer, multi-reader)
+	mu sync.Mutex
 	// full is true once the buffer has wrapped at least once; used to decide
 	// how to linearise the ring when we copy it out.
 	full bool
@@ -193,11 +215,11 @@ type logState struct {
 // DefaultService is the default implementation of the S6 Service interface
 type DefaultService struct {
 	logger     *zap.SugaredLogger
-	logCursors sync.Map // map[string]*logState (key = abs log path)
+	artifacts  *ServiceArtifacts // cached artifacts for the service
+	logCursors sync.Map          // map[string]*logState (key = abs log path)
 
 	// Lifecycle management with concurrency protection
-	mu        sync.Mutex        // serializes all state-changing calls
-	artifacts *ServiceArtifacts // cached artifacts for the service
+	mu sync.Mutex // serializes all state-changing calls
 }
 
 // NewDefaultService creates a new default S6 service
@@ -1190,6 +1212,24 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	} else {
 		// Ring buffer hasn't wrapped yet - simple copy from beginning
 		copy(out, st.logs[:st.head])
+	}
+
+	// filter the logs to only include logs since last deployment time
+	// We linearly search the array for the first entry after the last deployment time
+	// This is O(n) but the benchmark shows that the performance impact is negligible
+	// compared to the cost of reading the log file (11μs per call for 10.000 lines)
+	// this is why we decided agains using a cached index that comes with a high complexity
+	if !getLastDeploymentTime(servicePath).IsZero() {
+		lastDeployed := getLastDeploymentTime(servicePath)
+		for i, entry := range out {
+			if entry.Timestamp.After(lastDeployed) {
+				// Found first entry after deployment - return this and all subsequent entries
+				// since they're chronologically sorted
+				return out[i:], nil
+			}
+		}
+		// No entries found after deployment time
+		return nil, nil
 	}
 
 	return out, nil

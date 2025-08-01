@@ -112,8 +112,7 @@ type ConfigManager interface {
 
 // FileConfigManager implements the ConfigManager interface by reading from a file
 type FileConfigManager struct {
-	// configPath is the path to the config file
-	configPath string
+	cacheModTime time.Time // mtime of last successfully parsed file
 
 	// fsService handles filesystem operations
 	fsService filesystem.Service
@@ -134,11 +133,15 @@ type FileConfigManager struct {
 	// we use our own implementation of a context aware mutex here to avoid deadlocks
 	mutexReadOrWrite ctxrwmutex.CtxRWMutex
 
-	// ---------- in-memory cache (read-only after RLock) ----------
-	cacheMu        sync.RWMutex // guards the two fields below
-	cacheModTime   time.Time    // mtime of last successfully parsed file
-	cacheConfig    FullConfig   // struct obtained from that file
+	// configPath is the path to the config file
+	configPath string
+
 	cacheRawConfig string
+
+	cacheConfig FullConfig // struct obtained from that file
+
+	// ---------- in-memory cache (read-only after RLock) ----------
+	cacheMu sync.RWMutex // guards the two fields below
 }
 
 // NewFileConfigManager creates a new FileConfigManager

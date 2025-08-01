@@ -124,15 +124,16 @@ func IsRunningState(state string) bool {
 
 // ObservedState contains the observed runtime state of a Stream Processor instance
 type ObservedState struct {
-	// ServiceInfo contains information about the Stream Processor service
-	ServiceInfo spsvc.ServiceInfo
-
-	// ObservedRuntimeConfig contains the observed Stream Processor service config
-	ObservedRuntimeConfig streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime
 
 	// ObservedSpecConfig contains the observed Stream Processor service config spec with variables
 	// it is here for the purpose of the UI to display the variables and the location
 	ObservedSpecConfig streamprocessorserviceconfig.StreamProcessorServiceConfigSpec
+
+	// ObservedRuntimeConfig contains the observed Stream Processor service config
+	ObservedRuntimeConfig streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime
+
+	// ServiceInfo contains information about the Stream Processor service
+	ServiceInfo spsvc.ServiceInfo
 }
 
 // IsObservedState implements the ObservedState interface
@@ -145,17 +146,12 @@ var _ publicfsm.FSMInstance = (*Instance)(nil)
 
 // Instance is a state-machine managed instance of a Stream Processor service.
 type Instance struct {
-	baseFSMInstance *internalfsm.BaseFSMInstance
-
-	// ObservedState represents the observed state of the service
-	// ObservedState contains all metrics, logs, etc.
-	// that are updated at the beginning of Reconcile and then used to
-	// determine the next state
-	ObservedState ObservedState
 
 	// service is the Stream Processor service implementation to use
 	// It has a manager that manages the stream processor service instances
 	service spsvc.IStreamProcessorService
+
+	baseFSMInstance *internalfsm.BaseFSMInstance
 
 	// specConfig contains all the configuration spec for this service
 	specConfig streamprocessorserviceconfig.StreamProcessorServiceConfigSpec
@@ -173,6 +169,12 @@ type Instance struct {
 	// once the instance has access to SystemSnapshot (agent location,
 	// global variables, node name, …).
 	dfcRuntimeConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig
+
+	// ObservedState represents the observed state of the service
+	// ObservedState contains all metrics, logs, etc.
+	// that are updated at the beginning of Reconcile and then used to
+	// determine the next state
+	ObservedState ObservedState
 }
 
 // GetLastObservedState returns the last known state of the instance

@@ -31,6 +31,8 @@ import (
 // ServiceArtifacts represents the essential paths for an S6 service
 // Tracks only essential root paths to minimize I/O operations and improve performance
 type ServiceArtifacts struct {
+	// RemovalProgress tracks what has been completed during removal for idempotent incremental removal
+	RemovalProgress *RemovalProgress
 	// ServiceDir is the scan directory symlink path (e.g., /run/service/foo)
 	ServiceDir string
 	// RepositoryDir is the repository directory path (e.g., /data/services/foo)
@@ -41,8 +43,6 @@ type ServiceArtifacts struct {
 	TempDir string
 	// CreatedFiles tracks all files created during service creation for health checks (paths point to repository files)
 	CreatedFiles []string
-	// RemovalProgress tracks what has been completed during removal for idempotent incremental removal
-	RemovalProgress *RemovalProgress
 }
 
 // RemovalProgress tracks the state of removal operations using the skarnet sequence
@@ -126,6 +126,9 @@ func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string
 
 	// Store the created files in artifacts (repository paths)
 	artifacts.CreatedFiles = createdFiles
+
+	// set the last deployed time for the service to filter the logs and only show the logs since the last deployment
+	setLastDeployedTime(servicePath, time.Now())
 
 	// Notify S6 scanner of new service
 	if _, err := s.EnsureSupervision(ctx, servicePath, fsService); err != nil {
@@ -417,10 +420,10 @@ func (s *DefaultService) createS6RunScript(ctx context.Context, servicePath stri
 
 	// Create template data - include ServicePath for the template
 	data := struct {
-		Command     []string
 		Env         map[string]string
-		MemoryLimit int64
 		ServicePath string
+		Command     []string
+		MemoryLimit int64
 	}{
 		Command:     command,
 		Env:         env,

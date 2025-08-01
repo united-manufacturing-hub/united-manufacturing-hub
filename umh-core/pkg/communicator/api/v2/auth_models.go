@@ -17,11 +17,11 @@ package v2
 import "github.com/google/uuid"
 
 type LoginResponse struct {
-	JWT                   string                         `json:"jwt"`
-	UUID                  uuid.UUID                      `json:"uuid"`
-	Name                  string                         `json:"name"`
 	CertificateAndPrivKey *InstanceCertificateAndPrivKey `json:"certificate_and_priv_key"`
 	CompanyCertificate    *InstanceCompanyCertificate    `json:"company_certificate"`
+	JWT                   string                         `json:"jwt"`
+	Name                  string                         `json:"name"`
+	UUID                  uuid.UUID                      `json:"uuid"`
 }
 
 type InstanceCertificateAndPrivKey struct {

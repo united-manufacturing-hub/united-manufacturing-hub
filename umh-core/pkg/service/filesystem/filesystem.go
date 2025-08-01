@@ -151,15 +151,15 @@ func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, err
 
 	// Create a channel for results
 	type result struct {
-		data []byte
 		err  error
+		data []byte
 	}
 	resCh := make(chan result, 1)
 
 	// Run file operation in goroutine
 	go func() {
 		data, err := os.ReadFile(path)
-		resCh <- result{data, err}
+		resCh <- result{err: err, data: data}
 	}()
 
 	// Wait for either completion or context cancellation
@@ -204,16 +204,16 @@ func (s *DefaultService) ReadFileRange(
 	}
 
 	type result struct {
+		err     error
 		data    []byte
 		newSize int64
-		err     error
 	}
 	resCh := make(chan result, 1)
 
 	go func() {
 		f, err := os.Open(path)
 		if err != nil {
-			resCh <- result{nil, 0, err}
+			resCh <- result{err: err, data: nil, newSize: 0}
 			return
 		}
 		defer func() {
@@ -227,19 +227,19 @@ func (s *DefaultService) ReadFileRange(
 		// stat *after* open so we have a consistent view
 		fi, err := f.Stat()
 		if err != nil {
-			resCh <- result{nil, 0, err}
+			resCh <- result{err: err, data: nil, newSize: 0}
 			return
 		}
 		size := fi.Size()
 
 		// nothing new?
 		if from >= size {
-			resCh <- result{nil, size, nil}
+			resCh <- result{err: nil, data: nil, newSize: size}
 			return
 		}
 
 		if _, err = f.Seek(from, io.SeekStart); err != nil {
-			resCh <- result{nil, 0, err}
+			resCh <- result{err: err, data: nil, newSize: 0}
 			return
 		}
 
@@ -247,7 +247,7 @@ func (s *DefaultService) ReadFileRange(
 		// If less than timeBuffer remains, gracefully exit with partial data instead of timing out
 		deadline, ok := ctx.Deadline()
 		if !ok {
-			resCh <- result{nil, 0, fmt.Errorf("context deadline not set")}
+			resCh <- result{err: fmt.Errorf("context deadline not set"), data: nil, newSize: 0}
 			return
 		}
 		timeBuffer := time.Until(deadline) / 2
@@ -262,7 +262,7 @@ func (s *DefaultService) ReadFileRange(
 		smallBuf := chunkBufferPool.Get().(*[]byte)
 		// Sanity check (can't happen unless code changes)
 		if smallBuf == nil {
-			resCh <- result{nil, 0, fmt.Errorf("smallBuf is nil")}
+			resCh <- result{err: fmt.Errorf("smallBuf is nil"), data: nil, newSize: 0}
 			return
 		}
 
@@ -274,7 +274,7 @@ func (s *DefaultService) ReadFileRange(
 			if deadline, ok := ctx.Deadline(); ok {
 				if remaining := time.Until(deadline); remaining < timeBuffer {
 					// NEWSIZE CALCULATION: from + bytes_read = next offset to read from
-					resCh <- result{buf, from + int64(len(buf)), nil}
+					resCh <- result{err: nil, data: buf, newSize: from + int64(len(buf))}
 					return
 				}
 			}
@@ -290,7 +290,7 @@ func (s *DefaultService) ReadFileRange(
 				break
 			}
 			if err != nil {
-				resCh <- result{nil, 0, err}
+				resCh <- result{err: err, data: nil, newSize: 0}
 				return
 			}
 
@@ -300,7 +300,7 @@ func (s *DefaultService) ReadFileRange(
 		}
 
 		// FINAL RESULT: buf contains only actual file data, newSize = next read offset
-		resCh <- result{buf, from + int64(len(buf)), nil}
+		resCh <- result{err: nil, data: buf, newSize: from + int64(len(buf))}
 	}()
 
 	select {
@@ -345,8 +345,8 @@ func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, err
 
 	// Create a channel for results
 	type result struct {
-		exists bool
 		err    error
+		exists bool
 	}
 	resCh := make(chan result, 1)
 
@@ -354,14 +354,14 @@ func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, err
 	go func() {
 		_, err := os.Stat(path)
 		if os.IsNotExist(err) {
-			resCh <- result{false, nil}
+			resCh <- result{err: nil, exists: false}
 			return
 		}
 		if err != nil {
-			resCh <- result{false, fmt.Errorf("failed to check if path exists: %w", err)}
+			resCh <- result{err: fmt.Errorf("failed to check if path exists: %w", err), exists: false}
 			return
 		}
-		resCh <- result{true, nil}
+		resCh <- result{err: nil, exists: true}
 	}()
 
 	// Wait for either completion or context cancellation
@@ -496,15 +496,15 @@ func (s *DefaultService) ReadDir(ctx context.Context, path string) ([]os.DirEntr
 
 	// Create a channel for results
 	type result struct {
-		entries []os.DirEntry
 		err     error
+		entries []os.DirEntry
 	}
 	resCh := make(chan result, 1)
 
 	// Run file operation in goroutine
 	go func() {
 		entries, err := os.ReadDir(path)
-		resCh <- result{entries, err}
+		resCh <- result{err: err, entries: entries}
 	}()
 
 	// Wait for either completion or context cancellation
@@ -575,15 +575,15 @@ func (s *DefaultService) Glob(ctx context.Context, pattern string) ([]string, er
 
 	// Create a channel for results
 	type result struct {
-		matches []string
 		err     error
+		matches []string
 	}
 	resCh := make(chan result, 1)
 
 	// Run file operation in goroutine
 	go func() {
 		matches, err := filepath.Glob(pattern)
-		resCh <- result{matches, err}
+		resCh <- result{err: err, matches: matches}
 	}()
 
 	// Wait for either completion or context cancellation

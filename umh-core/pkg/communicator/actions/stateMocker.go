@@ -44,8 +44,8 @@ type ConfigManager interface {
 
 // StateTransition represents a state transition for a component
 type StateTransition struct {
-	TickAt int
 	State  string
+	TickAt int
 }
 
 // the state mocker is used for unit testing to mock the state of the system
@@ -53,16 +53,16 @@ type StateTransition struct {
 // it is passed a config manager that provides the config being used by the action unit tests
 // it then updates the state of the system according to the config just like the real system would do
 type StateMocker struct {
-	StateManager       *fsm.SnapshotManager
 	ConfigManager      ConfigManager
-	TickCounter        int
+	StateManager       *fsm.SnapshotManager
 	PendingTransitions map[string][]StateTransition // key is component ID
 	done               chan struct{}                // channel to signal shutdown of goroutine
-	running            atomic.Bool                  // flag to track if the mocker is running
 	mu                 *sync.RWMutex                // mutex to protect the state of the mocker
-	lastConfig         config.FullConfig            // last config is needed to detect config changes (events)
-	lastConfigSet      bool                         // flag to track if the last config has been set
 	IgnoreDfcUntilTick map[string]int               // map of component ID to tick to ignore
+	lastConfig         config.FullConfig            // last config is needed to detect config changes (events)
+	TickCounter        int
+	running            atomic.Bool // flag to track if the mocker is running
+	lastConfigSet      bool        // flag to track if the last config has been set
 }
 
 // NewStateMocker creates a new StateMocker
@@ -490,8 +490,8 @@ func (s *StateMocker) Stop() {
 // SetTransitionSequence schedules state transitions for a component
 // Each transition is defined by (tickOffset, state) where tickOffset is relative to current tick
 func (s *StateMocker) SetTransitionSequence(componentID string, transitions []struct {
-	TickOffset int
 	State      string
+	TickOffset int
 }) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

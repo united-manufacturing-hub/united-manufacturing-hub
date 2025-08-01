@@ -72,24 +72,25 @@ import (
 // ----------------------------------------------------------------------------
 
 type GetDataFlowComponentAction struct {
-
-	// ─── Request metadata ────────────────────────────────────────────────────
-	userEmail    string
-	actionUUID   uuid.UUID
-	instanceUUID uuid.UUID
+	configManager config.ConfigManager // currently unused but kept for symmetry
 
 	// ─── Plumbing ────────────────────────────────────────────────────────────
 	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager // currently unused but kept for symmetry
 
 	// ─── Runtime observation ────────────────────────────────────────────────
 	systemSnapshotManager *fsm.SnapshotManager
 
+	// ─── Utilities ──────────────────────────────────────────────────────────
+	actionLogger *zap.SugaredLogger
+
+	// ─── Request metadata ────────────────────────────────────────────────────
+	userEmail string
+
 	// ─── Parsed request payload ─────────────────────────────────────────────
 	payload models.GetDataflowcomponentRequestSchemaJson
 
-	// ─── Utilities ──────────────────────────────────────────────────────────
-	actionLogger *zap.SugaredLogger
+	actionUUID   uuid.UUID
+	instanceUUID uuid.UUID
 }
 
 // NewGetDataFlowComponentAction creates a new GetDataFlowComponentAction with the provided parameters.
