@@ -16,7 +16,6 @@ package e2e_test
 
 import (
 	"fmt"
-	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -56,13 +55,7 @@ type MockAPIServer struct {
 func NewMockAPIServer() *MockAPIServer {
 	gin.SetMode(gin.TestMode)
 
-	// Find an available port
-	listener, err := net.Listen("tcp", ":0")
-	if err != nil {
-		panic(fmt.Sprintf("Failed to find available port: %v", err))
-	}
-	port := listener.Addr().(*net.TCPAddr).Port
-	listener.Close()
+	port := getAvailablePort()
 
 	logger, _ := zap.NewDevelopment()
 

@@ -29,6 +29,7 @@ var _ = Describe("UMH Core E2E Communication", Ordered, Label("e2e"), func() {
 	var (
 		mockServer    *MockAPIServer
 		containerName string
+		metricsPort   int
 		testCancel    context.CancelFunc
 	)
 
@@ -40,11 +41,11 @@ var _ = Describe("UMH Core E2E Communication", Ordered, Label("e2e"), func() {
 		Expect(mockServer.Start()).To(Succeed())
 
 		By("Starting UMH Core container with mock API")
-		containerName = startUMHCoreWithMockAPI(mockServer)
+		containerName, metricsPort = startUMHCoreWithMockAPI(mockServer)
 
 		By("Waiting for container to be healthy and connected")
 		Eventually(func() bool {
-			return isContainerHealthy(containerName)
+			return isContainerHealthy(metricsPort)
 		}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "Container should be healthy")
 
 		DeferCleanup(func() {
@@ -146,7 +147,7 @@ var _ = Describe("UMH Core E2E Communication", Ordered, Label("e2e"), func() {
 			time.Sleep(5 * time.Second)
 
 			By("Verifying system remained stable")
-			Expect(isContainerHealthy(containerName)).To(BeTrue(), "Container should remain healthy during rapid message delivery")
+			Expect(isContainerHealthy(metricsPort)).To(BeTrue(), "Container should remain healthy during rapid message delivery")
 		})
 	})
 })

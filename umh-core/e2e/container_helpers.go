@@ -18,6 +18,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -25,43 +26,38 @@ import (
 )
 
 // startUMHCoreWithMockAPI starts a UMH Core container configured to use the mock API server
-func startUMHCoreWithMockAPI(mockServer *MockAPIServer) string {
+func startUMHCoreWithMockAPI(mockServer *MockAPIServer) (string, int) {
 	// Generate unique container name
 	suffix := make([]byte, 4)
 	rand.Read(suffix)
 	containerName := fmt.Sprintf("umh-core-e2e-%s", hex.EncodeToString(suffix))
 
-	// Create a minimal config file
-	configContent := createMinimalE2EConfig(mockServer.GetPort())
-	configDir := createTempConfigDir(containerName)
-	configPath := filepath.Join(configDir, "config.yaml")
-
-	err := os.WriteFile(configPath, []byte(configContent), 0644)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to write config file: %v", err))
-	}
-
-	// Build the image name (reuse existing logic if available)
 	imageName := getE2EImageName()
+
+	dataDir := createTempConfigDir(containerName)
 
 	// Generate a test auth token
 	authToken := generateTestAuthToken()
 
-	fmt.Printf("Starting container %s with config dir %s, API URL %s\n",
-		containerName, configDir, mockServer.GetURL())
+	fmt.Printf("Starting container %s with API URL %s\n",
+		containerName, mockServer.GetURL())
+
+	// Find two open ports for metrics and graphql using :0
+	metricsPort := getAvailablePort()
+	graphQLPort := getAvailablePort()
 
 	// Start the container with environment variables pointing to our mock server
 	cmd := exec.Command("docker", "run", "-d",
 		"--name", containerName,
 		"--restart", "unless-stopped",
-		"-v", fmt.Sprintf("%s:/data", configDir),
+		"-v", fmt.Sprintf("%s:/data", dataDir),
 		"-e", fmt.Sprintf("AUTH_TOKEN=%s", authToken),
 		"-e", fmt.Sprintf("API_URL=%s", mockServer.GetURL()),
 		"-e", "LOCATION_0=E2E-Test-Plant",
 		"-e", "LOCATION_1=Test-Line",
 		"-e", "ALLOW_INSECURE_TLS=true", // Since we're using HTTP for testing
-		"-p", "0:8080", // Bind to random port for metrics
-		"-p", "0:8090", // Bind to random port for GraphQL
+		"-p", fmt.Sprintf("%d:8080", metricsPort), // Bind to random port for metrics
+		"-p", fmt.Sprintf("%d:8090", graphQLPort), // Bind to random port for GraphQL
 		imageName,
 	)
 
@@ -74,25 +70,7 @@ func startUMHCoreWithMockAPI(mockServer *MockAPIServer) string {
 	}
 
 	fmt.Printf("Container %s started successfully\n", containerName)
-	return containerName
-}
-
-// createMinimalE2EConfig creates a minimal configuration for E2E testing
-func createMinimalE2EConfig(port int) string {
-	return fmt.Sprintf(`# Minimal configuration for E2E testing
-
-agent:
-	metricsPort: 8080
-	communicator:
-	  apiUrl: http://localhost:%d
-	  authToken: test-auth-token
-	releaseChannel: stable
-	location:
-		0: test-enterprise
-		1: test-site
-		2: test-area
-		3: test-line
-`, port)
+	return containerName, metricsPort
 }
 
 // createTempConfigDir creates a temporary directory for the test configuration
@@ -116,6 +94,18 @@ func generateTestAuthToken() string {
 	return hex.EncodeToString(tokenBytes)
 }
 
+// getAvailablePort returns an port that is not used by the OS
+func getAvailablePort() int {
+	// Find an available port
+	listener, err := net.Listen("tcp", ":0")
+	if err != nil {
+		panic(fmt.Sprintf("Failed to find available port: %v", err))
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	listener.Close()
+	return port
+}
+
 // getE2EImageName returns the image name to use for E2E testing
 func getE2EImageName() string {
 	// Check if there's an environment variable set
@@ -128,25 +118,9 @@ func getE2EImageName() string {
 }
 
 // isContainerHealthy checks if the container is healthy by testing the metrics endpoint
-func isContainerHealthy(containerName string) bool {
-	// Get the container's mapped port for metrics (8080 internal)
-	cmd := exec.Command("docker", "port", containerName, "8080")
-	output, err := cmd.Output()
-	if err != nil {
-		return false
-	}
-
-	// Parse the output to get the host port (format: "0.0.0.0:XXXXX")
-	portStr := string(output)
-	if len(portStr) < 10 {
-		return false
-	}
-
-	// Extract just the port number
-	hostPort := portStr[8 : len(portStr)-1] // Remove "0.0.0.0:" and newline
-
+func isContainerHealthy(metricsPort int) bool {
 	// Test the metrics endpoint
-	metricsURL := fmt.Sprintf("http://localhost:%s/metrics", hostPort)
+	metricsURL := fmt.Sprintf("http://localhost:%s/metrics", metricsPort)
 	resp, err := http.Get(metricsURL)
 	if err != nil {
 		return false
