@@ -120,7 +120,7 @@ func getE2EImageName() string {
 // isContainerHealthy checks if the container is healthy by testing the metrics endpoint
 func isContainerHealthy(metricsPort int) bool {
 	// Test the metrics endpoint
-	metricsURL := fmt.Sprintf("http://localhost:%s/metrics", metricsPort)
+	metricsURL := fmt.Sprintf("http://localhost:%d/metrics", metricsPort)
 	resp, err := http.Get(metricsURL)
 	if err != nil {
 		return false
