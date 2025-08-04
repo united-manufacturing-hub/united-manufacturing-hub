@@ -17,14 +17,12 @@ package e2e_test
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"time"
 
 	"go.uber.org/zap"
 )
@@ -84,9 +82,6 @@ func startUMHCoreWithMockAPI(mockServer *MockAPIServer) (string, int) {
 	}
 
 	containerLogger.Infof("Container %s started successfully", containerName)
-
-	// Start a mock data source that the bridge can connect to
-	go startMockDataSource()
 
 	return containerName, metricsPort
 }
@@ -162,45 +157,4 @@ func stopAndRemoveContainer(containerName string) {
 	rmCmd.Run() // Ignore errors
 
 	containerLogger.Infof("Container %s cleaned up", containerName)
-}
-
-// startMockDataSource starts a simple HTTP server on port 3000 that the bridge can connect to
-func startMockDataSource() {
-	mux := http.NewServeMux()
-
-	// Simple endpoint that returns mock industrial data
-	mux.HandleFunc("/data", func(w http.ResponseWriter, r *http.Request) {
-		data := map[string]interface{}{
-			"timestamp":   time.Now().Unix(),
-			"temperature": 23.5 + (float64(time.Now().Unix()%10) * 0.5),
-			"pressure":    1013.25 + (float64(time.Now().Unix()%20) * 0.1),
-			"status":      "running",
-			"tag_name":    "sensor_01",
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(data)
-	})
-
-	// Health check endpoint
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-	})
-
-	// Root endpoint
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Mock Data Source - E2E Test"))
-	})
-
-	server := &http.Server{
-		Addr:    ":3000",
-		Handler: mux,
-	}
-
-	containerLogger.Info("Starting mock data source on :3000")
-	if err := server.ListenAndServe(); err != nil {
-		containerLogger.Errorf("Mock data source error: %v", err)
-	}
 }
