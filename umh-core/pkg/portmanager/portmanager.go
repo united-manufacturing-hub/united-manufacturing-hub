@@ -68,12 +68,14 @@ type DefaultPortManager struct {
 	// allocatedPorts tracks all ports we've allocated to avoid duplicates
 	allocatedPorts map[uint16]bool
 
+	// random number generator
+	rand *rand.Rand
+	// mutex to protect concurrent access to maps
+	mutex sync.RWMutex
+
 	// ephemeral port range for random selection
 	minPort uint16
 	maxPort uint16
-
-	// random number generator
-	rand *rand.Rand
 }
 
 // Global singleton instance of DefaultPortManager
