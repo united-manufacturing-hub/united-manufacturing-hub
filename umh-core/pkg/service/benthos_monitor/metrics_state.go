@@ -16,6 +16,9 @@ package benthos_monitor
 
 // ComponentThroughput tracks throughput metrics for a single component
 type ComponentThroughput struct {
+	// Window stores the last N message counts for calculating sliding window average
+	// Do not deep-copy this field as it is not needed
+	Window []MessageCount `copy:"-"`
 	// LastTick is the last tick when metrics were updated
 	LastTick uint64
 	// LastCount is the last message count seen
@@ -26,9 +29,6 @@ type ComponentThroughput struct {
 	MessagesPerTick float64
 	// BatchesPerTick is the number of batches processed per tick (averaged over window)
 	BatchesPerTick float64
-	// Window stores the last N message counts for calculating sliding window average
-	// Do not deep-copy this field as it is not needed
-	Window []MessageCount `copy:"-"`
 }
 
 // MessageCount stores a count at a specific tick
@@ -40,18 +40,18 @@ type MessageCount struct {
 
 // BenthosMetricsState tracks the state of Benthos metrics over time
 type BenthosMetricsState struct {
+	// Processors tracks processor throughput
+	Processors map[string]ComponentThroughput
 	// Input tracks input throughput
 	Input ComponentThroughput
 	// Output tracks output throughput
 	Output ComponentThroughput
-	// Processors tracks processor throughput
-	Processors map[string]ComponentThroughput
 	// LastTick is the last tick when metrics were updated
 	LastTick uint64
-	// IsActive indicates if any component has shown activity in the last tick
-	IsActive bool
 	// LastInputChange tracks the tick when we last saw a change in input.received
 	LastInputChange uint64
+	// IsActive indicates if any component has shown activity in the last tick
+	IsActive bool
 }
 
 // Constants for throughput calculation

@@ -27,10 +27,9 @@ import (
 )
 
 type GetMetricsAction struct {
-	// ─── Request metadata ────────────────────────────────────────────────────
-	userEmail    string
-	actionUUID   uuid.UUID
-	instanceUUID uuid.UUID
+
+	// ─── Utilities ──────────────────────────────────────────────────────────
+	provider providers.MetricsProvider
 
 	// ─── Plumbing ────────────────────────────────────────────────────────────
 	outboundChannel chan *models.UMHMessage
@@ -38,12 +37,15 @@ type GetMetricsAction struct {
 	// ─── Runtime observation ────────────────────────────────────────────────
 	systemSnapshotManager *fsm.SnapshotManager
 
+	actionLogger *zap.SugaredLogger
+
 	// ─── Parsed request payload ─────────────────────────────────────────────
 	payload models.GetMetricsRequest
 
-	// ─── Utilities ──────────────────────────────────────────────────────────
-	provider     providers.MetricsProvider
-	actionLogger *zap.SugaredLogger
+	// ─── Request metadata ────────────────────────────────────────────────────
+	userEmail    string
+	actionUUID   uuid.UUID
+	instanceUUID uuid.UUID
 }
 
 // NewGetMetricsAction creates a new GetMetricsAction with the provided parameters.

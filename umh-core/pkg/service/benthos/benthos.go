@@ -112,19 +112,20 @@ type IBenthosService interface {
 
 // ServiceInfo contains information about a Benthos service
 type ServiceInfo struct {
-	// S6ObservedState contains information about the S6 service
-	S6ObservedState s6fsm.S6ObservedState
 	// S6FSMState contains the current state of the S6 FSM
 	S6FSMState string
+	// S6ObservedState contains information about the S6 service
+	S6ObservedState s6fsm.S6ObservedState
 	// BenthosStatus contains information about the status of the Benthos service
 	BenthosStatus BenthosStatus
 }
 
 type BenthosStatus struct {
-	// HealthCheck contains information about the health of the Benthos service
-	HealthCheck benthos_monitor.HealthCheck
-	// BenthosMetrics contains information about the metrics of the Benthos service
-	BenthosMetrics benthos_monitor.BenthosMetrics
+
+	// StatusReason contains the reason for the status of the Benthos service
+	// If the service is degraded, this will contain the log entry that caused the degradation together with the information that it is degraded because of the log entry
+	// If the service is currently starting up, it will contain the s6 status of the service
+	StatusReason string
 	// BenthosLogs contains the structured s6 log entries emitted by the
 	// Benthos service.
 	//
@@ -143,11 +144,10 @@ type BenthosStatus struct {
 	// Therefore we override the default behaviour and copy only the 3-word
 	// slice header (24 B on amd64) — see CopyBenthosLogs below.
 	BenthosLogs []s6service.LogEntry
-
-	// StatusReason contains the reason for the status of the Benthos service
-	// If the service is degraded, this will contain the log entry that caused the degradation together with the information that it is degraded because of the log entry
-	// If the service is currently starting up, it will contain the s6 status of the service
-	StatusReason string
+	// HealthCheck contains information about the health of the Benthos service
+	HealthCheck benthos_monitor.HealthCheck
+	// BenthosMetrics contains information about the metrics of the Benthos service
+	BenthosMetrics benthos_monitor.BenthosMetrics
 }
 
 // CopyBenthosLogs is a go-deepcopy override for the BenthosLogs field.
@@ -177,14 +177,12 @@ func (bs *BenthosStatus) CopyBenthosLogs(src []s6service.LogEntry) error {
 
 // BenthosService is the default implementation of the IBenthosService interface
 type BenthosService struct {
-	logger *zap.SugaredLogger
+	s6Service s6service.Service // S6 service for direct S6 operations
+	logger    *zap.SugaredLogger
 
-	s6Manager        *s6fsm.S6Manager
-	s6Service        s6service.Service // S6 service for direct S6 operations
-	s6ServiceConfigs []config.S6FSMConfig
+	s6Manager *s6fsm.S6Manager
 
 	benthosMonitorManager *benthos_monitor_fsm.BenthosMonitorManager
-	benthosMonitorConfigs []config.BenthosMonitorConfig
 
 	// -----------------------------------------------------------------------------
 	// 🌶️  Hot-path YAML-parsing cache
@@ -202,7 +200,10 @@ type BenthosService struct {
 	//      the cache is therefore *read-heavy* and *contention-light*.
 	//   2. sync.Map gives us lock-free reads and amortised-O(1) writes, which
 	//      is exactly what we need for a “mostly reads, very few writes” workload.
-	configCache sync.Map // map[string]configCacheEntry
+	configCache      sync.Map // map[string]configCacheEntry
+	s6ServiceConfigs []config.S6FSMConfig
+
+	benthosMonitorConfigs []config.BenthosMonitorConfig
 }
 
 // configCacheEntry is the value stored in configCache.
@@ -212,15 +213,15 @@ type BenthosService struct {
 // yaml.Unmarshal and simply hand the already-normalised struct back to the
 // caller – a ~20× speed-up on the hot path.
 type configCacheEntry struct {
-	// hash is xxhash.Sum64(buf) of the raw YAML file.  Collisions are
-	// vanishingly unlikely (2⁻⁶⁴), so equality is “good enough” to treat
-	// the file as unchanged.
-	hash uint64
 
 	// parsed is the *fully normalised* BenthosServiceConfig that callers
 	// expect.  It is treated as **read-only** after being cached; if callers
 	// ever start mutating the struct, we must clone it before returning.
 	parsed benthosserviceconfig.BenthosServiceConfig
+	// hash is xxhash.Sum64(buf) of the raw YAML file.  Collisions are
+	// vanishingly unlikely (2⁻⁶⁴), so equality is “good enough” to treat
+	// the file as unchanged.
+	hash uint64
 }
 
 // hash is a helper function for configCacheEntry.hash

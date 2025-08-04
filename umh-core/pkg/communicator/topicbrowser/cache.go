@@ -51,21 +51,21 @@ func (ps ProcessingSource) String() string {
 
 // ProcessingResult contains the result of processing incremental updates
 type ProcessingResult struct {
-	ProcessedCount  int       // Number of buffers successfully processed
-	SkippedCount    int       // Number of buffers skipped due to errors
 	LatestTimestamp time.Time // Latest timestamp from processed buffers
 	DebugInfo       string    // Debug information about what was processed
+	ProcessedCount  int       // Number of buffers successfully processed
+	SkippedCount    int       // Number of buffers skipped due to errors
 }
 
 // Cache maintains the latest UnsBundle for each topic key
 // This provides fast bootstrap for new subscribers and avoids re-decompressing data
 type Cache struct {
-	mu                       sync.RWMutex
+	lastSentTimestamp        time.Time                           // Timestamp of last bundle sent to subscribers
+	lastCachedTimestamp      time.Time                           // Timestamp of last cached/processed buffer
 	eventMap                 map[string]*tbproto.EventTableEntry // key = UnsTreeId from events
 	unsMap                   *tbproto.TopicMap
-	lastProcessedSequenceNum uint64    // Sequence number of last processed buffer
-	lastSentTimestamp        time.Time // Timestamp of last bundle sent to subscribers
-	lastCachedTimestamp      time.Time // Timestamp of last cached/processed buffer
+	lastProcessedSequenceNum uint64 // Sequence number of last processed buffer
+	mu                       sync.RWMutex
 }
 
 // NewCache creates a new topic browser cache

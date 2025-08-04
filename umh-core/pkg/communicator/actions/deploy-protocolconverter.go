@@ -57,18 +57,19 @@ import (
 // new Protocol Converter. All fields are immutable after construction to
 // avoid race conditions.
 type DeployProtocolConverterAction struct {
-	userEmail    string
-	actionUUID   uuid.UUID
-	instanceUUID uuid.UUID
+	configManager config.ConfigManager
 
 	outboundChannel       chan *models.UMHMessage
-	configManager         config.ConfigManager
 	systemSnapshotManager *fsm.SnapshotManager // Snapshot Manager holds the latest system snapshot
+
+	actionLogger *zap.SugaredLogger
+	userEmail    string
 
 	// Parsed request payload (only populated after Parse)
 	payload models.ProtocolConverter
 
-	actionLogger *zap.SugaredLogger
+	actionUUID   uuid.UUID
+	instanceUUID uuid.UUID
 }
 
 // NewDeployProtocolConverterAction returns an un-parsed action instance.

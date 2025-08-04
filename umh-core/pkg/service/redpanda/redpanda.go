@@ -97,14 +97,14 @@ type IRedpandaService interface {
 
 // ServiceInfo contains information about a Redpanda service
 type ServiceInfo struct {
-	// S6ObservedState contains information about the S6 service
-	S6ObservedState s6fsm.S6ObservedState
-	// S6FSMState contains the current state of the S6 FSM
-	S6FSMState string
 	// RedpandaStatus contains information about the status of the Redpanda service
 	RedpandaStatus RedpandaStatus
+	// S6FSMState contains the current state of the S6 FSM
+	S6FSMState string
 	// StatusReason contains the reason for the current state of the Redpanda service
 	StatusReason string
+	// S6ObservedState contains information about the S6 service
+	S6ObservedState s6fsm.S6ObservedState
 }
 
 // RedpandaStatus contains information about the status of the Redpanda service
@@ -160,29 +160,30 @@ func (rs *RedpandaStatus) CopyLogs(src []s6service.LogEntry) error {
 // HealthCheck contains information about the health of the Redpanda service
 // https://docs.redpanda.com/redpanda-connect/guides/monitoring/
 type HealthCheck struct {
+	// Version contains the version of the Redpanda service
+	Version string
 	// IsLive is true if the Redpanda service is live
 	IsLive bool
 	// IsReady is true if the Redpanda service is ready to process data
 	IsReady bool
-	// Version contains the version of the Redpanda service
-	Version string
 }
 
 // RedpandaService is the default implementation of the IRedpandaService interface
 type RedpandaService struct {
-	logger *zap.SugaredLogger
+	s6Service  s6service.Service // S6 service for direct S6 operations
+	httpClient httpclient.HTTPClient
 
-	s6Manager        *s6fsm.S6Manager
-	s6Service        s6service.Service // S6 service for direct S6 operations
-	s6ServiceConfigs []config.S6FSMConfig
-	httpClient       httpclient.HTTPClient
+	schemaRegistryManager ISchemaRegistry
+	logger                *zap.SugaredLogger
+
+	s6Manager *s6fsm.S6Manager
+
+	redpandaMonitorManager *redpanda_monitor_fsm.RedpandaMonitorManager
 
 	baseDir string
 
-	redpandaMonitorManager *redpanda_monitor_fsm.RedpandaMonitorManager
+	s6ServiceConfigs       []config.S6FSMConfig
 	redpandaMonitorConfigs []config.RedpandaMonitorConfig
-
-	schemaRegistryManager ISchemaRegistry
 }
 
 // RedpandaServiceOption is a function that modifies a RedpandaService

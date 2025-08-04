@@ -96,11 +96,11 @@ func IsRunningState(state string) bool {
 
 // RedpandaObservedState contains the observed runtime state of a Redpanda instance
 type RedpandaObservedState struct {
-	// ServiceInfo contains information about the S6 service
-	ServiceInfo redpandasvc.ServiceInfo
 
 	// ObservedRedpandaServiceConfig contains the observed Redpanda service config
 	ObservedRedpandaServiceConfig redpandaserviceconfig.RedpandaServiceConfig
+	// ServiceInfo contains information about the S6 service
+	ServiceInfo redpandasvc.ServiceInfo
 }
 
 // IsObservedState implements the ObservedState interface
@@ -113,32 +113,34 @@ var _ publicfsm.FSMInstance = (*RedpandaInstance)(nil)
 
 // RedpandaInstance is a state-machine managed instance of a Redpanda service
 type RedpandaInstance struct {
+
+	// transitionToRunningTime tracks when we first transitioned to a running state
+	// This is used to ignore errors that occurred before we were fully running
+	transitionToRunningTime time.Time
+
+	// service is the Redpanda service implementation to use
+	// It has a manager that manages the S6 service instances
+	service redpandasvc.IRedpandaService
+
+	// schemaRegistry manages JSON schema registration for data models and contracts
+	schemaRegistry redpandasvc.ISchemaRegistry
+
 	baseFSMInstance *internalfsm.BaseFSMInstance
+
+	payloadShapes map[string]config.PayloadShape
+
+	// Schema registry configuration data
+	dataModels    []config.DataModelsConfig
+	dataContracts []config.DataContractsConfig
+
+	// config contains all the configuration for this service
+	config redpandaserviceconfig.RedpandaServiceConfig
 
 	// PreviousObservedState represents the observed state of the service
 	// PreviousObservedState contains all metrics, logs, etc.
 	// that are updated at the beginning of Reconcile and then used to
 	// determine the next state
 	PreviousObservedState RedpandaObservedState
-
-	// service is the Redpanda service implementation to use
-	// It has a manager that manages the S6 service instances
-	service redpandasvc.IRedpandaService
-
-	// config contains all the configuration for this service
-	config redpandaserviceconfig.RedpandaServiceConfig
-
-	// schemaRegistry manages JSON schema registration for data models and contracts
-	schemaRegistry redpandasvc.ISchemaRegistry
-
-	// Schema registry configuration data
-	dataModels    []config.DataModelsConfig
-	dataContracts []config.DataContractsConfig
-	payloadShapes map[string]config.PayloadShape
-
-	// transitionToRunningTime tracks when we first transitioned to a running state
-	// This is used to ignore errors that occurred before we were fully running
-	transitionToRunningTime time.Time
 }
 
 // GetLastObservedState returns the last known state of the instance

@@ -299,10 +299,19 @@ func (b *BenthosInstance) IsBenthosS6Running() (bool, string) {
 //	reason – empty when ok is true; otherwise a short operator-friendly
 //	         explanation.
 func (b *BenthosInstance) IsBenthosS6Stopped() (bool, string) {
-	if b.ObservedState.ServiceInfo.S6FSMState == s6fsm.OperationalStateStopped {
+	// Check for both explicit stopped state and empty string.
+	// Empty string occurs when a service crashes (e.g., due to invalid config) and gets
+	// completely removed from S6, leaving no state. This is effectively "stopped" from
+	// the FSM perspective and allows proper recovery from corrupted states (see ENG-3243).
+
+	fsmState := b.ObservedState.ServiceInfo.S6FSMState
+	switch fsmState {
+	case "":
+		fsmState = "not existing"
+	case s6fsm.OperationalStateStopped:
 		return true, ""
 	}
-	return false, fmt.Sprintf("s6 is not stopped, current state: %s", b.ObservedState.ServiceInfo.S6FSMState)
+	return false, fmt.Sprintf("s6 is not stopped, current state: %s", fsmState)
 }
 
 // IsBenthosConfigLoaded reports true once Benthos uptime is at least
