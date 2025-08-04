@@ -140,25 +140,25 @@ var _ = Describe("UMH Core E2E Communication", Ordered, Label("e2e"), func() {
 				}
 
 				// Check Core health
-				if latestStatusMessage.Core.Health == nil || !isHealthActiveOrAcceptable(latestStatusMessage.Core.Health, "active") {
+				if latestStatusMessage.Core.Health == nil || !isHealthActiveOrAcceptable(latestStatusMessage.Core.Health, "active", "running") {
 					e2eLogger.Infof("Core not ready: %s", safeGetHealthState(latestStatusMessage.Core.Health))
 					return false
 				}
 
 				// Check Agent health
-				if latestStatusMessage.Core.Agent.Health == nil || !isHealthActiveOrAcceptable(latestStatusMessage.Core.Agent.Health, "active") {
+				if latestStatusMessage.Core.Agent.Health == nil || !isHealthActiveOrAcceptable(latestStatusMessage.Core.Agent.Health, "active", "running") {
 					e2eLogger.Infof("Agent not ready: %s", safeGetHealthState(latestStatusMessage.Core.Agent.Health))
 					return false
 				}
 
 				// Check Redpanda health (active or idle)
-				if latestStatusMessage.Core.Redpanda.Health == nil || !isHealthActiveOrAcceptable(latestStatusMessage.Core.Redpanda.Health, "active", "idle") {
+				if latestStatusMessage.Core.Redpanda.Health == nil || !isHealthActiveOrAcceptable(latestStatusMessage.Core.Redpanda.Health, "active", "idle", "running") {
 					e2eLogger.Infof("Redpanda not ready: %s", safeGetHealthState(latestStatusMessage.Core.Redpanda.Health))
 					return false
 				}
 
 				// Check TopicBrowser health (active or idle)
-				if latestStatusMessage.Core.TopicBrowser.Health == nil || !isHealthActiveOrAcceptable(latestStatusMessage.Core.TopicBrowser.Health, "active", "idle") {
+				if latestStatusMessage.Core.TopicBrowser.Health == nil || !isHealthActiveOrAcceptable(latestStatusMessage.Core.TopicBrowser.Health, "active", "idle", "running") {
 					e2eLogger.Infof("TopicBrowser not ready: %s", safeGetHealthState(latestStatusMessage.Core.TopicBrowser.Health))
 					return false
 				}
