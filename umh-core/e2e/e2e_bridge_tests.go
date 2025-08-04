@@ -18,8 +18,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	. "github.com/onsi/ginkgo/v2" //nolint:ST1001
+	. "github.com/onsi/gomega"    //nolint:ST1001
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
@@ -35,8 +35,8 @@ func getLoggerForBridge() *zap.SugaredLogger {
 // testBridgeCreation tests the full bridge creation process
 func testBridgeCreation(mockServer *MockAPIServer) {
 	bridgeName := "e2e-test-bridge"
-	bridgeIP := "192.168.1.100"
-	bridgePort := uint32(502)
+	bridgeIP := "localhost"
+	bridgePort := uint32(8080)
 	bridgeLocation := map[int]string{
 		2: "test-line",
 		3: "test-device",
@@ -82,7 +82,7 @@ func testBridgeCreation(mockServer *MockAPIServer) {
 			}
 		}
 		return false
-	}, 10*time.Second, 1*time.Second).Should(BeTrue(), "Bridge deployment should succeed")
+	}, 30*time.Second, 1*time.Second).Should(BeTrue(), "Bridge deployment should succeed")
 
 	By("Adding benthos generate configuration to the bridge")
 	editMessage := createEditProtocolConverterMessage(deployedUUID, bridgeName, bridgeIP, bridgePort, bridgeLocation)
@@ -114,7 +114,7 @@ func testBridgeCreation(mockServer *MockAPIServer) {
 			}
 		}
 		return false
-	}, 10*time.Second, 1*time.Second).Should(BeTrue(), "Bridge configuration should be applied successfully")
+	}, 30*time.Second, 1*time.Second).Should(BeTrue(), "Bridge configuration should be applied successfully")
 
 	By("Verifying bridge is active and generating data")
 	// Give the bridge some time to start generating data

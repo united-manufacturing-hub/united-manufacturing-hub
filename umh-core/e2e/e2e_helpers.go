@@ -137,21 +137,23 @@ func createEditProtocolConverterMessage(protocolConverterUUID uuid.UUID, name, i
 	readDFC := &models.ProtocolConverterDFC{
 		Inputs: models.CommonDataFlowComponentInputConfig{
 			Type: "generate",
-			Data: `auto_replay_nacks: true
-batch_size: 1
-count: 0
-interval: 1s
-mapping: root = "hello world from e2e bridge test"`,
+			Data: `generate:
+  auto_replay_nacks: true
+  batch_size: 1
+  count: 0
+  interval: 1s
+  mapping: root = "hello world from e2e bridge test"`,
 		},
 		Pipeline: models.CommonDataFlowComponentPipelineConfig{
 			Processors: models.CommonDataFlowComponentPipelineConfigProcessors{
-				"tag_processor": {
+				"0": {
 					Type: "tag_processor",
-					Data: `defaults: |
-  msg.meta.location_path = "{{ .location_path }}";
-  msg.meta.data_contract = "_raw";
-  msg.meta.tag_name = "e2e_bridge_data";
-  return msg;`,
+					Data: `tag_processor:
+  defaults: |
+    msg.meta.location_path = "{{ .location_path }}";
+    msg.meta.data_contract = "_raw";
+    msg.meta.tag_name = "e2e_bridge_data";
+    return msg;`,
 				},
 			},
 		},

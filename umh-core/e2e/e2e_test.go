@@ -65,6 +65,7 @@ var _ = Describe("UMH Core E2E Communication", Ordered, Label("e2e"), func() {
 			}
 			By("Stopping test context")
 			testCancel()
+
 		})
 	})
 
