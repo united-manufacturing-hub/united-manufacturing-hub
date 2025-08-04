@@ -300,14 +300,14 @@ func (r *RedpandaInstance) reconcileStartingStates(ctx context.Context, services
 		// First we need to ensure the S6 service is started
 		running, reason := r.IsRedpandaS6Running()
 		if !running {
-			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("Redpanda starting: %s", reason)
+			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reason)
 			return nil, false
 		}
 
 		// Check if "Successfully started Redpanda!" is found in logs
 		started, reasonStarted := r.IsRedpandaStarted(ctx)
 		if !started {
-			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("Redpanda starting: %s", reasonStarted)
+			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reasonStarted)
 			return nil, false
 		}
 
@@ -334,10 +334,10 @@ func (r *RedpandaInstance) reconcileRunningStates(ctx context.Context, services 
 		degraded, reasonDegraded := r.IsRedpandaDegraded(currentTime, constants.RedpandaLogWindow)
 		processingActivity, reasonProcessingActivity := r.IsRedpandaWithProcessingActivity()
 		if degraded {
-			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("Redpanda degraded: %s", reasonDegraded)
+			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("degraded: %s", reasonDegraded)
 			return r.baseFSMInstance.SendEvent(ctx, EventDegraded), true
 		} else if !processingActivity { // if there is no activity, we move to Idle
-			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("Redpanda idle: %s", reasonProcessingActivity)
+			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("idle: %s", reasonProcessingActivity)
 			return r.baseFSMInstance.SendEvent(ctx, EventNoDataTimeout), true
 		}
 		// If we're in Active,  send no status reason
@@ -348,19 +348,19 @@ func (r *RedpandaInstance) reconcileRunningStates(ctx context.Context, services 
 		processingActivity, reasonProcessingActivity := r.IsRedpandaWithProcessingActivity()
 
 		if degraded {
-			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("Redpanda degraded: %s", reasonDegraded)
+			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("degraded: %s", reasonDegraded)
 			return r.baseFSMInstance.SendEvent(ctx, EventDegraded), true
 		} else if processingActivity { // if there is activity, we move to Active
 			r.PreviousObservedState.ServiceInfo.StatusReason = ""
 			return r.baseFSMInstance.SendEvent(ctx, EventDataReceived), true
 		}
-		r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("Redpanda idle: %s", reasonProcessingActivity)
+		r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("idle: %s", reasonProcessingActivity)
 		return nil, false
 	case OperationalStateDegraded:
 		// If we're in Degraded, we need to recover to move to Idle
 		degraded, reason := r.IsRedpandaDegraded(currentTime, constants.RedpandaLogWindow)
 		if !degraded {
-			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("Redpanda recovering: %s", reason)
+			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("recovering: %s", reason)
 			return r.baseFSMInstance.SendEvent(ctx, EventRecovered), true
 		}
 
@@ -370,14 +370,14 @@ func (r *RedpandaInstance) reconcileRunningStates(ctx context.Context, services 
 			r.baseFSMInstance.GetLogger().Debugf("S6 service stopped while in degraded state, attempting to restart")
 			err := r.StartInstance(ctx, services.GetFileSystem())
 			if err != nil {
-				r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("Redpanda degraded: failed to restart service: %v", err)
+				r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("degraded: failed to restart service: %v", err)
 				return err, false
 			}
-			r.PreviousObservedState.ServiceInfo.StatusReason = "Redpanda degraded: restarting service"
+			r.PreviousObservedState.ServiceInfo.StatusReason = "degraded: restarting service"
 			return nil, false // Don't transition yet, wait for restart to take effect
 		}
 
-		r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("Redpanda degraded: %s", reason)
+		r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("degraded: %s", reason)
 		return nil, false
 	default:
 		return fmt.Errorf("invalid running state: %s", currentState), false
@@ -399,7 +399,7 @@ func (r *RedpandaInstance) reconcileTransitionToStopped(ctx context.Context, ser
 			return err, false
 		}
 		// Send event to transition to Stopping
-		r.PreviousObservedState.ServiceInfo.StatusReason = "Redpanda stopping"
+		r.PreviousObservedState.ServiceInfo.StatusReason = "stopping"
 		return r.baseFSMInstance.SendEvent(ctx, EventStop), true
 	}
 
@@ -407,7 +407,7 @@ func (r *RedpandaInstance) reconcileTransitionToStopped(ctx context.Context, ser
 	isStopped, reason := r.IsRedpandaS6Stopped()
 	if currentState == OperationalStateStopping {
 		if !isStopped {
-			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("Redpanda stopping: %s", reason)
+			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("stopping: %s", reason)
 			return nil, false
 		}
 		// Transition from Stopping to Stopped
