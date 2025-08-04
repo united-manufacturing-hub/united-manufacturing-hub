@@ -16,6 +16,7 @@ package generator
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -88,10 +89,41 @@ func buildProtocolConverterAsDfc(
 			lastLatencyMs = observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ServiceInfo.NmapStatus.LastScan.PortResult.LatencyMs
 		}
 
+		// check the variables for the target and port
+
+		specTarget := observed.ObservedProtocolConverterSpecConfig.Config.ConnectionServiceConfig.NmapTemplate.Target
+		specPort := observed.ObservedProtocolConverterSpecConfig.Config.ConnectionServiceConfig.NmapTemplate.Port
+
+		// targetConfig is e.g. "{{ .IP }}" and portConfig is e.g. "{{ .PORT }}"
+		// we need to replace the variables with the actual values therefore we need to get the variable name and check the values in the user variables
+		// if the variable is not found, we use the default value
+
+		tagetSplit := strings.Split(strings.TrimPrefix(specTarget, "{{ ."), " ")
+		portSplit := strings.Split(strings.TrimPrefix(specPort, "{{ ."), " ")
+
+		var targetName string
+		var portName string
+		if len(tagetSplit) > 0 {
+			targetName = tagetSplit[0]
+		}
+
+		if len(portSplit) > 0 {
+			portName = portSplit[0]
+		}
+
+		target, ok := observed.ObservedProtocolConverterSpecConfig.Variables.User[targetName]
+		if !ok {
+			target = specTarget
+		}
+		port, ok := observed.ObservedProtocolConverterSpecConfig.Variables.User[portName]
+		if !ok {
+			port = specPort
+		}
+
 		connection := models.Connection{
 			Name: instance.ID + "-connection",
 			UUID: dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID + "-connection").String(), // Derive connection UUID from PC UUID
-			URI:  fmt.Sprintf("%s:%s", observed.ObservedProtocolConverterSpecConfig.Config.ConnectionServiceConfig.NmapTemplate.Target, observed.ObservedProtocolConverterSpecConfig.Config.ConnectionServiceConfig.NmapTemplate.Port),
+			URI:  fmt.Sprintf("%s:%s", target, port),
 			Health: &models.Health{
 				Message:       observed.ServiceInfo.ConnectionFSMState,
 				ObservedState: observed.ServiceInfo.ConnectionFSMState,
