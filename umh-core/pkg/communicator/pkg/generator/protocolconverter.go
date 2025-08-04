@@ -81,7 +81,8 @@ func buildProtocolConverterAsDfc(
 
 	// Create connection info for protocol converter
 	var connections []models.Connection
-	if observed.ObservedProtocolConverterSpecConfig.Config.ConnectionServiceConfig.NmapTemplate.Target != "" {
+	if observed.ObservedProtocolConverterSpecConfig.Config.ConnectionServiceConfig.NmapTemplate != nil &&
+		observed.ObservedProtocolConverterSpecConfig.Config.ConnectionServiceConfig.NmapTemplate.Target != "" {
 		var lastLatencyMs float64
 		if observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ServiceInfo.NmapStatus.LastScan != nil {
 			lastLatencyMs = observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ServiceInfo.NmapStatus.LastScan.PortResult.LatencyMs
@@ -102,9 +103,12 @@ func buildProtocolConverterAsDfc(
 		connections = append(connections, connection)
 	}
 
-	//check if the protocol converter is initialized by checking if a read dfc is present
+	// Check if the protocol converter is initialized by checking if a read dfc is present.
 	isInitialized := false
-	input := observed.ObservedProtocolConverterSpecConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input
+	var input map[string]any
+	if observed.ObservedProtocolConverterSpecConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input != nil {
+		input = observed.ObservedProtocolConverterSpecConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input
+	}
 	if len(input) > 0 {
 		isInitialized = true
 	}
