@@ -16,7 +16,7 @@ package generator
 
 import (
 	"fmt"
-	"strings"
+	"regexp"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -98,26 +98,24 @@ func buildProtocolConverterAsDfc(
 		// we need to replace the variables with the actual values therefore we need to get the variable name and check the values in the user variables
 		// if the variable is not found, we use the default value
 
-		tagetSplit := strings.Split(strings.TrimPrefix(specTarget, "{{ ."), " ")
-		portSplit := strings.Split(strings.TrimPrefix(specPort, "{{ ."), " ")
+		re := regexp.MustCompile(`{{\s*\.(\w+)\s*}}`)
 
-		var targetName string
-		var portName string
-		if len(tagetSplit) > 0 {
-			targetName = tagetSplit[0]
+		target := specTarget
+		if match := re.FindStringSubmatch(specTarget); len(match) > 1 {
+			if userValue, ok := observed.ObservedProtocolConverterSpecConfig.Variables.User[match[1]]; ok {
+				if strValue, ok := userValue.(string); ok {
+					target = strValue
+				}
+			}
 		}
 
-		if len(portSplit) > 0 {
-			portName = portSplit[0]
-		}
-
-		target, ok := observed.ObservedProtocolConverterSpecConfig.Variables.User[targetName]
-		if !ok {
-			target = specTarget
-		}
-		port, ok := observed.ObservedProtocolConverterSpecConfig.Variables.User[portName]
-		if !ok {
-			port = specPort
+		port := specPort
+		if match := re.FindStringSubmatch(specPort); len(match) > 1 {
+			if userValue, ok := observed.ObservedProtocolConverterSpecConfig.Variables.User[match[1]]; ok {
+				if strValue, ok := userValue.(string); ok {
+					port = strValue
+				}
+			}
 		}
 
 		connection := models.Connection{
