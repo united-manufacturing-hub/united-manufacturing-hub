@@ -661,10 +661,10 @@ internal:
 			var finalConfig FullConfig
 			const maxWaitTime = 10 * time.Second
 
-			Eventually(func() int {
+			Eventually(func() error {
 				// Check if we've exceeded max wait time
 				if time.Since(start) > maxWaitTime {
-					return -1 // Signal timeout
+					return fmt.Errorf("exceeded max wait time")
 				}
 
 				var err error
@@ -672,7 +672,7 @@ internal:
 				finalConfig, err = configManager.GetConfig(newCtx, 0)
 				cancel()
 				if err != nil {
-					return -1
+					return fmt.Errorf("failed to get config: %w", err)
 				}
 
 				// Count processors in the updated config
@@ -684,8 +684,13 @@ internal:
 					}
 				}
 
-				return processorCount
-			}, "10s", "100ms").Should(Equal(numGenerators), "Background refresh should update config with %d processors", numGenerators)
+				// Do the comparison inside the function
+				if processorCount != numGenerators {
+					return fmt.Errorf("expected %d processors but got %d", numGenerators, processorCount)
+				}
+
+				return nil
+			}, "10s", "100ms").Should(Succeed(), "Background refresh should update config with %d processors", numGenerators)
 
 			// Verify the final config actually contains the expected processors
 			Expect(len(finalConfig.ProtocolConverter)).To(BeNumerically(">=", 1))

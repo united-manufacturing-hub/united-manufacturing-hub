@@ -273,10 +273,6 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 	return config, nil
 }
 
-// func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullConfig, error) {
-// 	return m.cacheConfig, nil
-// }
-
 // GetConfig returns the current configuration.
 //
 // The function first takes a shared read lock so multiple callers can run
