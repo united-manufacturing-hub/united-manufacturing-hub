@@ -158,7 +158,8 @@ func (a *GetDataflowcomponentMetricsAction) getUuid() uuid.UUID {
 	return a.actionUUID
 }
 
-func (a *GetDataflowcomponentMetricsAction) GetParsedPayload() models.GetDataflowcomponentMetricsRequest { //nolint:staticcheck // Deprecated but kept for back compat
+//nolint:staticcheck // Deprecated but kept for back compat
+func (a *GetDataflowcomponentMetricsAction) GetParsedPayload() models.GetDataflowcomponentMetricsRequest {
 	return a.payload
 }
 

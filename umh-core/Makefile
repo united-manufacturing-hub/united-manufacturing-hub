@@ -259,7 +259,6 @@ nilaway:
 
 betteralign:
 	betteralign -test=false ./... || (echo "Consider running 'make betteralign-fix' to fix the issues" && exit 1)
-
 betteralign-fix:
 	betteralign -test=false -apply ./...
 
@@ -274,17 +273,17 @@ betteralign-fix-all:
 vet-nilaway-lint-betteralign: vet nilaway lint betteralign
 
 test: vet-nilaway-lint-betteralign
-	go test -v -tags=test ./...
+	go test -race -v -tags=test ./...
 
 unit-test: vet-nilaway-lint-betteralign
-	ginkgo -r -v --tags=test --label-filter='!integration && !redpanda-extended && !tls' --fail-fast ./...
+	ginkgo -r -v --tags=test --race --label-filter='!integration && !redpanda-extended && !tls' --fail-fast ./...
 
 unit-test-fail-slow: vet-nilaway-lint-betteralign
-	ginkgo -r -v --tags=test --label-filter='!integration && !redpanda-extended && !tls' ./...
+	ginkgo -r -v --tags=test --race --label-filter='!integration && !redpanda-extended && !tls' ./...
 
 benchmark:
 	@echo "Running benchmarks..."
-	go test -bench=. -benchmem ./...
+	go test -race -bench=. -benchmem ./...
 
 benchmark-config:
 	@echo "Running config package benchmarks..."
