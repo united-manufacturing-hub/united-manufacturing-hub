@@ -62,7 +62,7 @@ var _ = Describe("PortManager", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				instance := "test-instance"
-				port, err := pm.AllocatePort(instance)
+				port, err := pm.AllocatePort(context.Background(), instance)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(port).To(BeNumerically(">", 0))
 
@@ -76,11 +76,11 @@ var _ = Describe("PortManager", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				instance := "test-instance"
-				port1, err := pm.AllocatePort(instance)
+				port1, err := pm.AllocatePort(context.Background(), instance)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Allocate again for the same instance
-				port2, err := pm.AllocatePort(instance)
+				port2, err := pm.AllocatePort(context.Background(), instance)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(port2).To(Equal(port1))
 			})
@@ -94,7 +94,7 @@ var _ = Describe("PortManager", func() {
 				ports := make(map[uint16]bool)
 
 				for _, instance := range instances {
-					port, err := pm.AllocatePort(instance)
+					port, err := pm.AllocatePort(context.Background(), instance)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(port).To(BeNumerically(">", 0))
 
@@ -113,7 +113,7 @@ var _ = Describe("PortManager", func() {
 
 				// Allocate a port
 				instance1 := "instance-1"
-				_, err = pm.AllocatePort(instance1)
+				_, err = pm.AllocatePort(context.Background(), instance1)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Release the port
@@ -126,7 +126,7 @@ var _ = Describe("PortManager", func() {
 
 				// Allocate a new port for a different instance
 				instance2 := "instance-2"
-				port2, err := pm.AllocatePort(instance2)
+				port2, err := pm.AllocatePort(context.Background(), instance2)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(port2).To(BeNumerically(">", 0))
 
@@ -142,7 +142,7 @@ var _ = Describe("PortManager", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			instance := "test-instance"
-			_, err = pm.AllocatePort(instance)
+			_, err = pm.AllocatePort(context.Background(), instance)
 			Expect(err).NotTo(HaveOccurred())
 
 			err = pm.ReleasePort(instance)
@@ -153,7 +153,7 @@ var _ = Describe("PortManager", func() {
 			Expect(exists).To(BeFalse())
 
 			// Verify we can allocate a port again
-			newPort, err := pm.AllocatePort("another-instance")
+			newPort, err := pm.AllocatePort(context.Background(), "another-instance")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(newPort).To(BeNumerically(">", 0))
 		})
@@ -173,7 +173,7 @@ var _ = Describe("PortManager", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			instance := "test-instance"
-			expectedPort, err := pm.AllocatePort(instance)
+			expectedPort, err := pm.AllocatePort(context.Background(), instance)
 			Expect(err).NotTo(HaveOccurred())
 
 			gotPort, exists := pm.GetPort(instance)
@@ -199,7 +199,7 @@ var _ = Describe("PortManager", func() {
 			instance := "test-instance"
 			// Use a likely available port in a safe range
 			portToReserve := uint16(55000)
-			err = pm.ReservePort(instance, portToReserve)
+			err = pm.ReservePort(context.Background(), instance, portToReserve)
 
 			// Note: This might fail if the port is already in use by another process
 			// That's expected behavior with real OS allocation
@@ -221,7 +221,7 @@ var _ = Describe("PortManager", func() {
 			portToReserve := uint16(55001)
 
 			// Try to reserve the port for first instance
-			err = pm.ReservePort("instance-1", portToReserve)
+			err = pm.ReservePort(context.Background(), "instance-1", portToReserve)
 			if err != nil {
 				// Port might already be in use by system, skip this test
 				Skip("Port not available for testing")
@@ -229,7 +229,7 @@ var _ = Describe("PortManager", func() {
 			}
 
 			// Try to reserve the same port for another instance
-			err = pm.ReservePort("instance-2", portToReserve)
+			err = pm.ReservePort(context.Background(), "instance-2", portToReserve)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("already in use"))
 		})
@@ -240,7 +240,7 @@ var _ = Describe("PortManager", func() {
 
 			instance := "test-instance"
 			port1 := uint16(55002)
-			err = pm.ReservePort(instance, port1)
+			err = pm.ReservePort(context.Background(), instance, port1)
 			if err != nil {
 				// Port might already be in use by system, skip this test
 				Skip("Port not available for testing")
@@ -249,7 +249,7 @@ var _ = Describe("PortManager", func() {
 
 			// Try to reserve a different port for the same instance
 			port2 := uint16(55003)
-			err = pm.ReservePort(instance, port2)
+			err = pm.ReservePort(context.Background(), instance, port2)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("already has port"))
 		})
@@ -260,7 +260,7 @@ var _ = Describe("PortManager", func() {
 
 			instance := "test-instance"
 			port := uint16(55004)
-			err = pm.ReservePort(instance, port)
+			err = pm.ReservePort(context.Background(), instance, port)
 			if err != nil {
 				// Port might already be in use by system, skip this test
 				Skip("Port not available for testing")
@@ -268,7 +268,7 @@ var _ = Describe("PortManager", func() {
 			}
 
 			// Reserve the same port for the same instance again
-			err = pm.ReservePort(instance, port)
+			err = pm.ReservePort(context.Background(), instance, port)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -276,7 +276,7 @@ var _ = Describe("PortManager", func() {
 			pm, err := NewDefaultPortManager()
 			Expect(err).NotTo(HaveOccurred())
 
-			err = pm.ReservePort("test-instance", 0)
+			err = pm.ReservePort(context.Background(), "test-instance", 0)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid port"))
 		})
@@ -298,7 +298,7 @@ var _ = Describe("PortManager", func() {
 				go func(id int) {
 					defer wg.Done()
 					instance := fmt.Sprintf("instance-%d", id)
-					port, err := pm.AllocatePort(instance)
+					port, err := pm.AllocatePort(context.Background(), instance)
 					errors[id] = err
 					if err == nil {
 						ports[id] = port
@@ -341,7 +341,7 @@ var _ = Describe("PortManager", func() {
 			instances := make([]string, numGoroutines)
 			for i := 0; i < numGoroutines; i++ {
 				instances[i] = fmt.Sprintf("instance-%d", i)
-				_, err := pm.AllocatePort(instances[i])
+				_, err := pm.AllocatePort(context.Background(), instances[i])
 				Expect(err).NotTo(HaveOccurred())
 			}
 
@@ -351,7 +351,7 @@ var _ = Describe("PortManager", func() {
 					defer GinkgoRecover()
 					defer wg.Done()
 					instance := fmt.Sprintf("new-instance-%d", id)
-					_, err := pm.AllocatePort(instance)
+					_, err := pm.AllocatePort(context.Background(), instance)
 					Expect(err).NotTo(HaveOccurred())
 				}(i)
 			}
@@ -362,8 +362,8 @@ var _ = Describe("PortManager", func() {
 					defer GinkgoRecover()
 					defer wg.Done()
 					instance := fmt.Sprintf("reserve-instance-%d", id)
-					port := uint16(55000 + id%1000)       // Use high port range to avoid conflicts
-					err := pm.ReservePort(instance, port) // Some might fail due to system usage
+					port := uint16(55000 + id%1000)                             // Use high port range to avoid conflicts
+					err := pm.ReservePort(context.Background(), instance, port) // Some might fail due to system usage
 					if err != nil {
 						// Error is expected - should be "port not available", "already in use" or "instance already has port"
 						Expect(err.Error()).To(Or(
@@ -414,7 +414,7 @@ var _ = Describe("PortManager", func() {
 
 			// Pre-allocate a port
 			existingInstance := "existing-instance"
-			existingPort, err := pm.AllocatePort(existingInstance)
+			existingPort, err := pm.AllocatePort(context.Background(), existingInstance)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Run PreReconcile with mix of existing and new instances

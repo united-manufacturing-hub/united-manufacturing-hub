@@ -101,7 +101,7 @@ func NewBenthosManager(name string) *BenthosManager {
 }
 
 // AllocatePortForInstance allocates a port for a service instance if needed
-func (m *BenthosManager) AllocatePortForInstance(instance public_fsm.FSMInstance, portManager portmanager.PortManager) error {
+func (m *BenthosManager) AllocatePortForInstance(ctx context.Context, instance public_fsm.FSMInstance, portManager portmanager.PortManager) error {
 	benthosInstance, ok := instance.(*BenthosInstance)
 	if !ok {
 		return fmt.Errorf("instance is not a BenthosInstance")
@@ -110,7 +110,7 @@ func (m *BenthosManager) AllocatePortForInstance(instance public_fsm.FSMInstance
 	// If port is already set, nothing to do
 	if benthosInstance.config.MetricsPort != 0 {
 		// Try to reserve this port just to be safe
-		err := portManager.ReservePort(benthosInstance.baseFSMInstance.GetID(), benthosInstance.config.MetricsPort)
+		err := portManager.ReservePort(ctx, benthosInstance.baseFSMInstance.GetID(), benthosInstance.config.MetricsPort)
 		if err != nil {
 			// Log but continue - this is best effort
 			logger.For(benthosInstance.baseFSMInstance.GetID()).Warnf("Failed to reserve port %d: %v",
@@ -120,7 +120,7 @@ func (m *BenthosManager) AllocatePortForInstance(instance public_fsm.FSMInstance
 	}
 
 	// Allocate a new port
-	port, err := portManager.AllocatePort(benthosInstance.baseFSMInstance.GetID())
+	port, err := portManager.AllocatePort(ctx, benthosInstance.baseFSMInstance.GetID())
 	if err != nil {
 		return fmt.Errorf("failed to allocate port for instance %s: %w",
 			benthosInstance.baseFSMInstance.GetID(), err)

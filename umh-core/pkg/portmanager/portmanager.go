@@ -34,7 +34,7 @@ import (
 type PortManager interface {
 	// AllocatePort allocates a port for a given instance and returns it
 	// Returns an error if no ports are available
-	AllocatePort(instanceName string) (uint16, error)
+	AllocatePort(ctx context.Context, instanceName string) (uint16, error)
 
 	// ReleasePort releases a port previously allocated to an instance
 	// Returns an error if the instance doesn't have a port
@@ -46,7 +46,7 @@ type PortManager interface {
 
 	// ReservePort attempts to reserve a specific port for an instance
 	// Returns an error if the port is already in use
-	ReservePort(instanceName string, port uint16) error
+	ReservePort(ctx context.Context, instanceName string, port uint16) error
 
 	// PreReconcile is called before the base FSM reconciliation to ensure ports are allocated
 	// It takes a list of instance names that should have ports allocated
@@ -173,7 +173,7 @@ func newDefaultPortManager() *DefaultPortManager {
 
 // AllocatePort allocates an available port for a given instance using random selection
 // from the OS ephemeral port range with collision detection and retries
-func (pm *DefaultPortManager) AllocatePort(instanceName string) (uint16, error) {
+func (pm *DefaultPortManager) AllocatePort(ctx context.Context, instanceName string) (uint16, error) {
 	pm.mutex.Lock()
 	defer pm.mutex.Unlock()
 
@@ -184,7 +184,16 @@ func (pm *DefaultPortManager) AllocatePort(instanceName string) (uint16, error) 
 
 	// Try up to 5 times to find an available port
 	const maxRetries = 5
+	lc := &net.ListenConfig{}
+
 	for attempt := 0; attempt < maxRetries; attempt++ {
+		// Check if context is cancelled
+		select {
+		case <-ctx.Done():
+			return 0, fmt.Errorf("port allocation cancelled: %w", ctx.Err())
+		default:
+		}
+
 		// Generate a random port in the ephemeral range
 		portRange := pm.maxPort - pm.minPort + 1
 		randomOffset := pm.rand.Intn(int(portRange))
@@ -197,7 +206,7 @@ func (pm *DefaultPortManager) AllocatePort(instanceName string) (uint16, error) 
 
 		// Try to bind to the port to verify it's available
 		addr := fmt.Sprintf(":%d", port)
-		listener, err := net.Listen("tcp", addr)
+		listener, err := lc.Listen(ctx, "tcp", addr)
 		if err != nil {
 			// Port not available, try another one
 			continue
@@ -245,7 +254,7 @@ func (pm *DefaultPortManager) GetPort(instanceName string) (uint16, bool) {
 }
 
 // ReservePort attempts to reserve a specific port for an instance
-func (pm *DefaultPortManager) ReservePort(instanceName string, port uint16) error {
+func (pm *DefaultPortManager) ReservePort(ctx context.Context, instanceName string, port uint16) error {
 	if port <= 0 {
 		return fmt.Errorf("invalid port: %d (must be positive)", port)
 	}
@@ -273,7 +282,8 @@ func (pm *DefaultPortManager) ReservePort(instanceName string, port uint16) erro
 
 	// Try to bind to the specific port to verify it's available
 	addr := fmt.Sprintf(":%d", port)
-	listener, err := net.Listen("tcp", addr)
+	lc := &net.ListenConfig{}
+	listener, err := lc.Listen(ctx, "tcp", addr)
 	if err != nil {
 		return fmt.Errorf("port %d is not available: %w", port, err)
 	}
@@ -309,7 +319,7 @@ func (pm *DefaultPortManager) PreReconcile(ctx context.Context, instanceNames []
 
 		// Allocate a port using our standard allocation method
 		// This will handle the locking internally
-		_, err := pm.AllocatePort(name)
+		_, err := pm.AllocatePort(ctx, name)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("failed to allocate port for instance %s: %w", name, err))
 		}
