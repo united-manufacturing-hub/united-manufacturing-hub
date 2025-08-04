@@ -837,8 +837,8 @@ type StreamProcessor struct {
 	TemplateInfo      *StreamProcessorTemplateInfo `json:"templateInfo"`
 	Model             StreamProcessorModelRef      `json:"model" binding:"required"`
 	Name              string                       `json:"name" binding:"required"`
-	IgnoreHealthCheck bool                         `json:"ignoreHealthCheck,omitempty"`
 	EncodedConfig     string                       `json:"encodedConfig" binding:"required"` // base64-encoded YAML structure containing sources and mappings
+	IgnoreHealthCheck bool                         `json:"ignoreHealthCheck,omitempty"`
 }
 
 // GetStreamProcessorPayload contains the necessary fields for getting a stream processor.

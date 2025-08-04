@@ -57,17 +57,17 @@ import (
 // new Stream Processor. All fields are immutable after construction to
 // avoid race conditions.
 type DeployStreamProcessorAction struct {
-
-	// Parsed request payload (only populated after Parse)
-	payload models.StreamProcessor
-
 	configManager config.ConfigManager
 
 	outboundChannel       chan *models.UMHMessage
 	systemSnapshotManager *fsm.SnapshotManager // Snapshot Manager holds the latest system snapshot
 
-	actionLogger      *zap.SugaredLogger
-	userEmail         string
+	actionLogger *zap.SugaredLogger
+	userEmail    string
+
+	// Parsed request payload (only populated after Parse)
+	payload models.StreamProcessor
+
 	actionUUID        uuid.UUID
 	instanceUUID      uuid.UUID
 	ignoreHealthCheck bool
