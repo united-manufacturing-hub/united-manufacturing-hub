@@ -31,11 +31,12 @@ var _ = Describe("UMH Core E2E Communication", Ordered, Label("e2e"), func() {
 		mockServer    *MockAPIServer
 		containerName string
 		metricsPort   int
+		testCtx       context.Context
 		testCancel    context.CancelFunc
 	)
 
 	BeforeAll(func() {
-		_, testCancel = context.WithTimeout(context.Background(), 10*time.Minute)
+		testCtx, testCancel = context.WithTimeout(context.Background(), 10*time.Minute)
 
 		By("Starting mock API server")
 		mockServer = NewMockAPIServer()
@@ -49,6 +50,9 @@ var _ = Describe("UMH Core E2E Communication", Ordered, Label("e2e"), func() {
 			return isContainerHealthy(metricsPort)
 		}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "Container should be healthy")
 
+		By("Starting background subscription sender")
+		go startPeriodicSubscription(testCtx, mockServer, 10*time.Second)
+
 		DeferCleanup(func() {
 			By("Cleaning up container and server")
 			if containerName != "" {
@@ -57,109 +61,71 @@ var _ = Describe("UMH Core E2E Communication", Ordered, Label("e2e"), func() {
 			if mockServer != nil {
 				mockServer.Stop()
 			}
+			By("Stopping test context")
 			testCancel()
 		})
 	})
 
-	Context("Bridge Deployment", func() {
-		It("should deploy a bridge successfully and verify it becomes active", func() {
-			By("Creating a bridge deployment message")
-			bridgeDeploymentMessage := createBridgeDeploymentMessage()
+	Context("Component Status Verification", func() {
+		It("should verify component health status from status messages", func() {
+			// Give umh-core time to process the initial subscription
+			time.Sleep(5 * time.Second)
 
-			By("Adding the bridge deployment message to the pull queue")
-			mockServer.AddMessageToPullQueue(bridgeDeploymentMessage)
+			By("Waiting for umh-core to send status messages")
+			var latestStatusMessage *models.StatusMessage
 
-			By("Waiting for umh-core to pull and process the deployment message")
-			time.Sleep(3 * time.Second)
-
-			By("Verifying UMH Core received and processed the message")
-			// UMH Core should have pulled the deployment message
-			Eventually(func() int {
-				return len(mockServer.DrainPushedMessages())
-			}, 30*time.Second, 2*time.Second).Should(BeNumerically(">", 0), "UMH Core should send back action confirmations")
-
-			By("Checking the bridge deployment status via pushed messages")
-			pushedMessages := mockServer.DrainPushedMessages()
-
-			// Look for action reply messages indicating successful deployment
-			var actionReplies []models.ActionReplyMessagePayload
-			for _, msg := range pushedMessages {
-				var content models.UMHMessageContent
-				if err := json.Unmarshal([]byte(msg.Content), &content); err == nil {
-					if content.MessageType == models.ActionReply {
-						if actionReply, ok := content.Payload.(models.ActionReplyMessagePayload); ok {
-							actionReplies = append(actionReplies, actionReply)
-						} else {
-							// Try to parse as map and convert
-							if payloadMap, ok := content.Payload.(map[string]interface{}); ok {
-								actionReply := parseActionReplyFromMap(payloadMap)
-								if actionReply != nil {
-									actionReplies = append(actionReplies, *actionReply)
-								}
-							}
-						}
-					}
-				}
-			}
-
-			By("Verifying we received action confirmations")
-			Expect(len(actionReplies)).To(BeNumerically(">", 0), "Should receive action reply messages")
-
-			// Print all action replies for debugging
-			fmt.Printf("Received %d action replies:\n", len(actionReplies))
-			for i, reply := range actionReplies {
-				fmt.Printf("  [%d] State=%s, Message=%v\n", i, reply.ActionReplyState, reply.ActionReplyPayload)
-			}
-
-			// Check for action confirmation
-			foundConfirmation := false
-			foundExecution := false
-			foundCompletion := false
-			var failureMessage string
-
-			for _, reply := range actionReplies {
-				switch reply.ActionReplyState {
-				case models.ActionConfirmed:
-					foundConfirmation = true
-				case models.ActionExecuting:
-					foundExecution = true
-				case models.ActionFinishedSuccessfull:
-					foundCompletion = true
-				case models.ActionFinishedWithFailure:
-					failureMessage = fmt.Sprintf("%v", reply.ActionReplyPayload)
-				}
-			}
-
-			// If we got a failure, report it
-			if failureMessage != "" {
-				Fail(fmt.Sprintf("Bridge deployment failed: %s", failureMessage))
-			}
-
-			Expect(foundConfirmation).To(BeTrue(), "Should receive action confirmation")
-			Expect(foundExecution).To(BeTrue(), "Should receive action execution notification")
-
-			By("Waiting for bridge deployment to complete successfully")
-			// Look for successful completion in additional messages
 			Eventually(func() bool {
-				newMessages := mockServer.DrainPushedMessages()
-				for _, msg := range newMessages {
+				pushedMessages := mockServer.DrainPushedMessages()
+
+				for _, msg := range pushedMessages {
+					// Only check messages for our test email
+					if msg.Email != "e2e-test@example.com" {
+						continue
+					}
+
 					var content models.UMHMessageContent
 					if err := json.Unmarshal([]byte(msg.Content), &content); err == nil {
-						if content.MessageType == models.ActionReply {
-							if actionReply := parseActionReplyFromMap(content.Payload.(map[string]interface{})); actionReply != nil {
-								fmt.Printf("Additional reply: State=%s, Message=%v\n", actionReply.ActionReplyState, actionReply.ActionReplyPayload)
-								if actionReply.ActionReplyState == models.ActionFinishedSuccessfull {
-									return true
-								}
-								if actionReply.ActionReplyState == models.ActionFinishedWithFailure {
-									Fail(fmt.Sprintf("Bridge deployment failed: %v", actionReply.ActionReplyPayload))
-								}
+						if content.MessageType == models.Status {
+							// Try to parse the status message payload
+							if statusMsg := parseStatusMessageFromPayload(content.Payload); statusMsg != nil {
+								latestStatusMessage = statusMsg
+								fmt.Printf("Received status message:\n")
+								fmt.Printf("  Core: %s (message: %s)\n",
+									safeGetHealthState(statusMsg.Core.Health), safeGetHealthMessage(statusMsg.Core.Health))
+								fmt.Printf("  Agent: %s (message: %s)\n",
+									safeGetHealthState(statusMsg.Core.Agent.Health), safeGetHealthMessage(statusMsg.Core.Agent.Health))
+								fmt.Printf("  Redpanda: %s (message: %s)\n",
+									safeGetHealthState(statusMsg.Core.Redpanda.Health), safeGetHealthMessage(statusMsg.Core.Redpanda.Health))
+								fmt.Printf("  TopicBrowser: %s (message: %s)\n",
+									safeGetHealthState(statusMsg.Core.TopicBrowser.Health), safeGetHealthMessage(statusMsg.Core.TopicBrowser.Health))
+								return true
 							}
 						}
 					}
 				}
-				return foundCompletion
-			}, 60*time.Second, 2*time.Second).Should(BeTrue(), "Bridge deployment should complete successfully")
+				return false
+			}, 60*time.Second, 2*time.Second).Should(BeTrue(), "Should receive at least one status message")
+
+			By("Verifying Core is active")
+			Expect(latestStatusMessage).ToNot(BeNil(), "Status message should be parsed successfully")
+			Expect(latestStatusMessage.Core.Health).ToNot(BeNil(), "Core health should be present")
+			Expect(isHealthActiveOrAcceptable(latestStatusMessage.Core.Health, "active")).To(BeTrue(),
+				fmt.Sprintf("Core should be active, but was: %v", latestStatusMessage.Core.Health))
+
+			By("Verifying Agent is active")
+			Expect(latestStatusMessage.Core.Agent.Health).ToNot(BeNil(), "Agent health should be present")
+			Expect(isHealthActiveOrAcceptable(latestStatusMessage.Core.Agent.Health, "active")).To(BeTrue(),
+				fmt.Sprintf("Agent should be active, but was: %v", latestStatusMessage.Core.Agent.Health))
+
+			By("Verifying Redpanda is active or idle")
+			Expect(latestStatusMessage.Core.Redpanda.Health).ToNot(BeNil(), "Redpanda health should be present")
+			Expect(isHealthActiveOrAcceptable(latestStatusMessage.Core.Redpanda.Health, "active", "idle")).To(BeTrue(),
+				fmt.Sprintf("Redpanda should be active or idle, but was: %v", latestStatusMessage.Core.Redpanda.Health))
+
+			By("Verifying TopicBrowser is active or idle")
+			Expect(latestStatusMessage.Core.TopicBrowser.Health).ToNot(BeNil(), "TopicBrowser health should be present")
+			Expect(isHealthActiveOrAcceptable(latestStatusMessage.Core.TopicBrowser.Health, "active", "idle")).To(BeTrue(),
+				fmt.Sprintf("TopicBrowser should be active or idle, but was: %v", latestStatusMessage.Core.TopicBrowser.Health))
 		})
 
 		It("should be able to send multiple messages through the pull queue", func() {
@@ -231,39 +197,84 @@ var _ = Describe("UMH Core E2E Communication", Ordered, Label("e2e"), func() {
 	})
 })
 
-// createBridgeDeploymentMessage creates a UMH message that deploys a protocol converter/bridge
-func createBridgeDeploymentMessage() models.UMHMessage {
-	bridgeUUID := uuid.New()
-	actionUUID := uuid.New()
-
-	// Create the protocol converter payload
-	protocolConverter := models.ProtocolConverter{
-		UUID: &bridgeUUID,
-		Name: "e2e-test-bridge",
-		Connection: models.ProtocolConverterConnection{
-			IP:   "localhost",
-			Port: 3000,
-		},
-		Location: map[int]string{
-			0: "E2E-Test-Plant",
-			1: "Test-Line",
-			2: "Test-Bridge",
-		},
-		// For a basic bridge, we don't need ReadDFC or WriteDFC initially
-		// They can be added later via edit actions
+// parseStatusMessageFromPayload converts payload to StatusMessage
+func parseStatusMessageFromPayload(payload interface{}) *models.StatusMessage {
+	// First try direct type assertion
+	if statusMsg, ok := payload.(*models.StatusMessage); ok {
+		return statusMsg
 	}
 
-	// Create the action payload
-	actionPayload := models.ActionMessagePayload{
-		ActionType:    models.DeployProtocolConverter,
-		ActionUUID:    actionUUID,
-		ActionPayload: protocolConverter,
+	if statusMsg, ok := payload.(models.StatusMessage); ok {
+		return &statusMsg
+	}
+
+	// If payload is a map, try to unmarshal it
+	if payloadMap, ok := payload.(map[string]interface{}); ok {
+		jsonBytes, err := json.Marshal(payloadMap)
+		if err != nil {
+			return nil
+		}
+
+		var statusMsg models.StatusMessage
+		if err := json.Unmarshal(jsonBytes, &statusMsg); err != nil {
+			return nil
+		}
+
+		return &statusMsg
+	}
+
+	return nil
+}
+
+// isHealthActiveOrAcceptable checks if health state matches any of the acceptable states
+func isHealthActiveOrAcceptable(health *models.Health, acceptableStates ...string) bool {
+	if health == nil {
+		return false
+	}
+
+	// Check the ObservedState field
+	for _, acceptable := range acceptableStates {
+		if health.ObservedState == acceptable {
+			return true
+		}
+	}
+
+	return false
+}
+
+// safeGetHealthState safely extracts the health state, returning a fallback if nil
+func safeGetHealthState(health *models.Health) string {
+	if health == nil {
+		return "<nil>"
+	}
+	if health.ObservedState == "" {
+		return "<empty>"
+	}
+	return health.ObservedState
+}
+
+// safeGetHealthMessage safely extracts the health message, returning a fallback if nil
+func safeGetHealthMessage(health *models.Health) string {
+	if health == nil {
+		return "<nil>"
+	}
+	if health.Message == "" {
+		return "<empty>"
+	}
+	return health.Message
+}
+
+// createSubscriptionMessage creates a UMH message that subscribes to status updates
+func createSubscriptionMessage() models.UMHMessage {
+	// Create the subscription payload
+	subscribePayload := models.SubscribeMessagePayload{
+		Resubscribed: false, // This is a new subscription, not a resubscription
 	}
 
 	// Create the message content
 	messageContent := models.UMHMessageContent{
-		MessageType: models.Action,
-		Payload:     actionPayload,
+		MessageType: models.Subscribe,
+		Payload:     subscribePayload,
 	}
 
 	// Serialize the content
@@ -280,23 +291,53 @@ func createBridgeDeploymentMessage() models.UMHMessage {
 	}
 }
 
-// parseActionReplyFromMap converts a map[string]interface{} to ActionReplyMessagePayload
-func parseActionReplyFromMap(payloadMap map[string]interface{}) *models.ActionReplyMessagePayload {
-	actionReply := &models.ActionReplyMessagePayload{}
+// startPeriodicSubscription sends subscription messages periodically to maintain the subscription
+func startPeriodicSubscription(ctx context.Context, mockServer *MockAPIServer, interval time.Duration) {
+	// Send initial subscription immediately
+	fmt.Printf("Sending initial subscription message\n")
+	subscribeMessage := createSubscriptionMessage()
+	mockServer.AddMessageToPullQueue(subscribeMessage)
 
-	if actionUUID, ok := payloadMap["actionUUID"].(string); ok {
-		if parsed, err := uuid.Parse(actionUUID); err == nil {
-			actionReply.ActionUUID = parsed
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			fmt.Printf("Stopping periodic subscription sender\n")
+			return
+		case <-ticker.C:
+			// Send resubscription message
+			fmt.Printf("Sending periodic resubscription message\n")
+			resubscribeMessage := createResubscriptionMessage()
+			mockServer.AddMessageToPullQueue(resubscribeMessage)
 		}
 	}
+}
 
-	if state, ok := payloadMap["actionReplyState"].(string); ok {
-		actionReply.ActionReplyState = models.ActionReplyState(state)
+// createResubscriptionMessage creates a UMH message that resubscribes to status updates
+func createResubscriptionMessage() models.UMHMessage {
+	// Create the subscription payload with resubscribed flag
+	subscribePayload := models.SubscribeMessagePayload{
+		Resubscribed: true, // This is a resubscription to refresh TTL
 	}
 
-	if payload, ok := payloadMap["actionReplyPayload"]; ok {
-		actionReply.ActionReplyPayload = payload
+	// Create the message content
+	messageContent := models.UMHMessageContent{
+		MessageType: models.Subscribe,
+		Payload:     subscribePayload,
 	}
 
-	return actionReply
+	// Serialize the content
+	contentBytes, _ := json.Marshal(messageContent)
+
+	// Create the UMH message
+	return models.UMHMessage{
+		Metadata: &models.MessageMetadata{
+			TraceID: uuid.New(),
+		},
+		Email:        "e2e-test@example.com",
+		Content:      string(contentBytes),
+		InstanceUUID: uuid.New(),
+	}
 }
