@@ -25,7 +25,17 @@ import (
 	"os/exec"
 	"path/filepath"
 	"time"
+
+	"go.uber.org/zap"
 )
+
+// containerLogger is a local logger for container operations
+var containerLogger *zap.SugaredLogger
+
+func init() {
+	logger, _ := zap.NewDevelopment()
+	containerLogger = logger.Sugar()
+}
 
 // startUMHCoreWithMockAPI starts a UMH Core container configured to use the mock API server
 func startUMHCoreWithMockAPI(mockServer *MockAPIServer) (string, int) {
@@ -41,7 +51,7 @@ func startUMHCoreWithMockAPI(mockServer *MockAPIServer) (string, int) {
 	// Generate a test auth token
 	authToken := generateTestAuthToken()
 
-	fmt.Printf("Starting container %s with API URL %s\n",
+	containerLogger.Infof("Starting container %s with API URL %s",
 		containerName, mockServer.GetHostURL())
 
 	// Find two open ports for metrics and graphql using :0
@@ -68,12 +78,12 @@ func startUMHCoreWithMockAPI(mockServer *MockAPIServer) (string, int) {
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		// Print debug info before panicking
-		fmt.Printf("Docker command failed: %s\n", cmd.String())
-		fmt.Printf("Output: %s\n", string(output))
+		containerLogger.Errorf("Docker command failed: %s", cmd.String())
+		containerLogger.Errorf("Output: %s", string(output))
 		panic(fmt.Sprintf("Failed to start container: %v", err))
 	}
 
-	fmt.Printf("Container %s started successfully\n", containerName)
+	containerLogger.Infof("Container %s started successfully", containerName)
 
 	// Start a mock data source that the bridge can connect to
 	go startMockDataSource()
@@ -91,7 +101,7 @@ func createTempConfigDir(containerName string) string {
 		panic(fmt.Sprintf("Failed to create config directory: %v", err))
 	}
 
-	fmt.Printf("📁 E2E test temp directory: %s\n", configDir)
+	containerLogger.Infof("📁 E2E test temp directory: %s", configDir)
 	return configDir
 }
 
@@ -141,7 +151,7 @@ func isContainerHealthy(metricsPort int) bool {
 
 // stopAndRemoveContainer stops and removes the test container
 func stopAndRemoveContainer(containerName string) {
-	fmt.Printf("Stopping and removing container %s\n", containerName)
+	containerLogger.Infof("Stopping and removing container %s", containerName)
 
 	// Stop the container
 	stopCmd := exec.Command("docker", "stop", containerName)
@@ -151,7 +161,7 @@ func stopAndRemoveContainer(containerName string) {
 	rmCmd := exec.Command("docker", "rm", containerName)
 	rmCmd.Run() // Ignore errors
 
-	fmt.Printf("Container %s cleaned up\n", containerName)
+	containerLogger.Infof("Container %s cleaned up", containerName)
 }
 
 // startMockDataSource starts a simple HTTP server on port 3000 that the bridge can connect to
@@ -189,8 +199,8 @@ func startMockDataSource() {
 		Handler: mux,
 	}
 
-	fmt.Println("Starting mock data source on :3000")
+	containerLogger.Info("Starting mock data source on :3000")
 	if err := server.ListenAndServe(); err != nil {
-		fmt.Printf("Mock data source error: %v\n", err)
+		containerLogger.Errorf("Mock data source error: %v", err)
 	}
 }

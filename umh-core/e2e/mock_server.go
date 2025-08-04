@@ -15,6 +15,7 @@
 package e2e_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"sync"
@@ -23,6 +24,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/backend_api_structs"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
@@ -285,14 +287,135 @@ func (s *MockAPIServer) handlePush(c *gin.Context) {
 
 	// Store the pushed messages in our channel for testing verification
 	for _, message := range payload.UMHMessages {
+		// Try to decode and log status messages with detailed information
+		s.logMessageDetails(message)
+
 		select {
 		case s.PushedMessages <- message:
-			s.logger.Infow("Received pushed message", "content", message.Content, "from_instance", message.InstanceUUID)
+			// Basic log kept for compatibility
+			s.logger.Infow("Received pushed message", "content_length", len(message.Content), "from_instance", message.InstanceUUID, "email", message.Email)
 		default:
-			s.logger.Warnw("Push message channel full, dropping message", "content", message.Content)
+			s.logger.Warnw("Push message channel full, dropping message", "content_length", len(message.Content), "email", message.Email)
 		}
 	}
 
 	s.logger.Infow("Received push from umh-core", "message_count", len(payload.UMHMessages))
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+// logMessageDetails decodes and logs detailed information about messages, especially status messages
+func (s *MockAPIServer) logMessageDetails(message models.UMHMessage) {
+	// Decode the base64 encoded message content
+	content, err := encoding.DecodeMessageFromUMHInstanceToUser(message.Content)
+	if err != nil {
+		s.logger.Debugw("Could not decode message content", "error", err, "email", message.Email)
+		return
+	}
+
+	s.logger.Infow("Decoded message",
+		"type", content.MessageType,
+		"email", message.Email,
+		"instance", message.InstanceUUID)
+
+	// If it's a status message, log detailed component health information
+	if content.MessageType == models.Status {
+		s.logStatusMessage(content, message.Email)
+	}
+}
+
+// logStatusMessage logs detailed information about status messages
+func (s *MockAPIServer) logStatusMessage(content models.UMHMessageContent, email string) {
+	// Try to parse the status message payload
+	statusMsg := s.parseStatusMessageFromPayload(content.Payload)
+	if statusMsg == nil {
+		s.logger.Warnw("Could not parse status message payload", "email", email)
+		return
+	}
+
+	s.logger.Infow("=== STATUS MESSAGE RECEIVED ===",
+		"email", email,
+		"timestamp", time.Now().Format(time.RFC3339))
+
+	// Log Core health
+	if statusMsg.Core.Health != nil {
+		s.logger.Infow("Core Status",
+			"state", statusMsg.Core.Health.ObservedState,
+			"desired_state", statusMsg.Core.Health.DesiredState,
+			"category", statusMsg.Core.Health.Category,
+			"message", statusMsg.Core.Health.Message)
+	}
+
+	// Log Agent health
+	if statusMsg.Core.Agent.Health != nil {
+		s.logger.Infow("Agent Status",
+			"state", statusMsg.Core.Agent.Health.ObservedState,
+			"desired_state", statusMsg.Core.Agent.Health.DesiredState,
+			"category", statusMsg.Core.Agent.Health.Category,
+			"message", statusMsg.Core.Agent.Health.Message)
+	}
+
+	// Log Redpanda health
+	if statusMsg.Core.Redpanda.Health != nil {
+		s.logger.Infow("Redpanda Status",
+			"state", statusMsg.Core.Redpanda.Health.ObservedState,
+			"desired_state", statusMsg.Core.Redpanda.Health.DesiredState,
+			"category", statusMsg.Core.Redpanda.Health.Category,
+			"message", statusMsg.Core.Redpanda.Health.Message,
+			"incoming_throughput", statusMsg.Core.Redpanda.AvgIncomingThroughputPerMinuteInBytesSec,
+			"outgoing_throughput", statusMsg.Core.Redpanda.AvgOutgoingThroughputPerMinuteInBytesSec)
+	}
+
+	// Log TopicBrowser health
+	if statusMsg.Core.TopicBrowser.Health != nil {
+		s.logger.Infow("TopicBrowser Status",
+			"state", statusMsg.Core.TopicBrowser.Health.ObservedState,
+			"desired_state", statusMsg.Core.TopicBrowser.Health.DesiredState,
+			"category", statusMsg.Core.TopicBrowser.Health.Category,
+			"message", statusMsg.Core.TopicBrowser.Health.Message,
+			"topic_count", statusMsg.Core.TopicBrowser.TopicCount)
+	}
+
+	// Log Container health if available
+	if statusMsg.Core.Container.Health != nil {
+		s.logger.Infow("Container Status",
+			"state", statusMsg.Core.Container.Health.ObservedState,
+			"desired_state", statusMsg.Core.Container.Health.DesiredState,
+			"category", statusMsg.Core.Container.Health.Category,
+			"message", statusMsg.Core.Container.Health.Message,
+			"architecture", statusMsg.Core.Container.Architecture)
+	}
+
+	// Log DFC count
+	s.logger.Infow("DFC Information", "dfc_count", len(statusMsg.Core.Dfcs))
+
+	s.logger.Infow("=== END STATUS MESSAGE ===")
+}
+
+// parseStatusMessageFromPayload converts payload to StatusMessage (duplicate of test function for mock server use)
+func (s *MockAPIServer) parseStatusMessageFromPayload(payload interface{}) *models.StatusMessage {
+	// First try direct type assertion
+	if statusMsg, ok := payload.(*models.StatusMessage); ok {
+		return statusMsg
+	}
+
+	if statusMsg, ok := payload.(models.StatusMessage); ok {
+		return &statusMsg
+	}
+
+	// If payload is a map, try to unmarshal it
+	if payloadMap, ok := payload.(map[string]interface{}); ok {
+		jsonBytes, err := json.Marshal(payloadMap)
+		if err != nil {
+			return nil
+		}
+
+		var statusMsg models.StatusMessage
+		if err := json.Unmarshal(jsonBytes, &statusMsg); err != nil {
+			return nil
+		}
+
+		return &statusMsg
+	}
+
+	return nil
 }

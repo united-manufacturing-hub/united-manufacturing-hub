@@ -19,7 +19,11 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
 )
+
+// Global logger for e2e tests
+var e2eLogger *zap.SugaredLogger
 
 func TestE2E(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -27,11 +31,14 @@ func TestE2E(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	// Any global setup for the entire E2E test suite
-	// For now, we don't need any global setup since each test starts its own infrastructure
+	// Set up global logger for e2e tests
+	logger, _ := zap.NewDevelopment()
+	e2eLogger = logger.Sugar()
 })
 
 var _ = AfterSuite(func() {
-	// Any global cleanup for the entire E2E test suite
-	// Individual tests handle their own cleanup
+	// Clean up global logger
+	if e2eLogger != nil {
+		_ = e2eLogger.Sync()
+	}
 })

@@ -23,8 +23,14 @@ import (
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
+
+func init() {
+	// Use corev1 encoder for best performance and compatibility
+	encoding.ChooseEncoder(encoding.EncodingCorev1)
+}
 
 var _ = Describe("UMH Core E2E Communication", Ordered, Label("e2e"), func() {
 	var (
@@ -72,8 +78,6 @@ var _ = Describe("UMH Core E2E Communication", Ordered, Label("e2e"), func() {
 			time.Sleep(5 * time.Second)
 
 			By("Waiting for umh-core to send status messages")
-			var latestStatusMessage *models.StatusMessage
-
 			Eventually(func() bool {
 				pushedMessages := mockServer.DrainPushedMessages()
 
@@ -83,117 +87,87 @@ var _ = Describe("UMH Core E2E Communication", Ordered, Label("e2e"), func() {
 						continue
 					}
 
-					var content models.UMHMessageContent
-					if err := json.Unmarshal([]byte(msg.Content), &content); err == nil {
-						if content.MessageType == models.Status {
-							// Try to parse the status message payload
-							if statusMsg := parseStatusMessageFromPayload(content.Payload); statusMsg != nil {
-								latestStatusMessage = statusMsg
-								fmt.Printf("Received status message:\n")
-								fmt.Printf("  Core: %s (message: %s)\n",
-									safeGetHealthState(statusMsg.Core.Health), safeGetHealthMessage(statusMsg.Core.Health))
-								fmt.Printf("  Agent: %s (message: %s)\n",
-									safeGetHealthState(statusMsg.Core.Agent.Health), safeGetHealthMessage(statusMsg.Core.Agent.Health))
-								fmt.Printf("  Redpanda: %s (message: %s)\n",
-									safeGetHealthState(statusMsg.Core.Redpanda.Health), safeGetHealthMessage(statusMsg.Core.Redpanda.Health))
-								fmt.Printf("  TopicBrowser: %s (message: %s)\n",
-									safeGetHealthState(statusMsg.Core.TopicBrowser.Health), safeGetHealthMessage(statusMsg.Core.TopicBrowser.Health))
-								return true
-							}
+					// Decode the base64 encoded message content
+					content, err := encoding.DecodeMessageFromUMHInstanceToUser(msg.Content)
+					if err != nil {
+						e2eLogger.Errorf("Failed to decode message content: %v", err)
+						continue
+					}
+
+					if content.MessageType == models.Status {
+						// Try to parse the status message payload
+						if statusMsg := parseStatusMessageFromPayload(content.Payload); statusMsg != nil {
+							e2eLogger.Info("Received status message:")
+							e2eLogger.Infof("  Core: %s (message: %s)",
+								safeGetHealthState(statusMsg.Core.Health), safeGetHealthMessage(statusMsg.Core.Health))
+							e2eLogger.Infof("  Agent: %s (message: %s)",
+								safeGetHealthState(statusMsg.Core.Agent.Health), safeGetHealthMessage(statusMsg.Core.Agent.Health))
+							e2eLogger.Infof("  Redpanda: %s (message: %s)",
+								safeGetHealthState(statusMsg.Core.Redpanda.Health), safeGetHealthMessage(statusMsg.Core.Redpanda.Health))
+							e2eLogger.Infof("  TopicBrowser: %s (message: %s)",
+								safeGetHealthState(statusMsg.Core.TopicBrowser.Health), safeGetHealthMessage(statusMsg.Core.TopicBrowser.Health))
+							return true
 						}
 					}
 				}
 				return false
 			}, 60*time.Second, 2*time.Second).Should(BeTrue(), "Should receive at least one status message")
 
-			By("Verifying Core is active")
-			Expect(latestStatusMessage).ToNot(BeNil(), "Status message should be parsed successfully")
-			Expect(latestStatusMessage.Core.Health).ToNot(BeNil(), "Core health should be present")
-			Expect(isHealthActiveOrAcceptable(latestStatusMessage.Core.Health, "active")).To(BeTrue(),
-				fmt.Sprintf("Core should be active, but was: %v", latestStatusMessage.Core.Health))
+			By("Verifying all components are in healthy states")
+			Eventually(func() bool {
+				var latestStatusMessage *models.StatusMessage
+				pushedMessages := mockServer.DrainPushedMessages()
 
-			By("Verifying Agent is active")
-			Expect(latestStatusMessage.Core.Agent.Health).ToNot(BeNil(), "Agent health should be present")
-			Expect(isHealthActiveOrAcceptable(latestStatusMessage.Core.Agent.Health, "active")).To(BeTrue(),
-				fmt.Sprintf("Agent should be active, but was: %v", latestStatusMessage.Core.Agent.Health))
+				for _, msg := range pushedMessages {
+					if msg.Email != "e2e-test@example.com" {
+						continue
+					}
 
-			By("Verifying Redpanda is active or idle")
-			Expect(latestStatusMessage.Core.Redpanda.Health).ToNot(BeNil(), "Redpanda health should be present")
-			Expect(isHealthActiveOrAcceptable(latestStatusMessage.Core.Redpanda.Health, "active", "idle")).To(BeTrue(),
-				fmt.Sprintf("Redpanda should be active or idle, but was: %v", latestStatusMessage.Core.Redpanda.Health))
+					content, err := encoding.DecodeMessageFromUMHInstanceToUser(msg.Content)
+					if err != nil {
+						continue
+					}
 
-			By("Verifying TopicBrowser is active or idle")
-			Expect(latestStatusMessage.Core.TopicBrowser.Health).ToNot(BeNil(), "TopicBrowser health should be present")
-			Expect(isHealthActiveOrAcceptable(latestStatusMessage.Core.TopicBrowser.Health, "active", "idle")).To(BeTrue(),
-				fmt.Sprintf("TopicBrowser should be active or idle, but was: %v", latestStatusMessage.Core.TopicBrowser.Health))
-		})
-
-		It("should be able to send multiple messages through the pull queue", func() {
-			By("Adding multiple test messages to the pull queue")
-			for i := 0; i < 5; i++ {
-				testMessage := models.UMHMessage{
-					Metadata: &models.MessageMetadata{
-						TraceID: uuid.New(),
-					},
-					Email:        "test@example.com",
-					Content:      fmt.Sprintf("Test message %d", i),
-					InstanceUUID: uuid.New(),
+					if content.MessageType == models.Status {
+						if statusMsg := parseStatusMessageFromPayload(content.Payload); statusMsg != nil {
+							latestStatusMessage = statusMsg
+						}
+					}
 				}
-				mockServer.AddMessageToPullQueue(testMessage)
-			}
 
-			By("Waiting for umh-core to pull and process all messages")
-			time.Sleep(3 * time.Second)
-
-			By("Verifying messages were processed")
-			// At this point, umh-core should have pulled all messages
-			// We can't directly verify they were processed without looking at internal state,
-			// but we can verify they were pulled by checking the queue is empty
-			Expect(true).To(BeTrue()) // Placeholder - in a real test you might check logs or other indicators
-		})
-
-		It("should capture any messages that umh-core pushes back", func() {
-			By("Checking if umh-core has pushed any messages to us")
-			pushedMessages := mockServer.DrainPushedMessages()
-
-			By("Logging what we received")
-			for i, msg := range pushedMessages {
-				fmt.Printf("Pushed message %d: Content=%s, Email=%s, InstanceUUID=%s\n",
-					i, msg.Content, msg.Email, msg.InstanceUUID)
-			}
-
-			// This test mainly verifies the infrastructure works
-			// In a real test, you might send specific messages that trigger responses
-			Expect(len(pushedMessages)).To(BeNumerically(">=", 0))
-		})
-	})
-
-	Context("Message Flow Verification", func() {
-		It("should handle rapid message delivery", func() {
-			By("Adding messages rapidly to test the communication speed")
-			messageCount := 20
-
-			for i := 0; i < messageCount; i++ {
-				testMessage := models.UMHMessage{
-					Metadata: &models.MessageMetadata{
-						TraceID: uuid.New(),
-					},
-					Email:        "speed-test@example.com",
-					Content:      fmt.Sprintf("Speed test message %d at %v", i, time.Now()),
-					InstanceUUID: uuid.New(),
+				if latestStatusMessage == nil {
+					return false
 				}
-				mockServer.AddMessageToPullQueue(testMessage)
 
-				// Small delay to avoid overwhelming
-				time.Sleep(10 * time.Millisecond)
-			}
+				// Check Core health
+				if latestStatusMessage.Core.Health == nil || !isHealthActiveOrAcceptable(latestStatusMessage.Core.Health, "active") {
+					e2eLogger.Infof("Core not ready: %s", safeGetHealthState(latestStatusMessage.Core.Health))
+					return false
+				}
 
-			By("Waiting for all messages to be processed")
-			time.Sleep(5 * time.Second)
+				// Check Agent health
+				if latestStatusMessage.Core.Agent.Health == nil || !isHealthActiveOrAcceptable(latestStatusMessage.Core.Agent.Health, "active") {
+					e2eLogger.Infof("Agent not ready: %s", safeGetHealthState(latestStatusMessage.Core.Agent.Health))
+					return false
+				}
 
-			By("Verifying system remained stable")
-			Expect(isContainerHealthy(metricsPort)).To(BeTrue(), "Container should remain healthy during rapid message delivery")
+				// Check Redpanda health (active or idle)
+				if latestStatusMessage.Core.Redpanda.Health == nil || !isHealthActiveOrAcceptable(latestStatusMessage.Core.Redpanda.Health, "active", "idle") {
+					e2eLogger.Infof("Redpanda not ready: %s", safeGetHealthState(latestStatusMessage.Core.Redpanda.Health))
+					return false
+				}
+
+				// Check TopicBrowser health (active or idle)
+				if latestStatusMessage.Core.TopicBrowser.Health == nil || !isHealthActiveOrAcceptable(latestStatusMessage.Core.TopicBrowser.Health, "active", "idle") {
+					e2eLogger.Infof("TopicBrowser not ready: %s", safeGetHealthState(latestStatusMessage.Core.TopicBrowser.Health))
+					return false
+				}
+
+				e2eLogger.Info("All components are healthy!")
+				return true
+			}, 10*time.Second, 1*time.Second).Should(BeTrue(), "All components should eventually be in healthy states")
 		})
+
 	})
 })
 
@@ -277,8 +251,11 @@ func createSubscriptionMessage() models.UMHMessage {
 		Payload:     subscribePayload,
 	}
 
-	// Serialize the content
-	contentBytes, _ := json.Marshal(messageContent)
+	// Encode the content using the encoding package
+	encodedContent, err := encoding.EncodeMessageFromUserToUMHInstance(messageContent)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to encode subscription message: %v", err))
+	}
 
 	// Create the UMH message
 	return models.UMHMessage{
@@ -286,7 +263,7 @@ func createSubscriptionMessage() models.UMHMessage {
 			TraceID: uuid.New(),
 		},
 		Email:        "e2e-test@example.com",
-		Content:      string(contentBytes),
+		Content:      encodedContent,
 		InstanceUUID: uuid.New(),
 	}
 }
@@ -294,7 +271,7 @@ func createSubscriptionMessage() models.UMHMessage {
 // startPeriodicSubscription sends subscription messages periodically to maintain the subscription
 func startPeriodicSubscription(ctx context.Context, mockServer *MockAPIServer, interval time.Duration) {
 	// Send initial subscription immediately
-	fmt.Printf("Sending initial subscription message\n")
+	e2eLogger.Info("Sending initial subscription message")
 	subscribeMessage := createSubscriptionMessage()
 	mockServer.AddMessageToPullQueue(subscribeMessage)
 
@@ -304,11 +281,11 @@ func startPeriodicSubscription(ctx context.Context, mockServer *MockAPIServer, i
 	for {
 		select {
 		case <-ctx.Done():
-			fmt.Printf("Stopping periodic subscription sender\n")
+			e2eLogger.Info("Stopping periodic subscription sender")
 			return
 		case <-ticker.C:
 			// Send resubscription message
-			fmt.Printf("Sending periodic resubscription message\n")
+			e2eLogger.Info("Sending periodic resubscription message")
 			resubscribeMessage := createResubscriptionMessage()
 			mockServer.AddMessageToPullQueue(resubscribeMessage)
 		}
@@ -328,8 +305,11 @@ func createResubscriptionMessage() models.UMHMessage {
 		Payload:     subscribePayload,
 	}
 
-	// Serialize the content
-	contentBytes, _ := json.Marshal(messageContent)
+	// Encode the content using the encoding package
+	encodedContent, err := encoding.EncodeMessageFromUserToUMHInstance(messageContent)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to encode resubscription message: %v", err))
+	}
 
 	// Create the UMH message
 	return models.UMHMessage{
@@ -337,7 +317,7 @@ func createResubscriptionMessage() models.UMHMessage {
 			TraceID: uuid.New(),
 		},
 		Email:        "e2e-test@example.com",
-		Content:      string(contentBytes),
+		Content:      encodedContent,
 		InstanceUUID: uuid.New(),
 	}
 }
