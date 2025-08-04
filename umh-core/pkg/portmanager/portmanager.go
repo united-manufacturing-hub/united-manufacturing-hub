@@ -25,6 +25,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 )
 
 // PortManager is an interface that defines methods for managing ports
@@ -146,6 +149,10 @@ func getEphemeralPortRange() (uint16, uint16) {
 	}
 
 	// Fallback to typical ephemeral port range
+	log := logger.For("portmanager")
+	log.Warnf("Failed to read ephemeral port range from OS (/proc/sys/net/ipv4/ip_local_port_range), falling back to default range 32768-65535. Error: %v", err)
+	sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to read ephemeral port range from OS, using fallback range 32768-65535. Error: %v", err)
+
 	return 32768, 65535
 }
 
