@@ -148,6 +148,11 @@ func (s *MockAPIServer) GetURL() string {
 	return fmt.Sprintf("http://localhost:%d", s.port)
 }
 
+// GetHostURL returns the base URL that can be accessed from inside a Docker container
+func (s *MockAPIServer) GetHostURL() string {
+	return fmt.Sprintf("http://host.docker.internal:%d", s.port)
+}
+
 // GetPort returns the port the server is listening on
 func (s *MockAPIServer) GetPort() int {
 	return s.port

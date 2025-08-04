@@ -322,10 +322,6 @@ e2e-test: build
 	@echo "Running E2E tests..."
 	cd e2e && go mod tidy && ginkgo -v --label-filter='e2e' --fail-fast ./...
 
-e2e-test-watch: build
-	@echo "Running E2E tests in watch mode..."
-	cd e2e && go mod tidy && ginkgo watch --label-filter='e2e' ./...
-
 # Meta target to setup the environment for the tests
 pre-test: build-protobuf stop-all-pods vet-nilaway-lint-betteralign
 

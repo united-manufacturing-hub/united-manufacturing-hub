@@ -17,12 +17,14 @@ package e2e_test
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 )
 
 // startUMHCoreWithMockAPI starts a UMH Core container configured to use the mock API server
@@ -40,19 +42,21 @@ func startUMHCoreWithMockAPI(mockServer *MockAPIServer) (string, int) {
 	authToken := generateTestAuthToken()
 
 	fmt.Printf("Starting container %s with API URL %s\n",
-		containerName, mockServer.GetURL())
+		containerName, mockServer.GetHostURL())
 
 	// Find two open ports for metrics and graphql using :0
 	metricsPort := getAvailablePort()
 	graphQLPort := getAvailablePort()
 
 	// Start the container with environment variables pointing to our mock server
+	// Use --add-host to allow container to reach host services via host.docker.internal
 	cmd := exec.Command("docker", "run", "-d",
 		"--name", containerName,
 		"--restart", "unless-stopped",
+		"--add-host=host.docker.internal:host-gateway", // Allow container to reach host services
 		"-v", fmt.Sprintf("%s:/data", dataDir),
 		"-e", fmt.Sprintf("AUTH_TOKEN=%s", authToken),
-		"-e", fmt.Sprintf("API_URL=%s", mockServer.GetURL()),
+		"-e", fmt.Sprintf("API_URL=%s", mockServer.GetHostURL()), // Use host-accessible URL
 		"-e", "LOCATION_0=E2E-Test-Plant",
 		"-e", "LOCATION_1=Test-Line",
 		"-e", "ALLOW_INSECURE_TLS=true", // Since we're using HTTP for testing
@@ -70,6 +74,10 @@ func startUMHCoreWithMockAPI(mockServer *MockAPIServer) (string, int) {
 	}
 
 	fmt.Printf("Container %s started successfully\n", containerName)
+
+	// Start a mock data source that the bridge can connect to
+	go startMockDataSource()
+
 	return containerName, metricsPort
 }
 
@@ -83,6 +91,7 @@ func createTempConfigDir(containerName string) string {
 		panic(fmt.Sprintf("Failed to create config directory: %v", err))
 	}
 
+	fmt.Printf("📁 E2E test temp directory: %s\n", configDir)
 	return configDir
 }
 
@@ -145,28 +154,43 @@ func stopAndRemoveContainer(containerName string) {
 	fmt.Printf("Container %s cleaned up\n", containerName)
 }
 
-// getContainerLogs gets the logs from the container for debugging
-func getContainerLogs(containerName string) string {
-	cmd := exec.Command("docker", "logs", containerName)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Sprintf("Failed to get logs: %v", err)
+// startMockDataSource starts a simple HTTP server on port 3000 that the bridge can connect to
+func startMockDataSource() {
+	mux := http.NewServeMux()
+
+	// Simple endpoint that returns mock industrial data
+	mux.HandleFunc("/data", func(w http.ResponseWriter, r *http.Request) {
+		data := map[string]interface{}{
+			"timestamp":   time.Now().Unix(),
+			"temperature": 23.5 + (float64(time.Now().Unix()%10) * 0.5),
+			"pressure":    1013.25 + (float64(time.Now().Unix()%20) * 0.1),
+			"status":      "running",
+			"tag_name":    "sensor_01",
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(data)
+	})
+
+	// Health check endpoint
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
+
+	// Root endpoint
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Mock Data Source - E2E Test"))
+	})
+
+	server := &http.Server{
+		Addr:    ":3000",
+		Handler: mux,
 	}
-	return string(output)
-}
 
-// printContainerDebugInfo prints debugging information about the container
-func printContainerDebugInfo(containerName string) {
-	fmt.Printf("=== Debug Info for Container %s ===\n", containerName)
-
-	// Container status
-	statusCmd := exec.Command("docker", "ps", "-a", "--filter", fmt.Sprintf("name=%s", containerName))
-	if output, err := statusCmd.Output(); err == nil {
-		fmt.Printf("Container status:\n%s\n", string(output))
+	fmt.Println("Starting mock data source on :3000")
+	if err := server.ListenAndServe(); err != nil {
+		fmt.Printf("Mock data source error: %v\n", err)
 	}
-
-	// Container logs
-	fmt.Printf("Container logs:\n%s\n", getContainerLogs(containerName))
-
-	fmt.Printf("=== End Debug Info ===\n")
 }
