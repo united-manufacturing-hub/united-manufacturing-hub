@@ -168,8 +168,11 @@ func NewFileConfigManager() *FileConfigManager {
 	}
 
 	// Initial cache population - try to load config during initialization
+	// here, we use the longer background timeout because we want to make sure, the inital config
+	// is cached before the first tick.
+	// The long blocking operation is not a problem, because it is only executed once during initialization.
 
-	initCtx, cancel := context.WithTimeout(context.Background(), constants.ConfigGetConfigTimeout)
+	initCtx, cancel := context.WithTimeout(context.Background(), constants.ConfigBackgroundRefreshTimeout)
 	defer cancel()
 
 	config, rawConfig, err := fc.readAndParseConfig(initCtx)
@@ -356,6 +359,8 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 
 	// ---------- SLOW PATH (file changed) ----------
 	// Check if a refresh is already in progress using TryLock
+	// if the lock does not succeed, we silently return the cached config
+	// this leads to the behavior that the config update always takes at least two ticks (two calls of GetConfig)
 	if m.refreshMu.TryLock() {
 		// Start background refresh only if we have a cached config to return
 		go m.backgroundRefresh(info.ModTime())
@@ -378,6 +383,8 @@ func (m *FileConfigManager) backgroundRefresh(modTime time.Time) {
 
 	start := time.Now()
 	// Create a background context with timeout
+	// to allow for long configs to be parsed, we use the longer background refresh timeout
+	// this is not a problem because this functions runs in a non-blocking goroutine
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ConfigBackgroundRefreshTimeout)
 	defer cancel()
 
