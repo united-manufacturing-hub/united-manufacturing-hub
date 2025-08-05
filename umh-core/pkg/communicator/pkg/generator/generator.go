@@ -261,6 +261,7 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 					"action-edit-protocol-converter",
 					"protocol-converter-logs",
 					"protocol-converter-metrics",
+					"stream-processor-ignore-health-check",
 				},
 			},
 		},
