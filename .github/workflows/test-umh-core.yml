@@ -52,6 +52,34 @@ jobs:
       - name: Run unit tests
         run: make unit-test
 
+  e2e-tests:
+    name: E2E Tests
+    runs-on:
+      group: arc-runners-tests
+    defaults:
+      run:
+        working-directory: ./umh-core
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: "umh-core/go.mod"
+          cache-dependency-path: |
+            umh-core/go.sum
+
+      - name: Install ginkgo and nilaway
+        run: make install
+
+      - name: Get dependencies
+        working-directory: ./umh-core
+        run: |
+          make download-docker-binaries
+
+      - name: Run e2e tests
+        run: make e2e-test
+
   integration-tests:
     name: Integration Tests
     runs-on:
@@ -90,7 +118,7 @@ jobs:
         working-directory: ./umh-core
         run: |
           make download-docker-binaries
-          
+
       - name: Stop containers & cleanup
         working-directory: ./umh-core
         run: |
