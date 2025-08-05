@@ -96,9 +96,6 @@ internal:
 			})
 
 			It("should return the parsed config", func() {
-				// Trigger initial config load to start background refresh
-				_, err := configManager.GetConfig(ctx, tick)
-				Expect(err).NotTo(HaveOccurred())
 
 				// Wait for background refresh to complete and verify config
 				Eventually(func() error {
