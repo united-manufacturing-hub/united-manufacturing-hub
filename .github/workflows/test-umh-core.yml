@@ -55,7 +55,7 @@ jobs:
   e2e-tests:
     name: E2E Tests
     runs-on:
-      group: arc-runners-tests
+      group: eos
     defaults:
       run:
         working-directory: ./umh-core
