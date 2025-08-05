@@ -117,6 +117,9 @@ type FileConfigManager struct {
 	// fsService handles filesystem operations
 	fsService filesystem.Service
 
+	// cacheError is the error that occurred during the last background refresh
+	cacheError error
+
 	// logger is the logger for the config manager
 	logger *zap.SugaredLogger
 
@@ -145,6 +148,7 @@ type FileConfigManager struct {
 
 	// ---------- background refresh state ----------
 	refreshMu sync.Mutex // prevents concurrent background refreshes
+
 }
 
 // NewFileConfigManager creates a new FileConfigManager
@@ -348,10 +352,6 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 		m.cacheMu.RUnlock()
 		return cfg, nil
 	}
-
-	// File has changed - check if we should start background refresh
-	currentCacheConfig := m.cacheConfig.Clone()
-	hasCache := !m.cacheModTime.IsZero()
 	m.cacheMu.RUnlock()
 
 	// ---------- SLOW PATH (file changed) ----------
@@ -362,28 +362,17 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 		// Note: mutex will be unlocked in backgroundRefresh
 	}
 
-	// If we have a cached config, return it while background refresh runs
-	if hasCache {
-		return currentCacheConfig, nil
-	}
+	// always return the cached config while the background refresh is running
+	// this leads to the behavior that the config update always takes at least two ticks
+	m.cacheMu.RLock()
+	currentCacheConfig := m.cacheConfig.Clone()
+	cacheError := m.cacheError
+	m.cacheMu.RUnlock()
+	return currentCacheConfig, cacheError
 
-	// No cached config - fall back to synchronous read (e.g., during tests or init failure)
-	config, rawConfig, err := m.readAndParseConfig(ctx)
-	if err != nil {
-		return FullConfig{}, err
-	}
-
-	// Update cache with the loaded config atomically
-	m.cacheMu.Lock()
-	m.cacheConfig = config
-	m.cacheRawConfig = rawConfig
-	m.cacheModTime = info.ModTime()
-	m.cacheMu.Unlock()
-
-	return config, nil
 }
 
-// backgroundRefresh runs the config refresh logic in a background goroutine
+// backgroundRefresh is intended to be called from a goroutine to refresh the config cache
 func (m *FileConfigManager) backgroundRefresh(modTime time.Time) {
 	defer m.refreshMu.Unlock() // unlock the mutex we acquired with TryLock
 
@@ -393,16 +382,13 @@ func (m *FileConfigManager) backgroundRefresh(modTime time.Time) {
 	defer cancel()
 
 	config, rawConfig, err := m.readAndParseConfig(ctx)
-	if err != nil {
-		m.logger.Warnf("Background config refresh failed: %v", err)
-		return
-	}
 
 	// Update cache atomically
 	m.cacheMu.Lock()
 	m.cacheConfig = config
 	m.cacheRawConfig = rawConfig
 	m.cacheModTime = modTime
+	m.cacheError = err
 	m.cacheMu.Unlock()
 
 	duration := time.Since(start)

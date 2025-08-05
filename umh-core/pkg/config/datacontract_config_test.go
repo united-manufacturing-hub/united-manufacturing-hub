@@ -141,7 +141,11 @@ dataContracts:
 					},
 				}
 
+				_, _ = configManager.GetConfig(ctx, 0) // get the config to trigger the background refresh
+				time.Sleep(100 * time.Millisecond)     // wait for the background refresh to finish
+
 				err := configManager.AtomicAddDataContract(ctx, dataContract)
+
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("another data contract with name \"existing-contract\" already exists"))
 			})

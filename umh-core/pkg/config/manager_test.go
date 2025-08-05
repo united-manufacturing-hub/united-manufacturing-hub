@@ -29,6 +29,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
+const TimeToWaitForConfigRefresh = 100 * time.Millisecond
+
 var _ = Describe("ConfigManager", func() {
 	var (
 		mockFS            *filesystem.MockFileSystem
@@ -93,7 +95,10 @@ internal:
 			})
 
 			It("should return the parsed config", func() {
-				config, err := configManager.GetConfig(ctx, tick)
+				_, err := configManager.GetConfig(ctx, tick)
+				Expect(err).NotTo(HaveOccurred())
+				time.Sleep(TimeToWaitForConfigRefresh)            // wait for the background refresh to finish
+				config, err := configManager.GetConfig(ctx, tick) // get the config again to check if the background refresh is working
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(config.Internal.Services).To(HaveLen(1))
@@ -140,7 +145,10 @@ internal:
 			})
 
 			It("should return an error", func() {
-				_, err := configManager.GetConfig(ctx, tick)
+				_, _ = configManager.GetConfig(ctx, tick)
+				time.Sleep(TimeToWaitForConfigRefresh)       // wait for the background refresh to finish
+				_, err := configManager.GetConfig(ctx, tick) // get the config again to check if the background refresh is working
+
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to parse config file"))
 			})
@@ -194,7 +202,10 @@ internal:
 			})
 
 			It("should return an error", func() {
-				_, err := configManager.GetConfig(ctx, tick)
+				_, _ = configManager.GetConfig(ctx, tick)
+				time.Sleep(TimeToWaitForConfigRefresh)       // wait for the background refresh to finish
+				_, err := configManager.GetConfig(ctx, tick) // get the config again to check if the background refresh is working
+
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to read config file"))
 			})
@@ -641,6 +652,9 @@ internal:
 
 			// Get initial config to populate cache
 			_, err = configManager.GetConfig(ctx, 0)
+			Expect(err).NotTo(HaveOccurred())
+			time.Sleep(TimeToWaitForConfigRefresh)   // wait for the background refresh to finish
+			_, err = configManager.GetConfig(ctx, 0) // get the config again to check if the background refresh is working
 			Expect(err).NotTo(HaveOccurred())
 
 			// Generate large config with numGenerators processors

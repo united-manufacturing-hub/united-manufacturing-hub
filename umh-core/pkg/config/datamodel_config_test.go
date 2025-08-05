@@ -293,7 +293,10 @@ dataModels:
 					},
 				}
 
+				_, _ = configManager.GetConfig(ctx, 0) // get the config to trigger the background refresh
+				time.Sleep(100 * time.Millisecond)     // wait for the background refresh to finish
 				err := configManager.AtomicAddDataModel(ctx, "existing-model", dmVersion, "test description")
+
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("another data model with name \"existing-model\" already exists"))
 			})
@@ -384,7 +387,10 @@ dataModels:
 					},
 				}
 
+				_, _ = configManager.GetConfig(ctx, 0) // get the config to trigger the background refresh
+				time.Sleep(100 * time.Millisecond)     // wait for the background refresh to finish
 				err := configManager.AtomicEditDataModel(ctx, "temperature", dmVersion, "test description")
+
 				Expect(err).NotTo(HaveOccurred())
 
 				// Verify the written data
@@ -432,7 +438,10 @@ dataModels:
 					},
 				}
 
+				_, _ = configManager.GetConfig(ctx, 0) // get the config to trigger the background refresh
+				time.Sleep(100 * time.Millisecond)     // wait for the background refresh to finish
 				err := configManager.AtomicEditDataModel(ctx, "non-existent", dmVersion, "test description")
+
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("data model with name \"non-existent\" not found"))
 			})
@@ -493,6 +502,8 @@ dataModels:
 			})
 
 			It("should remove the specified data model", func() {
+				_, _ = configManager.GetConfig(ctx, 0) // get the config to trigger the background refresh
+				time.Sleep(100 * time.Millisecond)     // wait for the background refresh to finish
 				err := configManager.AtomicDeleteDataModel(ctx, "temperature")
 				Expect(err).NotTo(HaveOccurred())
 
@@ -523,7 +534,10 @@ dataModels:
 			})
 
 			It("should return an error", func() {
+				_, _ = configManager.GetConfig(ctx, 0) // get the config to trigger the background refresh
+				time.Sleep(100 * time.Millisecond)     // wait for the background refresh to finish
 				err := configManager.AtomicDeleteDataModel(ctx, "non-existent")
+
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("data model with name \"non-existent\" not found"))
 			})

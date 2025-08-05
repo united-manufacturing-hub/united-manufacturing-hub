@@ -19,6 +19,9 @@ import (
 	"fmt"
 )
 
+// GenerateConfig creates a test configuration with a specified number of processors.
+// The specific config is not important, it is just a test configuration that is intended to be long
+// as we only use it to test runtime of the parsing of the config.
 func GenerateConfig(processors int, fcm *FileConfigManager) (FullConfig, error) {
 	fullConfig, err := fcm.GetConfig(context.Background(), 0)
 
@@ -26,7 +29,10 @@ func GenerateConfig(processors int, fcm *FileConfigManager) (FullConfig, error) 
 		return FullConfig{}, err
 	}
 
-	// add a long protocol converter processor
+	if len(fullConfig.ProtocolConverter) == 0 {
+		return FullConfig{}, fmt.Errorf("no protocol converter found")
+	}
+
 	pc := fullConfig.ProtocolConverter[0]
 	pipeline := make(map[string]any)
 	pipeline["processors"] = make(map[string]any)
