@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -95,18 +96,36 @@ internal:
 			})
 
 			It("should return the parsed config", func() {
+				// Trigger initial config load to start background refresh
 				_, err := configManager.GetConfig(ctx, tick)
 				Expect(err).NotTo(HaveOccurred())
-				time.Sleep(TimeToWaitForConfigRefresh)            // wait for the background refresh to finish
-				config, err := configManager.GetConfig(ctx, tick) // get the config again to check if the background refresh is working
-				Expect(err).NotTo(HaveOccurred())
 
-				Expect(config.Internal.Services).To(HaveLen(1))
-				Expect(config.Internal.Services[0].Name).To(Equal("service1"))
-				Expect(config.Internal.Services[0].FSMInstanceConfig.DesiredFSMState).To(Equal("running"))
-				Expect(config.Internal.Services[0].S6ServiceConfig.Command).To(Equal([]string{"/bin/echo", "hello world"}))
-				Expect(config.Internal.Services[0].S6ServiceConfig.Env).To(HaveKeyWithValue("KEY", "value"))
-				Expect(config.Internal.Services[0].S6ServiceConfig.ConfigFiles).To(HaveKeyWithValue("file.txt", "content"))
+				// Wait for background refresh to complete and verify config
+				Eventually(func() error {
+					config, err := configManager.GetConfig(ctx, tick)
+					if err != nil {
+						return err
+					}
+
+					if len(config.Internal.Services) != 1 {
+						return fmt.Errorf("expected 1 service, got %d", len(config.Internal.Services))
+					}
+
+					service := config.Internal.Services[0]
+					if service.Name != "service1" {
+						return fmt.Errorf("expected service name 'service1', got '%s'", service.Name)
+					}
+
+					if service.FSMInstanceConfig.DesiredFSMState != "running" {
+						return fmt.Errorf("expected desired state 'running', got '%s'", service.FSMInstanceConfig.DesiredFSMState)
+					}
+
+					// All checks passed, verify remaining fields
+					Expect(service.S6ServiceConfig.Command).To(Equal([]string{"/bin/echo", "hello world"}))
+					Expect(service.S6ServiceConfig.Env).To(HaveKeyWithValue("KEY", "value"))
+					Expect(service.S6ServiceConfig.ConfigFiles).To(HaveKeyWithValue("file.txt", "content"))
+					return nil
+				}, TimeToWaitForConfigRefresh*2, "10ms").Should(Succeed())
 			})
 		})
 
@@ -145,12 +164,20 @@ internal:
 			})
 
 			It("should return an error", func() {
+				// Trigger initial config load to start background refresh
 				_, _ = configManager.GetConfig(ctx, tick)
-				time.Sleep(TimeToWaitForConfigRefresh)       // wait for the background refresh to finish
-				_, err := configManager.GetConfig(ctx, tick) // get the config again to check if the background refresh is working
 
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to parse config file"))
+				// Wait for background refresh to complete and verify error
+				Eventually(func() error {
+					_, err := configManager.GetConfig(ctx, tick)
+					if err == nil {
+						return fmt.Errorf("expected error but got none")
+					}
+					if !strings.Contains(err.Error(), "failed to parse config file") {
+						return fmt.Errorf("expected error to contain 'failed to parse config file', got: %s", err.Error())
+					}
+					return nil
+				}, TimeToWaitForConfigRefresh*2, "10ms").Should(Succeed())
 			})
 		})
 
@@ -202,12 +229,20 @@ internal:
 			})
 
 			It("should return an error", func() {
+				// Trigger initial config load to start background refresh
 				_, _ = configManager.GetConfig(ctx, tick)
-				time.Sleep(TimeToWaitForConfigRefresh)       // wait for the background refresh to finish
-				_, err := configManager.GetConfig(ctx, tick) // get the config again to check if the background refresh is working
 
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to read config file"))
+				// Wait for background refresh to complete and verify error
+				Eventually(func() error {
+					_, err := configManager.GetConfig(ctx, tick)
+					if err == nil {
+						return fmt.Errorf("expected error but got none")
+					}
+					if !strings.Contains(err.Error(), "failed to read config file") {
+						return fmt.Errorf("expected error to contain 'failed to read config file', got: %s", err.Error())
+					}
+					return nil
+				}, TimeToWaitForConfigRefresh*2, "10ms").Should(Succeed())
 			})
 		})
 
@@ -650,12 +685,20 @@ internal:
 			err = configManager.writeConfig(ctx, config)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Get initial config to populate cache
+			// Get initial config to populate cache and wait for background refresh
 			_, err = configManager.GetConfig(ctx, 0)
 			Expect(err).NotTo(HaveOccurred())
-			time.Sleep(TimeToWaitForConfigRefresh)   // wait for the background refresh to finish
-			_, err = configManager.GetConfig(ctx, 0) // get the config again to check if the background refresh is working
-			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func() error {
+				cfg, err := configManager.GetConfig(ctx, 0)
+				if err != nil {
+					return err
+				}
+				if len(cfg.ProtocolConverter) != 3 {
+					return fmt.Errorf("expected %d processors but got %d", 3, len(cfg.ProtocolConverter))
+				}
+				return nil
+			}, TimeToWaitForConfigRefresh*2, "10ms").Should(Succeed())
 
 			// Generate large config with numGenerators processors
 			largeConfig, err := GenerateConfig(numGenerators, configManager)
