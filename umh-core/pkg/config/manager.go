@@ -176,23 +176,22 @@ func NewFileConfigManager() *FileConfigManager {
 	defer cancel()
 
 	config, rawConfig, err := fc.readAndParseConfig(initCtx)
-	if err != nil {
-		logger.Warnf("Failed to load initial config during init: %v - cache will be empty", err)
-		// Don't fail initialization, but cache will be empty
+	// Populate cache with initial config
+	info, statErr := fc.fsService.Stat(initCtx, fc.configPath)
+	if statErr == nil && info != nil {
+		// Acquire lock to prevent race conditions during initialization
+		// Update all cache fields atomically
+		fc.cacheMu.Lock()
+		fc.cacheConfig = config
+		fc.cacheRawConfig = rawConfig
+		fc.cacheError = err
+		fc.cacheModTime = info.ModTime()
+		fc.cacheMu.Unlock()
+		logger.Debugf("Initial config cache populated successfully")
 	} else {
-		// Populate cache with initial config
-		info, statErr := fc.fsService.Stat(initCtx, fc.configPath)
-		if statErr == nil && info != nil {
-			// Acquire lock to prevent race conditions during initialization
-			// Update all cache fields atomically
-			fc.cacheMu.Lock()
-			fc.cacheConfig = config
-			fc.cacheRawConfig = rawConfig
-			fc.cacheModTime = info.ModTime()
-			fc.cacheMu.Unlock()
-			logger.Debugf("Initial config cache populated successfully")
-		}
+		fc.cacheError = statErr
 	}
+
 	return fc
 }
 
@@ -372,10 +371,7 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	currentCacheConfig := m.cacheConfig.Clone()
 	cacheError := m.cacheError
 	m.cacheMu.RUnlock()
-	// checkk for empty config and return error if it is
-	if reflect.DeepEqual(currentCacheConfig, FullConfig{}) {
-		return FullConfig{}, fmt.Errorf("cached config is empty. may be fixed by a background refresh")
-	}
+
 	return currentCacheConfig, cacheError
 
 }
@@ -402,7 +398,7 @@ func (m *FileConfigManager) backgroundRefresh(modTime time.Time) {
 	m.cacheMu.Unlock()
 
 	duration := time.Since(start)
-	m.logger.Infof("Background config refresh completed successfully in %s", duration)
+	m.logger.Debugf("Background config refresh completed in %s", duration)
 }
 
 // readAndParseConfig contains the shared logic for reading and parsing the config file

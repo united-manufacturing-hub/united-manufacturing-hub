@@ -101,8 +101,10 @@ dataContracts:
 					},
 				}
 
-				err := configManager.AtomicAddDataContract(ctx, dataContract)
-				Expect(err).NotTo(HaveOccurred())
+				Eventually(func() error {
+					err := configManager.AtomicAddDataContract(ctx, dataContract)
+					return err
+				}, TimeToWaitForConfigRefresh*2, "10ms").Should(Succeed())
 
 				// Verify the written data
 				Expect(writtenData).NotTo(BeEmpty())

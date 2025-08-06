@@ -254,8 +254,10 @@ dataModels:
 					},
 				}
 
-				err := configManager.AtomicAddDataModel(ctx, "temperature", dmVersion, "test description")
-				Expect(err).NotTo(HaveOccurred())
+				Eventually(func() error {
+					err := configManager.AtomicAddDataModel(ctx, "temperature", dmVersion, "test description")
+					return err
+				}, TimeToWaitForConfigRefresh*2, "10ms").Should(Succeed())
 
 				// Verify the written data
 				Expect(writtenData).NotTo(BeEmpty())

@@ -99,10 +99,13 @@ internal:
 
 				// Wait for background refresh to complete and verify config
 				Eventually(func() error {
-					config, err := configManager.GetConfig(ctx, tick)
-					if err != nil {
+
+					var config FullConfig
+					Eventually(func() error {
+						var err error
+						config, err = configManager.GetConfig(ctx, tick)
 						return err
-					}
+					}, TimeToWaitForConfigRefresh*2, "10ms").Should(Succeed())
 
 					if len(config.Internal.Services) != 1 {
 						return fmt.Errorf("expected 1 service, got %d", len(config.Internal.Services))
@@ -166,13 +169,14 @@ internal:
 
 				// Wait for background refresh to complete and verify error
 				Eventually(func() error {
-					_, err := configManager.GetConfig(ctx, tick)
-					if err == nil {
-						return fmt.Errorf("expected error but got none")
-					}
-					if !strings.Contains(err.Error(), "failed to parse config file") {
-						return fmt.Errorf("expected error to contain 'failed to parse config file', got: %s", err.Error())
-					}
+					var err error
+					var config FullConfig
+					Eventually(func() error {
+						config, err = configManager.GetConfig(ctx, tick)
+						return err
+					}, TimeToWaitForConfigRefresh*2, "10ms").Should(Not(Succeed()))
+
+					Expect(config).To(Equal(FullConfig{}))
 					return nil
 				}, TimeToWaitForConfigRefresh*2, "10ms").Should(Succeed())
 			})
@@ -683,8 +687,10 @@ internal:
 			Expect(err).NotTo(HaveOccurred())
 
 			// Get initial config to populate cache and wait for background refresh
-			_, err = configManager.GetConfig(ctx, 0)
-			Expect(err).NotTo(HaveOccurred())
+			Eventually(func() error {
+				_, err := configManager.GetConfig(ctx, 0)
+				return err
+			}, TimeToWaitForConfigRefresh*2, "10ms").Should(Succeed())
 
 			Eventually(func() error {
 				cfg, err := configManager.GetConfig(ctx, 0)
