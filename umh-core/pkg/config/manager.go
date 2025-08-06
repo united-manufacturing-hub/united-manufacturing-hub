@@ -371,7 +371,13 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	currentCacheConfig := m.cacheConfig.Clone()
 	cacheError := m.cacheError
 	m.cacheMu.RUnlock()
-
+	// checkk for empty config and return error if it is
+	if reflect.DeepEqual(currentCacheConfig, FullConfig{}) {
+		if cacheError == nil {
+			return FullConfig{}, fmt.Errorf("cached config is empty. may be fixed by a background refresh")
+		}
+		return FullConfig{}, cacheError
+	}
 	return currentCacheConfig, cacheError
 
 }
