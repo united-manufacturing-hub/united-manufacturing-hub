@@ -91,6 +91,12 @@ func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string
 		return nil, ctx.Err()
 	}
 
+	// Acquire global mutex to serialize service creation
+	// This prevents race conditions when multiple services are created concurrently
+	// and s6-svscan from finding partially created services during rescans
+	globalServiceCreationMutex.Lock()
+	defer globalServiceCreationMutex.Unlock()
+
 	serviceName := filepath.Base(servicePath)
 	repositoryDir := filepath.Join(constants.S6RepositoryBaseDir, serviceName)
 
@@ -124,11 +130,25 @@ func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string
 		return nil, fmt.Errorf("failed to create service files: %w", err)
 	}
 
-	// NOW create the atomic symlink - this makes the service visible to scanner
-	if err := fsService.Symlink(ctx, repositoryDir, servicePath); err != nil {
-		// Clean up repository on symlink failure
+	// Use s6-svlink to atomically create the symlink and start supervision
+	// This avoids race conditions when many services are created concurrently
+	// s6-svlink:
+	// 1. Creates the symlink in the scan directory
+	// 2. Notifies s6-svscan of the new service (internally calls s6-svscanctl -a)
+	// 3. Waits for supervision to start (with timeout)
+	scanDir := filepath.Dir(servicePath)
+	// serviceName already declared above
+
+	// -t 5000: 5 second timeout for supervision to start
+	// scanDir: the scan directory (e.g., /run/service)
+	// repositoryDir: the source directory to link from
+	// serviceName: the name for the symlink (optional, but we provide it for clarity)
+	_, err = s.ExecuteS6Command(ctx, servicePath, fsService,
+		"s6-svlink", "-t", "5000", scanDir, repositoryDir, serviceName)
+	if err != nil {
+		// Clean up repository on failure
 		_ = fsService.RemoveAll(ctx, repositoryDir)
-		return nil, fmt.Errorf("failed to create scan directory symlink: %w", err)
+		return nil, fmt.Errorf("failed to link service with s6-svlink: %w", err)
 	}
 
 	// Store the created files in artifacts (repository paths)
@@ -137,10 +157,8 @@ func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string
 	// set the last deployed time for the service to filter the logs and only show the logs since the last deployment
 	setLastDeployedTime(servicePath, time.Now())
 
-	// Notify S6 scanner of new service
-	if _, err := s.EnsureSupervision(ctx, servicePath, fsService); err != nil {
-		s.logger.Warnf("Failed to notify S6 scanner: %v", err)
-	}
+	// No need to call EnsureSupervision - s6-svlink already handled the notification
+	// and waited for supervision to start
 
 	s.logger.Debugf("Successfully created service artifacts: %+v", artifacts)
 	return artifacts, nil

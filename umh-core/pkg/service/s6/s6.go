@@ -164,8 +164,8 @@ type Service interface {
 	ForceRemove(ctx context.Context, servicePath string, fsService filesystem.Service) error
 	// GetLogs gets the logs of the service
 	GetLogs(ctx context.Context, servicePath string, fsService filesystem.Service) ([]LogEntry, error)
-	// EnsureSupervision checks if the supervise directory exists for a service and notifies
-	// s6-svscan if it doesn't, to trigger supervision setup.
+	// EnsureSupervision checks if the supervise directory exists for a service.
+	// This is now a read-only check since s6-svlink handles the notification during creation.
 	// Returns true if supervise directory exists (ready for supervision), false otherwise.
 	EnsureSupervision(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error)
 }
@@ -1344,8 +1344,8 @@ func parseLogLine(line string) LogEntry {
 	}
 }
 
-// EnsureSupervision checks if the supervise directory exists for a service and notifies
-// s6-svscan if it doesn't, to trigger supervision setup.
+// EnsureSupervision checks if the supervise directory exists for a service.
+// This is now a read-only check since s6-svlink handles the notification during creation.
 // Returns true if supervise directory exists (ready for supervision), false otherwise.
 func (s *DefaultService) EnsureSupervision(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
 	start := time.Now()
@@ -1368,13 +1368,9 @@ func (s *DefaultService) EnsureSupervision(ctx context.Context, servicePath stri
 	}
 
 	if !exists {
-		s.logger.Debugf("Supervise directory not found for %s, notifying s6-svscan", servicePath)
-
-		_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svscanctl", "-a", constants.S6BaseDir)
-		if err != nil {
-			return false, fmt.Errorf("failed to notify s6-svscan: %w", err)
-		}
-		s.logger.Debugf("Notified s6-svscan, waiting for supervise directory to be created on next reconcile")
+		s.logger.Debugf("Supervise directory not found for %s, supervision not yet active", servicePath)
+		// No longer calling s6-svscanctl here - s6-svlink handles notification during creation
+		// This avoids race conditions when many services are created concurrently
 		return false, nil
 	}
 
