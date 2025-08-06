@@ -20,4 +20,4 @@ import "time"
 // RedpandaMonitorUpdateObservedStateTimeout is the timeout for updating the observed state
 const RedpandaMonitorUpdateObservedStateTimeout = 45 * time.Millisecond
 
-const RedpandaMonitorProcessMetricsTimeout = 30 * time.Millisecond // needs to be smaller than RedpandaMonitorUpdateObservedStateTimeout
+const RedpandaMonitorProcessMetricsTimeout = 35 * time.Millisecond // needs to be smaller than RedpandaMonitorUpdateObservedStateTimeout
