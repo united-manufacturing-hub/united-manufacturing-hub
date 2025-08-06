@@ -18,13 +18,12 @@ package portmanager
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
@@ -71,8 +70,6 @@ type DefaultPortManager struct {
 	// allocatedPorts tracks all ports we've allocated to avoid duplicates
 	allocatedPorts map[uint16]bool
 
-	// random number generator
-	rand *rand.Rand
 	// mutex to protect concurrent access to maps
 	mutex sync.RWMutex
 
@@ -167,7 +164,6 @@ func newDefaultPortManager() *DefaultPortManager {
 		allocatedPorts:  make(map[uint16]bool),
 		minPort:         minPort,
 		maxPort:         maxPort,
-		rand:            rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 
@@ -196,7 +192,7 @@ func (pm *DefaultPortManager) AllocatePort(ctx context.Context, instanceName str
 
 		// Generate a random port in the ephemeral range
 		portRange := pm.maxPort - pm.minPort + 1
-		randomOffset := pm.rand.Intn(int(portRange))
+		randomOffset := rand.IntN(int(portRange))
 		port := pm.minPort + uint16(randomOffset)
 
 		// Skip if we've already allocated this port
