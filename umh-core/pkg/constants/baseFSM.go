@@ -45,7 +45,7 @@ const (
 	// convergence; if you shorten them the system reacts faster but risks
 	// starving later managers in the loop.
 	// ─────────────────────────────────────────────────────────────────────────────
-	TicksBeforeNextAdd    = 10 // base cooldown (in ticks) after adding an instance
+	TicksBeforeNextAdd    = 50 // base cooldown (in ticks) after adding an instance
 	TicksBeforeNextUpdate = 5  // base cooldown after changing an instance configuration
 	TicksBeforeNextRemove = 10 // base cooldown after starting a removal
 	TicksBeforeNextState  = 3  // base cooldown after changing desired FSM state

@@ -135,16 +135,18 @@ func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string
 	// s6-svlink:
 	// 1. Creates the symlink in the scan directory
 	// 2. Notifies s6-svscan of the new service (internally calls s6-svscanctl -a)
-	// 3. Waits for supervision to start (with timeout)
+	// 3. Does NOT wait for supervision to start - this prevents blocking
+	//    and reduces race conditions during mass service creation
 	scanDir := filepath.Dir(servicePath)
 	// serviceName already declared above
 
-	// -t 5000: 5 second timeout for supervision to start
+	// -f: force creation even if supervision directory exists
+	// NO -t flag: don't wait for supervision to start
 	// scanDir: the scan directory (e.g., /run/service)
 	// repositoryDir: the source directory to link from
 	// serviceName: the name for the symlink (optional, but we provide it for clarity)
 	_, err = s.ExecuteS6Command(ctx, servicePath, fsService,
-		"s6-svlink", "-t", "5000", scanDir, repositoryDir, serviceName)
+		"s6-svlink", "-f", scanDir, repositoryDir, serviceName)
 	if err != nil {
 		// Clean up repository on failure
 		_ = fsService.RemoveAll(ctx, repositoryDir)
@@ -158,7 +160,7 @@ func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string
 	setLastDeployedTime(servicePath, time.Now())
 
 	// No need to call EnsureSupervision - s6-svlink already handled the notification
-	// and waited for supervision to start
+	// Supervision will start asynchronously - we don't wait to avoid blocking
 
 	s.logger.Debugf("Successfully created service artifacts: %+v", artifacts)
 	return artifacts, nil
