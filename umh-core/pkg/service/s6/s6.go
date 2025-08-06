@@ -405,7 +405,15 @@ func (s *DefaultService) Start(ctx context.Context, servicePath string, fsServic
 		return fmt.Errorf("failed to start log service: %w", err)
 	}
 
-	// Then start the main service to prevent a race condition
+	// Wait for log service to be fully up before starting main service
+	_, err = s.ExecuteS6Command(ctx, servicePath, fsService,
+		"s6-svwait", "-u", "-t", "2000", logServicePath)
+	if err != nil {
+		s.logger.Warnf("Failed to wait for log service to be up: %v", err)
+		// Continue anyway as this might be a timing issue
+	}
+
+	// Then start the main service
 	_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-u", servicePath)
 	if err != nil {
 		s.logger.Warnf("Failed to start service: %v", err)

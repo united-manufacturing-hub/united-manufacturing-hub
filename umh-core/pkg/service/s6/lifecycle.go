@@ -153,6 +153,21 @@ func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string
 		return nil, fmt.Errorf("failed to link service with s6-svlink: %w", err)
 	}
 
+	// Wait for supervision to be fully established
+	// Use s6-svok to check if the service is supervised
+	for i := 0; i < 20; i++ {
+		_, err := s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svok", servicePath)
+		if err == nil {
+			break // Service is supervised
+		}
+		// If we timed out the ctx, cleanup and return an error
+		if ctx.Err() != nil {
+			_ = fsService.RemoveAll(ctx, repositoryDir)
+			return nil, fmt.Errorf("failed to wait for supervision to be established: %w", ctx.Err())
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
 	// Store the created files in artifacts (repository paths)
 	artifacts.CreatedFiles = createdFiles
 
