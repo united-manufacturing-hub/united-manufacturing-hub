@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package protocolconverterserviceconfig
+package bridgeserviceconfig
 
 import (
 	"fmt"
@@ -23,8 +23,7 @@ import (
 )
 
 // Comparator handles the comparison of Connection configurations
-type Comparator struct {
-}
+type Comparator struct{}
 
 // NewComparator creates a new configuration comparator for Connection
 func NewComparator() *Comparator {
@@ -33,15 +32,15 @@ func NewComparator() *Comparator {
 
 // ConfigsEqual compares two ConnectionServiceConfigs by converting to NmapServiceConfig
 // and using the existing comparison utilization
-func (c *Comparator) ConfigsEqual(desired, observed ProtocolConverterServiceConfigSpec) (isEqual bool) {
-	connectionD := desired.GetConnectionServiceConfig()
-	connectionO := observed.GetConnectionServiceConfig()
+func (c *Comparator) ConfigsEqual(desired, observed ConfigSpec) (isEqual bool) {
+	connectionD := desired.GetConnectionConfig()
+	connectionO := observed.GetConnectionConfig()
 
-	dfcReadD := desired.GetDFCReadServiceConfig()
-	dfcReadO := observed.GetDFCReadServiceConfig()
+	dfcReadD := desired.GetDFCReadConfig()
+	dfcReadO := observed.GetDFCReadConfig()
 
-	dfcWriteD := desired.GetDFCWriteServiceConfig()
-	dfcWriteO := observed.GetDFCWriteServiceConfig()
+	dfcWriteD := desired.GetDFCWriteConfig()
+	dfcWriteO := observed.GetDFCWriteConfig()
 
 	// compare dfc's
 	comparatorDFC := dataflowcomponentserviceconfig.NewComparator()
@@ -58,15 +57,15 @@ func (c *Comparator) ConfigsEqual(desired, observed ProtocolConverterServiceConf
 }
 
 // ConfigDiff returns a human-readable string describing differences between configs
-func (c *Comparator) ConfigDiff(desired, observed ProtocolConverterServiceConfigSpec) string {
-	connectionD := desired.GetConnectionServiceConfig()
-	connectionO := observed.GetConnectionServiceConfig()
+func (c *Comparator) ConfigDiff(desired, observed ConfigSpec) string {
+	connectionD := desired.GetConnectionConfig()
+	connectionO := observed.GetConnectionConfig()
 
-	dfcReadD := desired.GetDFCReadServiceConfig()
-	dfcReadO := observed.GetDFCReadServiceConfig()
+	dfcReadD := desired.GetDFCReadConfig()
+	dfcReadO := observed.GetDFCReadConfig()
 
-	dfcWriteD := desired.GetDFCWriteServiceConfig()
-	dfcWriteO := observed.GetDFCWriteServiceConfig()
+	dfcWriteD := desired.GetDFCWriteConfig()
+	dfcWriteO := observed.GetDFCWriteConfig()
 
 	connectionDiff := ""
 	if !reflect.DeepEqual(connectionD, connectionO) {

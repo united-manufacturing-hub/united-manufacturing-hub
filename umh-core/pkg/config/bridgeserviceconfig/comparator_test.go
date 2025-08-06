@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package protocolconverterserviceconfig
+package bridgeserviceconfig
 
 import (
 	. "github.com/onsi/ginkgo/v2"
@@ -21,12 +21,12 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 )
 
-var _ = Describe("ProtocolConverter YAML Comparator", func() {
+var _ = Describe("Bridge YAML Comparator", func() {
 	Describe("ConfigsEqual", func() {
 		It("should consider identical configs equal", func() {
-			config1 := ProtocolConverterServiceConfigSpec{
-				Config: ProtocolConverterServiceConfigTemplate{
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			config1 := ConfigSpec{
+				Config: ConfigTemplate{
+					DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
 								"mqtt": map[string]any{
@@ -40,7 +40,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+					ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
 							Port:   "443",
@@ -49,9 +49,9 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 				},
 			}
 
-			config2 := ProtocolConverterServiceConfigSpec{
-				Config: ProtocolConverterServiceConfigTemplate{
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			config2 := ConfigSpec{
+				Config: ConfigTemplate{
+					DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
 								"mqtt": map[string]any{
@@ -65,7 +65,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+					ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
 							Port:   "443",
@@ -81,9 +81,9 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 		})
 
 		It("should consider configs with different input not equal", func() {
-			config1 := ProtocolConverterServiceConfigSpec{
-				Config: ProtocolConverterServiceConfigTemplate{
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			config1 := ConfigSpec{
+				Config: ConfigTemplate{
+					DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
 								"mqtt": map[string]any{
@@ -97,7 +97,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+					ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
 							Port:   "443",
@@ -106,9 +106,9 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 				},
 			}
 
-			config2 := ProtocolConverterServiceConfigSpec{
-				Config: ProtocolConverterServiceConfigTemplate{
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			config2 := ConfigSpec{
+				Config: ConfigTemplate{
+					DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
 								"mqtt": map[string]any{
@@ -122,7 +122,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+					ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
 							Port:   "443",
@@ -141,10 +141,9 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 		})
 
 		It("should consider configs with different output not equal", func() {
-
-			config1 := ProtocolConverterServiceConfigSpec{
-				Config: ProtocolConverterServiceConfigTemplate{
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			config1 := ConfigSpec{
+				Config: ConfigTemplate{
+					DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
 								"mqtt": map[string]any{
@@ -158,7 +157,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+					ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
 							Port:   "443",
@@ -167,9 +166,9 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 				},
 			}
 
-			config2 := ProtocolConverterServiceConfigSpec{
-				Config: ProtocolConverterServiceConfigTemplate{
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			config2 := ConfigSpec{
+				Config: ConfigTemplate{
+					DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
 								"mqtt": map[string]any{
@@ -183,7 +182,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+					ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
 							Port:   "443",
@@ -202,10 +201,9 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 		})
 
 		It("should consider configs with different Target not equal", func() {
-
-			config1 := ProtocolConverterServiceConfigSpec{
-				Config: ProtocolConverterServiceConfigTemplate{
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			config1 := ConfigSpec{
+				Config: ConfigTemplate{
+					DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
 								"mqtt": map[string]any{
@@ -219,7 +217,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+					ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
 							Port:   "443",
@@ -228,9 +226,9 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 				},
 			}
 
-			config2 := ProtocolConverterServiceConfigSpec{
-				Config: ProtocolConverterServiceConfigTemplate{
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			config2 := ConfigSpec{
+				Config: ConfigTemplate{
+					DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
 								"mqtt": map[string]any{
@@ -244,7 +242,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+					ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.2",
 							Port:   "443",
@@ -262,10 +260,9 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 		})
 
 		It("should consider configs with different Port not equal", func() {
-
-			config1 := ProtocolConverterServiceConfigSpec{
-				Config: ProtocolConverterServiceConfigTemplate{
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			config1 := ConfigSpec{
+				Config: ConfigTemplate{
+					DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
 								"mqtt": map[string]any{
@@ -279,7 +276,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+					ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
 							Port:   "443",
@@ -288,9 +285,9 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 				},
 			}
 
-			config2 := ProtocolConverterServiceConfigSpec{
-				Config: ProtocolConverterServiceConfigTemplate{
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			config2 := ConfigSpec{
+				Config: ConfigTemplate{
+					DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
 								"mqtt": map[string]any{
@@ -304,7 +301,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+					ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
 							Port:   "444",
@@ -324,9 +321,9 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 
 	Describe("ConfigDiff", func() {
 		It("should generate readable diff for different configs", func() {
-			config1 := ProtocolConverterServiceConfigSpec{
-				Config: ProtocolConverterServiceConfigTemplate{
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			config1 := ConfigSpec{
+				Config: ConfigTemplate{
+					DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
 								"mqtt": map[string]any{
@@ -340,7 +337,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+					ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
 							Port:   "443",
@@ -349,9 +346,9 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 				},
 			}
 
-			config2 := ProtocolConverterServiceConfigSpec{
-				Config: ProtocolConverterServiceConfigTemplate{
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			config2 := ConfigSpec{
+				Config: ConfigTemplate{
+					DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
 								"mqtt": map[string]any{
@@ -365,7 +362,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+					ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
 							Port:   "444",
@@ -387,9 +384,9 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 	// Test package-level functions
 	Describe("Package-level functions", func() {
 		It("ConfigsEqual should use default comparator", func() {
-			config1 := ProtocolConverterServiceConfigSpec{
-				Config: ProtocolConverterServiceConfigTemplate{
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			config1 := ConfigSpec{
+				Config: ConfigTemplate{
+					DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
 								"mqtt": map[string]any{
@@ -403,7 +400,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+					ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
 							Port:   "443",
@@ -412,9 +409,9 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 				},
 			}
 
-			config2 := ProtocolConverterServiceConfigSpec{
-				Config: ProtocolConverterServiceConfigTemplate{
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			config2 := ConfigSpec{
+				Config: ConfigTemplate{
+					DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
 								"mqtt": map[string]any{
@@ -428,7 +425,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+					ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
 							Port:   "443",
@@ -448,9 +445,9 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 		})
 
 		It("ConfigDiff should use default comparator", func() {
-			config1 := ProtocolConverterServiceConfigSpec{
-				Config: ProtocolConverterServiceConfigTemplate{
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			config1 := ConfigSpec{
+				Config: ConfigTemplate{
+					DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
 								"mqtt": map[string]any{
@@ -464,7 +461,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+					ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
 							Port:   "443",
@@ -473,9 +470,9 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 				},
 			}
 
-			config2 := ProtocolConverterServiceConfigSpec{
-				Config: ProtocolConverterServiceConfigTemplate{
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			config2 := ConfigSpec{
+				Config: ConfigTemplate{
+					DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
 								"mqtt": map[string]any{
@@ -489,7 +486,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+					ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
 							Port:   "444",

@@ -23,7 +23,7 @@ import (
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	protocolconverterconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
+	protocolconverterconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/bridgeserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -35,32 +35,31 @@ func NewProtocolConverterInstance(
 	s6BaseDir string,
 	config config.ProtocolConverterConfig,
 ) *ProtocolConverterInstance {
-
-	var degradedStates = []string{
+	degradedStates := []string{
 		OperationalStateDegradedConnection,
 		OperationalStateDegradedRedpanda,
 		OperationalStateDegradedDFC,
 		OperationalStateDegradedOther,
 	}
 
-	var runningStates = []string{
+	runningStates := []string{
 		OperationalStateActive,
 		OperationalStateIdle,
 	}
 	runningStates = append(runningStates, degradedStates...)
 
-	var startingStates = []string{
+	startingStates := []string{
 		OperationalStateStartingConnection,
 		OperationalStateStartingRedpanda,
 		OperationalStateStartingDFC,
 	}
 
-	var startingStatesWithFailed = append(startingStates, append(
+	startingStatesWithFailed := append(startingStates, append(
 		[]string{OperationalStateStartingFailedDFC},
 		[]string{OperationalStateStartingFailedDFCMissing}...,
 	)...)
 
-	var startingAndRunningStates = append(startingStatesWithFailed, runningStates...)
+	startingAndRunningStates := append(startingStatesWithFailed, runningStates...)
 
 	cfg := internal_fsm.BaseFSMInstanceConfig{
 		ID:                           config.Name,
@@ -124,7 +123,7 @@ func NewProtocolConverterInstance(
 		service:         protocolconvertersvc.NewDefaultProtocolConverterService(config.Name),
 		specConfig:      config.ProtocolConverterServiceConfig,
 		ObservedState:   ProtocolConverterObservedState{},
-		runtimeConfig:   protocolconverterconfig.ProtocolConverterServiceConfigRuntime{},
+		runtimeConfig:   protocolconverterconfig.ConfigRuntime{},
 	}
 
 	instance.registerCallbacks()

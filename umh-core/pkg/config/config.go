@@ -16,10 +16,10 @@ package config
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/bridgeserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/streamprocessorserviceconfig"
@@ -156,7 +156,6 @@ type BenthosConfig struct {
 
 // DataFlowComponentConfig contains configuration for creating a DataFlowComponent
 type DataFlowComponentConfig struct {
-
 	// For the FSM
 	FSMInstanceConfig `yaml:",inline"`
 
@@ -172,13 +171,12 @@ func (d *DataFlowComponentConfig) HasAnchors() bool { return d.hasAnchors }
 
 // ProtocolConverterConfig contains configuration for creating a ProtocolConverter
 type ProtocolConverterConfig struct {
-
 	// For the FSM
 	FSMInstanceConfig `yaml:",inline"`
 
 	anchorName string `yaml:"-"`
 
-	ProtocolConverterServiceConfig protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec `yaml:"protocolConverterServiceConfig"`
+	ProtocolConverterServiceConfig bridgeserviceconfig.ConfigSpec `yaml:"protocolConverterServiceConfig"`
 
 	// private marker – not (un)marshalled
 	// explanation see templating.go

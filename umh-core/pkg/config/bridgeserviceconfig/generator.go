@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package protocolconverterserviceconfig
+package bridgeserviceconfig
 
 import (
 	"fmt"
@@ -25,17 +25,15 @@ import (
 
 // Generator handles the generation of DFC YAML configurations
 // BoilerPlateCode
-type Generator struct {
-}
+type Generator struct{}
 
 // NewGenerator creates a new YAML generator for DFC configurations
 func NewGenerator() *Generator {
 	return &Generator{}
 }
 
-// RenderConfig generates a ProtocolConverter YAML configuration from a ProtocolConverterServiceConfigSpec
-func (g *Generator) RenderConfig(cfg ProtocolConverterServiceConfigSpec) (string, error) {
-
+// RenderConfig generates a Bridge YAML configuration from a ConfigSpec
+func (g *Generator) RenderConfig(cfg ConfigSpec) (string, error) {
 	// Convert the config to a normalized map
 	configMap := g.configToMap(cfg)
 	normalizedMap := normalizeConfig(configMap)
@@ -43,7 +41,7 @@ func (g *Generator) RenderConfig(cfg ProtocolConverterServiceConfigSpec) (string
 	// Marshal to YAML
 	yamlBytes, err := yaml.Marshal(normalizedMap)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal ProtocolConverter config: %w", err)
+		return "", fmt.Errorf("failed to marshal Bridge config: %w", err)
 	}
 
 	yamlStr := string(yamlBytes)
@@ -51,18 +49,18 @@ func (g *Generator) RenderConfig(cfg ProtocolConverterServiceConfigSpec) (string
 	return yamlStr, nil
 }
 
-// configToMap converts a DataFlowComponentServiceConfig to a raw map for YAML generation
-func (g *Generator) configToMap(cfg ProtocolConverterServiceConfigSpec) map[string]any {
+// configToMap converts a DFCConfig to a raw map for YAML generation
+func (g *Generator) configToMap(cfg ConfigSpec) map[string]any {
 	// use generator to create a valid dfcConfigMap & connectionConfigMap
 	dfcGenerator := dataflowcomponentserviceconfig.NewGenerator()
 	connectionGenerator := connectionserviceconfig.NewGenerator()
 	variableBundleGenerator := variables.NewGenerator()
 
 	// Get the template configs
-	dfcReadConfigMap := dfcGenerator.ConfigToMap(cfg.Config.DataflowComponentReadServiceConfig)
-	dfcWriteConfigMap := dfcGenerator.ConfigToMap(cfg.Config.DataflowComponentWriteServiceConfig)
+	dfcReadConfigMap := dfcGenerator.ConfigToMap(cfg.Config.DFCReadConfig)
+	dfcWriteConfigMap := dfcGenerator.ConfigToMap(cfg.Config.DFCWriteConfig)
 	// Convert template to runtime for config map generation
-	connRuntime, err := connectionserviceconfig.ConvertTemplateToRuntime(cfg.Config.ConnectionServiceConfig)
+	connRuntime, err := connectionserviceconfig.ConvertTemplateToRuntime(cfg.Config.ConnectionConfig)
 	if err != nil {
 		// If conversion fails, use empty config to avoid breaking YAML generation
 		connRuntime = connectionserviceconfig.ConnectionServiceConfigRuntime{}

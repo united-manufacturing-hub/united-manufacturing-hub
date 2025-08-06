@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/bridgeserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	connectionfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
@@ -41,7 +41,6 @@ import (
 // a logical unit that combines **one Connection + one Data-Flow-Component (DFC)**
 // and surfaces them as a single object to the rest of UMH-Core.
 type IProtocolConverterService interface {
-
 	// GetConfig pulls the **actual** runtime configuration that is currently
 	// deployed for the given Protocol-Converter.
 	//
@@ -55,7 +54,7 @@ type IProtocolConverterService interface {
 	// The resulting **ProtocolConverterServiceConfigRuntime** reflects the state
 	// the FSM is *really* running with and therefore forms the "live" side of the
 	// reconcile equation:
-	GetConfig(ctx context.Context, filesystemService filesystem.Service, protConvName string) (protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, error)
+	GetConfig(ctx context.Context, filesystemService filesystem.Service, protConvName string) (bridgeserviceconfig.ConfigRuntime, error)
 
 	// Status aggregates health from Connection, DFC and Redpanda into a single
 	// snapshot.  The returned structure is **read-only** – callers must not
@@ -63,10 +62,10 @@ type IProtocolConverterService interface {
 	Status(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot, protConvName string) (ServiceInfo, error)
 
 	// AddToManager adds a ProtocolConverter to the Connection & DFC manager
-	AddToManager(ctx context.Context, filesystemService filesystem.Service, protConvCfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, protConvName string) error
+	AddToManager(ctx context.Context, filesystemService filesystem.Service, protConvCfg *bridgeserviceconfig.ConfigRuntime, protConvName string) error
 
 	// UpdateInManager updates an existing ProtocolConverter in the Connection & DFC manager
-	UpdateInManager(ctx context.Context, filesystemService filesystem.Service, protConvCfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, protConvName string) error
+	UpdateInManager(ctx context.Context, filesystemService filesystem.Service, protConvCfg *bridgeserviceconfig.ConfigRuntime, protConvName string) error
 
 	// RemoveFromManager removes a ProtocolConverter from the Connection & DFC manager
 	RemoveFromManager(ctx context.Context, filesystemService filesystem.Service, protConvName string) error
@@ -99,7 +98,6 @@ type IProtocolConverterService interface {
 
 // ServiceInfo holds information about the ProtocolConverters underlying health states.
 type ServiceInfo struct {
-
 	// ConnectionFSMState is the *current* FSM state string (e.g. "up", "stopped").
 	ConnectionFSMState string
 
@@ -171,7 +169,6 @@ func WithUnderlyingManagers(
 	return func(c *ProtocolConverterService) {
 		c.connectionManager = connMgr
 		c.dataflowComponentManager = dfcMgr
-
 	}
 }
 
@@ -268,9 +265,9 @@ func (p *ProtocolConverterService) GetConfig(
 	ctx context.Context,
 	filesystemService filesystem.Service,
 	protConvName string,
-) (protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, error) {
+) (bridgeserviceconfig.ConfigRuntime, error) {
 	if ctx.Err() != nil {
-		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, ctx.Err()
+		return bridgeserviceconfig.ConfigRuntime{}, ctx.Err()
 	}
 
 	underlyingConnectionName := p.getUnderlyingConnectionName(protConvName)
@@ -280,20 +277,20 @@ func (p *ProtocolConverterService) GetConfig(
 	// Get the Connection config
 	connConfig, err := p.connectionService.GetConfig(ctx, filesystemService, underlyingConnectionName)
 	if err != nil {
-		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("failed to get connection config: %w", err)
+		return bridgeserviceconfig.ConfigRuntime{}, fmt.Errorf("failed to get connection config: %w", err)
 	}
 
 	dfcReadConfig, err := p.dataflowComponentService.GetConfig(ctx, filesystemService, underlyingDFCReadName)
 	if err != nil {
-		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("failed to get read dataflowcomponent config: %w", err)
+		return bridgeserviceconfig.ConfigRuntime{}, fmt.Errorf("failed to get read dataflowcomponent config: %w", err)
 	}
 
 	dfcWriteConfig, err := p.dataflowComponentService.GetConfig(ctx, filesystemService, underlyingDFCWriteName)
 	if err != nil {
-		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("failed to get write dataflowcomponent config: %w", err)
+		return bridgeserviceconfig.ConfigRuntime{}, fmt.Errorf("failed to get write dataflowcomponent config: %w", err)
 	}
 
-	actualConfig := protocolconverterserviceconfig.FromConnectionAndDFCServiceConfig(connConfig, dfcReadConfig, dfcWriteConfig)
+	actualConfig := bridgeserviceconfig.FromConfigs(connConfig, dfcReadConfig, dfcWriteConfig)
 
 	return actualConfig, nil
 }
@@ -423,7 +420,7 @@ func (p *ProtocolConverterService) Status(
 func (p *ProtocolConverterService) AddToManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
-	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
+	cfg *bridgeserviceconfig.ConfigRuntime,
 	protConvName string,
 ) error {
 	if p.connectionManager == nil {
@@ -451,9 +448,9 @@ func (p *ProtocolConverterService) AddToManager(
 		}
 	}
 
-	connServiceConfig := cfg.ConnectionServiceConfig
-	dfcReadServiceConfig := cfg.DataflowComponentReadServiceConfig
-	dfcWriteServiceConfig := cfg.DataflowComponentWriteServiceConfig
+	connServiceConfig := cfg.ConnectionConfig
+	dfcReadServiceConfig := cfg.DFCReadConfig
+	dfcWriteServiceConfig := cfg.DFCWriteConfig
 
 	// Create a config.ConnectionConfig that wraps the NmapServiceConfig
 	connectionConfig := config.ConnectionConfig{
@@ -495,7 +492,7 @@ func (p *ProtocolConverterService) AddToManager(
 func (p *ProtocolConverterService) UpdateInManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
-	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
+	cfg *bridgeserviceconfig.ConfigRuntime,
 	protConvName string,
 ) error {
 	if p.connectionManager == nil {
@@ -556,9 +553,9 @@ func (p *ProtocolConverterService) UpdateInManager(
 		return ErrServiceNotExist
 	}
 
-	connConfig := cfg.ConnectionServiceConfig
-	dfcReadConfig := cfg.DataflowComponentReadServiceConfig
-	dfcWriteConfig := cfg.DataflowComponentWriteServiceConfig
+	connConfig := cfg.ConnectionConfig
+	dfcReadConfig := cfg.DFCReadConfig
+	dfcWriteConfig := cfg.DFCWriteConfig
 
 	// Create a config.ConnectionConfig that wraps the ConnectionServiceConfig
 	connCurrentDesiredState := p.connectionConfig[indexConn].DesiredFSMState
@@ -866,7 +863,8 @@ func (p *ProtocolConverterService) ReconcileManager(
 		CurrentConfig: config.FullConfig{
 			Internal: config.InternalConfig{
 				Connection: p.connectionConfig,
-			}},
+			},
+		},
 		Tick: tick,
 	}, services)
 

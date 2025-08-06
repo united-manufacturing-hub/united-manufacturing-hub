@@ -12,26 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package protocolconverterserviceconfig
+package bridgeserviceconfig
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 )
 
-// GetConnectionServiceConfig returns the template form of the connection config.
+// GetConnectionConfig returns the template form of the connection config.
 // This is used during rendering to access the template that may contain variables like {{ .PORT }}.
 // The template will be rendered into a runtime config with proper types during BuildRuntimeConfig.
-func (c ProtocolConverterServiceConfigSpec) GetConnectionServiceConfig() connectionserviceconfig.ConnectionServiceConfigTemplate {
-	return c.Config.ConnectionServiceConfig
+func (c ConfigSpec) GetConnectionConfig() connectionserviceconfig.ConnectionServiceConfigTemplate {
+	return c.Config.ConnectionConfig
 }
 
-// GetDFCReadServiceConfig converts the component config to a full ProtocolConverterServiceConfig
+// GetDFCReadConfig converts the component config to a full ProtocolConverterServiceConfig
 // For a read DFC, the user is not allowed to set its own output config, so we "enforce" the output config
 // to be the UNS output config. This ensures protocol converters always write to the unified namespace.
-func (c ProtocolConverterServiceConfigSpec) GetDFCReadServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
+func (c ConfigSpec) GetDFCReadConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
 	// copy the config
-	dfcReadConfig := c.Config.DataflowComponentReadServiceConfig
+	dfcReadConfig := c.Config.DFCReadConfig
 
 	// Only append UNS output if there's an input config
 	if len(dfcReadConfig.BenthosConfig.Input) > 0 {
@@ -45,11 +45,11 @@ func (c ProtocolConverterServiceConfigSpec) GetDFCReadServiceConfig() dataflowco
 	return dfcReadConfig
 }
 
-// GetDFCWriteServiceConfig converts the component config to a full ProtocolConverterServiceConfig
+// GetDFCWriteConfig converts the component config to a full ProtocolConverterServiceConfig
 // For a write DFC, the user is not allowed to set its own input config, so we "enforce" the input config
 // to be the UNS input config. This ensures protocol converters always read from the unified namespace.
-func (c ProtocolConverterServiceConfigSpec) GetDFCWriteServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
-	dfcWriteConfig := c.Config.DataflowComponentWriteServiceConfig
+func (c ConfigSpec) GetDFCWriteConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
+	dfcWriteConfig := c.Config.DFCWriteConfig
 
 	// Only append UNS input if there's an output config
 	if len(dfcWriteConfig.BenthosConfig.Output) > 0 {
@@ -63,16 +63,16 @@ func (c ProtocolConverterServiceConfigSpec) GetDFCWriteServiceConfig() dataflowc
 	return dfcWriteConfig
 }
 
-// FromConnectionAndDFCServiceConfig creates a ProtocolConverterServiceConfig
-// from a ConnectionServiceConfig and DataFlowComponentConfig
-func FromConnectionAndDFCServiceConfig(
+// FromConfigs creates a Config
+// from a ConnectionConfig and DataFlowComponentConfig
+func FromConfigs(
 	connection connectionserviceconfig.ConnectionServiceConfig,
 	dfcRead dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
 	dfcWrite dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
-) ProtocolConverterServiceConfigRuntime {
-	return ProtocolConverterServiceConfigRuntime{
-		ConnectionServiceConfig:             connection,
-		DataflowComponentReadServiceConfig:  dfcRead,
-		DataflowComponentWriteServiceConfig: dfcWrite,
+) ConfigRuntime {
+	return ConfigRuntime{
+		ConnectionConfig: connection,
+		DFCReadConfig:    dfcRead,
+		DFCWriteConfig:   dfcWrite,
 	}
 }

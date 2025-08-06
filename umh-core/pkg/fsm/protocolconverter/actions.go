@@ -23,7 +23,7 @@ import (
 	"time"
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/bridgeserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	connectionfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	dataflowfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
@@ -285,12 +285,12 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 	}
 	metrics.ObserveReconcileTime(logger.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".buildRuntimeConfig", time.Since(start))
 
-	if !protocolconverterserviceconfig.ConfigsEqualRuntime(p.runtimeConfig, p.ObservedState.ObservedProtocolConverterRuntimeConfig) {
+	if !bridgeserviceconfig.ConfigsEqualRuntime(p.runtimeConfig, p.ObservedState.ObservedProtocolConverterRuntimeConfig) {
 		// Check if the service exists before attempting to update
 		if p.service.ServiceExists(ctx, services.GetFileSystem(), p.baseFSMInstance.GetID()) {
 			p.baseFSMInstance.GetLogger().Debugf("Observed ProtocolConverter config is different from desired config, updating ProtocolConverter configuration")
 
-			diffStr := protocolconverterserviceconfig.ConfigDiffRuntime(p.runtimeConfig, p.ObservedState.ObservedProtocolConverterRuntimeConfig)
+			diffStr := bridgeserviceconfig.ConfigDiffRuntime(p.runtimeConfig, p.ObservedState.ObservedProtocolConverterRuntimeConfig)
 			p.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
 			// Update the config in the Benthos manager
@@ -503,8 +503,8 @@ func (p *ProtocolConverterInstance) IsProtocolConverterStopped() (bool, string) 
 //	ok     – true when atleast one DFC is existing, false otherwise.
 //	reason – empty when ok is true; otherwise a service‑provided explanation.
 func (p *ProtocolConverterInstance) IsDFCExisting() (bool, string) {
-	if len(p.specConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input) > 0 ||
-		len(p.specConfig.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Output) > 0 {
+	if len(p.specConfig.Config.DFCReadConfig.BenthosConfig.Input) > 0 ||
+		len(p.specConfig.Config.DFCWriteConfig.BenthosConfig.Output) > 0 {
 		return true, ""
 	}
 	return false, "no DFCs configured"

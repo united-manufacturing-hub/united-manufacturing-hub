@@ -16,7 +16,7 @@ package protocolconverter
 
 import (
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
-	protocolconverterconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
+	protocolconverterconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/bridgeserviceconfig"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 )
@@ -143,13 +143,12 @@ func IsRunningState(state string) bool {
 
 // ProtocolConverterObservedState contains the observed runtime state of a ProtocolConverter instance
 type ProtocolConverterObservedState struct {
-
 	// ObservedProtocolConverterSpecConfig contains the observed ProtocolConverter service config spec with variables
 	// it is here for the purpose of the UI to display the variables and the location
-	ObservedProtocolConverterSpecConfig protocolconverterconfig.ProtocolConverterServiceConfigSpec
+	ObservedProtocolConverterSpecConfig protocolconverterconfig.ConfigSpec
 
 	// ObservedProtocolConverterRuntimeConfig contains the observed ProtocolConverter service config
-	ObservedProtocolConverterRuntimeConfig protocolconverterconfig.ProtocolConverterServiceConfigRuntime
+	ObservedProtocolConverterRuntimeConfig protocolconverterconfig.ConfigRuntime
 
 	// ServiceInfo contains information about the ProtocolConverter service
 	ServiceInfo protocolconvertersvc.ServiceInfo
@@ -165,7 +164,6 @@ var _ publicfsm.FSMInstance = (*ProtocolConverterInstance)(nil)
 
 // ProtocolConverterInstance is a state-machine managed instance of a ProtocolConverter service.
 type ProtocolConverterInstance struct {
-
 	// service is the ProtocolConverter service implementation to use
 	// It has a manager that manages the protocolconverter service instances
 	service protocolconvertersvc.IProtocolConverterService
@@ -173,14 +171,14 @@ type ProtocolConverterInstance struct {
 	baseFSMInstance *internalfsm.BaseFSMInstance
 
 	// specConfig contains all the configuration spec for this service
-	specConfig protocolconverterconfig.ProtocolConverterServiceConfigSpec
+	specConfig protocolconverterconfig.ConfigSpec
 
 	// runtimeConfig is the last fully-rendered runtime configuration.
 	// It is **zero-value** when the instance is first created; the real
 	// configuration is rendered during the *first* Reconcile() cycle
 	// once the instance has access to SystemSnapshot (agent location,
 	// global variables, node name, …).
-	runtimeConfig protocolconverterconfig.ProtocolConverterServiceConfigRuntime
+	runtimeConfig protocolconverterconfig.ConfigRuntime
 
 	// ObservedState represents the observed state of the service
 	// ObservedState contains all metrics, logs, etc.
@@ -202,7 +200,7 @@ func (d *ProtocolConverterInstance) SetService(service protocolconvertersvc.IPro
 
 // GetConfig returns the ProtocolConverterServiceConfig for this service
 // This is a testing-only utility to access the private service field
-func (d *ProtocolConverterInstance) GetConfig() protocolconverterconfig.ProtocolConverterServiceConfigSpec {
+func (d *ProtocolConverterInstance) GetConfig() protocolconverterconfig.ConfigSpec {
 	return d.specConfig
 }
 

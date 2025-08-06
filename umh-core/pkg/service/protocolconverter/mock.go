@@ -20,9 +20,9 @@ import (
 	"sync"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/bridgeserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	connfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	dfcfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
@@ -81,7 +81,7 @@ type MockProtocolConverterService struct {
 	*/
 	DfcService      *dataflowcomponent.MockDataFlowComponentService
 	ConnService     *connection.MockConnectionService
-	GetConfigResult protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
+	GetConfigResult bridgeserviceconfig.ConfigRuntime
 
 	// Return values for each method
 	GenerateConfigResultDFC        dataflowcomponentserviceconfig.DataflowComponentServiceConfig
@@ -264,7 +264,7 @@ func (m *MockProtocolConverterService) GetConfig(
 	filesystemService filesystem.Service,
 	protConvName string,
 ) (
-	protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
+	bridgeserviceconfig.ConfigRuntime,
 	error,
 ) {
 	m.mu.Lock()
@@ -273,7 +273,7 @@ func (m *MockProtocolConverterService) GetConfig(
 
 	// If error is set, return it
 	if m.GetConfigError != nil {
-		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, m.GetConfigError
+		return bridgeserviceconfig.ConfigRuntime{}, m.GetConfigError
 	}
 
 	// If a result is preset, return it
@@ -310,7 +310,7 @@ func (m *MockProtocolConverterService) Status(
 func (m *MockProtocolConverterService) AddToManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
-	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
+	cfg *bridgeserviceconfig.ConfigRuntime,
 	protConvName string,
 ) error {
 	m.mu.Lock()
@@ -366,7 +366,7 @@ func (m *MockProtocolConverterService) AddToManager(
 func (m *MockProtocolConverterService) UpdateInManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
-	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
+	cfg *bridgeserviceconfig.ConfigRuntime,
 	protConvName string,
 ) error {
 	m.mu.Lock()

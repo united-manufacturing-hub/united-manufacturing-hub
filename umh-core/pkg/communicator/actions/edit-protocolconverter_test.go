@@ -24,9 +24,9 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/bridgeserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
@@ -79,9 +79,9 @@ var _ = Describe("EditProtocolConverter", func() {
 						Name:            pcName,
 						DesiredFSMState: "active",
 					},
-					ProtocolConverterServiceConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-						Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-							ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+					ProtocolConverterServiceConfig: bridgeserviceconfig.ConfigSpec{
+						Config: bridgeserviceconfig.ConfigTemplate{
+							ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 								NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 									Target: "{{ .IP }}",
 									Port:   "{{ .PORT }}",
@@ -364,13 +364,13 @@ var _ = Describe("EditProtocolConverter", func() {
 			Expect(updatedPC).NotTo(BeNil(), "Protocol converter should exist in updated config")
 
 			// Verify the read DFC was added to the protocol converter configuration
-			readDFCConfig := updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig
+			readDFCConfig := updatedPC.ProtocolConverterServiceConfig.Config.DFCReadConfig
 			Expect(readDFCConfig.BenthosConfig.Input).NotTo(BeEmpty())
 			Expect(readDFCConfig.BenthosConfig.Input["input"]).To(HaveKey("http_client"))
 			Expect(readDFCConfig.BenthosConfig.Pipeline).NotTo(BeEmpty())
 
 			// Verify write DFC is still empty
-			writeDFCConfig := updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig
+			writeDFCConfig := updatedPC.ProtocolConverterServiceConfig.Config.DFCWriteConfig
 			Expect(writeDFCConfig.BenthosConfig.Input).To(BeEmpty())
 
 			// verify that the templateRef is set

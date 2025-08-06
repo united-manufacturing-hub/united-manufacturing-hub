@@ -96,10 +96,8 @@ internal:
 			})
 
 			It("should return the parsed config", func() {
-
 				// Wait for background refresh to complete and verify config
 				Eventually(func() error {
-
 					var config FullConfig
 					Eventually(func() error {
 						var err error
@@ -437,15 +435,15 @@ internal:
 				}
 			})
 
-			It("should extract templates from the templated protocol converter example", func() {
+			It("should extract templates from the templated bridge example", func() {
 				// Test specifically with the example file that has templates
-				data, err := fsService.ReadFile(ctx, "../../examples/example-config-protocolconverter-templated.yaml")
+				data, err := fsService.ReadFile(ctx, "../../examples/example-config-bridge-templated.yaml")
 				Expect(err).NotTo(HaveOccurred())
 
 				config, err := ParseConfig(data, ctx, true)
 				Expect(err).NotTo(HaveOccurred())
 
-				// The example should have at least one protocol converter using a template
+				// The example should have at least one bridge using a template
 				Expect(config.ProtocolConverter).NotTo(BeEmpty())
 			})
 		})
@@ -467,10 +465,10 @@ internal:
 			cancel()
 		})
 
-		Context("with templated protocol converter example", func() {
+		Context("with templated bridge example", func() {
 			It("should read, parse, and write the config preserving templates", func() {
 				// Read the original example file
-				originalData, err := fsService.ReadFile(ctx, "../../examples/example-config-protocolconverter-templated.yaml")
+				originalData, err := fsService.ReadFile(ctx, "../../examples/example-config-bridge-templated.yaml")
 				Expect(err).NotTo(HaveOccurred())
 
 				// Parse the config with anchor extraction enabled
@@ -481,11 +479,11 @@ internal:
 				Expect(config.ProtocolConverter).To(HaveLen(3))
 				Expect(config.Templates.ProtocolConverter).To(BeEmpty())
 
-				// Find the temperature-sensor-pc that uses the template
+				// Find the temperature-sensor-bridge that uses the template
 				var tempSensorPC *ProtocolConverterConfig
-				for _, pc := range config.ProtocolConverter {
-					if pc.Name == "temperature-sensor-pc" {
-						tempSensorPC = &pc
+				for _, br := range config.ProtocolConverter {
+					if br.Name == "temperature-sensor-bridge" {
+						tempSensorPC = &br
 						break
 					}
 				}
@@ -505,7 +503,7 @@ internal:
 					return nil
 				})
 				mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
-					return mockFS.NewMockFileInfo("config.yaml", int64(len(writtenData)), 0644, time.Now(), false), nil
+					return mockFS.NewMockFileInfo("config.yaml", int64(len(writtenData)), 0o644, time.Now(), false), nil
 				})
 
 				// Write the config
@@ -522,11 +520,11 @@ internal:
 				Expect(writtenConfig.Agent.Location).To(HaveKeyWithValue(0, "plant-A"))
 				Expect(writtenConfig.Agent.Location).To(HaveKeyWithValue(1, "line-4"))
 
-				// Verify the protocol converters are preserved
+				// Verify the bridge are preserved
 				var writtenTempSensorPC *ProtocolConverterConfig
-				for _, pc := range writtenConfig.ProtocolConverter {
-					if pc.Name == "temperature-sensor-pc" {
-						writtenTempSensorPC = &pc
+				for _, br := range writtenConfig.ProtocolConverter {
+					if br.Name == "temperature-sensor-bridge" {
+						writtenTempSensorPC = &br
 						break
 					}
 				}
@@ -601,7 +599,7 @@ internal:
 					return nil
 				})
 				mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
-					return mockFS.NewMockFileInfo("config.yaml", int64(len(writtenData)), 0644, time.Now(), false), nil
+					return mockFS.NewMockFileInfo("config.yaml", int64(len(writtenData)), 0o644, time.Now(), false), nil
 				})
 
 				// Write the config
@@ -676,7 +674,7 @@ internal:
 
 			numGenerators := 5000
 			// Read the original example file and write initial config
-			originalData, err := fsService.ReadFile(ctx, "../../examples/example-config-protocolconverter-templated.yaml")
+			originalData, err := fsService.ReadFile(ctx, "../../examples/example-config-bridge-templated.yaml")
 			Expect(err).NotTo(HaveOccurred())
 
 			// Parse and write initial config
@@ -738,7 +736,7 @@ internal:
 				// Count processors in the updated config
 				processorCount := 0
 				if len(finalConfig.ProtocolConverter) > 0 {
-					pipeline := finalConfig.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline
+					pipeline := finalConfig.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DFCReadConfig.BenthosConfig.Pipeline
 					if processors, ok := pipeline["processors"].(map[string]any); ok {
 						processorCount = len(processors)
 					}
@@ -754,7 +752,7 @@ internal:
 
 			// Verify the final config actually contains the expected processors
 			Expect(len(finalConfig.ProtocolConverter)).To(BeNumerically(">=", 1))
-			pipeline := finalConfig.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline
+			pipeline := finalConfig.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DFCReadConfig.BenthosConfig.Pipeline
 			processors, ok := pipeline["processors"].(map[string]any)
 			Expect(ok).To(BeTrue())
 			Expect(len(processors)).To(Equal(numGenerators))

@@ -1,0 +1,56 @@
+# Copyright 2025 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# ---------- Agent-wide settings ---------- #
+agent:
+  metricsPort: 8080
+  location: # authoritative, can’t be overridden
+    0: "plant-A"
+    1: "line-4"
+
+# ---------- Protocol-converters ---------- #
+protocolConverter:
+  - name: vibration-sensor-bridge
+    desiredState: active
+    protocolConverterServiceConfig:
+      location:
+        2: "machine-7"
+      config:
+        connection:
+          nmap:
+            target: "{{ .HOST }}"
+            port: "{{ .PORT }}" # Now templatable! Resolves to proper uint16 at runtime
+        dataflowcomponent_read:
+          benthos:
+            input:
+              generate:
+                count: 0
+                interval: 1s
+                mapping: |
+                  root = random_int(min:10, max:20)
+            pipeline:
+              processors:
+                - tag_processor:
+                    defaults: |
+                      // Minimal example
+                      msg.meta.location_path = "{{ .location_path }}"; // auto-generated path from agent and protocol converter location
+                      msg.meta.data_contract = "_raw";
+                      msg.meta.tag_name      = "random_int";
+                      msg.meta.host          = "{{ .HOST }}"; // optional metadata
+                      msg.meta.port          = "{{ .PORT }}"; // optional metadata
+                      // tag_processor now auto-creates msg.meta.topic
+                      return msg;
+      variables:
+        HOST: "localhost"
+        PORT: "8080"
