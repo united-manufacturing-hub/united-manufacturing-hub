@@ -57,18 +57,20 @@ import (
 // new Stream Processor. All fields are immutable after construction to
 // avoid race conditions.
 type DeployStreamProcessorAction struct {
-	userEmail    string
-	actionUUID   uuid.UUID
-	instanceUUID uuid.UUID
+	configManager config.ConfigManager
 
 	outboundChannel       chan *models.UMHMessage
-	configManager         config.ConfigManager
 	systemSnapshotManager *fsm.SnapshotManager // Snapshot Manager holds the latest system snapshot
+
+	actionLogger *zap.SugaredLogger
+	userEmail    string
 
 	// Parsed request payload (only populated after Parse)
 	payload models.StreamProcessor
 
-	actionLogger *zap.SugaredLogger
+	actionUUID        uuid.UUID
+	instanceUUID      uuid.UUID
+	ignoreHealthCheck bool
 }
 
 // NewDeployStreamProcessorAction returns an un-parsed action instance.
@@ -107,6 +109,8 @@ func (a *DeployStreamProcessorAction) Parse(payload interface{}) error {
 	}
 
 	a.payload.Config = &config
+
+	a.ignoreHealthCheck = a.payload.IgnoreHealthCheck
 
 	a.actionLogger.Debugf("Parsed DeployStreamProcessor action payload: name=%s, model=%s:%s",
 		a.payload.Name, a.payload.Model.Name, a.payload.Model.Version)
@@ -183,7 +187,7 @@ func (a *DeployStreamProcessorAction) Execute() (interface{}, map[string]interfa
 		"Waiting for stream processor to be active...", a.outboundChannel, models.DeployStreamProcessor)
 
 	// Check against observedState if snapshot manager is available
-	if a.systemSnapshotManager != nil {
+	if a.systemSnapshotManager != nil && !a.ignoreHealthCheck {
 		errCode, err := a.waitForComponentToAppear()
 		if err != nil {
 			errorMsg := fmt.Sprintf("Failed to wait for stream processor to be active: %v", err)

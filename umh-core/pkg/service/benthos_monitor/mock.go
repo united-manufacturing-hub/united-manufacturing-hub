@@ -29,6 +29,29 @@ import (
 
 // MockBenthosMonitorService is a mock implementation of the IBenthosMonitorService interface for testing
 type MockBenthosMonitorService struct {
+	LastScanTime                           time.Time
+	GenerateS6ConfigForBenthosMonitorError error
+	StatusError                            error
+	AddBenthosToS6ManagerError             error
+	UpdateBenthosMonitorInS6ManagerError   error
+	RemoveBenthosFromS6ManagerError        error
+	ForceRemoveBenthosMonitorError         error
+	StartBenthosError                      error
+	StopBenthosError                       error
+	ReconcileManagerError                  error
+	// For more complex testing scenarios
+	ServiceState    *ServiceInfo
+	S6ServiceConfig *config.S6FSMConfig
+
+	// State control for FSM testing
+	stateFlags *ServiceStateFlags
+
+	// Mock metrics state
+	metricsState *BenthosMetricsState
+	// Return values for each method
+	GenerateS6ConfigForBenthosMonitorResult s6serviceconfig.S6ServiceConfig
+	StatusResult                            ServiceInfo
+	UpdateLastPort                          uint16
 	// Tracks calls to methods
 	GenerateS6ConfigForBenthosMonitorCalled bool
 	StatusCalled                            bool
@@ -40,32 +63,9 @@ type MockBenthosMonitorService struct {
 	ReconcileManagerCalled                  bool
 	ServiceExistsCalled                     bool
 	ForceRemoveBenthosMonitorCalled         bool
-	// Return values for each method
-	GenerateS6ConfigForBenthosMonitorResult s6serviceconfig.S6ServiceConfig
-	GenerateS6ConfigForBenthosMonitorError  error
-	StatusResult                            ServiceInfo
-	StatusError                             error
-	AddBenthosToS6ManagerError              error
-	UpdateBenthosMonitorInS6ManagerError    error
-	RemoveBenthosFromS6ManagerError         error
-	ForceRemoveBenthosMonitorError          error
-	StartBenthosError                       error
-	StopBenthosError                        error
-	ReconcileManagerError                   error
 	ReconcileManagerReconciled              bool
 	ServiceExistsResult                     bool
-	UpdateLastPort                          uint16
-	LastScanTime                            time.Time
-	// For more complex testing scenarios
-	ServiceState      *ServiceInfo
-	ServiceExistsFlag bool
-	S6ServiceConfig   *config.S6FSMConfig
-
-	// State control for FSM testing
-	stateFlags *ServiceStateFlags
-
-	// Mock metrics state
-	metricsState *BenthosMetricsState
+	ServiceExistsFlag                       bool
 }
 
 // Ensure MockBenthosMonitorService implements IBenthosMonitorService
@@ -73,9 +73,9 @@ var _ IBenthosMonitorService = (*MockBenthosMonitorService)(nil)
 
 // ServiceStateFlags contains all the state flags needed for FSM testing
 type ServiceStateFlags struct {
+	S6FSMState      string
 	IsRunning       bool
 	IsMetricsActive bool
-	S6FSMState      string
 }
 
 // NewMockBenthosMonitorService creates a new mock Benthos monitor service

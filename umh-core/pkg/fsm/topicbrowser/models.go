@@ -113,11 +113,11 @@ func IsRunningState(state string) bool {
 
 // ObservedState contains the observed runtime state of a Benthos instance
 type ObservedState struct {
-	// ServiceInfo contains information about the S6 service
-	ServiceInfo topicbrowsersvc.ServiceInfo
 
 	// ObservedServiceConfig contains the observed Benthos service config
 	ObservedServiceConfig topicbrowserserviceconfig.Config
+	// ServiceInfo contains information about the S6 service
+	ServiceInfo topicbrowsersvc.ServiceInfo
 }
 
 // IsObservedState implements the ObservedState interface
@@ -130,20 +130,21 @@ var _ publicfsm.FSMInstance = (*TopicBrowserInstance)(nil)
 
 // TopicBrowserInstance is a state-machine managed instance of a Topic Browser service
 type TopicBrowserInstance struct {
+
+	// service is the Benthos service implementation to use
+	// It has a manager that manages the S6 service instances
+	service topicbrowsersvc.ITopicBrowserService
+
 	baseFSMInstance *internalfsm.BaseFSMInstance
+
+	// config contains all the configuration for this service
+	config topicbrowserserviceconfig.Config
 
 	// ObservedState represents the observed state of the service
 	// ObservedState contains all metrics, logs, etc.
 	// that are updated at the beginning of Reconcile and then used to
 	// determine the next state
 	ObservedState ObservedState
-
-	// service is the Benthos service implementation to use
-	// It has a manager that manages the S6 service instances
-	service topicbrowsersvc.ITopicBrowserService
-
-	// config contains all the configuration for this service
-	config topicbrowserserviceconfig.Config
 }
 
 // GetLastObservedState returns the last known state of the instance

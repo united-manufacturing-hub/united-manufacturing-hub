@@ -58,6 +58,7 @@ TARGETARCH := $(shell go env GOARCH)
 GINKGO_VERSION = v2.23.4
 NILWAY_VERSION = latest
 GOLANGCI_LINT_VERSION = v2.1.6
+BETTERALIGN_VERSION = v0.7.1
 DLV_VERSION = v1.25.0
 
 # Default values for build arguments
@@ -67,7 +68,7 @@ NMAP_VERSION = 7.95-r1
 S6_OVERLAY_VERSION = 3.2.0.2
 REDPANDA_VERSION = 24.3.8
 ## Benthos version is a tag or a sha-<commit hash> (e.g. 0.9.4 or sha-a51a685) to be used in the docker image
-BENTHOS_UMH_VERSION = 0.10.1
+BENTHOS_UMH_VERSION = 0.10.2
 BUF_VERSION = 1.55.1
 PROTOC_GEN_GO_VERSION = 1.36.6
 
@@ -88,6 +89,7 @@ install:
 	go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
 	go install github.com/evilmartians/lefthook@latest
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+	go install github.com/dkorunic/betteralign/cmd/betteralign@$(BETTERALIGN_VERSION)
 
 download-docker-binaries:
 	@mkdir -p .docker-cache/s6-overlay .docker-cache/benthos .docker-cache/redpanda
@@ -250,22 +252,38 @@ lint:
 nilaway:
 	# See lefthook.yaml for more details
 	nilaway \
-		-exclude-pkgs="github.com/prometheus/prometheus/util/textparse,github.com/onsi/ginkgo/v2,go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp,github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda" \
+		-include-pkgs="github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core" \
+		-exclude-pkgs="github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda" \
 		-exclude-errors-in-files="integration/" \
 		./...
 
-test: vet nilaway lint
-	go test -v -tags=test ./...
+betteralign:
+	betteralign -test=false ./... || (echo "Consider running 'make betteralign-fix' to fix the issues" && exit 1)
+betteralign-fix:
+	betteralign -test=false -apply ./...
 
-unit-test: vet nilaway lint
-	ginkgo -r -v --tags=test --label-filter='!integration && !redpanda-extended && !tls' --fail-fast ./...
+betteralign-fix-all:
+	@echo "Running betteralign-fix in loop until exit code is not 3..."
+	@while betteralign -test=false -apply ./...; [ $$? -eq 3 ]; do \
+		echo "betteralign-fix returned exit code 3, running again..."; \
+	done
+	@echo "betteralign-fix-all completed"
 
-unit-test-fail-slow: vet nilaway lint
-	ginkgo -r -v --tags=test --label-filter='!integration && !redpanda-extended && !tls' ./...
+# Meta target for vet, nilaway, lint, staticcheck and betteralign
+vet-nilaway-lint-betteralign: vet nilaway lint betteralign
+
+test: vet-nilaway-lint-betteralign
+	go test -race -v -tags=test ./...
+
+unit-test: vet-nilaway-lint-betteralign
+	ginkgo -r -v --tags=test --race --label-filter='!integration && !redpanda-extended && !tls' --fail-fast ./...
+
+unit-test-fail-slow: vet-nilaway-lint-betteralign
+	ginkgo -r -v --tags=test --race --label-filter='!integration && !redpanda-extended && !tls' ./...
 
 benchmark:
 	@echo "Running benchmarks..."
-	go test -bench=. -benchmem ./...
+	go test -race -bench=. -benchmem ./...
 
 benchmark-config:
 	@echo "Running config package benchmarks..."
@@ -297,13 +315,13 @@ benchmark-encoding:
 	@echo "Running encoding benchmarks..."
 	cd pkg/communicator/pkg/encoding && go test -bench=. -benchmem -benchtime=10s -count=1
 
-integration-test: stop-all-pods vet nilaway lint
+integration-test: stop-all-pods vet-nilaway-lint-betteralign
 
 # Meta target to setup the environment for the tests
-pre-test: build-protobuf stop-all-pods vet nilaway lint
+pre-test: build-protobuf stop-all-pods vet-nilaway-lint-betteralign
 
 # Meta target to setup the environment for the tests in CI environments
-pre-test-ci: vet lint
+pre-test-ci: vet-nilaway-lint-betteralign
 
 integration-test: pre-test
 	ginkgo -r -v --tags=test --label-filter='integration' --fail-fast ./...
@@ -563,9 +581,9 @@ test-benthos-monitor: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 		ghcr.io/united-manufacturing-hub/united-manufacturing-hub/umh-core:staging
 
 # GraphQL API Demo: Complete GraphQL server with real-time simulator data
-# 
+#
 # USAGE: cd umh-core && make test-graphql
-# 
+#
 # This target starts UMH Core with GraphQL API enabled and built-in simulator providing real data.
 # Perfect for quick testing and development without requiring MQTT/Redis infrastructure.
 #
@@ -728,7 +746,7 @@ build-push: build push-platform
 dump-metrics:
 	curl -s http://localhost:8081/metrics > metrics.txt
 
-run: 
+run:
 	@echo "Running $(IMAGE_NAME):$(TAG)"
 	docker rm -f $(IMAGE_NAME)
 	docker run \
