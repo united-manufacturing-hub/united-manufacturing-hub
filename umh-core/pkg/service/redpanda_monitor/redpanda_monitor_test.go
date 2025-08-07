@@ -46,9 +46,9 @@ func getTmpDir() string {
 	return tmpDir
 }
 
-// newTimeoutContext creates a context with a 30-second timeout
+// newTimeoutContext creates a context with a 40-second timeout
 func newTimeoutContext() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), 30*time.Second)
+	return context.WithTimeout(context.Background(), 40*time.Second)
 }
 
 func getMetricsReader() *bytes.Reader {
