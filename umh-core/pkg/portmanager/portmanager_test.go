@@ -37,7 +37,7 @@ var _ = Describe("PortManager", func() {
 
 	Describe("NewDefaultPortManager", func() {
 		It("creates a port manager successfully", func() {
-			pm, err := NewDefaultPortManager()
+			pm, err := NewDefaultPortManager(nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(pm).NotTo(BeNil())
 			Expect(pm.instanceToPorts).NotTo(BeNil())
@@ -45,10 +45,10 @@ var _ = Describe("PortManager", func() {
 		})
 
 		It("returns the same instance when called multiple times", func() {
-			pm1, err := NewDefaultPortManager()
+			pm1, err := NewDefaultPortManager(nil)
 			Expect(err).NotTo(HaveOccurred())
 
-			pm2, err := NewDefaultPortManager()
+			pm2, err := NewDefaultPortManager(nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(pm1).To(BeIdenticalTo(pm2))
@@ -58,7 +58,7 @@ var _ = Describe("PortManager", func() {
 	Describe("AllocatePort", func() {
 		Context("basic allocation", func() {
 			It("allocates a port successfully", func() {
-				pm, err := NewDefaultPortManager()
+				pm, err := NewDefaultPortManager(nil)
 				Expect(err).NotTo(HaveOccurred())
 
 				instance := "test-instance"
@@ -72,7 +72,7 @@ var _ = Describe("PortManager", func() {
 			})
 
 			It("returns the same port for an existing instance", func() {
-				pm, err := NewDefaultPortManager()
+				pm, err := NewDefaultPortManager(nil)
 				Expect(err).NotTo(HaveOccurred())
 
 				instance := "test-instance"
@@ -86,7 +86,7 @@ var _ = Describe("PortManager", func() {
 			})
 
 			It("allocates multiple different ports", func() {
-				pm, err := NewDefaultPortManager()
+				pm, err := NewDefaultPortManager(nil)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Allocate ports for multiple instances
@@ -108,7 +108,7 @@ var _ = Describe("PortManager", func() {
 			})
 
 			It("handles port release and reallocation", func() {
-				pm, err := NewDefaultPortManager()
+				pm, err := NewDefaultPortManager(nil)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Allocate a port
@@ -138,7 +138,7 @@ var _ = Describe("PortManager", func() {
 
 	Describe("ReleasePort", func() {
 		It("releases an allocated port", func() {
-			pm, err := NewDefaultPortManager()
+			pm, err := NewDefaultPortManager(nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			instance := "test-instance"
@@ -159,7 +159,7 @@ var _ = Describe("PortManager", func() {
 		})
 
 		It("returns an error for non-existent instance", func() {
-			pm, err := NewDefaultPortManager()
+			pm, err := NewDefaultPortManager(nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			err = pm.ReleasePort("non-existent")
@@ -169,7 +169,7 @@ var _ = Describe("PortManager", func() {
 
 	Describe("GetPort", func() {
 		It("returns the correct port for an existing instance", func() {
-			pm, err := NewDefaultPortManager()
+			pm, err := NewDefaultPortManager(nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			instance := "test-instance"
@@ -182,7 +182,7 @@ var _ = Describe("PortManager", func() {
 		})
 
 		It("returns false for a non-existent instance", func() {
-			pm, err := NewDefaultPortManager()
+			pm, err := NewDefaultPortManager(nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			gotPort, exists := pm.GetPort("non-existent")
@@ -193,7 +193,7 @@ var _ = Describe("PortManager", func() {
 
 	Describe("ReservePort", func() {
 		It("reserves an available port", func() {
-			pm, err := NewDefaultPortManager()
+			pm, err := NewDefaultPortManager(nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			instance := "test-instance"
@@ -215,7 +215,7 @@ var _ = Describe("PortManager", func() {
 		})
 
 		It("returns an error when port is already in use", func() {
-			pm, err := NewDefaultPortManager()
+			pm, err := NewDefaultPortManager(nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			portToReserve := uint16(55001)
@@ -235,7 +235,7 @@ var _ = Describe("PortManager", func() {
 		})
 
 		It("returns an error when instance already has a different port", func() {
-			pm, err := NewDefaultPortManager()
+			pm, err := NewDefaultPortManager(nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			instance := "test-instance"
@@ -255,7 +255,7 @@ var _ = Describe("PortManager", func() {
 		})
 
 		It("succeeds when reserving same port for same instance", func() {
-			pm, err := NewDefaultPortManager()
+			pm, err := NewDefaultPortManager(nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			instance := "test-instance"
@@ -273,7 +273,7 @@ var _ = Describe("PortManager", func() {
 		})
 
 		It("returns an error for invalid ports", func() {
-			pm, err := NewDefaultPortManager()
+			pm, err := NewDefaultPortManager(nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			err = pm.ReservePort(context.Background(), "test-instance", 0)
@@ -284,7 +284,7 @@ var _ = Describe("PortManager", func() {
 
 	Describe("Concurrent operations", func() {
 		It("handles concurrent allocations safely", func() {
-			pm, err := NewDefaultPortManager()
+			pm, err := NewDefaultPortManager(nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			numGoroutines := 100
@@ -330,7 +330,7 @@ var _ = Describe("PortManager", func() {
 		})
 
 		It("handles mixed concurrent operations safely", func() {
-			pm, err := NewDefaultPortManager()
+			pm, err := NewDefaultPortManager(nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			numGoroutines := 50
@@ -392,7 +392,7 @@ var _ = Describe("PortManager", func() {
 
 	Describe("PreReconcile", func() {
 		It("allocates ports for new instances", func() {
-			pm, err := NewDefaultPortManager()
+			pm, err := NewDefaultPortManager(nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Test with multiple instances
@@ -409,7 +409,7 @@ var _ = Describe("PortManager", func() {
 		})
 
 		It("handles instances that already have ports", func() {
-			pm, err := NewDefaultPortManager()
+			pm, err := NewDefaultPortManager(nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Pre-allocate a port
@@ -434,7 +434,7 @@ var _ = Describe("PortManager", func() {
 		})
 
 		It("allocates successfully with OS port allocation", func() {
-			pm, err := NewDefaultPortManager()
+			pm, err := NewDefaultPortManager(nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			// With OS allocation, we should be able to allocate many ports
@@ -456,7 +456,7 @@ var _ = Describe("PortManager", func() {
 
 	Describe("PostReconcile", func() {
 		It("completes without error", func() {
-			pm, err := NewDefaultPortManager()
+			pm, err := NewDefaultPortManager(nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			err = pm.PostReconcile(context.Background())

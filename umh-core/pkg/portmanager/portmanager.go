@@ -24,9 +24,11 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 // PortManager is an interface that defines methods for managing ports
@@ -95,12 +97,12 @@ func GetDefaultPortManager() *DefaultPortManager {
 
 // initDefaultPortManager initializes the singleton DefaultPortManager.
 // It ensures the DefaultPortManager is initialized only once.
-func initDefaultPortManager() *DefaultPortManager {
+func initDefaultPortManager(fs filesystem.Service) *DefaultPortManager {
 	defaultPortManagerOnce.Do(func() {
 		defaultPortManagerMutex.Lock()
 		defer defaultPortManagerMutex.Unlock()
 
-		manager := newDefaultPortManager()
+		manager := newDefaultPortManager(fs)
 		defaultPortManagerInstance = manager
 	})
 
@@ -113,14 +115,14 @@ func initDefaultPortManager() *DefaultPortManager {
 // NewDefaultPortManager creates a new DefaultPortManager using OS port allocation.
 // If a singleton instance already exists, it returns that instance.
 // Otherwise, it creates and initializes the singleton instance.
-func NewDefaultPortManager() (*DefaultPortManager, error) {
+func NewDefaultPortManager(fs filesystem.Service) (*DefaultPortManager, error) {
 	// Check if singleton already exists
 	if existing := GetDefaultPortManager(); existing != nil {
 		return existing, nil
 	}
 
 	// Initialize singleton if it doesn't exist
-	instance := initDefaultPortManager()
+	instance := initDefaultPortManager(fs)
 	if instance == nil {
 		return nil, fmt.Errorf("failed to initialize port manager")
 	}
@@ -130,9 +132,19 @@ func NewDefaultPortManager() (*DefaultPortManager, error) {
 // getEphemeralPortRange returns the OS ephemeral port range.
 // On Linux, it reads from /proc/sys/net/ipv4/ip_local_port_range.
 // Falls back to default range 32768-65535 if unable to read from OS.
-func getEphemeralPortRange() (uint16, uint16) {
-	// Try to read from Linux proc filesystem
-	data, err := os.ReadFile("/proc/sys/net/ipv4/ip_local_port_range")
+func getEphemeralPortRange(fs filesystem.Service) (uint16, uint16) {
+	// Try to read from Linux proc filesystem (at max 500ms timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	var data []byte
+	var err error
+	if fs != nil {
+		data, err = fs.ReadFile(ctx, "/proc/sys/net/ipv4/ip_local_port_range")
+	} else {
+		// Unit test path
+		data, err = os.ReadFile("/proc/sys/net/ipv4/ip_local_port_range")
+	}
+
 	if err == nil {
 		content := strings.TrimSpace(string(data))
 		parts := strings.Fields(content)
@@ -155,8 +167,8 @@ func getEphemeralPortRange() (uint16, uint16) {
 
 // newDefaultPortManager is an internal function that creates a new DefaultPortManager instance
 // without using the singleton pattern. This is used by initDefaultPortManager.
-func newDefaultPortManager() *DefaultPortManager {
-	minPort, maxPort := getEphemeralPortRange()
+func newDefaultPortManager(fs filesystem.Service) *DefaultPortManager {
+	minPort, maxPort := getEphemeralPortRange(fs)
 
 	return &DefaultPortManager{
 		instanceToPorts: make(map[string]uint16),
