@@ -78,7 +78,7 @@ func main() {
 	}()
 
 	// Test configuration
-	const numBenthosInstances = 200
+	const numBenthosInstances = 490
 	const testDuration = 2 * time.Minute
 
 	sugar.Infof("Creating %d benthos instances for %v", numBenthosInstances, testDuration)

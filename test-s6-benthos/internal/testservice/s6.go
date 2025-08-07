@@ -361,11 +361,11 @@ func (s *S6Service) GetLogs(ctx context.Context, servicePath string, fsService F
 func (s *S6Service) generateRunScript(config S6ServiceConfig) string {
 	var script strings.Builder
 
-	script.WriteString("#!/bin/bash\n\n")
+	script.WriteString("#!/command/execlineb -P\n\n")
 
 	// Add environment variables
 	for key, value := range config.Env {
-		script.WriteString(fmt.Sprintf("export %s=\"%s\"\n", key, value))
+		script.WriteString(fmt.Sprintf("export %s %s\n", key, value))
 	}
 
 	if len(config.Env) > 0 {
@@ -374,18 +374,21 @@ func (s *S6Service) generateRunScript(config S6ServiceConfig) string {
 
 	// Add memory limit if specified
 	if config.MemoryLimit > 0 {
-		script.WriteString(fmt.Sprintf("s6-softlimit -m %d \\\n", config.MemoryLimit))
+		script.WriteString(fmt.Sprintf("s6-softlimit -m %d\n", config.MemoryLimit))
 	}
 
-	// Add fdmove and command
-	script.WriteString("fdmove -c 2 1 \\\n")
+	// Drop privileges for the actual service
+	script.WriteString("s6-setuidgid nobody\n")
+
+	// Keep stderr and stdout separate but both visible in logs
+	script.WriteString("fdmove -c 2 1\n")
 
 	if len(config.Command) > 0 {
 		for i, arg := range config.Command {
 			if i == len(config.Command)-1 {
 				script.WriteString(fmt.Sprintf("%s\n", arg))
 			} else {
-				script.WriteString(fmt.Sprintf("%s \\\n", arg))
+				script.WriteString(fmt.Sprintf("%s ", arg))
 			}
 		}
 	} else {
@@ -400,18 +403,34 @@ func (s *S6Service) generateLogRunScript(config S6ServiceConfig, serviceName str
 	// Use the actual service name (e.g., "benthos-test-0") instead of just "benthos"
 	logDir := filepath.Join(S6LogBaseDir, serviceName)
 
-	var script strings.Builder
-	script.WriteString("#!/bin/bash\n\n")
-	script.WriteString(fmt.Sprintf("mkdir -p %s\n", logDir))
-	script.WriteString("fdmove -c 2 1 \\\n")
-
+	// Create logutil-service command line, see also https://skarnet.org/software/s6/s6-log.html
+	// logutil-service is a wrapper around s6_log and reads from the S6_LOGGING_SCRIPT environment variable
+	logutilServiceCmd := ""
+	logutilEnv := ""
 	if config.LogFilesize > 0 {
-		script.WriteString(fmt.Sprintf("s6-log -d3 s%d T %s\n", config.LogFilesize, logDir))
-	} else {
-		script.WriteString(fmt.Sprintf("s6-log -d3 T %s\n", logDir))
+		// n20 is currently hardcoded to match the default defined in the Dockerfile
+		// using the same export method as in runScriptTemplate for env variables
+		// Important: This needs to be T (ISO 8601) as our time parser expects this format
+		logutilEnv = fmt.Sprintf("export S6_LOGGING_SCRIPT \"n%d s%d T\"", 20, config.LogFilesize)
 	}
 
-	return script.String()
+	// Keep stdout quiet (stops binary blob leakage), but leave stderr visible
+	// in Docker logs for s6-log diagnostics
+	logutilServiceCmd = fmt.Sprintf(
+		"logutil-service %s 1>/dev/null",
+		logDir,
+	)
+
+	// Create log run script using the same format as UMH core
+	logRunContent := fmt.Sprintf(`#!/command/execlineb -P
+fdmove -c 2 1
+foreground { mkdir -p %s }
+foreground { chown -R nobody:nobody %s }
+
+%s
+%s`, logDir, logDir, logutilEnv, logutilServiceCmd)
+
+	return logRunContent
 }
 
 // parseLogContent parses log content into LogEntry structs
