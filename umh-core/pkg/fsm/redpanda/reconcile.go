@@ -337,7 +337,7 @@ func (r *RedpandaInstance) reconcileRunningStates(ctx context.Context, services 
 			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("degraded: %s", reasonDegraded)
 			return r.baseFSMInstance.SendEvent(ctx, EventDegraded), true
 		} else if !processingActivity { // if there is no activity, we move to Idle
-			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("idling: %s", reasonProcessingActivity)
+			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("idle: %s", reasonProcessingActivity)
 			return r.baseFSMInstance.SendEvent(ctx, EventNoDataTimeout), true
 		}
 		// If we're in Active,  send no status reason
