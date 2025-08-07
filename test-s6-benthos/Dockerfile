@@ -9,7 +9,7 @@ WORKDIR /build
 
 # Copy go.mod and go.sum (if it exists)
 COPY go.mod ./
-COPY go.su[m] ./
+COPY go.sum ./
 
 # Download dependencies
 RUN go mod download
