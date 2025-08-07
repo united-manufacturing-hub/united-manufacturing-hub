@@ -94,6 +94,7 @@ RUN echo "Go version: $(go version)"
 # CGO_ENABLED=1 is needed for the race detector to work
 RUN if [ "$DEBUG" = "true" ]; then \
     CGO_ENABLED=1 go build \
+    -mod=vendor \
     -race \
     -gcflags="all=-N -l" \
     -ldflags "-X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
@@ -102,7 +103,9 @@ RUN if [ "$DEBUG" = "true" ]; then \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version.AppVersion=${APP_VERSION}" \
     -o /go/bin/umh-core cmd/main.go; \
     elif [ "$PPROF" = "true" ]; then \
-    CGO_ENABLED=1 go build -mod=vendor -tags pprof \
+    CGO_ENABLED=1 go build \
+    -mod=vendor \
+    -tags pprof \
     -ldflags "-s -w \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \
@@ -110,7 +113,8 @@ RUN if [ "$DEBUG" = "true" ]; then \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version.AppVersion=${APP_VERSION}" \
     -o /go/bin/umh-core cmd/main.go; \
     else \
-    CGO_ENABLED=1 go build -mod=vendor  \
+    CGO_ENABLED=1 go build \
+    -mod=vendor \
     -ldflags "-s -w \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \
