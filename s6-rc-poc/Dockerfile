@@ -13,10 +13,6 @@ RUN tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz
 ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-x86_64.tar.xz /tmp
 RUN tar -C / -Jxpf /tmp/s6-overlay-x86_64.tar.xz
 
-# Ensure /data (and relevant subfolders) exists and is world writeable
-RUN mkdir -p /data/logs/s6-rc-poc
-RUN chown -R nobody:nobody /data
-
 # Copy static service configuration
 COPY service/s6-rc.d /etc/s6-overlay/s6-rc.d/
 # Enable poc run
