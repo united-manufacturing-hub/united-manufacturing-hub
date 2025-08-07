@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  s6-benthos-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: s6-benthos-test
+    ports:
+      # Benthos HTTP servers (5 instances)
+      - "8080:8080"
+      - "8081:8081"
+      - "8082:8082"
+      - "8083:8083"
+      - "8084:8084"
+      # Benthos metrics endpoints
+      - "9080:9080"
+      - "9081:9081"
+      - "9082:9082"
+      - "9083:9083"
+      - "9084:9084"
+    environment:
+      - S6_VERBOSITY=2
+      - S6_CMD_WAIT_FOR_SERVICES_MAXTIME=0
+    volumes:
+      # Optional: mount logs for external access
+      - ./logs:/data/logs
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
