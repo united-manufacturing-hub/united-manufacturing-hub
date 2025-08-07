@@ -15,11 +15,13 @@
 package e2e_test
 
 import (
+	"encoding/base64"
 	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"gopkg.in/yaml.v3"
 )
 
 // createSubscriptionMessage creates a UMH message that subscribes to status updates
@@ -173,4 +175,112 @@ func createEditProtocolConverterMessage(protocolConverterUUID uuid.UUID, name, i
 	}
 
 	return createActionMessage(models.EditProtocolConverter, payload)
+}
+
+// createAddDataModelMessage creates an add data model action message
+func createAddDataModelMessage(name, description string) models.UMHMessage {
+	// Create a simple data model structure
+	structure := map[string]models.Field{
+		"temperature": {
+			PayloadShape: "timeseries-number",
+		},
+		"pressure": {
+			PayloadShape: "timeseries-number",
+		},
+		"status": {
+			PayloadShape: "timeseries-string",
+		},
+		"measurements": {
+			Subfields: map[string]models.Field{
+				"vibration": {
+					PayloadShape: "timeseries-number",
+				},
+				"rpm": {
+					PayloadShape: "timeseries-number",
+				},
+			},
+		},
+	}
+
+	// Marshal the structure to YAML
+	yamlData, err := yaml.Marshal(structure)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to marshal data model structure: %v", err))
+	}
+
+	// Base64 encode the YAML
+	encodedStructure := base64.StdEncoding.EncodeToString(yamlData)
+
+	payload := models.AddDataModelPayload{
+		Name:             name,
+		Description:      description,
+		EncodedStructure: encodedStructure,
+	}
+
+	return createActionMessage(models.AddDataModel, payload)
+}
+
+// createEditDataModelMessage creates an edit data model action message
+func createEditDataModelMessage(name, description string) models.UMHMessage {
+	// Create an updated data model structure with additional fields
+	structure := map[string]models.Field{
+		"temperature": {
+			PayloadShape: "timeseries-number",
+		},
+		"pressure": {
+			PayloadShape: "timeseries-number",
+		},
+		"status": {
+			PayloadShape: "timeseries-string",
+		},
+		"measurements": {
+			Subfields: map[string]models.Field{
+				"vibration": {
+					PayloadShape: "timeseries-number",
+				},
+				"rpm": {
+					PayloadShape: "timeseries-number",
+				},
+				"efficiency": { // New field added in edit
+					PayloadShape: "timeseries-number",
+				},
+			},
+		},
+		"metadata": { // New section added in edit
+			Subfields: map[string]models.Field{
+				"location": {
+					PayloadShape: "timeseries-string",
+				},
+				"operator": {
+					PayloadShape: "timeseries-string",
+				},
+			},
+		},
+	}
+
+	// Marshal the structure to YAML
+	yamlData, err := yaml.Marshal(structure)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to marshal data model structure: %v", err))
+	}
+
+	// Base64 encode the YAML
+	encodedStructure := base64.StdEncoding.EncodeToString(yamlData)
+
+	payload := models.EditDataModelPayload{
+		Name:             name,
+		Description:      description,
+		EncodedStructure: encodedStructure,
+	}
+
+	return createActionMessage(models.EditDataModel, payload)
+}
+
+// createDeleteDataModelMessage creates a delete data model action message
+func createDeleteDataModelMessage(name string) models.UMHMessage {
+	payload := models.DeleteDataModelPayload{
+		Name: name,
+	}
+
+	return createActionMessage(models.DeleteDataModel, payload)
 }

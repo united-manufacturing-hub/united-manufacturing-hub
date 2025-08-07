@@ -84,4 +84,10 @@ var _ = Describe("UMH Core E2E Communication", Ordered, Label("e2e"), func() {
 			testBridgeCreation(mockServer)
 		})
 	})
+
+	Context("Data Model Lifecycle", func() {
+		It("should create, edit, and delete a data model with automatic data contract creation", func() {
+			testDataModelLifecycle(mockServer)
+		})
+	})
 })
