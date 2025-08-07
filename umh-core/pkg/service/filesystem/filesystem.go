@@ -22,7 +22,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -100,11 +103,31 @@ var chunkBufferPool = sync.Pool{
 }
 
 // DefaultService is the default implementation of FileSystemService
-type DefaultService struct{}
+type DefaultService struct {
+	goroutineCount atomic.Int64
+}
 
-// NewDefaultService creates a new DefaultFileSystemService
+var (
+	defaultServiceInstance     *DefaultService
+	defaultServiceInstanceOnce sync.Once
+)
+
+// NewDefaultService returns a singleton instance of DefaultService.
+// It is safe for concurrent use.
 func NewDefaultService() *DefaultService {
-	return &DefaultService{}
+	defaultServiceInstanceOnce.Do(func() {
+		df := &DefaultService{}
+		defaultServiceInstance = df
+	})
+	return defaultServiceInstance
+}
+
+func (s *DefaultService) reportGoroutineLeaksAndDecrement() {
+	count := s.goroutineCount.Load()
+	if count > 5 {
+		zap.S().Debugf("high filesystem goroutine count: %d", count)
+	}
+	s.goroutineCount.Add(-1)
 }
 
 // checkContext checks if the context is done before proceeding with an operation
@@ -128,6 +151,8 @@ func (s *DefaultService) EnsureDirectory(ctx context.Context, path string) error
 
 	// Run operation in goroutine
 	go func() {
+		s.goroutineCount.Add(1)
+		defer s.reportGoroutineLeaksAndDecrement()
 		errCh <- os.MkdirAll(path, 0755)
 	}()
 
@@ -158,6 +183,8 @@ func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, err
 
 	// Run file operation in goroutine
 	go func() {
+		s.goroutineCount.Add(1)
+		defer s.reportGoroutineLeaksAndDecrement()
 		data, err := os.ReadFile(path)
 		resCh <- result{err: err, data: data}
 	}()
@@ -211,6 +238,8 @@ func (s *DefaultService) ReadFileRange(
 	resCh := make(chan result, 1)
 
 	go func() {
+		s.goroutineCount.Add(1)
+		defer s.reportGoroutineLeaksAndDecrement()
 		f, err := os.Open(path)
 		if err != nil {
 			resCh <- result{err: err, data: nil, newSize: 0}
@@ -322,6 +351,8 @@ func (s *DefaultService) WriteFile(ctx context.Context, path string, data []byte
 
 	// Run file operation in goroutine
 	go func() {
+		s.goroutineCount.Add(1)
+		defer s.reportGoroutineLeaksAndDecrement()
 		errCh <- os.WriteFile(path, data, perm)
 	}()
 
@@ -352,6 +383,8 @@ func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, err
 
 	// Run file operation in goroutine
 	go func() {
+		s.goroutineCount.Add(1)
+		defer s.reportGoroutineLeaksAndDecrement()
 		_, err := os.Stat(path)
 		if os.IsNotExist(err) {
 			resCh <- result{err: nil, exists: false}
@@ -393,6 +426,8 @@ func (s *DefaultService) Remove(ctx context.Context, path string) error {
 
 	// Run file operation in goroutine
 	go func() {
+		s.goroutineCount.Add(1)
+		defer s.reportGoroutineLeaksAndDecrement()
 		errCh <- os.Remove(path)
 	}()
 
@@ -416,6 +451,8 @@ func (s *DefaultService) RemoveAll(ctx context.Context, path string) error {
 
 	// Run file operation in goroutine
 	go func() {
+		s.goroutineCount.Add(1)
+		defer s.reportGoroutineLeaksAndDecrement()
 		errCh <- os.RemoveAll(path)
 	}()
 
@@ -446,6 +483,8 @@ func (s *DefaultService) Stat(ctx context.Context, path string) (os.FileInfo, er
 
 	// Run file operation in goroutine
 	go func() {
+		s.goroutineCount.Add(1)
+		defer s.reportGoroutineLeaksAndDecrement()
 		info, err := os.Stat(path)
 		resCh <- result{info, err}
 	}()
@@ -473,6 +512,8 @@ func (s *DefaultService) Chmod(ctx context.Context, path string, mode os.FileMod
 
 	// Run file operation in goroutine
 	go func() {
+		s.goroutineCount.Add(1)
+		defer s.reportGoroutineLeaksAndDecrement()
 		errCh <- os.Chmod(path, mode)
 	}()
 
@@ -503,6 +544,8 @@ func (s *DefaultService) ReadDir(ctx context.Context, path string) ([]os.DirEntr
 
 	// Run file operation in goroutine
 	go func() {
+		s.goroutineCount.Add(1)
+		defer s.reportGoroutineLeaksAndDecrement()
 		entries, err := os.ReadDir(path)
 		resCh <- result{err: err, entries: entries}
 	}()
@@ -530,6 +573,8 @@ func (s *DefaultService) Chown(ctx context.Context, path string, user string, gr
 
 	// Run file operation in goroutine
 	go func() {
+		s.goroutineCount.Add(1)
+		defer s.reportGoroutineLeaksAndDecrement()
 		// Use chown command as os.Chown needs numeric user/group IDs
 		cmd := exec.Command("chown", fmt.Sprintf("%s:%s", user, group), path)
 		errCh <- cmd.Run()
@@ -582,6 +627,8 @@ func (s *DefaultService) Glob(ctx context.Context, pattern string) ([]string, er
 
 	// Run file operation in goroutine
 	go func() {
+		s.goroutineCount.Add(1)
+		defer s.reportGoroutineLeaksAndDecrement()
 		matches, err := filepath.Glob(pattern)
 		resCh <- result{err: err, matches: matches}
 	}()
@@ -610,6 +657,8 @@ func (s *DefaultService) Rename(ctx context.Context, oldPath, newPath string) er
 
 	// Run file operation in goroutine
 	go func() {
+		s.goroutineCount.Add(1)
+		defer s.reportGoroutineLeaksAndDecrement()
 		errCh <- os.Rename(oldPath, newPath)
 	}()
 
@@ -636,6 +685,8 @@ func (s *DefaultService) Symlink(ctx context.Context, target, linkPath string) e
 
 	// Run file operation in goroutine
 	go func() {
+		s.goroutineCount.Add(1)
+		defer s.reportGoroutineLeaksAndDecrement()
 		errCh <- os.Symlink(target, linkPath)
 	}()
 
