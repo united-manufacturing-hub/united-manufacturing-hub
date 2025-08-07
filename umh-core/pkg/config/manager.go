@@ -548,15 +548,17 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	// For writeConfig, we invalidate the cache instead of updating it directly.
-	// This is because writeConfig converts the spec to YAML using convertSpecToYaml(),
-	// which may not preserve the original YAML structure (anchors/aliases).
-	// Caching the converted data caused Protocol Converter templating bugs.
-	// Cache invalidation forces a fresh read that properly handles YAML templating.
+	//get the file stats for the config file
+	fileStats, err := m.fsService.Stat(ctx, m.configPath)
+	if err != nil {
+		return fmt.Errorf("failed to get file stats: %w", err)
+	}
+
+	// update the cache
 	m.cacheMu.Lock()
-	m.cacheModTime = time.Time{} // Invalidate cache by setting modtime to zero
-	m.cacheConfig = FullConfig{}
-	m.cacheRawConfig = ""
+	m.cacheModTime = fileStats.ModTime()
+	m.cacheConfig = config
+	m.cacheRawConfig = string(data)
 	m.cacheMu.Unlock()
 
 	m.logger.Infof("Successfully wrote config to %s", m.configPath)
