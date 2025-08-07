@@ -359,10 +359,11 @@ func (p *ProtocolConverterInstance) IsRedpandaHealthy() (bool, string) {
 		return true, ""
 	}
 
-	statusReason := "redpanda: " + p.ObservedState.ServiceInfo.RedpandaObservedState.ServiceInfo.StatusReason
-	if statusReason == "" {
-		statusReason = "Redpanda Health status unknown"
+	originalStatusReason := p.ObservedState.ServiceInfo.RedpandaObservedState.ServiceInfo.StatusReason
+	if originalStatusReason == "" {
+		return false, "Redpanda Health status unknown"
 	}
+	statusReason := "redpanda: " + originalStatusReason
 
 	return false, statusReason
 }
