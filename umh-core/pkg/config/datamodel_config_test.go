@@ -77,7 +77,7 @@ dataModels:
           unit:
             _payloadshape: timeseries-number
 `
-				config, err := ParseConfig([]byte(validYAML), false)
+				config, err := ParseConfig([]byte(validYAML), ctx, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(config.Internal.Services).To(HaveLen(1))
@@ -118,7 +118,7 @@ dataModels:
               name: device-info
               version: v1
 `
-				config, err := ParseConfig([]byte(complexYAML), false)
+				config, err := ParseConfig([]byte(complexYAML), ctx, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Test complex data model parsing
@@ -159,7 +159,7 @@ dataModels:
               name: sensor-metadata
               version: v1
 `
-				config, err := ParseConfig([]byte(multiVersionYAML), false)
+				config, err := ParseConfig([]byte(multiVersionYAML), ctx, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(config.DataModels).To(HaveLen(1))
@@ -254,14 +254,16 @@ dataModels:
 					},
 				}
 
-				err := configManager.AtomicAddDataModel(ctx, "temperature", dmVersion, "test description")
-				Expect(err).NotTo(HaveOccurred())
+				Eventually(func() error {
+					err := configManager.AtomicAddDataModel(ctx, "temperature", dmVersion, "test description")
+					return err
+				}, TimeToWaitForConfigRefresh*2, "10ms").Should(Succeed())
 
 				// Verify the written data
 				Expect(writtenData).NotTo(BeEmpty())
 
 				// Parse the written data to verify it contains the data model
-				writtenConfig, err := ParseConfig(writtenData, false)
+				writtenConfig, err := ParseConfig(writtenData, ctx, false)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(writtenConfig.DataModels).To(HaveLen(1))
 				Expect(writtenConfig.DataModels[0].Name).To(Equal("temperature"))
@@ -293,7 +295,10 @@ dataModels:
 					},
 				}
 
+				_, _ = configManager.GetConfig(ctx, 0) // get the config to trigger the background refresh
+				time.Sleep(100 * time.Millisecond)     // wait for the background refresh to finish
 				err := configManager.AtomicAddDataModel(ctx, "existing-model", dmVersion, "test description")
+
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("another data model with name \"existing-model\" already exists"))
 			})
@@ -384,14 +389,17 @@ dataModels:
 					},
 				}
 
+				_, _ = configManager.GetConfig(ctx, 0) // get the config to trigger the background refresh
+				time.Sleep(100 * time.Millisecond)     // wait for the background refresh to finish
 				err := configManager.AtomicEditDataModel(ctx, "temperature", dmVersion, "test description")
+
 				Expect(err).NotTo(HaveOccurred())
 
 				// Verify the written data
 				Expect(writtenData).NotTo(BeEmpty())
 
 				// Parse the written data to verify it contains both versions
-				writtenConfig, err := ParseConfig(writtenData, false)
+				writtenConfig, err := ParseConfig(writtenData, ctx, false)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(writtenConfig.DataModels).To(HaveLen(1))
 				Expect(writtenConfig.DataModels[0].Name).To(Equal("temperature"))
@@ -432,7 +440,10 @@ dataModels:
 					},
 				}
 
+				_, _ = configManager.GetConfig(ctx, 0) // get the config to trigger the background refresh
+				time.Sleep(100 * time.Millisecond)     // wait for the background refresh to finish
 				err := configManager.AtomicEditDataModel(ctx, "non-existent", dmVersion, "test description")
+
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("data model with name \"non-existent\" not found"))
 			})
@@ -493,6 +504,8 @@ dataModels:
 			})
 
 			It("should remove the specified data model", func() {
+				_, _ = configManager.GetConfig(ctx, 0) // get the config to trigger the background refresh
+				time.Sleep(100 * time.Millisecond)     // wait for the background refresh to finish
 				err := configManager.AtomicDeleteDataModel(ctx, "temperature")
 				Expect(err).NotTo(HaveOccurred())
 
@@ -500,7 +513,7 @@ dataModels:
 				Expect(writtenData).NotTo(BeEmpty())
 
 				// Parse the written data to verify the correct model was removed
-				writtenConfig, err := ParseConfig(writtenData, false)
+				writtenConfig, err := ParseConfig(writtenData, ctx, false)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(writtenConfig.DataModels).To(HaveLen(1))
 				Expect(writtenConfig.DataModels[0].Name).To(Equal("pressure"))
@@ -523,7 +536,10 @@ dataModels:
 			})
 
 			It("should return an error", func() {
+				_, _ = configManager.GetConfig(ctx, 0) // get the config to trigger the background refresh
+				time.Sleep(100 * time.Millisecond)     // wait for the background refresh to finish
 				err := configManager.AtomicDeleteDataModel(ctx, "non-existent")
+
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("data model with name \"non-existent\" not found"))
 			})

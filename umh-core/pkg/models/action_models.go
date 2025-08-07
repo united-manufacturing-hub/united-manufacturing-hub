@@ -831,13 +831,14 @@ type StreamProcessorMapping map[string]interface{}
 
 // StreamProcessor represents a stream processor configuration
 type StreamProcessor struct {
-	UUID          *uuid.UUID                   `json:"uuid" binding:"required"`
-	Location      map[int]string               `json:"location"`
-	Config        *StreamProcessorConfig       `json:"-"` // parsed configuration (not used in the action, but filled by the action)
-	TemplateInfo  *StreamProcessorTemplateInfo `json:"templateInfo"`
-	Model         StreamProcessorModelRef      `json:"model" binding:"required"`
-	Name          string                       `json:"name" binding:"required"`
-	EncodedConfig string                       `json:"encodedConfig" binding:"required"` // base64-encoded YAML structure containing sources and mappings
+	UUID              *uuid.UUID                   `json:"uuid" binding:"required"`
+	Location          map[int]string               `json:"location"`
+	Config            *StreamProcessorConfig       `json:"-"` // parsed configuration (not used in the action, but filled by the action)
+	TemplateInfo      *StreamProcessorTemplateInfo `json:"templateInfo"`
+	Model             StreamProcessorModelRef      `json:"model" binding:"required"`
+	Name              string                       `json:"name" binding:"required"`
+	EncodedConfig     string                       `json:"encodedConfig" binding:"required"` // base64-encoded YAML structure containing sources and mappings
+	IgnoreHealthCheck bool                         `json:"ignoreHealthCheck,omitempty"`
 }
 
 // GetStreamProcessorPayload contains the necessary fields for getting a stream processor.

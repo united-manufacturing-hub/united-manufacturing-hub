@@ -68,7 +68,7 @@ NMAP_VERSION = 7.95-r1
 S6_OVERLAY_VERSION = 3.2.0.2
 REDPANDA_VERSION = 24.3.8
 ## Benthos version is a tag or a sha-<commit hash> (e.g. 0.9.4 or sha-a51a685) to be used in the docker image
-BENTHOS_UMH_VERSION = 0.10.1
+BENTHOS_UMH_VERSION = 0.10.2
 BUF_VERSION = 1.55.1
 PROTOC_GEN_GO_VERSION = 1.36.6
 
@@ -259,7 +259,6 @@ nilaway:
 
 betteralign:
 	betteralign -test=false ./... || (echo "Consider running 'make betteralign-fix' to fix the issues" && exit 1)
-
 betteralign-fix:
 	betteralign -test=false -apply ./...
 
@@ -274,17 +273,17 @@ betteralign-fix-all:
 vet-nilaway-lint-betteralign: vet nilaway lint betteralign
 
 test: vet-nilaway-lint-betteralign
-	go test -v -tags=test ./...
+	go test -race -v -tags=test ./...
 
 unit-test: vet-nilaway-lint-betteralign
-	ginkgo -r -v --tags=test --label-filter='!integration && !redpanda-extended && !tls' --fail-fast ./...
+	ginkgo -r -v --tags=test --race --label-filter='!integration && !redpanda-extended && !tls' --fail-fast ./...
 
 unit-test-fail-slow: vet-nilaway-lint-betteralign
-	ginkgo -r -v --tags=test --label-filter='!integration && !redpanda-extended && !tls' ./...
+	ginkgo -r -v --tags=test --race --label-filter='!integration && !redpanda-extended && !tls' ./...
 
 benchmark:
 	@echo "Running benchmarks..."
-	go test -bench=. -benchmem ./...
+	go test -race -bench=. -benchmem ./...
 
 benchmark-config:
 	@echo "Running config package benchmarks..."

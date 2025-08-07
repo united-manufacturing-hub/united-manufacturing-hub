@@ -16,6 +16,7 @@ package generator
 
 import (
 	"fmt"
+	"regexp"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -81,16 +82,46 @@ func buildProtocolConverterAsDfc(
 
 	// Create connection info for protocol converter
 	var connections []models.Connection
-	if observed.ObservedProtocolConverterRuntimeConfig.ConnectionServiceConfig.NmapServiceConfig.Target != "" {
+	if observed.ObservedProtocolConverterSpecConfig.Config.ConnectionServiceConfig.NmapTemplate != nil &&
+		observed.ObservedProtocolConverterSpecConfig.Config.ConnectionServiceConfig.NmapTemplate.Target != "" {
 		var lastLatencyMs float64
 		if observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ServiceInfo.NmapStatus.LastScan != nil {
 			lastLatencyMs = observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ServiceInfo.NmapStatus.LastScan.PortResult.LatencyMs
 		}
 
+		// check the variables for the target and port
+
+		specTarget := observed.ObservedProtocolConverterSpecConfig.Config.ConnectionServiceConfig.NmapTemplate.Target
+		specPort := observed.ObservedProtocolConverterSpecConfig.Config.ConnectionServiceConfig.NmapTemplate.Port
+
+		// targetConfig is e.g. "{{ .IP }}" and portConfig is e.g. "{{ .PORT }}"
+		// we need to replace the variables with the actual values therefore we need to get the variable name and check the values in the user variables
+		// if the variable is not found, we use the default value
+
+		re := regexp.MustCompile(`{{\s*\.(\w+)\s*}}`)
+
+		target := specTarget
+		if match := re.FindStringSubmatch(specTarget); len(match) > 1 {
+			if userValue, ok := observed.ObservedProtocolConverterSpecConfig.Variables.User[match[1]]; ok {
+				if strValue, ok := userValue.(string); ok {
+					target = strValue
+				}
+			}
+		}
+
+		port := specPort
+		if match := re.FindStringSubmatch(specPort); len(match) > 1 {
+			if userValue, ok := observed.ObservedProtocolConverterSpecConfig.Variables.User[match[1]]; ok {
+				if strValue, ok := userValue.(string); ok {
+					port = strValue
+				}
+			}
+		}
+
 		connection := models.Connection{
 			Name: instance.ID + "-connection",
 			UUID: dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID + "-connection").String(), // Derive connection UUID from PC UUID
-			URI:  fmt.Sprintf("%s:%d", observed.ObservedProtocolConverterRuntimeConfig.ConnectionServiceConfig.NmapServiceConfig.Target, observed.ObservedProtocolConverterRuntimeConfig.ConnectionServiceConfig.NmapServiceConfig.Port),
+			URI:  fmt.Sprintf("%s:%s", target, port),
 			Health: &models.Health{
 				Message:       observed.ServiceInfo.ConnectionFSMState,
 				ObservedState: observed.ServiceInfo.ConnectionFSMState,
@@ -102,16 +133,12 @@ func buildProtocolConverterAsDfc(
 		connections = append(connections, connection)
 	}
 
-	// var templatePort string
-	// if observed.ObservedProtocolConverterTemplateConfig.ConnectionServiceConfig.NmapTemplate != nil {
-	// 	templatePort = observed.ObservedProtocolConverterTemplateConfig.ConnectionServiceConfig.NmapTemplate.Port
-	// } else {
-	// 	templatePort = "not found"
-	// }
-
-	//check if the protocol converter is initialized by checking if a read dfc is present
+	// Check if the protocol converter is initialized by checking if a read dfc is present.
 	isInitialized := false
-	input := observed.ObservedProtocolConverterRuntimeConfig.DataflowComponentReadServiceConfig.BenthosConfig.Input
+	var input map[string]any
+	if observed.ObservedProtocolConverterSpecConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input != nil {
+		input = observed.ObservedProtocolConverterSpecConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input
+	}
 	if len(input) > 0 {
 		isInitialized = true
 	}

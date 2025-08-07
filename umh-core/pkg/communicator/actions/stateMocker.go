@@ -453,6 +453,12 @@ func (s *StateMocker) Run() error {
 	ticker := time.NewTicker(constants.DefaultTickerTime)
 
 	sentry.SafeGo(func() {
+
+    // Get a reference to the done channel under mutex protection
+	  s.mu.RLock()
+	  done := s.done
+	  s.mu.RUnlock()
+    
 		defer ticker.Stop()
 		defer s.running.Store(false)
 
@@ -460,7 +466,7 @@ func (s *StateMocker) Run() error {
 			select {
 			case <-ticker.C:
 				s.Tick()
-			case <-s.done:
+			case <-done:
 				return
 			}
 		}
@@ -481,6 +487,9 @@ func (s *StateMocker) Start() error {
 // Stop signals the state mocker to stop updating and waits for it to complete
 // It is safe to call Stop even if the mocker isn't running
 func (s *StateMocker) Stop() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if s.running.Load() {
 		close(s.done)
 		// Create a new channel for next run
