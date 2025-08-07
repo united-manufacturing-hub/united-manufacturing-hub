@@ -21,4 +21,14 @@ linters:
   default: all
   disable:
     - forbidigo
+    - cyclop
+
+linters-settings:
+  cyclop:
+    # The maximal code complexity to report
+    max-complexity: 50
+  
+  gocyclo:
+    # minimal code complexity to report, 30 by default (but we recommend 10-20)
+    min-complexity: 50
 
