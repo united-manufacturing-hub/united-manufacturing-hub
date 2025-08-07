@@ -24,6 +24,7 @@ import (
 	"github.com/99designs/gqlgen/graphql/handler/transport"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/gin-gonic/gin"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
 )
 
@@ -120,11 +121,11 @@ func (s *Server) Start(ctx context.Context) error {
 	)
 
 	// Start server in a goroutine
-	go func() {
+	sentry.SafeGo(func() {
 		if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			s.logger.Errorw("GraphQL server failed", "error", err)
 		}
-	}()
+	})
 
 	return nil
 }

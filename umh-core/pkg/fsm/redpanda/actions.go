@@ -30,6 +30,7 @@ import (
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/monitor"
 	redpanda_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
@@ -221,6 +222,7 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 	observedStateMu := sync.Mutex{}
 
 	g.Go(func() error {
+		defer sentry.RecoverAndReport()
 		start := time.Now()
 		info, err := r.GetServiceStatus(gctx, services.GetFileSystem(), snapshot.Tick, snapshot.SnapshotTime)
 		metrics.ObserveReconcileTime(logger.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
@@ -244,6 +246,7 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 	})
 
 	g.Go(func() error {
+		defer sentry.RecoverAndReport()
 		start := time.Now()
 		// This GetConfig requires the tick parameter, which will be used to calculate the metrics state
 		observedConfig, err := r.service.GetConfig(gctx, services.GetFileSystem(), r.baseFSMInstance.GetID(), snapshot.Tick, snapshot.SnapshotTime)
@@ -287,11 +290,11 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 
 	// Run g.Wait() in a separate goroutine.
 	// This allows us to use a select statement to return early if the context is canceled.
-	go func() {
+	sentry.SafeGo(func() {
 		// g.Wait() blocks until all goroutines launched with g.Go() have returned.
 		// It returns the first non-nil error, if any.
 		errc <- g.Wait()
-	}()
+	})
 
 	// Use a select statement to wait for either the g.Wait() result or the context's cancellation.
 	select {

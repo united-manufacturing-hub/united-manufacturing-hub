@@ -673,7 +673,7 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 		// Start workers
 		for w := 0; w < workerCount; w++ {
 			wg.Add(1)
-			go func() {
+			sentry.SafeGo(func() {
 				defer wg.Done()
 
 				for job := range jobs {
@@ -806,14 +806,14 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 						},
 					}
 				}
-			}()
+			})
 		}
 
 		// Start a result collector goroutine
 		var resultErr error
 		resultDone := make(chan struct{})
 
-		go func() {
+		sentry.SafeGo(func() {
 			defer close(resultDone)
 
 			// Process results as they arrive
@@ -835,7 +835,7 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 				newFiles[result.absPath] = *result.state
 				filesMutex.Unlock()
 			}
-		}()
+		})
 
 		// Queue all file jobs
 		for path, cf := range dc.Files {
