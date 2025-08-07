@@ -19,14 +19,14 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/bridgeserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/bridge"
 )
 
 // ProtocolConverterObservedStateSnapshot is a deep-copyable snapshot of ProtocolConverterObservedState
 type ProtocolConverterObservedStateSnapshot struct {
 	ObservedProtocolConverterRuntimeConfig bridgeserviceconfig.ConfigRuntime
 	ObservedProtocolConverterSpecConfig    bridgeserviceconfig.ConfigSpec
-	ServiceInfo                            protocolconverter.ServiceInfo
+	ServiceInfo                            bridge.ServiceInfo
 }
 
 // IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface

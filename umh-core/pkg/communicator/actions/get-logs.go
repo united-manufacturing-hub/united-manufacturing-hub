@@ -225,9 +225,9 @@ func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
 		}
 
 		if logType == models.ProtocolConverterReadLogType {
-			res.Logs = mapS6LogsToSlice(observedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs, reqStartTime)
+			res.Logs = mapS6LogsToSlice(observedState.ServiceInfo.DFCReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs, reqStartTime)
 		} else {
-			res.Logs = mapS6LogsToSlice(observedState.ServiceInfo.DataflowComponentWriteObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs, reqStartTime)
+			res.Logs = mapS6LogsToSlice(observedState.ServiceInfo.DFCWriteObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs, reqStartTime)
 		}
 	case models.TopicBrowserLogType:
 		tbInstance, ok := fsm.FindInstance(systemSnapshot, constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)

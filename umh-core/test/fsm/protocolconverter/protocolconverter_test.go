@@ -33,14 +33,14 @@ import (
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	protocolconverterfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	redpandafsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
-	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
+	bridgesvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/bridge"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 var _ = Describe("ProtocolConverter FSM", func() {
 	var (
 		instance      *protocolconverterfsm.ProtocolConverterInstance
-		mockService   *protocolconvertersvc.MockProtocolConverterService
+		mockService   *bridgesvc.MockService
 		componentName string
 		ctx           context.Context
 		tick          uint64
@@ -779,7 +779,7 @@ var _ = Describe("ProtocolConverter FSM", func() {
 	// =========================================================================
 	Context("Stopping Flow", func() {
 		// Helper functions to setup different states
-		var setupActive = func() {
+		setupActive := func() {
 			var err error
 			// Reset for clean state
 			instance, mockService, _ = fsmtest.SetupProtocolConverterInstance(componentName, protocolconverterfsm.OperationalStateStopped)
@@ -843,7 +843,7 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 		}
 
-		var setupIdle = func() {
+		setupIdle := func() {
 			var err error
 			// Reset for clean state
 			instance, mockService, _ = fsmtest.SetupProtocolConverterInstance(componentName, protocolconverterfsm.OperationalStateStopped)
@@ -899,7 +899,7 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 		}
 
-		var setupStartingConnection = func() {
+		setupStartingConnection := func() {
 			var err error
 			// Reset for clean state
 			instance, mockService, _ = fsmtest.SetupProtocolConverterInstance(componentName, protocolconverterfsm.OperationalStateStopped)
@@ -930,7 +930,7 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 		}
 
-		var setupStartingRedpanda = func() {
+		setupStartingRedpanda := func() {
 			setupStartingConnection()
 			var err error
 
@@ -943,7 +943,7 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 		}
 
-		var setupStartingDFC = func() {
+		setupStartingDFC := func() {
 			setupStartingRedpanda()
 			var err error
 
@@ -956,7 +956,7 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 		}
 
-		var setupStartingFailedDFCMissing = func() {
+		setupStartingFailedDFCMissing := func() {
 			var err error
 			// Setup instance with missing DFC
 			instance, mockService, _ = fsmtest.SetupProtocolConverterInstanceWithMissingDfc(componentName, protocolconverterfsm.OperationalStateStopped)
@@ -1012,7 +1012,7 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 		}
 
-		var setupDegradedConnection = func() {
+		setupDegradedConnection := func() {
 			setupIdle()
 			var err error
 
@@ -1025,7 +1025,7 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 		}
 
-		var setupDegradedRedpanda = func() {
+		setupDegradedRedpanda := func() {
 			setupIdle()
 			var err error
 
@@ -1038,7 +1038,7 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 		}
 
-		var setupDegradedDFC = func() {
+		setupDegradedDFC := func() {
 			setupIdle()
 			var err error
 
@@ -1051,7 +1051,7 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 		}
 
-		var setupDegradedOther = func() {
+		setupDegradedOther := func() {
 			setupIdle()
 			var err error
 
@@ -1243,7 +1243,7 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			// HERE IS THE KEY: Configure the connection as DOWN/CLOSED to simulate unreachable port
 			// This simulates what would happen if nmap found port 8082 to be closed
 			fsmtest.SetupProtocolConverterServiceState(unreachableMockService, componentName,
-				protocolconvertersvc.ConverterStateFlags{
+				bridgesvc.StateFlags{
 					IsDFCRunning:       false,
 					IsConnectionUp:     false, // Connection is DOWN because port is unreachable
 					IsRedpandaRunning:  false,

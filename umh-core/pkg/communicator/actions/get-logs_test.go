@@ -34,8 +34,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/agent_monitor"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/bridge"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
@@ -99,8 +99,8 @@ var _ = Describe("GetLogsAction", func() {
 		dfcManagerSnapshot := &actions.MockManagerSnapshot{Instances: mockDfcInstances}
 
 		// Protocol Converter logs mock
-		protocolConverterServiceInfo := protocolconverter.ServiceInfo{
-			DataflowComponentReadObservedState: dfc_fsm.DataflowComponentObservedState{
+		protocolConverterServiceInfo := bridge.ServiceInfo{
+			DFCReadObservedState: dfc_fsm.DataflowComponentObservedState{
 				ServiceInfo: dataflowcomponent.ServiceInfo{
 					BenthosObservedState: benthosfsmmanager.BenthosObservedState{
 						ServiceInfo: benthossvc.ServiceInfo{
@@ -111,7 +111,7 @@ var _ = Describe("GetLogsAction", func() {
 					},
 				},
 			},
-			DataflowComponentWriteObservedState: dfc_fsm.DataflowComponentObservedState{
+			DFCWriteObservedState: dfc_fsm.DataflowComponentObservedState{
 				ServiceInfo: dataflowcomponent.ServiceInfo{
 					BenthosObservedState: benthosfsmmanager.BenthosObservedState{
 						ServiceInfo: benthossvc.ServiceInfo{

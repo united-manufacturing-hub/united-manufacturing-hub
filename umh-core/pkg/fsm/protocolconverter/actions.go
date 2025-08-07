@@ -30,9 +30,9 @@ import (
 	redpandafsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/bridge"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/bridge/runtime_config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter/runtime_config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
@@ -131,7 +131,7 @@ func (p *ProtocolConverterInstance) StartInstance(ctx context.Context, filesyste
 	// TODO: Add pre-start validation
 
 	// Set the desired state to running for the given instance
-	err := p.service.StartProtocolConverter(ctx, filesystemService, p.baseFSMInstance.GetID())
+	err := p.service.Start(ctx, filesystemService, p.baseFSMInstance.GetID())
 	if err != nil {
 		// if the service is not there yet but we attempt to start it, we need to throw an error
 		return fmt.Errorf("failed to start ProtocolConverter service %s: %w", p.baseFSMInstance.GetID(), err)
@@ -146,7 +146,7 @@ func (p *ProtocolConverterInstance) StopInstance(ctx context.Context, filesystem
 	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping ProtocolConverter service %s ...", p.baseFSMInstance.GetID())
 
 	// Set the desired state to stopped for the given instance
-	err := p.service.StopProtocolConverter(ctx, filesystemService, p.baseFSMInstance.GetID())
+	err := p.service.Stop(ctx, filesystemService, p.baseFSMInstance.GetID())
 	if err != nil {
 		// if the service is not there yet but we attempt to stop it, we need to throw an error
 		return fmt.Errorf("failed to stop ProtocolConverter service %s: %w", p.baseFSMInstance.GetID(), err)
@@ -189,10 +189,10 @@ func (p *ProtocolConverterInstance) getServiceStatus(ctx context.Context, servic
 
 		// Set health flags to false to indicate failure, following the pattern used by other FSMs
 		// Only set health checks for components that have them (Benthos components and Redpanda)
-		infoWithFailedHealthChecks.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive = false
-		infoWithFailedHealthChecks.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady = false
-		infoWithFailedHealthChecks.DataflowComponentWriteObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive = false
-		infoWithFailedHealthChecks.DataflowComponentWriteObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady = false
+		infoWithFailedHealthChecks.DFCReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive = false
+		infoWithFailedHealthChecks.DFCReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady = false
+		infoWithFailedHealthChecks.DFCWriteObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive = false
+		infoWithFailedHealthChecks.DFCWriteObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady = false
 
 		// Set the StatusReason to explain the error
 		infoWithFailedHealthChecks.StatusReason = fmt.Sprintf("service status error: %s", err.Error())
@@ -375,11 +375,11 @@ func (p *ProtocolConverterInstance) IsRedpandaHealthy() (bool, string) {
 //	ok     – true when the DFC is healthy, false otherwise.
 //	reason – empty when ok is true; otherwise a explanation
 func (p *ProtocolConverterInstance) IsDFCHealthy() (bool, string) {
-	if p.ObservedState.ServiceInfo.DataflowComponentReadFSMState == dataflowfsm.OperationalStateIdle || p.ObservedState.ServiceInfo.DataflowComponentReadFSMState == dataflowfsm.OperationalStateActive {
+	if p.ObservedState.ServiceInfo.DFCReadFSMState == dataflowfsm.OperationalStateIdle || p.ObservedState.ServiceInfo.DFCReadFSMState == dataflowfsm.OperationalStateActive {
 		return true, ""
 	}
 
-	statusReason := p.ObservedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.StatusReason
+	statusReason := p.ObservedState.ServiceInfo.DFCReadObservedState.ServiceInfo.StatusReason
 	if statusReason == "" {
 		statusReason = "DFC Health status unknown"
 	}
@@ -394,11 +394,11 @@ func (p *ProtocolConverterInstance) IsDFCHealthy() (bool, string) {
 // observedState structure may not be populated yet.
 func (p *ProtocolConverterInstance) safeBenthosMetrics() (input, output struct{ ConnectionUp, ConnectionLost int64 }) {
 	// Return zero values if the MetricsState pointer is nil (this is the only field that can actually be nil)
-	if p.ObservedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState == nil {
+	if p.ObservedState.ServiceInfo.DFCReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState == nil {
 		return
 	}
 
-	metrics := p.ObservedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
+	metrics := p.ObservedState.ServiceInfo.DFCReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
 	return struct{ ConnectionUp, ConnectionLost int64 }{
 			ConnectionUp:   metrics.Input.ConnectionUp,
 			ConnectionLost: metrics.Input.ConnectionLost,
@@ -422,7 +422,7 @@ func (p *ProtocolConverterInstance) IsOtherDegraded() (bool, string) {
 	// TODO: check the write DFC as well
 
 	// Check for case 1.1
-	if p.ObservedState.ServiceInfo.DataflowComponentReadFSMState == dataflowfsm.OperationalStateActive &&
+	if p.ObservedState.ServiceInfo.DFCReadFSMState == dataflowfsm.OperationalStateActive &&
 		p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateIdle {
 		return true, "DFC is active, but redpanda is idle"
 	}
@@ -457,11 +457,11 @@ func (p *ProtocolConverterInstance) IsOtherDegraded() (bool, string) {
 //	reason – empty when ok is true; otherwise a explanation
 func (p *ProtocolConverterInstance) IsDataflowComponentWithProcessingActivity() (bool, string) {
 	// TODO: check the write DFC as well
-	if p.ObservedState.ServiceInfo.DataflowComponentReadFSMState == dataflowfsm.OperationalStateActive {
+	if p.ObservedState.ServiceInfo.DFCReadFSMState == dataflowfsm.OperationalStateActive {
 		return true, ""
 	}
 
-	dfcState := p.ObservedState.ServiceInfo.DataflowComponentReadFSMState
+	dfcState := p.ObservedState.ServiceInfo.DFCReadFSMState
 	if dfcState == "" {
 		dfcState = "not existing"
 	}
@@ -479,7 +479,7 @@ func (p *ProtocolConverterInstance) IsDataflowComponentWithProcessingActivity() 
 func (p *ProtocolConverterInstance) IsProtocolConverterStopped() (bool, string) {
 	// TODO: check the write DFC as well
 	if p.ObservedState.ServiceInfo.ConnectionFSMState == connectionfsm.OperationalStateStopped &&
-		p.ObservedState.ServiceInfo.DataflowComponentReadFSMState == dataflowfsm.OperationalStateStopped {
+		p.ObservedState.ServiceInfo.DFCReadFSMState == dataflowfsm.OperationalStateStopped {
 		return true, ""
 	}
 
@@ -488,7 +488,7 @@ func (p *ProtocolConverterInstance) IsProtocolConverterStopped() (bool, string) 
 		connState = "not existing"
 	}
 
-	dfcState := p.ObservedState.ServiceInfo.DataflowComponentReadFSMState
+	dfcState := p.ObservedState.ServiceInfo.DFCReadFSMState
 	if dfcState == "" {
 		dfcState = "not existing"
 	}

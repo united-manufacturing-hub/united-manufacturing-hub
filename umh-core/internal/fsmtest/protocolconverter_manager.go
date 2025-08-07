@@ -23,7 +23,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	protocolconverterfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
-	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
+	bridgesvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/bridge"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -163,7 +163,7 @@ func WaitForProtocolConverterManagerMultiState(
 // SetupServiceInProtocolConverterManager adds a service to the manager and configures it
 func SetupServiceInProtocolConverterManager(
 	manager *protocolconverterfsm.ProtocolConverterManager,
-	mockService *protocolconvertersvc.MockProtocolConverterService,
+	mockService *bridgesvc.MockService,
 	converterName string,
 	desiredState string,
 	services serviceregistry.Provider,
@@ -178,13 +178,13 @@ func SetupServiceInProtocolConverterManager(
 	mockService.ExistingComponents[converterName] = true
 
 	// Ensure we have a service info initialized
-	if mockService.ConverterStates[converterName] == nil {
-		mockService.ConverterStates[converterName] = &protocolconvertersvc.ServiceInfo{}
+	if mockService.States[converterName] == nil {
+		mockService.States[converterName] = &bridgesvc.ServiceInfo{}
 	}
 }
 
 // CreateMockProtocolConverterManager creates a ProtocolConverter manager with a mock service for testing
-func CreateMockProtocolConverterManager(name string) (*protocolconverterfsm.ProtocolConverterManager, *protocolconvertersvc.MockProtocolConverterService) {
+func CreateMockProtocolConverterManager(name string) (*protocolconverterfsm.ProtocolConverterManager, *bridgesvc.MockService) {
 	mockManager, mockService := protocolconverterfsm.NewProtocolConverterManagerWithMockedServices(name)
 
 	return mockManager, mockService
@@ -198,7 +198,7 @@ func CreateMockProtocolConverterManager(name string) (*protocolconverterfsm.Prot
 //   - converterName: The name of the converter to configure
 //   - targetState: The desired state to configure the service for
 func ConfigureProtocolConverterManagerForState(
-	mockService *protocolconvertersvc.MockProtocolConverterService,
+	mockService *bridgesvc.MockService,
 	converterName string,
 	targetState string,
 ) {
@@ -209,11 +209,11 @@ func ConfigureProtocolConverterManagerForState(
 	mockService.ExistingComponents[converterName] = true
 
 	// Make sure service state is initialized
-	if mockService.ConverterStates == nil {
-		mockService.ConverterStates = make(map[string]*protocolconvertersvc.ServiceInfo)
+	if mockService.States == nil {
+		mockService.States = make(map[string]*bridgesvc.ServiceInfo)
 	}
-	if mockService.ConverterStates[converterName] == nil {
-		mockService.ConverterStates[converterName] = &protocolconvertersvc.ServiceInfo{}
+	if mockService.States[converterName] == nil {
+		mockService.States[converterName] = &bridgesvc.ServiceInfo{}
 	}
 
 	// Configure the service for the target state

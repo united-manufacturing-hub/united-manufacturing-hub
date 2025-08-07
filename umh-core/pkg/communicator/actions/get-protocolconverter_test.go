@@ -31,9 +31,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	redpandafsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	bridgesvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/bridge"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
-	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 	redpandasvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
 )
 
@@ -183,7 +183,7 @@ var _ = Describe("GetProtocolConverter", func() {
 							"2": "line-1",
 						},
 					},
-					ServiceInfo: protocolconvertersvc.ServiceInfo{
+					ServiceInfo: bridgesvc.ServiceInfo{
 						ConnectionFSMState: "up",
 						StatusReason:       "Protocol converter is healthy",
 						ConnectionObservedState: connectionfsm.ConnectionObservedState{
@@ -191,14 +191,14 @@ var _ = Describe("GetProtocolConverter", func() {
 								NmapFSMState: "open",
 							},
 						},
-						DataflowComponentReadFSMState: "active",
-						DataflowComponentReadObservedState: dfcfsm.DataflowComponentObservedState{
+						DFCReadFSMState: "active",
+						DFCReadObservedState: dfcfsm.DataflowComponentObservedState{
 							ServiceInfo: dataflowcomponent.ServiceInfo{
 								StatusReason: "DFC is healthy",
 							},
 						},
-						DataflowComponentWriteFSMState: "active",
-						DataflowComponentWriteObservedState: dfcfsm.DataflowComponentObservedState{
+						DFCWriteFSMState: "active",
+						DFCWriteObservedState: dfcfsm.DataflowComponentObservedState{
 							ServiceInfo: dataflowcomponent.ServiceInfo{
 								StatusReason: "DFC is healthy",
 							},
@@ -308,7 +308,7 @@ var _ = Describe("GetProtocolConverter", func() {
 							"3": "line-2",
 						},
 					},
-					ServiceInfo: protocolconvertersvc.ServiceInfo{
+					ServiceInfo: bridgesvc.ServiceInfo{
 						ConnectionFSMState: "up",
 						StatusReason:       "Protocol converter not initialized",
 					},

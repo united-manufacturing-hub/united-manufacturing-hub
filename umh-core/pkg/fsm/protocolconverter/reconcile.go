@@ -25,7 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
+	bridgesvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/bridge"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
@@ -88,7 +88,7 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 				func(ctx context.Context) error {
 					// Force removal when other approaches fail - bypasses state transitions
 					// and directly deletes files and resources
-					return p.service.ForceRemoveProtocolConverter(ctx, services.GetFileSystem(), protocolConverterInstanceName)
+					return p.service.ForceRemove(ctx, services.GetFileSystem(), protocolConverterInstanceName)
 				},
 			)
 		}
@@ -102,7 +102,7 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 	} else {
 		if err = p.reconcileExternalChanges(ctx, services, snapshot); err != nil {
 			// If the service is not running, we don't want to return an error here, because we want to continue reconciling
-			if !errors.Is(err, protocolconvertersvc.ErrServiceNotExist) && !errors.Is(err, s6.ErrServiceNotExist) {
+			if !errors.Is(err, bridgesvc.ErrServiceNotExist) && !errors.Is(err, s6.ErrServiceNotExist) {
 				// errors.Is(err, s6.ErrServiceNotExist)
 				// Consider a special case for DFC FSM here
 				// While creating for the first time, reconcileExternalChanges function will throw an error such as

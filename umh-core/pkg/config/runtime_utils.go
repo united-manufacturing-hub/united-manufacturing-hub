@@ -29,8 +29,8 @@ import (
 type ComponentType string
 
 const (
-	// ComponentTypeProtocolConverter represents a protocol converter component
-	ComponentTypeProtocolConverter ComponentType = "protocol-converter"
+	// ComponentTypeBridge represents a bridge component
+	ComponentTypeBridge ComponentType = "bridge"
 	// ComponentTypeStreamProcessor represents a stream processor component
 	ComponentTypeStreamProcessor ComponentType = "stream-processor"
 )
@@ -42,10 +42,9 @@ func (ct ComponentType) String() string {
 
 // At the top of the file, alongside your imports:
 var (
-    reNonAlnum  = regexp.MustCompile(`[^a-zA-Z0-9]`)
-    reMultiDash = regexp.MustCompile(`-{2,}`)
+	reNonAlnum  = regexp.MustCompile(`[^a-zA-Z0-9]`)
+	reMultiDash = regexp.MustCompile(`-{2,}`)
 )
-
 
 // GenerateBridgedBy creates a sanitized bridged_by header for UMH components.
 // It takes a component type, node name, and component name and returns a properly
@@ -68,13 +67,13 @@ var (
 // Examples:
 //
 //	GenerateBridgedBy(ComponentTypeProtocolConverter, "test-node", "temp-sensor")
-//	// → "protocol-converter_test-node_temp-sensor"
+//	// → "bridge_test-node_temp-sensor"
 //
 //	GenerateBridgedBy(ComponentTypeStreamProcessor, "test@node#1", "pump.sp@2")
 //	// → "stream-processor_test-node-1_pump-sp-2"
 //
 //	GenerateBridgedBy(ComponentTypeProtocolConverter, "", "sensor")
-//	// → "protocol-converter_unknown_sensor"
+//	// → "bridge_unknown_sensor"
 func GenerateBridgedBy(componentType ComponentType, nodeName, componentName string) string {
 	if nodeName == "" {
 		nodeName = "unknown"

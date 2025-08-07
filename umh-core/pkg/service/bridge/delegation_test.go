@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package protocolconverter
+package bridge
 
 import (
 	. "github.com/onsi/ginkgo/v2"
@@ -23,13 +23,13 @@ import (
 )
 
 var _ = Describe("Delegation Approach", func() {
-	Describe("SetConverterState", func() {
+	Describe("SetState", func() {
 		It("should delegate to sub-mocks correctly", func() {
 			// Create mock service
-			mockService := NewMockProtocolConverterService()
+			mockService := NewMockService()
 
 			// Set up test flags
-			flags := ConverterStateFlags{
+			flags := StateFlags{
 				IsDFCRunning:       true,
 				IsConnectionUp:     true,
 				IsRedpandaRunning:  true,
@@ -40,16 +40,16 @@ var _ = Describe("Delegation Approach", func() {
 			}
 
 			// Call SetConverterState
-			mockService.SetConverterState("test-converter", flags)
+			mockService.SetState("test-bridge", flags)
 
 			// Verify that the service exists
-			Expect(mockService.ExistingComponents["test-converter"]).To(BeTrue())
+			Expect(mockService.ExistingComponents["test-bridge"]).To(BeTrue())
 
 			// Verify that ConverterStates was populated
-			Expect(mockService.ConverterStates["test-converter"]).ToNot(BeNil())
+			Expect(mockService.States["test-bridge"]).ToNot(BeNil())
 
 			// Verify that the flags were stored
-			storedFlags := mockService.GetConverterState("test-converter")
+			storedFlags := mockService.GetState("test-bridge")
 			Expect(storedFlags).ToNot(BeNil())
 			Expect(storedFlags.IsDFCRunning).To(Equal(flags.IsDFCRunning))
 			Expect(storedFlags.IsConnectionUp).To(Equal(flags.IsConnectionUp))
@@ -58,14 +58,14 @@ var _ = Describe("Delegation Approach", func() {
 		})
 	})
 
-	Describe("ConverterToDFCFlags", func() {
+	Describe("BridgeToDFCFlags", func() {
 		It("should convert flags correctly", func() {
-			flags := ConverterStateFlags{
+			flags := StateFlags{
 				IsDFCRunning:    true,
 				DfcFSMReadState: dataflowcomponent.OperationalStateActive,
 			}
 
-			dfcFlags := ConverterToDFCFlags(flags)
+			dfcFlags := BridgeToDFCFlags(flags)
 
 			Expect(dfcFlags.IsBenthosRunning).To(BeTrue())
 			Expect(dfcFlags.BenthosFSMState).To(Equal(dataflowcomponent.OperationalStateActive))
@@ -73,14 +73,14 @@ var _ = Describe("Delegation Approach", func() {
 		})
 	})
 
-	Describe("ConverterToConnFlags", func() {
+	Describe("BridgeToConnFlags", func() {
 		It("should convert flags correctly", func() {
-			flags := ConverterStateFlags{
+			flags := StateFlags{
 				IsConnectionUp:     true,
 				ConnectionFSMState: connection.OperationalStateUp,
 			}
 
-			connFlags := ConverterToConnFlags(flags)
+			connFlags := BridgeToConnFlags(flags)
 
 			Expect(connFlags.IsNmapRunning).To(BeTrue())
 			Expect(connFlags.NmapFSMState).To(Equal(connection.OperationalStateUp))
@@ -89,12 +89,12 @@ var _ = Describe("Delegation Approach", func() {
 	})
 
 	Describe("SetComponentState backward compatibility", func() {
-		It("should work the same as SetConverterState", func() {
+		It("should work the same as SetState", func() {
 			// Create mock service
-			mockService := NewMockProtocolConverterService()
+			mockService := NewMockService()
 
 			// Set up test flags
-			flags := ConverterStateFlags{
+			flags := StateFlags{
 				IsDFCRunning:       true,
 				IsConnectionUp:     true,
 				DfcFSMReadState:    dataflowcomponent.OperationalStateActive,
@@ -102,13 +102,13 @@ var _ = Describe("Delegation Approach", func() {
 			}
 
 			// Call the old method name (should delegate to SetConverterState)
-			mockService.SetComponentState("test-converter", flags)
+			mockService.SetComponentState("test-bridge", flags)
 
 			// Verify that it works the same as SetConverterState
-			Expect(mockService.ExistingComponents["test-converter"]).To(BeTrue())
-			Expect(mockService.ConverterStates["test-converter"]).ToNot(BeNil())
+			Expect(mockService.ExistingComponents["test-bridge"]).To(BeTrue())
+			Expect(mockService.States["test-bridge"]).ToNot(BeNil())
 
-			storedFlags := mockService.GetConverterState("test-converter")
+			storedFlags := mockService.GetState("test-bridge")
 			Expect(storedFlags).ToNot(BeNil())
 			Expect(storedFlags.IsDFCRunning).To(Equal(flags.IsDFCRunning))
 			Expect(storedFlags.IsConnectionUp).To(Equal(flags.IsConnectionUp))

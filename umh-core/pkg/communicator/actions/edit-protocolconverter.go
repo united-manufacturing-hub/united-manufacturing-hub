@@ -48,7 +48,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter/runtime_config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/bridge/runtime_config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"go.uber.org/zap"
 )
@@ -557,7 +557,7 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 						}
 
 						// send the benthos logs to the user
-						logs = pcSnapshot.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
+						logs = pcSnapshot.ServiceInfo.DFCReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
 
 						// only send the logs that have not been sent yet
 						if len(logs) > len(lastLogs) {
@@ -624,12 +624,12 @@ func (a *EditProtocolConverterAction) compareProtocolConverterDFCConfig(pcSnapsh
 	}
 
 	// Check if the observed Benthos config is available for read DFC
-	if pcSnapshot.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ObservedBenthosServiceConfig.Input == nil {
+	if pcSnapshot.ServiceInfo.DFCReadObservedState.ServiceInfo.BenthosObservedState.ObservedBenthosServiceConfig.Input == nil {
 		return false
 	}
 
 	// Convert observed Benthos config to DFC config format for comparison
-	observedBenthosConfig := pcSnapshot.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ObservedBenthosServiceConfig
+	observedBenthosConfig := pcSnapshot.ServiceInfo.DFCReadObservedState.ServiceInfo.BenthosObservedState.ObservedBenthosServiceConfig
 	observedDFCConfig := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 		BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 			Input:              observedBenthosConfig.Input,

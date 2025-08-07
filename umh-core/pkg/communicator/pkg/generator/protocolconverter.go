@@ -161,7 +161,7 @@ func buildProtocolConverterAsDfc(
 
 	// ---- metrics --------------------------------------------------------
 	svcInfo := observed.ServiceInfo
-	if m := svcInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState; m != nil &&
+	if m := svcInfo.DFCReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState; m != nil &&
 		m.Input.LastCount > 0 {
 
 		dfc.Metrics = &models.DfcMetrics{
