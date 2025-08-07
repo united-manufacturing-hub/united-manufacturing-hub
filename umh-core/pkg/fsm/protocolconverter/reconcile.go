@@ -99,17 +99,14 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 		p.baseFSMInstance.GetLogger().Debugf("Skipping external changes detection during removal")
 	} else {
 		if err = p.reconcileExternalChanges(ctx, services, snapshot); err != nil {
-			if errors.Is(err, context.DeadlineExceeded) {
-				// Context deadline exceeded should be retried with backoff, not ignored
-				p.baseFSMInstance.SetError(err, snapshot.Tick)
-				p.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileExternalChanges, will retry with backoff")
+			if p.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
 				return nil, false
 			}
 
 			// Log the error but always continue reconciling - we need reconcileStateTransition to run
 			// to restore services after restart, even if we can't read their status yet
 			p.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)
-			
+
 			// For all other errors, just continue reconciling without setting backoff
 			err = nil
 		}
@@ -124,10 +121,7 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 			return nil, false
 		}
 
-		if errors.Is(err, context.DeadlineExceeded) {
-			// Context deadline exceeded should be retried with backoff, not ignored
-			p.baseFSMInstance.SetError(err, snapshot.Tick)
-			p.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileStateTransition, will retry with backoff")
+		if p.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileStateTransition") {
 			return nil, false
 		}
 

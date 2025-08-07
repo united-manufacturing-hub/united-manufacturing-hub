@@ -108,17 +108,14 @@ func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.Syste
 		i.baseFSMInstance.GetLogger().Debugf("Skipping external changes detection during removal")
 	} else {
 		if err = i.reconcileExternalChanges(ctx, services, snapshot); err != nil {
-			if errors.Is(err, context.DeadlineExceeded) {
-				// Context deadline exceeded should be retried with backoff, not ignored
-				i.baseFSMInstance.SetError(err, snapshot.Tick)
-				i.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileExternalChanges, will retry with backoff")
+			if i.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
 				return nil, false
 			}
 
 			// Log the error but always continue reconciling - we need reconcileStateTransition to run
 			// to restore services after restart, even if we can't read their status yet
 			i.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)
-			
+
 			// For all other errors, just continue reconciling without setting backoff
 			err = nil
 		}
@@ -133,10 +130,7 @@ func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.Syste
 			return nil, false
 		}
 
-		if errors.Is(err, context.DeadlineExceeded) {
-			// Context deadline exceeded should be retried with backoff, not ignored
-			i.baseFSMInstance.SetError(err, snapshot.Tick)
-			i.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileStateTransition, will retry with backoff")
+		if i.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileStateTransition") {
 			return nil, false
 		}
 

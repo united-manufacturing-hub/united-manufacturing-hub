@@ -100,17 +100,14 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 	} else {
 		err = d.reconcileExternalChanges(ctx, services, snapshot)
 		if err != nil {
-			if errors.Is(err, context.DeadlineExceeded) {
-				// Context deadline exceeded should be retried with backoff, not ignored
-				d.baseFSMInstance.SetError(err, snapshot.Tick)
-				d.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileExternalChanges, will retry with backoff")
+			if d.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
 				return nil, false
 			}
 
 			// Log the error but always continue reconciling - we need reconcileStateTransition to run
 			// to restore services after restart, even if we can't read their status yet
 			d.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)
-			
+
 			// For all other errors, just continue reconciling without setting backoff
 			err = nil
 		}
@@ -125,10 +122,7 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 			return nil, false
 		}
 
-		if errors.Is(err, context.DeadlineExceeded) {
-			// Context deadline exceeded should be retried with backoff, not ignored
-			d.baseFSMInstance.SetError(err, snapshot.Tick)
-			d.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileStateTransition, will retry with backoff")
+		if d.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileStateTransition") {
 			return nil, false
 		}
 

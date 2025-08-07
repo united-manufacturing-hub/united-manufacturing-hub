@@ -96,21 +96,19 @@ func (i *Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, s
 		i.baseFSMInstance.GetLogger().Debugf("Skipping external changes detection during removal")
 	} else {
 		if err = i.reconcileExternalChanges(ctx, services, snapshot); err != nil {
-			if errors.Is(err, context.DeadlineExceeded) {
+			if i.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
 				// Healthchecks occasionally take longer (sometimes up to 70ms),
 				// resulting in context.DeadlineExceeded errors. In this case, we want to
 				// mark the reconciliation as complete for this tick since we've likely
 				// already consumed significant time. We return reconciled=true to prevent
 				// further reconciliation attempts in the current tick.
-				i.baseFSMInstance.SetError(err, snapshot.Tick)
-				i.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileExternalChanges, will retry with backoff")
 				return nil, true // We don't want to return an error here, as this can happen in normal operations
 			}
 
 			// Log the error but always continue reconciling - we need reconcileStateTransition to run
 			// to restore services after restart, even if we can't read their status yet
 			i.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)
-			
+
 			// For all other errors, just continue reconciling without setting backoff
 			err = nil
 		}
