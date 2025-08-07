@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package protocolconverter
+package bridge
 
 import (
 	"context"
@@ -35,12 +35,12 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
-// MockProtocolConverterService is a mock implementation of the IProtocolConverterService interface for testing
+// MockService is a mock implementation of the IService interface for testing
 //
 // Why delegation?
 //
-// The Protocol-Converter FSM is *by definition* the union of the
-// Connection FSM and *two* DFC FSMs (read + write).  Re-encoding all
+// The Bridge FSM is by definition the union of the
+// Connection FSM and two DFC FSMs (read + write).  Re-encoding all
 // low-level fields (e.g. PortState, BenthosMetrics.IsActive) in a new
 // "converter flag bag" risks drifting out-of-sync with the canonical
 // mocks that the Connection / DFC teams already maintain.
@@ -50,7 +50,7 @@ import (
 // expect.  One source of truth, less duplication, and all helper
 // fns (`SetupConnectionServiceState`, `TransitionToDataflowComponentState`,
 // …) remain reusable.
-type MockProtocolConverterService struct {
+type MockService struct {
 	GenerateConfigError    error
 	GetConfigError         error
 	StatusError            error
@@ -63,14 +63,14 @@ type MockProtocolConverterService struct {
 	ReconcileManagerError  error
 
 	// For more complex testing scenarios
-	ConverterStates    map[string]*ServiceInfo
+	States             map[string]*ServiceInfo
 	ExistingComponents map[string]bool
 
 	// State control for FSM testing
-	stateFlags map[string]*ConverterStateFlags
+	stateFlags map[string]*StateFlags
 
 	/*
-	   Each protocol-converter *instance* is backed by
+	   Each bridge *instance* is backed by
 	     • one Connection  (talks to PLC / OPC-UA, etc.)
 	     • one READ DFC    (Benthos pipeline → Kafka, …)
 
@@ -111,11 +111,11 @@ type MockProtocolConverterService struct {
 	ReconcileManagerReconciled bool
 }
 
-// Ensure MockProtocolConverterService implements IProtocolConverterService
-var _ IProtocolConverterService = (*MockProtocolConverterService)(nil)
+// Ensure MockService implements IService
+var _ IService = (*MockService)(nil)
 
-// ConverterStateFlags contains all the state flags needed for FSM testing
-type ConverterStateFlags struct {
+// StateFlags contains all the state flags needed for FSM testing
+type StateFlags struct {
 	DfcFSMReadState    string
 	DfcFSMWriteState   string
 	ConnectionFSMState string
@@ -126,74 +126,74 @@ type ConverterStateFlags struct {
 	IsRedpandaRunning  bool
 }
 
-// NewMockProtocolConverterService creates a new mock DataFlowComponent service
-func NewMockProtocolConverterService() *MockProtocolConverterService {
-	return &MockProtocolConverterService{
+// NewMockService creates a new mock service
+func NewMockService() *MockService {
+	return &MockService{
 		mu:                 sync.RWMutex{},
-		ConverterStates:    make(map[string]*ServiceInfo),
+		States:             make(map[string]*ServiceInfo),
 		ExistingComponents: make(map[string]bool),
 		dfcConfigs:         make([]config.DataFlowComponentConfig, 0),
 		connConfigs:        make([]config.ConnectionConfig, 0),
-		stateFlags:         make(map[string]*ConverterStateFlags),
+		stateFlags:         make(map[string]*StateFlags),
 		DfcService:         dataflowcomponent.NewMockDataFlowComponentService(),
 		ConnService:        connection.NewMockConnectionService(),
 	}
 }
 
-// SetConverterState updates **both** underlying mocks so their FSMs
-// look exactly like a real system in the requested Protocol-Converter
+// SetState updates both underlying mocks so their FSMs
+// look exactly like a real system in the requested Bridge
 // high-level state.  It then synthesises a single ServiceInfo snapshot
-// (`ConverterStates`) so the ProtocolConverterService.Status method can
+// (`States`) so the Service.Status method can
 // still return aggregated data without peeking into the sub-services.
-func (m *MockProtocolConverterService) SetConverterState(
-	protConvName string,
-	flags ConverterStateFlags,
+func (m *MockService) SetState(
+	name string,
+	flags StateFlags,
 ) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	// Ensure service exists in mock
-	m.ExistingComponents[protConvName] = true
+	m.ExistingComponents[name] = true
 
 	// 1. Forward to DFC mock
-	dfcFlags := ConverterToDFCFlags(flags)
-	m.DfcService.SetComponentState(protConvName, dfcFlags)
+	dfcFlags := BridgeToDFCFlags(flags)
+	m.DfcService.SetComponentState(name, dfcFlags)
 
 	// 2. Forward to Connection mock
-	connFlags := ConverterToConnFlags(flags)
-	m.ConnService.SetConnectionState(protConvName, connFlags)
+	connFlags := BridgeToConnFlags(flags)
+	m.ConnService.SetConnectionState(name, connFlags)
 
 	// 3. Build a *single* aggregate ServiceInfo for Status()
-	m.ConverterStates[protConvName] = BuildProtocolConverterServiceInfo(
-		protConvName, flags, m.DfcService, m.ConnService,
+	m.States[name] = BuildServiceInfo(
+		name, flags, m.DfcService, m.ConnService,
 	)
 
 	// Store the flags for backward compatibility
-	m.stateFlags[protConvName] = &flags
+	m.stateFlags[name] = &flags
 }
 
-// SetComponentState is kept for backward compatibility but now delegates to SetConverterState
-func (m *MockProtocolConverterService) SetComponentState(protConvName string, flags ConverterStateFlags) {
-	m.SetConverterState(protConvName, flags)
+// SetComponentState is kept for backward compatibility but now delegates to SetState
+func (m *MockService) SetComponentState(name string, flags StateFlags) {
+	m.SetState(name, flags)
 }
 
-// GetConverterState gets the state flags for a protocol converter
-func (m *MockProtocolConverterService) GetConverterState(protConvName string) *ConverterStateFlags {
+// GetState gets the state flags for a bridge
+func (m *MockService) GetState(name string) *StateFlags {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if flags, exists := m.stateFlags[protConvName]; exists {
+	if flags, exists := m.stateFlags[name]; exists {
 		return flags
 	}
 	// Initialize with default flags if not exists
-	flags := &ConverterStateFlags{}
-	m.stateFlags[protConvName] = flags
+	flags := &StateFlags{}
+	m.stateFlags[name] = flags
 	return flags
 }
 
-// ConverterToDFCFlags converts high-level ConverterStateFlags into the
+// BridgeToDFCFlags converts high-level StateFlags into the
 // exact flag struct used by the DFC mock.
-func ConverterToDFCFlags(src ConverterStateFlags) dataflowcomponent.ComponentStateFlags {
+func BridgeToDFCFlags(src StateFlags) dataflowcomponent.ComponentStateFlags {
 	return dataflowcomponent.ComponentStateFlags{
 		IsBenthosRunning:                 src.IsDFCRunning,
 		BenthosFSMState:                  src.DfcFSMReadState,
@@ -201,9 +201,9 @@ func ConverterToDFCFlags(src ConverterStateFlags) dataflowcomponent.ComponentSta
 	}
 }
 
-// ConverterToConnFlags converts high-level ConverterStateFlags into the
+// BridgeToConnFlags converts high-level StateFlags into the
 // flag struct the Connection mock expects.
-func ConverterToConnFlags(src ConverterStateFlags) connection.ConnectionStateFlags {
+func BridgeToConnFlags(src StateFlags) connection.ConnectionStateFlags {
 	return connection.ConnectionStateFlags{
 		IsNmapRunning: src.IsConnectionUp,
 		NmapFSMState:  src.ConnectionFSMState,
@@ -211,10 +211,10 @@ func ConverterToConnFlags(src ConverterStateFlags) connection.ConnectionStateFla
 	}
 }
 
-// BuildProtocolConverterServiceInfo builds an aggregated ServiceInfo from the sub-mocks
-func BuildProtocolConverterServiceInfo(
+// BuildServiceInfo builds an aggregated ServiceInfo from the sub-mocks
+func BuildServiceInfo(
 	name string,
-	flags ConverterStateFlags,
+	flags StateFlags,
 	dfcMock *dataflowcomponent.MockDataFlowComponentService,
 	connMock *connection.MockConnectionService,
 ) *ServiceInfo {
@@ -232,12 +232,12 @@ func BuildProtocolConverterServiceInfo(
 
 	// Build the aggregate ServiceInfo
 	return &ServiceInfo{
-		DataflowComponentReadFSMState: flags.DfcFSMReadState,
-		DataflowComponentReadObservedState: dfcfsm.DataflowComponentObservedState{
+		DFCReadFSMState: flags.DfcFSMReadState,
+		DFCReadObservedState: dfcfsm.DataflowComponentObservedState{
 			ServiceInfo: dfcInfo,
 		},
-		DataflowComponentWriteFSMState: flags.DfcFSMWriteState,
-		DataflowComponentWriteObservedState: dfcfsm.DataflowComponentObservedState{
+		DFCWriteFSMState: flags.DfcFSMWriteState,
+		DFCWriteObservedState: dfcfsm.DataflowComponentObservedState{
 			ServiceInfo: dataflowcomponent.ServiceInfo{}, // TODO: Add write DFC support
 		},
 		ConnectionFSMState: flags.ConnectionFSMState,
@@ -258,11 +258,11 @@ func BuildProtocolConverterServiceInfo(
 	}
 }
 
-// GetConfig mocks getting the ProtocolConverter configuration
-func (m *MockProtocolConverterService) GetConfig(
+// GetConfig mocks getting the Bridge configuration
+func (m *MockService) GetConfig(
 	ctx context.Context,
 	filesystemService filesystem.Service,
-	protConvName string,
+	name string,
 ) (
 	bridgeserviceconfig.ConfigRuntime,
 	error,
@@ -280,12 +280,12 @@ func (m *MockProtocolConverterService) GetConfig(
 	return m.GetConfigResult, nil
 }
 
-// Status mocks getting the status of a ProtocolConverter
-func (m *MockProtocolConverterService) Status(
+// Status mocks getting the status of a Bridge
+func (m *MockService) Status(
 	ctx context.Context,
 	services serviceregistry.Provider,
 	snapshot fsm.SystemSnapshot,
-	protConvName string,
+	name string,
 ) (ServiceInfo, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -293,12 +293,12 @@ func (m *MockProtocolConverterService) Status(
 	m.StatusCalled = true
 
 	// Check if the component exists in the ExistingComponents map
-	if exists, ok := m.ExistingComponents[protConvName]; !ok || !exists {
+	if exists, ok := m.ExistingComponents[name]; !ok || !exists {
 		return ServiceInfo{}, ErrServiceNotExist
 	}
 
 	// If we have a state already stored, return it
-	if state, exists := m.ConverterStates[protConvName]; exists {
+	if state, exists := m.States[name]; exists {
 		return *state, m.StatusError
 	}
 
@@ -306,19 +306,19 @@ func (m *MockProtocolConverterService) Status(
 	return m.StatusResult, m.StatusError
 }
 
-// AddToManager mocks adding a ProtocolConverter to the Connection & DFC manager
-func (m *MockProtocolConverterService) AddToManager(
+// AddToManager mocks adding a Bridge to the Connection & DFC manager
+func (m *MockService) AddToManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
 	cfg *bridgeserviceconfig.ConfigRuntime,
-	protConvName string,
+	name string,
 ) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.AddToManagerCalled = true
 
-	underlyingName := fmt.Sprintf("protocolconverter-%s", protConvName)
+	underlyingName := fmt.Sprintf("bridge-%s", name)
 
 	// Check whether the component already exists
 	for _, dfcConfig := range m.dfcConfigs {
@@ -335,7 +335,7 @@ func (m *MockProtocolConverterService) AddToManager(
 	}
 
 	// Add the component to the list of existing components
-	m.ExistingComponents[protConvName] = true
+	m.ExistingComponents[name] = true
 
 	// Create a dfcConfig for this component
 	dfcConfig := config.DataFlowComponentConfig{
@@ -362,19 +362,19 @@ func (m *MockProtocolConverterService) AddToManager(
 	return m.AddToManagerError
 }
 
-// UpdateInManager mocks updating a ProtocolConverter in Connection & DFC manager
-func (m *MockProtocolConverterService) UpdateInManager(
+// UpdateInManager mocks updating a Bridge in Connection & DFC manager
+func (m *MockService) UpdateInManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
 	cfg *bridgeserviceconfig.ConfigRuntime,
-	protConvName string,
+	name string,
 ) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.UpdateInManagerCalled = true
 
-	underlyingName := fmt.Sprintf("protocolconverter-%s", protConvName)
+	underlyingName := fmt.Sprintf("bridge-%s", name)
 
 	// Check if the component exists
 	dfcFound := false
@@ -412,7 +412,7 @@ func (m *MockProtocolConverterService) UpdateInManager(
 		DataFlowComponentServiceConfig: m.GenerateConfigResultDFC,
 	}
 
-	// Update the DFCConfig
+	// Update the ConnConfig
 	currentDesiredStateConn := m.connConfigs[connIndex].DesiredFSMState
 	m.connConfigs[connIndex] = config.ConnectionConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
@@ -426,17 +426,17 @@ func (m *MockProtocolConverterService) UpdateInManager(
 }
 
 // RemoveFromManager mocks removing a DataFlowComponent from the Benthos manager
-func (m *MockProtocolConverterService) RemoveFromManager(
+func (m *MockService) RemoveFromManager(
 	ctx context.Context,
-	filesystemService filesystem.Service,
-	protConvName string,
+	fsService filesystem.Service,
+	name string,
 ) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.RemoveFromManagerCalled = true
 
-	underlyingName := fmt.Sprintf("protocolconverter-%s", protConvName)
+	underlyingName := fmt.Sprintf("bridge-%s", name)
 
 	dfcFound := false
 
@@ -464,20 +464,24 @@ func (m *MockProtocolConverterService) RemoveFromManager(
 	}
 
 	// Remove the component from the list of existing components
-	delete(m.ExistingComponents, protConvName)
-	delete(m.ConverterStates, protConvName)
+	delete(m.ExistingComponents, name)
+	delete(m.States, name)
 
 	return m.RemoveFromManagerError
 }
 
-// StartProtocolConverter mocks starting a ProtocolConverter
-func (m *MockProtocolConverterService) StartProtocolConverter(ctx context.Context, filesystemService filesystem.Service, protConvName string) error {
+// Start mocks starting a Bridge
+func (m *MockService) Start(
+	ctx context.Context,
+	fsService filesystem.Service,
+	name string,
+) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.StartCalled = true
 
-	underlyingName := fmt.Sprintf("protocolconverter-%s", protConvName)
+	underlyingName := fmt.Sprintf("bridge-%s", name)
 
 	dfcFound := false
 
@@ -508,18 +512,18 @@ func (m *MockProtocolConverterService) StartProtocolConverter(ctx context.Contex
 	return m.StartError
 }
 
-// StopProtocolConverter mocks stopping a ProtocolConverter
-func (m *MockProtocolConverterService) StopProtocolConverter(
+// Stop mocks stopping a Bridge
+func (m *MockService) Stop(
 	ctx context.Context,
-	filesystemService filesystem.Service,
-	protConvName string,
+	fsService filesystem.Service,
+	name string,
 ) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.StopCalled = true
 
-	underlyingName := fmt.Sprintf("protocolconverter-%s", protConvName)
+	underlyingName := fmt.Sprintf("bridge-%s", name)
 
 	dfcFound := false
 
@@ -550,8 +554,12 @@ func (m *MockProtocolConverterService) StopProtocolConverter(
 	return m.StopError
 }
 
-// ForceRemoveProtocolConverter mocks force removing a ProtocolConverter
-func (m *MockProtocolConverterService) ForceRemoveProtocolConverter(ctx context.Context, filesystemService filesystem.Service, protConvName string) error {
+// ForceRemove mocks force removing a Bridge
+func (m *MockService) ForceRemove(
+	ctx context.Context,
+	fsService filesystem.Service,
+	name string,
+) error {
 	m.mu.Lock()
 	m.ForceRemoveCalled = true
 	m.mu.Unlock()
@@ -559,8 +567,12 @@ func (m *MockProtocolConverterService) ForceRemoveProtocolConverter(ctx context.
 	return m.ForceRemoveError
 }
 
-// ServiceExists mocks checking if a ProtocolConverter exists
-func (m *MockProtocolConverterService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, protConvName string) bool {
+// ServiceExists mocks checking if a Bridge exists
+func (m *MockService) ServiceExists(
+	ctx context.Context,
+	fsService filesystem.Service,
+	name string,
+) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -569,8 +581,12 @@ func (m *MockProtocolConverterService) ServiceExists(ctx context.Context, filesy
 	return m.ServiceExistsResult
 }
 
-// ReconcileManager mocks reconciling the ProtocolConverter manager
-func (m *MockProtocolConverterService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool) {
+// ReconcileManager mocks reconciling the Bridge manager
+func (m *MockService) ReconcileManager(
+	ctx context.Context,
+	services serviceregistry.Provider,
+	tick uint64,
+) (error, bool) {
 	m.mu.Lock()
 	m.ReconcileManagerCalled = true
 	m.mu.Unlock()
@@ -579,17 +595,20 @@ func (m *MockProtocolConverterService) ReconcileManager(ctx context.Context, ser
 }
 
 // EvaluateDFCDesiredStates mocks the DFC state evaluation logic.
-// This method exists because protocol converters must re-evaluate DFC states
+// This method exists because bridge must re-evaluate DFC states
 // when configs change during reconciliation (unlike other FSMs that set states once).
-func (m *MockProtocolConverterService) EvaluateDFCDesiredStates(protConvName string, protocolConverterDesiredState string) error {
+func (m *MockService) EvaluateDFCDesiredStates(
+	name string,
+	desiredState string,
+) error {
 	// Mock implementation - just update the configs like the real implementation would
-	underlyingReadName := fmt.Sprintf("read-protocolconverter-%s", protConvName)
-	underlyingWriteName := fmt.Sprintf("write-protocolconverter-%s", protConvName)
+	underlyingReadName := fmt.Sprintf("read-bridge-%s", name)
+	underlyingWriteName := fmt.Sprintf("write-bridge-%s", name)
 
 	// Find and update read DFC config
 	for i, config := range m.dfcConfigs {
 		if config.Name == underlyingReadName {
-			if protocolConverterDesiredState == "stopped" {
+			if desiredState == "stopped" {
 				m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateStopped
 			} else {
 				// Only start the DFC, if it has been configured
@@ -606,7 +625,7 @@ func (m *MockProtocolConverterService) EvaluateDFCDesiredStates(protConvName str
 	// Find and update write DFC config
 	for i, config := range m.dfcConfigs {
 		if config.Name == underlyingWriteName {
-			if protocolConverterDesiredState == "stopped" {
+			if desiredState == "stopped" {
 				m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateStopped
 			} else {
 				// Only start the DFC, if it has been configured

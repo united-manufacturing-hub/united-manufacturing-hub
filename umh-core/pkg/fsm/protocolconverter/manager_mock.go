@@ -21,13 +21,13 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/bridgeserviceconfig"
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	bridgesvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/bridge"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
 	dfcsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
-	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 )
 
-func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConverterManager, *protocolconvertersvc.MockProtocolConverterService) {
-	mockSvc := protocolconvertersvc.NewMockProtocolConverterService()
+func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConverterManager, *bridgesvc.MockService) {
+	mockSvc := bridgesvc.NewMockService()
 
 	// Create a new manager instance
 	// Lets create a mock manager here
@@ -71,7 +71,7 @@ func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConver
 			// Only update config if configs are different (for mock service)
 			if !configsEqual {
 				protocolConverterInstance.specConfig = cfg.ProtocolConverterServiceConfig
-				if mockSvc, ok := protocolConverterInstance.service.(*protocolconvertersvc.MockProtocolConverterService); ok {
+				if mockSvc, ok := protocolConverterInstance.service.(*bridgesvc.MockService); ok {
 					runtimeConfig, err := bridgeserviceconfig.SpecToRuntime(cfg.ProtocolConverterServiceConfig)
 					if err != nil {
 						// For invalid configs, don't update the mock service but don't fail the comparison
@@ -91,7 +91,7 @@ func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConver
 				return fmt.Errorf("instance is not a ProtocolConverterInstance")
 			}
 			protocolConverterInstance.specConfig = cfg.ProtocolConverterServiceConfig
-			if mockSvc, ok := protocolConverterInstance.service.(*protocolconvertersvc.MockProtocolConverterService); ok {
+			if mockSvc, ok := protocolConverterInstance.service.(*bridgesvc.MockService); ok {
 				runtimeConfig, err := bridgeserviceconfig.SpecToRuntime(cfg.ProtocolConverterServiceConfig)
 				if err != nil {
 					// For invalid configs, don't update the mock service but don't fail the set operation

@@ -18,7 +18,7 @@ import (
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	protocolconverterconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/bridgeserviceconfig"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
+	bridgesvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/bridge"
 )
 
 // Operational state constants (using internal_fsm compatible naming)
@@ -151,7 +151,7 @@ type ProtocolConverterObservedState struct {
 	ObservedProtocolConverterRuntimeConfig protocolconverterconfig.ConfigRuntime
 
 	// ServiceInfo contains information about the ProtocolConverter service
-	ServiceInfo protocolconvertersvc.ServiceInfo
+	ServiceInfo bridgesvc.ServiceInfo
 }
 
 // IsObservedState implements the ObservedState interface
@@ -166,7 +166,7 @@ var _ publicfsm.FSMInstance = (*ProtocolConverterInstance)(nil)
 type ProtocolConverterInstance struct {
 	// service is the ProtocolConverter service implementation to use
 	// It has a manager that manages the protocolconverter service instances
-	service protocolconvertersvc.IProtocolConverterService
+	service bridgesvc.IService
 
 	baseFSMInstance *internalfsm.BaseFSMInstance
 
@@ -194,7 +194,7 @@ func (d *ProtocolConverterInstance) GetLastObservedState() publicfsm.ObservedSta
 
 // SetService sets the ProtocolConverter service implementation to use
 // This is a testing-only utility to access the private service field
-func (d *ProtocolConverterInstance) SetService(service protocolconvertersvc.IProtocolConverterService) {
+func (d *ProtocolConverterInstance) SetService(service bridgesvc.IService) {
 	d.service = service
 }
 

@@ -62,7 +62,7 @@ const (
 	ComponentAgentMonitorService      = "AgentMonitorService"
 	ComponentDataFlowComponentService = "DFCService"
 	ComponentConnectionService        = "ConnectionService"
-	ComponentProtocolConverterService = "ProtocolConverterService"
+	ComponentBridgeService            = "BridgeService"
 	ComponentStreamProcessorService   = "StreamProcessorService"
 	ComponentFilesystemService        = "FilesystemService"
 	ComponentTopicBrowserService      = "TopicBrowserService"

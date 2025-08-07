@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package protocolconverter
+package bridge
 
 import "errors"
 
 var (
 	// ErrServiceNotExist indicates the requested service does not exist
-	ErrServiceNotExist = errors.New("protocol converter service does not exist")
+	ErrServiceNotExist = errors.New("bridge service does not exist")
 	// ErrServiceAlreadyExists indicates the service already exists
-	ErrServiceAlreadyExists = errors.New("protocol converter service already exists")
+	ErrServiceAlreadyExists = errors.New("bridge service already exists")
 )

@@ -426,7 +426,7 @@ func getProtocolConverterMetrics(uuid string, snapshot fsm.SystemSnapshot) (mode
 	}
 
 	// Extract benthos metrics from the read DFC (using read DFC as primary metrics source)
-	metrics := observedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
+	metrics := observedState.ServiceInfo.DFCReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
 
 	// Process Input metrics (same structure as DFC since protocol converter uses benthos)
 	inputMetrics := metrics.Input

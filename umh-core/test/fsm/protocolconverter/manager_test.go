@@ -29,7 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
-	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
+	bridgesvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/bridge"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -39,7 +39,7 @@ import (
 var _ = Describe("ProtocolConverterManager", func() {
 	var (
 		manager         *protocolconverter.ProtocolConverterManager
-		mockService     *protocolconvertersvc.MockProtocolConverterService
+		mockService     *bridgesvc.MockService
 		ctx             context.Context
 		tick            uint64
 		cancel          context.CancelFunc
@@ -59,7 +59,7 @@ var _ = Describe("ProtocolConverterManager", func() {
 
 		// Initialize the mock service state to empty
 		mockService.ExistingComponents = make(map[string]bool)
-		mockService.ConverterStates = make(map[string]*protocolconvertersvc.ServiceInfo)
+		mockService.States = make(map[string]*bridgesvc.ServiceInfo)
 	})
 
 	// -------------------------------------------------------------------------

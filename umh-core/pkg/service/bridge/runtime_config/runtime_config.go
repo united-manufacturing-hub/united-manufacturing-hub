@@ -73,7 +73,7 @@ func BuildRuntimeConfig(
 	agentLocation map[string]string,
 	globalVars map[string]any,
 	nodeName string,
-	pcName string,
+	brName string,
 ) (bridgeserviceconfig.ConfigRuntime, error) {
 	if reflect.DeepEqual(spec, bridgeserviceconfig.ConfigSpec{}) {
 		return bridgeserviceconfig.ConfigRuntime{},
@@ -120,7 +120,7 @@ func BuildRuntimeConfig(
 	// • Error Handling Separation: Critical config validation belongs in the
 	//   initial parsing phase, not during runtime config building.
 	// • Graceful Degradation: A running system with some "unknown" location levels
-	//   provides better UX than a completely broken protocol converter.
+	//   provides better UX than a completely broken bridge.
 	// • Observable Failure: "unknown" values are visible in logs/metrics, making
 	//   the configuration gap obvious while maintaining system functionality.
 	// • Practical Recovery: Users can fix missing levels and the system will
@@ -174,7 +174,7 @@ func BuildRuntimeConfig(
 
 	// Internal namespace
 	vb.Internal = map[string]any{
-		"id": pcName,
+		"id": brName,
 	}
 
 	//----------------------------------------------------------------------
@@ -183,7 +183,7 @@ func BuildRuntimeConfig(
 	if nodeName == "" {
 		nodeName = "unknown"
 	}
-	vb.Internal["bridged_by"] = config.GenerateBridgedBy(config.ComponentTypeProtocolConverter, nodeName, pcName)
+	vb.Internal["bridged_by"] = config.GenerateBridgedBy(config.ComponentTypeBridge, nodeName, brName)
 
 	//----------------------------------------------------------------------
 	// 4. Render all three sub-templates
@@ -259,7 +259,7 @@ func renderConfig(
 	error,
 ) {
 	if reflect.DeepEqual(spec, bridgeserviceconfig.ConfigSpec{}) {
-		return bridgeserviceconfig.ConfigRuntime{}, fmt.Errorf("protocolConverter config is nil")
+		return bridgeserviceconfig.ConfigRuntime{}, fmt.Errorf("bridge config is nil")
 	}
 
 	// ─── Render the three sub-templates ─────────────────────────────

@@ -34,7 +34,7 @@ import (
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	protocolconverterfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	redpandafsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
-	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
+	bridgesvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/bridge"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -150,20 +150,20 @@ func CreateProtocolConverterTestConfigWithInvalidPort(name string, desiredState 
 
 // SetupProtocolConverterServiceState configures the mock service state for ProtocolConverter instance tests
 func SetupProtocolConverterServiceState(
-	mockService *protocolconvertersvc.MockProtocolConverterService,
+	mockService *bridgesvc.MockService,
 	serviceName string,
-	flags protocolconvertersvc.ConverterStateFlags,
+	flags bridgesvc.StateFlags,
 ) {
 	// Use the new delegation approach - this will:
 	// 1. Forward to DFC mock with converted flags
 	// 2. Forward to Connection mock with converted flags
 	// 3. Build aggregated ServiceInfo for Status() calls
 	// 4. Store flags for backward compatibility
-	mockService.SetConverterState(serviceName, flags)
+	mockService.SetState(serviceName, flags)
 }
 
 // ConfigureProtocolConverterServiceConfig configures the mock service with a default ProtocolConverter config
-func ConfigureProtocolConverterServiceConfig(mockService *protocolconvertersvc.MockProtocolConverterService) {
+func ConfigureProtocolConverterServiceConfig(mockService *bridgesvc.MockService) {
 	mockService.GetConfigResult = bridgeserviceconfig.ConfigRuntime{
 		DFCReadConfig: goodDataflowComponentReadConfig,
 		// TODO: add write DFC config
@@ -172,7 +172,7 @@ func ConfigureProtocolConverterServiceConfig(mockService *protocolconvertersvc.M
 	}
 }
 
-func ConfigureProtocolConverterServiceConfigWithMissingDfc(mockService *protocolconvertersvc.MockProtocolConverterService) {
+func ConfigureProtocolConverterServiceConfigWithMissingDfc(mockService *bridgesvc.MockService) {
 	mockService.GetConfigResult = bridgeserviceconfig.ConfigRuntime{
 		DFCReadConfig: missingDataflowComponentConfig,
 		// TODO: add write DFC config
@@ -183,10 +183,10 @@ func ConfigureProtocolConverterServiceConfigWithMissingDfc(mockService *protocol
 
 // TransitionToProtocolConverterState is a helper to configure a service for a given high-level state
 // TODO: add write DFC state
-func TransitionToProtocolConverterState(mockService *protocolconvertersvc.MockProtocolConverterService, serviceName string, state string) {
+func TransitionToProtocolConverterState(mockService *bridgesvc.MockService, serviceName string, state string) {
 	switch state {
 	case protocolconverterfsm.OperationalStateStopped:
-		SetupProtocolConverterServiceState(mockService, serviceName, protocolconvertersvc.ConverterStateFlags{
+		SetupProtocolConverterServiceState(mockService, serviceName, bridgesvc.StateFlags{
 			IsDFCRunning:       false,
 			IsConnectionUp:     false,
 			IsRedpandaRunning:  false,
@@ -197,7 +197,7 @@ func TransitionToProtocolConverterState(mockService *protocolconvertersvc.MockPr
 		})
 		ConfigureProtocolConverterServiceConfig(mockService)
 	case protocolconverterfsm.OperationalStateStartingConnection:
-		SetupProtocolConverterServiceState(mockService, serviceName, protocolconvertersvc.ConverterStateFlags{
+		SetupProtocolConverterServiceState(mockService, serviceName, bridgesvc.StateFlags{
 			IsDFCRunning:       false,
 			IsConnectionUp:     false,
 			IsRedpandaRunning:  false,
@@ -208,7 +208,7 @@ func TransitionToProtocolConverterState(mockService *protocolconvertersvc.MockPr
 		})
 		ConfigureProtocolConverterServiceConfig(mockService)
 	case protocolconverterfsm.OperationalStateStartingRedpanda:
-		SetupProtocolConverterServiceState(mockService, serviceName, protocolconvertersvc.ConverterStateFlags{
+		SetupProtocolConverterServiceState(mockService, serviceName, bridgesvc.StateFlags{
 			IsDFCRunning:       false,
 			IsConnectionUp:     true,
 			IsRedpandaRunning:  false,
@@ -219,7 +219,7 @@ func TransitionToProtocolConverterState(mockService *protocolconvertersvc.MockPr
 		})
 		ConfigureProtocolConverterServiceConfig(mockService)
 	case protocolconverterfsm.OperationalStateStartingDFC:
-		SetupProtocolConverterServiceState(mockService, serviceName, protocolconvertersvc.ConverterStateFlags{
+		SetupProtocolConverterServiceState(mockService, serviceName, bridgesvc.StateFlags{
 			IsDFCRunning:       false,
 			IsConnectionUp:     true,
 			IsRedpandaRunning:  true,
@@ -230,7 +230,7 @@ func TransitionToProtocolConverterState(mockService *protocolconvertersvc.MockPr
 		})
 		ConfigureProtocolConverterServiceConfig(mockService)
 	case protocolconverterfsm.OperationalStateStartingFailedDFC:
-		SetupProtocolConverterServiceState(mockService, serviceName, protocolconvertersvc.ConverterStateFlags{
+		SetupProtocolConverterServiceState(mockService, serviceName, bridgesvc.StateFlags{
 			IsDFCRunning:       false,
 			IsConnectionUp:     true,
 			IsRedpandaRunning:  true,
@@ -241,7 +241,7 @@ func TransitionToProtocolConverterState(mockService *protocolconvertersvc.MockPr
 		})
 		ConfigureProtocolConverterServiceConfig(mockService)
 	case protocolconverterfsm.OperationalStateStartingFailedDFCMissing:
-		SetupProtocolConverterServiceState(mockService, serviceName, protocolconvertersvc.ConverterStateFlags{
+		SetupProtocolConverterServiceState(mockService, serviceName, bridgesvc.StateFlags{
 			IsDFCRunning:       false,
 			IsConnectionUp:     true,
 			IsRedpandaRunning:  true,
@@ -252,7 +252,7 @@ func TransitionToProtocolConverterState(mockService *protocolconvertersvc.MockPr
 		})
 		ConfigureProtocolConverterServiceConfigWithMissingDfc(mockService) // missing DFC
 	case protocolconverterfsm.OperationalStateIdle:
-		SetupProtocolConverterServiceState(mockService, serviceName, protocolconvertersvc.ConverterStateFlags{
+		SetupProtocolConverterServiceState(mockService, serviceName, bridgesvc.StateFlags{
 			IsDFCRunning:       true,
 			IsConnectionUp:     true,
 			IsRedpandaRunning:  true,
@@ -263,7 +263,7 @@ func TransitionToProtocolConverterState(mockService *protocolconvertersvc.MockPr
 		})
 		ConfigureProtocolConverterServiceConfig(mockService)
 	case protocolconverterfsm.OperationalStateActive:
-		SetupProtocolConverterServiceState(mockService, serviceName, protocolconvertersvc.ConverterStateFlags{
+		SetupProtocolConverterServiceState(mockService, serviceName, bridgesvc.StateFlags{
 			IsDFCRunning:       true,
 			IsConnectionUp:     true,
 			IsRedpandaRunning:  true,
@@ -275,7 +275,7 @@ func TransitionToProtocolConverterState(mockService *protocolconvertersvc.MockPr
 		ConfigureProtocolConverterServiceConfig(mockService)
 	case protocolconverterfsm.OperationalStateDegradedConnection:
 		// Now to prevent case 3 of IsOtherDegraded, we need to set the DFC to not active
-		SetupProtocolConverterServiceState(mockService, serviceName, protocolconvertersvc.ConverterStateFlags{
+		SetupProtocolConverterServiceState(mockService, serviceName, bridgesvc.StateFlags{
 			IsDFCRunning:       true,
 			IsConnectionUp:     false,
 			IsRedpandaRunning:  true,
@@ -286,7 +286,7 @@ func TransitionToProtocolConverterState(mockService *protocolconvertersvc.MockPr
 		})
 		ConfigureProtocolConverterServiceConfig(mockService)
 	case protocolconverterfsm.OperationalStateDegradedRedpanda:
-		SetupProtocolConverterServiceState(mockService, serviceName, protocolconvertersvc.ConverterStateFlags{
+		SetupProtocolConverterServiceState(mockService, serviceName, bridgesvc.StateFlags{
 			IsDFCRunning:       true,
 			IsConnectionUp:     true,
 			IsRedpandaRunning:  false,
@@ -297,7 +297,7 @@ func TransitionToProtocolConverterState(mockService *protocolconvertersvc.MockPr
 		})
 		ConfigureProtocolConverterServiceConfig(mockService)
 	case protocolconverterfsm.OperationalStateDegradedDFC:
-		SetupProtocolConverterServiceState(mockService, serviceName, protocolconvertersvc.ConverterStateFlags{
+		SetupProtocolConverterServiceState(mockService, serviceName, bridgesvc.StateFlags{
 			IsDFCRunning:       false,
 			IsConnectionUp:     true,
 			IsRedpandaRunning:  true,
@@ -308,7 +308,7 @@ func TransitionToProtocolConverterState(mockService *protocolconvertersvc.MockPr
 		})
 		ConfigureProtocolConverterServiceConfig(mockService)
 	case protocolconverterfsm.OperationalStateDegradedOther:
-		SetupProtocolConverterServiceState(mockService, serviceName, protocolconvertersvc.ConverterStateFlags{
+		SetupProtocolConverterServiceState(mockService, serviceName, bridgesvc.StateFlags{
 			IsDFCRunning:       true,
 			IsConnectionUp:     false,
 			IsRedpandaRunning:  true,
@@ -323,12 +323,12 @@ func TransitionToProtocolConverterState(mockService *protocolconvertersvc.MockPr
 
 // SetupProtocolConverterInstance creates and configures a ProtocolConverter instance for testing.
 // Returns the instance, the mock service, and the config used to create it.
-func SetupProtocolConverterInstance(serviceName string, desiredState string) (*protocolconverterfsm.ProtocolConverterInstance, *protocolconvertersvc.MockProtocolConverterService, config.ProtocolConverterConfig) {
+func SetupProtocolConverterInstance(serviceName string, desiredState string) (*protocolconverterfsm.ProtocolConverterInstance, *bridgesvc.MockService, config.ProtocolConverterConfig) {
 	// Create test config
 	cfg := CreateProtocolConverterTestConfig(serviceName, desiredState)
 
 	// Create mock service
-	mockService := protocolconvertersvc.NewMockProtocolConverterService()
+	mockService := bridgesvc.NewMockService()
 
 	// Set up initial service states - the delegation approach will handle ConverterStates automatically
 	mockService.ExistingComponents = make(map[string]bool)
@@ -350,12 +350,12 @@ func SetupProtocolConverterInstance(serviceName string, desiredState string) (*p
 // SetupProtocolConverterInstanceWithMissingDfc creates and configures a ProtocolConverter instance for testing.
 // Same as SetupProtocolConverterInstance, but with a missing DFC config
 // Returns the instance, the mock service, and the config used to create it.
-func SetupProtocolConverterInstanceWithMissingDfc(serviceName string, desiredState string) (*protocolconverterfsm.ProtocolConverterInstance, *protocolconvertersvc.MockProtocolConverterService, config.ProtocolConverterConfig) {
+func SetupProtocolConverterInstanceWithMissingDfc(serviceName string, desiredState string) (*protocolconverterfsm.ProtocolConverterInstance, *bridgesvc.MockService, config.ProtocolConverterConfig) {
 	// Create test config
 	cfg := CreateProtocolConverterTestConfigWithMissingDfc(serviceName, desiredState)
 
 	// Create mock service
-	mockService := protocolconvertersvc.NewMockProtocolConverterService()
+	mockService := bridgesvc.NewMockService()
 
 	// Set up initial service states - the delegation approach will handle ConverterStates automatically
 	mockService.ExistingComponents = make(map[string]bool)
@@ -373,9 +373,9 @@ func SetupProtocolConverterInstanceWithMissingDfc(serviceName string, desiredSta
 }
 
 // SetupProtocolConverterInstanceWithInvalidPort creates a ProtocolConverter instance with invalid port configuration for testing error handling
-func SetupProtocolConverterInstanceWithInvalidPort(serviceName string, desiredState string, invalidPort string) (*protocolconverterfsm.ProtocolConverterInstance, *protocolconvertersvc.MockProtocolConverterService, config.ProtocolConverterConfig) {
+func SetupProtocolConverterInstanceWithInvalidPort(serviceName string, desiredState string, invalidPort string) (*protocolconverterfsm.ProtocolConverterInstance, *bridgesvc.MockService, config.ProtocolConverterConfig) {
 	cfg := CreateProtocolConverterTestConfigWithInvalidPort(serviceName, desiredState, invalidPort)
-	mockService := protocolconvertersvc.NewMockProtocolConverterService()
+	mockService := bridgesvc.NewMockService()
 	mockSvcRegistry := serviceregistry.NewMockRegistry()
 
 	instance := setUpMockProtocolConverterInstance(cfg, mockService, mockSvcRegistry)
@@ -387,7 +387,7 @@ func SetupProtocolConverterInstanceWithInvalidPort(serviceName string, desiredSt
 // This is an internal helper function used by SetupProtocolConverterInstance
 func setUpMockProtocolConverterInstance(
 	cfg config.ProtocolConverterConfig,
-	mockService *protocolconvertersvc.MockProtocolConverterService,
+	mockService *bridgesvc.MockService,
 	mockSvcRegistry *serviceregistry.Registry,
 ) *protocolconverterfsm.ProtocolConverterInstance {
 	// Create the instance
@@ -418,7 +418,7 @@ func setUpMockProtocolConverterInstance(
 func TestProtocolConverterStateTransition(
 	ctx context.Context,
 	instance *protocolconverterfsm.ProtocolConverterInstance,
-	mockService *protocolconvertersvc.MockProtocolConverterService,
+	mockService *bridgesvc.MockService,
 	services serviceregistry.Provider,
 	serviceName string,
 	fromState string,
@@ -485,7 +485,7 @@ func VerifyProtocolConverterStableState(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
 	instance *protocolconverterfsm.ProtocolConverterInstance,
-	mockService *protocolconvertersvc.MockProtocolConverterService,
+	mockService *bridgesvc.MockService,
 	services serviceregistry.Provider,
 	serviceName string,
 	expectedState string,
@@ -537,7 +537,7 @@ func StabilizeProtocolConverterInstance(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
 	instance *protocolconverterfsm.ProtocolConverterInstance,
-	mockService *protocolconvertersvc.MockProtocolConverterService,
+	mockService *bridgesvc.MockService,
 	services serviceregistry.Provider,
 	serviceName string,
 	targetState string,
@@ -571,7 +571,7 @@ func StabilizeProtocolConverterInstance(
 //
 // Parameters:
 //   - mockService: The mock service to reset
-func ResetProtocolConverterInstanceError(mockService *protocolconvertersvc.MockProtocolConverterService) {
+func ResetProtocolConverterInstanceError(mockService *bridgesvc.MockService) {
 	// Clear any error conditions in the mock
 	mockService.AddToManagerError = nil
 	mockService.UpdateInManagerError = nil
@@ -586,7 +586,7 @@ func ResetProtocolConverterInstanceError(mockService *protocolconvertersvc.MockP
 // It sets up a new instance with a mock service.
 func CreateMockProtocolConverterInstance(
 	serviceName string,
-	mockService protocolconvertersvc.IProtocolConverterService,
+	mockService bridgesvc.IService,
 	desiredState string,
 	services serviceregistry.Provider,
 ) *protocolconverterfsm.ProtocolConverterInstance {
@@ -662,7 +662,7 @@ func ReconcileProtocolConverterUntilError(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
 	instance *protocolconverterfsm.ProtocolConverterInstance,
-	mockService *protocolconvertersvc.MockProtocolConverterService,
+	mockService *bridgesvc.MockService,
 	services serviceregistry.Provider,
 	serviceName string,
 	maxAttempts int,

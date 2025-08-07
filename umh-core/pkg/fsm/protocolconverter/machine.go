@@ -27,7 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
+	bridgesvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/bridge"
 )
 
 // NewProtocolConverterInstance creates a new ProtocolConverterInstance with a given ID and service path
@@ -120,7 +120,7 @@ func NewProtocolConverterInstance(
 
 	instance := &ProtocolConverterInstance{
 		baseFSMInstance: internal_fsm.NewBaseFSMInstance(cfg, backoffConfig, logger),
-		service:         protocolconvertersvc.NewDefaultProtocolConverterService(config.Name),
+		service:         bridgesvc.NewDefaultService(config.Name),
 		specConfig:      config.ProtocolConverterServiceConfig,
 		ObservedState:   ProtocolConverterObservedState{},
 		runtimeConfig:   protocolconverterconfig.ConfigRuntime{},
@@ -191,8 +191,8 @@ func (d *ProtocolConverterInstance) PrintState() {
 	d.baseFSMInstance.GetLogger().Debugf("Desired state: %s", d.baseFSMInstance.GetDesiredFSMState())
 	d.baseFSMInstance.GetLogger().Debugf("Connection: %s, Read DFC: %s, Write DFC: %s, Status: %s",
 		d.ObservedState.ServiceInfo.ConnectionFSMState,
-		d.ObservedState.ServiceInfo.DataflowComponentReadFSMState,
-		d.ObservedState.ServiceInfo.DataflowComponentWriteFSMState,
+		d.ObservedState.ServiceInfo.DFCReadFSMState,
+		d.ObservedState.ServiceInfo.DFCWriteFSMState,
 		d.ObservedState.ServiceInfo.StatusReason)
 }
 

@@ -23,9 +23,9 @@ import (
 
 var _ = Describe("RuntimeUtils", func() {
 	Describe("GenerateBridgedBy", func() {
-		It("should generate correct bridged_by for protocol converter", func() {
-			result := config.GenerateBridgedBy(config.ComponentTypeProtocolConverter, "test-node", "temp-sensor")
-			Expect(result).To(Equal("protocol-converter_test-node_temp-sensor"))
+		It("should generate correct bridged_by for bridge", func() {
+			result := config.GenerateBridgedBy(config.ComponentTypeBridge, "test-node", "temp-sensor")
+			Expect(result).To(Equal("bridge_test-node_temp-sensor"))
 		})
 
 		It("should generate correct bridged_by for stream processor", func() {
@@ -34,13 +34,13 @@ var _ = Describe("RuntimeUtils", func() {
 		})
 
 		It("should handle empty node name by defaulting to unknown", func() {
-			result := config.GenerateBridgedBy(config.ComponentTypeProtocolConverter, "", "sensor")
-			Expect(result).To(Equal("protocol-converter_unknown_sensor"))
+			result := config.GenerateBridgedBy(config.ComponentTypeBridge, "", "sensor")
+			Expect(result).To(Equal("bridge_unknown_sensor"))
 		})
 
 		It("should sanitize special characters", func() {
-			result := config.GenerateBridgedBy(config.ComponentTypeProtocolConverter, "test@node#1", "temp.sensor@2")
-			Expect(result).To(Equal("protocol-converter_test-node-1_temp-sensor-2"))
+			result := config.GenerateBridgedBy(config.ComponentTypeBridge, "test@node#1", "temp.sensor@2")
+			Expect(result).To(Equal("bridge_test-node-1_temp-sensor-2"))
 		})
 
 		It("should collapse multiple dashes", func() {
@@ -49,8 +49,8 @@ var _ = Describe("RuntimeUtils", func() {
 		})
 
 		It("should trim leading and trailing dashes", func() {
-			result := config.GenerateBridgedBy(config.ComponentTypeProtocolConverter, "-test-node-", "-sensor-")
-			Expect(result).To(Equal("protocol-converter_test-node_sensor"))
+			result := config.GenerateBridgedBy(config.ComponentTypeBridge, "-test-node-", "-sensor-")
+			Expect(result).To(Equal("bridge_test-node_sensor"))
 		})
 
 		It("should handle complex special character combinations", func() {
@@ -59,13 +59,13 @@ var _ = Describe("RuntimeUtils", func() {
 		})
 
 		It("should handle numeric characters correctly", func() {
-			result := config.GenerateBridgedBy(config.ComponentTypeProtocolConverter, "node123", "sensor456")
-			Expect(result).To(Equal("protocol-converter_node123_sensor456"))
+			result := config.GenerateBridgedBy(config.ComponentTypeBridge, "node123", "sensor456")
+			Expect(result).To(Equal("bridge_node123_sensor456"))
 		})
 
 		It("should handle mixed case correctly", func() {
-			result := config.GenerateBridgedBy(config.ComponentTypeProtocolConverter, "TestNode", "TempSensor")
-			Expect(result).To(Equal("protocol-converter_TestNode_TempSensor"))
+			result := config.GenerateBridgedBy(config.ComponentTypeBridge, "TestNode", "TempSensor")
+			Expect(result).To(Equal("bridge_TestNode_TempSensor"))
 		})
 	})
 })
