@@ -19,3 +19,9 @@
 // CONFIG_CHANGE (name, service details)
 // STATE_CHANGE (name, desired state)
 package configwatcher
+
+type ConfigWatcher interface {
+	Start() error
+	Stop() error
+	Events() chan interface{}
+}
