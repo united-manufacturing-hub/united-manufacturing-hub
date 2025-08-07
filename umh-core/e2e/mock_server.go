@@ -15,7 +15,6 @@
 package e2e_test
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"sync"
@@ -326,7 +325,7 @@ func (s *MockAPIServer) logMessageDetails(message models.UMHMessage) {
 // logStatusMessage logs detailed information about status messages
 func (s *MockAPIServer) logStatusMessage(content models.UMHMessageContent, email string) {
 	// Try to parse the status message payload
-	statusMsg := s.parseStatusMessageFromPayload(content.Payload)
+	statusMsg := parseStatusMessageFromPayload(content.Payload)
 	if statusMsg == nil {
 		s.logger.Warnw("Could not parse status message payload", "email", email)
 		return
@@ -389,33 +388,4 @@ func (s *MockAPIServer) logStatusMessage(content models.UMHMessageContent, email
 	s.logger.Infow("DFC Information", "dfc_count", len(statusMsg.Core.Dfcs))
 
 	s.logger.Infow("=== END STATUS MESSAGE ===")
-}
-
-// parseStatusMessageFromPayload converts payload to StatusMessage (duplicate of test function for mock server use)
-func (s *MockAPIServer) parseStatusMessageFromPayload(payload interface{}) *models.StatusMessage {
-	// First try direct type assertion
-	if statusMsg, ok := payload.(*models.StatusMessage); ok {
-		return statusMsg
-	}
-
-	if statusMsg, ok := payload.(models.StatusMessage); ok {
-		return &statusMsg
-	}
-
-	// If payload is a map, try to unmarshal it
-	if payloadMap, ok := payload.(map[string]interface{}); ok {
-		jsonBytes, err := json.Marshal(payloadMap)
-		if err != nil {
-			return nil
-		}
-
-		var statusMsg models.StatusMessage
-		if err := json.Unmarshal(jsonBytes, &statusMsg); err != nil {
-			return nil
-		}
-
-		return &statusMsg
-	}
-
-	return nil
 }

@@ -16,7 +16,7 @@ package e2e_test
 
 import (
 	"context"
-	"encoding/json"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2" //nolint:ST1001
@@ -26,11 +26,20 @@ import (
 	"go.uber.org/zap"
 )
 
+// healthLogger is a logger for e2e health check tests
+var healthLogger *zap.SugaredLogger
+
+func init() {
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to initialize health logger: %v", err))
+	}
+	healthLogger = logger.Sugar()
+}
+
 // getLogger returns a logger for e2e tests
 func getLogger() *zap.SugaredLogger {
-	// Create a new logger for testing
-	logger, _ := zap.NewDevelopment()
-	return logger.Sugar()
+	return healthLogger
 }
 
 // waitForComponentsHealthy waits for all UMH components to become healthy
@@ -148,35 +157,6 @@ func startPeriodicSubscription(ctx context.Context, mockServer *MockAPIServer, i
 			mockServer.AddMessageToPullQueue(resubscribeMessage)
 		}
 	}
-}
-
-// parseStatusMessageFromPayload converts payload to StatusMessage
-func parseStatusMessageFromPayload(payload interface{}) *models.StatusMessage {
-	// First try direct type assertion
-	if statusMsg, ok := payload.(*models.StatusMessage); ok {
-		return statusMsg
-	}
-
-	if statusMsg, ok := payload.(models.StatusMessage); ok {
-		return &statusMsg
-	}
-
-	// If payload is a map, try to unmarshal it
-	if payloadMap, ok := payload.(map[string]interface{}); ok {
-		jsonBytes, err := json.Marshal(payloadMap)
-		if err != nil {
-			return nil
-		}
-
-		var statusMsg models.StatusMessage
-		if err := json.Unmarshal(jsonBytes, &statusMsg); err != nil {
-			return nil
-		}
-
-		return &statusMsg
-	}
-
-	return nil
 }
 
 // isHealthActiveOrAcceptable checks if health state matches any of the acceptable states

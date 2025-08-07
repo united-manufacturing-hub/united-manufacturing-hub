@@ -39,7 +39,9 @@ func init() {
 func startUMHCoreWithMockAPI(mockServer *MockAPIServer) (string, int) {
 	// Generate unique container name
 	suffix := make([]byte, 4)
-	rand.Read(suffix)
+	if _, err := rand.Read(suffix); err != nil {
+		panic(fmt.Sprintf("Failed to generate random suffix: %v", err))
+	}
 	containerName := fmt.Sprintf("umh-core-e2e-%s", hex.EncodeToString(suffix))
 
 	imageName := getE2EImageName()
@@ -104,7 +106,9 @@ func createTempConfigDir(containerName string) string {
 func generateTestAuthToken() string {
 	// For testing, we just generate a simple token
 	tokenBytes := make([]byte, 16)
-	rand.Read(tokenBytes)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		panic(fmt.Sprintf("Failed to generate auth token: %v", err))
+	}
 	return hex.EncodeToString(tokenBytes)
 }
 
