@@ -79,9 +79,9 @@ var _ = Describe("UMH Core E2E Communication", Ordered, Label("e2e"), func() {
 		})
 	})
 
-	Context("Bridge Creation", func() {
-		It("should create a bridge with benthos generate and UNS output", func() {
-			testBridgeCreation(mockServer)
+	Context("Bridge Lifecycle", func() {
+		It("should create, edit, and delete a bridge successfully", func() {
+			testBridgeLifecycle(mockServer)
 		})
 	})
 

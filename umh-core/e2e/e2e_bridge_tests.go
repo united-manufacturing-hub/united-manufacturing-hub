@@ -32,8 +32,8 @@ func getLoggerForBridge() *zap.SugaredLogger {
 	return logger.Sugar()
 }
 
-// testBridgeCreation tests the full bridge creation process
-func testBridgeCreation(mockServer *MockAPIServer) {
+// testBridgeLifecycle tests the full bridge lifecycle: create, edit, and delete
+func testBridgeLifecycle(mockServer *MockAPIServer) {
 	bridgeName := "e2e-test-bridge"
 	bridgeIP := "localhost"
 	bridgePort := uint32(8080)
@@ -151,7 +151,76 @@ func testBridgeCreation(mockServer *MockAPIServer) {
 		return false
 	}, 10*time.Second, 1*time.Second).Should(BeTrue(), "Bridge should appear as active in status messages")
 
-	getLoggerForBridge().Infof("Successfully created and verified bridge: %s", bridgeName)
+	By("Deleting the bridge")
+	deleteMessage := createDeleteProtocolConverterMessage(deployedUUID)
+	mockServer.AddMessageToPullQueue(deleteMessage)
+
+	// Wait for deletion confirmation
+	Eventually(func() bool {
+		pushedMessages := mockServer.DrainPushedMessages()
+		for _, msg := range pushedMessages {
+			if msg.Email != "e2e-test@example.com" {
+				continue
+			}
+
+			content, err := encoding.DecodeMessageFromUMHInstanceToUser(msg.Content)
+			if err != nil {
+				continue
+			}
+
+			if content.MessageType == models.ActionReply {
+				if actionReply := parseActionReplyFromPayload(content.Payload); actionReply != nil {
+					getLoggerForBridge().Infof("Received delete action reply: %s - %s", actionReply.ActionReplyState, actionReply.ActionReplyPayload)
+
+					// Check if this is a successful delete response
+					if actionReply.ActionReplyState == models.ActionFinishedSuccessfull {
+						getLoggerForBridge().Info("Bridge deletion completed successfully")
+						return true
+					}
+				}
+			}
+		}
+		return false
+	}, 30*time.Second, 1*time.Second).Should(BeTrue(), "Bridge deletion should succeed")
+
+	By("Verifying bridge is removed from status messages")
+	// Give the system time to process the deletion
+	time.Sleep(5 * time.Second)
+
+	// Check that the bridge no longer appears in status messages
+	Eventually(func() bool {
+		pushedMessages := mockServer.DrainPushedMessages()
+		foundBridge := false
+
+		for _, msg := range pushedMessages {
+			if msg.Email != "e2e-test@example.com" {
+				continue
+			}
+
+			content, err := encoding.DecodeMessageFromUMHInstanceToUser(msg.Content)
+			if err != nil {
+				continue
+			}
+
+			if content.MessageType == models.Status {
+				if statusMsg := parseStatusMessageFromPayload(content.Payload); statusMsg != nil {
+					// Check if our bridge appears in the DFCs list
+					for _, dfc := range statusMsg.Core.Dfcs {
+						if dfc.Name != nil && *dfc.Name == bridgeName {
+							foundBridge = true
+							getLoggerForBridge().Warnf("Bridge %s still appears in status messages", bridgeName)
+							break
+						}
+					}
+				}
+			}
+		}
+
+		// Success if bridge is NOT found
+		return !foundBridge
+	}, 20*time.Second, 2*time.Second).Should(BeTrue(), "Bridge should be removed from status messages")
+
+	getLoggerForBridge().Infof("Successfully completed full lifecycle test for bridge: %s", bridgeName)
 }
 
 // parseActionReplyFromPayload converts payload to ActionReplyMessagePayload

@@ -177,6 +177,14 @@ func createEditProtocolConverterMessage(protocolConverterUUID uuid.UUID, name, i
 	return createActionMessage(models.EditProtocolConverter, payload)
 }
 
+// createDeleteProtocolConverterMessage creates a delete protocol converter action message
+func createDeleteProtocolConverterMessage(protocolConverterUUID uuid.UUID) models.UMHMessage {
+	payload := models.DeleteProtocolConverterPayload{
+		UUID: protocolConverterUUID,
+	}
+	return createActionMessage(models.DeleteProtocolConverter, payload)
+}
+
 // createAddDataModelMessage creates an add data model action message
 func createAddDataModelMessage(name, description string) models.UMHMessage {
 	// Create a simple data model structure
