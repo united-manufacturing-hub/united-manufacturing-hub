@@ -12,15 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package cmd
-
-// Config watcher provides an interface that upon receiving a path to a config, emits events when it changes.
+// Package configwatcher provides an interface that upon receiving a path to a config, emits events when it changes.
 // These can be:
 // DELETE (name)
 // CREATE (name, service details, desired state)
 // CONFIG_CHANGE (name, service details)
 // STATE_CHANGE (name, desired state)
-
-/*
-
- */
+package configwatcher

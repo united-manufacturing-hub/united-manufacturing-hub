@@ -1,0 +1,4 @@
+#!/command/execlineb -P
+cd /
+fdmove -c 2 1
+/opt/s6-rc-poc

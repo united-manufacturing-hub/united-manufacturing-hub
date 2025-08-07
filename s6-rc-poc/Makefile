@@ -1,11 +1,14 @@
 tidy:
 	go mod tidy
 
-lint: tidy
+fmt: tidy
+	go fmt ./...
+
+lint: fmt
 	golangci-lint run ./...
 
 build: lint
 	docker build -t s6-rc-poc .
 
 run: build
-	docker run s6-rc-poc
+	docker run -v $(PWD)/data:/data s6-rc-poc

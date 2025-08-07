@@ -12,6 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package cmd is a simple implementation using s6-rc to
+// Package main is a simple implementation using s6-rc to
 // demonstrate its reliability, scalability, ease of use and maintenance.
-package cmd
+package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("Hello World")
+}
