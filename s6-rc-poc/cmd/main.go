@@ -32,5 +32,6 @@ func main() {
 
 	for {
 		event := <-watcher.Events()
+		zap.S().Infof("Received event: %v", event)
 	}
 }

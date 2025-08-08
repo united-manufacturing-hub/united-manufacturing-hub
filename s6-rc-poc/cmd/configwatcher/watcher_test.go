@@ -17,6 +17,7 @@ package configwatcher_test
 import (
 	"os"
 	"path/filepath"
+	"s6-rc-poc/cmd/shared"
 	"testing"
 	"time"
 
@@ -90,7 +91,7 @@ drained:
 		case event := <-watcher.Events():
 			if created, ok := event.(configwatcher.EventCreated); ok {
 				if created.Name == "new-service" {
-					if created.DesiredState != configwatcher.Down {
+					if created.DesiredState != shared.Down {
 						t.Errorf("Expected Down state, got %v", created.DesiredState)
 					}
 
@@ -132,7 +133,7 @@ testStateChange:
 		case event := <-watcher.Events():
 			if stateChanged, ok := event.(configwatcher.EventStateChanged); ok {
 				if stateChanged.Name == "test-service" {
-					if stateChanged.DesiredState != configwatcher.Down {
+					if stateChanged.DesiredState != shared.Down {
 						t.Errorf("Expected Down state, got %v", stateChanged.DesiredState)
 					}
 
@@ -183,15 +184,15 @@ testDelete:
 func TestStringToState(t *testing.T) {
 	tests := []struct {
 		input    string
-		expected configwatcher.State
+		expected shared.State
 	}{
-		{"up", configwatcher.Up},
-		{"down", configwatcher.Down},
-		{"invalid", configwatcher.Down}, // defaults to Down
+		{"up", shared.Up},
+		{"down", shared.Down},
+		{"invalid", shared.Down}, // defaults to Down
 	}
 
 	for _, test := range tests {
-		result := configwatcher.StringToState(test.input)
+		result := shared.FromStateString(test.input)
 		if result != test.expected {
 			t.Errorf("stringToState(%q) = %v, expected %v", test.input, result, test.expected)
 		}

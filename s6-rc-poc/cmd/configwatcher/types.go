@@ -14,13 +14,15 @@
 
 package configwatcher
 
+import "s6-rc-poc/cmd/shared"
+
 // Event represents the type of configuration event.
 type Event int
 
 // ConfigEvent represents a configuration change event.
 type ConfigEvent interface {
 	EventType() Event
-	ServiceName() string
+	ServiceName() shared.ServiceName
 }
 
 // Event types.
@@ -31,31 +33,10 @@ const (
 	ConfigChanged
 )
 
-// State represents the desired state of a service.
-type State int
-
-// Service states.
-const (
-	Down State = iota
-	Up         //nolint:varnamelen // Common state name convention
-)
-
-// String returns the string representation of the State.
-func (s State) String() string {
-	switch s {
-	case Up:
-		return "up"
-	case Down:
-		return "down"
-	default:
-		return "unknown"
-	}
-}
-
 // EventCreated represents a service creation event.
 type EventCreated struct {
-	Name         string
-	DesiredState State
+	Name         shared.ServiceName
+	DesiredState shared.State
 	Executable   string
 	Parameters   map[int]string
 }
@@ -64,34 +45,34 @@ type EventCreated struct {
 func (e EventCreated) EventType() Event { return Created }
 
 // ServiceName returns the service name.
-func (e EventCreated) ServiceName() string { return e.Name }
+func (e EventCreated) ServiceName() shared.ServiceName { return e.Name }
 
 // EventDeleted represents a service deletion event.
 type EventDeleted struct {
-	Name string
+	Name shared.ServiceName
 }
 
 // EventType returns the event type.
 func (e EventDeleted) EventType() Event { return Deleted }
 
 // ServiceName returns the service name.
-func (e EventDeleted) ServiceName() string { return e.Name }
+func (e EventDeleted) ServiceName() shared.ServiceName { return e.Name }
 
 // EventStateChanged represents a service state change event.
 type EventStateChanged struct {
-	Name         string
-	DesiredState State
+	Name         shared.ServiceName
+	DesiredState shared.State
 }
 
 // EventType returns the event type.
 func (e EventStateChanged) EventType() Event { return StateChanged }
 
 // ServiceName returns the service name.
-func (e EventStateChanged) ServiceName() string { return e.Name }
+func (e EventStateChanged) ServiceName() shared.ServiceName { return e.Name }
 
 // EventConfigChanged represents a service configuration change event.
 type EventConfigChanged struct {
-	Name       string
+	Name       shared.ServiceName
 	Executable string
 	Parameters map[int]string
 }
@@ -100,4 +81,4 @@ type EventConfigChanged struct {
 func (e EventConfigChanged) EventType() Event { return ConfigChanged }
 
 // ServiceName returns the service name.
-func (e EventConfigChanged) ServiceName() string { return e.Name }
+func (e EventConfigChanged) ServiceName() shared.ServiceName { return e.Name }

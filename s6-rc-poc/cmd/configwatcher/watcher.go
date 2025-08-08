@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"s6-rc-poc/cmd/shared"
 	"sync"
 
 	"github.com/fsnotify/fsnotify"
@@ -27,10 +28,10 @@ import (
 
 // Service represents a service configuration.
 type Service struct {
-	Name         string         `yaml:"name"`
-	DesiredState string         `yaml:"desired_state"` //nolint:tagliatelle // External API format
-	Executable   string         `yaml:"executable"`
-	Parameters   map[int]string `yaml:"parameters"`
+	Name         shared.ServiceName `yaml:"name"`
+	DesiredState string             `yaml:"desired_state"` //nolint:tagliatelle // External API format
+	Executable   string             `yaml:"executable"`
+	Parameters   map[int]string     `yaml:"parameters"`
 }
 
 // Config represents the complete configuration.
@@ -42,7 +43,7 @@ type Config struct {
 type FileWatcher struct {
 	watcher      *fsnotify.Watcher
 	events       chan ConfigEvent
-	currentState map[string]Service
+	currentState map[shared.ServiceName]Service
 	configPath   string
 	mu           sync.RWMutex
 	stopCh       chan struct{}
@@ -53,11 +54,10 @@ const eventBufferSize = 100
 
 // NewFileWatcher creates a new file watcher instance.
 func NewFileWatcher(logger *zap.Logger) *FileWatcher {
-
 	return &FileWatcher{
 		watcher:      nil,
 		events:       make(chan ConfigEvent, eventBufferSize),
-		currentState: make(map[string]Service),
+		currentState: make(map[shared.ServiceName]Service),
 		configPath:   "",
 		mu:           sync.RWMutex{},
 		stopCh:       make(chan struct{}),
@@ -117,28 +117,32 @@ func (fw *FileWatcher) Events() chan ConfigEvent {
 func (fw *FileWatcher) emitEvent(event ConfigEvent) {
 	fw.events <- event
 
+	if fw.logger == nil {
+		return
+	}
+
 	switch eventTyped := event.(type) {
 	case EventCreated:
 		fw.logger.Info("Service created",
-			zap.String("service", eventTyped.Name),
+			zap.String("service", eventTyped.Name.String()),
 			zap.String("event", "created"),
 			zap.String("desired_state", eventTyped.DesiredState.String()),
 			zap.String("executable", eventTyped.Executable),
 		)
 	case EventDeleted:
 		fw.logger.Info("Service deleted",
-			zap.String("service", eventTyped.Name),
+			zap.String("service", eventTyped.Name.String()),
 			zap.String("event", "deleted"),
 		)
 	case EventStateChanged:
 		fw.logger.Info("Service state changed",
-			zap.String("service", eventTyped.Name),
+			zap.String("service", eventTyped.Name.String()),
 			zap.String("event", "state_changed"),
 			zap.String("desired_state", eventTyped.DesiredState.String()),
 		)
 	case EventConfigChanged:
 		fw.logger.Info("Service config changed",
-			zap.String("service", eventTyped.Name),
+			zap.String("service", eventTyped.Name.String()),
 			zap.String("event", "config_changed"),
 			zap.String("executable", eventTyped.Executable),
 		)
@@ -184,7 +188,7 @@ func (fw *FileWatcher) loadAndCompareConfig() error {
 		return fmt.Errorf("failed to parse config: %w", err)
 	}
 
-	newState := make(map[string]Service)
+	newState := make(map[shared.ServiceName]Service)
 	for _, service := range config.Services {
 		newState[service.Name] = service
 	}
@@ -195,7 +199,7 @@ func (fw *FileWatcher) loadAndCompareConfig() error {
 	return nil
 }
 
-func (fw *FileWatcher) compareAndEmitEvents(newState map[string]Service) {
+func (fw *FileWatcher) compareAndEmitEvents(newState map[shared.ServiceName]Service) {
 	// Check for deleted services
 	for name := range fw.currentState {
 		if _, exists := newState[name]; !exists {
@@ -210,7 +214,7 @@ func (fw *FileWatcher) compareAndEmitEvents(newState map[string]Service) {
 			// New service
 			fw.emitEvent(EventCreated{
 				Name:         newService.Name,
-				DesiredState: StringToState(newService.DesiredState),
+				DesiredState: shared.FromStateString(newService.DesiredState),
 				Executable:   newService.Executable,
 				Parameters:   newService.Parameters,
 			})
@@ -219,7 +223,7 @@ func (fw *FileWatcher) compareAndEmitEvents(newState map[string]Service) {
 			if oldService.DesiredState != newService.DesiredState {
 				fw.emitEvent(EventStateChanged{
 					Name:         newService.Name,
-					DesiredState: StringToState(newService.DesiredState),
+					DesiredState: shared.FromStateString(newService.DesiredState),
 				})
 			}
 			// Check for config changes (executable or parameters)
@@ -232,15 +236,6 @@ func (fw *FileWatcher) compareAndEmitEvents(newState map[string]Service) {
 			}
 		}
 	}
-}
-
-// StringToState converts a string to State enum.
-func StringToState(s string) State {
-	if s == "up" {
-		return Up
-	}
-
-	return Down
 }
 
 // EqualMaps compares two maps for equality.
