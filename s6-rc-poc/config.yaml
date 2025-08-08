@@ -1,0 +1,10 @@
+services:
+  - name: sleep-service
+    desired_state: up
+    executable: /bin/sleep
+    parameters:
+      1: "30"
+  - name: true-service
+    desired_state: down
+    executable: /bin/true
+    parameters: []

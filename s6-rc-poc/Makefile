@@ -16,3 +16,6 @@ run: build
 	mkdir -p $(PWD)/data/logs/s6-rc-poc
 	chmod -R 777 $(PWD)/data
 	docker run -v $(PWD)/data:/data s6-rc-poc
+
+test: lint
+	go test -race ./...

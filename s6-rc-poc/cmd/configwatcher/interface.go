@@ -20,8 +20,11 @@
 // STATE_CHANGE (name, desired state)
 package configwatcher
 
+// ConfigWatcher is an interface that provides a way to watch for changes to a config file.
+// It is used to notify the s6-rc service when the config file changes.
+// The service will then reload the config file and update the s6-rc service.
 type ConfigWatcher interface {
-	Start() error
+	Start(configPath string) error
 	Stop() error
-	Events() chan interface{}
+	Events() chan ConfigEvent
 }
