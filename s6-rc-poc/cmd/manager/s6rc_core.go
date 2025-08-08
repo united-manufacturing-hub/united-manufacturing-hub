@@ -28,6 +28,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
@@ -149,12 +150,14 @@ func (s *S6RCService) setBundleMembership(name string, include bool) error {
 	return nil
 }
 
+func getRandDirName() string {
+	return filepath.Join(os.TempDir(), uuid.New().String())
+}
+
 func (s *S6RCService) compileAndChangeover() error {
-	// Compile into a temporary dir
-	tmpDir, err := os.MkdirTemp("", "s6rc-compiled-")
-	if err != nil {
-		return fmt.Errorf("create temp dir: %w", err)
-	}
+	// Generate a unique temporary path but don't create the directory
+	// s6-rc-compile wants to create the target directory itself
+	tmpDir := getRandDirName()
 
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 

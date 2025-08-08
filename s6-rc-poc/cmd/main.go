@@ -25,7 +25,7 @@ import (
 )
 
 func main() {
-	logger, _ := zap.NewProduction()
+	logger, _ := zap.NewDevelopment()
 	watcher := configwatcher.NewFileWatcher(logger)
 	svc := manager.NewS6RCService(logger, "", "", "")
 

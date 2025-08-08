@@ -24,7 +24,8 @@ func (s *S6RCService) Restart(name string) error { // interface method
 		return errServiceNameRequired
 	}
 
-	err := s.run("s6-rc", "-r", "change", name)
+	// Block on locks to avoid transient failures when another s6-rc is active
+	err := s.run("s6-rc", "-b", "-r", "change", name)
 	if err != nil {
 		return fmt.Errorf("restart %s: %w", name, err)
 	}
