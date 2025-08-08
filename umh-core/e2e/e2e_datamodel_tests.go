@@ -15,6 +15,7 @@
 package e2e_test
 
 import (
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2" //nolint:ST1001
@@ -24,11 +25,19 @@ import (
 	"go.uber.org/zap"
 )
 
+var dataModelLogger *zap.SugaredLogger
+
+func init() {
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to initialize data model logger: %v", err))
+	}
+	dataModelLogger = logger.Sugar()
+}
+
 // getLoggerForDataModel returns a logger for e2e data model tests
 func getLoggerForDataModel() *zap.SugaredLogger {
-	// Create a new logger for testing
-	logger, _ := zap.NewDevelopment()
-	return logger.Sugar()
+	return dataModelLogger
 }
 
 // testDataModelLifecycle tests the full data model lifecycle (create, edit, verify, delete)
@@ -37,7 +46,10 @@ func testDataModelLifecycle(mockServer *MockAPIServer) {
 	dataModelDescription := "E2E test sensor data model"
 
 	By("Creating a new data model")
-	addMessage := createAddDataModelMessage(dataModelName, dataModelDescription)
+	addMessage, err := createAddDataModelMessage(dataModelName, dataModelDescription)
+	if err != nil {
+		getLoggerForDataModel().Fatalf("Failed to create add data model message: %v", err)
+	}
 	mockServer.AddMessageToPullQueue(addMessage)
 
 	// Wait for creation confirmation
@@ -104,7 +116,10 @@ func testDataModelLifecycle(mockServer *MockAPIServer) {
 
 	By("Editing the data model with additional fields")
 	editedDescription := dataModelDescription + " - Updated with additional fields"
-	editMessage := createEditDataModelMessage(dataModelName, editedDescription)
+	editMessage, err := createEditDataModelMessage(dataModelName, editedDescription)
+	if err != nil {
+		getLoggerForDataModel().Fatalf("Failed to create edit data model message: %v", err)
+	}
 	mockServer.AddMessageToPullQueue(editMessage)
 
 	// Wait for edit confirmation
@@ -142,8 +157,7 @@ func testDataModelLifecycle(mockServer *MockAPIServer) {
 	}, 30*time.Second, 1*time.Second).Should(BeTrue(), "Data model edit should succeed")
 
 	By("Verifying updated data model in status messages")
-	time.Sleep(5 * time.Second) // Give time for the update to propagate
-
+	// Wait for the update to propagate
 	Eventually(func() bool {
 		pushedMessages := mockServer.DrainPushedMessages()
 		for _, msg := range pushedMessages {
@@ -202,7 +216,10 @@ func testDataModelLifecycle(mockServer *MockAPIServer) {
 	}, 15*time.Second, 1*time.Second).Should(BeTrue(), "Data contract should be automatically created")
 
 	By("Cleaning up - deleting the data model")
-	deleteMessage := createDeleteDataModelMessage(dataModelName)
+	deleteMessage, err := createDeleteDataModelMessage(dataModelName)
+	if err != nil {
+		getLoggerForDataModel().Fatalf("Failed to create delete data model message: %v", err)
+	}
 	mockServer.AddMessageToPullQueue(deleteMessage)
 
 	// Wait for deletion confirmation

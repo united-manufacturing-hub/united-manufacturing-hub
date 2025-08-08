@@ -43,7 +43,10 @@ func testBridgeLifecycle(mockServer *MockAPIServer) {
 	}
 
 	By("Deploying the protocol converter connection")
-	deployMessage := createDeployProtocolConverterMessage(bridgeName, bridgeIP, bridgePort, bridgeLocation)
+	deployMessage, err := createDeployProtocolConverterMessage(bridgeName, bridgeIP, bridgePort, bridgeLocation)
+	if err != nil {
+		getLogger().Fatalf("Failed to create deploy protocol converter message: %v", err)
+	}
 	mockServer.AddMessageToPullQueue(deployMessage)
 
 	// Wait for deployment confirmation
@@ -85,7 +88,10 @@ func testBridgeLifecycle(mockServer *MockAPIServer) {
 	}, 30*time.Second, 1*time.Second).Should(BeTrue(), "Bridge deployment should succeed")
 
 	By("Adding benthos generate configuration to the bridge")
-	editMessage := createEditProtocolConverterMessage(deployedUUID, bridgeName, bridgeIP, bridgePort, bridgeLocation)
+	editMessage, err := createEditProtocolConverterMessage(deployedUUID, bridgeName, bridgeIP, bridgePort, bridgeLocation)
+	if err != nil {
+		getLogger().Fatalf("Failed to create edit protocol converter message: %v", err)
+	}
 	mockServer.AddMessageToPullQueue(editMessage)
 
 	// Wait for edit confirmation
@@ -152,7 +158,10 @@ func testBridgeLifecycle(mockServer *MockAPIServer) {
 	}, 10*time.Second, 1*time.Second).Should(BeTrue(), "Bridge should appear as active in status messages")
 
 	By("Deleting the bridge")
-	deleteMessage := createDeleteProtocolConverterMessage(deployedUUID)
+	deleteMessage, err := createDeleteProtocolConverterMessage(deployedUUID)
+	if err != nil {
+		getLogger().Fatalf("Failed to create delete protocol converter message: %v", err)
+	}
 	mockServer.AddMessageToPullQueue(deleteMessage)
 
 	// Wait for deletion confirmation

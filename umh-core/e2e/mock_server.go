@@ -28,6 +28,8 @@ import (
 	"go.uber.org/zap"
 )
 
+const DefaultPushBufferSize = 100
+
 // MockAPIServer provides a simple mock implementation of the UMH backend API
 // that umh-core expects for communication
 type MockAPIServer struct {
@@ -58,14 +60,17 @@ func NewMockAPIServer() *MockAPIServer {
 
 	port := getAvailablePort()
 
-	logger, _ := zap.NewDevelopment()
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		panic(fmt.Sprintf("failed to create logger: %v", err))
+	}
 
 	server := &MockAPIServer{
 		router:         gin.New(),
 		port:           port,
 		logger:         logger.Sugar(),
 		pullQueue:      make([]models.UMHMessage, 0),
-		PushedMessages: make(chan models.UMHMessage, 100),
+		PushedMessages: make(chan models.UMHMessage, DefaultPushBufferSize),
 		validTokens:    make(map[string]string),
 		instanceUUID:   uuid.New(),
 		instanceName:   "test-instance",
@@ -129,8 +134,14 @@ func (s *MockAPIServer) Start() error {
 		}
 	}()
 
-	// Wait a bit for server to start
-	time.Sleep(100 * time.Millisecond)
+	// Verify server is responding
+	for i := 0; i < 50; i++ {
+		if resp, err := http.Get(s.GetURL() + "/v2/instance/login"); err == nil {
+			resp.Body.Close()
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	s.logger.Infow("Mock API server started", "port", s.port, "url", s.GetURL())
 	return nil

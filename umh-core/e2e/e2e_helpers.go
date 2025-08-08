@@ -24,26 +24,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// createSubscriptionMessage creates a UMH message that subscribes to status updates
-func createSubscriptionMessage() models.UMHMessage {
-	// Create the subscription payload
-	subscribePayload := models.SubscribeMessagePayload{
-		Resubscribed: false, // This is a new subscription, not a resubscription
-	}
-
-	// Create the message content
-	messageContent := models.UMHMessageContent{
-		MessageType: models.Subscribe,
-		Payload:     subscribePayload,
-	}
-
-	// Encode the content using the encoding package
-	encodedContent, err := encoding.EncodeMessageFromUserToUMHInstance(messageContent)
+// createUMHMessage is a helper that creates a UMH message with common structure
+func createUMHMessage(content models.UMHMessageContent) (models.UMHMessage, error) {
+	encodedContent, err := encoding.EncodeMessageFromUserToUMHInstance(content)
 	if err != nil {
-		panic(fmt.Sprintf("Failed to encode subscription message: %v", err))
+		return models.UMHMessage{}, fmt.Errorf("failed to encode message: %w", err)
 	}
 
-	// Create the UMH message
 	return models.UMHMessage{
 		Metadata: &models.MessageMetadata{
 			TraceID: uuid.New(),
@@ -51,75 +38,67 @@ func createSubscriptionMessage() models.UMHMessage {
 		Email:        "e2e-test@example.com",
 		Content:      encodedContent,
 		InstanceUUID: uuid.New(),
+	}, nil
+}
+
+// encodeDataModelStructure marshals a data model structure to base64-encoded YAML
+func encodeDataModelStructure(structure map[string]models.Field) (string, error) {
+	yamlData, err := yaml.Marshal(structure)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal data model structure: %w", err)
 	}
+	return base64.StdEncoding.EncodeToString(yamlData), nil
+}
+
+// createSubscriptionMessage creates a UMH message that subscribes to status updates
+func createSubscriptionMessage() (models.UMHMessage, error) {
+	subscribePayload := models.SubscribeMessagePayload{
+		Resubscribed: false,
+	}
+
+	messageContent := models.UMHMessageContent{
+		MessageType: models.Subscribe,
+		Payload:     subscribePayload,
+	}
+
+	return createUMHMessage(messageContent)
 }
 
 // createResubscriptionMessage creates a UMH message that resubscribes to status updates
-func createResubscriptionMessage() models.UMHMessage {
-	// Create the subscription payload with resubscribed flag
+func createResubscriptionMessage() (models.UMHMessage, error) {
 	subscribePayload := models.SubscribeMessagePayload{
-		Resubscribed: true, // This is a resubscription to refresh TTL
+		Resubscribed: true,
 	}
 
-	// Create the message content
 	messageContent := models.UMHMessageContent{
 		MessageType: models.Subscribe,
 		Payload:     subscribePayload,
 	}
 
-	// Encode the content using the encoding package
-	encodedContent, err := encoding.EncodeMessageFromUserToUMHInstance(messageContent)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to encode resubscription message: %v", err))
-	}
-
-	// Create the UMH message
-	return models.UMHMessage{
-		Metadata: &models.MessageMetadata{
-			TraceID: uuid.New(),
-		},
-		Email:        "e2e-test@example.com",
-		Content:      encodedContent,
-		InstanceUUID: uuid.New(),
-	}
+	return createUMHMessage(messageContent)
 }
 
 // createActionMessage creates a UMH message for a specific action type with payload
-func createActionMessage(actionType models.ActionType, payload interface{}) models.UMHMessage {
-	// Create the action payload
+func createActionMessage(actionType models.ActionType, payload interface{}) (models.UMHMessage, error) {
 	actionPayload := models.ActionMessagePayload{
 		ActionType:    actionType,
 		ActionUUID:    uuid.New(),
 		ActionPayload: payload,
 	}
 
-	// Create the message content
 	messageContent := models.UMHMessageContent{
 		MessageType: models.Action,
 		Payload:     actionPayload,
 	}
 
-	// Encode the content using the encoding package
-	encodedContent, err := encoding.EncodeMessageFromUserToUMHInstance(messageContent)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to encode action message: %v", err))
-	}
-
-	// Create the UMH message
-	return models.UMHMessage{
-		Metadata: &models.MessageMetadata{
-			TraceID: uuid.New(),
-		},
-		Email:        "e2e-test@example.com",
-		Content:      encodedContent,
-		InstanceUUID: uuid.New(),
-	}
+	return createUMHMessage(messageContent)
 }
 
 // createDeployProtocolConverterMessage creates a deploy protocol converter action message
-func createDeployProtocolConverterMessage(name, ip string, port uint32, location map[int]string) models.UMHMessage {
+func createDeployProtocolConverterMessage(name, ip string, port uint32, location map[int]string) (models.UMHMessage, error) {
+	protocolConverterUUID := uuid.New()
 	payload := models.ProtocolConverter{
-		UUID:     &[]uuid.UUID{uuid.New()}[0], // Generate a new UUID
+		UUID:     &protocolConverterUUID,
 		Name:     name,
 		Location: location,
 		Connection: models.ProtocolConverterConnection{
@@ -134,8 +113,8 @@ func createDeployProtocolConverterMessage(name, ip string, port uint32, location
 
 // createEditProtocolConverterMessage creates an edit protocol converter action message
 // with benthos generate configuration and UNS output
-func createEditProtocolConverterMessage(protocolConverterUUID uuid.UUID, name, ip string, port uint32, location map[int]string) models.UMHMessage {
-	// Create the benthos generate configuration for a read DFC
+func createEditProtocolConverterMessage(protocolConverterUUID uuid.UUID, name, ip string, port uint32, location map[int]string) (models.UMHMessage, error) {
+	ignoreErrors := false
 	readDFC := &models.ProtocolConverterDFC{
 		Inputs: models.CommonDataFlowComponentInputConfig{
 			Type: "generate",
@@ -159,7 +138,7 @@ func createEditProtocolConverterMessage(protocolConverterUUID uuid.UUID, name, i
 				},
 			},
 		},
-		IgnoreErrors: &[]bool{false}[0], // Don't ignore errors for testing
+		IgnoreErrors: &ignoreErrors,
 	}
 
 	payload := models.ProtocolConverter{
@@ -178,7 +157,7 @@ func createEditProtocolConverterMessage(protocolConverterUUID uuid.UUID, name, i
 }
 
 // createDeleteProtocolConverterMessage creates a delete protocol converter action message
-func createDeleteProtocolConverterMessage(protocolConverterUUID uuid.UUID) models.UMHMessage {
+func createDeleteProtocolConverterMessage(protocolConverterUUID uuid.UUID) (models.UMHMessage, error) {
 	payload := models.DeleteProtocolConverterPayload{
 		UUID: protocolConverterUUID,
 	}
@@ -186,8 +165,7 @@ func createDeleteProtocolConverterMessage(protocolConverterUUID uuid.UUID) model
 }
 
 // createAddDataModelMessage creates an add data model action message
-func createAddDataModelMessage(name, description string) models.UMHMessage {
-	// Create a simple data model structure
+func createAddDataModelMessage(name, description string) (models.UMHMessage, error) {
 	structure := map[string]models.Field{
 		"temperature": {
 			PayloadShape: "timeseries-number",
@@ -210,14 +188,10 @@ func createAddDataModelMessage(name, description string) models.UMHMessage {
 		},
 	}
 
-	// Marshal the structure to YAML
-	yamlData, err := yaml.Marshal(structure)
+	encodedStructure, err := encodeDataModelStructure(structure)
 	if err != nil {
-		panic(fmt.Sprintf("Failed to marshal data model structure: %v", err))
+		return models.UMHMessage{}, err
 	}
-
-	// Base64 encode the YAML
-	encodedStructure := base64.StdEncoding.EncodeToString(yamlData)
 
 	payload := models.AddDataModelPayload{
 		Name:             name,
@@ -229,8 +203,7 @@ func createAddDataModelMessage(name, description string) models.UMHMessage {
 }
 
 // createEditDataModelMessage creates an edit data model action message
-func createEditDataModelMessage(name, description string) models.UMHMessage {
-	// Create an updated data model structure with additional fields
+func createEditDataModelMessage(name, description string) (models.UMHMessage, error) {
 	structure := map[string]models.Field{
 		"temperature": {
 			PayloadShape: "timeseries-number",
@@ -249,12 +222,12 @@ func createEditDataModelMessage(name, description string) models.UMHMessage {
 				"rpm": {
 					PayloadShape: "timeseries-number",
 				},
-				"efficiency": { // New field added in edit
+				"efficiency": {
 					PayloadShape: "timeseries-number",
 				},
 			},
 		},
-		"metadata": { // New section added in edit
+		"metadata": {
 			Subfields: map[string]models.Field{
 				"location": {
 					PayloadShape: "timeseries-string",
@@ -266,14 +239,10 @@ func createEditDataModelMessage(name, description string) models.UMHMessage {
 		},
 	}
 
-	// Marshal the structure to YAML
-	yamlData, err := yaml.Marshal(structure)
+	encodedStructure, err := encodeDataModelStructure(structure)
 	if err != nil {
-		panic(fmt.Sprintf("Failed to marshal data model structure: %v", err))
+		return models.UMHMessage{}, err
 	}
-
-	// Base64 encode the YAML
-	encodedStructure := base64.StdEncoding.EncodeToString(yamlData)
 
 	payload := models.EditDataModelPayload{
 		Name:             name,
@@ -285,7 +254,7 @@ func createEditDataModelMessage(name, description string) models.UMHMessage {
 }
 
 // createDeleteDataModelMessage creates a delete data model action message
-func createDeleteDataModelMessage(name string) models.UMHMessage {
+func createDeleteDataModelMessage(name string) (models.UMHMessage, error) {
 	payload := models.DeleteDataModelPayload{
 		Name: name,
 	}

@@ -139,7 +139,10 @@ func waitForComponentsHealthy(mockServer *MockAPIServer) {
 func startPeriodicSubscription(ctx context.Context, mockServer *MockAPIServer, interval time.Duration) {
 	// Send initial subscription immediately
 	getLogger().Info("Sending initial subscription message")
-	subscribeMessage := createSubscriptionMessage()
+	subscribeMessage, err := createSubscriptionMessage()
+	if err != nil {
+		getLogger().Fatalf("Failed to create subscription message: %v", err)
+	}
 	mockServer.AddMessageToPullQueue(subscribeMessage)
 
 	ticker := time.NewTicker(interval)
@@ -153,7 +156,11 @@ func startPeriodicSubscription(ctx context.Context, mockServer *MockAPIServer, i
 		case <-ticker.C:
 			// Send resubscription message
 			getLogger().Info("Sending periodic resubscription message")
-			resubscribeMessage := createResubscriptionMessage()
+			resubscribeMessage, err := createResubscriptionMessage()
+			if err != nil {
+				getLogger().Errorf("Failed to create resubscription message: %v", err)
+				continue
+			}
 			mockServer.AddMessageToPullQueue(resubscribeMessage)
 		}
 	}
