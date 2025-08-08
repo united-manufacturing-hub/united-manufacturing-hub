@@ -28,5 +28,6 @@ func (s *S6RCService) Restart(name string) error { // interface method
 	if err != nil {
 		return fmt.Errorf("restart %s: %w", name, err)
 	}
+
 	return nil
 }

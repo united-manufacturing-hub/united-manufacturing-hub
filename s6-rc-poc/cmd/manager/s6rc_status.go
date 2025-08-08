@@ -30,11 +30,14 @@ func (s *S6RCService) Status(name string) error { // interface method
 
 	serviceRunDir := filepath.Join("/run/service", name)
 	stdout, err := s.runCapture("s6-svstat", serviceRunDir)
+
 	if err != nil {
 		return fmt.Errorf("status %s: %w", name, err)
 	}
+
 	if s.logger != nil {
 		s.logger.Info("Service status", zap.String("service", name), zap.String("status", strings.TrimSpace(stdout)))
 	}
+
 	return nil
 }

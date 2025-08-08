@@ -70,7 +70,9 @@ func handleConfigEvents(
 					zap.String("executable", configEvent.Executable),
 					zap.Any("parameters", configEvent.Parameters))
 			}
+
 			desiredStateByService[configEvent.Name.String()] = configEvent.DesiredState
+
 			if err := svc.Create(
 				configEvent.Name.String(),
 				configEvent.DesiredState,
@@ -84,7 +86,9 @@ func handleConfigEvents(
 			if logger != nil {
 				logger.Info("event: deleted", zap.String("service", configEvent.Name.String()))
 			}
+
 			delete(desiredStateByService, configEvent.Name.String())
+
 			if err := svc.Remove(configEvent.Name.String()); err != nil {
 				logError(logger, "remove", configEvent.Name.String(), err)
 			}
@@ -95,6 +99,7 @@ func handleConfigEvents(
 					zap.String("service", configEvent.Name.String()),
 					zap.String("desired_state", configEvent.DesiredState.String()))
 			}
+
 			desiredStateByService[configEvent.Name.String()] = configEvent.DesiredState
 
 			var err error
@@ -103,6 +108,7 @@ func handleConfigEvents(
 			} else {
 				err = svc.Stop(configEvent.Name.String())
 			}
+
 			if err != nil {
 				logError(logger, "state-change", configEvent.Name.String(), err)
 			}
@@ -120,6 +126,7 @@ func handleConfigEvents(
 				// default conservatively to Down
 				desiredState = shared.Down
 			}
+
 			if err := svc.Create(
 				configEvent.Name.String(),
 				desiredState,

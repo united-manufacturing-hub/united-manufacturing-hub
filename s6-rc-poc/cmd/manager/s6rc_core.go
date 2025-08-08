@@ -107,14 +107,18 @@ func (s *S6RCService) writeServiceDefinition(name, executable string, argsMap ma
 	// run
 	args := orderedArgs(argsMap)
 	runContent, err := s.renderRunScript(executable, args)
+
 	if err != nil {
 		return fmt.Errorf("render run script for %s: %w", name, err)
 	}
+
 	runPath := filepath.Join(serviceDir, "run")
+
 	if err := os.WriteFile(runPath, []byte(runContent), filePermission); err != nil {
 		return fmt.Errorf("write run for %s: %w", name, err)
 	}
-	if err := os.Chmod(runPath, executablePermission); err != nil { //nolint:gosec // run must be executable for s6
+
+	if err := os.Chmod(runPath, executablePermission); err != nil {
 		return fmt.Errorf("chmod run for %s: %w", name, err)
 	}
 
@@ -151,6 +155,7 @@ func (s *S6RCService) compileAndChangeover() error {
 	if err != nil {
 		return fmt.Errorf("create temp dir: %w", err)
 	}
+
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	if err := s.run("s6-rc-compile", tmpDir, s.servicesBaseDir); err != nil {
@@ -189,6 +194,7 @@ func (s *S6RCService) renderRunScript(executable string, args []string) (string,
 
 			continue
 		}
+
 		renderedArgs = append(renderedArgs, arg)
 	}
 
@@ -229,6 +235,7 @@ func orderedArgs(parameters map[int]string) []string {
 
 func (s *S6RCService) runCapture(name string, args ...string) (string, error) {
 	cmd := exec.Command(name, args...)
+
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -245,6 +252,7 @@ func (s *S6RCService) runCapture(name string, args ...string) (string, error) {
 				zap.Error(err),
 			)
 		}
+
 		return stdout.String(), err
 	}
 
@@ -261,5 +269,6 @@ func (s *S6RCService) logWarn(msg, service string, err error) {
 	if s.logger == nil {
 		return
 	}
+
 	s.logger.Warn(msg, zap.String("service", service), zap.Error(err))
 }

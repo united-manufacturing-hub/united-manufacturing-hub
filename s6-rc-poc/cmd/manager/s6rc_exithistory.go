@@ -30,11 +30,14 @@ func (s *S6RCService) ExitHistory(name string) error { // interface method
 
 	serviceRunDir := filepath.Join("/run/service", name)
 	stdout, err := s.runCapture("s6-svdt", serviceRunDir)
+
 	if err != nil {
 		return fmt.Errorf("exit history %s: %w", name, err)
 	}
+
 	if s.logger != nil {
 		s.logger.Info("Service exit history", zap.String("service", name), zap.String("history", strings.TrimSpace(stdout)))
 	}
+
 	return nil
 }

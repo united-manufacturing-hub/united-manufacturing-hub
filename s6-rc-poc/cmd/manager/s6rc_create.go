@@ -32,6 +32,7 @@ func (s *S6RCService) Create(
 	if name == "" {
 		return errServiceNameRequired
 	}
+
 	if executable == "" {
 		return fmt.Errorf("service %s: %w", name, errExecutableRequired)
 	}
