@@ -19,6 +19,7 @@ package manager
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -27,6 +28,7 @@ import (
 	"sort"
 	"strings"
 	"text/template"
+	"time"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -42,8 +44,8 @@ type S6RCService struct {
 }
 
 const (
-	defaultServicesBaseDir   = "/etc/s6-overlay/s6-rc.d"
-	defaultCompiledTargetDir = "/etc/s6-overlay/s6-rc/compiled"
+	defaultServicesBaseDir   = "/etc/s6-rc/source"
+	defaultCompiledTargetDir = "/run/s6-rc-compiled"
 	defaultBundleName        = "user"
 )
 
@@ -165,21 +167,16 @@ func (s *S6RCService) compileAndChangeover() error {
 		return fmt.Errorf("s6-rc-compile failed: %w", err)
 	}
 
-	// Replace target compiled dir atomically (best-effort)
-	if err := os.RemoveAll(s.compiledTargetDir); err != nil {
-		return fmt.Errorf("remove compiled target: %w", err)
-	}
-	// Ensure target dir exists, then copy contents (not the top dir) to it.
-	if err := os.MkdirAll(s.compiledTargetDir, dirPermission); err != nil {
-		return fmt.Errorf("create compiled target: %w", err)
-	}
-	// Use cp -a to preserve modes; copy contents with trailing '/.'
-	if err := s.run("cp", "-a", filepath.Clean(tmpDir)+"/.", s.compiledTargetDir); err != nil {
-		return fmt.Errorf("copy compiled db: %w", err)
+	// Update the live database using s6-rc-update with the freshly compiled database
+	// This atomically updates the live database at /run/s6-rc
+	// Use -b to block on locks for reliability
+	if err := s.run("s6-rc-update", "-b", "-l", "/run/s6-rc", tmpDir); err != nil {
+		return fmt.Errorf("update live database: %w", err)
 	}
 
-	// Apply changeover for the bundle
-	if err := s.run("s6-rc", "-u", "change", s.bundleName); err != nil {
+	// Apply changeover for the bundle using the live database
+	// Use -b to block on locks for reliability
+	if err := s.run("s6-rc", "-b", "-l", "/run/s6-rc", "-u", "change", s.bundleName); err != nil {
 		return fmt.Errorf("apply changeover: %w", err)
 	}
 
@@ -236,8 +233,13 @@ func orderedArgs(parameters map[int]string) []string {
 	return args
 }
 
+const defaultTimeout = 5 * time.Second
+
 func (s *S6RCService) runCapture(name string, args ...string) (string, error) {
-	cmd := exec.Command(name, args...)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, name, args...)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -258,6 +260,19 @@ func (s *S6RCService) runCapture(name string, args ...string) (string, error) {
 
 		return stdout.String(), err
 	}
+
+	deadline, _ := ctx.Deadline()
+	timeUntilDeadline := time.Until(deadline)
+
+	s.logger.Info(
+		"command succeeded",
+		zap.String("cmd", name),
+		zap.Strings("args", args),
+		zap.String("stdout", strings.TrimSpace(stdout.String())),
+		zap.String("stderr", strings.TrimSpace(stderr.String())),
+		zap.Duration("timeUntilDeadline", timeUntilDeadline),
+		zap.Error(err),
+	)
 
 	return stdout.String(), nil
 }

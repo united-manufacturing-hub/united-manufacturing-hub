@@ -7,3 +7,8 @@ services:
   - name: true-service
     desired_state: down
     executable: /bin/true
+  - name: touch-service
+    desired_state: up
+    executable: /bin/touch
+    parameters:
+      1: "/tmp/test-t"

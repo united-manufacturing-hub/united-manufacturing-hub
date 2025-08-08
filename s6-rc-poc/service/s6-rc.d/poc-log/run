@@ -1,2 +1,0 @@
-#!/command/execlineb -P
-logutil-service /data/logs/s6-rc-poc

@@ -17,19 +17,110 @@
 package main
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"s6-rc-poc/cmd/configwatcher"
 	"s6-rc-poc/cmd/manager"
 	"s6-rc-poc/cmd/shared"
+	"time"
 
 	"go.uber.org/zap"
 )
 
+const (
+	s6InitializationDelay = 2 * time.Second
+	commandTimeout        = 10 * time.Second
+	svscanDirPerm         = 0o750
+	sigtermFilePerm       = 0o700
+)
+
+var (
+	errS6SvscanNotStarted = errors.New("s6-svscan process not started")
+)
+
 func main() {
 	logger, _ := zap.NewDevelopment()
+
+	// Initialize s6 and s6-rc
+	if err := initializeS6(logger); err != nil {
+		logger.Fatal("Failed to initialize s6", zap.Error(err))
+	}
+
 	watcher := configwatcher.NewFileWatcher(logger)
 	svc := manager.NewS6RCService(logger, "", "", "")
 
 	handleConfigEvents(logger, watcher, svc, "/config.yaml")
+}
+
+func initializeS6(logger *zap.Logger) error {
+	logger.Info("Initializing s6 and s6-rc")
+
+	// Create basic .s6-svscan directory structure
+	svscanDir := "/run/service/.s6-svscan"
+
+	if err := os.MkdirAll(svscanDir, svscanDirPerm); err != nil {
+		return fmt.Errorf("create s6-svscan dir: %w", err)
+	}
+
+	// Create SIGTERM handler for clean shutdown
+	sigterm := filepath.Join(svscanDir, "SIGTERM")
+
+	if err := os.WriteFile(sigterm, []byte("#!/bin/sh\ns6-svscanctl -t /run/service\n"), sigtermFilePerm); err != nil {
+		return fmt.Errorf("create SIGTERM handler: %w", err)
+	}
+
+	// Start s6-svscan in background
+	logger.Info("Starting s6-svscan")
+
+	ctx := context.Background()
+	cmd := exec.CommandContext(ctx, "s6-svscan", "/run/service")
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("start s6-svscan: %w", err)
+	}
+
+	// Wait for s6-svscan to be ready
+	logger.Info("Waiting for s6-svscan to be ready")
+	time.Sleep(s6InitializationDelay)
+
+	// Check if s6-svscan is running
+	if cmd.Process == nil {
+		return fmt.Errorf("%w", errS6SvscanNotStarted)
+	}
+
+	// Initialize s6-rc database
+	logger.Info("Compiling s6-rc database")
+
+	if err := runCommand("s6-rc-compile", "/run/s6-rc-compiled", "/etc/s6-rc/source"); err != nil {
+		return fmt.Errorf("compile s6-rc database: %w", err)
+	}
+
+	logger.Info("Initializing s6-rc live database")
+
+	if err := runCommand("s6-rc-init", "-c", "/run/s6-rc-compiled", "-l", "/run/s6-rc", "/run/service"); err != nil {
+		return fmt.Errorf("initialize s6-rc: %w", err)
+	}
+
+	logger.Info("s6 and s6-rc initialization complete")
+
+	return nil
+}
+
+func runCommand(name string, args ...string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, name, args...)
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("command %s failed: %w", name, err)
+	}
+
+	return nil
 }
 
 func logError(logger *zap.Logger, action, service string, err error) {
