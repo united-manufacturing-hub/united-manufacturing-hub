@@ -2,8 +2,10 @@ FROM golang:1.24-alpine as builder
 WORKDIR /build
 RUN apk add build-base
 COPY go.mod .
-COPY "cmd" .
-RUN CGO_ENABLED=1 go build -race -ldflags "-s -w" -o /s6-rc-poc
+COPY go.sum .
+RUN go mod download
+COPY "cmd" "cmd"
+RUN CGO_ENABLED=1 go build -race -ldflags "-s -w" -o s6-rc-poc cmd/main.go
 
 FROM alpine as runner
 ARG S6_OVERLAY_VERSION=3.2.1.0
@@ -19,7 +21,7 @@ COPY service/s6-rc.d /etc/s6-overlay/s6-rc.d/
 RUN chmod +x /etc/s6-overlay/s6-rc.d/poc/run
 
 # Copy our binary
-COPY --from=builder --chmod=755 /s6-rc-poc /opt/s6-rc-poc
+COPY --from=builder --chmod=755 /build/s6-rc-poc /opt/s6-rc-poc
 
 ENV S6_KEEP_ENV=1 \
     S6_BEHAVIOUR_IF_STAGE2_FAILS=2 \

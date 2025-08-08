@@ -15,7 +15,7 @@ run: build
 	sudo rm -rf $(PWD)/data
 	mkdir -p $(PWD)/data/logs/s6-rc-poc
 	chmod -R 777 $(PWD)/data
-	docker run -v $(PWD)/data:/data s6-rc-poc
+	docker run -v $(PWD)/data:/data -v $(PWD)/config.yaml:/config.yaml s6-rc-poc
 
 test: lint
 	go test -race ./...

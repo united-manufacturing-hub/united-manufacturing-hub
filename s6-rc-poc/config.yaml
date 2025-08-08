@@ -7,4 +7,3 @@ services:
   - name: true-service
     desired_state: down
     executable: /bin/true
-    parameters: []

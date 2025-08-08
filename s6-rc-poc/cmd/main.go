@@ -16,8 +16,21 @@
 // demonstrate its reliability, scalability, ease of use and maintenance.
 package main
 
-import "fmt"
+import (
+	"s6-rc-poc/cmd/configwatcher"
+
+	"go.uber.org/zap"
+)
 
 func main() {
-	fmt.Println("Hello World")
+	logger, _ := zap.NewProduction()
+	watcher := configwatcher.NewFileWatcher(logger)
+
+	if err := watcher.Start("/config.yaml"); err != nil {
+		panic(err)
+	}
+
+	for {
+		event := <-watcher.Events()
+	}
 }

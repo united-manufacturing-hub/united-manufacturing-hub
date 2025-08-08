@@ -37,8 +37,20 @@ type State int
 // Service states.
 const (
 	Down State = iota
-	Up
+	Up         //nolint:varnamelen // Common state name convention
 )
+
+// String returns the string representation of the State.
+func (s State) String() string {
+	switch s {
+	case Up:
+		return "up"
+	case Down:
+		return "down"
+	default:
+		return "unknown"
+	}
+}
 
 // EventCreated represents a service creation event.
 type EventCreated struct {

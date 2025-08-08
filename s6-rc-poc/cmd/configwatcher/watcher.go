@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"github.com/fsnotify/fsnotify"
+	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
 
@@ -45,12 +46,14 @@ type FileWatcher struct {
 	configPath   string
 	mu           sync.RWMutex
 	stopCh       chan struct{}
+	logger       *zap.Logger
 }
 
 const eventBufferSize = 100
 
 // NewFileWatcher creates a new file watcher instance.
-func NewFileWatcher() *FileWatcher {
+func NewFileWatcher(logger *zap.Logger) *FileWatcher {
+
 	return &FileWatcher{
 		watcher:      nil,
 		events:       make(chan ConfigEvent, eventBufferSize),
@@ -58,6 +61,7 @@ func NewFileWatcher() *FileWatcher {
 		configPath:   "",
 		mu:           sync.RWMutex{},
 		stopCh:       make(chan struct{}),
+		logger:       logger,
 	}
 }
 
@@ -97,12 +101,48 @@ func (fw *FileWatcher) Stop() error {
 		}
 	}
 
+	if fw.logger != nil {
+		_ = fw.logger.Sync()
+	}
+
 	return nil
 }
 
 // Events returns the channel for configuration events.
 func (fw *FileWatcher) Events() chan ConfigEvent {
 	return fw.events
+}
+
+// emitEvent sends an event to the channel and logs it to stdout.
+func (fw *FileWatcher) emitEvent(event ConfigEvent) {
+	fw.events <- event
+
+	switch eventTyped := event.(type) {
+	case EventCreated:
+		fw.logger.Info("Service created",
+			zap.String("service", eventTyped.Name),
+			zap.String("event", "created"),
+			zap.String("desired_state", eventTyped.DesiredState.String()),
+			zap.String("executable", eventTyped.Executable),
+		)
+	case EventDeleted:
+		fw.logger.Info("Service deleted",
+			zap.String("service", eventTyped.Name),
+			zap.String("event", "deleted"),
+		)
+	case EventStateChanged:
+		fw.logger.Info("Service state changed",
+			zap.String("service", eventTyped.Name),
+			zap.String("event", "state_changed"),
+			zap.String("desired_state", eventTyped.DesiredState.String()),
+		)
+	case EventConfigChanged:
+		fw.logger.Info("Service config changed",
+			zap.String("service", eventTyped.Name),
+			zap.String("event", "config_changed"),
+			zap.String("executable", eventTyped.Executable),
+		)
+	}
 }
 
 func (fw *FileWatcher) watchLoop() {
@@ -159,7 +199,7 @@ func (fw *FileWatcher) compareAndEmitEvents(newState map[string]Service) {
 	// Check for deleted services
 	for name := range fw.currentState {
 		if _, exists := newState[name]; !exists {
-			fw.events <- EventDeleted{Name: name}
+			fw.emitEvent(EventDeleted{Name: name})
 		}
 	}
 
@@ -168,27 +208,27 @@ func (fw *FileWatcher) compareAndEmitEvents(newState map[string]Service) {
 		oldService, exists := fw.currentState[name]
 		if !exists {
 			// New service
-			fw.events <- EventCreated{
+			fw.emitEvent(EventCreated{
 				Name:         newService.Name,
 				DesiredState: StringToState(newService.DesiredState),
 				Executable:   newService.Executable,
 				Parameters:   newService.Parameters,
-			}
+			})
 		} else {
 			// Check for state changes
 			if oldService.DesiredState != newService.DesiredState {
-				fw.events <- EventStateChanged{
+				fw.emitEvent(EventStateChanged{
 					Name:         newService.Name,
 					DesiredState: StringToState(newService.DesiredState),
-				}
+				})
 			}
 			// Check for config changes (executable or parameters)
 			if oldService.Executable != newService.Executable || !EqualMaps(oldService.Parameters, newService.Parameters) {
-				fw.events <- EventConfigChanged{
+				fw.emitEvent(EventConfigChanged{
 					Name:       newService.Name,
 					Executable: newService.Executable,
 					Parameters: newService.Parameters,
-				}
+				})
 			}
 		}
 	}

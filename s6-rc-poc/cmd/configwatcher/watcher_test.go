@@ -42,7 +42,7 @@ func TestFileWatcher_ConfigChanges(t *testing.T) {
 	}
 
 	// Create watcher
-	watcher := configwatcher.NewFileWatcher()
+	watcher := configwatcher.NewFileWatcher(nil)
 	defer func() { _ = watcher.Stop() }()
 
 	if err := watcher.Start(configPath); err != nil {
