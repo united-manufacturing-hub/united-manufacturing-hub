@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package protocolconverter
+package bridge
 
 import (
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
-	protocolconverterconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/bridgeserviceconfig"
+	bridgesvccfg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/bridgeserviceconfig"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	bridgesvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/bridge"
 )
@@ -141,78 +141,77 @@ func IsRunningState(state string) bool {
 	return false
 }
 
-// ProtocolConverterObservedState contains the observed runtime state of a ProtocolConverter instance
-type ProtocolConverterObservedState struct {
-	// ObservedProtocolConverterSpecConfig contains the observed ProtocolConverter service config spec with variables
+// ObservedState contains the observed runtime state of a Bridge instance
+type ObservedState struct {
+	// ObservedConfigSpec contains the observed Bridge service config spec with variables
 	// it is here for the purpose of the UI to display the variables and the location
-	ObservedProtocolConverterSpecConfig protocolconverterconfig.ConfigSpec
+	ObservedConfigSpec bridgesvccfg.ConfigSpec
 
-	// ObservedProtocolConverterRuntimeConfig contains the observed ProtocolConverter service config
-	ObservedProtocolConverterRuntimeConfig protocolconverterconfig.ConfigRuntime
+	// ObservedConfigRuntime contains the observed Bridge service config
+	ObservedConfigRuntime bridgesvccfg.ConfigRuntime
 
-	// ServiceInfo contains information about the ProtocolConverter service
+	// ServiceInfo contains information about the Bridge service
 	ServiceInfo bridgesvc.ServiceInfo
 }
 
 // IsObservedState implements the ObservedState interface
-func (b ProtocolConverterObservedState) IsObservedState() {}
+func (b ObservedState) IsObservedState() {}
 
-// ProtocolConverterInstance implements the FSMInstance interface
-// If ProtocolConverterInstance does not implement the FSMInstance interface, this will
+// Instance implements the FSMInstance interface
+// If Instance does not implement the FSMInstance interface, this will
 // be detected at compile time
-var _ publicfsm.FSMInstance = (*ProtocolConverterInstance)(nil)
+var _ publicfsm.FSMInstance = (*Instance)(nil)
 
-// ProtocolConverterInstance is a state-machine managed instance of a ProtocolConverter service.
-type ProtocolConverterInstance struct {
-	// service is the ProtocolConverter service implementation to use
-	// It has a manager that manages the protocolconverter service instances
-	service bridgesvc.IService
-
+// Instance is a state-machine managed instance of a Bridge service.
+type Instance struct {
+	// service is the Bridge service implementation to use
+	// It has a manager that manages the bridge service instances
+	service         bridgesvc.IService
 	baseFSMInstance *internalfsm.BaseFSMInstance
 
-	// specConfig contains all the configuration spec for this service
-	specConfig protocolconverterconfig.ConfigSpec
+	// configSpec contains all the configuration spec for this service
+	configSpec bridgesvccfg.ConfigSpec
 
-	// runtimeConfig is the last fully-rendered runtime configuration.
+	// configRuntime is the last fully-rendered runtime configuration.
 	// It is **zero-value** when the instance is first created; the real
 	// configuration is rendered during the *first* Reconcile() cycle
 	// once the instance has access to SystemSnapshot (agent location,
 	// global variables, node name, …).
-	runtimeConfig protocolconverterconfig.ConfigRuntime
+	configRuntime bridgesvccfg.ConfigRuntime
 
 	// ObservedState represents the observed state of the service
 	// ObservedState contains all metrics, logs, etc.
 	// that are updated at the beginning of Reconcile and then used to
 	// determine the next state
-	ObservedState ProtocolConverterObservedState
+	ObservedState ObservedState
 }
 
 // GetLastObservedState returns the last known state of the instance
-func (d *ProtocolConverterInstance) GetLastObservedState() publicfsm.ObservedState {
-	return d.ObservedState
+func (i *Instance) GetLastObservedState() publicfsm.ObservedState {
+	return i.ObservedState
 }
 
-// SetService sets the ProtocolConverter service implementation to use
+// SetService sets the Bridge service implementation to use
 // This is a testing-only utility to access the private service field
-func (d *ProtocolConverterInstance) SetService(service bridgesvc.IService) {
-	d.service = service
+func (i *Instance) SetService(service bridgesvc.IService) {
+	i.service = service
 }
 
-// GetConfig returns the ProtocolConverterServiceConfig for this service
+// GetConfig returns the Config for this service
 // This is a testing-only utility to access the private service field
-func (d *ProtocolConverterInstance) GetConfig() protocolconverterconfig.ConfigSpec {
-	return d.specConfig
+func (i *Instance) GetConfig() bridgesvccfg.ConfigSpec {
+	return i.configSpec
 }
 
 // GetLastError returns the last error of the instance
 // This is a testing-only utility to access the private baseFSMInstance field
-func (d *ProtocolConverterInstance) GetLastError() error {
-	return d.baseFSMInstance.GetLastError()
+func (i *Instance) GetLastError() error {
+	return i.baseFSMInstance.GetLastError()
 }
 
 // IsTransientStreakCounterMaxed returns whether the transient streak counter
 // has reached the maximum number of ticks, which means that the FSM is stuck in a state
 // and should be removed
-func (d *ProtocolConverterInstance) IsTransientStreakCounterMaxed() bool {
-	return d.baseFSMInstance.IsTransientStreakCounterMaxed()
+func (i *Instance) IsTransientStreakCounterMaxed() bool {
+	return i.baseFSMInstance.IsTransientStreakCounterMaxed()
 }

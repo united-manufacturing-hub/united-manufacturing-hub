@@ -120,8 +120,8 @@ func (d *DataFlowComponentConfig) UnmarshalYAML(value *yaml.Node) error {
 
 // UnmarshalYAML is a helper function to detect anchors and set the hasAnchors flag
 // See also UnmarshalYAML for DataFlowComponentConfig
-func (d *ProtocolConverterConfig) UnmarshalYAML(value *yaml.Node) error {
-	type plain ProtocolConverterConfig // prevent recursion
+func (d *BridgeConfig) UnmarshalYAML(value *yaml.Node) error {
+	type plain BridgeConfig // prevent recursion
 	var tmp plain
 
 	// 1. decode into the temporary value just like the default behaviour
@@ -146,7 +146,7 @@ func (d *ProtocolConverterConfig) UnmarshalYAML(value *yaml.Node) error {
 	}
 
 	// 3. copy decoded data into the receiver
-	*d = ProtocolConverterConfig(tmp)
+	*d = BridgeConfig(tmp)
 
 	// 4. flag = true when that subtree has &anchor or *alias
 	d.hasAnchors = hasAnchors(cfgNode)
@@ -155,7 +155,7 @@ func (d *ProtocolConverterConfig) UnmarshalYAML(value *yaml.Node) error {
 }
 
 // UnmarshalYAML is a helper function to detect anchors and set the hasAnchors flag
-// See also UnmarshalYAML for DataFlowComponentConfig and ProtocolConverterConfig
+// See also UnmarshalYAML for DataFlowComponentConfig and BridgeConfig
 func (d *StreamProcessorConfig) UnmarshalYAML(value *yaml.Node) error {
 	type plain StreamProcessorConfig // prevent recursion
 	var tmp plain

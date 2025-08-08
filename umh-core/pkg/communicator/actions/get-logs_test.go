@@ -28,8 +28,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	agent_monitor_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/agent_monitor"
 	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
+	bridgefsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/bridge"
 	dfc_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
-	protocolconverter_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	redpanda_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/agent_monitor"
@@ -42,17 +42,17 @@ import (
 
 var _ = Describe("GetLogsAction", func() {
 	var (
-		action                *actions.GetLogsAction
-		userEmail             string
-		actionUUID            uuid.UUID
-		instanceUUID          uuid.UUID
-		outboundChannel       chan *models.UMHMessage
-		dfcName               string
-		dfcUUID               uuid.UUID
-		protocolConverterName string
-		protocolConverterUUID uuid.UUID
-		snapshotManager       *fsm.SnapshotManager
-		mockedLogs            []s6.LogEntry
+		action          *actions.GetLogsAction
+		userEmail       string
+		actionUUID      uuid.UUID
+		instanceUUID    uuid.UUID
+		outboundChannel chan *models.UMHMessage
+		dfcName         string
+		dfcUUID         uuid.UUID
+		brName          string
+		brUUID          uuid.UUID
+		snapshotManager *fsm.SnapshotManager
+		mockedLogs      []s6.LogEntry
 	)
 
 	BeforeEach(func() {
@@ -62,8 +62,8 @@ var _ = Describe("GetLogsAction", func() {
 		outboundChannel = make(chan *models.UMHMessage, 10)
 		dfcName = "test-dfc"
 		dfcUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(dfcName)
-		protocolConverterName = "test-protocol-converter"
-		protocolConverterUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(protocolConverterName)
+		brName = "test-bridge"
+		brUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(brName)
 		snapshotManager = fsm.NewSnapshotManager()
 
 		// Mocked logs contain logs from 6h ago and 2h ago
@@ -99,7 +99,7 @@ var _ = Describe("GetLogsAction", func() {
 		dfcManagerSnapshot := &actions.MockManagerSnapshot{Instances: mockDfcInstances}
 
 		// Protocol Converter logs mock
-		protocolConverterServiceInfo := bridge.ServiceInfo{
+		bridgeServiceInfo := bridge.ServiceInfo{
 			DFCReadObservedState: dfc_fsm.DataflowComponentObservedState{
 				ServiceInfo: dataflowcomponent.ServiceInfo{
 					BenthosObservedState: benthosfsmmanager.BenthosObservedState{
@@ -123,15 +123,15 @@ var _ = Describe("GetLogsAction", func() {
 				},
 			},
 		}
-		protocolConverterMockedObservedState := &protocolconverter_fsm.ProtocolConverterObservedStateSnapshot{ServiceInfo: protocolConverterServiceInfo}
+		bridgeMockedObservedState := &bridgefsm.ObservedStateSnapshot{ServiceInfo: bridgeServiceInfo}
 		mockProtocolConverterInstances := map[string]*fsm.FSMInstanceSnapshot{
-			protocolConverterUUID.String(): {
-				ID:                protocolConverterName,
+			brUUID.String(): {
+				ID:                brName,
 				CurrentState:      "active",
-				LastObservedState: protocolConverterMockedObservedState,
+				LastObservedState: bridgeMockedObservedState,
 			},
 		}
-		protocolConverterManagerSnapshot := &actions.MockManagerSnapshot{Instances: mockProtocolConverterInstances}
+		bridgeManagerSnapshot := &actions.MockManagerSnapshot{Instances: mockProtocolConverterInstances}
 
 		// Agent logs mock
 		agentServiceInfo := agent_monitor.ServiceInfo{AgentLogs: mockedLogs}
@@ -167,7 +167,7 @@ var _ = Describe("GetLogsAction", func() {
 		snapshotManager.UpdateSnapshot(&fsm.SystemSnapshot{
 			Managers: map[string]fsm.ManagerSnapshot{
 				constants.DataflowcomponentManagerName: dfcManagerSnapshot,
-				constants.ProtocolConverterManagerName: protocolConverterManagerSnapshot,
+				constants.BridgeManagerName:            bridgeManagerSnapshot,
 				constants.AgentManagerName:             agentManagerSnapshot,
 				constants.RedpandaManagerName:          redpandaManagerSnapshot,
 			},
@@ -327,7 +327,7 @@ var _ = Describe("GetLogsAction", func() {
 			}
 
 			if logType == models.ProtocolConverterReadLogType || logType == models.ProtocolConverterWriteLogType {
-				payload["uuid"] = protocolConverterUUID.String()
+				payload["uuid"] = brUUID.String()
 			}
 
 			err := action.Parse(payload)

@@ -26,8 +26,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/agent_monitor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/bridge"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/streamprocessor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
@@ -210,14 +210,14 @@ func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
 
 		res.Logs = mapS6LogsToSlice(observedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs, reqStartTime)
 	case models.ProtocolConverterReadLogType, models.ProtocolConverterWriteLogType:
-		protocolConverterInstance, err := fsm.FindProtocolConverterInstanceByUUID(systemSnapshot, a.payload.UUID)
+		protocolConverterInstance, err := fsm.FindBridgeInstanceByUUID(systemSnapshot, a.payload.UUID)
 		if err != nil || protocolConverterInstance == nil {
 			err := logsRetrievalError(err, logType)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
 			return nil, nil, err
 		}
 
-		observedState, ok := protocolConverterInstance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot)
+		observedState, ok := protocolConverterInstance.LastObservedState.(*bridge.ObservedStateSnapshot)
 		if !ok || observedState == nil {
 			err := logsRetrievalError(fmt.Errorf("invalid observed state type for Protocol Converter instance %s", protocolConverterInstance.ID), logType)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)

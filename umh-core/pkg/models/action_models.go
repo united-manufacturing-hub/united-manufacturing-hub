@@ -430,7 +430,6 @@ type EditDataflowcomponentRequestSchemaJson struct {
 type GetDataflowcomponentResponse map[string]GetDataflowcomponentResponseContent
 
 type GetDataflowcomponentResponseContent struct {
-
 	// Meta corresponds to the JSON schema field "meta".
 	Meta CommonDataFlowComponentMeta `json:"meta" yaml:"meta" mapstructure:"meta"`
 
@@ -473,7 +472,6 @@ type CommonDataFlowComponentCDFCPropertiesPayload struct {
 }
 
 type CommonDataFlowComponentCDFCProperties struct {
-
 	// Pipeline corresponds to the JSON schema field "pipeline".
 	Pipeline CommonDataFlowComponentPipelineConfig `json:"pipeline" yaml:"pipeline" mapstructure:"pipeline"`
 
@@ -717,10 +715,12 @@ type ActionReplyResponseSchemaJsonActionReplyPayloadV2 struct {
 
 type ActionReplyResponseSchemaJsonActionReplyState string
 
-const ActionReplyResponseSchemaJsonActionReplyStateActionConfirmed ActionReplyResponseSchemaJsonActionReplyState = "action-confirmed"
-const ActionReplyResponseSchemaJsonActionReplyStateActionExecuting ActionReplyResponseSchemaJsonActionReplyState = "action-executing"
-const ActionReplyResponseSchemaJsonActionReplyStateActionFailure ActionReplyResponseSchemaJsonActionReplyState = "action-failure"
-const ActionReplyResponseSchemaJsonActionReplyStateActionSuccess ActionReplyResponseSchemaJsonActionReplyState = "action-success"
+const (
+	ActionReplyResponseSchemaJsonActionReplyStateActionConfirmed ActionReplyResponseSchemaJsonActionReplyState = "action-confirmed"
+	ActionReplyResponseSchemaJsonActionReplyStateActionExecuting ActionReplyResponseSchemaJsonActionReplyState = "action-executing"
+	ActionReplyResponseSchemaJsonActionReplyStateActionFailure   ActionReplyResponseSchemaJsonActionReplyState = "action-failure"
+	ActionReplyResponseSchemaJsonActionReplyStateActionSuccess   ActionReplyResponseSchemaJsonActionReplyState = "action-success"
+)
 
 // var enumValues_ActionReplyResponseSchemaJsonActionReplyState = []interface{}{
 // 	"action-confirmed",

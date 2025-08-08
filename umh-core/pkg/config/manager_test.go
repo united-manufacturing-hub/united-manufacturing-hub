@@ -444,7 +444,7 @@ internal:
 				Expect(err).NotTo(HaveOccurred())
 
 				// The example should have at least one bridge using a template
-				Expect(config.ProtocolConverter).NotTo(BeEmpty())
+				Expect(config.Bridge).NotTo(BeEmpty())
 			})
 		})
 	})
@@ -476,12 +476,12 @@ internal:
 				Expect(err).NotTo(HaveOccurred())
 
 				// Verify we have the expected structure
-				Expect(config.ProtocolConverter).To(HaveLen(3))
-				Expect(config.Templates.ProtocolConverter).To(BeEmpty())
+				Expect(config.Bridge).To(HaveLen(3))
+				Expect(config.Templates.Bridge).To(BeEmpty())
 
 				// Find the temperature-sensor-bridge that uses the template
-				var tempSensorPC *ProtocolConverterConfig
-				for _, br := range config.ProtocolConverter {
+				var tempSensorPC *BridgeConfig
+				for _, br := range config.Bridge {
 					if br.Name == "temperature-sensor-bridge" {
 						tempSensorPC = &br
 						break
@@ -516,13 +516,13 @@ internal:
 				Expect(err).NotTo(HaveOccurred())
 
 				// Verify the structure is preserved
-				Expect(writtenConfig.ProtocolConverter).To(HaveLen(3))
+				Expect(writtenConfig.Bridge).To(HaveLen(3))
 				Expect(writtenConfig.Agent.Location).To(HaveKeyWithValue(0, "plant-A"))
 				Expect(writtenConfig.Agent.Location).To(HaveKeyWithValue(1, "line-4"))
 
 				// Verify the bridge are preserved
-				var writtenTempSensorPC *ProtocolConverterConfig
-				for _, br := range writtenConfig.ProtocolConverter {
+				var writtenTempSensorPC *BridgeConfig
+				for _, br := range writtenConfig.Bridge {
 					if br.Name == "temperature-sensor-bridge" {
 						writtenTempSensorPC = &br
 						break
@@ -530,8 +530,8 @@ internal:
 				}
 				Expect(writtenTempSensorPC).NotTo(BeNil())
 				Expect(writtenTempSensorPC.DesiredFSMState).To(Equal("active"))
-				Expect(writtenTempSensorPC.ProtocolConverterServiceConfig.Variables.User).To(HaveKeyWithValue("IP", "10.0.1.50"))
-				Expect(writtenTempSensorPC.ProtocolConverterServiceConfig.Variables.User).To(HaveKeyWithValue("PORT", "4840"))
+				Expect(writtenTempSensorPC.ServiceConfig.Variables.User).To(HaveKeyWithValue("IP", "10.0.1.50"))
+				Expect(writtenTempSensorPC.ServiceConfig.Variables.User).To(HaveKeyWithValue("PORT", "4840"))
 			})
 		})
 
@@ -695,8 +695,8 @@ internal:
 				if err != nil {
 					return err
 				}
-				if len(cfg.ProtocolConverter) != 3 {
-					return fmt.Errorf("expected %d processors but got %d", 3, len(cfg.ProtocolConverter))
+				if len(cfg.Bridge) != 3 {
+					return fmt.Errorf("expected %d processors but got %d", 3, len(cfg.Bridge))
 				}
 				return nil
 			}, TimeToWaitForConfigRefresh*2, "10ms").Should(Succeed())
@@ -735,8 +735,8 @@ internal:
 
 				// Count processors in the updated config
 				processorCount := 0
-				if len(finalConfig.ProtocolConverter) > 0 {
-					pipeline := finalConfig.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DFCReadConfig.BenthosConfig.Pipeline
+				if len(finalConfig.Bridge) > 0 {
+					pipeline := finalConfig.Bridge[0].ServiceConfig.Config.DFCReadConfig.BenthosConfig.Pipeline
 					if processors, ok := pipeline["processors"].(map[string]any); ok {
 						processorCount = len(processors)
 					}
@@ -751,8 +751,8 @@ internal:
 			}, "10s", "100ms").Should(Succeed(), "Background refresh should update config with %d processors", numGenerators)
 
 			// Verify the final config actually contains the expected processors
-			Expect(len(finalConfig.ProtocolConverter)).To(BeNumerically(">=", 1))
-			pipeline := finalConfig.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DFCReadConfig.BenthosConfig.Pipeline
+			Expect(len(finalConfig.Bridge)).To(BeNumerically(">=", 1))
+			pipeline := finalConfig.Bridge[0].ServiceConfig.Config.DFCReadConfig.BenthosConfig.Pipeline
 			processors, ok := pipeline["processors"].(map[string]any)
 			Expect(ok).To(BeTrue())
 			Expect(len(processors)).To(Equal(numGenerators))

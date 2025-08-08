@@ -18,7 +18,7 @@
 
 # ---------- Templates ---------- #
 templates:
-  protocolConverter:
+  bridge:
     temperature-sensor-bridge:
       connection:
         nmap:
@@ -42,12 +42,12 @@ agent:
     0: "plant-A"
     1: "line-4"
 
-# ---------- Protocol-converters ---------- #
-protocolConverter:
+# ---------- Bridges ---------- #
+bridge:
   # ────────────────────────────────────────────────────────────────
   - name: temperature-sensor-bridge
     desiredState: active
-    protocolConverterServiceConfig:
+    serviceConfig:
       # Intentionally tries to override level-0; will be ignored
       location:
         0: "override-level0"
@@ -58,7 +58,7 @@ protocolConverter:
         PORT: "4840"
   - name: temperature-sensor-inherited-bridge
     desiredState: active
-    protocolConverterServiceConfig:
+    serviceConfig:
       # Intentionally tries to override level-0; will be ignored
       location:
         0: "override-level0"
@@ -72,7 +72,7 @@ protocolConverter:
   - name: vibration-sensor-bridge
     desiredState: active
     # No anchor – inline config
-    protocolConverterServiceConfig:
+    serviceConfig:
       templateRef: null
       config:
         connection:

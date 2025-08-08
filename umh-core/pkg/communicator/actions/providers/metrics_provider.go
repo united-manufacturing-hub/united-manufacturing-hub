@@ -20,8 +20,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/bridge"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/streamprocessor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
@@ -399,17 +399,17 @@ func getProtocolConverterMetrics(uuid string, snapshot fsm.SystemSnapshot) (mode
 	res := models.GetMetricsResponse{Metrics: []models.Metric{}}
 
 	// Find the protocol converter manager
-	inst, ok := fsm.FindManager(snapshot, constants.ProtocolConverterManagerName)
+	inst, ok := fsm.FindManager(snapshot, constants.BridgeManagerName)
 	if !ok || inst == nil {
 		return res, fmt.Errorf("failed to find the %s manager", models.ProtocolConverterMetricResourceType)
 	}
 	protocolConverterInstances := inst.GetInstances()
-	var observedState *protocolconverter.ProtocolConverterObservedStateSnapshot
+	var observedState *bridge.ObservedStateSnapshot
 	found := false
 	for _, instance := range protocolConverterInstances {
 		if dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID).String() == uuid {
 			var ok bool
-			observedState, ok = instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot)
+			observedState, ok = instance.LastObservedState.(*bridge.ObservedStateSnapshot)
 			if !ok || observedState == nil {
 				return res, fmt.Errorf("protocol converter instance %s has no observed state", instance.ID)
 			}

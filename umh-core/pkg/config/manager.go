@@ -70,12 +70,12 @@ type ConfigManager interface {
 	AtomicDeleteDataflowcomponent(ctx context.Context, componentUUID uuid.UUID) error
 	// AtomicEditDataflowcomponent edits a dataflowcomponent in the config atomically
 	AtomicEditDataflowcomponent(ctx context.Context, componentUUID uuid.UUID, dfc DataFlowComponentConfig) (DataFlowComponentConfig, error)
-	// AtomicAddProtocolConverter adds a protocol converter to the config atomically
-	AtomicAddProtocolConverter(ctx context.Context, pc ProtocolConverterConfig) error
-	// AtomicEditProtocolConverter edits a protocol converter in the config atomically
-	AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc ProtocolConverterConfig) (ProtocolConverterConfig, error)
-	// AtomicDeleteProtocolConverter deletes a protocol converter from the config atomically
-	AtomicDeleteProtocolConverter(ctx context.Context, componentUUID uuid.UUID) error
+	// AtomicAddBridge adds a bridge to the config atomically
+	AtomicAddBridge(ctx context.Context, cfg BridgeConfig) error
+	// AtomicEditBridge edits a bridge in the config atomically
+	AtomicEditBridge(ctx context.Context, componentUUID uuid.UUID, cfg BridgeConfig) (BridgeConfig, error)
+	// AtomicDeleteBridge deletes a bridge from the config atomically
+	AtomicDeleteBridge(ctx context.Context, componentUUID uuid.UUID) error
 	// AtomicAddStreamProcessor adds a stream processor to the config atomically
 	AtomicAddStreamProcessor(ctx context.Context, sp StreamProcessorConfig) error
 	// AtomicEditStreamProcessor edits a stream processor in the config atomically
@@ -148,14 +148,12 @@ type FileConfigManager struct {
 
 	// ---------- background refresh state ----------
 	refreshMu sync.Mutex // prevents concurrent background refreshes
-
 }
 
 // NewFileConfigManager creates a new FileConfigManager
 // Note: This should only be used in tests or if you need a custom config manager.
 // Prefer NewFileConfigManagerWithBackoff() for application use.
 func NewFileConfigManager() *FileConfigManager {
-
 	configPath := DefaultConfigPath
 	logger := logger.For(logger.ComponentConfigManager)
 
@@ -379,7 +377,6 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 		return FullConfig{}, cacheError
 	}
 	return currentCacheConfig, cacheError
-
 }
 
 // backgroundRefresh is intended to be called from a goroutine to refresh the config cache
@@ -474,10 +471,8 @@ type FileConfigManagerWithBackoff struct {
 
 // NewFileConfigManagerWithBackoff creates a new FileConfigManagerWithBackoff with exponential backoff
 func NewFileConfigManagerWithBackoff() (*FileConfigManagerWithBackoff, error) {
-
 	if instance != nil {
 		return nil, fmt.Errorf("config manager already initialized, only one instance is allowed")
-
 	}
 
 	once.Do(func() {
@@ -486,7 +481,7 @@ func NewFileConfigManagerWithBackoff() (*FileConfigManagerWithBackoff, error) {
 
 		// Create backoff manager with default settings
 		backoffConfig := backoff.DefaultConfig("ConfigManager", logger)
-		backoffConfig.MaxRetries = uint64((time.Minute * 10) / constants.DefaultTickerTime) //10 minutes
+		backoffConfig.MaxRetries = uint64((time.Minute * 10) / constants.DefaultTickerTime) // 10 minutes
 		backoffManager := backoff.NewBackoffManager(backoffConfig)
 
 		instance = &FileConfigManagerWithBackoff{
@@ -544,7 +539,7 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 	}
 
 	// Write the file (give everybody read & write access)
-	if err := m.fsService.WriteFile(ctx, m.configPath, data, 0666); err != nil {
+	if err := m.fsService.WriteFile(ctx, m.configPath, data, 0o666); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
@@ -714,15 +709,15 @@ func (m *FileConfigManager) AtomicSetLocation(ctx context.Context, location mode
 	}
 
 	// Update all ProtocolConverter locations to match the agent location
-	for i := range config.ProtocolConverter {
-		if config.ProtocolConverter[i].ProtocolConverterServiceConfig.Location == nil {
-			config.ProtocolConverter[i].ProtocolConverterServiceConfig.Location = make(map[string]string)
+	for i := range config.Bridge {
+		if config.Bridge[i].ServiceConfig.Location == nil {
+			config.Bridge[i].ServiceConfig.Location = make(map[string]string)
 		}
 
 		// Update each level in the protocol converter location with the agent location
 		// Only update levels that exist in the agent location
 		for levelStr, value := range agentLocationStr {
-			config.ProtocolConverter[i].ProtocolConverterServiceConfig.Location[levelStr] = value
+			config.Bridge[i].ServiceConfig.Location[levelStr] = value
 		}
 	}
 
@@ -1062,7 +1057,7 @@ func (m *FileConfigManager) WriteYAMLConfigFromString(ctx context.Context, confi
 	}
 
 	// Write the raw string directly to file to preserve all YAML features
-	if err := m.fsService.WriteFile(ctx, m.configPath, []byte(configStr), 0666); err != nil {
+	if err := m.fsService.WriteFile(ctx, m.configPath, []byte(configStr), 0o666); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
@@ -1089,5 +1084,4 @@ func (m *FileConfigManagerWithBackoff) WriteYAMLConfigFromString(ctx context.Con
 	}
 
 	return m.configManager.WriteYAMLConfigFromString(ctx, configStr, expectedModTime)
-
 }

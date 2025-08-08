@@ -30,8 +30,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/bridge"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/streamprocessor"
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
@@ -76,7 +76,6 @@ func main() {
 	// This loads the config file if it exists, applies any environment variables as overrides,
 	// and persists the result back to the config file. See detailed docs in config.LoadConfigWithEnvOverrides.
 	configData, err := config.LoadConfigWithEnvOverrides(ctx, configManager, log)
-
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to load config: %w", err)
 		os.Exit(1)
@@ -237,7 +236,7 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 									statusReason = dfcSnapshot.ServiceInfo.StatusReason
 								}
 							case "ProtocolConverterManagerCore":
-								if pcSnapshot, ok := instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot); ok {
+								if pcSnapshot, ok := instance.LastObservedState.(*bridge.ObservedStateSnapshot); ok {
 									statusReason = pcSnapshot.ServiceInfo.StatusReason
 								}
 							case "RedpandaManagerCore":
@@ -275,7 +274,6 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 }
 
 func enableBackendConnection(config *config.FullConfig, communicationState *communication_state.CommunicationState, controlLoop *control.ControlLoop, logger *zap.SugaredLogger) {
-
 	logger.Info("Enabling backend connection")
 	// directly log the config to console, not to the logger
 	if config == nil {

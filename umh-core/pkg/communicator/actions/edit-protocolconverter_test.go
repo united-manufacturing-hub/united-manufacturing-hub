@@ -73,13 +73,13 @@ var _ = Describe("EditProtocolConverter", func() {
 					3: "test-line",
 				},
 			},
-			ProtocolConverter: []config.ProtocolConverterConfig{
+			Bridge: []config.BridgeConfig{
 				{
 					FSMInstanceConfig: config.FSMInstanceConfig{
 						Name:            pcName,
 						DesiredFSMState: "active",
 					},
-					ProtocolConverterServiceConfig: bridgeserviceconfig.ConfigSpec{
+					ServiceConfig: bridgeserviceconfig.ConfigSpec{
 						Config: bridgeserviceconfig.ConfigTemplate{
 							ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 								NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
@@ -354,27 +354,27 @@ var _ = Describe("EditProtocolConverter", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Find the updated protocol converter
-			var updatedPC *config.ProtocolConverterConfig
-			for i, pc := range updatedConfig.ProtocolConverter {
+			var updatedPC *config.BridgeConfig
+			for i, pc := range updatedConfig.Bridge {
 				if pc.Name == pcName {
-					updatedPC = &updatedConfig.ProtocolConverter[i]
+					updatedPC = &updatedConfig.Bridge[i]
 					break
 				}
 			}
 			Expect(updatedPC).NotTo(BeNil(), "Protocol converter should exist in updated config")
 
 			// Verify the read DFC was added to the protocol converter configuration
-			readDFCConfig := updatedPC.ProtocolConverterServiceConfig.Config.DFCReadConfig
+			readDFCConfig := updatedPC.ServiceConfig.Config.DFCReadConfig
 			Expect(readDFCConfig.BenthosConfig.Input).NotTo(BeEmpty())
 			Expect(readDFCConfig.BenthosConfig.Input["input"]).To(HaveKey("http_client"))
 			Expect(readDFCConfig.BenthosConfig.Pipeline).NotTo(BeEmpty())
 
 			// Verify write DFC is still empty
-			writeDFCConfig := updatedPC.ProtocolConverterServiceConfig.Config.DFCWriteConfig
+			writeDFCConfig := updatedPC.ServiceConfig.Config.DFCWriteConfig
 			Expect(writeDFCConfig.BenthosConfig.Input).To(BeEmpty())
 
 			// verify that the templateRef is set
-			Expect(updatedPC.ProtocolConverterServiceConfig.TemplateRef).To(Equal(pcName))
+			Expect(updatedPC.ServiceConfig.TemplateRef).To(Equal(pcName))
 		})
 
 		It("should handle protocol converter not found error", func() {
@@ -412,7 +412,7 @@ var _ = Describe("EditProtocolConverter", func() {
 
 		It("should handle AtomicEditProtocolConverter failure", func() {
 			// Set up mock to fail on AtomicEditProtocolConverter
-			mockConfig.WithAtomicEditProtocolConverterError(errors.New("mock edit protocol converter failure"))
+			mockConfig.WithAtomicEditBridgeError(errors.New("mock edit protocol converter failure"))
 
 			payload := map[string]interface{}{
 				"name": pcName,

@@ -45,7 +45,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/bridge"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/bridge/runtime_config"
@@ -297,20 +297,20 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 // to create the new protocol converter specification. It handles child/root relationships,
 // variable merging, and DFC configuration updates.
 // Returns the new spec and the atomic edit UUID to use for persistence.
-func (a *EditProtocolConverterAction) applyMutation(benthosConfig dataflowcomponentserviceconfig.BenthosConfig) (config.ProtocolConverterConfig, uuid.UUID, error) {
+func (a *EditProtocolConverterAction) applyMutation(benthosConfig dataflowcomponentserviceconfig.BenthosConfig) (config.BridgeConfig, uuid.UUID, error) {
 	// Get current configuration
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
 
 	currentConfig, err := a.configManager.GetConfig(ctx, 0)
 	if err != nil {
-		return config.ProtocolConverterConfig{}, uuid.Nil, fmt.Errorf("failed to get current configuration: %w", err)
+		return config.BridgeConfig{}, uuid.Nil, fmt.Errorf("failed to get current configuration: %w", err)
 	}
 
 	// Find the protocol converter in the configuration
-	var targetPC config.ProtocolConverterConfig
+	var targetPC config.BridgeConfig
 	found := false
-	for _, pc := range currentConfig.ProtocolConverter {
+	for _, pc := range currentConfig.Bridge {
 		pcID := dataflowcomponentserviceconfig.GenerateUUIDFromName(pc.Name)
 		if pcID == a.protocolConverterUUID {
 			targetPC = pc
@@ -320,29 +320,29 @@ func (a *EditProtocolConverterAction) applyMutation(benthosConfig dataflowcompon
 	}
 
 	if !found {
-		return config.ProtocolConverterConfig{}, uuid.Nil, fmt.Errorf("protocol converter with UUID %s not found", a.protocolConverterUUID)
+		return config.BridgeConfig{}, uuid.Nil, fmt.Errorf("protocol converter with UUID %s not found", a.protocolConverterUUID)
 	}
 
 	// Currently, we cannot reuse templates, so we need to create a new one
-	targetPC.ProtocolConverterServiceConfig.TemplateRef = a.name
+	targetPC.ServiceConfig.TemplateRef = a.name
 	targetPC.Name = a.name
 
 	// Classify the protocol converter instance
-	isChild := targetPC.ProtocolConverterServiceConfig.TemplateRef != "" &&
-		targetPC.ProtocolConverterServiceConfig.TemplateRef != targetPC.Name
+	isChild := targetPC.ServiceConfig.TemplateRef != "" &&
+		targetPC.ServiceConfig.TemplateRef != targetPC.Name
 
 	// Determine which instance to modify and which UUID to use for atomic operation
-	var instanceToModify config.ProtocolConverterConfig
+	var instanceToModify config.BridgeConfig
 	var atomicEditUUID uuid.UUID
 	var newVB map[string]any
 
 	if isChild {
 		// Find the root instance
-		var rootPC config.ProtocolConverterConfig
+		var rootPC config.BridgeConfig
 		rootFound := false
-		for _, pc := range currentConfig.ProtocolConverter {
-			if pc.Name == targetPC.ProtocolConverterServiceConfig.TemplateRef &&
-				pc.ProtocolConverterServiceConfig.TemplateRef == pc.Name {
+		for _, pc := range currentConfig.Bridge {
+			if pc.Name == targetPC.ServiceConfig.TemplateRef &&
+				pc.ServiceConfig.TemplateRef == pc.Name {
 				rootPC = pc
 				rootFound = true
 				break
@@ -350,8 +350,8 @@ func (a *EditProtocolConverterAction) applyMutation(benthosConfig dataflowcompon
 		}
 
 		if !rootFound {
-			return config.ProtocolConverterConfig{}, uuid.Nil, fmt.Errorf("root template %s not found for child protocol converter %s",
-				targetPC.ProtocolConverterServiceConfig.TemplateRef, targetPC.Name)
+			return config.BridgeConfig{}, uuid.Nil, fmt.Errorf("root template %s not found for child protocol converter %s",
+				targetPC.ServiceConfig.TemplateRef, targetPC.Name)
 		}
 
 		// Apply mutations to the root, but keep child's variables
@@ -363,7 +363,7 @@ func (a *EditProtocolConverterAction) applyMutation(benthosConfig dataflowcompon
 		for _, variable := range a.vb {
 			newVB[variable.Label] = variable.Value
 		}
-		maps.Copy(newVB, targetPC.ProtocolConverterServiceConfig.Variables.User)
+		maps.Copy(newVB, targetPC.ServiceConfig.Variables.User)
 	} else {
 		// Root or stand-alone: apply mutations directly
 		instanceToModify = targetPC
@@ -374,7 +374,7 @@ func (a *EditProtocolConverterAction) applyMutation(benthosConfig dataflowcompon
 		for _, variable := range a.vb {
 			newVB[variable.Label] = variable.Value
 		}
-		maps.Copy(newVB, targetPC.ProtocolConverterServiceConfig.Variables.User)
+		maps.Copy(newVB, targetPC.ServiceConfig.Variables.User)
 	}
 
 	// As the BuildRuntimeConfig function always adds location and location_path to the user variables,
@@ -382,7 +382,7 @@ func (a *EditProtocolConverterAction) applyMutation(benthosConfig dataflowcompon
 	delete(newVB, "location")
 	delete(newVB, "location_path")
 
-	instanceToModify.ProtocolConverterServiceConfig.Variables.User = newVB
+	instanceToModify.ServiceConfig.Variables.User = newVB
 
 	// Update the appropriate DFC configuration based on dfcType
 	var dfcServiceConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig
@@ -395,7 +395,7 @@ func (a *EditProtocolConverterAction) applyMutation(benthosConfig dataflowcompon
 	}
 
 	// Add the connection details to the template
-	instanceToModify.ProtocolConverterServiceConfig.Config.ConnectionConfig = connectionserviceconfig.ConnectionServiceConfigTemplate{
+	instanceToModify.ServiceConfig.Config.ConnectionConfig = connectionserviceconfig.ConnectionServiceConfigTemplate{
 		NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 			Target: "{{ .IP }}",
 			Port:   "{{ .PORT }}",
@@ -407,24 +407,24 @@ func (a *EditProtocolConverterAction) applyMutation(benthosConfig dataflowcompon
 	for k, v := range a.location {
 		locationMap[strconv.Itoa(k)] = v
 	}
-	instanceToModify.ProtocolConverterServiceConfig.Location = locationMap
+	instanceToModify.ServiceConfig.Location = locationMap
 
 	// Update the connection details of the protocol converter (IP and PORT variables)
-	if instanceToModify.ProtocolConverterServiceConfig.Variables.User != nil {
-		instanceToModify.ProtocolConverterServiceConfig.Variables.User["IP"] = a.connectionIP
-		instanceToModify.ProtocolConverterServiceConfig.Variables.User["PORT"] = a.connectionPort
+	if instanceToModify.ServiceConfig.Variables.User != nil {
+		instanceToModify.ServiceConfig.Variables.User["IP"] = a.connectionIP
+		instanceToModify.ServiceConfig.Variables.User["PORT"] = a.connectionPort
 	}
 
 	switch a.dfcType {
 	case DFCTypeRead:
-		instanceToModify.ProtocolConverterServiceConfig.Config.DFCReadConfig = dfcServiceConfig
+		instanceToModify.ServiceConfig.Config.DFCReadConfig = dfcServiceConfig
 	case DFCTypeWrite:
-		instanceToModify.ProtocolConverterServiceConfig.Config.DFCWriteConfig = dfcServiceConfig
+		instanceToModify.ServiceConfig.Config.DFCWriteConfig = dfcServiceConfig
 	case DFCTypeEmpty:
 		// For empty dfcType, we only update connection, location, and name - no DFC configuration
 		// The connection, location, and name updates are already handled above
 	default:
-		return config.ProtocolConverterConfig{}, uuid.Nil, fmt.Errorf("invalid DFC type: %s", a.dfcType.String())
+		return config.BridgeConfig{}, uuid.Nil, fmt.Errorf("invalid DFC type: %s", a.dfcType.String())
 	}
 
 	return instanceToModify, atomicEditUUID, nil
@@ -432,29 +432,29 @@ func (a *EditProtocolConverterAction) applyMutation(benthosConfig dataflowcompon
 
 // persistConfig performs the atomic configuration update operation.
 // Returns the old configuration for potential rollback operations.
-func (a *EditProtocolConverterAction) persistConfig(atomicEditUUID uuid.UUID, newSpec config.ProtocolConverterConfig) (config.ProtocolConverterConfig, error) {
+func (a *EditProtocolConverterAction) persistConfig(atomicEditUUID uuid.UUID, newSpec config.BridgeConfig) (config.BridgeConfig, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
 
-	oldConfig, err := a.configManager.AtomicEditProtocolConverter(ctx, atomicEditUUID, newSpec)
+	oldConfig, err := a.configManager.AtomicEditBridge(ctx, atomicEditUUID, newSpec)
 	if err != nil {
-		return config.ProtocolConverterConfig{}, fmt.Errorf("failed to update protocol converter: %w", err)
+		return config.BridgeConfig{}, fmt.Errorf("failed to update protocol converter: %w", err)
 	}
 
 	// deep copy the old config therefore setup a full config
 	// this may seem hacky but like that we can reuse the Clone() function
 	// and we do not need to implement a custom Clone() function for the ProtocolConverterConfig
 	fullConfig := config.FullConfig{
-		ProtocolConverter: []config.ProtocolConverterConfig{oldConfig},
+		Bridge: []config.BridgeConfig{oldConfig},
 	}
 
 	copiedConfig := fullConfig.Clone()
-	oldConfig = copiedConfig.ProtocolConverter[0]
+	oldConfig = copiedConfig.Bridge[0]
 	// remove the location and location_path from the user variables
 	// Check if User map exists before trying to delete from it
-	if oldConfig.ProtocolConverterServiceConfig.Variables.User != nil {
-		delete(oldConfig.ProtocolConverterServiceConfig.Variables.User, "location")
-		delete(oldConfig.ProtocolConverterServiceConfig.Variables.User, "location_path")
+	if oldConfig.ServiceConfig.Variables.User != nil {
+		delete(oldConfig.ServiceConfig.Variables.User, "location")
+		delete(oldConfig.ServiceConfig.Variables.User, "location_path")
 	}
 
 	return oldConfig, nil
@@ -462,7 +462,7 @@ func (a *EditProtocolConverterAction) persistConfig(atomicEditUUID uuid.UUID, ne
 
 // awaitRollout waits for the protocol converter to become active and performs health checks.
 // Returns error code and error message for proper error handling in the caller.
-func (a *EditProtocolConverterAction) awaitRollout(oldConfig config.ProtocolConverterConfig) (string, error) {
+func (a *EditProtocolConverterAction) awaitRollout(oldConfig config.BridgeConfig) (string, error) {
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		fmt.Sprintf("Waiting for protocol converter %s to be active...", a.name),
 		a.outboundChannel, models.EditProtocolConverter)
@@ -476,7 +476,7 @@ func (a *EditProtocolConverterAction) awaitRollout(oldConfig config.ProtocolConv
 // The function returns the error code and the error message via an error object.
 // The error code is a string that is sent to the frontend to allow it to determine if the action can be retried or not.
 // The error message is sent to the frontend to allow the user to see the error message.
-func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig config.ProtocolConverterConfig) (string, error) {
+func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig config.BridgeConfig) (string, error) {
 	ticker := time.NewTicker(constants.ActionTickerTime)
 	defer ticker.Stop()
 	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
@@ -497,7 +497,7 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 			// rollback to previous configuration
 			ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 			defer cancel()
-			_, err := a.configManager.AtomicEditProtocolConverter(ctx, a.atomicEditUUID, oldConfig)
+			_, err := a.configManager.AtomicEditBridge(ctx, a.atomicEditUUID, oldConfig)
 			if err != nil {
 				a.actionLogger.Errorf("Failed to rollback to previous configuration: %v", err)
 				stateMessage := fmt.Sprintf("Protocol converter '%s' edit timeout reached. It did not become active in time. Rolling back to previous configuration failed: %v", a.name, err)
@@ -510,7 +510,7 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 		case <-ticker.C:
 			// Get a deep copy of the system snapshot to prevent race conditions
 			systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
-			if protocolConverterManager, exists := systemSnapshot.Managers[constants.ProtocolConverterManagerName]; exists {
+			if protocolConverterManager, exists := systemSnapshot.Managers[constants.BridgeManagerName]; exists {
 				instances := protocolConverterManager.GetInstances()
 				found := false
 				for _, instance := range instances {
@@ -520,7 +520,7 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 					}
 
 					// Cast the instance LastObservedState to a protocolconverter instance
-					pcSnapshot, ok := instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot)
+					pcSnapshot, ok := instance.LastObservedState.(*bridge.ObservedStateSnapshot)
 					if !ok {
 						stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for state info of protocol converter instance"
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
@@ -572,8 +572,8 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("edit", a.name)+"configuration error detected. Rolling back...", a.outboundChannel, models.EditProtocolConverter)
 							ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 							defer cancel()
-							a.actionLogger.Infof("rolling back to previous configuration with user variables: %v", oldConfig.ProtocolConverterServiceConfig.Variables.User)
-							_, err := a.configManager.AtomicEditProtocolConverter(ctx, a.atomicEditUUID, oldConfig)
+							a.actionLogger.Infof("rolling back to previous configuration with user variables: %v", oldConfig.ServiceConfig.Variables.User)
+							_, err := a.configManager.AtomicEditBridge(ctx, a.atomicEditUUID, oldConfig)
 							if err != nil {
 								a.actionLogger.Errorf("failed to roll back protocol converter %s: %v", a.name, err)
 								return models.ErrConfigFileInvalid, fmt.Errorf("protocol converter '%s' has invalid configuration but could not be rolled back: %v. Please check your logs and consider manually restoring the previous configuration", a.name, err)
@@ -611,7 +611,7 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 // compareProtocolConverterDFCConfig compares the desired DFC configuration with the observed
 // DFC configuration in the protocol converter snapshot. Currently only checks the read DFC
 // since write DFC is not yet implemented.
-func (a *EditProtocolConverterAction) compareProtocolConverterDFCConfig(pcSnapshot *protocolconverter.ProtocolConverterObservedStateSnapshot) bool {
+func (a *EditProtocolConverterAction) compareProtocolConverterDFCConfig(pcSnapshot *bridge.ObservedStateSnapshot) bool {
 	if pcSnapshot == nil {
 		return false
 	}
@@ -664,9 +664,9 @@ func (a *EditProtocolConverterAction) compareProtocolConverterDFCConfig(pcSnapsh
 
 // renderDesiredDFCConfig renders the template variables in the desired DFC config
 // using the actual runtime values from the protocol converter observed state
-func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *protocolconverter.ProtocolConverterObservedStateSnapshot) (dataflowcomponentserviceconfig.DataflowComponentServiceConfig, error) {
+func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *bridge.ObservedStateSnapshot) (dataflowcomponentserviceconfig.DataflowComponentServiceConfig, error) {
 	// Get the observed spec config
-	specConfig := pcSnapshot.ObservedProtocolConverterSpecConfig
+	specConfig := pcSnapshot.ObservedConfigSpec
 
 	// Create a deep copy to avoid mutating the original observed state
 	var modifiedSpec bridgeserviceconfig.ConfigSpec

@@ -15,7 +15,7 @@
 //go:build test
 // +build test
 
-package protocolconverter_test
+package bridge_test
 
 import (
 	"testing"
@@ -24,7 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestProtocolConverter(t *testing.T) {
+func TestBridge(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "ProtocolConverter FSM Suite")
+	RunSpecs(t, "Bridge FSM Suite")
 }

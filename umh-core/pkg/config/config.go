@@ -29,21 +29,21 @@ import (
 )
 
 type FullConfig struct {
-	Templates         TemplatesConfig           `yaml:"templates,omitempty"`         // Templates section with enforced structure for protocol converter
-	PayloadShapes     map[string]PayloadShape   `yaml:"payloadShapes,omitempty"`     // PayloadShapes section with enforced structure for payload shapes
-	Internal          InternalConfig            `yaml:"internal,omitempty"`          // Internal config, not to be used by the user, only to be used for testing internal components
-	DataModels        []DataModelsConfig        `yaml:"dataModels,omitempty"`        // DataModels section with enforced structure for data models
-	DataContracts     []DataContractsConfig     `yaml:"dataContracts,omitempty"`     // DataContracts section with enforced structure for data contracts
-	DataFlow          []DataFlowComponentConfig `yaml:"dataFlow,omitempty"`          // DataFlow components to manage, can be updated while running
-	ProtocolConverter []ProtocolConverterConfig `yaml:"protocolConverter,omitempty"` // ProtocolConverter config, can be updated while runnnig
-	StreamProcessor   []StreamProcessorConfig   `yaml:"streamProcessor,omitempty"`   // StreamProcessor config, can be updated while running
-	Agent             AgentConfig               `yaml:"agent"`                       // Agent config, requires restart to take effect
+	Templates       TemplatesConfig           `yaml:"templates,omitempty"`       // Templates section with enforced structure for bridge
+	PayloadShapes   map[string]PayloadShape   `yaml:"payloadShapes,omitempty"`   // PayloadShapes section with enforced structure for payload shapes
+	Internal        InternalConfig            `yaml:"internal,omitempty"`        // Internal config, not to be used by the user, only to be used for testing internal components
+	DataModels      []DataModelsConfig        `yaml:"dataModels,omitempty"`      // DataModels section with enforced structure for data models
+	DataContracts   []DataContractsConfig     `yaml:"dataContracts,omitempty"`   // DataContracts section with enforced structure for data contracts
+	DataFlow        []DataFlowComponentConfig `yaml:"dataFlow,omitempty"`        // DataFlow components to manage, can be updated while running
+	Bridge          []BridgeConfig            `yaml:"bridge,omitempty"`          // Bridge config, can be updated while runnnig
+	StreamProcessor []StreamProcessorConfig   `yaml:"streamProcessor,omitempty"` // StreamProcessor config, can be updated while running
+	Agent           AgentConfig               `yaml:"agent"`                     // Agent config, requires restart to take effect
 }
 
 // TemplatesConfig defines the structure for the templates section
 type TemplatesConfig struct {
-	ProtocolConverter map[string]interface{} `yaml:"protocolConverter,omitempty"` // Array of protocol converter templates
-	StreamProcessor   map[string]interface{} `yaml:"streamProcessor,omitempty"`   // Array of stream processor templates
+	Bridge          map[string]interface{} `yaml:"bridge,omitempty"`          // Array of bridge templates
+	StreamProcessor map[string]interface{} `yaml:"streamProcessor,omitempty"` // Array of stream processor templates
 }
 
 // DataModelsConfig defines the structure for the data models section
@@ -169,25 +169,25 @@ type DataFlowComponentConfig struct {
 // HasAnchors returns true if the DataFlowComponentConfig has anchors, see templating.go
 func (d *DataFlowComponentConfig) HasAnchors() bool { return d.hasAnchors }
 
-// ProtocolConverterConfig contains configuration for creating a ProtocolConverter
-type ProtocolConverterConfig struct {
+// BridgeConfig contains configuration for creating a Bridge
+type BridgeConfig struct {
 	// For the FSM
 	FSMInstanceConfig `yaml:",inline"`
 
 	anchorName string `yaml:"-"`
 
-	ProtocolConverterServiceConfig bridgeserviceconfig.ConfigSpec `yaml:"protocolConverterServiceConfig"`
+	ServiceConfig bridgeserviceconfig.ConfigSpec `yaml:"serviceConfig"`
 
 	// private marker – not (un)marshalled
 	// explanation see templating.go
 	hasAnchors bool `yaml:"-"`
 }
 
-// HasAnchors returns true if the ProtocolConverterConfig has anchors, see templating.go
-func (d *ProtocolConverterConfig) HasAnchors() bool { return d.hasAnchors }
+// HasAnchors returns true if the BridgeConfig has anchors, see templating.go
+func (d *BridgeConfig) HasAnchors() bool { return d.hasAnchors }
 
-// AnchorName returns the anchor name of the ProtocolConverterConfig, see templating.go
-func (d *ProtocolConverterConfig) AnchorName() string { return d.anchorName }
+// AnchorName returns the anchor name of the BridgeConfig, see templating.go
+func (d *BridgeConfig) AnchorName() string { return d.anchorName }
 
 // StreamProcessorConfig contains configuration for creating a StreamProcessor
 type StreamProcessorConfig struct {
@@ -274,15 +274,15 @@ type PayloadField struct {
 // Clone creates a deep copy of FullConfig
 func (c FullConfig) Clone() FullConfig {
 	clone := FullConfig{
-		Agent:             c.Agent,
-		PayloadShapes:     make(map[string]PayloadShape),
-		DataModels:        make([]DataModelsConfig, len(c.DataModels)),
-		DataContracts:     make([]DataContractsConfig, len(c.DataContracts)),
-		DataFlow:          make([]DataFlowComponentConfig, len(c.DataFlow)),
-		ProtocolConverter: make([]ProtocolConverterConfig, len(c.ProtocolConverter)),
-		StreamProcessor:   make([]StreamProcessorConfig, len(c.StreamProcessor)),
-		Templates:         TemplatesConfig{},
-		Internal:          InternalConfig{},
+		Agent:           c.Agent,
+		PayloadShapes:   make(map[string]PayloadShape),
+		DataModels:      make([]DataModelsConfig, len(c.DataModels)),
+		DataContracts:   make([]DataContractsConfig, len(c.DataContracts)),
+		DataFlow:        make([]DataFlowComponentConfig, len(c.DataFlow)),
+		Bridge:          make([]BridgeConfig, len(c.Bridge)),
+		StreamProcessor: make([]StreamProcessorConfig, len(c.StreamProcessor)),
+		Templates:       TemplatesConfig{},
+		Internal:        InternalConfig{},
 	}
 	// deep copy the location map if it exists
 	if c.Agent.Location != nil {
@@ -311,7 +311,7 @@ func (c FullConfig) Clone() FullConfig {
 	if err != nil {
 		return FullConfig{}
 	}
-	err = deepcopy.Copy(&clone.ProtocolConverter, &c.ProtocolConverter)
+	err = deepcopy.Copy(&clone.Bridge, &c.Bridge)
 	if err != nil {
 		return FullConfig{}
 	}

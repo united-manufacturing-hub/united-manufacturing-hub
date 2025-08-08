@@ -26,9 +26,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/bridge"
 	connectionfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	dfcfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	redpandafsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	bridgesvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/bridge"
@@ -143,8 +143,8 @@ var _ = Describe("GetProtocolConverter", func() {
 				testPCName := "test-protocol-converter"
 
 				// Create observed state with populated DFC configs
-				observedState := &protocolconverter.ProtocolConverterObservedStateSnapshot{
-					ObservedProtocolConverterSpecConfig: bridgeserviceconfig.ConfigSpec{
+				observedState := &bridge.ObservedStateSnapshot{
+					ObservedConfigSpec: bridgeserviceconfig.ConfigSpec{
 						Config: bridgeserviceconfig.ConfigTemplate{
 							ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 								NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
@@ -220,8 +220,8 @@ var _ = Describe("GetProtocolConverter", func() {
 				// Create FSM instance
 				instance := &fsm.FSMInstanceSnapshot{
 					ID:                testPCName,
-					CurrentState:      protocolconverter.OperationalStateActive,
-					DesiredState:      protocolconverter.OperationalStateActive,
+					CurrentState:      bridge.OperationalStateActive,
+					DesiredState:      bridge.OperationalStateActive,
 					LastObservedState: observedState,
 				}
 
@@ -235,7 +235,7 @@ var _ = Describe("GetProtocolConverter", func() {
 				// Create system snapshot with config
 				systemSnapshot := &fsm.SystemSnapshot{
 					Managers: map[string]fsm.ManagerSnapshot{
-						constants.ProtocolConverterManagerName: pcManagerSnapshot,
+						constants.BridgeManagerName: pcManagerSnapshot,
 					},
 					CurrentConfig: config.FullConfig{},
 				}
@@ -293,8 +293,8 @@ var _ = Describe("GetProtocolConverter", func() {
 				testPCName := "test-protocol-converter-uninitialized"
 
 				// Create observed state with empty DFC configs
-				observedState := &protocolconverter.ProtocolConverterObservedStateSnapshot{
-					ObservedProtocolConverterSpecConfig: bridgeserviceconfig.ConfigSpec{
+				observedState := &bridge.ObservedStateSnapshot{
+					ObservedConfigSpec: bridgeserviceconfig.ConfigSpec{
 						Config: bridgeserviceconfig.ConfigTemplate{
 							ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 								NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
@@ -317,8 +317,8 @@ var _ = Describe("GetProtocolConverter", func() {
 				// Create FSM instance in starting state due to missing DFC
 				instance := &fsm.FSMInstanceSnapshot{
 					ID:                testPCName,
-					CurrentState:      protocolconverter.OperationalStateStartingFailedDFCMissing,
-					DesiredState:      protocolconverter.OperationalStateActive,
+					CurrentState:      bridge.OperationalStateStartingFailedDFCMissing,
+					DesiredState:      bridge.OperationalStateActive,
 					LastObservedState: observedState,
 				}
 
@@ -332,7 +332,7 @@ var _ = Describe("GetProtocolConverter", func() {
 				// Create system snapshot
 				systemSnapshot := &fsm.SystemSnapshot{
 					Managers: map[string]fsm.ManagerSnapshot{
-						constants.ProtocolConverterManagerName: pcManagerSnapshot,
+						constants.BridgeManagerName: pcManagerSnapshot,
 					},
 					CurrentConfig: config.FullConfig{},
 				}
@@ -384,7 +384,7 @@ var _ = Describe("GetProtocolConverter", func() {
 				// Create empty system snapshot
 				systemSnapshot := &fsm.SystemSnapshot{
 					Managers: map[string]fsm.ManagerSnapshot{
-						constants.ProtocolConverterManagerName: &actions.MockManagerSnapshot{
+						constants.BridgeManagerName: &actions.MockManagerSnapshot{
 							Instances: map[string]*fsm.FSMInstanceSnapshot{},
 						},
 					},
@@ -442,8 +442,8 @@ var _ = Describe("GetProtocolConverter", func() {
 				// Create FSM instance with invalid observed state type
 				instance := &fsm.FSMInstanceSnapshot{
 					ID:                testPCName,
-					CurrentState:      protocolconverter.OperationalStateActive,
-					DesiredState:      protocolconverter.OperationalStateActive,
+					CurrentState:      bridge.OperationalStateActive,
+					DesiredState:      bridge.OperationalStateActive,
 					LastObservedState: &actions.MockObservedState{}, // Wrong type
 				}
 
@@ -457,7 +457,7 @@ var _ = Describe("GetProtocolConverter", func() {
 				// Create system snapshot
 				systemSnapshot := &fsm.SystemSnapshot{
 					Managers: map[string]fsm.ManagerSnapshot{
-						constants.ProtocolConverterManagerName: pcManagerSnapshot,
+						constants.BridgeManagerName: pcManagerSnapshot,
 					},
 				}
 
@@ -485,8 +485,8 @@ var _ = Describe("GetProtocolConverter", func() {
 				// Create FSM instance with nil observed state
 				instance := &fsm.FSMInstanceSnapshot{
 					ID:                testPCName,
-					CurrentState:      protocolconverter.OperationalStateActive,
-					DesiredState:      protocolconverter.OperationalStateActive,
+					CurrentState:      bridge.OperationalStateActive,
+					DesiredState:      bridge.OperationalStateActive,
 					LastObservedState: nil,
 				}
 
@@ -500,7 +500,7 @@ var _ = Describe("GetProtocolConverter", func() {
 				// Create system snapshot
 				systemSnapshot := &fsm.SystemSnapshot{
 					Managers: map[string]fsm.ManagerSnapshot{
-						constants.ProtocolConverterManagerName: pcManagerSnapshot,
+						constants.BridgeManagerName: pcManagerSnapshot,
 					},
 				}
 
