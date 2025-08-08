@@ -56,7 +56,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/bridge"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
@@ -207,7 +207,7 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 	// we need to get a deep copy of it to prevent race conditions
 	systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
 
-	if protocolconverterManager, exists := systemSnapshot.Managers[constants.ProtocolConverterManagerName]; exists {
+	if protocolconverterManager, exists := systemSnapshot.Managers[constants.BridgeManagerName]; exists {
 		a.actionLogger.Debugf("Protocol converter manager found, getting the protocol converter")
 		instances := protocolconverterManager.GetInstances()
 
@@ -217,7 +217,7 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 				a.actionLogger.Debugf("Found protocol converter %s", instance.ID)
 
 				// Try to cast to the right type
-				observedState, ok := instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot)
+				observedState, ok := instance.LastObservedState.(*bridge.ObservedStateSnapshot)
 				if !ok {
 					a.actionLogger.Errorw("Observed state is of unexpected type", "instanceID", instance.ID)
 					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
@@ -242,7 +242,7 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 				var isTemplated bool
 
 				// Extract variables from observed spec config
-				specConfig := observedState.ObservedProtocolConverterSpecConfig
+				specConfig := observedState.ObservedConfigSpec
 				if specConfig.Variables.User != nil {
 					for key, value := range specConfig.Variables.User {
 						valueStr := fmt.Sprintf("%v", value) // Convert any type to string

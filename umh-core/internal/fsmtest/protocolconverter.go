@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build test
-// +build test
-
 package fsmtest
 
 import (
@@ -29,10 +26,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	bridgefsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/bridge"
 	connectionservicefsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	dataflowcomponentfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
-	protocolconverterfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	redpandafsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	bridgesvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/bridge"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
@@ -47,20 +44,20 @@ var (
 					"interval": "1s",
 				},
 			},
-			Output: map[string]interface{}{ // will be overwritten by the protocol converter service
+			Output: map[string]interface{}{ // will be overwritten by the bridge service
 				"drop": map[string]interface{}{},
 			},
 		},
 	}
 
-	goodDataflowComponentWriteConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-		BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-			Input: map[string]interface{}{},
-			Output: map[string]interface{}{ // will be overwritten by the protocol converter service
-				"stdout": map[string]interface{}{},
-			},
-		},
-	}
+	//goodDataflowComponentWriteConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+	//	BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+	//		Input: map[string]interface{}{},
+	//		Output: map[string]interface{}{ // will be overwritten by the bridge service
+	//			"stdout": map[string]interface{}{},
+	//		},
+	//	},
+	//}
 
 	goodConnectionServiceConfig = connectionserviceconfig.ConnectionServiceConfigTemplate{
 		NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
@@ -78,18 +75,18 @@ var (
 
 	missingDataflowComponentConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}
 
-	missingConnectionServiceConfig = connectionserviceconfig.ConnectionServiceConfig{}
+	// missingConnectionServiceConfig = connectionserviceconfig.ConnectionServiceConfig{}
 )
 
-// CreateProtocolConverterTestConfig creates a standard ProtocolConverter config for testing
+// CreateBridgeTestConfig creates a standard Bridge config for testing
 // it will contain a read and write DFC and a connection
-func CreateProtocolConverterTestConfig(name string, desiredState string) config.ProtocolConverterConfig {
-	return config.ProtocolConverterConfig{
+func CreateBridgeTestConfig(name string, desiredState string) config.BridgeConfig {
+	return config.BridgeConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            name,
 			DesiredFSMState: desiredState,
 		},
-		ProtocolConverterServiceConfig: bridgeserviceconfig.ConfigSpec{
+		ServiceConfig: bridgeserviceconfig.ConfigSpec{
 			Config: bridgeserviceconfig.ConfigTemplate{
 				DFCReadConfig: goodDataflowComponentReadConfig,
 				// ignoring write DFC for now as I get otherwise the error message of
@@ -101,15 +98,15 @@ func CreateProtocolConverterTestConfig(name string, desiredState string) config.
 	}
 }
 
-// CreateProtocolConverterTestConfigWithMissingDfc creates a standard ProtocolConverter config for testing
+// CreateBridgeConfigWithMissingDFC creates a standard Bridge config for testing
 // it will contain a read and write DFC and a connection
-func CreateProtocolConverterTestConfigWithMissingDfc(name string, desiredState string) config.ProtocolConverterConfig {
-	return config.ProtocolConverterConfig{
+func CreateBridgeConfigWithMissingDFC(name string, desiredState string) config.BridgeConfig {
+	return config.BridgeConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            name,
 			DesiredFSMState: desiredState,
 		},
-		ProtocolConverterServiceConfig: bridgeserviceconfig.ConfigSpec{
+		ServiceConfig: bridgeserviceconfig.ConfigSpec{
 			Config: bridgeserviceconfig.ConfigTemplate{
 				DFCReadConfig: missingDataflowComponentConfig,
 				// ignoring write DFC for now as I get otherwise the error message of
@@ -121,9 +118,9 @@ func CreateProtocolConverterTestConfigWithMissingDfc(name string, desiredState s
 	}
 }
 
-// CreateProtocolConverterTestConfigWithInvalidPort creates a ProtocolConverter config with an invalid port for testing error handling
+// CreateBridgeTestConfigWithInvalidPort creates a Bridge config with an invalid port for testing error handling
 // The invalid port will cause conversion from template to runtime to fail
-func CreateProtocolConverterTestConfigWithInvalidPort(name string, desiredState string, invalidPort string) config.ProtocolConverterConfig {
+func CreateBridgeTestConfigWithInvalidPort(name string, desiredState string, invalidPort string) config.BridgeConfig {
 	invalidConnectionServiceConfig := connectionserviceconfig.ConnectionServiceConfigTemplate{
 		NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 			Target: "localhost",
@@ -131,12 +128,12 @@ func CreateProtocolConverterTestConfigWithInvalidPort(name string, desiredState 
 		},
 	}
 
-	return config.ProtocolConverterConfig{
+	return config.BridgeConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            name,
 			DesiredFSMState: desiredState,
 		},
-		ProtocolConverterServiceConfig: bridgeserviceconfig.ConfigSpec{
+		ServiceConfig: bridgeserviceconfig.ConfigSpec{
 			Config: bridgeserviceconfig.ConfigTemplate{
 				DFCReadConfig: goodDataflowComponentReadConfig,
 				// ignoring write DFC for now as I get otherwise the error message of
@@ -148,8 +145,8 @@ func CreateProtocolConverterTestConfigWithInvalidPort(name string, desiredState 
 	}
 }
 
-// SetupProtocolConverterServiceState configures the mock service state for ProtocolConverter instance tests
-func SetupProtocolConverterServiceState(
+// SetupBridgeServiceState configures the mock service state for Bridge instance tests
+func SetupBridgeServiceState(
 	mockService *bridgesvc.MockService,
 	serviceName string,
 	flags bridgesvc.StateFlags,
@@ -162,8 +159,8 @@ func SetupProtocolConverterServiceState(
 	mockService.SetState(serviceName, flags)
 }
 
-// ConfigureProtocolConverterServiceConfig configures the mock service with a default ProtocolConverter config
-func ConfigureProtocolConverterServiceConfig(mockService *bridgesvc.MockService) {
+// ConfigureBridgeServiceConfig configures the mock service with a default Bridge config
+func ConfigureBridgeServiceConfig(mockService *bridgesvc.MockService) {
 	mockService.GetConfigResult = bridgeserviceconfig.ConfigRuntime{
 		DFCReadConfig: goodDataflowComponentReadConfig,
 		// TODO: add write DFC config
@@ -172,7 +169,7 @@ func ConfigureProtocolConverterServiceConfig(mockService *bridgesvc.MockService)
 	}
 }
 
-func ConfigureProtocolConverterServiceConfigWithMissingDfc(mockService *bridgesvc.MockService) {
+func ConfigureBridgeServiceConfigWithMissingDFC(mockService *bridgesvc.MockService) {
 	mockService.GetConfigResult = bridgeserviceconfig.ConfigRuntime{
 		DFCReadConfig: missingDataflowComponentConfig,
 		// TODO: add write DFC config
@@ -181,12 +178,12 @@ func ConfigureProtocolConverterServiceConfigWithMissingDfc(mockService *bridgesv
 	}
 }
 
-// TransitionToProtocolConverterState is a helper to configure a service for a given high-level state
+// TransitionToBridgeState is a helper to configure a service for a given high-level state
 // TODO: add write DFC state
-func TransitionToProtocolConverterState(mockService *bridgesvc.MockService, serviceName string, state string) {
+func TransitionToBridgeState(mockService *bridgesvc.MockService, serviceName string, state string) {
 	switch state {
-	case protocolconverterfsm.OperationalStateStopped:
-		SetupProtocolConverterServiceState(mockService, serviceName, bridgesvc.StateFlags{
+	case bridgefsm.OperationalStateStopped:
+		SetupBridgeServiceState(mockService, serviceName, bridgesvc.StateFlags{
 			IsDFCRunning:       false,
 			IsConnectionUp:     false,
 			IsRedpandaRunning:  false,
@@ -195,9 +192,9 @@ func TransitionToProtocolConverterState(mockService *bridgesvc.MockService, serv
 			RedpandaFSMState:   redpandafsm.OperationalStateStopped,
 			PortState:          nmapfsm.PortStateClosed,
 		})
-		ConfigureProtocolConverterServiceConfig(mockService)
-	case protocolconverterfsm.OperationalStateStartingConnection:
-		SetupProtocolConverterServiceState(mockService, serviceName, bridgesvc.StateFlags{
+		ConfigureBridgeServiceConfig(mockService)
+	case bridgefsm.OperationalStateStartingConnection:
+		SetupBridgeServiceState(mockService, serviceName, bridgesvc.StateFlags{
 			IsDFCRunning:       false,
 			IsConnectionUp:     false,
 			IsRedpandaRunning:  false,
@@ -206,9 +203,9 @@ func TransitionToProtocolConverterState(mockService *bridgesvc.MockService, serv
 			RedpandaFSMState:   redpandafsm.OperationalStateStopped,
 			PortState:          nmapfsm.PortStateClosed,
 		})
-		ConfigureProtocolConverterServiceConfig(mockService)
-	case protocolconverterfsm.OperationalStateStartingRedpanda:
-		SetupProtocolConverterServiceState(mockService, serviceName, bridgesvc.StateFlags{
+		ConfigureBridgeServiceConfig(mockService)
+	case bridgefsm.OperationalStateStartingRedpanda:
+		SetupBridgeServiceState(mockService, serviceName, bridgesvc.StateFlags{
 			IsDFCRunning:       false,
 			IsConnectionUp:     true,
 			IsRedpandaRunning:  false,
@@ -217,9 +214,9 @@ func TransitionToProtocolConverterState(mockService *bridgesvc.MockService, serv
 			RedpandaFSMState:   redpandafsm.OperationalStateStarting,
 			PortState:          nmapfsm.PortStateOpen,
 		})
-		ConfigureProtocolConverterServiceConfig(mockService)
-	case protocolconverterfsm.OperationalStateStartingDFC:
-		SetupProtocolConverterServiceState(mockService, serviceName, bridgesvc.StateFlags{
+		ConfigureBridgeServiceConfig(mockService)
+	case bridgefsm.OperationalStateStartingDFC:
+		SetupBridgeServiceState(mockService, serviceName, bridgesvc.StateFlags{
 			IsDFCRunning:       false,
 			IsConnectionUp:     true,
 			IsRedpandaRunning:  true,
@@ -228,9 +225,9 @@ func TransitionToProtocolConverterState(mockService *bridgesvc.MockService, serv
 			RedpandaFSMState:   redpandafsm.OperationalStateIdle,
 			PortState:          nmapfsm.PortStateOpen,
 		})
-		ConfigureProtocolConverterServiceConfig(mockService)
-	case protocolconverterfsm.OperationalStateStartingFailedDFC:
-		SetupProtocolConverterServiceState(mockService, serviceName, bridgesvc.StateFlags{
+		ConfigureBridgeServiceConfig(mockService)
+	case bridgefsm.OperationalStateStartingFailedDFC:
+		SetupBridgeServiceState(mockService, serviceName, bridgesvc.StateFlags{
 			IsDFCRunning:       false,
 			IsConnectionUp:     true,
 			IsRedpandaRunning:  true,
@@ -239,9 +236,9 @@ func TransitionToProtocolConverterState(mockService *bridgesvc.MockService, serv
 			RedpandaFSMState:   redpandafsm.OperationalStateIdle,
 			PortState:          nmapfsm.PortStateOpen,
 		})
-		ConfigureProtocolConverterServiceConfig(mockService)
-	case protocolconverterfsm.OperationalStateStartingFailedDFCMissing:
-		SetupProtocolConverterServiceState(mockService, serviceName, bridgesvc.StateFlags{
+		ConfigureBridgeServiceConfig(mockService)
+	case bridgefsm.OperationalStateStartingFailedDFCMissing:
+		SetupBridgeServiceState(mockService, serviceName, bridgesvc.StateFlags{
 			IsDFCRunning:       false,
 			IsConnectionUp:     true,
 			IsRedpandaRunning:  true,
@@ -250,9 +247,9 @@ func TransitionToProtocolConverterState(mockService *bridgesvc.MockService, serv
 			RedpandaFSMState:   redpandafsm.OperationalStateIdle,
 			PortState:          nmapfsm.PortStateOpen,
 		})
-		ConfigureProtocolConverterServiceConfigWithMissingDfc(mockService) // missing DFC
-	case protocolconverterfsm.OperationalStateIdle:
-		SetupProtocolConverterServiceState(mockService, serviceName, bridgesvc.StateFlags{
+		ConfigureBridgeServiceConfigWithMissingDFC(mockService) // missing DFC
+	case bridgefsm.OperationalStateIdle:
+		SetupBridgeServiceState(mockService, serviceName, bridgesvc.StateFlags{
 			IsDFCRunning:       true,
 			IsConnectionUp:     true,
 			IsRedpandaRunning:  true,
@@ -261,9 +258,9 @@ func TransitionToProtocolConverterState(mockService *bridgesvc.MockService, serv
 			RedpandaFSMState:   redpandafsm.OperationalStateIdle,
 			PortState:          nmapfsm.PortStateOpen,
 		})
-		ConfigureProtocolConverterServiceConfig(mockService)
-	case protocolconverterfsm.OperationalStateActive:
-		SetupProtocolConverterServiceState(mockService, serviceName, bridgesvc.StateFlags{
+		ConfigureBridgeServiceConfig(mockService)
+	case bridgefsm.OperationalStateActive:
+		SetupBridgeServiceState(mockService, serviceName, bridgesvc.StateFlags{
 			IsDFCRunning:       true,
 			IsConnectionUp:     true,
 			IsRedpandaRunning:  true,
@@ -272,10 +269,10 @@ func TransitionToProtocolConverterState(mockService *bridgesvc.MockService, serv
 			RedpandaFSMState:   redpandafsm.OperationalStateActive,
 			PortState:          nmapfsm.PortStateOpen,
 		})
-		ConfigureProtocolConverterServiceConfig(mockService)
-	case protocolconverterfsm.OperationalStateDegradedConnection:
+		ConfigureBridgeServiceConfig(mockService)
+	case bridgefsm.OperationalStateDegradedConnection:
 		// Now to prevent case 3 of IsOtherDegraded, we need to set the DFC to not active
-		SetupProtocolConverterServiceState(mockService, serviceName, bridgesvc.StateFlags{
+		SetupBridgeServiceState(mockService, serviceName, bridgesvc.StateFlags{
 			IsDFCRunning:       true,
 			IsConnectionUp:     false,
 			IsRedpandaRunning:  true,
@@ -284,9 +281,9 @@ func TransitionToProtocolConverterState(mockService *bridgesvc.MockService, serv
 			RedpandaFSMState:   redpandafsm.OperationalStateActive,
 			PortState:          nmapfsm.PortStateOpen,
 		})
-		ConfigureProtocolConverterServiceConfig(mockService)
-	case protocolconverterfsm.OperationalStateDegradedRedpanda:
-		SetupProtocolConverterServiceState(mockService, serviceName, bridgesvc.StateFlags{
+		ConfigureBridgeServiceConfig(mockService)
+	case bridgefsm.OperationalStateDegradedRedpanda:
+		SetupBridgeServiceState(mockService, serviceName, bridgesvc.StateFlags{
 			IsDFCRunning:       true,
 			IsConnectionUp:     true,
 			IsRedpandaRunning:  false,
@@ -295,9 +292,9 @@ func TransitionToProtocolConverterState(mockService *bridgesvc.MockService, serv
 			RedpandaFSMState:   redpandafsm.OperationalStateDegraded,
 			PortState:          nmapfsm.PortStateOpen,
 		})
-		ConfigureProtocolConverterServiceConfig(mockService)
-	case protocolconverterfsm.OperationalStateDegradedDFC:
-		SetupProtocolConverterServiceState(mockService, serviceName, bridgesvc.StateFlags{
+		ConfigureBridgeServiceConfig(mockService)
+	case bridgefsm.OperationalStateDegradedDFC:
+		SetupBridgeServiceState(mockService, serviceName, bridgesvc.StateFlags{
 			IsDFCRunning:       false,
 			IsConnectionUp:     true,
 			IsRedpandaRunning:  true,
@@ -306,9 +303,9 @@ func TransitionToProtocolConverterState(mockService *bridgesvc.MockService, serv
 			RedpandaFSMState:   redpandafsm.OperationalStateActive,
 			PortState:          nmapfsm.PortStateOpen,
 		})
-		ConfigureProtocolConverterServiceConfig(mockService)
-	case protocolconverterfsm.OperationalStateDegradedOther:
-		SetupProtocolConverterServiceState(mockService, serviceName, bridgesvc.StateFlags{
+		ConfigureBridgeServiceConfig(mockService)
+	case bridgefsm.OperationalStateDegradedOther:
+		SetupBridgeServiceState(mockService, serviceName, bridgesvc.StateFlags{
 			IsDFCRunning:       true,
 			IsConnectionUp:     false,
 			IsRedpandaRunning:  true,
@@ -317,15 +314,15 @@ func TransitionToProtocolConverterState(mockService *bridgesvc.MockService, serv
 			RedpandaFSMState:   redpandafsm.OperationalStateActive,
 			PortState:          nmapfsm.PortStateOpen,
 		})
-		ConfigureProtocolConverterServiceConfig(mockService)
+		ConfigureBridgeServiceConfig(mockService)
 	}
 }
 
-// SetupProtocolConverterInstance creates and configures a ProtocolConverter instance for testing.
+// SetupBridgeInstance creates and configures a Bridge instance for testing.
 // Returns the instance, the mock service, and the config used to create it.
-func SetupProtocolConverterInstance(serviceName string, desiredState string) (*protocolconverterfsm.ProtocolConverterInstance, *bridgesvc.MockService, config.ProtocolConverterConfig) {
+func SetupBridgeInstance(serviceName string, desiredState string) (*bridgefsm.Instance, *bridgesvc.MockService, config.BridgeConfig) {
 	// Create test config
-	cfg := CreateProtocolConverterTestConfig(serviceName, desiredState)
+	cfg := CreateBridgeTestConfig(serviceName, desiredState)
 
 	// Create mock service
 	mockService := bridgesvc.NewMockService()
@@ -336,23 +333,23 @@ func SetupProtocolConverterInstance(serviceName string, desiredState string) (*p
 	mockService.ExistingComponents[serviceName] = true
 
 	// Configure service with default config
-	ConfigureProtocolConverterServiceConfig(mockService)
+	ConfigureBridgeServiceConfig(mockService)
 
 	// Add mock service registry
 	mockSvcRegistry := serviceregistry.NewMockRegistry()
 
 	// Create new instance
-	instance := setUpMockProtocolConverterInstance(cfg, mockService, mockSvcRegistry)
+	instance := setUpMockBridgeInstance(cfg, mockService, mockSvcRegistry)
 
 	return instance, mockService, cfg
 }
 
-// SetupProtocolConverterInstanceWithMissingDfc creates and configures a ProtocolConverter instance for testing.
-// Same as SetupProtocolConverterInstance, but with a missing DFC config
+// SetupBridgeInstanceWithMissingDFC creates and configures a Bridge instance for testing.
+// Same as SetupBridgeInstance, but with a missing DFC config
 // Returns the instance, the mock service, and the config used to create it.
-func SetupProtocolConverterInstanceWithMissingDfc(serviceName string, desiredState string) (*protocolconverterfsm.ProtocolConverterInstance, *bridgesvc.MockService, config.ProtocolConverterConfig) {
+func SetupBridgeInstanceWithMissingDFC(serviceName string, desiredState string) (*bridgefsm.Instance, *bridgesvc.MockService, config.BridgeConfig) {
 	// Create test config
-	cfg := CreateProtocolConverterTestConfigWithMissingDfc(serviceName, desiredState)
+	cfg := CreateBridgeConfigWithMissingDFC(serviceName, desiredState)
 
 	// Create mock service
 	mockService := bridgesvc.NewMockService()
@@ -363,46 +360,46 @@ func SetupProtocolConverterInstanceWithMissingDfc(serviceName string, desiredSta
 	mockService.ExistingComponents[serviceName] = true
 
 	// Configure service with default config
-	ConfigureProtocolConverterServiceConfig(mockService)
+	ConfigureBridgeServiceConfig(mockService)
 	mockSvcRegistry := serviceregistry.NewMockRegistry()
 
 	// Create new instance
-	instance := setUpMockProtocolConverterInstance(cfg, mockService, mockSvcRegistry)
+	instance := setUpMockBridgeInstance(cfg, mockService, mockSvcRegistry)
 
 	return instance, mockService, cfg
 }
 
-// SetupProtocolConverterInstanceWithInvalidPort creates a ProtocolConverter instance with invalid port configuration for testing error handling
-func SetupProtocolConverterInstanceWithInvalidPort(serviceName string, desiredState string, invalidPort string) (*protocolconverterfsm.ProtocolConverterInstance, *bridgesvc.MockService, config.ProtocolConverterConfig) {
-	cfg := CreateProtocolConverterTestConfigWithInvalidPort(serviceName, desiredState, invalidPort)
+// SetupBridgeInstanceWithInvalidPort creates a Bridge instance with invalid port configuration for testing error handling
+func SetupBridgeInstanceWithInvalidPort(serviceName string, desiredState string, invalidPort string) (*bridgefsm.Instance, *bridgesvc.MockService, config.BridgeConfig) {
+	cfg := CreateBridgeTestConfigWithInvalidPort(serviceName, desiredState, invalidPort)
 	mockService := bridgesvc.NewMockService()
 	mockSvcRegistry := serviceregistry.NewMockRegistry()
 
-	instance := setUpMockProtocolConverterInstance(cfg, mockService, mockSvcRegistry)
+	instance := setUpMockBridgeInstance(cfg, mockService, mockSvcRegistry)
 
 	return instance, mockService, cfg
 }
 
-// setUpMockProtocolConverterInstance creates a ProtocolConverterInstance with a mock service
-// This is an internal helper function used by SetupProtocolConverterInstance
-func setUpMockProtocolConverterInstance(
-	cfg config.ProtocolConverterConfig,
+// setUpMockBridgeInstance creates a Bridge Instance with a mock service
+// This is an internal helper function used by SetupBridgeInstance
+func setUpMockBridgeInstance(
+	cfg config.BridgeConfig,
 	mockService *bridgesvc.MockService,
 	mockSvcRegistry *serviceregistry.Registry,
-) *protocolconverterfsm.ProtocolConverterInstance {
+) *bridgefsm.Instance {
 	// Create the instance
-	instance := protocolconverterfsm.NewProtocolConverterInstance("", cfg)
+	instance := bridgefsm.NewInstance("", cfg)
 
 	// Set the mock service
 	instance.SetService(mockService)
 	return instance
 }
 
-// TestProtocolConverterStateTransition tests a transition from one state to another.
+// TestBridgeStateTransition tests a transition from one state to another.
 //
 // Parameters:
 //   - ctx: Context for cancellation
-//   - instance: The ProtocolConverterInstance to reconcile
+//   - instance: The Bridge Instance to reconcile
 //   - mockService: The mock service to use
 //   - services: The service registry provider
 //   - serviceName: The name of the service instance
@@ -415,9 +412,9 @@ func setUpMockProtocolConverterInstance(
 // Returns:
 //   - uint64: The final tick value after transition
 //   - error: Any error that occurred during transition
-func TestProtocolConverterStateTransition(
+func TestBridgeStateTransition(
 	ctx context.Context,
-	instance *protocolconverterfsm.ProtocolConverterInstance,
+	instance *bridgefsm.Instance,
 	mockService *bridgesvc.MockService,
 	services serviceregistry.Provider,
 	serviceName string,
@@ -433,7 +430,7 @@ func TestProtocolConverterStateTransition(
 	}
 
 	// 2. Set up the mock service for the target state
-	TransitionToProtocolConverterState(mockService, serviceName, toState)
+	TransitionToBridgeState(mockService, serviceName, toState)
 
 	// 3. Execute reconciliation in a loop until we reach the target state
 	tick := startTick
@@ -465,13 +462,13 @@ func TestProtocolConverterStateTransition(
 	return startTick + uint64(maxAttempts), fmt.Errorf("failed to reach target state '%s' after %d attempts; current state: '%s'", toState, maxAttempts, instance.GetCurrentFSMState())
 }
 
-// VerifyProtocolConverterStableState ensures that an instance remains in the same state
+// VerifyBridgeStableState ensures that an instance remains in the same state
 // over multiple reconciliation cycles.
 //
 // Parameters:
 //   - ctx: Context for cancellation
 //   - snapshot: The system snapshot to use
-//   - instance: The ProtocolConverterInstance to reconcile
+//   - instance: The Bridge Instance to reconcile
 //   - mockService: The mock service to use
 //   - services: The service registry provider
 //   - serviceName: The name of the service instance
@@ -481,10 +478,10 @@ func TestProtocolConverterStateTransition(
 // Returns:
 //   - uint64: The final tick value after verification
 //   - error: Any error that occurred during verification
-func VerifyProtocolConverterStableState(
+func VerifyBridgeStableState(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
-	instance *protocolconverterfsm.ProtocolConverterInstance,
+	instance *bridgefsm.Instance,
 	mockService *bridgesvc.MockService,
 	services serviceregistry.Provider,
 	serviceName string,
@@ -498,7 +495,7 @@ func VerifyProtocolConverterStableState(
 	}
 
 	// Ensure the mock service stays configured for the expected state
-	TransitionToProtocolConverterState(mockService, serviceName, expectedState)
+	TransitionToBridgeState(mockService, serviceName, expectedState)
 
 	// Execute reconcile cycles and check state stability
 	tick := snapshot.Tick
@@ -518,12 +515,12 @@ func VerifyProtocolConverterStableState(
 	return tick, nil
 }
 
-// StabilizeProtocolConverterInstance ensures the ProtocolConverter instance reaches and remains in a stable state.
+// StabilizeBridgeInstance ensures the Bridge instance reaches and remains in a stable state.
 //
 // Parameters:
 //   - ctx: Context for cancellation
 //   - snapshot: The system snapshot to use
-//   - instance: The ProtocolConverterInstance to stabilize
+//   - instance: The Bridge Instance to stabilize
 //   - mockService: The mock service to use
 //   - services: The service registry provider
 //   - serviceName: The name of the service
@@ -533,10 +530,10 @@ func VerifyProtocolConverterStableState(
 // Returns:
 //   - uint64: The final tick value after stabilization
 //   - error: Any error that occurred during stabilization
-func StabilizeProtocolConverterInstance(
+func StabilizeBridgeInstance(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
-	instance *protocolconverterfsm.ProtocolConverterInstance,
+	instance *bridgefsm.Instance,
 	mockService *bridgesvc.MockService,
 	services serviceregistry.Provider,
 	serviceName string,
@@ -544,7 +541,7 @@ func StabilizeProtocolConverterInstance(
 	maxAttempts int,
 ) (uint64, error) {
 	// Configure the mock service for the target state
-	TransitionToProtocolConverterState(mockService, serviceName, targetState)
+	TransitionToBridgeState(mockService, serviceName, targetState)
 
 	// First wait for the instance to reach the target state
 	tick := snapshot.Tick
@@ -552,7 +549,7 @@ func StabilizeProtocolConverterInstance(
 		currentState := instance.GetCurrentFSMState()
 		if currentState == targetState {
 			// Now verify it remains stable
-			return VerifyProtocolConverterStableState(ctx, snapshot, instance, mockService, services, serviceName, targetState, 3)
+			return VerifyBridgeStableState(ctx, snapshot, instance, mockService, services, serviceName, targetState, 3)
 		}
 
 		currentSnapshot := snapshot
@@ -566,12 +563,12 @@ func StabilizeProtocolConverterInstance(
 		targetState, maxAttempts, instance.GetCurrentFSMState())
 }
 
-// ResetProtocolConverterInstanceError resets the error and backoff state of a ProtocolConverterInstance.
+// ResetBridgeInstanceError resets the error and backoff state of a Bridge Instance.
 // This is useful in tests to clear error conditions.
 //
 // Parameters:
 //   - mockService: The mock service to reset
-func ResetProtocolConverterInstanceError(mockService *bridgesvc.MockService) {
+func ResetBridgeInstanceError(mockService *bridgesvc.MockService) {
 	// Clear any error conditions in the mock
 	mockService.AddToManagerError = nil
 	mockService.UpdateInManagerError = nil
@@ -582,27 +579,27 @@ func ResetProtocolConverterInstanceError(mockService *bridgesvc.MockService) {
 	mockService.ReconcileManagerError = nil
 }
 
-// CreateMockProtocolConverterInstance creates a ProtocolConverter instance for testing.
+// CreateMockBridgeInstance creates a Bridge instance for testing.
 // It sets up a new instance with a mock service.
-func CreateMockProtocolConverterInstance(
+func CreateMockBridgeInstance(
 	serviceName string,
 	mockService bridgesvc.IService,
 	desiredState string,
 	services serviceregistry.Provider,
-) *protocolconverterfsm.ProtocolConverterInstance {
-	cfg := CreateProtocolConverterTestConfig(serviceName, desiredState)
-	instance := protocolconverterfsm.NewProtocolConverterInstance("", cfg)
+) *bridgefsm.Instance {
+	cfg := CreateBridgeTestConfig(serviceName, desiredState)
+	instance := bridgefsm.NewInstance("", cfg)
 	instance.SetService(mockService)
 	return instance
 }
 
-// WaitForProtocolConverterDesiredState waits for an instance's desired state to reach a target value.
+// WaitForBridgeDesiredState waits for an instance's desired state to reach a target value.
 // This is useful for testing error handling scenarios where the instance changes its own desired state.
 //
 // Parameters:
 //   - ctx: Context for cancellation
 //   - snapshot: The system snapshot to use
-//   - instance: The ProtocolConverterInstance to monitor
+//   - instance: The Bridge Instance to monitor
 //   - services: The service registry provider
 //   - targetState: The desired state to wait for
 //   - maxAttempts: Maximum number of reconcile cycles to attempt
@@ -610,10 +607,10 @@ func CreateMockProtocolConverterInstance(
 // Returns:
 //   - uint64: The final tick value after waiting
 //   - error: Any error that occurred during waiting
-func WaitForProtocolConverterDesiredState(
+func WaitForBridgeDesiredState(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
-	instance *protocolconverterfsm.ProtocolConverterInstance,
+	instance *bridgefsm.Instance,
 	services serviceregistry.Provider,
 	targetState string,
 	maxAttempts int,
@@ -642,13 +639,13 @@ func WaitForProtocolConverterDesiredState(
 		targetState, maxAttempts, instance.GetDesiredFSMState())
 }
 
-// ReconcileProtocolConverterUntilError performs reconciliation until an error occurs or maximum attempts are reached.
+// ReconcileBridgeUntilError performs reconciliation until an error occurs or maximum attempts are reached.
 // This is useful for testing error handling scenarios where we expect an error to occur during reconciliation.
 //
 // Parameters:
 //   - ctx: Context for cancellation
 //   - snapshot: The system snapshot to use
-//   - instance: The ProtocolConverterInstance to reconcile
+//   - instance: The Bridge Instance to reconcile
 //   - mockService: The mock service that may produce an error
 //   - services: The service registry provider
 //   - serviceName: The name of the service
@@ -658,10 +655,10 @@ func WaitForProtocolConverterDesiredState(
 //   - uint64: The final tick value after reconciliation
 //   - error: The error encountered during reconciliation (nil if no error occurred after maxAttempts)
 //   - bool: Whether reconciliation was successful (false if an error was encountered)
-func ReconcileProtocolConverterUntilError(
+func ReconcileBridgeUntilError(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
-	instance *protocolconverterfsm.ProtocolConverterInstance,
+	instance *bridgefsm.Instance,
 	mockService *bridgesvc.MockService,
 	services serviceregistry.Provider,
 	serviceName string,

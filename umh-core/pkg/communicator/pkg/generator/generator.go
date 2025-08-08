@@ -44,7 +44,6 @@ func NewStatusCollector(
 	logger *zap.SugaredLogger,
 	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator,
 ) *StatusCollectorType {
-
 	collector := &StatusCollectorType{
 		dog:                      dog,
 		systemSnapshotManager:    systemSnapshotManager,
@@ -132,7 +131,6 @@ func (s *StatusCollectorType) updateTopicBrowserCacheFromFSM() error {
 }
 
 func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBootstrapped bool) *models.StatusMessage {
-
 	// Step 1: Get the snapshot
 	snapshot := s.systemSnapshotManager.GetDeepCopySnapshot()
 	if len(snapshot.Managers) == 0 {
@@ -189,7 +187,7 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 	}
 
 	// --- protocol converters (multiple instances) as DFCs --------------------------
-	protocolConverterMgr, ok := fsm.FindManager(snapshot, constants.ProtocolConverterManagerName)
+	protocolConverterMgr, ok := fsm.FindManager(snapshot, constants.BridgeManagerName)
 	if ok {
 		protocolConverterDfcs := ProtocolConvertersFromSnapshot(protocolConverterMgr, s.logger)
 		dfcData = append(dfcData, protocolConverterDfcs...)

@@ -315,31 +315,31 @@ func FindDfcInstanceByUUID(systemSnapshot SystemSnapshot, dfcUUID string) (*FSMI
 	return nil, fmt.Errorf("the requested DFC with UUID %s was not found", dfcUUID)
 }
 
-// FindProtocolConverterInstanceByUUID finds a protocol converter instance with the given UUID.
+// FindBridgeInstanceByUUID finds a bridge instance with the given UUID.
 // It returns the instance if found, otherwise an error is returned.
 //
-// This function exists because protocol converter instances are mostly referenced by UUID,
+// This function exists because bridge instances are mostly referenced by UUID,
 // but stored by name internally. The UUID is generated deterministically from the instance name
 // using GenerateUUIDFromName, which ensures stable identifiers for client consumption
 // while allowing internal name changes without breaking external references.
-func FindProtocolConverterInstanceByUUID(systemSnapshot SystemSnapshot, protocolConverterUUID string) (*FSMInstanceSnapshot, error) {
-	protocolConverterManager, ok := FindManager(systemSnapshot, constants.ProtocolConverterManagerName)
+func FindBridgeInstanceByUUID(systemSnapshot SystemSnapshot, bridgeUUID string) (*FSMInstanceSnapshot, error) {
+	bridgeManager, ok := FindManager(systemSnapshot, constants.BridgeManagerName)
 	if !ok {
-		return nil, fmt.Errorf("protocol converter manager not found")
+		return nil, fmt.Errorf("bridge manager not found")
 	}
 
-	protocolConverterInstances := protocolConverterManager.GetInstances()
+	instances := bridgeManager.GetInstances()
 
-	for _, instance := range protocolConverterInstances {
+	for _, instance := range instances {
 		if instance == nil {
 			continue
 		}
 
 		currentUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID).String()
-		if currentUUID == protocolConverterUUID {
+		if currentUUID == bridgeUUID {
 			return instance, nil
 		}
 	}
 
-	return nil, fmt.Errorf("the requested protocol converter with UUID %s was not found", protocolConverterUUID)
+	return nil, fmt.Errorf("the requested bridge with UUID %s was not found", bridgeUUID)
 }

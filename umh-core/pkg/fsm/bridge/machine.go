@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package protocolconverter
+package bridge
 
 import (
 	"context"
@@ -23,18 +23,18 @@ import (
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	protocolconverterconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/bridgeserviceconfig"
+	bridgesvccfg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/bridgeserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	bridgesvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/bridge"
 )
 
-// NewProtocolConverterInstance creates a new ProtocolConverterInstance with a given ID and service path
-func NewProtocolConverterInstance(
+// NewInstance creates a new ProtocolConverterInstance with a given ID and service path
+func NewInstance(
 	s6BaseDir string,
-	config config.ProtocolConverterConfig,
-) *ProtocolConverterInstance {
+	config config.BridgeConfig,
+) *Instance {
 	degradedStates := []string{
 		OperationalStateDegradedConnection,
 		OperationalStateDegradedRedpanda,
@@ -77,7 +77,7 @@ func NewProtocolConverterInstance(
 			// EventStartRetry allows to reset the starting phase, e.g., if an intermediary check failed
 			// So it will cause the start to happen again
 			// In benthos, we simply call a EventStartFailed, and then let the system retry
-			// But the protocol converter, an EventStartFailed means an unrecoverable error requiring human intervention
+			// But the bridge, an EventStartFailed means an unrecoverable error requiring human intervention
 			// So this is why there is a separate EventStartRetry
 			{Name: EventStartRetry, Src: startingStatesWithFailed, Dst: OperationalStateStartingConnection},
 
@@ -118,17 +118,17 @@ func NewProtocolConverterInstance(
 	logger := logger.For(config.Name)
 	backoffConfig := backoff.DefaultConfig(cfg.ID, logger)
 
-	instance := &ProtocolConverterInstance{
+	instance := &Instance{
 		baseFSMInstance: internal_fsm.NewBaseFSMInstance(cfg, backoffConfig, logger),
 		service:         bridgesvc.NewDefaultService(config.Name),
-		specConfig:      config.ProtocolConverterServiceConfig,
-		ObservedState:   ProtocolConverterObservedState{},
-		runtimeConfig:   protocolconverterconfig.ConfigRuntime{},
+		configSpec:      config.ServiceConfig,
+		ObservedState:   ObservedState{},
+		configRuntime:   bridgesvccfg.ConfigRuntime{},
 	}
 
 	instance.registerCallbacks()
 
-	metrics.InitErrorCounter(metrics.ComponentProtocolConverterInstance, config.Name)
+	metrics.InitErrorCounter(metrics.ComponentBridgeInstance, config.Name)
 
 	return instance
 }
@@ -136,7 +136,7 @@ func NewProtocolConverterInstance(
 // SetDesiredFSMState safely updates the desired state
 // But ensures that the desired state is a valid state and that it is also a reasonable state
 // e.g., nobody wants to have an instance in the "starting" state, that is just intermediate
-func (d *ProtocolConverterInstance) SetDesiredFSMState(state string) error {
+func (i *Instance) SetDesiredFSMState(state string) error {
 	if state != OperationalStateStopped &&
 		state != OperationalStateActive {
 		return fmt.Errorf("invalid desired state: %s. valid states are %s and %s",
@@ -145,58 +145,58 @@ func (d *ProtocolConverterInstance) SetDesiredFSMState(state string) error {
 			OperationalStateActive)
 	}
 
-	d.baseFSMInstance.SetDesiredFSMState(state)
+	i.baseFSMInstance.SetDesiredFSMState(state)
 	return nil
 }
 
 // GetCurrentFSMState returns the current state of the FSM
-func (d *ProtocolConverterInstance) GetCurrentFSMState() string {
-	return d.baseFSMInstance.GetCurrentFSMState()
+func (i *Instance) GetCurrentFSMState() string {
+	return i.baseFSMInstance.GetCurrentFSMState()
 }
 
 // GetDesiredFSMState returns the desired state of the FSM
-func (d *ProtocolConverterInstance) GetDesiredFSMState() string {
-	return d.baseFSMInstance.GetDesiredFSMState()
+func (i *Instance) GetDesiredFSMState() string {
+	return i.baseFSMInstance.GetDesiredFSMState()
 }
 
 // Remove starts the removal process, it is idempotent and can be called multiple times
 // Note: it is only removed once IsRemoved returns true
-func (d *ProtocolConverterInstance) Remove(ctx context.Context) error {
-	return d.baseFSMInstance.Remove(ctx)
+func (i *Instance) Remove(ctx context.Context) error {
+	return i.baseFSMInstance.Remove(ctx)
 }
 
 // IsRemoved returns true if the instance has been removed
-func (d *ProtocolConverterInstance) IsRemoved() bool {
-	return d.baseFSMInstance.IsRemoved()
+func (i *Instance) IsRemoved() bool {
+	return i.baseFSMInstance.IsRemoved()
 }
 
 // IsRemoving returns true if the instance is in the removing state
-func (d *ProtocolConverterInstance) IsRemoving() bool {
-	return d.baseFSMInstance.IsRemoving()
+func (i *Instance) IsRemoving() bool {
+	return i.baseFSMInstance.IsRemoving()
 }
 
 // IsStopping returns true if the instance is in the stopping state
-func (d *ProtocolConverterInstance) IsStopping() bool {
-	return d.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopping
+func (i *Instance) IsStopping() bool {
+	return i.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopping
 }
 
 // IsStopped returns true if the instance is in the stopped state
-func (d *ProtocolConverterInstance) IsStopped() bool {
-	return d.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopped
+func (i *Instance) IsStopped() bool {
+	return i.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopped
 }
 
 // PrintState prints the current state of the FSM for debugging
-func (d *ProtocolConverterInstance) PrintState() {
-	d.baseFSMInstance.GetLogger().Debugf("Current state: %s", d.baseFSMInstance.GetCurrentFSMState())
-	d.baseFSMInstance.GetLogger().Debugf("Desired state: %s", d.baseFSMInstance.GetDesiredFSMState())
-	d.baseFSMInstance.GetLogger().Debugf("Connection: %s, Read DFC: %s, Write DFC: %s, Status: %s",
-		d.ObservedState.ServiceInfo.ConnectionFSMState,
-		d.ObservedState.ServiceInfo.DFCReadFSMState,
-		d.ObservedState.ServiceInfo.DFCWriteFSMState,
-		d.ObservedState.ServiceInfo.StatusReason)
+func (i *Instance) PrintState() {
+	i.baseFSMInstance.GetLogger().Debugf("Current state: %s", i.baseFSMInstance.GetCurrentFSMState())
+	i.baseFSMInstance.GetLogger().Debugf("Desired state: %s", i.baseFSMInstance.GetDesiredFSMState())
+	i.baseFSMInstance.GetLogger().Debugf("Connection: %s, Read DFC: %s, Write DFC: %s, Status: %s",
+		i.ObservedState.ServiceInfo.ConnectionFSMState,
+		i.ObservedState.ServiceInfo.DFCReadFSMState,
+		i.ObservedState.ServiceInfo.DFCWriteFSMState,
+		i.ObservedState.ServiceInfo.StatusReason)
 }
 
 // GetMinimumRequiredTime returns the minimum required time for this instance
-func (d *ProtocolConverterInstance) GetMinimumRequiredTime() time.Duration {
-	return constants.ProtocolConverterUpdateObservedStateTimeout
+func (i *Instance) GetMinimumRequiredTime() time.Duration {
+	return constants.BridgeUpdateObservedStateTimeout
 }

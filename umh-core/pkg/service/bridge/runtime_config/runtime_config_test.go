@@ -51,12 +51,12 @@ var _ = Describe("BuildRuntimeConfig", func() {
 		Expect(err).NotTo(HaveOccurred(), "Failed to parse example config")
 
 		// Extract the first bridge (temperature-sensor-bridge)
-		Expect(fullConfig.ProtocolConverter).To(HaveLen(3), "Expected 3 bridges in example config")
-		firstBridge := fullConfig.ProtocolConverter[0]
+		Expect(fullConfig.Bridge).To(HaveLen(3), "Expected 3 bridges in example config")
+		firstBridge := fullConfig.Bridge[0]
 		Expect(firstBridge.Name).To(Equal("temperature-sensor-bridge"), "Expected first Bridge to be temperature-sensor-bridge")
 
 		// Get the spec from the first bridge
-		spec = firstBridge.ProtocolConverterServiceConfig
+		spec = firstBridge.ServiceConfig
 
 		// Extract agent location from the config
 		agentLocation = map[string]string{}

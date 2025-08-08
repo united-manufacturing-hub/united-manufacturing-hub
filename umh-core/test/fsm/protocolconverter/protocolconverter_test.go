@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build test
-// +build test
-
-package protocolconverter_test
+package bridge_test
 
 import (
 	"context"
@@ -28,18 +25,18 @@ import (
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	bridgefsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/bridge"
 	connectionfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	dataflowcomponentfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
-	protocolconverterfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	redpandafsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	bridgesvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/bridge"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
-var _ = Describe("ProtocolConverter FSM", func() {
+var _ = Describe("Bridge FSM", func() {
 	var (
-		instance      *protocolconverterfsm.ProtocolConverterInstance
+		instance      *bridgefsm.Instance
 		mockService   *bridgesvc.MockService
 		componentName string
 		ctx           context.Context
@@ -49,13 +46,13 @@ var _ = Describe("ProtocolConverter FSM", func() {
 	)
 
 	BeforeEach(func() {
-		componentName = "test-protocol-converter"
+		componentName = "test-bridge"
 		ctx = context.Background()
 		tick = 0
 		startTime = time.Now()
 
-		// Initialize a ProtocolConverter instance with default desired state (Stopped to begin with)
-		instance, mockService, _ = fsmtest.SetupProtocolConverterInstance(componentName, protocolconverterfsm.OperationalStateStopped)
+		// Initialize a Bridge instance with default desired state (Stopped to begin with)
+		instance, mockService, _ = fsmtest.SetupBridgeInstance(componentName, bridgefsm.OperationalStateStopped)
 		mockRegistry = serviceregistry.NewMockRegistry()
 	})
 
@@ -67,7 +64,7 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			var err error
 
 			// Phase 1: Initial lifecycle setup (to_be_created -> creating -> stopped)
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating, 5, tick, startTime)
@@ -75,24 +72,24 @@ var _ = Describe("ProtocolConverter FSM", func() {
 
 			// Simulate successful creation: service now exists in stopped state
 			mockService.ExistingComponents[componentName] = true
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStopped)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStopped)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateCreating,
-				protocolconverterfsm.OperationalStateStopped, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.AddToManagerCalled).To(BeTrue()) // added to manager on creation
 
 			// Phase 2: Activation sequence (set desired state to Active)
-			Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
-			Expect(instance.GetDesiredFSMState()).To(Equal(protocolconverterfsm.OperationalStateActive))
+			Expect(instance.SetDesiredFSMState(bridgefsm.OperationalStateActive)).To(Succeed())
+			Expect(instance.GetDesiredFSMState()).To(Equal(bridgefsm.OperationalStateActive))
 
 			// Execute transition: Stopped -> StartingConnection
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStopped,
-				protocolconverterfsm.OperationalStateStartingConnection, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped,
+				bridgefsm.OperationalStateStartingConnection, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.StartCalled).To(BeTrue()) // ensure start initiated
 		})
@@ -101,37 +98,37 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			var err error
 
 			// Phase 1: Setup to stopped state
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			mockService.ExistingComponents[componentName] = true
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStopped)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStopped)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateCreating,
-				protocolconverterfsm.OperationalStateStopped, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Phase 2: Activate and reach StartingConnection
-			Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
+			Expect(instance.SetDesiredFSMState(bridgefsm.OperationalStateActive)).To(Succeed())
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStopped,
-				protocolconverterfsm.OperationalStateStartingConnection, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped,
+				bridgefsm.OperationalStateStartingConnection, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Phase 3: Simulate connection established, transition to StartingRedpanda
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingRedpanda)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingRedpanda)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingConnection,
-				protocolconverterfsm.OperationalStateStartingRedpanda, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingConnection,
+				bridgefsm.OperationalStateStartingRedpanda, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -139,45 +136,45 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			var err error
 
 			// Phase 1: Setup to stopped state
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			mockService.ExistingComponents[componentName] = true
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStopped)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStopped)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateCreating,
-				protocolconverterfsm.OperationalStateStopped, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Phase 2: Progress through connection startup to StartingRedpanda
-			Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
+			Expect(instance.SetDesiredFSMState(bridgefsm.OperationalStateActive)).To(Succeed())
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStopped,
-				protocolconverterfsm.OperationalStateStartingConnection, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped,
+				bridgefsm.OperationalStateStartingConnection, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingRedpanda)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingRedpanda)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingConnection,
-				protocolconverterfsm.OperationalStateStartingRedpanda, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingConnection,
+				bridgefsm.OperationalStateStartingRedpanda, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Phase 3: Simulate Redpanda ready, transition to StartingDFC
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingDFC)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingDFC)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingRedpanda,
-				protocolconverterfsm.OperationalStateStartingDFC, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingRedpanda,
+				bridgefsm.OperationalStateStartingDFC, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -185,53 +182,53 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			var err error
 
 			// Phase 1: Setup through StartingDFC state
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			mockService.ExistingComponents[componentName] = true
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStopped)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStopped)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateCreating,
-				protocolconverterfsm.OperationalStateStopped, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
+			Expect(instance.SetDesiredFSMState(bridgefsm.OperationalStateActive)).To(Succeed())
 
 			// Progress through startup sequence
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStopped,
-				protocolconverterfsm.OperationalStateStartingConnection, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped,
+				bridgefsm.OperationalStateStartingConnection, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingRedpanda)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingRedpanda)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingConnection,
-				protocolconverterfsm.OperationalStateStartingRedpanda, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingConnection,
+				bridgefsm.OperationalStateStartingRedpanda, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingDFC)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingDFC)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingRedpanda,
-				protocolconverterfsm.OperationalStateStartingDFC, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingRedpanda,
+				bridgefsm.OperationalStateStartingDFC, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Phase 2: Simulate DFC successfully started, transition to Idle
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateIdle)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateIdle)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingDFC,
-				protocolconverterfsm.OperationalStateIdle, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingDFC,
+				bridgefsm.OperationalStateIdle, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -239,61 +236,61 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			var err error
 
 			// Phase 1: Reach Idle state through full startup sequence
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			mockService.ExistingComponents[componentName] = true
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStopped)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStopped)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateCreating,
-				protocolconverterfsm.OperationalStateStopped, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
+			Expect(instance.SetDesiredFSMState(bridgefsm.OperationalStateActive)).To(Succeed())
 
 			// Progress through starting states to Idle
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStopped,
-				protocolconverterfsm.OperationalStateStartingConnection, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped,
+				bridgefsm.OperationalStateStartingConnection, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingRedpanda)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingRedpanda)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingConnection,
-				protocolconverterfsm.OperationalStateStartingRedpanda, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingConnection,
+				bridgefsm.OperationalStateStartingRedpanda, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingDFC)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingDFC)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingRedpanda,
-				protocolconverterfsm.OperationalStateStartingDFC, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingRedpanda,
+				bridgefsm.OperationalStateStartingDFC, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateIdle)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateIdle)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingDFC,
-				protocolconverterfsm.OperationalStateIdle, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingDFC,
+				bridgefsm.OperationalStateIdle, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Phase 2: Simulate data flow starting (Idle -> Active)
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateActive)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateActive)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateIdle,
-				protocolconverterfsm.OperationalStateActive, 5, tick, startTime)
+				bridgefsm.OperationalStateIdle,
+				bridgefsm.OperationalStateActive, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -301,69 +298,69 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			var err error
 
 			// Phase 1: Reach Active state through full sequence
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			mockService.ExistingComponents[componentName] = true
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStopped)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStopped)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateCreating,
-				protocolconverterfsm.OperationalStateStopped, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
+			Expect(instance.SetDesiredFSMState(bridgefsm.OperationalStateActive)).To(Succeed())
 
 			// Progress through startup sequence to Active
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStopped,
-				protocolconverterfsm.OperationalStateStartingConnection, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped,
+				bridgefsm.OperationalStateStartingConnection, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingRedpanda)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingRedpanda)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingConnection,
-				protocolconverterfsm.OperationalStateStartingRedpanda, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingConnection,
+				bridgefsm.OperationalStateStartingRedpanda, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingDFC)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingDFC)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingRedpanda,
-				protocolconverterfsm.OperationalStateStartingDFC, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingRedpanda,
+				bridgefsm.OperationalStateStartingDFC, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateIdle)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateIdle)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingDFC,
-				protocolconverterfsm.OperationalStateIdle, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingDFC,
+				bridgefsm.OperationalStateIdle, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateActive)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateActive)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateIdle,
-				protocolconverterfsm.OperationalStateActive, 5, tick, startTime)
+				bridgefsm.OperationalStateIdle,
+				bridgefsm.OperationalStateActive, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Phase 2: Simulate stopping of data flow (Active -> Idle)
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateIdle)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateIdle)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateActive,
-				protocolconverterfsm.OperationalStateIdle, 5, tick, startTime)
+				bridgefsm.OperationalStateActive,
+				bridgefsm.OperationalStateIdle, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
@@ -376,70 +373,70 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			var err error
 
 			// Phase 1: Establish Idle state
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			mockService.ExistingComponents[componentName] = true
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStopped)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStopped)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateCreating,
-				protocolconverterfsm.OperationalStateStopped, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
+			Expect(instance.SetDesiredFSMState(bridgefsm.OperationalStateActive)).To(Succeed())
 
 			// Progress through startup to Idle
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStopped,
-				protocolconverterfsm.OperationalStateStartingConnection, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped,
+				bridgefsm.OperationalStateStartingConnection, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingRedpanda)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingRedpanda)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingConnection,
-				protocolconverterfsm.OperationalStateStartingRedpanda, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingConnection,
+				bridgefsm.OperationalStateStartingRedpanda, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingDFC)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingDFC)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingRedpanda,
-				protocolconverterfsm.OperationalStateStartingDFC, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingRedpanda,
+				bridgefsm.OperationalStateStartingDFC, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateIdle)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateIdle)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingDFC,
-				protocolconverterfsm.OperationalStateIdle, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingDFC,
+				bridgefsm.OperationalStateIdle, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Phase 2: Simulate connection failure and recovery
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateDegradedConnection)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateDegradedConnection)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateIdle,
-				protocolconverterfsm.OperationalStateDegradedConnection, 5, tick, startTime)
+				bridgefsm.OperationalStateIdle,
+				bridgefsm.OperationalStateDegradedConnection, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Restore connection and verify recovery
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateIdle)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateIdle)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateDegradedConnection,
-				protocolconverterfsm.OperationalStateIdle, 5, tick, startTime)
+				bridgefsm.OperationalStateDegradedConnection,
+				bridgefsm.OperationalStateIdle, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -447,70 +444,70 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			var err error
 
 			// Phase 1: Establish Idle state
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			mockService.ExistingComponents[componentName] = true
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStopped)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStopped)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateCreating,
-				protocolconverterfsm.OperationalStateStopped, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
+			Expect(instance.SetDesiredFSMState(bridgefsm.OperationalStateActive)).To(Succeed())
 
 			// Progress through startup to Idle
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStopped,
-				protocolconverterfsm.OperationalStateStartingConnection, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped,
+				bridgefsm.OperationalStateStartingConnection, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingRedpanda)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingRedpanda)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingConnection,
-				protocolconverterfsm.OperationalStateStartingRedpanda, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingConnection,
+				bridgefsm.OperationalStateStartingRedpanda, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingDFC)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingDFC)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingRedpanda,
-				protocolconverterfsm.OperationalStateStartingDFC, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingRedpanda,
+				bridgefsm.OperationalStateStartingDFC, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateIdle)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateIdle)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingDFC,
-				protocolconverterfsm.OperationalStateIdle, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingDFC,
+				bridgefsm.OperationalStateIdle, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Phase 2: Simulate Redpanda failure and recovery
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateDegradedRedpanda)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateDegradedRedpanda)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateIdle,
-				protocolconverterfsm.OperationalStateDegradedRedpanda, 5, tick, startTime)
+				bridgefsm.OperationalStateIdle,
+				bridgefsm.OperationalStateDegradedRedpanda, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Restore Redpanda and verify recovery
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateIdle)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateIdle)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateDegradedRedpanda,
-				protocolconverterfsm.OperationalStateIdle, 5, tick, startTime)
+				bridgefsm.OperationalStateDegradedRedpanda,
+				bridgefsm.OperationalStateIdle, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -518,70 +515,70 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			var err error
 
 			// Phase 1: Establish Idle state
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			mockService.ExistingComponents[componentName] = true
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStopped)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStopped)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateCreating,
-				protocolconverterfsm.OperationalStateStopped, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
+			Expect(instance.SetDesiredFSMState(bridgefsm.OperationalStateActive)).To(Succeed())
 
 			// Progress through startup to Idle
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStopped,
-				protocolconverterfsm.OperationalStateStartingConnection, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped,
+				bridgefsm.OperationalStateStartingConnection, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingRedpanda)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingRedpanda)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingConnection,
-				protocolconverterfsm.OperationalStateStartingRedpanda, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingConnection,
+				bridgefsm.OperationalStateStartingRedpanda, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingDFC)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingDFC)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingRedpanda,
-				protocolconverterfsm.OperationalStateStartingDFC, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingRedpanda,
+				bridgefsm.OperationalStateStartingDFC, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateIdle)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateIdle)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingDFC,
-				protocolconverterfsm.OperationalStateIdle, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingDFC,
+				bridgefsm.OperationalStateIdle, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Phase 2: Simulate DFC failure and recovery
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateDegradedDFC)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateDegradedDFC)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateIdle,
-				protocolconverterfsm.OperationalStateDegradedDFC, 5, tick, startTime)
+				bridgefsm.OperationalStateIdle,
+				bridgefsm.OperationalStateDegradedDFC, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Restore DFC and verify recovery
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateIdle)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateIdle)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateDegradedDFC,
-				protocolconverterfsm.OperationalStateIdle, 5, tick, startTime)
+				bridgefsm.OperationalStateDegradedDFC,
+				bridgefsm.OperationalStateIdle, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -589,70 +586,70 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			var err error
 
 			// Phase 1: Establish Idle state
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			mockService.ExistingComponents[componentName] = true
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStopped)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStopped)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateCreating,
-				protocolconverterfsm.OperationalStateStopped, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
+			Expect(instance.SetDesiredFSMState(bridgefsm.OperationalStateActive)).To(Succeed())
 
 			// Progress through startup to Idle
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStopped,
-				protocolconverterfsm.OperationalStateStartingConnection, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped,
+				bridgefsm.OperationalStateStartingConnection, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingRedpanda)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingRedpanda)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingConnection,
-				protocolconverterfsm.OperationalStateStartingRedpanda, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingConnection,
+				bridgefsm.OperationalStateStartingRedpanda, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingDFC)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingDFC)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingRedpanda,
-				protocolconverterfsm.OperationalStateStartingDFC, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingRedpanda,
+				bridgefsm.OperationalStateStartingDFC, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateIdle)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateIdle)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingDFC,
-				protocolconverterfsm.OperationalStateIdle, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingDFC,
+				bridgefsm.OperationalStateIdle, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Phase 2: Force inconsistent state scenario and recovery
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateDegradedOther)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateDegradedOther)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateIdle,
-				protocolconverterfsm.OperationalStateDegradedOther, 5, tick, startTime)
+				bridgefsm.OperationalStateIdle,
+				bridgefsm.OperationalStateDegradedOther, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Resolve inconsistency and verify recovery
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateIdle)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateIdle)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateDegradedOther,
-				protocolconverterfsm.OperationalStateIdle, 5, tick, startTime)
+				bridgefsm.OperationalStateDegradedOther,
+				bridgefsm.OperationalStateIdle, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
@@ -666,110 +663,110 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			var err error
 
 			// Phase 1: Progress to StartingDFC state
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			mockService.ExistingComponents[componentName] = true
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStopped)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStopped)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateCreating,
-				protocolconverterfsm.OperationalStateStopped, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
+			Expect(instance.SetDesiredFSMState(bridgefsm.OperationalStateActive)).To(Succeed())
 
 			// Progress through startup sequence to StartingDFC
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStopped,
-				protocolconverterfsm.OperationalStateStartingConnection, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped,
+				bridgefsm.OperationalStateStartingConnection, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingRedpanda)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingRedpanda)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingConnection,
-				protocolconverterfsm.OperationalStateStartingRedpanda, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingConnection,
+				bridgefsm.OperationalStateStartingRedpanda, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingDFC)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingDFC)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingRedpanda,
-				protocolconverterfsm.OperationalStateStartingDFC, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingRedpanda,
+				bridgefsm.OperationalStateStartingDFC, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Phase 2: Simulate DFC startup failure
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingFailedDFC)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingFailedDFC)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingDFC,
-				protocolconverterfsm.OperationalStateStartingFailedDFC, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingDFC,
+				bridgefsm.OperationalStateStartingFailedDFC, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should transition to StartingFailedDFCMissing when the DFC is not present", func() {
 			// Setup instance with missing DFC
-			instance, mockService, _ = fsmtest.SetupProtocolConverterInstanceWithMissingDfc(componentName, protocolconverterfsm.OperationalStateStopped)
+			instance, mockService, _ = fsmtest.SetupBridgeInstanceWithMissingDFC(componentName, bridgefsm.OperationalStateStopped)
 
 			var err error
 
 			// Phase 1: Progress to StartingDFC state
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			mockService.ExistingComponents[componentName] = true
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStopped)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStopped)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateCreating,
-				protocolconverterfsm.OperationalStateStopped, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
+			Expect(instance.SetDesiredFSMState(bridgefsm.OperationalStateActive)).To(Succeed())
 
 			// Progress through startup sequence to StartingDFC
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStopped,
-				protocolconverterfsm.OperationalStateStartingConnection, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped,
+				bridgefsm.OperationalStateStartingConnection, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingRedpanda)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingRedpanda)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingConnection,
-				protocolconverterfsm.OperationalStateStartingRedpanda, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingConnection,
+				bridgefsm.OperationalStateStartingRedpanda, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingDFC)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingDFC)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingRedpanda,
-				protocolconverterfsm.OperationalStateStartingDFC, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingRedpanda,
+				bridgefsm.OperationalStateStartingDFC, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Phase 2: Simulate DFC component missing entirely
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingFailedDFCMissing)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingFailedDFCMissing)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingDFC,
-				protocolconverterfsm.OperationalStateStartingFailedDFCMissing, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingDFC,
+				bridgefsm.OperationalStateStartingFailedDFCMissing, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
@@ -782,151 +779,151 @@ var _ = Describe("ProtocolConverter FSM", func() {
 		setupActive := func() {
 			var err error
 			// Reset for clean state
-			instance, mockService, _ = fsmtest.SetupProtocolConverterInstance(componentName, protocolconverterfsm.OperationalStateStopped)
+			instance, mockService, _ = fsmtest.SetupBridgeInstance(componentName, bridgefsm.OperationalStateStopped)
 			tick = 0
 
 			// Progress to Active state
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			mockService.ExistingComponents[componentName] = true
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStopped)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStopped)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateCreating,
-				protocolconverterfsm.OperationalStateStopped, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
+			Expect(instance.SetDesiredFSMState(bridgefsm.OperationalStateActive)).To(Succeed())
 
 			// Progress through startup to Active
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStopped,
-				protocolconverterfsm.OperationalStateStartingConnection, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped,
+				bridgefsm.OperationalStateStartingConnection, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingRedpanda)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingRedpanda)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingConnection,
-				protocolconverterfsm.OperationalStateStartingRedpanda, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingConnection,
+				bridgefsm.OperationalStateStartingRedpanda, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingDFC)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingDFC)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingRedpanda,
-				protocolconverterfsm.OperationalStateStartingDFC, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingRedpanda,
+				bridgefsm.OperationalStateStartingDFC, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateIdle)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateIdle)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingDFC,
-				protocolconverterfsm.OperationalStateIdle, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingDFC,
+				bridgefsm.OperationalStateIdle, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateActive)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateActive)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateIdle,
-				protocolconverterfsm.OperationalStateActive, 5, tick, startTime)
+				bridgefsm.OperationalStateIdle,
+				bridgefsm.OperationalStateActive, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 		}
 
 		setupIdle := func() {
 			var err error
 			// Reset for clean state
-			instance, mockService, _ = fsmtest.SetupProtocolConverterInstance(componentName, protocolconverterfsm.OperationalStateStopped)
+			instance, mockService, _ = fsmtest.SetupBridgeInstance(componentName, bridgefsm.OperationalStateStopped)
 			tick = 0
 
 			// Progress to Idle state (similar to setupActive but stop at Idle)
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			mockService.ExistingComponents[componentName] = true
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStopped)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStopped)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateCreating,
-				protocolconverterfsm.OperationalStateStopped, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
+			Expect(instance.SetDesiredFSMState(bridgefsm.OperationalStateActive)).To(Succeed())
 
 			// Progress through startup to Idle
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStopped,
-				protocolconverterfsm.OperationalStateStartingConnection, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped,
+				bridgefsm.OperationalStateStartingConnection, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingRedpanda)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingRedpanda)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingConnection,
-				protocolconverterfsm.OperationalStateStartingRedpanda, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingConnection,
+				bridgefsm.OperationalStateStartingRedpanda, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingDFC)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingDFC)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingRedpanda,
-				protocolconverterfsm.OperationalStateStartingDFC, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingRedpanda,
+				bridgefsm.OperationalStateStartingDFC, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateIdle)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateIdle)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingDFC,
-				protocolconverterfsm.OperationalStateIdle, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingDFC,
+				bridgefsm.OperationalStateIdle, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 		}
 
 		setupStartingConnection := func() {
 			var err error
 			// Reset for clean state
-			instance, mockService, _ = fsmtest.SetupProtocolConverterInstance(componentName, protocolconverterfsm.OperationalStateStopped)
+			instance, mockService, _ = fsmtest.SetupBridgeInstance(componentName, bridgefsm.OperationalStateStopped)
 			tick = 0
 
 			// Progress to StartingConnection
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			mockService.ExistingComponents[componentName] = true
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStopped)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStopped)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateCreating,
-				protocolconverterfsm.OperationalStateStopped, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
+			Expect(instance.SetDesiredFSMState(bridgefsm.OperationalStateActive)).To(Succeed())
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStopped,
-				protocolconverterfsm.OperationalStateStartingConnection, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped,
+				bridgefsm.OperationalStateStartingConnection, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 		}
 
@@ -934,12 +931,12 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			setupStartingConnection()
 			var err error
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingRedpanda)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingRedpanda)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingConnection,
-				protocolconverterfsm.OperationalStateStartingRedpanda, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingConnection,
+				bridgefsm.OperationalStateStartingRedpanda, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 		}
 
@@ -947,68 +944,68 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			setupStartingRedpanda()
 			var err error
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingDFC)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingDFC)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingRedpanda,
-				protocolconverterfsm.OperationalStateStartingDFC, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingRedpanda,
+				bridgefsm.OperationalStateStartingDFC, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 		}
 
 		setupStartingFailedDFCMissing := func() {
 			var err error
 			// Setup instance with missing DFC
-			instance, mockService, _ = fsmtest.SetupProtocolConverterInstanceWithMissingDfc(componentName, protocolconverterfsm.OperationalStateStopped)
+			instance, mockService, _ = fsmtest.SetupBridgeInstanceWithMissingDFC(componentName, bridgefsm.OperationalStateStopped)
 			tick = 0
 
 			// Progress to StartingFailedDFCMissing
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			mockService.ExistingComponents[componentName] = true
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStopped)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStopped)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateCreating,
-				protocolconverterfsm.OperationalStateStopped, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
+			Expect(instance.SetDesiredFSMState(bridgefsm.OperationalStateActive)).To(Succeed())
 
 			// Progress through startup sequence to StartingFailedDFCMissing
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStopped,
-				protocolconverterfsm.OperationalStateStartingConnection, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped,
+				bridgefsm.OperationalStateStartingConnection, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingRedpanda)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingRedpanda)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingConnection,
-				protocolconverterfsm.OperationalStateStartingRedpanda, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingConnection,
+				bridgefsm.OperationalStateStartingRedpanda, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingDFC)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingDFC)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingRedpanda,
-				protocolconverterfsm.OperationalStateStartingDFC, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingRedpanda,
+				bridgefsm.OperationalStateStartingDFC, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStartingFailedDFCMissing)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStartingFailedDFCMissing)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStartingDFC,
-				protocolconverterfsm.OperationalStateStartingFailedDFCMissing, 5, tick, startTime)
+				bridgefsm.OperationalStateStartingDFC,
+				bridgefsm.OperationalStateStartingFailedDFCMissing, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 		}
 
@@ -1016,12 +1013,12 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			setupIdle()
 			var err error
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateDegradedConnection)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateDegradedConnection)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateIdle,
-				protocolconverterfsm.OperationalStateDegradedConnection, 5, tick, startTime)
+				bridgefsm.OperationalStateIdle,
+				bridgefsm.OperationalStateDegradedConnection, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 		}
 
@@ -1029,12 +1026,12 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			setupIdle()
 			var err error
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateDegradedRedpanda)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateDegradedRedpanda)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateIdle,
-				protocolconverterfsm.OperationalStateDegradedRedpanda, 5, tick, startTime)
+				bridgefsm.OperationalStateIdle,
+				bridgefsm.OperationalStateDegradedRedpanda, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 		}
 
@@ -1042,12 +1039,12 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			setupIdle()
 			var err error
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateDegradedDFC)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateDegradedDFC)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateIdle,
-				protocolconverterfsm.OperationalStateDegradedDFC, 5, tick, startTime)
+				bridgefsm.OperationalStateIdle,
+				bridgefsm.OperationalStateDegradedDFC, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 		}
 
@@ -1055,12 +1052,12 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			setupIdle()
 			var err error
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateDegradedOther)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateDegradedOther)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateIdle,
-				protocolconverterfsm.OperationalStateDegradedOther, 5, tick, startTime)
+				bridgefsm.OperationalStateIdle,
+				bridgefsm.OperationalStateDegradedOther, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 		}
 
@@ -1076,46 +1073,46 @@ var _ = Describe("ProtocolConverter FSM", func() {
 				Expect(instance.GetCurrentFSMState()).To(Equal(fromState))
 
 				// Phase 2: Request graceful stop
-				Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateStopped)).To(Succeed())
+				Expect(instance.SetDesiredFSMState(bridgefsm.OperationalStateStopped)).To(Succeed())
 
 				// Phase 3: Verify transition to stopping
-				tick, err = fsmtest.TestProtocolConverterStateTransition(
+				tick, err = fsmtest.TestBridgeStateTransition(
 					ctx, instance, mockService, mockRegistry, componentName,
 					fromState,
-					protocolconverterfsm.OperationalStateStopping, 10, tick, startTime)
+					bridgefsm.OperationalStateStopping, 10, tick, startTime)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(mockService.StopCalled).To(BeTrue())
 
 				// Phase 4: Complete shutdown
-				fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStopped)
+				fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateStopped)
 
-				tick, err = fsmtest.TestProtocolConverterStateTransition(
+				tick, err = fsmtest.TestBridgeStateTransition(
 					ctx, instance, mockService, mockRegistry, componentName,
-					protocolconverterfsm.OperationalStateStopping,
-					protocolconverterfsm.OperationalStateStopped, 5, tick, startTime)
+					bridgefsm.OperationalStateStopping,
+					bridgefsm.OperationalStateStopped, 5, tick, startTime)
 				Expect(err).NotTo(HaveOccurred())
 			},
 
 			// Starting states
-			Entry("from starting_connection", protocolconverterfsm.OperationalStateStartingConnection, setupStartingConnection),
-			Entry("from starting_redpanda", protocolconverterfsm.OperationalStateStartingRedpanda, setupStartingRedpanda),
-			Entry("from starting_dfc", protocolconverterfsm.OperationalStateStartingDFC, setupStartingDFC),
+			Entry("from starting_connection", bridgefsm.OperationalStateStartingConnection, setupStartingConnection),
+			Entry("from starting_redpanda", bridgefsm.OperationalStateStartingRedpanda, setupStartingRedpanda),
+			Entry("from starting_dfc", bridgefsm.OperationalStateStartingDFC, setupStartingDFC),
 			// Note: starting_failed_dfc is excluded because DFCs cannot reach this state in practice yet.
 			// The business logic supports stopping from this state, but test setup is complex and
 			// the state is not reachable through normal DFC lifecycle. Will add test when DFC
 			// failure scenarios are properly implemented.
-			// Entry("from starting_failed_dfc", protocolconverterfsm.OperationalStateStartingFailedDFC, setupStartingFailedDFC),
-			Entry("from starting_failed_dfc_missing", protocolconverterfsm.OperationalStateStartingFailedDFCMissing, setupStartingFailedDFCMissing),
+			// Entry("from starting_failed_dfc", bridgefsm.OperationalStateStartingFailedDFC, setupStartingFailedDFC),
+			Entry("from starting_failed_dfc_missing", bridgefsm.OperationalStateStartingFailedDFCMissing, setupStartingFailedDFCMissing),
 
 			// Running states
-			Entry("from idle", protocolconverterfsm.OperationalStateIdle, setupIdle),
-			Entry("from active", protocolconverterfsm.OperationalStateActive, setupActive),
+			Entry("from idle", bridgefsm.OperationalStateIdle, setupIdle),
+			Entry("from active", bridgefsm.OperationalStateActive, setupActive),
 
 			// Degraded states
-			Entry("from degraded_connection", protocolconverterfsm.OperationalStateDegradedConnection, setupDegradedConnection),
-			Entry("from degraded_redpanda", protocolconverterfsm.OperationalStateDegradedRedpanda, setupDegradedRedpanda),
-			Entry("from degraded_dfc", protocolconverterfsm.OperationalStateDegradedDFC, setupDegradedDFC),
-			Entry("from degraded_other", protocolconverterfsm.OperationalStateDegradedOther, setupDegradedOther),
+			Entry("from degraded_connection", bridgefsm.OperationalStateDegradedConnection, setupDegradedConnection),
+			Entry("from degraded_redpanda", bridgefsm.OperationalStateDegradedRedpanda, setupDegradedRedpanda),
+			Entry("from degraded_dfc", bridgefsm.OperationalStateDegradedDFC, setupDegradedDFC),
+			Entry("from degraded_other", bridgefsm.OperationalStateDegradedOther, setupDegradedOther),
 		)
 	})
 
@@ -1127,19 +1124,19 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			var err error
 
 			// Set to active from stopped state
-			Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
+			Expect(instance.SetDesiredFSMState(bridgefsm.OperationalStateActive)).To(Succeed())
 
 			// Phase 1: Establish Idle state
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateToBeCreated,
-				protocolconverterfsm.OperationalStateIdle, 15, tick, startTime)
+				bridgefsm.OperationalStateIdle, 15, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Phase 2: Verify stability over multiple reconcile cycles
-			tick, err = fsmtest.VerifyProtocolConverterStableState(
+			tick, err = fsmtest.VerifyBridgeStableState(
 				ctx, fsm.SystemSnapshot{Tick: tick}, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateIdle, 5)
+				bridgefsm.OperationalStateIdle, 5)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -1147,27 +1144,27 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			var err error
 
 			// Set to active from stopped state
-			Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
+			Expect(instance.SetDesiredFSMState(bridgefsm.OperationalStateActive)).To(Succeed())
 
 			// Phase 1: Establish Active state
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateToBeCreated,
-				protocolconverterfsm.OperationalStateIdle, 15, tick, startTime)
+				bridgefsm.OperationalStateIdle, 15, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
-			fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateActive)
+			fsmtest.TransitionToBridgeState(mockService, componentName, bridgefsm.OperationalStateActive)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateIdle,
-				protocolconverterfsm.OperationalStateActive, 5, tick, startTime)
+				bridgefsm.OperationalStateIdle,
+				bridgefsm.OperationalStateActive, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Phase 2: Verify stability over multiple reconcile cycles
-			tick, err = fsmtest.VerifyProtocolConverterStableState(
+			tick, err = fsmtest.VerifyBridgeStableState(
 				ctx, fsm.SystemSnapshot{Tick: tick}, instance, mockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateActive, 5)
+				bridgefsm.OperationalStateActive, 5)
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
@@ -1180,10 +1177,10 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			var err error
 
 			// Create an instance with invalid port configuration
-			invalidInstance, invalidMockService, _ := fsmtest.SetupProtocolConverterInstanceWithInvalidPort(componentName, protocolconverterfsm.OperationalStateStopped, "invalid-port")
+			invalidInstance, invalidMockService, _ := fsmtest.SetupBridgeInstanceWithInvalidPort(componentName, bridgefsm.OperationalStateStopped, "invalid-port")
 
 			// Attempt reconciliation several times
-			finalTick, err, _ := fsmtest.ReconcileProtocolConverterUntilError(
+			finalTick, err, _ := fsmtest.ReconcileBridgeUntilError(
 				ctx, fsm.SystemSnapshot{Tick: tick}, invalidInstance, invalidMockService, mockRegistry, componentName, 5)
 
 			// Should NOT get an error propagated up (FSM handles it gracefully)
@@ -1197,11 +1194,11 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			// The observed state should contain the configuration error in StatusReason
 			observedState := invalidInstance.GetLastObservedState()
 			Expect(observedState).NotTo(BeNil())
-			if pcObservedState, ok := observedState.(protocolconverterfsm.ProtocolConverterObservedState); ok {
+			if pcObservedState, ok := observedState.(bridgefsm.ObservedState); ok {
 				Expect(pcObservedState.ServiceInfo.StatusReason).To(ContainSubstring("config error"))
 				Expect(pcObservedState.ServiceInfo.StatusReason).To(ContainSubstring("invalid syntax"))
 			} else {
-				Fail("Could not cast observed state to ProtocolConverterObservedState")
+				Fail("Could not cast observed state to BridgeObservedState")
 			}
 		})
 
@@ -1210,14 +1207,14 @@ var _ = Describe("ProtocolConverter FSM", func() {
 
 			// Create a standard instance (we'll configure the mock to simulate unreachable port)
 			// This reproduces the exact scenario from the bug report: localhost:8082 should be unreachable
-			unreachableInstance, unreachableMockService, _ := fsmtest.SetupProtocolConverterInstance(
-				componentName, protocolconverterfsm.OperationalStateStopped)
+			unreachableInstance, unreachableMockService, _ := fsmtest.SetupBridgeInstance(
+				componentName, bridgefsm.OperationalStateStopped)
 
 			// Set desired state to active to trigger startup sequence
-			Expect(unreachableInstance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
+			Expect(unreachableInstance.SetDesiredFSMState(bridgefsm.OperationalStateActive)).To(Succeed())
 
 			// Progress through initial lifecycle creation
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, unreachableInstance, unreachableMockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating, 5, tick, startTime)
@@ -1225,24 +1222,24 @@ var _ = Describe("ProtocolConverter FSM", func() {
 
 			// Simulate service created but with stopped state (normal startup)
 			unreachableMockService.ExistingComponents[componentName] = true
-			fsmtest.TransitionToProtocolConverterState(unreachableMockService, componentName, protocolconverterfsm.OperationalStateStopped)
+			fsmtest.TransitionToBridgeState(unreachableMockService, componentName, bridgefsm.OperationalStateStopped)
 
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, unreachableInstance, unreachableMockService, mockRegistry, componentName,
 				internalfsm.LifecycleStateCreating,
-				protocolconverterfsm.OperationalStateStopped, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Now try to start - this should get to starting_connection
-			tick, err = fsmtest.TestProtocolConverterStateTransition(
+			tick, err = fsmtest.TestBridgeStateTransition(
 				ctx, unreachableInstance, unreachableMockService, mockRegistry, componentName,
-				protocolconverterfsm.OperationalStateStopped,
-				protocolconverterfsm.OperationalStateStartingConnection, 5, tick, startTime)
+				bridgefsm.OperationalStateStopped,
+				bridgefsm.OperationalStateStartingConnection, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// HERE IS THE KEY: Configure the connection as DOWN/CLOSED to simulate unreachable port
 			// This simulates what would happen if nmap found port 8082 to be closed
-			fsmtest.SetupProtocolConverterServiceState(unreachableMockService, componentName,
+			fsmtest.SetupBridgeServiceState(unreachableMockService, componentName,
 				bridgesvc.StateFlags{
 					IsDFCRunning:       false,
 					IsConnectionUp:     false, // Connection is DOWN because port is unreachable
@@ -1265,17 +1262,17 @@ var _ = Describe("ProtocolConverter FSM", func() {
 
 				// The bug is that it somehow progresses past starting states to degraded_other
 				// It should stay in starting_connection or starting_* states when connection is down
-				if currentState == protocolconverterfsm.OperationalStateDegradedOther {
+				if currentState == bridgefsm.OperationalStateDegradedOther {
 					Fail(fmt.Sprintf("BUG REPRODUCED: Instance progressed to degraded_other (state=%s) instead of staying in starting states. This means the connection test didn't catch the unreachable port during startup. Connection state was: %s", currentState, unreachableInstance.ObservedState.ServiceInfo.ConnectionFSMState))
 				}
 
 				// Also check if it wrongly progresses to other running states
-				if currentState == protocolconverterfsm.OperationalStateIdle || currentState == protocolconverterfsm.OperationalStateActive {
+				if currentState == bridgefsm.OperationalStateIdle || currentState == bridgefsm.OperationalStateActive {
 					Fail(fmt.Sprintf("BUG REPRODUCED: Instance progressed to running state %s despite connection being down. This means the connection check during startup is not working properly.", currentState))
 				}
 
 				// Expected behavior: should stay in starting_connection since connection is down
-				Expect(currentState).To(Equal(protocolconverterfsm.OperationalStateStartingConnection),
+				Expect(currentState).To(Equal(bridgefsm.OperationalStateStartingConnection),
 					fmt.Sprintf("Instance should stay in starting_connection when connection is down, but got: %s. Connection state: %s",
 						currentState, unreachableInstance.ObservedState.ServiceInfo.ConnectionFSMState))
 			}

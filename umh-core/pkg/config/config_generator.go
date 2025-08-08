@@ -28,11 +28,11 @@ func GenerateConfig(processors int, fcm *FileConfigManager) (FullConfig, error) 
 		return FullConfig{}, err
 	}
 
-	if len(fullConfig.ProtocolConverter) == 0 {
-		return FullConfig{}, fmt.Errorf("no protocol converter found")
+	if len(fullConfig.Bridge) == 0 {
+		return FullConfig{}, fmt.Errorf("no bridge found")
 	}
 
-	pc := fullConfig.ProtocolConverter[0]
+	br := fullConfig.Bridge[0]
 	pipeline := make(map[string]any)
 	pipeline["processors"] = make(map[string]any)
 
@@ -44,9 +44,9 @@ func GenerateConfig(processors int, fcm *FileConfigManager) (FullConfig, error) 
 			},
 		}
 	}
-	pc.ProtocolConverterServiceConfig.Config.DFCReadConfig.BenthosConfig.Pipeline = pipeline
+	br.ServiceConfig.Config.DFCReadConfig.BenthosConfig.Pipeline = pipeline
 
-	fullConfig.ProtocolConverter[0] = pc
+	fullConfig.Bridge[0] = br
 
 	return fullConfig, nil
 }

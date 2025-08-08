@@ -22,7 +22,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 )
 
-// AtomicAddProtocolConverter adds a protocol converter to the config atomically.
+// AtomicAddBridge adds a bridge to the config atomically.
 //
 // Business logic:
 // - Standalone converters: Always allowed if name is unique
@@ -32,7 +32,7 @@ import (
 // Fails if:
 // - Another converter with the same name already exists
 // - Adding a child converter but the referenced template doesn't exist
-func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc ProtocolConverterConfig) error {
+func (m *FileConfigManager) AtomicAddBridge(ctx context.Context, pc BridgeConfig) error {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to lock config file: %w", err)
@@ -46,20 +46,20 @@ func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 	}
 
 	// check for duplicate name before add
-	for _, cmp := range config.ProtocolConverter {
+	for _, cmp := range config.Bridge {
 		if cmp.Name == pc.Name {
-			return fmt.Errorf("another protocol converter with name %q already exists – choose a unique name", pc.Name)
+			return fmt.Errorf("another bridge with name %q already exists – choose a unique name", pc.Name)
 		}
 	}
 
 	// If it's a child (TemplateRef is non-empty and != Name), verify that a root with that TemplateRef exists
-	if pc.ProtocolConverterServiceConfig.TemplateRef != "" && pc.ProtocolConverterServiceConfig.TemplateRef != pc.Name {
-		templateRef := pc.ProtocolConverterServiceConfig.TemplateRef
+	if pc.ServiceConfig.TemplateRef != "" && pc.ServiceConfig.TemplateRef != pc.Name {
+		templateRef := pc.ServiceConfig.TemplateRef
 		rootExists := false
 
-		// Scan existing protocol converters to find a root with matching name
-		for _, existing := range config.ProtocolConverter {
-			if existing.Name == templateRef && existing.ProtocolConverterServiceConfig.TemplateRef == existing.Name {
+		// Scan existing bridges to find a root with matching name
+		for _, existing := range config.Bridge {
+			if existing.Name == templateRef && existing.ServiceConfig.TemplateRef == existing.Name {
 				rootExists = true
 				break
 			}
@@ -70,8 +70,8 @@ func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 		}
 	}
 
-	// Add the protocol converter - let convertSpecToYAML handle template generation
-	config.ProtocolConverter = append(config.ProtocolConverter, pc)
+	// Add the bridge - let convertSpecToYAML handle template generation
+	config.Bridge = append(config.Bridge, pc)
 
 	// write the config
 	if err := m.writeConfig(ctx, config); err != nil {
@@ -81,18 +81,17 @@ func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 	return nil
 }
 
-// AtomicAddProtocolConverter delegates to the underlying FileConfigManager
-func (m *FileConfigManagerWithBackoff) AtomicAddProtocolConverter(ctx context.Context, pc ProtocolConverterConfig) error {
-
+// AtomicAddBridge delegates to the underlying FileConfigManager
+func (m *FileConfigManagerWithBackoff) AtomicAddBridge(ctx context.Context, pc BridgeConfig) error {
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
-	return m.configManager.AtomicAddProtocolConverter(ctx, pc)
+	return m.configManager.AtomicAddBridge(ctx, pc)
 }
 
-// AtomicEditProtocolConverter edits a protocol converter in the config atomically.
+// AtomicEditBridge edits a bridge in the config atomically.
 //
 // Business logic:
 // - Standalone converters: Can be edited freely (name, config) if new name is unique
@@ -108,83 +107,83 @@ func (m *FileConfigManagerWithBackoff) AtomicAddProtocolConverter(ctx context.Co
 // - Converter with given UUID doesn't exist
 // - New name conflicts with another converter (excluding the one being edited)
 // - Child converter references a non-existent template
-func (m *FileConfigManager) AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc ProtocolConverterConfig) (ProtocolConverterConfig, error) {
+func (m *FileConfigManager) AtomicEditBridge(ctx context.Context, componentUUID uuid.UUID, pc BridgeConfig) (BridgeConfig, error) {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
-		return ProtocolConverterConfig{}, fmt.Errorf("failed to lock config file: %w", err)
+		return BridgeConfig{}, fmt.Errorf("failed to lock config file: %w", err)
 	}
 	defer m.mutexAtomicUpdate.Unlock()
 
 	// get the current config
 	config, err := m.GetConfig(ctx, 0)
 	if err != nil {
-		return ProtocolConverterConfig{}, fmt.Errorf("failed to get config: %w", err)
+		return BridgeConfig{}, fmt.Errorf("failed to get config: %w", err)
 	}
 
 	// Find target index via GenerateUUIDFromName(Name) == componentUUID
 	// the index is used later to update the config
 	targetIndex := -1
-	var oldConfig ProtocolConverterConfig
-	for i, component := range config.ProtocolConverter {
+	var oldConfig BridgeConfig
+	for i, component := range config.Bridge {
 		curComponentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
 		if curComponentID == componentUUID {
 			targetIndex = i
-			oldConfig = config.ProtocolConverter[i]
+			oldConfig = config.Bridge[i]
 			break
 		}
 	}
 
 	if targetIndex == -1 {
-		return ProtocolConverterConfig{}, fmt.Errorf("protocol converter with UUID %s not found", componentUUID)
+		return BridgeConfig{}, fmt.Errorf("bridge with UUID %s not found", componentUUID)
 	}
 
 	// Duplicate-name check (exclude the edited one)
-	for i, cmp := range config.ProtocolConverter {
+	for i, cmp := range config.Bridge {
 		if i != targetIndex && cmp.Name == pc.Name {
-			return ProtocolConverterConfig{}, fmt.Errorf("another protocol converter with name %q already exists – choose a unique name", pc.Name)
+			return BridgeConfig{}, fmt.Errorf("another bridge with name %q already exists – choose a unique name", pc.Name)
 		}
 	}
 
-	newIsRoot := pc.ProtocolConverterServiceConfig.TemplateRef != "" &&
-		pc.ProtocolConverterServiceConfig.TemplateRef == pc.Name
-	oldIsRoot := oldConfig.ProtocolConverterServiceConfig.TemplateRef != "" &&
-		oldConfig.ProtocolConverterServiceConfig.TemplateRef == oldConfig.Name
+	newIsRoot := pc.ServiceConfig.TemplateRef != "" &&
+		pc.ServiceConfig.TemplateRef == pc.Name
+	oldIsRoot := oldConfig.ServiceConfig.TemplateRef != "" &&
+		oldConfig.ServiceConfig.TemplateRef == oldConfig.Name
 
 	// Handle root rename - propagate to children
 	if oldIsRoot && newIsRoot && oldConfig.Name != pc.Name {
 		// Update all children that reference the old root name
-		for i, inst := range config.ProtocolConverter {
-			if i != targetIndex && inst.ProtocolConverterServiceConfig.TemplateRef == oldConfig.Name {
-				inst.ProtocolConverterServiceConfig.TemplateRef = pc.Name
-				config.ProtocolConverter[i] = inst
+		for i, inst := range config.Bridge {
+			if i != targetIndex && inst.ServiceConfig.TemplateRef == oldConfig.Name {
+				inst.ServiceConfig.TemplateRef = pc.Name
+				config.Bridge[i] = inst
 			}
 		}
 	}
 
 	// If it's a child (TemplateRef is non-empty and not a root), reject the edit
-	if !oldIsRoot && pc.ProtocolConverterServiceConfig.TemplateRef != "" {
-		return ProtocolConverterConfig{},
+	if !oldIsRoot && pc.ServiceConfig.TemplateRef != "" {
+		return BridgeConfig{},
 			fmt.Errorf("cannot edit child %q; it is not a root. Edit the root instead: %q",
-				oldConfig.Name, oldConfig.ProtocolConverterServiceConfig.TemplateRef)
+				oldConfig.Name, oldConfig.ServiceConfig.TemplateRef)
 	}
 
 	// Commit the edit
-	config.ProtocolConverter[targetIndex] = pc
+	config.Bridge[targetIndex] = pc
 
 	// write the config
 	if err := m.writeConfig(ctx, config); err != nil {
-		return ProtocolConverterConfig{}, fmt.Errorf("failed to write config: %w", err)
+		return BridgeConfig{}, fmt.Errorf("failed to write config: %w", err)
 	}
 
 	return oldConfig, nil
 }
 
-// AtomicDeleteProtocolConverter deletes a protocol converter from the config atomically.
+// AtomicDeleteBridge deletes a bridge from the config atomically.
 //
 // Business logic:
-// - Standalone converters: Can always be deleted safely
-// - Child converters: Can always be deleted safely (doesn't affect other converters)
-// - Root converters: Can only be deleted if no children depend on them
+// - Standalone bridges: Can always be deleted safely
+// - Child bridges: Can always be deleted safely (doesn't affect other converters)
+// - Root bridges: Can only be deleted if no children depend on them
 //
 // Dependency protection:
 // - Before deleting a root, checks if any child converters reference it via TemplateRef
@@ -194,7 +193,7 @@ func (m *FileConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 // Fails if:
 // - Converter with given UUID doesn't exist
 // - Attempting to delete a root converter that has dependent children
-func (m *FileConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, componentUUID uuid.UUID) error {
+func (m *FileConfigManager) AtomicDeleteBridge(ctx context.Context, componentUUID uuid.UUID) error {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to lock config file: %w", err)
@@ -207,10 +206,10 @@ func (m *FileConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 		return fmt.Errorf("failed to get config: %w", err)
 	}
 
-	// Find the target protocol converter by UUID
+	// Find the target bridge by UUID
 	targetIndex := -1
-	var targetConverter ProtocolConverterConfig
-	for i, converter := range config.ProtocolConverter {
+	var targetConverter BridgeConfig
+	for i, converter := range config.Bridge {
 		converterID := dataflowcomponentserviceconfig.GenerateUUIDFromName(converter.Name)
 		if converterID == componentUUID {
 			targetIndex = i
@@ -220,23 +219,23 @@ func (m *FileConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 	}
 
 	if targetIndex == -1 {
-		return fmt.Errorf("protocol converter with UUID %s not found", componentUUID)
+		return fmt.Errorf("bridge with UUID %s not found", componentUUID)
 	}
 
 	// Determine if target is a root
-	isRoot := targetConverter.ProtocolConverterServiceConfig.TemplateRef != "" &&
-		targetConverter.ProtocolConverterServiceConfig.TemplateRef == targetConverter.Name
+	isRoot := targetConverter.ServiceConfig.TemplateRef != "" &&
+		targetConverter.ServiceConfig.TemplateRef == targetConverter.Name
 
 	// If it's a root, check for dependent children
 	if isRoot {
 		childCount := 0
-		for i, converter := range config.ProtocolConverter {
+		for i, converter := range config.Bridge {
 			// Skip the target itself
 			if i == targetIndex {
 				continue
 			}
 			// Count children that reference this root
-			if converter.ProtocolConverterServiceConfig.TemplateRef == targetConverter.Name {
+			if converter.ServiceConfig.TemplateRef == targetConverter.Name {
 				childCount++
 			}
 		}
@@ -247,15 +246,15 @@ func (m *FileConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 	}
 
 	// Build new slice omitting the target
-	filteredConverters := make([]ProtocolConverterConfig, 0, len(config.ProtocolConverter)-1)
-	for i, converter := range config.ProtocolConverter {
+	filteredConverters := make([]BridgeConfig, 0, len(config.Bridge)-1)
+	for i, converter := range config.Bridge {
 		if i != targetIndex {
 			filteredConverters = append(filteredConverters, converter)
 		}
 	}
 
 	// Update config with filtered converters
-	config.ProtocolConverter = filteredConverters
+	config.Bridge = filteredConverters
 
 	// write the config
 	if err := m.writeConfig(ctx, config); err != nil {
@@ -265,22 +264,22 @@ func (m *FileConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 	return nil
 }
 
-// AtomicEditProtocolConverter delegates to the underlying FileConfigManager
-func (m *FileConfigManagerWithBackoff) AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc ProtocolConverterConfig) (ProtocolConverterConfig, error) {
+// AtomicEditBridge delegates to the underlying FileConfigManager
+func (m *FileConfigManagerWithBackoff) AtomicEditBridge(ctx context.Context, componentUUID uuid.UUID, pc BridgeConfig) (BridgeConfig, error) {
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
-		return ProtocolConverterConfig{}, ctx.Err()
+		return BridgeConfig{}, ctx.Err()
 	}
 
-	return m.configManager.AtomicEditProtocolConverter(ctx, componentUUID, pc)
+	return m.configManager.AtomicEditBridge(ctx, componentUUID, pc)
 }
 
-// AtomicDeleteProtocolConverter delegates to the underlying FileConfigManager
-func (m *FileConfigManagerWithBackoff) AtomicDeleteProtocolConverter(ctx context.Context, componentUUID uuid.UUID) error {
+// AtomicDeleteBridge delegates to the underlying FileConfigManager
+func (m *FileConfigManagerWithBackoff) AtomicDeleteBridge(ctx context.Context, componentUUID uuid.UUID) error {
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
-	return m.configManager.AtomicDeleteProtocolConverter(ctx, componentUUID)
+	return m.configManager.AtomicDeleteBridge(ctx, componentUUID)
 }

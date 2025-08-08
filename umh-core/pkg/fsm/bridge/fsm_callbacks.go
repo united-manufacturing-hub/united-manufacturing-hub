@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package protocolconverter
+package bridge
 
 import (
 	"context"
@@ -22,9 +22,9 @@ import (
 
 // registerCallbacks registers common callbacks for state transitions
 // These callbacks are executed synchronously and should not have any network calls or other operations that could fail
-func (instance *ProtocolConverterInstance) registerCallbacks() {
-	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStopping, func(ctx context.Context, e *fsm.Event) {
-		instance.baseFSMInstance.GetLogger().Infof("Entering stopping state for %s", instance.baseFSMInstance.GetID())
+func (i *Instance) registerCallbacks() {
+	i.baseFSMInstance.AddCallback("enter_"+OperationalStateStopping, func(ctx context.Context, e *fsm.Event) {
+		i.baseFSMInstance.GetLogger().Infof("Entering stopping state for %s", i.baseFSMInstance.GetID())
 		// instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
 		//	Record: storage.Record{
 		//		State:       OperationalStateStopping,
@@ -34,8 +34,8 @@ func (instance *ProtocolConverterInstance) registerCallbacks() {
 		//})
 	})
 
-	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStopped, func(ctx context.Context, e *fsm.Event) {
-		instance.baseFSMInstance.GetLogger().Infof("Entering stopped state for %s", instance.baseFSMInstance.GetID())
+	i.baseFSMInstance.AddCallback("enter_"+OperationalStateStopped, func(ctx context.Context, e *fsm.Event) {
+		i.baseFSMInstance.GetLogger().Infof("Entering stopped state for %s", i.baseFSMInstance.GetID())
 		// instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
 		//	Record: storage.Record{
 		//		State:       OperationalStateStopped,
@@ -46,8 +46,8 @@ func (instance *ProtocolConverterInstance) registerCallbacks() {
 	})
 
 	// Basic operational state callbacks
-	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStartingConnection, func(ctx context.Context, e *fsm.Event) {
-		instance.baseFSMInstance.GetLogger().Infof("Entering starting connection state for %s", instance.baseFSMInstance.GetID())
+	i.baseFSMInstance.AddCallback("enter_"+OperationalStateStartingConnection, func(ctx context.Context, e *fsm.Event) {
+		i.baseFSMInstance.GetLogger().Infof("Entering starting connection state for %s", i.baseFSMInstance.GetID())
 		//instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
 		//	Record: storage.Record{
 		//		State:       OperationalStateStartingConnection,
@@ -57,8 +57,8 @@ func (instance *ProtocolConverterInstance) registerCallbacks() {
 		//})
 	})
 
-	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStartingRedpanda, func(ctx context.Context, e *fsm.Event) {
-		instance.baseFSMInstance.GetLogger().Infof("Entering starting redpanda state for %s", instance.baseFSMInstance.GetID())
+	i.baseFSMInstance.AddCallback("enter_"+OperationalStateStartingRedpanda, func(ctx context.Context, e *fsm.Event) {
+		i.baseFSMInstance.GetLogger().Infof("Entering starting redpanda state for %s", i.baseFSMInstance.GetID())
 		//instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
 		//	Record: storage.Record{
 		//		State:       OperationalStateStartingRedpanda,
@@ -68,8 +68,8 @@ func (instance *ProtocolConverterInstance) registerCallbacks() {
 		//})
 	})
 
-	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStartingDFC, func(ctx context.Context, e *fsm.Event) {
-		instance.baseFSMInstance.GetLogger().Infof("Entering starting dfc state for %s", instance.baseFSMInstance.GetID())
+	i.baseFSMInstance.AddCallback("enter_"+OperationalStateStartingDFC, func(ctx context.Context, e *fsm.Event) {
+		i.baseFSMInstance.GetLogger().Infof("Entering starting dfc state for %s", i.baseFSMInstance.GetID())
 		//instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
 		//	Record: storage.Record{
 		//		State:       OperationalStateStartingDFC,
@@ -79,8 +79,8 @@ func (instance *ProtocolConverterInstance) registerCallbacks() {
 		//})
 	})
 
-	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStartingFailedDFC, func(ctx context.Context, e *fsm.Event) {
-		instance.baseFSMInstance.GetLogger().Errorf("Entering starting-failed-dfc state for %s", instance.baseFSMInstance.GetID())
+	i.baseFSMInstance.AddCallback("enter_"+OperationalStateStartingFailedDFC, func(ctx context.Context, e *fsm.Event) {
+		i.baseFSMInstance.GetLogger().Errorf("Entering starting-failed-dfc state for %s", i.baseFSMInstance.GetID())
 		//instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
 		//	Record: storage.Record{
 		//		State:       OperationalStateStartingFailedDFC,
@@ -90,8 +90,8 @@ func (instance *ProtocolConverterInstance) registerCallbacks() {
 		//})
 	})
 
-	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStartingFailedDFCMissing, func(ctx context.Context, e *fsm.Event) {
-		instance.baseFSMInstance.GetLogger().Errorf("Entering starting-failed-dfc-missing state for %s", instance.baseFSMInstance.GetID())
+	i.baseFSMInstance.AddCallback("enter_"+OperationalStateStartingFailedDFCMissing, func(ctx context.Context, e *fsm.Event) {
+		i.baseFSMInstance.GetLogger().Errorf("Entering starting-failed-dfc-missing state for %s", i.baseFSMInstance.GetID())
 		//instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
 		//	Record: storage.Record{
 		//		State:       OperationalStateStartingFailedDFCMissing,
@@ -102,8 +102,8 @@ func (instance *ProtocolConverterInstance) registerCallbacks() {
 	})
 
 	// Running phase state callbacks
-	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateIdle, func(ctx context.Context, e *fsm.Event) {
-		instance.baseFSMInstance.GetLogger().Infof("Entering idle state for %s", instance.baseFSMInstance.GetID())
+	i.baseFSMInstance.AddCallback("enter_"+OperationalStateIdle, func(ctx context.Context, e *fsm.Event) {
+		i.baseFSMInstance.GetLogger().Infof("Entering idle state for %s", i.baseFSMInstance.GetID())
 		// instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
 		//	Record: storage.Record{
 		//		State:       OperationalStateIdle,
@@ -113,8 +113,8 @@ func (instance *ProtocolConverterInstance) registerCallbacks() {
 		//})
 	})
 
-	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateActive, func(ctx context.Context, e *fsm.Event) {
-		instance.baseFSMInstance.GetLogger().Infof("Entering active state for %s", instance.baseFSMInstance.GetID())
+	i.baseFSMInstance.AddCallback("enter_"+OperationalStateActive, func(ctx context.Context, e *fsm.Event) {
+		i.baseFSMInstance.GetLogger().Infof("Entering active state for %s", i.baseFSMInstance.GetID())
 		// instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
 		//	Record: storage.Record{
 		//		State:       OperationalStateActive,
@@ -124,8 +124,8 @@ func (instance *ProtocolConverterInstance) registerCallbacks() {
 		//})
 	})
 
-	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateDegradedConnection, func(ctx context.Context, e *fsm.Event) {
-		instance.baseFSMInstance.GetLogger().Warnf("Entering degraded connection state for %s", instance.baseFSMInstance.GetID())
+	i.baseFSMInstance.AddCallback("enter_"+OperationalStateDegradedConnection, func(ctx context.Context, e *fsm.Event) {
+		i.baseFSMInstance.GetLogger().Warnf("Entering degraded connection state for %s", i.baseFSMInstance.GetID())
 		// instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
 		//	Record: storage.Record{
 		//		State:       OperationalStateDegradedConnection,
@@ -135,8 +135,8 @@ func (instance *ProtocolConverterInstance) registerCallbacks() {
 		//})
 	})
 
-	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateDegradedRedpanda, func(ctx context.Context, e *fsm.Event) {
-		instance.baseFSMInstance.GetLogger().Warnf("Entering degraded redpanda state for %s", instance.baseFSMInstance.GetID())
+	i.baseFSMInstance.AddCallback("enter_"+OperationalStateDegradedRedpanda, func(ctx context.Context, e *fsm.Event) {
+		i.baseFSMInstance.GetLogger().Warnf("Entering degraded redpanda state for %s", i.baseFSMInstance.GetID())
 		// instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
 		//	Record: storage.Record{
 		//		State:       OperationalStateDegradedRedpanda,
@@ -146,8 +146,8 @@ func (instance *ProtocolConverterInstance) registerCallbacks() {
 		//})
 	})
 
-	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateDegradedDFC, func(ctx context.Context, e *fsm.Event) {
-		instance.baseFSMInstance.GetLogger().Warnf("Entering degraded dfc state for %s", instance.baseFSMInstance.GetID())
+	i.baseFSMInstance.AddCallback("enter_"+OperationalStateDegradedDFC, func(ctx context.Context, e *fsm.Event) {
+		i.baseFSMInstance.GetLogger().Warnf("Entering degraded dfc state for %s", i.baseFSMInstance.GetID())
 		// instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
 		//	Record: storage.Record{
 		//		State:       OperationalStateDegradedDFC,
@@ -157,8 +157,8 @@ func (instance *ProtocolConverterInstance) registerCallbacks() {
 		//})
 	})
 
-	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateDegradedOther, func(ctx context.Context, e *fsm.Event) {
-		instance.baseFSMInstance.GetLogger().Warnf("Entering degraded other state for %s", instance.baseFSMInstance.GetID())
+	i.baseFSMInstance.AddCallback("enter_"+OperationalStateDegradedOther, func(ctx context.Context, e *fsm.Event) {
+		i.baseFSMInstance.GetLogger().Warnf("Entering degraded other state for %s", i.baseFSMInstance.GetID())
 		// instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
 		//	Record: storage.Record{
 		//		State:       OperationalStateDegradedOther,

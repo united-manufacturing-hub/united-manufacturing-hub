@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package protocolconverter
+package bridge
 
 import (
 	"context"
@@ -39,56 +39,56 @@ import (
 // This function is intended to be called repeatedly (e.g. in a periodic control loop).
 // Over multiple calls, it converges the actual state to the desired state. Transitions
 // that fail are retried in subsequent reconcile calls after a backoff periop.
-func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
+func (i *Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
 	start := time.Now()
-	protocolConverterInstanceName := p.baseFSMInstance.GetID()
+	instanceName := i.baseFSMInstance.GetID()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentProtocolConverterInstance, protocolConverterInstanceName, time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentBridgeInstance, instanceName, time.Since(start))
 		if err != nil {
-			p.baseFSMInstance.GetLogger().Errorf("error reconciling protocolconverter instance %s: %v", protocolConverterInstanceName, err)
-			p.PrintState()
+			i.baseFSMInstance.GetLogger().Errorf("error reconciling bridge instance %s: %v", instanceName, err)
+			i.PrintState()
 			// Add metrics for error
-			metrics.IncErrorCountAndLog(metrics.ComponentProtocolConverterInstance, protocolConverterInstanceName, err, p.baseFSMInstance.GetLogger())
+			metrics.IncErrorCountAndLog(metrics.ComponentBridgeInstance, instanceName, err, i.baseFSMInstance.GetLogger())
 		}
 	}()
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
-		if p.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "start of reconciliation") {
+		if i.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "start of reconciliation") {
 			return nil, false
 		}
 		return ctx.Err(), false
 	}
 
 	// Step 1: If there's a lastError, see if we've waited enough.
-	if p.baseFSMInstance.ShouldSkipReconcileBecauseOfError(snapshot.Tick) {
-		err := p.baseFSMInstance.GetBackoffError(snapshot.Tick)
-		p.baseFSMInstance.GetLogger().Debugf("Skipping reconcile for Protocolconverter pipeline %s: %v", protocolConverterInstanceName, err)
+	if i.baseFSMInstance.ShouldSkipReconcileBecauseOfError(snapshot.Tick) {
+		err := i.baseFSMInstance.GetBackoffError(snapshot.Tick)
+		i.baseFSMInstance.GetLogger().Debugf("Skipping reconcile for Bridge pipeline %s: %v", instanceName, err)
 
 		// if it is a permanent error, start the removal process and reset the error (so that we can reconcile towards a stopped / removed state)
 		if backoff.IsPermanentFailureError(err) {
 			// For permanent errors, we need special handling based on the instance's current state:
 			// 1. If already in a shutdown state (removed, removing, stopping, stopped), try force removal
 			// 2. If not in a shutdown state, attempt normal removal first, then force if needed
-			return p.baseFSMInstance.HandlePermanentError(
+			return i.baseFSMInstance.HandlePermanentError(
 				ctx,
 				err,
 				func() bool {
 					// Determine if we're already in a shutdown state where normal removal isn't possible
 					// and force removal is required
-					return p.IsRemoved() || p.IsRemoving() || p.IsStopping() || p.IsStopped()
+					return i.IsRemoved() || i.IsRemoving() || i.IsStopping() || i.IsStopped()
 				},
 				func(ctx context.Context) error {
 					// Normal removal through state transition
 					// Use Remove() instead of RemoveInstance() to ensure proper FSM state management.
 					// Remove() triggers FSM state transitions via baseFSMInstance.Remove(),
 					// while RemoveInstance() bypasses FSM and directly performs file operations.
-					return p.Remove(ctx)
+					return i.Remove(ctx)
 				},
 				func(ctx context.Context) error {
 					// Force removal when other approaches fail - bypasses state transitions
 					// and directly deletes files and resources
-					return p.service.ForceRemove(ctx, services.GetFileSystem(), protocolConverterInstanceName)
+					return i.service.ForceRemove(ctx, services.GetFileSystem(), instanceName)
 				},
 			)
 		}
@@ -96,11 +96,11 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 	}
 
 	// Step 2: Detect external changes - skip during removal
-	if p.baseFSMInstance.IsRemoving() {
+	if i.baseFSMInstance.IsRemoving() {
 		// Skip external changes detection during removal - config files may be deleted
-		p.baseFSMInstance.GetLogger().Debugf("Skipping external changes detection during removal")
+		i.baseFSMInstance.GetLogger().Debugf("Skipping external changes detection during removal")
 	} else {
-		if err = p.reconcileExternalChanges(ctx, services, snapshot); err != nil {
+		if err = i.reconcileExternalChanges(ctx, services, snapshot); err != nil {
 			// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 			if !errors.Is(err, bridgesvc.ErrServiceNotExist) && !errors.Is(err, s6.ErrServiceNotExist) {
 				// errors.Is(err, s6.ErrServiceNotExist)
@@ -113,14 +113,14 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 
 				if errors.Is(err, context.DeadlineExceeded) {
 					// Context deadline exceeded should be retried with backoff, not ignored
-					p.baseFSMInstance.SetError(err, snapshot.Tick)
-					p.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileExternalChanges, will retry with backoff")
+					i.baseFSMInstance.SetError(err, snapshot.Tick)
+					i.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileExternalChanges, will retry with backoff")
 					err = nil // Clear error so reconciliation continues
 					return nil, false
 				}
 
-				p.baseFSMInstance.SetError(err, snapshot.Tick)
-				p.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
+				i.baseFSMInstance.SetError(err, snapshot.Tick)
+				i.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
 
 				return nil, false // We don't want to return an error here, because we want to continue reconciling
 			}
@@ -131,7 +131,7 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 
 	// Step 3: Attempt to reconcile the state.
 	currentTime := time.Now() // this is used to check if the instance is degraded and for the log check
-	err, reconciled = p.reconcileStateTransition(ctx, services, currentTime)
+	err, reconciled = i.reconcileStateTransition(ctx, services, currentTime)
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
 		if errors.Is(err, standarderrors.ErrInstanceRemoved) {
@@ -140,32 +140,32 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 
 		if errors.Is(err, context.DeadlineExceeded) {
 			// Context deadline exceeded should be retried with backoff, not ignored
-			p.baseFSMInstance.SetError(err, snapshot.Tick)
-			p.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileStateTransition, will retry with backoff")
+			i.baseFSMInstance.SetError(err, snapshot.Tick)
+			i.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileStateTransition, will retry with backoff")
 			return nil, false
 		}
 
 		// Enhanced error logging with state context
-		currentState := p.baseFSMInstance.GetCurrentFSMState()
-		desiredState := p.baseFSMInstance.GetDesiredFSMState()
-		p.baseFSMInstance.GetLogger().Errorf("error reconciling state transition: current_state='%s', desired_state='%s', error: %s",
+		currentState := i.baseFSMInstance.GetCurrentFSMState()
+		desiredState := i.baseFSMInstance.GetDesiredFSMState()
+		i.baseFSMInstance.GetLogger().Errorf("error reconciling state transition: current_state='%s', desired_state='%s', error: %s",
 			currentState, desiredState, err)
 
-		p.baseFSMInstance.SetError(err, snapshot.Tick)
+		i.baseFSMInstance.SetError(err, snapshot.Tick)
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
 	// Reconcile the manager
-	managerErr, managerReconciled := p.service.ReconcileManager(ctx, services, snapshot.Tick)
+	managerErr, managerReconciled := i.service.ReconcileManager(ctx, services, snapshot.Tick)
 	if managerErr != nil {
 		if errors.Is(managerErr, context.DeadlineExceeded) {
 			// Context deadline exceeded should be retried with backoff, not ignored
-			p.baseFSMInstance.SetError(managerErr, snapshot.Tick)
-			p.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in manager reconciliation, will retry with backoff")
+			i.baseFSMInstance.SetError(managerErr, snapshot.Tick)
+			i.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in manager reconciliation, will retry with backoff")
 			return nil, false
 		}
-		p.baseFSMInstance.SetError(managerErr, snapshot.Tick)
-		p.baseFSMInstance.GetLogger().Errorf("error reconciling manager: %s", managerErr)
+		i.baseFSMInstance.SetError(managerErr, snapshot.Tick)
+		i.baseFSMInstance.GetLogger().Errorf("error reconciling manager: %s", managerErr)
 		return nil, false
 	}
 
@@ -175,25 +175,25 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 	reconciled = reconciled || managerReconciled
 
 	// It went all right, so clear the error
-	p.baseFSMInstance.ResetState()
+	i.baseFSMInstance.ResetState()
 
 	return nil, reconciled
 }
 
 // reconcileExternalChanges checks if the DataflowComponentInstance service status has changed
 // externally (e.g., if someone manually stopped or started it, or if it crashed)
-func (p *ProtocolConverterInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
+func (i *Instance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentBridgeInstance, i.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
 	}()
 
 	// Create context for UpdateObservedStateOfInstance with minimum timeout guarantee
 	// This ensures we get either 80% of available time OR the minimum required time, whichever is larger
-	updateCtx, cancel := constants.CreateUpdateObservedStateContextWithMinimum(ctx, constants.ProtocolConverterUpdateObservedStateTimeout)
+	updateCtx, cancel := constants.CreateUpdateObservedStateContextWithMinimum(ctx, constants.BridgeUpdateObservedStateTimeout)
 	defer cancel()
 
-	err := p.UpdateObservedStateOfInstance(updateCtx, services, snapshot)
+	err := i.UpdateObservedStateOfInstance(updateCtx, services, snapshot)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}
@@ -205,21 +205,21 @@ func (p *ProtocolConverterInstance) reconcileExternalChanges(ctx context.Context
 // Any functions that fetch information are disallowed here and must be called in reconcileExternalChanges
 // and exist in ObservedState.
 // This is to ensure full testability of the FSM.
-func (p *ProtocolConverterInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider, currentTime time.Time) (err error, reconciled bool) {
+func (i *Instance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".reconcileStateTransition", time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentBridgeInstance, i.baseFSMInstance.GetID()+".reconcileStateTransition", time.Since(start))
 	}()
 
-	currentState := p.baseFSMInstance.GetCurrentFSMState()
-	desiredState := p.baseFSMInstance.GetDesiredFSMState()
+	currentState := i.baseFSMInstance.GetCurrentFSMState()
+	desiredState := i.baseFSMInstance.GetDesiredFSMState()
 
 	// Report current and desired state metrics
-	metrics.UpdateServiceState(metrics.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID(), currentState, desiredState)
+	metrics.UpdateServiceState(metrics.ComponentBridgeInstance, i.baseFSMInstance.GetID(), currentState, desiredState)
 
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {
-		err, reconciled := p.baseFSMInstance.ReconcileLifecycleStates(ctx, services, currentState, p.CreateInstance, p.RemoveInstance, p.CheckForCreation)
+		err, reconciled := i.baseFSMInstance.ReconcileLifecycleStates(ctx, services, currentState, i.CreateInstance, i.RemoveInstance, i.CheckForCreation)
 		if err != nil {
 			return err, false
 		}
@@ -228,7 +228,7 @@ func (p *ProtocolConverterInstance) reconcileStateTransition(ctx context.Context
 
 	// Handle operational states
 	if IsOperationalState(currentState) {
-		err, reconciled := p.reconcileOperationalStates(ctx, services, currentState, desiredState, currentTime)
+		err, reconciled := i.reconcileOperationalStates(ctx, services, currentState, desiredState, currentTime)
 		if err != nil {
 			return err, false
 		}
@@ -239,17 +239,17 @@ func (p *ProtocolConverterInstance) reconcileStateTransition(ctx context.Context
 }
 
 // reconcileOperationalStates handles states related to instance operations (starting/stopping)
-func (p *ProtocolConverterInstance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time) (err error, reconciled bool) {
+func (i *Instance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".reconcileOperationalStates", time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentBridgeInstance, i.baseFSMInstance.GetID()+".reconcileOperationalStates", time.Since(start))
 	}()
 
 	switch desiredState {
 	case OperationalStateActive:
-		return p.reconcileTransitionToActive(ctx, services, currentState, currentTime)
+		return i.reconcileTransitionToActive(ctx, services, currentState, currentTime)
 	case OperationalStateStopped:
-		return p.reconcileTransitionToStopped(ctx, services, currentState)
+		return i.reconcileTransitionToStopped(ctx, services, currentState)
 	default:
 		return fmt.Errorf("invalid desired state: %s", desiredState), false
 	}
@@ -257,116 +257,116 @@ func (p *ProtocolConverterInstance) reconcileOperationalStates(ctx context.Conte
 
 // reconcileTransitionToActive handles transitions when the desired state is Active.
 // It deals with moving from various states to the Active state.
-func (p *ProtocolConverterInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (i *Instance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentBridgeInstance, i.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
 	}()
 
 	// If we're stopped, we need to start first
 	if currentState == OperationalStateStopped {
 		// Attempt to initiate start
-		if err := p.StartInstance(ctx, services.GetFileSystem()); err != nil {
+		if err := i.StartInstance(ctx, services.GetFileSystem()); err != nil {
 			return err, false
 		}
-		p.ObservedState.ServiceInfo.StatusReason = "started"
+		i.ObservedState.ServiceInfo.StatusReason = "started"
 		// Send event to transition from Stopped to Starting
-		return p.baseFSMInstance.SendEvent(ctx, EventStart), true
+		return i.baseFSMInstance.SendEvent(ctx, EventStart), true
 	}
 
 	// Handle starting phase states
 	if IsStartingState(currentState) {
-		return p.reconcileStartingStates(ctx, services, currentState, currentTime)
+		return i.reconcileStartingStates(ctx, services, currentState, currentTime)
 	} else if IsRunningState(currentState) {
-		return p.reconcileRunningState(ctx, services, currentState, currentTime)
+		return i.reconcileRunningState(ctx, services, currentState, currentTime)
 	} else if currentState == OperationalStateStopping {
 		// There can be the edge case where an fsm is set to stopped, and then a cycle later again to active
 		// It will cause the stopping process to start, but then the deisred state is again active, so it will land up in reconcileTransitionToActive
 		// if it is stopping, we will first finish the stopping process and then we will go to active
-		return p.reconcileTransitionToStopped(ctx, services, currentState)
+		return i.reconcileTransitionToStopped(ctx, services, currentState)
 	}
 
 	return nil, false
 }
 
 // reconcileStartingStates handles the various starting phase states when transitioning to Active.
-func (p *ProtocolConverterInstance) reconcileStartingStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (i *Instance) reconcileStartingStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".reconcileStartingState", time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentBridgeInstance, i.baseFSMInstance.GetID()+".reconcileStartingState", time.Since(start))
 	}()
 
 	switch currentState {
 	case OperationalStateStartingConnection:
 		// First we need to ensure the S6 service is started
-		running, reason := p.IsConnectionUp()
+		running, reason := i.IsConnectionUp()
 		if !running {
-			p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reason)
+			i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reason)
 			return nil, false
 		}
 
-		return p.baseFSMInstance.SendEvent(ctx, EventStartConnectionUp), true
+		return i.baseFSMInstance.SendEvent(ctx, EventStartConnectionUp), true
 	case OperationalStateStartingRedpanda:
 		// If the connection is not up, we need to go back to starting
-		running, reason := p.IsConnectionUp()
+		running, reason := i.IsConnectionUp()
 		if !running {
-			p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reason)
-			return p.baseFSMInstance.SendEvent(ctx, EventStartRetry), false // a previous succeeding check failed, so let's retry the whole start process
+			i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reason)
+			return i.baseFSMInstance.SendEvent(ctx, EventStartRetry), false // a previous succeeding check failed, so let's retry the whole start process
 		}
 
 		// Now check whether redpanda is healthy
-		running, reason = p.IsRedpandaHealthy()
+		running, reason = i.IsRedpandaHealthy()
 		if !running {
-			p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reason)
+			i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reason)
 			return nil, false
 		}
 
-		return p.baseFSMInstance.SendEvent(ctx, EventStartRedpandaUp), true
+		return i.baseFSMInstance.SendEvent(ctx, EventStartRedpandaUp), true
 	case OperationalStateStartingDFC:
 
 		// If the connection is not up, we need to go back to starting
-		running, reason := p.IsConnectionUp()
+		running, reason := i.IsConnectionUp()
 		if !running {
-			p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reason)
-			return p.baseFSMInstance.SendEvent(ctx, EventStartRetry), false // a previous succeeding check failed, so let's retry the whole start process
+			i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reason)
+			return i.baseFSMInstance.SendEvent(ctx, EventStartRetry), false // a previous succeeding check failed, so let's retry the whole start process
 		}
 
 		// If the redpanda is not healthy, we need to go back to starting
-		running, reason = p.IsRedpandaHealthy()
+		running, reason = i.IsRedpandaHealthy()
 		if !running {
-			p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reason)
-			return p.baseFSMInstance.SendEvent(ctx, EventStartRetry), false // a previous succeeding check failed, so let's retry the whole start process
+			i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reason)
+			return i.baseFSMInstance.SendEvent(ctx, EventStartRetry), false // a previous succeeding check failed, so let's retry the whole start process
 		}
 
 		// If neither read not write DFC is existing, then go into OperationalStateStartingFailedDFCMissing
-		existing, reason := p.IsDFCExisting()
+		existing, reason := i.IsDFCExisting()
 		if !existing {
-			p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reason)
-			return p.baseFSMInstance.SendEvent(ctx, EventStartFailedDFCMissing), true
+			i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reason)
+			return i.baseFSMInstance.SendEvent(ctx, EventStartFailedDFCMissing), true
 		}
 
 		// Now check whether the DFC is healthy
-		running, reason = p.IsDFCHealthy()
+		running, reason = i.IsDFCHealthy()
 		if !running {
-			p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reason)
+			i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reason)
 			return nil, false
 		}
 
-		return p.baseFSMInstance.SendEvent(ctx, EventStartDFCUp), true
+		return i.baseFSMInstance.SendEvent(ctx, EventStartDFCUp), true
 	case OperationalStateStartingFailedDFCMissing:
 		// For OperationalStateStartingFailedDFCMissing, check if a DFC is now available and retry starting
 
 		// CRITICAL FIX: Recovery mechanism for OperationalStateStartingFailedDFCMissing
 		//
 		// PROBLEM DESCRIPTION:
-		// The Protocol Converter FSM had a design flaw where instances would get permanently
+		// The Bridge FSM had a design flaw where instances would get permanently
 		// stuck in OperationalStateStartingFailedDFCMissing when created without DFC configuration
 		// and later updated to include DFCs. This created an unrecoverable state that required
 		// manual intervention or instance recreation.
 		//
 		// ROOT CAUSE ANALYSIS:
 		// 1. INITIAL STATE FLOW:
-		//    - User creates Protocol Converter without DFC configuration
+		//    - User creates Bridge without DFC configuration
 		//    - FSM transitions: stopped → starting_connection → starting_redpanda → starting_dfc
 		//    - In starting_dfc state, IsDFCExisting() returns false (no DFC configured)
 		//    - FSM transitions to OperationalStateStartingFailedDFCMissing via EventStartFailedDFCMissing
@@ -375,19 +375,19 @@ func (p *ProtocolConverterInstance) reconcileStartingStates(ctx context.Context,
 		//    - User adds DFC to configuration
 		//    - Base manager detects config change and calls setConfig()
 		//    - UpdateObservedStateOfInstance() successfully creates DFC via EvaluateDFCDesiredStates()
-		//    - BUT the Protocol Converter FSM remains stuck in OperationalStateStartingFailedDFCMissing
+		//    - BUT the Bridge FSM remains stuck in OperationalStateStartingFailedDFCMissing
 		//
 		// 3. WHY IT STAYED STUCK:
 		//    - Original code had no recovery logic: "Do not do anything here"
 		//    - Comment stated: "only way to get out is to be removed and recreated by manager"
-		//    - However, Protocol Converters do NOT call Remove() on config changes (unlike S6 instances)
+		//    - However, Bridges do NOT call Remove() on config changes (unlike S6 instances)
 		//    - They only call UpdateInManager() to update configuration in-place
 		//    - Base manager only calls Remove() when instance is completely removed from config
 		//    - Result: Instance permanently stuck with no automatic recovery path
 		//
 		// 4. COMPARISON WITH OTHER FSM TYPES:
 		//    - S6 instances: Call Remove() on config changes → get recreated → automatic recovery
-		//    - Protocol Converters: Call UpdateInManager() → stay in same instance → no recovery
+		//    - Bridges: Call UpdateInManager() → stay in same instance → no recovery
 		//    - This architectural difference created the recovery gap
 		//
 		// SOLUTION IMPLEMENTED:
@@ -399,14 +399,14 @@ func (p *ProtocolConverterInstance) reconcileStartingStates(ctx context.Context,
 		// 5. If DFC still missing, remain in failed state with clear status reason
 		//
 
-		existing, reason := p.IsDFCExisting()
+		existing, reason := i.IsDFCExisting()
 		if existing {
 			// DFC is now available, retry the start process
-			p.ObservedState.ServiceInfo.StatusReason = "retrying start: DFC now available"
-			return p.baseFSMInstance.SendEvent(ctx, EventStartRetry), true
+			i.ObservedState.ServiceInfo.StatusReason = "retrying start: DFC now available"
+			return i.baseFSMInstance.SendEvent(ctx, EventStartRetry), true
 		}
 		// Still no DFC available, stay in failed state
-		p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting failed: %s", reason)
+		i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting failed: %s", reason)
 		return nil, false
 
 	case OperationalStateStartingFailedDFC:
@@ -423,97 +423,97 @@ func (p *ProtocolConverterInstance) reconcileStartingStates(ctx context.Context,
 }
 
 // reconcileRunningState handles the various running states when transitioning to Active.
-func (p *ProtocolConverterInstance) reconcileRunningState(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (i *Instance) reconcileRunningState(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".reconcileRunningState", time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentBridgeInstance, i.baseFSMInstance.GetID()+".reconcileRunningState", time.Since(start))
 	}()
 
 	switch currentState {
 	case OperationalStateActive:
 		// If we're in Active, we need to check whether it is degraded
-		connectionUp, reasonConnection := p.IsConnectionUp()
-		redpandaHealthy, reasonRedpanda := p.IsRedpandaHealthy()
-		dfcHealthy, reasonDFC := p.IsDFCHealthy()
-		otherDegraded, reasonOtherDegraded := p.IsOtherDegraded()
-		hasActivity, reasonActivity := p.IsDataflowComponentWithProcessingActivity()
+		connectionUp, reasonConnection := i.IsConnectionUp()
+		redpandaHealthy, reasonRedpanda := i.IsRedpandaHealthy()
+		dfcHealthy, reasonDFC := i.IsDFCHealthy()
+		otherDegraded, reasonOtherDegraded := i.IsOtherDegraded()
+		hasActivity, reasonActivity := i.IsDataflowComponentWithProcessingActivity()
 		if otherDegraded {
-			p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("other degraded: %s", reasonOtherDegraded)
+			i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("other degraded: %s", reasonOtherDegraded)
 			if currentState != OperationalStateDegradedOther {
-				return p.baseFSMInstance.SendEvent(ctx, EventDegradedOther), true
+				return i.baseFSMInstance.SendEvent(ctx, EventDegradedOther), true
 			}
 			return nil, false
 		} else if !connectionUp {
-			p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("connection degraded: %s", reasonConnection)
+			i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("connection degraded: %s", reasonConnection)
 			if currentState != OperationalStateDegradedConnection {
-				return p.baseFSMInstance.SendEvent(ctx, EventConnectionUnhealthy), true
+				return i.baseFSMInstance.SendEvent(ctx, EventConnectionUnhealthy), true
 			}
 			return nil, false
 		} else if !redpandaHealthy {
-			p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("redpanda degraded: %s", reasonRedpanda)
+			i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("redpanda degraded: %s", reasonRedpanda)
 			if currentState != OperationalStateDegradedRedpanda {
-				return p.baseFSMInstance.SendEvent(ctx, EventRedpandaDegraded), true
+				return i.baseFSMInstance.SendEvent(ctx, EventRedpandaDegraded), true
 			}
 			return nil, false
 		} else if !dfcHealthy {
-			p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("DFC degraded: %s", reasonDFC)
+			i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("DFC degraded: %s", reasonDFC)
 			if currentState != OperationalStateDegradedDFC {
-				return p.baseFSMInstance.SendEvent(ctx, EventDFCDegraded), true
+				return i.baseFSMInstance.SendEvent(ctx, EventDFCDegraded), true
 			}
 			return nil, false
 		} else if !hasActivity { // if there is no activity, we move to Idle
-			p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("idling: %s", reasonActivity)
-			return p.baseFSMInstance.SendEvent(ctx, EventDFCIdle), true
+			i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("idling: %s", reasonActivity)
+			return i.baseFSMInstance.SendEvent(ctx, EventDFCIdle), true
 		}
-		p.ObservedState.ServiceInfo.StatusReason = "" // if everything is fine, reset the status reason
+		i.ObservedState.ServiceInfo.StatusReason = "" // if everything is fine, reset the status reason
 		return nil, false
 	case OperationalStateIdle:
 		// If we're in Idle, we need to check whether it is degraded
 		// If we're in Active, we need to check whether it is degraded
-		connectionUp, reasonConnection := p.IsConnectionUp()
-		redpandaHealthy, reasonRedpanda := p.IsRedpandaHealthy()
-		dfcHealthy, reasonDFC := p.IsDFCHealthy()
-		otherDegraded, reasonOtherDegraded := p.IsOtherDegraded()
-		hasActivity, reasonActivity := p.IsDataflowComponentWithProcessingActivity()
+		connectionUp, reasonConnection := i.IsConnectionUp()
+		redpandaHealthy, reasonRedpanda := i.IsRedpandaHealthy()
+		dfcHealthy, reasonDFC := i.IsDFCHealthy()
+		otherDegraded, reasonOtherDegraded := i.IsOtherDegraded()
+		hasActivity, reasonActivity := i.IsDataflowComponentWithProcessingActivity()
 		if otherDegraded {
-			p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("other degraded: %s", reasonOtherDegraded)
+			i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("other degraded: %s", reasonOtherDegraded)
 			if currentState != OperationalStateDegradedOther {
-				return p.baseFSMInstance.SendEvent(ctx, EventDegradedOther), true
+				return i.baseFSMInstance.SendEvent(ctx, EventDegradedOther), true
 			}
 			return nil, false
 		} else if !connectionUp {
-			p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("connection degraded: %s", reasonConnection)
+			i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("connection degraded: %s", reasonConnection)
 			if currentState != OperationalStateDegradedConnection {
-				return p.baseFSMInstance.SendEvent(ctx, EventConnectionUnhealthy), true
+				return i.baseFSMInstance.SendEvent(ctx, EventConnectionUnhealthy), true
 			}
 			return nil, false
 		} else if !redpandaHealthy {
-			p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("redpanda degraded: %s", reasonRedpanda)
+			i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("redpanda degraded: %s", reasonRedpanda)
 			if currentState != OperationalStateDegradedRedpanda {
-				return p.baseFSMInstance.SendEvent(ctx, EventRedpandaDegraded), true
+				return i.baseFSMInstance.SendEvent(ctx, EventRedpandaDegraded), true
 			}
 			return nil, false
 		} else if !dfcHealthy {
-			p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("DFC degraded: %s", reasonDFC)
+			i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("DFC degraded: %s", reasonDFC)
 			if currentState != OperationalStateDegradedDFC {
-				return p.baseFSMInstance.SendEvent(ctx, EventDFCDegraded), true
+				return i.baseFSMInstance.SendEvent(ctx, EventDFCDegraded), true
 			}
 			return nil, false
 		} else if !hasActivity { // if there is no activity, we stay in idle
-			p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("idling: %s", reasonActivity)
+			i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("idling: %s", reasonActivity)
 			return nil, false
 		}
-		p.ObservedState.ServiceInfo.StatusReason = "active" // if everything is fine, reset the status reason
-		return p.baseFSMInstance.SendEvent(ctx, EventDFCActive), true
+		i.ObservedState.ServiceInfo.StatusReason = "active" // if everything is fine, reset the status reason
+		return i.baseFSMInstance.SendEvent(ctx, EventDFCActive), true
 	case OperationalStateDegradedConnection,
 		OperationalStateDegradedRedpanda,
 		OperationalStateDegradedDFC,
 		OperationalStateDegradedOther:
 		// If we're in Degraded, we need to recover to move to Idle
-		connectionUp, reasonConnection := p.IsConnectionUp()
-		redpandaHealthy, reasonRedpanda := p.IsRedpandaHealthy()
-		dfcHealthy, reasonDFC := p.IsDFCHealthy()
-		otherDegraded, reasonOtherDegraded := p.IsOtherDegraded()
+		connectionUp, reasonConnection := i.IsConnectionUp()
+		redpandaHealthy, reasonRedpanda := i.IsRedpandaHealthy()
+		dfcHealthy, reasonDFC := i.IsDFCHealthy()
+		otherDegraded, reasonOtherDegraded := i.IsOtherDegraded()
 
 		// CRITICAL: Only send degraded events for NEW degradation issues, not the current one.
 		//
@@ -532,34 +532,34 @@ func (p *ProtocolConverterInstance) reconcileRunningState(ctx context.Context, s
 		// - Recovering to idle when all issues resolve (EventRecovered)
 
 		if otherDegraded {
-			p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("other degraded: %s", reasonOtherDegraded) // Always set status reason
+			i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("other degraded: %s", reasonOtherDegraded) // Always set status reason
 			if currentState != OperationalStateDegradedOther {
-				return p.baseFSMInstance.SendEvent(ctx, EventDegradedOther), true // Send event for NEW degraded issue
+				return i.baseFSMInstance.SendEvent(ctx, EventDegradedOther), true // Send event for NEW degraded issue
 			}
 			return nil, false // Stay in current degraded state (same issue persists)
 		} else if !connectionUp {
-			p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("connection degraded: %s", reasonConnection)
+			i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("connection degraded: %s", reasonConnection)
 			if currentState != OperationalStateDegradedConnection {
-				return p.baseFSMInstance.SendEvent(ctx, EventConnectionUnhealthy), true
+				return i.baseFSMInstance.SendEvent(ctx, EventConnectionUnhealthy), true
 			}
 			return nil, false
 		} else if !redpandaHealthy {
-			p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("redpanda degraded: %s", reasonRedpanda)
+			i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("redpanda degraded: %s", reasonRedpanda)
 			if currentState != OperationalStateDegradedRedpanda {
-				return p.baseFSMInstance.SendEvent(ctx, EventRedpandaDegraded), true
+				return i.baseFSMInstance.SendEvent(ctx, EventRedpandaDegraded), true
 			}
 			return nil, false
 		} else if !dfcHealthy {
-			p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("DFC degraded: %s", reasonDFC)
+			i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("DFC degraded: %s", reasonDFC)
 			if currentState != OperationalStateDegradedDFC {
-				return p.baseFSMInstance.SendEvent(ctx, EventDFCDegraded), true
+				return i.baseFSMInstance.SendEvent(ctx, EventDFCDegraded), true
 			}
 			return nil, false
 		}
 
 		// If we reach here, all issues are resolved - recover to Idle
-		p.ObservedState.ServiceInfo.StatusReason = "recovering"
-		return p.baseFSMInstance.SendEvent(ctx, EventRecovered), true
+		i.ObservedState.ServiceInfo.StatusReason = "recovering"
+		return i.baseFSMInstance.SendEvent(ctx, EventRecovered), true
 	default:
 		return fmt.Errorf("invalid running state: %s", currentState), false
 	}
@@ -567,32 +567,32 @@ func (p *ProtocolConverterInstance) reconcileRunningState(ctx context.Context, s
 
 // reconcileTransitionToStopped handles transitions when the desired state is Stoppep.
 // It deals with moving from any operational state to Stopping and then to Stoppep.
-func (p *ProtocolConverterInstance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
+func (i *Instance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".reconcileTransitionToStopped", time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentBridgeInstance, i.baseFSMInstance.GetID()+".reconcileTransitionToStopped", time.Since(start))
 	}()
 
 	switch currentState {
 	case OperationalStateStopped:
 		// Already stopped, nothing to do more
-		p.ObservedState.ServiceInfo.StatusReason = "stopped"
+		i.ObservedState.ServiceInfo.StatusReason = "stopped"
 		return nil, false
 	case OperationalStateStopping:
-		stopped, reason := p.IsProtocolConverterStopped()
+		stopped, reason := i.IsBridgeStopped()
 		if stopped {
 			// Transition from Stopping to Stopped
-			p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("stopped: %s", reason)
-			return p.baseFSMInstance.SendEvent(ctx, EventStopDone), true
+			i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("stopped: %s", reason)
+			return i.baseFSMInstance.SendEvent(ctx, EventStopDone), true
 		}
-		p.ObservedState.ServiceInfo.StatusReason = "stopping"
+		i.ObservedState.ServiceInfo.StatusReason = "stopping"
 		return nil, false
 	default:
-		if err := p.StopInstance(ctx, services.GetFileSystem()); err != nil {
+		if err := i.StopInstance(ctx, services.GetFileSystem()); err != nil {
 			return err, false
 		}
 		// Send event to transition to Stopping
-		p.ObservedState.ServiceInfo.StatusReason = "stopping"
-		return p.baseFSMInstance.SendEvent(ctx, EventStop), true
+		i.ObservedState.ServiceInfo.StatusReason = "stopping"
+		return i.baseFSMInstance.SendEvent(ctx, EventStop), true
 	}
 }

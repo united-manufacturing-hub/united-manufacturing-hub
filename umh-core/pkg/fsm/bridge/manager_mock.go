@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package protocolconverter
+package bridge
 
 import (
 	"fmt"
@@ -26,27 +26,27 @@ import (
 	dfcsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 )
 
-func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConverterManager, *bridgesvc.MockService) {
+func NewManagerWithMockServices(name string) (*Manager, *bridgesvc.MockService) {
 	mockSvc := bridgesvc.NewMockService()
 
 	// Create a new manager instance
 	// Lets create a mock manager here
-	mockFSMManager := public_fsm.NewBaseFSMManager[config.ProtocolConverterConfig](
+	mockFSMManager := public_fsm.NewBaseFSMManager[config.BridgeConfig](
 		name,
 		"/dev/null",
-		func(config config.FullConfig) ([]config.ProtocolConverterConfig, error) {
-			return config.ProtocolConverter, nil
+		func(config config.FullConfig) ([]config.BridgeConfig, error) {
+			return config.Bridge, nil
 		},
-		func(config config.ProtocolConverterConfig) (string, error) {
-			return fmt.Sprintf("protocolconverter-%s", config.Name), nil
+		func(config config.BridgeConfig) (string, error) {
+			return fmt.Sprintf("bridge-%s", config.Name), nil
 		},
-		// Get desired state for ProtocolConverter config
-		func(cfg config.ProtocolConverterConfig) (string, error) {
+		// Get desired state for Bridge config
+		func(cfg config.BridgeConfig) (string, error) {
 			return cfg.DesiredFSMState, nil
 		},
-		// Create ProtocolConverter instance from config
-		func(cfg config.ProtocolConverterConfig) (public_fsm.FSMInstance, error) {
-			instance := NewProtocolConverterInstance("/dev/null", cfg)
+		// Create Bridge instance from config
+		func(cfg config.BridgeConfig) (public_fsm.FSMInstance, error) {
+			instance := NewInstance("/dev/null", cfg)
 			connectionServiceMock := connection.NewMockConnectionService()
 			dfcServiceMock := dfcsvc.NewMockDataFlowComponentService()
 
@@ -58,21 +58,21 @@ func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConver
 			instance.service = mockSvc
 			return instance, nil
 		},
-		// Compare ProtocolConverter configs
-		func(instance public_fsm.FSMInstance, cfg config.ProtocolConverterConfig) (bool, error) {
-			protocolConverterInstance, ok := instance.(*ProtocolConverterInstance)
+		// Compare Bridge configs
+		func(instance public_fsm.FSMInstance, cfg config.BridgeConfig) (bool, error) {
+			bridgeInstance, ok := instance.(*Instance)
 			if !ok {
-				return false, fmt.Errorf("instance is not a ProtocolConverterInstance")
+				return false, fmt.Errorf("instance is not a Bridge Instance")
 			}
 
 			// Perform actual comparison - return true if configs are equal
-			configsEqual := bridgeserviceconfig.ConfigsEqual(protocolConverterInstance.specConfig, cfg.ProtocolConverterServiceConfig)
+			configsEqual := bridgeserviceconfig.ConfigsEqual(bridgeInstance.configSpec, cfg.ServiceConfig)
 
 			// Only update config if configs are different (for mock service)
 			if !configsEqual {
-				protocolConverterInstance.specConfig = cfg.ProtocolConverterServiceConfig
-				if mockSvc, ok := protocolConverterInstance.service.(*bridgesvc.MockService); ok {
-					runtimeConfig, err := bridgeserviceconfig.SpecToRuntime(cfg.ProtocolConverterServiceConfig)
+				bridgeInstance.configSpec = cfg.ServiceConfig
+				if mockSvc, ok := bridgeInstance.service.(*bridgesvc.MockService); ok {
+					runtimeConfig, err := bridgeserviceconfig.SpecToRuntime(cfg.ServiceConfig)
 					if err != nil {
 						// For invalid configs, don't update the mock service but don't fail the comparison
 						// This matches the behavior of the real manager where invalid configs are handled gracefully
@@ -84,15 +84,15 @@ func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConver
 
 			return configsEqual, nil
 		},
-		// Set ProtocolConverter config
-		func(instance public_fsm.FSMInstance, cfg config.ProtocolConverterConfig) error {
-			protocolConverterInstance, ok := instance.(*ProtocolConverterInstance)
+		// Set Bridge config
+		func(instance public_fsm.FSMInstance, cfg config.BridgeConfig) error {
+			bridgeInstance, ok := instance.(*Instance)
 			if !ok {
-				return fmt.Errorf("instance is not a ProtocolConverterInstance")
+				return fmt.Errorf("instance is not a Bridge Instance")
 			}
-			protocolConverterInstance.specConfig = cfg.ProtocolConverterServiceConfig
-			if mockSvc, ok := protocolConverterInstance.service.(*bridgesvc.MockService); ok {
-				runtimeConfig, err := bridgeserviceconfig.SpecToRuntime(cfg.ProtocolConverterServiceConfig)
+			bridgeInstance.configSpec = cfg.ServiceConfig
+			if mockSvc, ok := bridgeInstance.service.(*bridgesvc.MockService); ok {
+				runtimeConfig, err := bridgeserviceconfig.SpecToRuntime(cfg.ServiceConfig)
 				if err != nil {
 					// For invalid configs, don't update the mock service but don't fail the set operation
 					// This matches the behavior of the real manager where invalid configs are handled gracefully
@@ -104,15 +104,15 @@ func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConver
 		},
 		// Get expected max p95 execution time per instance
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
-			protocolConverterInstance, ok := instance.(*ProtocolConverterInstance)
+			brInstance, ok := instance.(*Instance)
 			if !ok {
-				return 0, fmt.Errorf("instance is not a ProtocolConverterInstance")
+				return 0, fmt.Errorf("instance is not a Bridge Instance")
 			}
-			return protocolConverterInstance.GetMinimumRequiredTime(), nil
+			return brInstance.GetMinimumRequiredTime(), nil
 		},
 	)
 
-	mockManager := &ProtocolConverterManager{
+	mockManager := &Manager{
 		BaseFSMManager: mockFSMManager,
 	}
 

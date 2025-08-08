@@ -24,7 +24,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// convertYamlToSpec processes protocol converter configs to resolve templateRef fields
+// convertYamlToSpec processes bridge configs to resolve templateRef fields
 // This translates between the "unrendered" config (with templateRef) and "rendered" config (with actual template content)
 func convertYamlToSpec(config FullConfig, ctx context.Context) (FullConfig, error) {
 	// Check if context is already cancelled
@@ -37,11 +37,11 @@ func convertYamlToSpec(config FullConfig, ctx context.Context) (FullConfig, erro
 	// Create a copy to avoid mutating the original
 	processedConfig := config.Clone()
 
-	// Build a map of available protocol converter templates for quick lookup
-	protocolConverterTemplateMap := make(map[string]bridgeserviceconfig.ConfigTemplate)
+	// Build a map of available bridge templates for quick lookup
+	brTemplateMap := make(map[string]bridgeserviceconfig.ConfigTemplate)
 
-	// Process protocol converter templates from the enforced structure
-	for templateName, templateContent := range processedConfig.Templates.ProtocolConverter {
+	// Process bridge templates from the enforced structure
+	for templateName, templateContent := range processedConfig.Templates.Bridge {
 		// Check for context cancellation
 		select {
 		case <-ctx.Done():
@@ -52,15 +52,15 @@ func convertYamlToSpec(config FullConfig, ctx context.Context) (FullConfig, erro
 		// Convert the template content to the proper structure
 		templateBytes, err := yaml.Marshal(templateContent)
 		if err != nil {
-			return FullConfig{}, fmt.Errorf("failed to marshal protocol converter template %s: %w", templateName, err)
+			return FullConfig{}, fmt.Errorf("failed to marshal bridge template %s: %w", templateName, err)
 		}
 
 		var template bridgeserviceconfig.ConfigTemplate
 		if err := yaml.Unmarshal(templateBytes, &template); err != nil {
-			return FullConfig{}, fmt.Errorf("failed to unmarshal protocol converter template %s: %w", templateName, err)
+			return FullConfig{}, fmt.Errorf("failed to unmarshal bridge template %s: %w", templateName, err)
 		}
 
-		protocolConverterTemplateMap[templateName] = template
+		brTemplateMap[templateName] = template
 	}
 
 	// Build a map of available stream processor templates for quick lookup
@@ -89,8 +89,8 @@ func convertYamlToSpec(config FullConfig, ctx context.Context) (FullConfig, erro
 		streamProcessorTemplateMap[templateName] = template
 	}
 
-	// Process each protocol converter to resolve templateRef
-	for i, pc := range processedConfig.ProtocolConverter {
+	// Process each bridge to resolve templateRef
+	for i, pc := range processedConfig.Bridge {
 		// Check for context cancellation
 		select {
 		case <-ctx.Done():
@@ -99,20 +99,20 @@ func convertYamlToSpec(config FullConfig, ctx context.Context) (FullConfig, erro
 		}
 
 		// Only resolve templateRef if it's not empty/null and there's no inline config
-		if pc.ProtocolConverterServiceConfig.TemplateRef != "" {
+		if pc.ServiceConfig.TemplateRef != "" {
 			// Resolve the template reference
-			templateName := pc.ProtocolConverterServiceConfig.TemplateRef
-			template, exists := protocolConverterTemplateMap[templateName]
+			templateName := pc.ServiceConfig.TemplateRef
+			template, exists := brTemplateMap[templateName]
 			if !exists {
-				return FullConfig{}, fmt.Errorf("protocol converter template reference %q not found for protocol converter %s", templateName, pc.Name)
+				return FullConfig{}, fmt.Errorf("bridge template reference %q not found for bridge %s", templateName, pc.Name)
 			}
 
 			// Create a new spec with the resolved template
-			resolvedSpec := pc.ProtocolConverterServiceConfig
+			resolvedSpec := pc.ServiceConfig
 			resolvedSpec.Config = template
 
 			// Update the config
-			processedConfig.ProtocolConverter[i].ProtocolConverterServiceConfig = resolvedSpec
+			processedConfig.Bridge[i].ServiceConfig = resolvedSpec
 		}
 		// If templateRef is empty/null, use the inline config as-is
 	}
@@ -195,12 +195,12 @@ func convertSpecToYaml(spec FullConfig, ctx context.Context) (FullConfig, error)
 	//------------------------------------
 
 	// Protocol Converter template maps
-	// tplMap collects every **root** protocol-converter we encounter.
+	// tplMap collects every **root** bridge we encounter.
 	// A "root" is the first, fully-detailed instance whose TemplateRef
 	// equals its own Name.  We stash those complete Config blocks here
 	// so that, after the loop, we can write them once into
-	//   clone.Templates.protocolConverter[<root-name>]
-	protocolConverterTplMap := make(map[string]bridgeserviceconfig.ConfigTemplate) // roots collected here
+	//   clone.Templates.bridge[<root-name>]
+	bridgeTplMap := make(map[string]bridgeserviceconfig.ConfigTemplate) // roots collected here
 
 	// pendingRefs
 	// -----------
@@ -210,7 +210,7 @@ func convertSpecToYaml(spec FullConfig, ctx context.Context) (FullConfig, error)
 	// in tplMap.  If something is missing we've discovered an "orphan" child that
 	// points to a template which is not present – in that case we return an error
 	// instead of writing an inconsistent YAML file.
-	protocolConverterPendingRefs := make(map[string]struct{}) // child refs to be validated
+	bridgePendingRefs := make(map[string]struct{}) // child refs to be validated
 
 	// Stream Processor template maps
 	streamProcessorTplMap := make(map[string]streamprocessorserviceconfig.StreamProcessorServiceConfigTemplate) // roots collected here
@@ -219,7 +219,7 @@ func convertSpecToYaml(spec FullConfig, ctx context.Context) (FullConfig, error)
 	//------------------------------------
 	// 3) walk every PC once
 	//------------------------------------
-	for i, pc := range clone.ProtocolConverter {
+	for i, pc := range clone.Bridge {
 		// Check for context cancellation
 		select {
 		case <-ctx.Done():
@@ -227,7 +227,7 @@ func convertSpecToYaml(spec FullConfig, ctx context.Context) (FullConfig, error)
 		default:
 		}
 
-		tr := pc.ProtocolConverterServiceConfig.TemplateRef
+		tr := pc.ServiceConfig.TemplateRef
 
 		// ─────────────────────────────
 		// 3a) Stand-alone (no template)
@@ -241,14 +241,14 @@ func convertSpecToYaml(spec FullConfig, ctx context.Context) (FullConfig, error)
 		// 3b) Root  (golden instance)
 		// ─────────────────────────────
 		if tr == pc.Name {
-			if prev, dup := protocolConverterTplMap[tr]; dup {
+			if prev, dup := bridgeTplMap[tr]; dup {
 				// second root with same name ⇒ must be byte-identical
-				if !reflect.DeepEqual(prev, pc.ProtocolConverterServiceConfig.Config) {
+				if !reflect.DeepEqual(prev, pc.ServiceConfig.Config) {
 					return FullConfig{}, fmt.Errorf(
-						"duplicate protocol converter root %q with different Config blocks", tr)
+						"duplicate bridge root %q with different Config blocks", tr)
 				}
 			} else {
-				protocolConverterTplMap[tr] = pc.ProtocolConverterServiceConfig.Config
+				bridgeTplMap[tr] = pc.ServiceConfig.Config
 			}
 		} else {
 			// ─────────────────────────
@@ -268,17 +268,17 @@ func convertSpecToYaml(spec FullConfig, ctx context.Context) (FullConfig, error)
 			// storing an empty struct is the most memory-efficient and idiomatic way to
 			// represent a "set" in Go.  At the end of the loop we simply iterate over the
 			// keys to verify that every referenced template has a corresponding root.
-			protocolConverterPendingRefs[tr] = struct{}{}
+			bridgePendingRefs[tr] = struct{}{}
 		}
 
 		// Strip Config from every templated instance (root or child) ─ the full
 		// definition will live once in the templates section, so we avoid
 		// duplicating it inside each instance.
-		pc.ProtocolConverterServiceConfig.Config = bridgeserviceconfig.ConfigTemplate{}
+		pc.ServiceConfig.Config = bridgeserviceconfig.ConfigTemplate{}
 		// remove the location and location_path from the user variables
-		delete(pc.ProtocolConverterServiceConfig.Variables.User, "location")
-		delete(pc.ProtocolConverterServiceConfig.Variables.User, "location_path")
-		clone.ProtocolConverter[i] = pc
+		delete(pc.ServiceConfig.Variables.User, "location")
+		delete(pc.ServiceConfig.Variables.User, "location_path")
+		clone.Bridge[i] = pc
 	}
 
 	//------------------------------------
@@ -336,13 +336,13 @@ func convertSpecToYaml(spec FullConfig, ctx context.Context) (FullConfig, error)
 	// 5) orphan-ref validation and cleanup (children → root)
 	//------------------------------------
 	// If a reference is missing it means a child points to a
-	// non-existent template. For protocol converters, this is an error.
+	// non-existent template. For bridges, this is an error.
 	// For stream processors, we convert them to inline configs to handle
 	// the external template pattern.
-	for ref := range protocolConverterPendingRefs {
-		if _, ok := protocolConverterTplMap[ref]; !ok {
+	for ref := range bridgePendingRefs {
+		if _, ok := bridgeTplMap[ref]; !ok {
 			return FullConfig{}, fmt.Errorf(
-				"protocol converter references unknown template %q", ref)
+				"bridge references unknown template %q", ref)
 		}
 	}
 
@@ -378,12 +378,12 @@ func convertSpecToYaml(spec FullConfig, ctx context.Context) (FullConfig, error)
 	//------------------------------------
 	// 6) attach template maps (only if we have roots)
 	//------------------------------------
-	if len(protocolConverterTplMap) > 0 {
-		if clone.Templates.ProtocolConverter == nil {
-			clone.Templates.ProtocolConverter = make(map[string]interface{})
+	if len(bridgeTplMap) > 0 {
+		if clone.Templates.Bridge == nil {
+			clone.Templates.Bridge = make(map[string]interface{})
 		}
-		for name, tpl := range protocolConverterTplMap {
-			clone.Templates.ProtocolConverter[name] = tpl
+		for name, tpl := range bridgeTplMap {
+			clone.Templates.Bridge[name] = tpl
 		}
 	}
 

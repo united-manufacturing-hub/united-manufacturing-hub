@@ -15,9 +15,8 @@
 package actions_test
 
 import (
-	"sync"
-
 	"errors"
+	"sync"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
@@ -74,8 +73,8 @@ var _ = Describe("DeployProtocolConverter", func() {
 				},
 				ReleaseChannel: config.ReleaseChannelStable,
 			},
-			ProtocolConverter: []config.ProtocolConverterConfig{},
-			Templates:         config.TemplatesConfig{},
+			Bridge:    []config.BridgeConfig{},
+			Templates: config.TemplatesConfig{},
 		}
 
 		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)
@@ -254,7 +253,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 			stateMocker.Stop()
 
 			// Verify AtomicAddProtocolConverter was called
-			Expect(mockConfig.AtomicAddProtocolConverterCalled).To(BeTrue())
+			Expect(mockConfig.AtomicAddBridgeCalled).To(BeTrue())
 
 			// Verify the response contains the expected protocol converter with UUID
 			responsePC, ok := result.(models.ProtocolConverter)
@@ -277,15 +276,14 @@ var _ = Describe("DeployProtocolConverter", func() {
 			Expect(responsePC.TemplateInfo).To(BeNil())
 
 			// Verify expected configuration changes
-			Expect(mockConfig.Config.ProtocolConverter).To(HaveLen(1))
-			addedPC := mockConfig.Config.ProtocolConverter[0]
+			Expect(mockConfig.Config.Bridge).To(HaveLen(1))
+			addedPC := mockConfig.Config.Bridge[0]
 			Expect(addedPC.Name).To(Equal(pcName))
-
 		})
 
 		It("should handle AtomicAddProtocolConverter failure", func() {
 			// Set up mock to fail on AtomicAddProtocolConverter
-			mockConfig.WithAtomicAddProtocolConverterError(errors.New("mock add protocol converter failure"))
+			mockConfig.WithAtomicAddBridgeError(errors.New("mock add protocol converter failure"))
 
 			// Parse valid payload
 			payload := map[string]interface{}{
@@ -313,19 +311,18 @@ var _ = Describe("DeployProtocolConverter", func() {
 
 			// Stop the state mocker
 			stateMocker.Stop()
-
 		})
 
 		It("should handle duplicate protocol converter name", func() {
 			// Add a protocol converter to the initial config
-			existingPC := config.ProtocolConverterConfig{
+			existingPC := config.BridgeConfig{
 				FSMInstanceConfig: config.FSMInstanceConfig{
 					Name: pcName, // Same name as test
 				},
 			}
 
-			mockConfig.Config.ProtocolConverter = []config.ProtocolConverterConfig{existingPC}
-			mockConfig.WithAtomicAddProtocolConverterError(errors.New("another protocol converter with name \"" + pcName + "\" already exists – choose a unique name"))
+			mockConfig.Config.Bridge = []config.BridgeConfig{existingPC}
+			mockConfig.WithAtomicAddBridgeError(errors.New("another protocol converter with name \"" + pcName + "\" already exists – choose a unique name"))
 
 			// Parse valid payload
 			payload := map[string]interface{}{

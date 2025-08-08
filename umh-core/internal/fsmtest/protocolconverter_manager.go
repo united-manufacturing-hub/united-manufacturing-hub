@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build test
-// +build test
-
 package fsmtest
 
 import (
@@ -22,19 +19,19 @@ import (
 	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	protocolconverterfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
+	bridgefsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/bridge"
 	bridgesvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/bridge"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
-// protocolConverterInstancePrefix is the consistent prefix used for protocol converter instance IDs
-const protocolConverterInstancePrefix = "protocolconverter"
+// bridgeInstancePrefix is the consistent prefix used for bridge instance IDs
+const bridgeInstancePrefix = "bridge"
 
-// WaitForProtocolConverterManagerStable waits for the manager to reach a stable state with all instances
-func WaitForProtocolConverterManagerStable(
+// WaitForBridgeManagerStable waits for the manager to reach a stable state with all instances
+func WaitForBridgeManagerStable(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
-	manager *protocolconverterfsm.ProtocolConverterManager,
+	manager *bridgefsm.Manager,
 	services serviceregistry.Provider,
 ) (uint64, error) {
 	tick := snapshot.Tick
@@ -56,11 +53,11 @@ func WaitForProtocolConverterManagerStable(
 	return tick, nil
 }
 
-// WaitForProtocolConverterManagerInstanceState waits for an instance to reach a specific state
-func WaitForProtocolConverterManagerInstanceState(
+// WaitForBridgeInstanceState waits for an instance to reach a specific state
+func WaitForBridgeInstanceState(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
-	manager *protocolconverterfsm.ProtocolConverterManager,
+	manager *bridgefsm.Manager,
 	services serviceregistry.Provider,
 	instanceName string,
 	expectedState string,
@@ -82,7 +79,7 @@ func WaitForProtocolConverterManagerInstanceState(
 		tick++
 
 		// Get the instance and check its state
-		instance, found := manager.GetInstance(fmt.Sprintf("%s-%s", protocolConverterInstancePrefix, instanceName))
+		instance, found := manager.GetInstance(fmt.Sprintf("%s-%s", bridgeInstancePrefix, instanceName))
 		if found && instance.GetCurrentFSMState() == expectedState {
 			return tick, nil
 		}
@@ -91,11 +88,11 @@ func WaitForProtocolConverterManagerInstanceState(
 	return tick, fmt.Errorf("instance %s didn't reach expected state: %s", instanceName, expectedState)
 }
 
-// WaitForProtocolConverterManagerInstanceRemoval waits for an instance to be removed
-func WaitForProtocolConverterManagerInstanceRemoval(
+// WaitForBridgeInstanceRemoval waits for an instance to be removed
+func WaitForBridgeInstanceRemoval(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
-	manager *protocolconverterfsm.ProtocolConverterManager,
+	manager *bridgefsm.Manager,
 	services serviceregistry.Provider,
 	instanceName string,
 	maxAttempts int,
@@ -124,12 +121,12 @@ func WaitForProtocolConverterManagerInstanceRemoval(
 	return tick, fmt.Errorf("instance %s was not removed after %d attempts", instanceName, maxAttempts)
 }
 
-// WaitForProtocolConverterManagerMultiState can check multiple instances at once:
+// WaitForBridgeManagerMultiState can check multiple instances at once:
 // e.g. map[serviceName]desiredState = ...
-func WaitForProtocolConverterManagerMultiState(
+func WaitForBridgeManagerMultiState(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
-	manager *protocolconverterfsm.ProtocolConverterManager,
+	manager *bridgefsm.Manager,
 	services serviceregistry.Provider,
 	desiredMap map[string]string, // e.g. { "conv1": "idle", "conv2": "active" }
 	maxAttempts int,
@@ -147,7 +144,7 @@ func WaitForProtocolConverterManagerMultiState(
 
 		allMatched := true
 		for conv, desired := range desiredMap {
-			inst, found := manager.GetInstance(fmt.Sprintf("%s-%s", protocolConverterInstancePrefix, conv))
+			inst, found := manager.GetInstance(fmt.Sprintf("%s-%s", bridgeInstancePrefix, conv))
 			if !found || inst.GetCurrentFSMState() != desired {
 				allMatched = false
 				break
@@ -160,19 +157,19 @@ func WaitForProtocolConverterManagerMultiState(
 	return tick, fmt.Errorf("not all instances reached desired states after %d attempts", maxAttempts)
 }
 
-// SetupServiceInProtocolConverterManager adds a service to the manager and configures it
-func SetupServiceInProtocolConverterManager(
-	manager *protocolconverterfsm.ProtocolConverterManager,
+// SetupServiceInBridgeManager adds a service to the manager and configures it
+func SetupServiceInBridgeManager(
+	manager *bridgefsm.Manager,
 	mockService *bridgesvc.MockService,
 	converterName string,
 	desiredState string,
 	services serviceregistry.Provider,
 ) {
 	// Create a properly configured instance
-	instance := protocolconverterfsm.NewProtocolConverterInstance("", CreateProtocolConverterTestConfig(converterName, desiredState))
+	instance := bridgefsm.NewInstance("", CreateBridgeTestConfig(converterName, desiredState))
 
 	// Add it to the manager
-	manager.BaseFSMManager.AddInstanceForTest(fmt.Sprintf("%s-%s", protocolConverterInstancePrefix, converterName), instance)
+	manager.AddInstanceForTest(fmt.Sprintf("%s-%s", bridgeInstancePrefix, converterName), instance)
 
 	// Make sure the service exists in the mock service
 	mockService.ExistingComponents[converterName] = true
@@ -183,50 +180,50 @@ func SetupServiceInProtocolConverterManager(
 	}
 }
 
-// CreateMockProtocolConverterManager creates a ProtocolConverter manager with a mock service for testing
-func CreateMockProtocolConverterManager(name string) (*protocolconverterfsm.ProtocolConverterManager, *bridgesvc.MockService) {
-	mockManager, mockService := protocolconverterfsm.NewProtocolConverterManagerWithMockedServices(name)
+// CreateMockBridgeManager creates a Bridge manager with a mock service for testing
+func CreateMockBridgeManager(name string) (*bridgefsm.Manager, *bridgesvc.MockService) {
+	mockManager, mockService := bridgefsm.NewManagerWithMockServices(name)
 
 	return mockManager, mockService
 }
 
-// ConfigureProtocolConverterManagerForState sets up the mock service in a ProtocolConverterManager to facilitate
+// ConfigureBridgeManagerForState sets up the mock service in a Bridge Manager to facilitate
 // a state transition for a specific instance.
 //
 // Parameters:
 //   - mockService: The mock service from the manager
-//   - converterName: The name of the converter to configure
+//   - name: The name of the bridge to configure
 //   - targetState: The desired state to configure the service for
-func ConfigureProtocolConverterManagerForState(
+func ConfigureBridgeManagerForState(
 	mockService *bridgesvc.MockService,
-	converterName string,
+	name string,
 	targetState string,
 ) {
 	// Make sure the service exists in the mock
 	if mockService.ExistingComponents == nil {
 		mockService.ExistingComponents = make(map[string]bool)
 	}
-	mockService.ExistingComponents[converterName] = true
+	mockService.ExistingComponents[name] = true
 
 	// Make sure service state is initialized
 	if mockService.States == nil {
 		mockService.States = make(map[string]*bridgesvc.ServiceInfo)
 	}
-	if mockService.States[converterName] == nil {
-		mockService.States[converterName] = &bridgesvc.ServiceInfo{}
+	if mockService.States[name] == nil {
+		mockService.States[name] = &bridgesvc.ServiceInfo{}
 	}
 
 	// Configure the service for the target state
-	TransitionToProtocolConverterState(mockService, converterName, targetState)
+	TransitionToBridgeState(mockService, name, targetState)
 }
 
-// ReconcileOnceProtocolConverterManager calls manager.Reconcile(...) exactly once,
+// ReconcileOnceBridgeManager calls manager.Reconcile(...) exactly once,
 // increments 'tick' by 1, and returns the new tick plus any error & the
 // manager's 'reconciled' bool.
-func ReconcileOnceProtocolConverterManager(
+func ReconcileOnceBridgeManager(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
-	manager *protocolconverterfsm.ProtocolConverterManager,
+	manager *bridgefsm.Manager,
 	services serviceregistry.Provider,
 ) (newTick uint64, err error, reconciled bool) {
 	err, rec := manager.Reconcile(ctx, snapshot, services)

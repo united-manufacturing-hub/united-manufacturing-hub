@@ -73,7 +73,6 @@ type DeleteProtocolConverterAction struct {
 
 	// ─── Business data ──────────────────────────────────────────────────────
 	componentUUID uuid.UUID // the component slated for deletion
-
 }
 
 // NewDeleteProtocolConverterAction returns an *empty* action instance prepared
@@ -134,7 +133,7 @@ func (a *DeleteProtocolConverterAction) Execute() (interface{}, map[string]inter
 	defer cancel()
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Removing protocol converter from configuration...", a.outboundChannel, models.DeleteProtocolConverter)
-	err := a.configManager.AtomicDeleteProtocolConverter(ctx, a.componentUUID)
+	err := a.configManager.AtomicDeleteBridge(ctx, a.componentUUID)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to delete protocol converter: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeleteProtocolConverter)
@@ -175,7 +174,7 @@ func (a *DeleteProtocolConverterAction) GetComponentUUID() uuid.UUID {
 }
 
 func (a *DeleteProtocolConverterAction) waitForComponentToBeRemoved() error {
-	//check the system snapshot and waits for the instance to be removed
+	// check the system snapshot and waits for the instance to be removed
 	ticker := time.NewTicker(constants.ActionTickerTime)
 	defer ticker.Stop()
 	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
@@ -187,7 +186,7 @@ func (a *DeleteProtocolConverterAction) waitForComponentToBeRemoved() error {
 	// the snapshot manager holds the latest system snapshot which is asynchronously updated by the other goroutines
 	// we need to get a deep copy of it to prevent race conditions
 	systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
-	if protocolConverterManager, exists := systemSnapshot.Managers[constants.ProtocolConverterManagerName]; exists {
+	if protocolConverterManager, exists := systemSnapshot.Managers[constants.BridgeManagerName]; exists {
 		for _, inst := range protocolConverterManager.GetInstances() {
 			if dataflowcomponentserviceconfig.GenerateUUIDFromName(inst.ID) == a.componentUUID {
 				componentName = inst.ID
@@ -212,7 +211,7 @@ func (a *DeleteProtocolConverterAction) waitForComponentToBeRemoved() error {
 			systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
 
 			removed := true
-			if mgr, ok := systemSnapshot.Managers[constants.ProtocolConverterManagerName]; ok {
+			if mgr, ok := systemSnapshot.Managers[constants.BridgeManagerName]; ok {
 				for _, inst := range mgr.GetInstances() {
 					if dataflowcomponentserviceconfig.GenerateUUIDFromName(inst.ID) == a.componentUUID {
 						removed = false

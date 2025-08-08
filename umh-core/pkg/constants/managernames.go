@@ -24,7 +24,7 @@ const (
 	DataflowcomponentManagerName = logger.ComponentDataFlowComponentManager + DefaultManagerName
 	AgentManagerName             = logger.ComponentAgentManager + "_" + DefaultManagerName
 	RedpandaManagerName          = logger.ComponentRedpandaManager + DefaultManagerName
-	ProtocolConverterManagerName = logger.ComponentProtocolConverterManager + DefaultManagerName
+	BridgeManagerName            = logger.ComponentBridgeManager + DefaultManagerName
 	StreamProcessorManagerName   = logger.ComponentStreamProcessorManager + DefaultManagerName
 	TopicBrowserManagerName      = logger.ComponentTopicBrowserManager + DefaultManagerName
 

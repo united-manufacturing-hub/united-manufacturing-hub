@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package protocolconverter
+package bridge
 
 import (
 	"context"
@@ -28,70 +28,70 @@ import (
 )
 
 const (
-	baseProtocolConverterDir = constants.S6BaseDir
+	baseBridgeDir = constants.S6BaseDir
 )
 
-// ProtocolConverterManager implements the FSM management for ProtocolConverter services
-type ProtocolConverterManager struct {
-	*public_fsm.BaseFSMManager[config.ProtocolConverterConfig]
+// Manager implements the FSM management for Bridge services
+type Manager struct {
+	*public_fsm.BaseFSMManager[config.BridgeConfig]
 }
 
-// ProtocolConverterSnapshot extends the base ManagerSnapshot with ProtocolConverter specific information
-type ProtocolConverterSnapshot struct {
+// Snapshot extends the base ManagerSnapshot with ProtocolConverter specific information
+type Snapshot struct {
 	// Embed BaseManagerSnapshot to include its methods using composition
 	*public_fsm.BaseManagerSnapshot
 }
 
-func NewProtocolConverterManager(name string) *ProtocolConverterManager {
-	managerName := fmt.Sprintf("%s%s", logger.ComponentProtocolConverterManager, name)
-	baseManager := public_fsm.NewBaseFSMManager[config.ProtocolConverterConfig](
+func NewManager(name string) *Manager {
+	managerName := fmt.Sprintf("%s%s", logger.ComponentBridgeManager, name)
+	baseManager := public_fsm.NewBaseFSMManager[config.BridgeConfig](
 		managerName,
-		baseProtocolConverterDir,
-		// Extract the protocolconverter config from fullConfig
-		func(fullConfig config.FullConfig) ([]config.ProtocolConverterConfig, error) {
-			return fullConfig.ProtocolConverter, nil
+		baseBridgeDir,
+		// Extract the bridge config from fullConfig
+		func(fullConfig config.FullConfig) ([]config.BridgeConfig, error) {
+			return fullConfig.Bridge, nil
 		},
 		// Get name for ProtocolConverter config
-		func(cfg config.ProtocolConverterConfig) (string, error) {
+		func(cfg config.BridgeConfig) (string, error) {
 			return cfg.Name, nil
 		},
 		// Get desired state for ProtocolConverter config
-		func(cfg config.ProtocolConverterConfig) (string, error) {
+		func(cfg config.BridgeConfig) (string, error) {
 			return cfg.DesiredFSMState, nil
 		},
 		// Create ProtocolConverter instance from config
-		func(cfg config.ProtocolConverterConfig) (public_fsm.FSMInstance, error) {
+		func(cfg config.BridgeConfig) (public_fsm.FSMInstance, error) {
 			// We'll pass nil for the portManager here, and the instance will get it from the services registry during reconciliation
-			return NewProtocolConverterInstance(baseProtocolConverterDir, cfg), nil
+			return NewInstance(baseBridgeDir, cfg), nil
 		},
 		// Compare ProtocolConverter configs
-		func(instance public_fsm.FSMInstance, cfg config.ProtocolConverterConfig) (bool, error) {
-			protocolConverterInstance, ok := instance.(*ProtocolConverterInstance)
+		func(instance public_fsm.FSMInstance, cfg config.BridgeConfig) (bool, error) {
+			brInstance, ok := instance.(*Instance)
 			if !ok {
-				return false, fmt.Errorf("instance is not a ProtocolConverterInstance")
+				return false, fmt.Errorf("instance is not a Bridge Instance")
 			}
-			return protocolConverterInstance.specConfig.Equal(cfg.ProtocolConverterServiceConfig), nil
+			return brInstance.configSpec.Equal(cfg.ServiceConfig), nil
 		},
 		// Set ProtocolConverter config
-		func(instance public_fsm.FSMInstance, cfg config.ProtocolConverterConfig) error {
-			protocolConverterInstance, ok := instance.(*ProtocolConverterInstance)
+		func(instance public_fsm.FSMInstance, cfg config.BridgeConfig) error {
+			brInstance, ok := instance.(*Instance)
 			if !ok {
-				return fmt.Errorf("instance is not a ProtocolConverterInstance")
+				return fmt.Errorf("instance is not a Bridge Instance")
 			}
-			protocolConverterInstance.specConfig = cfg.ProtocolConverterServiceConfig
+			brInstance.configSpec = cfg.ServiceConfig
 			return nil
 		},
 		// Get expected max p95 execution time per instance
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
-			protocolConverterInstance, ok := instance.(*ProtocolConverterInstance)
+			brInstance, ok := instance.(*Instance)
 			if !ok {
-				return 0, fmt.Errorf("instance is not a ProtocolConverterInstance")
+				return 0, fmt.Errorf("instance is not a Bridge Instance")
 			}
-			return protocolConverterInstance.GetMinimumRequiredTime(), nil
+			return brInstance.GetMinimumRequiredTime(), nil
 		},
 	)
-	metrics.InitErrorCounter(metrics.ComponentProtocolConverterManager, name)
-	return &ProtocolConverterManager{
+	metrics.InitErrorCounter(metrics.ComponentBridgeManager, name)
+	return &Manager{
 		BaseFSMManager: baseManager,
 	}
 }
@@ -99,36 +99,36 @@ func NewProtocolConverterManager(name string) *ProtocolConverterManager {
 // Reconcile calls the base manager's Reconcile method
 // The filesystemService parameter allows for filesystem operations during reconciliation,
 // enabling the method to read configuration or state information from the filesystem.
-func (m *ProtocolConverterManager) Reconcile(ctx context.Context, snapshot public_fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool) {
+func (m *Manager) Reconcile(ctx context.Context, snapshot public_fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool) {
 	start := time.Now()
 	defer func() {
 		duration := time.Since(start)
-		metrics.ObserveReconcileTime(logger.ComponentProtocolConverterManager, m.GetManagerName(), duration)
+		metrics.ObserveReconcileTime(logger.ComponentBridgeManager, m.GetManagerName(), duration)
 	}()
 	return m.BaseFSMManager.Reconcile(ctx, snapshot, services)
 }
 
-// CreateSnapshot overrides the base CreateSnapshot to include ProtocolConverterManager-specific information
-func (m *ProtocolConverterManager) CreateSnapshot() public_fsm.ManagerSnapshot {
+// CreateSnapshot overrides the base CreateSnapshot to include Manager-specific information
+func (m *Manager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	// Get base snapshot from parent
 	baseSnapshot := m.BaseFSMManager.CreateSnapshot()
 
 	// We need to convert the interface to the concrete type
 	baseManagerSnapshot, ok := baseSnapshot.(*public_fsm.BaseManagerSnapshot)
 	if !ok {
-		logger.For(logger.ComponentProtocolConverterManager).Errorf(
+		logger.For(logger.ComponentBridgeManager).Errorf(
 			"Failed to convert base snapshot to BaseManagerSnapshot, using generic snapshot")
 		return baseSnapshot
 	}
 
 	// Create ProtocolConverterManager-specific snapshot
-	snap := &ProtocolConverterSnapshot{
+	snap := &Snapshot{
 		BaseManagerSnapshot: baseManagerSnapshot,
 	}
 	return snap
 }
 
 // IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface
-func (s *ProtocolConverterSnapshot) IsObservedStateSnapshot() {
+func (s *Snapshot) IsObservedStateSnapshot() {
 	// Marker method implementation
 }

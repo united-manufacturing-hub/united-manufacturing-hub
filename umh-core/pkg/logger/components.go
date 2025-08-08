@@ -33,7 +33,7 @@ const (
 	ComponentDataFlowComponentManager = "DataFlowCompManager"
 	ComponentNmapManager              = "NmapCompManager"
 	ComponentConnectionManager        = "ConnectionManager"
-	ComponentProtocolConverterManager = "ProtocolConverterManager"
+	ComponentBridgeManager            = "BridgeManager"
 	ComponentStreamProcessorManager   = "StreamProcessorManager"
 	ComponentTopicBrowserManager      = "TopicBrowserManager"
 
@@ -47,7 +47,7 @@ const (
 	ComponentNmapInstance              = "NmapInstance"
 	ComponentDataFlowComponentInstance = "DFCInstance"
 	ComponentConnectionInstance        = "ConnectionInstance"
-	ComponentProtocolConverterInstance = "ProtocolConverterInstance"
+	ComponentBridgeInstance            = "BridgeInstance"
 	ComponentStreamProcessorInstance   = "StreamProcessorInstance"
 	ComponentTopicBrowserInstance      = "TopicBrowserInstance"
 

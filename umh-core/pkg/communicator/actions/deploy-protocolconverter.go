@@ -47,7 +47,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/bridge"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
@@ -134,7 +134,7 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 	pcConfig := a.createProtocolConverterConfig()
 
 	// currently, we canot reuse templates, so we need to create a new one
-	pcConfig.ProtocolConverterServiceConfig.TemplateRef = pcConfig.Name
+	pcConfig.ServiceConfig.TemplateRef = pcConfig.Name
 
 	// Add to configuration
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
@@ -143,7 +143,7 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		"Adding protocol converter to configuration...", a.outboundChannel, models.DeployProtocolConverter)
 
-	err := a.configManager.AtomicAddProtocolConverter(ctx, pcConfig)
+	err := a.configManager.AtomicAddBridge(ctx, pcConfig)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to add protocol converter: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -183,7 +183,7 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 }
 
 // createProtocolConverterConfig creates a ProtocolConverterConfig with templated configuration
-func (a *DeployProtocolConverterAction) createProtocolConverterConfig() config.ProtocolConverterConfig {
+func (a *DeployProtocolConverterAction) createProtocolConverterConfig() config.BridgeConfig {
 	// Create variables bundle starting with IP and PORT as strings in the User namespace
 	userVars := map[string]any{
 		"IP":   a.payload.Connection.IP,                      // Keep IP as string
@@ -222,12 +222,12 @@ func (a *DeployProtocolConverterAction) createProtocolConverterConfig() config.P
 	}
 
 	// Create the full config
-	return config.ProtocolConverterConfig{
+	return config.BridgeConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            a.payload.Name,
 			DesiredFSMState: "active", // Default to active state
 		},
-		ProtocolConverterServiceConfig: spec,
+		ServiceConfig: spec,
 	}
 }
 
@@ -283,7 +283,7 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear() (string, erro
 
 			ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 			defer cancel()
-			err := a.configManager.AtomicDeleteProtocolConverter(ctx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.payload.Name))
+			err := a.configManager.AtomicDeleteBridge(ctx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.payload.Name))
 			if err != nil {
 				a.actionLogger.Errorf("failed to remove protocol converter %s: %v", a.payload.Name, err)
 				return models.ErrRetryRollbackTimeout, fmt.Errorf("protocol converter '%s' failed to activate within timeout but could not be removed: %v. Please check system load and consider removing the component manually", a.payload.Name, err)
@@ -295,7 +295,7 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear() (string, erro
 			// the snapshot manager holds the latest system snapshot which is asynchronously updated by the other goroutines
 			// we need to get a deep copy of it to prevent race conditions
 			systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
-			if protocolConverterManager, exists := systemSnapshot.Managers[constants.ProtocolConverterManagerName]; exists {
+			if protocolConverterManager, exists := systemSnapshot.Managers[constants.BridgeManagerName]; exists {
 				instances := protocolConverterManager.GetInstances()
 				found := false
 				for _, instance := range instances {
@@ -305,7 +305,7 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear() (string, erro
 					}
 
 					// cast the instance LastObservedState to a protocolconverter instance
-					pcSnapshot, ok := instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot)
+					pcSnapshot, ok := instance.LastObservedState.(*bridge.ObservedStateSnapshot)
 					if !ok {
 						continue
 					}

@@ -35,44 +35,44 @@ import (
 
 // MockConfigManager is a mock implementation of ConfigManager for testing
 type MockConfigManager struct {
-	CacheModTime                        time.Time
-	ConfigError                         error
-	AddDataflowcomponentError           error
-	DeleteDataflowcomponentError        error
-	EditDataflowcomponentError          error
-	AtomicAddProtocolConverterError     error
-	AtomicEditProtocolConverterError    error
-	AtomicDeleteProtocolConverterError  error
-	AtomicAddStreamProcessorError       error
-	AtomicEditStreamProcessorError      error
-	AtomicDeleteStreamProcessorError    error
-	AtomicAddDataModelError             error
-	AtomicEditDataModelError            error
-	AtomicDeleteDataModelError          error
-	AtomicAddDataContractError          error
-	GetConfigAsStringError              error
-	MockFileSystem                      *filesystem.MockFileSystem
-	logger                              *zap.SugaredLogger
-	ConfigAsString                      string
-	Config                              FullConfig
-	ConfigDelay                         time.Duration
-	mutexReadOrWrite                    sync.Mutex
-	mutexReadAndWrite                   sync.Mutex
-	GetConfigCalled                     int32 // Use atomic int32 for thread safety (0=false, 1=true)
-	AddDataflowcomponentCalled          bool
-	DeleteDataflowcomponentCalled       bool
-	EditDataflowcomponentCalled         bool
-	AtomicAddProtocolConverterCalled    bool
-	AtomicEditProtocolConverterCalled   bool
-	AtomicDeleteProtocolConverterCalled bool
-	AtomicAddStreamProcessorCalled      bool
-	AtomicEditStreamProcessorCalled     bool
-	AtomicDeleteStreamProcessorCalled   bool
-	AtomicAddDataModelCalled            bool
-	AtomicEditDataModelCalled           bool
-	AtomicDeleteDataModelCalled         bool
-	AtomicAddDataContractCalled         bool
-	GetConfigAsStringCalled             bool
+	CacheModTime                      time.Time
+	ConfigError                       error
+	AddDataflowcomponentError         error
+	DeleteDataflowcomponentError      error
+	EditDataflowcomponentError        error
+	AtomicAddBridgeError              error
+	AtomicEditBridgeError             error
+	AtomicDeleteBridgeError           error
+	AtomicAddStreamProcessorError     error
+	AtomicEditStreamProcessorError    error
+	AtomicDeleteStreamProcessorError  error
+	AtomicAddDataModelError           error
+	AtomicEditDataModelError          error
+	AtomicDeleteDataModelError        error
+	AtomicAddDataContractError        error
+	GetConfigAsStringError            error
+	MockFileSystem                    *filesystem.MockFileSystem
+	logger                            *zap.SugaredLogger
+	ConfigAsString                    string
+	Config                            FullConfig
+	ConfigDelay                       time.Duration
+	mutexReadOrWrite                  sync.Mutex
+	mutexReadAndWrite                 sync.Mutex
+	GetConfigCalled                   int32 // Use atomic int32 for thread safety (0=false, 1=true)
+	AddDataflowcomponentCalled        bool
+	DeleteDataflowcomponentCalled     bool
+	EditDataflowcomponentCalled       bool
+	AtomicAddBridgeCalled             bool
+	AtomicEditBridgeCalled            bool
+	AtomicDeleteBridgeCalled          bool
+	AtomicAddStreamProcessorCalled    bool
+	AtomicEditStreamProcessorCalled   bool
+	AtomicDeleteStreamProcessorCalled bool
+	AtomicAddDataModelCalled          bool
+	AtomicEditDataModelCalled         bool
+	AtomicDeleteDataModelCalled       bool
+	AtomicAddDataContractCalled       bool
+	GetConfigAsStringCalled           bool
 }
 
 // NewMockConfigManager creates a new MockConfigManager instance
@@ -152,7 +152,7 @@ func (m *MockConfigManager) writeConfig(ctx context.Context, cfg FullConfig) err
 
 	// Write the file via mock filesystem (give everybody read & write access)
 	configPath := DefaultConfigPath
-	if err := m.MockFileSystem.WriteFile(ctx, configPath, data, 0666); err != nil {
+	if err := m.MockFileSystem.WriteFile(ctx, configPath, data, 0o666); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
@@ -212,27 +212,27 @@ func (m *MockConfigManager) WithEditDataflowcomponentError(err error) *MockConfi
 	return m
 }
 
-// WithAtomicAddProtocolConverterError configures the mock to return the given error when AtomicAddProtocolConverter is called
-func (m *MockConfigManager) WithAtomicAddProtocolConverterError(err error) *MockConfigManager {
+// WithAtomicAddBridgeError configures the mock to return the given error when AtomicAddBridge is called
+func (m *MockConfigManager) WithAtomicAddBridgeError(err error) *MockConfigManager {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
-	m.AtomicAddProtocolConverterError = err
+	m.AtomicAddBridgeError = err
 	return m
 }
 
-// WithAtomicEditProtocolConverterError configures the mock to return the given error when AtomicEditProtocolConverter is called
-func (m *MockConfigManager) WithAtomicEditProtocolConverterError(err error) *MockConfigManager {
+// WithAtomicEditBridgeError configures the mock to return the given error when AtomicEditBridge is called
+func (m *MockConfigManager) WithAtomicEditBridgeError(err error) *MockConfigManager {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
-	m.AtomicEditProtocolConverterError = err
+	m.AtomicEditBridgeError = err
 	return m
 }
 
-// WithAtomicDeleteProtocolConverterError configures the mock to return the given error when AtomicDeleteProtocolConverter is called
-func (m *MockConfigManager) WithAtomicDeleteProtocolConverterError(err error) *MockConfigManager {
+// WithAtomicDeleteBridgeError configures the mock to return the given error when AtomicDeleteBridge is called
+func (m *MockConfigManager) WithAtomicDeleteBridgeError(err error) *MockConfigManager {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
-	m.AtomicDeleteProtocolConverterError = err
+	m.AtomicDeleteBridgeError = err
 	return m
 }
 
@@ -300,9 +300,9 @@ func (m *MockConfigManager) ResetCalls() {
 	m.AddDataflowcomponentCalled = false
 	m.DeleteDataflowcomponentCalled = false
 	m.EditDataflowcomponentCalled = false
-	m.AtomicAddProtocolConverterCalled = false
-	m.AtomicEditProtocolConverterCalled = false
-	m.AtomicDeleteProtocolConverterCalled = false
+	m.AtomicAddBridgeCalled = false
+	m.AtomicEditBridgeCalled = false
+	m.AtomicDeleteBridgeCalled = false
 	m.AtomicAddStreamProcessorCalled = false
 	m.AtomicEditStreamProcessorCalled = false
 	m.AtomicDeleteStreamProcessorCalled = false
@@ -344,16 +344,16 @@ func (m *MockConfigManager) AtomicSetLocation(ctx context.Context, location mode
 		agentLocationStr[fmt.Sprintf("%d", k)] = v
 	}
 
-	// Update all ProtocolConverter locations to match the agent location
-	for i := range config.ProtocolConverter {
-		if config.ProtocolConverter[i].ProtocolConverterServiceConfig.Location == nil {
-			config.ProtocolConverter[i].ProtocolConverterServiceConfig.Location = make(map[string]string)
+	// Update all Bridge locations to match the agent location
+	for i := range config.Bridge {
+		if config.Bridge[i].ServiceConfig.Location == nil {
+			config.Bridge[i].ServiceConfig.Location = make(map[string]string)
 		}
 
 		// Update each level in the protocol converter location with the agent location
 		// Only update levels that exist in the agent location
 		for levelStr, value := range agentLocationStr {
-			config.ProtocolConverter[i].ProtocolConverterServiceConfig.Location[levelStr] = value
+			config.Bridge[i].ServiceConfig.Location[levelStr] = value
 		}
 	}
 
@@ -494,15 +494,15 @@ func (m *MockConfigManager) AtomicEditDataflowcomponent(ctx context.Context, com
 	return oldConfig, nil
 }
 
-// AtomicAddProtocolConverter implements the ConfigManager interface
-func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc ProtocolConverterConfig) error {
+// AtomicAddBridge implements the ConfigManager interface
+func (m *MockConfigManager) AtomicAddBridge(ctx context.Context, pc BridgeConfig) error {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
 
-	m.AtomicAddProtocolConverterCalled = true
+	m.AtomicAddBridgeCalled = true
 
-	if m.AtomicAddProtocolConverterError != nil {
-		return m.AtomicAddProtocolConverterError
+	if m.AtomicAddBridgeError != nil {
+		return m.AtomicAddBridgeError
 	}
 
 	// get the current config
@@ -512,20 +512,20 @@ func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 	}
 
 	// check for duplicate name before add
-	for _, cmp := range config.ProtocolConverter {
+	for _, cmp := range config.Bridge {
 		if cmp.Name == pc.Name {
 			return fmt.Errorf("another protocol converter with name %q already exists – choose a unique name", pc.Name)
 		}
 	}
 
 	// If it's a child (TemplateRef is non-empty and != Name), verify that a root with that TemplateRef exists
-	if pc.ProtocolConverterServiceConfig.TemplateRef != "" && pc.ProtocolConverterServiceConfig.TemplateRef != pc.Name {
-		templateRef := pc.ProtocolConverterServiceConfig.TemplateRef
+	if pc.ServiceConfig.TemplateRef != "" && pc.ServiceConfig.TemplateRef != pc.Name {
+		templateRef := pc.ServiceConfig.TemplateRef
 		rootExists := false
 
 		// Scan existing protocol converters to find a root with matching name
-		for _, existing := range config.ProtocolConverter {
-			if existing.Name == templateRef && existing.ProtocolConverterServiceConfig.TemplateRef == existing.Name {
+		for _, existing := range config.Bridge {
+			if existing.Name == templateRef && existing.ServiceConfig.TemplateRef == existing.Name {
 				rootExists = true
 				break
 			}
@@ -537,7 +537,7 @@ func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 	}
 
 	// Add the protocol converter - let convertSpecToYAML handle template generation
-	config.ProtocolConverter = append(config.ProtocolConverter, pc)
+	config.Bridge = append(config.Bridge, pc)
 
 	// write the config
 	if err := m.writeConfig(ctx, config); err != nil {
@@ -547,75 +547,75 @@ func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 	return nil
 }
 
-// AtomicEditProtocolConverter implements the ConfigManager interface
-func (m *MockConfigManager) AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc ProtocolConverterConfig) (ProtocolConverterConfig, error) {
+// AtomicEditBridge implements the ConfigManager interface
+func (m *MockConfigManager) AtomicEditBridge(ctx context.Context, componentUUID uuid.UUID, pc BridgeConfig) (BridgeConfig, error) {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
 
-	m.AtomicEditProtocolConverterCalled = true
+	m.AtomicEditBridgeCalled = true
 
-	if m.AtomicEditProtocolConverterError != nil {
-		return ProtocolConverterConfig{}, m.AtomicEditProtocolConverterError
+	if m.AtomicEditBridgeError != nil {
+		return BridgeConfig{}, m.AtomicEditBridgeError
 	}
 
 	// get the current config
 	config, err := m.getConfigInternal(ctx, 0)
 	if err != nil {
-		return ProtocolConverterConfig{}, fmt.Errorf("failed to get config: %w", err)
+		return BridgeConfig{}, fmt.Errorf("failed to get config: %w", err)
 	}
 
 	// Find target index via GenerateUUIDFromName(Name) == componentUUID
 	targetIndex := -1
-	var oldConfig ProtocolConverterConfig
-	for i, component := range config.ProtocolConverter {
+	var oldConfig BridgeConfig
+	for i, component := range config.Bridge {
 		curComponentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
 		if curComponentID == componentUUID {
 			targetIndex = i
-			oldConfig = config.ProtocolConverter[i]
+			oldConfig = config.Bridge[i]
 			break
 		}
 	}
 
 	if targetIndex == -1 {
-		return ProtocolConverterConfig{}, fmt.Errorf("protocol converter with UUID %s not found", componentUUID)
+		return BridgeConfig{}, fmt.Errorf("protocol converter with UUID %s not found", componentUUID)
 	}
 
 	// Duplicate-name check (exclude the edited one)
-	for i, cmp := range config.ProtocolConverter {
+	for i, cmp := range config.Bridge {
 		if i != targetIndex && cmp.Name == pc.Name {
-			return ProtocolConverterConfig{}, fmt.Errorf("another protocol converter with name %q already exists – choose a unique name", pc.Name)
+			return BridgeConfig{}, fmt.Errorf("another protocol converter with name %q already exists – choose a unique name", pc.Name)
 		}
 	}
 
-	newIsRoot := pc.ProtocolConverterServiceConfig.TemplateRef != "" &&
-		pc.ProtocolConverterServiceConfig.TemplateRef == pc.Name
-	oldIsRoot := oldConfig.ProtocolConverterServiceConfig.TemplateRef != "" &&
-		oldConfig.ProtocolConverterServiceConfig.TemplateRef == oldConfig.Name
+	newIsRoot := pc.ServiceConfig.TemplateRef != "" &&
+		pc.ServiceConfig.TemplateRef == pc.Name
+	oldIsRoot := oldConfig.ServiceConfig.TemplateRef != "" &&
+		oldConfig.ServiceConfig.TemplateRef == oldConfig.Name
 
 	// Handle root rename - propagate to children
 	if oldIsRoot && newIsRoot && oldConfig.Name != pc.Name {
 		// Update all children that reference the old root name
-		for i, inst := range config.ProtocolConverter {
-			if i != targetIndex && inst.ProtocolConverterServiceConfig.TemplateRef == oldConfig.Name {
-				inst.ProtocolConverterServiceConfig.TemplateRef = pc.Name
-				config.ProtocolConverter[i] = inst
+		for i, inst := range config.Bridge {
+			if i != targetIndex && inst.ServiceConfig.TemplateRef == oldConfig.Name {
+				inst.ServiceConfig.TemplateRef = pc.Name
+				config.Bridge[i] = inst
 			}
 		}
 	}
 
 	// If it's a child (TemplateRef is non-empty and not a root), validate that the template reference exists
-	if !newIsRoot && pc.ProtocolConverterServiceConfig.TemplateRef != "" {
-		templateRef := pc.ProtocolConverterServiceConfig.TemplateRef
+	if !newIsRoot && pc.ServiceConfig.TemplateRef != "" {
+		templateRef := pc.ServiceConfig.TemplateRef
 		rootExists := false
 
 		// Scan existing protocol converters to find a root with matching name
 		// Note: we check the updated slice which may include renamed roots
-		for i, inst := range config.ProtocolConverter {
+		for i, inst := range config.Bridge {
 			// Skip the instance being edited since it's not committed yet
 			if i == targetIndex {
 				continue
 			}
-			if inst.Name == templateRef && inst.ProtocolConverterServiceConfig.TemplateRef == inst.Name {
+			if inst.Name == templateRef && inst.ServiceConfig.TemplateRef == inst.Name {
 				rootExists = true
 				break
 			}
@@ -627,30 +627,30 @@ func (m *MockConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 		}
 
 		if !rootExists {
-			return ProtocolConverterConfig{}, fmt.Errorf("template %q not found for child %s", templateRef, pc.Name)
+			return BridgeConfig{}, fmt.Errorf("template %q not found for child %s", templateRef, pc.Name)
 		}
 	}
 
 	// Commit the edit
-	config.ProtocolConverter[targetIndex] = pc
+	config.Bridge[targetIndex] = pc
 
 	// write the config
 	if err := m.writeConfig(ctx, config); err != nil {
-		return ProtocolConverterConfig{}, fmt.Errorf("failed to write config: %w", err)
+		return BridgeConfig{}, fmt.Errorf("failed to write config: %w", err)
 	}
 
 	return oldConfig, nil
 }
 
-// AtomicDeleteProtocolConverter implements the ConfigManager interface
-func (m *MockConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, componentUUID uuid.UUID) error {
+// AtomicDeleteBridge implements the ConfigManager interface
+func (m *MockConfigManager) AtomicDeleteBridge(ctx context.Context, componentUUID uuid.UUID) error {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
 
-	m.AtomicDeleteProtocolConverterCalled = true
+	m.AtomicDeleteBridgeCalled = true
 
-	if m.AtomicDeleteProtocolConverterError != nil {
-		return m.AtomicDeleteProtocolConverterError
+	if m.AtomicDeleteBridgeError != nil {
+		return m.AtomicDeleteBridgeError
 	}
 
 	// get the current config
@@ -660,9 +660,9 @@ func (m *MockConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 	}
 
 	// Find the component to delete
-	var targetComponent *ProtocolConverterConfig
+	var targetComponent *BridgeConfig
 	targetIndex := -1
-	for i, component := range config.ProtocolConverter {
+	for i, component := range config.Bridge {
 		componentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
 		if componentID == componentUUID {
 			targetComponent = &component
@@ -676,18 +676,18 @@ func (m *MockConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 	}
 
 	// Check if this is a root component (TemplateRef == Name) that has dependent children
-	isRoot := targetComponent.ProtocolConverterServiceConfig.TemplateRef == targetComponent.Name
+	isRoot := targetComponent.ServiceConfig.TemplateRef == targetComponent.Name
 	if isRoot {
 		// Check for dependent children
-		for _, component := range config.ProtocolConverter {
-			if component.ProtocolConverterServiceConfig.TemplateRef == targetComponent.Name && component.Name != targetComponent.Name {
+		for _, component := range config.Bridge {
+			if component.ServiceConfig.TemplateRef == targetComponent.Name && component.Name != targetComponent.Name {
 				return fmt.Errorf("cannot delete template %q: it has dependent child instances", targetComponent.Name)
 			}
 		}
 	}
 
 	// Remove the component (no cascading deletion)
-	config.ProtocolConverter = append(config.ProtocolConverter[:targetIndex], config.ProtocolConverter[targetIndex+1:]...)
+	config.Bridge = append(config.Bridge[:targetIndex], config.Bridge[targetIndex+1:]...)
 
 	// write the config
 	if err := m.writeConfig(ctx, config); err != nil {
@@ -966,7 +966,7 @@ func (m *MockConfigManager) AtomicEditDataModel(ctx context.Context, name string
 	currentDataModel := config.DataModels[targetIndex]
 
 	// Find the highest version number to ensure we don't overwrite existing versions
-	var maxVersion = 0
+	maxVersion := 0
 	for versionKey := range currentDataModel.Versions {
 		if strings.HasPrefix(versionKey, "v") {
 			if versionNum, err := strconv.Atoi(versionKey[1:]); err == nil {

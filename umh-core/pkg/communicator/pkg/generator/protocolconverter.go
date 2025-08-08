@@ -21,9 +21,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/bridge"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
@@ -56,7 +56,7 @@ func buildProtocolConverterAsDfc(
 	instance fsm.FSMInstanceSnapshot,
 	log *zap.SugaredLogger,
 ) (models.Dfc, error) {
-	observed, ok := instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot)
+	observed, ok := instance.LastObservedState.(*bridge.ObservedStateSnapshot)
 	if !ok || observed == nil {
 		return models.Dfc{}, fmt.Errorf("observed state %T is not ProtocolConverterObservedStateSnapshot", instance.LastObservedState)
 	}
@@ -64,14 +64,14 @@ func buildProtocolConverterAsDfc(
 	// ---- health ---------------------------------------------------------
 	healthCat := models.Neutral
 	switch instance.CurrentState {
-	case protocolconverter.OperationalStateActive:
+	case bridge.OperationalStateActive:
 		healthCat = models.Active
-	case protocolconverter.OperationalStateDegradedConnection,
-		protocolconverter.OperationalStateDegradedRedpanda,
-		protocolconverter.OperationalStateDegradedDFC,
-		protocolconverter.OperationalStateDegradedOther:
+	case bridge.OperationalStateDegradedConnection,
+		bridge.OperationalStateDegradedRedpanda,
+		bridge.OperationalStateDegradedDFC,
+		bridge.OperationalStateDegradedOther:
 		healthCat = models.Degraded
-	case protocolconverter.OperationalStateIdle:
+	case bridge.OperationalStateIdle:
 		healthCat = models.Neutral
 	}
 
@@ -80,8 +80,8 @@ func buildProtocolConverterAsDfc(
 
 	// Create connection info for protocol converter
 	var connections []models.Connection
-	if observed.ObservedProtocolConverterSpecConfig.Config.ConnectionConfig.NmapTemplate != nil &&
-		observed.ObservedProtocolConverterSpecConfig.Config.ConnectionConfig.NmapTemplate.Target != "" {
+	if observed.ObservedConfigSpec.Config.ConnectionConfig.NmapTemplate != nil &&
+		observed.ObservedConfigSpec.Config.ConnectionConfig.NmapTemplate.Target != "" {
 		var lastLatencyMs float64
 		if observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ServiceInfo.NmapStatus.LastScan != nil {
 			lastLatencyMs = observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ServiceInfo.NmapStatus.LastScan.PortResult.LatencyMs
@@ -89,8 +89,8 @@ func buildProtocolConverterAsDfc(
 
 		// check the variables for the target and port
 
-		specTarget := observed.ObservedProtocolConverterSpecConfig.Config.ConnectionConfig.NmapTemplate.Target
-		specPort := observed.ObservedProtocolConverterSpecConfig.Config.ConnectionConfig.NmapTemplate.Port
+		specTarget := observed.ObservedConfigSpec.Config.ConnectionConfig.NmapTemplate.Target
+		specPort := observed.ObservedConfigSpec.Config.ConnectionConfig.NmapTemplate.Port
 
 		// targetConfig is e.g. "{{ .IP }}" and portConfig is e.g. "{{ .PORT }}"
 		// we need to replace the variables with the actual values therefore we need to get the variable name and check the values in the user variables
@@ -100,7 +100,7 @@ func buildProtocolConverterAsDfc(
 
 		target := specTarget
 		if match := re.FindStringSubmatch(specTarget); len(match) > 1 {
-			if userValue, ok := observed.ObservedProtocolConverterSpecConfig.Variables.User[match[1]]; ok {
+			if userValue, ok := observed.ObservedConfigSpec.Variables.User[match[1]]; ok {
 				if strValue, ok := userValue.(string); ok {
 					target = strValue
 				}
@@ -109,7 +109,7 @@ func buildProtocolConverterAsDfc(
 
 		port := specPort
 		if match := re.FindStringSubmatch(specPort); len(match) > 1 {
-			if userValue, ok := observed.ObservedProtocolConverterSpecConfig.Variables.User[match[1]]; ok {
+			if userValue, ok := observed.ObservedConfigSpec.Variables.User[match[1]]; ok {
 				if strValue, ok := userValue.(string); ok {
 					port = strValue
 				}
@@ -134,8 +134,8 @@ func buildProtocolConverterAsDfc(
 	// Check if the protocol converter is initialized by checking if a read dfc is present.
 	isInitialized := false
 	var input map[string]any
-	if observed.ObservedProtocolConverterSpecConfig.Config.DFCReadConfig.BenthosConfig.Input != nil {
-		input = observed.ObservedProtocolConverterSpecConfig.Config.DFCReadConfig.BenthosConfig.Input
+	if observed.ObservedConfigSpec.Config.DFCReadConfig.BenthosConfig.Input != nil {
+		input = observed.ObservedConfigSpec.Config.DFCReadConfig.BenthosConfig.Input
 	}
 	if len(input) > 0 {
 		isInitialized = true
@@ -179,21 +179,21 @@ func getProtocolConverterStatusMessage(state string, statusReason string, connec
 
 	// Get base message from protocol converter state
 	switch state {
-	case protocolconverter.OperationalStateActive:
+	case bridge.OperationalStateActive:
 		baseMessage = "Protocol converter is active and processing data"
-	case protocolconverter.OperationalStateIdle:
+	case bridge.OperationalStateIdle:
 		baseMessage = "Protocol converter is idle"
-	case protocolconverter.OperationalStateStopped:
+	case bridge.OperationalStateStopped:
 		baseMessage = "Protocol converter is stopped"
-	case protocolconverter.OperationalStateDegradedConnection:
+	case bridge.OperationalStateDegradedConnection:
 		baseMessage = "Protocol converter connection is degraded"
-	case protocolconverter.OperationalStateDegradedRedpanda:
+	case bridge.OperationalStateDegradedRedpanda:
 		baseMessage = "Protocol converter Redpanda connection is degraded"
-	case protocolconverter.OperationalStateDegradedDFC:
+	case bridge.OperationalStateDegradedDFC:
 		baseMessage = "Protocol converter data flow component is degraded"
-	case protocolconverter.OperationalStateDegradedOther:
+	case bridge.OperationalStateDegradedOther:
 		baseMessage = "Protocol converter has other degradation issues"
-	case protocolconverter.OperationalStateStartingFailedDFCMissing:
+	case bridge.OperationalStateStartingFailedDFCMissing:
 		baseMessage = "No DFC added yet"
 	default:
 		baseMessage = fmt.Sprintf("Protocol converter state: %s", state)
@@ -203,7 +203,7 @@ func getProtocolConverterStatusMessage(state string, statusReason string, connec
 	if connectionState != "" {
 		switch connectionState {
 		case connection.OperationalStateUp:
-			if state == protocolconverter.OperationalStateActive {
+			if state == bridge.OperationalStateActive {
 				connectionSuffix = " with healthy connection"
 			}
 		case connection.OperationalStateDown:
@@ -264,7 +264,7 @@ func getHealthCategoryFromState(state string) models.HealthCategory {
 		return models.Active
 	case connection.OperationalStateDown, connection.OperationalStateDegraded, connection.OperationalStateStopped:
 		return models.Degraded
-	case protocolconverter.OperationalStateIdle:
+	case bridge.OperationalStateIdle:
 		return models.Neutral
 	default:
 		return models.Neutral

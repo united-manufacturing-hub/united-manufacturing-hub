@@ -436,8 +436,8 @@ func (w *writeFailingMockConfigManager) AtomicEditDataflowcomponent(ctx context.
 	return config.DataFlowComponentConfig{}, nil
 }
 
-// AtomicAddProtocolConverter implements the required interface method but ensures the write fails
-func (w *writeFailingMockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc config.ProtocolConverterConfig) error {
+// AtomicAddBridge implements the required interface method but ensures the write fails
+func (w *writeFailingMockConfigManager) AtomicAddBridge(ctx context.Context, pc config.BridgeConfig) error {
 	// Get the current config
 	configData, err := w.GetConfig(ctx, 0)
 	if err != nil {
@@ -454,26 +454,26 @@ func (w *writeFailingMockConfigManager) AtomicAddProtocolConverter(ctx context.C
 	return nil
 }
 
-// AtomicEditProtocolConverter implements the required interface method but ensures the write fails
-func (w *writeFailingMockConfigManager) AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc config.ProtocolConverterConfig) (config.ProtocolConverterConfig, error) {
+// AtomicEditBridge implements the required interface method but ensures the write fails
+func (w *writeFailingMockConfigManager) AtomicEditBridge(ctx context.Context, componentUUID uuid.UUID, pc config.BridgeConfig) (config.BridgeConfig, error) {
 	// Get the current config
 	configData, err := w.GetConfig(ctx, 0)
 	if err != nil {
-		return config.ProtocolConverterConfig{}, err
+		return config.BridgeConfig{}, err
 	}
 
 	// do not edit anything
 
 	// Write config (will fail with this mock)
 	if err := w.writeConfig(ctx, configData); err != nil {
-		return config.ProtocolConverterConfig{}, err
+		return config.BridgeConfig{}, err
 	}
 
-	return config.ProtocolConverterConfig{}, nil
+	return config.BridgeConfig{}, nil
 }
 
-// AtomicDeleteProtocolConverter implements the required interface method but ensures the write fails
-func (w *writeFailingMockConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, componentUUID uuid.UUID) error {
+// AtomicDeleteBridge implements the required interface method but ensures the write fails
+func (w *writeFailingMockConfigManager) AtomicDeleteBridge(ctx context.Context, componentUUID uuid.UUID) error {
 	// Get the current config
 	configData, err := w.GetConfig(ctx, 0)
 	if err != nil {
