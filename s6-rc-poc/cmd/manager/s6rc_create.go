@@ -15,7 +15,6 @@
 package manager
 
 import (
-	"errors"
 	"fmt"
 
 	"s6-rc-poc/cmd/shared"
@@ -24,12 +23,17 @@ import (
 // Create creates or updates a service definition and applies it. Desired
 // state is represented via bundle membership: services included in the
 // bundle are considered "up" after changeover; excluded are "down".
-func (s *S6RCService) Create(name string, desiredState shared.State, executable string, parameters map[int]string) error { //nolint:ireturn // interface method
+func (s *S6RCService) Create(
+	name string,
+	desiredState shared.State,
+	executable string,
+	parameters map[int]string,
+) error { // interface method
 	if name == "" {
-		return errors.New("service name is required")
+		return errServiceNameRequired
 	}
 	if executable == "" {
-		return fmt.Errorf("service %s: executable is required", name)
+		return fmt.Errorf("service %s: %w", name, errExecutableRequired)
 	}
 
 	if err := s.writeServiceDefinition(name, executable, parameters); err != nil {

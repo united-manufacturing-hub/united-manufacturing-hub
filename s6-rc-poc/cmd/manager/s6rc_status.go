@@ -15,7 +15,6 @@
 package manager
 
 import (
-	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -24,12 +23,13 @@ import (
 )
 
 // Status prints (logs) the current status of the service via s6-svstat.
-func (s *S6RCService) Status(name string) error { //nolint:ireturn // interface method
+func (s *S6RCService) Status(name string) error { // interface method
 	if name == "" {
-		return errors.New("service name is required")
+		return errServiceNameRequired
 	}
+
 	serviceRunDir := filepath.Join("/run/service", name)
-	stdout, _, err := s.run("s6-svstat", serviceRunDir)
+	stdout, err := s.runCapture("s6-svstat", serviceRunDir)
 	if err != nil {
 		return fmt.Errorf("status %s: %w", name, err)
 	}

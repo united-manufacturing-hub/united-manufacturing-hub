@@ -15,16 +15,16 @@
 package manager
 
 import (
-	"errors"
 	"fmt"
 )
 
 // Restart performs an in-place restart using s6-rc without a compile.
-func (s *S6RCService) Restart(name string) error { //nolint:ireturn // interface method
+func (s *S6RCService) Restart(name string) error { // interface method
 	if name == "" {
-		return errors.New("service name is required")
+		return errServiceNameRequired
 	}
-	_, _, err := s.run("s6-rc", "-r", "change", name)
+
+	err := s.run("s6-rc", "-r", "change", name)
 	if err != nil {
 		return fmt.Errorf("restart %s: %w", name, err)
 	}

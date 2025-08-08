@@ -15,7 +15,6 @@
 package manager
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -23,9 +22,9 @@ import (
 
 // Remove stops a service (via exclusion from bundle), removes its definition,
 // and applies the changeover.
-func (s *S6RCService) Remove(name string) error { //nolint:ireturn // interface method
+func (s *S6RCService) Remove(name string) error { // interface method
 	if name == "" {
-		return errors.New("service name is required")
+		return errServiceNameRequired
 	}
 
 	// Ensure it is not part of the bundle anymore

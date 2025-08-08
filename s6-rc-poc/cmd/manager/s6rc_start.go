@@ -14,15 +14,15 @@
 
 package manager
 
-import "errors"
-
 // Start marks the service as a member of the bundle and applies changeover.
-func (s *S6RCService) Start(name string) error { //nolint:ireturn // interface method
+func (s *S6RCService) Start(name string) error { // interface method
 	if name == "" {
-		return errors.New("service name is required")
+		return errServiceNameRequired
 	}
+
 	if err := s.setBundleMembership(name, true); err != nil {
 		return err
 	}
+
 	return s.compileAndChangeover()
 }

@@ -17,7 +17,6 @@
 package main
 
 import (
-	"fmt"
 	"s6-rc-poc/cmd/configwatcher"
 	"s6-rc-poc/cmd/manager"
 	"s6-rc-poc/cmd/shared"
@@ -33,15 +32,25 @@ func main() {
 	handleConfigEvents(logger, watcher, svc, "/config.yaml")
 }
 
-func logError(logger *zap.Logger, action, service string, err error) error {
-	if logger != nil {
-		logger.Error("manager call failed", zap.String("action", action), zap.String("service", service), zap.Error(err))
+func logError(logger *zap.Logger, action, service string, err error) {
+	if logger == nil {
+		return
 	}
-	// also return for potential future handling
-	return fmt.Errorf("%s %s failed: %w", action, service, err)
+
+	logger.Error(
+		"manager call failed",
+		zap.String("action", action),
+		zap.String("service", service),
+		zap.Error(err),
+	)
 }
 
-func handleConfigEvents(logger *zap.Logger, watcher configwatcher.ConfigWatcher, svc manager.Service, configPath string) {
+func handleConfigEvents(
+	logger *zap.Logger,
+	watcher configwatcher.ConfigWatcher,
+	svc manager.Service,
+	configPath string,
+) {
 	// Track desired state so ConfigChanged can reuse it without race/goroutines
 	desiredStateByService := map[string]shared.State{}
 
@@ -52,40 +61,72 @@ func handleConfigEvents(logger *zap.Logger, watcher configwatcher.ConfigWatcher,
 	for {
 		event := <-watcher.Events()
 
-		switch e := event.(type) {
+		switch configEvent := event.(type) {
 		case configwatcher.EventCreated:
-			desiredStateByService[e.Name.String()] = e.DesiredState
-			if err := svc.Create(e.Name.String(), e.DesiredState, e.Executable, e.Parameters); err != nil {
-				_ = logError(logger, "create", e.Name.String(), err)
+			if logger != nil {
+				logger.Info("event: created",
+					zap.String("service", configEvent.Name.String()),
+					zap.String("desired_state", configEvent.DesiredState.String()),
+					zap.String("executable", configEvent.Executable),
+					zap.Any("parameters", configEvent.Parameters))
+			}
+			desiredStateByService[configEvent.Name.String()] = configEvent.DesiredState
+			if err := svc.Create(
+				configEvent.Name.String(),
+				configEvent.DesiredState,
+				configEvent.Executable,
+				configEvent.Parameters,
+			); err != nil {
+				logError(logger, "create", configEvent.Name.String(), err)
 			}
 
 		case configwatcher.EventDeleted:
-			delete(desiredStateByService, e.Name.String())
-			if err := svc.Remove(e.Name.String()); err != nil {
-				_ = logError(logger, "remove", e.Name.String(), err)
+			if logger != nil {
+				logger.Info("event: deleted", zap.String("service", configEvent.Name.String()))
+			}
+			delete(desiredStateByService, configEvent.Name.String())
+			if err := svc.Remove(configEvent.Name.String()); err != nil {
+				logError(logger, "remove", configEvent.Name.String(), err)
 			}
 
 		case configwatcher.EventStateChanged:
-			desiredStateByService[e.Name.String()] = e.DesiredState
+			if logger != nil {
+				logger.Info("event: state-changed",
+					zap.String("service", configEvent.Name.String()),
+					zap.String("desired_state", configEvent.DesiredState.String()))
+			}
+			desiredStateByService[configEvent.Name.String()] = configEvent.DesiredState
+
 			var err error
-			if e.DesiredState == shared.Up {
-				err = svc.Start(e.Name.String())
+			if configEvent.DesiredState == shared.Up {
+				err = svc.Start(configEvent.Name.String())
 			} else {
-				err = svc.Stop(e.Name.String())
+				err = svc.Stop(configEvent.Name.String())
 			}
 			if err != nil {
-				_ = logError(logger, "state-change", e.Name.String(), err)
+				logError(logger, "state-change", configEvent.Name.String(), err)
 			}
 
 		case configwatcher.EventConfigChanged:
+			if logger != nil {
+				logger.Info("event: config-changed",
+					zap.String("service", configEvent.Name.String()),
+					zap.String("executable", configEvent.Executable),
+					zap.Any("parameters", configEvent.Parameters))
+			}
 			// Re-create with same desired state as last known
-			ds, ok := desiredStateByService[e.Name.String()]
+			desiredState, ok := desiredStateByService[configEvent.Name.String()]
 			if !ok {
 				// default conservatively to Down
-				ds = shared.Down
+				desiredState = shared.Down
 			}
-			if err := svc.Create(e.Name.String(), ds, e.Executable, e.Parameters); err != nil {
-				_ = logError(logger, "config-change", e.Name.String(), err)
+			if err := svc.Create(
+				configEvent.Name.String(),
+				desiredState,
+				configEvent.Executable,
+				configEvent.Parameters,
+			); err != nil {
+				logError(logger, "config-change", configEvent.Name.String(), err)
 			}
 		}
 	}

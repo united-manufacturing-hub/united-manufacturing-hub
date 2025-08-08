@@ -37,6 +37,7 @@ type S6RCService struct {
 	servicesBaseDir   string
 	compiledTargetDir string
 	bundleName        string
+	runScriptTmpl     *template.Template
 }
 
 const (
@@ -45,59 +46,76 @@ const (
 	defaultBundleName        = "user"
 )
 
+const (
+	dirPermission        = 0o750
+	filePermission       = 0o600
+	executablePermission = 0o755
+)
+
 // NewS6RCService constructs a new S6RCService with the provided paths.
 // If any path is empty, sensible defaults are used for s6-overlay v3.
 func NewS6RCService(logger *zap.Logger, servicesBaseDir, compiledTargetDir, bundleName string) *S6RCService {
 	if servicesBaseDir == "" {
 		servicesBaseDir = defaultServicesBaseDir
 	}
+
 	if compiledTargetDir == "" {
 		compiledTargetDir = defaultCompiledTargetDir
 	}
+
 	if bundleName == "" {
 		bundleName = defaultBundleName
 	}
 
-	return &S6RCService{
-		logger:            logger,
-		servicesBaseDir:   servicesBaseDir,
-		compiledTargetDir: compiledTargetDir,
-		bundleName:        bundleName,
-	}
-}
-
-// ----- internals -----
-
-var runScriptTmpl = template.Must(
-	template.New("run").Funcs(template.FuncMap{
-		"join": strings.Join,
-	}).Parse(`#!/command/execlineb -P
+	const runTemplate = `#!/command/execlineb -P
 cd /
 fdmove -c 2 1
 {{- if not .Args }}
 {{ .Executable }}
 {{- else }}
 {{ .Executable }} {{ join .Args " " }}
-{{- end }}
-`),
-)
+{{- end }}`
+
+	tmpl := template.Must(
+		template.New("run").
+			Funcs(template.FuncMap{"join": strings.Join}).
+			Parse(runTemplate),
+	)
+
+	return &S6RCService{
+		logger:            logger,
+		servicesBaseDir:   servicesBaseDir,
+		compiledTargetDir: compiledTargetDir,
+		bundleName:        bundleName,
+		runScriptTmpl:     tmpl,
+	}
+}
+
+// ----- internals -----
 
 func (s *S6RCService) writeServiceDefinition(name, executable string, argsMap map[int]string) error {
 	serviceDir := filepath.Join(s.servicesBaseDir, name)
-	if err := os.MkdirAll(serviceDir, 0o755); err != nil {
+	if err := os.MkdirAll(serviceDir, dirPermission); err != nil {
 		return fmt.Errorf("create service dir %s: %w", serviceDir, err)
 	}
 
 	// type
-	if err := os.WriteFile(filepath.Join(serviceDir, "type"), []byte("longrun\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(serviceDir, "type"), []byte("longrun\n"), filePermission); err != nil {
 		return fmt.Errorf("write type for %s: %w", name, err)
 	}
 
 	// run
 	args := orderedArgs(argsMap)
-	runContent := s.renderRunScript(executable, args)
-	if err := os.WriteFile(filepath.Join(serviceDir, "run"), []byte(runContent), 0o755); err != nil {
+	runContent, err := s.renderRunScript(executable, args)
+	if err != nil {
+		return fmt.Errorf("render run script for %s: %w", name, err)
+	}
+	runPath := filepath.Join(serviceDir, "run")
+	if err := os.WriteFile(runPath, []byte(runContent), filePermission); err != nil {
 		return fmt.Errorf("write run for %s: %w", name, err)
+	}
+	if err := os.Chmod(runPath, executablePermission); err != nil { //nolint:gosec // run must be executable for s6
+		return fmt.Errorf("chmod run for %s: %w", name, err)
 	}
 
 	return nil
@@ -105,16 +123,17 @@ func (s *S6RCService) writeServiceDefinition(name, executable string, argsMap ma
 
 func (s *S6RCService) setBundleMembership(name string, include bool) error {
 	contentsDir := filepath.Join(s.servicesBaseDir, s.bundleName, "contents.d")
-	if err := os.MkdirAll(contentsDir, 0o755); err != nil {
+	if err := os.MkdirAll(contentsDir, dirPermission); err != nil {
 		return fmt.Errorf("ensure bundle contents dir: %w", err)
 	}
 
 	markerPath := filepath.Join(contentsDir, name)
 	if include {
 		// Touch the file
-		if err := os.WriteFile(markerPath, []byte("\n"), 0o644); err != nil {
+		if err := os.WriteFile(markerPath, []byte("\n"), filePermission); err != nil {
 			return fmt.Errorf("include %s in bundle: %w", name, err)
 		}
+
 		return nil
 	}
 
@@ -122,6 +141,7 @@ func (s *S6RCService) setBundleMembership(name string, include bool) error {
 	if err := os.Remove(markerPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("exclude %s from bundle: %w", name, err)
 	}
+
 	return nil
 }
 
@@ -133,7 +153,7 @@ func (s *S6RCService) compileAndChangeover() error {
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
-	if _, _, err := s.run("s6-rc-compile", tmpDir, s.servicesBaseDir); err != nil {
+	if err := s.run("s6-rc-compile", tmpDir, s.servicesBaseDir); err != nil {
 		return fmt.Errorf("s6-rc-compile failed: %w", err)
 	}
 
@@ -142,31 +162,34 @@ func (s *S6RCService) compileAndChangeover() error {
 		return fmt.Errorf("remove compiled target: %w", err)
 	}
 	// Ensure target dir exists, then copy contents (not the top dir) to it.
-	if err := os.MkdirAll(s.compiledTargetDir, 0o755); err != nil {
+	if err := os.MkdirAll(s.compiledTargetDir, dirPermission); err != nil {
 		return fmt.Errorf("create compiled target: %w", err)
 	}
 	// Use cp -a to preserve modes; copy contents with trailing '/.'
-	if _, _, err := s.run("cp", "-a", filepath.Clean(tmpDir)+"/.", s.compiledTargetDir); err != nil {
+	if err := s.run("cp", "-a", filepath.Clean(tmpDir)+"/.", s.compiledTargetDir); err != nil {
 		return fmt.Errorf("copy compiled db: %w", err)
 	}
 
 	// Apply changeover for the bundle
-	if _, _, err := s.run("s6-rc", "-u", "change", s.bundleName); err != nil {
+	if err := s.run("s6-rc", "-u", "change", s.bundleName); err != nil {
 		return fmt.Errorf("apply changeover: %w", err)
 	}
+
 	return nil
 }
 
-func (s *S6RCService) renderRunScript(executable string, args []string) string {
+func (s *S6RCService) renderRunScript(executable string, args []string) (string, error) {
 	// naive quoting for POC: wrap args with spaces/quotes in double quotes
 	renderedArgs := make([]string, 0, len(args))
-	for _, a := range args {
-		if strings.ContainsAny(a, " \t\n\"'") {
-			escaped := strings.ReplaceAll(a, "\"", "\\\"")
+
+	for _, arg := range args {
+		if strings.ContainsAny(arg, " \t\n\"'") {
+			escaped := strings.ReplaceAll(arg, "\"", "\\\"")
 			renderedArgs = append(renderedArgs, "\""+escaped+"\"")
+
 			continue
 		}
-		renderedArgs = append(renderedArgs, a)
+		renderedArgs = append(renderedArgs, arg)
 	}
 
 	data := struct {
@@ -175,43 +198,46 @@ func (s *S6RCService) renderRunScript(executable string, args []string) string {
 	}{Executable: executable, Args: renderedArgs}
 
 	var out bytes.Buffer
-	if err := runScriptTmpl.Execute(&out, data); err != nil {
-		// Fallback to minimal script
-		return "#!/command/execlineb -P\ncd /\nfdmove -c 2 1\n" + executable + func() string {
-			if len(renderedArgs) == 0 {
-				return "\n"
-			}
-			return " " + strings.Join(renderedArgs, " ") + "\n"
-		}()
+	if err := s.runScriptTmpl.Execute(&out, data); err != nil {
+		return "", fmt.Errorf("template execute: %w", err)
 	}
-	return out.String()
+
+	return out.String(), nil
 }
 
 func orderedArgs(parameters map[int]string) []string {
 	if len(parameters) == 0 {
 		return nil
 	}
+
 	keys := make([]int, 0, len(parameters))
+
 	for k := range parameters {
 		keys = append(keys, k)
 	}
+
 	sort.Ints(keys)
+
 	args := make([]string, 0, len(keys))
+
 	for _, k := range keys {
 		args = append(args, parameters[k])
 	}
+
 	return args
 }
 
-func (s *S6RCService) run(name string, args ...string) (string, string, error) {
-	cmd := exec.Command(name, args...) //nolint:gosec // command is controlled by program
+func (s *S6RCService) runCapture(name string, args ...string) (string, error) {
+	cmd := exec.Command(name, args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
+
 	err := cmd.Run()
 	if err != nil {
 		if s.logger != nil {
-			s.logger.Error("command failed",
+			s.logger.Error(
+				"command failed",
 				zap.String("cmd", name),
 				zap.Strings("args", args),
 				zap.String("stdout", strings.TrimSpace(stdout.String())),
@@ -219,9 +245,16 @@ func (s *S6RCService) run(name string, args ...string) (string, string, error) {
 				zap.Error(err),
 			)
 		}
-		return stdout.String(), stderr.String(), err
+		return stdout.String(), err
 	}
-	return stdout.String(), stderr.String(), nil
+
+	return stdout.String(), nil
+}
+
+func (s *S6RCService) run(name string, args ...string) error {
+	_, err := s.runCapture(name, args...)
+
+	return err
 }
 
 func (s *S6RCService) logWarn(msg, service string, err error) {

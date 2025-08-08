@@ -14,15 +14,15 @@
 
 package manager
 
-import "errors"
-
 // Stop removes the service from the bundle and applies changeover.
-func (s *S6RCService) Stop(name string) error { //nolint:ireturn // interface method
+func (s *S6RCService) Stop(name string) error { // interface method
 	if name == "" {
-		return errors.New("service name is required")
+		return errServiceNameRequired
 	}
+
 	if err := s.setBundleMembership(name, false); err != nil {
 		return err
 	}
+
 	return s.compileAndChangeover()
 }
