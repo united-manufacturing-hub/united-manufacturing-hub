@@ -343,7 +343,7 @@ func (i *Instance) IsRedpandaHealthy() (bool, string) {
 		return true, ""
 	}
 
-	statusReason := i.ObservedState.ServiceInfo.RedpandaObservedState.ServiceInfo.StatusReason
+	statusReason := "redpanda: " + i.ObservedState.ServiceInfo.RedpandaObservedState.ServiceInfo.StatusReason
 	if statusReason == "" {
 		statusReason = "Redpanda Health status unknown"
 	}
@@ -363,7 +363,7 @@ func (i *Instance) IsDFCHealthy() (bool, string) {
 		return true, ""
 	}
 
-	statusReason := i.ObservedState.ServiceInfo.DFCObservedState.ServiceInfo.StatusReason
+	statusReason := "DFC: " + i.ObservedState.ServiceInfo.DFCObservedState.ServiceInfo.StatusReason
 	if statusReason == "" {
 		statusReason = "DFC Health status unknown"
 	}

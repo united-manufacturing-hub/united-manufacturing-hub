@@ -25,8 +25,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	dataflowcomponentservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
@@ -102,30 +100,15 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 	} else {
 		err = d.reconcileExternalChanges(ctx, services, snapshot)
 		if err != nil {
-			// If the service is not running, we don't want to return an error here, because we want to continue reconciling
-			if !errors.Is(err, dataflowcomponentservice.ErrServiceNotExists) && !errors.Is(err, s6.ErrServiceNotExist) {
-				// errors.Is(err, s6.ErrServiceNotExist)
-				// Consider a special case for DFC FSM here
-				// While creating for the first time, reconcileExternalChanges function will throw an error such as
-				// s6 service not found in the path since DFC fsm is relying on BenthosFSM and Benthos in turn relies on S6 fsm
-				// Inorder for DFC fsm to start, benthosManager.Reconcile should be called and this is called at the end of the function
-				// So set the err to nil in this case
-				// An example error: "failed to update observed state: failed to get observed DataflowComponent config: failed to get benthos config: failed to get benthos config file for service benthos-dataflow-hello-world-dfc: service does not exist"
-
-				if errors.Is(err, context.DeadlineExceeded) {
-					// Context deadline exceeded should be retried with backoff, not ignored
-					d.baseFSMInstance.SetError(err, snapshot.Tick)
-					d.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileExternalChanges, will retry with backoff")
-					err = nil // Clear error so reconciliation continues
-					return nil, false
-				}
-
-				d.baseFSMInstance.SetError(err, snapshot.Tick)
-				d.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
-
-				return nil, false // We don't want to return an error here, because we want to continue reconciling
+			if d.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
+				return nil, false
 			}
 
+			// Log the error but always continue reconciling - we need reconcileStateTransition to run
+			// to restore services after restart, even if we can't read their status yet
+			d.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)
+
+			// For all other errors, just continue reconciling without setting backoff
 			err = nil
 		}
 	}
@@ -139,10 +122,7 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 			return nil, false
 		}
 
-		if errors.Is(err, context.DeadlineExceeded) {
-			// Context deadline exceeded should be retried with backoff, not ignored
-			d.baseFSMInstance.SetError(err, snapshot.Tick)
-			d.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileStateTransition, will retry with backoff")
+		if d.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileStateTransition") {
 			return nil, false
 		}
 
