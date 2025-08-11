@@ -56,7 +56,7 @@ func NewMockPortManager() *MockPortManager {
 }
 
 // AllocatePort allocates a port for the given service
-func (m *MockPortManager) AllocatePort(serviceName string) (uint16, error) {
+func (m *MockPortManager) AllocatePort(ctx context.Context, serviceName string) (uint16, error) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -116,7 +116,7 @@ func (m *MockPortManager) GetPort(serviceName string) (uint16, bool) {
 }
 
 // ReservePort reserves a specific port for the given service
-func (m *MockPortManager) ReservePort(serviceName string, port uint16) error {
+func (m *MockPortManager) ReservePort(ctx context.Context, serviceName string, port uint16) error {
 	m.Lock()
 	defer m.Unlock()
 

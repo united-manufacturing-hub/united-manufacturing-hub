@@ -37,15 +37,13 @@ func NewRegistry() (*Registry, error) {
 	if initialized {
 		panic("NewRegistry called more than once - registry must be initialized once and explicitly passed between components")
 	}
+	fs := filesystem.NewDefaultService()
 
-	minPort := uint16(9000)
-	maxPort := uint16(9999)
-	pm, portErr := portmanager.NewDefaultPortManager(minPort, maxPort)
+	pm, portErr := portmanager.NewDefaultPortManager(fs)
 	if portErr != nil {
 		return nil, fmt.Errorf("failed to create port manager: %w", portErr)
 	}
 
-	fs := filesystem.NewDefaultService()
 	registry := &Registry{
 		PortManager: pm,
 		FileSystem:  fs,
