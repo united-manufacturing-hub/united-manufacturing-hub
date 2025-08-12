@@ -15,7 +15,7 @@
 package generator
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -30,7 +30,6 @@ func RedpandaFromSnapshot(
 	inst *fsm.FSMInstanceSnapshot,
 	log *zap.SugaredLogger,
 ) models.Redpanda {
-
 	if inst == nil {
 		return defaultRedpanda()
 	}
@@ -38,8 +37,10 @@ func RedpandaFromSnapshot(
 	rp, err := buildRedpanda(*inst, log)
 	if err != nil {
 		log.Error("unable to build redpanda data", zap.Error(err))
+
 		return defaultRedpanda()
 	}
+
 	return rp
 }
 
@@ -49,14 +50,14 @@ func buildRedpanda(
 	instance fsm.FSMInstanceSnapshot,
 	_ *zap.SugaredLogger,
 ) (models.Redpanda, error) {
-
 	snap, ok := instance.LastObservedState.(*redpanda.RedpandaObservedStateSnapshot)
 	if !ok || snap == nil {
-		return models.Redpanda{}, fmt.Errorf("invalid observed-state")
+		return models.Redpanda{}, errors.New("invalid observed-state")
 	}
 
 	// Health ---------------------------------------------------------------
 	healthCat := models.Neutral
+
 	switch instance.CurrentState {
 	case redpanda.OperationalStateActive:
 		healthCat = models.Active
@@ -81,6 +82,7 @@ func buildRedpanda(
 		out.AvgOutgoingThroughputPerMinuteInBytesSec =
 			float64(m.Output.BytesPerTick) / constants.DefaultTickerTime.Seconds()
 	}
+
 	return out, nil
 }
 

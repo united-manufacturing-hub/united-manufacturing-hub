@@ -15,6 +15,7 @@
 package s6
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -78,7 +79,7 @@ func NewS6ManagerWithMockedServices(name string) *S6Manager {
 		func(instance public_fsm.FSMInstance, cfg config.S6FSMConfig) (bool, error) {
 			s6Instance, ok := instance.(*S6Instance)
 			if !ok {
-				return false, fmt.Errorf("instance is not an S6Instance")
+				return false, errors.New("instance is not an S6Instance")
 			}
 
 			// Get the mock service
@@ -98,7 +99,7 @@ func NewS6ManagerWithMockedServices(name string) *S6Manager {
 		func(instance public_fsm.FSMInstance, cfg config.S6FSMConfig) error {
 			s6Instance, ok := instance.(*S6Instance)
 			if !ok {
-				return fmt.Errorf("instance is not an S6Instance")
+				return errors.New("instance is not an S6Instance")
 			}
 
 			// Update the instance config

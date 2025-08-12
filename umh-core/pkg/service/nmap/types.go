@@ -28,11 +28,11 @@ import (
 )
 
 const (
-	// ScanIntervalSeconds defines the fixed interval between scans
+	// ScanIntervalSeconds defines the fixed interval between scans.
 	ScanIntervalSeconds = 1
 )
 
-// INmapService defines the interface for managing nmap scan services
+// INmapService defines the interface for managing nmap scan services.
 type INmapService interface {
 	// GenerateS6ConfigForNmap generates a S6 config for a given nmap instance
 	GenerateS6ConfigForNmap(nmapConfig *nmapserviceconfig.NmapServiceConfig, s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error)
@@ -58,7 +58,7 @@ type INmapService interface {
 	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
 }
 
-// NmapScanResult contains the results of an nmap scan
+// NmapScanResult contains the results of an nmap scan.
 type NmapScanResult struct {
 	// Timestamp of the scan
 	Timestamp time.Time `json:"timestamp"`
@@ -72,7 +72,7 @@ type NmapScanResult struct {
 	Metrics ScanMetrics `json:"metrics"`
 }
 
-// PortResult contains the result for a specific port
+// PortResult contains the result for a specific port.
 type PortResult struct {
 	// State (open/closed/filtered)
 	State string `json:"state"`
@@ -82,13 +82,13 @@ type PortResult struct {
 	Port uint16 `json:"port"`
 }
 
-// ScanMetrics contains overall metrics for the scan
+// ScanMetrics contains overall metrics for the scan.
 type ScanMetrics struct {
 	// Total duration of scan in seconds
 	ScanDuration float64 `json:"scanDuration"`
 }
 
-// ServiceInfo contains information about an nmap service
+// ServiceInfo contains information about an nmap service.
 type ServiceInfo struct {
 	// S6FSMState contains the current state of the S6 FSM
 	S6FSMState string
@@ -98,7 +98,7 @@ type ServiceInfo struct {
 	S6ObservedState s6fsm.S6ObservedState
 }
 
-// NmapServiceInfo contains status information about the nmap service
+// NmapServiceInfo contains status information about the nmap service.
 type NmapServiceInfo struct {
 	// LastScan contains the result of the last scan
 	LastScan *NmapScanResult
@@ -146,5 +146,6 @@ type NmapServiceInfo struct {
 // See also: https://github.com/tiendc/go-deepcopy?tab=readme-ov-file#copy-struct-fields-via-struct-methods
 func (nsi *NmapServiceInfo) CopyLogs(src []s6_shared.LogEntry) error {
 	nsi.Logs = src
+
 	return nil
 }

@@ -17,8 +17,10 @@ package s6_orig
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
@@ -33,7 +35,7 @@ import (
 // Uses symlink-based atomic creation:
 // - Creates service files directly in repository directory
 // - Creates atomic symlink to make service visible to scanner
-// - S6 scanner notification to trigger supervision setup
+// - S6 scanner notification to trigger supervision setup.
 func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, fsService filesystem.Service) (*s6_shared.ServiceArtifacts, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
@@ -52,14 +54,16 @@ func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string
 
 	// Remove existing symlink if present
 	if exists, _ := fsService.PathExists(ctx, servicePath); exists {
-		if err := fsService.RemoveAll(ctx, servicePath); err != nil {
+		err := fsService.RemoveAll(ctx, servicePath)
+		if err != nil {
 			return nil, fmt.Errorf("failed to remove existing symlink: %w", err)
 		}
 	}
 
 	// Remove existing repository if present
 	if exists, _ := fsService.PathExists(ctx, repositoryDir); exists {
-		if err := fsService.RemoveAll(ctx, repositoryDir); err != nil {
+		err := fsService.RemoveAll(ctx, repositoryDir)
+		if err != nil {
 			return nil, fmt.Errorf("failed to remove existing repository: %w", err)
 		}
 	}
@@ -69,6 +73,7 @@ func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string
 	if err != nil {
 		// Clean up on failure
 		_ = fsService.RemoveAll(ctx, repositoryDir)
+
 		return nil, fmt.Errorf("failed to create service files: %w", err)
 	}
 
@@ -76,6 +81,7 @@ func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string
 	if err := fsService.Symlink(ctx, repositoryDir, servicePath); err != nil {
 		// Clean up repository on symlink failure
 		_ = fsService.RemoveAll(ctx, repositoryDir)
+
 		return nil, fmt.Errorf("failed to create scan directory symlink: %w", err)
 	}
 
@@ -91,6 +97,7 @@ func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string
 	}
 
 	s.logger.Debugf("Successfully created service artifacts: %+v", artifacts)
+
 	return artifacts, nil
 }
 
@@ -106,7 +113,7 @@ func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string
 // by the calling FSM system until the operation succeeds.
 func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *s6_shared.ServiceArtifacts, fsService filesystem.Service) error {
 	if s == nil {
-		return fmt.Errorf("lifecycle manager is nil")
+		return errors.New("lifecycle manager is nil")
 	}
 
 	if ctx.Err() != nil {
@@ -114,7 +121,7 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *s6_shar
 	}
 
 	if artifacts == nil {
-		return fmt.Errorf("artifacts is nil")
+		return errors.New("artifacts is nil")
 	}
 
 	// Initialize removal progress tracking
@@ -123,24 +130,30 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *s6_shar
 	// Fast path: Check if already fully removed
 	if artifacts.IsFullyRemoved() {
 		s.logger.Debugf("Service artifacts already fully removed: %+v", artifacts)
+
 		return nil
 	}
 
 	// This requires a Write Lock, as progress is just a ptr to artifacts.RemovalProgress
 	artifacts.RemovalProgressMu.Lock()
 	defer artifacts.RemovalProgressMu.Unlock()
+
 	progress := artifacts.RemovalProgress
 
 	// Step 1: Stop service cleanly using s6-svc -wD -d (idempotent, targeting scan directory symlink)
 	if !progress.ServiceStopped {
 		symlinkExists, _ := fsService.PathExists(ctx, artifacts.ServiceDir)
 		if symlinkExists {
-			if err := s.stopServiceCleanly(ctx, artifacts.ServiceDir, fsService); err != nil {
+			err := s.stopServiceCleanly(ctx, artifacts.ServiceDir, fsService)
+			if err != nil {
 				s.logger.Debugf("Failed to stop service cleanly during removal: %v", err)
+
 				return fmt.Errorf("failed to stop service cleanly: %w", err)
 			}
 		}
+
 		progress.ServiceStopped = true
+
 		s.logger.Debugf("Service stopped cleanly: %s", artifacts.ServiceDir)
 	}
 
@@ -148,12 +161,16 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *s6_shar
 	if !progress.ServiceUnsupervised {
 		symlinkExists, _ := fsService.PathExists(ctx, artifacts.ServiceDir)
 		if symlinkExists {
-			if err := s.unsuperviseService(ctx, artifacts.ServiceDir, fsService); err != nil {
+			err := s.unsuperviseService(ctx, artifacts.ServiceDir, fsService)
+			if err != nil {
 				s.logger.Debugf("Failed to unsupervise service during removal: %v", err)
+
 				return fmt.Errorf("failed to unsupervise service: %w", err)
 			}
 		}
+
 		progress.ServiceUnsupervised = true
+
 		s.logger.Debugf("Service unsupervised: %s", artifacts.ServiceDir)
 	}
 
@@ -162,8 +179,10 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *s6_shar
 		// Remove symlink from scan directory
 		symlinkExists, _ := fsService.PathExists(ctx, artifacts.ServiceDir)
 		if symlinkExists {
-			if err := fsService.RemoveAll(ctx, artifacts.ServiceDir); err != nil {
+			err := fsService.RemoveAll(ctx, artifacts.ServiceDir)
+			if err != nil {
 				s.logger.Debugf("Failed to remove scan directory symlink: %v", err)
+
 				return fmt.Errorf("failed to remove scan directory symlink: %w", err)
 			}
 		}
@@ -172,8 +191,11 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *s6_shar
 		repoExists, _ := fsService.PathExists(ctx, artifacts.RepositoryDir)
 		if repoExists {
 			s.logDirectoryContentsIfNotEmpty(ctx, artifacts.RepositoryDir, "repository directory", fsService)
-			if err := fsService.RemoveAll(ctx, artifacts.RepositoryDir); err != nil {
+			err := fsService.RemoveAll(ctx, artifacts.RepositoryDir)
+
+			if err != nil {
 				s.logger.Debugf("Failed to remove repository directory: %v", err)
+
 				return fmt.Errorf("failed to remove repository directory: %w", err)
 			}
 		}
@@ -182,18 +204,23 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *s6_shar
 		logExists, _ := fsService.PathExists(ctx, artifacts.LogDir)
 		if logExists {
 			s.logDirectoryContentsIfNotEmpty(ctx, artifacts.LogDir, "log directory", fsService)
-			if err := fsService.RemoveAll(ctx, artifacts.LogDir); err != nil {
+			err := fsService.RemoveAll(ctx, artifacts.LogDir)
+
+			if err != nil {
 				s.logger.Debugf("Failed to remove log directory: %v", err)
+
 				return fmt.Errorf("failed to remove log directory: %w", err)
 			}
 		}
 
 		progress.DirectoriesRemoved = true
 		progress.SymlinkRemoved = true // Mark symlink as removed since it's part of directory removal
+
 		s.logger.Debugf("Directories removed: symlink=%s, repository=%s, log=%s", artifacts.ServiceDir, artifacts.RepositoryDir, artifacts.LogDir)
 	}
 
 	s.logger.Debugf("Successfully completed symlink-aware skarnet sequence for service artifacts: %+v", artifacts)
+
 	return nil
 }
 
@@ -201,10 +228,10 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *s6_shar
 // Returns:
 // - HealthUnknown: I/O errors, timeouts, etc. (retry next tick)
 // - HealthOK: Service directory is healthy and complete
-// - HealthBad: Service directory is broken (triggers FSM transition)
+// - HealthBad: Service directory is broken (triggers FSM transition).
 func (s *DefaultService) CheckArtifactsHealth(ctx context.Context, artifacts *s6_shared.ServiceArtifacts, fsService filesystem.Service) (s6_shared.HealthStatus, error) {
 	if s == nil {
-		return s6_shared.HealthUnknown, fmt.Errorf("lifecycle manager is nil")
+		return s6_shared.HealthUnknown, errors.New("lifecycle manager is nil")
 	}
 
 	if ctx.Err() != nil {
@@ -212,13 +239,14 @@ func (s *DefaultService) CheckArtifactsHealth(ctx context.Context, artifacts *s6
 	}
 
 	if artifacts == nil {
-		return s6_shared.HealthBad, fmt.Errorf("artifacts is nil")
+		return s6_shared.HealthBad, errors.New("artifacts is nil")
 	}
 
 	// Always use tracked files for health check
 	if len(artifacts.CreatedFiles) == 0 {
 		// No tracked files indicates service was not properly created or is from old version
 		s.logger.Debugf("Health check: no tracked files available, service needs recreation")
+
 		return s6_shared.HealthBad, nil
 	}
 
@@ -228,11 +256,14 @@ func (s *DefaultService) CheckArtifactsHealth(ctx context.Context, artifacts *s6
 		if err != nil {
 			// I/O error - return Unknown so we retry next tick
 			s.logger.Debugf("Health check: I/O error checking tracked file %s: %v", file, err)
+
 			return s6_shared.HealthUnknown, err
 		}
+
 		if !exists {
 			// Missing required file - definitely broken
 			s.logger.Debugf("Health check: missing tracked file %s", file)
+
 			return s6_shared.HealthBad, nil
 		}
 	}
@@ -241,10 +272,13 @@ func (s *DefaultService) CheckArtifactsHealth(ctx context.Context, artifacts *s6
 	symlinkExists, err := fsService.PathExists(ctx, artifacts.ServiceDir)
 	if err != nil {
 		s.logger.Debugf("Health check: I/O error checking symlink %s: %v", artifacts.ServiceDir, err)
+
 		return s6_shared.HealthUnknown, err
 	}
+
 	if !symlinkExists {
 		s.logger.Debugf("Health check: missing symlink %s", artifacts.ServiceDir)
+
 		return s6_shared.HealthBad, nil
 	}
 
@@ -252,10 +286,13 @@ func (s *DefaultService) CheckArtifactsHealth(ctx context.Context, artifacts *s6
 	repoExists, err := fsService.PathExists(ctx, artifacts.RepositoryDir)
 	if err != nil {
 		s.logger.Debugf("Health check: I/O error checking repository %s: %v", artifacts.RepositoryDir, err)
+
 		return s6_shared.HealthUnknown, err
 	}
+
 	if !repoExists {
 		s.logger.Debugf("Health check: missing repository directory %s", artifacts.RepositoryDir)
+
 		return s6_shared.HealthBad, nil
 	}
 
@@ -269,12 +306,14 @@ func (s *DefaultService) CheckArtifactsHealth(ctx context.Context, artifacts *s6
 	// If either check failed due to I/O error, return Unknown
 	if mainErr != nil || logErr != nil {
 		s.logger.Debugf("Health check: I/O error checking supervise directories: main=%v, log=%v", mainErr, logErr)
-		return s6_shared.HealthUnknown, fmt.Errorf("supervise directory check failed: main=%v, log=%v", mainErr, logErr)
+
+		return s6_shared.HealthUnknown, fmt.Errorf("supervise directory check failed: main=%w, log=%w", mainErr, logErr)
 	}
 
 	// If supervise directories exist, both must exist (prevents race condition)
 	if mainExists != logExists {
 		s.logger.Debugf("Health check: supervise directory mismatch - main=%v, log=%v", mainExists, logExists)
+
 		return s6_shared.HealthBad, nil
 	}
 
@@ -282,7 +321,7 @@ func (s *DefaultService) CheckArtifactsHealth(ctx context.Context, artifacts *s6
 	return s6_shared.HealthOK, nil
 }
 
-// createS6FilesInRepository creates the service files directly in the repository directory
+// createS6FilesInRepository creates the service files directly in the repository directory.
 func (s *DefaultService) createS6FilesInRepository(ctx context.Context, repositoryDir string, config s6serviceconfig.S6ServiceConfig, fsService filesystem.Service) ([]string, error) {
 	var createdFiles []string
 
@@ -296,6 +335,7 @@ func (s *DefaultService) createS6FilesInRepository(ctx context.Context, reposito
 	if err := fsService.WriteFile(ctx, downFilePath, []byte{}, 0644); err != nil {
 		return nil, fmt.Errorf("failed to create down file: %w", err)
 	}
+
 	createdFiles = append(createdFiles, downFilePath)
 
 	// Create type file (required for s6-rc)
@@ -303,6 +343,7 @@ func (s *DefaultService) createS6FilesInRepository(ctx context.Context, reposito
 	if err := fsService.WriteFile(ctx, typeFile, []byte("longrun"), 0644); err != nil {
 		return nil, fmt.Errorf("failed to create type file: %w", err)
 	}
+
 	createdFiles = append(createdFiles, typeFile)
 
 	// Create log service
@@ -319,6 +360,7 @@ func (s *DefaultService) createS6FilesInRepository(ctx context.Context, reposito
 	if err := fsService.WriteFile(ctx, logTypeFile, []byte("longrun"), 0644); err != nil {
 		return nil, fmt.Errorf("failed to create log service type file: %w", err)
 	}
+
 	createdFiles = append(createdFiles, logTypeFile)
 
 	// Create log service down file to prevent automatic startup during creation
@@ -326,6 +368,7 @@ func (s *DefaultService) createS6FilesInRepository(ctx context.Context, reposito
 	if err := fsService.WriteFile(ctx, logDownFile, []byte{}, 0644); err != nil {
 		return nil, fmt.Errorf("failed to create log service down file: %w", err)
 	}
+
 	createdFiles = append(createdFiles, logDownFile)
 
 	// Create log run script immediately after other log service files to avoid race conditions
@@ -338,16 +381,19 @@ func (s *DefaultService) createS6FilesInRepository(ctx context.Context, reposito
 	if err := fsService.WriteFile(ctx, logRunPath, []byte(logRunContent), 0755); err != nil {
 		return nil, fmt.Errorf("failed to write log run script: %w", err)
 	}
+
 	createdFiles = append(createdFiles, logRunPath)
 
 	// Create main service run script using proven template system
 	if len(config.Command) > 0 {
-		if err := s.createS6RunScript(ctx, repositoryDir, fsService, config.Command, config.Env, config.MemoryLimit, repositoryDir); err != nil {
+		err := s.createS6RunScript(ctx, repositoryDir, fsService, config.Command, config.Env, config.MemoryLimit, repositoryDir)
+		if err != nil {
 			return nil, fmt.Errorf("failed to create S6 run script: %w", err)
 		}
+
 		createdFiles = append(createdFiles, filepath.Join(repositoryDir, "run"))
 	} else {
-		return nil, fmt.Errorf("no command specified for service")
+		return nil, errors.New("no command specified for service")
 	}
 
 	// Create config files using proven function
@@ -355,6 +401,7 @@ func (s *DefaultService) createS6FilesInRepository(ctx context.Context, reposito
 	if err != nil {
 		return nil, fmt.Errorf("failed to create S6 config files: %w", err)
 	}
+
 	createdFiles = append(createdFiles, configFiles...)
 
 	// Create dependencies
@@ -367,12 +414,13 @@ func (s *DefaultService) createS6FilesInRepository(ctx context.Context, reposito
 	if err := fsService.WriteFile(ctx, baseDepFile, []byte{}, 0644); err != nil {
 		return nil, fmt.Errorf("failed to create base dependency file: %w", err)
 	}
+
 	createdFiles = append(createdFiles, baseDepFile)
 
 	return createdFiles, nil
 }
 
-// createS6RunScript creates a run script for the service using the proven template system
+// createS6RunScript creates a run script for the service using the proven template system.
 func (s *DefaultService) createS6RunScript(ctx context.Context, servicePath string, fsService filesystem.Service, command []string, env map[string]string, memoryLimit int64, finalServicePath string) error {
 	runScript := filepath.Join(servicePath, "run")
 
@@ -408,20 +456,20 @@ func (s *DefaultService) createS6RunScript(ctx context.Context, servicePath stri
 	return nil
 }
 
-// createS6ConfigFiles creates config files needed by the service using the proven method
+// createS6ConfigFiles creates config files needed by the service using the proven method.
 func (s *DefaultService) createS6ConfigFiles(ctx context.Context, servicePath string, fsService filesystem.Service, configFiles map[string]string) ([]string, error) {
 	if len(configFiles) == 0 {
 		return nil, nil
 	}
 
 	configPath := filepath.Join(servicePath, "config")
+
 	var createdFiles []string
 
 	for path, content := range configFiles {
-
 		// Validate config file path for security and correctness
 		if strings.TrimSpace(path) == "" {
-			return nil, fmt.Errorf("config filename cannot be empty")
+			return nil, errors.New("config filename cannot be empty")
 		}
 
 		// Prevent path traversal attacks
@@ -447,6 +495,7 @@ func (s *DefaultService) createS6ConfigFiles(ctx context.Context, servicePath st
 
 		// Check for reserved/dangerous filenames
 		baseName := filepath.Base(path)
+
 		reservedNames := []string{".", "..", "CON", "PRN", "AUX", "NUL"}
 		for _, reserved := range reservedNames {
 			if strings.EqualFold(baseName, reserved) {
@@ -469,12 +518,14 @@ func (s *DefaultService) createS6ConfigFiles(ctx context.Context, servicePath st
 
 		// Create directory if it doesn't exist
 		dir := filepath.Dir(path)
-		if err := fsService.EnsureDirectory(ctx, dir); err != nil {
+		err := fsService.EnsureDirectory(ctx, dir)
+		if err != nil {
 			return nil, fmt.Errorf("failed to create directory for config file: %w", err)
 		}
 
 		// Create and write the file
-		if err := fsService.WriteFile(ctx, path, []byte(content), 0644); err != nil {
+		err = fsService.WriteFile(ctx, path, []byte(content), 0644)
+		if err != nil {
 			return nil, fmt.Errorf("failed to write to config file %s: %w", path, err)
 		}
 
@@ -485,7 +536,7 @@ func (s *DefaultService) createS6ConfigFiles(ctx context.Context, servicePath st
 	return createdFiles, nil
 }
 
-// createDownFiles creates down files to prevent service startup
+// createDownFiles creates down files to prevent service startup.
 func (s *DefaultService) createDownFiles(ctx context.Context, artifacts *s6_shared.ServiceArtifacts, fsService filesystem.Service) error {
 	downFiles := []string{
 		filepath.Join(artifacts.ServiceDir, "down"),
@@ -493,7 +544,8 @@ func (s *DefaultService) createDownFiles(ctx context.Context, artifacts *s6_shar
 	}
 
 	for _, downFile := range downFiles {
-		if err := fsService.WriteFile(ctx, downFile, []byte{}, 0644); err != nil {
+		err := fsService.WriteFile(ctx, downFile, []byte{}, 0644)
+		if err != nil {
 			return fmt.Errorf("failed to create down file %s: %w", downFile, err)
 		}
 	}
@@ -504,7 +556,7 @@ func (s *DefaultService) createDownFiles(ctx context.Context, artifacts *s6_shar
 // stopServiceCleanly stops the service using S6's recommended approach
 // Uses s6-svc -wD -d for clean shutdown and waits for finish scripts to complete
 // This is step 1 of the skarnet sequence for proper service removal
-// Now includes timeout handling with -T parameter and retry logic for exit code 111
+// Now includes timeout handling with -T parameter and retry logic for exit code 111.
 func (s *DefaultService) stopServiceCleanly(ctx context.Context, servicePath string, fsService filesystem.Service) error {
 	servicePaths := []string{
 		servicePath,                       // Main service
@@ -519,11 +571,13 @@ func (s *DefaultService) stopServiceCleanly(ctx context.Context, servicePath str
 		if err != nil {
 			s.logger.Debugf("Failed to check if service path exists %s: %v", svcPath, err)
 			lastErr = err
+
 			continue
 		}
 
 		if !exists {
 			s.logger.Debugf("Service path does not exist, skipping: %s", svcPath)
+
 			continue
 		}
 
@@ -537,7 +591,7 @@ func (s *DefaultService) stopServiceCleanly(ctx context.Context, servicePath str
 		var args []string
 		if timeoutMs > 0 {
 			// -T: timeout in milliseconds
-			args = []string{"-T", fmt.Sprintf("%d", timeoutMs), "-wD", "-d", svcPath}
+			args = []string{"-T", strconv.Itoa(timeoutMs), "-wD", "-d", svcPath}
 		} else {
 			// No timeout specified, use S6 default behavior
 			args = []string{"-wD", "-d", svcPath}
@@ -559,7 +613,7 @@ func (s *DefaultService) stopServiceCleanly(ctx context.Context, servicePath str
 // unsuperviseService removes the service from S6 supervision using s6-svunlink
 // This is step 2 of the skarnet sequence for proper service removal
 // s6-svunlink removes the service from s6-svscan supervision and waits for supervisor processes to exit
-// Now includes timeout handling with -t parameter and verification that supervision actually ended
+// Now includes timeout handling with -t parameter and verification that supervision actually ended.
 func (s *DefaultService) unsuperviseService(ctx context.Context, servicePath string, fsService filesystem.Service) error {
 	scanDir := filepath.Dir(servicePath)      // e.g., /run/service
 	serviceName := filepath.Base(servicePath) // e.g., benthos-hello-world
@@ -573,7 +627,7 @@ func (s *DefaultService) unsuperviseService(ctx context.Context, servicePath str
 	var args []string
 	if timeoutMs > 0 {
 		// -t: timeout in milliseconds
-		args = []string{"-t", fmt.Sprintf("%d", timeoutMs), scanDir, serviceName}
+		args = []string{"-t", strconv.Itoa(timeoutMs), scanDir, serviceName}
 	} else {
 		// No timeout specified, use S6 default behavior
 		args = []string{scanDir, serviceName}
@@ -591,20 +645,23 @@ func (s *DefaultService) unsuperviseService(ctx context.Context, servicePath str
 	}
 
 	s.logger.Debugf("Successfully unsupervised service %s (including log subdirectory)", servicePath)
+
 	return nil
 }
 
 // verifySupervisionEnded checks if supervision has actually ended using the same logic as s6-svstat
-// Returns nil if supervision has ended, error if supervisor is still running or check failed
+// Returns nil if supervision has ended, error if supervisor is still running or check failed.
 func (s *DefaultService) verifySupervisionEnded(ctx context.Context, servicePath string, fsService filesystem.Service) error {
 	// Check main service supervision
-	if err := s.checkSingleSupervisionEnded(ctx, servicePath, fsService); err != nil {
+	err := s.checkSingleSupervisionEnded(ctx, servicePath, fsService)
+	if err != nil {
 		return fmt.Errorf("main service supervision still active: %w", err)
 	}
 
 	// Check log service supervision
 	logServicePath := filepath.Join(servicePath, "log")
-	if err := s.checkSingleSupervisionEnded(ctx, logServicePath, fsService); err != nil {
+	err = s.checkSingleSupervisionEnded(ctx, logServicePath, fsService)
+	if err != nil {
 		return fmt.Errorf("log service supervision still active: %w", err)
 	}
 
@@ -612,7 +669,7 @@ func (s *DefaultService) verifySupervisionEnded(ctx context.Context, servicePath
 }
 
 // checkSingleSupervisionEnded checks if supervision has ended for a single service path
-// Uses the same logic as s6_svc_ok() and s6-svstat to detect supervisor presence
+// Uses the same logic as s6_svc_ok() and s6-svstat to detect supervisor presence.
 func (s *DefaultService) checkSingleSupervisionEnded(ctx context.Context, servicePath string, fsService filesystem.Service) error {
 	lockFile := filepath.Join(servicePath, "supervise", "lock")
 
@@ -625,6 +682,7 @@ func (s *DefaultService) checkSingleSupervisionEnded(ctx context.Context, servic
 	if !exists {
 		// Lock file doesn't exist - supervision has ended
 		s.logger.Debugf("Lock file %s does not exist - supervision ended", lockFile)
+
 		return nil
 	}
 
@@ -635,18 +693,20 @@ func (s *DefaultService) checkSingleSupervisionEnded(ctx context.Context, servic
 	if err != nil {
 		// flock failed - this typically means the file is locked by supervisor
 		s.logger.Debugf("Lock file %s is locked (supervisor still running): %v", lockFile, err)
+
 		return fmt.Errorf("supervisor still running (lock file %s is locked)", lockFile)
 	}
 
 	// flock succeeded - file is not locked, supervision has ended
 	s.logger.Debugf("Lock file %s exists but is not locked - supervision ended", lockFile)
+
 	return nil
 }
 
 // Note: parseStatusFile logic has been moved to status.go as parseS6StatusFile
 // This centralizes all S6 status parsing logic in one place
 
-// removeFileFromArtifacts removes a file from the artifacts tracking
+// removeFileFromArtifacts removes a file from the artifacts tracking.
 func (s *DefaultService) removeFileFromArtifacts(filePath string) {
 	if s.artifacts == nil {
 		return
@@ -656,12 +716,13 @@ func (s *DefaultService) removeFileFromArtifacts(filePath string) {
 	for i, createdFile := range s.artifacts.CreatedFiles {
 		if createdFile == filePath {
 			s.artifacts.CreatedFiles = append(s.artifacts.CreatedFiles[:i], s.artifacts.CreatedFiles[i+1:]...)
+
 			break
 		}
 	}
 }
 
-// addFileToArtifacts adds a file to the artifacts tracking
+// addFileToArtifacts adds a file to the artifacts tracking.
 func (s *DefaultService) addFileToArtifacts(filePath string) {
 	if s.artifacts == nil {
 		return
@@ -679,7 +740,7 @@ func (s *DefaultService) addFileToArtifacts(filePath string) {
 }
 
 // calculateS6Timeout calculates the timeout for S6 commands based on remaining context time
-// Uses S6_TIMEOUT_PERCENTAGE of remaining context time
+// Uses S6_TIMEOUT_PERCENTAGE of remaining context time.
 func (s *DefaultService) calculateS6Timeout(ctx context.Context) int {
 	deadline, ok := ctx.Deadline()
 	if !ok {
@@ -705,16 +766,18 @@ func (s *DefaultService) calculateS6Timeout(ctx context.Context) int {
 	return timeoutMs
 }
 
-// logDirectoryContentsIfNotEmpty logs the contents of a directory if it's not empty
+// logDirectoryContentsIfNotEmpty logs the contents of a directory if it's not empty.
 func (s *DefaultService) logDirectoryContentsIfNotEmpty(ctx context.Context, dirPath string, dirType string, fsService filesystem.Service) {
 	entries, err := fsService.ReadDir(ctx, dirPath)
 	if err != nil {
 		s.logger.Debugf("Could not read %s contents before removal: %v", dirType, err)
+
 		return
 	}
 
 	if len(entries) > 0 {
 		var contents []string
+
 		for _, entry := range entries {
 			if entry.IsDir() {
 				contents = append(contents, entry.Name()+"/")
@@ -722,6 +785,7 @@ func (s *DefaultService) logDirectoryContentsIfNotEmpty(ctx context.Context, dir
 				contents = append(contents, entry.Name())
 			}
 		}
+
 		s.logger.Debugf("Removing non-empty %s %s containing: %v", dirType, dirPath, contents)
 	}
 }

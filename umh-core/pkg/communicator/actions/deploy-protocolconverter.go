@@ -37,6 +37,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -90,7 +91,7 @@ func (a *DeployProtocolConverterAction) Parse(payload interface{}) error {
 	// Parse the payload to get the protocol converter configuration
 	parsedPayload, err := ParseActionPayload[models.ProtocolConverter](payload)
 	if err != nil {
-		return fmt.Errorf("failed to parse payload: %v", err)
+		return fmt.Errorf("failed to parse payload: %w", err)
 	}
 
 	a.payload = parsedPayload
@@ -115,7 +116,8 @@ func (a *DeployProtocolConverterAction) Validate() error {
 		return errors.New("missing required field Connection.Port")
 	}
 
-	if err := ValidateComponentName(a.payload.Name); err != nil {
+	err := ValidateComponentName(a.payload.Name)
+	if err != nil {
 		return err
 	}
 
@@ -148,6 +150,7 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 		errorMsg := fmt.Sprintf("Failed to add protocol converter: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.DeployProtocolConverter)
+
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
@@ -172,6 +175,7 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 		if err != nil {
 			errorMsg := fmt.Sprintf("Failed to wait for protocol converter to be active: %v", err)
 			SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, errCode, nil, a.outboundChannel, models.DeployProtocolConverter, nil)
+
 			return nil, nil, fmt.Errorf("%s", errorMsg)
 		}
 	}
@@ -182,12 +186,12 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 	return response, nil, nil
 }
 
-// createProtocolConverterConfig creates a ProtocolConverterConfig with templated configuration
+// createProtocolConverterConfig creates a ProtocolConverterConfig with templated configuration.
 func (a *DeployProtocolConverterAction) createProtocolConverterConfig() config.ProtocolConverterConfig {
 	// Create variables bundle starting with IP and PORT as strings in the User namespace
 	userVars := map[string]any{
-		"IP":   a.payload.Connection.IP,                      // Keep IP as string
-		"PORT": fmt.Sprintf("%d", a.payload.Connection.Port), // Convert port to string
+		"IP":   a.payload.Connection.IP,                                   // Keep IP as string
+		"PORT": strconv.FormatUint(uint64(a.payload.Connection.Port), 10), // Convert port to string
 	}
 
 	// Add any additional user-supplied variables from TemplateInfo.Variables
@@ -231,7 +235,7 @@ func (a *DeployProtocolConverterAction) createProtocolConverterConfig() config.P
 	}
 }
 
-// convertIntMapToStringMap converts map[int]string to map[string]string
+// convertIntMapToStringMap converts map[int]string to map[string]string.
 func convertIntMapToStringMap(intMap map[int]string) map[string]string {
 	if intMap == nil {
 		return nil
@@ -239,8 +243,9 @@ func convertIntMapToStringMap(intMap map[int]string) map[string]string {
 
 	stringMap := make(map[string]string)
 	for k, v := range intMap {
-		stringMap[fmt.Sprintf("%d", k)] = v
+		stringMap[strconv.Itoa(k)] = v
 	}
+
 	return stringMap
 }
 
@@ -261,16 +266,17 @@ func (a *DeployProtocolConverterAction) GetParsedPayload() models.ProtocolConver
 
 // waitForComponentToAppear polls live FSM state until the new component
 // becomes available or the timeout hits (→ delete unless ignoreHealthCheck).
-// the function returns the error code and and the error message via an error object
+// the function returns the error code and the error message via an error object
 // the error code is a string that is sent to the frontend to allow it to determine if the action can be retried or not
-// the error message is sent to the frontend to allow the user to see the error message
+// the error message is sent to the frontend to allow the user to see the error message.
 func (a *DeployProtocolConverterAction) waitForComponentToAppear() (string, error) {
-
 	ticker := time.NewTicker(constants.ActionTickerTime)
 	defer ticker.Stop()
+
 	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
 	startTime := time.Now()
 	timeoutDuration := constants.DataflowComponentWaitForActiveTimeout
+
 	for {
 		elapsed := time.Since(startTime)
 		remaining := timeoutDuration - elapsed
@@ -284,21 +290,24 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear() (string, erro
 
 			ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 			defer cancel()
+
 			err := a.configManager.AtomicDeleteProtocolConverter(ctx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.payload.Name))
 			if err != nil {
 				a.actionLogger.Errorf("failed to remove protocol converter %s: %v", a.payload.Name, err)
-				return models.ErrRetryRollbackTimeout, fmt.Errorf("protocol converter '%s' failed to activate within timeout but could not be removed: %v. Please check system load and consider removing the component manually", a.payload.Name, err)
+
+				return models.ErrRetryRollbackTimeout, fmt.Errorf("protocol converter '%s' failed to activate within timeout but could not be removed: %w. Please check system load and consider removing the component manually", a.payload.Name, err)
 			}
+
 			return models.ErrRetryRollbackTimeout, fmt.Errorf("protocol converter '%s' was removed because it did not become active within the timeout period. Please check system load or component configuration and try again", a.payload.Name)
 
 		case <-ticker.C:
-
 			// the snapshot manager holds the latest system snapshot which is asynchronously updated by the other goroutines
 			// we need to get a deep copy of it to prevent race conditions
 			systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
 			if protocolConverterManager, exists := systemSnapshot.Managers[constants.ProtocolConverterManagerName]; exists {
 				instances := protocolConverterManager.GetInstances()
 				found := false
+
 				for _, instance := range instances {
 					curName := instance.ID
 					if curName != a.payload.Name {
@@ -318,6 +327,7 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear() (string, erro
 						stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for nmap to apply the connection configuration"
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 							stateMessage, a.outboundChannel, models.DeployProtocolConverter)
+
 						continue
 					}
 
@@ -329,7 +339,6 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear() (string, erro
 					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 						stateMessage, a.outboundChannel, models.DeployProtocolConverter)
 				}
-
 			} else {
 				stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for manager to initialise"
 				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
@@ -337,5 +346,4 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear() (string, erro
 			}
 		}
 	}
-
 }

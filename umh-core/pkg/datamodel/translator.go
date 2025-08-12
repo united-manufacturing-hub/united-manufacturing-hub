@@ -30,10 +30,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 )
 
-// JSONSchema represents a JSON Schema document
+// JSONSchema represents a JSON Schema document.
 type JSONSchema map[string]interface{}
 
-// SchemaTranslationResult contains the result of translating a data model to JSON schemas
+// SchemaTranslationResult contains the result of translating a data model to JSON schemas.
 type SchemaTranslationResult struct {
 	// Schemas maps schema registry subject names to JSON schemas
 	// Subject format: {contract_name}_{version}-{payload_shape}
@@ -109,12 +109,14 @@ func (t *Translator) TranslateDataModel(
 	// Determine if we should handle references based on allDataModels
 	hasReferences := len(allDataModels) > 0
 
-	var pathsByShape map[string][]string
-	var err error
+	var (
+		pathsByShape map[string][]string
+	)
 
 	if hasReferences {
 		// Validate with full reference checking
-		if err := t.validator.ValidateWithReferences(ctx, dataModel, allDataModels, enrichedPayloadShapes); err != nil {
+		err := t.validator.ValidateWithReferences(ctx, dataModel, allDataModels, enrichedPayloadShapes)
+		if err != nil {
 			return nil, fmt.Errorf("data model reference validation failed: %w", err)
 		}
 
@@ -125,7 +127,8 @@ func (t *Translator) TranslateDataModel(
 		}
 	} else {
 		// Basic structure validation only
-		if err := t.validator.ValidateStructureOnly(ctx, dataModel); err != nil {
+		err := t.validator.ValidateStructureOnly(ctx, dataModel)
+		if err != nil {
 			return nil, fmt.Errorf("data model validation failed: %w", err)
 		}
 
@@ -202,6 +205,7 @@ func (t *Translator) extractVirtualPaths(
 			if pathsByShape[field.PayloadShape] == nil {
 				pathsByShape[field.PayloadShape] = make([]string, 0, 4) // typical field count per shape
 			}
+
 			pathsByShape[field.PayloadShape] = append(pathsByShape[field.PayloadShape], fieldPath)
 		}
 
@@ -217,6 +221,7 @@ func (t *Translator) extractVirtualPaths(
 				if pathsByShape[shape] == nil {
 					pathsByShape[shape] = make([]string, 0, len(paths)+4) // size for incoming + typical growth
 				}
+
 				pathsByShape[shape] = append(pathsByShape[shape], paths...)
 			}
 		}
@@ -232,7 +237,7 @@ func (t *Translator) extractVirtualPaths(
 	return pathsByShape, nil
 }
 
-// extractVirtualPathsWithReferences resolves model references and extracts virtual paths
+// extractVirtualPathsWithReferences resolves model references and extracts virtual paths.
 func (t *Translator) extractVirtualPathsWithReferences(
 	ctx context.Context,
 	structure map[string]config.Field,
@@ -268,6 +273,7 @@ func (t *Translator) extractVirtualPathsWithReferences(
 			if pathsByShape[field.PayloadShape] == nil {
 				pathsByShape[field.PayloadShape] = make([]string, 0, 4) // typical field count per shape
 			}
+
 			pathsByShape[field.PayloadShape] = append(pathsByShape[field.PayloadShape], fieldPath)
 		}
 
@@ -277,6 +283,7 @@ func (t *Translator) extractVirtualPathsWithReferences(
 			if err != nil {
 				return nil, err
 			}
+
 			t.mergePathsByShape(pathsByShape, subPaths)
 		}
 
@@ -286,6 +293,7 @@ func (t *Translator) extractVirtualPathsWithReferences(
 			if err != nil {
 				return nil, err
 			}
+
 			t.mergePathsByShape(pathsByShape, refPaths)
 		}
 	}
@@ -298,7 +306,7 @@ func (t *Translator) extractVirtualPathsWithReferences(
 	return pathsByShape, nil
 }
 
-// resolveModelReference resolves a model reference and extracts its virtual paths
+// resolveModelReference resolves a model reference and extracts its virtual paths.
 func (t *Translator) resolveModelReference(
 	ctx context.Context,
 	modelRef *config.ModelRef,
@@ -339,17 +347,18 @@ func (t *Translator) resolveModelReference(
 	return t.extractVirtualPathsWithReferences(ctx, referencedVersion.Structure, currentPath, allDataModels, payloadShapes, visitedModels, depth+1)
 }
 
-// mergePathsByShape merges two pathsByShape maps
+// mergePathsByShape merges two pathsByShape maps.
 func (t *Translator) mergePathsByShape(dest, src map[string][]string) {
 	for shape, paths := range src {
 		if dest[shape] == nil {
 			dest[shape] = make([]string, 0, len(paths)+4) // size for incoming + typical growth
 		}
+
 		dest[shape] = append(dest[shape], paths...)
 	}
 }
 
-// generateJSONSchema creates a JSON schema for a specific payload shape and virtual paths
+// generateJSONSchema creates a JSON schema for a specific payload shape and virtual paths.
 func (t *Translator) generateJSONSchema(
 	ctx context.Context,
 	virtualPaths []string,
@@ -385,7 +394,7 @@ func (t *Translator) generateJSONSchema(
 	return schema, nil
 }
 
-// generateFieldsSchema converts a payload shape definition to JSON schema format
+// generateFieldsSchema converts a payload shape definition to JSON schema format.
 func (t *Translator) generateFieldsSchema(payloadShape config.PayloadShape) (map[string]interface{}, error) {
 	fieldCount := len(payloadShape.Fields)
 	properties := make(map[string]interface{}, fieldCount)
@@ -418,7 +427,7 @@ func (t *Translator) generateFieldsSchema(payloadShape config.PayloadShape) (map
 	}, nil
 }
 
-// convertTypeToJSONSchema converts UMH type names to JSON Schema types
+// convertTypeToJSONSchema converts UMH type names to JSON Schema types.
 func (t *Translator) convertTypeToJSONSchema(umhType string) (string, error) {
 	switch umhType {
 	case "number":
@@ -436,7 +445,7 @@ func (t *Translator) convertTypeToJSONSchema(umhType string) (string, error) {
 
 // generateSubjectName creates a Schema Registry subject name from contract, version, and payload shape
 // Format: {contract_name}_{version}-{payload_shape} or {contract_name}-{payload_shape} if version already in name
-// Example: "_pump_v1-timeseries-number" or "_sensor_data_v1-timeseries-number"
+// Example: "_pump_v1-timeseries-number" or "_sensor_data_v1-timeseries-number".
 func generateSubjectName(contractName, version, payloadShape string) string {
 	// Ensure contract name starts with underscore
 	if !strings.HasPrefix(contractName, "_") {
@@ -459,7 +468,7 @@ func generateSubjectName(contractName, version, payloadShape string) string {
 	return fmt.Sprintf("%s_%s-%s", contractName, version, payloadShape)
 }
 
-// GetSchemaAsJSON returns a JSON schema as a JSON byte array
+// GetSchemaAsJSON returns a JSON schema as a JSON byte array.
 func (result *SchemaTranslationResult) GetSchemaAsJSON(subjectName string) ([]byte, error) {
 	schema, exists := result.Schemas[subjectName]
 	if !exists {
@@ -469,12 +478,14 @@ func (result *SchemaTranslationResult) GetSchemaAsJSON(subjectName string) ([]by
 	return json.Marshal(schema)
 }
 
-// GetAllSubjectNames returns all schema registry subject names
+// GetAllSubjectNames returns all schema registry subject names.
 func (result *SchemaTranslationResult) GetAllSubjectNames() []string {
 	subjects := make([]string, 0, len(result.Schemas))
 	for subject := range result.Schemas {
 		subjects = append(subjects, subject)
 	}
+
 	sort.Strings(subjects)
+
 	return subjects
 }

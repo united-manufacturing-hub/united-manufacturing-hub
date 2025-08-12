@@ -18,10 +18,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Generator handles YAML generation for VariableBundle
+// Generator handles YAML generation for VariableBundle.
 type Generator struct{}
 
-// NewGenerator creates a new Generator instance
+// NewGenerator creates a new Generator instance.
 func NewGenerator() *Generator {
 	return &Generator{}
 }
@@ -34,14 +34,16 @@ func NewGenerator() *Generator {
 func (g *Generator) RenderConfig(vb VariableBundle) (string, error) {
 	// Use ConfigToMap to get the full structure with all namespaces
 	configMap := g.ConfigToMap(vb)
+
 	bytes, err := yaml.Marshal(configMap)
 	if err != nil {
 		return "", err
 	}
+
 	return string(bytes), nil
 }
 
-// ConfigToMap converts a VariableBundle to a raw map for YAML generation
+// ConfigToMap converts a VariableBundle to a raw map for YAML generation.
 func (g *Generator) ConfigToMap(cfg VariableBundle) map[string]any {
 	configMap := make(map[string]any)
 
@@ -63,7 +65,7 @@ func (g *Generator) ConfigToMap(cfg VariableBundle) map[string]any {
 	return configMap
 }
 
-// normalizeConfig applies nothing since Variables has no default settings
+// normalizeConfig applies nothing since Variables has no default settings.
 func NormalizeConfig(raw map[string]any) map[string]any {
 	return raw
 }

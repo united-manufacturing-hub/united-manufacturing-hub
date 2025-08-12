@@ -16,7 +16,7 @@ package s6_orig
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"sync"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
@@ -24,7 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 )
 
-// MockService is a mock implementation of the S6 Service interface for testing
+// MockService is a mock implementation of the S6 Service interface for testing.
 type MockService struct {
 
 	// Return values for each method
@@ -90,7 +90,7 @@ type MockService struct {
 	ErrorMode  bool
 }
 
-// NewMockService creates a new mock S6 service
+// NewMockService creates a new mock S6 service.
 func NewMockService() *MockService {
 	return &MockService{
 		ServiceStates:    make(map[string]s6_shared.ServiceInfo),
@@ -101,7 +101,7 @@ func NewMockService() *MockService {
 	}
 }
 
-// Create mocks creating an S6 service
+// Create mocks creating an S6 service.
 func (m *MockService) Create(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, filesystemService filesystem.Service) error {
 	m.CreateCalled = true
 
@@ -109,10 +109,11 @@ func (m *MockService) Create(ctx context.Context, servicePath string, config s6s
 	defer m.mu.Unlock()
 
 	m.ExistingServices[servicePath] = true
+
 	return m.CreateError
 }
 
-// Remove mocks removing an S6 service
+// Remove mocks removing an S6 service.
 func (m *MockService) Remove(ctx context.Context, servicePath string, filesystemService filesystem.Service) error {
 	m.RemoveCalled = true
 
@@ -121,10 +122,11 @@ func (m *MockService) Remove(ctx context.Context, servicePath string, filesystem
 
 	delete(m.ExistingServices, servicePath)
 	delete(m.ServiceStates, servicePath)
+
 	return m.RemoveError
 }
 
-// Start mocks starting an S6 service
+// Start mocks starting an S6 service.
 func (m *MockService) Start(ctx context.Context, servicePath string, filesystemService filesystem.Service) error {
 	m.StartCalled = true
 
@@ -142,7 +144,7 @@ func (m *MockService) Start(ctx context.Context, servicePath string, filesystemS
 	return m.StartError
 }
 
-// Stop mocks stopping an S6 service
+// Stop mocks stopping an S6 service.
 func (m *MockService) Stop(ctx context.Context, servicePath string, filesystemService filesystem.Service) error {
 	m.StopCalled = true
 
@@ -160,7 +162,7 @@ func (m *MockService) Stop(ctx context.Context, servicePath string, filesystemSe
 	return m.StopError
 }
 
-// Restart mocks restarting an S6 service
+// Restart mocks restarting an S6 service.
 func (m *MockService) Restart(ctx context.Context, servicePath string, filesystemService filesystem.Service) error {
 	m.RestartCalled = true
 
@@ -179,7 +181,7 @@ func (m *MockService) Restart(ctx context.Context, servicePath string, filesyste
 	return m.RestartError
 }
 
-// Status mocks getting the status of an S6 service
+// Status mocks getting the status of an S6 service.
 func (m *MockService) Status(ctx context.Context, servicePath string, filesystemService filesystem.Service) (s6_shared.ServiceInfo, error) {
 	m.StatusCalled = true
 
@@ -190,42 +192,48 @@ func (m *MockService) Status(ctx context.Context, servicePath string, filesystem
 	return m.StatusResult, m.StatusError
 }
 
-// ServiceExists mocks checking if an S6 service exists
+// ServiceExists mocks checking if an S6 service exists.
 func (m *MockService) ServiceExists(ctx context.Context, servicePath string, filesystemService filesystem.Service) (bool, error) {
 	m.ServiceExistsCalled = true
 	if exists := m.ExistingServices[servicePath]; exists {
 		return true, m.ServiceExistsError
 	}
+
 	return false, m.ServiceExistsError
 }
 
-// GetConfig mocks getting the config of an S6 service
+// GetConfig mocks getting the config of an S6 service.
 func (m *MockService) GetConfig(ctx context.Context, servicePath string, filesystemService filesystem.Service) (s6serviceconfig.S6ServiceConfig, error) {
 	m.GetConfigCalled = true
+
 	return m.GetConfigResult, m.GetConfigError
 }
 
 func (m *MockService) ExitHistory(ctx context.Context, servicePath string, filesystemService filesystem.Service) ([]s6_shared.ExitEvent, error) {
 	m.ExitHistoryCalled = true
+
 	return m.ExitHistoryResult, m.ExitHistoryError
 }
 
-// CleanS6ServiceDirectory implements the Service interface
+// CleanS6ServiceDirectory implements the Service interface.
 func (m *MockService) CleanS6ServiceDirectory(ctx context.Context, path string, filesystemService filesystem.Service) error {
 	m.CleanS6ServiceDirectoryCalled = true
+
 	return m.CleanS6ServiceDirectoryResult
 }
 
-// GetS6ConfigFile is a mock method
+// GetS6ConfigFile is a mock method.
 func (m *MockService) GetS6ConfigFile(ctx context.Context, servicePath string, configFileName string, filesystemService filesystem.Service) ([]byte, error) {
 	m.GetS6ConfigFileCalled = true
+
 	return m.GetS6ConfigFileResult, m.GetS6ConfigFileError
 }
 
-// ForceRemove is a mock method
+// ForceRemove is a mock method.
 func (m *MockService) ForceRemove(ctx context.Context, servicePath string, filesystemService filesystem.Service) error {
 	m.ForceRemoveCalled = true
 	m.ForceRemovePath = servicePath
+
 	return m.ForceRemoveError
 }
 
@@ -235,11 +243,11 @@ func (m *MockService) GetLogs(ctx context.Context, servicePath string, filesyste
 	return m.GetLogsResult, m.GetLogsError
 }
 
-// EnsureSupervision is a mock implementation that checks if supervise dir exists
+// EnsureSupervision is a mock implementation that checks if supervise dir exists.
 func (m *MockService) EnsureSupervision(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
 	// Check if we should return an error
 	if m.ErrorMode {
-		return false, fmt.Errorf("mock error")
+		return false, errors.New("mock error")
 	}
 
 	// Mock successful supervision
@@ -251,6 +259,7 @@ func (m *MockService) EnsureSupervision(ctx context.Context, servicePath string,
 	// On subsequent calls, return true (supervision ready)
 	if !m.MockExists {
 		m.MockExists = true // Set to true for next call
+
 		return false, nil
 	}
 

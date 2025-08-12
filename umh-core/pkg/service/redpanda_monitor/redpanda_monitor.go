@@ -55,7 +55,7 @@ import (
 	"github.com/prometheus/prometheus/model/textparse"
 )
 
-// Metrics contains information about the metrics of the Redpanda service
+// Metrics contains information about the metrics of the Redpanda service.
 type Metrics struct {
 	Topic          TopicMetrics
 	Infrastructure InfrastructureMetrics
@@ -63,12 +63,12 @@ type Metrics struct {
 	Throughput     ThroughputMetrics
 }
 
-// InfrastructureMetrics contains information about the infrastructure metrics of the Redpanda service
+// InfrastructureMetrics contains information about the infrastructure metrics of the Redpanda service.
 type InfrastructureMetrics struct {
 	Storage StorageMetrics
 }
 
-// StorageMetrics contains information about the storage metrics of the Redpanda service
+// StorageMetrics contains information about the storage metrics of the Redpanda service.
 type StorageMetrics struct {
 	// redpanda_storage_disk_free_bytes
 	// type: gauge
@@ -83,7 +83,7 @@ type StorageMetrics struct {
 	FreeSpaceAlert bool
 }
 
-// ClusterMetrics contains information about the cluster metrics of the Redpanda service
+// ClusterMetrics contains information about the cluster metrics of the Redpanda service.
 type ClusterMetrics struct {
 	// redpanda_cluster_topics
 	// type: gauge
@@ -95,7 +95,7 @@ type ClusterMetrics struct {
 	UnavailableTopics int64
 }
 
-// ThroughputMetrics contains information about the throughput metrics of the Redpanda service
+// ThroughputMetrics contains information about the throughput metrics of the Redpanda service.
 type ThroughputMetrics struct {
 	// redpanda_kafka_request_bytes_total over all redpanda_namespace and redpanda_topic labels using redpanda_request=("produce")
 	// type: counter
@@ -107,7 +107,7 @@ type ThroughputMetrics struct {
 	BytesOut int64
 }
 
-// TopicMetrics contains information about the topic metrics of the Redpanda service
+// TopicMetrics contains information about the topic metrics of the Redpanda service.
 type TopicMetrics struct {
 	// redpanda_kafka_partitions
 	// type: gauge
@@ -140,7 +140,7 @@ type TopicConfig struct {
 	DefaultTopicSegmentMs            int64
 }
 
-// RedpandaMetrics contains information about the metrics of the Redpanda service
+// RedpandaMetrics contains information about the metrics of the Redpanda service.
 type RedpandaMetrics struct {
 	// MetricsState contains the last observed state of the metrics
 	MetricsState *RedpandaMetricsState
@@ -148,7 +148,7 @@ type RedpandaMetrics struct {
 	Metrics Metrics
 }
 
-// ServiceInfo contains information about a redpanda service
+// ServiceInfo contains information about a redpanda service.
 type ServiceInfo struct {
 	// S6FSMState contains the current state of the S6 FSM of the redpanda_monitor service
 	S6FSMState string
@@ -158,7 +158,7 @@ type ServiceInfo struct {
 	S6ObservedState s6fsm.S6ObservedState
 }
 
-// RedpandaMonitorScan contains information about the status of the Redpanda service
+// RedpandaMonitorScan contains information about the status of the Redpanda service.
 type RedpandaMetricsScan struct {
 	// LastUpdatedAt contains the last time the metrics were updated
 	LastUpdatedAt time.Time
@@ -170,10 +170,10 @@ type RedpandaMetricsScan struct {
 	HealthCheck HealthCheck
 }
 
-// RedpandaMonitorStatus contains status information about the redpanda service
+// RedpandaMonitorStatus contains status information about the redpanda service.
 type RedpandaMonitorStatus struct {
 	// LastScan contains the result of the last scan
-	// If this is nil, we never had a successfull scan
+	// If this is nil, we never had a successful scan
 	LastScan *RedpandaMetricsScan
 	// Logs contains the structured s6 log entries emitted by the
 	// redpanda_monitor service.
@@ -219,6 +219,7 @@ type RedpandaMonitorStatus struct {
 // See also: https://github.com/tiendc/go-deepcopy?tab=readme-ov-file#copy-struct-fields-via-struct-methods
 func (rms *RedpandaMonitorStatus) CopyLogs(src []s6_shared.LogEntry) error {
 	rms.Logs = src
+
 	return nil
 }
 
@@ -234,7 +235,7 @@ type IRedpandaMonitorService interface {
 	ForceRemoveRedpandaMonitor(ctx context.Context, filesystemService filesystem.Service) error
 }
 
-// Ensure RedpandaMonitorService implements IRedpandaMonitorService
+// Ensure RedpandaMonitorService implements IRedpandaMonitorService.
 var _ IRedpandaMonitorService = (*RedpandaMonitorService)(nil)
 
 type RedpandaMonitorService struct {
@@ -256,17 +257,17 @@ type RedpandaMonitorService struct {
 	cacheMutex sync.Mutex
 }
 
-// RedpandaMonitorServiceOption is a function that modifies a RedpandaMonitorService
+// RedpandaMonitorServiceOption is a function that modifies a RedpandaMonitorService.
 type RedpandaMonitorServiceOption func(*RedpandaMonitorService)
 
-// WithS6Service sets a custom S6 service for the RedpandaMonitorService
+// WithS6Service sets a custom S6 service for the RedpandaMonitorService.
 func WithS6Service(s6Service s6_shared.Service) RedpandaMonitorServiceOption {
 	return func(s *RedpandaMonitorService) {
 		s.s6Service = s6Service
 	}
 }
 
-// WithS6Manager sets a custom S6 manager for the RedpandaMonitorService
+// WithS6Manager sets a custom S6 manager for the RedpandaMonitorService.
 func WithS6Manager(s6Manager *s6fsm.S6Manager) RedpandaMonitorServiceOption {
 	return func(s *RedpandaMonitorService) {
 		s.s6Manager = s6Manager
@@ -275,6 +276,7 @@ func WithS6Manager(s6Manager *s6fsm.S6Manager) RedpandaMonitorServiceOption {
 
 func NewRedpandaMonitorService(redpandaName string, opts ...RedpandaMonitorServiceOption) *RedpandaMonitorService {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentRedpandaService, redpandaName)
+
 	service := &RedpandaMonitorService{
 		logger:       logger.For(managerName),
 		metricsState: NewRedpandaMetricsState(),
@@ -285,6 +287,7 @@ func NewRedpandaMonitorService(redpandaName string, opts ...RedpandaMonitorServi
 	for _, opt := range opts {
 		opt(service)
 	}
+
 	return service
 }
 
@@ -332,7 +335,7 @@ done
 }
 
 func (s *RedpandaMonitorService) GetS6ServiceName() string {
-	return fmt.Sprintf("redpanda-monitor-%s", s.redpandaName)
+	return "redpanda-monitor-" + s.redpandaName
 }
 
 func (s *RedpandaMonitorService) GenerateS6ConfigForRedpandaMonitor(s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error) {
@@ -377,15 +380,17 @@ func ConcatContent(logs []s6_shared.LogEntry) []byte {
 
 	// 1 alloc, no re-growth
 	buf := make([]byte, size)
+
 	off := 0
 	for i := range logs {
 		off += copy(buf[off:], logs[i].Content)
 	}
+
 	return buf
 }
 
 // build one DFA-based replacer at package-init;
-// one pass over the input, no regex, no 4×ReplaceAll
+// one pass over the input, no regex, no 4×ReplaceAll.
 var markerReplacer = strings.NewReplacer(
 	BLOCK_START_MARKER, "",
 	METRICS_END_MARKER, "",
@@ -402,7 +407,7 @@ func StripMarkers(b []byte) []byte {
 	return []byte(markerReplacer.Replace(string(b)))
 }
 
-// ParseRedpandaLogs parses the logs of a redpanda service and extracts metrics
+// ParseRedpandaLogs parses the logs of a redpanda service and extracts metrics.
 func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s6_shared.LogEntry, tick uint64) (*RedpandaMetricsScan, error) {
 	/*
 		A normal log entry looks like this:
@@ -416,10 +421,10 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 		Timestamp data
 		BLOCK_END_MARKER
 	*/
-
 	if len(logs) == 0 {
 		s.logger.Debugf("No logs provided")
-		return nil, fmt.Errorf("no logs provided")
+
+		return nil, errors.New("no logs provided")
 	}
 	// Find the markers in a single pass through the logs
 	// Pre-allocate the slice to avoid reallocations (we usually expect ~4-7 sections)
@@ -436,7 +441,7 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 	// This implementation scans the logs in a single pass, which is more efficient than scanning for each marker separately
 	// If the there are multiple sections, we will have multiple entries in the sections list
 	// This ensures that we always have a valid section, even if the markers of later sections are missing (e.g the end marker for example was not yet written)
-	for i := 0; i < len(logs); i++ {
+	for i := range len(logs) {
 		if strings.Contains(logs[i].Content, BLOCK_START_MARKER) {
 			currentSection.StartMarkerIndex = i
 		} else if strings.Contains(logs[i].Content, METRICS_END_MARKER) {
@@ -444,18 +449,21 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 			if currentSection.StartMarkerIndex == -1 {
 				continue
 			}
+
 			currentSection.MetricsEndMarkerIndex = i
 		} else if strings.Contains(logs[i].Content, CLUSTERCONFIG_END_MARKER) {
 			// Dont even try to find an end marker, if we dont have a start marker
 			if currentSection.StartMarkerIndex == -1 {
 				continue
 			}
+
 			currentSection.ClusterConfigEndMarkerIndex = i
 		} else if strings.Contains(logs[i].Content, READYNESS_END_MARKER) {
 			// Dont even try to find an end marker, if we dont have a start marker
 			if currentSection.StartMarkerIndex == -1 {
 				continue
 			}
+
 			currentSection.ReadynessEndMarkerIndex = i
 		} else if strings.Contains(logs[i].Content, BLOCK_END_MARKER) {
 			// We dont break here, as there might be multiple end markers
@@ -481,7 +489,8 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 
 	if len(sections) == 0 {
 		s.logger.Debugf("No sections found in logs")
-		return nil, fmt.Errorf("could not parse redpanda metrics/configuration: no sections found. This can happen when the redpanda service is not running, or the logs where rotated")
+
+		return nil, errors.New("could not parse redpanda metrics/configuration: no sections found. This can happen when the redpanda service is not running, or the logs where rotated")
 	}
 
 	// Find the latest section that is fully constructed (e.g the latest entry in the list)
@@ -494,10 +503,12 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 	readynessData := logs[actualSection.ClusterConfigEndMarkerIndex+1 : actualSection.ReadynessEndMarkerIndex]
 	timestampData := logs[actualSection.ReadynessEndMarkerIndex+1 : actualSection.BlockEndMarkerIndex]
 
-	var metricsDataBytes []byte
-	var clusterConfigDataBytes []byte
-	var readynessDataBytes []byte
-	var timestampDataBytes []byte
+	var (
+		metricsDataBytes       []byte
+		clusterConfigDataBytes []byte
+		readynessDataBytes     []byte
+		timestampDataBytes     []byte
+	)
 
 	var readyness bool
 
@@ -542,19 +553,24 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 		}, nil
 	}
 
-	var metrics *RedpandaMetrics
-	var clusterConfig *ClusterConfig
-	var lastUpdatedAt time.Time
+	var (
+		metrics       *RedpandaMetrics
+		clusterConfig *ClusterConfig
+		lastUpdatedAt time.Time
+	)
 	// Processing the Metrics & cluster config takes time (especially the metrics parsing) each, therefore process them in parallel
 
 	ctxProcessMetrics, cancelProcessMetrics := context.WithTimeout(ctx, constants.RedpandaMonitorProcessMetricsTimeout)
 	defer cancelProcessMetrics()
+
 	g, _ := errgroup.WithContext(ctxProcessMetrics)
 
 	if metricsChanged {
 		g.Go(func() error {
 			var err error
+
 			metrics, err = s.processMetricsDataBytes(metricsDataBytes, tick)
+
 			return err
 		})
 	} else {
@@ -564,7 +580,9 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 	if clusterConfigChanged {
 		g.Go(func() error {
 			var err error
+
 			clusterConfig, err = s.processClusterConfigDataBytes(clusterConfigDataBytes, tick)
+
 			return err
 		})
 	} else {
@@ -622,6 +640,7 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 	// Update previous values
 	s.cacheMutex.Lock()
 	defer s.cacheMutex.Unlock()
+
 	s.previousMetricsDataByteHash = metricsDataByteHash
 	s.previousClusterConfigDataByteHash = clusterConfigDataByteHash
 	s.previousTimestampDataByteHash = timestampDataByteHash
@@ -645,13 +664,14 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 }
 
 func (s *RedpandaMonitorService) processMetricsDataBytes(metricsDataBytes []byte, tick uint64) (*RedpandaMetrics, error) {
-
 	gzr, err := gzip.NewReader(hex.NewDecoder(bytes.NewReader(metricsDataBytes)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
 	}
+
 	defer func() {
-		if err := gzr.Close(); err != nil {
+		err := gzr.Close()
+		if err != nil {
 			s.logger.Error("failed to close gzip reader", zap.Error(err))
 		}
 	}()
@@ -681,9 +701,12 @@ func parseMetricsBlob(r io.Reader) (Metrics, error) {
 	if err != nil {
 		return Metrics{}, err
 	}
-	if curl := monitor.ParseCurlError(string(payload)); curl != nil {
+
+	curl := monitor.ParseCurlError(string(payload))
+	if curl != nil {
 		return Metrics{}, curl
 	}
+
 	return ParseMetricsFast(payload)
 }
 
@@ -709,16 +732,18 @@ func ParseMetricsFast(b []byte) (Metrics, error) {
 		sawPartitionsMetric                                  bool
 	)
 
-	p := textparse.NewPromParser(b, labels.NewSymbolTable())
+	p := textparse.NewPromParser(b, labels.NewSymbolTable(), false)
 
 	for {
 		typ, err := p.Next()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
+
 		if err != nil {
 			return m, fmt.Errorf("iterating metric stream: %w", err)
 		}
+
 		if typ != textparse.EntrySeries {
 			continue
 		}
@@ -773,9 +798,10 @@ func ParseMetricsFast(b []byte) (Metrics, error) {
 					redpanda_kafka_request_bytes_total{redpanda_namespace="redpanda",redpanda_request="consume",redpanda_topic="controller"} 0
 					redpanda_kafka_request_bytes_total{redpanda_namespace="kafka",redpanda_request="consume",redpanda_topic="messages"} 0
 			*/
-			if lbls == nil {
-				return m, fmt.Errorf("metric redpanda_kafka_request_bytes_total has no labels")
+			if lbls.IsEmpty() {
+				return m, errors.New("metric redpanda_kafka_request_bytes_total has no labels")
 			}
+
 			switch lbls.Get("redpanda_request") {
 			case "produce":
 				m.Throughput.BytesIn += int64(val)
@@ -787,14 +813,16 @@ func ParseMetricsFast(b []byte) (Metrics, error) {
 
 		// ── per-topic (needs a label) ─────────────────────────────────────
 		case "redpanda_kafka_partitions":
-			if lbls == nil {
-				return m, fmt.Errorf("metric redpanda_kafka_partitions has no labels")
+			if lbls.IsEmpty() {
+				return m, errors.New("metric redpanda_kafka_partitions has no labels")
 			}
+
 			if topic := lbls.Get("redpanda_topic"); topic != "" {
 				if m.Topic.TopicPartitionMap == nil {
 					// a small, non-zero initial capacity
 					m.Topic.TopicPartitionMap = make(map[string]int64, 16)
 				}
+
 				m.Topic.TopicPartitionMap[topic] = int64(val)
 				sawPartitionsMetric = true
 			}
@@ -804,19 +832,19 @@ func ParseMetricsFast(b []byte) (Metrics, error) {
 	// ── validation – mirrors the old expfmt version ──────────────────────
 	switch {
 	case !foundFreeBytes:
-		return m, fmt.Errorf("metric redpanda_storage_disk_free_bytes not found")
+		return m, errors.New("metric redpanda_storage_disk_free_bytes not found")
 	case !foundTotalBytes:
-		return m, fmt.Errorf("metric redpanda_storage_disk_total_bytes not found")
+		return m, errors.New("metric redpanda_storage_disk_total_bytes not found")
 	case !foundFreeSpaceAlert:
-		return m, fmt.Errorf("metric redpanda_storage_disk_free_space_alert not found")
+		return m, errors.New("metric redpanda_storage_disk_free_space_alert not found")
 	case !foundClusterTopics:
-		return m, fmt.Errorf("metric redpanda_cluster_topics not found")
+		return m, errors.New("metric redpanda_cluster_topics not found")
 	case !foundUnavailablePartitions:
-		return m, fmt.Errorf("metric redpanda_cluster_unavailable_partitions not found")
+		return m, errors.New("metric redpanda_cluster_unavailable_partitions not found")
 	case !foundProduce:
-		return m, fmt.Errorf(`metric redpanda_kafka_request_bytes_total with label redpanda_request="produce" not found`)
+		return m, errors.New(`metric redpanda_kafka_request_bytes_total with label redpanda_request="produce" not found`)
 	case !foundConsume:
-		return m, fmt.Errorf(`metric redpanda_kafka_request_bytes_total with label redpanda_request="consume" not found`)
+		return m, errors.New(`metric redpanda_kafka_request_bytes_total with label redpanda_request="consume" not found`)
 	case m.Cluster.Topics > 0 && !sawPartitionsMetric:
 		return m, fmt.Errorf("metric redpanda_kafka_partitions not found but redpanda_cluster_topics reports %d topics",
 			m.Cluster.Topics)
@@ -825,14 +853,16 @@ func ParseMetricsFast(b []byte) (Metrics, error) {
 	return m, nil
 }
 
-// helper – cheap split without allocations
+// helper – cheap split without allocations.
 func seriesName(b []byte) string {
 	if b == nil {
 		return ""
 	}
+
 	if i := bytes.IndexByte(b, '{'); i > 0 {
 		return string(b[:i])
 	}
+
 	return string(b)
 }
 
@@ -853,6 +883,7 @@ func (s *RedpandaMonitorService) parseReadynessData(readynessDataBytes []byte) (
 	if err != nil {
 		return false, "", fmt.Errorf("failed to create gzip reader: %w", err)
 	}
+
 	defer func() {
 		err := gzipReader.Close()
 		if err != nil {
@@ -866,11 +897,11 @@ func (s *RedpandaMonitorService) parseReadynessData(readynessDataBytes []byte) (
 	}
 
 	readyness := strings.Contains(string(data), "{\"status\":\"ready\"}")
+
 	return readyness, string(data), nil
 }
 
 func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigDataBytes []byte, tick uint64) (*ClusterConfig, error) {
-
 	clusterConfigDataString := string(clusterConfigDataBytes)
 	// Strip any newlines
 	clusterConfigDataString = strings.ReplaceAll(clusterConfigDataString, "\n", "")
@@ -886,6 +917,7 @@ func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigData
 	if err != nil {
 		return nil, fmt.Errorf("failed to decompress metrics data: %w", err)
 	}
+
 	defer func() {
 		err := gzipReader.Close()
 		if err != nil {
@@ -918,7 +950,7 @@ func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigData
 			return nil, fmt.Errorf("failed to parse cluster config data: log_retention_ms is not a number: %w", err)
 		}
 	} else {
-		return nil, fmt.Errorf("failed to parse cluster config data: no log_retention_ms found")
+		return nil, errors.New("failed to parse cluster config data: no log_retention_ms found")
 	}
 
 	if value, ok := redpandaConfig["retention_bytes"]; ok {
@@ -927,27 +959,27 @@ func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigData
 			return nil, fmt.Errorf("failed to parse cluster config data: retention_bytes is not a number: %w", err)
 		}
 	} else {
-		return nil, fmt.Errorf("failed to parse cluster config data: no retention_bytes found")
+		return nil, errors.New("failed to parse cluster config data: no retention_bytes found")
 	}
 
 	if value, ok := redpandaConfig["log_compression_type"]; ok {
 		if strValue, ok := value.(string); ok {
 			result.Topic.DefaultTopicCompressionAlgorithm = strValue
 		} else {
-			return nil, fmt.Errorf("failed to parse cluster config data: log_compression_type is not a string")
+			return nil, errors.New("failed to parse cluster config data: log_compression_type is not a string")
 		}
 	} else {
-		return nil, fmt.Errorf("failed to parse cluster config data: no log_compression_type found")
+		return nil, errors.New("failed to parse cluster config data: no log_compression_type found")
 	}
 
 	if value, ok := redpandaConfig["log_cleanup_policy"]; ok {
 		if strValue, ok := value.(string); ok {
 			result.Topic.DefaultTopicCleanupPolicy = strValue
 		} else {
-			return nil, fmt.Errorf("failed to parse cluster config data: log_cleanup_policy is not a string")
+			return nil, errors.New("failed to parse cluster config data: log_cleanup_policy is not a string")
 		}
 	} else {
-		return nil, fmt.Errorf("failed to parse cluster config data: no log_cleanup_policy found")
+		return nil, errors.New("failed to parse cluster config data: no log_cleanup_policy found")
 	}
 
 	if value, ok := redpandaConfig["log_segment_ms"]; ok {
@@ -956,7 +988,7 @@ func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigData
 			return nil, fmt.Errorf("failed to parse cluster config data: log_segment_ms is not a number: %w", err)
 		}
 	} else {
-		return nil, fmt.Errorf("failed to parse cluster config data: no log_segment_ms found")
+		return nil, errors.New("failed to parse cluster config data: no log_segment_ms found")
 	}
 
 	s.logger.Debugf("Cluster config [log_retention_ms: %d, retention_bytes: %d, log_compression_type: %s, log_cleanup_policy: %s, log_segment_ms: %d]",
@@ -969,9 +1001,10 @@ func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigData
 	return &result, nil
 }
 
-// ParseMetrics parses prometheus metrics into structured format
+// ParseMetrics parses prometheus metrics into structured format.
 func ParseMetrics(dataReader io.Reader) (Metrics, error) {
 	var parser expfmt.TextParser
+
 	metrics := Metrics{
 		Infrastructure: InfrastructureMetrics{},
 		Cluster:        ClusterMetrics{},
@@ -980,6 +1013,7 @@ func ParseMetrics(dataReader io.Reader) (Metrics, error) {
 			TopicPartitionMap: make(map[string]int64), // Pre-allocate map to avoid nil check later
 		},
 	}
+
 	data, err := io.ReadAll(dataReader)
 	if err != nil {
 		return Metrics{}, fmt.Errorf("failed to read metrics data: %w", err)
@@ -998,36 +1032,36 @@ func ParseMetrics(dataReader io.Reader) (Metrics, error) {
 
 	// Directly extract only the metrics we need instead of iterating all metrics
 	// Infrastructure metrics - Storage
-	if family, ok := mf["redpanda_storage_disk_free_bytes"]; ok && len(family.Metric) > 0 {
-		metrics.Infrastructure.Storage.FreeBytes = getMetricValue(family.Metric[0])
+	if family, ok := mf["redpanda_storage_disk_free_bytes"]; ok && len(family.GetMetric()) > 0 {
+		metrics.Infrastructure.Storage.FreeBytes = getMetricValue(family.GetMetric()[0])
 	} else {
-		return metrics, fmt.Errorf("metric redpanda_storage_disk_free_bytes not found")
+		return metrics, errors.New("metric redpanda_storage_disk_free_bytes not found")
 	}
 
-	if family, ok := mf["redpanda_storage_disk_total_bytes"]; ok && len(family.Metric) > 0 {
-		metrics.Infrastructure.Storage.TotalBytes = getMetricValue(family.Metric[0])
+	if family, ok := mf["redpanda_storage_disk_total_bytes"]; ok && len(family.GetMetric()) > 0 {
+		metrics.Infrastructure.Storage.TotalBytes = getMetricValue(family.GetMetric()[0])
 	} else {
-		return metrics, fmt.Errorf("metric redpanda_storage_disk_total_bytes not found")
+		return metrics, errors.New("metric redpanda_storage_disk_total_bytes not found")
 	}
 
-	if family, ok := mf["redpanda_storage_disk_free_space_alert"]; ok && len(family.Metric) > 0 {
+	if family, ok := mf["redpanda_storage_disk_free_space_alert"]; ok && len(family.GetMetric()) > 0 {
 		// Any non-zero value indicates an alert condition
-		metrics.Infrastructure.Storage.FreeSpaceAlert = getMetricValue(family.Metric[0]) != 0
+		metrics.Infrastructure.Storage.FreeSpaceAlert = getMetricValue(family.GetMetric()[0]) != 0
 	} else {
-		return metrics, fmt.Errorf("metric redpanda_storage_disk_free_space_alert not found")
+		return metrics, errors.New("metric redpanda_storage_disk_free_space_alert not found")
 	}
 
 	// Cluster metrics
-	if family, ok := mf["redpanda_cluster_topics"]; ok && len(family.Metric) > 0 {
-		metrics.Cluster.Topics = getMetricValue(family.Metric[0])
+	if family, ok := mf["redpanda_cluster_topics"]; ok && len(family.GetMetric()) > 0 {
+		metrics.Cluster.Topics = getMetricValue(family.GetMetric()[0])
 	} else {
-		return metrics, fmt.Errorf("metric redpanda_cluster_topics not found")
+		return metrics, errors.New("metric redpanda_cluster_topics not found")
 	}
 
-	if family, ok := mf["redpanda_cluster_unavailable_partitions"]; ok && len(family.Metric) > 0 {
-		metrics.Cluster.UnavailableTopics = getMetricValue(family.Metric[0])
+	if family, ok := mf["redpanda_cluster_unavailable_partitions"]; ok && len(family.GetMetric()) > 0 {
+		metrics.Cluster.UnavailableTopics = getMetricValue(family.GetMetric()[0])
 	} else {
-		return metrics, fmt.Errorf("metric redpanda_cluster_unavailable_partitions not found")
+		return metrics, errors.New("metric redpanda_cluster_unavailable_partitions not found")
 	}
 
 	// Throughput metrics
@@ -1035,7 +1069,8 @@ func ParseMetrics(dataReader io.Reader) (Metrics, error) {
 		// Process only produce/consume metrics in a single pass
 		produceFound := false
 		consumeFound := false
-		for _, metric := range family.Metric {
+
+		for _, metric := range family.GetMetric() {
 			if label := getLabel(metric, "redpanda_request"); label != "" {
 				switch label {
 				case "produce":
@@ -1047,20 +1082,22 @@ func ParseMetrics(dataReader io.Reader) (Metrics, error) {
 				}
 			}
 		}
+
 		if !produceFound {
-			return metrics, fmt.Errorf("metric redpanda_kafka_request_bytes_total with label redpanda_request=produce not found")
+			return metrics, errors.New("metric redpanda_kafka_request_bytes_total with label redpanda_request=produce not found")
 		}
+
 		if !consumeFound {
-			return metrics, fmt.Errorf("metric redpanda_kafka_request_bytes_total with label redpanda_request=consume not found")
+			return metrics, errors.New("metric redpanda_kafka_request_bytes_total with label redpanda_request=consume not found")
 		}
 	} else {
-		return metrics, fmt.Errorf("metric redpanda_kafka_request_bytes_total not found")
+		return metrics, errors.New("metric redpanda_kafka_request_bytes_total not found")
 	}
 
 	// Topic metrics
 	// If we have topics, then topic metrics should be available
 	if family, ok := mf["redpanda_kafka_partitions"]; ok {
-		for _, metric := range family.Metric {
+		for _, metric := range family.GetMetric() {
 			if topic := getLabel(metric, "redpanda_topic"); topic != "" {
 				metrics.Topic.TopicPartitionMap[topic] = getMetricValue(metric)
 			}
@@ -1073,31 +1110,35 @@ func ParseMetrics(dataReader io.Reader) (Metrics, error) {
 	return metrics, nil
 }
 
-// getMetricValue extracts numeric value from a metric
+// getMetricValue extracts numeric value from a metric.
 func getMetricValue(m *dto.Metric) int64 {
-	if m.Counter != nil {
-		return int64(m.Counter.GetValue())
+	if m.GetCounter() != nil {
+		return int64(m.GetCounter().GetValue())
 	}
-	if m.Gauge != nil {
-		return int64(m.Gauge.GetValue())
+
+	if m.GetGauge() != nil {
+		return int64(m.GetGauge().GetValue())
 	}
-	if m.Untyped != nil {
-		return int64(m.Untyped.GetValue())
+
+	if m.GetUntyped() != nil {
+		return int64(m.GetUntyped().GetValue())
 	}
+
 	return 0
 }
 
-// getLabel extracts a label value from a metric
+// getLabel extracts a label value from a metric.
 func getLabel(m *dto.Metric, name string) string {
-	for _, label := range m.Label {
+	for _, label := range m.GetLabel() {
 		if label.GetName() == name {
 			return label.GetValue()
 		}
 	}
+
 	return ""
 }
 
-// Status checks the status of a redpanda service
+// Status checks the status of a redpanda service.
 func (s *RedpandaMonitorService) Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error) {
 	if ctx.Err() != nil {
 		return ServiceInfo{}, ctx.Err()
@@ -1118,6 +1159,7 @@ func (s *RedpandaMonitorService) Status(ctx context.Context, filesystemService f
 			strings.Contains(err.Error(), "not found") {
 			return ServiceInfo{}, ErrServiceNotExist
 		}
+
 		return ServiceInfo{}, fmt.Errorf("failed to get S6 state: %w", err)
 	}
 
@@ -1133,6 +1175,7 @@ func (s *RedpandaMonitorService) Status(ctx context.Context, filesystemService f
 			strings.Contains(err.Error(), "not found") {
 			return ServiceInfo{}, ErrServiceNotExist
 		}
+
 		return ServiceInfo{}, fmt.Errorf("failed to get current FSM state: %w", err)
 	}
 
@@ -1150,6 +1193,7 @@ func (s *RedpandaMonitorService) Status(ctx context.Context, filesystemService f
 
 	// Get logs
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
+
 	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, filesystemService)
 	if err != nil {
 		return ServiceInfo{
@@ -1194,7 +1238,7 @@ func (s *RedpandaMonitorService) Status(ctx context.Context, filesystemService f
 	}, nil
 }
 
-// AddRedpandaMonitorToS6Manager adds a redpanda instance to the S6 manager
+// AddRedpandaMonitorToS6Manager adds a redpanda instance to the S6 manager.
 func (s *RedpandaMonitorService) AddRedpandaMonitorToS6Manager(ctx context.Context) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
@@ -1234,7 +1278,7 @@ func (s *RedpandaMonitorService) AddRedpandaMonitorToS6Manager(ctx context.Conte
 
 //  There is no need for an UpdateRedpandaInS6Manager, as the S6 config is static
 
-// RemoveRedpandaMonitorFromS6Manager removes a redpanda instance from the S6 manager
+// RemoveRedpandaMonitorFromS6Manager removes a redpanda instance from the S6 manager.
 func (s *RedpandaMonitorService) RemoveRedpandaMonitorFromS6Manager(ctx context.Context) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
@@ -1259,7 +1303,7 @@ func (s *RedpandaMonitorService) RemoveRedpandaMonitorFromS6Manager(ctx context.
 	return nil
 }
 
-// StartRedpandaMonitor starts a redpanda instance
+// StartRedpandaMonitor starts a redpanda instance.
 func (s *RedpandaMonitorService) StartRedpandaMonitor(ctx context.Context) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
@@ -1278,7 +1322,7 @@ func (s *RedpandaMonitorService) StartRedpandaMonitor(ctx context.Context) error
 	return nil
 }
 
-// StopRedpandaMonitor stops a redpanda instance
+// StopRedpandaMonitor stops a redpanda instance.
 func (s *RedpandaMonitorService) StopRedpandaMonitor(ctx context.Context) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
@@ -1297,7 +1341,7 @@ func (s *RedpandaMonitorService) StopRedpandaMonitor(ctx context.Context) error 
 	return nil
 }
 
-// ReconcileManager reconciles the Redpanda manager
+// ReconcileManager reconciles the Redpanda manager.
 func (s *RedpandaMonitorService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (err error, reconciled bool) {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized"), false
@@ -1314,7 +1358,7 @@ func (s *RedpandaMonitorService) ReconcileManager(ctx context.Context, services 
 	return s.s6Manager.Reconcile(ctx, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: []config.S6FSMConfig{*s.s6ServiceConfig}}}}, services)
 }
 
-// ServiceExists checks if a redpanda instance exists
+// ServiceExists checks if a redpanda instance exists.
 func (s *RedpandaMonitorService) ServiceExists(ctx context.Context, filesystemService filesystem.Service) bool {
 	if s.s6Manager == nil {
 		return false
@@ -1334,10 +1378,11 @@ func (s *RedpandaMonitorService) ServiceExists(ctx context.Context, filesystemSe
 
 // ForceRemoveRedpandaMonitor removes a Redpanda monitor from the S6 manager
 // This should only be called if the Redpanda monitor is in a permanent failure state
-// and the instance itself cannot be stopped or removed
+// and the instance itself cannot be stopped or removed.
 func (s *RedpandaMonitorService) ForceRemoveRedpandaMonitor(ctx context.Context, filesystemService filesystem.Service) error {
 	s6ServiceName := s.GetS6ServiceName()
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
+
 	return s.s6Service.ForceRemove(ctx, s6ServicePath, filesystemService)
 }
 
@@ -1351,8 +1396,10 @@ func ParseRedpandaIntegerlikeValue(value interface{}) (int64, error) {
 		if strings.Contains(err.Error(), "value is nil") || strings.Contains(err.Error(), "value is negative") {
 			return 0, nil
 		}
+
 		return 0, err
 	}
+
 	if v > math.MaxInt64 {
 		return 0, nil
 	}
@@ -1369,21 +1416,23 @@ func ParseValue(value interface{}) (uint64, error) {
 	case float64:
 		// If v is negative, return 0, with "value is negative"
 		if v < 0 {
-			return 0, fmt.Errorf("value is negative")
+			return 0, errors.New("value is negative")
 		}
 		// We remove fractional parts, as redpanda uses integer values only
 		result = uint64(v)
 	case int:
 		// If v is negative, return 0, with "value is negative"
 		if v < 0 {
-			return 0, fmt.Errorf("value is negative")
+			return 0, errors.New("value is negative")
 		}
+
 		result = uint64(v)
 	case int64:
 		// If v is negative, return 0, with "value is negative"
 		if v < 0 {
-			return 0, fmt.Errorf("value is negative")
+			return 0, errors.New("value is negative")
 		}
+
 		result = uint64(v)
 	case string:
 		// Try to parse the string as a number
@@ -1396,14 +1445,15 @@ func ParseValue(value interface{}) (uint64, error) {
 			}
 			// If v is negative, return 0, with "value is negative"
 			if parsedFloat < 0 {
-				return 0, fmt.Errorf("value is negative")
+				return 0, errors.New("value is negative")
 			}
+
 			result = uint64(parsedFloat)
 		} else {
 			result = parsed
 		}
 	case nil:
-		return 0, fmt.Errorf("value is nil")
+		return 0, errors.New("value is nil")
 	default:
 		return 0, fmt.Errorf("unsupported value type for conversion to uint64: %T", value)
 	}

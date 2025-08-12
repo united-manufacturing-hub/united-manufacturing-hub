@@ -30,11 +30,10 @@ import (
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_orig"
 )
 
-// NewS6Instance creates a new S6Instance with the given ID and service path
+// NewS6Instance creates a new S6Instance with the given ID and service path.
 func NewS6Instance(
 	s6BaseDir string,
 	config config.S6FSMConfig) (*S6Instance, error) {
-
 	cfg := internal_fsm.BaseFSMInstanceConfig{
 		ID:                           config.Name,
 		DesiredFSMState:              OperationalStateStopped,
@@ -70,7 +69,7 @@ func NewS6Instance(
 }
 
 // NewS6InstanceWithService creates a new S6Instance with a custom service implementation
-// This is useful for testing
+// This is useful for testing.
 func NewS6InstanceWithService(
 	s6BaseDir string,
 	config config.S6FSMConfig,
@@ -79,34 +78,37 @@ func NewS6InstanceWithService(
 	if err != nil {
 		return nil, err
 	}
+
 	instance.service = service
+
 	return instance, nil
 }
 
 // SetDesiredFSMState safely updates the desired state
 // But ensures that the desired state is a valid state and that it is also a reasonable state
-// e.g., nobody wants to have an instance in the "starting" state, that is just intermediate
+// e.g., nobody wants to have an instance in the "starting" state, that is just intermediate.
 func (s *S6Instance) SetDesiredFSMState(state string) error {
 	if state != OperationalStateRunning && state != OperationalStateStopped {
 		return fmt.Errorf("invalid desired state: %s. valid states are %s and %s", state, OperationalStateRunning, OperationalStateStopped)
 	}
 
 	s.baseFSMInstance.SetDesiredFSMState(state)
+
 	return nil
 }
 
-// GetCurrentFSMState returns the current state of the FSM
+// GetCurrentFSMState returns the current state of the FSM.
 func (s *S6Instance) GetCurrentFSMState() string {
 	return s.baseFSMInstance.GetCurrentFSMState()
 }
 
-// GetDesiredFSMState returns the desired state of the FSM
+// GetDesiredFSMState returns the desired state of the FSM.
 func (s *S6Instance) GetDesiredFSMState() string {
 	return s.baseFSMInstance.GetDesiredFSMState()
 }
 
 // Remove starts the removal process, it is idempotent and can be called multiple times
-// Note: it is only removed once IsRemoved returns true
+// Note: it is only removed once IsRemoved returns true.
 func (s *S6Instance) Remove(ctx context.Context) error {
 	return s.baseFSMInstance.Remove(ctx)
 }
@@ -127,7 +129,7 @@ func (s *S6Instance) IsStopped() bool {
 	return s.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopped
 }
 
-// WantsToBeStopped returns true if the instance wants to be stopped
+// WantsToBeStopped returns true if the instance wants to be stopped.
 func (s *S6Instance) WantsToBeStopped() bool {
 	return s.baseFSMInstance.GetDesiredFSMState() == OperationalStateStopped
 }

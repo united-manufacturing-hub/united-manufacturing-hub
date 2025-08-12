@@ -16,6 +16,7 @@ package benthos
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -37,10 +38,11 @@ type BenthosManager struct {
 	*public_fsm.BaseFSMManager[config.BenthosConfig]
 }
 
-// BenthosManagerSnapshot extends the base ManagerSnapshot with Benthos-specific information
+// BenthosManagerSnapshot extends the base ManagerSnapshot with Benthos-specific information.
 type BenthosManagerSnapshot struct {
 	// Embed the BaseManagerSnapshot to inherit its methods
 	*public_fsm.BaseManagerSnapshot
+
 	// Add Benthos-specific fields
 	PortAllocations map[string]uint16 // Maps instance name to port
 }
@@ -71,28 +73,33 @@ func NewBenthosManager(name string) *BenthosManager {
 		func(instance public_fsm.FSMInstance, cfg config.BenthosConfig) (bool, error) {
 			benthosInstance, ok := instance.(*BenthosInstance)
 			if !ok {
-				return false, fmt.Errorf("instance is not a BenthosInstance")
+				return false, errors.New("instance is not a BenthosInstance")
 			}
+
 			return benthosInstance.config.Equal(cfg.BenthosServiceConfig), nil
 		},
 		// Set Benthos config
 		func(instance public_fsm.FSMInstance, cfg config.BenthosConfig) error {
 			benthosInstance, ok := instance.(*BenthosInstance)
 			if !ok {
-				return fmt.Errorf("instance is not a BenthosInstance")
+				return errors.New("instance is not a BenthosInstance")
 			}
+
 			benthosInstance.config = cfg.BenthosServiceConfig
+
 			return nil
 		},
 		// Get expected max p95 execution time per instance
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
 			benthosInstance, ok := instance.(*BenthosInstance)
 			if !ok {
-				return 0, fmt.Errorf("instance is not a BenthosInstance")
+				return 0, errors.New("instance is not a BenthosInstance")
 			}
+
 			return benthosInstance.GetMinimumRequiredTime(), nil
 		},
 	)
+
 	metrics.InitErrorCounter(metrics.ComponentBenthosManager, name)
 
 	return &BenthosManager{
@@ -100,11 +107,11 @@ func NewBenthosManager(name string) *BenthosManager {
 	}
 }
 
-// AllocatePortForInstance allocates a port for a service instance if needed
+// AllocatePortForInstance allocates a port for a service instance if needed.
 func (m *BenthosManager) AllocatePortForInstance(ctx context.Context, instance public_fsm.FSMInstance, portManager portmanager.PortManager) error {
 	benthosInstance, ok := instance.(*BenthosInstance)
 	if !ok {
-		return fmt.Errorf("instance is not a BenthosInstance")
+		return errors.New("instance is not a BenthosInstance")
 	}
 
 	// If port is already set, nothing to do
@@ -116,6 +123,7 @@ func (m *BenthosManager) AllocatePortForInstance(ctx context.Context, instance p
 			logger.For(benthosInstance.baseFSMInstance.GetID()).Warnf("Failed to reserve port %d: %v",
 				benthosInstance.config.MetricsPort, err)
 		}
+
 		return nil
 	}
 
@@ -128,16 +136,17 @@ func (m *BenthosManager) AllocatePortForInstance(ctx context.Context, instance p
 
 	// Update the instance config
 	benthosInstance.config.MetricsPort = port
+
 	return nil
 }
 
-// ReleasePortForInstance releases the port allocated to an instance
+// ReleasePortForInstance releases the port allocated to an instance.
 func (m *BenthosManager) ReleasePortForInstance(instanceName string, portManager portmanager.PortManager) error {
 	// Release the port
 	return portManager.ReleasePort(instanceName)
 }
 
-// HandleInstanceRemoved releases the port when an instance is removed
+// HandleInstanceRemoved releases the port when an instance is removed.
 func (m *BenthosManager) HandleInstanceRemoved(instanceName string, portManager portmanager.PortManager) {
 	// Release the port
 	err := m.ReleasePortForInstance(instanceName, portManager)
@@ -147,9 +156,10 @@ func (m *BenthosManager) HandleInstanceRemoved(instanceName string, portManager 
 	}
 }
 
-// Reconcile overrides the base manager's Reconcile method to add port management
+// Reconcile overrides the base manager's Reconcile method to add port management.
 func (m *BenthosManager) Reconcile(ctx context.Context, snapshot public_fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool) {
 	start := time.Now()
+
 	defer func() {
 		duration := time.Since(start)
 		metrics.ObserveReconcileTime(logger.ComponentBenthosManager, m.GetManagerName(), duration)
@@ -158,11 +168,12 @@ func (m *BenthosManager) Reconcile(ctx context.Context, snapshot public_fsm.Syst
 	// Get port manager from service registry
 	portManager := services.GetPortManager()
 	if portManager == nil {
-		return fmt.Errorf("port manager not available in service registry"), false
+		return errors.New("port manager not available in service registry"), false
 	}
 
 	// Phase 1: Port Management Pre-reconciliation
 	benthosConfigs := snapshot.CurrentConfig.Internal.Benthos
+
 	instanceNames := make([]string, len(benthosConfigs))
 	for i, cfg := range benthosConfigs {
 		instanceNames[i] = cfg.Name
@@ -206,7 +217,7 @@ func (m *BenthosManager) Reconcile(ctx context.Context, snapshot public_fsm.Syst
 	return nil, reconciled || instancesWereRemoved
 }
 
-// CreateSnapshot overrides the base CreateSnapshot to include Benthos-specific information
+// CreateSnapshot overrides the base CreateSnapshot to include Benthos-specific information.
 func (m *BenthosManager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	// Get base snapshot from parent
 	baseSnapshot := m.BaseFSMManager.CreateSnapshot()
@@ -216,6 +227,7 @@ func (m *BenthosManager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	if !ok {
 		logger.For(logger.ComponentBenthosManager).Errorf(
 			"Failed to convert base snapshot to BaseManagerSnapshot, using generic snapshot")
+
 		return baseSnapshot
 	}
 
@@ -228,11 +240,12 @@ func (m *BenthosManager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	if pm := serviceregistry.GetGlobalRegistry().GetPortManager(); pm != nil {
 		m.ReconcilePortAllocations(benthosSnapshot, pm)
 	}
+
 	return benthosSnapshot
 }
 
 // ReconcilePortAllocations updates the port allocations in the snapshot
-// This should be called after CreateSnapshot to populate the port allocations
+// This should be called after CreateSnapshot to populate the port allocations.
 func (m *BenthosManager) ReconcilePortAllocations(snapshot *BenthosManagerSnapshot, portManager portmanager.PortManager) {
 	if snapshot == nil || portManager == nil {
 		return
@@ -246,7 +259,7 @@ func (m *BenthosManager) ReconcilePortAllocations(snapshot *BenthosManagerSnapsh
 	}
 }
 
-// IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface
+// IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface.
 func (s *BenthosManagerSnapshot) IsObservedStateSnapshot() {
 	// Marker method implementation
 }

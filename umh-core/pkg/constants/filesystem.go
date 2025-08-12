@@ -26,9 +26,9 @@ const (
 	// having more workers than CPU cores can improve throughput.
 	FilesystemWorkerMultiplier = 4
 
-	// FilesystemMinWorkers sets a minimum floor for worker count regardless of CPU count
+	// FilesystemMinWorkers sets a minimum floor for worker count regardless of CPU count.
 	FilesystemMinWorkers = 4
 
-	// FilesystemMaxWorkers caps the maximum number of workers to prevent excessive goroutines
+	// FilesystemMaxWorkers caps the maximum number of workers to prevent excessive goroutines.
 	FilesystemMaxWorkers = 32
 )

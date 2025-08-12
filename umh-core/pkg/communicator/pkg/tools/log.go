@@ -22,9 +22,10 @@ import (
 	"go.uber.org/zap"
 )
 
-// InitLogging initializes the global logger using zap
+// InitLogging initializes the global logger using zap.
 func InitLogging() {
-	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION") //nolint:errcheck
+	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION")
+
 	log := logger.New(logLevel)
 	defer func(zlogger *zap.SugaredLogger) {
 		err := logger.Sync(zlogger)

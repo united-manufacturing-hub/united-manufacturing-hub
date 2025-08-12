@@ -37,6 +37,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -91,7 +92,7 @@ func (a *DeployStreamProcessorAction) Parse(payload interface{}) error {
 	// Parse the payload to get the stream processor configuration
 	parsedPayload, err := ParseActionPayload[models.StreamProcessor](payload)
 	if err != nil {
-		return fmt.Errorf("failed to parse payload: %v", err)
+		return fmt.Errorf("failed to parse payload: %w", err)
 	}
 
 	a.payload = parsedPayload
@@ -99,13 +100,14 @@ func (a *DeployStreamProcessorAction) Parse(payload interface{}) error {
 	// Decode the base64-encoded config
 	decodedConfig, err := base64.StdEncoding.DecodeString(a.payload.EncodedConfig)
 	if err != nil {
-		return fmt.Errorf("failed to decode stream processor config: %v", err)
+		return fmt.Errorf("failed to decode stream processor config: %w", err)
 	}
 
 	var config models.StreamProcessorConfig
+
 	err = yaml.Unmarshal(decodedConfig, &config)
 	if err != nil {
-		return fmt.Errorf("failed to unmarshal stream processor config: %v", err)
+		return fmt.Errorf("failed to unmarshal stream processor config: %w", err)
 	}
 
 	a.payload.Config = &config
@@ -133,7 +135,8 @@ func (a *DeployStreamProcessorAction) Validate() error {
 		return errors.New("missing required field Model.Version")
 	}
 
-	if err := ValidateComponentName(a.payload.Name); err != nil {
+	err := ValidateComponentName(a.payload.Name)
+	if err != nil {
 		return err
 	}
 
@@ -166,6 +169,7 @@ func (a *DeployStreamProcessorAction) Execute() (interface{}, map[string]interfa
 		errorMsg := fmt.Sprintf("Failed to add stream processor: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.DeployStreamProcessor)
+
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
@@ -192,6 +196,7 @@ func (a *DeployStreamProcessorAction) Execute() (interface{}, map[string]interfa
 		if err != nil {
 			errorMsg := fmt.Sprintf("Failed to wait for stream processor to be active: %v", err)
 			SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, errCode, nil, a.outboundChannel, models.DeployStreamProcessor, nil)
+
 			return nil, nil, fmt.Errorf("%s", errorMsg)
 		}
 	}
@@ -202,7 +207,7 @@ func (a *DeployStreamProcessorAction) Execute() (interface{}, map[string]interfa
 	return response, nil, nil
 }
 
-// createStreamProcessorConfig creates a StreamProcessorConfig with templated configuration
+// createStreamProcessorConfig creates a StreamProcessorConfig with templated configuration.
 func (a *DeployStreamProcessorAction) createStreamProcessorConfig() config.StreamProcessorConfig {
 	// Create variables bundle starting with any user-supplied variables
 	userVars := make(map[string]any)
@@ -230,9 +235,10 @@ func (a *DeployStreamProcessorAction) createStreamProcessorConfig() config.Strea
 
 	// Convert location map from int keys to string keys
 	locationMap := make(map[string]string)
+
 	if a.payload.Location != nil {
 		for k, v := range a.payload.Location {
-			locationMap[fmt.Sprintf("%d", k)] = v
+			locationMap[strconv.Itoa(k)] = v
 		}
 	}
 
@@ -272,10 +278,11 @@ func (a *DeployStreamProcessorAction) GetParsedPayload() models.StreamProcessor 
 // becomes available or the timeout hits (→ delete unless ignoreHealthCheck).
 // The function returns the error code and the error message via an error object
 // The error code is a string that is sent to the frontend to allow it to determine if the action can be retried or not
-// The error message is sent to the frontend to allow the user to see the error message
+// The error message is sent to the frontend to allow the user to see the error message.
 func (a *DeployStreamProcessorAction) waitForComponentToAppear() (string, error) {
 	ticker := time.NewTicker(constants.ActionTickerTime)
 	defer ticker.Stop()
+
 	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
 	startTime := time.Now()
 	timeoutDuration := constants.DataflowComponentWaitForActiveTimeout
@@ -293,11 +300,14 @@ func (a *DeployStreamProcessorAction) waitForComponentToAppear() (string, error)
 
 			ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 			defer cancel()
+
 			err := a.configManager.AtomicDeleteStreamProcessor(ctx, a.payload.Name)
 			if err != nil {
 				a.actionLogger.Errorf("failed to remove stream processor %s: %v", a.payload.Name, err)
-				return models.ErrRetryRollbackTimeout, fmt.Errorf("stream processor '%s' failed to activate within timeout but could not be removed: %v. Please check system load and consider removing the component manually", a.payload.Name, err)
+
+				return models.ErrRetryRollbackTimeout, fmt.Errorf("stream processor '%s' failed to activate within timeout but could not be removed: %w. Please check system load and consider removing the component manually", a.payload.Name, err)
 			}
+
 			return models.ErrRetryRollbackTimeout, fmt.Errorf("stream processor '%s' was removed because it did not become active within the timeout period. Please check system load or component configuration and try again", a.payload.Name)
 
 		case <-ticker.C:
@@ -307,6 +317,7 @@ func (a *DeployStreamProcessorAction) waitForComponentToAppear() (string, error)
 			if streamProcessorManager, exists := systemSnapshot.Managers[constants.StreamProcessorManagerName]; exists {
 				instances := streamProcessorManager.GetInstances()
 				found := false
+
 				for _, instance := range instances {
 					curName := instance.ID
 					if curName != a.payload.Name {
@@ -321,7 +332,7 @@ func (a *DeployStreamProcessorAction) waitForComponentToAppear() (string, error)
 					}
 
 					// Get more detailed status information from the stream processor snapshot
-					currentStateReason := fmt.Sprintf("current state: %s", instance.CurrentState)
+					currentStateReason := "current state: " + instance.CurrentState
 
 					// Cast the instance LastObservedState to a streamprocessor instance
 					spSnapshot, ok := instance.LastObservedState.(*streamprocessor.ObservedStateSnapshot)
@@ -339,7 +350,6 @@ func (a *DeployStreamProcessorAction) waitForComponentToAppear() (string, error)
 					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 						stateMessage, a.outboundChannel, models.DeployStreamProcessor)
 				}
-
 			} else {
 				stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for manager to initialise"
 				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,

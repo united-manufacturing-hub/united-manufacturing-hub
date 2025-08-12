@@ -86,7 +86,7 @@ func (a *DeleteStreamProcessorAction) Parse(payload interface{}) error {
 	// Parse the payload to get the UUID
 	parsedPayload, err := ParseActionPayload[models.DeleteStreamProcessorPayload](payload)
 	if err != nil {
-		return fmt.Errorf("failed to parse payload: %v", err)
+		return fmt.Errorf("failed to parse payload: %w", err)
 	}
 
 	// Validate UUID is provided
@@ -97,12 +97,13 @@ func (a *DeleteStreamProcessorAction) Parse(payload interface{}) error {
 	// Parse string UUID into UUID object
 	streamProcessorUUID, err := uuid.Parse(parsedPayload.UUID)
 	if err != nil {
-		return fmt.Errorf("invalid UUID format: %v", err)
+		return fmt.Errorf("invalid UUID format: %w", err)
 	}
 
 	a.streamProcessorUUID = streamProcessorUUID
 
 	a.actionLogger.Debugf("Parsed DeleteStreamProcessor action payload: UUID=%s", a.streamProcessorUUID)
+
 	return nil
 }
 
@@ -126,11 +127,12 @@ func (a *DeleteStreamProcessorAction) Execute() (interface{}, map[string]interfa
 		errorMsg := fmt.Sprintf("Failed to find stream processor: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.DeleteStreamProcessor)
+
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
 	// Send confirmation that action is starting
-	confirmationMessage := fmt.Sprintf("Starting deletion of stream processor %s", a.name)
+	confirmationMessage := "Starting deletion of stream processor " + a.name
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed,
 		confirmationMessage, a.outboundChannel, models.DeleteStreamProcessor)
 
@@ -143,6 +145,7 @@ func (a *DeleteStreamProcessorAction) Execute() (interface{}, map[string]interfa
 		errorMsg := fmt.Sprintf("Failed to delete stream processor: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.DeleteStreamProcessor)
+
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
@@ -153,6 +156,7 @@ func (a *DeleteStreamProcessorAction) Execute() (interface{}, map[string]interfa
 			errorMsg := fmt.Sprintf("Failed during cleanup: %v", err)
 			SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 				errorMsg, errCode, nil, a.outboundChannel, models.DeleteStreamProcessor, nil)
+
 			return nil, nil, fmt.Errorf("%s", errorMsg)
 		}
 	}
@@ -181,6 +185,7 @@ func (a *DeleteStreamProcessorAction) findStreamProcessorByUUID() error {
 		if spID == a.streamProcessorUUID {
 			a.name = sp.Name
 			a.actionLogger.Debugf("Found stream processor: uuid=%s, name=%s", a.streamProcessorUUID, a.name)
+
 			return nil
 		}
 	}
@@ -216,6 +221,7 @@ func (a *DeleteStreamProcessorAction) awaitCleanup() (string, error) {
 func (a *DeleteStreamProcessorAction) waitForComponentToBeRemoved() (string, error) {
 	ticker := time.NewTicker(constants.ActionTickerTime)
 	defer ticker.Stop()
+
 	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
 	startTime := time.Now()
 	timeoutDuration := constants.DataflowComponentWaitForActiveTimeout
@@ -228,6 +234,7 @@ func (a *DeleteStreamProcessorAction) waitForComponentToBeRemoved() (string, err
 		select {
 		case <-timeout:
 			stateMessage := fmt.Sprintf("Stream processor '%s' deletion timeout reached. It may still be stopping in the background", a.name)
+
 			return models.ErrRetryRollbackTimeout, fmt.Errorf("%s", stateMessage)
 
 		case <-ticker.C:
@@ -236,10 +243,12 @@ func (a *DeleteStreamProcessorAction) waitForComponentToBeRemoved() (string, err
 			if streamProcessorManager, exists := systemSnapshot.Managers[constants.StreamProcessorManagerName]; exists {
 				instances := streamProcessorManager.GetInstances()
 				found := false
+
 				for _, instance := range instances {
 					curName := instance.ID
 					if curName == a.name {
 						found = true
+
 						break
 					}
 				}
@@ -249,13 +258,13 @@ func (a *DeleteStreamProcessorAction) waitForComponentToBeRemoved() (string, err
 					stateMessage := RemainingPrefixSec(remainingSeconds) + "stream processor successfully removed"
 					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage,
 						a.outboundChannel, models.DeleteStreamProcessor)
+
 					return "", nil
 				}
 
 				stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for stream processor to be removed"
 				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 					stateMessage, a.outboundChannel, models.DeleteStreamProcessor)
-
 			} else {
 				stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for stream processor manager to initialise"
 				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,

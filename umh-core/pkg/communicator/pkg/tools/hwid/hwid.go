@@ -46,13 +46,14 @@ func GenerateHWID() string {
 
 func generateNewHWID(hwidPath string) {
 	// Generate 1024 bytes of random data and hash it using SHA3-512 and write hex to file
-
 	reader := rand.Reader
 
 	buffer := make([]byte, 1024)
+
 	_, err := reader.Read(buffer)
 	if err != nil {
 		zap.S().Warnf("Failed to generate HWID: %s", err)
+
 		return
 	}
 
@@ -61,11 +62,13 @@ func generateNewHWID(hwidPath string) {
 	file, err := os.Create(hwidPath)
 	if err != nil {
 		zap.S().Warnf("Failed to create HWID file: %s", err)
+
 		return
 	}
 
 	defer func() {
-		if err := file.Close(); err != nil {
+		err := file.Close()
+		if err != nil {
 			zap.S().Warnf("Failed to close HWID file: %s", err)
 		}
 	}()
@@ -73,6 +76,7 @@ func generateNewHWID(hwidPath string) {
 	_, err = file.WriteString(hash)
 	if err != nil {
 		zap.S().Warnf("Failed to write HWID to file: %s", err)
+
 		return
 	}
 }

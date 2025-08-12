@@ -77,6 +77,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -161,7 +162,7 @@ func NewEditDataflowComponentAction(userEmail string, actionUUID uuid.UUID, inst
 // function of the name and therefore already known at this stage (even before
 // the heavy YAML parsing starts).
 func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
-	//First parse the top level structure
+	// First parse the top level structure
 	type TopLevelPayload struct {
 		Payload interface{} `json:"payload"`
 		Name    string      `json:"name"`
@@ -175,13 +176,14 @@ func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
 
 	// Parse the top level payload
 	var topLevel TopLevelPayload
+
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("failed to marshal payload: %v", err)
+		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
 	if err := json.Unmarshal(payloadBytes, &topLevel); err != nil {
-		return fmt.Errorf("failed to unmarshal top level payload: %v", err)
+		return fmt.Errorf("failed to unmarshal top level payload: %w", err)
 	}
 
 	a.name = topLevel.Name
@@ -194,12 +196,12 @@ func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
 		return err
 	}
 
-	//set the new component UUID by the name
+	// set the new component UUID by the name
 	a.newComponentUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name)
 
 	a.oldComponentUUID, err = uuid.Parse(topLevel.UUID)
 	if err != nil {
-		return fmt.Errorf("invalid UUID format: %v", err)
+		return fmt.Errorf("invalid UUID format: %w", err)
 	}
 
 	// Store the meta type
@@ -217,6 +219,7 @@ func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
 		if err != nil {
 			return err
 		}
+
 		a.payload = payload
 	case "protocolConverter", "dataBridge", "streamProcessor":
 		return fmt.Errorf("component type %s not yet supported", a.metaType)
@@ -225,6 +228,7 @@ func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
 	}
 
 	a.actionLogger.Debugf("Parsed EditDataFlowComponent action payload: name=%s, type=%s, UUID=%s", a.name, a.metaType, a.oldComponentUUID)
+
 	return nil
 }
 
@@ -254,6 +258,7 @@ func (a *EditDataflowComponentAction) Validate() error {
 		if a.payload.Inputs.Type == "" {
 			return errors.New("missing required field inputs.type")
 		}
+
 		if a.payload.Inputs.Data == "" {
 			return errors.New("missing required field inputs.data")
 		}
@@ -262,6 +267,7 @@ func (a *EditDataflowComponentAction) Validate() error {
 		if a.payload.Outputs.Type == "" {
 			return errors.New("missing required field outputs.type")
 		}
+
 		if a.payload.Outputs.Data == "" {
 			return errors.New("missing required field outputs.data")
 		}
@@ -275,13 +281,15 @@ func (a *EditDataflowComponentAction) Validate() error {
 		var temp map[string]interface{}
 
 		// Validate Input YAML
-		if err := yaml.Unmarshal([]byte(a.payload.Inputs.Data), &temp); err != nil {
-			return fmt.Errorf("inputs.data is not valid YAML: %v", err)
+		err := yaml.Unmarshal([]byte(a.payload.Inputs.Data), &temp)
+		if err != nil {
+			return fmt.Errorf("inputs.data is not valid YAML: %w", err)
 		}
 
 		// Validate Output YAML
-		if err := yaml.Unmarshal([]byte(a.payload.Outputs.Data), &temp); err != nil {
-			return fmt.Errorf("outputs.data is not valid YAML: %v", err)
+		err = yaml.Unmarshal([]byte(a.payload.Outputs.Data), &temp)
+		if err != nil {
+			return fmt.Errorf("outputs.data is not valid YAML: %w", err)
 		}
 
 		// Validate pipeline processor YAML and fields
@@ -289,20 +297,23 @@ func (a *EditDataflowComponentAction) Validate() error {
 			if proc.Type == "" {
 				return fmt.Errorf("missing required field pipeline.processors.%s.type", key)
 			}
+
 			if proc.Data == "" {
 				return fmt.Errorf("missing required field pipeline.processors.%s.data", key)
 			}
 
 			// Check processor YAML
-			if err := yaml.Unmarshal([]byte(proc.Data), &temp); err != nil {
-				return fmt.Errorf("pipeline.processors.%s.data is not valid YAML: %v", key, err)
+			err := yaml.Unmarshal([]byte(proc.Data), &temp)
+			if err != nil {
+				return fmt.Errorf("pipeline.processors.%s.data is not valid YAML: %w", key, err)
 			}
 		}
 
 		// Validate inject data
 		if a.payload.Inject != "" {
-			if err := yaml.Unmarshal([]byte(a.payload.Inject), &temp); err != nil {
-				return fmt.Errorf("inject.data is not valid YAML: %v", err)
+			err := yaml.Unmarshal([]byte(a.payload.Inject), &temp)
+			if err != nil {
+				return fmt.Errorf("inject.data is not valid YAML: %w", err)
 			}
 		}
 	}
@@ -329,30 +340,33 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 	// First try to use the Input data
 	err := yaml.Unmarshal([]byte(a.payload.Inputs.Data), &benthosInput)
 	if err != nil {
-		errMsg := Label("edit", a.name) + fmt.Sprintf("failed to parse input data: %s", err.Error())
+		errMsg := Label("edit", a.name) + "failed to parse input data: " + err.Error()
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.EditDataFlowComponent)
+
 		return nil, nil, fmt.Errorf("%s", errMsg)
 	}
 
-	//parse the output data
+	// parse the output data
 	err = yaml.Unmarshal([]byte(a.payload.Outputs.Data), &benthosOutput)
 	if err != nil {
-		errMsg := Label("edit", a.name) + fmt.Sprintf("failed to parse output data: %s", err.Error())
+		errMsg := Label("edit", a.name) + "failed to parse output data: " + err.Error()
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.EditDataFlowComponent)
+
 		return nil, nil, fmt.Errorf("%s", errMsg)
 	}
 
-	//parse the inject data
+	// parse the inject data
 	if a.payload.Inject != "" {
 		err = yaml.Unmarshal([]byte(a.payload.Inject), &benthosYamlInject)
 		if err != nil {
-			errMsg := Label("edit", a.name) + fmt.Sprintf("failed to parse inject data: %s", err.Error())
+			errMsg := Label("edit", a.name) + "failed to parse inject data: " + err.Error()
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.EditDataFlowComponent)
+
 			return nil, nil, fmt.Errorf("%s", errMsg)
 		}
 	}
 
-	//parse the cache resources, rate limit resources and buffer from the inject data
+	// parse the cache resources, rate limit resources and buffer from the inject data
 	cacheResources, ok := benthosYamlInject["cache_resources"].([]interface{})
 	if !ok {
 		cacheResources = []interface{}{}
@@ -374,6 +388,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 		if !ok {
 			return nil, nil, fmt.Errorf("cache resource %d is not a valid object", i)
 		}
+
 		benthosCacheResources[i] = resourceMap
 	}
 
@@ -383,6 +398,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 		if !ok {
 			return nil, nil, fmt.Errorf("rate limit resource %d is not a valid object", i)
 		}
+
 		benthosRateLimitResources[i] = resourceMap
 	}
 
@@ -406,14 +422,17 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 		if hasNumericKeys {
 			// Process in numeric order
 			for i := range len(a.payload.Pipeline) {
-				processorName := fmt.Sprintf("%d", i)
+				processorName := strconv.Itoa(i)
 
 				processor := a.payload.Pipeline[processorName]
+
 				var procConfig map[string]interface{}
+
 				err := yaml.Unmarshal([]byte(processor.Data), &procConfig)
 				if err != nil {
 					errMsg := Label("edit", a.name) + fmt.Sprintf("failed to parse pipeline processor %s: %s", processorName, err.Error())
 					SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, models.ErrRetryRollbackTimeout, nil, a.outboundChannel, models.EditDataFlowComponent, nil)
+
 					return nil, nil, fmt.Errorf("%s", errMsg)
 				}
 
@@ -427,7 +446,8 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 			SendActionReply(a.instanceUUID, a.userEmail,
 				a.actionUUID, models.ActionFinishedWithFailure, "At least one processor with a non-numerous key was found.",
 				a.outboundChannel, models.EditDataFlowComponent)
-			return nil, nil, fmt.Errorf("at least one processor with a non-numerous key was found")
+
+			return nil, nil, errors.New("at least one processor with a non-numerous key was found")
 		}
 
 		benthosPipeline["processors"] = processors
@@ -469,11 +489,14 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 	// Update the component in the configuration
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
+
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("edit", a.name)+"updating configuration", a.outboundChannel, models.EditDataFlowComponent)
+
 	a.oldConfig, err = a.configManager.AtomicEditDataflowcomponent(ctx, a.oldComponentUUID, dfc)
 	if err != nil {
 		errorMsg := Label("edit", a.name) + fmt.Sprintf("failed to edit dataflow component: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.EditDataFlowComponent)
+
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
@@ -483,6 +506,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("edit", a.name)+"configuration updated; but ignoring the health check", a.outboundChannel, models.EditDataFlowComponent)
 		} else {
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("edit", a.name)+"configuration updated; waiting to become ready", a.outboundChannel, models.EditDataFlowComponent)
+
 			errCode, err := a.waitForComponentToBeReady(ctx)
 			if err != nil {
 				errorMsg := Label("edit", a.name) + fmt.Sprintf("failed to wait for dataflow component to be ready: %v", err)
@@ -490,6 +514,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 				// the error code is a string that can be used to identify the error reason
 				// the main reason for this is to allow the frontend to determine whether it should offer a retry option or not
 				SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, errCode, nil, a.outboundChannel, models.EditDataFlowComponent, nil)
+
 				return nil, nil, fmt.Errorf("%s", errorMsg)
 			}
 		}
@@ -532,9 +557,9 @@ func (a *EditDataflowComponentAction) GetComponentUUID() uuid.UUID {
 // Concurrency note: The method never writes to `systemSnapshot`; the FSM runtime
 // is the single writer.  We only take read‑locks while **copying** the full
 // snapshot to avoid holding the lock during YAML comparisons.
-// the function returns the error code and and the error message via an error object
+// the function returns the error code and the error message via an error object
 // the error code is a string that is sent to the frontend to allow it to determine if the action can be retried or not
-// the error message is sent to the frontend to allow the user to see the error message
+// the error message is sent to the frontend to allow the user to see the error message.
 func (a *EditDataflowComponentAction) waitForComponentToBeReady(ctx context.Context) (string, error) {
 	// checks the system snapshot
 	// 1. waits for the component to appear in the system snapshot (relevant for changed name)
@@ -542,12 +567,15 @@ func (a *EditDataflowComponentAction) waitForComponentToBeReady(ctx context.Cont
 	// 3. waits for the component to have the correct config
 	ticker := time.NewTicker(constants.ActionTickerTime)
 	defer ticker.Stop()
+
 	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
 	startTime := time.Now()
 	timeoutDuration := constants.DataflowComponentWaitForActiveTimeout
 
-	var logs []s6_shared.LogEntry
-	var lastLogs []s6_shared.LogEntry
+	var (
+		logs     []s6_shared.LogEntry
+		lastLogs []s6_shared.LogEntry
+	)
 
 	for {
 		select {
@@ -558,11 +586,14 @@ func (a *EditDataflowComponentAction) waitForComponentToBeReady(ctx context.Cont
 			// Create a fresh context for rollback operation since the original ctx has timed out
 			rollbackCtx, rollbackCancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 			defer rollbackCancel()
+
 			_, err := a.configManager.AtomicEditDataflowcomponent(rollbackCtx, a.newComponentUUID, a.oldConfig)
 			if err != nil {
 				a.actionLogger.Errorf("failed to roll back dataflow component %s: %v", a.name, err)
-				return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component '%s' failed to reach desired state within timeout and could not be rolled back: %v. Please check system load and consider manually restoring the previous configuration", a.name, err)
+
+				return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component '%s' failed to reach desired state within timeout and could not be rolled back: %w. Please check system load and consider manually restoring the previous configuration", a.name, err)
 			}
+
 			return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component '%s' was rolled back to its previous configuration because it did not reach the desired state within the timeout period. Please check system load or component configuration and try again", a.name)
 
 		case <-ticker.C:
@@ -576,14 +607,17 @@ func (a *EditDataflowComponentAction) waitForComponentToBeReady(ctx context.Cont
 			if dataflowcomponentManager, exists := systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
 				instances := dataflowcomponentManager.GetInstances()
 				found := false
+
 				for _, instance := range instances {
 					if dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID) == a.newComponentUUID {
 						found = true
+
 						dfcSnapshot, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
 						if !ok {
 							stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for state info"
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 								stateMessage, a.outboundChannel, models.EditDataFlowComponent)
+
 							continue
 						}
 						// Verify that the Benthos instance has applied the desired configuration.
@@ -605,11 +639,13 @@ func (a *EditDataflowComponentAction) waitForComponentToBeReady(ctx context.Cont
 							stateMessage := RemainingPrefixSec(remainingSeconds) + "config not yet applied"
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 								stateMessage, a.outboundChannel, models.EditDataFlowComponent)
+
 							continue
 						}
 
 						// depending on the desired state, we accept different states
 						var acceptedStates []string
+
 						switch a.state {
 						case dataflowcomponent.OperationalStateActive:
 							acceptedStates = []string{dataflowcomponent.OperationalStateActive, dataflowcomponent.OperationalStateIdle}
@@ -629,7 +665,6 @@ func (a *EditDataflowComponentAction) waitForComponentToBeReady(ctx context.Cont
 
 							// only send the logs that have not been sent yet
 							if len(logs) > len(lastLogs) {
-
 								lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditDataFlowComponent, remainingSeconds)
 							}
 							// CheckBenthosLogLinesForConfigErrors is used to detect fatal configuration errors that would cause
@@ -642,11 +677,14 @@ func (a *EditDataflowComponentAction) waitForComponentToBeReady(ctx context.Cont
 								// Create a fresh context for rollback operation since the original ctx may be expired or close to expiring
 								rollbackCtx, rollbackCancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 								defer rollbackCancel()
+
 								_, err := a.configManager.AtomicEditDataflowcomponent(rollbackCtx, a.newComponentUUID, a.oldConfig)
 								if err != nil {
 									a.actionLogger.Errorf("failed to roll back dataflow component %s: %v", a.name, err)
-									return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' has invalid configuration but could not be rolled back: %v. Please check your logs and consider manually restoring the previous configuration", a.name, err)
+
+									return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' has invalid configuration but could not be rolled back: %w. Please check your logs and consider manually restoring the previous configuration", a.name, err)
 								}
+
 								return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' was rolled back to its previous configuration due to configuration errors. Please check the component logs, fix the configuration issues, and try editing again", a.name)
 							}
 
@@ -657,6 +695,7 @@ func (a *EditDataflowComponentAction) waitForComponentToBeReady(ctx context.Cont
 						return "", nil
 					}
 				}
+
 				if !found {
 					stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for it to appear in the config"
 					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
@@ -675,6 +714,7 @@ func CompareSnapshotWithDesiredConfig(dfcSnapshot *dataflowcomponent.DataflowCom
 	if dfcSnapshot == nil || dfcSnapshot.ServiceInfo.BenthosObservedState.ObservedBenthosServiceConfig.Input == nil {
 		return false
 	}
+
 	observedConfig := dfcSnapshot.ServiceInfo.BenthosObservedState.ObservedBenthosServiceConfig
 	observedConfigInDfcConfig := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 		BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
@@ -686,5 +726,6 @@ func CompareSnapshotWithDesiredConfig(dfcSnapshot *dataflowcomponent.DataflowCom
 			Buffer:             observedConfig.Buffer,
 		},
 	}
+
 	return dataflowcomponentserviceconfig.NewComparator().ConfigsEqual(observedConfigInDfcConfig, desiredConfig.DataFlowComponentServiceConfig)
 }

@@ -16,7 +16,7 @@ package s6_orig
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -79,6 +79,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				if strings.HasSuffix(path, ".complete") {
 					return false, nil // Sentinel file disappeared
 				}
+
 				return true, nil
 			})
 
@@ -94,7 +95,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 
 		It("should return HealthUnknown for I/O errors during health check", func() {
 			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
-				return false, fmt.Errorf("I/O error: disk read error")
+				return false, errors.New("I/O error: disk read error")
 			})
 
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
@@ -113,6 +114,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				if strings.Contains(path, "/log/run") {
 					return false, nil
 				}
+
 				return true, nil
 			})
 
@@ -140,8 +142,9 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				// Simulate another process modifying files during creation
 				// Target the log run script which is now created earlier in the process
 				if writeCount == 5 && strings.HasSuffix(path, "log/run") {
-					return fmt.Errorf("text file busy")
+					return errors.New("text file busy")
 				}
+
 				return nil
 			})
 
@@ -166,7 +169,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			})
 
 			mockFS.WithSymlinkFunc(func(ctx context.Context, oldPath, newPath string) error {
-				return fmt.Errorf("simulated symlink failure")
+				return errors.New("simulated symlink failure")
 			})
 
 			result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockFS)
@@ -181,8 +184,9 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 		It("should handle permission denied during creation", func() {
 			mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
 				if strings.Contains(path, "log") {
-					return fmt.Errorf("permission denied")
+					return errors.New("permission denied")
 				}
+
 				return nil
 			})
 
@@ -196,8 +200,9 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 		It("should handle files becoming unreadable during health check", func() {
 			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
 				if strings.HasSuffix(path, "run") {
-					return false, fmt.Errorf("permission denied")
+					return false, errors.New("permission denied")
 				}
+
 				return true, nil
 			})
 
@@ -223,6 +228,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				if strings.Contains(path, "/log/supervise") {
 					return false, nil
 				}
+
 				return true, nil
 			})
 
@@ -238,6 +244,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				if strings.HasSuffix(path, "type") {
 					return false, nil
 				}
+
 				return true, nil
 			})
 
@@ -262,8 +269,9 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
 				writeCount++
 				if writeCount > 3 {
-					return fmt.Errorf("no space left on device")
+					return errors.New("no space left on device")
 				}
+
 				return nil
 			})
 
@@ -277,8 +285,9 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 		It("should handle inode exhaustion", func() {
 			mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
 				if strings.Contains(path, "dependencies.d") {
-					return fmt.Errorf("no space left on device: inode table full")
+					return errors.New("no space left on device: inode table full")
 				}
+
 				return nil
 			})
 
@@ -311,6 +320,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			mockFS.WithPathExistsFunc(func(ctx context.Context, path string) (bool, error) {
 				mu.Lock()
 				defer mu.Unlock()
+
 				return existingFiles[path], nil
 			})
 
@@ -327,6 +337,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 
 				delete(existingFiles, oldPath)
 				existingFiles[newPath] = true
+
 				return nil
 			})
 
@@ -334,6 +345,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 				mu.Lock()
 				defer mu.Unlock()
 				delete(existingFiles, path)
+
 				return nil
 			})
 
@@ -347,8 +359,9 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 		It("should handle stale NFS handles", func() {
 			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
 				if strings.HasSuffix(path, ".complete") {
-					return false, fmt.Errorf("stale file handle")
+					return false, errors.New("stale file handle")
 				}
+
 				return true, nil
 			})
 
@@ -361,8 +374,9 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 		It("should handle network timeouts during operations", func() {
 			mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
 				if strings.Contains(path, "log") {
-					return fmt.Errorf("operation timed out")
+					return errors.New("operation timed out")
 				}
+
 				return nil
 			})
 
@@ -385,8 +399,9 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 
 			mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
 				if strings.HasSuffix(path, "run") {
-					return fmt.Errorf("simulated write failure")
+					return errors.New("simulated write failure")
 				}
+
 				return nil
 			})
 
@@ -397,8 +412,10 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			mockFS.WithRemoveAllFunc(func(ctx context.Context, path string) error {
 				if strings.Contains(path, constants.S6RepositoryBaseDir) {
 					cleanupFailed = true
-					return fmt.Errorf("cleanup failed: device busy")
+
+					return errors.New("cleanup failed: device busy")
 				}
+
 				return nil
 			})
 
@@ -417,8 +434,9 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 
 			mockFS.WithRemoveAllFunc(func(ctx context.Context, path string) error {
 				if strings.Contains(path, "service") {
-					return fmt.Errorf("directory not empty: process still running")
+					return errors.New("directory not empty: process still running")
 				}
+
 				return nil
 			})
 
@@ -465,6 +483,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 						return true, nil
 					}
 				}
+
 				return false, nil
 			})
 
@@ -482,7 +501,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			})
 
 			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
-				return false, fmt.Errorf("input/output error")
+				return false, errors.New("input/output error")
 			})
 
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
@@ -497,7 +516,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			})
 
 			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
-				return false, fmt.Errorf("permission denied")
+				return false, errors.New("permission denied")
 			})
 
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
@@ -512,7 +531,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			})
 
 			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
-				return false, fmt.Errorf("network is unreachable")
+				return false, errors.New("network is unreachable")
 			})
 
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
@@ -584,7 +603,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 	Describe("Filesystem Edge Cases", func() {
 		It("should handle disk full scenarios", func() {
 			mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
-				return fmt.Errorf("no space left on device")
+				return errors.New("no space left on device")
 			})
 
 			config := s6serviceconfig.S6ServiceConfig{
@@ -600,7 +619,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 
 		It("should handle permission denied errors", func() {
 			mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
-				return fmt.Errorf("permission denied")
+				return errors.New("permission denied")
 			})
 
 			config := s6serviceconfig.S6ServiceConfig{
@@ -616,7 +635,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 
 		It("should handle filesystem corruption", func() {
 			mockFS.WithSymlinkFunc(func(ctx context.Context, oldPath, newPath string) error {
-				return fmt.Errorf("simulated symlink failure")
+				return errors.New("simulated symlink failure")
 			})
 
 			config := s6serviceconfig.S6ServiceConfig{
@@ -635,8 +654,9 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
 				callCount++
 				if callCount%2 == 0 {
-					return false, fmt.Errorf("intermittent error")
+					return false, errors.New("intermittent error")
 				}
+
 				return true, nil
 			})
 
@@ -659,7 +679,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			}
 
 			// Try to create the same service concurrently
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
@@ -690,7 +710,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			errors := make([]error, 0)
 
 			// Run multiple removals concurrently
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()

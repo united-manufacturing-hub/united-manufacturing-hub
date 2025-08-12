@@ -15,6 +15,7 @@
 package providers
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
@@ -28,17 +29,17 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
-// MetricsProvider defines a simple interface for retrieving metrics
+// MetricsProvider defines a simple interface for retrieving metrics.
 type MetricsProvider interface {
 	// GetMetrics retrieves metrics from the appropriate source based on the payload type.
 	// It returns a response object with an array of metrics or an error if the retrieval fails.
 	GetMetrics(payload models.GetMetricsRequest, snapshot fsm.SystemSnapshot) (models.GetMetricsResponse, error)
 }
 
-// DefaultMetricsProvider implements the MetricsProvider interface
+// DefaultMetricsProvider implements the MetricsProvider interface.
 type DefaultMetricsProvider struct{}
 
-// GetMetrics delegates to the appropriate helper function based on resource type
+// GetMetrics delegates to the appropriate helper function based on resource type.
 func (p *DefaultMetricsProvider) GetMetrics(payload models.GetMetricsRequest, snapshot fsm.SystemSnapshot) (models.GetMetricsResponse, error) {
 	switch payload.Type {
 	case models.DFCMetricResourceType:
@@ -71,6 +72,7 @@ func getDFCMetrics(uuid string, snapshot fsm.SystemSnapshot) (models.GetMetricsR
 	observedState, ok := dfcInstance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
 	if !ok || observedState == nil {
 		err = fmt.Errorf("DFC instance %s has no observed state", uuid)
+
 		return res, err
 	}
 
@@ -188,6 +190,7 @@ func getTopicBrowserMetrics(snapshot fsm.SystemSnapshot) (models.GetMetricsRespo
 	if !ok || inst == nil {
 		return res, fmt.Errorf("failed to find the %s instance", models.TopicBrowserMetricResourceType)
 	}
+
 	observedState, ok := inst.LastObservedState.(*topicbrowser.ObservedStateSnapshot)
 	if !ok || observedState == nil {
 		return res, fmt.Errorf("topic browser instance %s has no observed state", inst.ID)
@@ -247,50 +250,50 @@ func getTopicBrowserMetrics(snapshot fsm.SystemSnapshot) (models.GetMetricsRespo
 }
 
 const (
-	// DFC paths
+	// DFC paths.
 	DFCInputPath  = "root.input"
 	DFCOutputPath = "root.output"
 
-	// DFC metric component types
+	// DFC metric component types.
 	DFCMetricComponentTypeInput     = "input"
 	DFCMetricComponentTypeOutput    = "output"
 	DFCMetricComponentTypeProcessor = "processor"
 
-	// Redpanda paths
+	// Redpanda paths.
 	RedpandaStoragePath = "redpanda.storage"
 	RedpandaClusterPath = "redpanda.cluster"
 	RedpandaKafkaPath   = "redpanda.kafka"
 	RedpandaTopicPath   = "redpanda.topic"
 
-	// Redpanda metric component types
+	// Redpanda metric component types.
 	RedpandaMetricComponentTypeStorage = "storage"
 	RedpandaMetricComponentTypeCluster = "cluster"
 	RedpandaMetricComponentTypeKafka   = "kafka"
 	RedpandaMetricComponentTypeTopic   = "topic"
 
-	// Topic Browser paths
+	// Topic Browser paths.
 	TopicBrowserInputPath  = "root.input"
 	TopicBrowserOutputPath = "root.output"
 
-	// Topic Browser metric component types
+	// Topic Browser metric component types.
 	TopicBrowserMetricComponentTypeInput     = "input"
 	TopicBrowserMetricComponentTypeOutput    = "output"
 	TopicBrowserMetricComponentTypeProcessor = "processor"
 
-	// Stream Processor paths
+	// Stream Processor paths.
 	StreamProcessorInputPath  = "root.input"
 	StreamProcessorOutputPath = "root.output"
 
-	// Stream Processor metric component types
+	// Stream Processor metric component types.
 	StreamProcessorMetricComponentTypeInput     = "input"
 	StreamProcessorMetricComponentTypeOutput    = "output"
 	StreamProcessorMetricComponentTypeProcessor = "processor"
 
-	// Protocol Converter paths
+	// Protocol Converter paths.
 	ProtocolConverterInputPath  = "root.input"
 	ProtocolConverterOutputPath = "root.output"
 
-	// Protocol Converter metric component types
+	// Protocol Converter metric component types.
 	ProtocolConverterMetricComponentTypeInput     = "input"
 	ProtocolConverterMetricComponentTypeOutput    = "output"
 	ProtocolConverterMetricComponentTypeProcessor = "processor"
@@ -318,26 +321,34 @@ func getStreamProcessorMetrics(uuid string, snapshot fsm.SystemSnapshot) (models
 	if !ok || inst == nil {
 		return res, fmt.Errorf("failed to find the %s instance", models.StreamProcessorMetricResourceType)
 	}
+
 	streamProcessorInstances := inst.GetInstances()
+
 	var observedState *streamprocessor.ObservedStateSnapshot
+
 	found := false
+
 	for _, instance := range streamProcessorInstances {
 		if dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID).String() == uuid {
 			var ok bool
+
 			observedState, ok = instance.LastObservedState.(*streamprocessor.ObservedStateSnapshot)
 			if !ok || observedState == nil {
 				return res, fmt.Errorf("stream processor instance %s has no observed state", instance.ID)
 			}
+
 			found = true
+
 			break
 		}
 	}
+
 	if !found {
 		return res, fmt.Errorf("stream processor instance %s not found", uuid)
 	}
 
 	if observedState == nil {
-		return res, fmt.Errorf("stream processor instance has nil observed state")
+		return res, errors.New("stream processor instance has nil observed state")
 	}
 
 	// Extract benthos metrics from the observed state
@@ -403,26 +414,34 @@ func getProtocolConverterMetrics(uuid string, snapshot fsm.SystemSnapshot) (mode
 	if !ok || inst == nil {
 		return res, fmt.Errorf("failed to find the %s manager", models.ProtocolConverterMetricResourceType)
 	}
+
 	protocolConverterInstances := inst.GetInstances()
+
 	var observedState *protocolconverter.ProtocolConverterObservedStateSnapshot
+
 	found := false
+
 	for _, instance := range protocolConverterInstances {
 		if dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID).String() == uuid {
 			var ok bool
+
 			observedState, ok = instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot)
 			if !ok || observedState == nil {
 				return res, fmt.Errorf("protocol converter instance %s has no observed state", instance.ID)
 			}
+
 			found = true
+
 			break
 		}
 	}
+
 	if !found {
 		return res, fmt.Errorf("protocol converter instance %s not found", uuid)
 	}
 
 	if observedState == nil {
-		return res, fmt.Errorf("protocol converter instance has nil observed state")
+		return res, errors.New("protocol converter instance has nil observed state")
 	}
 
 	// Extract benthos metrics from the read DFC (using read DFC as primary metrics source)

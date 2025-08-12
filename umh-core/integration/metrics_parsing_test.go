@@ -125,6 +125,7 @@ umh_core_reconcile_starved_total_seconds 3`
 			for _, failure := range metricsErrors {
 				if strings.Contains(failure.Error(), "golden-service") && strings.Contains(failure.Error(), "3") {
 					foundGoldenServiceError = true
+
 					break
 				}
 			}
@@ -144,6 +145,7 @@ umh_core_reconcile_starved_total_seconds 3`
 			for _, failure := range metricsErrors {
 				if strings.Contains(failure.Error(), "starved seconds") {
 					foundStarvedSecondsError = true
+
 					break
 				}
 			}
@@ -180,6 +182,7 @@ umh_core_reconcile_starved_total_seconds 3`
 			for _, failure := range metricsErrors {
 				if strings.Contains(failure.Error(), "reconcile time") && strings.Contains(failure.Error(), strconv.FormatFloat(maxReconcileTime99th, 'f', -1, 64)) {
 					foundReconcileTimeError = true
+
 					break
 				}
 			}

@@ -24,7 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 )
 
-// S6ObservedStateSnapshot is a deep-copyable snapshot of S6ObservedState
+// S6ObservedStateSnapshot is a deep-copyable snapshot of S6ObservedState.
 type S6ObservedStateSnapshot struct {
 	Config                  config.S6FSMConfig
 	ObservedS6ServiceConfig s6serviceconfig.S6ServiceConfig
@@ -32,12 +32,12 @@ type S6ObservedStateSnapshot struct {
 	LastStateChange         int64
 }
 
-// IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface
+// IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface.
 func (s *S6ObservedStateSnapshot) IsObservedStateSnapshot() {
 	// Marker method implementation
 }
 
-// S6InstanceConverter implements the fsm.ObservedStateConverter interface for S6Instance
+// S6InstanceConverter implements the fsm.ObservedStateConverter interface for S6Instance.
 func (s *S6Instance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	// Create a deep copy of the observed state
 	snapshot := &S6ObservedStateSnapshot{
@@ -48,6 +48,7 @@ func (s *S6Instance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	err := deepcopy.Copy(&snapshot.Config, &s.config)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, s.baseFSMInstance.GetLogger(), "failed to deep copy config: %v", err)
+
 		return nil
 	}
 
@@ -55,6 +56,7 @@ func (s *S6Instance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	err = deepcopy.Copy(&snapshot.ServiceInfo, &s.ObservedState.ServiceInfo)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, s.baseFSMInstance.GetLogger(), "failed to deep copy service info: %v", err)
+
 		return nil
 	}
 
@@ -62,6 +64,7 @@ func (s *S6Instance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	err = deepcopy.Copy(&snapshot.ObservedS6ServiceConfig, &s.ObservedState.ObservedS6ServiceConfig)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, s.baseFSMInstance.GetLogger(), "failed to deep copy observed config: %v", err)
+
 		return nil
 	}
 

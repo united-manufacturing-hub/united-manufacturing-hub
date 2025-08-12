@@ -21,7 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-// Service defines the interface for interacting with S6 services
+// Service defines the interface for interacting with S6 services.
 type Service interface {
 	// Create creates the service with specific configuration
 	Create(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, fsService filesystem.Service) error

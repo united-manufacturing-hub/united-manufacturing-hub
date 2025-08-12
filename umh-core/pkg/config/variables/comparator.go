@@ -18,20 +18,20 @@ import (
 	"reflect"
 )
 
-// Comparator handles comparison of VariableBundle
+// Comparator handles comparison of VariableBundle.
 type Comparator struct{}
 
-// NewComparator creates a new Comparator instance
+// NewComparator creates a new Comparator instance.
 func NewComparator() *Comparator {
 	return &Comparator{}
 }
 
-// ConfigsEqual checks if two VariableBundles are equal
+// ConfigsEqual checks if two VariableBundles are equal.
 func (c *Comparator) ConfigsEqual(desired, observed VariableBundle) bool {
 	return reflect.DeepEqual(desired, observed)
 }
 
-// ConfigDiff generates a diff between two VariableBundles
+// ConfigDiff generates a diff between two VariableBundles.
 func (c *Comparator) ConfigDiff(desired, observed VariableBundle) string {
 	if c.ConfigsEqual(desired, observed) {
 		return "Configs are identical"

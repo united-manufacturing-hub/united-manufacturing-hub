@@ -16,6 +16,7 @@ package config
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"text/template"
 
@@ -55,14 +56,17 @@ func hasAnchors(n *yaml.Node) bool {
 	if n == nil {
 		return false
 	}
+
 	if n.Anchor != "" || n.Kind == yaml.AliasNode {
 		return true
 	}
+
 	for _, c := range n.Content {
 		if hasAnchors(c) {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -86,10 +90,12 @@ func hasAnchors(n *yaml.Node) bool {
 // inside every DFC.
 func (d *DataFlowComponentConfig) UnmarshalYAML(value *yaml.Node) error {
 	type plain DataFlowComponentConfig // prevent recursion
+
 	var tmp plain
 
 	// 1. decode into the temporary value just like the default behaviour
-	if err := value.Decode(&tmp); err != nil {
+	err := value.Decode(&tmp)
+	if err != nil {
 		return err
 	}
 
@@ -98,13 +104,16 @@ func (d *DataFlowComponentConfig) UnmarshalYAML(value *yaml.Node) error {
 	// Content[0]=key1, Content[1]=value1, Content[2]=key2, Content[3]=value2, etc.
 	// We iterate by 2 to step through each key-value pair.
 	var cfgNode *yaml.Node
+
 	if len(value.Content)%2 != 0 {
 		return fmt.Errorf("invalid YAML mapping node: Content length %d is not even", len(value.Content))
 	}
+
 	for i := 0; i < len(value.Content); i += 2 {
 		k, v := value.Content[i], value.Content[i+1]
 		if k.Value == "dataFlowComponentConfig" {
 			cfgNode = v
+
 			break
 		}
 	}
@@ -119,13 +128,15 @@ func (d *DataFlowComponentConfig) UnmarshalYAML(value *yaml.Node) error {
 }
 
 // UnmarshalYAML is a helper function to detect anchors and set the hasAnchors flag
-// See also UnmarshalYAML for DataFlowComponentConfig
+// See also UnmarshalYAML for DataFlowComponentConfig.
 func (d *ProtocolConverterConfig) UnmarshalYAML(value *yaml.Node) error {
 	type plain ProtocolConverterConfig // prevent recursion
+
 	var tmp plain
 
 	// 1. decode into the temporary value just like the default behaviour
-	if err := value.Decode(&tmp); err != nil {
+	err := value.Decode(&tmp)
+	if err != nil {
 		return err
 	}
 
@@ -134,13 +145,16 @@ func (d *ProtocolConverterConfig) UnmarshalYAML(value *yaml.Node) error {
 	// Content[0]=key1, Content[1]=value1, Content[2]=key2, Content[3]=value2, etc.
 	// We iterate by 2 to step through each key-value pair.
 	var cfgNode *yaml.Node
+
 	if len(value.Content)%2 != 0 {
 		return fmt.Errorf("invalid YAML mapping node: Content length %d is not even", len(value.Content))
 	}
+
 	for i := 0; i < len(value.Content); i += 2 {
 		k, v := value.Content[i], value.Content[i+1]
 		if k.Value == "protocolConverterConfig" {
 			cfgNode = v
+
 			break
 		}
 	}
@@ -155,13 +169,15 @@ func (d *ProtocolConverterConfig) UnmarshalYAML(value *yaml.Node) error {
 }
 
 // UnmarshalYAML is a helper function to detect anchors and set the hasAnchors flag
-// See also UnmarshalYAML for DataFlowComponentConfig and ProtocolConverterConfig
+// See also UnmarshalYAML for DataFlowComponentConfig and ProtocolConverterConfig.
 func (d *StreamProcessorConfig) UnmarshalYAML(value *yaml.Node) error {
 	type plain StreamProcessorConfig // prevent recursion
+
 	var tmp plain
 
 	// 1. decode into the temporary value just like the default behaviour
-	if err := value.Decode(&tmp); err != nil {
+	err := value.Decode(&tmp)
+	if err != nil {
 		return err
 	}
 
@@ -170,13 +186,16 @@ func (d *StreamProcessorConfig) UnmarshalYAML(value *yaml.Node) error {
 	// Content[0]=key1, Content[1]=value1, Content[2]=key2, Content[3]=value2, etc.
 	// We iterate by 2 to step through each key-value pair.
 	var cfgNode *yaml.Node
+
 	if len(value.Content)%2 != 0 {
 		return fmt.Errorf("invalid YAML mapping node: Content length %d is not even", len(value.Content))
 	}
+
 	for i := 0; i < len(value.Content); i += 2 {
 		k, v := value.Content[i], value.Content[i+1]
 		if k.Value == "streamProcessorServiceConfig" {
 			cfgNode = v
+
 			break
 		}
 	}
@@ -198,7 +217,7 @@ func (d *StreamProcessorConfig) UnmarshalYAML(value *yaml.Node) error {
 // not fetch or inject `.global`, `.internal`, or `.location` keys.
 func RenderTemplate[T any](tmpl T, scope map[string]any) (T, error) {
 	if scope == nil {
-		return *new(T), fmt.Errorf("scope cannot be nil")
+		return *new(T), errors.New("scope cannot be nil")
 	}
 
 	// A. serialise to YAML – keeps anchors & order stable for diffing
@@ -228,5 +247,6 @@ func RenderTemplate[T any](tmpl T, scope map[string]any) (T, error) {
 	if bytes.Contains(buf.Bytes(), []byte("{{")) {
 		return *new(T), fmt.Errorf("unresolved template markers in %T", tmpl)
 	}
+
 	return out, nil
 }

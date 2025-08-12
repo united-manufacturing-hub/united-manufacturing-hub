@@ -73,6 +73,7 @@ func NewPusher(instanceUUID uuid.UUID, jwt string, dog watchdog.Iface, outboundC
 		logger:                 logger,
 	}
 	p.jwt.Store(jwt)
+
 	return &p
 }
 
@@ -86,13 +87,14 @@ func (p *Pusher) Start() {
 func (p *Pusher) Push(message models.UMHMessage) {
 	if len(p.outboundMessageChannel) == cap(p.outboundMessageChannel) {
 		p.logger.Warnf("Outbound message channel is full !")
+
 		if p.watcherUUID != uuid.Nil {
 			p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 		}
 	}
 
 	// Recover from panic
-	// This is primarly for tests, where the outboundMessageChannel is closed.
+	// This is primarily for tests, where the outboundMessageChannel is closed.
 	defer func() {
 		if r := recover(); r != nil {
 			zap.S().Errorf("Panic in Push: %v", r)
@@ -110,11 +112,12 @@ func (p *Pusher) Push(message models.UMHMessage) {
 func (p *Pusher) push() {
 	boPostRequest := p.backoff
 	p.watcherUUID = p.dog.RegisterHeartbeat("push", 10, 600, false)
+
 	var ticker = time.NewTicker(10 * time.Millisecond)
+
 	for {
 		select {
 		case <-ticker.C:
-
 			p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
 
 			messages := p.outBoundMessages()
@@ -129,10 +132,12 @@ func (p *Pusher) push() {
 			payload := backend_api_structs.PushPayload{
 				UMHMessages: messages,
 			}
+
 			_, status, err := http.PostRequest[any, backend_api_structs.PushPayload](context.Background(), http.PushEndpoint, &payload, nil, &cookies, p.insecureTLS, p.apiURL, p.logger)
 			if err != nil {
 				error_handler.ReportHTTPErrors(err, status, string(http.PushEndpoint), "POST", &payload, nil)
 				p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
+
 				if status == http2.StatusBadRequest {
 					// Its bit fuzzy here to determine the error code since the PostRequest does not return the error code.
 					// Todo: Need to refactor the PostRequest to return the error code.
@@ -144,10 +149,12 @@ func (p *Pusher) push() {
 				}
 				// In case of an error, push the message back to the deadletter channel.
 				go enqueueToDeadLetterChannel(p.deadletterCh, messages, cookies, 0, p.logger)
+
 				boPostRequest.IncrementAndSleep()
 
 				continue
 			}
+
 			error_handler.ResetErrorCounter()
 			boPostRequest.Reset()
 
@@ -163,10 +170,11 @@ func (p *Pusher) push() {
 			p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
 			// Retry the messages in deadletter channel only thrice. If it fails after 3 retryAttempts, log the message and drop.
 			if d.retryAttempts > 2 {
-
 				continue
 			}
+
 			d.retryAttempts++
+
 			_, _, err := http.PostRequest[any, backend_api_structs.PushPayload](context.Background(), http.PushEndpoint, &backend_api_structs.PushPayload{UMHMessages: d.messages}, nil, &d.cookies, p.insecureTLS, p.apiURL, p.logger)
 			if err != nil {
 				p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
@@ -174,6 +182,7 @@ func (p *Pusher) push() {
 				// In case of an error, push the message back to the deadletter channel.
 				go enqueueToDeadLetterChannel(p.deadletterCh, d.messages, d.cookies, d.retryAttempts, p.logger)
 			}
+
 			boPostRequest.Reset()
 		}
 	}
@@ -187,6 +196,7 @@ func enqueueToDeadLetterChannel(deadLetterCh chan DeadLetter, messages []models.
 		if !ok {
 			// Channel is closed
 			sentry.ReportIssuef(sentry.IssueTypeError, logger, "[enqueueToDeadLetterChannel] Deadletter channel is closed, cannot enqueue messages!")
+
 			return
 		}
 	case deadLetterCh <- DeadLetter{
@@ -205,12 +215,15 @@ func (p *Pusher) outBoundMessages() []models.UMHMessage {
 	if len(p.outboundMessageChannel) == 0 {
 		return messages
 	}
+
 	for len(p.outboundMessageChannel) > 0 {
 		msgX := <-p.outboundMessageChannel
 		if msgX == nil {
 			continue
 		}
+
 		messages = append(messages, *msgX)
 	}
+
 	return messages
 }

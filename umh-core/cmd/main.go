@@ -76,7 +76,6 @@ func main() {
 	// This loads the config file if it exists, applies any environment variables as overrides,
 	// and persists the result back to the config file. See detailed docs in config.LoadConfigWithEnvOverrides.
 	configData, err := config.LoadConfigWithEnvOverrides(ctx, configManager, log)
-
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to load config: %w", err)
 		os.Exit(1)
@@ -84,11 +83,14 @@ func main() {
 
 	// Start the metrics server
 	server := metrics.SetupMetricsEndpoint(fmt.Sprintf(":%d", configData.Agent.MetricsPort))
+
 	defer func() {
 		// S6_KILL_FINISH_MAXTIME is 5 seconds, so we need to finish before that
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer shutdownCancel()
-		if err := server.Shutdown(shutdownCtx); err != nil {
+		err := server.Shutdown(shutdownCtx)
+
+		if err != nil {
 			sentry.ReportIssuef(sentry.IssueTypeError, log, "Failed to shutdown metrics server: %w", err)
 		}
 	}()
@@ -117,11 +119,13 @@ func main() {
 
 	// Start the GraphQL server if enabled
 	var graphqlServer *graphql.Server
+
 	if configData.Agent.GraphQLConfig.Enabled {
 		// Set defaults for GraphQL config if not specified
 		if configData.Agent.GraphQLConfig.Port == 0 {
 			configData.Agent.GraphQLConfig.Port = 8090
 		}
+
 		if len(configData.Agent.GraphQLConfig.CORSOrigins) == 0 {
 			configData.Agent.GraphQLConfig.CORSOrigins = []string{"*"}
 		}
@@ -137,6 +141,7 @@ func main() {
 
 		// Start GraphQL server
 		var err error
+
 		graphqlServer, err = graphql.StartGraphQLServer(graphqlResolver, &configData.Agent.GraphQLConfig, log)
 		if err != nil {
 			sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to start GraphQL server: %w", err)
@@ -146,7 +151,9 @@ func main() {
 			if graphqlServer != nil {
 				shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
 				defer shutdownCancel()
-				if err := graphqlServer.Stop(shutdownCtx); err != nil {
+				err := graphqlServer.Stop(shutdownCtx)
+
+				if err != nil {
 					sentry.ReportIssuef(sentry.IssueTypeError, log, "Failed to shutdown GraphQL server: %w", err)
 				}
 			}
@@ -175,7 +182,7 @@ func main() {
 }
 
 // SystemSnapshotLogger logs the system snapshot every 5 seconds
-// It is an example on how to access the system snapshot and log it for communication with other components
+// It is an example on how to access the system snapshot and log it for communication with other components.
 func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -191,11 +198,13 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 		select {
 		case <-ctx.Done():
 			snap_logger.Info("Stopping system snapshot logger")
+
 			return
 		case <-ticker.C:
 			snapshot := controlLoop.GetSystemSnapshot()
 			if snapshot == nil {
 				sentry.ReportIssuef(sentry.IssueTypeWarning, snap_logger, "[SystemSnapshotLogger] No system snapshot available")
+
 				continue
 			}
 
@@ -249,6 +258,7 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 
 						// Format state with emojis for better visibility
 						stateIcon := "⚠️"
+
 						switch instance.CurrentState {
 						case "active":
 							stateIcon = "✅"
@@ -275,22 +285,23 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 }
 
 func enableBackendConnection(config *config.FullConfig, communicationState *communication_state.CommunicationState, controlLoop *control.ControlLoop, logger *zap.SugaredLogger) {
-
 	logger.Info("Enabling backend connection")
 	// directly log the config to console, not to the logger
 	if config == nil {
 		logger.Warn("Config is nil, cannot enable backend connection")
+
 		return
 	}
 
 	if config.Agent.APIURL != "" && config.Agent.AuthToken != "" {
 		// This can temporarely deactivated, e.g., during integration tests where just the mgmtcompanion-config is changed directly
-
 		login := v2.NewLogin(config.Agent.AuthToken, config.Agent.AllowInsecureTLS, config.Agent.APIURL, logger)
 		if login == nil {
 			sentry.ReportIssuef(sentry.IssueTypeError, logger, "[v2.NewLogin] Failed to create login object")
+
 			return
 		}
+
 		communicationState.LoginResponseMu.Lock()
 		communicationState.LoginResponse = login
 		communicationState.LoginResponseMu.Unlock()
@@ -299,12 +310,12 @@ func enableBackendConnection(config *config.FullConfig, communicationState *comm
 		// Get the config manager from the control loop
 		configManager := controlLoop.GetConfigManager()
 		snapshotManager := controlLoop.GetSnapshotManager()
+
 		communicationState.InitialiseAndStartPuller()
 		communicationState.InitialiseAndStartPusher()
 		communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config, snapshotManager, configManager)
 		communicationState.InitialiseAndStartRouter()
 		communicationState.InitialiseReAuthHandler(config.Agent.AuthToken, config.Agent.AllowInsecureTLS)
-
 	}
 
 	logger.Info("Backend connection enabled")

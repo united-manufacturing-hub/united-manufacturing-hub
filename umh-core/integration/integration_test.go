@@ -21,6 +21,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -43,7 +44,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 		PrintLogsAndStopContainer()
 		CleanupDockerBuildCache()
 
-		//Keep temp dirs for debugging if the test failed
+		// Keep temp dirs for debugging if the test failed
 		if !CurrentSpecReport().Failed() {
 			cleanupTmpDirs(containerName)
 		}
@@ -74,7 +75,8 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 					return false
 				}
 				defer func() {
-					if err := resp.Body.Close(); err != nil {
+					err := resp.Body.Close()
+					if err != nil {
 						Fail(fmt.Sprintf("Error closing response body: %v\n", err))
 					}
 				}()
@@ -113,7 +115,8 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 					return false
 				}
 				defer func() {
-					if err := resp.Body.Close(); err != nil {
+					err := resp.Body.Close()
+					if err != nil {
 						Fail(fmt.Sprintf("Error closing response body: %v\n", err))
 					}
 				}()
@@ -162,7 +165,8 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 					return false
 				}
 				defer func() {
-					if err := resp.Body.Close(); err != nil {
+					err := resp.Body.Close()
+					if err != nil {
 						Fail(fmt.Sprintf("Error closing response body: %v\n", err))
 					}
 				}()
@@ -209,7 +213,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 			By("Scaling up by adding 10 sleep services")
 			// Add 10 sleep services to the configuration
-			for i := 0; i < 10; i++ {
+			for i := range 10 {
 				serviceName := fmt.Sprintf("sleepy-%d", i)
 				builder.AddSleepService(serviceName, "600")
 				cfg = builder.BuildYAML()
@@ -220,7 +224,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			By("Simulating random stop/start actions on sleep services (chaos monkey)")
 			// Create a deterministic random number generator for reproducibility
 			r := rand.New(rand.NewSource(42))
-			for i := 0; i < 100; i++ {
+			for range 100 {
 				// Pick a random sleep service index (0-9)
 				randomIndex := r.Intn(10)
 				randomServiceName := fmt.Sprintf("sleepy-%d", randomIndex)
@@ -252,7 +256,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 	Context("with comprehensive chaos test", Label("chaos"), func() {
 
 		BeforeAll(func() {
-			//Skip("Skipping comprehensive chaos test due to time constraints")
+			// Skip("Skipping comprehensive chaos test due to time constraints")
 			// Start with an empty config
 			cfg := NewBuilder().BuildYAML()
 			Expect(writeConfigFile(cfg)).To(Succeed())
@@ -312,9 +316,9 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 				// Add new batch of services
 				GinkgoWriter.Printf("Adding batch of %d services\n", batchSize)
-				for i := 0; i < batchSize; i++ {
+				for range batchSize {
 					serviceName := fmt.Sprintf("warmup-svc-%d", len(existingServices))
-					duration := fmt.Sprintf("%d", 60+r.Intn(600))
+					duration := strconv.Itoa(60 + r.Intn(600))
 					builder.AddSleepService(serviceName, duration)
 					existingServices[serviceName] = "running"
 					serviceDurations[serviceName] = duration
@@ -370,9 +374,9 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 								}
 							}
 							// Add new services
-							for i := 0; i < numToAdd; i++ {
+							for i := range numToAdd {
 								serviceName := fmt.Sprintf("bulk-add-%d-%d", actionCount, i)
-								duration := fmt.Sprintf("%d", 60+r.Intn(600))
+								duration := strconv.Itoa(60 + r.Intn(600))
 								builder.AddSleepService(serviceName, duration)
 								existingServices[serviceName] = "running"
 								serviceDurations[serviceName] = duration
@@ -388,11 +392,12 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 							GinkgoWriter.Printf("\n=== BULK REMOVE OPERATION ===\nRemoving %d services\n", numToRemove)
 							// Choose random services to remove
 							indicesToRemove := make(map[int]bool)
-							for i := 0; i < numToRemove; i++ {
+							for range numToRemove {
 								for {
 									idx := r.Intn(len(keys))
 									if !indicesToRemove[idx] {
 										indicesToRemove[idx] = true
+
 										break
 									}
 								}
@@ -559,7 +564,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 			By("Scaling up by adding 10 benthos generator services")
 			// Add 10 benthos services to the configuration
-			for i := 0; i < 10; i++ {
+			for i := range 10 {
 				serviceName := fmt.Sprintf("benthos-%d", i)
 				builder.AddGeneratorBenthos(serviceName, fmt.Sprintf("%ds", 1+i%3)) // Varying intervals
 				cfg = builder.BuildYAML()
@@ -576,7 +581,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			By("Simulating random stop/start/update actions on benthos services")
 			// Create a deterministic random number generator for reproducibility
 			r := rand.New(rand.NewSource(42))
-			for i := 0; i < 50; i++ {
+			for i := range 50 {
 				// Pick a random benthos service index (0-9)
 				randomIndex := r.Intn(10)
 				randomServiceName := fmt.Sprintf("benthos-%d", randomIndex)
@@ -647,7 +652,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			Eventually(func() bool {
 				ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 				defer cancel()
-				req, err := http.NewRequestWithContext(ctx, "GET", GetMetricsURL(), nil)
+				req, err := http.NewRequestWithContext(ctx, http.MethodGet, GetMetricsURL(), nil)
 				if err != nil {
 					return false
 				}
@@ -656,10 +661,12 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 					return false
 				}
 				defer func() {
-					if err := resp.Body.Close(); err != nil {
+					err := resp.Body.Close()
+					if err != nil {
 						Fail(fmt.Sprintf("Error closing response body: %v\n", err))
 					}
 				}()
+
 				return resp.StatusCode == http.StatusOK
 			}, 20*time.Second, 1*time.Second).Should(BeTrue(),
 				"Metrics endpoint should be healthy")
@@ -729,7 +736,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			Eventually(func() bool {
 				ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 				defer cancel()
-				req, err := http.NewRequestWithContext(ctx, "GET", GetMetricsURL(), nil)
+				req, err := http.NewRequestWithContext(ctx, http.MethodGet, GetMetricsURL(), nil)
 				if err != nil {
 					return false
 				}
@@ -738,17 +745,19 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 					return false
 				}
 				defer func() {
-					if err := resp.Body.Close(); err != nil {
+					err := resp.Body.Close()
+					if err != nil {
 						Fail(fmt.Sprintf("Error closing response body: %v\n", err))
 					}
 				}()
+
 				return resp.StatusCode == http.StatusOK
 			}, 20*time.Second, 1*time.Second).Should(BeTrue(),
 				"Metrics endpoint should be healthy")
 
 			By("Scaling up by adding 10 dataflow generator components")
 			// Add 10 dataflow components to the configuration
-			for i := 0; i < 10; i++ {
+			for i := range 10 {
 				componentName := fmt.Sprintf("dataflow-%d", i)
 				builder.AddGeneratorDataFlowComponent(componentName, fmt.Sprintf("%ds", 1+i%3)) // Varying intervals
 				cfg = builder.BuildYAML()
@@ -765,7 +774,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			By("Simulating random stop/start/update actions on dataflow components")
 			// Create a deterministic random number generator for reproducibility
 			r := rand.New(rand.NewSource(42))
-			for i := 0; i < 50; i++ {
+			for i := range 50 {
 				// Pick a random dataflow component index (0-9)
 				randomIndex := r.Intn(10)
 				randomComponentName := fmt.Sprintf("dataflow-%d", randomIndex)
@@ -814,22 +823,25 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 // Helper functions for the chaos test
 
-// getKeys returns all keys from a map as a slice
+// getKeys returns all keys from a map as a slice.
 func getKeys(m map[string]string) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)
 	}
+
 	return keys
 }
 
-// countRunningServices counts how many services are in the "running" state
+// countRunningServices counts how many services are in the "running" state.
 func countRunningServices(services map[string]string) int {
 	count := 0
+
 	for _, state := range services {
 		if state == "running" {
 			count++
 		}
 	}
+
 	return count
 }

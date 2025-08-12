@@ -17,8 +17,8 @@ package streamprocessor
 import "errors"
 
 var (
-	// ErrServiceNotExist indicates the requested service does not exist
+	// ErrServiceNotExist indicates the requested service does not exist.
 	ErrServiceNotExist = errors.New("stream processor service does not exist")
-	// ErrServiceAlreadyExists indicates the service already exists
+	// ErrServiceAlreadyExists indicates the service already exists.
 	ErrServiceAlreadyExists = errors.New("stream processor service already exists")
 )

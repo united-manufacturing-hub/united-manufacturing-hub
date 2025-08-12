@@ -15,6 +15,7 @@
 package redpanda_monitor
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -24,17 +25,17 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 )
 
-// RedpandaMonitorManager is the FSM manager for the redpanda monitor instance
+// RedpandaMonitorManager is the FSM manager for the redpanda monitor instance.
 type RedpandaMonitorManager struct {
 	*public_fsm.BaseFSMManager[config.RedpandaMonitorConfig]
 }
 
-// RedpandaMonitorManagerSnapshot extends the base manager snapshot to hold any redpanda monitor-specific info
+// RedpandaMonitorManagerSnapshot extends the base manager snapshot to hold any redpanda monitor-specific info.
 type RedpandaMonitorManagerSnapshot struct {
 	*public_fsm.BaseManagerSnapshot
 }
 
-// Ensure it satisfies fsm.ObservedStateSnapshot
+// Ensure it satisfies fsm.ObservedStateSnapshot.
 func (b *RedpandaMonitorManagerSnapshot) IsObservedStateSnapshot() {}
 
 // NewRedpandaMonitorManager constructs a manager.
@@ -59,13 +60,14 @@ func NewRedpandaMonitorManager(name string) *RedpandaMonitorManager {
 		// Create instance
 		func(fc config.RedpandaMonitorConfig) (public_fsm.FSMInstance, error) {
 			inst := NewRedpandaMonitorInstance(fc)
+
 			return inst, nil
 		},
 		// Compare config => if same, no recreation needed
 		func(instance public_fsm.FSMInstance, fc config.RedpandaMonitorConfig) (bool, error) {
 			bi, ok := instance.(*RedpandaMonitorInstance)
 			if !ok {
-				return false, fmt.Errorf("instance is not a RedpandaMonitorInstance")
+				return false, errors.New("instance is not a RedpandaMonitorInstance")
 			}
 			// If same config => return true, else false
 			// Minimal check:
@@ -75,20 +77,24 @@ func NewRedpandaMonitorManager(name string) *RedpandaMonitorManager {
 		func(instance public_fsm.FSMInstance, fc config.RedpandaMonitorConfig) error {
 			bi, ok := instance.(*RedpandaMonitorInstance)
 			if !ok {
-				return fmt.Errorf("instance is not a RedpandaMonitorInstance")
+				return errors.New("instance is not a RedpandaMonitorInstance")
 			}
+
 			bi.config = fc
+
 			return nil
 		},
 		// Get expected max p95 execution time per instance
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
 			bi, ok := instance.(*RedpandaMonitorInstance)
 			if !ok {
-				return 0, fmt.Errorf("instance is not a RedpandaMonitorInstance")
+				return 0, errors.New("instance is not a RedpandaMonitorInstance")
 			}
+
 			return bi.GetMinimumRequiredTime(), nil
 		},
 	)
+
 	metrics.InitErrorCounter(logger.ComponentRedpandaMonitorManager, name)
 
 	return &RedpandaMonitorManager{
@@ -96,16 +102,20 @@ func NewRedpandaMonitorManager(name string) *RedpandaMonitorManager {
 	}
 }
 
-// CreateSnapshot overrides the base to add agent-specific fields if desired
+// CreateSnapshot overrides the base to add agent-specific fields if desired.
 func (m *RedpandaMonitorManager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	baseSnap := m.BaseFSMManager.CreateSnapshot()
+
 	baseSnapshot, ok := baseSnap.(*public_fsm.BaseManagerSnapshot)
 	if !ok {
 		logger.For(logger.ComponentRedpandaMonitorManager).Errorf("Could not cast manager snapshot to BaseManagerSnapshot.")
+
 		return baseSnap
 	}
+
 	snap := &RedpandaMonitorManagerSnapshot{
 		BaseManagerSnapshot: baseSnapshot,
 	}
+
 	return snap
 }

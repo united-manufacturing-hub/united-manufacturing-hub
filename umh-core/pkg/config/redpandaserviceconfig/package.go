@@ -21,7 +21,7 @@ var (
 )
 
 // RedpandaServiceConfig represents the configuration for a Redpanda service
-// TopicConfig represents the topic-related configuration for Redpanda
+// TopicConfig represents the topic-related configuration for Redpanda.
 type TopicConfig struct {
 	DefaultTopicCompressionAlgorithm string `yaml:"defaultTopicCompressionAlgorithm,omitempty"`
 	DefaultTopicCleanupPolicy        string `yaml:"defaultTopicCleanupPolicy,omitempty"`
@@ -30,13 +30,13 @@ type TopicConfig struct {
 	DefaultTopicSegmentMs            int64  `yaml:"defaultTopicSegmentMs,omitempty"`
 }
 
-// ResourcesConfig represents the resource-related configuration for Redpanda
+// ResourcesConfig represents the resource-related configuration for Redpanda.
 type ResourcesConfig struct {
 	MaxCores             int `yaml:"maxCores,omitempty"`
 	MemoryPerCoreInBytes int `yaml:"memoryPerCoreInBytes,omitempty"`
 }
 
-// RedpandaServiceConfig represents the configuration for a Redpanda service
+// RedpandaServiceConfig represents the configuration for a Redpanda service.
 type RedpandaServiceConfig struct {
 	BaseDir string `yaml:"baseDir,omitempty"`
 	// Redpanda-specific configuration
@@ -44,12 +44,12 @@ type RedpandaServiceConfig struct {
 	Resources ResourcesConfig `yaml:"resources,omitempty"`
 }
 
-// Equal checks if two RedpandaServiceConfigs are equal
+// Equal checks if two RedpandaServiceConfigs are equal.
 func (c RedpandaServiceConfig) Equal(other RedpandaServiceConfig) bool {
 	return NewComparator().ConfigsEqual(c, other)
 }
 
-// RenderRedpandaYAML is a package-level function for easy YAML generation
+// RenderRedpandaYAML is a package-level function for easy YAML generation.
 func RenderRedpandaYAML(defaultTopicRetentionMs int64, defaultTopicRetentionBytes int64, defaultTopicCompressionAlgorithm string, defaultTopicCleanupPolicy string, defaultTopicSegmentMs int64) (string, error) {
 	// Create a config object from the individual components
 	cfg := RedpandaServiceConfig{}
@@ -63,17 +63,17 @@ func RenderRedpandaYAML(defaultTopicRetentionMs int64, defaultTopicRetentionByte
 	return defaultGenerator.RenderConfig(cfg)
 }
 
-// NormalizeRedpandaConfig is a package-level function for easy config normalization
+// NormalizeRedpandaConfig is a package-level function for easy config normalization.
 func NormalizeRedpandaConfig(cfg RedpandaServiceConfig) RedpandaServiceConfig {
 	return defaultNormalizer.NormalizeConfig(cfg)
 }
 
-// ConfigsEqual is a package-level function for easy config comparison
+// ConfigsEqual is a package-level function for easy config comparison.
 func ConfigsEqual(desired, observed RedpandaServiceConfig) bool {
 	return defaultComparator.ConfigsEqual(desired, observed)
 }
 
-// ConfigDiff is a package-level function for easy config diff generation
+// ConfigDiff is a package-level function for easy config diff generation.
 func ConfigDiff(desired, observed RedpandaServiceConfig) string {
 	return defaultComparator.ConfigDiff(desired, observed)
 }

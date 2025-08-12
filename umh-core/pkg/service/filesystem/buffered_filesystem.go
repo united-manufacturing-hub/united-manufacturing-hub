@@ -87,20 +87,19 @@ import (
 // use the default unbuffered filesystem service in production until the buffering
 // strategy is refined and its benefits are clearly demonstrated.
 
-// CachedFile represents a file or directory in the filesystem
+// CachedFile represents a file or directory in the filesystem.
 type CachedFile struct {
 	Info  os.FileInfo
 	IsDir bool
 }
 
-// DirectoryCache represents a snapshot of a directory tree
+// DirectoryCache represents a snapshot of a directory tree.
 type DirectoryCache struct {
 	Files map[string]*CachedFile // relative path -> file info
 }
 
-// ReadDirectoryTree reads a directory tree from disk and returns a cache of its contents
+// ReadDirectoryTree reads a directory tree from disk and returns a cache of its contents.
 func ReadDirectoryTree(ctx context.Context, service Service, root string) (*DirectoryCache, error) {
-
 	dc := &DirectoryCache{
 		Files: make(map[string]*CachedFile),
 	}
@@ -110,11 +109,13 @@ func ReadDirectoryTree(ctx context.Context, service Service, root string) (*Dire
 	if err != nil {
 		return nil, fmt.Errorf("failed to walk directory tree: %w", err)
 	}
+
 	if rootInfo == nil {
-		return nil, fmt.Errorf("failed to walk directory tree: stat returned nil")
+		return nil, errors.New("failed to walk directory tree: stat returned nil")
 	}
+
 	if !rootInfo.IsDir() {
-		return nil, fmt.Errorf("failed to walk directory tree: root is not a directory")
+		return nil, errors.New("failed to walk directory tree: root is not a directory")
 	}
 
 	// Start with root directory
@@ -126,6 +127,7 @@ func ReadDirectoryTree(ctx context.Context, service Service, root string) (*Dire
 	// Process each entry recursively
 	for _, entry := range entries {
 		fullPath := filepath.Join(root, entry.Name())
+
 		relPath, err := filepath.Rel(root, fullPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get relative path: %w", err)
@@ -235,7 +237,7 @@ type BufferedService struct {
 	verifyPermissions bool
 }
 
-// fileState holds in-memory data and metadata for a single file or directory
+// fileState holds in-memory data and metadata for a single file or directory.
 type fileState struct {
 	modTime  time.Time
 	content  []byte // might be empty if we skipped reading (e.g. large file)
@@ -248,7 +250,7 @@ type fileState struct {
 	isDir    bool
 }
 
-// fileChange represents a pending user-level change: either an updated content or a removal
+// fileChange represents a pending user-level change: either an updated content or a removal.
 type fileChange struct {
 	content []byte
 	perm    os.FileMode
@@ -256,7 +258,7 @@ type fileChange struct {
 	wasDir  bool // tracks if this was a directory before removal
 }
 
-// Check interface conformance at compile time
+// Check interface conformance at compile time.
 var _ Service = (*BufferedService)(nil)
 
 // NewBufferedService creates a buffered service that wraps an existing filesystem service.
@@ -280,6 +282,7 @@ func NewBufferedServiceWithDirs(base Service, syncDirectories []string, pathsToI
 	if workerCount < constants.FilesystemMinWorkers {
 		workerCount = constants.FilesystemMinWorkers
 	}
+
 	if workerCount > constants.FilesystemMaxWorkers {
 		workerCount = constants.FilesystemMaxWorkers
 	}
@@ -324,6 +327,7 @@ func (bs *BufferedService) Chown(ctx context.Context, path string, username stri
 
 	// Convert username to uid
 	var uid int
+
 	if username != "" {
 		// Note: This is a call outside of the buffered service
 		// We could later cache this information
@@ -331,9 +335,11 @@ func (bs *BufferedService) Chown(ctx context.Context, path string, username stri
 		if err != nil {
 			return fmt.Errorf("failed to lookup user %s: %w", username, err)
 		}
+
 		if u == nil {
 			return fmt.Errorf("user lookup returned nil for user %s", username)
 		}
+
 		uid, _ = strconv.Atoi(u.Uid)
 	} else {
 		uid = st.uid // Keep existing
@@ -341,6 +347,7 @@ func (bs *BufferedService) Chown(ctx context.Context, path string, username stri
 
 	// Convert groupname to gid
 	var gid int
+
 	if groupname != "" {
 		// Note: This is a call outside of the buffered service
 		// We could later cache this information
@@ -348,9 +355,11 @@ func (bs *BufferedService) Chown(ctx context.Context, path string, username stri
 		if err != nil {
 			return fmt.Errorf("failed to lookup group %s: %w", groupname, err)
 		}
+
 		if g == nil {
 			return fmt.Errorf("group lookup returned nil for group %s", groupname)
 		}
+
 		gid, _ = strconv.Atoi(g.Gid)
 	} else {
 		gid = st.gid // Keep existing
@@ -360,7 +369,7 @@ func (bs *BufferedService) Chown(ctx context.Context, path string, username stri
 	if bs.verifyPermissions && bs.currentUser != nil {
 		currentUid, _ := strconv.Atoi(bs.currentUser.Uid)
 		if currentUid != 0 {
-			return fmt.Errorf("insufficient permissions to change ownership: not root")
+			return errors.New("insufficient permissions to change ownership: not root")
 		}
 	}
 
@@ -380,14 +389,15 @@ func (bs *BufferedService) Chown(ctx context.Context, path string, username stri
 	return nil
 }
 
-// SetVerifyPermissions configures whether permission checks should be performed
+// SetVerifyPermissions configures whether permission checks should be performed.
 func (bs *BufferedService) SetVerifyPermissions(verify bool) {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
+
 	bs.verifyPermissions = verify
 }
 
-// SetFileReadWorkers configures the number of worker goroutines for file reading
+// SetFileReadWorkers configures the number of worker goroutines for file reading.
 func (bs *BufferedService) SetFileReadWorkers(count int) {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
@@ -398,48 +408,54 @@ func (bs *BufferedService) SetFileReadWorkers(count int) {
 		if count < constants.FilesystemMinWorkers {
 			count = constants.FilesystemMinWorkers
 		}
+
 		if count > constants.FilesystemMaxWorkers {
 			count = constants.FilesystemMaxWorkers
 		}
 	}
+
 	bs.fileReadWorkers = count
 }
 
-// SetSlowReadThreshold configures the threshold for logging slow file reads
+// SetSlowReadThreshold configures the threshold for logging slow file reads.
 func (bs *BufferedService) SetSlowReadThreshold(threshold time.Duration) {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
+
 	bs.slowReadThreshold = threshold
 }
 
 // SetAppendOnlyDirs configures directories that contain append-only files (like logs)
-// Files in these directories will be read incrementally (only new content)
+// Files in these directories will be read incrementally (only new content).
 func (bs *BufferedService) SetAppendOnlyDirs(dirs []string) {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
+
 	bs.appendOnlyDirs = dirs
 }
 
-// isInAppendOnlyDir checks if a path is in one of the append-only directories
+// isInAppendOnlyDir checks if a path is in one of the append-only directories.
 func (bs *BufferedService) isInAppendOnlyDir(path string) bool {
 	for _, dir := range bs.appendOnlyDirs {
 		if strings.HasPrefix(path, dir) {
 			return true
 		}
 	}
+
 	return false
 }
 
-// getFileState gets the cached file state, or returns nil if not found
+// getFileState gets the cached file state, or returns nil if not found.
 func (bs *BufferedService) getFileState(path string) *fileState {
 	state, ok := bs.files[path]
 	if !ok {
 		return nil
 	}
+
 	return &state
 }
 
-// canWriteBasedOnMode checks if the current user can write to a file based on its mode
+// canWriteBasedOnMode checks if the current user can write to a file based on its mode.
 func (bs *BufferedService) canWriteBasedOnMode(state *fileState) bool {
 	if state == nil {
 		return false
@@ -474,7 +490,7 @@ func (bs *BufferedService) canWriteBasedOnMode(state *fileState) bool {
 }
 
 // checkWritePermission verifies if the current process should have write permission for a path
-// based on cached file information
+// based on cached file information.
 func (bs *BufferedService) checkWritePermission(path string) error {
 	if !bs.verifyPermissions {
 		return nil
@@ -486,6 +502,7 @@ func (bs *BufferedService) checkWritePermission(path string) error {
 	// If the file doesn't exist in our cache, check if parent directory is writable
 	if state == nil {
 		parentDir := filepath.Dir(path)
+
 		return bs.checkDirectoryWritePermission(parentDir)
 	}
 
@@ -498,7 +515,7 @@ func (bs *BufferedService) checkWritePermission(path string) error {
 }
 
 // checkDirectoryWritePermission verifies if we can write to a directory
-// based on cached directory information
+// based on cached directory information.
 func (bs *BufferedService) checkDirectoryWritePermission(dir string) error {
 	if !bs.verifyPermissions {
 		return nil
@@ -530,13 +547,14 @@ func (bs *BufferedService) checkDirectoryWritePermission(dir string) error {
 	return nil
 }
 
-// shouldIgnorePath checks if a path should be ignored during sync
+// shouldIgnorePath checks if a path should be ignored during sync.
 func (bs *BufferedService) shouldIgnorePath(path string) bool {
 	for _, ignore := range bs.pathsToIgnore {
 		if strings.Contains(path, ignore) {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -546,25 +564,31 @@ func (bs *BufferedService) shouldIgnorePath(path string) bool {
 
 // SyncFromDisk loads the filesystem state into memory, ignoring anything we had before.
 // It will read file contents unless they exceed maxFileSize, in which case content is blank.
-// TODO: make this function better readable
+// TODO: make this function better readable.
 func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 	logger := logger.For(logger.ComponentFilesystem)
 	startTime := time.Now()
+
 	logger.Debugf("SyncFromDisk started for %d directories", len(bs.syncDirs))
+
 	defer func() {
 		logger.Debugf("SyncFromDisk took %dms", time.Since(startTime).Milliseconds())
 	}()
 
 	// Create a new map to hold synced files
 	newFiles := make(map[string]fileState)
+
 	var filesMutex sync.Mutex
 
 	// Copy existing state for incremental reads
 	existingFiles := make(map[string]fileState)
+
 	bs.mu.Lock()
+
 	for k, v := range bs.files {
 		existingFiles[k] = v
 	}
+
 	bs.mu.Unlock()
 
 	// Sync each directory in the list
@@ -575,10 +599,13 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 		if err != nil {
 			if os.IsNotExist(err) {
 				logger.Debugf("Directory doesn't exist, skipping: %s", dir)
+
 				continue // Skip directories that don't exist
 			}
+
 			return fmt.Errorf("failed to stat directory %s: %w", dir, err)
 		}
+
 		if info == nil {
 			return fmt.Errorf("stat returned nil for directory: %s", dir)
 		}
@@ -592,6 +619,7 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 
 		// Add directory itself
 		filesMutex.Lock()
+
 		newFiles[dir] = fileState{
 			isDir:    true,
 			content:  nil,
@@ -601,6 +629,7 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 			uid:      uid,
 			gid:      gid,
 		}
+
 		filesMutex.Unlock()
 
 		// Read the directory tree
@@ -621,7 +650,9 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 			}
 
 			uid, gid := getFileOwner(absPath)
+
 			filesMutex.Lock()
+
 			newFiles[absPath] = fileState{
 				isDir:    true,
 				content:  nil,
@@ -631,6 +662,7 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 				uid:      uid,
 				gid:      gid,
 			}
+
 			filesMutex.Unlock()
 		}
 
@@ -658,6 +690,7 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 		jobs := make(chan fileReadJob, fileCount)
 		results := make(chan fileReadResult, fileCount)
 		errChan := make(chan error, 1)
+
 		var wg sync.WaitGroup
 
 		// Determine worker count
@@ -671,8 +704,9 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 		defer cancel() // Ensure we cancel workers on exit
 
 		// Start workers
-		for w := 0; w < workerCount; w++ {
+		for range workerCount {
 			wg.Add(1)
+
 			go func() {
 				defer wg.Done()
 
@@ -711,14 +745,18 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 								inode:    fileInode,
 							},
 						}
+
 						continue
 					}
 
 					// Check if this is an append-only file that we've seen before
 					isIncremental := false
-					var previousContent []byte
-					var previousSize int64
-					var previousInode uint64
+
+					var (
+						previousContent []byte
+						previousSize    int64
+						previousInode   uint64
+					)
 
 					if bs.isInAppendOnlyDir(job.absPath) {
 						if prevState, exists := existingFiles[job.absPath]; exists && !prevState.isDir {
@@ -735,13 +773,17 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 								// Log rotation detected - file replaced or truncated
 								logger.Debugf("Log rotation detected for %s (inode: %d->%d, size: %d->%d)",
 									job.absPath, previousInode, fileInode, previousSize, job.cf.Info.Size())
+
 								isIncremental = false
 							}
 						}
 					}
 
-					var data []byte
-					var err error
+					var (
+						data []byte
+						err  error
+					)
+
 					readStart := time.Now()
 
 					if isIncremental && job.cf.Info.Size() > previousSize {
@@ -752,8 +794,10 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 								absPath: job.absPath,
 								err:     err,
 							}
+
 							continue
 						}
+
 						logger.Debugf("Incremental read: %s (%d bytes new)", job.absPath, len(data)-len(previousContent))
 					} else {
 						// Normal full read (either first time seeing file or log rotation happened)
@@ -787,6 +831,7 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 								// Another error already sent
 							}
 						}
+
 						continue
 					}
 
@@ -811,6 +856,7 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 
 		// Start a result collector goroutine
 		var resultErr error
+
 		resultDone := make(chan struct{})
 
 		go func() {
@@ -821,18 +867,23 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 				if result.err != nil {
 					if errors.Is(result.err, os.ErrNotExist) {
 						logger.Debugf("File does not exist, skipping: %s", result.absPath)
+
 						continue
 					}
 
 					// Set error and exit
 					resultErr = result.err
+
 					cancel() // Signal workers to stop
+
 					return
 				}
 
 				// Store result
 				filesMutex.Lock()
+
 				newFiles[result.absPath] = *result.state
+
 				filesMutex.Unlock()
 			}
 		}()
@@ -853,6 +904,7 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 				// Job queued successfully
 			case <-ctx.Done():
 				cancel()
+
 				return ctx.Err()
 			}
 		}
@@ -892,6 +944,7 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 	bs.mu.Unlock()
 
 	logger.Debugf("SyncFromDisk: done")
+
 	return nil
 }
 
@@ -900,6 +953,7 @@ func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 	start := time.Now()
 	logger := logger.For(logger.ComponentFilesystem)
 	logger.Debugf("SyncToDisk started")
+
 	defer func() {
 		logger.Debugf("SyncToDisk took %dms", time.Since(start).Milliseconds())
 	}()
@@ -915,7 +969,8 @@ func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 		for path, chg := range bs.changed {
 			if !chg.removed {
 				// Check write permission for files/directories we're creating or modifying
-				if err := bs.checkWritePermission(path); err != nil {
+				err := bs.checkWritePermission(path)
+				if err != nil {
 					permissionErrors[path] = err
 				}
 			}
@@ -930,6 +985,7 @@ func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 			for path, err := range permissionErrors {
 				errStrs = append(errStrs, fmt.Sprintf("%s: %v", path, err))
 			}
+
 			return fmt.Errorf("permission checks failed for %d paths: %s",
 				len(permissionErrors), strings.Join(errStrs, "; "))
 		}
@@ -943,12 +999,14 @@ func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 
 	// Step 1: Create directories (shallowest first)
 	var dirsToCreate []string
+
 	for path, chg := range bs.changed {
 		if _, exists := bs.changed[path]; exists && !chg.removed {
 			state, exists := bs.files[path]
 			if !exists {
 				return fmt.Errorf("file not found in memory: %s", path)
 			}
+
 			if state.isDir {
 				dirsToCreate = append(dirsToCreate, path)
 			}
@@ -960,20 +1018,24 @@ func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 	})
 
 	for _, path := range dirsToCreate {
-		if err := bs.base.EnsureDirectory(ctx, path); err != nil {
+		err := bs.base.EnsureDirectory(ctx, path)
+		if err != nil {
 			return fmt.Errorf("failed to create directory: %w", err)
 		}
+
 		delete(bs.changed, path)
 	}
 
 	// Step 2: Write files (ensuring parent directories exist)
 	var filesToWrite []string
+
 	for path, chg := range bs.changed {
 		if _, exists := bs.changed[path]; exists && !chg.removed {
 			state, exists := bs.files[path]
 			if !exists {
 				return fmt.Errorf("file not found in memory: %s", path)
 			}
+
 			if !state.isDir {
 				filesToWrite = append(filesToWrite, path)
 			}
@@ -983,7 +1045,8 @@ func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 	for _, path := range filesToWrite {
 		// Ensure parent directory exists
 		parentDir := filepath.Dir(path)
-		if err := bs.base.EnsureDirectory(ctx, parentDir); err != nil {
+		err := bs.base.EnsureDirectory(ctx, parentDir)
+		if err != nil {
 			return fmt.Errorf("failed to create parent directory: %w", err)
 		}
 
@@ -992,15 +1055,21 @@ func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 		if !exists {
 			return fmt.Errorf("change record missing for path: %s", path)
 		}
-		if err := bs.base.WriteFile(ctx, path, chg.content, chg.perm); err != nil {
+		err = bs.base.WriteFile(ctx, path, chg.content, chg.perm)
+
+		if err != nil {
 			return fmt.Errorf("failed to write file: %w", err)
 		}
+
 		delete(bs.changed, path)
 	}
 
 	// Step 3 & 4: Handle removals in reverse order (deepest paths first)
-	var filesToRemove []string
-	var dirsToRemove []string
+	var (
+		filesToRemove []string
+		dirsToRemove  []string
+	)
+
 	for path, chg := range bs.changed {
 		if _, exists := bs.changed[path]; exists && chg.removed {
 			if chg.wasDir {
@@ -1021,18 +1090,22 @@ func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 
 	// First remove files
 	for _, path := range filesToRemove {
-		if err := bs.base.Remove(ctx, path); err != nil {
+		err := bs.base.Remove(ctx, path)
+		if err != nil {
 			return fmt.Errorf("failed to remove file: %w", err)
 		}
+
 		delete(bs.files, path)
 		delete(bs.changed, path)
 	}
 
 	// Then remove directories
 	for _, path := range dirsToRemove {
-		if err := bs.base.RemoveAll(ctx, path); err != nil {
+		err := bs.base.RemoveAll(ctx, path)
+		if err != nil {
 			return fmt.Errorf("failed to remove directory: %w", err)
 		}
+
 		delete(bs.files, path)
 		delete(bs.changed, path)
 	}
@@ -1052,7 +1125,8 @@ func (bs *BufferedService) EnsureDirectory(ctx context.Context, path string) err
 	// Check permissions for the parent directory
 	if bs.verifyPermissions {
 		parentDir := filepath.Dir(path)
-		if err := bs.checkDirectoryWritePermission(parentDir); err != nil {
+		err := bs.checkDirectoryWritePermission(parentDir)
+		if err != nil {
 			return fmt.Errorf("permission check failed: %w", err)
 		}
 	}
@@ -1062,6 +1136,7 @@ func (bs *BufferedService) EnsureDirectory(ctx context.Context, path string) err
 		if !state.isDir {
 			return fmt.Errorf("%s exists and is not a directory", path)
 		}
+
 		return nil
 	}
 
@@ -1077,6 +1152,7 @@ func (bs *BufferedService) EnsureDirectory(ctx context.Context, path string) err
 		removed: false,
 		perm:    os.ModeDir | 0755,
 	}
+
 	return nil
 }
 
@@ -1099,6 +1175,7 @@ func (bs *BufferedService) ReadFile(ctx context.Context, path string) ([]byte, e
 	if st.content == nil {
 		return []byte{}, nil
 	}
+
 	return st.content, nil
 }
 
@@ -1117,7 +1194,8 @@ func (bs *BufferedService) WriteFile(ctx context.Context, path string, data []by
 		} else {
 			// If file doesn't exist, check parent directory permissions
 			parentDir := filepath.Dir(path)
-			if err := bs.checkDirectoryWritePermission(parentDir); err != nil {
+			err := bs.checkDirectoryWritePermission(parentDir)
+			if err != nil {
 				return fmt.Errorf("permission check failed: %w", err)
 			}
 		}
@@ -1149,10 +1227,11 @@ func (bs *BufferedService) WriteFile(ctx context.Context, path string, data []by
 		perm:    perm,
 		removed: false,
 	}
+
 	return nil
 }
 
-// PathExists checks if a path (file or directory) exists in the in-memory map
+// PathExists checks if a path (file or directory) exists in the in-memory map.
 func (bs *BufferedService) PathExists(ctx context.Context, path string) (bool, error) {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
@@ -1171,7 +1250,7 @@ func (bs *BufferedService) PathExists(ctx context.Context, path string) (bool, e
 }
 
 // FileExists checks the in-memory map only.
-// Deprecated: use PathExists instead
+// Deprecated: use PathExists instead.
 func (bs *BufferedService) FileExists(ctx context.Context, path string) (bool, error) {
 	return bs.PathExists(ctx, path)
 }
@@ -1185,7 +1264,8 @@ func (bs *BufferedService) Remove(ctx context.Context, path string) error {
 	if bs.verifyPermissions {
 		// For removal, need write permission on parent directory
 		parentDir := filepath.Dir(path)
-		if err := bs.checkDirectoryWritePermission(parentDir); err != nil {
+		err := bs.checkDirectoryWritePermission(parentDir)
+		if err != nil {
 			return fmt.Errorf("permission check failed: %w", err)
 		}
 	}
@@ -1193,7 +1273,7 @@ func (bs *BufferedService) Remove(ctx context.Context, path string) error {
 	// If we have a fileState, check if it's a directory
 	if st, ok := bs.files[path]; ok {
 		if st.isDir {
-			return fmt.Errorf("cannot remove: is directory")
+			return errors.New("cannot remove: is directory")
 		}
 		// Delete from files map immediately
 		delete(bs.files, path)
@@ -1202,6 +1282,7 @@ func (bs *BufferedService) Remove(ctx context.Context, path string) error {
 	bs.changed[path] = fileChange{
 		removed: true,
 	}
+
 	return nil
 }
 
@@ -1214,7 +1295,8 @@ func (bs *BufferedService) RemoveAll(ctx context.Context, path string) error {
 	if bs.verifyPermissions {
 		// For removal, need write permission on parent directory
 		parentDir := filepath.Dir(path)
-		if err := bs.checkDirectoryWritePermission(parentDir); err != nil {
+		err := bs.checkDirectoryWritePermission(parentDir)
+		if err != nil {
 			return fmt.Errorf("permission check failed: %w", err)
 		}
 	}
@@ -1232,6 +1314,7 @@ func (bs *BufferedService) RemoveAll(ctx context.Context, path string) error {
 			if !ok {
 				continue
 			}
+
 			bs.changed[key] = fileChange{removed: true, wasDir: state.isDir}
 			// Also mark it as removed in the files map
 			delete(bs.files, key)
@@ -1240,6 +1323,7 @@ func (bs *BufferedService) RemoveAll(ctx context.Context, path string) error {
 
 	// Also mark the target itself for removal even if it wasn't in our files map
 	bs.changed[path] = fileChange{removed: true, wasDir: targetIsDir}
+
 	return nil
 }
 
@@ -1252,6 +1336,7 @@ func (bs *BufferedService) Stat(ctx context.Context, path string) (os.FileInfo, 
 	if !ok {
 		return nil, os.ErrNotExist
 	}
+
 	if st.isDir {
 		// Return a synthetic fileInfo for a directory
 		return &memFileInfo{
@@ -1262,6 +1347,7 @@ func (bs *BufferedService) Stat(ctx context.Context, path string) (os.FileInfo, 
 			dir:   true,
 		}, nil
 	}
+
 	return &memFileInfo{
 		name:  filepathBase(path),
 		size:  st.size,
@@ -1280,7 +1366,8 @@ func (bs *BufferedService) CreateFile(ctx context.Context, path string, perm os.
 	// Check permissions
 	if bs.verifyPermissions {
 		parentDir := filepath.Dir(path)
-		if err := bs.checkDirectoryWritePermission(parentDir); err != nil {
+		err := bs.checkDirectoryWritePermission(parentDir)
+		if err != nil {
 			return nil, fmt.Errorf("permission check failed: %w", err)
 		}
 	}
@@ -1330,7 +1417,7 @@ func (bs *BufferedService) Chmod(ctx context.Context, path string, mode os.FileM
 		if bs.currentUser != nil {
 			uid, _ := strconv.Atoi(bs.currentUser.Uid)
 			if uid != 0 && uid != state.uid {
-				return fmt.Errorf("insufficient permissions to change mode: not owner")
+				return errors.New("insufficient permissions to change mode: not owner")
 			}
 		}
 	}
@@ -1339,6 +1426,7 @@ func (bs *BufferedService) Chmod(ctx context.Context, path string, mode os.FileM
 	if !ok {
 		return os.ErrNotExist
 	}
+
 	st.fileMode = mode
 
 	// If the file wasn't removed, mark changed
@@ -1346,6 +1434,7 @@ func (bs *BufferedService) Chmod(ctx context.Context, path string, mode os.FileM
 	if !inChg {
 		chg = fileChange{}
 	}
+
 	chg.perm = mode
 	bs.changed[path] = chg
 
@@ -1365,6 +1454,7 @@ func (bs *BufferedService) ReadDir(ctx context.Context, path string) ([]os.DirEn
 
 	// Gather immediate children (1 level)
 	var entries []os.DirEntry
+
 	prefix := path
 	if prefix != "" && !strings.HasSuffix(prefix, string(os.PathSeparator)) {
 		prefix += string(os.PathSeparator)
@@ -1396,22 +1486,25 @@ func (bs *BufferedService) ReadDir(ctx context.Context, path string) ([]os.DirEn
 			}
 		}
 	}
+
 	return entries, nil
 }
 
-// ExecuteCommand delegates to the base service
+// ExecuteCommand delegates to the base service.
 func (bs *BufferedService) ExecuteCommand(ctx context.Context, name string, args ...string) ([]byte, error) {
 	return bs.base.ExecuteCommand(ctx, name, args...)
 }
 
-// GetFiles returns a copy of the in-memory files map
+// GetFiles returns a copy of the in-memory files map.
 func (bs *BufferedService) GetFiles() map[string]fileState {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
+
 	files := make(map[string]fileState)
 	for k, v := range bs.files {
 		files[k] = v
 	}
+
 	return files
 }
 
@@ -1423,15 +1516,16 @@ func filepathBase(path string) string {
 	return filepath.Base(path)
 }
 
-// hasPrefix is a small helper to check prefix
+// hasPrefix is a small helper to check prefix.
 func hasPrefix(s, prefix string) bool {
 	if len(s) < len(prefix) {
 		return false
 	}
+
 	return s[:len(prefix)] == prefix
 }
 
-// memFileInfo is a trivial in-memory file info
+// memFileInfo is a trivial in-memory file info.
 type memFileInfo struct {
 	mtime time.Time
 	name  string
@@ -1447,7 +1541,7 @@ func (m *memFileInfo) ModTime() time.Time { return m.mtime }
 func (m *memFileInfo) IsDir() bool        { return m.dir }
 func (m *memFileInfo) Sys() interface{}   { return nil }
 
-// memDirEntry is a trivial in-memory dir entry
+// memDirEntry is a trivial in-memory dir entry.
 type memDirEntry struct {
 	info  os.FileInfo
 	name  string
@@ -1459,7 +1553,7 @@ func (m *memDirEntry) IsDir() bool                { return m.isDir }
 func (m *memDirEntry) Type() os.FileMode          { return m.info.Mode().Type() }
 func (m *memDirEntry) Info() (os.FileInfo, error) { return m.info, nil }
 
-// getFileOwner gets the UID and GID of a file
+// getFileOwner gets the UID and GID of a file.
 func getFileOwner(path string) (uid, gid int) {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -1473,18 +1567,20 @@ func getFileOwner(path string) (uid, gid int) {
 	return -1, -1 // Not available on this platform
 }
 
-// countFiles counts the number of regular files (not directories) in a map of CachedFile
+// countFiles counts the number of regular files (not directories) in a map of CachedFile.
 func countFiles(files map[string]*CachedFile) int {
 	count := 0
+
 	for _, cf := range files {
 		if !cf.IsDir {
 			count++
 		}
 	}
+
 	return count
 }
 
-// getFileInode returns the inode number of a file to detect if the file has been replaced
+// getFileInode returns the inode number of a file to detect if the file has been replaced.
 func getFileInode(path string) uint64 {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -1504,6 +1600,7 @@ func (bs *BufferedService) readFileIncrementally(absPath string, previousSize in
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file for incremental read: %w", err)
 	}
+
 	defer func() {
 		closeErr := file.Close()
 		if closeErr != nil {
@@ -1525,6 +1622,7 @@ func (bs *BufferedService) readFileIncrementally(absPath string, previousSize in
 
 	// Read the new content
 	newContent := make([]byte, fileInfo.Size()-previousSize)
+
 	_, err = file.Read(newContent)
 	if err != nil && !errors.Is(err, io.EOF) {
 		return nil, fmt.Errorf("failed to read new content: %w", err)
@@ -1541,12 +1639,12 @@ func (bs *BufferedService) ReadFileRange(ctx context.Context, path string, from 
 	panic("not implemented")
 }
 
-// Glob is a wrapper around filepath.Glob that respects the context
+// Glob is a wrapper around filepath.Glob that respects the context.
 func (bs *BufferedService) Glob(ctx context.Context, pattern string) ([]string, error) {
 	panic("not implemented")
 }
 
-// Rename renames (moves) a file or directory from oldPath to newPath
+// Rename renames (moves) a file or directory from oldPath to newPath.
 func (bs *BufferedService) Rename(ctx context.Context, oldPath, newPath string) error {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
@@ -1587,6 +1685,7 @@ func (bs *BufferedService) Rename(ctx context.Context, oldPath, newPath string) 
 		if !strings.HasSuffix(oldPrefix, string(os.PathSeparator)) {
 			oldPrefix += string(os.PathSeparator)
 		}
+
 		newPrefix := newPath
 		if !strings.HasSuffix(newPrefix, string(os.PathSeparator)) {
 			newPrefix += string(os.PathSeparator)
@@ -1611,7 +1710,7 @@ func (bs *BufferedService) Rename(ctx context.Context, oldPath, newPath string) 
 	return nil
 }
 
-// Symlink creates a symbolic link by delegating to the base service
+// Symlink creates a symbolic link by delegating to the base service.
 func (bs *BufferedService) Symlink(ctx context.Context, target, linkPath string) error {
 	return bs.base.Symlink(ctx, target, linkPath)
 }

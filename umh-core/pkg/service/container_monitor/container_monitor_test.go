@@ -65,12 +65,14 @@ var _ = Describe("Container Monitor Service", func() {
 					if path == hwidPath {
 						return true, nil
 					}
+
 					return false, nil
 				})
 				mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
 					if path == hwidPath {
 						return []byte("test-hwid-123"), nil
 					}
+
 					return nil, errors.New("file not found")
 				})
 
@@ -123,18 +125,21 @@ var _ = Describe("Container Monitor Service", func() {
 					if path == hwidPath {
 						return false, nil
 					}
+
 					return false, nil
 				})
 				mockFS.WithEnsureDirectoryFunc(func(_ context.Context, path string) error {
 					if path == testDataPath {
 						return nil
 					}
+
 					return errors.New("failed to ensure directory")
 				})
 				mockFS.WithWriteFileFunc(func(_ context.Context, path string, data []byte, perm os.FileMode) error {
 					if path == hwidPath {
 						return nil
 					}
+
 					return errors.New("failed to write file")
 				})
 
@@ -152,6 +157,7 @@ var _ = Describe("Container Monitor Service", func() {
 					if path == constants.HWIDFilePath {
 						return false, nil
 					}
+
 					return false, nil
 				})
 
@@ -177,6 +183,7 @@ var _ = Describe("Container Monitor Service", func() {
 					if path == hwidPath {
 						return true, nil
 					}
+
 					return false, nil
 				})
 
@@ -184,6 +191,7 @@ var _ = Describe("Container Monitor Service", func() {
 					if path == hwidPath {
 						return nil, errors.New("read error")
 					}
+
 					return nil, errors.New("file not found")
 				})
 			})
@@ -204,6 +212,7 @@ var _ = Describe("Container Monitor Service", func() {
 					if path == constants.HWIDFilePath {
 						return true, nil
 					}
+
 					return false, nil
 				})
 
@@ -211,6 +220,7 @@ var _ = Describe("Container Monitor Service", func() {
 					if path == constants.HWIDFilePath {
 						return []byte(defaultHWID), nil
 					}
+
 					return nil, errors.New("file not found")
 				})
 			})
@@ -223,6 +233,7 @@ var _ = Describe("Container Monitor Service", func() {
 					Expect(err).ToNot(HaveOccurred())
 					Expect(status).ToNot(BeNil())
 					GinkgoWriter.Printf("GetStatus: %+v\n", status)
+
 					return status.OverallHealth
 				}).Should(Or(
 					Equal(models.Active),

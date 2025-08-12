@@ -29,23 +29,22 @@ import (
 type ComponentType string
 
 const (
-	// ComponentTypeProtocolConverter represents a protocol converter component
+	// ComponentTypeProtocolConverter represents a protocol converter component.
 	ComponentTypeProtocolConverter ComponentType = "protocol-converter"
-	// ComponentTypeStreamProcessor represents a stream processor component
+	// ComponentTypeStreamProcessor represents a stream processor component.
 	ComponentTypeStreamProcessor ComponentType = "stream-processor"
 )
 
-// String returns the string representation of the ComponentType
+// String returns the string representation of the ComponentType.
 func (ct ComponentType) String() string {
 	return string(ct)
 }
 
-// At the top of the file, alongside your imports:
+// At the top of the file, alongside your imports:.
 var (
-    reNonAlnum  = regexp.MustCompile(`[^a-zA-Z0-9]`)
-    reMultiDash = regexp.MustCompile(`-{2,}`)
+	reNonAlnum  = regexp.MustCompile(`[^a-zA-Z0-9]`)
+	reMultiDash = regexp.MustCompile(`-{2,}`)
 )
-
 
 // GenerateBridgedBy creates a sanitized bridged_by header for UMH components.
 // It takes a component type, node name, and component name and returns a properly

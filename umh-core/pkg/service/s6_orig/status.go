@@ -29,7 +29,7 @@ import (
 
 // buildFullServiceInfo converts S6StatusData into a complete ServiceInfo
 // This adds the high-level business logic (down files, exit history, etc.)
-// that's needed for the full Status() method but not for cleanup detection
+// that's needed for the full Status() method but not for cleanup detection.
 func (s *DefaultService) buildFullServiceInfo(ctx context.Context, servicePath string, statusData *s6_shared.S6StatusData, fsService filesystem.Service) (s6_shared.ServiceInfo, error) {
 	// Start with basic info from the binary status data
 	info := s6_shared.ServiceInfo{
@@ -47,6 +47,7 @@ func (s *DefaultService) buildFullServiceInfo(ctx context.Context, servicePath s
 
 	// --- Determine service status and calculate time fields ---
 	now := time.Now().UTC()
+
 	if statusData.Pid != 0 && !statusData.IsFinishing {
 		info.Status = s6_shared.ServiceUp
 		// uptime is measured from the stamp timestamp
@@ -64,6 +65,7 @@ func (s *DefaultService) buildFullServiceInfo(ctx context.Context, servicePath s
 		} else {
 			info.ExitCode = int(statusData.Wstat)
 		}
+
 		info.DownTime = int64(now.Sub(statusData.StampTime).Seconds())
 		info.ReadyTime = int64(now.Sub(statusData.ReadyTime).Seconds())
 	}
@@ -77,6 +79,7 @@ func (s *DefaultService) buildFullServiceInfo(ctx context.Context, servicePath s
 
 	// Add exit history from the supervise directory
 	superviseDir := filepath.Join(servicePath, "supervise")
+
 	history, histErr := s.ExitHistory(ctx, superviseDir, fsService)
 	if histErr == nil {
 		info.ExitHistory = history
@@ -106,6 +109,7 @@ func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, f
 	if err != nil {
 		return nil, err
 	}
+
 	if !exists {
 		// If the dtally file does not exist, no exit history is available.
 		return nil, nil
@@ -116,6 +120,7 @@ func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, f
 	if err != nil {
 		return nil, fmt.Errorf("failed to read dtally file: %w", err)
 	}
+
 	if data == nil { // Empty history file
 		return nil, nil
 	}
@@ -130,10 +135,11 @@ func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, f
 
 	// Calculate the number of records.
 	numRecords := len(data) / s6_shared.S6_DTALLY_PACK
+
 	var history []s6_shared.ExitEvent
 
 	// Process each dtally record.
-	for i := 0; i < numRecords; i++ {
+	for i := range numRecords {
 		offset := i * s6_shared.S6_DTALLY_PACK
 		record := data[offset : offset+s6_shared.S6_DTALLY_PACK]
 
@@ -141,6 +147,7 @@ func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, f
 		// The timestamp is encoded as 12 bytes, which we first convert to a hex string,
 		// then prepend "@" (as required by the tai64.Parse function) and parse.
 		tai64Str := "@" + hex.EncodeToString(record[:12])
+
 		parsedTime, err := tai64.Parse(tai64Str)
 		if err != nil {
 			// If parsing fails, skip this record.

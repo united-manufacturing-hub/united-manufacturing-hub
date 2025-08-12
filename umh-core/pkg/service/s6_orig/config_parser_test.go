@@ -83,7 +83,7 @@ export SINGLE_QUOTED 'single quoted'`,
 		DescribeTable("splitting command line respecting quotes",
 			func(cmdLine string, expected []string) {
 				result, err := parseCommandLine(cmdLine)
-				Expect(err).To(BeNil(), "Command line parsing should not return an error")
+				Expect(err).ToNot(HaveOccurred(), "Command line parsing should not return an error")
 				Expect(result).To(Equal(expected), "Command line parsing incorrect")
 			},
 			Entry("Simple command",

@@ -17,8 +17,8 @@ package protocolconverter
 import "errors"
 
 var (
-	// ErrServiceNotExist indicates the requested service does not exist
+	// ErrServiceNotExist indicates the requested service does not exist.
 	ErrServiceNotExist = errors.New("protocol converter service does not exist")
-	// ErrServiceAlreadyExists indicates the service already exists
+	// ErrServiceAlreadyExists indicates the service already exists.
 	ErrServiceAlreadyExists = errors.New("protocol converter service already exists")
 )

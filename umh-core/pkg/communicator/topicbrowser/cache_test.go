@@ -60,13 +60,13 @@ var _ = Describe("Cache", func() {
 			// Verify first update
 			eventMap := cache.GetEventMap()
 			Expect(eventMap).To(HaveLen(2))
-			Expect(eventMap["topic1"].ProducedAtMs).To(Equal(uint64(1000)))
-			Expect(eventMap["topic2"].ProducedAtMs).To(Equal(uint64(1100)))
+			Expect(eventMap["topic1"].GetProducedAtMs()).To(Equal(uint64(1000)))
+			Expect(eventMap["topic2"].GetProducedAtMs()).To(Equal(uint64(1100)))
 
 			unsMap := cache.GetUnsMap()
-			Expect(unsMap.Entries).To(HaveLen(2))
-			for _, entry := range unsMap.Entries {
-				Expect(entry.Name).To(Or(Equal("uns.topic1"), Equal("uns.topic2")))
+			Expect(unsMap.GetEntries()).To(HaveLen(2))
+			for _, entry := range unsMap.GetEntries() {
+				Expect(entry.GetName()).To(Or(Equal("uns.topic1"), Equal("uns.topic2")))
 			}
 
 			// Create second UnsBundle with updated and new data
@@ -90,12 +90,12 @@ var _ = Describe("Cache", func() {
 			// Verify graceful upsert
 			eventMap = cache.GetEventMap()
 			Expect(eventMap).To(HaveLen(3))
-			Expect(eventMap["topic1"].ProducedAtMs).To(Equal(uint64(2000))) // Updated
-			Expect(eventMap["topic2"].ProducedAtMs).To(Equal(uint64(1100))) // Unchanged
-			Expect(eventMap["topic3"].ProducedAtMs).To(Equal(uint64(1500))) // New
+			Expect(eventMap["topic1"].GetProducedAtMs()).To(Equal(uint64(2000))) // Updated
+			Expect(eventMap["topic2"].GetProducedAtMs()).To(Equal(uint64(1100))) // Unchanged
+			Expect(eventMap["topic3"].GetProducedAtMs()).To(Equal(uint64(1500))) // New
 
 			unsMap = cache.GetUnsMap()
-			Expect(unsMap.Entries).To(HaveLen(3))
+			Expect(unsMap.GetEntries()).To(HaveLen(3))
 		})
 
 		It("should only use new bundles for cache update", func() {
@@ -118,7 +118,7 @@ var _ = Describe("Cache", func() {
 
 			// Verify initial state
 			eventMap := cache.GetEventMap()
-			Expect(eventMap["topic1"].ProducedAtMs).To(Equal(uint64(1000)))
+			Expect(eventMap["topic1"].GetProducedAtMs()).To(Equal(uint64(1000)))
 
 			// Create a modified version of the old bundle (simulating modification after processing)
 			modifiedOldBundle := createMockUnsBundle(map[string]int64{
@@ -147,8 +147,8 @@ var _ = Describe("Cache", func() {
 			// Verify that only new bundle was processed
 			eventMap = cache.GetEventMap()
 			Expect(eventMap).To(HaveLen(2))
-			Expect(eventMap["topic1"].ProducedAtMs).To(Equal(uint64(1000))) // Unchanged from original
-			Expect(eventMap["topic2"].ProducedAtMs).To(Equal(uint64(2000))) // New topic added
+			Expect(eventMap["topic1"].GetProducedAtMs()).To(Equal(uint64(1000))) // Unchanged from original
+			Expect(eventMap["topic2"].GetProducedAtMs()).To(Equal(uint64(2000))) // New topic added
 
 			// Verify timestamp was updated correctly
 			Expect(cache.GetLastCachedTimestamp()).To(Equal(time.UnixMilli(2000)))
@@ -181,21 +181,21 @@ var _ = Describe("Cache", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// Verify events are correctly encoded
-			Expect(decodedBundle.Events.Entries).To(HaveLen(2))
+			Expect(decodedBundle.GetEvents().GetEntries()).To(HaveLen(2))
 
 			// Create a map for easier verification
 			eventsByTreeId := make(map[string]*tbproto.EventTableEntry)
-			for _, entry := range decodedBundle.Events.Entries {
-				eventsByTreeId[entry.UnsTreeId] = entry
+			for _, entry := range decodedBundle.GetEvents().GetEntries() {
+				eventsByTreeId[entry.GetUnsTreeId()] = entry
 			}
 
-			Expect(eventsByTreeId["topic1"].ProducedAtMs).To(Equal(uint64(1000)))
-			Expect(eventsByTreeId["topic2"].ProducedAtMs).To(Equal(uint64(1100)))
+			Expect(eventsByTreeId["topic1"].GetProducedAtMs()).To(Equal(uint64(1000)))
+			Expect(eventsByTreeId["topic2"].GetProducedAtMs()).To(Equal(uint64(1100)))
 
 			// Verify UnsMap is correctly encoded
-			Expect(decodedBundle.UnsMap.Entries).To(HaveLen(2))
-			for _, entry := range decodedBundle.UnsMap.Entries {
-				Expect(entry.Name).To(Or(Equal("uns.topic1"), Equal("uns.topic2")))
+			Expect(decodedBundle.GetUnsMap().GetEntries()).To(HaveLen(2))
+			for _, entry := range decodedBundle.GetUnsMap().GetEntries() {
+				Expect(entry.GetName()).To(Or(Equal("uns.topic1"), Equal("uns.topic2")))
 			}
 		})
 
@@ -255,14 +255,14 @@ var _ = Describe("Cache", func() {
 			// Verify final state
 			eventMap := cache.GetEventMap()
 			Expect(eventMap).To(HaveLen(5))
-			Expect(eventMap["topic1"].ProducedAtMs).To(Equal(uint64(2000))) // Updated to latest
-			Expect(eventMap["topic2"].ProducedAtMs).To(Equal(uint64(1500))) // Updated in second batch
-			Expect(eventMap["topic3"].ProducedAtMs).To(Equal(uint64(1200))) // Original value
-			Expect(eventMap["topic4"].ProducedAtMs).To(Equal(uint64(1300))) // Added in second batch
-			Expect(eventMap["topic5"].ProducedAtMs).To(Equal(uint64(1800))) // Added in third batch
+			Expect(eventMap["topic1"].GetProducedAtMs()).To(Equal(uint64(2000))) // Updated to latest
+			Expect(eventMap["topic2"].GetProducedAtMs()).To(Equal(uint64(1500))) // Updated in second batch
+			Expect(eventMap["topic3"].GetProducedAtMs()).To(Equal(uint64(1200))) // Original value
+			Expect(eventMap["topic4"].GetProducedAtMs()).To(Equal(uint64(1300))) // Added in second batch
+			Expect(eventMap["topic5"].GetProducedAtMs()).To(Equal(uint64(1800))) // Added in third batch
 
 			unsMap := cache.GetUnsMap()
-			Expect(unsMap.Entries).To(HaveLen(5))
+			Expect(unsMap.GetEntries()).To(HaveLen(5))
 
 			// Verify cache timestamp tracking
 			Expect(cache.GetLastCachedTimestamp()).To(Equal(time.UnixMilli(2000)))
@@ -284,7 +284,7 @@ var _ = Describe("Cache", func() {
 			Expect(eventMap).To(HaveLen(0))
 
 			unsMap := cache.GetUnsMap()
-			Expect(unsMap.Entries).To(HaveLen(0))
+			Expect(unsMap.GetEntries()).To(HaveLen(0))
 
 			// But timestamp should be updated to latest processed timestamp
 			Expect(cache.GetLastCachedTimestamp()).To(Equal(time.UnixMilli(1100)))
@@ -295,7 +295,7 @@ var _ = Describe("Cache", func() {
 
 // Helper functions for creating mock data
 
-// Global sequence counter for test mock buffers
+// Global sequence counter for test mock buffers.
 var mockSequenceCounter uint64
 
 func createMockUnsBundle(events map[string]int64, unsTopics map[string]string) []byte {
@@ -328,17 +328,20 @@ func createMockUnsBundle(events map[string]int64, unsTopics map[string]string) [
 	}
 
 	encoded, _ := proto.Marshal(bundle)
+
 	return encoded
 }
 
 func createMockObservedStateSnapshot(buffers []*topicbrowserservice.BufferItem) *topicbrowserfsm.ObservedStateSnapshot {
 	// Assign sequence numbers to buffers that don't have them
 	var maxSeq uint64
+
 	for _, buf := range buffers {
 		if buf.SequenceNum == 0 {
 			mockSequenceCounter++
 			buf.SequenceNum = mockSequenceCounter
 		}
+
 		if buf.SequenceNum > maxSeq {
 			maxSeq = buf.SequenceNum
 		}

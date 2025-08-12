@@ -16,6 +16,7 @@ package protocolconverter
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -31,12 +32,12 @@ const (
 	baseProtocolConverterDir = constants.S6BaseDir
 )
 
-// ProtocolConverterManager implements the FSM management for ProtocolConverter services
+// ProtocolConverterManager implements the FSM management for ProtocolConverter services.
 type ProtocolConverterManager struct {
 	*public_fsm.BaseFSMManager[config.ProtocolConverterConfig]
 }
 
-// ProtocolConverterSnapshot extends the base ManagerSnapshot with ProtocolConverter specific information
+// ProtocolConverterSnapshot extends the base ManagerSnapshot with ProtocolConverter specific information.
 type ProtocolConverterSnapshot struct {
 	// Embed BaseManagerSnapshot to include its methods using composition
 	*public_fsm.BaseManagerSnapshot
@@ -68,29 +69,35 @@ func NewProtocolConverterManager(name string) *ProtocolConverterManager {
 		func(instance public_fsm.FSMInstance, cfg config.ProtocolConverterConfig) (bool, error) {
 			protocolConverterInstance, ok := instance.(*ProtocolConverterInstance)
 			if !ok {
-				return false, fmt.Errorf("instance is not a ProtocolConverterInstance")
+				return false, errors.New("instance is not a ProtocolConverterInstance")
 			}
+
 			return protocolConverterInstance.specConfig.Equal(cfg.ProtocolConverterServiceConfig), nil
 		},
 		// Set ProtocolConverter config
 		func(instance public_fsm.FSMInstance, cfg config.ProtocolConverterConfig) error {
 			protocolConverterInstance, ok := instance.(*ProtocolConverterInstance)
 			if !ok {
-				return fmt.Errorf("instance is not a ProtocolConverterInstance")
+				return errors.New("instance is not a ProtocolConverterInstance")
 			}
+
 			protocolConverterInstance.specConfig = cfg.ProtocolConverterServiceConfig
+
 			return nil
 		},
 		// Get expected max p95 execution time per instance
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
 			protocolConverterInstance, ok := instance.(*ProtocolConverterInstance)
 			if !ok {
-				return 0, fmt.Errorf("instance is not a ProtocolConverterInstance")
+				return 0, errors.New("instance is not a ProtocolConverterInstance")
 			}
+
 			return protocolConverterInstance.GetMinimumRequiredTime(), nil
 		},
 	)
+
 	metrics.InitErrorCounter(metrics.ComponentProtocolConverterManager, name)
+
 	return &ProtocolConverterManager{
 		BaseFSMManager: baseManager,
 	}
@@ -101,14 +108,16 @@ func NewProtocolConverterManager(name string) *ProtocolConverterManager {
 // enabling the method to read configuration or state information from the filesystem.
 func (m *ProtocolConverterManager) Reconcile(ctx context.Context, snapshot public_fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool) {
 	start := time.Now()
+
 	defer func() {
 		duration := time.Since(start)
 		metrics.ObserveReconcileTime(logger.ComponentProtocolConverterManager, m.GetManagerName(), duration)
 	}()
+
 	return m.BaseFSMManager.Reconcile(ctx, snapshot, services)
 }
 
-// CreateSnapshot overrides the base CreateSnapshot to include ProtocolConverterManager-specific information
+// CreateSnapshot overrides the base CreateSnapshot to include ProtocolConverterManager-specific information.
 func (m *ProtocolConverterManager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	// Get base snapshot from parent
 	baseSnapshot := m.BaseFSMManager.CreateSnapshot()
@@ -118,6 +127,7 @@ func (m *ProtocolConverterManager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	if !ok {
 		logger.For(logger.ComponentProtocolConverterManager).Errorf(
 			"Failed to convert base snapshot to BaseManagerSnapshot, using generic snapshot")
+
 		return baseSnapshot
 	}
 
@@ -125,10 +135,11 @@ func (m *ProtocolConverterManager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	snap := &ProtocolConverterSnapshot{
 		BaseManagerSnapshot: baseManagerSnapshot,
 	}
+
 	return snap
 }
 
-// IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface
+// IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface.
 func (s *ProtocolConverterSnapshot) IsObservedStateSnapshot() {
 	// Marker method implementation
 }

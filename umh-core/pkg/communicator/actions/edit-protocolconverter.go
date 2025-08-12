@@ -53,24 +53,24 @@ import (
 	"go.uber.org/zap"
 )
 
-// DFCType represents the type of dataflow component configuration
+// DFCType represents the type of dataflow component configuration.
 type DFCType string
 
 const (
-	// DFCTypeRead represents a read dataflow component
+	// DFCTypeRead represents a read dataflow component.
 	DFCTypeRead DFCType = "read"
-	// DFCTypeWrite represents a write dataflow component
+	// DFCTypeWrite represents a write dataflow component.
 	DFCTypeWrite DFCType = "write"
-	// DFCTypeEmpty represents no dataflow component (connection/location update only)
+	// DFCTypeEmpty represents no dataflow component (connection/location update only).
 	DFCTypeEmpty DFCType = "empty"
 )
 
-// String returns the string representation of the DFCType
+// String returns the string representation of the DFCType.
 func (d DFCType) String() string {
 	return string(d)
 }
 
-// IsValid checks if the DFCType has a valid value
+// IsValid checks if the DFCType has a valid value.
 func (d DFCType) IsValid() bool {
 	switch d {
 	case DFCTypeRead, DFCTypeWrite, DFCTypeEmpty:
@@ -135,18 +135,20 @@ func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
 	// Parse the payload directly as a complete ProtocolConverter object
 	pcPayload, err := ParseActionPayload[models.ProtocolConverter](payload)
 	if err != nil {
-		return fmt.Errorf("failed to parse protocol converter payload: %v", err)
+		return fmt.Errorf("failed to parse protocol converter payload: %w", err)
 	}
 
 	// Extract UUID
 	if pcPayload.UUID == nil {
 		return errors.New("missing required field UUID")
 	}
+
 	a.protocolConverterUUID = *pcPayload.UUID
 	a.name = pcPayload.Name
 
 	// Determine which DFC is being updated and convert it to CDFCPayload
 	var dfcToUpdate *models.ProtocolConverterDFC
+
 	if pcPayload.ReadDFC != nil {
 		a.dfcType = DFCTypeRead
 		dfcToUpdate = pcPayload.ReadDFC
@@ -190,6 +192,7 @@ func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
 
 	a.actionLogger.Debugf("Parsed EditProtocolConverter action payload: uuid=%s, name=%s, dfcType=%s",
 		a.protocolConverterUUID, a.name, a.dfcType)
+
 	return nil
 }
 
@@ -200,13 +203,15 @@ func (a *EditProtocolConverterAction) Validate() error {
 		return errors.New("missing or invalid protocol converter UUID")
 	}
 
-	if err := ValidateComponentName(a.name); err != nil {
+	err := ValidateComponentName(a.name)
+	if err != nil {
 		return err
 	}
 
 	if a.dfcType != DFCTypeEmpty {
-		if err := ValidateCustomDataFlowComponentPayload(a.dfcPayload, false); err != nil {
-			return fmt.Errorf("invalid dataflow component configuration: %v", err)
+		err := ValidateCustomDataFlowComponentPayload(a.dfcPayload, false)
+		if err != nil {
+			return fmt.Errorf("invalid dataflow component configuration: %w", err)
 		}
 	}
 
@@ -225,13 +230,17 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	} else {
 		confirmationMessage = fmt.Sprintf("Starting edit of protocol converter %s to add %s DFC", a.protocolConverterUUID, a.dfcType.String())
 	}
+
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed,
 		confirmationMessage, a.outboundChannel, models.EditProtocolConverter)
 
-	var benthosConfig dataflowcomponentserviceconfig.BenthosConfig
-	var err error
+	var (
+		benthosConfig dataflowcomponentserviceconfig.BenthosConfig
+		err           error
+	)
 
 	// Only create Benthos config if we have a DFC to configure
+
 	if a.dfcType != DFCTypeEmpty {
 		// Convert the DFC payload to BenthosConfig
 		benthosConfig, err = CreateBenthosConfigFromCDFCPayload(a.dfcPayload, a.name)
@@ -239,6 +248,7 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 			errorMsg := fmt.Sprintf("Failed to create Benthos configuration: %v", err)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 				errorMsg, a.outboundChannel, models.EditProtocolConverter)
+
 			return nil, nil, fmt.Errorf("%s", errorMsg)
 		}
 
@@ -257,6 +267,7 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 		errorMsg := fmt.Sprintf("Failed to apply configuration mutation: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.EditProtocolConverter)
+
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
@@ -269,6 +280,7 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 		errorMsg := fmt.Sprintf("Failed to persist configuration changes: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.EditProtocolConverter)
+
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
@@ -279,6 +291,7 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 			errorMsg := fmt.Sprintf("Failed during rollout: %v", err)
 			SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 				errorMsg, errCode, nil, a.outboundChannel, models.EditProtocolConverter, nil)
+
 			return nil, nil, fmt.Errorf("%s", errorMsg)
 		}
 
@@ -310,12 +323,15 @@ func (a *EditProtocolConverterAction) applyMutation(benthosConfig dataflowcompon
 
 	// Find the protocol converter in the configuration
 	var targetPC config.ProtocolConverterConfig
+
 	found := false
+
 	for _, pc := range currentConfig.ProtocolConverter {
 		pcID := dataflowcomponentserviceconfig.GenerateUUIDFromName(pc.Name)
 		if pcID == a.protocolConverterUUID {
 			targetPC = pc
 			found = true
+
 			break
 		}
 	}
@@ -333,19 +349,24 @@ func (a *EditProtocolConverterAction) applyMutation(benthosConfig dataflowcompon
 		targetPC.ProtocolConverterServiceConfig.TemplateRef != targetPC.Name
 
 	// Determine which instance to modify and which UUID to use for atomic operation
-	var instanceToModify config.ProtocolConverterConfig
-	var atomicEditUUID uuid.UUID
-	var newVB map[string]any
+	var (
+		instanceToModify config.ProtocolConverterConfig
+		atomicEditUUID   uuid.UUID
+		newVB            map[string]any
+	)
 
 	if isChild {
 		// Find the root instance
 		var rootPC config.ProtocolConverterConfig
+
 		rootFound := false
+
 		for _, pc := range currentConfig.ProtocolConverter {
 			if pc.Name == targetPC.ProtocolConverterServiceConfig.TemplateRef &&
 				pc.ProtocolConverterServiceConfig.TemplateRef == pc.Name {
 				rootPC = pc
 				rootFound = true
+
 				break
 			}
 		}
@@ -364,6 +385,7 @@ func (a *EditProtocolConverterAction) applyMutation(benthosConfig dataflowcompon
 		for _, variable := range a.vb {
 			newVB[variable.Label] = variable.Value
 		}
+
 		maps.Copy(newVB, targetPC.ProtocolConverterServiceConfig.Variables.User)
 	} else {
 		// Root or stand-alone: apply mutations directly
@@ -375,6 +397,7 @@ func (a *EditProtocolConverterAction) applyMutation(benthosConfig dataflowcompon
 		for _, variable := range a.vb {
 			newVB[variable.Label] = variable.Value
 		}
+
 		maps.Copy(newVB, targetPC.ProtocolConverterServiceConfig.Variables.User)
 	}
 
@@ -408,6 +431,7 @@ func (a *EditProtocolConverterAction) applyMutation(benthosConfig dataflowcompon
 	for k, v := range a.location {
 		locationMap[strconv.Itoa(k)] = v
 	}
+
 	instanceToModify.ProtocolConverterServiceConfig.Location = locationMap
 
 	// Update the connection details of the protocol converter (IP and PORT variables)
@@ -480,12 +504,15 @@ func (a *EditProtocolConverterAction) awaitRollout(oldConfig config.ProtocolConv
 func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig config.ProtocolConverterConfig) (string, error) {
 	ticker := time.NewTicker(constants.ActionTickerTime)
 	defer ticker.Stop()
+
 	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
 	startTime := time.Now()
 	timeoutDuration := constants.DataflowComponentWaitForActiveTimeout
 
-	var logs []s6_shared.LogEntry
-	var lastLogs []s6_shared.LogEntry
+	var (
+		logs     []s6_shared.LogEntry
+		lastLogs []s6_shared.LogEntry
+	)
 
 	for {
 		elapsed := time.Since(startTime)
@@ -494,17 +521,19 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 
 		select {
 		case <-timeout:
-
 			// rollback to previous configuration
 			ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 			defer cancel()
+
 			_, err := a.configManager.AtomicEditProtocolConverter(ctx, a.atomicEditUUID, oldConfig)
 			if err != nil {
 				a.actionLogger.Errorf("Failed to rollback to previous configuration: %v", err)
 				stateMessage := fmt.Sprintf("Protocol converter '%s' edit timeout reached. It did not become active in time. Rolling back to previous configuration failed: %v", a.name, err)
+
 				return models.ErrRetryRollbackTimeout, fmt.Errorf("%s", stateMessage)
 			} else {
 				stateMessage := fmt.Sprintf("Protocol converter '%s' edit timeout reached. It did not become active in time. Rolled back to previous configuration", a.name)
+
 				return models.ErrRetryRollbackTimeout, fmt.Errorf("%s", stateMessage)
 			}
 
@@ -514,6 +543,7 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 			if protocolConverterManager, exists := systemSnapshot.Managers[constants.ProtocolConverterManagerName]; exists {
 				instances := protocolConverterManager.GetInstances()
 				found := false
+
 				for _, instance := range instances {
 					curName := instance.ID
 					if curName != a.name {
@@ -526,12 +556,13 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 						stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for state info of protocol converter instance"
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 							stateMessage, a.outboundChannel, models.EditProtocolConverter)
+
 						continue
 					}
 
 					found = true
 
-					currentStateReason := fmt.Sprintf("current state: %s", instance.CurrentState)
+					currentStateReason := "current state: " + instance.CurrentState
 
 					if a.dfcType != DFCTypeEmpty {
 						// Verify that the protocol converter has applied the desired DFC configuration.
@@ -541,6 +572,7 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 							stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("%s DFC config not yet applied. State: %s, Status reason: %s", a.dfcType.String(), instance.CurrentState, pcSnapshot.ServiceInfo.StatusReason)
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 								stateMessage, a.outboundChannel, models.EditProtocolConverter)
+
 							continue
 						}
 
@@ -549,6 +581,7 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 							stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("protocol converter successfully activated with state '%s', %s DFC configuration verified", instance.CurrentState, a.dfcType.String())
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage,
 								a.outboundChannel, models.EditProtocolConverter)
+
 							return "", nil
 						}
 
@@ -571,19 +604,24 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 						// as these errors require configuration changes to resolve.
 						if CheckBenthosLogLinesForConfigErrors(logs) {
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("edit", a.name)+"configuration error detected. Rolling back...", a.outboundChannel, models.EditProtocolConverter)
+
 							ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 							defer cancel()
+
 							a.actionLogger.Infof("rolling back to previous configuration with user variables: %v", oldConfig.ProtocolConverterServiceConfig.Variables.User)
+
 							_, err := a.configManager.AtomicEditProtocolConverter(ctx, a.atomicEditUUID, oldConfig)
 							if err != nil {
 								a.actionLogger.Errorf("failed to roll back protocol converter %s: %v", a.name, err)
-								return models.ErrConfigFileInvalid, fmt.Errorf("protocol converter '%s' has invalid configuration but could not be rolled back: %v. Please check your logs and consider manually restoring the previous configuration", a.name, err)
+
+								return models.ErrConfigFileInvalid, fmt.Errorf("protocol converter '%s' has invalid configuration but could not be rolled back: %w. Please check your logs and consider manually restoring the previous configuration", a.name, err)
 							}
+
 							return models.ErrConfigFileInvalid, fmt.Errorf("protocol converter '%s' was rolled back to its previous configuration due to configuration errors. Please check the component logs, fix the configuration issues, and try editing again", a.name)
 						}
 					} else {
-						if fmt.Sprintf("%d", pcSnapshot.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ObservedNmapServiceConfig.Port) != a.connectionPort {
-							currentStateReason = fmt.Sprintf("waiting for nmap to connect to port %s", a.connectionPort)
+						if strconv.FormatUint(uint64(pcSnapshot.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ObservedNmapServiceConfig.Port), 10) != a.connectionPort {
+							currentStateReason = "waiting for nmap to connect to port " + a.connectionPort
 						} else {
 							return "", nil
 						}
@@ -599,7 +637,6 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 						stateMessage, a.outboundChannel, models.EditProtocolConverter)
 				}
-
 			} else {
 				stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for protocol converter manager to initialise"
 				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
@@ -648,6 +685,7 @@ func (a *EditProtocolConverterAction) compareProtocolConverterDFCConfig(pcSnapsh
 	renderedDesiredConfig, err := a.renderDesiredDFCConfig(pcSnapshot)
 	if err != nil {
 		a.actionLogger.Errorf("failed to render desired DFC config: %v", err)
+
 		return false
 	}
 
@@ -664,13 +702,14 @@ func (a *EditProtocolConverterAction) compareProtocolConverterDFCConfig(pcSnapsh
 }
 
 // renderDesiredDFCConfig renders the template variables in the desired DFC config
-// using the actual runtime values from the protocol converter observed state
+// using the actual runtime values from the protocol converter observed state.
 func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *protocolconverter.ProtocolConverterObservedStateSnapshot) (dataflowcomponentserviceconfig.DataflowComponentServiceConfig, error) {
 	// Get the observed spec config
 	specConfig := pcSnapshot.ObservedProtocolConverterSpecConfig
 
 	// Create a deep copy to avoid mutating the original observed state
 	var modifiedSpec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+
 	err := deepcopy.Copy(&modifiedSpec, &specConfig)
 	if err != nil {
 		return dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, fmt.Errorf("failed to deep copy spec config: %w", err)
@@ -714,7 +753,7 @@ func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *protoco
 	}
 }
 
-// convertPipelineToMap converts CommonDataFlowComponentPipelineConfig to map[string]DfcDataConfig
+// convertPipelineToMap converts CommonDataFlowComponentPipelineConfig to map[string]DfcDataConfig.
 func convertPipelineToMap(pipeline models.CommonDataFlowComponentPipelineConfig) map[string]models.DfcDataConfig {
 	result := make(map[string]models.DfcDataConfig)
 	for key, processor := range pipeline.Processors {
@@ -723,15 +762,17 @@ func convertPipelineToMap(pipeline models.CommonDataFlowComponentPipelineConfig)
 			Type: processor.Type,
 		}
 	}
+
 	return result
 }
 
 // extractInjectFromRawYAML extracts the inject data from the RawYAML field to support
-// CacheResources, RateLimitResources, and Buffer in protocol converter DFCs
+// CacheResources, RateLimitResources, and Buffer in protocol converter DFCs.
 func extractInjectFromRawYAML(rawYAML *models.CommonDataFlowComponentRawYamlConfig) string {
 	if rawYAML == nil {
 		return ""
 	}
+
 	return rawYAML.Data
 }
 

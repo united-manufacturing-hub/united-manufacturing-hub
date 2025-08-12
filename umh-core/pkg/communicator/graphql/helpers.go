@@ -23,7 +23,7 @@ import (
 )
 
 // StartGraphQLServer is a convenience function for main.go to start the GraphQL server
-// It handles the configuration conversion and server creation
+// It handles the configuration conversion and server creation.
 func StartGraphQLServer(
 	resolver *Resolver,
 	cfg *config.GraphQLConfig,

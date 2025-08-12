@@ -39,7 +39,9 @@ var _ = Describe("Container FSM", func() {
 	)
 
 	BeforeEach(func() {
-		ctx, cancel = context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(context.Background())
+		_ = ctx
+		_ = cancel
 
 		mockSvc = container_monitor.NewMockService()
 		// By default, let's set it up for healthy

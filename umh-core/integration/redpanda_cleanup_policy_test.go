@@ -17,6 +17,7 @@ package integration_test
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -73,6 +74,7 @@ var _ = Describe("Redpanda Cleanup Policy Integration Test", Ordered, Label("int
 			newOffset, err := checkRPK(topicName, lastOffset, lastTimestamp, 0.1, 0.2, messagesPerSecond)
 			lastOffset = newOffset
 			lastTimestamp = time.Now()
+
 			return err == nil && newOffset != -1
 		}, 30*time.Second, 1*time.Second).Should(BeTrue(), "Messages should be produced initially")
 
@@ -93,13 +95,15 @@ var _ = Describe("Redpanda Cleanup Policy Integration Test", Ordered, Label("int
 			GinkgoWriter.Printf("Cleanup policy: %s\n", cleanupPolicyRead)
 			GinkgoWriter.Printf("Segment time: %s\n", segmentTimeRead)
 			GinkgoWriter.Printf("Error: %v\n", err)
-			return err == nil && err2 == nil && err3 == nil && compactionTimeRead == fmt.Sprintf("%d", retentionTime) && cleanupPolicyRead == policy && segmentTimeRead == fmt.Sprintf("%d", segmentTime)
+
+			return err == nil && err2 == nil && err3 == nil && compactionTimeRead == strconv.Itoa(retentionTime) && cleanupPolicyRead == policy && segmentTimeRead == strconv.Itoa(segmentTime)
 		}, 20*time.Second, 1*time.Second).Should(BeTrue(), "Redpanda config should be updated")
 
 		By("Waiting for Redpanda to restart and apply new config")
 		// Wait for metrics to become available again after restart
 		Eventually(func() bool {
 			resp, err := httpGetWithTimeout(GetMetricsURL(), 1*time.Second)
+
 			return err == nil && resp == 200
 		}, 20*time.Second, 1*time.Second).Should(BeTrue(), "Metrics endpoint should be healthy after config update")
 
@@ -108,12 +112,13 @@ var _ = Describe("Redpanda Cleanup Policy Integration Test", Ordered, Label("int
 			newOffset, err := checkRPK(topicName, lastOffset, lastTimestamp, 0.1, 0.2, messagesPerSecond)
 			lastOffset = newOffset
 			lastTimestamp = time.Now()
+
 			return err == nil && newOffset != -1
 		}, 5*time.Second, 1*time.Second).Should(BeTrue(), "Messages should be produced after config update")
 
 		By("Verifying messages continue to be produced after config update")
 		failure := false
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			failure = false
 			startTime := time.Now()
 			for time.Since(startTime) < testDuration {
@@ -122,6 +127,7 @@ var _ = Describe("Redpanda Cleanup Policy Integration Test", Ordered, Label("int
 				if err != nil {
 					GinkgoWriter.Printf("Error: %v\n", err)
 					failure = true
+
 					break
 				}
 				lastOffset = newOffset
@@ -147,7 +153,8 @@ var _ = Describe("Redpanda Cleanup Policy Integration Test", Ordered, Label("int
 			GinkgoWriter.Printf("Cleanup policy: %s\n", cleanupPolicyRead)
 			GinkgoWriter.Printf("Segment time: %s\n", segmentTimeRead)
 			GinkgoWriter.Printf("Error: %v\n", err)
-			return err == nil && err2 == nil && err3 == nil && compactionTimeRead == fmt.Sprintf("%d", retentionTime) && cleanupPolicyRead == policy && segmentTimeRead == fmt.Sprintf("%d", segmentTime)
+
+			return err == nil && err2 == nil && err3 == nil && compactionTimeRead == strconv.Itoa(retentionTime) && cleanupPolicyRead == policy && segmentTimeRead == strconv.Itoa(segmentTime)
 		}, 5*time.Second, 1*time.Second).Should(BeTrue(), "Redpanda config should not be changed back")
 
 		// Now we disable the producer, and wait for the compaction to happen (e.g waiting 1 minute)
@@ -163,6 +170,7 @@ var _ = Describe("Redpanda Cleanup Policy Integration Test", Ordered, Label("int
 				"/opt/redpanda/bin/rpk", "topic", "describe-storage", topicName)
 			if err != nil {
 				GinkgoWriter.Printf("Error getting segment info: %v\n", err)
+
 				return false
 			}
 			GinkgoWriter.Printf("Segment info: %s\n", segmentInfo)
@@ -188,9 +196,11 @@ var _ = Describe("Redpanda Cleanup Policy Integration Test", Ordered, Label("int
 				"/opt/redpanda/bin/rpk", "topic", "describe-storage", topicName)
 			if err != nil {
 				GinkgoWriter.Printf("Error getting segment info: %v\n", err)
+
 				return false
 			}
 			GinkgoWriter.Printf("Segment info: %s\n", segmentInfo)
+
 			return strings.Contains(segmentInfo, "LOCAL-SEGMENTS") && !strings.Contains(segmentInfo, "LOCAL-SEGMENTS  1")
 		}, 90*time.Second, 5*time.Second).Should(BeTrue(), "Segment should roll after segment.ms timeout")
 

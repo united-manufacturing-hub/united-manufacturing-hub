@@ -46,7 +46,7 @@ var _ = Describe("HasSufficientTime", func() {
 		remaining, sufficient, err := ctxutil.HasSufficientTime(ctx, time.Millisecond*100)
 
 		Expect(sufficient).To(BeTrue(), "Expected sufficient time")
-		Expect(err).To(BeNil(), "Expected no error")
+		Expect(err).ToNot(HaveOccurred(), "Expected no error")
 		Expect(remaining).To(BeNumerically(">", 0), "Expected positive remaining time")
 	})
 
@@ -60,7 +60,7 @@ var _ = Describe("HasSufficientTime", func() {
 		remaining, sufficient, err := ctxutil.HasSufficientTime(ctx, time.Millisecond*10)
 
 		Expect(sufficient).To(BeFalse(), "Expected insufficient time")
-		Expect(err).To(BeNil(), "Expected no error")
+		Expect(err).ToNot(HaveOccurred(), "Expected no error")
 		Expect(remaining).To(BeNumerically("<", time.Millisecond*10))
 	})
 })

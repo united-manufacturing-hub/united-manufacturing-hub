@@ -17,6 +17,7 @@ package redpanda
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -30,7 +31,7 @@ import (
 
 // emptyIntegrationTestConfig returns empty configuration for schema registry reconciliation
 // This is used in integration tests where we want to test the reconciliation performance
-// without the overhead of data model translation
+// without the overhead of data model translation.
 func emptyIntegrationTestConfig() ([]config.DataModelsConfig, []config.DataContractsConfig, map[string]config.PayloadShape) {
 	return []config.DataModelsConfig{}, []config.DataContractsConfig{}, make(map[string]config.PayloadShape)
 }
@@ -38,7 +39,7 @@ func emptyIntegrationTestConfig() ([]config.DataModelsConfig, []config.DataContr
 var redpandaContainer *redpanda.Container
 var redpandaSchemaRegistryURL string
 
-// cleanupRedpandaContainer cleans up the Redpanda container with proper timeout handling
+// cleanupRedpandaContainer cleans up the Redpanda container with proper timeout handling.
 func cleanupRedpandaContainer() {
 	if redpandaContainer != nil {
 		// Use a timeout context to prevent hanging during cleanup
@@ -51,7 +52,7 @@ func cleanupRedpandaContainer() {
 	}
 }
 
-// startRedpandaContainer starts a Redpanda container using testcontainers
+// startRedpandaContainer starts a Redpanda container using testcontainers.
 func startRedpandaContainer() error {
 	// Clean up any existing container first
 	cleanupRedpandaContainer()
@@ -64,8 +65,9 @@ func startRedpandaContainer() error {
 	if err != nil {
 		return fmt.Errorf("failed to start Redpanda container: %w", err)
 	}
+
 	if container == nil {
-		return fmt.Errorf("received nil container from redpanda.Run")
+		return errors.New("received nil container from redpanda.Run")
 	}
 
 	// Get the schema registry URL
@@ -75,6 +77,7 @@ func startRedpandaContainer() error {
 		if errX != nil {
 			return fmt.Errorf("failed to terminate Redpanda container: %w", errX)
 		}
+
 		return fmt.Errorf("failed to get schema registry URL: %w", err)
 	}
 
@@ -85,7 +88,7 @@ func startRedpandaContainer() error {
 }
 
 // fetchSchemaViaHTTP retrieves a schema from the registry via HTTP GET
-// Returns the schema definition if found, or an error if not found or malformed
+// Returns the schema definition if found, or an error if not found or malformed.
 func fetchSchemaViaHTTP(subject SubjectName) (JSONSchemaDefinition, error) {
 	// Get the latest version of the schema
 	url := fmt.Sprintf("%s/subjects/%s/versions/latest", redpandaSchemaRegistryURL, string(subject))
@@ -94,11 +97,14 @@ func fetchSchemaViaHTTP(subject SubjectName) (JSONSchemaDefinition, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch schema for subject %s: %w", subject, err)
 	}
+
 	if resp == nil {
 		return "", fmt.Errorf("received nil response for subject %s", subject)
 	}
+
 	defer func() {
-		if closeErr := resp.Body.Close(); closeErr != nil {
+		closeErr := resp.Body.Close()
+		if closeErr != nil {
 			// Log error but don't fail the function for close errors
 			fmt.Printf("Warning: Failed to close response body for subject %s: %v\n", subject, closeErr)
 		}
@@ -129,7 +135,7 @@ func fetchSchemaViaHTTP(subject SubjectName) (JSONSchemaDefinition, error) {
 	return JSONSchemaDefinition(response.Schema), nil
 }
 
-// verifySchemaViaHTTP fetches a schema via HTTP and compares it to the expected definition
+// verifySchemaViaHTTP fetches a schema via HTTP and compares it to the expected definition.
 func verifySchemaViaHTTP(subject SubjectName, expectedSchema JSONSchemaDefinition) error {
 	fetchedSchema, err := fetchSchemaViaHTTP(subject)
 	if err != nil {
@@ -180,12 +186,14 @@ var _ = Describe("Real Redpanda Integration Tests", Ordered, Label("integration"
 					return false
 				}
 				if resp.Body != nil {
-					if closeErr := resp.Body.Close(); closeErr != nil {
+					closeErr := resp.Body.Close()
+					if closeErr != nil {
 						// Log but don't fail for close errors
 						fmt.Printf("Warning: Failed to close response body: %v\n", closeErr)
 					}
 				}
-				return resp.StatusCode == 200
+
+				return resp.StatusCode == http.StatusOK
 			}, 30*time.Second, 1*time.Second).Should(BeTrue())
 		})
 	})
@@ -211,6 +219,7 @@ var _ = Describe("Real Redpanda Integration Tests", Ordered, Label("integration"
 					return false
 				}
 				metrics := registry.GetMetrics()
+
 				return metrics.CurrentPhase == SchemaRegistryPhaseLookup &&
 					metrics.TotalReconciliations >= 1 &&
 					metrics.SuccessfulOperations >= 1
@@ -228,6 +237,7 @@ var _ = Describe("Real Redpanda Integration Tests", Ordered, Label("integration"
 					return false
 				}
 				metrics := registry.GetMetrics()
+
 				return metrics.SubjectsToAdd == 0 &&
 					metrics.SubjectsToRemove == 0 &&
 					metrics.SuccessfulOperations >= 1
@@ -244,6 +254,7 @@ var _ = Describe("Real Redpanda Integration Tests", Ordered, Label("integration"
 					return false
 				}
 				metrics := registry.GetMetrics()
+
 				return metrics.SubjectsToAdd == 0 &&
 					metrics.SubjectsToRemove == 0 &&
 					metrics.SuccessfulOperations >= 1
@@ -260,6 +271,7 @@ var _ = Describe("Real Redpanda Integration Tests", Ordered, Label("integration"
 					return false
 				}
 				metrics := registry.GetMetrics()
+
 				return metrics.SubjectsToAdd == 0 &&
 					metrics.SubjectsToRemove == 0 &&
 					metrics.SuccessfulOperations >= 1
@@ -293,6 +305,7 @@ var _ = Describe("Real Redpanda Integration Tests", Ordered, Label("integration"
 					return false
 				}
 				metrics := registry.GetMetrics()
+
 				return metrics.SubjectsToAdd == 0 &&
 					metrics.SubjectsToRemove == 0 &&
 					metrics.SuccessfulOperations >= 1
@@ -340,6 +353,7 @@ var _ = Describe("Real Redpanda Integration Tests", Ordered, Label("integration"
 					return false
 				}
 				metrics := registry.GetMetrics()
+
 				return metrics.SubjectsToAdd == 0 &&
 					metrics.SubjectsToRemove == 0 &&
 					metrics.SuccessfulOperations >= 1
@@ -396,6 +410,7 @@ var _ = Describe("Real Redpanda Integration Tests", Ordered, Label("integration"
 				GinkgoWriter.Printf("LastError: %s\n", metrics.LastError)
 				GinkgoWriter.Printf("LastOperationTime: %s\n", metrics.LastOperationTime)
 				GinkgoWriter.Printf("LastOperationTime under 10 seconds: %t\n", time.Since(metrics.LastOperationTime) < 10*time.Second)
+
 				return metrics.SubjectsToAdd == 0 &&
 					metrics.SubjectsToRemove == 0 &&
 					metrics.TotalReconciliations > initialReconciliations &&
@@ -408,6 +423,7 @@ var _ = Describe("Real Redpanda Integration Tests", Ordered, Label("integration"
 		It("should provide current phase information", func() {
 			Eventually(func() bool {
 				metrics := registry.GetMetrics()
+
 				return metrics.CurrentPhase == SchemaRegistryPhaseLookup
 			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue())
 		})
@@ -447,6 +463,7 @@ var _ = Describe("Real Redpanda Integration Tests", Ordered, Label("integration"
 					return false
 				}
 				metrics := registry.GetMetrics()
+
 				return metrics.FailedOperations > 0 && metrics.LastError != ""
 			}, 5*time.Second, 500*time.Millisecond).Should(BeTrue())
 		})
@@ -457,16 +474,17 @@ var _ = Describe("Real Redpanda Integration Tests", Ordered, Label("integration"
 			done := make(chan bool, 10)
 
 			// Start multiple goroutines reading metrics
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				go func() {
 					defer GinkgoRecover()
 					Eventually(func() bool {
-						for j := 0; j < 100; j++ {
+						for range 100 {
 							metrics := registry.GetMetrics()
 							if metrics.TotalReconciliations < 0 {
 								return false
 							}
 						}
+
 						return true
 					}, 5*time.Second, 10*time.Millisecond).Should(BeTrue())
 					done <- true
@@ -474,7 +492,7 @@ var _ = Describe("Real Redpanda Integration Tests", Ordered, Label("integration"
 			}
 
 			// Wait for all goroutines to complete
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				Eventually(done).Should(Receive())
 			}
 		})

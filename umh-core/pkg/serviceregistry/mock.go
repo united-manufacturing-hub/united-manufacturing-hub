@@ -21,7 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-// NewMockRegistry creates a new Registry with mock services for testing
+// NewMockRegistry creates a new Registry with mock services for testing.
 func NewMockRegistry() *Registry {
 	mockFs := filesystem.NewMockFileSystem()
 	mockPm := portmanager.NewMockPortManager()

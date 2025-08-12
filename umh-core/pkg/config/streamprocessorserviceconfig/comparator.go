@@ -22,15 +22,15 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 )
 
-// Comparator handles the comparison of StreamProcessor configurations
+// Comparator handles the comparison of StreamProcessor configurations.
 type Comparator struct{}
 
-// NewComparator creates a new configuration comparator for StreamProcessor
+// NewComparator creates a new configuration comparator for StreamProcessor.
 func NewComparator() *Comparator {
 	return &Comparator{}
 }
 
-// ConfigsEqual checks if two StreamProcessorServiceConfigSpecs are equal
+// ConfigsEqual checks if two StreamProcessorServiceConfigSpecs are equal.
 func (c *Comparator) ConfigsEqual(desired, observed StreamProcessorServiceConfigSpec) bool {
 	// Normalize both configs before comparison
 	normalizer := NewNormalizer()
@@ -71,7 +71,7 @@ func (c *Comparator) ConfigsEqual(desired, observed StreamProcessorServiceConfig
 	return true
 }
 
-// ConfigDiff generates a diff between two StreamProcessorServiceConfigSpecs
+// ConfigDiff generates a diff between two StreamProcessorServiceConfigSpecs.
 func (c *Comparator) ConfigDiff(desired, observed StreamProcessorServiceConfigSpec) string {
 	var diff strings.Builder
 

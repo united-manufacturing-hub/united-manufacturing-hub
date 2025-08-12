@@ -24,7 +24,7 @@ import (
 	"time"
 )
 
-// MockFileSystem is a mock implementation of the filesystem.Service interface
+// MockFileSystem is a mock implementation of the filesystem.Service interface.
 type MockFileSystem struct {
 	FailedOperations    map[string]bool
 	ReadFileFunc        func(ctx context.Context, path string) ([]byte, error)
@@ -49,7 +49,7 @@ type MockFileSystem struct {
 	mutex               sync.Mutex
 }
 
-// NewMockFileSystem creates a new MockFileSystem instance
+// NewMockFileSystem creates a new MockFileSystem instance.
 func NewMockFileSystem() *MockFileSystem {
 	return &MockFileSystem{
 		FailureRate:      0.0,
@@ -58,19 +58,21 @@ func NewMockFileSystem() *MockFileSystem {
 	}
 }
 
-// WithFailureRate sets the failure rate for the mock
+// WithFailureRate sets the failure rate for the mock.
 func (m *MockFileSystem) WithFailureRate(rate float64) *MockFileSystem {
 	m.FailureRate = rate
+
 	return m
 }
 
-// WithDelayRange sets the delay range for the mock
+// WithDelayRange sets the delay range for the mock.
 func (m *MockFileSystem) WithDelayRange(delay time.Duration) *MockFileSystem {
 	m.DelayRange = delay
+
 	return m
 }
 
-// simulateRandomBehavior decides whether an operation should fail and how long it should delay
+// simulateRandomBehavior decides whether an operation should fail and how long it should delay.
 func (m *MockFileSystem) simulateRandomBehavior(operation string) (bool, time.Duration) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -94,7 +96,7 @@ func (m *MockFileSystem) simulateRandomBehavior(operation string) (bool, time.Du
 	return shouldFail, delay
 }
 
-// EnsureDirectory creates a directory if it doesn't exist
+// EnsureDirectory creates a directory if it doesn't exist.
 func (m *MockFileSystem) EnsureDirectory(ctx context.Context, path string) error {
 	if m.EnsureDirectoryFunc != nil {
 		return m.EnsureDirectoryFunc(ctx, path)
@@ -114,10 +116,11 @@ func (m *MockFileSystem) EnsureDirectory(ctx context.Context, path string) error
 	if shouldFail {
 		return errors.New("simulated failure in EnsureDirectory")
 	}
+
 	return nil
 }
 
-// ReadFile reads a file's contents respecting the context
+// ReadFile reads a file's contents respecting the context.
 func (m *MockFileSystem) ReadFile(ctx context.Context, path string) ([]byte, error) {
 	if m.ReadFileFunc != nil {
 		return m.ReadFileFunc(ctx, path)
@@ -137,6 +140,7 @@ func (m *MockFileSystem) ReadFile(ctx context.Context, path string) ([]byte, err
 	if shouldFail {
 		return nil, errors.New("simulated failure in ReadFile")
 	}
+
 	return []byte("mock content"), nil
 }
 
@@ -162,18 +166,20 @@ func (m *MockFileSystem) ReadFileRange(ctx context.Context, path string, from in
 	if shouldFail {
 		return nil, 0, errors.New("simulated failure in ReadFileRange")
 	}
+
 	return nil, 0, errors.New("not implemented")
 }
 
-// Glob is a wrapper around filepath.Glob that respects the context
+// Glob is a wrapper around filepath.Glob that respects the context.
 func (m *MockFileSystem) Glob(ctx context.Context, pattern string) ([]string, error) {
 	if m.GlobFunc != nil {
 		return m.GlobFunc(ctx, pattern)
 	}
+
 	panic("not implemented")
 }
 
-// WriteFile writes data to a file respecting the context
+// WriteFile writes data to a file respecting the context.
 func (m *MockFileSystem) WriteFile(ctx context.Context, path string, data []byte, perm os.FileMode) error {
 	if m.WriteFileFunc != nil {
 		return m.WriteFileFunc(ctx, path, data, perm)
@@ -193,10 +199,11 @@ func (m *MockFileSystem) WriteFile(ctx context.Context, path string, data []byte
 	if shouldFail {
 		return errors.New("simulated failure in WriteFile")
 	}
+
 	return nil
 }
 
-// PathExists checks if a path exists
+// PathExists checks if a path exists.
 func (m *MockFileSystem) PathExists(ctx context.Context, path string) (bool, error) {
 	if m.PathExistsFunc != nil {
 		return m.PathExistsFunc(ctx, path)
@@ -221,11 +228,12 @@ func (m *MockFileSystem) PathExists(ctx context.Context, path string) (bool, err
 	if shouldFail {
 		return false, errors.New("simulated failure in PathExists")
 	}
+
 	return true, nil
 }
 
 // FileExists checks if a file exists
-// Deprecated: use PathExists instead
+// Deprecated: use PathExists instead.
 func (m *MockFileSystem) FileExists(ctx context.Context, path string) (bool, error) {
 	if m.FileExistsFunc != nil {
 		return m.FileExistsFunc(ctx, path)
@@ -250,10 +258,11 @@ func (m *MockFileSystem) FileExists(ctx context.Context, path string) (bool, err
 	if shouldFail {
 		return false, errors.New("simulated failure in FileExists")
 	}
+
 	return true, nil
 }
 
-// Remove removes a file or directory
+// Remove removes a file or directory.
 func (m *MockFileSystem) Remove(ctx context.Context, path string) error {
 	if m.RemoveFunc != nil {
 		return m.RemoveFunc(ctx, path)
@@ -273,10 +282,11 @@ func (m *MockFileSystem) Remove(ctx context.Context, path string) error {
 	if shouldFail {
 		return errors.New("simulated failure in Remove")
 	}
+
 	return nil
 }
 
-// RemoveAll removes a directory and all its contents
+// RemoveAll removes a directory and all its contents.
 func (m *MockFileSystem) RemoveAll(ctx context.Context, path string) error {
 	if m.RemoveAllFunc != nil {
 		return m.RemoveAllFunc(ctx, path)
@@ -296,10 +306,11 @@ func (m *MockFileSystem) RemoveAll(ctx context.Context, path string) error {
 	if shouldFail {
 		return errors.New("simulated failure in RemoveAll")
 	}
+
 	return nil
 }
 
-// Stat returns file info
+// Stat returns file info.
 func (m *MockFileSystem) Stat(ctx context.Context, path string) (os.FileInfo, error) {
 	if m.StatFunc != nil {
 		return m.StatFunc(ctx, path)
@@ -330,7 +341,7 @@ func (m *MockFileSystem) Stat(ctx context.Context, path string) (os.FileInfo, er
 	}, nil
 }
 
-// CreateFile creates a new file with the specified permissions
+// CreateFile creates a new file with the specified permissions.
 func (m *MockFileSystem) CreateFile(ctx context.Context, path string, perm os.FileMode) (*os.File, error) {
 	if m.CreateFileFunc != nil {
 		return m.CreateFileFunc(ctx, path, perm)
@@ -350,10 +361,11 @@ func (m *MockFileSystem) CreateFile(ctx context.Context, path string, perm os.Fi
 	if shouldFail {
 		return nil, errors.New("simulated failure in CreateFile")
 	}
+
 	return nil, errors.New("not implemented")
 }
 
-// Chmod changes the mode of the named file
+// Chmod changes the mode of the named file.
 func (m *MockFileSystem) Chmod(ctx context.Context, path string, mode os.FileMode) error {
 	if m.ChmodFunc != nil {
 		return m.ChmodFunc(ctx, path, mode)
@@ -373,10 +385,11 @@ func (m *MockFileSystem) Chmod(ctx context.Context, path string, mode os.FileMod
 	if shouldFail {
 		return errors.New("simulated failure in Chmod")
 	}
+
 	return nil
 }
 
-// Chown changes the owner and group of the named file
+// Chown changes the owner and group of the named file.
 func (m *MockFileSystem) Chown(ctx context.Context, path string, user string, group string) error {
 	if m.ChownFunc != nil {
 		return m.ChownFunc(ctx, path, user, group)
@@ -396,10 +409,11 @@ func (m *MockFileSystem) Chown(ctx context.Context, path string, user string, gr
 	if shouldFail {
 		return errors.New("simulated failure in Chown")
 	}
+
 	return nil
 }
 
-// ReadDir reads a directory, returning all its directory entries
+// ReadDir reads a directory, returning all its directory entries.
 func (m *MockFileSystem) ReadDir(ctx context.Context, path string) ([]os.DirEntry, error) {
 	if m.ReadDirFunc != nil {
 		return m.ReadDirFunc(ctx, path)
@@ -419,10 +433,11 @@ func (m *MockFileSystem) ReadDir(ctx context.Context, path string) ([]os.DirEntr
 	if shouldFail {
 		return nil, errors.New("simulated failure in ReadDir")
 	}
+
 	return nil, nil
 }
 
-// ExecuteCommand executes a command with context
+// ExecuteCommand executes a command with context.
 func (m *MockFileSystem) ExecuteCommand(ctx context.Context, name string, args ...string) ([]byte, error) {
 	if m.ExecuteCommandFunc != nil {
 		return m.ExecuteCommandFunc(ctx, name, args...)
@@ -442,10 +457,11 @@ func (m *MockFileSystem) ExecuteCommand(ctx context.Context, name string, args .
 	if shouldFail {
 		return nil, errors.New("simulated failure in ExecuteCommand")
 	}
+
 	return []byte("mock command output"), nil
 }
 
-// Rename renames (moves) a file or directory from oldPath to newPath
+// Rename renames (moves) a file or directory from oldPath to newPath.
 func (m *MockFileSystem) Rename(ctx context.Context, oldPath, newPath string) error {
 	if m.RenameFunc != nil {
 		return m.RenameFunc(ctx, oldPath, newPath)
@@ -465,10 +481,11 @@ func (m *MockFileSystem) Rename(ctx context.Context, oldPath, newPath string) er
 	if shouldFail {
 		return errors.New("simulated failure in Rename")
 	}
+
 	return nil
 }
 
-// Symlink creates a symbolic link from linkPath to target
+// Symlink creates a symbolic link from linkPath to target.
 func (m *MockFileSystem) Symlink(ctx context.Context, target, linkPath string) error {
 	if m.SymlinkFunc != nil {
 		return m.SymlinkFunc(ctx, target, linkPath)
@@ -488,112 +505,130 @@ func (m *MockFileSystem) Symlink(ctx context.Context, target, linkPath string) e
 	if shouldFail {
 		return errors.New("simulated failure in Symlink")
 	}
+
 	return nil
 }
 
-// WithEnsureDirectoryFunc sets a custom implementation for EnsureDirectory
+// WithEnsureDirectoryFunc sets a custom implementation for EnsureDirectory.
 func (m *MockFileSystem) WithEnsureDirectoryFunc(fn func(ctx context.Context, path string) error) *MockFileSystem {
 	m.EnsureDirectoryFunc = fn
+
 	return m
 }
 
-// WithReadFileFunc sets a custom implementation for ReadFile
+// WithReadFileFunc sets a custom implementation for ReadFile.
 func (m *MockFileSystem) WithReadFileFunc(fn func(ctx context.Context, path string) ([]byte, error)) *MockFileSystem {
 	m.ReadFileFunc = fn
+
 	return m
 }
 
-// WithReadFileRangeFunc sets a custom implementation for ReadFileRange
+// WithReadFileRangeFunc sets a custom implementation for ReadFileRange.
 func (m *MockFileSystem) WithReadFileRangeFunc(fn func(ctx context.Context, path string, from int64) ([]byte, int64, error)) *MockFileSystem {
 	m.ReadFileRangeFunc = fn
+
 	return m
 }
 
-// WithWriteFileFunc sets a custom implementation for WriteFile
+// WithWriteFileFunc sets a custom implementation for WriteFile.
 func (m *MockFileSystem) WithWriteFileFunc(fn func(ctx context.Context, path string, data []byte, perm os.FileMode) error) *MockFileSystem {
 	m.WriteFileFunc = fn
+
 	return m
 }
 
-// WithFileExistsFunc sets a custom function for FileExists
+// WithFileExistsFunc sets a custom function for FileExists.
 func (m *MockFileSystem) WithFileExistsFunc(fn func(ctx context.Context, path string) (bool, error)) *MockFileSystem {
 	m.FileExistsFunc = fn
+
 	return m
 }
 
-// WithPathExistsFunc sets a custom function for PathExists
+// WithPathExistsFunc sets a custom function for PathExists.
 func (m *MockFileSystem) WithPathExistsFunc(fn func(ctx context.Context, path string) (bool, error)) *MockFileSystem {
 	m.PathExistsFunc = fn
+
 	return m
 }
 
-// WithRemoveFunc sets a custom implementation for Remove
+// WithRemoveFunc sets a custom implementation for Remove.
 func (m *MockFileSystem) WithRemoveFunc(fn func(ctx context.Context, path string) error) *MockFileSystem {
 	m.RemoveFunc = fn
+
 	return m
 }
 
-// WithRemoveAllFunc sets a custom implementation for RemoveAll
+// WithRemoveAllFunc sets a custom implementation for RemoveAll.
 func (m *MockFileSystem) WithRemoveAllFunc(fn func(ctx context.Context, path string) error) *MockFileSystem {
 	m.RemoveAllFunc = fn
+
 	return m
 }
 
-// WithStatFunc sets a custom implementation for Stat
+// WithStatFunc sets a custom implementation for Stat.
 func (m *MockFileSystem) WithStatFunc(fn func(ctx context.Context, path string) (os.FileInfo, error)) *MockFileSystem {
 	m.StatFunc = fn
+
 	return m
 }
 
-// WithCreateFileFunc sets a custom implementation for CreateFile
+// WithCreateFileFunc sets a custom implementation for CreateFile.
 func (m *MockFileSystem) WithCreateFileFunc(fn func(ctx context.Context, path string, perm os.FileMode) (*os.File, error)) *MockFileSystem {
 	m.CreateFileFunc = fn
+
 	return m
 }
 
-// WithChmodFunc sets a custom implementation for Chmod
+// WithChmodFunc sets a custom implementation for Chmod.
 func (m *MockFileSystem) WithChmodFunc(fn func(ctx context.Context, path string, mode os.FileMode) error) *MockFileSystem {
 	m.ChmodFunc = fn
+
 	return m
 }
 
-// WithChownFunc sets a custom implementation for Chown
+// WithChownFunc sets a custom implementation for Chown.
 func (m *MockFileSystem) WithChownFunc(fn func(ctx context.Context, path string, user string, group string) error) *MockFileSystem {
 	m.ChownFunc = fn
+
 	return m
 }
 
-// WithReadDirFunc sets a custom implementation for ReadDir
+// WithReadDirFunc sets a custom implementation for ReadDir.
 func (m *MockFileSystem) WithReadDirFunc(fn func(ctx context.Context, path string) ([]os.DirEntry, error)) *MockFileSystem {
 	m.ReadDirFunc = fn
+
 	return m
 }
 
-// WithExecuteCommandFunc sets a custom implementation for ExecuteCommand
+// WithExecuteCommandFunc sets a custom implementation for ExecuteCommand.
 func (m *MockFileSystem) WithExecuteCommandFunc(fn func(ctx context.Context, name string, args ...string) ([]byte, error)) *MockFileSystem {
 	m.ExecuteCommandFunc = fn
+
 	return m
 }
 
-// WithGlobFunc sets a custom implementation for Glob
+// WithGlobFunc sets a custom implementation for Glob.
 func (m *MockFileSystem) WithGlobFunc(fn func(ctx context.Context, pattern string) ([]string, error)) *MockFileSystem {
 	m.GlobFunc = fn
+
 	return m
 }
 
-// WithRenameFunc sets a custom implementation for Rename
+// WithRenameFunc sets a custom implementation for Rename.
 func (m *MockFileSystem) WithRenameFunc(fn func(ctx context.Context, oldPath, newPath string) error) *MockFileSystem {
 	m.RenameFunc = fn
+
 	return m
 }
 
-// WithSymlinkFunc sets a custom implementation for Symlink
+// WithSymlinkFunc sets a custom implementation for Symlink.
 func (m *MockFileSystem) WithSymlinkFunc(fn func(ctx context.Context, target, linkPath string) error) *MockFileSystem {
 	m.SymlinkFunc = fn
+
 	return m
 }
 
-// NewMockFileInfo creates a new mock FileInfo for testing
+// NewMockFileInfo creates a new mock FileInfo for testing.
 func (m *MockFileSystem) NewMockFileInfo(name string, size int64, mode os.FileMode, modTime time.Time, isDir bool) os.FileInfo {
 	return &memFileInfo{
 		name:  name,

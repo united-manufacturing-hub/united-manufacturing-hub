@@ -16,7 +16,6 @@ package protocolconverter
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -111,10 +110,10 @@ type MockProtocolConverterService struct {
 	ReconcileManagerReconciled bool
 }
 
-// Ensure MockProtocolConverterService implements IProtocolConverterService
+// Ensure MockProtocolConverterService implements IProtocolConverterService.
 var _ IProtocolConverterService = (*MockProtocolConverterService)(nil)
 
-// ConverterStateFlags contains all the state flags needed for FSM testing
+// ConverterStateFlags contains all the state flags needed for FSM testing.
 type ConverterStateFlags struct {
 	DfcFSMReadState    string
 	DfcFSMWriteState   string
@@ -126,7 +125,7 @@ type ConverterStateFlags struct {
 	IsRedpandaRunning  bool
 }
 
-// NewMockProtocolConverterService creates a new mock DataFlowComponent service
+// NewMockProtocolConverterService creates a new mock DataFlowComponent service.
 func NewMockProtocolConverterService() *MockProtocolConverterService {
 	return &MockProtocolConverterService{
 		mu:                 sync.RWMutex{},
@@ -172,12 +171,12 @@ func (m *MockProtocolConverterService) SetConverterState(
 	m.stateFlags[protConvName] = &flags
 }
 
-// SetComponentState is kept for backward compatibility but now delegates to SetConverterState
+// SetComponentState is kept for backward compatibility but now delegates to SetConverterState.
 func (m *MockProtocolConverterService) SetComponentState(protConvName string, flags ConverterStateFlags) {
 	m.SetConverterState(protConvName, flags)
 }
 
-// GetConverterState gets the state flags for a protocol converter
+// GetConverterState gets the state flags for a protocol converter.
 func (m *MockProtocolConverterService) GetConverterState(protConvName string) *ConverterStateFlags {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -188,6 +187,7 @@ func (m *MockProtocolConverterService) GetConverterState(protConvName string) *C
 	// Initialize with default flags if not exists
 	flags := &ConverterStateFlags{}
 	m.stateFlags[protConvName] = flags
+
 	return flags
 }
 
@@ -211,7 +211,7 @@ func ConverterToConnFlags(src ConverterStateFlags) connection.ConnectionStateFla
 	}
 }
 
-// BuildProtocolConverterServiceInfo builds an aggregated ServiceInfo from the sub-mocks
+// BuildProtocolConverterServiceInfo builds an aggregated ServiceInfo from the sub-mocks.
 func BuildProtocolConverterServiceInfo(
 	name string,
 	flags ConverterStateFlags,
@@ -219,8 +219,10 @@ func BuildProtocolConverterServiceInfo(
 	connMock *connection.MockConnectionService,
 ) *ServiceInfo {
 	// Get observed states from the sub-mocks
-	var dfcInfo dataflowcomponent.ServiceInfo
-	var connInfo connection.ServiceInfo
+	var (
+		dfcInfo  dataflowcomponent.ServiceInfo
+		connInfo connection.ServiceInfo
+	)
 
 	if dfcMock.ComponentStates[name] != nil {
 		dfcInfo = *dfcMock.ComponentStates[name]
@@ -258,7 +260,7 @@ func BuildProtocolConverterServiceInfo(
 	}
 }
 
-// GetConfig mocks getting the ProtocolConverter configuration
+// GetConfig mocks getting the ProtocolConverter configuration.
 func (m *MockProtocolConverterService) GetConfig(
 	ctx context.Context,
 	filesystemService filesystem.Service,
@@ -280,7 +282,7 @@ func (m *MockProtocolConverterService) GetConfig(
 	return m.GetConfigResult, nil
 }
 
-// Status mocks getting the status of a ProtocolConverter
+// Status mocks getting the status of a ProtocolConverter.
 func (m *MockProtocolConverterService) Status(
 	ctx context.Context,
 	services serviceregistry.Provider,
@@ -306,7 +308,7 @@ func (m *MockProtocolConverterService) Status(
 	return m.StatusResult, m.StatusError
 }
 
-// AddToManager mocks adding a ProtocolConverter to the Connection & DFC manager
+// AddToManager mocks adding a ProtocolConverter to the Connection & DFC manager.
 func (m *MockProtocolConverterService) AddToManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
@@ -318,7 +320,7 @@ func (m *MockProtocolConverterService) AddToManager(
 
 	m.AddToManagerCalled = true
 
-	underlyingName := fmt.Sprintf("protocolconverter-%s", protConvName)
+	underlyingName := "protocolconverter-" + protConvName
 
 	// Check whether the component already exists
 	for _, dfcConfig := range m.dfcConfigs {
@@ -362,7 +364,7 @@ func (m *MockProtocolConverterService) AddToManager(
 	return m.AddToManagerError
 }
 
-// UpdateInManager mocks updating a ProtocolConverter in Connection & DFC manager
+// UpdateInManager mocks updating a ProtocolConverter in Connection & DFC manager.
 func (m *MockProtocolConverterService) UpdateInManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
@@ -374,15 +376,17 @@ func (m *MockProtocolConverterService) UpdateInManager(
 
 	m.UpdateInManagerCalled = true
 
-	underlyingName := fmt.Sprintf("protocolconverter-%s", protConvName)
+	underlyingName := "protocolconverter-" + protConvName
 
 	// Check if the component exists
 	dfcFound := false
 	dfcIndex := -1
+
 	for i, dfcConfig := range m.dfcConfigs {
 		if dfcConfig.Name == underlyingName {
 			dfcFound = true
 			dfcIndex = i
+
 			break
 		}
 	}
@@ -390,10 +394,12 @@ func (m *MockProtocolConverterService) UpdateInManager(
 	// Check if the connection exists
 	connFound := false
 	connIndex := -1
+
 	for i, connConfig := range m.connConfigs {
 		if connConfig.Name == underlyingName {
 			connFound = true
 			connIndex = i
+
 			break
 		}
 	}
@@ -425,7 +431,7 @@ func (m *MockProtocolConverterService) UpdateInManager(
 	return m.UpdateInManagerError
 }
 
-// RemoveFromManager mocks removing a DataFlowComponent from the Benthos manager
+// RemoveFromManager mocks removing a DataFlowComponent from the Benthos manager.
 func (m *MockProtocolConverterService) RemoveFromManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
@@ -436,7 +442,7 @@ func (m *MockProtocolConverterService) RemoveFromManager(
 
 	m.RemoveFromManagerCalled = true
 
-	underlyingName := fmt.Sprintf("protocolconverter-%s", protConvName)
+	underlyingName := "protocolconverter-" + protConvName
 
 	dfcFound := false
 
@@ -445,6 +451,7 @@ func (m *MockProtocolConverterService) RemoveFromManager(
 		if dfcConfig.Name == underlyingName {
 			m.dfcConfigs = append(m.dfcConfigs[:i], m.dfcConfigs[i+1:]...)
 			dfcFound = true
+
 			break
 		}
 	}
@@ -455,6 +462,7 @@ func (m *MockProtocolConverterService) RemoveFromManager(
 		if connConfig.Name == underlyingName {
 			m.connConfigs = append(m.connConfigs[:i], m.connConfigs[i+1:]...)
 			connFound = true
+
 			break
 		}
 	}
@@ -470,14 +478,14 @@ func (m *MockProtocolConverterService) RemoveFromManager(
 	return m.RemoveFromManagerError
 }
 
-// StartProtocolConverter mocks starting a ProtocolConverter
+// StartProtocolConverter mocks starting a ProtocolConverter.
 func (m *MockProtocolConverterService) StartProtocolConverter(ctx context.Context, filesystemService filesystem.Service, protConvName string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.StartCalled = true
 
-	underlyingName := fmt.Sprintf("protocolconverter-%s", protConvName)
+	underlyingName := "protocolconverter-" + protConvName
 
 	dfcFound := false
 
@@ -486,6 +494,7 @@ func (m *MockProtocolConverterService) StartProtocolConverter(ctx context.Contex
 		if dfcConfig.Name == underlyingName {
 			m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateActive
 			dfcFound = true
+
 			break
 		}
 	}
@@ -497,6 +506,7 @@ func (m *MockProtocolConverterService) StartProtocolConverter(ctx context.Contex
 		if connConfig.Name == underlyingName {
 			m.connConfigs[i].DesiredFSMState = connfsm.OperationalStateUp
 			connFound = true
+
 			break
 		}
 	}
@@ -508,7 +518,7 @@ func (m *MockProtocolConverterService) StartProtocolConverter(ctx context.Contex
 	return m.StartError
 }
 
-// StopProtocolConverter mocks stopping a ProtocolConverter
+// StopProtocolConverter mocks stopping a ProtocolConverter.
 func (m *MockProtocolConverterService) StopProtocolConverter(
 	ctx context.Context,
 	filesystemService filesystem.Service,
@@ -519,7 +529,7 @@ func (m *MockProtocolConverterService) StopProtocolConverter(
 
 	m.StopCalled = true
 
-	underlyingName := fmt.Sprintf("protocolconverter-%s", protConvName)
+	underlyingName := "protocolconverter-" + protConvName
 
 	dfcFound := false
 
@@ -528,6 +538,7 @@ func (m *MockProtocolConverterService) StopProtocolConverter(
 		if dfcConfig.Name == underlyingName {
 			m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateStopped
 			dfcFound = true
+
 			break
 		}
 	}
@@ -539,6 +550,7 @@ func (m *MockProtocolConverterService) StopProtocolConverter(
 		if connConfig.Name == underlyingName {
 			m.connConfigs[i].DesiredFSMState = connfsm.OperationalStateStopped
 			connFound = true
+
 			break
 		}
 	}
@@ -550,7 +562,7 @@ func (m *MockProtocolConverterService) StopProtocolConverter(
 	return m.StopError
 }
 
-// ForceRemoveProtocolConverter mocks force removing a ProtocolConverter
+// ForceRemoveProtocolConverter mocks force removing a ProtocolConverter.
 func (m *MockProtocolConverterService) ForceRemoveProtocolConverter(ctx context.Context, filesystemService filesystem.Service, protConvName string) error {
 	m.mu.Lock()
 	m.ForceRemoveCalled = true
@@ -559,7 +571,7 @@ func (m *MockProtocolConverterService) ForceRemoveProtocolConverter(ctx context.
 	return m.ForceRemoveError
 }
 
-// ServiceExists mocks checking if a ProtocolConverter exists
+// ServiceExists mocks checking if a ProtocolConverter exists.
 func (m *MockProtocolConverterService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, protConvName string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -569,7 +581,7 @@ func (m *MockProtocolConverterService) ServiceExists(ctx context.Context, filesy
 	return m.ServiceExistsResult
 }
 
-// ReconcileManager mocks reconciling the ProtocolConverter manager
+// ReconcileManager mocks reconciling the ProtocolConverter manager.
 func (m *MockProtocolConverterService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool) {
 	m.mu.Lock()
 	m.ReconcileManagerCalled = true
@@ -583,8 +595,8 @@ func (m *MockProtocolConverterService) ReconcileManager(ctx context.Context, ser
 // when configs change during reconciliation (unlike other FSMs that set states once).
 func (m *MockProtocolConverterService) EvaluateDFCDesiredStates(protConvName string, protocolConverterDesiredState string) error {
 	// Mock implementation - just update the configs like the real implementation would
-	underlyingReadName := fmt.Sprintf("read-protocolconverter-%s", protConvName)
-	underlyingWriteName := fmt.Sprintf("write-protocolconverter-%s", protConvName)
+	underlyingReadName := "read-protocolconverter-" + protConvName
+	underlyingWriteName := "write-protocolconverter-" + protConvName
 
 	// Find and update read DFC config
 	for i, config := range m.dfcConfigs {
@@ -599,6 +611,7 @@ func (m *MockProtocolConverterService) EvaluateDFCDesiredStates(protConvName str
 					m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateStopped
 				}
 			}
+
 			break
 		}
 	}
@@ -616,6 +629,7 @@ func (m *MockProtocolConverterService) EvaluateDFCDesiredStates(protConvName str
 					m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateStopped
 				}
 			}
+
 			break
 		}
 	}

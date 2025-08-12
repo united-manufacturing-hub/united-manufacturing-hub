@@ -14,15 +14,15 @@
 
 package nmapserviceconfig
 
-// Normalizer handles the normalization of Nmap configurations
+// Normalizer handles the normalization of Nmap configurations.
 type Normalizer struct{}
 
-// NewNormalizer creates a new configuration normalizer for Nmap
+// NewNormalizer creates a new configuration normalizer for Nmap.
 func NewNormalizer() *Normalizer {
 	return &Normalizer{}
 }
 
-// NormalizeConfig doesn't do anything, there is no normalization needed here
+// NormalizeConfig doesn't do anything, there is no normalization needed here.
 func (n *Normalizer) NormalizeConfig(cfg NmapServiceConfig) NmapServiceConfig {
 	return cfg
 }

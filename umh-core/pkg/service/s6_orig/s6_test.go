@@ -16,6 +16,7 @@ package s6_orig
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -31,7 +32,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 )
 
-// Mock implementation of os.DirEntry for testing
+// Mock implementation of os.DirEntry for testing.
 type mockDirEntry struct {
 	name  string
 	isDir bool
@@ -264,6 +265,7 @@ var _ = Describe("S6 Service", func() {
 				// Record the removed directory
 				dirName := filepath.Base(path)
 				removedDirectories = append(removedDirectories, dirName)
+
 				return nil
 			})
 		})
@@ -339,6 +341,7 @@ var _ = Describe("S6 Service", func() {
 					if path == filepath.Join(servicePath, constants.S6ConfigDirName, "config.yaml") {
 						return false, nil
 					}
+
 					return false, nil
 				})
 			})
@@ -364,6 +367,7 @@ var _ = Describe("S6 Service", func() {
 					if path == filepath.Join(servicePath, constants.S6ConfigDirName, "config.yaml") {
 						return []byte("key: value"), nil
 					}
+
 					return nil, os.ErrNotExist
 				})
 			})
@@ -391,13 +395,13 @@ var _ = Describe("S6 Service", func() {
 	Describe("ParseLogsFromBytes", func() {
 		It("should parse logs from bytes", func() {
 			data, err := os.ReadFile("s6_test_log_data.txt")
-			Expect(len(data)).To(BeNumerically(">", 0))
+			Expect(data).ToNot(BeEmpty())
 			Expect(err).NotTo(HaveOccurred())
 			entries, err := ParseLogsFromBytes(data)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Expect more than 0 log entries
-			Expect(len(entries)).To(BeNumerically(">", 0))
+			Expect(entries).ToNot(BeEmpty())
 		})
 	})
 	// --- NEW TESTS FOR DefaultService.Remove ------------------------------------
@@ -415,6 +419,7 @@ var _ = Describe("S6 Service", func() {
 		// helper – PathExists reads from our map
 		pathExists := func(p string) bool {
 			exists, ok := exists.Load(p)
+
 			return ok && exists.(bool)
 		}
 
@@ -441,12 +446,14 @@ var _ = Describe("S6 Service", func() {
 					exists.Delete(oldPath)
 					exists.Store(newPath, true)
 				}
+
 				return nil
 			})
 
 			mockFS.WithRemoveAllFunc(func(ctx context.Context, p string) error {
 				// simulate deletion (background cleanup)
 				exists.Delete(p)
+
 				return nil
 			})
 		})
@@ -520,6 +527,7 @@ var _ = Describe("S6 Service", func() {
 			removeCalls := 0
 			mockFS.WithRemoveAllFunc(func(ctx context.Context, p string) error {
 				removeCalls++
+
 				return nil
 			})
 
@@ -545,7 +553,7 @@ var _ = Describe("S6 Service", func() {
 				},
 			}
 
-			boom := fmt.Errorf("IO error")
+			boom := errors.New("IO error")
 			mockFS.WithRemoveAllFunc(func(ctx context.Context, path string) error {
 				if path == svcPath {
 					return boom // fail removing service dir
@@ -554,6 +562,7 @@ var _ = Describe("S6 Service", func() {
 				if pathExists(path) {
 					exists.Delete(path)
 				}
+
 				return nil
 			})
 
@@ -592,7 +601,7 @@ var _ = Describe("LastDeploymentTime Sharing", func() {
 
 // Now we use the main implementation from s6.go for consistency
 
-// Additional test for MaxFunc approach correctness
+// Additional test for MaxFunc approach correctness.
 var _ = Describe("MaxFunc Approach for Rotated Files", func() {
 	var (
 		ctx       context.Context

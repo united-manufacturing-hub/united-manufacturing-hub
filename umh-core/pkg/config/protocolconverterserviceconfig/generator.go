@@ -24,18 +24,17 @@ import (
 )
 
 // Generator handles the generation of DFC YAML configurations
-// BoilerPlateCode
+// BoilerPlateCode.
 type Generator struct {
 }
 
-// NewGenerator creates a new YAML generator for DFC configurations
+// NewGenerator creates a new YAML generator for DFC configurations.
 func NewGenerator() *Generator {
 	return &Generator{}
 }
 
-// RenderConfig generates a ProtocolConverter YAML configuration from a ProtocolConverterServiceConfigSpec
+// RenderConfig generates a ProtocolConverter YAML configuration from a ProtocolConverterServiceConfigSpec.
 func (g *Generator) RenderConfig(cfg ProtocolConverterServiceConfigSpec) (string, error) {
-
 	// Convert the config to a normalized map
 	configMap := g.configToMap(cfg)
 	normalizedMap := normalizeConfig(configMap)
@@ -51,7 +50,7 @@ func (g *Generator) RenderConfig(cfg ProtocolConverterServiceConfigSpec) (string
 	return yamlStr, nil
 }
 
-// configToMap converts a DataFlowComponentServiceConfig to a raw map for YAML generation
+// configToMap converts a DataFlowComponentServiceConfig to a raw map for YAML generation.
 func (g *Generator) configToMap(cfg ProtocolConverterServiceConfigSpec) map[string]any {
 	// use generator to create a valid dfcConfigMap & connectionConfigMap
 	dfcGenerator := dataflowcomponentserviceconfig.NewGenerator()
@@ -67,6 +66,7 @@ func (g *Generator) configToMap(cfg ProtocolConverterServiceConfigSpec) map[stri
 		// If conversion fails, use empty config to avoid breaking YAML generation
 		connRuntime = connectionserviceconfig.ConnectionServiceConfigRuntime{}
 	}
+
 	connectionConfigMap := connectionGenerator.ConfigToMap(connRuntime)
 	variableBundleConfigMap := variableBundleGenerator.ConfigToMap(cfg.Variables)
 
@@ -82,10 +82,11 @@ func (g *Generator) configToMap(cfg ProtocolConverterServiceConfigSpec) map[stri
 	configMap["template"] = templateMap
 	configMap["variables"] = variableBundleConfigMap
 	configMap["location"] = cfg.Location
+
 	return configMap
 }
 
-// normalizeConfig normalizes the configuration by applying defaults and ensuring consistency
+// normalizeConfig normalizes the configuration by applying defaults and ensuring consistency.
 func normalizeConfig(raw map[string]any) map[string]any {
 	normalized := make(map[string]any)
 
@@ -149,5 +150,6 @@ func normalizeConfig(raw map[string]any) map[string]any {
 	normalized["template"] = normalizedTemplate
 	normalized["variables"] = normalizedVariables
 	normalized["location"] = locationMap // Use our correctly processed location map
+
 	return normalized
 }

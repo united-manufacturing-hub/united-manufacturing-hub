@@ -16,6 +16,7 @@ package v2
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -27,42 +28,53 @@ import (
 	"go.uber.org/zap"
 )
 
-// login logs in to the API and returns a JWT token, UUID & the instance name
+// login logs in to the API and returns a JWT token, UUID & the instance name.
 func login(token string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (*LoginResponse, error) {
 	var cookieMap = make(map[string]string)
+
 	request, status, err := http.PostRequest[backend_api_structs.InstanceLoginResponse, any](context.Background(), http.LoginEndpoint, nil, map[string]string{
 		"Authorization": fmt.Sprint("Bearer ", LoginHash(token)),
 	}, &cookieMap, insecureTLS, apiURL, logger)
 	if err != nil {
 		logger.Warnf("Failed to login (Status %d): %s", status, err)
+
 		return nil, err
 	}
+
 	if cookieMap == nil {
 		logger.Warnf("No cookie returned")
-		return nil, fmt.Errorf("no cookie returned")
+
+		return nil, errors.New("no cookie returned")
 	}
+
 	if cookie, ok := cookieMap["token"]; !ok || cookie == "" {
 		logger.Warnf("No token cookie returned")
-		return nil, fmt.Errorf("no token cookie returned")
+
+		return nil, errors.New("no token cookie returned")
 	}
+
 	if cookieMap["token"] == "" {
 		logger.Warnf("Token cookie is empty")
-		return nil, fmt.Errorf("token cookie is empty")
+
+		return nil, errors.New("token cookie is empty")
 	}
 
 	if request == nil {
 		logger.Warnf("No request returned")
-		return nil, fmt.Errorf("no request returned")
+
+		return nil, errors.New("no request returned")
 	}
 
 	// Parse UUID
 	uuid, err := uuid.Parse(request.UUID)
 	if err != nil {
 		logger.Warnf("Failed to parse UUID: %s", err)
-		return nil, fmt.Errorf("failed to parse UUID")
+
+		return nil, errors.New("failed to parse UUID")
 	}
 
 	var LoginResponse LoginResponse
+
 	LoginResponse.JWT = cookieMap["token"]
 	LoginResponse.UUID = uuid
 	LoginResponse.Name = request.Name
@@ -72,10 +84,13 @@ func login(token string, insecureTLS bool, apiURL string, logger *zap.SugaredLog
 
 func NewLogin(authToken string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) *LoginResponse {
 	var credentials *LoginResponse
+
 	bo := tools.NewBackoff(1*time.Second, 1*time.Second, 60*time.Second, tools.BackoffPolicyLinear)
+
 	var loggedIn bool
 	for !loggedIn {
 		var err error
+
 		credentials, err = login(authToken, insecureTLS, apiURL, logger)
 		if err != nil {
 			logger.Warnf("Failed to login: %s", err)
@@ -84,11 +99,15 @@ func NewLogin(authToken string, insecureTLS bool, apiURL string, logger *zap.Sug
 			loggedIn = true
 		}
 	}
+
 	if credentials == nil {
 		logger.Error("Login successful but credentials are nil")
+
 		return nil
 	}
+
 	logger.Infof("Successfully logged in as %s", credentials.Name)
+
 	return credentials
 }
 

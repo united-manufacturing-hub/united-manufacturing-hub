@@ -51,7 +51,9 @@ var _ = Describe("ConnectionService", func() {
 	)
 
 	BeforeEach(func() {
-		ctx, cancelFunc = context.WithDeadline(context.Background(), time.Now().Add(500*time.Second))
+		ctx, cancelFunc := context.WithDeadline(context.Background(), time.Now().Add(500*time.Second))
+		_ = ctx
+		_ = cancelFunc
 		tick = 1
 		connectionName = "test-connection"
 
@@ -341,6 +343,7 @@ var _ = Describe("ConnectionService", func() {
 				if config.Name == nmapName {
 					foundStopped = true
 					Expect(config.DesiredFSMState).To(Equal(nmapfsm.OperationalStateStopped))
+
 					break
 				}
 			}
@@ -356,6 +359,7 @@ var _ = Describe("ConnectionService", func() {
 				if config.Name == nmapName {
 					foundStarted = true
 					Expect(config.DesiredFSMState).To(Equal(nmapfsm.OperationalStateOpen))
+
 					break
 				}
 			}
@@ -491,7 +495,7 @@ var _ = Describe("ConnectionService", func() {
 	})
 })
 
-// TransitionToNmapState is a helper to configure a service for a given high-level state
+// TransitionToNmapState is a helper to configure a service for a given high-level state.
 func TransitionToNmapState(mockService *nmap.MockNmapService, serviceName string, state string) {
 	switch state {
 	case nmapfsm.OperationalStateStopped,
@@ -559,7 +563,7 @@ func TransitionToNmapState(mockService *nmap.MockNmapService, serviceName string
 	}
 }
 
-// SetupNmapServiceState configures the mock service state for Nmap instance tests
+// SetupNmapServiceState configures the mock service state for Nmap instance tests.
 func SetupNmapServiceState(
 	mockService *nmap.MockNmapService,
 	serviceName string,
@@ -627,12 +631,14 @@ func ConfigureNmapManagerForState(
 	if mockService.ExistingServices == nil {
 		mockService.ExistingServices = make(map[string]bool)
 	}
+
 	mockService.ExistingServices[serviceName] = true
 
 	// Make sure service state is initialized
 	if mockService.ServiceStates == nil {
 		mockService.ServiceStates = make(map[string]*nmap.ServiceInfo)
 	}
+
 	if mockService.ServiceStates[serviceName] == nil {
 		mockService.ServiceStates[serviceName] = &nmap.ServiceInfo{}
 	}
@@ -653,22 +659,25 @@ func WaitForNmapManagerInstanceState(
 	maxAttempts int,
 ) (uint64, error) {
 	tick := snapshot.Tick
-	for i := 0; i < maxAttempts; i++ {
+	for range maxAttempts {
 		err, _ := manager.Reconcile(ctx, snapshot, services)
 		if err != nil {
 			return tick, err
 		}
+
 		tick++
 
 		inst, found := manager.GetInstance(instanceName)
 		if found && inst.GetCurrentFSMState() == desiredState {
 			return tick, nil
 		}
+
 		if found {
 			fmt.Printf("currentState: %s\n", inst.GetCurrentFSMState())
 			fmt.Printf(" found instance: %s\n", instanceName)
 		}
 	}
+
 	return tick, fmt.Errorf("instance %s did not reach state %s after %d attempts",
 		instanceName, desiredState, maxAttempts)
 }

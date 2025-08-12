@@ -15,7 +15,7 @@
 package dataflowcomponent
 
 import (
-	"fmt"
+	"errors"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -27,7 +27,6 @@ import (
 )
 
 func NewDataflowComponentManagerWithMockedServices(name string) (*DataflowComponentManager, *dataflowcomponentsvc.MockDataFlowComponentService) {
-
 	mockSvc := dataflowcomponentsvc.NewMockDataFlowComponentService()
 
 	// Configure the mock S6 service
@@ -59,7 +58,7 @@ func NewDataflowComponentManagerWithMockedServices(name string) (*DataflowCompon
 			return config.DataFlow, nil
 		},
 		func(config config.DataFlowComponentConfig) (string, error) {
-			return fmt.Sprintf("dataflow-%s", config.Name), nil
+			return "dataflow-" + config.Name, nil
 		},
 		// Get desired state for Dataflowcomponent config
 		func(cfg config.DataFlowComponentConfig) (string, error) {
@@ -79,38 +78,44 @@ func NewDataflowComponentManagerWithMockedServices(name string) (*DataflowCompon
 			benthosMockService.S6Service = s6MockService
 			mockSvc.BenthosService = benthosMockService
 			instance.service = mockSvc
+
 			return instance, nil
 		},
 		// Compare Dataflowcomponent configs
 		func(instance public_fsm.FSMInstance, cfg config.DataFlowComponentConfig) (bool, error) {
 			dataflowComponentInstance, ok := instance.(*DataflowComponentInstance)
 			if !ok {
-				return false, fmt.Errorf("instance is not a DataflowComponentInstance")
+				return false, errors.New("instance is not a DataflowComponentInstance")
 			}
+
 			dataflowComponentInstance.config = cfg.DataFlowComponentServiceConfig
 			if mockSvc, ok := dataflowComponentInstance.service.(*dataflowcomponentsvc.MockDataFlowComponentService); ok {
 				mockSvc.GetConfigResult = cfg.DataFlowComponentServiceConfig
 			}
+
 			return true, nil
 		},
 		// Set DataflowComponent config
 		func(instance public_fsm.FSMInstance, cfg config.DataFlowComponentConfig) error {
 			dataflowComponentInstance, ok := instance.(*DataflowComponentInstance)
 			if !ok {
-				return fmt.Errorf("instance is not a DataflowComponentInstance")
+				return errors.New("instance is not a DataflowComponentInstance")
 			}
+
 			dataflowComponentInstance.config = cfg.DataFlowComponentServiceConfig
 			if mockSvc, ok := dataflowComponentInstance.service.(*dataflowcomponentsvc.MockDataFlowComponentService); ok {
 				mockSvc.GetConfigResult = cfg.DataFlowComponentServiceConfig
 			}
+
 			return nil
 		},
 		// Get expected max p95 execution time per instance
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
 			dataflowComponentInstance, ok := instance.(*DataflowComponentInstance)
 			if !ok {
-				return 0, fmt.Errorf("instance is not a DataflowComponentInstance")
+				return 0, errors.New("instance is not a DataflowComponentInstance")
 			}
+
 			return dataflowComponentInstance.GetMinimumRequiredTime(), nil
 		},
 	)

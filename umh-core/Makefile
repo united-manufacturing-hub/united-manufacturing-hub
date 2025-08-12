@@ -90,6 +90,7 @@ install:
 	go install github.com/evilmartians/lefthook@latest
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 	go install github.com/dkorunic/betteralign/cmd/betteralign@$(BETTERALIGN_VERSION)
+	go install golang.org/x/tools/cmd/goimports@latest
 
 download-docker-binaries:
 	@mkdir -p .docker-cache/s6-overlay .docker-cache/benthos .docker-cache/redpanda
@@ -246,11 +247,16 @@ cleanup-all: cleanup-ci cleanup-tmp cleanup-data
 vet:
 	go vet -tags=test ./...
 
-lint:
+lint: fix
 	golangci-lint run ./...
 
 lint-fix:
-	golangci-lint autofix ./...
+	golangci-lint run --fix ./...
+
+import-fix:
+	goimports -w $$(find . -type f -name '*.go' -not -path "./vendor/*")
+
+fix: import-fix lint-fix
 
 nilaway:
 	# See lefthook.yaml for more details
@@ -346,6 +352,7 @@ update-go-dependencies:
 	go get -u ./...
 	go mod tidy
 	go mod vendor
+	go vet ./...
 
 # Print version variables for use in other scripts/tools
 print-versions:

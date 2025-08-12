@@ -19,7 +19,7 @@ import (
 )
 
 // ServiceArtifacts represents the essential paths for an S6 service
-// Tracks only essential root paths to minimize I/O operations and improve performance
+// Tracks only essential root paths to minimize I/O operations and improve performance.
 type ServiceArtifacts struct {
 	// RemovalProgress tracks what has been completed during removal for idempotent incremental removal
 	RemovalProgress *RemovalProgress
@@ -38,7 +38,7 @@ type ServiceArtifacts struct {
 }
 
 // RemovalProgress tracks the state of removal operations using the skarnet sequence
-// Each field represents a step that has been completed and verified
+// Each field represents a step that has been completed and verified.
 type RemovalProgress struct {
 	// SymlinkRemoved indicates that the symlink has been removed from scan directory
 	SymlinkRemoved bool
@@ -50,22 +50,26 @@ type RemovalProgress struct {
 	DirectoriesRemoved bool
 }
 
-// InitRemovalProgress initializes removal progress tracking if not already present
+// InitRemovalProgress initializes removal progress tracking if not already present.
 func (artifacts *ServiceArtifacts) InitRemovalProgress() {
 	artifacts.RemovalProgressMu.Lock()
 	defer artifacts.RemovalProgressMu.Unlock()
+
 	if artifacts.RemovalProgress == nil {
 		artifacts.RemovalProgress = &RemovalProgress{}
 	}
 }
 
-// IsFullyRemoved checks if all removal steps have been completed using the skarnet sequence
+// IsFullyRemoved checks if all removal steps have been completed using the skarnet sequence.
 func (artifacts *ServiceArtifacts) IsFullyRemoved() bool {
 	artifacts.RemovalProgressMu.RLock()
 	defer artifacts.RemovalProgressMu.RUnlock()
+
 	if artifacts.RemovalProgress == nil {
 		return false
 	}
+
 	p := artifacts.RemovalProgress
+
 	return p.SymlinkRemoved && p.ServiceStopped && p.ServiceUnsupervised && p.DirectoriesRemoved
 }

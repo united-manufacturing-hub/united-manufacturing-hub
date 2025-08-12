@@ -32,7 +32,9 @@ func (c StreamProcessorServiceConfigSpec) GetDFCServiceConfig(spName string) dat
 	// Extract topics from sources for input configuration
 	// These are template strings that will be rendered with variables later
 	var umhTopics []string
+
 	enhancedSources := make(map[string]string)
+
 	for alias, topic := range c.Config.Sources {
 		// Topics in sources are template strings like "{{ .location_path }}._raw.{{ .abc }}"
 		// We need to prefix them with "umh.v1." to make them valid UNS topics
@@ -41,6 +43,7 @@ func (c StreamProcessorServiceConfigSpec) GetDFCServiceConfig(spName string) dat
 		if !strings.HasPrefix(topic, "umh.v1.") {
 			umhTopic = "umh.v1." + topic
 		}
+
 		umhTopics = append(umhTopics, umhTopic)
 		enhancedSources[alias] = umhTopic
 	}
@@ -91,12 +94,14 @@ type StreamProcessorBenthosConfig struct {
 	OutputTopic string         `yaml:"output_topic"`
 }
 
-// FromDFCServiceConfig creates a StreamProcessorServiceConfigRuntime from a DFC config
+// FromDFCServiceConfig creates a StreamProcessorServiceConfigRuntime from a DFC config.
 func FromDFCServiceConfig(dfcConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig) StreamProcessorServiceConfigRuntime {
 	// Extract the stream processor config from the DFC pipeline section
-	var model ModelRef
-	var sources SourceMapping
-	var mapping map[string]any
+	var (
+		model   ModelRef
+		sources SourceMapping
+		mapping map[string]any
+	)
 
 	if processor, ok := dfcConfig.BenthosConfig.Pipeline["processors"].([]any); ok {
 		for _, v := range processor {
@@ -106,7 +111,8 @@ func FromDFCServiceConfig(dfcConfig dataflowcomponentserviceconfig.DataflowCompo
 					yamlBytes, err := yaml.Marshal(streamProcessorMap)
 					if err == nil {
 						var streamProcessor StreamProcessorBenthosConfig
-						if err := yaml.Unmarshal(yamlBytes, &streamProcessor); err == nil {
+						err := yaml.Unmarshal(yamlBytes, &streamProcessor)
+						if err == nil {
 							model = streamProcessor.Model
 							sources = streamProcessor.Sources
 							mapping = streamProcessor.Mapping

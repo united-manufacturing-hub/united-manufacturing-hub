@@ -35,29 +35,29 @@ import (
 // ─ parseBufferPool supplies ephemeral byte slices.
 // ─ Decoded data is stored in BufferItems obtained from bufferItemPool.
 
-// s6 log limits (bytes, before hex decoding)
+// s6 log limits (bytes, before hex decoding).
 const (
 	// s6LineLimit is the maximum number of characters S6 allows in a single log line
-	// This is the default S6 configuration limit before truncation occurs
+	// This is the default S6 configuration limit before truncation occurs.
 	s6LineLimit = 8192
 
 	// s6Overhead represents additional characters S6 adds to each log line
-	// This accounts for line terminators and other S6-specific formatting
+	// This accounts for line terminators and other S6-specific formatting.
 	s6Overhead = 1
 
 	// safetyBuffer provides extra buffer space beyond the calculated minimum
 	// This prevents buffer reallocation in edge cases and accounts for
-	// minor variations in actual log line lengths
+	// minor variations in actual log line lengths.
 	safetyBuffer = 64
 
 	// parseBufferInitialSize is the starting capacity for hex parsing buffers
 	// Calculation: ~8 typical S6-truncated entries × 8,193 bytes per entry = 64KB
 	// This handles most common batch sizes without reallocation while avoiding
-	// excessive memory usage for small batches
+	// excessive memory usage for small batches.
 	parseBufferInitialSize = 64 << 10 // 64KB
 )
 
-// Pre-compiled byte markers for efficient searching
+// Pre-compiled byte markers for efficient searching.
 var (
 	blockStartMarkerBytes = []byte(constants.BLOCK_START_MARKER)
 	dataEndMarkerBytes    = []byte(constants.DATA_END_MARKER)
@@ -65,10 +65,10 @@ var (
 )
 
 // maxMarkerLineLength is the maximum expected length of lines containing markers
-// Hex payload lines are ~8KB, marker lines are tiny (~50 bytes max)
+// Hex payload lines are ~8KB, marker lines are tiny (~50 bytes max).
 const maxMarkerLineLength = 100
 
-// containsMarker efficiently checks if content contains the given marker using byte operations
+// containsMarker efficiently checks if content contains the given marker using byte operations.
 func containsMarker(content string, marker []byte) bool {
 	// Fast path: if line is too long, it can't contain a marker
 	if len(content) > maxMarkerLineLength {
@@ -78,6 +78,7 @@ func containsMarker(content string, marker []byte) bool {
 	// Use unsafe conversion to avoid string->[]byte allocation
 	// This is safe because we're only reading from the bytes, not modifying them
 	contentBytes := unsafe.Slice(unsafe.StringData(content), len(content))
+
 	return bytes.Contains(contentBytes, marker)
 }
 
@@ -115,9 +116,11 @@ func extractNextBlock(entries []s6_shared.LogEntry, lastProcessedTimestamp time.
 		for i := searchStart; i < len(entries); i++ {
 			if containsMarker(entries[i].Content, blockStartMarkerBytes) {
 				startIndex = i
+
 				break
 			}
 		}
+
 		if startIndex == -1 {
 			return nil, 0, len(entries) - 1, nil // No new block start found
 		}
@@ -126,9 +129,11 @@ func extractNextBlock(entries []s6_shared.LogEntry, lastProcessedTimestamp time.
 		for i := startIndex + 1; i < len(entries); i++ {
 			if containsMarker(entries[i].Content, dataEndMarkerBytes) {
 				dataEndIndex = i
+
 				break
 			}
 		}
+
 		if dataEndIndex == -1 {
 			return nil, 0, len(entries) - 1, nil // Incomplete block
 		}
@@ -137,25 +142,31 @@ func extractNextBlock(entries []s6_shared.LogEntry, lastProcessedTimestamp time.
 		for i := dataEndIndex + 1; i < len(entries); i++ {
 			if containsMarker(entries[i].Content, blockEndMarkerBytes) {
 				blockEndIndex = i
+
 				break
 			}
 		}
+
 		if blockEndIndex == -1 {
 			return nil, 0, len(entries) - 1, nil // Incomplete block
 		}
 
 		// Extract timestamp from this block
 		tsLine := ""
+
 		for _, entry := range entries[dataEndIndex+1 : blockEndIndex] {
 			s := strings.TrimSpace(entry.Content)
 			if s != "" {
 				tsLine = s
+
 				break
 			}
 		}
+
 		if tsLine == "" {
 			// Skip this malformed block and continue searching
 			searchStart = blockEndIndex + 1
+
 			continue
 		}
 
@@ -163,6 +174,7 @@ func extractNextBlock(entries []s6_shared.LogEntry, lastProcessedTimestamp time.
 		if err != nil {
 			// Move past this malformed block and continue searching
 			searchStart = blockEndIndex + 1
+
 			continue
 		}
 
@@ -182,7 +194,7 @@ func extractNextBlock(entries []s6_shared.LogEntry, lastProcessedTimestamp time.
 	return nil, 0, len(entries) - 1, nil
 }
 
-// extractBlockData extracts the hex payload from a complete block
+// extractBlockData extracts the hex payload from a complete block.
 func extractBlockData(entries []s6_shared.LogEntry, startIndex, dataEndIndex, blockEndIndex int, epochMS int64) ([]byte, int64, int, error) {
 	// Extract hex payload using parseBufferPool (see memory management docs above)
 	bufPtr := parseBufferPool.Get().(*[]byte)
@@ -258,7 +270,7 @@ func (svc *Service) parseBlock(entries []s6_shared.LogEntry) error {
 		item.Payload = item.Payload[:payloadSize]
 	}
 
-	//now := time.Now()
+	// now := time.Now()
 	if _, err := hex.Decode(item.Payload, hexBuf); err != nil {
 		// Return to pool on error
 		bufferItemPool.Put(item)
@@ -312,6 +324,7 @@ func (svc *Service) parseBlock(entries []s6_shared.LogEntry) error {
 var parseBufferPool = sync.Pool{
 	New: func() any {
 		b := make([]byte, 0, parseBufferInitialSize)
+
 		return &b
 	},
 }

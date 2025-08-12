@@ -47,7 +47,9 @@ var _ = Describe("DataFlowComponentService", func() {
 	)
 
 	BeforeEach(func() {
-		ctx, cancelFunc = context.WithDeadline(context.Background(), time.Now().Add(500*time.Second))
+		ctx, cancelFunc := context.WithDeadline(context.Background(), time.Now().Add(500*time.Second))
+		_ = ctx
+		_ = cancelFunc
 		tick = 1
 		componentName = "test-component"
 
@@ -141,7 +143,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			_, _ = service.ReconcileManager(ctx, mockSvcRegistry, tick)
 
 			// Assert
-			//Expect(reconciled).To(BeTrue())
+			// Expect(reconciled).To(BeTrue())
 			Expect(service.benthosConfigs).To(HaveLen(1))
 		})
 	})
@@ -371,6 +373,7 @@ var _ = Describe("DataFlowComponentService", func() {
 				if config.Name == benthosName {
 					foundStopped = true
 					Expect(config.DesiredFSMState).To(Equal(benthosfsmmanager.OperationalStateStopped))
+
 					break
 				}
 			}
@@ -386,6 +389,7 @@ var _ = Describe("DataFlowComponentService", func() {
 				if config.Name == benthosName {
 					foundStarted = true
 					Expect(config.DesiredFSMState).To(Equal(benthosfsmmanager.OperationalStateActive))
+
 					break
 				}
 			}
@@ -530,25 +534,26 @@ var _ = Describe("DataFlowComponentService", func() {
 	})
 })
 
-// ConfigureBenthosManagerForState configures mock service for proper transitions
+// ConfigureBenthosManagerForState configures mock service for proper transitions.
 func ConfigureBenthosManagerForState(mockService *benthosservice.MockBenthosService, serviceName string, targetState string) {
 	// Make sure the service exists in the mock
 	if mockService.ExistingServices == nil {
 		mockService.ExistingServices = make(map[string]bool)
 	}
+
 	mockService.ExistingServices[serviceName] = true
 
 	// Make sure service state is initialized
 	if mockService.ServiceStates == nil {
 		mockService.ServiceStates = make(map[string]*benthosservice.ServiceInfo)
 	}
+
 	if mockService.ServiceStates[serviceName] == nil {
 		mockService.ServiceStates[serviceName] = &benthosservice.ServiceInfo{}
 	}
 
 	// Configure the service for the target state
 	TransitionToBenthosState(mockService, serviceName, targetState)
-
 }
 
 func TransitionToBenthosState(mockService *benthosservice.MockBenthosService, serviceName string, targetState string) {
@@ -681,7 +686,7 @@ func SetupBenthosServiceState(
 	mockService.SetServiceState(serviceName, flags)
 }
 
-// WaitForBenthosManagerInstanceState waits for instance to reach desired state
+// WaitForBenthosManagerInstanceState waits for instance to reach desired state.
 func WaitForBenthosManagerInstanceState(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
@@ -693,16 +698,18 @@ func WaitForBenthosManagerInstanceState(
 ) (uint64, error) {
 	// Duplicate implementation from fsmtest package
 	tick := snapshot.Tick
-	baseTime := snapshot.SnapshotTime
-	for i := 0; i < maxAttempts; i++ {
 
+	baseTime := snapshot.SnapshotTime
+	for range maxAttempts {
 		// Update the snapshot time and tick to simulate the passage of time deterministically
 		snapshot.SnapshotTime = baseTime.Add(time.Duration(tick) * constants.DefaultTickerTime)
 		snapshot.Tick = tick
+
 		err, _ := manager.Reconcile(ctx, snapshot, services)
 		if err != nil {
 			return tick, err
 		}
+
 		tick++
 
 		instance, found := manager.GetInstance(instanceName)
@@ -710,5 +717,6 @@ func WaitForBenthosManagerInstanceState(
 			return tick, nil
 		}
 	}
+
 	return tick, fmt.Errorf("instance didn't reach expected state: %s", expectedState)
 }

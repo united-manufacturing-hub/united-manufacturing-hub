@@ -16,7 +16,6 @@ package backoff
 
 import (
 	"errors"
-	"fmt"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -66,7 +65,7 @@ var _ = Describe("BackoffManager", func() {
 	Context("when handling errors", func() {
 		It("should track errors and reset correctly", func() {
 			// Initially no error
-			Expect(manager.GetLastError()).To(BeNil())
+			Expect(manager.GetLastError()).To(Succeed())
 			Expect(manager.IsPermanentlyFailed()).To(BeFalse())
 
 			// Set a temporary error
@@ -79,7 +78,7 @@ var _ = Describe("BackoffManager", func() {
 
 			// Reset should clear the error state
 			manager.Reset()
-			Expect(manager.GetLastError()).To(BeNil())
+			Expect(manager.GetLastError()).To(Succeed())
 			Expect(manager.ShouldSkipOperation(tick)).To(BeFalse())
 		})
 
@@ -242,11 +241,11 @@ var _ = Describe("BackoffManager", func() {
 	Context("when using backoff manager in FSM", func() {
 		It("should calculate reasonable backoff intervals", func() {
 			// First error
-			manager.SetError(fmt.Errorf("error1"), 0)
+			manager.SetError(errors.New("error1"), 0)
 			Expect(manager.suspendedUntilTick).To(Equal(uint64(1)))
 
 			// Second error
-			manager.SetError(fmt.Errorf("error2"), 1)
+			manager.SetError(errors.New("error2"), 1)
 			Expect(manager.suspendedUntilTick).To(BeNumerically("~", 2, 3))
 		})
 	})

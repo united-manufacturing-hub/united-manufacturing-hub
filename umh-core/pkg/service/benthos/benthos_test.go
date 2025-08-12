@@ -16,7 +16,7 @@ package benthos
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"path/filepath"
 	"time"
 
@@ -536,7 +536,8 @@ var _ = Describe("Benthos Service", func() {
 		)
 
 		BeforeEach(func() {
-			ctx, cancel = context.WithDeadline(context.Background(), time.Now().Add(100*time.Second))
+			ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(100*time.Second))
+			_ = cancel
 			mockS6Service = s6service.NewMockService()
 			mockSvcRegistry = serviceregistry.NewMockRegistry()
 			benthosMonitorMockService = benthos_monitor.NewMockBenthosMonitorService()
@@ -606,7 +607,7 @@ var _ = Describe("Benthos Service", func() {
 			}
 
 			// Reconcile the S6 manager a couple of times
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				err, _ = service.ReconcileManager(ctx, mockSvcRegistry, 0)
 				Expect(err).NotTo(HaveOccurred())
 			}
@@ -723,7 +724,7 @@ logger:
 
 				if topicsInterface, ok := mqttConfig["topics"]; ok {
 					if topics, ok := topicsInterface.([]interface{}); ok {
-						Expect(len(topics)).To(Equal(1), "Should have one topic")
+						Expect(topics).To(HaveLen(1), "Should have one topic")
 						if topicStr, ok := topics[0].(string); ok {
 							Expect(topicStr).To(Equal("updated-topic"), "The configuration should be updated to the new topic")
 						} else {
@@ -758,7 +759,8 @@ logger:
 		)
 
 		BeforeEach(func() {
-			ctx, cancel = context.WithDeadline(context.Background(), time.Now().Add(1*time.Second))
+			ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(1*time.Second))
+			_ = cancel
 			mockS6Service = s6service.NewMockService()
 			benthosMonitorMockService = benthos_monitor.NewMockBenthosMonitorService()
 			benthosMonitorMockService.SetLiveStatus(true)
@@ -799,7 +801,7 @@ logger:
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reconcile the S6 manager a couple of times
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				err, _ = service.ReconcileManager(ctx, mockSvcRegistry, 0)
 				Expect(err).NotTo(HaveOccurred())
 			}
@@ -1030,7 +1032,7 @@ logger:
 
 		It("should propagate errors from S6 service", func() {
 			// Set up mock to return an error
-			mockError := fmt.Errorf("mock force remove error")
+			mockError := errors.New("mock force remove error")
 			mockS6Service.ForceRemoveError = mockError
 
 			// Call ForceRemoveBenthos

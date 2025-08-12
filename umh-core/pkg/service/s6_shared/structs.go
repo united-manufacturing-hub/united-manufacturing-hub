@@ -19,34 +19,34 @@ import (
 	"time"
 )
 
-// ServiceStatus represents the status of an S6 service
+// ServiceStatus represents the status of an S6 service.
 type ServiceStatus string
 
 const (
-	// ServiceUnknown indicates the service status cannot be determined
+	// ServiceUnknown indicates the service status cannot be determined.
 	ServiceUnknown ServiceStatus = "unknown"
-	// ServiceUp indicates the service is running
+	// ServiceUp indicates the service is running.
 	ServiceUp ServiceStatus = "up"
-	// ServiceDown indicates the service is stopped
+	// ServiceDown indicates the service is stopped.
 	ServiceDown ServiceStatus = "down"
-	// ServiceRestarting indicates the service is restarting
+	// ServiceRestarting indicates the service is restarting.
 	ServiceRestarting ServiceStatus = "restarting"
 )
 
-// HealthStatus represents the health state of an S6 service
+// HealthStatus represents the health state of an S6 service.
 type HealthStatus int
 
 const (
 	// HealthUnknown indicates the health check failed due to I/O errors, timeouts, etc.
-	// This should not trigger service recreation, just retry next tick
+	// This should not trigger service recreation, just retry next tick.
 	HealthUnknown HealthStatus = iota
-	// HealthOK indicates the service directory is healthy and complete
+	// HealthOK indicates the service directory is healthy and complete.
 	HealthOK
-	// HealthBad indicates the service directory is definitely broken and needs recreation
+	// HealthBad indicates the service directory is definitely broken and needs recreation.
 	HealthBad
 )
 
-// String returns a string representation of the health status
+// String returns a string representation of the health status.
 func (h HealthStatus) String() string {
 	switch h {
 	case HealthUnknown:
@@ -60,7 +60,7 @@ func (h HealthStatus) String() string {
 	}
 }
 
-// ServiceInfo contains information about an S6 service
+// ServiceInfo contains information about an S6 service.
 type ServiceInfo struct {
 	LastChangedAt      time.Time     // Timestamp when the service status last changed
 	LastReadyAt        time.Time     // Timestamp when the service was last ready
@@ -80,14 +80,14 @@ type ServiceInfo struct {
 	IsReady            bool          // Whether the service is ready
 }
 
-// ExitEvent represents a service exit event
+// ExitEvent represents a service exit event.
 type ExitEvent struct {
 	Timestamp time.Time // timestamp of the exit event
 	ExitCode  int       // exit code of the service
 	Signal    int       // signal number of the exit event
 }
 
-// LogEntry represents a parsed log entry from the S6 logs
+// LogEntry represents a parsed log entry from the S6 logs.
 type LogEntry struct {
 	// Timestamp in UTC time
 	Timestamp time.Time `json:"timestamp"`

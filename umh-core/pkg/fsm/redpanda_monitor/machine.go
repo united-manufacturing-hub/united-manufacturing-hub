@@ -86,28 +86,30 @@ func NewRedpandaMonitorInstanceWithService(config config.RedpandaMonitorConfig, 
 	return instance
 }
 
-// SetDesiredFSMState is how external code updates the desired state at runtime
+// SetDesiredFSMState is how external code updates the desired state at runtime.
 func (a *RedpandaMonitorInstance) SetDesiredFSMState(state string) error {
 	// We only allow "active" or "stopped"
 	if state != OperationalStateActive && state != OperationalStateStopped {
 		return fmt.Errorf("invalid desired state: %s (only '%s' or '%s' allowed)",
 			state, OperationalStateActive, OperationalStateStopped)
 	}
+
 	a.baseFSMInstance.SetDesiredFSMState(state)
+
 	return nil
 }
 
-// GetCurrentFSMState returns the current operational or lifecycle state
+// GetCurrentFSMState returns the current operational or lifecycle state.
 func (a *RedpandaMonitorInstance) GetCurrentFSMState() string {
 	return a.baseFSMInstance.GetCurrentFSMState()
 }
 
-// GetDesiredFSMState returns what we want operationally
+// GetDesiredFSMState returns what we want operationally.
 func (a *RedpandaMonitorInstance) GetDesiredFSMState() string {
 	return a.baseFSMInstance.GetDesiredFSMState()
 }
 
-// Remove initiates the removal lifecycle
+// Remove initiates the removal lifecycle.
 func (a *RedpandaMonitorInstance) Remove(ctx context.Context) error {
 	return a.baseFSMInstance.Remove(ctx)
 }
@@ -128,13 +130,13 @@ func (a *RedpandaMonitorInstance) IsStopping() bool {
 	return a.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopping
 }
 
-// PrintState is a helper for debugging
+// PrintState is a helper for debugging.
 func (a *RedpandaMonitorInstance) PrintState() {
 	a.baseFSMInstance.GetLogger().Infof("RedpandaMonitorInstance %s - Current state: %s, Desired: %s",
 		a.baseFSMInstance.GetID(), a.GetCurrentFSMState(), a.GetDesiredFSMState())
 }
 
-// GetMinimumRequiredTime returns the minimum required time for this instance
+// GetMinimumRequiredTime returns the minimum required time for this instance.
 func (a *RedpandaMonitorInstance) GetMinimumRequiredTime() time.Duration {
 	return constants.RedpandaMonitorUpdateObservedStateTimeout
 }

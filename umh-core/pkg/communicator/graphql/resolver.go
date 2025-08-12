@@ -31,17 +31,17 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 )
 
-// SnapshotProvider provides access to system snapshots containing topic data
+// SnapshotProvider provides access to system snapshots containing topic data.
 type SnapshotProvider interface {
 	GetSnapshot() *SystemSnapshot
 }
 
-// SystemSnapshot represents the system state snapshot
+// SystemSnapshot represents the system state snapshot.
 type SystemSnapshot struct {
 	Managers map[string]interface{}
 }
 
-// TopicBrowserCacheInterface defines the interface for topic browser cache
+// TopicBrowserCacheInterface defines the interface for topic browser cache.
 type TopicBrowserCacheInterface interface {
 	GetEventMap() map[string]*tbproto.EventTableEntry
 	GetUnsMap() *tbproto.TopicMap
@@ -68,6 +68,7 @@ func (r *queryResolver) Topics(ctx context.Context, filter *TopicFilter, limit *
 
 	// Determine effective limit early
 	const defaultMaxLimit = 100
+
 	maxLimit := defaultMaxLimit
 	if limit != nil && *limit > 0 && *limit < defaultMaxLimit {
 		maxLimit = *limit
@@ -77,7 +78,7 @@ func (r *queryResolver) Topics(ctx context.Context, filter *TopicFilter, limit *
 
 	// Convert protobuf data to GraphQL models with early termination
 	processedCount := 0
-	for _, topicInfo := range unsMap.Entries {
+	for _, topicInfo := range unsMap.GetEntries() {
 		// Check context cancellation for long-running operations
 		if processedCount%50 == 0 {
 			select {
@@ -93,13 +94,14 @@ func (r *queryResolver) Topics(ctx context.Context, filter *TopicFilter, limit *
 		// Create topic object
 		topic := &Topic{
 			Topic:     r.buildTopicName(topicInfo),
-			Metadata:  r.mapMetadataToGraphQL(topicInfo.Metadata),
+			Metadata:  r.mapMetadataToGraphQL(topicInfo.GetMetadata()),
 			LastEvent: nil, // Will be populated below if event exists
 		}
 
 		// Apply filters early to avoid unnecessary processing
 		if filter != nil && !r.matchesFilter(topic, filter) {
 			processedCount++
+
 			continue
 		}
 
@@ -142,16 +144,17 @@ func (r *queryResolver) Topic(ctx context.Context, topic string) (*Topic, error)
 func (r *Resolver) buildTopicName(topicInfo *tbproto.TopicInfo) string {
 	// Use expert's exact algorithm: Level0 + LocationSublevels + DataContract + VirtualPath + Name
 	var parts []string
-	parts = append(parts, topicInfo.Level0)
-	parts = append(parts, topicInfo.LocationSublevels...)
-	parts = append(parts, topicInfo.DataContract)
+
+	parts = append(parts, topicInfo.GetLevel0())
+	parts = append(parts, topicInfo.GetLocationSublevels()...)
+	parts = append(parts, topicInfo.GetDataContract())
 
 	// VirtualPath may already contain dots; add as-is if present
-	if topicInfo.VirtualPath != nil && *topicInfo.VirtualPath != "" {
-		parts = append(parts, *topicInfo.VirtualPath)
+	if topicInfo.VirtualPath != nil && topicInfo.GetVirtualPath() != "" {
+		parts = append(parts, topicInfo.GetVirtualPath())
 	}
 
-	parts = append(parts, topicInfo.Name)
+	parts = append(parts, topicInfo.GetName())
 
 	return strings.Join(parts, ".")
 }
@@ -173,22 +176,22 @@ func (r *Resolver) hashUNSTableEntry(info *tbproto.TopicInfo) string {
 		_, _ = hasher.Write(append([]byte(s), 0))
 	}
 
-	write(info.Level0)
+	write(info.GetLevel0())
 
 	// Hash all location sublevels
-	for _, level := range info.LocationSublevels {
+	for _, level := range info.GetLocationSublevels() {
 		write(level)
 	}
 
-	write(info.DataContract)
+	write(info.GetDataContract())
 
 	// Hash virtual path if it exists
 	if info.VirtualPath != nil {
-		write(*info.VirtualPath)
+		write(info.GetVirtualPath())
 	}
 
 	// Hash the name (new field)
-	write(info.Name)
+	write(info.GetName())
 
 	return hex.EncodeToString(hasher.Sum(nil))
 }
@@ -201,14 +204,15 @@ func (r *Resolver) mapMetadataToGraphQL(metadata map[string]string) []*MetadataK
 			Value: value,
 		})
 	}
+
 	return result
 }
 
 func (r *Resolver) mapEventEntryToGraphQL(entry *tbproto.EventTableEntry) Event {
-	timestamp := time.UnixMilli(int64(entry.ProducedAtMs))
+	timestamp := time.UnixMilli(int64(entry.GetProducedAtMs()))
 
 	// Determine event type based on payload format
-	switch entry.PayloadFormat {
+	switch entry.GetPayloadFormat() {
 	case tbproto.PayloadFormat_TIMESERIES:
 		return r.mapTimeSeriesEvent(entry, timestamp)
 	case tbproto.PayloadFormat_RELATIONAL:
@@ -220,7 +224,7 @@ func (r *Resolver) mapEventEntryToGraphQL(entry *tbproto.EventTableEntry) Event 
 }
 
 func (r *Resolver) mapTimeSeriesEvent(entry *tbproto.EventTableEntry, timestamp time.Time) *TimeSeriesEvent {
-	headers := r.mapKafkaHeaders(entry.RawKafkaMsg)
+	headers := r.mapKafkaHeaders(entry.GetRawKafkaMsg())
 
 	// Get the time series payload
 	tsPayload := entry.GetTs()
@@ -235,36 +239,41 @@ func (r *Resolver) mapTimeSeriesEvent(entry *tbproto.EventTableEntry, timestamp 
 		}
 	}
 
-	var scalarType ScalarType
-	var numericValue *float64
-	var stringValue *string
-	var booleanValue *bool
-	var sourceTs time.Time
+	var (
+		scalarType   ScalarType
+		numericValue *float64
+		stringValue  *string
+		booleanValue *bool
+		sourceTs     time.Time
+	)
 
-	if tsPayload.TimestampMs > 0 {
-		sourceTs = time.UnixMilli(tsPayload.TimestampMs)
+	if tsPayload.GetTimestampMs() > 0 {
+		sourceTs = time.UnixMilli(tsPayload.GetTimestampMs())
 	} else {
 		sourceTs = timestamp
 	}
 
 	// Extract scalar value based on type
-	switch tsPayload.ScalarType {
+	switch tsPayload.GetScalarType() {
 	case tbproto.ScalarType_BOOLEAN:
 		scalarType = ScalarTypeBoolean
+
 		if boolVal := tsPayload.GetBooleanValue(); boolVal != nil {
-			value := boolVal.Value
+			value := boolVal.GetValue()
 			booleanValue = &value
 		}
 	case tbproto.ScalarType_STRING:
 		scalarType = ScalarTypeString
+
 		if strVal := tsPayload.GetStringValue(); strVal != nil {
-			value := strVal.Value
+			value := strVal.GetValue()
 			stringValue = &value
 		}
 	case tbproto.ScalarType_NUMERIC:
 		scalarType = ScalarTypeNumeric
+
 		if numVal := tsPayload.GetNumericValue(); numVal != nil {
-			value := numVal.Value
+			value := numVal.GetValue()
 			numericValue = &value
 		}
 	default:
@@ -285,28 +294,29 @@ func (r *Resolver) mapTimeSeriesEvent(entry *tbproto.EventTableEntry, timestamp 
 }
 
 func (r *Resolver) mapRelationalEvent(entry *tbproto.EventTableEntry, timestamp time.Time) *RelationalEvent {
-	headers := r.mapKafkaHeaders(entry.RawKafkaMsg)
+	headers := r.mapKafkaHeaders(entry.GetRawKafkaMsg())
 
 	// Get the relational payload
 	relPayload := entry.GetRel()
+
 	var jsonData map[string]any
 
-	if relPayload != nil && len(relPayload.Json) > 0 {
+	if relPayload != nil && len(relPayload.GetJson()) > 0 {
 		// Parse the JSON payload
-		if err := json.Unmarshal(relPayload.Json, &jsonData); err != nil {
+		if err := json.Unmarshal(relPayload.GetJson(), &jsonData); err != nil {
 			// Log the error for debugging/monitoring (with context)
 			log := logger.For(logger.ComponentCommunicator)
 			log.Warnw("Failed to unmarshal relational event JSON in GraphQL resolver",
 				"error", err,
-				"payload_size", len(relPayload.Json),
-				"uns_tree_id", entry.UnsTreeId,
-				"produced_at_ms", entry.ProducedAtMs,
+				"payload_size", len(relPayload.GetJson()),
+				"uns_tree_id", entry.GetUnsTreeId(),
+				"produced_at_ms", entry.GetProducedAtMs(),
 			)
 
 			// Create object with parse error indicator for debugging
 			jsonData = map[string]any{
 				"_parseError": err.Error(),
-				"_rawSize":    len(relPayload.Json),
+				"_rawSize":    len(relPayload.GetJson()),
 			}
 		}
 	} else {
@@ -322,14 +332,16 @@ func (r *Resolver) mapRelationalEvent(entry *tbproto.EventTableEntry, timestamp 
 
 func (r *Resolver) mapKafkaHeaders(eventKafka *tbproto.EventKafka) []*MetadataKv {
 	var headers []*MetadataKv
+
 	if eventKafka != nil && eventKafka.Headers != nil {
-		for key, value := range eventKafka.Headers {
+		for key, value := range eventKafka.GetHeaders() {
 			headers = append(headers, &MetadataKv{
 				Key:   key,
 				Value: value,
 			})
 		}
 	}
+
 	return headers
 }
 
@@ -344,13 +356,16 @@ func (r *Resolver) matchesFilter(topic *Topic, filter *TopicFilter) bool {
 		} else {
 			// Not found in topic path, check metadata
 			foundInMetadata := false
+
 			for _, kv := range topic.Metadata {
 				if strings.Contains(strings.ToLower(kv.Key), searchText) ||
 					strings.Contains(strings.ToLower(kv.Value), searchText) {
 					foundInMetadata = true
+
 					break
 				}
 			}
+
 			if !foundInMetadata {
 				return false
 			}
@@ -387,7 +402,7 @@ func (r *Resolver) matchesMetadataFilter(topicMetadata []*MetadataKv, filterMeta
 	return true
 }
 
-// Query returns QueryResolver which is required by gqlgen
+// Query returns QueryResolver which is required by gqlgen.
 func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 
 type queryResolver struct{ *Resolver }

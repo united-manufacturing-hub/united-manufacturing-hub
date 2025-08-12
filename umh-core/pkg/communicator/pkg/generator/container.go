@@ -15,7 +15,7 @@
 package generator
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
@@ -29,7 +29,6 @@ func ContainerFromSnapshot(
 	inst *fsm.FSMInstanceSnapshot,
 	log *zap.SugaredLogger,
 ) models.Container {
-
 	if inst == nil {
 		return defaultContainer()
 	}
@@ -37,8 +36,10 @@ func ContainerFromSnapshot(
 	c, err := buildContainer(*inst, log)
 	if err != nil {
 		log.Error("unable to build container data", zap.Error(err))
+
 		return defaultContainer()
 	}
+
 	return c
 }
 
@@ -49,10 +50,9 @@ func buildContainer(
 	instance fsm.FSMInstanceSnapshot,
 	_ *zap.SugaredLogger,
 ) (models.Container, error) {
-
 	snap, ok := instance.LastObservedState.(*container.ContainerObservedStateSnapshot)
 	if !ok || snap == nil {
-		return models.Container{}, fmt.Errorf("invalid observed-state")
+		return models.Container{}, errors.New("invalid observed-state")
 	}
 
 	status := snap.ServiceInfoSnapshot
@@ -77,6 +77,7 @@ func buildContainer(
 			}
 		}
 	}
+
 	if status.Memory != nil {
 		out.Memory = status.Memory
 		if out.Memory.Health == nil {
@@ -88,6 +89,7 @@ func buildContainer(
 			}
 		}
 	}
+
 	if status.Disk != nil {
 		out.Disk = status.Disk
 		if out.Disk.Health == nil {
@@ -102,6 +104,7 @@ func buildContainer(
 
 	out.Hwid = status.Hwid
 	out.Architecture = status.Architecture
+
 	return out, nil
 }
 

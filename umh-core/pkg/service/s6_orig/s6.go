@@ -43,25 +43,26 @@ import (
 
 // Global map to store last config change timestamps keyed by service path
 // This ensures timestamps are shared across all S6 service instances operating on the same service
-// TODO: This is to be replaced with the archive storage when it is implemented
+// TODO: This is to be replaced with the archive storage when it is implemented.
 var (
 	configChangeTimestamps = sync.Map{} // map[string]time.Time
 )
 
-// setLastDeployedTime sets the last config change timestamp for a service path
+// setLastDeployedTime sets the last config change timestamp for a service path.
 func setLastDeployedTime(servicePath string, timestamp time.Time) {
 	configChangeTimestamps.Store(servicePath, timestamp)
 }
 
-// getLastDeploymentTime gets the last config change timestamp for a service path
+// getLastDeploymentTime gets the last config change timestamp for a service path.
 func getLastDeploymentTime(servicePath string) time.Time {
 	if timestamp, ok := configChangeTimestamps.Load(servicePath); ok {
 		return timestamp.(time.Time)
 	}
+
 	return time.Time{} // zero time if not found
 }
 
-// DefaultService is the default implementation of the S6 Service interface
+// DefaultService is the default implementation of the S6 Service interface.
 type DefaultService struct {
 	logger     *zap.SugaredLogger
 	artifacts  *s6_shared.ServiceArtifacts // cached artifacts for the service
@@ -71,28 +72,31 @@ type DefaultService struct {
 	mu sync.Mutex // serializes all state-changing calls
 }
 
-// NewDefaultService creates a new default S6 service
+// NewDefaultService creates a new default S6 service.
 func NewDefaultService() s6_shared.Service {
 	serviceLogger := logger.For(logger.ComponentS6Service)
+
 	return &DefaultService{
 		logger: serviceLogger,
 	}
 }
 
 // withLifecycleGuard serializes all state-changing operations to prevent race conditions
-// This addresses concurrent Create/Remove/ForceRemove operations
+// This addresses concurrent Create/Remove/ForceRemove operations.
 func (s *DefaultService) withLifecycleGuard(fn func() error) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	return fn()
 }
 
 // Create creates the S6 service with specific configuration using proven patterns:
 // - Unified lifecycle mutex prevents concurrent Create/Remove/ForceRemove operations
 // - Uses lifecycle manager for atomic creation with EXDEV protection
-// - Simplified 3-path approach with health checks
+// - Simplified 3-path approach with health checks.
 func (s *DefaultService) Create(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, fsService filesystem.Service) error {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".create", time.Since(start))
 	}()
@@ -107,13 +111,17 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 		if err != nil {
 			return fmt.Errorf("failed to check if service path exists: %w", err)
 		}
+
 		if !exists {
 			s.logger.Debugf("Service %s doesn't exist, creating fresh", servicePath)
+
 			artifacts, err := s.CreateArtifacts(ctx, servicePath, config, fsService)
 			if err != nil {
 				return err
 			}
+
 			s.artifacts = artifacts
+
 			return nil
 		}
 
@@ -129,7 +137,9 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 			if err != nil {
 				return err
 			}
+
 			s.artifacts = artifacts
+
 			return nil
 		}
 
@@ -138,16 +148,21 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 		if err != nil && health != s6_shared.HealthUnknown {
 			return fmt.Errorf("failed to check service health: %w", err)
 		}
+
 		if health == s6_shared.HealthBad {
 			s.logger.Debugf("Service %s is unhealthy, removing and recreating", servicePath)
+
 			if err := s.ForceCleanup(ctx, s.artifacts, fsService); err != nil {
 				return fmt.Errorf("failed to remove unhealthy service: %w", err)
 			}
+
 			artifacts, err := s.CreateArtifacts(ctx, servicePath, config, fsService)
 			if err != nil {
 				return err
 			}
+
 			s.artifacts = artifacts
+
 			return nil
 		}
 
@@ -160,19 +175,24 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 		// 5. Same config → do nothing (success)
 		if currentConfig.Equal(config) {
 			s.logger.Debugf("Service %s config unchanged, nothing to do", servicePath)
+
 			return nil
 		}
 
 		// 6. Different config → remove and recreate
 		s.logger.Debugf("Service %s config changed, removing and recreating", servicePath)
+
 		if err := s.RemoveArtifacts(ctx, s.artifacts, fsService); err != nil {
 			return fmt.Errorf("failed to remove service for recreation: %w", err)
 		}
+
 		artifacts, err := s.CreateArtifacts(ctx, servicePath, config, fsService)
 		if err != nil {
 			return err
 		}
+
 		s.artifacts = artifacts
+
 		return nil
 	})
 }
@@ -182,9 +202,10 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 // - Implements rename-then-delete pattern for immediate S6 scanner visibility removal
 // - Returns quickly (<1 second) to respect FSM context timeouts
 // - Fully idempotent - safe to call when directories are partially removed
-// - Returns nil only when nothing is left
+// - Returns nil only when nothing is left.
 func (s *DefaultService) Remove(ctx context.Context, servicePath string, fsService filesystem.Service) error {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service,
 			servicePath+".remove", time.Since(start))
@@ -205,22 +226,26 @@ func (s *DefaultService) Remove(ctx context.Context, servicePath string, fsServi
 		// No tracked files - service is in an inconsistent state
 		// Remove() requires tracked files to work properly
 		s.logger.Debugf("No tracked files for service %s, cannot do tracked removal", servicePath)
+
 		return fmt.Errorf("service %s has no tracked files - use ForceRemove() instead", servicePath)
 	})
 }
 
-// Start starts the S6 service
+// Start starts the S6 service.
 func (s *DefaultService) Start(ctx context.Context, servicePath string, fsService filesystem.Service) error {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".start", time.Since(start))
 	}()
 
 	s.logger.Debugf("Starting S6 service %s", servicePath)
+
 	exists, err := s.ServiceExists(ctx, servicePath, fsService)
 	if err != nil {
 		return fmt.Errorf("failed to check if service exists: %w", err)
 	}
+
 	if !exists {
 		return s6_shared.ErrServiceNotExist
 	}
@@ -233,7 +258,8 @@ func (s *DefaultService) Start(ctx context.Context, servicePath string, fsServic
 
 	for _, downFile := range downFiles {
 		if exists, _ := fsService.FileExists(ctx, downFile); exists {
-			if err := fsService.Remove(ctx, downFile); err != nil {
+			err := fsService.Remove(ctx, downFile)
+			if err != nil {
 				s.logger.Warnf("Failed to remove down file %s: %v", downFile, err)
 				// Continue anyway - s6-svc -u might still work
 			} else {
@@ -248,9 +274,11 @@ func (s *DefaultService) Start(ctx context.Context, servicePath string, fsServic
 
 	// First start the log service
 	logServicePath := filepath.Join(servicePath, "log")
+
 	_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-u", logServicePath)
 	if err != nil {
 		s.logger.Warnf("Failed to start log service: %v", err)
+
 		return fmt.Errorf("failed to start log service: %w", err)
 	}
 
@@ -258,25 +286,30 @@ func (s *DefaultService) Start(ctx context.Context, servicePath string, fsServic
 	_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-u", servicePath)
 	if err != nil {
 		s.logger.Warnf("Failed to start service: %v", err)
+
 		return fmt.Errorf("failed to start service: %w", err)
 	}
 
 	s.logger.Debugf("Started S6 service %s", servicePath)
+
 	return nil
 }
 
-// Stop stops the S6 service
+// Stop stops the S6 service.
 func (s *DefaultService) Stop(ctx context.Context, servicePath string, fsService filesystem.Service) error {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".stop", time.Since(start))
 	}()
 
 	s.logger.Debugf("Stopping S6 service %s", servicePath)
+
 	exists, err := s.ServiceExists(ctx, servicePath, fsService)
 	if err != nil {
 		return fmt.Errorf("failed to check if service exists: %w", err)
 	}
+
 	if !exists {
 		return s6_shared.ErrServiceNotExist
 	}
@@ -285,14 +318,17 @@ func (s *DefaultService) Stop(ctx context.Context, servicePath string, fsService
 	_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-d", servicePath)
 	if err != nil {
 		s.logger.Warnf("Failed to stop service: %v", err)
+
 		return fmt.Errorf("failed to stop service: %w", err)
 	}
 
 	// Also stop the log service separately
 	logServicePath := filepath.Join(servicePath, "log")
+
 	_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-d", logServicePath)
 	if err != nil {
 		s.logger.Warnf("Failed to stop log service: %v", err)
+
 		return fmt.Errorf("failed to stop log service: %w", err)
 	}
 
@@ -303,7 +339,8 @@ func (s *DefaultService) Stop(ctx context.Context, servicePath string, fsService
 	}
 
 	for _, downFile := range downFiles {
-		if err := fsService.WriteFile(ctx, downFile, []byte{}, 0644); err != nil {
+		err := fsService.WriteFile(ctx, downFile, []byte{}, 0644)
+		if err != nil {
 			s.logger.Warnf("Failed to create down file %s: %v", downFile, err)
 			// Continue anyway - service is already stopped
 		} else {
@@ -316,21 +353,25 @@ func (s *DefaultService) Stop(ctx context.Context, servicePath string, fsService
 	}
 
 	s.logger.Debugf("Stopped S6 service %s", servicePath)
+
 	return nil
 }
 
-// Restart restarts the S6 service
+// Restart restarts the S6 service.
 func (s *DefaultService) Restart(ctx context.Context, servicePath string, fsService filesystem.Service) error {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".restart", time.Since(start))
 	}()
 
 	s.logger.Debugf("Restarting S6 service %s", servicePath)
+
 	exists, err := s.ServiceExists(ctx, servicePath, fsService)
 	if err != nil {
 		return fmt.Errorf("failed to check if service exists: %w", err)
 	}
+
 	if !exists {
 		return s6_shared.ErrServiceNotExist
 	}
@@ -338,15 +379,18 @@ func (s *DefaultService) Restart(ctx context.Context, servicePath string, fsServ
 	_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-r", servicePath)
 	if err != nil {
 		s.logger.Warnf("Failed to restart service: %v", err)
+
 		return fmt.Errorf("failed to restart service: %w", err)
 	}
 
 	s.logger.Debugf("Restarted S6 service %s", servicePath)
+
 	return nil
 }
 
 func (s *DefaultService) Status(ctx context.Context, servicePath string, fsService filesystem.Service) (s6_shared.ServiceInfo, error) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".status", time.Since(start))
 	}()
@@ -356,6 +400,7 @@ func (s *DefaultService) Status(ctx context.Context, servicePath string, fsServi
 	if err != nil {
 		return s6_shared.ServiceInfo{}, fmt.Errorf("failed to check if service exists: %w", err)
 	}
+
 	if !exists {
 		return s6_shared.ServiceInfo{}, s6_shared.ErrServiceNotExist
 	}
@@ -367,10 +412,12 @@ func (s *DefaultService) Status(ctx context.Context, servicePath string, fsServi
 
 	// Build supervise directory path.
 	superviseDir := filepath.Join(servicePath, "supervise")
+
 	exists, err = fsService.FileExists(ctx, superviseDir)
 	if err != nil {
 		return info, fmt.Errorf("failed to check if supervise directory exists: %w", err)
 	}
+
 	if !exists {
 		return info, s6_shared.ErrServiceNotExist // This is a temporary thing that can happen in bufered filesystems, when s6 did not yet have time to create the directory
 	}
@@ -378,10 +425,12 @@ func (s *DefaultService) Status(ctx context.Context, servicePath string, fsServi
 	// Parse the status file using centralized parser from status.go
 	// This eliminates code duplication and uses the same parsing logic everywhere
 	statusFile := filepath.Join(superviseDir, s6_shared.S6SuperviseStatusFile)
+
 	exists, err = fsService.FileExists(ctx, statusFile)
 	if err != nil {
 		return info, fmt.Errorf("failed to check if status file exists: %w", err)
 	}
+
 	if !exists {
 		return info, s6_shared.ErrServiceNotExist // This is a temporary thing that can happen in bufered filesystems, when s6 did not yet have time to create the file
 	}
@@ -396,9 +445,10 @@ func (s *DefaultService) Status(ctx context.Context, servicePath string, fsServi
 	return s.buildFullServiceInfo(ctx, servicePath, statusData, fsService)
 }
 
-// ServiceExists checks if the service directory exists
+// ServiceExists checks if the service directory exists.
 func (s *DefaultService) ServiceExists(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".serviceExists", time.Since(start))
 	}()
@@ -407,21 +457,25 @@ func (s *DefaultService) ServiceExists(ctx context.Context, servicePath string, 
 	if err != nil {
 		return false, fmt.Errorf("failed to check if S6 service exists: %w", err)
 	}
+
 	if !exists {
 		if s.logger != nil {
 			s.logger.Debugf("S6 service %s does not exist", servicePath)
 		}
+
 		return false, nil
 	}
+
 	return true, nil
 }
 
-// GetConfig gets the actual service config from s6
+// GetConfig gets the actual service config from s6.
 func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsService filesystem.Service) (s6serviceconfig.S6ServiceConfig, error) {
 	exists, err := s.ServiceExists(ctx, servicePath, fsService)
 	if err != nil {
 		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to check if service exists: %w", err)
 	}
+
 	if !exists {
 		return s6serviceconfig.S6ServiceConfig{}, s6_shared.ErrServiceNotExist
 	}
@@ -435,12 +489,14 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 
 	// Fetch run script
 	runScript := filepath.Join(servicePath, "run")
+
 	exists, err = fsService.FileExists(ctx, runScript)
 	if err != nil {
 		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to check if run script exists: %w", err)
 	}
+
 	if !exists {
-		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("run script not found")
+		return s6serviceconfig.S6ServiceConfig{}, errors.New("run script not found")
 	}
 
 	content, err := fsService.ReadFile(ctx, runScript)
@@ -469,6 +525,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 	if len(cmdMatch) >= 2 && cmdMatch[1] != "" {
 		// If we captured the command on the same line as fdmove
 		cmdLine := strings.TrimSpace(cmdMatch[1])
+
 		observedS6ServiceConfig.Command, err = parseCommandLine(cmdLine)
 		if err != nil {
 			return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to parse command: %w", err)
@@ -476,6 +533,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 	} else {
 		// If the command is on the line after fdmove, or regex didn't match properly
 		lines := strings.Split(scriptContent, "\n")
+
 		var commandLine string
 
 		// Find the fdmove line
@@ -487,6 +545,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 					parts := strings.SplitN(line, "fdmove -c 2 1", 2)
 					if len(parts) > 1 && strings.TrimSpace(parts[1]) != "" {
 						commandLine = strings.TrimSpace(parts[1])
+
 						break
 					}
 				}
@@ -496,6 +555,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 					nextLine := strings.TrimSpace(lines[j])
 					if nextLine != "" {
 						commandLine = nextLine
+
 						break
 					}
 				}
@@ -514,6 +574,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 		} else {
 			// Absolute fallback - try to look for the command we know should be there
 			sentry.ReportIssuef(sentry.IssueTypeWarning, s.logger, "[s6.GetConfig] Could not find command in run script for %s, searching for known paths", servicePath)
+
 			cmdRegex := regexp.MustCompile(`(/[^\s]+)`)
 			cmdMatches := cmdRegex.FindAllString(scriptContent, -1)
 
@@ -536,7 +597,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 
 				observedS6ServiceConfig.Command = append([]string{cmd}, args...)
 			} else {
-				return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to parse run script: no valid command found")
+				return s6serviceconfig.S6ServiceConfig{}, errors.New("failed to parse run script: no valid command found")
 			}
 		}
 	}
@@ -552,10 +613,12 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 
 	// Fetch config files from servicePath
 	configPath := filepath.Join(servicePath, "config")
+
 	exists, err = fsService.FileExists(ctx, configPath)
 	if err != nil {
 		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to check if config directory exists: %w", err)
 	}
+
 	if !exists {
 		return observedS6ServiceConfig, nil
 	}
@@ -572,6 +635,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 		}
 
 		filePath := filepath.Join(configPath, entry.Name())
+
 		content, err := fsService.ReadFile(ctx, filePath)
 		if err != nil {
 			return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to read config file %s: %w", entry.Name(), err)
@@ -584,12 +648,14 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 	// Fetch run script
 	logServicePath := filepath.Join(servicePath, "log")
 	logScript := filepath.Join(logServicePath, "run")
+
 	exists, err = fsService.FileExists(ctx, logScript)
 	if err != nil {
 		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to check if log run§ script exists: %w", err)
 	}
+
 	if !exists {
-		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("log run script not found")
+		return s6serviceconfig.S6ServiceConfig{}, errors.New("log run script not found")
 	}
 
 	logScriptContentRaw, err := fsService.ReadFile(ctx, logScript)
@@ -615,18 +681,22 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 	return observedS6ServiceConfig, nil
 }
 
-// parseCommandLine splits a command line into command and arguments, respecting quotes
+// parseCommandLine splits a command line into command and arguments, respecting quotes.
 func parseCommandLine(cmdLine string) ([]string, error) {
-	var cmdParts []string
-	var currentPart strings.Builder
+	var (
+		cmdParts    []string
+		currentPart strings.Builder
+	)
+
 	inQuote := false
 	quoteChar := byte(0)
 	escaped := false
 
-	for i := 0; i < len(cmdLine); i++ {
+	for i := range len(cmdLine) {
 		// Handle escape character
 		if cmdLine[i] == '\\' && !escaped {
 			escaped = true
+
 			continue
 		}
 
@@ -644,6 +714,7 @@ func parseCommandLine(cmdLine string) ([]string, error) {
 		} else if escaped {
 			// Handle the escaped character
 			currentPart.WriteByte(cmdLine[i])
+
 			escaped = false
 		} else {
 			if cmdLine[i] == ' ' && !inQuote {
@@ -659,7 +730,7 @@ func parseCommandLine(cmdLine string) ([]string, error) {
 
 	// Check for unclosed quotes
 	if inQuote {
-		return nil, fmt.Errorf("unclosed quote")
+		return nil, errors.New("unclosed quote")
 	}
 
 	if currentPart.Len() > 0 {
@@ -669,11 +740,12 @@ func parseCommandLine(cmdLine string) ([]string, error) {
 	return cmdParts, nil
 }
 
-// CleanS6ServiceDirectory cleans the S6 service directory except for the known services
+// CleanS6ServiceDirectory cleans the S6 service directory except for the known services.
 func (s *DefaultService) CleanS6ServiceDirectory(ctx context.Context, path string, fsService filesystem.Service) error {
 	if ctx == nil {
-		return fmt.Errorf("context is nil")
+		return errors.New("context is nil")
 	}
+
 	if ctx.Err() != nil {
 		return fmt.Errorf("context is done: %w", ctx.Err())
 	}
@@ -696,6 +768,7 @@ func (s *DefaultService) CleanS6ServiceDirectory(ctx context.Context, path strin
 			if s.logger != nil {
 				s.logger.Debugf("Skipping non-directory: %s", entry.Name())
 			}
+
 			continue
 		}
 
@@ -708,7 +781,8 @@ func (s *DefaultService) CleanS6ServiceDirectory(ctx context.Context, path strin
 			}
 
 			// Simply remove the directory (and its contents)
-			if err := fsService.RemoveAll(ctx, dirPath); err != nil {
+			err := fsService.RemoveAll(ctx, dirPath)
+			if err != nil {
 				if s.logger != nil {
 					sentry.ReportIssuef(sentry.IssueTypeWarning, s.logger, "Failed to remove directory %s: %v", dirPath, err)
 				}
@@ -723,10 +797,11 @@ func (s *DefaultService) CleanS6ServiceDirectory(ctx context.Context, path strin
 	if s.logger != nil {
 		s.logger.Infof("Finished cleaning S6 service directory: %s", path)
 	}
+
 	return nil
 }
 
-// IsKnownService checks if a service is known
+// IsKnownService checks if a service is known.
 func (s *DefaultService) IsKnownService(name string) bool {
 	// Core system services that should never be removed
 	knownServices := []string{
@@ -761,7 +836,7 @@ func (s *DefaultService) IsKnownService(name string) bool {
 }
 
 // GetS6ConfigFile retrieves the specified config file for a service
-// servicePath should be the full path including S6BaseDir
+// servicePath should be the full path including S6BaseDir.
 func (s *DefaultService) GetS6ConfigFile(ctx context.Context, servicePath string, configFileName string, fsService filesystem.Service) ([]byte, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
@@ -772,6 +847,7 @@ func (s *DefaultService) GetS6ConfigFile(ctx context.Context, servicePath string
 	if err != nil {
 		return nil, fmt.Errorf("failed to check if service exists: %w", err)
 	}
+
 	if !exists {
 		return nil, s6_shared.ErrServiceNotExist
 	}
@@ -784,6 +860,7 @@ func (s *DefaultService) GetS6ConfigFile(ctx context.Context, servicePath string
 	if err != nil {
 		return nil, fmt.Errorf("failed to check if config file exists: %w", err)
 	}
+
 	if !exists {
 		return nil, fmt.Errorf("config file %s does not exist in service directory %s", configFileName, servicePath)
 	}
@@ -802,13 +879,14 @@ func (s *DefaultService) GetS6ConfigFile(ctx context.Context, servicePath string
 // - Implements comprehensive process termination and supervisor killing
 // - Performs timeout-aware recursive deletion
 // - Called by FSM escalation - can take longer than Remove but must be thorough
-// - Returns nil only when nothing remains
+// - Returns nil only when nothing remains.
 func (s *DefaultService) ForceRemove(
 	ctx context.Context,
 	servicePath string,
 	fsService filesystem.Service,
 ) error {
 	start := time.Now()
+
 	defer func() {
 		metrics.IncErrorCount(metrics.ComponentS6Service, servicePath+".forceRemove") // a force remove is an error
 		metrics.ObserveReconcileTime(
@@ -851,6 +929,7 @@ func (s *DefaultService) appendToRingBuffer(entries []s6_shared.LogEntry, st *s6
 
 	for _, e := range entries {
 		st.Logs[st.Head] = e
+
 		st.Head = (st.Head + 1) % max
 		if !st.Full && st.Head == 0 {
 			st.Full = true // wrapped around for the first time
@@ -928,6 +1007,7 @@ func (s *DefaultService) appendToRingBuffer(entries []s6_shared.LogEntry, st *s6
 // see the root cause (e.g. "file disappeared", "permission denied").
 func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsService filesystem.Service) ([]s6_shared.LogEntry, error) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".getLogs", time.Since(start))
 	}()
@@ -939,19 +1019,23 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	if err != nil {
 		return nil, fmt.Errorf("failed to check if service exists: %w", err)
 	}
+
 	if !exists {
 		s.logger.Debugf("Service with path %s does not exist, returning empty logs", servicePath)
+
 		return nil, s6_shared.ErrServiceNotExist
 	}
 
 	// Get the log file from /data/logs/<service-name>/current
 	logFile := filepath.Join(constants.S6LogBaseDir, serviceName, "current")
+
 	exists, err = fsService.PathExists(ctx, logFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check if log file exists: %w", err)
 	}
+
 	if !exists {
-		//s.logger.Debugf("Log file %s does not exist, returning ErrLogFileNotFound", logFile)
+		// s.logger.Debugf("Log file %s does not exist, returning ErrLogFileNotFound", logFile)
 		return nil, fmt.Errorf("path: %s err :%w", logFile, s6_shared.ErrLogFileNotFound)
 	}
 
@@ -967,14 +1051,17 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	if err != nil {
 		return nil, err
 	}
+
 	if fi == nil {
 		return nil, fmt.Errorf("stat returned nil for log file: %s", logFile)
 	}
+
 	sys := fi.Sys().(*syscall.Stat_t) // on Linux / Alpine
 	size, ino := fi.Size(), sys.Ino
 
 	// Check for rotation or truncation
 	var rotatedContent []byte
+
 	if st.Inode != 0 && (st.Inode != ino || st.Offset > size) {
 		s.logger.Debugf("Detected rotation for log file %s (inode: %d->%d, offset: %d, size: %d)",
 			logFile, st.Inode, ino, st.Offset, size)
@@ -989,14 +1076,18 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 		// Find the most recent rotated file
 		logDir := filepath.Dir(logFile)
 		pattern := filepath.Join(logDir, "@*.s")
+
 		entries, err := fsService.Glob(ctx, pattern)
 		if err != nil {
 			s.logger.Debugf("Failed to read log directory %s: %v", logDir, err)
+
 			return nil, err
 		}
+
 		rotatedFile := s.findLatestRotatedFile(entries)
 		if rotatedFile != "" {
 			var err error
+
 			rotatedContent, _, err = fsService.ReadFileRange(ctx, rotatedFile, st.Offset)
 			if err != nil {
 				s.logger.Warnf("Failed to read rotated file %s from offset %d: %v", rotatedFile, st.Offset, err)
@@ -1017,6 +1108,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	if err != nil {
 		return nil, err
 	}
+
 	st.Offset = newSize // advance cursor even if currentContent == nil
 
 	// ── 4. combine rotated and current content into the ring buffer ──────────────────────
@@ -1028,6 +1120,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 		if err != nil {
 			return nil, err
 		}
+
 		s.appendToRingBuffer(entries, st)
 	}
 
@@ -1036,6 +1129,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 		if err != nil {
 			return nil, err
 		}
+
 		s.appendToRingBuffer(entries, st)
 	}
 
@@ -1067,7 +1161,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	// We linearly search the array for the first entry after the last deployment time
 	// This is O(n) but the benchmark shows that the performance impact is negligible
 	// compared to the cost of reading the log file (11μs per call for 10.000 lines)
-	// this is why we decided agains using a cached index that comes with a high complexity
+	// this is why we decided against using a cached index that comes with a high complexity
 	if !getLastDeploymentTime(servicePath).IsZero() {
 		lastDeployed := getLastDeploymentTime(servicePath)
 		for i, entry := range out {
@@ -1103,6 +1197,7 @@ func ParseLogsFromBytes(buf []byte) ([]s6_shared.LogEntry, error) {
 	for start := 0; start < len(buf); {
 		// find next '\n'
 		nl := bytes.IndexByte(buf[start:], '\n')
+
 		var line []byte
 		if nl == -1 {
 			line = buf[start:]
@@ -1111,6 +1206,7 @@ func ParseLogsFromBytes(buf []byte) ([]s6_shared.LogEntry, error) {
 			line = buf[start : start+nl]
 			start += nl + 1
 		}
+
 		if len(line) == 0 { // empty line – rotate artefact
 			continue
 		}
@@ -1120,12 +1216,14 @@ func ParseLogsFromBytes(buf []byte) ([]s6_shared.LogEntry, error) {
 		sep := bytes.Index(line, []byte("  "))
 		if sep == -1 || sep < 29 { // malformed – keep raw
 			entries = append(entries, s6_shared.LogEntry{Content: string(line)})
+
 			continue
 		}
 
 		ts, err := s6_shared.ParseNano(string(line[:sep])) // ParseNano is already fast
 		if err != nil {
 			entries = append(entries, s6_shared.LogEntry{Content: string(line)})
+
 			continue
 		}
 
@@ -1134,16 +1232,18 @@ func ParseLogsFromBytes(buf []byte) ([]s6_shared.LogEntry, error) {
 			Content:   string(line[sep+2:]),
 		})
 	}
+
 	return entries, nil
 }
 
-// ParseLogsFromBytes_Unoptimized is the more readable not optimized version of ParseLogsFromBytes
+// ParseLogsFromBytes_Unoptimized is the more readable not optimized version of ParseLogsFromBytes.
 func ParseLogsFromBytes_Unoptimized(content []byte) ([]s6_shared.LogEntry, error) {
 	// Split logs by newline
 	logs := strings.Split(strings.TrimSpace(string(content)), "\n")
 
 	// Parse each log line into structured entries
 	var entries []s6_shared.LogEntry
+
 	for _, line := range logs {
 		if line == "" {
 			continue
@@ -1158,7 +1258,7 @@ func ParseLogsFromBytes_Unoptimized(content []byte) ([]s6_shared.LogEntry, error
 	return entries, nil
 }
 
-// parseLogLine parses a log line from S6 format and returns a LogEntry
+// parseLogLine parses a log line from S6 format and returns a LogEntry.
 func parseLogLine(line string) s6_shared.LogEntry {
 	// Quick check for empty strings or too short lines
 	if len(line) < 28 { // Minimum length for "YYYY-MM-DD HH:MM:SS.<9 digit nanoseconds>  content"
@@ -1198,6 +1298,7 @@ func parseLogLine(line string) s6_shared.LogEntry {
 // Returns true if supervise directory exists (ready for supervision), false otherwise.
 func (s *DefaultService) EnsureSupervision(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".ensureSupervision", time.Since(start))
 	}()
@@ -1206,11 +1307,13 @@ func (s *DefaultService) EnsureSupervision(ctx context.Context, servicePath stri
 	if err != nil {
 		return false, fmt.Errorf("failed to check if service exists: %w", err)
 	}
+
 	if !exists {
 		return false, s6_shared.ErrServiceNotExist
 	}
 
 	superviseDir := filepath.Join(servicePath, "supervise")
+
 	exists, err = fsService.FileExists(ctx, superviseDir)
 	if err != nil {
 		return false, fmt.Errorf("failed to check if supervise directory exists: %w", err)
@@ -1223,11 +1326,14 @@ func (s *DefaultService) EnsureSupervision(ctx context.Context, servicePath stri
 		if err != nil {
 			return false, fmt.Errorf("failed to notify s6-svscan: %w", err)
 		}
+
 		s.logger.Debugf("Notified s6-svscan, waiting for supervise directory to be created on next reconcile")
+
 		return false, nil
 	}
 
 	s.logger.Debugf("Supervise directory exists for %s", servicePath)
+
 	return true, nil
 }
 
@@ -1248,21 +1354,26 @@ func (s *DefaultService) ExecuteS6Command(ctx context.Context, servicePath strin
 			switch exitErr.ExitCode() {
 			case 111:
 				s.logger.Debugf("S6 command encountered a temporary error (exit code 111) for service %s", servicePath)
+
 				return "", s6_shared.ErrS6TemporaryError
 			case 100:
 				s.logger.Debugf("S6 service %s is already being monitored (exit code 100), continuing", servicePath)
+
 				return "", nil
 			case 127:
 				s.logger.Debugf("S6 command could not find program (exit code 127) for service %s", servicePath)
+
 				return "", s6_shared.ErrS6ProgramNotFound
 			case 126:
 				s.logger.Debugf("S6 command could not execute program (exit code 126) for service %s", servicePath)
+
 				return "", s6_shared.ErrS6ProgramNotExecutable
 			default:
 				return "", fmt.Errorf("unknown S6 error (exit code %d) for service %s: %w, output: %s",
 					exitErr.ExitCode(), servicePath, err, string(output))
 			}
 		}
+
 		return "", fmt.Errorf("failed to execute s6 command (name: %s, args: %v): %w, output: %s", name, args, err, string(output))
 	}
 
@@ -1310,6 +1421,7 @@ func (s *DefaultService) CheckHealth(ctx context.Context, servicePath string, fs
 	artifacts := s.artifacts
 	if artifacts == nil || len(artifacts.CreatedFiles) == 0 {
 		s.logger.Debugf("No tracked files for service %s, returning HealthBad", servicePath)
+
 		return s6_shared.HealthBad, nil
 	}
 

@@ -81,16 +81,19 @@ internal:
 			BeforeEach(func() {
 				mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
 					Expect(path).To(Equal(filepath.Dir(DefaultConfigPath)))
+
 					return nil
 				})
 
 				mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
 					Expect(path).To(Equal(DefaultConfigPath))
+
 					return true, nil
 				})
 
 				mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
 					Expect(path).To(Equal(DefaultConfigPath))
+
 					return []byte(validYAML), nil
 				})
 			})
@@ -104,6 +107,7 @@ internal:
 					Eventually(func() error {
 						var err error
 						config, err = configManager.GetConfig(ctx, tick)
+
 						return err
 					}, TimeToWaitForConfigRefresh*2, "10ms").Should(Succeed())
 
@@ -124,6 +128,7 @@ internal:
 					Expect(service.S6ServiceConfig.Command).To(Equal([]string{"/bin/echo", "hello world"}))
 					Expect(service.S6ServiceConfig.Env).To(HaveKeyWithValue("KEY", "value"))
 					Expect(service.S6ServiceConfig.ConfigFiles).To(HaveKeyWithValue("file.txt", "content"))
+
 					return nil
 				}, TimeToWaitForConfigRefresh*2, "10ms").Should(Succeed())
 			})
@@ -173,10 +178,12 @@ internal:
 					var config FullConfig
 					Eventually(func() error {
 						config, err = configManager.GetConfig(ctx, tick)
+
 						return err
 					}, TimeToWaitForConfigRefresh*2, "10ms").Should(Not(Succeed()))
 
 					Expect(config).To(Equal(FullConfig{}))
+
 					return nil
 				}, TimeToWaitForConfigRefresh*2, "10ms").Should(Succeed())
 			})
@@ -237,11 +244,12 @@ internal:
 				Eventually(func() error {
 					_, err := configManager.GetConfig(ctx, tick)
 					if err == nil {
-						return fmt.Errorf("expected error but got none")
+						return errors.New("expected error but got none")
 					}
 					if !strings.Contains(err.Error(), "failed to read config file") {
 						return fmt.Errorf("expected error to contain 'failed to read config file', got: %s", err.Error())
 					}
+
 					return nil
 				}, TimeToWaitForConfigRefresh*2, "10ms").Should(Succeed())
 			})
@@ -251,7 +259,8 @@ internal:
 			BeforeEach(func() {
 				// Create a context with cancel function
 				var cancel context.CancelFunc
-				ctx, cancel = context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(context.Background())
+				_ = ctx
 				ctxWithCancelFunc = cancel
 
 				// Set up mock to block and check context
@@ -265,7 +274,7 @@ internal:
 					case <-ctx.Done():
 						return ctx.Err()
 					default:
-						return fmt.Errorf("context should have been canceled")
+						return errors.New("context should have been canceled")
 					}
 				})
 			})
@@ -410,7 +419,9 @@ internal:
 			BeforeEach(func() {
 				// Use the real filesystem for this test with a timeout context
 				fsService = filesystem.NewDefaultService()
-				ctx, cancel = context.WithTimeout(context.Background(), 1*time.Second)
+				ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+				_ = ctx
+				_ = cancel
 			})
 
 			AfterEach(func() {
@@ -428,12 +439,12 @@ internal:
 						continue
 					}
 
-					By(fmt.Sprintf("Parsing %s", file.Name()))
+					By("Parsing " + file.Name())
 					data, err := fsService.ReadFile(ctx, filepath.Join("../../examples", file.Name()))
 					Expect(err).NotTo(HaveOccurred())
 
 					_, err = ParseConfig(data, ctx, false)
-					Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to parse %s", file.Name()))
+					Expect(err).NotTo(HaveOccurred(), "Failed to parse "+file.Name())
 				}
 			})
 
@@ -460,7 +471,9 @@ internal:
 
 		BeforeEach(func() {
 			fsService = filesystem.NewDefaultService()
-			ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			_ = ctx
+			_ = cancel
 		})
 
 		AfterEach(func() {
@@ -486,6 +499,7 @@ internal:
 				for _, pc := range config.ProtocolConverter {
 					if pc.Name == "temperature-sensor-pc" {
 						tempSensorPC = &pc
+
 						break
 					}
 				}
@@ -502,6 +516,7 @@ internal:
 				})
 				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
 					writtenData = data
+
 					return nil
 				})
 				mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
@@ -527,6 +542,7 @@ internal:
 				for _, pc := range writtenConfig.ProtocolConverter {
 					if pc.Name == "temperature-sensor-pc" {
 						writtenTempSensorPC = &pc
+
 						break
 					}
 				}
@@ -581,6 +597,7 @@ internal:
 				for _, sp := range config.StreamProcessor {
 					if sp.Name == "pump-processor" {
 						pumpProcessor1 = &sp
+
 						break
 					}
 				}
@@ -598,6 +615,7 @@ internal:
 				})
 				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
 					writtenData = data
+
 					return nil
 				})
 				mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
@@ -626,6 +644,7 @@ internal:
 				for _, sp := range writtenConfig.StreamProcessor {
 					if sp.Name == "pump-processor" {
 						writtenPumpProcessor1 = &sp
+
 						break
 					}
 				}
@@ -640,6 +659,7 @@ internal:
 				for _, sp := range writtenConfig.StreamProcessor {
 					if sp.Name == "motor-direct-processor" {
 						directProcessor = &sp
+
 						break
 					}
 				}
@@ -659,7 +679,9 @@ internal:
 
 		BeforeEach(func() {
 			fsService = filesystem.NewDefaultService()
-			ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			_ = ctx
+			_ = cancel
 		})
 
 		AfterEach(func() {
@@ -689,6 +711,7 @@ internal:
 			// Get initial config to populate cache and wait for background refresh
 			Eventually(func() error {
 				_, err := configManager.GetConfig(ctx, 0)
+
 				return err
 			}, TimeToWaitForConfigRefresh*2, "10ms").Should(Succeed())
 
@@ -700,6 +723,7 @@ internal:
 				if len(cfg.ProtocolConverter) != 3 {
 					return fmt.Errorf("expected %d processors but got %d", 3, len(cfg.ProtocolConverter))
 				}
+
 				return nil
 			}, TimeToWaitForConfigRefresh*2, "10ms").Should(Succeed())
 
@@ -724,7 +748,7 @@ internal:
 			Eventually(func() error {
 				// Check if we've exceeded max wait time
 				if time.Since(start) > maxWaitTime {
-					return fmt.Errorf("exceeded max wait time")
+					return errors.New("exceeded max wait time")
 				}
 
 				var err error
@@ -753,11 +777,11 @@ internal:
 			}, "10s", "100ms").Should(Succeed(), "Background refresh should update config with %d processors", numGenerators)
 
 			// Verify the final config actually contains the expected processors
-			Expect(len(finalConfig.ProtocolConverter)).To(BeNumerically(">=", 1))
+			Expect(finalConfig.ProtocolConverter).ToNot(BeEmpty())
 			pipeline := finalConfig.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline
 			processors, ok := pipeline["processors"].(map[string]any)
 			Expect(ok).To(BeTrue())
-			Expect(len(processors)).To(Equal(numGenerators))
+			Expect(processors).To(HaveLen(numGenerators))
 
 			// Measure final GetConfig performance
 			perfStart := time.Now()

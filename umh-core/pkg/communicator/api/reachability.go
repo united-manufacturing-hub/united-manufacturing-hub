@@ -15,6 +15,7 @@
 package api
 
 import (
+	"net/http"
 	"os"
 	"strings"
 
@@ -22,12 +23,13 @@ import (
 	"go.uber.org/zap"
 )
 
-// CheckIfAPIIsReachable checks if the management.umh.app/api endpoint is reachable
+// CheckIfAPIIsReachable checks if the management.umh.app/api endpoint is reachable.
 func CheckIfAPIIsReachable(insecureTLS bool, apiURL string, logger *zap.SugaredLogger) bool {
 	baseUrl := apiURL
 
 	// Log proxy configuration that ProxyFromEnvironment will use
 	logger.Debugf("Proxy configuration for API reachability check:")
+
 	proxyVars := []string{"HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy", "NO_PROXY", "no_proxy"}
 	for _, envVar := range proxyVars {
 		if value := os.Getenv(envVar); value != "" {
@@ -44,29 +46,35 @@ func CheckIfAPIIsReachable(insecureTLS bool, apiURL string, logger *zap.SugaredL
 	client := httpv2.GetClient(insecureTLS)
 
 	response, err := client.Get(baseUrl)
-
 	if err != nil {
 		logger.Errorf("Error while checking if API is reachable: %v", err)
+
 		return false
 	}
+
 	if response == nil {
 		logger.Errorf("Received nil response from API check")
+
 		return false
 	}
+
 	defer func() {
-		if err := response.Body.Close(); err != nil {
+		err := response.Body.Close()
+		if err != nil {
 			logger.Errorf("Error while closing response body: %v", err)
 		}
 	}()
 	// Check if response is 200 OK
-	if response.StatusCode != 200 {
+	if response.StatusCode != http.StatusOK {
 		logger.Errorf("API check response code is not 200 OK: %v", response.StatusCode)
+
 		return false
 	}
 
 	if strings.HasPrefix(baseUrl, "https://") {
 		if response.TLS == nil {
 			logger.Errorf("API check got HTTP response for an HTTPS endpoint")
+
 			return false
 		}
 

@@ -15,6 +15,7 @@
 package nmap
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -71,12 +72,13 @@ func NewNmapManagerWithMockedService(name string) (*NmapManager, *nmap.MockNmapS
 
 			// Attach the shared mock service to this instance
 			inst.monitorService = mockService
+
 			return inst, nil
 		},
 		func(instance public_fsm.FSMInstance, cfg config.NmapConfig) (bool, error) {
 			nmapInstance, ok := instance.(*NmapInstance)
 			if !ok {
-				return false, fmt.Errorf("instance not a NmapInstance")
+				return false, errors.New("instance not a NmapInstance")
 			}
 
 			nmapInstance.config.NmapServiceConfig = cfg.NmapServiceConfig
@@ -91,25 +93,29 @@ func NewNmapManagerWithMockedService(name string) (*NmapManager, *nmap.MockNmapS
 		func(instance public_fsm.FSMInstance, nc config.NmapConfig) error {
 			ni, ok := instance.(*NmapInstance)
 			if !ok {
-				return fmt.Errorf("instance not a NmapInstance")
+				return errors.New("instance not a NmapInstance")
 			}
+
 			ni.config = nc
 
 			if mockService, ok := ni.monitorService.(*nmap.MockNmapService); ok {
 				mockService.GetConfigResult = nc.NmapServiceConfig
 			}
+
 			return nil
 		},
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
 			ni, ok := instance.(*NmapInstance)
 			if !ok {
-				return 0, fmt.Errorf("instance not a NmapInstance")
+				return 0, errors.New("instance not a NmapInstance")
 			}
+
 			return ni.GetMinimumRequiredTime(), nil
 		},
 	)
 
 	logger.For(managerName).Info("Created NmapManager with mocked service.")
+
 	return &NmapManager{
 		BaseFSMManager: baseMgr,
 	}, mockService

@@ -29,7 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
-// CreateStreamProcessorTestConfig creates a standard StreamProcessor config for testing
+// CreateStreamProcessorTestConfig creates a standard StreamProcessor config for testing.
 func CreateStreamProcessorTestConfig(name string, desiredState string) config.StreamProcessorConfig {
 	return config.StreamProcessorConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
@@ -53,7 +53,7 @@ func CreateStreamProcessorTestConfig(name string, desiredState string) config.St
 	}
 }
 
-// CreateStreamProcessorTestConfigWithMissingDfc creates a StreamProcessor config with missing DFC for testing
+// CreateStreamProcessorTestConfigWithMissingDfc creates a StreamProcessor config with missing DFC for testing.
 func CreateStreamProcessorTestConfigWithMissingDfc(name string, desiredState string) config.StreamProcessorConfig {
 	return config.StreamProcessorConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
@@ -66,7 +66,7 @@ func CreateStreamProcessorTestConfigWithMissingDfc(name string, desiredState str
 	}
 }
 
-// SetupStreamProcessorServiceState configures the mock service state for StreamProcessor instance tests
+// SetupStreamProcessorServiceState configures the mock service state for StreamProcessor instance tests.
 func SetupStreamProcessorServiceState(
 	mockService *spsvc.MockService,
 	serviceName string,
@@ -75,7 +75,7 @@ func SetupStreamProcessorServiceState(
 	mockService.SetProcessorState(serviceName, flags)
 }
 
-// ConfigureStreamProcessorServiceConfig configures the mock service with a default StreamProcessor config
+// ConfigureStreamProcessorServiceConfig configures the mock service with a default StreamProcessor config.
 func ConfigureStreamProcessorServiceConfig(mockService *spsvc.MockService) {
 	mockService.GetConfigResult = streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime{
 		Model: streamprocessorserviceconfig.ModelRef{
@@ -95,7 +95,7 @@ func ConfigureStreamProcessorServiceConfigWithMissingDfc(mockService *spsvc.Mock
 	mockService.GetConfigResult = streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime{}
 }
 
-// TransitionToStreamProcessorState is a helper to configure a service for a given high-level state
+// TransitionToStreamProcessorState is a helper to configure a service for a given high-level state.
 func TransitionToStreamProcessorState(mockService *spsvc.MockService, serviceName string, state string) {
 	switch state {
 	case spfsm.OperationalStateStopped:
@@ -173,7 +173,7 @@ func TransitionToStreamProcessorState(mockService *spsvc.MockService, serviceNam
 	}
 }
 
-// SetupStreamProcessorInstance creates and configures a StreamProcessor instance for testing
+// SetupStreamProcessorInstance creates and configures a StreamProcessor instance for testing.
 func SetupStreamProcessorInstance(serviceName string, desiredState string) (*spfsm.Instance, *spsvc.MockService, config.StreamProcessorConfig) {
 	cfg := CreateStreamProcessorTestConfig(serviceName, desiredState)
 	mockService := spsvc.NewMockService()
@@ -182,7 +182,7 @@ func SetupStreamProcessorInstance(serviceName string, desiredState string) (*spf
 	return setUpMockStreamProcessorInstance(cfg, mockService, mockSvcRegistry), mockService, cfg
 }
 
-// SetupStreamProcessorInstanceWithMissingDfc creates and configures a StreamProcessor instance with missing DFC for testing
+// SetupStreamProcessorInstanceWithMissingDfc creates and configures a StreamProcessor instance with missing DFC for testing.
 func SetupStreamProcessorInstanceWithMissingDfc(serviceName string, desiredState string) (*spfsm.Instance, *spsvc.MockService, config.StreamProcessorConfig) {
 	cfg := CreateStreamProcessorTestConfigWithMissingDfc(serviceName, desiredState)
 	mockService := spsvc.NewMockService()
@@ -217,7 +217,7 @@ func setUpMockStreamProcessorInstance(
 	return instance
 }
 
-// TestStreamProcessorStateTransition tests a state transition for a StreamProcessor instance
+// TestStreamProcessorStateTransition tests a state transition for a StreamProcessor instance.
 func TestStreamProcessorStateTransition(
 	ctx context.Context,
 	instance *spfsm.Instance,
@@ -241,7 +241,7 @@ func TestStreamProcessorStateTransition(
 	TransitionToStreamProcessorState(mockService, serviceName, toState)
 
 	// Wait for the state transition
-	for i := 0; i < maxAttempts; i++ {
+	for range maxAttempts {
 		snapshot := fsm.SystemSnapshot{
 			Tick:         tick,
 			SnapshotTime: startTimestamp.Add(time.Duration(tick) * time.Second),
@@ -262,7 +262,7 @@ func TestStreamProcessorStateTransition(
 	return tick, fmt.Errorf("state transition from %s to %s failed after %d attempts, current state: %s", fromState, toState, maxAttempts, instance.GetCurrentFSMState())
 }
 
-// VerifyStreamProcessorStableState verifies that a StreamProcessor instance remains in a stable state
+// VerifyStreamProcessorStableState verifies that a StreamProcessor instance remains in a stable state.
 func VerifyStreamProcessorStableState(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
@@ -279,7 +279,7 @@ func VerifyStreamProcessorStableState(
 		return tick, fmt.Errorf("instance is not in expected state %s, current state: %s", expectedState, instance.GetCurrentFSMState())
 	}
 
-	for i := 0; i < numCycles; i++ {
+	for range numCycles {
 		currentSnapshot := snapshot
 		currentSnapshot.Tick = tick
 
@@ -298,7 +298,7 @@ func VerifyStreamProcessorStableState(
 	return tick, nil
 }
 
-// StabilizeStreamProcessorInstance stabilizes a StreamProcessor instance to a target state
+// StabilizeStreamProcessorInstance stabilizes a StreamProcessor instance to a target state.
 func StabilizeStreamProcessorInstance(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
@@ -314,7 +314,7 @@ func StabilizeStreamProcessorInstance(
 	// Configure the service for the target state
 	TransitionToStreamProcessorState(mockService, serviceName, targetState)
 
-	for i := 0; i < maxAttempts; i++ {
+	for range maxAttempts {
 		currentSnapshot := snapshot
 		currentSnapshot.Tick = tick
 
@@ -333,7 +333,7 @@ func StabilizeStreamProcessorInstance(
 	return tick, fmt.Errorf("failed to stabilize instance to state %s after %d attempts, current state: %s", targetState, maxAttempts, instance.GetCurrentFSMState())
 }
 
-// ResetStreamProcessorInstanceError resets any error states in the mock service
+// ResetStreamProcessorInstanceError resets any error states in the mock service.
 func ResetStreamProcessorInstanceError(mockService *spsvc.MockService) {
 	mockService.StatusError = nil
 	mockService.GetConfigError = nil
@@ -345,7 +345,7 @@ func ResetStreamProcessorInstanceError(mockService *spsvc.MockService) {
 	mockService.ForceRemoveError = nil
 }
 
-// CreateMockStreamProcessorInstance creates a mock StreamProcessor instance for testing
+// CreateMockStreamProcessorInstance creates a mock StreamProcessor instance for testing.
 func CreateMockStreamProcessorInstance(
 	serviceName string,
 	mockService spsvc.IStreamProcessorService,
@@ -355,10 +355,11 @@ func CreateMockStreamProcessorInstance(
 	cfg := CreateStreamProcessorTestConfig(serviceName, desiredState)
 	instance := spfsm.NewInstance("", cfg)
 	instance.SetService(mockService)
+
 	return instance
 }
 
-// WaitForStreamProcessorDesiredState waits for a StreamProcessor instance to reach a desired state
+// WaitForStreamProcessorDesiredState waits for a StreamProcessor instance to reach a desired state.
 func WaitForStreamProcessorDesiredState(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
@@ -369,7 +370,7 @@ func WaitForStreamProcessorDesiredState(
 ) (uint64, error) {
 	tick := snapshot.Tick
 
-	for i := 0; i < maxAttempts; i++ {
+	for range maxAttempts {
 		currentSnapshot := snapshot
 		currentSnapshot.Tick = tick
 
@@ -388,7 +389,7 @@ func WaitForStreamProcessorDesiredState(
 	return tick, fmt.Errorf("instance did not reach desired state %s after %d attempts, current state: %s", targetState, maxAttempts, instance.GetCurrentFSMState())
 }
 
-// ReconcileStreamProcessorUntilError reconciles a StreamProcessor instance until an error occurs
+// ReconcileStreamProcessorUntilError reconciles a StreamProcessor instance until an error occurs.
 func ReconcileStreamProcessorUntilError(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
@@ -400,7 +401,7 @@ func ReconcileStreamProcessorUntilError(
 ) (uint64, error, bool) {
 	tick := snapshot.Tick
 
-	for i := 0; i < maxAttempts; i++ {
+	for range maxAttempts {
 		currentSnapshot := snapshot
 		currentSnapshot.Tick = tick
 

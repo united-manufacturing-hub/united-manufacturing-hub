@@ -28,7 +28,7 @@ import (
 //
 // Fails if:
 // - Another processor with the same name already exists
-// - Adding a child processor but the referenced template doesn't exist
+// - Adding a child processor but the referenced template doesn't exist.
 func (m *FileConfigManager) AtomicAddStreamProcessor(ctx context.Context, sp StreamProcessorConfig) error {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
@@ -58,6 +58,7 @@ func (m *FileConfigManager) AtomicAddStreamProcessor(ctx context.Context, sp Str
 		for _, existing := range config.StreamProcessor {
 			if existing.Name == templateRef && existing.StreamProcessorServiceConfig.TemplateRef == existing.Name {
 				rootExists = true
+
 				break
 			}
 		}
@@ -78,9 +79,8 @@ func (m *FileConfigManager) AtomicAddStreamProcessor(ctx context.Context, sp Str
 	return nil
 }
 
-// AtomicAddStreamProcessor delegates to the underlying FileConfigManager
+// AtomicAddStreamProcessor delegates to the underlying FileConfigManager.
 func (m *FileConfigManagerWithBackoff) AtomicAddStreamProcessor(ctx context.Context, sp StreamProcessorConfig) error {
-
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -99,7 +99,7 @@ func (m *FileConfigManagerWithBackoff) AtomicAddStreamProcessor(ctx context.Cont
 // Fails if:
 // - The processor with the given name doesn't exist
 // - Attempting to edit a child processor (TemplateRef != "" && TemplateRef != Name)
-// - The new configuration has validation errors
+// - The new configuration has validation errors.
 func (m *FileConfigManager) AtomicEditStreamProcessor(ctx context.Context, sp StreamProcessorConfig) (StreamProcessorConfig, error) {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
@@ -114,12 +114,16 @@ func (m *FileConfigManager) AtomicEditStreamProcessor(ctx context.Context, sp St
 	}
 
 	// find the stream processor by name
-	var oldStreamProcessor *StreamProcessorConfig
-	var index = -1
+	var (
+		oldStreamProcessor *StreamProcessorConfig
+		index              = -1
+	)
+
 	for i, cmp := range config.StreamProcessor {
 		if cmp.Name == sp.Name {
 			oldStreamProcessor = &cmp
 			index = i
+
 			break
 		}
 	}
@@ -150,9 +154,8 @@ func (m *FileConfigManager) AtomicEditStreamProcessor(ctx context.Context, sp St
 	return oldConfig, nil
 }
 
-// AtomicEditStreamProcessor delegates to the underlying FileConfigManager
+// AtomicEditStreamProcessor delegates to the underlying FileConfigManager.
 func (m *FileConfigManagerWithBackoff) AtomicEditStreamProcessor(ctx context.Context, sp StreamProcessorConfig) (StreamProcessorConfig, error) {
-
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return StreamProcessorConfig{}, ctx.Err()
@@ -170,7 +173,7 @@ func (m *FileConfigManagerWithBackoff) AtomicEditStreamProcessor(ctx context.Con
 //
 // Fails if:
 // - The processor with the given name doesn't exist
-// - Attempting to delete a root processor that still has children depending on it
+// - Attempting to delete a root processor that still has children depending on it.
 func (m *FileConfigManager) AtomicDeleteStreamProcessor(ctx context.Context, name string) error {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
@@ -185,12 +188,16 @@ func (m *FileConfigManager) AtomicDeleteStreamProcessor(ctx context.Context, nam
 	}
 
 	// find the stream processor by name
-	var streamProcessorToDelete *StreamProcessorConfig
-	var index = -1
+	var (
+		streamProcessorToDelete *StreamProcessorConfig
+		index                   = -1
+	)
+
 	for i, cmp := range config.StreamProcessor {
 		if cmp.Name == name {
 			streamProcessorToDelete = &cmp
 			index = i
+
 			break
 		}
 	}
@@ -227,9 +234,8 @@ func (m *FileConfigManager) AtomicDeleteStreamProcessor(ctx context.Context, nam
 	return nil
 }
 
-// AtomicDeleteStreamProcessor delegates to the underlying FileConfigManager
+// AtomicDeleteStreamProcessor delegates to the underlying FileConfigManager.
 func (m *FileConfigManagerWithBackoff) AtomicDeleteStreamProcessor(ctx context.Context, name string) error {
-
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return ctx.Err()

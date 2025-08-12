@@ -458,6 +458,7 @@ var _ = Describe("TopicBrowserService", func() {
 				if config.Name == benthosName {
 					foundStopped = true
 					Expect(config.DesiredFSMState).To(Equal(benthosfsm.OperationalStateStopped))
+
 					break
 				}
 			}
@@ -473,6 +474,7 @@ var _ = Describe("TopicBrowserService", func() {
 				if config.Name == benthosName {
 					foundStarted = true
 					Expect(config.DesiredFSMState).To(Equal(benthosfsm.OperationalStateActive))
+
 					break
 				}
 			}
@@ -707,42 +709,48 @@ var _ = Describe("TopicBrowserService", func() {
 	)
 })
 
-// build redpanda observedState for checkMetrics
+// build redpanda observedState for checkMetrics.
 func buildRedpandaObs(bytesOut int64, withState bool) rpfsm.RedpandaObservedState {
 	var rpObservedState rpfsm.RedpandaObservedState
+
 	rpObservedState.ServiceInfo.RedpandaStatus.RedpandaMetrics.
 		Metrics.Throughput.BytesOut = bytesOut
 	if withState {
 		rpObservedState.ServiceInfo.RedpandaStatus.RedpandaMetrics.
 			MetricsState = &rpmonitor.RedpandaMetricsState{}
 	}
+
 	return rpObservedState
 }
 
-// build benthos observedState for checkMetrics
+// build benthos observedState for checkMetrics.
 func buildBenthosObs(outMsgs, inMsgs float64, withState bool) benthosfsm.BenthosObservedState {
 	var beObservedState benthosfsm.BenthosObservedState
+
 	if withState {
 		metricsState := &benthos_monitor.BenthosMetricsState{}
 		metricsState.Output.MessagesPerTick = outMsgs
 		metricsState.Input.MessagesPerTick = inMsgs
 		beObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState = metricsState
 	}
+
 	return beObservedState
 }
 
-// ConfigureBenthosManagerForState configures mock service for proper transitions
+// ConfigureBenthosManagerForState configures mock service for proper transitions.
 func ConfigureBenthosManagerForState(mockService *benthossvc.MockBenthosService, serviceName string, targetState string) {
 	// Make sure the service exists in the mock
 	if mockService.ExistingServices == nil {
 		mockService.ExistingServices = make(map[string]bool)
 	}
+
 	mockService.ExistingServices[serviceName] = true
 
 	// Make sure service state is initialized
 	if mockService.ServiceStates == nil {
 		mockService.ServiceStates = make(map[string]*benthossvc.ServiceInfo)
 	}
+
 	if mockService.ServiceStates[serviceName] == nil {
 		mockService.ServiceStates[serviceName] = &benthossvc.ServiceInfo{}
 	}
@@ -881,7 +889,7 @@ func SetupBenthosServiceState(
 	mockService.SetServiceState(serviceName, flags)
 }
 
-// WaitForBenthosManagerInstanceState waits for instance to reach desired state
+// WaitForBenthosManagerInstanceState waits for instance to reach desired state.
 func WaitForBenthosManagerInstanceState(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
@@ -893,16 +901,18 @@ func WaitForBenthosManagerInstanceState(
 ) (uint64, error) {
 	// Duplicate implementation from fsmtest package
 	tick := snapshot.Tick
-	baseTime := snapshot.SnapshotTime
-	for i := 0; i < maxAttempts; i++ {
 
+	baseTime := snapshot.SnapshotTime
+	for range maxAttempts {
 		// Update the snapshot time and tick to simulate the passage of time deterministically
 		snapshot.SnapshotTime = baseTime.Add(time.Duration(tick) * constants.DefaultTickerTime)
 		snapshot.Tick = tick
+
 		err, _ := manager.Reconcile(ctx, snapshot, services)
 		if err != nil {
 			return tick, err
 		}
+
 		tick++
 
 		instance, found := manager.GetInstance(instanceName)
@@ -910,10 +920,11 @@ func WaitForBenthosManagerInstanceState(
 			return tick, nil
 		}
 	}
+
 	return tick, fmt.Errorf("instance didn't reach expected state: %s", expectedState)
 }
 
-// makeHex creates hex-encoded payload for testing
+// makeHex creates hex-encoded payload for testing.
 func makeHex(payload []byte) string {
 	return hex.EncodeToString(payload)
 }

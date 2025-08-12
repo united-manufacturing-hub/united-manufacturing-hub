@@ -72,12 +72,15 @@ func (i *Instance) CreateInstance(ctx context.Context, filesystemService filesys
 	if err != nil {
 		if errors.Is(err, spsvc.ErrServiceAlreadyExists) {
 			i.baseFSMInstance.GetLogger().Debugf("Stream Processor service %s already exists in DFC  manager", i.baseFSMInstance.GetID())
+
 			return nil // do not throw an error, as each action is expected to be idempotent
 		}
+
 		return fmt.Errorf("failed to add Stream Processor service %s to DFC  manager: %w", i.baseFSMInstance.GetID(), err)
 	}
 
 	i.baseFSMInstance.GetLogger().Debugf("Stream Processor service %s added to DFC  manager", i.baseFSMInstance.GetID())
+
 	return nil
 }
 
@@ -96,6 +99,7 @@ func (i *Instance) RemoveInstance(ctx context.Context, filesystemService filesys
 		i.baseFSMInstance.GetLogger().
 			Debugf("StreamProcessor service %s removed from DFC manager",
 				i.baseFSMInstance.GetID())
+
 		return nil
 
 	case errors.Is(err, spsvc.ErrServiceNotExist):
@@ -124,7 +128,7 @@ func (i *Instance) RemoveInstance(ctx context.Context, filesystemService filesys
 	}
 }
 
-// StartInstance to start the Stream Processor by setting the desired state to running for the given instance
+// StartInstance to start the Stream Processor by setting the desired state to running for the given instance.
 func (i *Instance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	i.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting Stream Processor service %s ...", i.baseFSMInstance.GetID())
 
@@ -138,10 +142,11 @@ func (i *Instance) StartInstance(ctx context.Context, filesystemService filesyst
 	}
 
 	i.baseFSMInstance.GetLogger().Debugf("Stream Processor service %s start command executed", i.baseFSMInstance.GetID())
+
 	return nil
 }
 
-// StopInstance attempts to stop the DataflowComponent by setting the desired state to stopped for the given instance
+// StopInstance attempts to stop the DataflowComponent by setting the desired state to stopped for the given instance.
 func (i *Instance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	i.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping Stream Processor service %s ...", i.baseFSMInstance.GetID())
 
@@ -153,22 +158,22 @@ func (i *Instance) StopInstance(ctx context.Context, filesystemService filesyste
 	}
 
 	i.baseFSMInstance.GetLogger().Debugf("Stream Processor service %s stop command executed", i.baseFSMInstance.GetID())
+
 	return nil
 }
 
 // CheckForCreation checks whether the creation was successful
-// For DataflowComponent, this is a no-op as we don't need to check anything
+// For DataflowComponent, this is a no-op as we don't need to check anything.
 func (i *Instance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
 	return true
 }
 
 // getServiceStatus gets the status of the StreamProcessor service
-// its main purpose is to handle the edge cases where the service is not yet created or not yet running
+// its main purpose is to handle the edge cases where the service is not yet created or not yet running.
 func (i *Instance) getServiceStatus(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (spsvc.ServiceInfo, error) {
 	info, err := i.service.Status(ctx, services, snapshot, i.baseFSMInstance.GetID())
 	if err != nil {
 		// If there's an error getting the service status, we need to distinguish between cases
-
 		if errors.Is(err, spsvc.ErrServiceNotExist) {
 			// If the service is being created, we don't want to count this as an error
 			// The instance is likely in Creating or ToBeCreated state, so service doesn't exist yet
@@ -180,11 +185,13 @@ func (i *Instance) getServiceStatus(ctx context.Context, services serviceregistr
 
 			// Log the warning but don't treat it as a fatal error
 			i.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation")
+
 			return spsvc.ServiceInfo{}, nil
 		}
 
 		// For other errors, log them and return
 		i.baseFSMInstance.GetLogger().Errorf("error updating observed state for %s: %s", i.baseFSMInstance.GetID(), err)
+
 		infoWithFailedHealthChecks := info
 
 		// Set health flags to false to indicate failure, following the pattern used by other FSMs
@@ -193,7 +200,7 @@ func (i *Instance) getServiceStatus(ctx context.Context, services serviceregistr
 		infoWithFailedHealthChecks.DFCObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady = false
 
 		// Set the StatusReason to explain the error
-		infoWithFailedHealthChecks.StatusReason = fmt.Sprintf("service status error: %s", err.Error())
+		infoWithFailedHealthChecks.StatusReason = "service status error: " + err.Error()
 
 		// return the info with healthchecks failed
 		return infoWithFailedHealthChecks, err
@@ -202,17 +209,19 @@ func (i *Instance) getServiceStatus(ctx context.Context, services serviceregistr
 	return info, nil
 }
 
-// UpdateObservedStateOfInstance updates the observed state of the service
+// UpdateObservedStateOfInstance updates the observed state of the service.
 func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
 	start := time.Now()
+
 	info, err := i.getServiceStatus(ctx, services, snapshot)
 	if err != nil {
 		return fmt.Errorf("error while getting service status: %w", err)
 	}
+
 	metrics.ObserveReconcileTime(logger.ComponentStreamProcessorInstance, i.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
 	// Store the raw service info
 	i.ObservedState.ServiceInfo = info
@@ -229,6 +238,7 @@ func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services s
 	start = time.Now()
 	observedConfig, err := i.service.GetConfig(ctx, services.GetFileSystem(), i.baseFSMInstance.GetID())
 	metrics.ObserveReconcileTime(logger.ComponentStreamProcessorInstance, i.baseFSMInstance.GetID()+".getConfig", time.Since(start))
+
 	if err == nil {
 		// Only update if we successfully got the config
 		i.ObservedState.ObservedRuntimeConfig = observedConfig
@@ -236,6 +246,7 @@ func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services s
 		if strings.Contains(err.Error(), spsvc.ErrServiceNotExist.Error()) {
 			// Log the error but don't fail - this might happen during creation when the config file doesn't exist yet
 			i.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
+
 			return nil
 		} else {
 			return fmt.Errorf("failed to get observed StreamProcessor config: %w", err)
@@ -267,6 +278,7 @@ func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services s
 	// Now render the config
 	// WARN: TODO
 	start = time.Now()
+
 	i.runtimeConfig, i.dfcRuntimeConfig, err = runtime_config.BuildRuntimeConfig(
 		i.specConfig,
 		agentLocationStr,
@@ -276,7 +288,8 @@ func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services s
 	)
 	if err != nil {
 		// Capture the configuration error in StatusReason for troubleshooting
-		i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("config error: %s", err.Error())
+		i.ObservedState.ServiceInfo.StatusReason = "config error: " + err.Error()
+
 		return fmt.Errorf("failed to build runtime config: %w", err)
 	}
 
@@ -296,6 +309,7 @@ func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services s
 			if err != nil {
 				return fmt.Errorf("failed to update Stream Processor service configuration: %w", err)
 			}
+
 			i.baseFSMInstance.GetLogger().Debugf("config updated")
 
 			// UNIQUE BEHAVIOR: Re-evaluate DFC desired states after config changes
@@ -306,6 +320,7 @@ func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services s
 			// 3. This ensures we don't start broken Benthos instances with empty configs
 			if i.baseFSMInstance.GetDesiredFSMState() == OperationalStateActive {
 				i.baseFSMInstance.GetLogger().Debugf("re-evaluating DFC desired states and will be active")
+
 				err := i.service.EvaluateDFCDesiredStates(i.baseFSMInstance.GetID(), "active")
 				if err != nil {
 					i.baseFSMInstance.GetLogger().Debugf("Failed to re-evaluate DFC states after config update: %v", err)
@@ -322,12 +337,13 @@ func (i *Instance) UpdateObservedStateOfInstance(ctx context.Context, services s
 	return nil
 }
 
-// convertIntMapToStringMap converts a map[int]string to map[string]string
+// convertIntMapToStringMap converts a map[int]string to map[string]string.
 func convertIntMapToStringMap(m map[int]string) map[string]string {
 	result := make(map[string]string)
 	for k, v := range m {
 		result[strconv.Itoa(k)] = v
 	}
+
 	return result
 }
 
@@ -382,6 +398,7 @@ func (i *Instance) safeBenthosMetrics() (input, output struct{ ConnectionUp, Con
 	}
 
 	metrics := i.ObservedState.ServiceInfo.DFCObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
+
 	return struct{ ConnectionUp, ConnectionLost int64 }{
 			ConnectionUp:   metrics.Input.ConnectionUp,
 			ConnectionLost: metrics.Input.ConnectionLost,
@@ -393,7 +410,7 @@ func (i *Instance) safeBenthosMetrics() (input, output struct{ ConnectionUp, Con
 
 // IsOtherDegraded checks for certain states that should never happen
 // and moves the instance into a degraded state if they happen anyway
-// Case 1: DFC and redpanda should either be both idle or both active, if they differ (for more than a tick) something must have gone wrong (exept that redpanda can be active because of a different DFC)
+// Case 1: DFC and redpanda should either be both idle or both active, if they differ (for more than a tick) something must have gone wrong (except that redpanda can be active because of a different DFC)
 // Case 2: if redpanda is idle or active, but the DFC has no output active, something must have gone wrong (either redpanda is actually down and not detected, or the DFC is not connecting to Kafka)
 //
 // It returns:
@@ -441,7 +458,7 @@ func (i *Instance) IsDataflowComponentWithProcessingActivity() (bool, string) {
 		dfcState = "not existing"
 	}
 
-	return false, fmt.Sprintf("DFC is %s", dfcState)
+	return false, "DFC is " + dfcState
 }
 
 // IsStreamProcessorStopped checks whether the StreamProcessor is stopped
@@ -462,7 +479,7 @@ func (i *Instance) IsStreamProcessorStopped() (bool, string) {
 		dfcState = "not existing"
 	}
 
-	return false, fmt.Sprintf("DFC is %s", dfcState)
+	return false, "DFC is " + dfcState
 }
 
 // IsDFCExisting checks whether either the read or write DFC is existing
@@ -475,5 +492,6 @@ func (i *Instance) IsDFCExisting() (bool, string) {
 	if len(i.ObservedState.ServiceInfo.DFCObservedState.ServiceInfo.BenthosObservedState.ObservedBenthosServiceConfig.Input) > 0 {
 		return true, ""
 	}
+
 	return false, "no DFCs configured"
 }

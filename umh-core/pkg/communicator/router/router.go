@@ -84,6 +84,7 @@ func (r *Router) Start() {
 func (r *Router) router() {
 	watcherUUID := r.dog.RegisterHeartbeat("router", 5, 600, true)
 	ticker := time.NewTicker(5 * time.Second)
+
 	for {
 		select {
 		case message := <-r.inboundChannel:
@@ -92,8 +93,10 @@ func (r *Router) router() {
 			messageContent, err := encoding.DecodeMessageFromUserToUMHInstance(message.Content)
 			if err != nil {
 				r.routerLogger.Warnf("Failed to decrypt message: %s", err.Error())
+
 				continue
 			}
+
 			switch messageContent.MessageType {
 			case models.Subscribe:
 				r.handleSub(message, messageContent, watcherUUID)
@@ -101,6 +104,7 @@ func (r *Router) router() {
 				r.handleAction(messageContent, message, watcherUUID)
 			default:
 				r.routerLogger.Warnf("Unexpected message type: %s", messageContent.MessageType)
+
 				continue
 			}
 		case <-ticker.C:
@@ -114,11 +118,12 @@ func (r *Router) router() {
 // otherwise it will add the subscriber to the registry
 // this is an optimization to avoid sending a "new subscriber" message, containing the cached uns data with at least
 // one event for every topic, to the frontend when the user is already subscribed
-// we should avoid unnecessary new subscriber message generation because of its high memory and cpu usage
+// we should avoid unnecessary new subscriber message generation because of its high memory and cpu usage.
 func (r *Router) handleSub(message *models.UMHMessage, messageContent models.UMHMessageContent, watcherUUID uuid.UUID) {
 	if r.subHandler == nil {
 		r.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 		r.routerLogger.Warnf("Subscribe handler not yet initialized")
+
 		return
 	}
 
@@ -139,11 +144,14 @@ func (r *Router) handleAction(messageContent models.UMHMessageContent, message *
 	payloadMap, ok := messageContent.Payload.(map[string]interface{})
 	if !ok {
 		r.routerLogger.Warnf("Warning: Could not assert payload to map[string]interface{}. Actual type: %T, Value: %v", messageContent.Payload, messageContent.Payload)
+
 		return
 	}
 
-	if err := maptostruct.MapToStruct(payloadMap, &actionPayload); err != nil {
+	err := maptostruct.MapToStruct(payloadMap, &actionPayload)
+	if err != nil {
 		r.routerLogger.Warnf("Failed to convert payload into ActionMessagePayload: %v", err)
+
 		return
 	}
 

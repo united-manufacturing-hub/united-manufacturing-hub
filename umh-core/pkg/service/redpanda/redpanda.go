@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -47,7 +48,7 @@ import (
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_orig"
 )
 
-// IRedpandaService is the interface for managing Redpanda
+// IRedpandaService is the interface for managing Redpanda.
 type IRedpandaService interface {
 	// GenerateS6ConfigForRedpanda generates a S6 config for a given redpanda instance
 	GenerateS6ConfigForRedpanda(redpandaConfig *redpandaserviceconfig.RedpandaServiceConfig, redpandaName string) (s6serviceconfig.S6ServiceConfig, error)
@@ -96,7 +97,7 @@ type IRedpandaService interface {
 	UpdateRedpandaClusterConfig(ctx context.Context, redpandaName string, configUpdates map[string]interface{}) error
 }
 
-// ServiceInfo contains information about a Redpanda service
+// ServiceInfo contains information about a Redpanda service.
 type ServiceInfo struct {
 	// RedpandaStatus contains information about the status of the Redpanda service
 	RedpandaStatus RedpandaStatus
@@ -108,7 +109,7 @@ type ServiceInfo struct {
 	S6ObservedState s6fsm.S6ObservedState
 }
 
-// RedpandaStatus contains information about the status of the Redpanda service
+// RedpandaStatus contains information about the status of the Redpanda service.
 type RedpandaStatus struct {
 	// HealthCheck contains information about the health of the Redpanda service
 	HealthCheck HealthCheck
@@ -155,6 +156,7 @@ type RedpandaStatus struct {
 // See also: https://github.com/tiendc/go-deepcopy?tab=readme-ov-file#copy-struct-fields-via-struct-methods
 func (rs *RedpandaStatus) CopyLogs(src []s6_shared.LogEntry) error {
 	rs.Logs = src
+
 	return nil
 }
 
@@ -169,7 +171,7 @@ type HealthCheck struct {
 	IsReady bool
 }
 
-// RedpandaService is the default implementation of the IRedpandaService interface
+// RedpandaService is the default implementation of the IRedpandaService interface.
 type RedpandaService struct {
 	s6Service  s6_shared.Service // S6 service for direct S6 operations
 	httpClient httpclient.HTTPClient
@@ -187,46 +189,46 @@ type RedpandaService struct {
 	redpandaMonitorConfigs []config.RedpandaMonitorConfig
 }
 
-// RedpandaServiceOption is a function that modifies a RedpandaService
+// RedpandaServiceOption is a function that modifies a RedpandaService.
 type RedpandaServiceOption func(*RedpandaService)
 
 // WithHTTPClient sets a custom HTTP client for the RedpandaService
-// This is only used for testing purposes
+// This is only used for testing purposes.
 func WithHTTPClient(client httpclient.HTTPClient) RedpandaServiceOption {
 	return func(s *RedpandaService) {
 		s.httpClient = client
 	}
 }
 
-// WithS6Service sets a custom S6 service for the RedpandaService
+// WithS6Service sets a custom S6 service for the RedpandaService.
 func WithS6Service(s6Service s6_shared.Service) RedpandaServiceOption {
 	return func(s *RedpandaService) {
 		s.s6Service = s6Service
 	}
 }
 
-// WithS6Manager sets a custom S6 manager for the RedpandaService
+// WithS6Manager sets a custom S6 manager for the RedpandaService.
 func WithS6Manager(s6Manager *s6fsm.S6Manager) RedpandaServiceOption {
 	return func(s *RedpandaService) {
 		s.s6Manager = s6Manager
 	}
 }
 
-// WithBaseDir sets the base directory for the RedpandaService
+// WithBaseDir sets the base directory for the RedpandaService.
 func WithBaseDir(baseDir string) RedpandaServiceOption {
 	return func(s *RedpandaService) {
 		s.baseDir = baseDir
 	}
 }
 
-// WithMonitorManager sets a custom monitor manager for the RedpandaService
+// WithMonitorManager sets a custom monitor manager for the RedpandaService.
 func WithMonitorManager(monitorManager *redpanda_monitor_fsm.RedpandaMonitorManager) RedpandaServiceOption {
 	return func(s *RedpandaService) {
 		s.redpandaMonitorManager = monitorManager
 	}
 }
 
-// WithSchemaRegistryManager sets a custom schema registry manager for the RedpandaService
+// WithSchemaRegistryManager sets a custom schema registry manager for the RedpandaService.
 func WithSchemaRegistryManager(schemaRegistryManager ISchemaRegistry) RedpandaServiceOption {
 	return func(s *RedpandaService) {
 		s.schemaRegistryManager = schemaRegistryManager
@@ -234,7 +236,7 @@ func WithSchemaRegistryManager(schemaRegistryManager ISchemaRegistry) RedpandaSe
 }
 
 // NewDefaultRedpandaService creates a new default Redpanda service
-// name is the name of the Redpanda service as defined in the UMH config
+// name is the name of the Redpanda service as defined in the UMH config.
 func NewDefaultRedpandaService(redpandaName string, opts ...RedpandaServiceOption) *RedpandaService {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentRedpandaService, redpandaName)
 	service := &RedpandaService{
@@ -255,17 +257,17 @@ func NewDefaultRedpandaService(redpandaName string, opts ...RedpandaServiceOptio
 	return service
 }
 
-// generateRedpandaYaml generates a Redpanda YAML configuration from a RedpandaServiceConfig
+// generateRedpandaYaml generates a Redpanda YAML configuration from a RedpandaServiceConfig.
 func (s *RedpandaService) generateRedpandaYaml(config *redpandaserviceconfig.RedpandaServiceConfig) (string, error) {
 	if config == nil {
-		return "", fmt.Errorf("config is nil")
+		return "", errors.New("config is nil")
 	}
 
 	return redpandaserviceconfig.RenderRedpandaYAML(config.Topic.DefaultTopicRetentionMs, config.Topic.DefaultTopicRetentionBytes, config.Topic.DefaultTopicCompressionAlgorithm, config.Topic.DefaultTopicCleanupPolicy, config.Topic.DefaultTopicSegmentMs)
 }
 
 // generateS6ConfigForRedpanda creates a S6 config for a given redpanda instance
-// Expects s6ServiceName (e.g. "redpanda-myservice"), not the raw redpandaName
+// Expects s6ServiceName (e.g. "redpanda-myservice"), not the raw redpandaName.
 func (s *RedpandaService) GenerateS6ConfigForRedpanda(redpandaConfig *redpandaserviceconfig.RedpandaServiceConfig, s6ServiceName string) (s6Config s6serviceconfig.S6ServiceConfig, err error) {
 	configPath := fmt.Sprintf("%s/%s/config/%s", constants.S6BaseDir, s6ServiceName, constants.RedpandaConfigFileName)
 
@@ -292,7 +294,7 @@ func (s *RedpandaService) GenerateS6ConfigForRedpanda(redpandaConfig *redpandase
 			formatMemory(redpandaConfig.Resources.MemoryPerCoreInBytes),
 			// --smp comes directly from seastar (you can find all redpanda seastar options by executing `redpanda --help` or `redpanda --seastar-help`)
 			"--smp",
-			fmt.Sprintf("%d", redpandaConfig.Resources.MaxCores),
+			strconv.Itoa(redpandaConfig.Resources.MaxCores),
 		},
 		Env: map[string]string{},
 		ConfigFiles: map[string]string{
@@ -306,12 +308,12 @@ func (s *RedpandaService) GenerateS6ConfigForRedpanda(redpandaConfig *redpandase
 // GetS6ServiceName converts a logical Redpanda name ("my-pipe") into the
 // canonical S6 service name ("redpanda-my-pipe").
 //
-// It is exported ONLY because tests and other packages need the mapping
+// It is exported ONLY because tests and other packages need the mapping.
 func (s *RedpandaService) GetS6ServiceName(redpandaName string) string {
-	return fmt.Sprintf("redpanda-%s", redpandaName)
+	return "redpanda-" + redpandaName
 }
 
-// GetConfig returns the actual Redpanda config from the S6 service
+// GetConfig returns the actual Redpanda config from the S6 service.
 func (s *RedpandaService) GetConfig(ctx context.Context, filesystemService filesystem.Service, redpandaName string, tick uint64, loopStartTime time.Time) (redpandaserviceconfig.RedpandaServiceConfig, error) {
 	if ctx.Err() != nil {
 		return redpandaserviceconfig.RedpandaServiceConfig{}, ctx.Err()
@@ -325,6 +327,7 @@ func (s *RedpandaService) GetConfig(ctx context.Context, filesystemService files
 
 	// Get the last observed state of the redpanda monitor
 	s6ServiceName := s.GetS6ServiceName(redpandaName)
+
 	lastObservedState, err := s.redpandaMonitorManager.GetLastObservedState(s6ServiceName)
 	if err != nil {
 		return redpandaserviceconfig.RedpandaServiceConfig{}, fmt.Errorf("failed to get redpanda status: %w", err)
@@ -356,10 +359,11 @@ func (s *RedpandaService) GetConfig(ctx context.Context, filesystemService files
 		} else {
 			s.logger.Debugf("Cluster config is nil, skipping update")
 		}
+
 		redpandaStatus.Resources.MaxCores = 1
 		redpandaStatus.Resources.MemoryPerCoreInBytes = 2048 * 1024 * 1024 // 2GB
 	} else {
-		return redpandaserviceconfig.RedpandaServiceConfig{}, fmt.Errorf("last scan is nil")
+		return redpandaserviceconfig.RedpandaServiceConfig{}, errors.New("last scan is nil")
 	}
 
 	// If the current state is stopped, we can return immediately
@@ -371,7 +375,7 @@ func (s *RedpandaService) GetConfig(ctx context.Context, filesystemService files
 	return redpandaserviceconfig.NormalizeRedpandaConfig(redpandaStatus), nil
 }
 
-// Status checks the status of a Redpanda service
+// Status checks the status of a Redpanda service.
 func (s *RedpandaService) Status(ctx context.Context, filesystemService filesystem.Service, redpandaName string, tick uint64, loopStartTime time.Time) (ServiceInfo, error) {
 	if ctx.Err() != nil {
 		return ServiceInfo{}, ctx.Err()
@@ -384,6 +388,7 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 	// during reconciliation when a service is being created or removed
 	if _, exists := s.s6Manager.GetInstance(s6ServiceName); !exists {
 		s.logger.Debugf("Service %s not found in S6 manager: %+v", redpandaName, s.s6Manager.GetInstances())
+
 		return ServiceInfo{}, ErrServiceNotExist
 	}
 
@@ -395,10 +400,13 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 		if strings.Contains(err.Error(), "instance "+redpandaName+" not found") ||
 			strings.Contains(err.Error(), "not found") {
 			s.logger.Debugf("Service %s was removed during status check", redpandaName)
+
 			return ServiceInfo{}, ErrServiceNotExist
 		}
+
 		return ServiceInfo{}, fmt.Errorf("failed to get last observed state: %w", err)
 	}
+
 	s6ServiceObservedState, ok := s6ServiceObservedStateRaw.(s6fsm.S6ObservedState)
 	if !ok {
 		return ServiceInfo{}, fmt.Errorf("observed state is not a S6ObservedState: %v", s6ServiceObservedStateRaw)
@@ -411,19 +419,24 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 		if strings.Contains(err.Error(), "instance "+s6ServiceName+" not found") ||
 			strings.Contains(err.Error(), "not found") {
 			s.logger.Debugf("Service %s was removed during status check", s6ServiceName)
+
 			return ServiceInfo{}, ErrServiceNotExist
 		}
+
 		return ServiceInfo{}, fmt.Errorf("failed to get current FSM state: %w", err)
 	}
 	// Let's get the logs of the Redpanda service
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
+
 	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, filesystemService)
 	if err != nil {
 		if errors.Is(err, s6_shared.ErrServiceNotExist) {
 			s.logger.Debugf("Service %s does not exist, returning empty logs", s6ServiceName)
+
 			return ServiceInfo{}, ErrServiceNotExist
 		} else if errors.Is(err, s6_shared.ErrLogFileNotFound) {
 			s.logger.Debugf("Log file for service %s not found, returning empty logs", s6ServiceName)
+
 			return ServiceInfo{}, ErrServiceNotExist
 		} else {
 			return ServiceInfo{}, fmt.Errorf("failed to get logs: %w", err)
@@ -443,6 +456,7 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 				},
 			}, ErrServiceNoLogFile
 		}
+
 		if strings.Contains(err.Error(), monitor.ErrServiceConnectionRefused.Error()) {
 			return ServiceInfo{
 				S6ObservedState: s6ServiceObservedState,
@@ -472,6 +486,7 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 		if strings.Contains(err.Error(), "instance "+s6ServiceName+" not found") ||
 			strings.Contains(err.Error(), "not found") {
 			s.logger.Debugf("Service %s was removed during status check", s6ServiceName)
+
 			return ServiceInfo{}, ErrServiceNotExist
 		}
 
@@ -492,9 +507,10 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 	return serviceInfo, nil
 }
 
-// GetHealthCheckAndMetrics returns the health check and metrics of a Redpanda service
+// GetHealthCheckAndMetrics returns the health check and metrics of a Redpanda service.
 func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uint64, logs []s6_shared.LogEntry, filesystemService filesystem.Service, redpandaName string, loopStartTime time.Time) (RedpandaStatus, error) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(logger.ComponentRedpandaService, redpandaName, time.Since(start))
 	}()
@@ -521,6 +537,7 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 
 	// Get the last observed state of the redpanda monitor
 	s6ServiceName := s.GetS6ServiceName(redpandaName)
+
 	lastObservedState, err := s.redpandaMonitorManager.GetLastObservedState(s6ServiceName)
 	if err != nil {
 		return RedpandaStatus{}, fmt.Errorf("failed to get redpanda status: %w", err)
@@ -570,7 +587,7 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 
 		redpandaStatus.Logs = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.Logs
 	} else {
-		return RedpandaStatus{}, fmt.Errorf("last scan is nil")
+		return RedpandaStatus{}, errors.New("last scan is nil")
 	}
 
 	// If the service is not running, we can return immediately
@@ -582,7 +599,7 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 	return redpandaStatus, nil
 }
 
-// AddRedpandaToS6Manager adds a Redpanda instance to the S6 manager
+// AddRedpandaToS6Manager adds a Redpanda instance to the S6 manager.
 func (s *RedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig, filesystemService filesystem.Service, redpandaName string) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
@@ -636,7 +653,7 @@ func (s *RedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *redpa
 	return nil
 }
 
-// ensureRedpandaDirectories creates all necessary directories for Redpanda
+// ensureRedpandaDirectories creates all necessary directories for Redpanda.
 func (s *RedpandaService) ensureRedpandaDirectories(ctx context.Context, baseDir string, filesystemService filesystem.Service) error {
 	if baseDir == "" {
 		s.logger.Warnf("baseDir is empty, using default value %s", constants.DefaultRedpandaBaseDir)
@@ -644,20 +661,22 @@ func (s *RedpandaService) ensureRedpandaDirectories(ctx context.Context, baseDir
 	}
 
 	// Ensure main data directory
-	if err := filesystemService.EnsureDirectory(ctx, filepath.Join(baseDir, "redpanda")); err != nil {
+	err := filesystemService.EnsureDirectory(ctx, filepath.Join(baseDir, "redpanda"))
+	if err != nil {
 		return fmt.Errorf("failed to ensure %s/redpanda directory exists: %w", baseDir, err)
 	}
 
 	// Ensure coredump directory
 	// By default redpanda will generate coredumps when crashing
-	if err := filesystemService.EnsureDirectory(ctx, filepath.Join(baseDir, "redpanda", "coredump")); err != nil {
+	err = filesystemService.EnsureDirectory(ctx, filepath.Join(baseDir, "redpanda", "coredump"))
+	if err != nil {
 		return fmt.Errorf("failed to ensure %s/redpanda/coredump directory exists: %w", baseDir, err)
 	}
 
 	return nil
 }
 
-// UpdateRedpandaInS6Manager updates an existing Redpanda instance in the S6 manager
+// UpdateRedpandaInS6Manager updates an existing Redpanda instance in the S6 manager.
 func (s *RedpandaService) UpdateRedpandaInS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig, redpandaName string) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
@@ -672,10 +691,12 @@ func (s *RedpandaService) UpdateRedpandaInS6Manager(ctx context.Context, cfg *re
 	// Check if the service exists
 	found := false
 	index := -1
+
 	for i, s6Config := range s.s6ServiceConfigs {
 		if s6Config.Name == s6ServiceName {
 			found = true
 			index = i
+
 			break
 		}
 	}
@@ -705,6 +726,7 @@ func (s *RedpandaService) UpdateRedpandaInS6Manager(ctx context.Context, cfg *re
 	if currentDesiredState == s6fsm.OperationalStateStopped {
 		redpandaMonitorDesiredState = redpanda_monitor_fsm.OperationalStateStopped
 	}
+
 	s.redpandaMonitorConfigs[index] = config.RedpandaMonitorConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            s6ServiceName,
@@ -715,7 +737,7 @@ func (s *RedpandaService) UpdateRedpandaInS6Manager(ctx context.Context, cfg *re
 	return nil
 }
 
-// RemoveRedpandaFromS6Manager removes a Redpanda instance from the S6 manager
+// RemoveRedpandaFromS6Manager removes a Redpanda instance from the S6 manager.
 func (s *RedpandaService) RemoveRedpandaFromS6Manager(ctx context.Context, redpandaName string) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
@@ -736,6 +758,7 @@ func (s *RedpandaService) RemoveRedpandaFromS6Manager(ctx context.Context, redpa
 		if s6Config.Name == s6ServiceName {
 			s.s6ServiceConfigs = append(s.s6ServiceConfigs[:i], s.s6ServiceConfigs[i+1:]...)
 			found = true
+
 			break
 		}
 	}
@@ -749,6 +772,7 @@ func (s *RedpandaService) RemoveRedpandaFromS6Manager(ctx context.Context, redpa
 		if redpandaMonitorConfig.Name == s6ServiceName {
 			s.redpandaMonitorConfigs = append(s.redpandaMonitorConfigs[:i], s.redpandaMonitorConfigs[i+1:]...)
 			found = true
+
 			break
 		}
 	}
@@ -760,7 +784,7 @@ func (s *RedpandaService) RemoveRedpandaFromS6Manager(ctx context.Context, redpa
 	return nil
 }
 
-// StartRedpanda starts a Redpanda instance
+// StartRedpanda starts a Redpanda instance.
 func (s *RedpandaService) StartRedpanda(ctx context.Context, redpandaName string) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
@@ -779,6 +803,7 @@ func (s *RedpandaService) StartRedpanda(ctx context.Context, redpandaName string
 		if s6Config.Name == s6ServiceName {
 			s.s6ServiceConfigs[i].DesiredFSMState = s6fsm.OperationalStateRunning
 			found = true
+
 			break
 		}
 	}
@@ -794,6 +819,7 @@ func (s *RedpandaService) StartRedpanda(ctx context.Context, redpandaName string
 		if redpandaMonitorConfig.Name == s6ServiceName {
 			s.redpandaMonitorConfigs[i].DesiredFSMState = redpanda_monitor_fsm.OperationalStateActive
 			found = true
+
 			break
 		}
 	}
@@ -805,7 +831,7 @@ func (s *RedpandaService) StartRedpanda(ctx context.Context, redpandaName string
 	return nil
 }
 
-// StopRedpanda stops a Redpanda instance
+// StopRedpanda stops a Redpanda instance.
 func (s *RedpandaService) StopRedpanda(ctx context.Context, redpandaName string) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
@@ -824,6 +850,7 @@ func (s *RedpandaService) StopRedpanda(ctx context.Context, redpandaName string)
 		if s6Config.Name == s6ServiceName {
 			s.s6ServiceConfigs[i].DesiredFSMState = s6fsm.OperationalStateStopped
 			found = true
+
 			break
 		}
 	}
@@ -839,6 +866,7 @@ func (s *RedpandaService) StopRedpanda(ctx context.Context, redpandaName string)
 		if redpandaMonitorConfig.Name == s6ServiceName {
 			s.redpandaMonitorConfigs[i].DesiredFSMState = redpanda_monitor_fsm.OperationalStateStopped
 			found = true
+
 			break
 		}
 	}
@@ -851,7 +879,7 @@ func (s *RedpandaService) StopRedpanda(ctx context.Context, redpandaName string)
 }
 
 // ReconcileManager reconciles the Redpanda manager
-// This basically just calls the Reconcile method of the S6 manager, resulting in a (re)start of the Redpanda service with the latest configuration
+// This basically just calls the Reconcile method of the S6 manager, resulting in a (re)start of the Redpanda service with the latest configuration.
 func (s *RedpandaService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (err error, reconciled bool) {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized"), false
@@ -887,6 +915,7 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, services service
 
 	// Only reconcile the schema registry if redpanda itself is running
 	hasRunningRedpanda := false
+
 	for _, s6Config := range s.s6ServiceConfigs {
 		// Check if this service has a desired state of running
 		if s6Config.DesiredFSMState == s6fsm.OperationalStateRunning {
@@ -894,6 +923,7 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, services service
 			currentState, err := s.s6Manager.GetCurrentFSMState(s6Config.Name)
 			if err == nil && currentState == s6fsm.OperationalStateRunning {
 				hasRunningRedpanda = true
+
 				break
 			}
 		}
@@ -981,13 +1011,15 @@ func (s *RedpandaService) HasProcessingActivity(status RedpandaStatus) (bool, st
 	if status.RedpandaMetrics.MetricsState == nil {
 		return false, ""
 	}
+
 	if status.RedpandaMetrics.MetricsState.IsActive {
 		return true, ""
 	}
+
 	return false, fmt.Sprintf("no input bytes activity, (in=%.2f bytes/s, out=%.2f bytes/s)", status.RedpandaMetrics.MetricsState.Input.BytesPerTick, status.RedpandaMetrics.MetricsState.Output.BytesPerTick)
 }
 
-// ServiceExists checks if a Redpanda service exists
+// ServiceExists checks if a Redpanda service exists.
 func (s *RedpandaService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, benthosName string) bool {
 	s6ServiceName := s.GetS6ServiceName(benthosName)
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
@@ -995,6 +1027,7 @@ func (s *RedpandaService) ServiceExists(ctx context.Context, filesystemService f
 	exists, err := s.s6Service.ServiceExists(ctx, s6ServicePath, filesystemService)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "Error checking if service exists for %s: %v", s6ServiceName, err)
+
 		return false
 	}
 
@@ -1003,10 +1036,11 @@ func (s *RedpandaService) ServiceExists(ctx context.Context, filesystemService f
 
 // ForceRemoveRedpanda removes a Redpanda instance from the S6 manager
 // This should only be called if the Redpanda instance is in a permanent failure state
-// and the instance itself cannot be stopped or removed
+// and the instance itself cannot be stopped or removed.
 func (s *RedpandaService) ForceRemoveRedpanda(ctx context.Context, filesystemService filesystem.Service, redpandaName string) error {
 	s6ServiceName := s.GetS6ServiceName(redpandaName)
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
+
 	return s.s6Service.ForceRemove(ctx, s6ServicePath, filesystemService)
 }
 
@@ -1023,10 +1057,10 @@ func formatMemory(memory int) string {
 	return fmt.Sprintf("%d%s", memory, units[unitIndex])
 }
 
-// setRedpandaClusterConfig sends a PUT request to update Redpanda's cluster config
+// setRedpandaClusterConfig sends a PUT request to update Redpanda's cluster config.
 func (s *RedpandaService) setRedpandaClusterConfig(ctx context.Context, configUpdates map[string]interface{}) (err error) {
 	if s.httpClient == nil {
-		return fmt.Errorf("http client not initialized")
+		return errors.New("http client not initialized")
 	}
 
 	// Construct the request body
@@ -1037,6 +1071,7 @@ func (s *RedpandaService) setRedpandaClusterConfig(ctx context.Context, configUp
 
 	// Convert to JSON
 	var jsonBody []byte
+
 	jsonBody, err = json.Marshal(requestBody)
 	if err != nil {
 		return fmt.Errorf("failed to marshal request body: %w", err)
@@ -1044,6 +1079,7 @@ func (s *RedpandaService) setRedpandaClusterConfig(ctx context.Context, configUp
 
 	// Create the request
 	var req *http.Request
+
 	req, err = http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("http://127.0.0.1:%d/v1/cluster_config", constants.AdminAPIPort), bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -1054,16 +1090,19 @@ func (s *RedpandaService) setRedpandaClusterConfig(ctx context.Context, configUp
 
 	// Send the request
 	var resp *http.Response
+
 	resp, err = s.httpClient.Do(req)
 	if err != nil {
 		// If we get a connection refused error, it means that the Redpanda service is not yet ready, so we just ignore it
 		if strings.Contains(err.Error(), "connection refused") {
 			return nil
 		}
+
 		return fmt.Errorf("failed to send request: %w", err)
 	}
+
 	if resp == nil {
-		return fmt.Errorf("received nil response")
+		return errors.New("received nil response")
 	}
 
 	defer func() {
@@ -1078,6 +1117,7 @@ func (s *RedpandaService) setRedpandaClusterConfig(ctx context.Context, configUp
 	// Check response status
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+
 		return fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -1092,10 +1132,10 @@ func (s *RedpandaService) setRedpandaClusterConfig(ctx context.Context, configUp
 	return nil
 }
 
-// verifyRedpandaClusterConfig reads back the cluster config and verifies that the updates were applied correctly
+// verifyRedpandaClusterConfig reads back the cluster config and verifies that the updates were applied correctly.
 func (s *RedpandaService) verifyRedpandaClusterConfig(ctx context.Context, redpandaName string, configUpdates map[string]interface{}) error {
 	if s.httpClient == nil {
-		return fmt.Errorf("http client not initialized")
+		return errors.New("http client not initialized")
 	}
 
 	readbackReq, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/v1/cluster_config", constants.AdminAPIPort), nil)
@@ -1109,10 +1149,12 @@ func (s *RedpandaService) verifyRedpandaClusterConfig(ctx context.Context, redpa
 		if strings.Contains(err.Error(), "connection refused") {
 			return nil
 		}
+
 		return fmt.Errorf("failed to send readback request: %w", err)
 	}
+
 	if readbackResp == nil {
-		return fmt.Errorf("received nil readback response")
+		return errors.New("received nil readback response")
 	}
 
 	readbackBody, err := io.ReadAll(readbackResp.Body)
@@ -1137,6 +1179,7 @@ func (s *RedpandaService) verifyRedpandaClusterConfig(ctx context.Context, redpa
 		readbackValue, ok := readbackConfig[key]
 		if !ok {
 			s.logger.Debugf("Key %s not found in Redpanda cluster config for %s", key, redpandaName)
+
 			return fmt.Errorf("key %s not found in Redpanda cluster config for %s", key, redpandaName)
 		}
 
@@ -1144,22 +1187,26 @@ func (s *RedpandaService) verifyRedpandaClusterConfig(ctx context.Context, redpa
 		expectedStr, err := anyToString(value)
 		if err != nil {
 			s.logger.Debugf("Failed to convert expected value for key %s: %v", key, err)
+
 			return fmt.Errorf("failed to convert expected value for key %s: %w", key, err)
 		}
 
 		actualStr, err := anyToString(readbackValue)
 		if err != nil {
 			s.logger.Debugf("Failed to convert actual value for key %s: %v", key, err)
+
 			return fmt.Errorf("failed to convert actual value for key %s: %w", key, err)
 		}
 
 		if expectedStr != actualStr {
 			s.logger.Debugf("Config verification failed for key %s: expected %s, got %s", key, expectedStr, actualStr)
+
 			return fmt.Errorf("config verification failed for key %s: expected %s, got %s", key, expectedStr, actualStr)
 		}
 	}
 
 	s.logger.Debugf("Config verification passed for %s", redpandaName)
+
 	return nil
 }
 
@@ -1190,7 +1237,9 @@ func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpa
 
 	// Set the cluster config
 	s.logger.Debugf("Setting Redpanda cluster config: %v", configUpdates)
-	if err := s.setRedpandaClusterConfig(innerCtx, configUpdates); err != nil {
+	err := s.setRedpandaClusterConfig(innerCtx, configUpdates)
+
+	if err != nil {
 		return err
 	}
 
@@ -1201,33 +1250,37 @@ func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpa
 
 	// Verify the config was applied correctly
 	s.logger.Debugf("Verifying Redpanda cluster config: %v", configUpdates)
+
 	return s.verifyRedpandaClusterConfig(innerCtx, redpandaName, configUpdates)
 }
 
-// anyToString converts common data types to string for easier comparison
+// anyToString converts common data types to string for easier comparison.
 func anyToString(input any) (result string, err error) {
 	switch v := input.(type) {
 	case string:
 		return v, nil
 	case int:
-		return fmt.Sprintf("%d", v), nil
+		return strconv.Itoa(v), nil
 	case int64:
-		return fmt.Sprintf("%d", v), nil
+		return strconv.FormatInt(v, 10), nil
 	case float64:
 		// Check if it's actually an integer represented as float
 		if v == float64(int64(v)) {
 			return fmt.Sprintf("%.0f", v), nil
 		}
+
 		return fmt.Sprintf("%g", v), nil
 	case float32:
 		if v == float32(int32(v)) {
 			return fmt.Sprintf("%.0f", v), nil
 		}
+
 		return fmt.Sprintf("%g", v), nil
 	case bool:
 		if v {
 			return "true", nil
 		}
+
 		return "false", nil
 	default:
 		return result, fmt.Errorf("cannot convert %T to string", input)

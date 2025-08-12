@@ -18,15 +18,15 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 )
 
-// Normalizer handles the normalization of StreamProcessor configurations
+// Normalizer handles the normalization of StreamProcessor configurations.
 type Normalizer struct{}
 
-// NewNormalizer creates a new configuration normalizer for StreamProcessor
+// NewNormalizer creates a new configuration normalizer for StreamProcessor.
 func NewNormalizer() *Normalizer {
 	return &Normalizer{}
 }
 
-// NormalizeConfig applies StreamProcessor defaults to a structured config
+// NormalizeConfig applies StreamProcessor defaults to a structured config.
 func (n *Normalizer) NormalizeConfig(cfg StreamProcessorServiceConfigSpec) StreamProcessorServiceConfigSpec {
 	// create a shallow copy
 	normalized := cfg

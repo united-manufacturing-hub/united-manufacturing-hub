@@ -109,6 +109,7 @@ func ParseS6StatusFile(ctx context.Context, statusFilePath string, fsService fil
 	// Stamp: bytes [0:12] - When status last changed
 	stampBytes := statusData[S6StatusChangedOffset : S6StatusChangedOffset+12]
 	stampHex := "@" + hex.EncodeToString(stampBytes)
+
 	stampTime, err := tai64.Parse(stampHex)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse stamp (%s): %w", stampHex, err)
@@ -117,6 +118,7 @@ func ParseS6StatusFile(ctx context.Context, statusFilePath string, fsService fil
 	// Readystamp: bytes [12:24] - When service was last ready
 	readyStampBytes := statusData[S6StatusReadyOffset : S6StatusReadyOffset+12]
 	readyStampHex := "@" + hex.EncodeToString(readyStampBytes)
+
 	readyTime, err := tai64.Parse(readyStampHex)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse readystamp (%s): %w", readyStampHex, err)
@@ -168,11 +170,11 @@ const (
 	// 24-31      | Process ID (big-endian uint64, 8 bytes)
 	// 32-39      | Process group ID (big-endian uint64, 8 bytes)
 	// 40-41      | Wait status (big-endian uint16, 2 bytes)
-	// 42         | Flags byte (1 byte: bit 0=paused, bit 1=finishing, bit 2=want up, bit 3=ready)
+	// 42         | Flags byte (1 byte: bit 0=paused, bit 1=finishing, bit 2=want up, bit 3=ready).
 
 	// Source: https://github.com/skarnet/s6/blob/main/src/libs6/s6_svstatus_unpack.c
 
-	// Offsets in the status file:
+	// Offsets in the status file:.
 	S6StatusChangedOffset = 0  // TAI64N timestamp when status last changed (12 bytes)
 	S6StatusReadyOffset   = 12 // TAI64N timestamp when service was last ready (12 bytes)
 	S6StatusPidOffset     = 24 // Process ID (uint64, 8 bytes)
@@ -180,13 +182,13 @@ const (
 	S6StatusWstatOffset   = 40 // Wait status (uint16, 2 bytes)
 	S6StatusFlagsOffset   = 42 // Flags byte (1 byte)
 
-	// Flags in the flags byte:
+	// Flags in the flags byte:.
 	S6FlagPaused    = 0x01 // Service is paused
 	S6FlagFinishing = 0x02 // Service is shutting down
 	S6FlagWantUp    = 0x04 // Service wants to be up
 	S6FlagReady     = 0x08 // Service is ready
 
-	// Expected size of the status file:
+	// Expected size of the status file:.
 	S6StatusFileSize = 43 // bytes
 )
 

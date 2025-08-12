@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"sync"
 	"time"
 
@@ -42,7 +43,7 @@ import (
 )
 
 const (
-	// DefaultConfigPath is the default path to the config file
+	// DefaultConfigPath is the default path to the config file.
 	DefaultConfigPath = "/data/config.yaml"
 )
 
@@ -50,13 +51,13 @@ const (
 // we avoid, having more than one instance of the config manager because it can lead to race conditions
 // if we ensure, that we have only one instance, we can avoid race conditions by using mutexes in this single instance as we do here
 
-// however, access from outside the package is not protected by mutexes (keep in mind e.g. when using GitOps on the config file)
+// however, access from outside the package is not protected by mutexes (keep in mind e.g. when using GitOps on the config file).
 var (
 	instance ConfigManager
 	once     sync.Once
 )
 
-// ConfigManager is the interface for config management
+// ConfigManager is the interface for config management.
 type ConfigManager interface {
 	// GetConfig returns the current config
 	GetConfig(ctx context.Context, tick uint64) (FullConfig, error)
@@ -110,7 +111,7 @@ type ConfigManager interface {
 	// AtomicUnlinkFromTemplate(ctx context.Context, componentUUID uuid.UUID) error
 }
 
-// FileConfigManager implements the ConfigManager interface by reading from a file
+// FileConfigManager implements the ConfigManager interface by reading from a file.
 type FileConfigManager struct {
 	cacheModTime time.Time // mtime of last successfully parsed file
 
@@ -155,7 +156,6 @@ type FileConfigManager struct {
 // Note: This should only be used in tests or if you need a custom config manager.
 // Prefer NewFileConfigManagerWithBackoff() for application use.
 func NewFileConfigManager() *FileConfigManager {
-
 	configPath := DefaultConfigPath
 	logger := logger.For(logger.ComponentConfigManager)
 
@@ -168,7 +168,7 @@ func NewFileConfigManager() *FileConfigManager {
 	}
 
 	// Initial cache population - try to load config during initialization
-	// here, we use the longer background timeout because we want to make sure, the inital config
+	// here, we use the longer background timeout because we want to make sure, the initial config
 	// is cached before the first tick.
 	// The long blocking operation is not a problem, because it is only executed once during initialization.
 
@@ -196,19 +196,20 @@ func NewFileConfigManager() *FileConfigManager {
 }
 
 // WithFileSystemService allows setting a custom filesystem service
-// useful for testing or advanced use cases
+// useful for testing or advanced use cases.
 func (m *FileConfigManager) WithFileSystemService(fsService filesystem.Service) *FileConfigManager {
 	m.fsService = fsService
+
 	return m
 }
 
-// GetFileSystemService returns the filesystem service
+// GetFileSystemService returns the filesystem service.
 func (m *FileConfigManager) GetFileSystemService() filesystem.Service {
 	return m.fsService
 }
 
 // get config or create new with given config parameters (communicator, release channel, location)
-// if the config file does not exist, it will be created with default values and then overwritten with the given config parameters
+// if the config file does not exist, it will be created with default values and then overwritten with the given config parameters.
 func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Context, configOverride FullConfig) (FullConfig, error) {
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
@@ -228,7 +229,6 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 		if err != nil {
 			return FullConfig{}, fmt.Errorf("failed to get config that exists: %w", err)
 		}
-
 	}
 
 	// Apply overrides
@@ -275,6 +275,7 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 	}
 
 	m.logger.Infof("Successfully wrote config to %s", m.configPath)
+
 	return config, nil
 }
 
@@ -328,6 +329,7 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	if err != nil {
 		return FullConfig{}, fmt.Errorf("failed to check if config file exists in %s: %w", m.configPath, err)
 	}
+
 	if !exists {
 		return FullConfig{}, fmt.Errorf("config file does not exist: %s", m.configPath)
 	}
@@ -348,11 +350,14 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 
 	// ---------- FAST PATH ----------
 	m.cacheMu.RLock()
+
 	if !m.cacheModTime.IsZero() && info.ModTime().Equal(m.cacheModTime) {
 		cfg := m.cacheConfig.Clone() // Use deep copy to prevent race conditions with slices/maps
 		m.cacheMu.RUnlock()
+
 		return cfg, nil
 	}
+
 	m.cacheMu.RUnlock()
 
 	// ---------- SLOW PATH (file changed) ----------
@@ -374,15 +379,16 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	// checkk for empty config and return error if it is
 	if reflect.DeepEqual(currentCacheConfig, FullConfig{}) {
 		if cacheError == nil {
-			return FullConfig{}, fmt.Errorf("cached config is empty. may be fixed by a background refresh")
+			return FullConfig{}, errors.New("cached config is empty. may be fixed by a background refresh")
 		}
+
 		return FullConfig{}, cacheError
 	}
-	return currentCacheConfig, cacheError
 
+	return currentCacheConfig, cacheError
 }
 
-// backgroundRefresh is intended to be called from a goroutine to refresh the config cache
+// backgroundRefresh is intended to be called from a goroutine to refresh the config cache.
 func (m *FileConfigManager) backgroundRefresh(modTime time.Time) {
 	defer m.refreshMu.Unlock() // unlock the mutex we acquired with TryLock
 
@@ -408,7 +414,7 @@ func (m *FileConfigManager) backgroundRefresh(modTime time.Time) {
 }
 
 // readAndParseConfig contains the shared logic for reading and parsing the config file
-// Returns both the parsed config and the raw data to allow atomic cache updates
+// Returns both the parsed config and the raw data to allow atomic cache updates.
 func (m *FileConfigManager) readAndParseConfig(ctx context.Context) (FullConfig, string, error) {
 	// Read the file
 	// Allow half of the timeout for the read operation
@@ -446,6 +452,7 @@ func (m *FileConfigManager) readAndParseConfig(ctx context.Context) (FullConfig,
 	// This ensures downstream code doesn't panic when trying to access the location map
 	if config.Agent.Location == nil {
 		m.logger.Warnf("config file has no location map: %s", m.configPath)
+
 		config.Agent.Location = make(map[int]string)
 	}
 
@@ -460,7 +467,7 @@ func (m *FileConfigManager) readAndParseConfig(ctx context.Context) (FullConfig,
 	return config, string(data), nil
 }
 
-// FileConfigManagerWithBackoff wraps a FileConfigManager and implements backoff for GetConfig errors
+// FileConfigManagerWithBackoff wraps a FileConfigManager and implements backoff for GetConfig errors.
 type FileConfigManagerWithBackoff struct {
 	// The wrapped file config manager
 	configManager *FileConfigManager
@@ -472,12 +479,10 @@ type FileConfigManagerWithBackoff struct {
 	logger *zap.SugaredLogger
 }
 
-// NewFileConfigManagerWithBackoff creates a new FileConfigManagerWithBackoff with exponential backoff
+// NewFileConfigManagerWithBackoff creates a new FileConfigManagerWithBackoff with exponential backoff.
 func NewFileConfigManagerWithBackoff() (*FileConfigManagerWithBackoff, error) {
-
 	if instance != nil {
-		return nil, fmt.Errorf("config manager already initialized, only one instance is allowed")
-
+		return nil, errors.New("config manager already initialized, only one instance is allowed")
 	}
 
 	once.Do(func() {
@@ -486,7 +491,7 @@ func NewFileConfigManagerWithBackoff() (*FileConfigManagerWithBackoff, error) {
 
 		// Create backoff manager with default settings
 		backoffConfig := backoff.DefaultConfig("ConfigManager", logger)
-		backoffConfig.MaxRetries = uint64((time.Minute * 10) / constants.DefaultTickerTime) //10 minutes
+		backoffConfig.MaxRetries = uint64((time.Minute * 10) / constants.DefaultTickerTime) // 10 minutes
 		backoffManager := backoff.NewBackoffManager(backoffConfig)
 
 		instance = &FileConfigManagerWithBackoff{
@@ -500,18 +505,18 @@ func NewFileConfigManagerWithBackoff() (*FileConfigManagerWithBackoff, error) {
 }
 
 // GetConfigWithOverwritesOrCreateNew wraps the FileConfigManager's GetConfigWithOverwritesOrCreateNew method
-// it is used in main.go to get the config with overwrites or create a new one on startup
+// it is used in main.go to get the config with overwrites or create a new one on startup.
 func (m *FileConfigManagerWithBackoff) GetConfigWithOverwritesOrCreateNew(ctx context.Context, config FullConfig) (FullConfig, error) {
 	return m.configManager.GetConfigWithOverwritesOrCreateNew(ctx, config)
 }
 
-// GetFileSystemService returns the filesystem service
+// GetFileSystemService returns the filesystem service.
 func (m *FileConfigManagerWithBackoff) GetFileSystemService() filesystem.Service {
 	return m.configManager.GetFileSystemService()
 }
 
 // writeConfig writes the config to the file
-// it should not be exposed or used outside of the config manager, due to potential race conditions
+// it should not be exposed or used outside of the config manager, due to potential race conditions.
 func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) error {
 	// we use a write lock here, because we write the config file
 	err := m.mutexReadOrWrite.Lock(ctx)
@@ -548,7 +553,7 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	//get the file stats for the config file
+	// get the file stats for the config file
 	fileStats, err := m.fsService.Stat(ctx, m.configPath)
 	if err != nil {
 		return fmt.Errorf("failed to get file stats: %w", err)
@@ -562,11 +567,13 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 	m.cacheMu.Unlock()
 
 	m.logger.Infof("Successfully wrote config to %s", m.configPath)
+
 	return nil
 }
 
 func (m *FileConfigManager) WithConfigPath(configPath string) *FileConfigManager {
 	m.configPath = configPath
+
 	return m
 }
 
@@ -591,6 +598,7 @@ func ParseConfig(data []byte, ctx context.Context, allowUnknownFields bool) (Ful
 	// First decode the YAML into the raw config structure using standard YAML functions
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(!allowUnknownFields) // Only reject unknown keys if allowUnknownFields is false
+
 	if err := dec.Decode(&rawConfig); err != nil {
 		return FullConfig{}, fmt.Errorf("failed to decode config: %w", err)
 	}
@@ -605,18 +613,20 @@ func ParseConfig(data []byte, ctx context.Context, allowUnknownFields bool) (Ful
 }
 
 // WithFileSystemService allows setting a custom filesystem service on the wrapped FileConfigManager
-// useful for testing or advanced use cases
+// useful for testing or advanced use cases.
 func (m *FileConfigManagerWithBackoff) WithFileSystemService(fsService filesystem.Service) *FileConfigManagerWithBackoff {
 	m.configManager.WithFileSystemService(fsService)
+
 	return m
 }
 
 // GetConfig returns the current config with backoff logic for failures
 // This is a wrapper around the FileConfigManager's GetConfig method
 // It adds backoff logic to handle temporary and permanent failures
-// It will return either a temporary backoff error or a permanent failure error
+// It will return either a temporary backoff error or a permanent failure error.
 func (m *FileConfigManagerWithBackoff) GetConfig(ctx context.Context, tick uint64) (FullConfig, error) {
 	start := time.Now()
+
 	defer func() {
 		duration := time.Since(start)
 		metrics.ObserveReconcileTime(logger.ComponentConfigManager, "get_config", duration)
@@ -647,27 +657,29 @@ func (m *FileConfigManagerWithBackoff) GetConfig(ctx context.Context, tick uint6
 	config, err := m.configManager.GetConfig(getConfigCtx, tick)
 	if err != nil {
 		m.backoffManager.SetError(err, tick)
+
 		return FullConfig{}, err
 	}
 
 	// Reset backoff state on successful operation
 	m.backoffManager.Reset()
+
 	return config, nil
 }
 
 // Reset forcefully resets the config manager's state, including permanent failure status
-// This should be called when the parent component has taken action to address the failure
+// This should be called when the parent component has taken action to address the failure.
 func (m *FileConfigManagerWithBackoff) Reset() {
 	m.backoffManager.Reset()
 }
 
 // IsPermanentFailure returns true if the config manager has permanently failed
-// This can be used by consumers to distinguish between temporary and permanent failures
+// This can be used by consumers to distinguish between temporary and permanent failures.
 func (m *FileConfigManagerWithBackoff) IsPermanentFailure() bool {
 	return m.backoffManager.IsPermanentlyFailed()
 }
 
-// GetLastError returns the last error that occurred when fetching the config
+// GetLastError returns the last error that occurred when fetching the config.
 func (m *FileConfigManagerWithBackoff) GetLastError() error {
 	return m.backoffManager.GetLastError()
 }
@@ -699,12 +711,15 @@ func (m *FileConfigManager) AtomicSetLocation(ctx context.Context, location mode
 	if location.Site != nil {
 		config.Agent.Location[1] = *location.Site
 	}
+
 	if location.Area != nil {
 		config.Agent.Location[2] = *location.Area
 	}
+
 	if location.Line != nil {
 		config.Agent.Location[3] = *location.Line
 	}
+
 	if location.WorkCell != nil {
 		config.Agent.Location[4] = *location.WorkCell
 	}
@@ -712,7 +727,7 @@ func (m *FileConfigManager) AtomicSetLocation(ctx context.Context, location mode
 	// Convert the agent location to string map for use in other components
 	agentLocationStr := make(map[string]string)
 	for k, v := range config.Agent.Location {
-		agentLocationStr[fmt.Sprintf("%d", k)] = v
+		agentLocationStr[strconv.Itoa(k)] = v
 	}
 
 	// Update all ProtocolConverter locations to match the agent location
@@ -749,7 +764,7 @@ func (m *FileConfigManager) AtomicSetLocation(ctx context.Context, location mode
 	return nil
 }
 
-// AtomicSetLocation delegates to the underlying FileConfigManager
+// AtomicSetLocation delegates to the underlying FileConfigManager.
 func (m *FileConfigManagerWithBackoff) AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error {
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
@@ -759,7 +774,7 @@ func (m *FileConfigManagerWithBackoff) AtomicSetLocation(ctx context.Context, lo
 	return m.configManager.AtomicSetLocation(ctx, location)
 }
 
-// AtomicAddDataflowcomponent adds a dataflowcomponent to the config atomically
+// AtomicAddDataflowcomponent adds a dataflowcomponent to the config atomically.
 func (m *FileConfigManager) AtomicAddDataflowcomponent(ctx context.Context, dfc DataFlowComponentConfig) error {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
@@ -791,7 +806,7 @@ func (m *FileConfigManager) AtomicAddDataflowcomponent(ctx context.Context, dfc 
 	return nil
 }
 
-// AtomicAddDataflowcomponent delegates to the underlying FileConfigManager
+// AtomicAddDataflowcomponent delegates to the underlying FileConfigManager.
 func (m *FileConfigManagerWithBackoff) AtomicAddDataflowcomponent(ctx context.Context, dfc DataFlowComponentConfig) error {
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
@@ -801,7 +816,7 @@ func (m *FileConfigManagerWithBackoff) AtomicAddDataflowcomponent(ctx context.Co
 	return m.configManager.AtomicAddDataflowcomponent(ctx, dfc)
 }
 
-// AtomicDeleteDataflowcomponent deletes a dataflowcomponent from the config atomically
+// AtomicDeleteDataflowcomponent deletes a dataflowcomponent from the config atomically.
 func (m *FileConfigManager) AtomicDeleteDataflowcomponent(ctx context.Context, componentUUID uuid.UUID) error {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
@@ -843,7 +858,7 @@ func (m *FileConfigManager) AtomicDeleteDataflowcomponent(ctx context.Context, c
 	return nil
 }
 
-// AtomicDeleteDataflowcomponent delegates to the underlying FileConfigManager
+// AtomicDeleteDataflowcomponent delegates to the underlying FileConfigManager.
 func (m *FileConfigManagerWithBackoff) AtomicDeleteDataflowcomponent(ctx context.Context, componentUUID uuid.UUID) error {
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
@@ -853,7 +868,7 @@ func (m *FileConfigManagerWithBackoff) AtomicDeleteDataflowcomponent(ctx context
 	return m.configManager.AtomicDeleteDataflowcomponent(ctx, componentUUID)
 }
 
-// AtomicEditDataflowcomponent edits a dataflowcomponent in the config atomically
+// AtomicEditDataflowcomponent edits a dataflowcomponent in the config atomically.
 func (m *FileConfigManager) AtomicEditDataflowcomponent(ctx context.Context, componentUUID uuid.UUID, dfc DataFlowComponentConfig) (DataFlowComponentConfig, error) {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
@@ -902,6 +917,7 @@ func (m *FileConfigManager) AtomicEditDataflowcomponent(ctx context.Context, com
 					"dataFlowComponentConfig for %s is defined via YAML anchors/aliases; "+
 						"please edit the file manually or see https://docs.umh.app/reference/configuration-reference for more details", componentUUID)
 			}
+
 			break
 		}
 	}
@@ -909,6 +925,7 @@ func (m *FileConfigManager) AtomicEditDataflowcomponent(ctx context.Context, com
 
 	// Find the component with matching UUID
 	found := false
+
 	for i, component := range config.DataFlow {
 		componentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
 		if componentID == componentUUID {
@@ -916,6 +933,7 @@ func (m *FileConfigManager) AtomicEditDataflowcomponent(ctx context.Context, com
 			oldConfig = config.DataFlow[i]
 			config.DataFlow[i] = dfc
 			found = true
+
 			break
 		}
 	}
@@ -932,7 +950,7 @@ func (m *FileConfigManager) AtomicEditDataflowcomponent(ctx context.Context, com
 	return oldConfig, nil
 }
 
-// AtomicEditDataflowcomponent delegates to the underlying FileConfigManager
+// AtomicEditDataflowcomponent delegates to the underlying FileConfigManager.
 func (m *FileConfigManagerWithBackoff) AtomicEditDataflowcomponent(ctx context.Context, componentUUID uuid.UUID, dfc DataFlowComponentConfig) (DataFlowComponentConfig, error) {
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
@@ -945,7 +963,7 @@ func (m *FileConfigManagerWithBackoff) AtomicEditDataflowcomponent(ctx context.C
 // GetConfigAsString returns the current config file contents as a string
 // This function is used in the get-config-file action to retrieve the raw config file
 // without any yaml parsing applied. This allows to display yaml anchors and change them
-// via the frontend
+// via the frontend.
 func (m *FileConfigManager) GetConfigAsString(ctx context.Context) (string, error) {
 	// in the GetConfig method, we already read the file and cached the raw config to m.cacheRawConfig
 	_, err := m.GetConfig(ctx, 0)
@@ -960,7 +978,7 @@ func (m *FileConfigManager) GetConfigAsString(ctx context.Context) (string, erro
 	return rawConfig, nil
 }
 
-// GetConfigAsString returns the current config as a string with backoff logic for failures
+// GetConfigAsString returns the current config as a string with backoff logic for failures.
 func (m *FileConfigManagerWithBackoff) GetConfigAsString(ctx context.Context) (string, error) {
 	// in the GetConfig method, we already read the file and cached the raw config to m.cacheRawConfig
 	_, err := m.GetConfig(ctx, 0)
@@ -975,15 +993,16 @@ func (m *FileConfigManagerWithBackoff) GetConfigAsString(ctx context.Context) (s
 	return rawConfig, nil
 }
 
-// GetCacheModTimeWithoutUpdate returns the modification time without updating the cache
+// GetCacheModTimeWithoutUpdate returns the modification time without updating the cache.
 func (m *FileConfigManager) GetCacheModTimeWithoutUpdate() time.Time {
 	m.cacheMu.RLock()
 	modTime := m.cacheModTime
 	m.cacheMu.RUnlock()
+
 	return modTime
 }
 
-// UpdateAndGetCacheModTime updates the cache and returns the modification time
+// UpdateAndGetCacheModTime updates the cache and returns the modification time.
 func (m *FileConfigManager) UpdateAndGetCacheModTime(ctx context.Context) (time.Time, error) {
 	// read config to update the cache mod time
 	_, err := m.GetConfig(ctx, 0)
@@ -994,12 +1013,12 @@ func (m *FileConfigManager) UpdateAndGetCacheModTime(ctx context.Context) (time.
 	return m.GetCacheModTimeWithoutUpdate(), nil
 }
 
-// GetCacheModTimeWithoutUpdate delegates to the underlying FileConfigManager
+// GetCacheModTimeWithoutUpdate delegates to the underlying FileConfigManager.
 func (m *FileConfigManagerWithBackoff) GetCacheModTimeWithoutUpdate() time.Time {
 	return m.configManager.GetCacheModTimeWithoutUpdate()
 }
 
-// UpdateAndGetCacheModTime delegates to the underlying FileConfigManager
+// UpdateAndGetCacheModTime delegates to the underlying FileConfigManager.
 func (m *FileConfigManagerWithBackoff) UpdateAndGetCacheModTime(ctx context.Context) (time.Time, error) {
 	return m.configManager.UpdateAndGetCacheModTime(ctx)
 }
@@ -1050,6 +1069,7 @@ func (m *FileConfigManager) WriteYAMLConfigFromString(ctx context.Context, confi
 			if info == nil {
 				return fmt.Errorf("stat returned nil for config file: %s", m.configPath)
 			}
+
 			if info.ModTime().Format(time.RFC3339) != expectedModTime {
 				return fmt.Errorf("concurrent modification detected: file modified at %v, expected %v",
 					info.ModTime().Format(time.RFC3339), expectedModTime)
@@ -1080,10 +1100,11 @@ func (m *FileConfigManager) WriteYAMLConfigFromString(ctx context.Context, confi
 	m.cacheMu.Unlock()
 
 	m.logger.Infof("Successfully wrote config to %s", m.configPath)
+
 	return nil
 }
 
-// WriteYAMLConfigFromString delegates to the underlying FileConfigManager
+// WriteYAMLConfigFromString delegates to the underlying FileConfigManager.
 func (m *FileConfigManagerWithBackoff) WriteYAMLConfigFromString(ctx context.Context, configStr string, expectedModTime string) error {
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
@@ -1091,5 +1112,4 @@ func (m *FileConfigManagerWithBackoff) WriteYAMLConfigFromString(ctx context.Con
 	}
 
 	return m.configManager.WriteYAMLConfigFromString(ctx, configStr, expectedModTime)
-
 }

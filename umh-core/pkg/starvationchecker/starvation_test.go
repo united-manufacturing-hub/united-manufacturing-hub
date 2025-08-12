@@ -29,7 +29,9 @@ var _ = Describe("StarvationChecker", func() {
 	var cancel context.CancelFunc
 
 	BeforeEach(func() {
-		ctx, cancel = context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(context.Background())
+		_ = ctx
+		_ = cancel
 		checker = NewStarvationChecker(100 * time.Millisecond)
 	})
 
@@ -79,7 +81,7 @@ var _ = Describe("StarvationChecker", func() {
 
 		It("should not detect starvation when reconciles happen frequently", func() {
 			// Call Reconcile multiple times with small delays
-			for i := 0; i < 3; i++ {
+			for range 3 {
 				_, _ = checker.Reconcile(ctx, config.FullConfig{})
 				time.Sleep(30 * time.Millisecond)
 			}

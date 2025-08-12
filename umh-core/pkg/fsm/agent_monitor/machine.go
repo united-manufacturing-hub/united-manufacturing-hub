@@ -84,28 +84,30 @@ func NewAgentInstanceWithService(config config.AgentMonitorConfig, service agent
 	return instance
 }
 
-// SetDesiredFSMState is how external code updates the desired state at runtime
+// SetDesiredFSMState is how external code updates the desired state at runtime.
 func (a *AgentInstance) SetDesiredFSMState(state string) error {
 	// We only allow "active" or "stopped"
 	if state != OperationalStateActive && state != OperationalStateStopped {
 		return fmt.Errorf("invalid desired state: %s (only '%s' or '%s' allowed)",
 			state, OperationalStateActive, OperationalStateStopped)
 	}
+
 	a.baseFSMInstance.SetDesiredFSMState(state)
+
 	return nil
 }
 
-// GetCurrentFSMState returns the current operational or lifecycle state
+// GetCurrentFSMState returns the current operational or lifecycle state.
 func (a *AgentInstance) GetCurrentFSMState() string {
 	return a.baseFSMInstance.GetCurrentFSMState()
 }
 
-// GetDesiredFSMState returns what we want operationally
+// GetDesiredFSMState returns what we want operationally.
 func (a *AgentInstance) GetDesiredFSMState() string {
 	return a.baseFSMInstance.GetDesiredFSMState()
 }
 
-// Remove initiates the removal lifecycle
+// Remove initiates the removal lifecycle.
 func (a *AgentInstance) Remove(ctx context.Context) error {
 	return a.baseFSMInstance.Remove(ctx)
 }
@@ -126,13 +128,13 @@ func (a *AgentInstance) IsStopping() bool {
 	return a.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopping
 }
 
-// PrintState is a helper for debugging
+// PrintState is a helper for debugging.
 func (a *AgentInstance) PrintState() {
 	a.baseFSMInstance.GetLogger().Infof("AgentInstance %s - Current state: %s, Desired: %s",
 		a.baseFSMInstance.GetID(), a.GetCurrentFSMState(), a.GetDesiredFSMState())
 }
 
-// GetMinimumRequiredTime returns the minimum required time for this instance
+// GetMinimumRequiredTime returns the minimum required time for this instance.
 func (a *AgentInstance) GetMinimumRequiredTime() time.Duration {
 	return constants.AgentMonitorUpdateObservedStateTimeout
 }

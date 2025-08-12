@@ -48,6 +48,7 @@ var _ = Describe("Redpanda YAML Generator", func() {
 					cfg := &RedpandaServiceConfig{}
 					cfg.Topic.DefaultTopicRetentionMs = 0
 					cfg.Topic.DefaultTopicRetentionBytes = 0
+
 					return cfg
 				}(),
 				expected: []string{
@@ -62,6 +63,7 @@ var _ = Describe("Redpanda YAML Generator", func() {
 					cfg.Topic.DefaultTopicRetentionMs = 1000
 					cfg.Topic.DefaultTopicRetentionBytes = 1000
 					cfg.Topic.DefaultTopicCompressionAlgorithm = "lz4"
+
 					return cfg
 				}(),
 				expected: []string{
@@ -76,6 +78,7 @@ var _ = Describe("Redpanda YAML Generator", func() {
 					cfg := &RedpandaServiceConfig{}
 					cfg.Topic.DefaultTopicRetentionMs = 1000
 					cfg.Topic.DefaultTopicRetentionBytes = 1000
+
 					return cfg
 				}(),
 				expected: []string{

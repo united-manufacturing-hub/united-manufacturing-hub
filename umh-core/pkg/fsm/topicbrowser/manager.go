@@ -16,6 +16,7 @@ package topicbrowser
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -31,12 +32,12 @@ const (
 	baseConnectionDir = constants.S6BaseDir
 )
 
-// Manager implements the FSM management for Topic Browser services
+// Manager implements the FSM management for Topic Browser services.
 type Manager struct {
 	*public_fsm.BaseFSMManager[config.TopicBrowserConfig]
 }
 
-// Snapshot extends the base ManagerSnapshot with Topic Browser specific information
+// Snapshot extends the base ManagerSnapshot with Topic Browser specific information.
 type Snapshot struct {
 	// Embed BaseManagerSnapshot to include its methods using composition
 	*public_fsm.BaseManagerSnapshot
@@ -52,13 +53,15 @@ func NewTopicBrowserManager(name string) *Manager {
 			tbConfig := fullConfig.Internal.TopicBrowser
 			// Force topic browser name to be "topic-browser"
 			tbConfig.Name = constants.TopicBrowserServiceName
+
 			return []config.TopicBrowserConfig{tbConfig}, nil
 		},
 		// Get name for topic browser config
 		func(cfg config.TopicBrowserConfig) (string, error) {
 			if cfg.Name == "" {
-				return "", fmt.Errorf("topic browser config name cannot be empty")
+				return "", errors.New("topic browser config name cannot be empty")
 			}
+
 			return cfg.Name, nil
 		},
 		// Get desired state for topic browser config
@@ -73,29 +76,35 @@ func NewTopicBrowserManager(name string) *Manager {
 		func(instance public_fsm.FSMInstance, cfg config.TopicBrowserConfig) (bool, error) {
 			tbInstance, ok := instance.(*TopicBrowserInstance)
 			if !ok {
-				return false, fmt.Errorf("instance is not a Topic Browser Instance")
+				return false, errors.New("instance is not a Topic Browser Instance")
 			}
+
 			return tbInstance.config.Equal(cfg.TopicBrowserServiceConfig), nil
 		},
 		// Set Connection config
 		func(instance public_fsm.FSMInstance, cfg config.TopicBrowserConfig) error {
 			tbInstance, ok := instance.(*TopicBrowserInstance)
 			if !ok {
-				return fmt.Errorf("instance is not a Topic Browser Instance")
+				return errors.New("instance is not a Topic Browser Instance")
 			}
+
 			tbInstance.config = cfg.TopicBrowserServiceConfig
+
 			return nil
 		},
 		// Get expected max p95 execution time per instance
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
 			tbInstance, ok := instance.(*TopicBrowserInstance)
 			if !ok {
-				return 0, fmt.Errorf("instance is not a Topic Browser Instance")
+				return 0, errors.New("instance is not a Topic Browser Instance")
 			}
+
 			return tbInstance.GetMinimumRequiredTime(), nil
 		},
 	)
+
 	metrics.InitErrorCounter(metrics.ComponentTopicBrowserManager, name)
+
 	return &Manager{
 		BaseFSMManager: baseManager,
 	}
@@ -103,6 +112,7 @@ func NewTopicBrowserManager(name string) *Manager {
 
 func (m *Manager) Reconcile(ctx context.Context, snapshot public_fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool) {
 	start := time.Now()
+
 	defer func() {
 		duration := time.Since(start)
 		metrics.ObserveReconcileTime(logger.ComponentTopicBrowserManager, m.GetManagerName(), duration)
@@ -112,7 +122,7 @@ func (m *Manager) Reconcile(ctx context.Context, snapshot public_fsm.SystemSnaps
 	return m.BaseFSMManager.Reconcile(ctx, snapshot, services)
 }
 
-// CreateSnapshot overrides the base CreateSnapshot to include ConnectionManager-specific information
+// CreateSnapshot overrides the base CreateSnapshot to include ConnectionManager-specific information.
 func (m *Manager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	// Get base snapshot from parent
 	baseSnapshot := m.BaseFSMManager.CreateSnapshot()
@@ -122,6 +132,7 @@ func (m *Manager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	if !ok {
 		logger.For(logger.ComponentTopicBrowserManager).Errorf(
 			"Failed to convert base snapshot to BaseManagerSnapshot, using generic snapshot")
+
 		return baseSnapshot
 	}
 
@@ -129,10 +140,11 @@ func (m *Manager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	snap := &Snapshot{
 		BaseManagerSnapshot: baseManagerSnapshot,
 	}
+
 	return snap
 }
 
-// IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface
+// IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface.
 func (s *Snapshot) IsObservedStateSnapshot() {
 	// Marker method implementation
 }

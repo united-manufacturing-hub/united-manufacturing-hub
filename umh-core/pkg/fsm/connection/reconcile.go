@@ -41,8 +41,10 @@ import (
 func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
 	start := time.Now()
 	connectionInstanceName := c.baseFSMInstance.GetID()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentConnectionInstance, connectionInstanceName, time.Since(start))
+
 		if err != nil {
 			c.baseFSMInstance.GetLogger().Errorf("error reconciling connection instance %s: %s", connectionInstanceName, err)
 			c.PrintState()
@@ -56,6 +58,7 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 		if c.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "start of reconciliation") {
 			return nil, false
 		}
+
 		return ctx.Err(), false
 	}
 
@@ -91,6 +94,7 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 				},
 			)
 		}
+
 		return nil, false
 	}
 
@@ -99,7 +103,8 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 		// Skip external changes detection during removal - config files may be deleted
 		c.baseFSMInstance.GetLogger().Debugf("Skipping external changes detection during removal")
 	} else {
-		if err = c.reconcileExternalChanges(ctx, services, snapshot); err != nil {
+		err = c.reconcileExternalChanges(ctx, services, snapshot)
+		if err != nil {
 			if c.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
 				return nil, false
 			}
@@ -107,7 +112,7 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 			// Log the error but always continue reconciling - we need reconcileStateTransition to run
 			// to restore services after restart, even if we can't read their status yet
 			c.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)
-			
+
 			// For all other errors, just continue reconciling without setting backoff
 			err = nil
 		}
@@ -115,6 +120,7 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 
 	// Step 3: Attempt to reconcile the state.
 	currentTime := time.Now() // this is used to check if the instance is degraded and for the log check
+
 	err, reconciled = c.reconcileStateTransition(ctx, services, currentTime)
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
@@ -128,6 +134,7 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 
 		c.baseFSMInstance.SetError(err, snapshot.Tick)
 		c.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
+
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
@@ -137,13 +144,15 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 		if c.baseFSMInstance.IsDeadlineExceededAndHandle(nmapErr, snapshot.Tick, "nmapManager reconciliation") {
 			return nil, false
 		}
+
 		c.baseFSMInstance.SetError(nmapErr, snapshot.Tick)
 		c.baseFSMInstance.GetLogger().Errorf("error reconciling nmapManager: %s", nmapErr)
+
 		return nil, false
 	}
 
 	// If either Connection state or Nmap state was reconciled, we return reconciled so that nothing happens anymore in this tick
-	// nothing should happen as we might have already taken up some significant time of the avaialble time per tick, so better
+	// nothing should happen as we might have already taken up some significant time of the available time per tick, so better
 	// to be on the safe side and let the rest handle in another tick
 	reconciled = reconciled || nmapReconciled
 
@@ -154,9 +163,10 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 }
 
 // reconcileExternalChanges checks if the ConnectionInstance service status has changed
-// externally (e.g., if someone manually stopped or started it, or if it crashed)
+// externally (e.g., if someone manually stopped or started it, or if it crashed).
 func (c *ConnectionInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentConnectionInstance, c.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
 	}()
@@ -170,6 +180,7 @@ func (c *ConnectionInstance) reconcileExternalChanges(ctx context.Context, servi
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}
+
 	return nil
 }
 
@@ -180,6 +191,7 @@ func (c *ConnectionInstance) reconcileExternalChanges(ctx context.Context, servi
 // This is to ensure full testability of the FSM.
 func (c *ConnectionInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentConnectionInstance, c.baseFSMInstance.GetID()+".reconcileStateTransition", time.Since(start))
 	}()
@@ -199,6 +211,7 @@ func (c *ConnectionInstance) reconcileStateTransition(ctx context.Context, servi
 		if err != nil {
 			return err, false
 		}
+
 		return nil, reconciled
 	}
 
@@ -208,15 +221,17 @@ func (c *ConnectionInstance) reconcileStateTransition(ctx context.Context, servi
 		if err != nil {
 			return err, false
 		}
+
 		return nil, reconciled
 	}
 
 	return fmt.Errorf("invalid state: %s", currentState), false
 }
 
-// reconcileOperationalStates handles states related to instance operations (starting/stopping)
+// reconcileOperationalStates handles states related to instance operations (starting/stopping).
 func (c *ConnectionInstance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentConnectionInstance, c.baseFSMInstance.GetID()+".reconcileOperationalStates", time.Since(start))
 	}()
@@ -235,6 +250,7 @@ func (c *ConnectionInstance) reconcileOperationalStates(ctx context.Context, ser
 // It deals with moving from various states to the Active state.
 func (c *ConnectionInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentConnectionInstance, c.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
 	}()
@@ -265,6 +281,7 @@ func (c *ConnectionInstance) reconcileTransitionToActive(ctx context.Context, se
 // reconcileStartingStates handles the various starting phase states when transitioning to Active.
 func (c *ConnectionInstance) reconcileStartingStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentConnectionInstance, c.baseFSMInstance.GetID()+".reconcileStartingStates", time.Since(start))
 	}()
@@ -279,12 +296,14 @@ func (c *ConnectionInstance) reconcileStartingStates(ctx context.Context, servic
 	default:
 		return fmt.Errorf("invalid starting state: %s", currentState), false
 	}
+
 	return nil, false
 }
 
 // reconcileRunningStates handles the various running states when transitioning to Active.
 func (c *ConnectionInstance) reconcileRunningStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentConnectionInstance, c.baseFSMInstance.GetID()+".reconcileRunningStates", time.Since(start))
 	}()
@@ -332,6 +351,7 @@ func (c *ConnectionInstance) reconcileRunningStates(ctx context.Context, service
 // It deals with moving from any operational state to Stopping and then to Stopped.
 func (c *ConnectionInstance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentConnectionInstance, c.baseFSMInstance.GetID()+".reconcileTransitionToStopped", time.Since(start))
 	}()
@@ -346,7 +366,8 @@ func (c *ConnectionInstance) reconcileTransitionToStopped(ctx context.Context, s
 			return c.baseFSMInstance.SendEvent(ctx, EventStopDone), true
 		}
 	default:
-		if err := c.StopInstance(ctx, services.GetFileSystem()); err != nil {
+		err := c.StopInstance(ctx, services.GetFileSystem())
+		if err != nil {
 			return err, false
 		}
 		// Send event to transition to Stopping

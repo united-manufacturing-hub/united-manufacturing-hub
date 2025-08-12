@@ -34,7 +34,6 @@ func Setenv(env, value string) {
 func IsTest() bool {
 	// Analyze the call stack to determine if the caller is a test
 	// If it is a test the callstack will have files with _test.go
-
 	pcs := make([]uintptr, 10) // adjust the depth as necessary
 	runtime.Callers(2, pcs)
 	frames := runtime.CallersFrames(pcs)
@@ -45,5 +44,6 @@ func IsTest() bool {
 			return true
 		}
 	}
+
 	return false
 }

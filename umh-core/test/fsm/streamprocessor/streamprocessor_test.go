@@ -16,7 +16,7 @@ package streamprocessor_test
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -604,7 +604,7 @@ var _ = Describe("StreamProcessor FSM", func() {
 
 			// Simulate creation failure - service doesn't exist and creation fails
 			mockService.ExistingComponents[spName] = false
-			mockService.AddToManagerError = fmt.Errorf("simulated creation failure")
+			mockService.AddToManagerError = errors.New("simulated creation failure")
 
 			// Try to transition from to_be_created to creating
 			tick, err = fsmtest.TestStreamProcessorStateTransition(
@@ -645,7 +645,7 @@ var _ = Describe("StreamProcessor FSM", func() {
 
 			// Phase 2: Simulate start failure
 			Expect(instance.SetDesiredFSMState(spfsm.OperationalStateActive)).To(Succeed())
-			mockService.StartError = fmt.Errorf("simulated start failure")
+			mockService.StartError = errors.New("simulated start failure")
 
 			// The transition should fail, so we expect the instance to remain in stopped state
 			snapshot := fsm.SystemSnapshot{
@@ -654,7 +654,7 @@ var _ = Describe("StreamProcessor FSM", func() {
 			}
 
 			// Try to reconcile multiple times, should remain in stopped state due to start failure
-			for i := 0; i < 5; i++ {
+			for range 5 {
 				snapshot.Tick = tick
 				_, _ = instance.Reconcile(ctx, snapshot, mockRegistry)
 				tick++
@@ -710,7 +710,7 @@ var _ = Describe("StreamProcessor FSM", func() {
 
 			// Phase 2: Simulate stop failure
 			Expect(instance.SetDesiredFSMState(spfsm.OperationalStateStopped)).To(Succeed())
-			mockService.StopError = fmt.Errorf("simulated stop failure")
+			mockService.StopError = errors.New("simulated stop failure")
 
 			// The transition should fail, so we expect the instance to remain in active state
 			snapshot := fsm.SystemSnapshot{
@@ -719,7 +719,7 @@ var _ = Describe("StreamProcessor FSM", func() {
 			}
 
 			// Try to reconcile multiple times, should remain in active state due to stop failure
-			for i := 0; i < 5; i++ {
+			for range 5 {
 				snapshot.Tick = tick
 				_, _ = instance.Reconcile(ctx, snapshot, mockRegistry)
 				tick++

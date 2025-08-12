@@ -24,19 +24,19 @@ import (
 // These are the agent-monitor operational states, in addition
 // to the lifecycle states from internal_fsm.
 const (
-	// agent_monitoring_stopped is the operational state when monitoring is disabled
+	// agent_monitoring_stopped is the operational state when monitoring is disabled.
 	OperationalStateStopped = "agent_monitoring_stopped"
 
-	// agent_monitoring_stopping is the operational state when monitoring is stopping
+	// agent_monitoring_stopping is the operational state when monitoring is stopping.
 	OperationalStateStopping = "agent_monitoring_stopping"
 
-	// agent_monitoring_starting is the operational state when monitoring is starting
+	// agent_monitoring_starting is the operational state when monitoring is starting.
 	OperationalStateStarting = "agent_monitoring_starting"
 
-	// degraded means monitoring is running, but metrics are not OK
+	// degraded means monitoring is running, but metrics are not OK.
 	OperationalStateDegraded = "degraded"
 
-	// active means monitoring is running, and metrics are OK
+	// active means monitoring is running, and metrics are OK.
 	OperationalStateActive = "active"
 )
 
@@ -51,25 +51,28 @@ func IsOperationalState(state string) bool {
 		OperationalStateActive:
 		return true
 	}
+
 	return false
 }
 
-// IsStartingState returns true if the given state is a starting state
+// IsStartingState returns true if the given state is a starting state.
 func IsStartingState(state string) bool {
 	switch state {
 	case OperationalStateStarting:
 		return true
 	}
+
 	return false
 }
 
-// IsRunningState returns true if the given state is a running state
+// IsRunningState returns true if the given state is a running state.
 func IsRunningState(state string) bool {
 	switch state {
 	case OperationalStateActive,
 		OperationalStateDegraded:
 		return true
 	}
+
 	return false
 }
 
@@ -84,7 +87,7 @@ const (
 	EventMetricsNotOK = "metrics_not_ok"
 )
 
-// AgentObservedState holds the last known agent metrics and health status
+// AgentObservedState holds the last known agent metrics and health status.
 type AgentObservedState struct {
 	// We store the agent data from agent_monitor.GetStatus
 	ServiceInfo *agent_monitor.ServiceInfo
@@ -92,12 +95,12 @@ type AgentObservedState struct {
 	// Normally this would have also have an ObservedAgentConfig, but we don't need it here
 }
 
-// Ensure it implements the ObservedState interface
+// Ensure it implements the ObservedState interface.
 func (a AgentObservedState) IsObservedState() {}
 
 // AgentMonitorInstance implements fsm.FSMInstance
 // If AgentInstance does not implement the FSMInstance interface, this will
-// be detected at compile time
+// be detected at compile time.
 var _ publicfsm.FSMInstance = (*AgentInstance)(nil)
 
 // AgentInstance holds the FSM instance and references to the agent monitor service.
@@ -116,14 +119,14 @@ type AgentInstance struct {
 	config config.AgentMonitorConfig
 }
 
-// GetLastObservedState returns the last known observed data
+// GetLastObservedState returns the last known observed data.
 func (a *AgentInstance) GetLastObservedState() publicfsm.ObservedState {
 	return a.ObservedState
 }
 
 // IsTransientStreakCounterMaxed returns whether the transient streak counter
 // has reached the maximum number of ticks, which means that the FSM is stuck in a state
-// and should be removed
+// and should be removed.
 func (a *AgentInstance) IsTransientStreakCounterMaxed() bool {
 	return a.baseFSMInstance.IsTransientStreakCounterMaxed()
 }

@@ -31,19 +31,21 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 )
 
-// CustomMockS6Service extends s6_orig.MockService to track the servicePath parameter passed to GetLogs
+// CustomMockS6Service extends s6_orig.MockService to track the servicePath parameter passed to GetLogs.
 type CustomMockS6Service struct {
 	*s6_orig.MockService
+
 	lastServicePath string
 }
 
-// GetLogs overrides the mock implementation to track the servicePath parameter
+// GetLogs overrides the mock implementation to track the servicePath parameter.
 func (m *CustomMockS6Service) GetLogs(ctx context.Context, servicePath string, fs filesystem.Service) ([]s6_shared.LogEntry, error) {
 	m.lastServicePath = servicePath
+
 	return m.MockService.GetLogs(ctx, servicePath, fs)
 }
 
-// NewCustomMockS6Service creates a new custom mock S6 service
+// NewCustomMockS6Service creates a new custom mock S6 service.
 func NewCustomMockS6Service() *CustomMockS6Service {
 	return &CustomMockS6Service{
 		MockService: s6_orig.NewMockService(),

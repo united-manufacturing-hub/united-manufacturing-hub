@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"runtime"
+	"strconv"
 
 	"github.com/DataDog/gostackparse"
 	"github.com/getsentry/sentry-go"
@@ -34,6 +35,7 @@ func captureGoroutinesAsThreads() ([]sentry.Thread, []byte) {
 	if err != nil {
 		// Handle error (optional: log or return an empty list of threads)
 		fmt.Printf("Error parsing goroutines: %v\n", err)
+
 		return nil, []byte("")
 	}
 
@@ -56,11 +58,12 @@ func entireStack() []byte {
 		if n < len(buf) {
 			return buf[:n]
 		}
+
 		buf = make([]byte, 2*len(buf))
 	}
 }
 
-// convertGoroutineToThread converts a parsed Goroutine to a Sentry Thread object
+// convertGoroutineToThread converts a parsed Goroutine to a Sentry Thread object.
 func convertGoroutineToThread(g *gostackparse.Goroutine) sentry.Thread {
 	// Convert each Goroutine's stack frames to Sentry frames
 	frames := convertFrames(g.Stack)
@@ -72,7 +75,7 @@ func convertGoroutineToThread(g *gostackparse.Goroutine) sentry.Thread {
 
 	// Create a Sentry thread
 	return sentry.Thread{
-		ID:         fmt.Sprintf("%d", g.ID),
+		ID:         strconv.Itoa(g.ID),
 		Name:       fmt.Sprintf("Goroutine %d", g.ID),
 		Stacktrace: stacktrace,
 		Crashed:    false, // Adjust based on actual crash status if needed
@@ -80,9 +83,10 @@ func convertGoroutineToThread(g *gostackparse.Goroutine) sentry.Thread {
 	}
 }
 
-// convertFrames converts a slice of gostackparse.Frame to a slice of sentry.Frame
+// convertFrames converts a slice of gostackparse.Frame to a slice of sentry.Frame.
 func convertFrames(goroutineFrames []*gostackparse.Frame) []sentry.Frame {
 	var frames []sentry.Frame
+
 	for _, gf := range goroutineFrames {
 		absPath := gf.File
 		fileName := filepath.Base(absPath)
@@ -94,5 +98,6 @@ func convertFrames(goroutineFrames []*gostackparse.Frame) []sentry.Frame {
 		}
 		frames = append(frames, frame)
 	}
+
 	return frames
 }

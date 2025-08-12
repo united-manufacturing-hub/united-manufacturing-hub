@@ -16,6 +16,7 @@ package s6_orig
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"time"
@@ -27,10 +28,10 @@ import (
 // ForceCleanup performs aggressive cleanup for stuck services
 // Uses comprehensive cleanup approach:
 // - Process termination and supervisor killing
-// - Comprehensive artifact removal
+// - Comprehensive artifact removal.
 func (s *DefaultService) ForceCleanup(ctx context.Context, artifacts *s6_shared.ServiceArtifacts, fsService filesystem.Service) error {
 	if s == nil {
-		return fmt.Errorf("lifecycle manager is nil")
+		return errors.New("lifecycle manager is nil")
 	}
 
 	if ctx.Err() != nil {
@@ -38,14 +39,15 @@ func (s *DefaultService) ForceCleanup(ctx context.Context, artifacts *s6_shared.
 	}
 
 	if artifacts == nil {
-		return fmt.Errorf("artifacts is nil")
+		return errors.New("artifacts is nil")
 	}
 
 	s.logger.Warnf("Force cleaning service artifacts: service=%s, files=%d",
 		filepath.Base(artifacts.ServiceDir), len(artifacts.CreatedFiles))
 
 	// Create down files first to ensure services stay down
-	if err := s.createDownFiles(ctx, artifacts, fsService); err != nil {
+	err := s.createDownFiles(ctx, artifacts, fsService)
+	if err != nil {
 		s.logger.Warnf("Failed to create down files: %v", err)
 		// Continue with cleanup even if down files fail
 	}
@@ -54,23 +56,27 @@ func (s *DefaultService) ForceCleanup(ctx context.Context, artifacts *s6_shared.
 	s.logger.Debugf("Attempting skarnet sequence for force cleanup")
 
 	// Step 1: Stop service cleanly
-	if err := s.stopServiceCleanly(ctx, artifacts.ServiceDir, fsService); err != nil {
+	err = s.stopServiceCleanly(ctx, artifacts.ServiceDir, fsService)
+	if err != nil {
 		s.logger.Warnf("Failed to stop service cleanly during force cleanup: %v", err)
 		// Continue with cleanup even if stopping fails
 	}
 
 	// Step 2: Try to unsupervise service (may fail if service is corrupted)
-	if err := s.unsuperviseService(ctx, artifacts.ServiceDir, fsService); err != nil {
+	err = s.unsuperviseService(ctx, artifacts.ServiceDir, fsService)
+	if err != nil {
 		s.logger.Warnf("Failed to unsupervise service during force cleanup: %v", err)
 		// Continue with direct directory removal if unsupervise fails
 	}
 
 	// Step 3: Remove directories with timeout awareness (fallback approach)
-	if err := s.removeDirectoryWithTimeout(ctx, artifacts.ServiceDir, fsService); err != nil {
+	err = s.removeDirectoryWithTimeout(ctx, artifacts.ServiceDir, fsService)
+	if err != nil {
 		s.logger.Warnf("Failed to remove service directory: %v", err)
 	}
 
-	if err := s.removeDirectoryWithTimeout(ctx, artifacts.LogDir, fsService); err != nil {
+	err = s.removeDirectoryWithTimeout(ctx, artifacts.LogDir, fsService)
+	if err != nil {
 		s.logger.Warnf("Failed to remove log directory: %v", err)
 	}
 
@@ -83,6 +89,7 @@ func (s *DefaultService) ForceCleanup(ctx context.Context, artifacts *s6_shared.
 	}
 
 	s.logger.Infof("Force cleanup completed for service: %s", filepath.Base(artifacts.ServiceDir))
+
 	return nil
 }
 
@@ -100,11 +107,14 @@ func (s *DefaultService) removeDirectoryWithTimeout(ctx context.Context, path st
 	chunkCtx, cancel := context.WithTimeout(context.Background(), chunkTimeout)
 	defer cancel()
 
-	if err := fsService.RemoveAll(chunkCtx, path); err != nil {
-		if chunkCtx.Err() == context.DeadlineExceeded {
+	err := fsService.RemoveAll(chunkCtx, path)
+	if err != nil {
+		if errors.Is(chunkCtx.Err(), context.DeadlineExceeded) {
 			s.logger.Debugf("Directory removal timed out for %s, will retry", path)
+
 			return context.DeadlineExceeded
 		}
+
 		return err
 	}
 

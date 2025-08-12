@@ -17,5 +17,5 @@ package constants
 import "time"
 
 // Agent Operation Timeouts - Level 1 Service (depends on S6)
-// AgentMonitorUpdateObservedStateTimeout is the timeout for updating the observed state
+// AgentMonitorUpdateObservedStateTimeout is the timeout for updating the observed state.
 const AgentMonitorUpdateObservedStateTimeout = 30 * time.Millisecond

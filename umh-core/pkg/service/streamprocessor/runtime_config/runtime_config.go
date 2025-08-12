@@ -15,6 +15,7 @@
 package runtime_config
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -39,7 +40,7 @@ import (
 //     – fleet-wide  `.global`  namespace   (injected by central loop)
 //     – runtime-only `.internal` namespace (added by the manager)
 //
-// Returns both the streamprocessor runtime config and the rendered DFC config
+// Returns both the streamprocessor runtime config and the rendered DFC config.
 func BuildRuntimeConfig(
 	spec streamprocessorserviceconfig.StreamProcessorServiceConfigSpec,
 	agentLocation map[string]string,
@@ -50,7 +51,7 @@ func BuildRuntimeConfig(
 	if reflect.DeepEqual(spec, streamprocessorserviceconfig.StreamProcessorServiceConfigSpec{}) {
 		return streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime{},
 			dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
-			fmt.Errorf("nil spec")
+			errors.New("nil spec")
 	}
 
 	spLocation := spec.Location
@@ -91,12 +92,14 @@ func BuildRuntimeConfig(
 	// • Practical Recovery: Users can fix missing levels and the system will
 	//   automatically pick up the corrected configuration on the next reconcile.
 	maxLevel := -1
+
 	for k := range loc {
 		level, err := strconv.Atoi(k)
 		if err == nil && level > maxLevel {
 			maxLevel = level
 		}
 	}
+
 	for i := 0; i <= maxLevel; i++ {
 		key := strconv.Itoa(i)
 		if _, exists := loc[key]; !exists {
@@ -106,12 +109,14 @@ func BuildRuntimeConfig(
 
 	// 1d) generate location path (dot-separated string)
 	var pathParts []string
+
 	for i := 0; i <= maxLevel; i++ {
 		key := strconv.Itoa(i)
 		if val, exists := loc[key]; exists {
 			pathParts = append(pathParts, val)
 		}
 	}
+
 	locationPath := strings.Join(pathParts, ".")
 	// Strip trailing dots
 	locationPath = strings.TrimRight(locationPath, ".")
@@ -123,6 +128,7 @@ func BuildRuntimeConfig(
 	if vb.User == nil {
 		vb.User = map[string]any{}
 	}
+
 	vb.User["location"] = loc // merged map
 	vb.User["location_path"] = locationPath
 
@@ -141,6 +147,7 @@ func BuildRuntimeConfig(
 	if nodeName == "" {
 		nodeName = "unknown"
 	}
+
 	vb.Internal["bridged_by"] = config.GenerateBridgedBy(config.ComponentTypeStreamProcessor, nodeName, spName)
 
 	//----------------------------------------------------------------------
@@ -158,6 +165,7 @@ func BuildRuntimeConfig(
 
 	// Render the DFC config
 	dfcTemplate := spec.GetDFCServiceConfig(spName)
+
 	dfcRuntime, err := config.RenderTemplate(dfcTemplate, scope)
 	if err != nil {
 		return streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime{},
@@ -235,7 +243,7 @@ func renderConfig(
 	error,
 ) {
 	if reflect.DeepEqual(spec, streamprocessorserviceconfig.StreamProcessorServiceConfigSpec{}) {
-		return streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime{}, fmt.Errorf("streamprocessor config is nil")
+		return streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime{}, errors.New("streamprocessor config is nil")
 	}
 
 	// ─── Render the streamprocessor template with variable substitution ─────────────────────────────
