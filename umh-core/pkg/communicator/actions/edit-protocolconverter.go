@@ -49,7 +49,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter/runtime_config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 	"go.uber.org/zap"
 )
 
@@ -484,8 +484,8 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 	startTime := time.Now()
 	timeoutDuration := constants.DataflowComponentWaitForActiveTimeout
 
-	var logs []s6.LogEntry
-	var lastLogs []s6.LogEntry
+	var logs []s6_shared.LogEntry
+	var lastLogs []s6_shared.LogEntry
 
 	for {
 		elapsed := time.Since(startTime)

@@ -24,7 +24,8 @@ import (
 	tbproto "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models/topicbrowser/pb"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 	topicbrowserservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/topicbrowser"
 )
 
@@ -351,7 +352,7 @@ func createMockObservedStateSnapshot(buffers []*topicbrowserservice.BufferItem) 
 
 					LastSequenceNum: maxSeq,
 				},
-				Logs: []s6svc.LogEntry{}, // Initialize with empty slice
+				Logs: []s6_shared.LogEntry{}, // Initialize with empty slice
 			},
 			// Leave other fields as zero values
 		},

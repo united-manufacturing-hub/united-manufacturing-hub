@@ -36,7 +36,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	benthos_monitor "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -89,7 +90,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			mockService.ServiceStates[serviceName] = &benthossvc.ServiceInfo{
 				S6FSMState: s6fsm.OperationalStateStopped,
 				S6ObservedState: s6fsm.S6ObservedState{
-					ServiceInfo: s6svc.ServiceInfo{Status: s6svc.ServiceDown, Uptime: 5},
+					ServiceInfo: s6_shared.ServiceInfo{Status: s6_shared.ServiceDown, Uptime: 5},
 				},
 				BenthosStatus: benthossvc.BenthosStatus{
 					BenthosMetrics: benthos_monitor.BenthosMetrics{
@@ -1185,7 +1186,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			// ARCHITECTURAL DECISION: We now continue reconciling even when UpdateObservedState
 			// encounters permanent errors. This enables force-kill recovery scenarios where
 			// S6 services exist on filesystem but FSM managers lose their in-memory mappings.
-			// 
+			//
 			// The trade-off: We prioritize system recovery over immediate error handling.
 			// Permanent errors in UpdateObservedState no longer trigger automatic FSM removal,
 			// allowing the system to restore services after unexpected shutdowns/restarts.
@@ -1264,7 +1265,6 @@ var _ = Describe("BenthosInstance FSM", func() {
 			Expect(instance.GetCurrentFSMState()).To(Equal(benthosfsm.OperationalStateActive))
 			Expect(instance.GetDesiredFSMState()).To(Equal(benthosfsm.OperationalStateActive))
 
-
 			// Clear error for other tests
 			mockService.StatusError = nil
 		})
@@ -1273,7 +1273,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			// ARCHITECTURAL DECISION: We now continue reconciling even when UpdateObservedState
 			// encounters permanent errors. This enables force-kill recovery scenarios where
 			// S6 services exist on filesystem but FSM managers lose their in-memory mappings.
-			// 
+			//
 			// The trade-off: We prioritize system recovery over immediate error handling.
 			// Permanent errors in UpdateObservedState no longer trigger automatic FSM removal,
 			// allowing the system to restore services after unexpected shutdowns/restarts.
@@ -1316,10 +1316,10 @@ var _ = Describe("BenthosInstance FSM", func() {
 			// Attempt reconciliation - should continue despite the error
 			var recErr error
 			snapshot := fsm.SystemSnapshot{Tick: tick}
-			
+
 			// Single reconcile attempt should succeed despite the UpdateObservedState error
 			recErr, _ = instance.Reconcile(ctx, snapshot, mockSvcRegistry)
-			
+
 			// With the new architecture, reconcile should NOT return an error for UpdateObservedState failures
 			Expect(recErr).NotTo(HaveOccurred(), "Reconcile should continue despite UpdateObservedState errors")
 
@@ -1328,7 +1328,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			Expect(instance.GetDesiredFSMState()).To(Equal(benthosfsm.OperationalStateActive))
 			// The current state may have progressed from stopped to starting since reconciliation continues
 			currentState := instance.GetCurrentFSMState()
-			Expect(currentState).To(Or(Equal(benthosfsm.OperationalStateStopped), Equal(benthosfsm.OperationalStateStarting)), 
+			Expect(currentState).To(Or(Equal(benthosfsm.OperationalStateStopped), Equal(benthosfsm.OperationalStateStarting)),
 				"FSM should either remain stopped or progress to starting despite UpdateObservedState errors")
 
 			// Force removal should NOT be attempted since we continue reconciling
@@ -1340,9 +1340,9 @@ var _ = Describe("BenthosInstance FSM", func() {
 		It("should continue reconciling despite permanent errors in UpdateObservedState when in starting state", func() {
 			// ARCHITECTURAL DECISION: We now continue reconciling even when UpdateObservedState
 			// encounters permanent errors, regardless of whether we're in a terminal or non-terminal state.
-			// This enables force-kill recovery scenarios where S6 services exist on filesystem 
+			// This enables force-kill recovery scenarios where S6 services exist on filesystem
 			// but FSM managers lose their in-memory mappings.
-			// 
+			//
 			// The trade-off: We prioritize system recovery over immediate error handling.
 			// Permanent errors in UpdateObservedState no longer trigger automatic FSM removal,
 			// allowing the system to restore services after unexpected shutdowns/restarts.
@@ -1414,7 +1414,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			Expect(instance.GetDesiredFSMState()).To(Equal(benthosfsm.OperationalStateActive))
 			// The current state should remain in starting config loading or may progress
 			currentState := instance.GetCurrentFSMState()
-			Expect(benthosfsm.IsStartingState(currentState) || benthosfsm.IsRunningState(currentState)).To(BeTrue(), 
+			Expect(benthosfsm.IsStartingState(currentState) || benthosfsm.IsRunningState(currentState)).To(BeTrue(),
 				"FSM should maintain starting state or progress despite UpdateObservedState errors")
 
 			// Force removal should NOT be attempted since we continue reconciling
@@ -1432,7 +1432,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 		It("should attempt forced removal when encountering permanent errors in state transitions", func() {
 			// This test verifies that permanent errors in state transition actions (not UpdateObservedState)
 			// still trigger the traditional forced removal behavior. This ensures the distinction between:
-			// - UpdateObservedState errors (ignored for recovery) 
+			// - UpdateObservedState errors (ignored for recovery)
 			// - State transition errors (still trigger removal)
 
 			// 1) Get to stopped state using proper transitions
@@ -1492,10 +1492,10 @@ var _ = Describe("BenthosInstance FSM", func() {
 		It("should validate architectural principle that UpdateObservedState errors don't block reconciliation", func() {
 			// This test validates the key architectural principle:
 			// UpdateObservedState errors (like StatusError) should continue reconciling (not block FSM progression)
-			// This enables force-kill recovery scenarios where S6 services exist on filesystem 
+			// This enables force-kill recovery scenarios where S6 services exist on filesystem
 			// but FSM managers lose their in-memory mappings.
 			//
-			// Note: The first test in this context already proved that state transition errors 
+			// Note: The first test in this context already proved that state transition errors
 			// (like StartError) still trigger forced removal as expected.
 
 			var err error
@@ -1513,7 +1513,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 
 			// Inject permanent error in UpdateObservedState (StatusError)
 			mockService.StatusError = fmt.Errorf("%s: test permanent error", backoff.PermanentFailureError)
-			
+
 			// Set desired state to trigger reconciliation
 			Expect(instance.SetDesiredFSMState(benthosfsm.OperationalStateActive)).To(Succeed())
 
@@ -1526,7 +1526,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 
 			// FSM should progress toward desired state despite UpdateObservedState errors
 			currentState := instance.GetCurrentFSMState()
-			Expect(benthosfsm.IsStartingState(currentState) || benthosfsm.IsRunningState(currentState)).To(BeTrue(), 
+			Expect(benthosfsm.IsStartingState(currentState) || benthosfsm.IsRunningState(currentState)).To(BeTrue(),
 				"FSM should progress despite UpdateObservedState errors")
 
 			// Force removal should NOT have been called for UpdateObservedState errors

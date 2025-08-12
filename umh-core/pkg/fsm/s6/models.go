@@ -22,7 +22,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 )
 
 // Operational state constants represent the runtime states of a service
@@ -71,7 +72,7 @@ type S6ObservedState struct {
 	ObservedS6ServiceConfig s6serviceconfig.S6ServiceConfig
 
 	// ServiceInfo contains the actual service info from s6
-	ServiceInfo s6svc.ServiceInfo
+	ServiceInfo s6_shared.ServiceInfo
 
 	// LastStateChange is the timestamp of the last observed state change
 	LastStateChange int64
@@ -89,7 +90,7 @@ var _ publicfsm.FSMInstance = (*S6Instance)(nil)
 type S6Instance struct {
 
 	// service is the S6 service implementation to use
-	service s6svc.Service
+	service s6_shared.Service
 
 	baseFSMInstance *internalfsm.BaseFSMInstance
 
@@ -124,7 +125,7 @@ func (s *S6Instance) GetServicePath() string {
 
 // GetService returns the S6 service implementation
 // This is a testing-only utility to access the private field
-func (s *S6Instance) GetService() s6svc.Service {
+func (s *S6Instance) GetService() s6_shared.Service {
 	return s.service
 }
 
@@ -136,7 +137,7 @@ func (s *S6Instance) SetServicePath(servicePath string) {
 
 // SetService sets the S6 service implementation
 // This is a testing-only utility to access the private field
-func (s *S6Instance) SetService(service s6svc.Service) {
+func (s *S6Instance) SetService(service s6_shared.Service) {
 	s.service = service
 }
 

@@ -34,6 +34,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 	"go.uber.org/zap"
@@ -42,7 +43,7 @@ import (
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"gopkg.in/yaml.v3"
 
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_orig"
 
 	"github.com/cespare/xxhash/v2"
 )
@@ -89,7 +90,7 @@ type IBenthosService interface {
 	//
 	//	ok    – true when logs look clean, false otherwise.
 	//	entry – zero value when ok is true; otherwise the first offending log line.
-	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) (bool, s6service.LogEntry)
+	IsLogsFine(logs []s6_shared.LogEntry, currentTime time.Time, logWindow time.Duration) (bool, s6_shared.LogEntry)
 	// IsMetricsErrorFree reports true when Benthos metrics contain no error
 	// counters.
 	//
@@ -143,7 +144,7 @@ type BenthosStatus struct {
 	//
 	// Therefore we override the default behaviour and copy only the 3-word
 	// slice header (24 B on amd64) — see CopyBenthosLogs below.
-	BenthosLogs []s6service.LogEntry
+	BenthosLogs []s6_shared.LogEntry
 	// HealthCheck contains information about the health of the Benthos service
 	HealthCheck benthos_monitor.HealthCheck
 	// BenthosMetrics contains information about the metrics of the Benthos service
@@ -170,14 +171,14 @@ type BenthosStatus struct {
 // deep-copy (O(n) but safe for mutable slices).
 //
 // See also: https://github.com/tiendc/go-deepcopy?tab=readme-ov-file#copy-struct-fields-via-struct-methods
-func (bs *BenthosStatus) CopyBenthosLogs(src []s6service.LogEntry) error {
+func (bs *BenthosStatus) CopyBenthosLogs(src []s6_shared.LogEntry) error {
 	bs.BenthosLogs = src
 	return nil
 }
 
 // BenthosService is the default implementation of the IBenthosService interface
 type BenthosService struct {
-	s6Service s6service.Service // S6 service for direct S6 operations
+	s6Service s6_shared.Service // S6 service for direct S6 operations
 	logger    *zap.SugaredLogger
 
 	s6Manager *s6fsm.S6Manager
@@ -234,7 +235,7 @@ var benthosLogRe = regexp.MustCompile(`^level=(error|warning)\s+msg=(.+)`)
 type BenthosServiceOption func(*BenthosService)
 
 // WithS6Service sets a custom S6 service for the BenthosService
-func WithS6Service(s6Service s6service.Service) BenthosServiceOption {
+func WithS6Service(s6Service s6_shared.Service) BenthosServiceOption {
 	return func(s *BenthosService) {
 		s.s6Service = s6Service
 	}
@@ -509,10 +510,10 @@ func (s *BenthosService) Status(ctx context.Context, services serviceregistry.Pr
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
 	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, services.GetFileSystem())
 	if err != nil {
-		if errors.Is(err, s6service.ErrServiceNotExist) {
+		if errors.Is(err, s6_shared.ErrServiceNotExist) {
 			s.logger.Debugf("Service %s does not exist, returning empty logs", s6ServiceName)
 			return ServiceInfo{}, ErrServiceNotExist
-		} else if errors.Is(err, s6service.ErrLogFileNotFound) {
+		} else if errors.Is(err, s6_shared.ErrLogFileNotFound) {
 			s.logger.Debugf("Log file for service %s not found, returning empty logs", s6ServiceName)
 			return ServiceInfo{}, ErrServiceNotExist
 		} else {
@@ -560,7 +561,7 @@ func (s *BenthosService) Status(ctx context.Context, services serviceregistry.Pr
 	return serviceInfo, nil
 }
 
-func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time, benthosName string, logs []s6service.LogEntry) (BenthosStatus, error) {
+func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time, benthosName string, logs []s6_shared.LogEntry) (BenthosStatus, error) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(logger.ComponentBenthosService, metrics.ComponentBenthosService+"_get_health_check_and_metrics", time.Since(start))
@@ -949,13 +950,13 @@ func (s *BenthosService) ReconcileManager(ctx context.Context, services servicer
 //	ok    – true when logs look clean, false otherwise.
 //	entry – zero value when ok is true; otherwise the first offending log line.
 func (s *BenthosService) IsLogsFine(
-	logs []s6service.LogEntry,
+	logs []s6_shared.LogEntry,
 	now time.Time,
 	window time.Duration,
-) (bool, s6service.LogEntry) {
+) (bool, s6_shared.LogEntry) {
 
 	if len(logs) == 0 {
-		return true, s6service.LogEntry{}
+		return true, s6_shared.LogEntry{}
 	}
 
 	cutoff := now.Add(-window)         // pre-compute once
@@ -992,7 +993,7 @@ func (s *BenthosService) IsLogsFine(
 			}
 		}
 	}
-	return true, s6service.LogEntry{}
+	return true, s6_shared.LogEntry{}
 }
 
 // IsMetricsErrorFree reports true when Benthos metrics contain no error

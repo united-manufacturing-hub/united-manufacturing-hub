@@ -20,13 +20,14 @@ import (
 	"path/filepath"
 
 	"github.com/looplab/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_orig"
 )
 
 // NewS6Instance creates a new S6Instance with the given ID and service path
@@ -73,7 +74,7 @@ func NewS6Instance(
 func NewS6InstanceWithService(
 	s6BaseDir string,
 	config config.S6FSMConfig,
-	service s6service.Service) (*S6Instance, error) {
+	service s6_shared.Service) (*S6Instance, error) {
 	instance, err := NewS6Instance(s6BaseDir, config)
 	if err != nil {
 		return nil, err

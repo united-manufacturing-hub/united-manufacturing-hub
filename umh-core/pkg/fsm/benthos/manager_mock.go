@@ -24,7 +24,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_orig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 )
 
 // NewBenthosManagerWithMockedServices creates a BenthosManager with fully mocked services
@@ -69,8 +70,8 @@ func NewBenthosManagerWithMockedServices(name string) (*BenthosManager, *benthos
 
 			// Configure mock S6 service
 			s6MockService.ServiceExistsResult = true
-			s6MockService.StatusResult = s6svc.ServiceInfo{
-				Status:    s6svc.ServiceUp, // Start in UP state
+			s6MockService.StatusResult = s6_shared.ServiceInfo{
+				Status:    s6_shared.ServiceUp, // Start in UP state
 				Pid:       12345,
 				Uptime:    60,
 				IsReady:   true,

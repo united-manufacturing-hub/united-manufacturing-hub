@@ -31,7 +31,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 	"go.uber.org/zap"
@@ -63,8 +64,8 @@ type ITopicBrowserService interface {
 }
 
 type Status struct {
-	Logs           []s6svc.LogEntry   // contain the structured s6 logs entries
-	BufferSnapshot RingBufferSnapshot // structured ring buffer snapshot with sequence tracking
+	Logs           []s6_shared.LogEntry // contain the structured s6 logs entries
+	BufferSnapshot RingBufferSnapshot   // structured ring buffer snapshot with sequence tracking
 }
 
 // CopyLogs is a go-deepcopy override for the Logs field.
@@ -72,7 +73,7 @@ type Status struct {
 // go-deepcopy looks for a method with the signature
 //
 //	func (dst *T) Copy<FieldName>(src <FieldType>) error
-func (st *Status) CopyLogs(src []s6svc.LogEntry) error {
+func (st *Status) CopyLogs(src []s6_shared.LogEntry) error {
 	st.Logs = src
 	return nil
 }

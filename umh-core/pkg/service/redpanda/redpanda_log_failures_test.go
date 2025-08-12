@@ -20,7 +20,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 )
 
 var _ = Describe("Redpanda Log Failures", func() {
@@ -34,7 +35,7 @@ var _ = Describe("Redpanda Log Failures", func() {
 		})
 
 		It("should detect address already in use failure", func() {
-			log := s6service.LogEntry{
+			log := s6_shared.LogEntry{
 				Timestamp: time.Now(),
 				Content:   "Address already in use",
 			}
@@ -42,7 +43,7 @@ var _ = Describe("Redpanda Log Failures", func() {
 		})
 
 		It("should not detect failure in normal log line", func() {
-			log := s6service.LogEntry{
+			log := s6_shared.LogEntry{
 				Timestamp: time.Now(),
 				Content:   "Normal log line",
 			}
@@ -50,7 +51,7 @@ var _ = Describe("Redpanda Log Failures", func() {
 		})
 
 		It("should be case sensitive", func() {
-			log := s6service.LogEntry{
+			log := s6_shared.LogEntry{
 				Timestamp: time.Now(),
 				Content:   "address already in use",
 			}
@@ -68,7 +69,7 @@ var _ = Describe("Redpanda Log Failures", func() {
 		})
 
 		It("should detect reactor stall over 500ms", func() {
-			log := s6service.LogEntry{
+			log := s6_shared.LogEntry{
 				Timestamp: time.Now(),
 				Content:   "Reactor stalled for 501 ms",
 			}
@@ -76,7 +77,7 @@ var _ = Describe("Redpanda Log Failures", func() {
 		})
 
 		It("should not detect reactor stall under 500ms", func() {
-			log := s6service.LogEntry{
+			log := s6_shared.LogEntry{
 				Timestamp: time.Now(),
 				Content:   "Reactor stalled for 499 ms",
 			}
@@ -84,7 +85,7 @@ var _ = Describe("Redpanda Log Failures", func() {
 		})
 
 		It("should not detect failure in normal log line", func() {
-			log := s6service.LogEntry{
+			log := s6_shared.LogEntry{
 				Timestamp: time.Now(),
 				Content:   "Normal log line",
 			}
@@ -92,11 +93,11 @@ var _ = Describe("Redpanda Log Failures", func() {
 		})
 
 		It("should handle malformed log lines", func() {
-			log1 := s6service.LogEntry{
+			log1 := s6_shared.LogEntry{
 				Timestamp: time.Now(),
 				Content:   "Reactor stalled for ms",
 			}
-			log2 := s6service.LogEntry{
+			log2 := s6_shared.LogEntry{
 				Timestamp: time.Now(),
 				Content:   "Reactor stalled for abc ms",
 			}
@@ -105,7 +106,7 @@ var _ = Describe("Redpanda Log Failures", func() {
 		})
 
 		It("should be case sensitive", func() {
-			log := s6service.LogEntry{
+			log := s6_shared.LogEntry{
 				Timestamp: time.Now(),
 				Content:   "reactor stalled for 501 ms",
 			}
@@ -114,7 +115,7 @@ var _ = Describe("Redpanda Log Failures", func() {
 
 		It("should ignore stalls before transition time", func() {
 			transitionTime := time.Now()
-			log := s6service.LogEntry{
+			log := s6_shared.LogEntry{
 				Timestamp: transitionTime.Add(-1 * time.Second), // 1 second before transition
 				Content:   "Reactor stalled for 501 ms",
 			}
@@ -123,7 +124,7 @@ var _ = Describe("Redpanda Log Failures", func() {
 
 		It("should detect stalls after transition time", func() {
 			transitionTime := time.Now()
-			log := s6service.LogEntry{
+			log := s6_shared.LogEntry{
 				Timestamp: transitionTime.Add(1 * time.Second), // 1 second after transition
 				Content:   "Reactor stalled for 501 ms",
 			}

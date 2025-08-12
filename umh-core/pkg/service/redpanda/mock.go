@@ -28,7 +28,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/httpclient"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_orig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -50,7 +51,7 @@ type MockRedpandaService struct {
 	HTTPClient httpclient.HTTPClient
 
 	// S6 service mock
-	S6Service s6service.Service
+	S6Service s6_shared.Service
 
 	// Configuration to return on method calls
 	FileSystemMock filesystem.Service // Mock filesystem service
@@ -339,10 +340,10 @@ func (m *MockRedpandaService) ReconcileManager(ctx context.Context, services ser
 }
 
 // IsLogsFine mocks checking if the logs are fine
-func (m *MockRedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration, transitionToRunningTime time.Time) (bool, s6service.LogEntry) {
+func (m *MockRedpandaService) IsLogsFine(logs []s6_shared.LogEntry, currentTime time.Time, logWindow time.Duration, transitionToRunningTime time.Time) (bool, s6_shared.LogEntry) {
 	m.IsLogsFineCalled = true
 	// For testing purposes, we'll consider logs fine if they're empty or nil
-	return len(logs) == 0, s6service.LogEntry{}
+	return len(logs) == 0, s6_shared.LogEntry{}
 }
 
 // IsMetricsErrorFree mocks checking if metrics are error-free

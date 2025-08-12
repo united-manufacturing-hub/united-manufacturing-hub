@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package s6
+package s6_orig
 
 import (
 	"context"
@@ -25,11 +25,11 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 )
 
 var _ = Describe("LifecycleManager", func() {
@@ -37,14 +37,14 @@ var _ = Describe("LifecycleManager", func() {
 		ctx       context.Context
 		service   *DefaultService
 		mockFS    *filesystem.MockFileSystem
-		artifacts *ServiceArtifacts
+		artifacts *s6_shared.ServiceArtifacts
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
 		service = &DefaultService{logger: logger.For("test")}
 		mockFS = filesystem.NewMockFileSystem()
-		artifacts = &ServiceArtifacts{
+		artifacts = &s6_shared.ServiceArtifacts{
 			ServiceDir: filepath.Join(constants.S6BaseDir, "test-service"),
 			LogDir:     filepath.Join(constants.S6LogBaseDir, "test-service"),
 		}
@@ -326,7 +326,7 @@ var _ = Describe("LifecycleManager", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(health).To(Equal(HealthOK))
+			Expect(health).To(Equal(s6_shared.HealthOK))
 		})
 
 		It("should return HealthBad for missing service directory", func() {
@@ -338,7 +338,7 @@ var _ = Describe("LifecycleManager", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(health).To(Equal(HealthBad))
+			Expect(health).To(Equal(s6_shared.HealthBad))
 		})
 
 		It("should return HealthBad for missing completion sentinel", func() {
@@ -349,7 +349,7 @@ var _ = Describe("LifecycleManager", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(health).To(Equal(HealthBad))
+			Expect(health).To(Equal(s6_shared.HealthBad))
 		})
 
 		It("should return HealthUnknown for filesystem errors", func() {
@@ -360,7 +360,7 @@ var _ = Describe("LifecycleManager", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).To(HaveOccurred())
-			Expect(health).To(Equal(HealthUnknown))
+			Expect(health).To(Equal(s6_shared.HealthUnknown))
 		})
 
 		It("should handle nil artifacts", func() {
@@ -368,7 +368,7 @@ var _ = Describe("LifecycleManager", func() {
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("artifacts is nil"))
-			Expect(health).To(Equal(HealthBad))
+			Expect(health).To(Equal(s6_shared.HealthBad))
 		})
 	})
 

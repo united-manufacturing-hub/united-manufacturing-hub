@@ -35,7 +35,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 	rpsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
 	rpmonitor "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -153,7 +154,7 @@ var _ = Describe("TopicBrowserService", func() {
 			mockBenthosService *benthossvc.MockBenthosService
 			statusService      *Service
 			benthosName        string
-			logs               []s6svc.LogEntry
+			logs               []s6_shared.LogEntry
 		)
 
 		BeforeEach(func() {
@@ -232,7 +233,7 @@ var _ = Describe("TopicBrowserService", func() {
 			payload := []byte("hello world")
 			hexBlock := makeHex(payload)
 
-			logs = []s6svc.LogEntry{
+			logs = []s6_shared.LogEntry{
 				{Content: constants.BLOCK_START_MARKER, Timestamp: time.Now()},
 				{Content: hexBlock, Timestamp: time.Now()},
 				{Content: constants.DATA_END_MARKER, Timestamp: time.Now()},
@@ -302,7 +303,7 @@ var _ = Describe("TopicBrowserService", func() {
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
 			Expect(status.BenthosFSMState).To(Equal(benthosfsm.OperationalStateActive))
-			Expect(status.BenthosObservedState.ServiceInfo.S6ObservedState.ServiceInfo.Status).To(Equal(s6svc.ServiceUp))
+			Expect(status.BenthosObservedState.ServiceInfo.S6ObservedState.ServiceInfo.Status).To(Equal(s6_shared.ServiceUp))
 			// check the ringbuffer if logs appear
 			Expect(status.Status.BufferSnapshot.Items).To(HaveLen(1))
 			Expect(status.Status.BufferSnapshot.Items[0].Timestamp.UnixMilli()).To(Equal(int64(1750091514783)))
@@ -829,14 +830,14 @@ func SetupBenthosServiceState(
 
 	// Update S6 observed state
 	if flags.IsS6Running {
-		mockService.ServiceStates[serviceName].S6ObservedState.ServiceInfo = s6svc.ServiceInfo{
-			Status: s6svc.ServiceUp,
+		mockService.ServiceStates[serviceName].S6ObservedState.ServiceInfo = s6_shared.ServiceInfo{
+			Status: s6_shared.ServiceUp,
 			Uptime: 10, // Set uptime to 10s to simulate config loaded
 			Pid:    1234,
 		}
 	} else {
-		mockService.ServiceStates[serviceName].S6ObservedState.ServiceInfo = s6svc.ServiceInfo{
-			Status: s6svc.ServiceDown,
+		mockService.ServiceStates[serviceName].S6ObservedState.ServiceInfo = s6_shared.ServiceInfo{
+			Status: s6_shared.ServiceDown,
 		}
 	}
 

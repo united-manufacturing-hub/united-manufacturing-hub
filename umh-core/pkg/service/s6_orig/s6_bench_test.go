@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package s6
+package s6_orig
 
 import (
 	"bufio"
@@ -28,6 +28,7 @@ import (
 
 	"github.com/cactus/tai64"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 )
 
 // S6 Log Rotation Performance Benchmarks
@@ -101,16 +102,16 @@ import (
 // 1. Avoids allocations for simple cases
 // 2. Uses a more efficient string scanning strategy
 // 3. Checks for minimum length before trying to parse
-func parseLogLineOptimized(line string) LogEntry {
+func parseLogLineOptimized(line string) s6_shared.LogEntry {
 	// Quick check for empty strings or too short lines
 	if len(line) < 29 { // Minimum length for "YYYY-MM-DD HH:MM:SS  content"
-		return LogEntry{Content: line}
+		return s6_shared.LogEntry{Content: line}
 	}
 
 	// Check if we have the double space separator
 	sepIdx := strings.Index(line, "  ")
 	if sepIdx == -1 || sepIdx > 28 {
-		return LogEntry{Content: line}
+		return s6_shared.LogEntry{Content: line}
 	}
 
 	// Extract timestamp part
@@ -124,32 +125,32 @@ func parseLogLineOptimized(line string) LogEntry {
 
 	// Try to parse the timestamp
 	// We are using ParseNano over time.Parse because it is faster for our specific time format
-	timestamp, err := ParseNano(timestampStr)
+	timestamp, err := s6_shared.ParseNano(timestampStr)
 	if err != nil {
-		return LogEntry{Content: line}
+		return s6_shared.LogEntry{Content: line}
 	}
 
-	return LogEntry{
+	return s6_shared.LogEntry{
 		Timestamp: timestamp,
 		Content:   content,
 	}
 }
 
-// parseLogLine parses a log line from S6 format and returns a LogEntry
-func parseLogLineOriginal(line string) LogEntry {
+// parseLogLine parses a log line from S6 format and returns a s6_shared.LogEntry
+func parseLogLineOriginal(line string) s6_shared.LogEntry {
 	// S6 log format with T flag: YYYY-MM-DD HH:MM:SS.NNNNNNNNN  content
 	parts := strings.SplitN(line, "  ", 2)
 	if len(parts) != 2 {
-		return LogEntry{Content: line}
+		return s6_shared.LogEntry{Content: line}
 	}
 
 	// We are using ParseNano over time.Parse because it is faster for our specific time format
-	timestamp, err := ParseNano(parts[0])
+	timestamp, err := s6_shared.ParseNano(parts[0])
 	if err != nil {
-		return LogEntry{Content: line}
+		return s6_shared.LogEntry{Content: line}
 	}
 
-	return LogEntry{
+	return s6_shared.LogEntry{
 		Timestamp: timestamp,
 		Content:   parts[1],
 	}
@@ -210,12 +211,12 @@ func BenchmarkParseLogLine(b *testing.B) {
 	testCases := []struct {
 		name     string
 		logLine  string
-		expected LogEntry
+		expected s6_shared.LogEntry
 	}{
 		{
 			name:    "Valid log line",
 			logLine: "2023-01-02 15:04:05.123456789  This is a valid log entry",
-			expected: LogEntry{
+			expected: s6_shared.LogEntry{
 				Timestamp: time.Date(2023, 1, 2, 15, 4, 5, 123456789, time.UTC),
 				Content:   "This is a valid log entry",
 			},
@@ -223,28 +224,28 @@ func BenchmarkParseLogLine(b *testing.B) {
 		{
 			name:    "Invalid timestamp format",
 			logLine: "2023/01/02 15:04:05  Invalid timestamp format",
-			expected: LogEntry{
+			expected: s6_shared.LogEntry{
 				Content: "2023/01/02 15:04:05  Invalid timestamp format",
 			},
 		},
 		{
 			name:    "No timestamp",
 			logLine: "Just a log message without timestamp",
-			expected: LogEntry{
+			expected: s6_shared.LogEntry{
 				Content: "Just a log message without timestamp",
 			},
 		},
 		{
 			name:    "Empty string",
 			logLine: "",
-			expected: LogEntry{
+			expected: s6_shared.LogEntry{
 				Content: "",
 			},
 		},
 		{
 			name:    "Missing content",
 			logLine: "2023-01-02 15:04:05.123456789  ",
-			expected: LogEntry{
+			expected: s6_shared.LogEntry{
 				Timestamp: time.Date(2023, 1, 2, 15, 4, 5, 123456789, time.UTC),
 				Content:   "",
 			},
@@ -272,12 +273,12 @@ func BenchmarkParseLogLineOptimized(b *testing.B) {
 	testCases := []struct {
 		name     string
 		logLine  string
-		expected LogEntry
+		expected s6_shared.LogEntry
 	}{
 		{
 			name:    "Valid log line",
 			logLine: "2023-01-02 15:04:05.123456789  This is a valid log entry",
-			expected: LogEntry{
+			expected: s6_shared.LogEntry{
 				Timestamp: time.Date(2023, 1, 2, 15, 4, 5, 123456789, time.UTC),
 				Content:   "This is a valid log entry",
 			},
@@ -285,28 +286,28 @@ func BenchmarkParseLogLineOptimized(b *testing.B) {
 		{
 			name:    "Invalid timestamp format",
 			logLine: "2023/01/02 15:04:05  Invalid timestamp format",
-			expected: LogEntry{
+			expected: s6_shared.LogEntry{
 				Content: "2023/01/02 15:04:05  Invalid timestamp format",
 			},
 		},
 		{
 			name:    "No timestamp",
 			logLine: "Just a log message without timestamp",
-			expected: LogEntry{
+			expected: s6_shared.LogEntry{
 				Content: "Just a log message without timestamp",
 			},
 		},
 		{
 			name:    "Empty string",
 			logLine: "",
-			expected: LogEntry{
+			expected: s6_shared.LogEntry{
 				Content: "",
 			},
 		},
 		{
 			name:    "Missing content",
 			logLine: "2023-01-02 15:04:05.123456789  ",
-			expected: LogEntry{
+			expected: s6_shared.LogEntry{
 				Timestamp: time.Date(2023, 1, 2, 15, 4, 5, 123456789, time.UTC),
 				Content:   "",
 			},

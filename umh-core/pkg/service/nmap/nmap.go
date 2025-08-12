@@ -32,7 +32,8 @@ import (
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_orig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 	"go.uber.org/zap"
@@ -40,7 +41,7 @@ import (
 
 // NmapService is the implementation of the INmapService interface
 type NmapService struct {
-	s6Service        s6service.Service
+	s6Service        s6_shared.Service
 	logger           *zap.SugaredLogger
 	s6Manager        *s6fsm.S6Manager
 	lastScanResult   *NmapScanResult // Cache for scan results
@@ -51,7 +52,7 @@ type NmapService struct {
 type NmapServiceOption func(*NmapService)
 
 // WithS6Service sets a custom S6 service for the NmapService
-func WithS6Service(s6Service s6service.Service) NmapServiceOption {
+func WithS6Service(s6Service s6_shared.Service) NmapServiceOption {
 	return func(s *NmapService) {
 		s.s6Service = s6Service
 	}
@@ -169,7 +170,7 @@ func (s *NmapService) GetConfig(ctx context.Context, filesystemService filesyste
 }
 
 // parseScanLogs parses the logs of an nmap service and extracts scan results
-func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port uint16) *NmapScanResult {
+func (s *NmapService) parseScanLogs(logs []s6_shared.LogEntry, port uint16) *NmapScanResult {
 	if len(logs) == 0 {
 		return nil
 	}
@@ -318,9 +319,9 @@ func (s *NmapService) Status(ctx context.Context, filesystemService filesystem.S
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
 	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, filesystemService)
 	if err != nil {
-		if errors.Is(err, s6service.ErrServiceNotExist) {
+		if errors.Is(err, s6_shared.ErrServiceNotExist) {
 			return ServiceInfo{}, ErrServiceNotExist
-		} else if errors.Is(err, s6service.ErrLogFileNotFound) {
+		} else if errors.Is(err, s6_shared.ErrLogFileNotFound) {
 			return ServiceInfo{}, ErrServiceNotExist
 		}
 		return ServiceInfo{}, fmt.Errorf("failed to get logs: %w", err)

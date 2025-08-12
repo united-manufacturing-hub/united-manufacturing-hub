@@ -21,7 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 )
 
 // MockService is a mock implementation of the agent monitor Service interface
@@ -73,7 +73,7 @@ func CreateDefaultAgentStatus() *ServiceInfo {
 			3: "Line",
 		},
 		Latency: &models.Latency{},
-		AgentLogs: []s6.LogEntry{
+		AgentLogs: []s6_shared.LogEntry{
 			{
 				Timestamp: time.Now().Add(-10 * time.Minute),
 				Content:   "INFO: Test log entry 1",

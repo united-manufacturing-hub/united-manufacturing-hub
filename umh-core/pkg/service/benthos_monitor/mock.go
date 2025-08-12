@@ -23,7 +23,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -459,7 +460,7 @@ func (m *MockBenthosMonitorService) SetMetricsState(isActive bool) {
 }
 
 // SetMockLogs allows tests to set the mock logs for the service
-func (m *MockBenthosMonitorService) SetMockLogs(logs []s6service.LogEntry) {
+func (m *MockBenthosMonitorService) SetMockLogs(logs []s6_shared.LogEntry) {
 	if m.ServiceState == nil {
 		m.ServiceState = &ServiceInfo{
 			BenthosStatus: BenthosMonitorStatus{

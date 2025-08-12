@@ -35,13 +35,14 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 
 	dto "github.com/prometheus/client_model/go"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/monitor"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_orig"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )
@@ -181,7 +182,7 @@ type BenthosMonitorStatus struct {
 	//
 	// Therefore we override the default behaviour and copy only the 3-word
 	// slice header (24 B on amd64) — see CopyLogs below.
-	Logs []s6service.LogEntry
+	Logs []s6_shared.LogEntry
 	// IsRunning indicates whether the benthos_monitor service is running
 	IsRunning bool
 }
@@ -206,7 +207,7 @@ type BenthosMonitorStatus struct {
 // deep-copy (O(n) but safe for mutable slices).
 //
 // See also: https://github.com/tiendc/go-deepcopy?tab=readme-ov-file#copy-struct-fields-via-struct-methods
-func (bms *BenthosMonitorStatus) CopyLogs(src []s6service.LogEntry) error {
+func (bms *BenthosMonitorStatus) CopyLogs(src []s6_shared.LogEntry) error {
 	bms.Logs = src
 	return nil
 }
@@ -231,7 +232,7 @@ type BenthosMonitorService struct {
 	logger          *zap.SugaredLogger
 	metricsState    *BenthosMetricsState
 	s6Manager       *s6fsm.S6Manager
-	s6Service       s6service.Service
+	s6Service       s6_shared.Service
 	s6ServiceConfig *config.S6FSMConfig // There can only be one monitor per benthos instance
 	benthosName     string              // normally a service can handle multiple instances, the service monitor here is different and can only handle one instance
 }
@@ -240,7 +241,7 @@ type BenthosMonitorService struct {
 type BenthosMonitorServiceOption func(*BenthosMonitorService)
 
 // WithS6Service sets a custom S6 service for the RedpandaMonitorService
-func WithS6Service(s6Service s6service.Service) BenthosMonitorServiceOption {
+func WithS6Service(s6Service s6_shared.Service) BenthosMonitorServiceOption {
 	return func(s *BenthosMonitorService) {
 		s.s6Service = s6Service
 	}
@@ -356,7 +357,7 @@ type Section struct {
 // ConcatContent concatenates the content of a slice of LogEntry objects into a single byte slice.
 // It calculates the total size of the content, allocates a buffer of that size, and then copies each LogEntry's content into the buffer.
 // This approach is more efficient than using multiple strings.ReplaceAll calls or regex operations.
-func ConcatContent(logs []s6service.LogEntry) []byte {
+func ConcatContent(logs []s6_shared.LogEntry) []byte {
 	// 1st pass: exact size
 	size := 0
 	for i := range logs {
@@ -392,7 +393,7 @@ func StripMarkers(b []byte) []byte {
 }
 
 // ParseBenthosLogs parses the logs of a benthos service and extracts metrics
-func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6service.LogEntry, tick uint64) (*BenthosMetricsScan, error) {
+func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6_shared.LogEntry, tick uint64) (*BenthosMetricsScan, error) {
 	/*
 		A normal log entry looks like this:
 		BLOCK_START_MARKER

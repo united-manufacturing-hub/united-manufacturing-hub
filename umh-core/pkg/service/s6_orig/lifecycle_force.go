@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package s6
+package s6_orig
 
 import (
 	"context"
@@ -21,13 +21,14 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 )
 
 // ForceCleanup performs aggressive cleanup for stuck services
 // Uses comprehensive cleanup approach:
 // - Process termination and supervisor killing
 // - Comprehensive artifact removal
-func (s *DefaultService) ForceCleanup(ctx context.Context, artifacts *ServiceArtifacts, fsService filesystem.Service) error {
+func (s *DefaultService) ForceCleanup(ctx context.Context, artifacts *s6_shared.ServiceArtifacts, fsService filesystem.Service) error {
 	if s == nil {
 		return fmt.Errorf("lifecycle manager is nil")
 	}

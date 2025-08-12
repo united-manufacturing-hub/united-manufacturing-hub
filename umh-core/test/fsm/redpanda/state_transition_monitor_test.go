@@ -31,12 +31,13 @@ import (
 	s6 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_orig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // Helper function to create mock logs with valid format
-func createMonitorMockLogs(freBytes, totalBytes uint64, hasSpaceAlert bool, topics, unavailableTopics uint64, bytesIn, bytesOut uint64, topicPartitionMap map[string]int64) ([]s6service.LogEntry, error) {
+func createMonitorMockLogs(freBytes, totalBytes uint64, hasSpaceAlert bool, topics, unavailableTopics uint64, bytesIn, bytesOut uint64, topicPartitionMap map[string]int64) ([]s6_shared.LogEntry, error) {
 	// Create Prometheus-formatted metrics text
 	var promMetrics strings.Builder
 	// Add storage metrics
@@ -134,7 +135,7 @@ func createMonitorMockLogs(freBytes, totalBytes uint64, hasSpaceAlert bool, topi
 	timestamp := time.Now()
 
 	// Create log entries with the markers
-	logs := []s6service.LogEntry{
+	logs := []s6_shared.LogEntry{
 		{Content: redpanda_monitor.BLOCK_START_MARKER, Timestamp: timestamp},
 		{Content: metricsHex, Timestamp: timestamp},
 		{Content: redpanda_monitor.METRICS_END_MARKER, Timestamp: timestamp},
@@ -169,8 +170,8 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 		mockS6Service.GetLogsResult = logs
 
 		// Set default state to stopped
-		mockS6Service.StatusResult = s6service.ServiceInfo{
-			Status: s6service.ServiceDown,
+		mockS6Service.StatusResult = s6_shared.ServiceInfo{
+			Status: s6_shared.ServiceDown,
 		}
 
 		// Create a mocked S6 manager with mocked services to prevent using real S6 functionality

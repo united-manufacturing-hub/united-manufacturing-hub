@@ -26,7 +26,8 @@ import (
 	benthos_monitor_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos_monitor"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_orig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -196,11 +197,11 @@ var _ = Describe("Benthos Service", func() {
 
 		Context("IsLogsFine", func() {
 			It("should return true when there are no logs", func() {
-				Expect(service.IsLogsFine([]s6service.LogEntry{}, currentTime, logWindow)).To(BeTrue())
+				Expect(service.IsLogsFine([]s6_shared.LogEntry{}, currentTime, logWindow)).To(BeTrue())
 			})
 
 			It("should detect official Benthos error logs", func() {
-				logs := []s6service.LogEntry{
+				logs := []s6_shared.LogEntry{
 					{
 						Timestamp: currentTime.Add(-1 * time.Minute),
 						Content:   `level=error msg="failed to connect to broker"`,
@@ -211,7 +212,7 @@ var _ = Describe("Benthos Service", func() {
 			})
 
 			It("should detect critical warnings in official Benthos logs", func() {
-				logs := []s6service.LogEntry{
+				logs := []s6_shared.LogEntry{
 					{
 						Timestamp: currentTime.Add(-1 * time.Minute),
 						Content:   `level=warning msg="failed to process message"`,
@@ -230,7 +231,7 @@ var _ = Describe("Benthos Service", func() {
 			})
 
 			It("should ignore non-critical warnings in official Benthos logs", func() {
-				logs := []s6service.LogEntry{
+				logs := []s6_shared.LogEntry{
 					{
 						Timestamp: currentTime.Add(-1 * time.Minute),
 						Content:   `level=warning msg="rate limit applied"`,
@@ -245,7 +246,7 @@ var _ = Describe("Benthos Service", func() {
 			})
 
 			It("should detect configuration file read errors", func() {
-				logs := []s6service.LogEntry{
+				logs := []s6_shared.LogEntry{
 					{
 						Timestamp: currentTime.Add(-1 * time.Minute),
 						Content:   `configuration file read error: file not found`,
@@ -256,7 +257,7 @@ var _ = Describe("Benthos Service", func() {
 			})
 
 			It("should detect logger creation errors", func() {
-				logs := []s6service.LogEntry{
+				logs := []s6_shared.LogEntry{
 					{
 						Timestamp: currentTime.Add(-1 * time.Minute),
 						Content:   `failed to create logger: invalid log level`,
@@ -267,7 +268,7 @@ var _ = Describe("Benthos Service", func() {
 			})
 
 			It("should detect linter errors", func() {
-				logs := []s6service.LogEntry{
+				logs := []s6_shared.LogEntry{
 					{
 						Timestamp: currentTime.Add(-1 * time.Minute),
 						Content:   `Config lint error: invalid input type`,
@@ -282,7 +283,7 @@ var _ = Describe("Benthos Service", func() {
 			})
 
 			It("should ignore error-like strings in message content", func() {
-				logs := []s6service.LogEntry{
+				logs := []s6_shared.LogEntry{
 					{
 						Timestamp: currentTime.Add(-1 * time.Minute),
 						Content:   `level=info msg="Processing message: configuration file read error in payload"`,
@@ -301,7 +302,7 @@ var _ = Describe("Benthos Service", func() {
 			})
 
 			It("should ignore error patterns not at start of line", func() {
-				logs := []s6service.LogEntry{
+				logs := []s6_shared.LogEntry{
 					{
 						Timestamp: currentTime.Add(-1 * time.Minute),
 						Content:   `level=info msg="User reported: configuration file read error"`,
@@ -320,7 +321,7 @@ var _ = Describe("Benthos Service", func() {
 			})
 
 			It("should handle mixed log types correctly", func() {
-				logs := []s6service.LogEntry{
+				logs := []s6_shared.LogEntry{
 					{
 						Timestamp: currentTime.Add(-1 * time.Minute),
 						Content:   `level=info msg="Starting up Benthos service"`,
@@ -343,7 +344,7 @@ var _ = Describe("Benthos Service", func() {
 			})
 
 			It("should handle malformed Benthos logs gracefully", func() {
-				logs := []s6service.LogEntry{
+				logs := []s6_shared.LogEntry{
 					{
 						Timestamp: currentTime.Add(-1 * time.Minute),
 						Content:   `levelerror msg="broken log format"`,
@@ -362,7 +363,7 @@ var _ = Describe("Benthos Service", func() {
 			})
 
 			It("should ignore logs outside the time window", func() {
-				logs := []s6service.LogEntry{
+				logs := []s6_shared.LogEntry{
 					{
 						Timestamp: currentTime.Add(-1 * time.Minute),
 						Content:   `level=info msg="Recent normal log"`,
@@ -377,7 +378,7 @@ var _ = Describe("Benthos Service", func() {
 			})
 
 			It("should handle DEBUG level logs", func() {
-				logs := []s6service.LogEntry{
+				logs := []s6_shared.LogEntry{
 					{
 						Timestamp: currentTime.Add(-1 * time.Minute),
 						Content:   `level=error msg=TEST @service=benthos label="" path=root.pipeline.processors.0`,
@@ -618,8 +619,8 @@ var _ = Describe("Benthos Service", func() {
 		It("should restart the service when configuration changes", func() {
 
 			// Set up the mock S6 service status to simulate running service
-			mockS6Service.StatusResult = s6service.ServiceInfo{
-				Status:   s6service.ServiceUp,
+			mockS6Service.StatusResult = s6_shared.ServiceInfo{
+				Status:   s6_shared.ServiceUp,
 				WantUp:   true,
 				Pid:      12345,
 				Uptime:   10,
@@ -647,7 +648,7 @@ var _ = Describe("Benthos Service", func() {
 				Env:     map[string]string{"BENTHOS_LOG_LEVEL": "info"},
 			}
 
-			mockS6Service.GetLogsResult = []s6service.LogEntry{
+			mockS6Service.GetLogsResult = []s6_shared.LogEntry{
 				{
 					Timestamp: time.Now(),
 					Content:   "test log",
@@ -810,7 +811,7 @@ logger:
 
 		It("should identify an instance as bad when logs contain errors", func() {
 			// Prepare error logs that would make an instance bad
-			errorLogs := []s6service.LogEntry{
+			errorLogs := []s6_shared.LogEntry{
 				{
 					Timestamp: currentTime.Add(-1 * time.Minute),
 					Content:   `level=error msg="failed to connect to broker"`,
@@ -821,8 +822,8 @@ logger:
 			mockS6Service.GetLogsResult = errorLogs
 
 			// Setup S6 service status to reflect a running service
-			mockS6Service.StatusResult = s6service.ServiceInfo{
-				Status:   s6service.ServiceUp,
+			mockS6Service.StatusResult = s6_shared.ServiceInfo{
+				Status:   s6_shared.ServiceUp,
 				WantUp:   true,
 				Pid:      12345,
 				Uptime:   60, // Running for a minute
@@ -844,12 +845,12 @@ logger:
 			// Test various error types
 			errorCases := []struct {
 				description string
-				logs        []s6service.LogEntry
+				logs        []s6_shared.LogEntry
 				expectBad   bool
 			}{
 				{
 					description: "Official Benthos error logs",
-					logs: []s6service.LogEntry{
+					logs: []s6_shared.LogEntry{
 						{
 							Timestamp: currentTime.Add(-1 * time.Minute),
 							Content:   `level=error msg="failed to connect to broker"`,
@@ -859,7 +860,7 @@ logger:
 				},
 				{
 					description: "Configuration file errors",
-					logs: []s6service.LogEntry{
+					logs: []s6_shared.LogEntry{
 						{
 							Timestamp: currentTime.Add(-1 * time.Minute),
 							Content:   `configuration file read error: invalid syntax in line 10`,
@@ -869,7 +870,7 @@ logger:
 				},
 				{
 					description: "Logger creation errors",
-					logs: []s6service.LogEntry{
+					logs: []s6_shared.LogEntry{
 						{
 							Timestamp: currentTime.Add(-1 * time.Minute),
 							Content:   `failed to create logger: invalid log level "unknown"`,
@@ -879,7 +880,7 @@ logger:
 				},
 				{
 					description: "Linter errors",
-					logs: []s6service.LogEntry{
+					logs: []s6_shared.LogEntry{
 						{
 							Timestamp: currentTime.Add(-1 * time.Minute),
 							Content:   `Config lint error: unknown input type "not_real_input"`,
@@ -889,7 +890,7 @@ logger:
 				},
 				{
 					description: "Critical warnings",
-					logs: []s6service.LogEntry{
+					logs: []s6_shared.LogEntry{
 						{
 							Timestamp: currentTime.Add(-1 * time.Minute),
 							Content:   `level=warning msg="failed to process message batch"`,
@@ -899,7 +900,7 @@ logger:
 				},
 				{
 					description: "Non-critical warnings",
-					logs: []s6service.LogEntry{
+					logs: []s6_shared.LogEntry{
 						{
 							Timestamp: currentTime.Add(-1 * time.Minute),
 							Content:   `level=warning msg="rate limit applied"`,
@@ -909,7 +910,7 @@ logger:
 				},
 				{
 					description: "Mixed logs with one error",
-					logs: []s6service.LogEntry{
+					logs: []s6_shared.LogEntry{
 						{
 							Timestamp: currentTime.Add(-1 * time.Minute),
 							Content:   `level=info msg="Service started"`,
@@ -927,7 +928,7 @@ logger:
 				},
 				{
 					description: "Error outside time window",
-					logs: []s6service.LogEntry{
+					logs: []s6_shared.LogEntry{
 						{
 							Timestamp: currentTime.Add(-10 * time.Minute), // Outside our 5-minute window
 							Content:   `level=error msg="connection failed"`,
@@ -958,7 +959,7 @@ logger:
 
 		It("should check logs in ServiceInfo when determining instance health", func() {
 			// Set up a ServiceInfo with error logs
-			errorLogs := []s6service.LogEntry{
+			errorLogs := []s6_shared.LogEntry{
 				{
 					Timestamp: currentTime.Add(-1 * time.Minute),
 					Content:   `level=error msg="failed to process message"`,

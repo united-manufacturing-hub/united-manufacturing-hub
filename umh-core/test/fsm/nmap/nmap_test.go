@@ -33,7 +33,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	nmapsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -86,7 +87,7 @@ var _ = Describe("NmapInstance FSM", func() {
 			mockService.ServiceStates[serviceName] = &nmapsvc.ServiceInfo{
 				S6FSMState: s6fsm.OperationalStateStopped,
 				S6ObservedState: s6fsm.S6ObservedState{
-					ServiceInfo: s6svc.ServiceInfo{Status: s6svc.ServiceDown, Uptime: 5},
+					ServiceInfo: s6_shared.ServiceInfo{Status: s6_shared.ServiceDown, Uptime: 5},
 				},
 				NmapStatus: nmapsvc.NmapServiceInfo{
 					IsRunning: true,
@@ -546,9 +547,9 @@ var _ = Describe("NmapInstance FSM", func() {
 		It("should continue reconciling despite permanent errors in UpdateObservedState when in starting state", func() {
 			// ARCHITECTURAL DECISION: We now continue reconciling even when UpdateObservedState
 			// encounters permanent errors, regardless of whether we're in a terminal or non-terminal state.
-			// This enables force-kill recovery scenarios where S6 services exist on filesystem 
+			// This enables force-kill recovery scenarios where S6 services exist on filesystem
 			// but FSM managers lose their in-memory mappings.
-			// 
+			//
 			// The trade-off: We prioritize system recovery over immediate error handling.
 			// Permanent errors in UpdateObservedState no longer trigger automatic FSM removal,
 			// allowing the system to restore services after unexpected shutdowns/restarts.
@@ -607,7 +608,7 @@ var _ = Describe("NmapInstance FSM", func() {
 			Expect(instance.GetDesiredFSMState()).To(Equal(nmap.OperationalStateOpen))
 			// The current state should remain in starting or may progress
 			currentState := instance.GetCurrentFSMState()
-			Expect(nmap.IsStartingState(currentState) || nmap.IsRunningState(currentState)).To(BeTrue(), 
+			Expect(nmap.IsStartingState(currentState) || nmap.IsRunningState(currentState)).To(BeTrue(),
 				"FSM should maintain starting state or progress despite UpdateObservedState errors")
 
 			// Force removal should NOT be attempted since we continue reconciling

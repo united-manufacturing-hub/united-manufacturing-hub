@@ -12,15 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package s6
+package s6_shared
 
 import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"path/filepath"
-	"syscall"
 	"time"
 
 	"github.com/cactus/tai64"
@@ -65,7 +63,7 @@ type S6StatusData struct {
 	IsReady     bool // Service is ready (status.flagready)
 }
 
-// parseS6StatusFile reads and parses the 43-byte binary S6 status file
+// ParseS6StatusFile reads and parses the 43-byte binary S6 status file
 //
 // This is the CENTRAL parsing function that all status operations use.
 // It handles the low-level binary format parsing of S6's status file.
@@ -94,7 +92,7 @@ type S6StatusData struct {
 //	Bytes 32-39: Process group ID (big-endian uint64)
 //	Bytes 40-41: Wait status (big-endian uint16)
 //	Byte 42:     Flags (bit 0=paused, bit 1=finishing, bit 2=want up, bit 3=ready)
-func parseS6StatusFile(ctx context.Context, statusFilePath string, fsService filesystem.Service) (*S6StatusData, error) {
+func ParseS6StatusFile(ctx context.Context, statusFilePath string, fsService filesystem.Service) (*S6StatusData, error) {
 	// Read the 43-byte binary status file
 	statusData, err := fsService.ReadFile(ctx, statusFilePath)
 	if err != nil {
@@ -153,140 +151,6 @@ func parseS6StatusFile(ctx context.Context, statusFilePath string, fsService fil
 		IsWantingUp: flagWantUp,
 		IsReady:     flagReady,
 	}, nil
-}
-
-// buildFullServiceInfo converts S6StatusData into a complete ServiceInfo
-// This adds the high-level business logic (down files, exit history, etc.)
-// that's needed for the full Status() method but not for cleanup detection
-func (s *DefaultService) buildFullServiceInfo(ctx context.Context, servicePath string, statusData *S6StatusData, fsService filesystem.Service) (ServiceInfo, error) {
-	// Start with basic info from the binary status data
-	info := ServiceInfo{
-		Status:             ServiceUnknown,
-		Pid:                statusData.Pid,
-		Pgid:               statusData.Pgid,
-		IsPaused:           statusData.IsPaused,
-		IsFinishing:        statusData.IsFinishing,
-		IsWantingUp:        statusData.IsWantingUp,
-		IsReady:            statusData.IsReady,
-		LastChangedAt:      statusData.StampTime,
-		LastReadyAt:        statusData.ReadyTime,
-		LastDeploymentTime: getLastDeploymentTime(servicePath),
-	}
-
-	// --- Determine service status and calculate time fields ---
-	now := time.Now().UTC()
-	if statusData.Pid != 0 && !statusData.IsFinishing {
-		info.Status = ServiceUp
-		// uptime is measured from the stamp timestamp
-		info.Uptime = int64(now.Sub(statusData.StampTime).Seconds())
-		info.ReadyTime = int64(now.Sub(statusData.ReadyTime).Seconds())
-	} else {
-		info.Status = ServiceDown
-		// Interpret wstat as a wait status
-		ws := syscall.WaitStatus(statusData.Wstat)
-		if ws.Exited() {
-			info.ExitCode = ws.ExitStatus()
-		} else if ws.Signaled() {
-			// Record the signal number as a negative exit code
-			info.ExitCode = -int(ws.Signal())
-		} else {
-			info.ExitCode = int(statusData.Wstat)
-		}
-		info.DownTime = int64(now.Sub(statusData.StampTime).Seconds())
-		info.ReadyTime = int64(now.Sub(statusData.ReadyTime).Seconds())
-	}
-
-	// --- Add business logic fields (down files, exit history) ---
-
-	// Determine if service is "wanted up": if no "down" file exists
-	downFile := filepath.Join(servicePath, "down")
-	downExists, _ := fsService.FileExists(ctx, downFile)
-	info.WantUp = !downExists
-
-	// Add exit history from the supervise directory
-	superviseDir := filepath.Join(servicePath, "supervise")
-	history, histErr := s.ExitHistory(ctx, superviseDir, fsService)
-	if histErr == nil {
-		info.ExitHistory = history
-	} else {
-		return info, fmt.Errorf("failed to get exit history: %w", histErr)
-	}
-
-	return info, nil
-}
-
-// ExitHistory retrieves the service exit history by reading the dtally file ("death_tally")
-// directly from the supervise directory instead of invoking s6-svdt.
-// The dtally file is a binary file containing a sequence of dtally records.
-// Each record has the following structure:
-//   - Bytes [0:12]: TAI64N timestamp (12 bytes)
-//   - Byte 12:      Exit code (1 byte)
-//   - Byte 13:      Signal number (1 byte)
-//
-// If the file size is not a multiple of the record size, it is considered corrupted.
-// In that case, you may choose to truncate the file (as the C code does) or return an error.
-func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, fsService filesystem.Service) ([]ExitEvent, error) {
-	// Build the full path to the dtally file.
-	dtallyFile := filepath.Join(superviseDir, S6DtallyFileName)
-
-	// Check if the dtally file exists.
-	exists, err := fsService.FileExists(ctx, dtallyFile)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		// If the dtally file does not exist, no exit history is available.
-		return nil, nil
-	}
-
-	// Read the entire dtally file.
-	data, err := fsService.ReadFile(ctx, dtallyFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read dtally file: %w", err)
-	}
-	if data == nil { // Empty history file
-		return nil, nil
-	}
-
-	// Verify that the file size is a multiple of the dtally record size.
-	if len(data)%S6_DTALLY_PACK != 0 {
-		// The file is considered corrupted or partially written.
-		// In the C code, a truncation is attempted in this case.
-		// Here, we return an error.
-		return nil, fmt.Errorf("dtally file size (%d bytes) is not a multiple of record size (%d)", len(data), S6_DTALLY_PACK)
-	}
-
-	// Calculate the number of records.
-	numRecords := len(data) / S6_DTALLY_PACK
-	var history []ExitEvent
-
-	// Process each dtally record.
-	for i := 0; i < numRecords; i++ {
-		offset := i * S6_DTALLY_PACK
-		record := data[offset : offset+S6_DTALLY_PACK]
-
-		// Unpack the TAI64N timestamp (first 12 bytes) and convert it to a time.Time.
-		// The timestamp is encoded as 12 bytes, which we first convert to a hex string,
-		// then prepend "@" (as required by the tai64.Parse function) and parse.
-		tai64Str := "@" + hex.EncodeToString(record[:12])
-		parsedTime, err := tai64.Parse(tai64Str)
-		if err != nil {
-			// If parsing fails, skip this record.
-			continue
-		}
-
-		// Unpack the exit code (13th byte).
-		exitCode := int(record[12])
-		signalNumber := int(record[13])
-
-		history = append(history, ExitEvent{
-			Timestamp: parsedTime,
-			ExitCode:  exitCode,
-			Signal:    signalNumber,
-		})
-	}
-
-	return history, nil
 }
 
 // These constants define file locations and offsets for direct S6 supervision file access

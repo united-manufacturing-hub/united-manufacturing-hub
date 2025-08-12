@@ -27,14 +27,14 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_orig"
 )
 
 // NewRedpandaMonitorInstance creates a new RedpandaMonitorInstance with the standard transitions.
 func NewRedpandaMonitorInstance(config config.RedpandaMonitorConfig) *RedpandaMonitorInstance {
 	return NewRedpandaMonitorInstanceWithService(config, redpanda_monitor.NewRedpandaMonitorService(
 		config.Name,
-		redpanda_monitor.WithS6Service(s6.NewDefaultService()),
+		redpanda_monitor.WithS6Service(s6_orig.NewDefaultService()),
 	))
 }
 

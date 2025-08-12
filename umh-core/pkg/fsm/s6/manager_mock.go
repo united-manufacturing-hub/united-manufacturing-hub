@@ -23,7 +23,8 @@ import (
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_orig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 )
 
 // NewS6ManagerWithMockedServices creates an S6Manager with fully mocked instances
@@ -61,8 +62,8 @@ func NewS6ManagerWithMockedServices(name string) *S6Manager {
 			// Pre-configure mock responses for stopped state
 			servicePath := instance.GetServicePath()
 			mockService.ExistingServices[servicePath] = true
-			mockService.ServiceStates[servicePath] = s6service.ServiceInfo{
-				Status: s6service.ServiceDown,
+			mockService.ServiceStates[servicePath] = s6_shared.ServiceInfo{
+				Status: s6_shared.ServiceDown,
 			}
 
 			// Setup mock to return the config we're setting

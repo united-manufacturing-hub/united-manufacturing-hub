@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package s6
+package s6_orig
 
 import (
 	"context"
@@ -24,11 +24,11 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 )
 
 var _ = Describe("LifecycleManager Edge Cases", func() {
@@ -36,7 +36,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 		ctx       context.Context
 		service   *DefaultService
 		mockFS    *filesystem.MockFileSystem
-		artifacts *ServiceArtifacts
+		artifacts *s6_shared.ServiceArtifacts
 		config    s6serviceconfig.S6ServiceConfig
 	)
 
@@ -44,7 +44,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 		ctx = context.Background()
 		service = &DefaultService{logger: logger.For("test")}
 		mockFS = filesystem.NewMockFileSystem()
-		artifacts = &ServiceArtifacts{
+		artifacts = &s6_shared.ServiceArtifacts{
 			ServiceDir:    filepath.Join(constants.S6BaseDir, "test-service"),
 			RepositoryDir: filepath.Join(constants.S6RepositoryBaseDir, "test-service"),
 			LogDir:        filepath.Join(constants.S6LogBaseDir, "test-service"),
@@ -89,7 +89,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(health).To(Equal(HealthBad)) // Missing completion file = bad state
+			Expect(health).To(Equal(s6_shared.HealthBad)) // Missing completion file = bad state
 		})
 
 		It("should return HealthUnknown for I/O errors during health check", func() {
@@ -100,7 +100,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).To(HaveOccurred())
-			Expect(health).To(Equal(HealthUnknown)) // I/O error = unknown state, retry
+			Expect(health).To(Equal(s6_shared.HealthUnknown)) // I/O error = unknown state, retry
 		})
 
 		It("should handle partial directory structure", func() {
@@ -119,7 +119,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(health).To(Equal(HealthBad)) // Partial structure = bad state
+			Expect(health).To(Equal(s6_shared.HealthBad)) // Partial structure = bad state
 		})
 	})
 
@@ -208,7 +208,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).To(HaveOccurred())
-			Expect(health).To(Equal(HealthUnknown)) // Permission error = unknown, retry
+			Expect(health).To(Equal(s6_shared.HealthUnknown)) // Permission error = unknown, retry
 		})
 	})
 
@@ -229,7 +229,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(health).To(Equal(HealthBad)) // Inconsistent supervise = bad state
+			Expect(health).To(Equal(s6_shared.HealthBad)) // Inconsistent supervise = bad state
 		})
 
 		It("should detect incomplete service creation", func() {
@@ -248,7 +248,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(health).To(Equal(HealthBad)) // Missing type file = bad state
+			Expect(health).To(Equal(s6_shared.HealthBad)) // Missing type file = bad state
 		})
 	})
 
@@ -355,7 +355,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).To(HaveOccurred())
-			Expect(health).To(Equal(HealthUnknown)) // Network error = unknown, retry
+			Expect(health).To(Equal(s6_shared.HealthUnknown)) // Network error = unknown, retry
 		})
 
 		It("should handle network timeouts during operations", func() {
@@ -449,7 +449,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(health).To(Equal(HealthBad)) // Partial creation = bad state
+			Expect(health).To(Equal(s6_shared.HealthBad)) // Partial creation = bad state
 		})
 
 		It("should validate all required files for healthy state", func() {
@@ -471,7 +471,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(health).To(Equal(HealthOK)) // All files present = healthy
+			Expect(health).To(Equal(s6_shared.HealthOK)) // All files present = healthy
 		})
 	})
 
@@ -488,7 +488,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).To(HaveOccurred())
-			Expect(health).To(Equal(HealthUnknown))
+			Expect(health).To(Equal(s6_shared.HealthUnknown))
 		})
 
 		It("should handle permission denied as retryable", func() {
@@ -503,7 +503,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).To(HaveOccurred())
-			Expect(health).To(Equal(HealthUnknown))
+			Expect(health).To(Equal(s6_shared.HealthUnknown))
 		})
 
 		It("should handle network errors as retryable", func() {
@@ -518,7 +518,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).To(HaveOccurred())
-			Expect(health).To(Equal(HealthUnknown))
+			Expect(health).To(Equal(s6_shared.HealthUnknown))
 		})
 
 		It("should handle missing files as permanent errors", func() {
@@ -534,7 +534,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(health).To(Equal(HealthBad))
+			Expect(health).To(Equal(s6_shared.HealthBad))
 		})
 	})
 
@@ -643,7 +643,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).To(HaveOccurred())
-			Expect(health).To(Equal(HealthUnknown))
+			Expect(health).To(Equal(s6_shared.HealthUnknown))
 		})
 	})
 
@@ -651,7 +651,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 		It("should handle concurrent creation attempts", func() {
 			var wg sync.WaitGroup
 			var mu sync.Mutex
-			results := make([]*ServiceArtifacts, 0)
+			results := make([]*s6_shared.ServiceArtifacts, 0)
 			errors := make([]error, 0)
 
 			config := s6serviceconfig.S6ServiceConfig{
@@ -720,7 +720,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(health).To(Equal(HealthBad))
+			Expect(health).To(Equal(s6_shared.HealthBad))
 		})
 
 		It("should handle partially created services", func() {
@@ -737,7 +737,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(health).To(Equal(HealthBad))
+			Expect(health).To(Equal(s6_shared.HealthBad))
 		})
 	})
 })

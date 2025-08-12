@@ -25,7 +25,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_orig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -46,7 +47,7 @@ type MockNmapService struct {
 	ForceRemoveNmapError          error
 
 	// S6 service mock
-	S6Service s6service.Service
+	S6Service s6_shared.Service
 
 	// Configs keeps track of registered services
 	Configs map[string]*nmapserviceconfig.NmapServiceConfig
@@ -435,12 +436,12 @@ func (m *MockNmapService) SetServicePortState(serviceName string, state string, 
 						ScanDuration: 0.5,
 					},
 				},
-				Logs: []s6service.LogEntry{},
+				Logs: []s6_shared.LogEntry{},
 			},
 		}
 	}
 
-	logs := []s6service.LogEntry{
+	logs := []s6_shared.LogEntry{
 		{
 			Timestamp: now,
 			Content:   "NMAP_SCAN_START",
@@ -536,7 +537,7 @@ func (m *MockNmapService) SetNmapError(serviceName string, latencyMs float64) {
 						ScanDuration: 0.5,
 					},
 				},
-				Logs: []s6service.LogEntry{},
+				Logs: []s6_shared.LogEntry{},
 			},
 		}
 	}

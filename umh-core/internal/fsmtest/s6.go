@@ -27,7 +27,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_orig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -57,7 +58,7 @@ func CreateS6TestConfig(name string, desiredState string) config.S6FSMConfig {
 // ConfigureServiceForState sets up a mock S6 service to return the given state
 func ConfigureServiceForState(mockService *s6service.MockService, servicePath string, state string) {
 	if mockService.ServiceStates == nil {
-		mockService.ServiceStates = make(map[string]s6service.ServiceInfo)
+		mockService.ServiceStates = make(map[string]s6_shared.ServiceInfo)
 	}
 	if mockService.ExistingServices == nil {
 		mockService.ExistingServices = make(map[string]bool)
@@ -72,14 +73,14 @@ func ConfigureServiceForState(mockService *s6service.MockService, servicePath st
 	case internal_fsm.LifecycleStateCreating:
 		// Service directory exists but isn't running
 		mockService.ExistingServices[servicePath] = true
-		mockService.ServiceStates[servicePath] = s6service.ServiceInfo{
-			Status: s6service.ServiceDown,
+		mockService.ServiceStates[servicePath] = s6_shared.ServiceInfo{
+			Status: s6_shared.ServiceDown,
 		}
 	case internal_fsm.LifecycleStateRemoving:
 		// Service exists but is about to be removed
 		mockService.ExistingServices[servicePath] = true
-		mockService.ServiceStates[servicePath] = s6service.ServiceInfo{
-			Status: s6service.ServiceDown,
+		mockService.ServiceStates[servicePath] = s6_shared.ServiceInfo{
+			Status: s6_shared.ServiceDown,
 		}
 	case internal_fsm.LifecycleStateRemoved:
 		// Service doesn't exist anymore
@@ -87,30 +88,30 @@ func ConfigureServiceForState(mockService *s6service.MockService, servicePath st
 		delete(mockService.ServiceStates, servicePath)
 	case s6RunningState:
 		mockService.ExistingServices[servicePath] = true
-		mockService.ServiceStates[servicePath] = s6service.ServiceInfo{
-			Status: s6service.ServiceUp,
+		mockService.ServiceStates[servicePath] = s6_shared.ServiceInfo{
+			Status: s6_shared.ServiceUp,
 			Uptime: 10,
 			Pid:    12345,
 		}
 	case s6StoppedState:
 		mockService.ExistingServices[servicePath] = true
-		mockService.ServiceStates[servicePath] = s6service.ServiceInfo{
-			Status: s6service.ServiceDown,
+		mockService.ServiceStates[servicePath] = s6_shared.ServiceInfo{
+			Status: s6_shared.ServiceDown,
 		}
 	case s6StartingState:
 		mockService.ExistingServices[servicePath] = true
-		mockService.ServiceStates[servicePath] = s6service.ServiceInfo{
-			Status: s6service.ServiceRestarting, // Use as proxy for "starting"
+		mockService.ServiceStates[servicePath] = s6_shared.ServiceInfo{
+			Status: s6_shared.ServiceRestarting, // Use as proxy for "starting"
 		}
 	case s6StoppingState:
 		mockService.ExistingServices[servicePath] = true
-		mockService.ServiceStates[servicePath] = s6service.ServiceInfo{
-			Status: s6service.ServiceDown, // Use as proxy for "stopping"
+		mockService.ServiceStates[servicePath] = s6_shared.ServiceInfo{
+			Status: s6_shared.ServiceDown, // Use as proxy for "stopping"
 		}
 	default:
 		mockService.ExistingServices[servicePath] = true
-		mockService.ServiceStates[servicePath] = s6service.ServiceInfo{
-			Status: s6service.ServiceUnknown,
+		mockService.ServiceStates[servicePath] = s6_shared.ServiceInfo{
+			Status: s6_shared.ServiceUnknown,
 		}
 	}
 }

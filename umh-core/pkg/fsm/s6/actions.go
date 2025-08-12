@@ -26,7 +26,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -90,7 +91,7 @@ func (s *S6Instance) RemoveInstance(ctx context.Context, filesystemService files
 	err := s.service.Remove(ctx, s.servicePath, filesystemService)
 	if err != nil {
 		// If the service doesn't exist, consider removal successful
-		if errors.Is(err, s6service.ErrServiceNotExist) {
+		if errors.Is(err, s6_shared.ErrServiceNotExist) {
 			s.baseFSMInstance.GetLogger().Debugf("S6 service %s already removed", s.baseFSMInstance.GetID())
 			return nil
 		}
@@ -200,12 +201,12 @@ func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, services
 
 // IsS6Running checks if the S6 service is running.
 func (s *S6Instance) IsS6Running() bool {
-	return s.ObservedState.ServiceInfo.Status == s6service.ServiceUp
+	return s.ObservedState.ServiceInfo.Status == s6_shared.ServiceUp
 }
 
 // IsS6Stopped checks if the S6 service is stopped.
 func (s *S6Instance) IsS6Stopped() bool {
-	return s.ObservedState.ServiceInfo.Status == s6service.ServiceDown
+	return s.ObservedState.ServiceInfo.Status == s6_shared.ServiceDown
 }
 
 // GetServicePid gets the process ID of the running service.
@@ -241,7 +242,7 @@ func (s *S6Instance) IsServiceWantingUp() bool {
 }
 
 // GetExitHistory gets the history of service exit events.
-func (s *S6Instance) GetExitHistory() []s6service.ExitEvent {
+func (s *S6Instance) GetExitHistory() []s6_shared.ExitEvent {
 	return s.ObservedState.ServiceInfo.ExitHistory
 }
 

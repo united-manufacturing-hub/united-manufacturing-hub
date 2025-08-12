@@ -21,7 +21,8 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -78,7 +79,7 @@ var _ = Describe("extractRaw / parseBlock", func() {
 
 	Context("incomplete block", func() {
 		It("returns without error and without writing", func() {
-			logs := []s6svc.LogEntry{
+			logs := []s6_shared.LogEntry{
 				{Content: constants.BLOCK_START_MARKER},
 				{Content: string(compressed)},
 			}
@@ -142,11 +143,11 @@ var _ = Describe("extractRaw / parseBlock", func() {
 
 	Context("origin benthos block ", func() {
 		It("processes the full benthos sample", func() {
-			var logs []s6svc.LogEntry
+			var logs []s6_shared.LogEntry
 			for _, l := range strings.Split(rawLog, "\n") {
 				l = strings.TrimSpace(l)
 				if l != "" {
-					logs = append(logs, s6svc.LogEntry{Content: l})
+					logs = append(logs, s6_shared.LogEntry{Content: l})
 				}
 			}
 
@@ -327,7 +328,7 @@ var _ = Describe("extractRaw / parseBlock", func() {
 
 			// Create a log slice that simulates a wrapped S6 ring buffer
 			// In a real scenario, this would be 10,000 entries, but we'll use fewer for testing
-			var wrappedLogs []s6svc.LogEntry
+			var wrappedLogs []s6_shared.LogEntry
 
 			// Add some "old" entries that were from earlier processing (before wrap)
 			for i := 0; i < 5; i++ {
@@ -370,16 +371,16 @@ var _ = Describe("extractRaw / parseBlock", func() {
 // supplied hex-encoded data line between BLOCK_START / DATA_END / BLOCK_END
 // markers and, if includeTimestamp is true, inserts the given epochMS as the
 // timestamp line.  The returned slice is ready to be fed into parseBlock.
-func buildLogs(includeTimestamp bool, dataLine string, epochMS int64) []s6svc.LogEntry {
-	logs := []s6svc.LogEntry{
+func buildLogs(includeTimestamp bool, dataLine string, epochMS int64) []s6_shared.LogEntry {
+	logs := []s6_shared.LogEntry{
 		{Content: constants.BLOCK_START_MARKER},
 		{Content: dataLine},
 		{Content: constants.DATA_END_MARKER},
 	}
 	if includeTimestamp {
-		logs = append(logs, s6svc.LogEntry{Content: strconv.FormatInt(epochMS, 10)})
+		logs = append(logs, s6_shared.LogEntry{Content: strconv.FormatInt(epochMS, 10)})
 	}
-	logs = append(logs, s6svc.LogEntry{Content: constants.BLOCK_END_MARKER})
+	logs = append(logs, s6_shared.LogEntry{Content: constants.BLOCK_END_MARKER})
 	return logs
 }
 
@@ -387,16 +388,16 @@ func buildLogs(includeTimestamp bool, dataLine string, epochMS int64) []s6svc.Lo
 // It wraps the supplied hex-encoded data line between BLOCK_START / DATA_END / BLOCK_END
 // markers and sets the given timestamp on all log entries. This is useful for testing
 // timestamp-based processing logic.
-func buildLogsWithTimestamps(includeTimestamp bool, dataLine string, epochMS int64) []s6svc.LogEntry {
+func buildLogsWithTimestamps(includeTimestamp bool, dataLine string, epochMS int64) []s6_shared.LogEntry {
 	timestamp := time.UnixMilli(epochMS)
-	logs := []s6svc.LogEntry{
+	logs := []s6_shared.LogEntry{
 		{Content: constants.BLOCK_START_MARKER, Timestamp: timestamp},
 		{Content: dataLine, Timestamp: timestamp},
 		{Content: constants.DATA_END_MARKER, Timestamp: timestamp},
 	}
 	if includeTimestamp {
-		logs = append(logs, s6svc.LogEntry{Content: strconv.FormatInt(epochMS, 10), Timestamp: timestamp})
+		logs = append(logs, s6_shared.LogEntry{Content: strconv.FormatInt(epochMS, 10), Timestamp: timestamp})
 	}
-	logs = append(logs, s6svc.LogEntry{Content: constants.BLOCK_END_MARKER, Timestamp: timestamp})
+	logs = append(logs, s6_shared.LogEntry{Content: constants.BLOCK_END_MARKER, Timestamp: timestamp})
 	return logs
 }

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package s6
+package s6_orig
 
 import (
 	"context"
@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 )
 
 // Mock implementation of os.DirEntry for testing
@@ -110,32 +111,32 @@ var _ = Describe("S6 Service", func() {
 		Expect(exists).To(BeTrue())
 
 		// Set the service state to down initially
-		mockService.ServiceStates[testPath] = ServiceInfo{
-			Status: ServiceDown,
+		mockService.ServiceStates[testPath] = s6_shared.ServiceInfo{
+			Status: s6_shared.ServiceDown,
 		}
 
 		// Get status should return the set state
 		info, err := mockService.Status(ctx, testPath, mockFS)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(info.Status).To(Equal(ServiceDown))
+		Expect(info.Status).To(Equal(s6_shared.ServiceDown))
 
 		// Start service should change state to up
 		err = mockService.Start(ctx, testPath, mockFS)
 		Expect(err).NotTo(HaveOccurred())
 		info, _ = mockService.Status(ctx, testPath, mockFS)
-		Expect(info.Status).To(Equal(ServiceUp))
+		Expect(info.Status).To(Equal(s6_shared.ServiceUp))
 
 		// Stop service should change state to down
 		err = mockService.Stop(ctx, testPath, mockFS)
 		Expect(err).NotTo(HaveOccurred())
 		info, _ = mockService.Status(ctx, testPath, mockFS)
-		Expect(info.Status).To(Equal(ServiceDown))
+		Expect(info.Status).To(Equal(s6_shared.ServiceDown))
 
 		// Restart service should change state to up (after briefly being restarting)
 		err = mockService.Restart(ctx, testPath, mockFS)
 		Expect(err).NotTo(HaveOccurred())
 		info, _ = mockService.Status(ctx, testPath, mockFS)
-		Expect(info.Status).To(Equal(ServiceUp))
+		Expect(info.Status).To(Equal(s6_shared.ServiceUp))
 
 		// Remove service should make it not exist
 		err = mockService.Remove(ctx, testPath, mockFS)
@@ -147,7 +148,7 @@ var _ = Describe("S6 Service", func() {
 		_, err = mockService.Status(ctx, testPath, mockFS)
 		Expect(err).NotTo(HaveOccurred()) // No error, but...
 		info = mockService.StatusResult   // Should return the default result
-		Expect(info.Status).To(Equal(ServiceUnknown))
+		Expect(info.Status).To(Equal(s6_shared.ServiceUnknown))
 	})
 
 	Describe("IsKnownService", func() {
@@ -321,7 +322,7 @@ var _ = Describe("S6 Service", func() {
 			It("should return ErrServiceNotExist", func() {
 				servicePath := filepath.Join(constants.S6BaseDir, "non-existent-service")
 				_, err := s6Service.GetS6ConfigFile(ctx, servicePath, "config.yaml", mockFS)
-				Expect(err).To(Equal(ErrServiceNotExist))
+				Expect(err).To(Equal(s6_shared.ErrServiceNotExist))
 			})
 		})
 
@@ -452,7 +453,7 @@ var _ = Describe("S6 Service", func() {
 
 		It("removes both service and log directory (normal case)", func() {
 			// Simulate a service with tracked files
-			svc.artifacts = &ServiceArtifacts{
+			svc.artifacts = &s6_shared.ServiceArtifacts{
 				ServiceDir: svcPath,
 				LogDir:     logDir,
 				CreatedFiles: []string{
@@ -475,7 +476,7 @@ var _ = Describe("S6 Service", func() {
 
 		It("is successful when only the log dir had to be removed", func() {
 			// Simulate a service with tracked files
-			svc.artifacts = &ServiceArtifacts{
+			svc.artifacts = &s6_shared.ServiceArtifacts{
 				ServiceDir: svcPath,
 				LogDir:     logDir,
 				CreatedFiles: []string{
@@ -499,7 +500,7 @@ var _ = Describe("S6 Service", func() {
 
 		It("is idempotent (everything already gone)", func() {
 			// Simulate a service with tracked files
-			svc.artifacts = &ServiceArtifacts{
+			svc.artifacts = &s6_shared.ServiceArtifacts{
 				ServiceDir: svcPath,
 				LogDir:     logDir,
 				CreatedFiles: []string{
@@ -529,7 +530,7 @@ var _ = Describe("S6 Service", func() {
 
 		It("returns an error when deletion fails", func() {
 			// Simulate a service with tracked files
-			svc.artifacts = &ServiceArtifacts{
+			svc.artifacts = &s6_shared.ServiceArtifacts{
 				ServiceDir: svcPath,
 				LogDir:     logDir,
 				CreatedFiles: []string{

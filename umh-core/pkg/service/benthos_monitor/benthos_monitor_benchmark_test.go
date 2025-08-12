@@ -58,7 +58,7 @@ import (
 	"testing"
 	"time"
 
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 )
 
 var sampleMetrics = `# HELP input_connection_failed Benthos Counter metric
@@ -127,46 +127,46 @@ func prepareDataForBenchmark() ([]byte, string) {
 }
 
 // Prepare sample log entries for ParseBenthosLogs benchmark
-func prepareSampleLogEntries() []s6service.LogEntry {
-	entries := []s6service.LogEntry{}
+func prepareSampleLogEntries() []s6_shared.LogEntry {
+	entries := []s6_shared.LogEntry{}
 
 	// Add BLOCK_START_MARKER
-	entries = append(entries, s6service.LogEntry{Content: BLOCK_START_MARKER})
+	entries = append(entries, s6_shared.LogEntry{Content: BLOCK_START_MARKER})
 
 	// Add ping data
 	pingGzip := compressAndHex(samplePing)
-	entries = append(entries, s6service.LogEntry{Content: pingGzip})
+	entries = append(entries, s6_shared.LogEntry{Content: pingGzip})
 
 	// Add PING_END_MARKER
-	entries = append(entries, s6service.LogEntry{Content: PING_END_MARKER})
+	entries = append(entries, s6_shared.LogEntry{Content: PING_END_MARKER})
 
 	// Add ready data
 	readyGzip := compressAndHex(sampleReady)
-	entries = append(entries, s6service.LogEntry{Content: readyGzip})
+	entries = append(entries, s6_shared.LogEntry{Content: readyGzip})
 
 	// Add READY_END
-	entries = append(entries, s6service.LogEntry{Content: READY_END})
+	entries = append(entries, s6_shared.LogEntry{Content: READY_END})
 
 	// Add version data
 	versionGzip := compressAndHex(sampleVersion)
-	entries = append(entries, s6service.LogEntry{Content: versionGzip})
+	entries = append(entries, s6_shared.LogEntry{Content: versionGzip})
 
 	// Add VERSION_END
-	entries = append(entries, s6service.LogEntry{Content: VERSION_END})
+	entries = append(entries, s6_shared.LogEntry{Content: VERSION_END})
 
 	// Add metrics data
 	_, metricsHex := prepareDataForBenchmark()
-	entries = append(entries, s6service.LogEntry{Content: metricsHex})
+	entries = append(entries, s6_shared.LogEntry{Content: metricsHex})
 
 	// Add METRICS_END_MARKER
-	entries = append(entries, s6service.LogEntry{Content: METRICS_END_MARKER})
+	entries = append(entries, s6_shared.LogEntry{Content: METRICS_END_MARKER})
 
 	// Add timestamp (unix timestamp in nanoseconds)
 	timestamp := fmt.Sprintf("%d", time.Now().UnixNano())
-	entries = append(entries, s6service.LogEntry{Content: timestamp})
+	entries = append(entries, s6_shared.LogEntry{Content: timestamp})
 
 	// Add BLOCK_END_MARKER
-	entries = append(entries, s6service.LogEntry{Content: BLOCK_END_MARKER})
+	entries = append(entries, s6_shared.LogEntry{Content: BLOCK_END_MARKER})
 
 	return entries
 }

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package s6
+package s6_orig
 
 import (
 	"bytes"
@@ -20,73 +20,21 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
-	"sync"
 	"text/template"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 )
-
-// ServiceArtifacts represents the essential paths for an S6 service
-// Tracks only essential root paths to minimize I/O operations and improve performance
-type ServiceArtifacts struct {
-	// RemovalProgress tracks what has been completed during removal for idempotent incremental removal
-	RemovalProgress *RemovalProgress
-	// ServiceDir is the scan directory symlink path (e.g., /run/service/foo)
-	ServiceDir string
-	// RepositoryDir is the repository directory path (e.g., /data/services/foo)
-	RepositoryDir string
-	// LogDir is the external log directory (e.g., /data/logs/foo)
-	LogDir string
-	// TempDir is populated only during Create() for atomic operations (DEPRECATED: no longer used with symlink approach)
-	TempDir string
-	// CreatedFiles tracks all files created during service creation for health checks (paths point to repository files)
-	CreatedFiles []string
-	// RemovalProgressMutex secures concurrent access to RemovalProgress
-	RemovalProgressMu sync.RWMutex
-}
-
-// RemovalProgress tracks the state of removal operations using the skarnet sequence
-// Each field represents a step that has been completed and verified
-type RemovalProgress struct {
-	// SymlinkRemoved indicates that the symlink has been removed from scan directory
-	SymlinkRemoved bool
-	// ServiceStopped indicates that s6-svc -wD -d has completed for both main and log services
-	ServiceStopped bool
-	// ServiceUnsupervised indicates that s6-svunlink has completed and supervisors have exited
-	ServiceUnsupervised bool
-	// DirectoriesRemoved indicates that both repository and log directories have been removed
-	DirectoriesRemoved bool
-}
-
-// InitRemovalProgress initializes removal progress tracking if not already present
-func (artifacts *ServiceArtifacts) InitRemovalProgress() {
-	artifacts.RemovalProgressMu.Lock()
-	defer artifacts.RemovalProgressMu.Unlock()
-	if artifacts.RemovalProgress == nil {
-		artifacts.RemovalProgress = &RemovalProgress{}
-	}
-}
-
-// IsFullyRemoved checks if all removal steps have been completed using the skarnet sequence
-func (artifacts *ServiceArtifacts) IsFullyRemoved() bool {
-	artifacts.RemovalProgressMu.RLock()
-	defer artifacts.RemovalProgressMu.RUnlock()
-	if artifacts.RemovalProgress == nil {
-		return false
-	}
-	p := artifacts.RemovalProgress
-	return p.SymlinkRemoved && p.ServiceStopped && p.ServiceUnsupervised && p.DirectoriesRemoved
-}
 
 // CreateArtifacts creates a complete S6 service using the symlink approach
 // Uses symlink-based atomic creation:
 // - Creates service files directly in repository directory
 // - Creates atomic symlink to make service visible to scanner
 // - S6 scanner notification to trigger supervision setup
-func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, fsService filesystem.Service) (*ServiceArtifacts, error) {
+func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, fsService filesystem.Service) (*s6_shared.ServiceArtifacts, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -95,7 +43,7 @@ func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string
 	repositoryDir := filepath.Join(constants.S6RepositoryBaseDir, serviceName)
 
 	// Create artifacts structure
-	artifacts := &ServiceArtifacts{
+	artifacts := &s6_shared.ServiceArtifacts{
 		ServiceDir:    servicePath,   // Scan directory symlink path
 		RepositoryDir: repositoryDir, // Repository directory path
 		LogDir:        filepath.Join(constants.S6LogBaseDir, serviceName),
@@ -156,7 +104,7 @@ func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string
 // and leverages S6's idempotent nature for safe operation.
 // Retries for exit code 111 (timeout/system call failure) are handled automatically
 // by the calling FSM system until the operation succeeds.
-func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *ServiceArtifacts, fsService filesystem.Service) error {
+func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *s6_shared.ServiceArtifacts, fsService filesystem.Service) error {
 	if s == nil {
 		return fmt.Errorf("lifecycle manager is nil")
 	}
@@ -254,24 +202,24 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *Service
 // - HealthUnknown: I/O errors, timeouts, etc. (retry next tick)
 // - HealthOK: Service directory is healthy and complete
 // - HealthBad: Service directory is broken (triggers FSM transition)
-func (s *DefaultService) CheckArtifactsHealth(ctx context.Context, artifacts *ServiceArtifacts, fsService filesystem.Service) (HealthStatus, error) {
+func (s *DefaultService) CheckArtifactsHealth(ctx context.Context, artifacts *s6_shared.ServiceArtifacts, fsService filesystem.Service) (s6_shared.HealthStatus, error) {
 	if s == nil {
-		return HealthUnknown, fmt.Errorf("lifecycle manager is nil")
+		return s6_shared.HealthUnknown, fmt.Errorf("lifecycle manager is nil")
 	}
 
 	if ctx.Err() != nil {
-		return HealthUnknown, ctx.Err()
+		return s6_shared.HealthUnknown, ctx.Err()
 	}
 
 	if artifacts == nil {
-		return HealthBad, fmt.Errorf("artifacts is nil")
+		return s6_shared.HealthBad, fmt.Errorf("artifacts is nil")
 	}
 
 	// Always use tracked files for health check
 	if len(artifacts.CreatedFiles) == 0 {
 		// No tracked files indicates service was not properly created or is from old version
 		s.logger.Debugf("Health check: no tracked files available, service needs recreation")
-		return HealthBad, nil
+		return s6_shared.HealthBad, nil
 	}
 
 	// Check all tracked files exist
@@ -280,12 +228,12 @@ func (s *DefaultService) CheckArtifactsHealth(ctx context.Context, artifacts *Se
 		if err != nil {
 			// I/O error - return Unknown so we retry next tick
 			s.logger.Debugf("Health check: I/O error checking tracked file %s: %v", file, err)
-			return HealthUnknown, err
+			return s6_shared.HealthUnknown, err
 		}
 		if !exists {
 			// Missing required file - definitely broken
 			s.logger.Debugf("Health check: missing tracked file %s", file)
-			return HealthBad, nil
+			return s6_shared.HealthBad, nil
 		}
 	}
 
@@ -293,22 +241,22 @@ func (s *DefaultService) CheckArtifactsHealth(ctx context.Context, artifacts *Se
 	symlinkExists, err := fsService.PathExists(ctx, artifacts.ServiceDir)
 	if err != nil {
 		s.logger.Debugf("Health check: I/O error checking symlink %s: %v", artifacts.ServiceDir, err)
-		return HealthUnknown, err
+		return s6_shared.HealthUnknown, err
 	}
 	if !symlinkExists {
 		s.logger.Debugf("Health check: missing symlink %s", artifacts.ServiceDir)
-		return HealthBad, nil
+		return s6_shared.HealthBad, nil
 	}
 
 	// Check repository directory exists
 	repoExists, err := fsService.PathExists(ctx, artifacts.RepositoryDir)
 	if err != nil {
 		s.logger.Debugf("Health check: I/O error checking repository %s: %v", artifacts.RepositoryDir, err)
-		return HealthUnknown, err
+		return s6_shared.HealthUnknown, err
 	}
 	if !repoExists {
 		s.logger.Debugf("Health check: missing repository directory %s", artifacts.RepositoryDir)
-		return HealthBad, nil
+		return s6_shared.HealthBad, nil
 	}
 
 	// Check supervise directory consistency (in repository location)
@@ -321,17 +269,17 @@ func (s *DefaultService) CheckArtifactsHealth(ctx context.Context, artifacts *Se
 	// If either check failed due to I/O error, return Unknown
 	if mainErr != nil || logErr != nil {
 		s.logger.Debugf("Health check: I/O error checking supervise directories: main=%v, log=%v", mainErr, logErr)
-		return HealthUnknown, fmt.Errorf("supervise directory check failed: main=%v, log=%v", mainErr, logErr)
+		return s6_shared.HealthUnknown, fmt.Errorf("supervise directory check failed: main=%v, log=%v", mainErr, logErr)
 	}
 
 	// If supervise directories exist, both must exist (prevents race condition)
 	if mainExists != logExists {
 		s.logger.Debugf("Health check: supervise directory mismatch - main=%v, log=%v", mainExists, logExists)
-		return HealthBad, nil
+		return s6_shared.HealthBad, nil
 	}
 
 	// All checks passed
-	return HealthOK, nil
+	return s6_shared.HealthOK, nil
 }
 
 // createS6FilesInRepository creates the service files directly in the repository directory
@@ -538,7 +486,7 @@ func (s *DefaultService) createS6ConfigFiles(ctx context.Context, servicePath st
 }
 
 // createDownFiles creates down files to prevent service startup
-func (s *DefaultService) createDownFiles(ctx context.Context, artifacts *ServiceArtifacts, fsService filesystem.Service) error {
+func (s *DefaultService) createDownFiles(ctx context.Context, artifacts *s6_shared.ServiceArtifacts, fsService filesystem.Service) error {
 	downFiles := []string{
 		filepath.Join(artifacts.ServiceDir, "down"),
 		filepath.Join(artifacts.ServiceDir, "log", "down"),

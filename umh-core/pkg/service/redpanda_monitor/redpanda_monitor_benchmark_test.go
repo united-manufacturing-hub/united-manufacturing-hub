@@ -56,7 +56,7 @@ import (
 	"testing"
 	"time"
 
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 )
 
 var sampleMetrics = `# HELP redpanda_application_build Redpanda build information
@@ -1351,32 +1351,32 @@ func prepareDataForBenchmark(rawData string) (string, []byte) {
 }
 
 // Prepare sample log entries for ParseRedpandaLogs benchmark
-func prepareSampleLogEntries() []s6service.LogEntry {
-	entries := []s6service.LogEntry{}
+func prepareSampleLogEntries() []s6_shared.LogEntry {
+	entries := []s6_shared.LogEntry{}
 
 	// Add BLOCK_START_MARKER
-	entries = append(entries, s6service.LogEntry{Content: BLOCK_START_MARKER})
+	entries = append(entries, s6_shared.LogEntry{Content: BLOCK_START_MARKER})
 
 	// Add metrics data
 	metricsGZIPHex, _ := prepareDataForBenchmark(sampleMetrics)
-	entries = append(entries, s6service.LogEntry{Content: metricsGZIPHex})
+	entries = append(entries, s6_shared.LogEntry{Content: metricsGZIPHex})
 
 	// Add METRICS_END_MARKER
-	entries = append(entries, s6service.LogEntry{Content: METRICS_END_MARKER})
+	entries = append(entries, s6_shared.LogEntry{Content: METRICS_END_MARKER})
 
 	// Add cluster config data
 	clusterConfigGZIPHex, _ := prepareDataForBenchmark(clusterConfig)
-	entries = append(entries, s6service.LogEntry{Content: clusterConfigGZIPHex})
+	entries = append(entries, s6_shared.LogEntry{Content: clusterConfigGZIPHex})
 
 	// Add CLUSTERCONFIG_END_MARKER
-	entries = append(entries, s6service.LogEntry{Content: CLUSTERCONFIG_END_MARKER})
+	entries = append(entries, s6_shared.LogEntry{Content: CLUSTERCONFIG_END_MARKER})
 
 	// Add timestamp (unix timestamp in nanoseconds)
 	timestamp := fmt.Sprintf("%d", time.Now().UnixNano())
-	entries = append(entries, s6service.LogEntry{Content: timestamp})
+	entries = append(entries, s6_shared.LogEntry{Content: timestamp})
 
 	// Add BLOCK_END_MARKER
-	entries = append(entries, s6service.LogEntry{Content: BLOCK_END_MARKER})
+	entries = append(entries, s6_shared.LogEntry{Content: BLOCK_END_MARKER})
 
 	return entries
 }

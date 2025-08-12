@@ -37,7 +37,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
 )
 
 var _ = Describe("GetLogsAction", func() {
@@ -52,7 +53,7 @@ var _ = Describe("GetLogsAction", func() {
 		protocolConverterName string
 		protocolConverterUUID uuid.UUID
 		snapshotManager       *fsm.SnapshotManager
-		mockedLogs            []s6.LogEntry
+		mockedLogs            []s6_shared.LogEntry
 	)
 
 	BeforeEach(func() {
@@ -67,7 +68,7 @@ var _ = Describe("GetLogsAction", func() {
 		snapshotManager = fsm.NewSnapshotManager()
 
 		// Mocked logs contain logs from 6h ago and 2h ago
-		mockedLogs = []s6.LogEntry{
+		mockedLogs = []s6_shared.LogEntry{
 			{
 				Timestamp: time.Now().Add(-6 * time.Hour).UTC(),
 				Content:   "test log",
