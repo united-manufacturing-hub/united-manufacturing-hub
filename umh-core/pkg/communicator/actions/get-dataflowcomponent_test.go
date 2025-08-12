@@ -15,6 +15,7 @@
 package actions_test
 
 import (
+	"context"
 	"reflect"
 	"time"
 
@@ -170,7 +171,7 @@ var _ = Describe("GetDataFlowComponent", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Check if the payload was properly parsed
@@ -187,7 +188,7 @@ var _ = Describe("GetDataFlowComponent", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Check if the payload was properly parsed
@@ -202,7 +203,7 @@ var _ = Describe("GetDataFlowComponent", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("error unmarshaling into target type"))
 		})
@@ -216,11 +217,11 @@ var _ = Describe("GetDataFlowComponent", func() {
 					"00000000-0000-0000-0000-000000000001",
 				},
 			}
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Validate
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -229,11 +230,11 @@ var _ = Describe("GetDataFlowComponent", func() {
 			payload := map[string]interface{}{
 				"versionUUIDs": []interface{}{},
 			}
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Validate
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
@@ -249,11 +250,11 @@ var _ = Describe("GetDataFlowComponent", func() {
 					testComponentUUID,
 				},
 			}
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(metadata).To(BeNil())
 
@@ -294,11 +295,11 @@ var _ = Describe("GetDataFlowComponent", func() {
 					"11111111-1111-1111-1111-111111111111", // Non-existent UUID
 				},
 			}
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(metadata).To(BeNil())
 
@@ -335,11 +336,11 @@ var _ = Describe("GetDataFlowComponent", func() {
 					"00000000-0000-0000-0000-000000000001",
 				},
 			}
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(metadata).To(BeNil())
 
@@ -368,11 +369,11 @@ var _ = Describe("GetDataFlowComponent", func() {
 					testComponentUUID,
 				},
 			}
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(metadata).To(BeNil())
 
@@ -444,11 +445,11 @@ var _ = Describe("GetDataFlowComponent", func() {
 			payload := map[string]interface{}{
 				"versionUUIDs": []interface{}{testUUID},
 			}
-			err := testAction.Parse(payload)
+			err := testAction.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute and check result
-			result, _, err := testAction.Execute()
+			result, _, err := testAction.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 
 			response, ok := result.(models.GetDataflowcomponentResponse)
@@ -511,11 +512,11 @@ var _ = Describe("GetDataFlowComponent", func() {
 			payload := map[string]interface{}{
 				"versionUUIDs": []interface{}{testUUID},
 			}
-			err := testAction.Parse(payload)
+			err := testAction.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute and check result - should return empty map since building the component failed
-			result, _, err := testAction.Execute()
+			result, _, err := testAction.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 
 			response, ok := result.(models.GetDataflowcomponentResponse)

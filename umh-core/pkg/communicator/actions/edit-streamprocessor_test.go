@@ -15,6 +15,7 @@
 package actions_test
 
 import (
+	"context"
 	"encoding/base64"
 	"errors"
 	"sync"
@@ -190,7 +191,7 @@ var _ = Describe("EditStreamProcessor", func() {
 				},
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify parsed values
@@ -213,7 +214,7 @@ var _ = Describe("EditStreamProcessor", func() {
 				"uuid":          spUUID.String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify parsed values
@@ -233,7 +234,7 @@ var _ = Describe("EditStreamProcessor", func() {
 				"location":      spLocation,
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field UUID"))
 		})
@@ -242,7 +243,7 @@ var _ = Describe("EditStreamProcessor", func() {
 			// Invalid payload (not a map)
 			payload := "invalid-payload"
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to parse stream processor payload"))
 		})
@@ -257,7 +258,7 @@ var _ = Describe("EditStreamProcessor", func() {
 				"uuid":          spUUID.String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to decode stream processor config"))
 		})
@@ -275,7 +276,7 @@ var _ = Describe("EditStreamProcessor", func() {
 				"uuid":          spUUID.String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to unmarshal stream processor config"))
 		})
@@ -292,11 +293,11 @@ var _ = Describe("EditStreamProcessor", func() {
 				"uuid":          spUUID.String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Then validate
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -310,9 +311,9 @@ var _ = Describe("EditStreamProcessor", func() {
 				"uuid":          uuid.Nil.String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).ToNot(HaveOccurred())
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing or invalid stream processor UUID"))
 		})
@@ -327,9 +328,9 @@ var _ = Describe("EditStreamProcessor", func() {
 				"uuid":          spUUID.String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).ToNot(HaveOccurred())
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("name cannot be empty"))
 		})
@@ -348,9 +349,9 @@ var _ = Describe("EditStreamProcessor", func() {
 				"uuid":          spUUID.String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).ToNot(HaveOccurred())
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field Model.Name"))
 		})
@@ -369,9 +370,9 @@ var _ = Describe("EditStreamProcessor", func() {
 				"uuid":          spUUID.String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).ToNot(HaveOccurred())
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field Model.Version"))
 		})
@@ -386,9 +387,9 @@ var _ = Describe("EditStreamProcessor", func() {
 				"uuid":          spUUID.String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).ToNot(HaveOccurred())
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("name can only contain letters"))
 		})
@@ -408,7 +409,7 @@ var _ = Describe("EditStreamProcessor", func() {
 				},
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reset tracking for this test
@@ -419,7 +420,7 @@ var _ = Describe("EditStreamProcessor", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(metadata).To(BeNil())
 
@@ -459,7 +460,7 @@ var _ = Describe("EditStreamProcessor", func() {
 				"uuid":          spUUID.String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Start the state mocker
@@ -467,7 +468,7 @@ var _ = Describe("EditStreamProcessor", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action - should fail
-			_, metadata, err := action.Execute()
+			_, metadata, err := action.Execute(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("Failed to persist configuration changes"))
 			Expect(metadata).To(BeNil())
@@ -487,7 +488,7 @@ var _ = Describe("EditStreamProcessor", func() {
 				"uuid":          nonExistentUUID.String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Start the state mocker
@@ -495,7 +496,7 @@ var _ = Describe("EditStreamProcessor", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action - should fail
-			_, metadata, err := action.Execute()
+			_, metadata, err := action.Execute(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("stream processor with UUID"))
 			Expect(err.Error()).To(ContainSubstring("not found"))
@@ -518,7 +519,7 @@ var _ = Describe("EditStreamProcessor", func() {
 				},
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Start the state mocker
@@ -526,7 +527,7 @@ var _ = Describe("EditStreamProcessor", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(metadata).To(BeNil())
 
@@ -560,7 +561,7 @@ var _ = Describe("EditStreamProcessor", func() {
 				"uuid":          spUUID.String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Start the state mocker
@@ -568,7 +569,7 @@ var _ = Describe("EditStreamProcessor", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action - should fail
-			_, metadata, err := action.Execute()
+			_, metadata, err := action.Execute(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("Failed to apply configuration mutation"))
 			Expect(metadata).To(BeNil())
@@ -587,7 +588,7 @@ var _ = Describe("EditStreamProcessor", func() {
 				"uuid":          spUUID.String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Start the state mocker
@@ -595,7 +596,7 @@ var _ = Describe("EditStreamProcessor", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(metadata).To(BeNil())
 

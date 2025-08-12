@@ -88,7 +88,7 @@ func NewDeployStreamProcessorAction(userEmail string, actionUUID uuid.UUID, inst
 }
 
 // Parse implements the Action interface by extracting stream processor configuration from the payload.
-func (a *DeployStreamProcessorAction) Parse(payload interface{}) error {
+func (a *DeployStreamProcessorAction) Parse(ctx context.Context, payload interface{}) error {
 	// Parse the payload to get the stream processor configuration
 	parsedPayload, err := ParseActionPayload[models.StreamProcessor](payload)
 	if err != nil {
@@ -121,7 +121,7 @@ func (a *DeployStreamProcessorAction) Parse(payload interface{}) error {
 }
 
 // Validate performs validation of the parsed payload.
-func (a *DeployStreamProcessorAction) Validate() error {
+func (a *DeployStreamProcessorAction) Validate(ctx context.Context) error {
 	// Validate all required fields
 	if a.payload.Name == "" {
 		return errors.New("missing required field Name")
@@ -144,7 +144,7 @@ func (a *DeployStreamProcessorAction) Validate() error {
 }
 
 // Execute implements the Action interface by creating the stream processor configuration.
-func (a *DeployStreamProcessorAction) Execute() (interface{}, map[string]interface{}, error) {
+func (a *DeployStreamProcessorAction) Execute(ctx context.Context) (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Info("Executing DeployStreamProcessor action")
 
 	// Send confirmation that action is starting
@@ -158,13 +158,13 @@ func (a *DeployStreamProcessorAction) Execute() (interface{}, map[string]interfa
 	spConfig.StreamProcessorServiceConfig.TemplateRef = spConfig.Name
 
 	// Add to configuration
-	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	timeoutCtx, cancel := context.WithTimeout(ctx, constants.ActionTimeout)
 	defer cancel()
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		"Adding stream processor to configuration...", a.outboundChannel, models.DeployStreamProcessor)
 
-	err := a.configManager.AtomicAddStreamProcessor(ctx, spConfig)
+	err := a.configManager.AtomicAddStreamProcessor(timeoutCtx, spConfig)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to add stream processor: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -192,7 +192,7 @@ func (a *DeployStreamProcessorAction) Execute() (interface{}, map[string]interfa
 
 	// Check against observedState if snapshot manager is available
 	if a.systemSnapshotManager != nil && !a.ignoreHealthCheck {
-		errCode, err := a.waitForComponentToAppear()
+		errCode, err := a.waitForComponentToAppear(ctx)
 		if err != nil {
 			errorMsg := fmt.Sprintf("Failed to wait for stream processor to be active: %v", err)
 			SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, errCode, nil, a.outboundChannel, models.DeployStreamProcessor, nil)
@@ -279,7 +279,7 @@ func (a *DeployStreamProcessorAction) GetParsedPayload() models.StreamProcessor 
 // The function returns the error code and the error message via an error object
 // The error code is a string that is sent to the frontend to allow it to determine if the action can be retried or not
 // The error message is sent to the frontend to allow the user to see the error message.
-func (a *DeployStreamProcessorAction) waitForComponentToAppear() (string, error) {
+func (a *DeployStreamProcessorAction) waitForComponentToAppear(ctx context.Context) (string, error) {
 	ticker := time.NewTicker(constants.ActionTickerTime)
 	defer ticker.Stop()
 
@@ -298,10 +298,10 @@ func (a *DeployStreamProcessorAction) waitForComponentToAppear() (string, error)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage,
 				a.outboundChannel, models.DeployStreamProcessor)
 
-			ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+			timeoutCtx, cancel := context.WithTimeout(ctx, constants.ActionTimeout)
 			defer cancel()
 
-			err := a.configManager.AtomicDeleteStreamProcessor(ctx, a.payload.Name)
+			err := a.configManager.AtomicDeleteStreamProcessor(timeoutCtx, a.payload.Name)
 			if err != nil {
 				a.actionLogger.Errorf("failed to remove stream processor %s: %v", a.payload.Name, err)
 

@@ -15,6 +15,7 @@
 package actions_test
 
 import (
+	"context"
 	"encoding/base64"
 	"errors"
 
@@ -104,7 +105,7 @@ var _ = Describe("GetDataModelAction", func() {
 		Context("with valid payload", func() {
 			It("should parse successfully", func() {
 				payload := createGetDataModelPayload("test-model")
-				err := action.Parse(payload)
+				err := action.Parse(context.Background(), payload)
 				Expect(err).ToNot(HaveOccurred())
 
 				parsedPayload := action.GetParsedPayload()
@@ -114,17 +115,17 @@ var _ = Describe("GetDataModelAction", func() {
 
 		Context("with invalid payload", func() {
 			It("should return error for non-map payload", func() {
-				err := action.Parse("invalid")
+				err := action.Parse(context.Background(), "invalid")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("could not assert ActionPayload"))
 			})
 
 			It("should return error for empty payload", func() {
-				err := action.Parse(map[string]interface{}{})
+				err := action.Parse(context.Background(), map[string]interface{}{})
 				Expect(err).ToNot(HaveOccurred()) // Parse doesn't validate, only extracts
 
 				// But validation should fail
-				err = action.Validate()
+				err = action.Validate(context.Background())
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(Equal("missing required field Name"))
 			})
@@ -135,12 +136,12 @@ var _ = Describe("GetDataModelAction", func() {
 		Context("with valid payload", func() {
 			BeforeEach(func() {
 				payload := createGetDataModelPayload("test-model")
-				err := action.Parse(payload)
+				err := action.Parse(context.Background(), payload)
 				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should validate successfully", func() {
-				err := action.Validate()
+				err := action.Validate(context.Background())
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})
@@ -148,12 +149,12 @@ var _ = Describe("GetDataModelAction", func() {
 		Context("with missing name", func() {
 			BeforeEach(func() {
 				payload := createGetDataModelPayload("")
-				err := action.Parse(payload)
+				err := action.Parse(context.Background(), payload)
 				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should return validation error", func() {
-				err := action.Validate()
+				err := action.Validate(context.Background())
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(Equal("missing required field Name"))
 			})
@@ -164,14 +165,14 @@ var _ = Describe("GetDataModelAction", func() {
 		Context("with existing data model", func() {
 			BeforeEach(func() {
 				payload := createGetDataModelPayload("test-model")
-				err := action.Parse(payload)
+				err := action.Parse(context.Background(), payload)
 				Expect(err).ToNot(HaveOccurred())
-				err = action.Validate()
+				err = action.Validate(context.Background())
 				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should retrieve data model successfully", func() {
-				result, metadata, err := action.Execute()
+				result, metadata, err := action.Execute(context.Background())
 				Expect(err).ToNot(HaveOccurred())
 				Expect(metadata).To(BeNil())
 
@@ -210,7 +211,7 @@ var _ = Describe("GetDataModelAction", func() {
 			})
 
 			It("should send appropriate action replies", func() {
-				_, _, err := action.Execute()
+				_, _, err := action.Execute(context.Background())
 				Expect(err).ToNot(HaveOccurred())
 
 				// Should have received at least 2 messages (ActionConfirmed and ActionExecuting)
@@ -222,14 +223,14 @@ var _ = Describe("GetDataModelAction", func() {
 		Context("with non-existing data model", func() {
 			BeforeEach(func() {
 				payload := createGetDataModelPayload("non-existing-model")
-				err := action.Parse(payload)
+				err := action.Parse(context.Background(), payload)
 				Expect(err).ToNot(HaveOccurred())
-				err = action.Validate()
+				err = action.Validate(context.Background())
 				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should return error for non-existing data model", func() {
-				_, _, err := action.Execute()
+				_, _, err := action.Execute(context.Background())
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("Data model with name \"non-existing-model\" not found"))
 
@@ -245,14 +246,14 @@ var _ = Describe("GetDataModelAction", func() {
 				mockConfigManager = config.NewMockConfigManager().WithConfigError(errors.New("config error"))
 				action = actions.NewGetDataModelAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfigManager)
 				payload := createGetDataModelPayload("test-model")
-				err := action.Parse(payload)
+				err := action.Parse(context.Background(), payload)
 				Expect(err).ToNot(HaveOccurred())
-				err = action.Validate()
+				err = action.Validate(context.Background())
 				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should return error when config manager fails", func() {
-				_, _, err := action.Execute()
+				_, _, err := action.Execute(context.Background())
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("Failed to get configuration"))
 
@@ -298,14 +299,14 @@ var _ = Describe("GetDataModelAction", func() {
 				action = actions.NewGetDataModelAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfigManager)
 
 				payload := createGetDataModelPayload("complex-model")
-				err := action.Parse(payload)
+				err := action.Parse(context.Background(), payload)
 				Expect(err).ToNot(HaveOccurred())
-				err = action.Validate()
+				err = action.Validate(context.Background())
 				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should handle nested structures correctly", func() {
-				result, _, err := action.Execute()
+				result, _, err := action.Execute(context.Background())
 				Expect(err).ToNot(HaveOccurred())
 
 				response, ok := result.(models.GetDataModelResponse)
@@ -400,14 +401,14 @@ var _ = Describe("GetDataModelAction - Enriched Tree", func() {
 		Context("with model containing refModel fields", func() {
 			BeforeEach(func() {
 				payload := createGetDataModelPayloadWithEnrichment("pump", true)
-				err := action.Parse(payload)
+				err := action.Parse(context.Background(), payload)
 				Expect(err).ToNot(HaveOccurred())
-				err = action.Validate()
+				err = action.Validate(context.Background())
 				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should enrich refModel fields with actual model data", func() {
-				result, metadata, err := action.Execute()
+				result, metadata, err := action.Execute(context.Background())
 				Expect(err).ToNot(HaveOccurred())
 				Expect(metadata).To(BeNil())
 
@@ -445,14 +446,14 @@ var _ = Describe("GetDataModelAction - Enriched Tree", func() {
 		Context("with getEnrichedTree=false", func() {
 			BeforeEach(func() {
 				payload := createGetDataModelPayloadWithEnrichment("pump", false)
-				err := action.Parse(payload)
+				err := action.Parse(context.Background(), payload)
 				Expect(err).ToNot(HaveOccurred())
-				err = action.Validate()
+				err = action.Validate(context.Background())
 				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should not enrich refModel fields", func() {
-				result, metadata, err := action.Execute()
+				result, metadata, err := action.Execute(context.Background())
 				Expect(err).ToNot(HaveOccurred())
 				Expect(metadata).To(BeNil())
 

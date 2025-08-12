@@ -15,6 +15,7 @@
 package actions_test
 
 import (
+	"context"
 	"errors"
 	"sync"
 
@@ -121,7 +122,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -160,7 +161,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(action.GetParsedPayload().Inject).To(Equal("cache_resources:\n- label: my_cache\n  memory: {}\nrate_limit_resources:\n- label: limiter\n  local: {}\nbuffer:\n  memory: {}\n"))
 
@@ -200,11 +201,11 @@ var _ = Describe("DeployDataflowComponent", func() {
 				},
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Call Validate method - this should fail
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("inject.data is not valid YAML"))
 		})
@@ -231,7 +232,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field Name"))
 		})
@@ -248,7 +249,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("unsupported component type"))
 		})
@@ -267,7 +268,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing customDataFlowComponent in payload"))
 		})
@@ -300,7 +301,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field inputs"))
 		})
@@ -331,11 +332,11 @@ var _ = Describe("DeployDataflowComponent", func() {
 			}
 
 			// Call Parse method - this should now succeed with structural parsing
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Call Validate method - this should fail with field validation
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field pipeline.processors"))
 		})
@@ -370,7 +371,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 			}
 
 			// Call Parse method - should fail with appropriate error
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing customDataFlowComponent in payload"))
 		})
@@ -408,11 +409,11 @@ var _ = Describe("DeployDataflowComponent", func() {
 				},
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Then validate
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
@@ -457,7 +458,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				},
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reset tracking for this test
@@ -478,7 +479,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(ContainSubstring("success"))
 			Expect(metadata).To(BeNil())
@@ -561,7 +562,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				},
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reset tracking for this test
@@ -572,7 +573,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action
-			_, metadata, err := action.Execute()
+			_, metadata, err := action.Execute(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("at least one processor with a non-numerous key was found"))
 			Expect(metadata).To(BeNil())
@@ -616,7 +617,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				},
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Start the state mocker
@@ -624,7 +625,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action - should fail
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to add dataflow component: mock add dataflow component failure"))
 			Expect(result).To(BeNil())
@@ -689,7 +690,7 @@ buffer:
 				},
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reset tracking for this test
@@ -700,7 +701,7 @@ buffer:
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(ContainSubstring("success"))
 			Expect(metadata).To(BeNil())
@@ -756,7 +757,7 @@ buffer:
 				},
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reset tracking for this test
@@ -767,7 +768,7 @@ buffer:
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(ContainSubstring("success"))
 			Expect(metadata).To(BeNil())

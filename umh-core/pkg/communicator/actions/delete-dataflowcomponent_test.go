@@ -15,6 +15,7 @@
 package actions_test
 
 import (
+	"context"
 	"errors"
 	"sync"
 
@@ -106,7 +107,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(action.GetComponentUUID()).To(Equal(componentUUID))
 		})
@@ -116,7 +117,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 			payload := map[string]interface{}{}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field UUID"))
 		})
@@ -128,7 +129,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid UUID format"))
 		})
@@ -141,11 +142,11 @@ var _ = Describe("DeleteDataflowComponent", func() {
 				"uuid": componentUUID.String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Then validate
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
@@ -157,7 +158,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 				"uuid": componentUUID.String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reset tracking for this test
@@ -168,7 +169,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(ContainSubstring("Successfully deleted dataflow component with UUID: " + componentUUID.String()))
 			Expect(metadata).To(BeNil())
@@ -192,7 +193,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 				"uuid": componentUUID.String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Start the state mocker
@@ -200,7 +201,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action - should fail
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("Failed to delete dataflow component: mock delete dataflow component failure"))
 			Expect(result).To(BeNil())
@@ -231,7 +232,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 				"uuid": nonExistentUUID.String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Set up mock to return component not found error
@@ -252,7 +253,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action - should fail with component not found
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("dataflow component with UUID not found"))
 			Expect(result).To(BeNil())

@@ -15,6 +15,7 @@
 package actions_test
 
 import (
+	"context"
 	"sync"
 
 	"encoding/base64"
@@ -150,7 +151,7 @@ var _ = Describe("DeployStreamProcessor", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			parsedPayload := action.GetParsedPayload()
@@ -171,7 +172,7 @@ var _ = Describe("DeployStreamProcessor", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			parsedPayload := action.GetParsedPayload()
@@ -185,7 +186,7 @@ var _ = Describe("DeployStreamProcessor", func() {
 			payload := "invalid-payload"
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to parse payload"))
 		})
@@ -200,7 +201,7 @@ var _ = Describe("DeployStreamProcessor", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to decode stream processor config"))
 		})
@@ -219,7 +220,7 @@ var _ = Describe("DeployStreamProcessor", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to unmarshal stream processor config"))
 		})
@@ -235,11 +236,11 @@ var _ = Describe("DeployStreamProcessor", func() {
 				"location":      spLocation,
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Then validate
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -252,9 +253,9 @@ var _ = Describe("DeployStreamProcessor", func() {
 				"location":      spLocation,
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).ToNot(HaveOccurred())
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field Name"))
 		})
@@ -272,9 +273,9 @@ var _ = Describe("DeployStreamProcessor", func() {
 				"location":      spLocation,
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).ToNot(HaveOccurred())
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field Model.Name"))
 		})
@@ -292,9 +293,9 @@ var _ = Describe("DeployStreamProcessor", func() {
 				"location":      spLocation,
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).ToNot(HaveOccurred())
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field Model.Version"))
 		})
@@ -308,9 +309,9 @@ var _ = Describe("DeployStreamProcessor", func() {
 				"location":      spLocation,
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).ToNot(HaveOccurred())
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("name can only contain letters"))
 		})
@@ -329,7 +330,7 @@ var _ = Describe("DeployStreamProcessor", func() {
 				},
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reset tracking for this test
@@ -340,7 +341,7 @@ var _ = Describe("DeployStreamProcessor", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(metadata).To(BeNil())
 
@@ -385,7 +386,7 @@ var _ = Describe("DeployStreamProcessor", func() {
 				"location":      spLocation,
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Start the state mocker
@@ -393,7 +394,7 @@ var _ = Describe("DeployStreamProcessor", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action - should fail
-			_, metadata, err := action.Execute()
+			_, metadata, err := action.Execute(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("Failed to add stream processor: mock add stream processor failure"))
 			Expect(metadata).To(BeNil())
@@ -421,7 +422,7 @@ var _ = Describe("DeployStreamProcessor", func() {
 				"location":      spLocation,
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Start the state mocker
@@ -429,7 +430,7 @@ var _ = Describe("DeployStreamProcessor", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action - should fail with duplicate name error
-			_, metadata, err := action.Execute()
+			_, metadata, err := action.Execute(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("choose a unique name"))
 			Expect(metadata).To(BeNil())
@@ -447,7 +448,7 @@ var _ = Describe("DeployStreamProcessor", func() {
 				"location":      spLocation,
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Start the state mocker
@@ -455,7 +456,7 @@ var _ = Describe("DeployStreamProcessor", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action
-			_, metadata, err := action.Execute()
+			_, metadata, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(metadata).To(BeNil())
 
@@ -480,7 +481,7 @@ var _ = Describe("DeployStreamProcessor", func() {
 				},
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Start the state mocker
@@ -488,7 +489,7 @@ var _ = Describe("DeployStreamProcessor", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action
-			_, metadata, err := action.Execute()
+			_, metadata, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(metadata).To(BeNil())
 

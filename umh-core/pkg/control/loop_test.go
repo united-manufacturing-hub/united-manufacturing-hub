@@ -111,9 +111,8 @@ var _ = Describe("ControlLoop", func() {
 		mockConfig = config.NewMockConfigManager()
 		mockSvcRegistry = serviceregistry.NewMockRegistry()
 
-		// Set up a context with timeout (moved out of nested context)
-		testCtx, testCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		ctx, cancel = testCtx, testCancel
+		// Set up a context with timeout
+		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 
 		starvationChecker := starvationchecker.NewStarvationChecker(constants.StarvationThreshold)
 

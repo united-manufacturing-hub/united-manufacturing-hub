@@ -15,6 +15,7 @@
 package actions_test
 
 import (
+	"context"
 	"errors"
 	"sync"
 
@@ -135,7 +136,7 @@ var _ = Describe("DeleteStreamProcessor", func() {
 				"uuid": spUUID.String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify parsed values
@@ -149,7 +150,7 @@ var _ = Describe("DeleteStreamProcessor", func() {
 			// Payload without UUID
 			payload := map[string]interface{}{}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field UUID"))
 		})
@@ -158,7 +159,7 @@ var _ = Describe("DeleteStreamProcessor", func() {
 			// Invalid payload (not a map)
 			payload := "invalid-payload"
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to parse payload"))
 		})
@@ -171,11 +172,11 @@ var _ = Describe("DeleteStreamProcessor", func() {
 				"uuid": spUUID.String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Then validate
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -185,9 +186,9 @@ var _ = Describe("DeleteStreamProcessor", func() {
 				"uuid": uuid.Nil.String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).ToNot(HaveOccurred())
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing or invalid stream processor UUID"))
 		})
@@ -200,7 +201,7 @@ var _ = Describe("DeleteStreamProcessor", func() {
 				"uuid": spUUID.String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reset tracking for this test
@@ -211,7 +212,7 @@ var _ = Describe("DeleteStreamProcessor", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(metadata).To(BeNil())
 
@@ -240,7 +241,7 @@ var _ = Describe("DeleteStreamProcessor", func() {
 				"uuid": spUUID.String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Start the state mocker
@@ -248,7 +249,7 @@ var _ = Describe("DeleteStreamProcessor", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action - should fail
-			_, metadata, err := action.Execute()
+			_, metadata, err := action.Execute(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("Failed to delete stream processor"))
 			Expect(metadata).To(BeNil())
@@ -266,7 +267,7 @@ var _ = Describe("DeleteStreamProcessor", func() {
 				"uuid": nonExistentUUID.String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Start the state mocker
@@ -274,7 +275,7 @@ var _ = Describe("DeleteStreamProcessor", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action - should fail because stream processor lookup will fail
-			_, metadata, err := action.Execute()
+			_, metadata, err := action.Execute(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("Failed to find stream processor"))
 			Expect(err.Error()).To(ContainSubstring("not found"))
@@ -293,14 +294,14 @@ var _ = Describe("DeleteStreamProcessor", func() {
 				"uuid": spUUID.String(),
 			}
 
-			err := actionWithoutHealthCheck.Parse(payload)
+			err := actionWithoutHealthCheck.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reset tracking for this test
 			mockConfig.ResetCalls()
 
 			// Execute the action (no state mocker needed)
-			result, metadata, err := actionWithoutHealthCheck.Execute()
+			result, metadata, err := actionWithoutHealthCheck.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(metadata).To(BeNil())
 
@@ -320,7 +321,7 @@ var _ = Describe("DeleteStreamProcessor", func() {
 				"uuid": spUUID.String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reset tracking for this test
@@ -331,7 +332,7 @@ var _ = Describe("DeleteStreamProcessor", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(metadata).To(BeNil())
 
@@ -399,7 +400,7 @@ var _ = Describe("DeleteStreamProcessor", func() {
 				"uuid": spUUID.String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Start the state mocker
@@ -407,7 +408,7 @@ var _ = Describe("DeleteStreamProcessor", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action - should fail
-			_, metadata, err := action.Execute()
+			_, metadata, err := action.Execute(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("Failed to delete stream processor"))
 			Expect(err.Error()).To(ContainSubstring("dependent child instances"))

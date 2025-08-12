@@ -15,6 +15,7 @@
 package actions_test
 
 import (
+	"context"
 	"sync"
 
 	"errors"
@@ -110,7 +111,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			parsedPayload := action.GetParsedPayload()
@@ -131,9 +132,9 @@ var _ = Describe("DeployProtocolConverter", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).ToNot(HaveOccurred())
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field Name"))
 		})
@@ -149,9 +150,9 @@ var _ = Describe("DeployProtocolConverter", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).ToNot(HaveOccurred())
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field Connection.IP"))
 		})
@@ -167,9 +168,9 @@ var _ = Describe("DeployProtocolConverter", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).ToNot(HaveOccurred())
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field Connection.Port"))
 		})
@@ -179,7 +180,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 			payload := "invalid-payload"
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to parse payload"))
 		})
@@ -197,11 +198,11 @@ var _ = Describe("DeployProtocolConverter", func() {
 				"location": pcLocation,
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Then validate
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -215,9 +216,9 @@ var _ = Describe("DeployProtocolConverter", func() {
 				},
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).ToNot(HaveOccurred())
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field Name"))
 		})
@@ -235,7 +236,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 				"location": pcLocation,
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reset tracking for this test
@@ -246,7 +247,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(metadata).To(BeNil())
 
@@ -297,7 +298,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 				"location": pcLocation,
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Start the state mocker
@@ -305,7 +306,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action - should fail
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("Failed to add protocol converter: mock add protocol converter failure"))
 			Expect(result).To(BeNil())
@@ -337,7 +338,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 				"location": pcLocation,
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Start the state mocker
@@ -345,7 +346,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action - should fail with duplicate name error
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("choose a unique name"))
 			Expect(result).To(BeNil())

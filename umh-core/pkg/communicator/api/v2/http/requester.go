@@ -257,7 +257,7 @@ func DoHTTPRequest(ctx context.Context, url string, header map[string]string, co
 	// Send request
 	requestStart = time.Now()
 
-	response, err := GetClient(insecureTLS).Do(req.WithContext(httptrace.WithClientTrace(ctx, trace)))
+	response, err := GetClient(insecureTLS).Do(req.WithContext(httptrace.WithClientTrace(req.Context(), trace)))
 	if err != nil {
 		if response != nil {
 			return response, err
@@ -337,13 +337,11 @@ func processJSONResponse[R any](response *http.Response, cookies *map[string]str
 func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (result *R, statusCode int, responseErr error) {
 	// Set up context with default 30 second timeout if none provided
 	if ctx == nil {
-		ctx = context.Background()
-	}
+		var cancel context.CancelFunc
 
-	// Always ensure we have a timeout context for HTTP requests
-	var cancel context.CancelFunc
-	ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
+		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+	}
 
 	url := apiURL + string(endpoint)
 
@@ -417,7 +415,7 @@ func DoHTTPPostRequest[T any](ctx context.Context, url string, data *T, header m
 	// Send the request
 	start = time.Now()
 
-	response, err := GetClient(insecureTLS).Do(req.WithContext(httptrace.WithClientTrace(ctx, trace)))
+	response, err := GetClient(insecureTLS).Do(req.WithContext(httptrace.WithClientTrace(req.Context(), trace)))
 	if err != nil {
 		if response != nil {
 			return response, err

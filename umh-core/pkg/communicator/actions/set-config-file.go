@@ -67,7 +67,7 @@ func NewSetConfigFileAction(userEmail string, actionUUID uuid.UUID, instanceUUID
 }
 
 // Parse extracts the business fields from the raw JSON payload.
-func (a *SetConfigFileAction) Parse(payload interface{}) error {
+func (a *SetConfigFileAction) Parse(ctx context.Context, payload interface{}) error {
 	a.actionLogger.Info("Parsing SetConfigFile payload")
 
 	// Extract SetConfigFilePayload from the interface{}
@@ -82,7 +82,7 @@ func (a *SetConfigFileAction) Parse(payload interface{}) error {
 }
 
 // Validate performs semantic validation of the parsed payload.
-func (a *SetConfigFileAction) Validate() error {
+func (a *SetConfigFileAction) Validate(ctx context.Context) error {
 	a.actionLogger.Info("Validating SetConfigFile action")
 
 	// Ensure content is not empty
@@ -111,11 +111,11 @@ func (a *SetConfigFileAction) Validate() error {
 }
 
 // Execute takes care of updating the config file content.
-func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, error) {
+func (a *SetConfigFileAction) Execute(ctx context.Context) (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Info("Executing SetConfigFile action")
 
 	// Create a context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), constants.GetOrSetConfigFileTimeout)
+	timeoutCtx, cancel := context.WithTimeout(ctx, constants.GetOrSetConfigFileTimeout)
 	defer cancel()
 
 	// Use the default config path from the config manager
@@ -125,7 +125,7 @@ func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 		"Updating config file at "+configPath, a.outboundChannel, models.SetConfigFile)
 
 	// Write the new content to the file with atomic concurrent modification check
-	err := a.configManager.WriteYAMLConfigFromString(ctx, a.payload.Content, a.payload.LastModifiedTime)
+	err := a.configManager.WriteYAMLConfigFromString(timeoutCtx, a.payload.Content, a.payload.LastModifiedTime)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to write config file: %v", err)
 		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,

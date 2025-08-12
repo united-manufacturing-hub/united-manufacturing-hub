@@ -96,7 +96,7 @@ func NewEditStreamProcessorAction(userEmail string, actionUUID uuid.UUID, instan
 
 // Parse implements the Action interface by extracting the stream processor UUID and
 // configuration from the payload.
-func (a *EditStreamProcessorAction) Parse(payload interface{}) error {
+func (a *EditStreamProcessorAction) Parse(ctx context.Context, payload interface{}) error {
 	// Parse the payload directly as a complete StreamProcessor object
 	spPayload, err := ParseActionPayload[models.StreamProcessor](payload)
 	if err != nil {
@@ -146,7 +146,7 @@ func (a *EditStreamProcessorAction) Parse(payload interface{}) error {
 }
 
 // Validate performs validation of the parsed payload.
-func (a *EditStreamProcessorAction) Validate() error {
+func (a *EditStreamProcessorAction) Validate(ctx context.Context) error {
 	// Validate UUID
 	if a.streamProcessorUUID == uuid.Nil {
 		return errors.New("missing or invalid stream processor UUID")
@@ -170,7 +170,7 @@ func (a *EditStreamProcessorAction) Validate() error {
 
 // Execute implements the Action interface by updating the stream processor configuration
 // with the provided configuration.
-func (a *EditStreamProcessorAction) Execute() (interface{}, map[string]interface{}, error) {
+func (a *EditStreamProcessorAction) Execute(ctx context.Context) (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Info("Executing EditStreamProcessor action")
 
 	// Send confirmation that action is starting
@@ -182,7 +182,7 @@ func (a *EditStreamProcessorAction) Execute() (interface{}, map[string]interface
 		"Updating stream processor configuration...", a.outboundChannel, models.EditStreamProcessor)
 
 	// Apply mutations to create new spec
-	newSpec, atomicEditUUID, err := a.applyMutation()
+	newSpec, atomicEditUUID, err := a.applyMutation(ctx)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to apply configuration mutation: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -195,7 +195,7 @@ func (a *EditStreamProcessorAction) Execute() (interface{}, map[string]interface
 	a.atomicEditUUID = atomicEditUUID
 
 	// Persist the configuration changes
-	oldConfig, err := a.persistConfig(newSpec)
+	oldConfig, err := a.persistConfig(ctx, newSpec)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to persist configuration changes: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -206,7 +206,7 @@ func (a *EditStreamProcessorAction) Execute() (interface{}, map[string]interface
 
 	// Await rollout and perform health checks
 	if a.systemSnapshotManager != nil && !a.ignoreHealthCheck {
-		errCode, err := a.awaitRollout(oldConfig)
+		errCode, err := a.awaitRollout(ctx, oldConfig)
 		if err != nil {
 			errorMsg := fmt.Sprintf("Failed during rollout: %v", err)
 			SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -231,12 +231,12 @@ func (a *EditStreamProcessorAction) Execute() (interface{}, map[string]interface
 // to create the new stream processor specification. It handles child/root relationships,
 // variable merging, and configuration updates.
 // Returns the new spec and the atomic edit UUID to use for persistence.
-func (a *EditStreamProcessorAction) applyMutation() (config.StreamProcessorConfig, uuid.UUID, error) {
+func (a *EditStreamProcessorAction) applyMutation(ctx context.Context) (config.StreamProcessorConfig, uuid.UUID, error) {
 	// Get current configuration
-	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	timeoutCtx, cancel := context.WithTimeout(ctx, constants.ActionTimeout)
 	defer cancel()
 
-	currentConfig, err := a.configManager.GetConfig(ctx, 0)
+	currentConfig, err := a.configManager.GetConfig(timeoutCtx, 0)
 	if err != nil {
 		return config.StreamProcessorConfig{}, uuid.Nil, fmt.Errorf("failed to get current configuration: %w", err)
 	}
@@ -349,12 +349,12 @@ func (a *EditStreamProcessorAction) applyMutation() (config.StreamProcessorConfi
 
 // persistConfig performs the atomic configuration update operation.
 // Returns the old configuration for potential rollback operations.
-func (a *EditStreamProcessorAction) persistConfig(newSpec config.StreamProcessorConfig) (config.StreamProcessorConfig, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+func (a *EditStreamProcessorAction) persistConfig(ctx context.Context, newSpec config.StreamProcessorConfig) (config.StreamProcessorConfig, error) {
+	timeoutCtx, cancel := context.WithTimeout(ctx, constants.ActionTimeout)
 	defer cancel()
 
 	// Apply the configuration changes
-	returnedOldConfig, err := a.configManager.AtomicEditStreamProcessor(ctx, newSpec)
+	returnedOldConfig, err := a.configManager.AtomicEditStreamProcessor(timeoutCtx, newSpec)
 	if err != nil {
 		return config.StreamProcessorConfig{}, fmt.Errorf("failed to update stream processor: %w", err)
 	}
@@ -364,12 +364,12 @@ func (a *EditStreamProcessorAction) persistConfig(newSpec config.StreamProcessor
 
 // awaitRollout waits for the stream processor to become active and performs health checks.
 // Returns error code and error message for proper error handling in the caller.
-func (a *EditStreamProcessorAction) awaitRollout(oldConfig config.StreamProcessorConfig) (string, error) {
+func (a *EditStreamProcessorAction) awaitRollout(ctx context.Context, oldConfig config.StreamProcessorConfig) (string, error) {
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		fmt.Sprintf("Waiting for stream processor %s to be active...", a.name),
 		a.outboundChannel, models.EditStreamProcessor)
 
-	return a.waitForComponentToBeActive(oldConfig)
+	return a.waitForComponentToBeActive(ctx, oldConfig)
 }
 
 // waitForComponentToBeActive polls live FSM state until the stream processor
@@ -378,7 +378,7 @@ func (a *EditStreamProcessorAction) awaitRollout(oldConfig config.StreamProcesso
 // The function returns the error code and the error message via an error object.
 // The error code is a string that is sent to the frontend to allow it to determine if the action can be retried or not.
 // The error message is sent to the frontend to allow the user to see the error message.
-func (a *EditStreamProcessorAction) waitForComponentToBeActive(oldConfig config.StreamProcessorConfig) (string, error) {
+func (a *EditStreamProcessorAction) waitForComponentToBeActive(ctx context.Context, oldConfig config.StreamProcessorConfig) (string, error) {
 	ticker := time.NewTicker(constants.ActionTickerTime)
 	defer ticker.Stop()
 
@@ -394,10 +394,10 @@ func (a *EditStreamProcessorAction) waitForComponentToBeActive(oldConfig config.
 		select {
 		case <-timeout:
 			// Rollback to previous configuration
-			ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+			timeoutCtx, cancel := context.WithTimeout(ctx, constants.ActionTimeout)
 			defer cancel()
 
-			_, err := a.configManager.AtomicEditStreamProcessor(ctx, oldConfig)
+			_, err := a.configManager.AtomicEditStreamProcessor(timeoutCtx, oldConfig)
 			if err != nil {
 				a.actionLogger.Errorf("Failed to rollback to previous configuration: %v", err)
 				stateMessage := fmt.Sprintf("Stream processor '%s' edit timeout reached. It did not become active in time. Rolling back to previous configuration failed: %v", a.name, err)

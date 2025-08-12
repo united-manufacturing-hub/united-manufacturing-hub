@@ -393,10 +393,10 @@ func (m *FileConfigManager) backgroundRefresh(ctx context.Context, modTime time.
 	defer m.refreshMu.Unlock() // unlock the mutex we acquired with TryLock
 
 	start := time.Now()
-	// Create a background context with timeout
+	// Create a context with timeout from the passed context
 	// to allow for long configs to be parsed, we use the longer background refresh timeout
 	// this is not a problem because this functions runs in a non-blocking goroutine
-	ctx, cancel := context.WithTimeout(context.Background(), constants.ConfigBackgroundRefreshTimeout)
+	ctx, cancel := context.WithTimeout(ctx, constants.ConfigBackgroundRefreshTimeout)
 	defer cancel()
 
 	config, rawConfig, err := m.readAndParseConfig(ctx)

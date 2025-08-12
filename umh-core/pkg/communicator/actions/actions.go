@@ -15,6 +15,7 @@
 package actions
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -22,6 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/safejson"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -33,17 +35,17 @@ import (
 type Action interface {
 	// Parse parses the ActionMessagePayload into the corresponding action type.
 	// It should extract and validate all required fields from the raw payload.
-	Parse(interface{}) error
+	Parse(ctx context.Context, payload interface{}) error
 
 	// Validate validates the action payload, returns an error if something is wrong.
 	// This should perform deeper validation than Parse, checking business rules and constraints.
-	Validate() error
+	Validate(ctx context.Context) error
 
 	// Execute executes the action, returns the result as an interface and an error if something went wrong.
 	// It must send ActionConfirmed and ActionExecuting messages for progress updates.
 	// It must send ActionFinishedWithFailure messages if an error occurs.
 	// It must not send the final successful action reply, as it is done by the caller.
-	Execute() (interface{}, map[string]interface{}, error)
+	Execute(ctx context.Context) (interface{}, map[string]interface{}, error)
 
 	// getUserEmail returns the user email of the action
 	getUserEmail() string
@@ -60,6 +62,10 @@ type Action interface {
 // Error handling for each step is done within this function.
 func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePayload, sender string, outboundChannel chan *models.UMHMessage, releaseChannel config.ReleaseChannel, dog watchdog.Iface, traceID uuid.UUID, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager) {
 	log := logger.For(logger.ComponentCommunicator)
+
+	// Create context for the entire action execution flow (3x [Parse, Validate, Execute])
+	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout*3)
+	defer cancel()
 
 	// Start a new transaction for this action
 	log.Debugf("Handling action message: Type: %s, Payload: %v", payload.ActionType, payload.ActionPayload)
@@ -211,9 +217,11 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 		models.EditOPCUADatasource, models.DeleteDatasource, models.UpgradeCompanion, models.EditMqttBroker,
 		models.GetAuditLog, models.EditInstanceLocation, models.GetDataFlowComponentLog,
 		models.GetKubernetesEvents, models.GetOPCUATags, models.RollbackDataFlowComponent,
-		models.AllowAppSecretAccess, models.GetConfiguration, models.UpdateConfiguration:
+		models.AllowAppSecretAccess, models.GetConfiguration, models.UpdateConfiguration,
+		models.DeployOPCUAConnection:
 		log.Errorf("Unsupported action type: %s", payload.ActionType)
 		SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, "Action type not implemented", outboundChannel, payload.ActionType)
+
 		return
 
 	default:
@@ -225,7 +233,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 
 	SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionExecuting, "Parsing action payload", outboundChannel, payload.ActionType)
 	// Parse the action payload
-	err := action.Parse(payload.ActionPayload)
+	err := action.Parse(ctx, payload.ActionPayload)
 	if err != nil {
 		// If parsing fails, send a structured error reply using SendActionReplyV2 with ErrRetryParseFailed
 		// this will allow the UI to retry the action
@@ -237,7 +245,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 
 	SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionExecuting, "Validating action payload", outboundChannel, payload.ActionType)
 	// Validate the action payload
-	err = action.Validate()
+	err = action.Validate(ctx)
 	if err != nil {
 		// If validation fails, send a structured error reply using SendActionReplyV2 with ErrEditValidationFailed
 		SendActionReplyV2(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, "Failed to validate action payload: "+err.Error(), models.ErrValidationFailed, nil, outboundChannel, payload.ActionType, nil)
@@ -248,7 +256,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 
 	SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionExecuting, "Executing action", outboundChannel, payload.ActionType)
 	// Execute the action
-	result, metadata, err := action.Execute()
+	result, metadata, err := action.Execute(ctx)
 	if err != nil {
 		log.Errorf("Error executing action: %s", err)
 

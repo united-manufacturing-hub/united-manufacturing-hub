@@ -15,6 +15,7 @@
 package actions_test
 
 import (
+	"context"
 	"encoding/base64"
 	"errors"
 
@@ -99,7 +100,7 @@ var _ = Describe("EditDataModelAction", func() {
 					},
 				}
 
-				err := action.Parse(structToEncodedMapForEdit(payload))
+				err := action.Parse(context.Background(), structToEncodedMapForEdit(payload))
 
 				Expect(err).ToNot(HaveOccurred())
 				parsedPayload := action.GetParsedPayload()
@@ -113,7 +114,7 @@ var _ = Describe("EditDataModelAction", func() {
 			It("should return error", func() {
 				invalidPayload := "not a valid payload"
 
-				err := action.Parse(invalidPayload)
+				err := action.Parse(context.Background(), invalidPayload)
 
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to parse payload"))
@@ -122,7 +123,7 @@ var _ = Describe("EditDataModelAction", func() {
 
 		Context("with nil payload", func() {
 			It("should return error", func() {
-				err := action.Parse(nil)
+				err := action.Parse(context.Background(), nil)
 
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to parse payload"))
@@ -141,7 +142,7 @@ var _ = Describe("EditDataModelAction", func() {
 						},
 					},
 				}
-				err := action.Parse(structToEncodedMapForEdit(payload))
+				err := action.Parse(context.Background(), structToEncodedMapForEdit(payload))
 				Expect(err).ToNot(HaveOccurred())
 
 				// Set up mock config to provide empty data models and payload shapes for validation
@@ -160,7 +161,7 @@ var _ = Describe("EditDataModelAction", func() {
 			})
 
 			It("should validate successfully", func() {
-				err := action.Validate()
+				err := action.Validate(context.Background())
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})
@@ -174,12 +175,12 @@ var _ = Describe("EditDataModelAction", func() {
 						},
 					},
 				}
-				err := action.Parse(structToEncodedMapForEdit(payload))
+				err := action.Parse(context.Background(), structToEncodedMapForEdit(payload))
 				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should return validation error", func() {
-				err := action.Validate()
+				err := action.Validate(context.Background())
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(Equal("missing required field Name"))
 			})
@@ -191,12 +192,12 @@ var _ = Describe("EditDataModelAction", func() {
 					Name:      "test-model",
 					Structure: map[string]models.Field{},
 				}
-				err := action.Parse(structToEncodedMapForEdit(payload))
+				err := action.Parse(context.Background(), structToEncodedMapForEdit(payload))
 				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should return validation error", func() {
-				err := action.Validate()
+				err := action.Validate(context.Background())
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(Equal("missing required field Structure"))
 			})
@@ -208,12 +209,12 @@ var _ = Describe("EditDataModelAction", func() {
 					Name:      "test-model",
 					Structure: nil,
 				}
-				err := action.Parse(structToEncodedMapForEdit(payload))
+				err := action.Parse(context.Background(), structToEncodedMapForEdit(payload))
 				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should return validation error", func() {
-				err := action.Validate()
+				err := action.Validate(context.Background())
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(Equal("missing required field Structure"))
 			})
@@ -242,7 +243,7 @@ var _ = Describe("EditDataModelAction", func() {
 						},
 					},
 				}
-				err := action.Parse(structToEncodedMapForEdit(payload))
+				err := action.Parse(context.Background(), structToEncodedMapForEdit(payload))
 				Expect(err).ToNot(HaveOccurred())
 
 				// Set up mock config with the referenced data model and payload shapes
@@ -280,7 +281,7 @@ var _ = Describe("EditDataModelAction", func() {
 			})
 
 			It("should validate successfully", func() {
-				err := action.Validate()
+				err := action.Validate(context.Background())
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})
@@ -297,10 +298,10 @@ var _ = Describe("EditDataModelAction", func() {
 						},
 					},
 				}
-				err := action.Parse(structToEncodedMapForEdit(payload))
+				err := action.Parse(context.Background(), structToEncodedMapForEdit(payload))
 				Expect(err).ToNot(HaveOccurred())
 
-				err = action.Validate()
+				err = action.Validate(context.Background())
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("_refModel must have a version specified"))
 			})
@@ -316,10 +317,10 @@ var _ = Describe("EditDataModelAction", func() {
 						},
 					},
 				}
-				err := action.Parse(structToEncodedMapForEdit(payload))
+				err := action.Parse(context.Background(), structToEncodedMapForEdit(payload))
 				Expect(err).ToNot(HaveOccurred())
 
-				err = action.Validate()
+				err = action.Validate(context.Background())
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("_refModel must have a version specified"))
 			})
@@ -335,10 +336,10 @@ var _ = Describe("EditDataModelAction", func() {
 						},
 					},
 				}
-				err := action.Parse(structToEncodedMapForEdit(payload))
+				err := action.Parse(context.Background(), structToEncodedMapForEdit(payload))
 				Expect(err).ToNot(HaveOccurred())
 
-				err = action.Validate()
+				err = action.Validate(context.Background())
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("_refModel must have a version specified"))
 			})
@@ -357,10 +358,10 @@ var _ = Describe("EditDataModelAction", func() {
 						},
 					},
 				}
-				err := action.Parse(structToEncodedMapForEdit(payload))
+				err := action.Parse(context.Background(), structToEncodedMapForEdit(payload))
 				Expect(err).ToNot(HaveOccurred())
 
-				err = action.Validate()
+				err = action.Validate(context.Background())
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("does not match pattern ^v\\d+$"))
 			})
@@ -380,10 +381,10 @@ var _ = Describe("EditDataModelAction", func() {
 						},
 					},
 				}
-				err := action.Parse(structToEncodedMapForEdit(payload))
+				err := action.Parse(context.Background(), structToEncodedMapForEdit(payload))
 				Expect(err).ToNot(HaveOccurred())
 
-				err = action.Validate()
+				err = action.Validate(context.Background())
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("validation error at path 'invalid_field': field cannot have both _payloadshape and _refModel"))
 			})
@@ -405,10 +406,10 @@ var _ = Describe("EditDataModelAction", func() {
 						},
 					},
 				}
-				err := action.Parse(structToEncodedMapForEdit(payload))
+				err := action.Parse(context.Background(), structToEncodedMapForEdit(payload))
 				Expect(err).ToNot(HaveOccurred())
 
-				err = action.Validate()
+				err = action.Validate(context.Background())
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("field cannot have both subfields and _refModel"))
 			})
@@ -422,10 +423,10 @@ var _ = Describe("EditDataModelAction", func() {
 						"invalid_leaf": {},
 					},
 				}
-				err := action.Parse(structToEncodedMapForEdit(payload))
+				err := action.Parse(context.Background(), structToEncodedMapForEdit(payload))
 				Expect(err).ToNot(HaveOccurred())
 
-				err = action.Validate()
+				err = action.Validate(context.Background())
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("validation error at path 'invalid_leaf': leaf nodes must contain _payloadshape"))
 			})
@@ -445,10 +446,10 @@ var _ = Describe("EditDataModelAction", func() {
 						},
 					},
 				}
-				err := action.Parse(structToEncodedMapForEdit(payload))
+				err := action.Parse(context.Background(), structToEncodedMapForEdit(payload))
 				Expect(err).ToNot(HaveOccurred())
 
-				err = action.Validate()
+				err = action.Validate(context.Background())
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("field cannot have both _payloadshape and _refModel"))
 			})
@@ -480,10 +481,10 @@ var _ = Describe("EditDataModelAction", func() {
 						},
 					},
 				}
-				err := action.Parse(structToEncodedMapForEdit(payload))
+				err := action.Parse(context.Background(), structToEncodedMapForEdit(payload))
 				Expect(err).ToNot(HaveOccurred())
 
-				err = action.Validate()
+				err = action.Validate(context.Background())
 				Expect(err).To(HaveOccurred())
 				errorMsg := err.Error()
 				Expect(errorMsg).To(ContainSubstring("data model structure validation failed:"))
@@ -517,7 +518,7 @@ var _ = Describe("EditDataModelAction", func() {
 						},
 					},
 				}
-				err := action.Parse(structToEncodedMapForEdit(payload))
+				err := action.Parse(context.Background(), structToEncodedMapForEdit(payload))
 				Expect(err).ToNot(HaveOccurred())
 
 				// Set up mock config with existing data model and payload shapes
@@ -561,7 +562,7 @@ var _ = Describe("EditDataModelAction", func() {
 			})
 
 			It("should execute successfully", func() {
-				response, metadata, err := action.Execute()
+				response, metadata, err := action.Execute(context.Background())
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(metadata).To(BeNil())
@@ -590,7 +591,7 @@ var _ = Describe("EditDataModelAction", func() {
 						},
 					},
 				}
-				err := action.Parse(structToEncodedMapForEdit(payload))
+				err := action.Parse(context.Background(), structToEncodedMapForEdit(payload))
 				Expect(err).ToNot(HaveOccurred())
 
 				// Configure mock to return error
@@ -598,7 +599,7 @@ var _ = Describe("EditDataModelAction", func() {
 			})
 
 			It("should return error", func() {
-				response, metadata, err := action.Execute()
+				response, metadata, err := action.Execute(context.Background())
 
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("Failed to edit data model"))
@@ -630,7 +631,7 @@ var _ = Describe("EditDataModelAction", func() {
 				},
 			}
 
-			err := action.Parse(structToEncodedMapForEdit(originalPayload))
+			err := action.Parse(context.Background(), structToEncodedMapForEdit(originalPayload))
 			Expect(err).ToNot(HaveOccurred())
 
 			parsedPayload := action.GetParsedPayload()
@@ -674,7 +675,7 @@ var _ = Describe("EditDataModelAction", func() {
 				},
 			}
 
-			err := action.Parse(structToEncodedMapForEdit(payload))
+			err := action.Parse(context.Background(), structToEncodedMapForEdit(payload))
 			Expect(err).ToNot(HaveOccurred())
 
 			// Set up mock config with existing data model and referenced model and payload shapes
@@ -728,10 +729,10 @@ var _ = Describe("EditDataModelAction", func() {
 			}
 			mockConfigMgr.WithConfig(existingConfig)
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 
-			response, metadata, err := action.Execute()
+			response, metadata, err := action.Execute(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 			Expect(response).ToNot(BeNil())
 			Expect(metadata).To(BeNil())

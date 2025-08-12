@@ -89,21 +89,21 @@ var _ = Describe("GetConfigFile", func() {
 	Describe("Parse", func() {
 		It("should not have any payload to parse", func() {
 			payload := map[string]interface{}{}
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 
 	Describe("Validate", func() {
 		It("should pass validation", func() {
-			err := action.Validate()
+			err := action.Validate(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 
 	Describe("Execute", func() {
 		It("should return the config file content", func() {
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(metadata).To(BeNil())
 
@@ -121,7 +121,7 @@ var _ = Describe("GetConfigFile", func() {
 
 			mockConfig.WithCacheModTime(fixedTime)
 
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(metadata).To(BeNil())
 
@@ -194,7 +194,7 @@ internal:
 				return nil, errors.New("file not found")
 			})
 
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(metadata).To(BeNil())
 
@@ -218,7 +218,7 @@ internal:
 			})
 			mockConfig.WithGetConfigAsStringError(errors.New("simulated filesystem error"))
 
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to read config file"))
 			Expect(result).To(BeNil())
@@ -240,7 +240,7 @@ internal:
 			})
 			mockConfig.WithConfigDelay(2 * time.Second)
 
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to read config file"))
 			Expect(result).To(BeNil())

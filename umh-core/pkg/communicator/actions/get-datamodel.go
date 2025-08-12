@@ -73,7 +73,7 @@ func NewGetDataModelAction(userEmail string, actionUUID uuid.UUID, instanceUUID 
 }
 
 // Parse implements the Action interface by extracting data model name from the payload.
-func (a *GetDataModelAction) Parse(payload interface{}) error {
+func (a *GetDataModelAction) Parse(ctx context.Context, payload interface{}) error {
 	// Parse the payload to get the data model name
 	parsedPayload, err := ParseActionPayload[models.GetDataModelPayload](payload)
 	if err != nil {
@@ -87,7 +87,7 @@ func (a *GetDataModelAction) Parse(payload interface{}) error {
 }
 
 // Validate performs validation of the parsed payload.
-func (a *GetDataModelAction) Validate() error {
+func (a *GetDataModelAction) Validate(ctx context.Context) error {
 	// Validate required fields
 	if a.payload.Name == "" {
 		return errors.New("missing required field Name")
@@ -97,7 +97,7 @@ func (a *GetDataModelAction) Validate() error {
 }
 
 // Execute implements the Action interface by retrieving the data model configuration.
-func (a *GetDataModelAction) Execute() (interface{}, map[string]interface{}, error) {
+func (a *GetDataModelAction) Execute(ctx context.Context) (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Info("Executing GetDataModel action")
 
 	// Send confirmation that action is starting
@@ -105,13 +105,13 @@ func (a *GetDataModelAction) Execute() (interface{}, map[string]interface{}, err
 		"Starting to retrieve data model: "+a.payload.Name, a.outboundChannel, models.GetDataModel)
 
 	// Get configuration
-	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	timeoutCtx, cancel := context.WithTimeout(ctx, constants.ActionTimeout)
 	defer cancel()
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		"Retrieving data model from configuration...", a.outboundChannel, models.GetDataModel)
 
-	fullConfig, err := a.configManager.GetConfig(ctx, 0)
+	fullConfig, err := a.configManager.GetConfig(timeoutCtx, 0)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to get configuration: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,

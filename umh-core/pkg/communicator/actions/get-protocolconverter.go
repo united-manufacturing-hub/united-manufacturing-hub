@@ -48,6 +48,7 @@
 package actions
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -111,7 +112,7 @@ func NewGetProtocolConverterAction(userEmail string, actionUUID uuid.UUID, insta
 
 // Parse stores the UUID we should resolve.  The heavy lifting
 // happens later in Execute.
-func (a *GetProtocolConverterAction) Parse(payload interface{}) (err error) {
+func (a *GetProtocolConverterAction) Parse(ctx context.Context, payload interface{}) (err error) {
 	a.actionLogger.Info("Parsing the payload")
 	a.payload, err = ParseActionPayload[models.GetProtocolConverterPayload](payload)
 	a.actionLogger.Info("Payload parsed, uuid: ", a.payload.UUID)
@@ -121,7 +122,7 @@ func (a *GetProtocolConverterAction) Parse(payload interface{}) (err error) {
 
 // Validate validates the parsed payload, checking that required fields are present
 // and properly formatted.
-func (a *GetProtocolConverterAction) Validate() error {
+func (a *GetProtocolConverterAction) Validate(ctx context.Context) error {
 	// Check if UUID is the zero value (empty UUID)
 	if a.payload.UUID == uuid.Nil {
 		return errors.New("uuid must be set to retrieve protocol converter")
@@ -199,7 +200,7 @@ func buildProtocolConverterDFCFromConfig(dfcConfig dataflowcomponentserviceconfi
 	return dfc, nil
 }
 
-func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interface{}, error) {
+func (a *GetProtocolConverterAction) Execute(ctx context.Context) (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Info("Executing the action")
 
 	// Get the Protocol Converter

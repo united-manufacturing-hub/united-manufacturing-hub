@@ -101,7 +101,7 @@ var _ = Describe("EditInstance", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Check if the location was properly parsed
@@ -114,7 +114,7 @@ var _ = Describe("EditInstance", func() {
 			payload := map[string]interface{}{}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Location should be nil
@@ -129,7 +129,7 @@ var _ = Describe("EditInstance", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid location format"))
 		})
@@ -143,7 +143,7 @@ var _ = Describe("EditInstance", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing or invalid enterprise"))
 		})
@@ -159,7 +159,7 @@ var _ = Describe("EditInstance", func() {
 			action.SetLocation(location)
 
 			// Validate
-			err := action.Validate()
+			err := action.Validate(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -168,7 +168,7 @@ var _ = Describe("EditInstance", func() {
 			action.SetLocation(nil)
 
 			// Validate
-			err := action.Validate()
+			err := action.Validate(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
@@ -177,14 +177,14 @@ var _ = Describe("EditInstance", func() {
 		It("should handle nil location gracefully", func() {
 			// Parse with nil location
 			payload := map[string]interface{}{}
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reset tracking for this test
 			mockConfig.ResetCalls()
 
 			// Execute the action
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(ContainSubstring("No changes were made"))
 			Expect(metadata).To(BeNil())
@@ -214,14 +214,14 @@ var _ = Describe("EditInstance", func() {
 					"area":       "New Area",
 				},
 			}
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reset tracking
 			mockConfig.ResetCalls()
 
 			// Execute the action
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(ContainSubstring("Successfully updated"))
 			Expect(metadata).To(BeNil())
@@ -260,11 +260,11 @@ var _ = Describe("EditInstance", func() {
 					"enterprise": "New Enterprise",
 				},
 			}
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action - should fail
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to update instance location"))
 			Expect(result).To(BeNil())
@@ -301,11 +301,11 @@ var _ = Describe("EditInstance", func() {
 					"enterprise": "New Enterprise",
 				},
 			}
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action - should fail
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to update instance location"))
 			Expect(result).To(BeNil())

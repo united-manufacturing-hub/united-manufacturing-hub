@@ -49,6 +49,7 @@
 package actions
 
 import (
+	"context"
 	"fmt"
 	"slices"
 
@@ -111,7 +112,7 @@ func NewGetDataFlowComponentAction(userEmail string, actionUUID uuid.UUID, insta
 
 // Parse stores the list of version UUIDs we should resolve.  The heavy lifting
 // happens later in Execute.
-func (a *GetDataFlowComponentAction) Parse(payload interface{}) (err error) {
+func (a *GetDataFlowComponentAction) Parse(ctx context.Context, payload interface{}) (err error) {
 	a.actionLogger.Info("Parsing the payload")
 	a.payload, err = ParseActionPayload[models.GetDataflowcomponentRequestSchemaJson](payload)
 	a.actionLogger.Info("Payload parsed, uuids: ", a.payload.VersionUUIDs)
@@ -121,11 +122,11 @@ func (a *GetDataFlowComponentAction) Parse(payload interface{}) (err error) {
 
 // Validate is a no‑op because the request schema does not require additional
 // semantic checks beyond JSON deserialization.
-func (a *GetDataFlowComponentAction) Validate() error {
+func (a *GetDataFlowComponentAction) Validate(ctx context.Context) error {
 	return nil
 }
 
-func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interface{}, error) {
+func (a *GetDataFlowComponentAction) Execute(ctx context.Context) (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Info("Executing the action")
 	numUUIDs := len(a.payload.VersionUUIDs)
 

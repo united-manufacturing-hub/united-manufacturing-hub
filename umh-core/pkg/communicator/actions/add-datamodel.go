@@ -78,7 +78,7 @@ func NewAddDataModelAction(userEmail string, actionUUID uuid.UUID, instanceUUID 
 }
 
 // Parse implements the Action interface by extracting data model configuration from the payload.
-func (a *AddDataModelAction) Parse(payload interface{}) error {
+func (a *AddDataModelAction) Parse(ctx context.Context, payload interface{}) error {
 	// Parse the payload to get the data model configuration
 	parsedPayload, err := ParseActionPayload[models.AddDataModelPayload](payload)
 	if err != nil {
@@ -108,9 +108,9 @@ func (a *AddDataModelAction) Parse(payload interface{}) error {
 }
 
 // Validate performs validation of the parsed payload.
-func (a *AddDataModelAction) Validate() error {
+func (a *AddDataModelAction) Validate(ctx context.Context) error {
 	// Create context with timeout for validation operations
-	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	timeoutCtx, cancel := context.WithTimeout(ctx, constants.ActionTimeout)
 	defer cancel()
 
 	// Validate all required fields
@@ -133,7 +133,7 @@ func (a *AddDataModelAction) Validate() error {
 	}
 
 	// Get all existing data models and payload shapes for validation
-	currentConfig, err := a.configManager.GetConfig(ctx, 0)
+	currentConfig, err := a.configManager.GetConfig(timeoutCtx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get current config for validation: %w", err)
 	}
@@ -145,7 +145,7 @@ func (a *AddDataModelAction) Validate() error {
 	}
 
 	// Validate with references and payload shapes (handles cases with no references gracefully)
-	if err := validator.ValidateWithReferences(ctx, dmVersion, allDataModels, currentConfig.PayloadShapes); err != nil {
+	if err := validator.ValidateWithReferences(timeoutCtx, dmVersion, allDataModels, currentConfig.PayloadShapes); err != nil {
 		return fmt.Errorf("data model validation failed: %w", err)
 	}
 
@@ -153,9 +153,9 @@ func (a *AddDataModelAction) Validate() error {
 }
 
 // Execute implements the Action interface by creating the data model configuration.
-func (a *AddDataModelAction) Execute() (interface{}, map[string]interface{}, error) {
+func (a *AddDataModelAction) Execute(ctx context.Context) (interface{}, map[string]interface{}, error) {
 	// Create context with timeout for execution operations
-	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	timeoutCtx, cancel := context.WithTimeout(ctx, constants.ActionTimeout)
 	defer cancel()
 
 	a.actionLogger.Info("Executing AddDataModel action")
@@ -171,7 +171,7 @@ func (a *AddDataModelAction) Execute() (interface{}, map[string]interface{}, err
 
 	// Safety validation before adding to config
 	validator := datamodel.NewValidator()
-	if err := validator.ValidateStructureOnly(ctx, dmVersion); err != nil {
+	if err := validator.ValidateStructureOnly(timeoutCtx, dmVersion); err != nil {
 		errorMsg := fmt.Sprintf("Final validation failed before adding data model: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.AddDataModel)
@@ -183,7 +183,7 @@ func (a *AddDataModelAction) Execute() (interface{}, map[string]interface{}, err
 		"Adding data model to configuration...", a.outboundChannel, models.AddDataModel)
 
 	// Use context for execution
-	err := a.configManager.AtomicAddDataModel(ctx, a.payload.Name, dmVersion, a.payload.Description)
+	err := a.configManager.AtomicAddDataModel(timeoutCtx, a.payload.Name, dmVersion, a.payload.Description)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to add data model: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -205,7 +205,7 @@ func (a *AddDataModelAction) Execute() (interface{}, map[string]interface{}, err
 		},
 	}
 
-	dataContractErr := a.configManager.AtomicAddDataContract(ctx, dataContract)
+	dataContractErr := a.configManager.AtomicAddDataContract(timeoutCtx, dataContract)
 	if dataContractErr != nil {
 		// Log the error but don't fail the entire operation since the data model was successfully added
 		a.actionLogger.Warnf("Failed to automatically create data contract for data model %s: %v", a.payload.Name, dataContractErr)

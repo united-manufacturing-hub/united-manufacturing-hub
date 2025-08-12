@@ -128,7 +128,7 @@ func NewDeployDataflowComponentAction(userEmail string, actionUUID uuid.UUID, in
 // - "custom": Custom dataflow components with Benthos configuration
 //
 // The function returns appropriate errors for missing required fields or unsupported component types.
-func (a *DeployDataflowComponentAction) Parse(payload interface{}) error {
+func (a *DeployDataflowComponentAction) Parse(ctx context.Context, payload interface{}) error {
 	topLevel, err := ParseDataflowComponentTopLevel(payload)
 	if err != nil {
 		return err
@@ -170,7 +170,7 @@ func (a *DeployDataflowComponentAction) Parse(payload interface{}) error {
 //
 // The function returns detailed error messages for any validation failures, indicating
 // exactly which field or YAML section is invalid.
-func (a *DeployDataflowComponentAction) Validate() error {
+func (a *DeployDataflowComponentAction) Validate(ctx context.Context) error {
 	// Validate name and metatype were properly parsed
 	if a.name == "" {
 		return errors.New("missing required field Name")
@@ -203,7 +203,7 @@ func (a *DeployDataflowComponentAction) Validate() error {
 // - Converting YAML strings into structured configuration
 // - Normalizing the Benthos configuration
 // - Adding the component to the configuration with a desired state of "active".
-func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]interface{}, error) {
+func (a *DeployDataflowComponentAction) Execute(ctx context.Context) (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Info("Executing DeployDataflowComponent action")
 
 	// Send confirmation that action is starting
@@ -223,10 +223,10 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("deploy", a.name)+"adding to configuration", a.outboundChannel, models.DeployDataFlowComponent)
 	// Update the location in the configuration
-	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	timeoutCtx, cancel := context.WithTimeout(ctx, constants.ActionTimeout)
 	defer cancel()
 
-	err = a.configManager.AtomicAddDataflowcomponent(ctx, dfc)
+	err = a.configManager.AtomicAddDataflowcomponent(timeoutCtx, dfc)
 	if err != nil {
 		errorMsg := Label("deploy", a.name) + fmt.Sprintf("failed to add dataflow component: %v.", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeployDataFlowComponent)
@@ -314,11 +314,7 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeReady(ctx context.Co
 			stateMessage := Label("deploy", a.name) + "timeout reached. it did not reach the desired state in time. removing"
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage,
 				a.outboundChannel, models.DeployDataFlowComponent)
-			// Create a fresh context for cleanup operation since the original ctx has timed out
-			cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
-			defer cleanupCancel()
-
-			err := a.configManager.AtomicDeleteDataflowcomponent(cleanupCtx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name))
+			err := a.configManager.AtomicDeleteDataflowcomponent(ctx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name))
 			if err != nil {
 				a.actionLogger.Errorf("failed to remove dataflowcomponent %s: %v", a.name, err)
 
@@ -388,11 +384,7 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeReady(ctx context.Co
 					// as these errors require configuration changes to resolve.
 					if CheckBenthosLogLinesForConfigErrors(logs) {
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("deploy", a.name)+"configuration error detected. Removing component...", a.outboundChannel, models.DeployDataFlowComponent)
-						// Create a fresh context for cleanup operation since the original ctx may be expired or close to expiring
-						cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
-						defer cleanupCancel()
-
-						err := a.configManager.AtomicDeleteDataflowcomponent(cleanupCtx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name))
+						err := a.configManager.AtomicDeleteDataflowcomponent(ctx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name))
 						if err != nil {
 							a.actionLogger.Errorf("failed to remove dataflowcomponent %s: %v", a.name, err)
 

@@ -15,6 +15,7 @@
 package actions_test
 
 import (
+	"context"
 	"encoding/base64"
 	"errors"
 
@@ -97,7 +98,7 @@ var _ = Describe("AddDataModelAction", func() {
 					},
 				}
 
-				err := action.Parse(structToEncodedMap(payload))
+				err := action.Parse(context.Background(), structToEncodedMap(payload))
 
 				Expect(err).ToNot(HaveOccurred())
 				parsedPayload := action.GetParsedPayload()
@@ -111,7 +112,7 @@ var _ = Describe("AddDataModelAction", func() {
 			It("should return error", func() {
 				invalidPayload := "not a valid payload"
 
-				err := action.Parse(invalidPayload)
+				err := action.Parse(context.Background(), invalidPayload)
 
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to parse payload"))
@@ -120,7 +121,7 @@ var _ = Describe("AddDataModelAction", func() {
 
 		Context("with nil payload", func() {
 			It("should return error", func() {
-				err := action.Parse(nil)
+				err := action.Parse(context.Background(), nil)
 
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to parse payload"))
@@ -140,12 +141,12 @@ var _ = Describe("AddDataModelAction", func() {
 	// 					},
 	// 				},
 	// 			}
-	// 			err := action.Parse(structToEncodedMap(payload))
+	// 			err := action.Parse(context.Background(), structToEncodedMap(payload))
 	// 			Expect(err).ToNot(HaveOccurred())
 	// 		})
 
 	// 		It("should validate successfully", func() {
-	// 			err := action.Validate()
+	// 			err := action.Validate(context.Background())
 	// 			Expect(err).ToNot(HaveOccurred())
 	// 		})
 	// 	})
@@ -160,12 +161,12 @@ var _ = Describe("AddDataModelAction", func() {
 	// 					},
 	// 				},
 	// 			}
-	// 			err := action.Parse(structToEncodedMap(payload))
+	// 			err := action.Parse(context.Background(), structToEncodedMap(payload))
 	// 			Expect(err).ToNot(HaveOccurred())
 	// 		})
 
 	// 		It("should return validation error", func() {
-	// 			err := action.Validate()
+	// 			err := action.Validate(context.Background())
 	// 			Expect(err).To(HaveOccurred())
 	// 			Expect(err.Error()).To(Equal("missing required field Name"))
 	// 		})
@@ -177,12 +178,12 @@ var _ = Describe("AddDataModelAction", func() {
 	// 				Name:        "test-model",
 	// 				Structure:   map[string]models.Field{},
 	// 			}
-	// 			err := action.Parse(structToEncodedMap(payload))
+	// 			err := action.Parse(context.Background(), structToEncodedMap(payload))
 	// 			Expect(err).ToNot(HaveOccurred())
 	// 		})
 
 	// 		It("should return validation error", func() {
-	// 			err := action.Validate()
+	// 			err := action.Validate(context.Background())
 	// 			Expect(err).To(HaveOccurred())
 	// 			Expect(err.Error()).To(Equal("missing required field Structure"))
 	// 		})
@@ -194,12 +195,12 @@ var _ = Describe("AddDataModelAction", func() {
 	// 				Name:        "test-model",
 	// 				Structure:   nil,
 	// 			}
-	// 			err := action.Parse(structToEncodedMap(payload))
+	// 			err := action.Parse(context.Background(), structToEncodedMap(payload))
 	// 			Expect(err).ToNot(HaveOccurred())
 	// 		})
 
 	// 		It("should return validation error", func() {
-	// 			err := action.Validate()
+	// 			err := action.Validate(context.Background())
 	// 			Expect(err).To(HaveOccurred())
 	// 			Expect(err.Error()).To(Equal("missing required field Structure"))
 	// 		})
@@ -228,12 +229,12 @@ var _ = Describe("AddDataModelAction", func() {
 	// 					},
 	// 				},
 	// 			}
-	// 			err := action.Parse(structToEncodedMap(payload))
+	// 			err := action.Parse(context.Background(), structToEncodedMap(payload))
 	// 			Expect(err).ToNot(HaveOccurred())
 	// 		})
 
 	// 		It("should validate successfully", func() {
-	// 			err := action.Validate()
+	// 			err := action.Validate(context.Background())
 	// 			Expect(err).ToNot(HaveOccurred())
 	// 		})
 	// 	})
@@ -250,10 +251,10 @@ var _ = Describe("AddDataModelAction", func() {
 	// 					},
 	// 				},
 	// 			}
-	// 			err := action.Parse(structToEncodedMap(payload))
+	// 			err := action.Parse(context.Background(), structToEncodedMap(payload))
 	// 			Expect(err).ToNot(HaveOccurred())
 
-	// 			err = action.Validate()
+	// 			err = action.Validate(context.Background())
 	// 			Expect(err).To(HaveOccurred())
 	// 			Expect(err.Error()).To(ContainSubstring("_refModel must have a version specified"))
 	// 		})
@@ -269,10 +270,10 @@ var _ = Describe("AddDataModelAction", func() {
 	// 					},
 	// 				},
 	// 			}
-	// 			err := action.Parse(structToEncodedMap(payload))
+	// 			err := action.Parse(context.Background(), structToEncodedMap(payload))
 	// 			Expect(err).ToNot(HaveOccurred())
 
-	// 			err = action.Validate()
+	// 			err = action.Validate(context.Background())
 	// 			Expect(err).To(HaveOccurred())
 	// 			Expect(err.Error()).To(ContainSubstring("_refModel must have a version specified"))
 	// 		})
@@ -288,10 +289,10 @@ var _ = Describe("AddDataModelAction", func() {
 	// 					},
 	// 				},
 	// 			}
-	// 			err := action.Parse(structToEncodedMap(payload))
+	// 			err := action.Parse(context.Background(), structToEncodedMap(payload))
 	// 			Expect(err).ToNot(HaveOccurred())
 
-	// 			err = action.Validate()
+	// 			err = action.Validate(context.Background())
 	// 			Expect(err).To(HaveOccurred())
 	// 			Expect(err.Error()).To(ContainSubstring("_refModel must have a version specified"))
 	// 		})
@@ -310,10 +311,10 @@ var _ = Describe("AddDataModelAction", func() {
 	// 					},
 	// 				},
 	// 			}
-	// 			err := action.Parse(structToEncodedMap(payload))
+	// 			err := action.Parse(context.Background(), structToEncodedMap(payload))
 	// 			Expect(err).ToNot(HaveOccurred())
 
-	// 			err = action.Validate()
+	// 			err = action.Validate(context.Background())
 	// 			Expect(err).To(HaveOccurred())
 	// 			Expect(err.Error()).To(ContainSubstring("does not match pattern ^v\\d+$"))
 	// 		})
@@ -333,10 +334,10 @@ var _ = Describe("AddDataModelAction", func() {
 	// 					},
 	// 				},
 	// 			}
-	// 			err := action.Parse(structToEncodedMap(payload))
+	// 			err := action.Parse(context.Background(), structToEncodedMap(payload))
 	// 			Expect(err).ToNot(HaveOccurred())
 
-	// 			err = action.Validate()
+	// 			err = action.Validate(context.Background())
 	// 			Expect(err).To(HaveOccurred())
 	// 			Expect(err.Error()).To(ContainSubstring("field cannot have both _type and _refModel"))
 	// 		})
@@ -358,10 +359,10 @@ var _ = Describe("AddDataModelAction", func() {
 	// 					},
 	// 				},
 	// 			}
-	// 			err := action.Parse(structToEncodedMap(payload))
+	// 			err := action.Parse(context.Background(), structToEncodedMap(payload))
 	// 			Expect(err).ToNot(HaveOccurred())
 
-	// 			err = action.Validate()
+	// 			err = action.Validate(context.Background())
 	// 			Expect(err).To(HaveOccurred())
 	// 			Expect(err.Error()).To(ContainSubstring("field cannot have both subfields and _refModel"))
 	// 		})
@@ -375,10 +376,10 @@ var _ = Describe("AddDataModelAction", func() {
 	// 					"invalid_leaf": {},
 	// 				},
 	// 			}
-	// 			err := action.Parse(structToEncodedMap(payload))
+	// 			err := action.Parse(context.Background(), structToEncodedMap(payload))
 	// 			Expect(err).ToNot(HaveOccurred())
 
-	// 			err = action.Validate()
+	// 			err = action.Validate(context.Background())
 	// 			Expect(err).To(HaveOccurred())
 	// 			Expect(err.Error()).To(ContainSubstring("leaf nodes must contain _type"))
 	// 		})
@@ -397,10 +398,10 @@ var _ = Describe("AddDataModelAction", func() {
 	// 					},
 	// 				},
 	// 			}
-	// 			err := action.Parse(structToEncodedMap(payload))
+	// 			err := action.Parse(context.Background(), structToEncodedMap(payload))
 	// 			Expect(err).ToNot(HaveOccurred())
 
-	// 			err = action.Validate()
+	// 			err = action.Validate(context.Background())
 	// 			Expect(err).To(HaveOccurred())
 	// 			Expect(err.Error()).To(ContainSubstring("subModel nodes should ONLY contain _refModel"))
 	// 		})
@@ -432,10 +433,10 @@ var _ = Describe("AddDataModelAction", func() {
 	// 					},
 	// 				},
 	// 			}
-	// 			err := action.Parse(structToEncodedMap(payload))
+	// 			err := action.Parse(context.Background(), structToEncodedMap(payload))
 	// 			Expect(err).ToNot(HaveOccurred())
 
-	// 			err = action.Validate()
+	// 			err = action.Validate(context.Background())
 	// 			Expect(err).To(HaveOccurred())
 	// 			errorMsg := err.Error()
 	// 			Expect(errorMsg).To(ContainSubstring("data model structure validation failed:"))
@@ -466,12 +467,12 @@ var _ = Describe("AddDataModelAction", func() {
 						},
 					},
 				}
-				err := action.Parse(structToEncodedMap(payload))
+				err := action.Parse(context.Background(), structToEncodedMap(payload))
 				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should execute successfully", func() {
-				response, metadata, err := action.Execute()
+				response, metadata, err := action.Execute(context.Background())
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(metadata).To(BeNil())
@@ -511,7 +512,7 @@ var _ = Describe("AddDataModelAction", func() {
 						},
 					},
 				}
-				err := action.Parse(structToEncodedMap(payload))
+				err := action.Parse(context.Background(), structToEncodedMap(payload))
 				Expect(err).ToNot(HaveOccurred())
 
 				// Configure mock to fail data contract creation
@@ -519,7 +520,7 @@ var _ = Describe("AddDataModelAction", func() {
 			})
 
 			It("should still succeed but indicate data contract creation failed", func() {
-				response, metadata, err := action.Execute()
+				response, metadata, err := action.Execute(context.Background())
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(metadata).To(BeNil())
@@ -592,7 +593,7 @@ var _ = Describe("AddDataModelAction", func() {
 				},
 			}
 
-			err := action.Parse(structToEncodedMap(payload))
+			err := action.Parse(context.Background(), structToEncodedMap(payload))
 			Expect(err).ToNot(HaveOccurred())
 
 			// Set up mock config with the referenced model and payload shapes
@@ -634,10 +635,10 @@ var _ = Describe("AddDataModelAction", func() {
 			}
 			mockConfigMgr.WithConfig(mockConfig)
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 
-			response, metadata, err := action.Execute()
+			response, metadata, err := action.Execute(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 			Expect(response).ToNot(BeNil())
 			Expect(metadata).To(BeNil())

@@ -15,6 +15,7 @@
 package actions_test
 
 import (
+	"context"
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -84,7 +85,7 @@ var _ = Describe("GetProtocolConverter", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Check if the payload was properly parsed
@@ -99,11 +100,11 @@ var _ = Describe("GetProtocolConverter", func() {
 			}
 
 			// Call Parse method - should succeed but set UUID to zero value
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Validation should fail because UUID is zero value
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("uuid must be set"))
 		})
@@ -115,7 +116,7 @@ var _ = Describe("GetProtocolConverter", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 		})
 	})
@@ -127,11 +128,11 @@ var _ = Describe("GetProtocolConverter", func() {
 			payload := map[string]interface{}{
 				"uuid": testUUID.String(),
 			}
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Validate
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
@@ -248,11 +249,11 @@ var _ = Describe("GetProtocolConverter", func() {
 				payload := map[string]interface{}{
 					"uuid": actualUUID.String(),
 				}
-				err := action.Parse(payload)
+				err := action.Parse(context.Background(), payload)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Execute the action
-				result, metadata, err := action.Execute()
+				result, metadata, err := action.Execute(context.Background())
 				Expect(err).NotTo(HaveOccurred())
 				Expect(metadata).To(BeNil())
 
@@ -345,11 +346,11 @@ var _ = Describe("GetProtocolConverter", func() {
 				payload := map[string]interface{}{
 					"uuid": actualUUID.String(),
 				}
-				err := action.Parse(payload)
+				err := action.Parse(context.Background(), payload)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Execute the action
-				result, metadata, err := action.Execute()
+				result, metadata, err := action.Execute(context.Background())
 				Expect(err).NotTo(HaveOccurred())
 				Expect(metadata).To(BeNil())
 
@@ -399,11 +400,11 @@ var _ = Describe("GetProtocolConverter", func() {
 				payload := map[string]interface{}{
 					"uuid": nonExistentUUID.String(),
 				}
-				err := action.Parse(payload)
+				err := action.Parse(context.Background(), payload)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Execute the action
-				result, metadata, err := action.Execute()
+				result, metadata, err := action.Execute(context.Background())
 				Expect(err).To(HaveOccurred())
 				Expect(result).To(BeNil())
 				Expect(metadata).To(BeNil())
@@ -426,11 +427,11 @@ var _ = Describe("GetProtocolConverter", func() {
 				payload := map[string]interface{}{
 					"uuid": testUUID.String(),
 				}
-				err := action.Parse(payload)
+				err := action.Parse(context.Background(), payload)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Execute the action
-				result, metadata, err := action.Execute()
+				result, metadata, err := action.Execute(context.Background())
 				Expect(err).To(HaveOccurred())
 				Expect(result).To(BeNil())
 				Expect(metadata).To(BeNil())
@@ -471,11 +472,11 @@ var _ = Describe("GetProtocolConverter", func() {
 				payload := map[string]interface{}{
 					"uuid": actualUUID.String(),
 				}
-				err := action.Parse(payload)
+				err := action.Parse(context.Background(), payload)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Execute the action
-				result, metadata, err := action.Execute()
+				result, metadata, err := action.Execute(context.Background())
 				Expect(err).To(HaveOccurred())
 				Expect(result).To(BeNil())
 				Expect(metadata).To(BeNil())
@@ -514,11 +515,11 @@ var _ = Describe("GetProtocolConverter", func() {
 				payload := map[string]interface{}{
 					"uuid": actualUUID.String(),
 				}
-				err := action.Parse(payload)
+				err := action.Parse(context.Background(), payload)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Execute the action
-				result, metadata, err := action.Execute()
+				result, metadata, err := action.Execute(context.Background())
 				Expect(err).To(HaveOccurred())
 				Expect(result).To(BeNil())
 				Expect(metadata).To(BeNil())

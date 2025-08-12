@@ -98,7 +98,7 @@ func NewDeleteDataflowComponentAction(userEmail string, actionUUID uuid.UUID, in
 // Parse extracts the component UUID from the user‑supplied JSON payload.
 // Shape errors (missing or malformed UUID) are detected here so that Validate
 // can remain trivial.
-func (a *DeleteDataflowComponentAction) Parse(payload interface{}) error {
+func (a *DeleteDataflowComponentAction) Parse(ctx context.Context, payload interface{}) error {
 	// Parse the payload to get the UUID
 	parsedPayload, err := ParseActionPayload[models.DeleteDFCPayload](payload)
 	if err != nil {
@@ -124,7 +124,7 @@ func (a *DeleteDataflowComponentAction) Parse(payload interface{}) error {
 
 // Validate performs only *existence* checks because all heavy‑weight work has
 // already happened in Parse.
-func (a *DeleteDataflowComponentAction) Validate() error {
+func (a *DeleteDataflowComponentAction) Validate(ctx context.Context) error {
 	// UUID validation is already done in Parse, so there's not much additional validation needed
 	if a.componentUUID == uuid.Nil {
 		return errors.New("component UUID is missing or invalid")
@@ -138,19 +138,19 @@ func (a *DeleteDataflowComponentAction) Validate() error {
 //
 // Progress is streamed via `outboundChannel` so that a human operator can watch
 // the deletion in real time.
-func (a *DeleteDataflowComponentAction) Execute() (interface{}, map[string]interface{}, error) {
+func (a *DeleteDataflowComponentAction) Execute(ctx context.Context) (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Info("Executing DeleteDataflowComponent action")
 
 	// ─── 1  Tell the UI we are about to start ──────────────────────────────
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, "Starting deletion of dataflow component with UUID: "+a.componentUUID.String(), a.outboundChannel, models.DeleteDataFlowComponent)
 
 	// ─── 2  Remove the config atomically ───────────────────────────────────-
-	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	timeoutCtx, cancel := context.WithTimeout(ctx, constants.ActionTimeout)
 	defer cancel()
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Removing dataflow component from configuration...", a.outboundChannel, models.DeleteDataFlowComponent)
 
-	err := a.configManager.AtomicDeleteDataflowcomponent(ctx, a.componentUUID)
+	err := a.configManager.AtomicDeleteDataflowcomponent(timeoutCtx, a.componentUUID)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to delete dataflow component: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeleteDataFlowComponent)

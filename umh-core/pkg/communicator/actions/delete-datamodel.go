@@ -70,7 +70,7 @@ func NewDeleteDataModelAction(userEmail string, actionUUID uuid.UUID, instanceUU
 }
 
 // Parse implements the Action interface by extracting data model name from the payload.
-func (a *DeleteDataModelAction) Parse(payload interface{}) error {
+func (a *DeleteDataModelAction) Parse(ctx context.Context, payload interface{}) error {
 	// Parse the payload to get the data model name
 	parsedPayload, err := ParseActionPayload[models.DeleteDataModelPayload](payload)
 	if err != nil {
@@ -84,7 +84,7 @@ func (a *DeleteDataModelAction) Parse(payload interface{}) error {
 }
 
 // Validate performs validation of the parsed payload.
-func (a *DeleteDataModelAction) Validate() error {
+func (a *DeleteDataModelAction) Validate(ctx context.Context) error {
 	// Validate required fields
 	if a.payload.Name == "" {
 		return errors.New("missing required field Name")
@@ -94,7 +94,7 @@ func (a *DeleteDataModelAction) Validate() error {
 }
 
 // Execute implements the Action interface by deleting the data model configuration.
-func (a *DeleteDataModelAction) Execute() (interface{}, map[string]interface{}, error) {
+func (a *DeleteDataModelAction) Execute(ctx context.Context) (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Info("Executing DeleteDataModel action")
 
 	// Send confirmation that action is starting
@@ -102,13 +102,13 @@ func (a *DeleteDataModelAction) Execute() (interface{}, map[string]interface{}, 
 		"Starting to delete data model: "+a.payload.Name, a.outboundChannel, models.DeleteDataModel)
 
 	// Delete from configuration
-	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	timeoutCtx, cancel := context.WithTimeout(ctx, constants.ActionTimeout)
 	defer cancel()
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		"Removing data model from configuration...", a.outboundChannel, models.DeleteDataModel)
 
-	err := a.configManager.AtomicDeleteDataModel(ctx, a.payload.Name)
+	err := a.configManager.AtomicDeleteDataModel(timeoutCtx, a.payload.Name)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to delete data model: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,

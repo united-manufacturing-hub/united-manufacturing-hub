@@ -15,6 +15,7 @@
 package actions_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"time"
@@ -113,7 +114,7 @@ var _ = Describe("DeleteDataModelAction", func() {
 					Name: "test-model",
 				}
 
-				err := action.Parse(structToMap(payload))
+				err := action.Parse(context.Background(), structToMap(payload))
 
 				Expect(err).ToNot(HaveOccurred())
 				parsedPayload := action.GetParsedPayload()
@@ -125,7 +126,7 @@ var _ = Describe("DeleteDataModelAction", func() {
 			It("should return error", func() {
 				invalidPayload := "not a valid payload"
 
-				err := action.Parse(invalidPayload)
+				err := action.Parse(context.Background(), invalidPayload)
 
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to parse payload"))
@@ -134,7 +135,7 @@ var _ = Describe("DeleteDataModelAction", func() {
 
 		Context("with nil payload", func() {
 			It("should return error", func() {
-				err := action.Parse(nil)
+				err := action.Parse(context.Background(), nil)
 
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to parse payload"))
@@ -148,12 +149,12 @@ var _ = Describe("DeleteDataModelAction", func() {
 				payload := models.DeleteDataModelPayload{
 					Name: "test-model",
 				}
-				err := action.Parse(structToMap(payload))
+				err := action.Parse(context.Background(), structToMap(payload))
 				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should validate successfully", func() {
-				err := action.Validate()
+				err := action.Validate(context.Background())
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})
@@ -163,12 +164,12 @@ var _ = Describe("DeleteDataModelAction", func() {
 				payload := models.DeleteDataModelPayload{
 					Name: "",
 				}
-				err := action.Parse(structToMap(payload))
+				err := action.Parse(context.Background(), structToMap(payload))
 				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should return validation error", func() {
-				err := action.Validate()
+				err := action.Validate(context.Background())
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(Equal("missing required field Name"))
 			})
@@ -181,12 +182,12 @@ var _ = Describe("DeleteDataModelAction", func() {
 				payload := models.DeleteDataModelPayload{
 					Name: "test-model",
 				}
-				err := action.Parse(structToMap(payload))
+				err := action.Parse(context.Background(), structToMap(payload))
 				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should execute successfully", func() {
-				response, metadata, err := action.Execute()
+				response, metadata, err := action.Execute(context.Background())
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(metadata).To(BeNil())
@@ -204,7 +205,7 @@ var _ = Describe("DeleteDataModelAction", func() {
 			It("should send correct action replies to outbound channel", func() {
 				go func() {
 					defer GinkgoRecover()
-					_, _, _ = action.Execute()
+					_, _, _ = action.Execute(context.Background())
 				}()
 
 				// Should receive multiple messages
@@ -230,12 +231,12 @@ var _ = Describe("DeleteDataModelAction", func() {
 				payload := models.DeleteDataModelPayload{
 					Name: "non-existent-model",
 				}
-				err := action.Parse(structToMap(payload))
+				err := action.Parse(context.Background(), structToMap(payload))
 				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should return error", func() {
-				_, _, err := action.Execute()
+				_, _, err := action.Execute(context.Background())
 
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("Failed to delete data model"))
@@ -248,7 +249,7 @@ var _ = Describe("DeleteDataModelAction", func() {
 				payload := models.DeleteDataModelPayload{
 					Name: "test-model",
 				}
-				err := action.Parse(structToMap(payload))
+				err := action.Parse(context.Background(), structToMap(payload))
 				Expect(err).ToNot(HaveOccurred())
 
 				// Configure mock to return error
@@ -256,7 +257,7 @@ var _ = Describe("DeleteDataModelAction", func() {
 			})
 
 			It("should return error", func() {
-				_, _, err := action.Execute()
+				_, _, err := action.Execute(context.Background())
 
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("Failed to delete data model"))
@@ -275,7 +276,7 @@ var _ = Describe("DeleteDataModelAction", func() {
 			originalPayload := models.DeleteDataModelPayload{
 				Name: "test-model",
 			}
-			err := action.Parse(structToMap(originalPayload))
+			err := action.Parse(context.Background(), structToMap(originalPayload))
 			Expect(err).ToNot(HaveOccurred())
 
 			payload := action.GetParsedPayload()

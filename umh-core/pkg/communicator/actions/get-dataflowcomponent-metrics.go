@@ -15,6 +15,7 @@
 package actions
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -57,7 +58,7 @@ func NewGetDataflowcomponentMetricsAction(userEmail string, actionUUID uuid.UUID
 	}
 }
 
-func (a *GetDataflowcomponentMetricsAction) Parse(payload interface{}) (err error) {
+func (a *GetDataflowcomponentMetricsAction) Parse(ctx context.Context, payload interface{}) (err error) {
 	a.actionLogger.Info("Parsing the payload")
 	a.payload, err = ParseActionPayload[models.GetDataflowcomponentMetricsRequest](payload) //nolint:staticcheck // Deprecated but kept for back compat
 	a.actionLogger.Info("Payload parsed: %v", a.payload)
@@ -65,7 +66,7 @@ func (a *GetDataflowcomponentMetricsAction) Parse(payload interface{}) (err erro
 	return err
 }
 
-func (a *GetDataflowcomponentMetricsAction) Validate() (err error) {
+func (a *GetDataflowcomponentMetricsAction) Validate(ctx context.Context) (err error) {
 	a.actionLogger.Info("Validating the payload")
 
 	if a.payload.UUID == "" {
@@ -80,7 +81,7 @@ func (a *GetDataflowcomponentMetricsAction) Validate() (err error) {
 	return nil
 }
 
-func (a *GetDataflowcomponentMetricsAction) Execute() (interface{}, map[string]interface{}, error) {
+func (a *GetDataflowcomponentMetricsAction) Execute(ctx context.Context) (interface{}, map[string]interface{}, error) {
 	dfcInstance, err := fsm.FindDfcInstanceByUUID(a.systemSnapshotManager.GetDeepCopySnapshot(), a.payload.UUID)
 	if err != nil {
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "failed to find DFC instance", a.outboundChannel, models.GetDataFlowComponentMetrics) //nolint:staticcheck // Deprecated but kept for back compat
@@ -96,7 +97,15 @@ func (a *GetDataflowcomponentMetricsAction) Execute() (interface{}, map[string]i
 		return nil, nil, err
 	}
 
-	metrics := dfcInstance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot).ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
+	snapshot, ok := dfcInstance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
+	if !ok {
+		err = fmt.Errorf("DFC instance %s has invalid observed state type", a.payload.UUID)
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetDataFlowComponentMetrics) //nolint:staticcheck // Deprecated but kept for back compat
+
+		return nil, nil, err
+	}
+
+	metrics := snapshot.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
 
 	// Convert metrics to flattened DfcMetrics format
 	dfcMetrics := DfcMetrics{

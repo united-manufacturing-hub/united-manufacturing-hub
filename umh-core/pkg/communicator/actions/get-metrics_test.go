@@ -15,6 +15,7 @@
 package actions_test
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -208,7 +209,7 @@ var _ = Describe("GetMetricsAction", func() {
 				"uuid": dfcUUID.String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(action.GetParsedPayload().Type).To(Equal(models.DFCMetricResourceType))
 			Expect(action.GetParsedPayload().UUID).To(Equal(dfcUUID.String()))
@@ -219,7 +220,7 @@ var _ = Describe("GetMetricsAction", func() {
 				"type": "redpanda",
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(action.GetParsedPayload().Type).To(Equal(models.RedpandaMetricResourceType))
 		})
@@ -230,7 +231,7 @@ var _ = Describe("GetMetricsAction", func() {
 				"uuid": streamProcessorUUID.String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(action.GetParsedPayload().Type).To(Equal(models.StreamProcessorMetricResourceType))
 			Expect(action.GetParsedPayload().UUID).To(Equal(streamProcessorUUID.String()))
@@ -241,20 +242,20 @@ var _ = Describe("GetMetricsAction", func() {
 		It("should validate a valid payload", func() {
 			payload := map[string]interface{}{"type": "redpanda"}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should return an error if the metrics type is invalid", func() {
 			payload := map[string]interface{}{"type": "invalid"}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("metric type must be set and must be one of the following: dfc, redpanda, topic-browser, stream-processor"))
 		})
@@ -262,10 +263,10 @@ var _ = Describe("GetMetricsAction", func() {
 		It("should return an error if the uuid is missing on DFC metrics type", func() {
 			payload := map[string]interface{}{"type": "dfc"}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("uuid must be set to retrieve metrics for a DFC"))
 		})
@@ -273,10 +274,10 @@ var _ = Describe("GetMetricsAction", func() {
 		It("should return an error if the uuid is missing on Stream Processor metrics type", func() {
 			payload := map[string]interface{}{"type": "stream-processor"}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("uuid must be set to retrieve metrics for a Stream Processor"))
 		})
@@ -284,10 +285,10 @@ var _ = Describe("GetMetricsAction", func() {
 		It("should return an error if the uuid is invalid", func() {
 			payload := map[string]interface{}{"type": "dfc", "uuid": "invalid"}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid UUID format"))
 		})
@@ -306,13 +307,13 @@ var _ = Describe("GetMetricsAction", func() {
 				payload["uuid"] = streamProcessorUUID.String()
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 
-			result, _, err := action.Execute()
+			result, _, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 
 			res, ok := result.(models.GetMetricsResponse)
@@ -340,13 +341,13 @@ var _ = Describe("GetMetricsAction", func() {
 				"type": models.RedpandaMetricResourceType,
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 
-			result, _, err := action.Execute()
+			result, _, err := action.Execute(context.Background())
 			Expect(result).To(BeNil())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to get metrics"))
@@ -367,13 +368,13 @@ var _ = Describe("GetMetricsAction", func() {
 				payload["uuid"] = streamProcessorUUID.String()
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 
-			result, _, err := action.Execute()
+			result, _, err := action.Execute(context.Background())
 			Expect(result).To(BeNil())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to find the %s instance", metricType))
@@ -392,13 +393,13 @@ var _ = Describe("GetMetricsAction", func() {
 				"uuid": uuid.New().String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 
-			result, _, err := action.Execute()
+			result, _, err := action.Execute(context.Background())
 			Expect(result).To(BeNil())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("the requested DFC with UUID %s was not found", payload["uuid"]))

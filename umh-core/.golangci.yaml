@@ -39,3 +39,8 @@ linters:
     - gochecknoglobals
     - funcorder
     - dupl
+    - gosmopolitan
+    # To be enabled later
+    - forbidigo
+    - exhaustruct
+    - fatcontext

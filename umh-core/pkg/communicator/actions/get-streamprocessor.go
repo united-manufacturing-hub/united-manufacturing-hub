@@ -111,7 +111,7 @@ func NewGetStreamProcessorAction(userEmail string, actionUUID uuid.UUID, instanc
 
 // Parse stores the UUID we should resolve.  The heavy lifting
 // happens later in Execute.
-func (a *GetStreamProcessorAction) Parse(payload interface{}) (err error) {
+func (a *GetStreamProcessorAction) Parse(ctx context.Context, payload interface{}) (err error) {
 	a.actionLogger.Info("Parsing the payload")
 	a.payload, err = ParseActionPayload[models.GetStreamProcessorPayload](payload)
 	a.actionLogger.Info("Payload parsed, uuid: ", a.payload.UUID)
@@ -121,7 +121,7 @@ func (a *GetStreamProcessorAction) Parse(payload interface{}) (err error) {
 
 // Validate validates the parsed payload, checking that required fields are present
 // and properly formatted.
-func (a *GetStreamProcessorAction) Validate() error {
+func (a *GetStreamProcessorAction) Validate(ctx context.Context) error {
 	// Check if UUID is the zero value (empty UUID)
 	if a.payload.UUID == uuid.Nil {
 		return errors.New("uuid must be set to retrieve stream processor")
@@ -131,7 +131,7 @@ func (a *GetStreamProcessorAction) Validate() error {
 }
 
 // Execute retrieves the stream processor configuration from the system snapshot and returns it.
-func (a *GetStreamProcessorAction) Execute() (interface{}, map[string]interface{}, error) {
+func (a *GetStreamProcessorAction) Execute(ctx context.Context) (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Info("Executing GetStreamProcessor action")
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed,
@@ -141,8 +141,6 @@ func (a *GetStreamProcessorAction) Execute() (interface{}, map[string]interface{
 		"Retrieving stream processor configuration...", a.outboundChannel, models.GetStreamProcessor)
 
 	// Get the current config to read the stream processor configuration
-	ctx := context.Background()
-
 	currentConfig, err := a.configManager.GetConfig(ctx, 0)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to get current config: %v", err)

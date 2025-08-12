@@ -61,7 +61,7 @@ func NewGetConfigFileAction(userEmail string, actionUUID uuid.UUID, instanceUUID
 
 // Parse extracts the business fields from the raw JSON payload.
 // The GetConfigFile action doesn't require any payload, so this is a no-op.
-func (a *GetConfigFileAction) Parse(payload interface{}) error {
+func (a *GetConfigFileAction) Parse(ctx context.Context, payload interface{}) error {
 	a.actionLogger.Info("Parsing GetConfigFile payload")
 	// No payload to parse for this action
 	return nil
@@ -69,18 +69,18 @@ func (a *GetConfigFileAction) Parse(payload interface{}) error {
 
 // Validate performs semantic validation of the parsed payload.
 // The GetConfigFile action doesn't require any payload, so this is a no-op.
-func (a *GetConfigFileAction) Validate() error {
+func (a *GetConfigFileAction) Validate(ctx context.Context) error {
 	a.actionLogger.Info("Validating GetConfigFile action")
 	// No validation needed for this action
 	return nil
 }
 
 // Execute takes care of retrieving the config file content.
-func (a *GetConfigFileAction) Execute() (interface{}, map[string]interface{}, error) {
+func (a *GetConfigFileAction) Execute(ctx context.Context) (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Info("Executing GetConfigFile action")
 
 	// Create a context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), constants.GetOrSetConfigFileTimeout)
+	timeoutCtx, cancel := context.WithTimeout(ctx, constants.GetOrSetConfigFileTimeout)
 	defer cancel()
 
 	// Use the default config path from the config manager
@@ -90,7 +90,7 @@ func (a *GetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 		"Reading config file from "+configPath, a.outboundChannel, models.GetConfigFile)
 
 	// Get the config file content as string using the new method
-	content, err := a.configManager.GetConfigAsString(ctx)
+	content, err := a.configManager.GetConfigAsString(timeoutCtx)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to read config file: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,

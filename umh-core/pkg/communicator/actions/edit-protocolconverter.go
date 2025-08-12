@@ -131,7 +131,7 @@ func NewEditProtocolConverterAction(userEmail string, actionUUID uuid.UUID, inst
 
 // Parse implements the Action interface by extracting the protocol converter UUID and
 // dataflow component configuration from the payload.
-func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
+func (a *EditProtocolConverterAction) Parse(ctx context.Context, payload interface{}) error {
 	// Parse the payload directly as a complete ProtocolConverter object
 	pcPayload, err := ParseActionPayload[models.ProtocolConverter](payload)
 	if err != nil {
@@ -197,7 +197,7 @@ func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
 }
 
 // Validate performs validation of the parsed payload.
-func (a *EditProtocolConverterAction) Validate() error {
+func (a *EditProtocolConverterAction) Validate(ctx context.Context) error {
 	// Validate UUID and DFC type
 	if a.protocolConverterUUID == uuid.Nil {
 		return errors.New("missing or invalid protocol converter UUID")
@@ -220,7 +220,7 @@ func (a *EditProtocolConverterAction) Validate() error {
 
 // Execute implements the Action interface by updating the protocol converter configuration
 // with the provided dataflow component configuration.
-func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interface{}, error) {
+func (a *EditProtocolConverterAction) Execute(ctx context.Context) (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Info("Executing EditProtocolConverter action")
 
 	// Send confirmation that action is starting
@@ -262,7 +262,7 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	}
 
 	// Apply mutations to create new spec
-	newSpec, atomicEditUUID, err := a.applyMutation(benthosConfig)
+	newSpec, atomicEditUUID, err := a.applyMutation(ctx, benthosConfig)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to apply configuration mutation: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -275,7 +275,7 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	a.atomicEditUUID = atomicEditUUID
 
 	// Persist the configuration changes
-	oldConfig, err := a.persistConfig(atomicEditUUID, newSpec)
+	oldConfig, err := a.persistConfig(ctx, atomicEditUUID, newSpec)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to persist configuration changes: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -286,7 +286,7 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 
 	// Await rollout and perform health checks
 	if a.systemSnapshotManager != nil && !a.ignoreHealthCheck {
-		errCode, err := a.awaitRollout(oldConfig)
+		errCode, err := a.awaitRollout(ctx, oldConfig)
 		if err != nil {
 			errorMsg := fmt.Sprintf("Failed during rollout: %v", err)
 			SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -311,12 +311,12 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 // to create the new protocol converter specification. It handles child/root relationships,
 // variable merging, and DFC configuration updates.
 // Returns the new spec and the atomic edit UUID to use for persistence.
-func (a *EditProtocolConverterAction) applyMutation(benthosConfig dataflowcomponentserviceconfig.BenthosConfig) (config.ProtocolConverterConfig, uuid.UUID, error) {
+func (a *EditProtocolConverterAction) applyMutation(ctx context.Context, benthosConfig dataflowcomponentserviceconfig.BenthosConfig) (config.ProtocolConverterConfig, uuid.UUID, error) {
 	// Get current configuration
-	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	timeoutCtx, cancel := context.WithTimeout(ctx, constants.ActionTimeout)
 	defer cancel()
 
-	currentConfig, err := a.configManager.GetConfig(ctx, 0)
+	currentConfig, err := a.configManager.GetConfig(timeoutCtx, 0)
 	if err != nil {
 		return config.ProtocolConverterConfig{}, uuid.Nil, fmt.Errorf("failed to get current configuration: %w", err)
 	}
@@ -457,11 +457,11 @@ func (a *EditProtocolConverterAction) applyMutation(benthosConfig dataflowcompon
 
 // persistConfig performs the atomic configuration update operation.
 // Returns the old configuration for potential rollback operations.
-func (a *EditProtocolConverterAction) persistConfig(atomicEditUUID uuid.UUID, newSpec config.ProtocolConverterConfig) (config.ProtocolConverterConfig, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+func (a *EditProtocolConverterAction) persistConfig(ctx context.Context, atomicEditUUID uuid.UUID, newSpec config.ProtocolConverterConfig) (config.ProtocolConverterConfig, error) {
+	timeoutCtx, cancel := context.WithTimeout(ctx, constants.ActionTimeout)
 	defer cancel()
 
-	oldConfig, err := a.configManager.AtomicEditProtocolConverter(ctx, atomicEditUUID, newSpec)
+	oldConfig, err := a.configManager.AtomicEditProtocolConverter(timeoutCtx, atomicEditUUID, newSpec)
 	if err != nil {
 		return config.ProtocolConverterConfig{}, fmt.Errorf("failed to update protocol converter: %w", err)
 	}
@@ -487,12 +487,12 @@ func (a *EditProtocolConverterAction) persistConfig(atomicEditUUID uuid.UUID, ne
 
 // awaitRollout waits for the protocol converter to become active and performs health checks.
 // Returns error code and error message for proper error handling in the caller.
-func (a *EditProtocolConverterAction) awaitRollout(oldConfig config.ProtocolConverterConfig) (string, error) {
+func (a *EditProtocolConverterAction) awaitRollout(ctx context.Context, oldConfig config.ProtocolConverterConfig) (string, error) {
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		fmt.Sprintf("Waiting for protocol converter %s to be active...", a.name),
 		a.outboundChannel, models.EditProtocolConverter)
 
-	return a.waitForComponentToBeActive(oldConfig)
+	return a.waitForComponentToBeActive(ctx, oldConfig)
 }
 
 // waitForComponentToBeActive polls live FSM state until the protocol converter
@@ -501,7 +501,7 @@ func (a *EditProtocolConverterAction) awaitRollout(oldConfig config.ProtocolConv
 // The function returns the error code and the error message via an error object.
 // The error code is a string that is sent to the frontend to allow it to determine if the action can be retried or not.
 // The error message is sent to the frontend to allow the user to see the error message.
-func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig config.ProtocolConverterConfig) (string, error) {
+func (a *EditProtocolConverterAction) waitForComponentToBeActive(ctx context.Context, oldConfig config.ProtocolConverterConfig) (string, error) {
 	ticker := time.NewTicker(constants.ActionTickerTime)
 	defer ticker.Stop()
 
@@ -522,10 +522,10 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 		select {
 		case <-timeout:
 			// rollback to previous configuration
-			ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+			timeoutCtx, cancel := context.WithTimeout(ctx, constants.ActionTimeout)
 			defer cancel()
 
-			_, err := a.configManager.AtomicEditProtocolConverter(ctx, a.atomicEditUUID, oldConfig)
+			_, err := a.configManager.AtomicEditProtocolConverter(timeoutCtx, a.atomicEditUUID, oldConfig)
 			if err != nil {
 				a.actionLogger.Errorf("Failed to rollback to previous configuration: %v", err)
 				stateMessage := fmt.Sprintf("Protocol converter '%s' edit timeout reached. It did not become active in time. Rolling back to previous configuration failed: %v", a.name, err)
@@ -605,12 +605,12 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 						if CheckBenthosLogLinesForConfigErrors(logs) {
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("edit", a.name)+"configuration error detected. Rolling back...", a.outboundChannel, models.EditProtocolConverter)
 
-							ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+							timeoutCtx, cancel := context.WithTimeout(ctx, constants.ActionTimeout)
 							defer cancel()
 
 							a.actionLogger.Infof("rolling back to previous configuration with user variables: %v", oldConfig.ProtocolConverterServiceConfig.Variables.User)
 
-							_, err := a.configManager.AtomicEditProtocolConverter(ctx, a.atomicEditUUID, oldConfig)
+							_, err := a.configManager.AtomicEditProtocolConverter(timeoutCtx, a.atomicEditUUID, oldConfig)
 							if err != nil {
 								a.actionLogger.Errorf("failed to roll back protocol converter %s: %v", a.name, err)
 

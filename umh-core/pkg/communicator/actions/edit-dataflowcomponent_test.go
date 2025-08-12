@@ -15,6 +15,7 @@
 package actions_test
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"time"
@@ -154,7 +155,7 @@ var _ = Describe("EditDataflowComponent", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(action.GetComponentUUID()).To(Equal(componentUUID))
 		})
@@ -182,7 +183,7 @@ var _ = Describe("EditDataflowComponent", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid UUID"))
 		})
@@ -199,7 +200,7 @@ var _ = Describe("EditDataflowComponent", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid UUID format"))
 		})
@@ -227,7 +228,7 @@ var _ = Describe("EditDataflowComponent", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field Name"))
 		})
@@ -254,7 +255,7 @@ var _ = Describe("EditDataflowComponent", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field Meta.Type"))
 		})
@@ -271,7 +272,7 @@ var _ = Describe("EditDataflowComponent", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("unsupported component type"))
 		})
@@ -311,7 +312,7 @@ var _ = Describe("EditDataflowComponent", func() {
 			}
 
 			// Call Parse method
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(action.GetParsedPayload().Inject).To(Equal("cache_resources:\n- label: my_cache\n  memory: {}\nrate_limit_resources:\n- label: limiter\n  local: {}\nbuffer:\n  memory: {}\n"))
 		})
@@ -349,11 +350,11 @@ var _ = Describe("EditDataflowComponent", func() {
 				},
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Then validate
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -388,11 +389,11 @@ var _ = Describe("EditDataflowComponent", func() {
 				},
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Then validate - should fail
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("is not valid YAML"))
 		})
@@ -430,7 +431,7 @@ var _ = Describe("EditDataflowComponent", func() {
 				},
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reset tracking for this test
@@ -452,7 +453,7 @@ var _ = Describe("EditDataflowComponent", func() {
 			time.Sleep(1 * time.Second)
 
 			// Execute the action
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(ContainSubstring("success"))
 			Expect(metadata).To(BeNil())
@@ -518,7 +519,7 @@ var _ = Describe("EditDataflowComponent", func() {
 				},
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reset tracking for this test
@@ -529,7 +530,7 @@ var _ = Describe("EditDataflowComponent", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(ContainSubstring("success"))
 			Expect(metadata).To(BeNil())
@@ -609,7 +610,7 @@ buffer:
 				},
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reset tracking for this test
@@ -620,7 +621,7 @@ buffer:
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(ContainSubstring("success"))
 			Expect(metadata).To(BeNil())
@@ -713,7 +714,7 @@ buffer:
 			}
 
 			// Parse the stopped state payload
-			err := action.Parse(payloadStopped)
+			err := action.Parse(context.Background(), payloadStopped)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reset tracking
@@ -724,7 +725,7 @@ buffer:
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the first state change (active to stopped)
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(ContainSubstring("success"))
 			Expect(metadata).To(BeNil())
@@ -769,11 +770,11 @@ buffer:
 			action = actions.NewEditDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockManagerSnapshot)
 
 			// Parse the active state payload
-			err = action.Parse(payloadActive)
+			err = action.Parse(context.Background(), payloadActive)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the second state change (stopped to active)
-			result, metadata, err = action.Execute()
+			result, metadata, err = action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(ContainSubstring("success"))
 			Expect(metadata).To(BeNil())
@@ -819,11 +820,11 @@ buffer:
 				},
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action - should fail
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to edit dataflow component: mock edit dataflow component failure"))
 			Expect(result).To(BeNil())
@@ -876,14 +877,14 @@ buffer:
 				},
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Set up mock to return component not found error
 			mockConfig.WithEditDataflowcomponentError(errors.New("dataflow component with UUID not found"))
 
 			// Execute the action - should fail with component not found
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("dataflow component with UUID not found"))
 			Expect(result).To(BeNil())

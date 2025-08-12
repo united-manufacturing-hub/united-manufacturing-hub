@@ -15,6 +15,7 @@
 package actions_test
 
 import (
+	"context"
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -329,7 +330,7 @@ var _ = Describe("GetDataflowcomponentMetricsAction", func() {
 				"uuid": dfcUUID.String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(action.GetParsedPayload().UUID).To(Equal(dfcUUID.String()))
 		})
@@ -339,7 +340,7 @@ var _ = Describe("GetDataflowcomponentMetricsAction", func() {
 				"uuid": 123, // Invalid type, should be string
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("error unmarshaling into target type"))
 		})
@@ -351,20 +352,20 @@ var _ = Describe("GetDataflowcomponentMetricsAction", func() {
 				"uuid": dfcUUID.String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should return an error if the UUID is missing", func() {
 			payload := map[string]interface{}{}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("uuid must be set"))
 		})
@@ -374,10 +375,10 @@ var _ = Describe("GetDataflowcomponentMetricsAction", func() {
 				"uuid": "invalid-uuid",
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid UUID format"))
 		})
@@ -389,13 +390,13 @@ var _ = Describe("GetDataflowcomponentMetricsAction", func() {
 				"uuid": dfcUUID.String(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 
-			result, _, err := action.Execute()
+			result, _, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the structure and contents of the result
@@ -448,13 +449,13 @@ var _ = Describe("GetDataflowcomponentMetricsAction", func() {
 				"uuid": nonExistentUUID,
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 
-			result, _, err := action.Execute()
+			result, _, err := action.Execute(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("was not found"))
 			Expect(result).To(BeNil())
@@ -481,13 +482,13 @@ var _ = Describe("GetDataflowcomponentMetricsAction", func() {
 				"uuid": dfcUUID.String(),
 			}
 
-			err := emptyAction.Parse(payload)
+			err := emptyAction.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = emptyAction.Validate()
+			err = emptyAction.Validate(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 
-			result, _, err := emptyAction.Execute()
+			result, _, err := emptyAction.Execute(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("dfc manager not found"))
 			Expect(result).To(BeNil())

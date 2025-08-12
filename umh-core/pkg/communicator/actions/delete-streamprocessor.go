@@ -82,7 +82,7 @@ func NewDeleteStreamProcessorAction(userEmail string, actionUUID uuid.UUID, inst
 }
 
 // Parse implements the Action interface by extracting the stream processor UUID from the payload.
-func (a *DeleteStreamProcessorAction) Parse(payload interface{}) error {
+func (a *DeleteStreamProcessorAction) Parse(ctx context.Context, payload interface{}) error {
 	// Parse the payload to get the UUID
 	parsedPayload, err := ParseActionPayload[models.DeleteStreamProcessorPayload](payload)
 	if err != nil {
@@ -108,7 +108,7 @@ func (a *DeleteStreamProcessorAction) Parse(payload interface{}) error {
 }
 
 // Validate performs validation of the parsed payload.
-func (a *DeleteStreamProcessorAction) Validate() error {
+func (a *DeleteStreamProcessorAction) Validate(ctx context.Context) error {
 	// Validate UUID
 	if a.streamProcessorUUID == uuid.Nil {
 		return errors.New("missing or invalid stream processor UUID")
@@ -118,11 +118,11 @@ func (a *DeleteStreamProcessorAction) Validate() error {
 }
 
 // Execute implements the Action interface by deleting the stream processor configuration.
-func (a *DeleteStreamProcessorAction) Execute() (interface{}, map[string]interface{}, error) {
+func (a *DeleteStreamProcessorAction) Execute(ctx context.Context) (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Info("Executing DeleteStreamProcessor action")
 
 	// Find the stream processor by UUID to get the name
-	err := a.findStreamProcessorByUUID()
+	err := a.findStreamProcessorByUUID(ctx)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to find stream processor: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -140,7 +140,7 @@ func (a *DeleteStreamProcessorAction) Execute() (interface{}, map[string]interfa
 		"Deleting stream processor configuration...", a.outboundChannel, models.DeleteStreamProcessor)
 
 	// Delete the stream processor configuration
-	err = a.deleteStreamProcessor()
+	err = a.deleteStreamProcessor(ctx)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to delete stream processor: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -169,12 +169,12 @@ func (a *DeleteStreamProcessorAction) Execute() (interface{}, map[string]interfa
 }
 
 // findStreamProcessorByUUID finds the stream processor by UUID from the configuration and extracts the name.
-func (a *DeleteStreamProcessorAction) findStreamProcessorByUUID() error {
-	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+func (a *DeleteStreamProcessorAction) findStreamProcessorByUUID(ctx context.Context) error {
+	timeoutCtx, cancel := context.WithTimeout(ctx, constants.ActionTimeout)
 	defer cancel()
 
 	// Get current configuration
-	currentConfig, err := a.configManager.GetConfig(ctx, 0)
+	currentConfig, err := a.configManager.GetConfig(timeoutCtx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get current configuration: %w", err)
 	}
@@ -194,12 +194,12 @@ func (a *DeleteStreamProcessorAction) findStreamProcessorByUUID() error {
 }
 
 // deleteStreamProcessor performs the actual deletion of the stream processor from the configuration.
-func (a *DeleteStreamProcessorAction) deleteStreamProcessor() error {
-	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+func (a *DeleteStreamProcessorAction) deleteStreamProcessor(ctx context.Context) error {
+	timeoutCtx, cancel := context.WithTimeout(ctx, constants.ActionTimeout)
 	defer cancel()
 
 	// Delete the stream processor using the atomic operation
-	err := a.configManager.AtomicDeleteStreamProcessor(ctx, a.name)
+	err := a.configManager.AtomicDeleteStreamProcessor(timeoutCtx, a.name)
 	if err != nil {
 		return fmt.Errorf("failed to delete stream processor: %w", err)
 	}

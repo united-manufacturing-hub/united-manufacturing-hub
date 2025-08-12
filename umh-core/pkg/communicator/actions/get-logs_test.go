@@ -15,6 +15,7 @@
 package actions_test
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -190,7 +191,7 @@ var _ = Describe("GetLogsAction", func() {
 				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(action.GetPayload().UUID).To(Equal(dfcUUID.String()))
 			Expect(action.GetPayload().Type).To(Equal(models.DFCLogType))
@@ -203,7 +204,7 @@ var _ = Describe("GetLogsAction", func() {
 				"startTime": "not-a-number",
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("error unmarshaling into target type"))
 		})
@@ -217,10 +218,10 @@ var _ = Describe("GetLogsAction", func() {
 				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).ToNot(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -230,10 +231,10 @@ var _ = Describe("GetLogsAction", func() {
 				"uuid":      dfcUUID.String(),
 				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
 			}
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).ToNot(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("log type must be set and must be one of the following: agent, dfc, protocol-converter-read, protocol-converter-write, redpanda, topic-browser"))
 
@@ -242,10 +243,10 @@ var _ = Describe("GetLogsAction", func() {
 				"uuid": dfcUUID.String(),
 				"type": models.DFCLogType,
 			}
-			err = action.Parse(payload)
+			err = action.Parse(context.Background(), payload)
 			Expect(err).ToNot(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("start time must be greater than 0"))
 		})
@@ -256,10 +257,10 @@ var _ = Describe("GetLogsAction", func() {
 				"type":      "invalid",
 				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
 			}
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).ToNot(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("log type must be set and must be one of the following: agent, dfc, protocol-converter-read, protocol-converter-write, redpanda, topic-browser"))
 		})
@@ -269,10 +270,10 @@ var _ = Describe("GetLogsAction", func() {
 				"type":      models.DFCLogType,
 				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
 			}
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).ToNot(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("uuid must be set to retrieve logs for a DFC, Protocol Converter, or Stream Processor"))
 		})
@@ -282,10 +283,10 @@ var _ = Describe("GetLogsAction", func() {
 				"type":      models.ProtocolConverterReadLogType,
 				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
 			}
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).ToNot(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("uuid must be set to retrieve logs for a DFC, Protocol Converter, or Stream Processor"))
 
@@ -293,10 +294,10 @@ var _ = Describe("GetLogsAction", func() {
 				"type":      models.ProtocolConverterWriteLogType,
 				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
 			}
-			err = action.Parse(payload)
+			err = action.Parse(context.Background(), payload)
 			Expect(err).ToNot(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("uuid must be set to retrieve logs for a DFC, Protocol Converter, or Stream Processor"))
 		})
@@ -307,10 +308,10 @@ var _ = Describe("GetLogsAction", func() {
 				"type":      models.DFCLogType,
 				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
 			}
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).ToNot(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid UUID format"))
 		})
@@ -331,10 +332,10 @@ var _ = Describe("GetLogsAction", func() {
 				payload["uuid"] = protocolConverterUUID.String()
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).ToNot(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 
 			// add the time to the loglines
@@ -343,7 +344,7 @@ var _ = Describe("GetLogsAction", func() {
 				fmt.Sprintf("[%s] test log 2", mockedLogs[1].Timestamp.Format(time.RFC3339)),
 			}
 
-			result, _, err := action.Execute()
+			result, _, err := action.Execute(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(models.GetLogsResponse{Logs: expectedLogs}))
 		},
@@ -360,13 +361,13 @@ var _ = Describe("GetLogsAction", func() {
 				"startTime": time.Now().Add(-3 * time.Hour).UnixMilli(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).ToNot(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 
-			result, _, err := action.Execute()
+			result, _, err := action.Execute(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(models.GetLogsResponse{Logs: []string{fmt.Sprintf("[%s] test log 2", mockedLogs[1].Timestamp.Format(time.RFC3339))}}))
 		})
@@ -380,13 +381,13 @@ var _ = Describe("GetLogsAction", func() {
 				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).ToNot(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 
-			result, _, err := action.Execute()
+			result, _, err := action.Execute(context.Background())
 			Expect(result).To(BeNil())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to retrieve logs for redpanda: redpanda instance not found"))
@@ -402,13 +403,13 @@ var _ = Describe("GetLogsAction", func() {
 				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).ToNot(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).ToNot(HaveOccurred())
 
-			result, _, err := action.Execute()
+			result, _, err := action.Execute(context.Background())
 			Expect(result).To(BeNil())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to retrieve logs for agent: agent instance not found"))

@@ -160,7 +160,7 @@ var _ = Describe("EditProtocolConverter", func() {
 				},
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify parsed values
@@ -193,7 +193,7 @@ var _ = Describe("EditProtocolConverter", func() {
 				},
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify parsed values
@@ -218,7 +218,7 @@ var _ = Describe("EditProtocolConverter", func() {
 				},
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field UUID"))
 		})
@@ -227,7 +227,7 @@ var _ = Describe("EditProtocolConverter", func() {
 			// Invalid payload that cannot be parsed as ProtocolConverter
 			payload := "invalid string payload"
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to parse protocol converter payload"))
 		})
@@ -254,10 +254,10 @@ var _ = Describe("EditProtocolConverter", func() {
 				},
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -265,7 +265,7 @@ var _ = Describe("EditProtocolConverter", func() {
 			// Use action with empty UUID
 			action = actions.NewEditProtocolConverterAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, nil)
 
-			err := action.Validate()
+			err := action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing or invalid protocol converter UUID"))
 		})
@@ -285,10 +285,10 @@ var _ = Describe("EditProtocolConverter", func() {
 				},
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid dataflow component configuration"))
 		})
@@ -330,10 +330,10 @@ var _ = Describe("EditProtocolConverter", func() {
 				},
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 
 			// Start the state mocker
@@ -341,7 +341,7 @@ var _ = Describe("EditProtocolConverter", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action
-			_, metadata, err := action.Execute()
+			_, metadata, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(metadata).To(BeNil())
 
@@ -400,11 +400,11 @@ var _ = Describe("EditProtocolConverter", func() {
 				},
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action - should fail with protocol converter not found
-			_, metadata, err := action.Execute()
+			_, metadata, err := action.Execute(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("protocol converter with UUID"))
 			Expect(err.Error()).To(ContainSubstring("not found"))
@@ -434,11 +434,11 @@ var _ = Describe("EditProtocolConverter", func() {
 				},
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action - should fail
-			_, metadata, err := action.Execute()
+			_, metadata, err := action.Execute(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to update protocol converter: mock edit protocol converter failure"))
 			Expect(metadata).To(BeNil())
@@ -467,11 +467,11 @@ var _ = Describe("EditProtocolConverter", func() {
 				},
 			}
 
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action - should fail
-			_, metadata, err := action.Execute()
+			_, metadata, err := action.Execute(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to get current configuration: mock get config failure"))
 			Expect(metadata).To(BeNil())

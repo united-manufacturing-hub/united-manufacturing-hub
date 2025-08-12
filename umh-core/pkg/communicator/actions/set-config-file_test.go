@@ -97,13 +97,13 @@ var _ = Describe("SetConfigFile", func() {
 				"content":          configContent,
 				"lastModifiedTime": lastModifiedTime,
 			}
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should handle invalid payload format", func() {
 			payload := "invalid payload"
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to parse payload"))
 		})
@@ -115,10 +115,10 @@ var _ = Describe("SetConfigFile", func() {
 				"content":          configContent,
 				"lastModifiedTime": lastModifiedTime,
 			}
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -149,10 +149,10 @@ dataFlow:
 				"content":          yamlWithAnchors,
 				"lastModifiedTime": lastModifiedTime,
 			}
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -161,10 +161,10 @@ dataFlow:
 				"content":          "",
 				"lastModifiedTime": lastModifiedTime,
 			}
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("content cannot be empty"))
 		})
@@ -186,10 +186,10 @@ dataFlow:
 				"content":          invalidYAML,
 				"lastModifiedTime": lastModifiedTime,
 			}
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid YAML content"))
 		})
@@ -199,10 +199,10 @@ dataFlow:
 				"content":          configContent,
 				"lastModifiedTime": "",
 			}
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = action.Validate()
+			err = action.Validate(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("last modified time cannot be zero"))
 		})
@@ -214,12 +214,12 @@ dataFlow:
 				"content":          configContent,
 				"lastModifiedTime": lastModifiedTime,
 			}
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should successfully update the config file", func() {
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(metadata).To(BeNil())
 
@@ -268,10 +268,10 @@ dataFlow:
 				"content":          yamlWithAnchors,
 				"lastModifiedTime": lastModifiedTime,
 			}
-			err := action.Parse(payload)
+			err := action.Parse(context.Background(), payload)
 			Expect(err).NotTo(HaveOccurred())
 
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(metadata).To(BeNil())
 
@@ -289,7 +289,7 @@ dataFlow:
 			differentTime := time.Date(2023, 5, 16, 10, 30, 0, 0, time.UTC)
 			mockConfig.WithCacheModTime(differentTime)
 
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("concurrent modification detected"))
 			Expect(result).To(BeNil())
@@ -300,7 +300,7 @@ dataFlow:
 		})
 
 		It("should retrieve a new last modified time", func() {
-			result, metadata, err := action.Execute()
+			result, metadata, err := action.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(metadata).To(BeNil())
 

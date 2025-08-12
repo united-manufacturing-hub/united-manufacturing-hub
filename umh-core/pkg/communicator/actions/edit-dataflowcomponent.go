@@ -161,7 +161,7 @@ func NewEditDataflowComponentAction(userEmail string, actionUUID uuid.UUID, inst
 // The function also computes `newComponentUUID` because the UUID is purely a
 // function of the name and therefore already known at this stage (even before
 // the heavy YAML parsing starts).
-func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
+func (a *EditDataflowComponentAction) Parse(ctx context.Context, payload interface{}) error {
 	// First parse the top level structure
 	type TopLevelPayload struct {
 		Payload interface{} `json:"payload"`
@@ -237,7 +237,7 @@ func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
 // After `Parse` succeeded, Validate performs all expensive checks such as YAML
 // unmarshalling.  That keeps error messages well‑structured: syntax/shape errors
 // surface here, whereas runtime failures show up in Execute.
-func (a *EditDataflowComponentAction) Validate() error {
+func (a *EditDataflowComponentAction) Validate(ctx context.Context) error {
 	// Validate UUID was properly parsed
 	if a.oldComponentUUID == uuid.Nil {
 		return errors.New("component UUID is missing or invalid")
@@ -326,7 +326,7 @@ func (a *EditDataflowComponentAction) Validate() error {
 //
 // The method is intentionally *long* because splitting it would complicate the
 // rollback logic – we need the full context to unwind safely.
-func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interface{}, error) {
+func (a *EditDataflowComponentAction) Execute(ctx context.Context) (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Info("Executing EditDataflowComponent action")
 
 	// Send confirmation that action is starting
@@ -487,12 +487,12 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 	a.dfc = dfc
 
 	// Update the component in the configuration
-	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	timeoutCtx, cancel := context.WithTimeout(ctx, constants.ActionTimeout)
 	defer cancel()
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("edit", a.name)+"updating configuration", a.outboundChannel, models.EditDataFlowComponent)
 
-	a.oldConfig, err = a.configManager.AtomicEditDataflowcomponent(ctx, a.oldComponentUUID, dfc)
+	a.oldConfig, err = a.configManager.AtomicEditDataflowcomponent(timeoutCtx, a.oldComponentUUID, dfc)
 	if err != nil {
 		errorMsg := Label("edit", a.name) + fmt.Sprintf("failed to edit dataflow component: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.EditDataFlowComponent)
@@ -583,11 +583,7 @@ func (a *EditDataflowComponentAction) waitForComponentToBeReady(ctx context.Cont
 			stateMessage := Label("edit", a.name) + "timeout reached. it did not reach the desired state in time. rolling back"
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage, a.outboundChannel, models.EditDataFlowComponent)
 
-			// Create a fresh context for rollback operation since the original ctx has timed out
-			rollbackCtx, rollbackCancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
-			defer rollbackCancel()
-
-			_, err := a.configManager.AtomicEditDataflowcomponent(rollbackCtx, a.newComponentUUID, a.oldConfig)
+			_, err := a.configManager.AtomicEditDataflowcomponent(ctx, a.newComponentUUID, a.oldConfig)
 			if err != nil {
 				a.actionLogger.Errorf("failed to roll back dataflow component %s: %v", a.name, err)
 
@@ -674,8 +670,8 @@ func (a *EditDataflowComponentAction) waitForComponentToBeReady(ctx context.Cont
 							if CheckBenthosLogLinesForConfigErrors(logs) {
 								SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("edit", a.name)+"configuration error detected. Rolling back...", a.outboundChannel, models.EditDataFlowComponent)
 
-								// Create a fresh context for rollback operation since the original ctx may be expired or close to expiring
-								rollbackCtx, rollbackCancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+								// Create a context for rollback operation from the passed context
+								rollbackCtx, rollbackCancel := context.WithTimeout(ctx, constants.ActionTimeout)
 								defer rollbackCancel()
 
 								_, err := a.configManager.AtomicEditDataflowcomponent(rollbackCtx, a.newComponentUUID, a.oldConfig)

@@ -63,7 +63,7 @@ func NewEditInstanceAction(userEmail string, actionUUID uuid.UUID, instanceUUID 
 //
 // The function handles the case where no location is provided by leaving the location field nil,
 // which is valid and indicates no location change is requested.
-func (a *EditInstanceAction) Parse(payload interface{}) error {
+func (a *EditInstanceAction) Parse(ctx context.Context, payload interface{}) error {
 	a.actionLogger.Debug("Parsing EditInstance action payload")
 
 	// Convert the payload to a map
@@ -123,7 +123,7 @@ func (a *EditInstanceAction) Parse(payload interface{}) error {
 // is provided, the enterprise field is not empty.
 //
 // If the location field is nil (no location update requested), validation passes.
-func (a *EditInstanceAction) Validate() error {
+func (a *EditInstanceAction) Validate(ctx context.Context) error {
 	// If location is provided, validate that enterprise is not empty
 	if a.location != nil && a.location.Enterprise == "" {
 		return errors.New("enterprise cannot be empty when location is provided")
@@ -142,7 +142,7 @@ func (a *EditInstanceAction) Validate() error {
 //
 // For EditInstanceAction, if no location update is requested (location is nil),
 // it returns early with a message indicating no changes were made.
-func (a *EditInstanceAction) Execute() (interface{}, map[string]interface{}, error) {
+func (a *EditInstanceAction) Execute(ctx context.Context) (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Debug("Executing EditInstance action")
 
 	// Send confirmation that action is starting
@@ -159,10 +159,10 @@ func (a *EditInstanceAction) Execute() (interface{}, map[string]interface{}, err
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Updating instance location", a.outboundChannel, models.EditInstance)
 
 	// Update the location in the configuration
-	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	timeoutCtx, cancel := context.WithTimeout(ctx, constants.ActionTimeout)
 	defer cancel()
 
-	err := a.configManager.AtomicSetLocation(ctx, *a.location)
+	err := a.configManager.AtomicSetLocation(timeoutCtx, *a.location)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to update instance location: %s", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.EditInstance)

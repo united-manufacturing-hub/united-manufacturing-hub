@@ -40,8 +40,7 @@ var _ = Describe("Redpanda Monitor FSM", func() {
 	)
 
 	BeforeEach(func() {
-		testCtx, testCancel := context.WithCancel(context.Background())
-		ctx, cancel = testCtx, testCancel
+		ctx, cancel = context.WithCancel(context.Background())
 
 		mockSvcRegistry = serviceregistry.NewMockRegistry()
 

@@ -15,6 +15,7 @@
 package actions
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"slices"
@@ -77,7 +78,7 @@ func NewGetLogsAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.
 
 // Parse extracts the business fields from the raw JSON payload.
 // Shape errors are detected here, while semantic validation is done in Validate.
-func (a *GetLogsAction) Parse(payload interface{}) (err error) {
+func (a *GetLogsAction) Parse(ctx context.Context, payload interface{}) (err error) {
 	a.actionLogger.Info("Parsing the payload")
 	a.payload, err = ParseActionPayload[models.GetLogsRequest](payload)
 	a.actionLogger.Info("Payload parsed: %v", a.payload)
@@ -89,7 +90,7 @@ func (a *GetLogsAction) Parse(payload interface{}) (err error) {
 // This includes checking that the provided start time is a valid timestamp,
 // and that the log type is one of the allowed types.
 // The UUID is necessary for DFC logs to identify the correct instance.
-func (a *GetLogsAction) Validate() (err error) {
+func (a *GetLogsAction) Validate(ctx context.Context) (err error) {
 	a.actionLogger.Info("Validating the payload")
 
 	if a.payload.StartTime <= 0 {
@@ -151,7 +152,7 @@ func logsRetrievalError(err error, logType models.LogType) error {
 
 // Execute takes care of retrieving the logs from the correct source based on the log type.
 // It returns a response object with an array of logs from the provided start time up to the current time.
-func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
+func (a *GetLogsAction) Execute(ctx context.Context) (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Info("Executing GetLogs action")
 
 	// Request time is in unix ms, but log entries contain UTC timestamps

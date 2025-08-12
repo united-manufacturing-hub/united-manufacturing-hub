@@ -94,7 +94,7 @@ func NewDeleteProtocolConverterAction(userEmail string, actionUUID uuid.UUID, in
 // Parse extracts the component UUID from the user‑supplied JSON payload.
 // Shape errors (missing or malformed UUID) are detected here so that Validate
 // can remain trivial.
-func (a *DeleteProtocolConverterAction) Parse(payload interface{}) error {
+func (a *DeleteProtocolConverterAction) Parse(ctx context.Context, payload interface{}) error {
 	// Parse the payload to get the UUID
 	parsedPayload, err := ParseActionPayload[models.DeleteProtocolConverterPayload](payload)
 	if err != nil {
@@ -109,7 +109,7 @@ func (a *DeleteProtocolConverterAction) Parse(payload interface{}) error {
 
 // Validate performs only *existence* checks because all heavy‑weight work has
 // already happened in Parse.
-func (a *DeleteProtocolConverterAction) Validate() error {
+func (a *DeleteProtocolConverterAction) Validate(ctx context.Context) error {
 	// UUID validation is already done in Parse, so there's not much additional validation needed
 	if a.componentUUID == uuid.Nil {
 		return errors.New("component UUID is missing or invalid")
@@ -123,19 +123,19 @@ func (a *DeleteProtocolConverterAction) Validate() error {
 //
 // Progress is streamed via `outboundChannel` so that a human operator can watch
 // the deletion in real time.
-func (a *DeleteProtocolConverterAction) Execute() (interface{}, map[string]interface{}, error) {
+func (a *DeleteProtocolConverterAction) Execute(ctx context.Context) (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Info("Executing DeleteProtocolConverter action")
 
 	// ─── 1  Tell the UI we are about to start ──────────────────────────────
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, "Starting deletion of protocol converter with UUID: "+a.componentUUID.String(), a.outboundChannel, models.DeleteProtocolConverter)
 
 	// ─── 2  Remove the config atomically ───────────────────────────────────-
-	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	timeoutCtx, cancel := context.WithTimeout(ctx, constants.ActionTimeout)
 	defer cancel()
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Removing protocol converter from configuration...", a.outboundChannel, models.DeleteProtocolConverter)
 
-	err := a.configManager.AtomicDeleteProtocolConverter(ctx, a.componentUUID)
+	err := a.configManager.AtomicDeleteProtocolConverter(timeoutCtx, a.componentUUID)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to delete protocol converter: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeleteProtocolConverter)
