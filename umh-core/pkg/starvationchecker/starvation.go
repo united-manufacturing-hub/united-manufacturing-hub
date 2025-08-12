@@ -42,7 +42,7 @@ import (
 // - Logs warnings with the starvation duration.
 type StarvationChecker struct {
 	lastReconcileTime   time.Time
-	ctx                 context.Context
+	ctx                 context.Context //nolint:containedctx // This is intentional for background service lifecycle
 	logger              *zap.SugaredLogger
 	cancel              context.CancelFunc
 	wg                  sync.WaitGroup

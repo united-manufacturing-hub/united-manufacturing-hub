@@ -179,8 +179,8 @@ func determineProtocol(readDFC *models.ProtocolConverterDFC) string {
 // into the models.ProtocolConverterDFC format expected by the API using the shared function.
 func buildProtocolConverterDFCFromConfig(dfcConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig, a *GetProtocolConverterAction) (*models.ProtocolConverterDFC, error) {
 	if len(dfcConfig.BenthosConfig.Input) == 0 {
-		// No DFC configuration present
-		return nil, nil
+		// No DFC configuration present - return empty DFC instead of nil
+		return &models.ProtocolConverterDFC{}, nil
 	}
 
 	// Use the shared function to build the common DFC properties

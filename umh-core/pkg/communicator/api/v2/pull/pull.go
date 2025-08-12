@@ -88,8 +88,16 @@ func (p *Puller) pull() {
 
 		p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
 
+		jwtValue := p.jwt.Load()
+		jwt, ok := jwtValue.(string)
+		if !ok {
+			p.logger.Errorf("JWT token has unexpected type: %T", jwtValue)
+			time.Sleep(1 * time.Second)
+			continue
+		}
+
 		var cookies = map[string]string{
-			"token": p.jwt.Load().(string),
+			"token": jwt,
 		}
 
 		incomingMessages, _, err := http.GetRequest[backend_api_structs.PullPayload](context.Background(), http.PullEndpoint, nil, &cookies, p.insecureTLS, p.apiURL, p.logger)

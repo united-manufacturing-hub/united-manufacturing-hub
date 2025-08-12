@@ -16,6 +16,7 @@ package protocolconverter
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -78,6 +79,8 @@ func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConver
 						// For invalid configs, don't update the mock service but don't fail the comparison
 						// This matches the behavior of the real manager where invalid configs are handled gracefully
 						// We intentionally ignore the error and continue with the old config
+						// Log the error for debugging but continue
+						fmt.Printf("Warning: failed to convert config to runtime for mock service: %v\n", err)
 					} else {
 						mockSvc.GetConfigResult = runtimeConfig
 					}
@@ -100,6 +103,8 @@ func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConver
 					// For invalid configs, don't update the mock service but don't fail the set operation
 					// This matches the behavior of the real manager where invalid configs are handled gracefully
 					// We intentionally ignore the error and continue with the old config
+					// Log the error for debugging but continue
+					fmt.Printf("Warning: failed to convert config to runtime for mock service: %v\n", err)
 				} else {
 					mockSvc.GetConfigResult = runtimeConfig
 				}

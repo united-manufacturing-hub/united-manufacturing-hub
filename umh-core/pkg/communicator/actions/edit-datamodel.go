@@ -57,14 +57,9 @@ type EditDataModelAction struct {
 
 	configManager config.ConfigManager
 
-	// Shared context for the entire action lifecycle (validate + execute)
-	ctx context.Context
-
 	outboundChannel chan *models.UMHMessage
 
 	actionLogger *zap.SugaredLogger
-
-	cancel       context.CancelFunc
 	userEmail    string
 	actionUUID   uuid.UUID
 	instanceUUID uuid.UUID
@@ -72,9 +67,6 @@ type EditDataModelAction struct {
 
 // NewEditDataModelAction returns an un-parsed action instance.
 func NewEditDataModelAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager) *EditDataModelAction {
-	// Create shared context with timeout for the entire action lifecycle
-	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
-
 	return &EditDataModelAction{
 		userEmail:       userEmail,
 		actionUUID:      actionUUID,
@@ -82,8 +74,6 @@ func NewEditDataModelAction(userEmail string, actionUUID uuid.UUID, instanceUUID
 		outboundChannel: outboundChannel,
 		configManager:   configManager,
 		actionLogger:    logger.For(logger.ComponentCommunicator),
-		ctx:             ctx,
-		cancel:          cancel,
 	}
 }
 
@@ -119,6 +109,10 @@ func (a *EditDataModelAction) Parse(payload interface{}) error {
 
 // Validate performs validation of the parsed payload.
 func (a *EditDataModelAction) Validate() error {
+	// Create context with timeout for validation operations
+	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	defer cancel()
+
 	// Validate all required fields
 	if a.payload.Name == "" {
 		return errors.New("missing required field Name")
@@ -139,7 +133,7 @@ func (a *EditDataModelAction) Validate() error {
 	}
 
 	// Get all existing data models and payload shapes for validation
-	currentConfig, err := a.configManager.GetConfig(a.ctx, 0)
+	currentConfig, err := a.configManager.GetConfig(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get current config for validation: %w", err)
 	}
@@ -151,7 +145,7 @@ func (a *EditDataModelAction) Validate() error {
 	}
 
 	// Validate with references and payload shapes (handles cases with no references gracefully)
-	if err := validator.ValidateWithReferences(a.ctx, dmVersion, allDataModels, currentConfig.PayloadShapes); err != nil {
+	if err := validator.ValidateWithReferences(ctx, dmVersion, allDataModels, currentConfig.PayloadShapes); err != nil {
 		return fmt.Errorf("data model validation failed: %w", err)
 	}
 
@@ -160,8 +154,9 @@ func (a *EditDataModelAction) Validate() error {
 
 // Execute implements the Action interface by creating a new version of the data model configuration.
 func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, error) {
-	// Ensure context is cleaned up when action completes
-	defer a.cancel()
+	// Create context with timeout for execution operations
+	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	defer cancel()
 
 	a.actionLogger.Info("Executing EditDataModel action")
 
@@ -176,7 +171,7 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 
 	// Safety validation before editing the data model
 	validator := datamodel.NewValidator()
-	if err := validator.ValidateStructureOnly(a.ctx, dmVersion); err != nil {
+	if err := validator.ValidateStructureOnly(ctx, dmVersion); err != nil {
 		errorMsg := fmt.Sprintf("Final validation failed before editing data model: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.EditDataModel)
@@ -187,7 +182,7 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		"Adding new version to data model configuration...", a.outboundChannel, models.EditDataModel)
 
-	err := a.configManager.AtomicEditDataModel(a.ctx, a.payload.Name, dmVersion, a.payload.Description)
+	err := a.configManager.AtomicEditDataModel(ctx, a.payload.Name, dmVersion, a.payload.Description)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to edit data model: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -197,7 +192,7 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 	}
 
 	// Get the updated configuration to determine the new version number
-	fullConfig, err := a.configManager.GetConfig(a.ctx, 0)
+	fullConfig, err := a.configManager.GetConfig(ctx, 0)
 	if err != nil {
 		a.actionLogger.Warnf("Failed to get config to determine new version number: %v", err)
 		// Continue with execution, just use a placeholder version
@@ -250,7 +245,7 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 		},
 	}
 
-	dataContractErr := a.configManager.AtomicAddDataContract(a.ctx, dataContract)
+	dataContractErr := a.configManager.AtomicAddDataContract(ctx, dataContract)
 	if dataContractErr != nil {
 		// Log the error but don't fail the entire operation since the data model was successfully edited
 		a.actionLogger.Warnf("Failed to automatically create data contract for data model %s version %s: %v", a.payload.Name, versionStr, dataContractErr)

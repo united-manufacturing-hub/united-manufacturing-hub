@@ -125,8 +125,15 @@ func (p *Pusher) push() {
 				continue
 			}
 
+			jwtValue := p.jwt.Load()
+			jwt, ok := jwtValue.(string)
+			if !ok {
+				p.logger.Errorf("JWT token has unexpected type: %T", jwtValue)
+				continue
+			}
+
 			var cookies = map[string]string{
-				"token": p.jwt.Load().(string),
+				"token": jwt,
 			}
 
 			payload := backend_api_structs.PushPayload{

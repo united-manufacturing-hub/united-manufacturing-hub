@@ -206,7 +206,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 
 	// Explicitly handle unsupported action types
 	case models.UnknownAction, models.DummyAction, models.TestBenthosInput, models.TestNetworkConnection,
-		models.DeployOPCUAConnection, models.DeployConnection, models.EditConnection, models.DeleteConnection,
+		models.DeployConnection, models.EditConnection, models.DeleteConnection,
 		models.GetConnectionNotes, models.DeployOPCUADatasource, models.GetDatasourceBasic,
 		models.EditOPCUADatasource, models.DeleteDatasource, models.UpgradeCompanion, models.EditMqttBroker,
 		models.GetAuditLog, models.EditInstanceLocation, models.GetDataFlowComponentLog,

@@ -1384,7 +1384,8 @@ func (bs *BufferedService) CreateFile(ctx context.Context, path string, perm os.
 			return nil, fmt.Errorf("%s exists and is not a file", path)
 		}
 		// It exists and is a file, so we're good
-		return nil, nil
+		// For in-memory filesystem, file handles don't exist until sync to disk
+		return nil, nil //nolint:nilnil // Intentional: in-memory FS returns no file handle until sync
 	}
 
 	// Create new file entry in memory
@@ -1404,7 +1405,8 @@ func (bs *BufferedService) CreateFile(ctx context.Context, path string, perm os.
 	}
 
 	// Return nil, nil since the file isn't actually on disk yet
-	return nil, nil
+	// For in-memory filesystem, file handles don't exist until sync to disk
+	return nil, nil //nolint:nilnil // Intentional: in-memory FS returns no file handle until sync
 }
 
 // Chmod updates the fileMode in memory (and later flush).

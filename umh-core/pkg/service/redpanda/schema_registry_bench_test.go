@@ -733,7 +733,11 @@ func generateLargeSchema(propertyCount int) JSONSchemaDefinition {
 	}
 
 	// Convert to JSON
-	jsonBytes, _ := json.Marshal(schema)
+	jsonBytes, err := json.Marshal(schema)
+	if err != nil {
+		// In a benchmark test, if marshaling fails, return a simple fallback
+		return JSONSchemaDefinition(`{"type": "object", "properties": {}}`)
+	}
 
 	return JSONSchemaDefinition(string(jsonBytes))
 }

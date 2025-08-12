@@ -57,14 +57,9 @@ type AddDataModelAction struct {
 
 	configManager config.ConfigManager
 
-	// Shared context for the entire action lifecycle (validate + execute)
-	ctx context.Context
-
 	outboundChannel chan *models.UMHMessage
 
 	actionLogger *zap.SugaredLogger
-
-	cancel       context.CancelFunc
 	userEmail    string
 	actionUUID   uuid.UUID
 	instanceUUID uuid.UUID
@@ -72,9 +67,6 @@ type AddDataModelAction struct {
 
 // NewAddDataModelAction returns an un-parsed action instance.
 func NewAddDataModelAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager) *AddDataModelAction {
-	// Create shared context with timeout for the entire action lifecycle
-	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
-
 	return &AddDataModelAction{
 		userEmail:       userEmail,
 		actionUUID:      actionUUID,
@@ -82,8 +74,6 @@ func NewAddDataModelAction(userEmail string, actionUUID uuid.UUID, instanceUUID 
 		outboundChannel: outboundChannel,
 		configManager:   configManager,
 		actionLogger:    logger.For(logger.ComponentCommunicator),
-		ctx:             ctx,
-		cancel:          cancel,
 	}
 }
 
@@ -119,6 +109,10 @@ func (a *AddDataModelAction) Parse(payload interface{}) error {
 
 // Validate performs validation of the parsed payload.
 func (a *AddDataModelAction) Validate() error {
+	// Create context with timeout for validation operations
+	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	defer cancel()
+
 	// Validate all required fields
 	if a.payload.Name == "" {
 		return errors.New("missing required field Name")
@@ -139,7 +133,7 @@ func (a *AddDataModelAction) Validate() error {
 	}
 
 	// Get all existing data models and payload shapes for validation
-	currentConfig, err := a.configManager.GetConfig(a.ctx, 0)
+	currentConfig, err := a.configManager.GetConfig(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get current config for validation: %w", err)
 	}
@@ -151,7 +145,7 @@ func (a *AddDataModelAction) Validate() error {
 	}
 
 	// Validate with references and payload shapes (handles cases with no references gracefully)
-	if err := validator.ValidateWithReferences(a.ctx, dmVersion, allDataModels, currentConfig.PayloadShapes); err != nil {
+	if err := validator.ValidateWithReferences(ctx, dmVersion, allDataModels, currentConfig.PayloadShapes); err != nil {
 		return fmt.Errorf("data model validation failed: %w", err)
 	}
 
@@ -160,8 +154,9 @@ func (a *AddDataModelAction) Validate() error {
 
 // Execute implements the Action interface by creating the data model configuration.
 func (a *AddDataModelAction) Execute() (interface{}, map[string]interface{}, error) {
-	// Ensure context is cleaned up when action completes
-	defer a.cancel()
+	// Create context with timeout for execution operations
+	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	defer cancel()
 
 	a.actionLogger.Info("Executing AddDataModel action")
 
@@ -176,7 +171,7 @@ func (a *AddDataModelAction) Execute() (interface{}, map[string]interface{}, err
 
 	// Safety validation before adding to config
 	validator := datamodel.NewValidator()
-	if err := validator.ValidateStructureOnly(a.ctx, dmVersion); err != nil {
+	if err := validator.ValidateStructureOnly(ctx, dmVersion); err != nil {
 		errorMsg := fmt.Sprintf("Final validation failed before adding data model: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.AddDataModel)
@@ -187,8 +182,8 @@ func (a *AddDataModelAction) Execute() (interface{}, map[string]interface{}, err
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		"Adding data model to configuration...", a.outboundChannel, models.AddDataModel)
 
-	// Use shared context for execution
-	err := a.configManager.AtomicAddDataModel(a.ctx, a.payload.Name, dmVersion, a.payload.Description)
+	// Use context for execution
+	err := a.configManager.AtomicAddDataModel(ctx, a.payload.Name, dmVersion, a.payload.Description)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to add data model: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -210,7 +205,7 @@ func (a *AddDataModelAction) Execute() (interface{}, map[string]interface{}, err
 		},
 	}
 
-	dataContractErr := a.configManager.AtomicAddDataContract(a.ctx, dataContract)
+	dataContractErr := a.configManager.AtomicAddDataContract(ctx, dataContract)
 	if dataContractErr != nil {
 		// Log the error but don't fail the entire operation since the data model was successfully added
 		a.actionLogger.Warnf("Failed to automatically create data contract for data model %s: %v", a.payload.Name, dataContractErr)

@@ -136,7 +136,12 @@ var (
 
 // Buffer management functions.
 func getBase64Buffer() *[]byte {
-	return base64BufferPool.Get().(*[]byte)
+	if buf, ok := base64BufferPool.Get().(*[]byte); ok {
+		return buf
+	}
+	// If pool returns wrong type, create new buffer
+	newBuf := make([]byte, 0, 1024)
+	return &newBuf
 }
 
 func putBase64Buffer(b *[]byte) {

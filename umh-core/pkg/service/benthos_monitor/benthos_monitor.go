@@ -681,7 +681,8 @@ func ParsePingData(dataReader io.Reader) (bool, error) {
 	if curlError != nil {
 		// If we have any curl error, we can assume the service is not live (but we do not need to return the error)
 		// We intentionally ignore the curl error as it just means the service is not responding
-		return false, nil
+		// This is intentional: curl errors indicate service unavailability, not a method failure
+		return false, nil //nolint:nilerr // Intentional: curl errors indicate service down, not method failure
 	}
 
 	if strings.Contains(string(data), "pong") {

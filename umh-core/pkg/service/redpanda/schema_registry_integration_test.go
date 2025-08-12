@@ -154,8 +154,14 @@ func verifySchemaViaHTTP(subject SubjectName, expectedSchema JSONSchemaDefinitio
 	}
 
 	// Convert back to JSON with consistent formatting for comparison
-	expectedNormalized, _ := json.Marshal(expectedParsed)
-	fetchedNormalized, _ := json.Marshal(fetchedParsed)
+	expectedNormalized, err := json.Marshal(expectedParsed)
+	if err != nil {
+		return fmt.Errorf("failed to marshal expected schema for comparison: %w", err)
+	}
+	fetchedNormalized, err := json.Marshal(fetchedParsed)
+	if err != nil {
+		return fmt.Errorf("failed to marshal fetched schema for comparison: %w", err)
+	}
 
 	if string(expectedNormalized) != string(fetchedNormalized) {
 		return fmt.Errorf("schema mismatch for subject %s:\nExpected: %s\nFetched: %s",
@@ -203,7 +209,8 @@ var _ = Describe("Real Redpanda Integration Tests", Ordered, Label("integration"
 		var cancel context.CancelFunc
 
 		BeforeEach(func() {
-			ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+			testCtx, testCancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel = testCtx, testCancel
 		})
 
 		AfterEach(func() {
