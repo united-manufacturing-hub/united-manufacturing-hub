@@ -102,6 +102,10 @@ func (r *Router) router() {
 				r.handleSub(message, messageContent, watcherUUID)
 			case models.Action:
 				r.handleAction(messageContent, message, watcherUUID)
+			case models.Status, models.ActionReply, models.EncryptedContent:
+				// These message types are not handled by this router
+				r.routerLogger.Debugf("Message type %s not handled by router", messageContent.MessageType)
+				continue
 			default:
 				r.routerLogger.Warnf("Unexpected message type: %s", messageContent.MessageType)
 

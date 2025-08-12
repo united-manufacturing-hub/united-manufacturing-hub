@@ -217,6 +217,9 @@ func (r *Resolver) mapEventEntryToGraphQL(entry *tbproto.EventTableEntry) Event 
 		return r.mapTimeSeriesEvent(entry, timestamp)
 	case tbproto.PayloadFormat_RELATIONAL:
 		return r.mapRelationalEvent(entry, timestamp)
+	case tbproto.PayloadFormat_PAYLOAD_FORMAT_UNSPECIFIED:
+		// Default to time series for unspecified format
+		return r.mapTimeSeriesEvent(entry, timestamp)
 	default:
 		// Default to time series for unknown formats
 		return r.mapTimeSeriesEvent(entry, timestamp)
@@ -276,6 +279,11 @@ func (r *Resolver) mapTimeSeriesEvent(entry *tbproto.EventTableEntry, timestamp 
 			value := numVal.GetValue()
 			numericValue = &value
 		}
+	case tbproto.ScalarType_SCALAR_TYPE_UNSPECIFIED:
+		// Default to string for unspecified scalar type
+		scalarType = ScalarTypeString
+		emptyStr := ""
+		stringValue = &emptyStr
 	default:
 		scalarType = ScalarTypeString
 		emptyStr := ""

@@ -15,6 +15,7 @@
 package integration_test
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -198,7 +199,15 @@ var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("i
 func httpGetWithTimeout(url string, timeout time.Duration) (int, error) {
 	client := &http.Client{Timeout: timeout}
 
-	resp, err := client.Get(url)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return 0, err
 	}
@@ -214,7 +223,15 @@ func httpGetWithTimeout(url string, timeout time.Duration) (int, error) {
 func checkRedpandaState(url string, timeout time.Duration) (int, error) {
 	client := &http.Client{Timeout: timeout}
 
-	resp, err := client.Get(url)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return 0, err
 	}

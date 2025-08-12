@@ -46,8 +46,13 @@ func ChooseEncoder(encoding Encoding) {
 		encodeMessageFromUMHInstanceToUser = encoding_corev1.EncodeMessageFromUMHInstanceToUser
 		decodeMessageFromUserToUMHInstance = encoding_corev1.DecodeMessageFromUserToUMHInstance
 		decodeMessageFromUMHInstanceToUser = encoding_corev1.DecodeMessageFromUMHInstanceToUser
+	case EncodingOld:
+		encodeMessageFromUserToUMHInstance = encoding_old.EncodeMessageFromUserToUMHInstance
+		encodeMessageFromUMHInstanceToUser = encoding_old.EncodeMessageFromUMHInstanceToUser
+		decodeMessageFromUserToUMHInstance = encoding_old.DecodeMessageFromUserToUMHInstance
+		decodeMessageFromUMHInstanceToUser = encoding_old.DecodeMessageFromUMHInstanceToUser
 	default:
-		// Default to old encoding
+		// Default to old encoding for unknown types
 		encodeMessageFromUserToUMHInstance = encoding_old.EncodeMessageFromUserToUMHInstance
 		encodeMessageFromUMHInstanceToUser = encoding_old.EncodeMessageFromUMHInstanceToUser
 		decodeMessageFromUserToUMHInstance = encoding_old.DecodeMessageFromUserToUMHInstance

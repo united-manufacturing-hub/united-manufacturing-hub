@@ -60,6 +60,9 @@ func (a *LogAnalyzer) ShowTickTimeline(startTick, endTick int) {
 				actions = append(actions, event)
 			case EntryTypeError:
 				errors = append(errors, event)
+			case EntryTypeUnknown, EntryTypeTick:
+				// These entry types are not categorized for display
+				continue
 			}
 		}
 
@@ -82,6 +85,8 @@ func (a *LogAnalyzer) ShowTickTimeline(startTick, endTick int) {
 					status = "→"
 				case EntryTypeFSMFailed:
 					status = "✗"
+				case EntryTypeUnknown, EntryTypeTick, EntryTypeFSMTransition, EntryTypeFSMDesiredState, EntryTypeReconciliation, EntryTypeActionStart, EntryTypeActionDone, EntryTypeError:
+					// Default status "✓" for other entry types
 				}
 
 				toState := event.ToState

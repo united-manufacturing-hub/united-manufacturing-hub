@@ -191,6 +191,10 @@ func (a *LogAnalyzer) processEntry(entry LogEntry) {
 
 	case EntryTypeFSMFailed:
 		a.recordFSMTransition(entry, false)
+
+	case EntryTypeUnknown, EntryTypeFSMDesiredState, EntryTypeReconciliation, EntryTypeActionStart, EntryTypeActionDone, EntryTypeError:
+		// These entry types are recorded but don't require special processing
+		// They will be added to the current tick's events during the add operation
 	}
 
 	if a.CurrentTick > 0 {

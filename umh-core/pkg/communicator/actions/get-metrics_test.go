@@ -124,6 +124,30 @@ var _ = Describe("GetMetricsAction", func() {
 							},
 						},
 					}, nil
+				case models.TopicBrowserMetricResourceType:
+					return models.GetMetricsResponse{
+						Metrics: []models.Metric{
+							{
+								Name:          "messages_processed",
+								Path:          "topic_browser.messages_processed",
+								ComponentType: "processor",
+								ValueType:     models.MetricValueTypeNumber,
+								Value:         float64(50),
+							},
+						},
+					}, nil
+				case models.ProtocolConverterMetricResourceType:
+					return models.GetMetricsResponse{
+						Metrics: []models.Metric{
+							{
+								Name:          "connections_active",
+								Path:          "protocol_converter.connections_active",
+								ComponentType: "connection",
+								ValueType:     models.MetricValueTypeNumber,
+								Value:         float64(3),
+							},
+						},
+					}, nil
 				default:
 					return models.GetMetricsResponse{}, fmt.Errorf("unsupported metric type: %s", payload.Type)
 				}

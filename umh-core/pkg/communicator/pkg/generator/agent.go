@@ -110,6 +110,8 @@ func getAgentHealthMessage(cat models.HealthCategory) string {
 		return "Agent operating normally"
 	case models.Degraded:
 		return "Agent degraded"
+	case models.Neutral:
+		return "Agent in neutral state"
 	default:
 		return "Agent status unknown"
 	}

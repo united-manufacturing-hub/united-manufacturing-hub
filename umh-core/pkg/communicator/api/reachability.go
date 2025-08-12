@@ -15,9 +15,11 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	httpv2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/http"
 	"go.uber.org/zap"
@@ -45,7 +47,17 @@ func CheckIfAPIIsReachable(insecureTLS bool, apiURL string, logger *zap.SugaredL
 
 	client := httpv2.GetClient(insecureTLS)
 
-	response, err := client.Get(baseUrl)
+	// Create a context with timeout for the reachability check
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", baseUrl, nil)
+	if err != nil {
+		logger.Errorf("Error creating request for API reachability check: %v", err)
+		return false
+	}
+
+	response, err := client.Do(req)
 	if err != nil {
 		logger.Errorf("Error while checking if API is reachable: %v", err)
 

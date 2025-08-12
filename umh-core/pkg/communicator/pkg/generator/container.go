@@ -153,6 +153,8 @@ func getContainerHealthMessage(cat models.HealthCategory) string {
 		return "Container operating normally"
 	case models.Degraded:
 		return "Container degraded"
+	case models.Neutral:
+		return "Container in neutral state"
 	default:
 		return "Container status unknown"
 	}
