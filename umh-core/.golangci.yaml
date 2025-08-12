@@ -31,3 +31,11 @@ linters:
     - revive
     - godox
     - wrapcheck
+    - testpackage
+    - tagliatelle
+    - mnd
+    - lll
+    - goconst
+    - gochecknoglobals
+    - funcorder
+    - dupl
