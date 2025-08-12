@@ -57,7 +57,7 @@ func (m *MockComponent) DoOperation(tick uint64) error {
 	// Determine if we should succeed or fail
 	if m.operationCount <= m.failNextNTimes {
 		// Simulate a failure
-		err := errors.New("simulated operation failure")
+		err := errors.New("simulated operation failure") //nolint:err113 // Test needs dynamic error
 		isPermanent := m.backoffManager.SetError(err, tick)
 
 		if isPermanent {
@@ -109,7 +109,7 @@ func (p *MockParent) Execute(tick uint64) error {
 			// For permanent failures, extract original error for context
 			originalErr := ExtractOriginalError(err)
 			// Then return error to caller
-			return errors.New("component permanently failed: " + originalErr.Error())
+			return errors.New("component permanently failed: " + originalErr.Error()) //nolint:err113 // Test needs dynamic error
 		}
 
 		// For other errors, just return them

@@ -20,6 +20,9 @@ import (
 	"fmt"
 )
 
+// ErrNoProtocolConverterFound is returned when no protocol converter is found in the configuration
+var ErrNoProtocolConverterFound = errors.New("no protocol converter found")
+
 // GenerateConfig creates a test configuration with a specified number of processors.
 // The specific config is not important, it is just a test configuration that is intended to be long
 // as we only use it to test runtime of the parsing of the config.
@@ -30,7 +33,7 @@ func GenerateConfig(processors int, fcm *FileConfigManager) (FullConfig, error) 
 	}
 
 	if len(fullConfig.ProtocolConverter) == 0 {
-		return FullConfig{}, errors.New("no protocol converter found")
+		return FullConfig{}, ErrNoProtocolConverterFound
 	}
 
 	pc := fullConfig.ProtocolConverter[0]

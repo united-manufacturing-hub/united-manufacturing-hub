@@ -60,12 +60,12 @@ func ChooseEncoder(encoding Encoding) {
 	}
 }
 
-func EncodeMessageFromUserToUMHInstance(UMHMessage models.UMHMessageContent) (string, error) {
-	return encodeMessageFromUserToUMHInstance(UMHMessage)
+func EncodeMessageFromUserToUMHInstance(umhMessage models.UMHMessageContent) (string, error) {
+	return encodeMessageFromUserToUMHInstance(umhMessage)
 }
 
-func EncodeMessageFromUMHInstanceToUser(UMHMessage models.UMHMessageContent) (string, error) {
-	return encodeMessageFromUMHInstanceToUser(UMHMessage)
+func EncodeMessageFromUMHInstanceToUser(umhMessage models.UMHMessageContent) (string, error) {
+	return encodeMessageFromUMHInstanceToUser(umhMessage)
 }
 
 func DecodeMessageFromUserToUMHInstance(base64Message string) (models.UMHMessageContent, error) {

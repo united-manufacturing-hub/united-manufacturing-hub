@@ -202,13 +202,13 @@ func isCompressed(data []byte) bool {
 
 // EncodeMessageFromUserToUMHInstance converts and encodes a UMHMessageContent object to Base64 String.
 // Note: only the inner payload will later be encrypted, not the whole message.
-func EncodeMessageFromUserToUMHInstance(UMHMessage models.UMHMessageContent) (string, error) {
+func EncodeMessageFromUserToUMHInstance(umhMessage models.UMHMessageContent) (string, error) {
 	encoderMutex.Lock()
 	defer encoderMutex.Unlock()
 
-	messageBytes, err := safejson.Marshal(UMHMessage)
+	messageBytes, err := safejson.Marshal(umhMessage)
 	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to marshal UMHMessage: %v (%+v)", err, UMHMessage)
+		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to marshal UMHMessage: %v (%+v)", err, umhMessage)
 
 		return "", err
 	}
@@ -218,13 +218,13 @@ func EncodeMessageFromUserToUMHInstance(UMHMessage models.UMHMessageContent) (st
 
 // EncodeMessageFromUMHInstanceToUser converts and encodes a UMHMessageContent object to Base64 String.
 // Note: only the inner payload will later be encrypted, not the whole message.
-func EncodeMessageFromUMHInstanceToUser(UMHMessage models.UMHMessageContent) (string, error) {
+func EncodeMessageFromUMHInstanceToUser(umhMessage models.UMHMessageContent) (string, error) {
 	encoderMutex.Lock()
 	defer encoderMutex.Unlock()
 
-	messageBytes, err := safejson.Marshal(UMHMessage)
+	messageBytes, err := safejson.Marshal(umhMessage)
 	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to marshal UMHMessage: %v (%+v)", err, UMHMessage)
+		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to marshal UMHMessage: %v (%+v)", err, umhMessage)
 
 		return "", err
 	}

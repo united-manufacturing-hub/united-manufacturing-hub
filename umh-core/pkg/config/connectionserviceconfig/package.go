@@ -26,6 +26,9 @@ var (
 	defaultGenerator  = NewGenerator()
 	defaultNormalizer = NewNormalizer()
 	defaultComparator = NewComparator()
+
+	// ErrConnectionTemplateNilOrEmpty is returned when the connection template is nil or empty
+	ErrConnectionTemplateNilOrEmpty = errors.New("connection template is nil or empty")
 )
 
 // ConnectionServiceConfigRuntime represents the fully rendered configuration for a Connection service.
@@ -143,7 +146,7 @@ func ConvertRuntimeToTemplate(cfg ConnectionServiceConfigRuntime) ConnectionServ
 func ConvertTemplateToRuntime(cfg ConnectionServiceConfigTemplate) (ConnectionServiceConfigRuntime, error) {
 	// Handle nil NmapTemplate (e.g., from empty/uninitialized configs)
 	if cfg.NmapTemplate == nil {
-		return ConnectionServiceConfigRuntime{}, errors.New("connection template is nil or empty")
+		return ConnectionServiceConfigRuntime{}, ErrConnectionTemplateNilOrEmpty
 	}
 
 	// Parse string port to uint16 for runtime type safety

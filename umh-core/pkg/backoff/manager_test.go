@@ -69,7 +69,7 @@ var _ = Describe("BackoffManager", func() {
 			Expect(manager.IsPermanentlyFailed()).To(BeFalse())
 
 			// Set a temporary error
-			testErr := errors.New("test error")
+			testErr := errors.New("test error") //nolint:err113 // Test needs dynamic error
 			isPermanent := manager.SetError(testErr, tick)
 			tick++
 			Expect(isPermanent).To(BeFalse()) // Not permanent on first attempt
@@ -83,7 +83,7 @@ var _ = Describe("BackoffManager", func() {
 		})
 
 		It("should detect permanent failure after max retries", func() {
-			testErr := errors.New("test error")
+			testErr := errors.New("test error") //nolint:err113 // Test needs dynamic error
 
 			// Need to access the impl directly to set exact retries
 			// Create a new manager with a shorter MaxRetries for this test
@@ -123,7 +123,7 @@ var _ = Describe("BackoffManager", func() {
 
 		It("should skip operations in backoff state", func() {
 			// Set an error to enter backoff state
-			testErr := errors.New("test error")
+			testErr := errors.New("test error") //nolint:err113 // Test needs dynamic error
 			manager.SetError(testErr, tick)
 
 			// Now operations should be skipped
@@ -133,7 +133,7 @@ var _ = Describe("BackoffManager", func() {
 
 		It("should not skip operations after reset", func() {
 			// Set an error to enter backoff state
-			testErr := errors.New("test error")
+			testErr := errors.New("test error") //nolint:err113 // Test needs dynamic error
 			manager.SetError(testErr, tick)
 			Expect(manager.ShouldSkipOperation(tick)).To(BeTrue())
 
@@ -147,7 +147,7 @@ var _ = Describe("BackoffManager", func() {
 	Context("when working with backoff errors", func() {
 		It("should generate appropriate temporary backoff errors", func() {
 			// Set an error but not permanently failed
-			testErr := errors.New("test error")
+			testErr := errors.New("test error") //nolint:err113 // Test needs dynamic error
 			manager.SetError(testErr, tick)
 
 			backoffErr := manager.GetBackoffError(tick)
@@ -162,7 +162,7 @@ var _ = Describe("BackoffManager", func() {
 			specialConfig.MaxRetries = 2
 			specialManager := NewBackoffManager(specialConfig)
 
-			testErr := errors.New("test error")
+			testErr := errors.New("test error") //nolint:err113 // Test needs dynamic error
 
 			// Set errors until we reach permanent failure
 			// First error
@@ -186,7 +186,7 @@ var _ = Describe("BackoffManager", func() {
 		})
 
 		It("should preserve original error", func() {
-			testErr := errors.New("original test error")
+			testErr := errors.New("original test error") //nolint:err113 // Test needs dynamic error
 			manager.SetError(testErr, tick)
 			backoffErr := manager.GetBackoffError(tick)
 			extractedErr := ExtractOriginalError(backoffErr)
@@ -196,21 +196,21 @@ var _ = Describe("BackoffManager", func() {
 
 	Context("when using error helpers", func() {
 		It("should correctly identify temporary backoff errors", func() {
-			tempErr := errors.New(TemporaryBackoffError + ": test")
+			tempErr := errors.New(TemporaryBackoffError + ": test") //nolint:err113 // Test needs dynamic error
 			Expect(IsTemporaryBackoffError(tempErr)).To(BeTrue())
 			Expect(IsPermanentFailureError(tempErr)).To(BeFalse())
 			Expect(IsBackoffError(tempErr)).To(BeTrue())
 		})
 
 		It("should correctly identify permanent failure errors", func() {
-			permErr := errors.New(PermanentFailureError + ": test")
+			permErr := errors.New(PermanentFailureError + ": test") //nolint:err113 // Test needs dynamic error
 			Expect(IsTemporaryBackoffError(permErr)).To(BeFalse())
 			Expect(IsPermanentFailureError(permErr)).To(BeTrue())
 			Expect(IsBackoffError(permErr)).To(BeTrue())
 		})
 
 		It("should not identify regular errors as backoff errors", func() {
-			regularErr := errors.New("regular error")
+			regularErr := errors.New("regular error") //nolint:err113 // Test needs dynamic error
 			Expect(IsTemporaryBackoffError(regularErr)).To(BeFalse())
 			Expect(IsPermanentFailureError(regularErr)).To(BeFalse())
 			Expect(IsBackoffError(regularErr)).To(BeFalse())
@@ -224,7 +224,7 @@ var _ = Describe("BackoffManager", func() {
 			testManager := NewBackoffManager(config)
 
 			// Set an error to trigger backoff
-			testErr := errors.New("test error")
+			testErr := errors.New("test error") //nolint:err113 // Test needs dynamic error
 			testManager.SetError(testErr, tick)
 			// Should be in backoff immediately after setting error
 			Expect(testManager.ShouldSkipOperation(tick)).To(BeTrue())
@@ -241,11 +241,11 @@ var _ = Describe("BackoffManager", func() {
 	Context("when using backoff manager in FSM", func() {
 		It("should calculate reasonable backoff intervals", func() {
 			// First error
-			manager.SetError(errors.New("error1"), 0)
+			manager.SetError(errors.New("error1"), 0) //nolint:err113 // Test needs dynamic error
 			Expect(manager.suspendedUntilTick).To(Equal(uint64(1)))
 
 			// Second error
-			manager.SetError(errors.New("error2"), 1)
+			manager.SetError(errors.New("error2"), 1) //nolint:err113 // Test needs dynamic error
 			Expect(manager.suspendedUntilTick).To(BeNumerically("~", 2, 3))
 		})
 	})

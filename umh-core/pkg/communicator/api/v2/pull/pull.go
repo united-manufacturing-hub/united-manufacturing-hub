@@ -116,13 +116,13 @@ func (p *Puller) pull() {
 
 		error_handler.ResetErrorCounter()
 
-		if incomingMessages == nil || incomingMessages.UMHMessages == nil || len((*incomingMessages).UMHMessages) == 0 {
+		if incomingMessages == nil || incomingMessages.UMHMessages == nil || len(incomingMessages.UMHMessages) == 0 {
 			time.Sleep(1 * time.Second)
 
 			continue
 		}
 
-		for _, message := range (*incomingMessages).UMHMessages {
+		for _, message := range incomingMessages.UMHMessages {
 			insertionTimeout := time.After(10 * time.Second)
 			select {
 			case p.inboundMessageChannel <- &models.UMHMessage{
