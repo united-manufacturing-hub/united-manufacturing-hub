@@ -56,7 +56,7 @@ var _ = Describe("Simulator", func() {
 			simulator.Tick()
 
 			newState := simulator.GetSimObservedState()
-			Expect(len(newState.ServiceInfo.Status.BufferSnapshot.Items)).To(Equal(initialBufferLen + 1))
+			Expect(newState.ServiceInfo.Status.BufferSnapshot.Items).To(HaveLen(initialBufferLen + 1))
 		})
 	})
 
@@ -140,11 +140,11 @@ var _ = Describe("Simulator", func() {
 			event1 := unsBundle1.GetEvents().GetEntries()[0]
 			event2 := unsBundle2.GetEvents().GetEntries()[0]
 
-			Expect(event1.Payload.(*tbproto.EventTableEntry_Ts).Ts.GetScalarType()).To(Equal(tbproto.ScalarType_NUMERIC))
-			Expect(event2.Payload.(*tbproto.EventTableEntry_Ts).Ts.GetScalarType()).To(Equal(tbproto.ScalarType_NUMERIC))
+			Expect(event1.GetPayload().(*tbproto.EventTableEntry_Ts).Ts.GetScalarType()).To(Equal(tbproto.ScalarType_NUMERIC))
+			Expect(event2.GetPayload().(*tbproto.EventTableEntry_Ts).Ts.GetScalarType()).To(Equal(tbproto.ScalarType_NUMERIC))
 
-			val1 := event1.Payload.(*tbproto.EventTableEntry_Ts).Ts.Value.(*tbproto.TimeSeriesPayload_NumericValue).NumericValue.GetValue()
-			val2 := event2.Payload.(*tbproto.EventTableEntry_Ts).Ts.Value.(*tbproto.TimeSeriesPayload_NumericValue).NumericValue.GetValue()
+			val1 := event1.Payload.(*tbproto.EventTableEntry_Ts).Ts.GetValue().(*tbproto.TimeSeriesPayload_NumericValue).NumericValue.GetValue()
+			val2 := event2.Payload.(*tbproto.EventTableEntry_Ts).Ts.GetValue().(*tbproto.TimeSeriesPayload_NumericValue).NumericValue.GetValue()
 
 			// Values should be between 0 and 100
 			Expect(val1).To(BeNumerically(">=", 0))
@@ -180,7 +180,7 @@ var _ = Describe("Simulator", func() {
 			simulator.AddUnsBundleToSimObservedState(bundle)
 
 			newState := simulator.GetSimObservedState()
-			Expect(len(newState.ServiceInfo.Status.BufferSnapshot.Items)).To(Equal(initialCount + 1))
+			Expect(newState.ServiceInfo.Status.BufferSnapshot.Items).To(HaveLen(initialCount + 1))
 
 			addedBuffer := newState.ServiceInfo.Status.BufferSnapshot.Items[len(newState.ServiceInfo.Status.BufferSnapshot.Items)-1]
 			Expect(addedBuffer.Payload).To(Equal(bundle))
@@ -195,7 +195,7 @@ var _ = Describe("Simulator", func() {
 			}
 
 			state := simulator.GetSimObservedState()
-			Expect(len(state.ServiceInfo.Status.BufferSnapshot.Items)).To(Equal(bufferLimit))
+			Expect(state.ServiceInfo.Status.BufferSnapshot.Items).To(HaveLen(bufferLimit))
 		})
 
 		It("should remove oldest entries when buffer exceeds limit", func() {
@@ -237,7 +237,7 @@ var _ = Describe("Simulator", func() {
 
 			state := simulator.GetSimObservedState()
 			expectedCount := numGoroutines * bundlesPerGoroutine
-			Expect(len(state.ServiceInfo.Status.BufferSnapshot.Items)).To(Equal(expectedCount))
+			Expect(state.ServiceInfo.Status.BufferSnapshot.Items).To(HaveLen(expectedCount))
 		})
 	})
 
@@ -420,7 +420,7 @@ var _ = Describe("Simulator", func() {
 			simulator.Tick()
 
 			newState := simulator.GetSimObservedState()
-			Expect(len(newState.ServiceInfo.Status.BufferSnapshot.Items)).To(Equal(initialCount + 1))
+			Expect(newState.ServiceInfo.Status.BufferSnapshot.Items).To(HaveLen(initialCount + 1))
 		})
 
 		It("should increment ticker value in generated bundles", func() {
@@ -451,7 +451,7 @@ var _ = Describe("Simulator", func() {
 			}
 
 			finalState := simulator.GetSimObservedState()
-			Expect(len(finalState.ServiceInfo.Status.BufferSnapshot.Items)).To(Equal(initialCount + numTicks))
+			Expect(finalState.ServiceInfo.Status.BufferSnapshot.Items).To(HaveLen(initialCount + numTicks))
 		})
 	})
 
@@ -471,7 +471,7 @@ var _ = Describe("Simulator", func() {
 
 				Expect(unsBundle.GetUnsMap()).NotTo(BeNil())
 				Expect(unsBundle.GetEvents()).NotTo(BeNil())
-				Expect(len(unsBundle.GetUnsMap().GetEntries())).To(Equal(len(unsBundle.GetEvents().GetEntries())))
+				Expect(unsBundle.GetUnsMap().GetEntries()).To(HaveLen(len(unsBundle.GetEvents().GetEntries())))
 
 				// Verify each event has valid UnsTreeId that maps to a topic
 				for _, event := range unsBundle.GetEvents().GetEntries() {

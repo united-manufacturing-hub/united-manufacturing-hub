@@ -72,6 +72,7 @@ func (vb *VariableBundle) UnmarshalYAML(value *yaml.Node) error {
 	}
 
 	var explicit explicitBundle
+
 	err := value.Decode(&explicit)
 	if err == nil {
 		// Check if this looks like an explicit namespace structure
@@ -86,6 +87,7 @@ func (vb *VariableBundle) UnmarshalYAML(value *yaml.Node) error {
 
 	// Otherwise, treat all variables as user variables (flat structure)
 	var userVars map[string]any
+
 	err = value.Decode(&userVars)
 	if err != nil {
 		return err

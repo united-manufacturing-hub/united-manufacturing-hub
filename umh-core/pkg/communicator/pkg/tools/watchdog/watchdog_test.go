@@ -49,15 +49,20 @@ var _ = Describe("Watchdog", func() {
 					// Extract witch test caused the panic
 					// Heartbeat too old test-2 (cd41ec9f-b168-4b58-a41c-4e582b6a2122)
 					// We want to get the uuid
-					uuidRegex := regexp.MustCompile(`\[.+?\].+((\w{8})-(\w{4})-(\w{4})-(\w{4})-(\w{12}))`)
-					matches := uuidRegex.FindStringSubmatch(r.(string))
-					if len(matches) > 1 {
-						// zap.S().Debuff("Panic was caused by UUID: %s", matches[1])
-						u := uuid.MustParse(matches[1])
-						panickingUUIDsLock.Lock()
-						panickingUUIDs[u] = true
-						panickingUUIDsLock.Unlock()
+					if panicStr, ok := r.(string); ok {
+						uuidRegex := regexp.MustCompile(`\[.+?\].+((\w{8})-(\w{4})-(\w{4})-(\w{4})-(\w{12}))`)
+						matches := uuidRegex.FindStringSubmatch(panicStr)
+						if len(matches) > 1 {
+							// zap.S().Debuff("Panic was caused by UUID: %s", matches[1])
+							u := uuid.MustParse(matches[1])
+							panickingUUIDsLock.Lock()
+							panickingUUIDs[u] = true
+							panickingUUIDsLock.Unlock()
+						} else {
+							otherpanic.Store(true)
+						}
 					} else {
+						// Panic value is not a string, treat as other panic
 						otherpanic.Store(true)
 					}
 				}

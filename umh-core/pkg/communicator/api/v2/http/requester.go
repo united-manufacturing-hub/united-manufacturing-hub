@@ -348,6 +348,11 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 	response, err := DoHTTPRequest(ctx, url, header, cookies, insecureTLS, logger)
 	if err != nil {
 		if response != nil {
+			defer func() {
+				if closeErr := response.Body.Close(); closeErr != nil {
+					logger.Warnf("Failed to close response body: %v", closeErr)
+				}
+			}()
 			return nil, response.StatusCode, err
 		}
 
@@ -441,6 +446,11 @@ func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, 
 	response, err := DoHTTPPostRequest(ctx, url, data, header, cookies, insecureTLS, logger)
 	if err != nil {
 		if response != nil {
+			defer func() {
+				if closeErr := response.Body.Close(); closeErr != nil {
+					logger.Warnf("Failed to close response body: %v", closeErr)
+				}
+			}()
 			return nil, response.StatusCode, err
 		}
 

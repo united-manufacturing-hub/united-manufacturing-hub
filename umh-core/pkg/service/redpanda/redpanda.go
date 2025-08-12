@@ -1237,8 +1237,8 @@ func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpa
 
 	// Set the cluster config
 	s.logger.Debugf("Setting Redpanda cluster config: %v", configUpdates)
-	err := s.setRedpandaClusterConfig(innerCtx, configUpdates)
 
+	err := s.setRedpandaClusterConfig(innerCtx, configUpdates)
 	if err != nil {
 		return err
 	}

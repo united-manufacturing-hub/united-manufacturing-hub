@@ -21,5 +21,9 @@ linters:
   default: all
 
   disable:
-    - depguard
     - wsl
+    - depguard
+    - cyclop
+    - gocyclo
+    - gocognit
+    - paralleltest

@@ -247,7 +247,7 @@ cleanup-all: cleanup-ci cleanup-tmp cleanup-data
 vet:
 	go vet -tags=test ./...
 
-lint: fix
+lint:
 	golangci-lint run ./...
 
 lint-fix:

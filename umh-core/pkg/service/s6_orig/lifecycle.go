@@ -191,8 +191,8 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *s6_shar
 		repoExists, _ := fsService.PathExists(ctx, artifacts.RepositoryDir)
 		if repoExists {
 			s.logDirectoryContentsIfNotEmpty(ctx, artifacts.RepositoryDir, "repository directory", fsService)
-			err := fsService.RemoveAll(ctx, artifacts.RepositoryDir)
 
+			err := fsService.RemoveAll(ctx, artifacts.RepositoryDir)
 			if err != nil {
 				s.logger.Debugf("Failed to remove repository directory: %v", err)
 
@@ -204,8 +204,8 @@ func (s *DefaultService) RemoveArtifacts(ctx context.Context, artifacts *s6_shar
 		logExists, _ := fsService.PathExists(ctx, artifacts.LogDir)
 		if logExists {
 			s.logDirectoryContentsIfNotEmpty(ctx, artifacts.LogDir, "log directory", fsService)
-			err := fsService.RemoveAll(ctx, artifacts.LogDir)
 
+			err := fsService.RemoveAll(ctx, artifacts.LogDir)
 			if err != nil {
 				s.logger.Debugf("Failed to remove log directory: %v", err)
 
@@ -518,6 +518,7 @@ func (s *DefaultService) createS6ConfigFiles(ctx context.Context, servicePath st
 
 		// Create directory if it doesn't exist
 		dir := filepath.Dir(path)
+
 		err := fsService.EnsureDirectory(ctx, dir)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create directory for config file: %w", err)
@@ -660,6 +661,7 @@ func (s *DefaultService) verifySupervisionEnded(ctx context.Context, servicePath
 
 	// Check log service supervision
 	logServicePath := filepath.Join(servicePath, "log")
+
 	err = s.checkSingleSupervisionEnded(ctx, logServicePath, fsService)
 	if err != nil {
 		return fmt.Errorf("log service supervision still active: %w", err)

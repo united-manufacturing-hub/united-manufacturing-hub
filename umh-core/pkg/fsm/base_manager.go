@@ -672,7 +672,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 			if innerCtx.Err() != nil {
 				m.logger.Debugf("Context is already cancelled, skipping instance %s", nameCaptured)
 
-				return nil
+				return innerCtx.Err()
 			}
 
 			reconciled, shallBeRemoved, err := m.reconcileInstanceWithTimeout(innerCtx, instanceCaptured, services, nameCaptured, snapshot, minimumRequiredTime)

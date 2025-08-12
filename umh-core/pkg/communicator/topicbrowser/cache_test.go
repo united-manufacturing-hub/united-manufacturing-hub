@@ -281,10 +281,10 @@ var _ = Describe("Cache", func() {
 
 			// Cache should remain empty since no valid data was processed
 			eventMap := cache.GetEventMap()
-			Expect(eventMap).To(HaveLen(0))
+			Expect(eventMap).To(BeEmpty())
 
 			unsMap := cache.GetUnsMap()
-			Expect(unsMap.GetEntries()).To(HaveLen(0))
+			Expect(unsMap.GetEntries()).To(BeEmpty())
 
 			// But timestamp should be updated to latest processed timestamp
 			Expect(cache.GetLastCachedTimestamp()).To(Equal(time.UnixMilli(1100)))

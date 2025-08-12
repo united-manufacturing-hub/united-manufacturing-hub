@@ -162,8 +162,8 @@ func GetUserCertificate(ctx context.Context, userEmail string, cookies *map[stri
 	response, statusCode, err := http.GetRequest[UserCertificateResponse](ctx, endpoint, nil, cookies, insecureTLS, apiURL, logger)
 	if err != nil {
 		if statusCode == http2.StatusNoContent {
-			// User does not have a certificate
-			return nil, nil
+			// User does not have a certificate - return empty response with no error
+			return &UserCertificateResponse{}, nil
 		}
 
 		logger.Errorf("Failed to get user certificate: %v (status code: %d)", err, statusCode)

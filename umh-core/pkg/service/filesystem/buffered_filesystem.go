@@ -1045,6 +1045,7 @@ func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 	for _, path := range filesToWrite {
 		// Ensure parent directory exists
 		parentDir := filepath.Dir(path)
+
 		err := bs.base.EnsureDirectory(ctx, parentDir)
 		if err != nil {
 			return fmt.Errorf("failed to create parent directory: %w", err)
@@ -1055,8 +1056,8 @@ func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 		if !exists {
 			return fmt.Errorf("change record missing for path: %s", path)
 		}
-		err = bs.base.WriteFile(ctx, path, chg.content, chg.perm)
 
+		err = bs.base.WriteFile(ctx, path, chg.content, chg.perm)
 		if err != nil {
 			return fmt.Errorf("failed to write file: %w", err)
 		}
@@ -1125,6 +1126,7 @@ func (bs *BufferedService) EnsureDirectory(ctx context.Context, path string) err
 	// Check permissions for the parent directory
 	if bs.verifyPermissions {
 		parentDir := filepath.Dir(path)
+
 		err := bs.checkDirectoryWritePermission(parentDir)
 		if err != nil {
 			return fmt.Errorf("permission check failed: %w", err)
@@ -1194,6 +1196,7 @@ func (bs *BufferedService) WriteFile(ctx context.Context, path string, data []by
 		} else {
 			// If file doesn't exist, check parent directory permissions
 			parentDir := filepath.Dir(path)
+
 			err := bs.checkDirectoryWritePermission(parentDir)
 			if err != nil {
 				return fmt.Errorf("permission check failed: %w", err)
@@ -1264,6 +1267,7 @@ func (bs *BufferedService) Remove(ctx context.Context, path string) error {
 	if bs.verifyPermissions {
 		// For removal, need write permission on parent directory
 		parentDir := filepath.Dir(path)
+
 		err := bs.checkDirectoryWritePermission(parentDir)
 		if err != nil {
 			return fmt.Errorf("permission check failed: %w", err)
@@ -1295,6 +1299,7 @@ func (bs *BufferedService) RemoveAll(ctx context.Context, path string) error {
 	if bs.verifyPermissions {
 		// For removal, need write permission on parent directory
 		parentDir := filepath.Dir(path)
+
 		err := bs.checkDirectoryWritePermission(parentDir)
 		if err != nil {
 			return fmt.Errorf("permission check failed: %w", err)
@@ -1366,6 +1371,7 @@ func (bs *BufferedService) CreateFile(ctx context.Context, path string, perm os.
 	// Check permissions
 	if bs.verifyPermissions {
 		parentDir := filepath.Dir(path)
+
 		err := bs.checkDirectoryWritePermission(parentDir)
 		if err != nil {
 			return nil, fmt.Errorf("permission check failed: %w", err)

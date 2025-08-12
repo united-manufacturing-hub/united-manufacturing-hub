@@ -54,7 +54,7 @@ func (instance *ProtocolConverterInstance) registerCallbacks() {
 		//		SourceEvent: e.Event,
 		//	},
 		//	Time: time.Now(),
-		//})
+		// })
 	})
 
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStartingRedpanda, func(ctx context.Context, e *fsm.Event) {
@@ -65,7 +65,7 @@ func (instance *ProtocolConverterInstance) registerCallbacks() {
 		//		SourceEvent: e.Event,
 		//	},
 		//	Time: time.Now(),
-		//})
+		// })
 	})
 
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStartingDFC, func(ctx context.Context, e *fsm.Event) {
@@ -76,7 +76,7 @@ func (instance *ProtocolConverterInstance) registerCallbacks() {
 		//		SourceEvent: e.Event,
 		//	},
 		//	Time: time.Now(),
-		//})
+		// })
 	})
 
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStartingFailedDFC, func(ctx context.Context, e *fsm.Event) {
@@ -87,7 +87,7 @@ func (instance *ProtocolConverterInstance) registerCallbacks() {
 		//		SourceEvent: e.Event,
 		//	},
 		//	Time: time.Now(),
-		//})
+		// })
 	})
 
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStartingFailedDFCMissing, func(ctx context.Context, e *fsm.Event) {
@@ -98,7 +98,7 @@ func (instance *ProtocolConverterInstance) registerCallbacks() {
 		//		SourceEvent: e.Event,
 		//	},
 		//	Time: time.Now(),
-		//})
+		// })
 	})
 
 	// Running phase state callbacks

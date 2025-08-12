@@ -77,10 +77,10 @@ func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConver
 					if err != nil {
 						// For invalid configs, don't update the mock service but don't fail the comparison
 						// This matches the behavior of the real manager where invalid configs are handled gracefully
-						return configsEqual, nil
+						// We intentionally ignore the error and continue with the old config
+					} else {
+						mockSvc.GetConfigResult = runtimeConfig
 					}
-
-					mockSvc.GetConfigResult = runtimeConfig
 				}
 			}
 
@@ -99,10 +99,10 @@ func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConver
 				if err != nil {
 					// For invalid configs, don't update the mock service but don't fail the set operation
 					// This matches the behavior of the real manager where invalid configs are handled gracefully
-					return nil
+					// We intentionally ignore the error and continue with the old config
+				} else {
+					mockSvc.GetConfigResult = runtimeConfig
 				}
-
-				mockSvc.GetConfigResult = runtimeConfig
 			}
 
 			return nil

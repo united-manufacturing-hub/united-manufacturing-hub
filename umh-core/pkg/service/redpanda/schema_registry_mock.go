@@ -131,8 +131,8 @@ func (m *MockSchemaRegistry) handleSubjects(w http.ResponseWriter, r *http.Reque
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	err := json.NewEncoder(w).Encode(subjects)
 
+	err := json.NewEncoder(w).Encode(subjects)
 	if err != nil {
 		http.Error(w, "Failed to encode subjects", http.StatusInternalServerError)
 
@@ -339,8 +339,8 @@ func (m *MockSchemaRegistry) handleLatestVersion(w http.ResponseWriter, subject 
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	err := json.NewEncoder(w).Encode(latestSchema)
 
+	err := json.NewEncoder(w).Encode(latestSchema)
 	if err != nil {
 		http.Error(w, "Failed to encode latest schema", http.StatusInternalServerError)
 

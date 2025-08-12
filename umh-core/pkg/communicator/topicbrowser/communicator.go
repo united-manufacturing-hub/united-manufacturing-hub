@@ -319,6 +319,7 @@ func (tbc *TopicBrowserCommunicator) processIncrementalBuffers(buffers []*topicb
 func (tbc *TopicBrowserCommunicator) updateInternalCache(buf *topicbrowserservice.BufferItem) error {
 	// Unmarshal the protobuf data
 	var ub tbproto.UnsBundle
+
 	err := proto.Unmarshal(buf.Payload, &ub)
 	if err != nil {
 		context := map[string]interface{}{

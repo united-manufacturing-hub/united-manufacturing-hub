@@ -63,6 +63,7 @@ func BenchmarkSchemaRegistry(b *testing.B) {
 	// Wait for registry to be ready
 	for range 30 {
 		dataModels, dataContracts, payloadShapes := emptySchemaRegistryConfig()
+
 		err := registry.Reconcile(ctx, dataModels, dataContracts, payloadShapes)
 		if err == nil {
 			break

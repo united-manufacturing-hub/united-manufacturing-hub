@@ -303,7 +303,8 @@ func (r *Resolver) mapRelationalEvent(entry *tbproto.EventTableEntry, timestamp 
 
 	if relPayload != nil && len(relPayload.GetJson()) > 0 {
 		// Parse the JSON payload
-		if err := json.Unmarshal(relPayload.GetJson(), &jsonData); err != nil {
+		err := json.Unmarshal(relPayload.GetJson(), &jsonData)
+		if err != nil {
 			// Log the error for debugging/monitoring (with context)
 			log := logger.For(logger.ComponentCommunicator)
 			log.Warnw("Failed to unmarshal relational event JSON in GraphQL resolver",

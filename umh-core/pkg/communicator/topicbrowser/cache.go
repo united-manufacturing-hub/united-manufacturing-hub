@@ -217,6 +217,7 @@ func (c *Cache) ProcessIncrementalUpdates(obs *topicbrowserfsm.ObservedStateSnap
 func (c *Cache) processBuffer(buf *topicbrowserservice.BufferItem, log *zap.SugaredLogger) error {
 	// Unmarshal the protobuf data
 	var ub tbproto.UnsBundle
+
 	err := proto.Unmarshal(buf.Payload, &ub)
 	if err != nil {
 		// Log the unmarshal error with context and report to Sentry

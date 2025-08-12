@@ -401,11 +401,11 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 		capturedManager := c.managers[i]
 
 		started := errorgroup.TryGo(func() error {
-			// It might be that .Go is blocked until the ctx is already cancelled, in that case we just return
+			// It might be that .Go is blocked until the ctx is already cancelled, in that case we just return the error
 			if innerCtx.Err() != nil {
 				c.logger.Debugf("Context is already cancelled, skipping manager %s", capturedManager.GetManagerName())
 
-				return nil
+				return innerCtx.Err()
 			}
 
 			reconciled, err := c.reconcileManager(innerCtx, capturedManager, &executedManagers, &executedManagersMutex, newSnapshot)

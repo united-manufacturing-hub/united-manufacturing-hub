@@ -111,6 +111,7 @@ func FromDFCServiceConfig(dfcConfig dataflowcomponentserviceconfig.DataflowCompo
 					yamlBytes, err := yaml.Marshal(streamProcessorMap)
 					if err == nil {
 						var streamProcessor StreamProcessorBenthosConfig
+
 						err := yaml.Unmarshal(yamlBytes, &streamProcessor)
 						if err == nil {
 							model = streamProcessor.Model

@@ -94,7 +94,8 @@ var _ = Describe("BuildRuntimeConfig", func() {
 			Expect(dfcRuntime.BenthosConfig.Pipeline).To(HaveKey("processors"))
 
 			// Check UNS output has bridged_by value (it should be rendered at this point)
-			unsOutput := dfcRuntime.BenthosConfig.Output["uns"].(map[string]any)
+			unsOutput, ok := dfcRuntime.BenthosConfig.Output["uns"].(map[string]any)
+			Expect(ok).To(BeTrue(), "UNS output should be a map[string]any")
 			Expect(unsOutput).To(HaveKey("bridged_by"))
 			Expect(unsOutput["bridged_by"]).To(Equal("stream-processor_test-node_test-sp"))
 		})
@@ -104,7 +105,8 @@ var _ = Describe("BuildRuntimeConfig", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify that bridged_by is properly rendered in UNS output
-			unsOutput := dfcRuntime.BenthosConfig.Output["uns"].(map[string]any)
+			unsOutput, ok := dfcRuntime.BenthosConfig.Output["uns"].(map[string]any)
+			Expect(ok).To(BeTrue(), "UNS output should be a map[string]any")
 			Expect(unsOutput["bridged_by"]).To(Equal("stream-processor_test-node_test-sp"))
 
 			// Verify the rendered value follows the expected format

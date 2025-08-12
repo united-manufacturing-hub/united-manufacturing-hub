@@ -88,8 +88,8 @@ func main() {
 		// S6_KILL_FINISH_MAXTIME is 5 seconds, so we need to finish before that
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer shutdownCancel()
-		err := server.Shutdown(shutdownCtx)
 
+		err := server.Shutdown(shutdownCtx)
 		if err != nil {
 			sentry.ReportIssuef(sentry.IssueTypeError, log, "Failed to shutdown metrics server: %w", err)
 		}
@@ -151,8 +151,8 @@ func main() {
 			if graphqlServer != nil {
 				shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
 				defer shutdownCancel()
-				err := graphqlServer.Stop(shutdownCtx)
 
+				err := graphqlServer.Stop(shutdownCtx)
 				if err != nil {
 					sentry.ReportIssuef(sentry.IssueTypeError, log, "Failed to shutdown GraphQL server: %w", err)
 				}

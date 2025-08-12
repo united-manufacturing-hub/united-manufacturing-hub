@@ -350,8 +350,11 @@ func (s *BenthosService) GetConfig(ctx context.Context, filesystemService filesy
 
 	// ---------- fast path: YAML identical to last call ----------
 	if v, ok := s.configCache.Load(benthosName); ok {
-		entry := v.(configCacheEntry)
-		if entry.hash == h {
+		entry, ok := v.(configCacheEntry)
+		if !ok {
+			// Cache entry has unexpected type, clear and continue
+			s.configCache.Delete(benthosName)
+		} else if entry.hash == h {
 			// Nothing changed – return the cached, already-normalised struct
 			return entry.parsed, nil
 		}

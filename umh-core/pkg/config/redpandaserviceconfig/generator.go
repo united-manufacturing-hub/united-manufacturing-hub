@@ -80,6 +80,7 @@ func (g *Generator) RenderConfig(cfg RedpandaServiceConfig) (string, error) {
 
 	// Render the template
 	var rendered bytes.Buffer
+
 	err := g.tmpl.Execute(&rendered, extendedCfg)
 	if err != nil {
 		return "", fmt.Errorf("failed to execute template: %w", err)

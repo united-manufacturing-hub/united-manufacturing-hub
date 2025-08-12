@@ -60,7 +60,7 @@ func (e *PrettyConsoleEncoder) EncodeEntry(entry zapcore.Entry, fields []zapcore
 	// } else {
 	// line.AppendString(entry.Time.Format("2006-01-02 15:04:05 MST"))
 	// }
-	//line.AppendByte(']')
+	// line.AppendByte(']')
 
 	// Format log level with padding for alignment
 	line.AppendString(" [")

@@ -441,7 +441,7 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 	// This implementation scans the logs in a single pass, which is more efficient than scanning for each marker separately
 	// If the there are multiple sections, we will have multiple entries in the sections list
 	// This ensures that we always have a valid section, even if the markers of later sections are missing (e.g the end marker for example was not yet written)
-	for i := range len(logs) {
+	for i := range logs {
 		if strings.Contains(logs[i].Content, BLOCK_START_MARKER) {
 			currentSection.StartMarkerIndex = i
 		} else if strings.Contains(logs[i].Content, METRICS_END_MARKER) {
