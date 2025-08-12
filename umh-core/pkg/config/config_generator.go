@@ -38,11 +38,13 @@ func GenerateConfig(processors int, fcm *FileConfigManager) (FullConfig, error) 
 	pipeline["processors"] = make(map[string]any)
 
 	for i := range processors {
-		pipeline["processors"].(map[string]any)[fmt.Sprintf("processor_%d", i)] = map[string]any{
-			"name": "long_processor",
-			"config": map[string]any{
-				"long_processor": "long_processor",
-			},
+		if processors, ok := pipeline["processors"].(map[string]any); ok {
+			processors[fmt.Sprintf("processor_%d", i)] = map[string]any{
+				"name": "long_processor",
+				"config": map[string]any{
+					"long_processor": "long_processor",
+				},
+			}
 		}
 	}
 

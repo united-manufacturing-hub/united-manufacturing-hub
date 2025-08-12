@@ -140,11 +140,25 @@ var _ = Describe("Simulator", func() {
 			event1 := unsBundle1.GetEvents().GetEntries()[0]
 			event2 := unsBundle2.GetEvents().GetEntries()[0]
 
-			Expect(event1.GetPayload().(*tbproto.EventTableEntry_Ts).Ts.GetScalarType()).To(Equal(tbproto.ScalarType_NUMERIC))
-			Expect(event2.GetPayload().(*tbproto.EventTableEntry_Ts).Ts.GetScalarType()).To(Equal(tbproto.ScalarType_NUMERIC))
+			payload1Check, ok := event1.GetPayload().(*tbproto.EventTableEntry_Ts)
+			Expect(ok).To(BeTrue(), "event1 payload should be EventTableEntry_Ts for type check")
+			Expect(payload1Check.Ts.GetScalarType()).To(Equal(tbproto.ScalarType_NUMERIC))
 
-			val1 := event1.Payload.(*tbproto.EventTableEntry_Ts).Ts.GetValue().(*tbproto.TimeSeriesPayload_NumericValue).NumericValue.GetValue()
-			val2 := event2.Payload.(*tbproto.EventTableEntry_Ts).Ts.GetValue().(*tbproto.TimeSeriesPayload_NumericValue).NumericValue.GetValue()
+			payload2Check, ok := event2.GetPayload().(*tbproto.EventTableEntry_Ts)
+			Expect(ok).To(BeTrue(), "event2 payload should be EventTableEntry_Ts for type check")
+			Expect(payload2Check.Ts.GetScalarType()).To(Equal(tbproto.ScalarType_NUMERIC))
+
+			payload1, ok := event1.Payload.(*tbproto.EventTableEntry_Ts)
+			Expect(ok).To(BeTrue(), "event1 payload should be EventTableEntry_Ts")
+			value1, ok := payload1.Ts.GetValue().(*tbproto.TimeSeriesPayload_NumericValue)
+			Expect(ok).To(BeTrue(), "event1 value should be NumericValue")
+			val1 := value1.NumericValue.GetValue()
+
+			payload2, ok := event2.Payload.(*tbproto.EventTableEntry_Ts)
+			Expect(ok).To(BeTrue(), "event2 payload should be EventTableEntry_Ts")
+			value2, ok := payload2.Ts.GetValue().(*tbproto.TimeSeriesPayload_NumericValue)
+			Expect(ok).To(BeTrue(), "event2 value should be NumericValue")
+			val2 := value2.NumericValue.GetValue()
 
 			// Values should be between 0 and 100
 			Expect(val1).To(BeNumerically(">=", 0))

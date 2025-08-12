@@ -129,10 +129,12 @@ var _ = Describe("StreamProcessorService", func() {
 			Expect(dfcConfig.BenthosConfig.Pipeline).To(HaveKey("processors"))
 
 			// Check UNS input structure
-			unsInput := dfcConfig.BenthosConfig.Input["uns"].(map[string]any)
+			unsInput, ok := dfcConfig.BenthosConfig.Input["uns"].(map[string]any)
+			Expect(ok).To(BeTrue(), "UNS input should be a map[string]any")
 			Expect(unsInput).To(HaveKey("umh_topics"))
 
-			umhTopics := unsInput["umh_topics"].([]any)
+			umhTopics, ok := unsInput["umh_topics"].([]any)
+			Expect(ok).To(BeTrue(), "umh_topics should be a []any")
 			Expect(umhTopics).To(ContainElement("umh.v1.factory-A.line-1.vibration"))
 			Expect(umhTopics).To(ContainElement("umh.v1.factory-A.line-1.count"))
 			Expect(umhTopics).To(ContainElement("umh.v1.factory-A.line-1.motor"))
@@ -150,7 +152,8 @@ var _ = Describe("StreamProcessorService", func() {
 						Expect(streamprocessor).To(HaveKey("mapping"))
 						Expect(streamprocessor).To(HaveKey("output_topic"))
 						// Verify model
-						model := streamprocessor["model"].(map[string]any)
+						model, ok := streamprocessor["model"].(map[string]any)
+						Expect(ok).To(BeTrue(), "model should be a map[string]any")
 						Expect(model["name"]).To(Equal("pump"))
 						Expect(model["version"]).To(Equal("v1"))
 

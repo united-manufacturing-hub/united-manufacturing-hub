@@ -30,8 +30,14 @@ func NewDataflowComponentManagerWithMockedServices(name string) (*DataflowCompon
 	mockSvc := dataflowcomponentsvc.NewMockDataFlowComponentService()
 
 	// Configure the mock S6 service
-	mockBenthosService := mockSvc.BenthosService.(*benthossvc.MockBenthosService)
-	s6MockService := mockBenthosService.S6Service.(*s6svc.MockService)
+	mockBenthosService, ok := mockSvc.BenthosService.(*benthossvc.MockBenthosService)
+	if !ok {
+		panic("expected MockBenthosService")
+	}
+	s6MockService, ok := mockBenthosService.S6Service.(*s6svc.MockService)
+	if !ok {
+		panic("expected MockService")
+	}
 
 	// Configure default responses to prevent real filesystem operations
 	s6MockService.CreateError = nil

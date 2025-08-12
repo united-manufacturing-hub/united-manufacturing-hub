@@ -27,3 +27,4 @@ linters:
     - gocyclo
     - gocognit
     - paralleltest
+    - funlen

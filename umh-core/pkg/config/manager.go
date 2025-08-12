@@ -501,7 +501,10 @@ func NewFileConfigManagerWithBackoff() (*FileConfigManagerWithBackoff, error) {
 		}
 	})
 
-	return instance.(*FileConfigManagerWithBackoff), nil
+	if fcm, ok := instance.(*FileConfigManagerWithBackoff); ok {
+		return fcm, nil
+	}
+	return nil, errors.New("config manager instance has unexpected type")
 }
 
 // GetConfigWithOverwritesOrCreateNew wraps the FileConfigManager's GetConfigWithOverwritesOrCreateNew method

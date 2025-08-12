@@ -119,7 +119,8 @@ var _ = Describe("BuildRuntimeConfig", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the bridged_by is properly sanitized
-			unsOutput := dfcRuntime.BenthosConfig.Output["uns"].(map[string]any)
+			unsOutput, ok := dfcRuntime.BenthosConfig.Output["uns"].(map[string]any)
+			Expect(ok).To(BeTrue(), "UNS output should be a map[string]any")
 			Expect(unsOutput["bridged_by"]).To(Equal("stream-processor_test-node-1_test-sp-2"))
 
 			// Verify sanitization removed special characters
@@ -131,7 +132,8 @@ var _ = Describe("BuildRuntimeConfig", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Should default to "unknown" for empty node name
-			unsOutput := dfcRuntime.BenthosConfig.Output["uns"].(map[string]any)
+			unsOutput, ok := dfcRuntime.BenthosConfig.Output["uns"].(map[string]any)
+			Expect(ok).To(BeTrue(), "UNS output should be a map[string]any")
 			Expect(unsOutput["bridged_by"]).To(Equal("stream-processor_unknown_test-sp"))
 
 			Expect(spRuntime).NotTo(BeZero())

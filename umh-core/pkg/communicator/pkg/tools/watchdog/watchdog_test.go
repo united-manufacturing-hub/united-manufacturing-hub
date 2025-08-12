@@ -78,7 +78,9 @@ var _ = Describe("Watchdog", func() {
 	AfterEach(func() {
 		time.Sleep(10 * time.Millisecond)
 		// zap.S().Debuff("Started AfterEach")
-		dogCnclAtomic.Load().(context.CancelFunc)()
+		if cancel, ok := dogCnclAtomic.Load().(context.CancelFunc); ok {
+			cancel()
+		}
 		// zap.S().Debuff("Finished AfterEach")
 	})
 

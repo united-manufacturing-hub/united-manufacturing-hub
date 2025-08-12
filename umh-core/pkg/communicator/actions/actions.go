@@ -204,6 +204,18 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 	case models.GetStreamProcessor:
 		action = NewGetStreamProcessorAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
 
+	// Explicitly handle unsupported action types
+	case models.UnknownAction, models.DummyAction, models.TestBenthosInput, models.TestNetworkConnection,
+		models.DeployOPCUAConnection, models.DeployConnection, models.EditConnection, models.DeleteConnection,
+		models.GetConnectionNotes, models.DeployOPCUADatasource, models.GetDatasourceBasic,
+		models.EditOPCUADatasource, models.DeleteDatasource, models.UpgradeCompanion, models.EditMqttBroker,
+		models.GetAuditLog, models.EditInstanceLocation, models.GetDataFlowComponentLog,
+		models.GetKubernetesEvents, models.GetOPCUATags, models.RollbackDataFlowComponent,
+		models.AllowAppSecretAccess, models.GetConfiguration, models.UpdateConfiguration:
+		log.Errorf("Unsupported action type: %s", payload.ActionType)
+		SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, "Action type not implemented", outboundChannel, payload.ActionType)
+		return
+
 	default:
 		log.Errorf("Unknown action type: %s", payload.ActionType)
 		SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, "Unknown action type", outboundChannel, payload.ActionType)

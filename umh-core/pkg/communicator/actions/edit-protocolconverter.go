@@ -721,6 +721,9 @@ func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *protoco
 		modifiedSpec.Config.DataflowComponentReadServiceConfig = a.desiredDFCConfig
 	case DFCTypeWrite:
 		modifiedSpec.Config.DataflowComponentWriteServiceConfig = a.desiredDFCConfig
+	case DFCTypeEmpty:
+		// For empty dfcType, no DFC configuration updates needed
+		// Only connection/location updates which are handled elsewhere
 	default:
 		return dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, fmt.Errorf("invalid DFC type: %s", a.dfcType.String())
 	}
@@ -748,6 +751,9 @@ func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *protoco
 		return runtimeConfig.DataflowComponentReadServiceConfig, nil
 	case DFCTypeWrite:
 		return runtimeConfig.DataflowComponentWriteServiceConfig, nil
+	case DFCTypeEmpty:
+		// For empty dfcType, return empty DFC config
+		return dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, nil
 	default:
 		return dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, fmt.Errorf("invalid DFC type: %s", a.dfcType.String())
 	}

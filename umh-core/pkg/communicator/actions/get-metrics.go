@@ -118,6 +118,10 @@ func (a *GetMetricsAction) Validate() (err error) {
 		if err != nil {
 			return fmt.Errorf("invalid UUID format: %w", err)
 		}
+	case models.RedpandaMetricResourceType, models.TopicBrowserMetricResourceType:
+		return fmt.Errorf("metric type %s is not yet supported", a.payload.Type)
+	default:
+		return fmt.Errorf("unknown metric type: %s", a.payload.Type)
 	}
 
 	return nil

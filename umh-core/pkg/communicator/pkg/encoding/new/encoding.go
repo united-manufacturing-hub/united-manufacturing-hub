@@ -71,9 +71,11 @@ var (
 )
 
 func getBase64Buffer() []byte {
-	bufPtr := base64BufferPool.Get().(*[]byte)
-
-	return *bufPtr
+	if bufPtr, ok := base64BufferPool.Get().(*[]byte); ok {
+		return *bufPtr
+	}
+	// If pool returns wrong type, create new buffer
+	return make([]byte, 0, 1024)
 }
 
 func putBase64Buffer(buf []byte) {
@@ -86,7 +88,11 @@ func putBase64Buffer(buf []byte) {
 }
 
 func getDecompressBuffer() *bytes.Buffer {
-	return decompressBufferPool.Get().(*bytes.Buffer)
+	if buf, ok := decompressBufferPool.Get().(*bytes.Buffer); ok {
+		return buf
+	}
+	// If pool returns wrong type, create new buffer
+	return bytes.NewBuffer(make([]byte, 0, 32*1024))
 }
 
 func putDecompressBuffer(buf *bytes.Buffer) {
@@ -106,7 +112,17 @@ func Compress(message []byte) ([]byte, error) {
 		return result, nil
 	}
 
-	encoder := encoderPool.Get().(*zstd.Encoder)
+	var encoder *zstd.Encoder
+	if enc, ok := encoderPool.Get().(*zstd.Encoder); ok {
+		encoder = enc
+	} else {
+		// If pool returns wrong type, create new encoder
+		var err error
+		encoder, err = zstd.NewWriter(nil)
+		if err != nil {
+			return nil, err
+		}
+	}
 	defer encoderPool.Put(encoder)
 
 	// Create a new buffer for each compression
@@ -140,7 +156,17 @@ func Decompress(message []byte) ([]byte, error) {
 		return result, nil
 	}
 
-	decoder := decoderPool.Get().(*zstd.Decoder)
+	var decoder *zstd.Decoder
+	if dec, ok := decoderPool.Get().(*zstd.Decoder); ok {
+		decoder = dec
+	} else {
+		// If pool returns wrong type, create new decoder
+		var err error
+		decoder, err = zstd.NewReader(nil)
+		if err != nil {
+			return nil, err
+		}
+	}
 	defer decoderPool.Put(decoder)
 
 	// Get buffer from pool
