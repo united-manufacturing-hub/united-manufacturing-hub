@@ -57,7 +57,7 @@ TARGETARCH := $(shell go env GOARCH)
 # Default values for go tools
 GINKGO_VERSION = v2.23.4
 NILWAY_VERSION = latest
-GOLANGCI_LINT_VERSION = v2.1.6
+GOLANGCI_LINT_VERSION = v2.3.1
 BETTERALIGN_VERSION = v0.7.1
 DLV_VERSION = v1.25.0
 
@@ -248,6 +248,9 @@ vet:
 
 lint:
 	golangci-lint run ./...
+
+lint-fix:
+	golangci-lint autofix ./...
 
 nilaway:
 	# See lefthook.yaml for more details
