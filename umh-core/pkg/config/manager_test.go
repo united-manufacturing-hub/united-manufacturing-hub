@@ -259,8 +259,7 @@ internal:
 			BeforeEach(func() {
 				// Create a context with cancel function
 				var cancel context.CancelFunc
-				ctx, cancel := context.WithCancel(context.Background())
-				_ = ctx
+				ctx, cancel = context.WithCancel(context.Background())
 				ctxWithCancelFunc = cancel
 
 				// Set up mock to block and check context
@@ -419,9 +418,7 @@ internal:
 			BeforeEach(func() {
 				// Use the real filesystem for this test with a timeout context
 				fsService = filesystem.NewDefaultService()
-				ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-				_ = ctx
-				_ = cancel
+				ctx, cancel = context.WithTimeout(context.Background(), 1*time.Second)
 			})
 
 			AfterEach(func() {
@@ -471,9 +468,7 @@ internal:
 
 		BeforeEach(func() {
 			fsService = filesystem.NewDefaultService()
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			_ = ctx
-			_ = cancel
+			ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
 		})
 
 		AfterEach(func() {
@@ -679,9 +674,7 @@ internal:
 
 		BeforeEach(func() {
 			fsService = filesystem.NewDefaultService()
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			_ = ctx
-			_ = cancel
+			ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 		})
 
 		AfterEach(func() {
