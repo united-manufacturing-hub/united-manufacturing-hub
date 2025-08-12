@@ -40,9 +40,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/tiendc/go-deepcopy"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/bridgeserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
@@ -83,7 +83,6 @@ func (d DFCType) IsValid() bool {
 // EditProtocolConverterAction implements the Action interface for editing
 // protocol converter configurations, particularly for adding DFC configurations.
 type EditProtocolConverterAction struct {
-
 	// Desired DFC config for comparison during health checks
 	desiredDFCConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 
@@ -396,7 +395,7 @@ func (a *EditProtocolConverterAction) applyMutation(benthosConfig dataflowcompon
 	}
 
 	// Add the connection details to the template
-	instanceToModify.ProtocolConverterServiceConfig.Config.ConnectionServiceConfig = connectionserviceconfig.ConnectionServiceConfigTemplate{
+	instanceToModify.ProtocolConverterServiceConfig.Config.ConnectionConfig = connectionserviceconfig.ConnectionServiceConfigTemplate{
 		NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 			Target: "{{ .IP }}",
 			Port:   "{{ .PORT }}",
@@ -418,9 +417,9 @@ func (a *EditProtocolConverterAction) applyMutation(benthosConfig dataflowcompon
 
 	switch a.dfcType {
 	case DFCTypeRead:
-		instanceToModify.ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig = dfcServiceConfig
+		instanceToModify.ProtocolConverterServiceConfig.Config.DFCReadConfig = dfcServiceConfig
 	case DFCTypeWrite:
-		instanceToModify.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = dfcServiceConfig
+		instanceToModify.ProtocolConverterServiceConfig.Config.DFCWriteConfig = dfcServiceConfig
 	case DFCTypeEmpty:
 		// For empty dfcType, we only update connection, location, and name - no DFC configuration
 		// The connection, location, and name updates are already handled above
@@ -670,7 +669,7 @@ func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *protoco
 	specConfig := pcSnapshot.ObservedProtocolConverterSpecConfig
 
 	// Create a deep copy to avoid mutating the original observed state
-	var modifiedSpec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+	var modifiedSpec bridgeserviceconfig.ConfigSpec
 	err := deepcopy.Copy(&modifiedSpec, &specConfig)
 	if err != nil {
 		return dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, fmt.Errorf("failed to deep copy spec config: %w", err)
@@ -679,9 +678,9 @@ func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *protoco
 	// Now safely modify the copy without affecting the original
 	switch a.dfcType {
 	case DFCTypeRead:
-		modifiedSpec.Config.DataflowComponentReadServiceConfig = a.desiredDFCConfig
+		modifiedSpec.Config.DFCReadConfig = a.desiredDFCConfig
 	case DFCTypeWrite:
-		modifiedSpec.Config.DataflowComponentWriteServiceConfig = a.desiredDFCConfig
+		modifiedSpec.Config.DFCWriteConfig = a.desiredDFCConfig
 	default:
 		return dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, fmt.Errorf("invalid DFC type: %s", a.dfcType.String())
 	}
@@ -706,9 +705,9 @@ func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *protoco
 	// Return the appropriate DFC config
 	switch a.dfcType {
 	case DFCTypeRead:
-		return runtimeConfig.DataflowComponentReadServiceConfig, nil
+		return runtimeConfig.DFCReadConfig, nil
 	case DFCTypeWrite:
-		return runtimeConfig.DataflowComponentWriteServiceConfig, nil
+		return runtimeConfig.DFCWriteConfig, nil
 	default:
 		return dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, fmt.Errorf("invalid DFC type: %s", a.dfcType.String())
 	}

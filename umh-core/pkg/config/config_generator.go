@@ -24,7 +24,6 @@ import (
 // as we only use it to test runtime of the parsing of the config.
 func GenerateConfig(processors int, fcm *FileConfigManager) (FullConfig, error) {
 	fullConfig, err := fcm.GetConfig(context.Background(), 0)
-
 	if err != nil {
 		return FullConfig{}, err
 	}
@@ -45,7 +44,7 @@ func GenerateConfig(processors int, fcm *FileConfigManager) (FullConfig, error) 
 			},
 		}
 	}
-	pc.ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline = pipeline
+	pc.ProtocolConverterServiceConfig.Config.DFCReadConfig.BenthosConfig.Pipeline = pipeline
 
 	fullConfig.ProtocolConverter[0] = pc
 

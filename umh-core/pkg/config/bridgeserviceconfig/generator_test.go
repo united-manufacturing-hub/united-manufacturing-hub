@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package protocolconverterserviceconfig
+package bridgeserviceconfig
 
 import (
 	. "github.com/onsi/ginkgo/v2"
@@ -21,9 +21,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 )
 
-var _ = Describe("ProtocolConverter YAML Generator", func() {
+var _ = Describe("Bridge YAML Generator", func() {
 	type testCase struct {
-		config      *ProtocolConverterServiceConfigSpec
+		config      *ConfigSpec
 		expected    []string
 		notExpected []string
 	}
@@ -46,22 +46,22 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 		},
 		Entry("should render empty stdout output correctly",
 			testCase{
-				config: &ProtocolConverterServiceConfigSpec{
-					Config: ProtocolConverterServiceConfigTemplate{
-						ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+				config: &ConfigSpec{
+					Config: ConfigTemplate{
+						ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 							NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 								Target: "127.0.0.1",
 								Port:   "443",
 							},
 						},
-						DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 								Output: map[string]any{
 									"stdout": map[string]any{},
 								},
 							},
 						},
-						DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						DFCWriteConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 								Input: map[string]any{
 									"stdin": map[string]any{},
@@ -107,15 +107,15 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 			}),
 		Entry("should render configured output correctly",
 			testCase{
-				config: &ProtocolConverterServiceConfigSpec{
-					Config: ProtocolConverterServiceConfigTemplate{
-						ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+				config: &ConfigSpec{
+					Config: ConfigTemplate{
+						ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 							NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 								Target: "127.0.0.1",
 								Port:   "443",
 							},
 						},
-						DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 								Output: map[string]any{
 									"stdout": map[string]any{
@@ -124,7 +124,7 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 								},
 							},
 						},
-						DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						DFCWriteConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 								Input: map[string]any{
 									"http_server": map[string]any{
@@ -162,15 +162,15 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 			}),
 		Entry("should render empty input correctly",
 			testCase{
-				config: &ProtocolConverterServiceConfigSpec{
-					Config: ProtocolConverterServiceConfigTemplate{
-						ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+				config: &ConfigSpec{
+					Config: ConfigTemplate{
+						ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 							NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 								Target: "127.0.0.1",
 								Port:   "443",
 							},
 						},
-						DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 								Input: map[string]any{},
 								Output: map[string]any{
@@ -178,7 +178,7 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 								},
 							},
 						},
-						DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						DFCWriteConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 								Input: map[string]any{
 									"file": map[string]any{
@@ -218,15 +218,15 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 			}),
 		Entry("should render Kafka input with processor and AWS S3 output",
 			testCase{
-				config: &ProtocolConverterServiceConfigSpec{
-					Config: ProtocolConverterServiceConfigTemplate{
-						ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+				config: &ConfigSpec{
+					Config: ConfigTemplate{
+						ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 							NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 								Target: "127.0.0.1",
 								Port:   "443",
 							},
 						},
-						DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 								Input: map[string]any{
 									"kafka": map[string]any{
@@ -254,7 +254,7 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 								},
 							},
 						},
-						DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						DFCWriteConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 								Input: map[string]any{
 									"mqtt": map[string]any{

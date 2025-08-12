@@ -19,11 +19,11 @@
 # ---------- Templates ---------- #
 templates:
   protocolConverter:
-    temperature-sensor-pc:
+    temperature-sensor-bridge:
       connection:
         nmap:
-          target: '{{ .IP }}'
-          port: '{{ .PORT }}'
+          target: "{{ .IP }}"
+          port: "{{ .PORT }}"
       dataflowcomponent_read:
         benthos:
           input:
@@ -33,50 +33,50 @@ templates:
         benthos:
           output:
             http_client:
-              url: "http://collector.local/ingest"   # static
+              url: "http://collector.local/ingest" # static
 
 # ---------- Agent-wide settings ---------- #
 agent:
   metricsPort: 8080
-  location:            # authoritative, can't be overridden
+  location: # authoritative, can't be overridden
     0: "plant-A"
     1: "line-4"
 
 # ---------- Protocol-converters ---------- #
 protocolConverter:
   # ────────────────────────────────────────────────────────────────
-  - name: temperature-sensor-pc
+  - name: temperature-sensor-bridge
     desiredState: active
     protocolConverterServiceConfig:
       # Intentionally tries to override level-0; will be ignored
       location:
         0: "override-level0"
         2: "machine-7"
-      templateRef: "temperature-sensor-pc"
-      variables:                  # <- flat, user-defined variables
-        IP:   "10.0.1.50"
+      templateRef: "temperature-sensor-bridge"
+      variables: # <- flat, user-defined variables
+        IP: "10.0.1.50"
         PORT: "4840"
-  - name: temperature-sensor-inherited-pc
+  - name: temperature-sensor-inherited-bridge
     desiredState: active
     protocolConverterServiceConfig:
       # Intentionally tries to override level-0; will be ignored
       location:
         0: "override-level0"
         2: "machine-7"
-      templateRef: "temperature-sensor-pc"
-      variables:                  # <- flat, user-defined variables
-        IP:   "10.0.1.51"
+      templateRef: "temperature-sensor-bridge"
+      variables: # <- flat, user-defined variables
+        IP: "10.0.1.51"
         PORT: "4840"
 
   # ────────────────────────────────────────────────────────────────
-  - name: vibration-sensor-pc
+  - name: vibration-sensor-bridge
     desiredState: active
     # No anchor – inline config
     protocolConverterServiceConfig:
       templateRef: null
       config:
         connection:
-          ip:   "{{ .IP }}"
+          ip: "{{ .IP }}"
           port: "{{ .PORT }}"
         dataflowcomponent_read:
           benthos:
@@ -84,5 +84,5 @@ protocolConverter:
               tcp_server:
                 address: ":{{ .PORT }}"
       variables:
-        IP:   "10.0.1.51"
+        IP: "10.0.1.51"
         PORT: "9000"

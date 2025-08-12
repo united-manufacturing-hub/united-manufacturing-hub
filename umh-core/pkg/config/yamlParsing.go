@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/bridgeserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/streamprocessorserviceconfig"
 	"gopkg.in/yaml.v3"
 )
@@ -38,7 +38,7 @@ func convertYamlToSpec(config FullConfig, ctx context.Context) (FullConfig, erro
 	processedConfig := config.Clone()
 
 	// Build a map of available protocol converter templates for quick lookup
-	protocolConverterTemplateMap := make(map[string]protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate)
+	protocolConverterTemplateMap := make(map[string]bridgeserviceconfig.ConfigTemplate)
 
 	// Process protocol converter templates from the enforced structure
 	for templateName, templateContent := range processedConfig.Templates.ProtocolConverter {
@@ -55,7 +55,7 @@ func convertYamlToSpec(config FullConfig, ctx context.Context) (FullConfig, erro
 			return FullConfig{}, fmt.Errorf("failed to marshal protocol converter template %s: %w", templateName, err)
 		}
 
-		var template protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate
+		var template bridgeserviceconfig.ConfigTemplate
 		if err := yaml.Unmarshal(templateBytes, &template); err != nil {
 			return FullConfig{}, fmt.Errorf("failed to unmarshal protocol converter template %s: %w", templateName, err)
 		}
@@ -200,7 +200,7 @@ func convertSpecToYaml(spec FullConfig, ctx context.Context) (FullConfig, error)
 	// equals its own Name.  We stash those complete Config blocks here
 	// so that, after the loop, we can write them once into
 	//   clone.Templates.protocolConverter[<root-name>]
-	protocolConverterTplMap := make(map[string]protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate) // roots collected here
+	protocolConverterTplMap := make(map[string]bridgeserviceconfig.ConfigTemplate) // roots collected here
 
 	// pendingRefs
 	// -----------
@@ -274,8 +274,7 @@ func convertSpecToYaml(spec FullConfig, ctx context.Context) (FullConfig, error)
 		// Strip Config from every templated instance (root or child) ─ the full
 		// definition will live once in the templates section, so we avoid
 		// duplicating it inside each instance.
-		pc.ProtocolConverterServiceConfig.Config =
-			protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{}
+		pc.ProtocolConverterServiceConfig.Config = bridgeserviceconfig.ConfigTemplate{}
 		// remove the location and location_path from the user variables
 		delete(pc.ProtocolConverterServiceConfig.Variables.User, "location")
 		delete(pc.ProtocolConverterServiceConfig.Variables.User, "location_path")
@@ -326,8 +325,7 @@ func convertSpecToYaml(spec FullConfig, ctx context.Context) (FullConfig, error)
 		// Strip Config from every templated instance (root or child) ─ the full
 		// definition will live once in the templates section, so we avoid
 		// duplicating it inside each instance.
-		sp.StreamProcessorServiceConfig.Config =
-			streamprocessorserviceconfig.StreamProcessorServiceConfigTemplate{}
+		sp.StreamProcessorServiceConfig.Config = streamprocessorserviceconfig.StreamProcessorServiceConfigTemplate{}
 		// remove the location and location_path from the user variables
 		delete(sp.StreamProcessorServiceConfig.Variables.User, "location")
 		delete(sp.StreamProcessorServiceConfig.Variables.User, "location_path")

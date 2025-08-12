@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package protocolconverterserviceconfig
+package bridgeserviceconfig
 
 import (
 	"testing"
@@ -23,5 +23,5 @@ import (
 
 func TestYAML(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "ProtocolConverter YAML Suite")
+	RunSpecs(t, "Bridge YAML Suite")
 }

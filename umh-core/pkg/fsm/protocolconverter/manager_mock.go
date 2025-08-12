@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/bridgeserviceconfig"
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
 	dfcsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
@@ -27,7 +27,6 @@ import (
 )
 
 func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConverterManager, *protocolconvertersvc.MockProtocolConverterService) {
-
 	mockSvc := protocolconvertersvc.NewMockProtocolConverterService()
 
 	// Create a new manager instance
@@ -67,13 +66,13 @@ func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConver
 			}
 
 			// Perform actual comparison - return true if configs are equal
-			configsEqual := protocolconverterserviceconfig.ConfigsEqual(protocolConverterInstance.specConfig, cfg.ProtocolConverterServiceConfig)
+			configsEqual := bridgeserviceconfig.ConfigsEqual(protocolConverterInstance.specConfig, cfg.ProtocolConverterServiceConfig)
 
 			// Only update config if configs are different (for mock service)
 			if !configsEqual {
 				protocolConverterInstance.specConfig = cfg.ProtocolConverterServiceConfig
 				if mockSvc, ok := protocolConverterInstance.service.(*protocolconvertersvc.MockProtocolConverterService); ok {
-					runtimeConfig, err := protocolconverterserviceconfig.SpecToRuntime(cfg.ProtocolConverterServiceConfig)
+					runtimeConfig, err := bridgeserviceconfig.SpecToRuntime(cfg.ProtocolConverterServiceConfig)
 					if err != nil {
 						// For invalid configs, don't update the mock service but don't fail the comparison
 						// This matches the behavior of the real manager where invalid configs are handled gracefully
@@ -93,7 +92,7 @@ func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConver
 			}
 			protocolConverterInstance.specConfig = cfg.ProtocolConverterServiceConfig
 			if mockSvc, ok := protocolConverterInstance.service.(*protocolconvertersvc.MockProtocolConverterService); ok {
-				runtimeConfig, err := protocolconverterserviceconfig.SpecToRuntime(cfg.ProtocolConverterServiceConfig)
+				runtimeConfig, err := bridgeserviceconfig.SpecToRuntime(cfg.ProtocolConverterServiceConfig)
 				if err != nil {
 					// For invalid configs, don't update the mock service but don't fail the set operation
 					// This matches the behavior of the real manager where invalid configs are handled gracefully

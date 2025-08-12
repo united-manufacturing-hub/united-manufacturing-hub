@@ -268,15 +268,15 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 
 				// If no variables found, check template config for non-templated values
 				if !isTemplated {
-					if specConfig.Config.ConnectionServiceConfig.NmapTemplate != nil {
-						if specConfig.Config.ConnectionServiceConfig.NmapTemplate.Target != "" {
-							ip = specConfig.Config.ConnectionServiceConfig.NmapTemplate.Target
+					if specConfig.Config.ConnectionConfig.NmapTemplate != nil {
+						if specConfig.Config.ConnectionConfig.NmapTemplate.Target != "" {
+							ip = specConfig.Config.ConnectionConfig.NmapTemplate.Target
 						}
-						if specConfig.Config.ConnectionServiceConfig.NmapTemplate.Port != "" {
-							if portInt, err := strconv.ParseUint(specConfig.Config.ConnectionServiceConfig.NmapTemplate.Port, 10, 32); err == nil {
+						if specConfig.Config.ConnectionConfig.NmapTemplate.Port != "" {
+							if portInt, err := strconv.ParseUint(specConfig.Config.ConnectionConfig.NmapTemplate.Port, 10, 32); err == nil {
 								port = uint32(portInt)
 							} else {
-								a.actionLogger.Warnw("Failed to parse port number", "port", specConfig.Config.ConnectionServiceConfig.NmapTemplate.Port, "error", err)
+								a.actionLogger.Warnw("Failed to parse port number", "port", specConfig.Config.ConnectionConfig.NmapTemplate.Port, "error", err)
 							}
 						}
 					}
@@ -291,7 +291,7 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 
 				// Build ReadDFC if present
 				var readDFC *models.ProtocolConverterDFC
-				if readDFCConfig := specConfig.Config.DataflowComponentReadServiceConfig; len(readDFCConfig.BenthosConfig.Input) > 0 {
+				if readDFCConfig := specConfig.Config.DFCReadConfig; len(readDFCConfig.BenthosConfig.Input) > 0 {
 					var err error
 					readDFC, err = buildProtocolConverterDFCFromConfig(readDFCConfig, a)
 					if err != nil {
@@ -304,7 +304,7 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 
 				// Build WriteDFC if present
 				var writeDFC *models.ProtocolConverterDFC
-				if writeDFCConfig := specConfig.Config.DataflowComponentWriteServiceConfig; len(writeDFCConfig.BenthosConfig.Input) > 0 {
+				if writeDFCConfig := specConfig.Config.DFCWriteConfig; len(writeDFCConfig.BenthosConfig.Input) > 0 {
 					var err error
 					writeDFC, err = buildProtocolConverterDFCFromConfig(writeDFCConfig, a)
 					if err != nil {

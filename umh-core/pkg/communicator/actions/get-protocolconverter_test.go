@@ -20,9 +20,9 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/bridgeserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -144,15 +144,15 @@ var _ = Describe("GetProtocolConverter", func() {
 
 				// Create observed state with populated DFC configs
 				observedState := &protocolconverter.ProtocolConverterObservedStateSnapshot{
-					ObservedProtocolConverterSpecConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-						Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-							ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+					ObservedProtocolConverterSpecConfig: bridgeserviceconfig.ConfigSpec{
+						Config: bridgeserviceconfig.ConfigTemplate{
+							ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 								NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 									Target: "{{ .IP }}",
 									Port:   "{{ .PORT }}",
 								},
 							},
-							DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+							DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 								BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 									Input: map[string]interface{}{
 										"modbus": map[string]interface{}{
@@ -161,7 +161,7 @@ var _ = Describe("GetProtocolConverter", func() {
 									},
 								},
 							},
-							DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+							DFCWriteConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 								BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 									Input: map[string]interface{}{
 										"kafka": map[string]interface{}{
@@ -284,7 +284,6 @@ var _ = Describe("GetProtocolConverter", func() {
 				Expect(response.Meta).NotTo(BeNil())
 				Expect(response.Meta.ProcessingMode).To(Equal("custom")) // Determined from read DFC
 				Expect(response.Meta.Protocol).To(Equal("modbus"))       // Determined from read DFC input type
-
 			})
 		})
 
@@ -295,9 +294,9 @@ var _ = Describe("GetProtocolConverter", func() {
 
 				// Create observed state with empty DFC configs
 				observedState := &protocolconverter.ProtocolConverterObservedStateSnapshot{
-					ObservedProtocolConverterSpecConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-						Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-							ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+					ObservedProtocolConverterSpecConfig: bridgeserviceconfig.ConfigSpec{
+						Config: bridgeserviceconfig.ConfigTemplate{
+							ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 								NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 									Target: "192.168.1.101",
 									Port:   "503",
@@ -377,7 +376,6 @@ var _ = Describe("GetProtocolConverter", func() {
 				Expect(response.Meta).NotTo(BeNil())
 				Expect(response.Meta.ProcessingMode).To(Equal("")) // No DFC present
 				Expect(response.Meta.Protocol).To(Equal(""))       // Default protocol
-
 			})
 		})
 
@@ -408,7 +406,6 @@ var _ = Describe("GetProtocolConverter", func() {
 				Expect(result).To(BeNil())
 				Expect(metadata).To(BeNil())
 				Expect(err.Error()).To(ContainSubstring("not found"))
-
 			})
 		})
 

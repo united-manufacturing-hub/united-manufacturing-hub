@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package protocolconverterserviceconfig
+package bridgeserviceconfig
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
@@ -20,30 +20,29 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 )
 
-// Normalizer handles the normalization of ProtocolConverter configurations
+// Normalizer handles the normalization of configurations
 type Normalizer struct{}
 
-// NewNormalizer creates a new configuration normalizer for ProtocolConverter
+// NewNormalizer creates a new configuration normalizer for Bridges
 func NewNormalizer() *Normalizer {
 	return &Normalizer{}
 }
 
-// NormalizeConfig applies ProtocolConverter defaults to a structured config
-func (n *Normalizer) NormalizeConfig(cfg ProtocolConverterServiceConfigSpec) ProtocolConverterServiceConfigSpec {
-
+// NormalizeConfig applies Bridge defaults to a structured config
+func (n *Normalizer) NormalizeConfig(cfg ConfigSpec) ConfigSpec {
 	// create a shallow copy
 	normalized := cfg
 
 	// We need to first normalize the underlying DFCServiceConfig
 	dfcNormalizer := dataflowcomponentserviceconfig.NewNormalizer()
-	normalized.Config.DataflowComponentReadServiceConfig = dfcNormalizer.NormalizeConfig(normalized.GetDFCReadServiceConfig())
-	normalized.Config.DataflowComponentWriteServiceConfig = dfcNormalizer.NormalizeConfig(normalized.GetDFCWriteServiceConfig())
+	normalized.Config.DFCReadConfig = dfcNormalizer.NormalizeConfig(normalized.GetDFCReadConfig())
+	normalized.Config.DFCWriteConfig = dfcNormalizer.NormalizeConfig(normalized.GetDFCWriteConfig())
 
 	// Then we  need to normalize the underlying ConnectionServiceConfig
 	connectionNormalizer := connectionserviceconfig.NewNormalizer()
 	// If conversion fails, e.g., because the port is not a number, keep the original template config (graceful degradation during normalization)
-	if connRuntime, err := connectionserviceconfig.ConvertTemplateToRuntime(normalized.GetConnectionServiceConfig()); err == nil {
-		normalized.Config.ConnectionServiceConfig = connectionserviceconfig.ConvertRuntimeToTemplate(connectionNormalizer.NormalizeConfig(connRuntime))
+	if connRuntime, err := connectionserviceconfig.ConvertTemplateToRuntime(normalized.GetConnectionConfig()); err == nil {
+		normalized.Config.ConnectionConfig = connectionserviceconfig.ConvertRuntimeToTemplate(connectionNormalizer.NormalizeConfig(connRuntime))
 	}
 
 	// Then we need to normalize the variables

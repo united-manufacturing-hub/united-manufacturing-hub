@@ -16,7 +16,7 @@ package protocolconverter
 
 import (
 	"github.com/tiendc/go-deepcopy"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/bridgeserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
@@ -24,8 +24,8 @@ import (
 
 // ProtocolConverterObservedStateSnapshot is a deep-copyable snapshot of ProtocolConverterObservedState
 type ProtocolConverterObservedStateSnapshot struct {
-	ObservedProtocolConverterRuntimeConfig protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
-	ObservedProtocolConverterSpecConfig    protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+	ObservedProtocolConverterRuntimeConfig bridgeserviceconfig.ConfigRuntime
+	ObservedProtocolConverterSpecConfig    bridgeserviceconfig.ConfigSpec
 	ServiceInfo                            protocolconverter.ServiceInfo
 }
 

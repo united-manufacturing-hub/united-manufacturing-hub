@@ -41,9 +41,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/bridgeserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -202,20 +202,20 @@ func (a *DeployProtocolConverterAction) createProtocolConverterConfig() config.P
 	}
 
 	// Create template configuration with connection and placeholders for DFCs
-	template := protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-		ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+	template := bridgeserviceconfig.ConfigTemplate{
+		ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 			NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 				Target: "{{ .IP }}",   // Template variable for IP
 				Port:   "{{ .PORT }}", // Template variable for PORT
 			},
 		},
 		// DataflowComponent configs left empty initially - they will be configured later via edit actions
-		DataflowComponentReadServiceConfig:  dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
-		DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
+		DFCReadConfig:  dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
+		DFCWriteConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
 	}
 
 	// Create the spec with template and variables
-	spec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+	spec := bridgeserviceconfig.ConfigSpec{
 		Config:    template,
 		Variables: variableBundle,
 		Location:  convertIntMapToStringMap(a.payload.Location),
@@ -265,7 +265,6 @@ func (a *DeployProtocolConverterAction) GetParsedPayload() models.ProtocolConver
 // the error code is a string that is sent to the frontend to allow it to determine if the action can be retried or not
 // the error message is sent to the frontend to allow the user to see the error message
 func (a *DeployProtocolConverterAction) waitForComponentToAppear() (string, error) {
-
 	ticker := time.NewTicker(constants.ActionTickerTime)
 	defer ticker.Stop()
 	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
@@ -337,5 +336,4 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear() (string, erro
 			}
 		}
 	}
-
 }

@@ -21,8 +21,8 @@ import (
 	"strings"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/bridgeserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 )
 
 // BuildRuntimeConfig merges all variables (user + agent + global + internal),
@@ -69,15 +69,14 @@ import (
 //
 // It does NOT belong to the service
 func BuildRuntimeConfig(
-	spec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
+	spec bridgeserviceconfig.ConfigSpec,
 	agentLocation map[string]string,
 	globalVars map[string]any,
 	nodeName string,
 	pcName string,
-) (protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, error) {
-
-	if reflect.DeepEqual(spec, protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{}) {
-		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{},
+) (bridgeserviceconfig.ConfigRuntime, error) {
+	if reflect.DeepEqual(spec, bridgeserviceconfig.ConfigSpec{}) {
+		return bridgeserviceconfig.ConfigRuntime{},
 			fmt.Errorf("nil spec")
 	}
 
@@ -253,14 +252,14 @@ func BuildRuntimeConfig(
 // The returned object is ready for diffing or to be handed straight to the
 // Protocol-Converter FSM.
 func renderConfig(
-	spec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
+	spec bridgeserviceconfig.ConfigSpec,
 	scope map[string]any,
 ) (
-	protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
+	bridgeserviceconfig.ConfigRuntime,
 	error,
 ) {
-	if reflect.DeepEqual(spec, protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{}) {
-		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("protocolConverter config is nil")
+	if reflect.DeepEqual(spec, bridgeserviceconfig.ConfigSpec{}) {
+		return bridgeserviceconfig.ConfigRuntime{}, fmt.Errorf("protocolConverter config is nil")
 	}
 
 	// ─── Render the three sub-templates ─────────────────────────────
@@ -268,31 +267,31 @@ func renderConfig(
 
 	// 1. Render the connection template with variable substitution
 	// This converts template strings like "{{ .PORT }}" to actual values
-	conn, err := config.RenderTemplate(spec.GetConnectionServiceConfig(), scope)
+	conn, err := config.RenderTemplate(spec.GetConnectionConfig(), scope)
 	if err != nil {
-		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
+		return bridgeserviceconfig.ConfigRuntime{}, err
 	}
 
 	// 2. Convert the rendered template to runtime config with proper types
 	// This handles the string-to-uint16 port conversion and type safety
 	connRuntime, err := connectionserviceconfig.ConvertTemplateToRuntime(conn)
 	if err != nil {
-		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("failed to convert connection template to runtime: %w", err)
+		return bridgeserviceconfig.ConfigRuntime{}, fmt.Errorf("failed to convert connection template to runtime: %w", err)
 	}
 
-	read, err := config.RenderTemplate(spec.GetDFCReadServiceConfig(), scope)
+	read, err := config.RenderTemplate(spec.GetDFCReadConfig(), scope)
 	if err != nil {
-		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
+		return bridgeserviceconfig.ConfigRuntime{}, err
 	}
 
-	write, err := config.RenderTemplate(spec.GetDFCWriteServiceConfig(), scope)
+	write, err := config.RenderTemplate(spec.GetDFCWriteConfig(), scope)
 	if err != nil {
-		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
+		return bridgeserviceconfig.ConfigRuntime{}, err
 	}
 
-	return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{
-		ConnectionServiceConfig:             connRuntime,
-		DataflowComponentReadServiceConfig:  read,
-		DataflowComponentWriteServiceConfig: write,
+	return bridgeserviceconfig.ConfigRuntime{
+		ConnectionConfig: connRuntime,
+		DFCReadConfig:    read,
+		DFCWriteConfig:   write,
 	}, nil
 }

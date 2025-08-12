@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build test
-// +build test
-
 package protocolconverter
 
 import (
@@ -25,9 +22,9 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/bridgeserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 	connfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	dfcfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
@@ -71,21 +68,21 @@ var _ = Describe("DataFlowComponentService", func() {
 
 	Describe("AddToManager", func() {
 		var (
-			cfg        protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
-			runtimeCfg protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
+			cfg        bridgeserviceconfig.ConfigSpec
+			runtimeCfg bridgeserviceconfig.ConfigRuntime
 		)
 
 		BeforeEach(func() {
 			// Create a basic config for testing
-			cfg = protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+			cfg = bridgeserviceconfig.ConfigSpec{
+				Config: bridgeserviceconfig.ConfigTemplate{
+					ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "localhost",
 							Port:   "102",
 						},
 					},
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+					DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]interface{}{
 								"kafka_consumer": map[string]interface{}{
@@ -122,7 +119,6 @@ var _ = Describe("DataFlowComponentService", func() {
 		})
 
 		It("should add a new protocolConverter to the underlying manager", func() {
-
 			// Act
 			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, protConvName)
 
@@ -176,8 +172,8 @@ var _ = Describe("DataFlowComponentService", func() {
 
 	Describe("Status", func() {
 		var (
-			cfg             protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
-			runtimeCfg      protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
+			cfg             bridgeserviceconfig.ConfigSpec
+			runtimeCfg      bridgeserviceconfig.ConfigRuntime
 			dfcManager      *dfcfsm.DataflowComponentManager
 			connManager     *connfsm.ConnectionManager
 			mockConnService *connservice.MockConnectionService
@@ -187,15 +183,15 @@ var _ = Describe("DataFlowComponentService", func() {
 
 		BeforeEach(func() {
 			// Create a basic config for testing
-			cfg = protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+			cfg = bridgeserviceconfig.ConfigSpec{
+				Config: bridgeserviceconfig.ConfigTemplate{
+					ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "localhost",
 							Port:   "102",
 						},
 					},
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+					DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]interface{}{
 								"kafka_consumer": map[string]interface{}{
@@ -245,23 +241,23 @@ var _ = Describe("DataFlowComponentService", func() {
 
 	Describe("UpdateInManager", func() {
 		var (
-			config            protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
-			updatedConfig     protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
-			runtimeCfg        protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
-			updatedRuntimeCfg protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
+			config            bridgeserviceconfig.ConfigSpec
+			updatedConfig     bridgeserviceconfig.ConfigSpec
+			runtimeCfg        bridgeserviceconfig.ConfigRuntime
+			updatedRuntimeCfg bridgeserviceconfig.ConfigRuntime
 		)
 
 		BeforeEach(func() {
 			// Initial config
-			config = protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+			config = bridgeserviceconfig.ConfigSpec{
+				Config: bridgeserviceconfig.ConfigTemplate{
+					ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "localhost",
 							Port:   "102",
 						},
 					},
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+					DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]interface{}{
 								"kafka_consumer": map[string]interface{}{
@@ -276,15 +272,15 @@ var _ = Describe("DataFlowComponentService", func() {
 
 			// Updated config with different settings
 
-			updatedConfig = protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+			updatedConfig = bridgeserviceconfig.ConfigSpec{
+				Config: bridgeserviceconfig.ConfigTemplate{
+					ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "localhost",
 							Port:   "102",
 						},
 					},
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+					DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]interface{}{
 								"kafka_consumer": map[string]interface{}{
@@ -361,21 +357,21 @@ var _ = Describe("DataFlowComponentService", func() {
 
 	Describe("StartAndStopDataFlowComponent", func() {
 		var (
-			cfg        protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
-			runtimeCfg protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
+			cfg        bridgeserviceconfig.ConfigSpec
+			runtimeCfg bridgeserviceconfig.ConfigRuntime
 		)
 
 		BeforeEach(func() {
 			// Create a basic config for testing
-			cfg = protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+			cfg = bridgeserviceconfig.ConfigSpec{
+				Config: bridgeserviceconfig.ConfigTemplate{
+					ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "localhost",
 							Port:   "102",
 						},
 					},
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+					DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]interface{}{
 								"http_server": map[string]interface{}{
@@ -461,21 +457,21 @@ var _ = Describe("DataFlowComponentService", func() {
 
 	Describe("RemoveFromManager", func() {
 		var (
-			cfg        protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
-			runtimeCfg protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
+			cfg        bridgeserviceconfig.ConfigSpec
+			runtimeCfg bridgeserviceconfig.ConfigRuntime
 		)
 
 		BeforeEach(func() {
 			// Create a basic config for testing
-			cfg = protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+			cfg = bridgeserviceconfig.ConfigSpec{
+				Config: bridgeserviceconfig.ConfigTemplate{
+					ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "localhost",
 							Port:   "102",
 						},
 					},
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+					DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]interface{}{
 								"http_server": map[string]interface{}{
@@ -527,15 +523,15 @@ var _ = Describe("DataFlowComponentService", func() {
 	Describe("ReconcileManager", func() {
 		It("should pass configs to the managers for reconciliation", func() {
 			// Add a test component to have something to reconcile
-			cfg := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+			cfg := bridgeserviceconfig.ConfigSpec{
+				Config: bridgeserviceconfig.ConfigTemplate{
+					ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "localhost",
 							Port:   "102",
 						},
 					},
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+					DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]interface{}{
 								"http_server": map[string]interface{}{
@@ -586,15 +582,15 @@ var _ = Describe("DataFlowComponentService", func() {
 
 			// Add a test component to have something to reconcile (just like in the other test)
 			testComponentName := "test-error-component"
-			cfg := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+			cfg := bridgeserviceconfig.ConfigSpec{
+				Config: bridgeserviceconfig.ConfigTemplate{
+					ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "localhost",
 							Port:   "102",
 						},
 					},
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+					DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]interface{}{
 								"http_server": map[string]interface{}{
@@ -641,7 +637,7 @@ var _ = Describe("DataFlowComponentService", func() {
 	Describe("runtime_config.BuildRuntimeConfig", func() {
 		It("should correctly render variables in templates", func() {
 			// Create a spec with templates that use variables
-			spec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+			spec := bridgeserviceconfig.ConfigSpec{
 				Variables: variables.VariableBundle{
 					User: map[string]interface{}{
 						"custom_var": "test-value",
@@ -650,14 +646,14 @@ var _ = Describe("DataFlowComponentService", func() {
 						},
 					},
 				},
-				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+				Config: bridgeserviceconfig.ConfigTemplate{
+					ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "{{.custom_var}}",
 							Port:   "102",
 						},
 					},
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+					DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]interface{}{
 								"random_input": map[string]interface{}{
@@ -695,42 +691,42 @@ var _ = Describe("DataFlowComponentService", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// 1. Verify user variables are rendered
-			Expect(runtimeCfg.ConnectionServiceConfig.NmapServiceConfig.Target).To(Equal("test-value"))
-			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["address"]).To(Equal("nested-value"))
+			Expect(runtimeCfg.ConnectionConfig.NmapServiceConfig.Target).To(Equal("test-value"))
+			Expect(runtimeCfg.DFCReadConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["address"]).To(Equal("nested-value"))
 
 			// 2. Verify global vars are accessible
-			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["global_var"]).To(Equal("global-value"))
+			Expect(runtimeCfg.DFCReadConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["global_var"]).To(Equal("global-value"))
 
 			// 3. Verify bridged_by header
-			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["bridged_by"]).To(Equal("protocol-converter_test-node_test-pc"))
+			Expect(runtimeCfg.DFCReadConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["bridged_by"]).To(Equal("protocol-converter_test-node_test-pc"))
 
 			// 4. Verify location merging
-			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["location_0"]).To(Equal("factory"))
-			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["location_1"]).To(Equal("line1"))
-			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["location_2"]).To(Equal("machine1"))
+			Expect(runtimeCfg.DFCReadConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["location_0"]).To(Equal("factory"))
+			Expect(runtimeCfg.DFCReadConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["location_1"]).To(Equal("line1"))
+			Expect(runtimeCfg.DFCReadConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["location_2"]).To(Equal("machine1"))
 		})
 
 		It("should handle nil inputs gracefully", func() {
 			// Test with nil spec
-			_, err := runtime_config.BuildRuntimeConfig(protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{}, nil, nil, "", "")
+			_, err := runtime_config.BuildRuntimeConfig(bridgeserviceconfig.ConfigSpec{}, nil, nil, "", "")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("nil spec"))
 
 			// Test with nil maps, but reference internal and user variables in the template
-			spec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+			spec := bridgeserviceconfig.ConfigSpec{
 				Variables: variables.VariableBundle{
 					User: map[string]interface{}{
 						"custom_var": "test-value",
 					},
 				},
-				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+				Config: bridgeserviceconfig.ConfigTemplate{
+					ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "{{.custom_var}}",
 							Port:   "102",
 						},
 					},
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+					DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]interface{}{
 								"random_input": map[string]interface{}{
@@ -744,21 +740,21 @@ var _ = Describe("DataFlowComponentService", func() {
 			runtimeCfg, err := runtime_config.BuildRuntimeConfig(spec, nil, nil, "", "test-pc")
 			Expect(err).NotTo(HaveOccurred())
 			// User variable rendered
-			Expect(runtimeCfg.ConnectionServiceConfig.NmapServiceConfig.Target).To(Equal("test-value"))
+			Expect(runtimeCfg.ConnectionConfig.NmapServiceConfig.Target).To(Equal("test-value"))
 			// Internal variable rendered
-			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["internal_id"]).To(Equal("test-pc"))
+			Expect(runtimeCfg.DFCReadConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["internal_id"]).To(Equal("test-pc"))
 		})
 
 		It("should sanitize bridged_by header correctly", func() {
-			spec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+			spec := bridgeserviceconfig.ConfigSpec{
+				Config: bridgeserviceconfig.ConfigTemplate{
+					ConnectionConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "localhost",
 							Port:   "443",
 						},
 					},
-					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+					DFCReadConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]interface{}{
 								"random_input": map[string]interface{}{
@@ -773,12 +769,12 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Test with special characters
 			runtimeCfg, err := runtime_config.BuildRuntimeConfig(spec, nil, nil, "test@node", "test.pc")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["bridged_by"]).To(Equal("protocol-converter_test-node_test-pc"))
+			Expect(runtimeCfg.DFCReadConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["bridged_by"]).To(Equal("protocol-converter_test-node_test-pc"))
 
 			// Test with multiple special characters
 			runtimeCfg, err = runtime_config.BuildRuntimeConfig(spec, nil, nil, "test@node#1", "test.pc@2")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["bridged_by"]).To(Equal("protocol-converter_test-node-1_test-pc-2"))
+			Expect(runtimeCfg.DFCReadConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["bridged_by"]).To(Equal("protocol-converter_test-node-1_test-pc-2"))
 		})
 	})
 })
