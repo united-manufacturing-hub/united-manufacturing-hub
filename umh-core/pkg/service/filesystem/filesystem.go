@@ -22,6 +22,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -569,6 +571,11 @@ func (s *DefaultService) Chown(ctx context.Context, path string, user string, gr
 		return fmt.Errorf("failed to check context: %w", err)
 	}
 
+	// Validate inputs to prevent command injection
+	if err := validateChownInputs(path, user, group); err != nil {
+		return fmt.Errorf("invalid chown parameters: %w", err)
+	}
+
 	// Create a channel for results
 	errCh := make(chan error, 1)
 
@@ -704,4 +711,36 @@ func (s *DefaultService) Symlink(ctx context.Context, target, linkPath string) e
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+// validateChownInputs validates user, group, and path inputs to prevent command injection
+func validateChownInputs(path, user, group string) error {
+	// Validate path - must be absolute and not contain shell metacharacters
+	if !filepath.IsAbs(path) {
+		return errors.New("path must be absolute")
+	}
+
+	// Check for dangerous characters in path
+	if strings.ContainsAny(path, ";|&$`<>(){}[]?*") {
+		return errors.New("path contains illegal characters")
+	}
+
+	// Validate user/group names - allow alphanumeric, underscore, dash, and dots
+	validName := regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
+
+	if user == "" {
+		return errors.New("user cannot be empty")
+	}
+	if !validName.MatchString(user) {
+		return errors.New("user contains illegal characters")
+	}
+
+	if group == "" {
+		return errors.New("group cannot be empty")
+	}
+	if !validName.MatchString(group) {
+		return errors.New("group contains illegal characters")
+	}
+
+	return nil
 }

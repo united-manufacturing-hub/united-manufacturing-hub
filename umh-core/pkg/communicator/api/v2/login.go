@@ -28,6 +28,15 @@ import (
 	"go.uber.org/zap"
 )
 
+// Static errors for login functionality
+var (
+	ErrNoCookieReturned      = errors.New("no cookie returned")
+	ErrNoTokenCookieReturned = errors.New("no token cookie returned")
+	ErrTokenCookieEmpty      = errors.New("token cookie is empty")
+	ErrNoRequestReturned     = errors.New("no request returned")
+	ErrFailedToParseUUID     = errors.New("failed to parse UUID")
+)
+
 // login logs in to the API and returns a JWT token, UUID & the instance name.
 func login(token string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (*LoginResponse, error) {
 	var cookieMap = make(map[string]string)
@@ -44,25 +53,25 @@ func login(token string, insecureTLS bool, apiURL string, logger *zap.SugaredLog
 	if cookieMap == nil {
 		logger.Warnf("No cookie returned")
 
-		return nil, errors.New("no cookie returned")
+		return nil, ErrNoCookieReturned
 	}
 
 	if cookie, ok := cookieMap["token"]; !ok || cookie == "" {
 		logger.Warnf("No token cookie returned")
 
-		return nil, errors.New("no token cookie returned")
+		return nil, ErrNoTokenCookieReturned
 	}
 
 	if cookieMap["token"] == "" {
 		logger.Warnf("Token cookie is empty")
 
-		return nil, errors.New("token cookie is empty")
+		return nil, ErrTokenCookieEmpty
 	}
 
 	if request == nil {
 		logger.Warnf("No request returned")
 
-		return nil, errors.New("no request returned")
+		return nil, ErrNoRequestReturned
 	}
 
 	// Parse UUID
@@ -70,7 +79,7 @@ func login(token string, insecureTLS bool, apiURL string, logger *zap.SugaredLog
 	if err != nil {
 		logger.Warnf("Failed to parse UUID: %s", err)
 
-		return nil, errors.New("failed to parse UUID")
+		return nil, ErrFailedToParseUUID
 	}
 
 	var LoginResponse LoginResponse

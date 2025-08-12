@@ -110,10 +110,12 @@ nested:
 		Expect(scope).To(HaveKey("global"))
 		Expect(scope).To(HaveKey("internal"))
 
-		globalScope := scope["global"].(map[string]any)
+		globalScope, ok := scope["global"].(map[string]any)
+		Expect(ok).To(BeTrue())
 		Expect(globalScope).To(HaveKeyWithValue("cluster_id", "prod-cluster-1"))
 
-		internalScope := scope["internal"].(map[string]any)
+		internalScope, ok := scope["internal"].(map[string]any)
+		Expect(ok).To(BeTrue())
 		Expect(internalScope).To(HaveKeyWithValue("bridged_by", "protocol-converter-node1-pc123"))
 
 		fmt.Printf("Final flattened scope for template rendering:\n")

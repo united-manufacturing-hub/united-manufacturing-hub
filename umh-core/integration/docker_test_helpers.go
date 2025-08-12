@@ -230,8 +230,14 @@ func buildContainer() error {
 	imageName := imageNameParts[0]
 	tag := imageNameParts[1]
 
+	// Validate inputs to prevent command injection (even though they're controlled in tests)
+	if strings.ContainsAny(imageName, ";|&$`<>(){}[]?*") || strings.ContainsAny(tag, ";|&$`<>(){}[]?*") {
+		return fmt.Errorf("invalid characters in image name or tag")
+	}
+
 	var outmake []byte
 
+	// #nosec G204 - Command arguments are validated and controlled in test environment
 	cmd := exec.Command("make", "build", "IMAGE_NAME="+imageName, "TAG="+tag)
 	cmd.Dir = coreDir // Set working directory to coreDir
 

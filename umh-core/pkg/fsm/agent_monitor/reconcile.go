@@ -30,6 +30,15 @@ import (
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
+var (
+	// Static errors for agent monitor reconcile
+	ErrInvalidState                 = errors.New("invalid state")
+	ErrInvalidDesiredStateReconcile = errors.New("invalid desired state")
+	ErrInvalidCurrentState          = errors.New("invalid current state")
+	ErrInvalidStartingState         = errors.New("invalid starting state")
+	ErrInvalidRunningState          = errors.New("invalid running state")
+)
+
 // Reconcile periodically checks if the FSM needs state transitions based on metrics
 // The filesystemService parameter allows for filesystem operations during reconciliation,
 // enabling the method to read configuration or state information from the filesystem.
@@ -250,7 +259,7 @@ func (a *AgentInstance) reconcileStateTransition(ctx context.Context, services s
 		}
 	}
 
-	return fmt.Errorf("invalid state: %s", currentState), false
+	return fmt.Errorf("%w: %s", ErrInvalidState, currentState), false
 }
 
 // reconcileOperationalStates handles states related to instance operations (starting/stopping).
@@ -267,7 +276,7 @@ func (a *AgentInstance) reconcileOperationalStates(ctx context.Context, services
 	case OperationalStateStopped:
 		return a.reconcileTransitionToStopped(ctx, services, currentState)
 	default:
-		return fmt.Errorf("invalid desired state: %s", desiredState), false
+		return fmt.Errorf("%w: %s", ErrInvalidDesiredStateReconcile, desiredState), false
 	}
 }
 
@@ -299,7 +308,7 @@ func (a *AgentInstance) reconcileTransitionToActive(ctx context.Context, service
 		// if it is stopping, we will first finish the stopping process and then we will go to active
 		return a.reconcileTransitionToStopped(ctx, services, currentState)
 	default:
-		return fmt.Errorf("invalid current state: %s", currentState), false
+		return fmt.Errorf("%w: %s", ErrInvalidCurrentState, currentState), false
 	}
 }
 
@@ -317,7 +326,7 @@ func (a *AgentInstance) reconcileStartingStates(ctx context.Context, services se
 		// nothing to verify here, just for consistency with other fsms
 		return a.baseFSMInstance.SendEvent(ctx, EventStartDone), true
 	default:
-		return fmt.Errorf("invalid starting state: %s", currentState), false
+		return fmt.Errorf("%w: %s", ErrInvalidStartingState, currentState), false
 	}
 }
 
@@ -345,7 +354,7 @@ func (a *AgentInstance) reconcileRunningStates(ctx context.Context, services ser
 
 		return nil, false
 	default:
-		return fmt.Errorf("invalid running state: %s", currentState), false
+		return fmt.Errorf("%w: %s", ErrInvalidRunningState, currentState), false
 	}
 }
 

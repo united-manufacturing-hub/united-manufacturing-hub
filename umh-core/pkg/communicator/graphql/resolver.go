@@ -136,7 +136,7 @@ func (r *queryResolver) Topic(ctx context.Context, topic string) (*Topic, error)
 		}
 	}
 
-	return nil, nil
+	return nil, nil //nolint:nilnil // GraphQL pattern: nil result means field is null, not an error
 }
 
 // Helper methods for data conversion and filtering

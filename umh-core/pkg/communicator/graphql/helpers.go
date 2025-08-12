@@ -30,7 +30,7 @@ func StartGraphQLServer(
 	logger *zap.SugaredLogger,
 ) (*Server, error) {
 	if !cfg.Enabled {
-		return nil, nil // Server not enabled, return nil without error
+		return nil, nil //nolint:nilnil // Server not enabled is not an error condition, no server instance needed
 	}
 
 	// Convert config

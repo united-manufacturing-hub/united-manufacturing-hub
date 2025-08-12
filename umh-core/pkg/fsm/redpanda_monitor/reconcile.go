@@ -29,6 +29,15 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
+var (
+	// Static errors for redpanda monitor reconcile
+	ErrInvalidState                 = errors.New("invalid state")
+	ErrInvalidDesiredStateReconcile = errors.New("invalid desired state")
+	ErrInvalidCurrentState          = errors.New("invalid current state")
+	ErrInvalidStartingState         = errors.New("invalid starting state")
+	ErrInvalidRunningState          = errors.New("invalid running state")
+)
+
 // Reconcile periodically checks if the FSM needs state transitions based on metrics
 // The filesystemService parameter allows for filesystem operations during reconciliation,
 // enabling the method to read configuration or state information from the filesystem.
@@ -211,7 +220,7 @@ func (b *RedpandaMonitorInstance) reconcileStateTransition(ctx context.Context, 
 		}
 	}
 
-	return fmt.Errorf("invalid state: %s", currentState), false
+	return fmt.Errorf("%w: %s", ErrInvalidState, currentState), false
 }
 
 // reconcileOperationalStates handles states related to instance operations (starting/stopping).
@@ -228,7 +237,7 @@ func (b *RedpandaMonitorInstance) reconcileOperationalStates(ctx context.Context
 	case OperationalStateStopped:
 		return b.reconcileTransitionToStopped(ctx, services, currentState)
 	default:
-		return fmt.Errorf("invalid desired state: %s", desiredState), false
+		return fmt.Errorf("%w: %s", ErrInvalidDesiredStateReconcile, desiredState), false
 	}
 }
 
@@ -260,7 +269,7 @@ func (b *RedpandaMonitorInstance) reconcileTransitionToActive(ctx context.Contex
 		// if it is stopping, we will first finish the stopping process and then we will go to active
 		return b.reconcileTransitionToStopped(ctx, services, currentState)
 	default:
-		return fmt.Errorf("invalid current state: %s", currentState), false
+		return fmt.Errorf("%w: %s", ErrInvalidCurrentState, currentState), false
 	}
 }
 
@@ -278,7 +287,7 @@ func (b *RedpandaMonitorInstance) reconcileStartingStates(ctx context.Context, s
 		// nothing to verify here, just for consistency with other fsms
 		return b.baseFSMInstance.SendEvent(ctx, EventStartDone), true
 	default:
-		return fmt.Errorf("invalid starting state: %s", currentState), false
+		return fmt.Errorf("%w: %s", ErrInvalidStartingState, currentState), false
 	}
 }
 
@@ -306,7 +315,7 @@ func (b *RedpandaMonitorInstance) reconcileRunningStates(ctx context.Context, se
 
 		return nil, false
 	default:
-		return fmt.Errorf("invalid running state: %s", currentState), false
+		return fmt.Errorf("%w: %s", ErrInvalidRunningState, currentState), false
 	}
 }
 

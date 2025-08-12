@@ -28,19 +28,19 @@ var _ = Describe("Error Helpers", func() {
 	Context("when checking error types", func() {
 		It("should correctly identify temporary backoff errors", func() {
 			// Direct error with constant
-			tempErr := errors.New(backoff.TemporaryBackoffError)
+			tempErr := errors.New(backoff.TemporaryBackoffError) //nolint:err113 // Test needs dynamic error
 			Expect(backoff.IsTemporaryBackoffError(tempErr)).To(BeTrue())
 			Expect(backoff.IsPermanentFailureError(tempErr)).To(BeFalse())
 			Expect(backoff.IsBackoffError(tempErr)).To(BeTrue())
 
 			// Error with additional text
-			tempWithMsg := errors.New(backoff.TemporaryBackoffError + ": system busy")
+			tempWithMsg := errors.New(backoff.TemporaryBackoffError + ": system busy") //nolint:err113 // Test needs dynamic error
 			Expect(backoff.IsTemporaryBackoffError(tempWithMsg)).To(BeTrue())
 			Expect(backoff.IsPermanentFailureError(tempWithMsg)).To(BeFalse())
 			Expect(backoff.IsBackoffError(tempWithMsg)).To(BeTrue())
 
 			// Wrapped error
-			origErr := errors.New("connection refused")
+			origErr := errors.New("connection refused") //nolint:err113 // Test needs dynamic error
 			wrappedErr := fmt.Errorf("%s: %w", backoff.TemporaryBackoffError, origErr)
 			Expect(backoff.IsTemporaryBackoffError(wrappedErr)).To(BeTrue())
 			Expect(backoff.IsPermanentFailureError(wrappedErr)).To(BeFalse())
@@ -49,19 +49,19 @@ var _ = Describe("Error Helpers", func() {
 
 		It("should correctly identify permanent failure errors", func() {
 			// Direct error with constant
-			permErr := errors.New(backoff.PermanentFailureError)
+			permErr := errors.New(backoff.PermanentFailureError) //nolint:err113 // Test needs dynamic error
 			Expect(backoff.IsTemporaryBackoffError(permErr)).To(BeFalse())
 			Expect(backoff.IsPermanentFailureError(permErr)).To(BeTrue())
 			Expect(backoff.IsBackoffError(permErr)).To(BeTrue())
 
 			// Error with additional text
-			permWithMsg := errors.New(backoff.PermanentFailureError + ": max retries exceeded")
+			permWithMsg := errors.New(backoff.PermanentFailureError + ": max retries exceeded") //nolint:err113 // Test needs dynamic error
 			Expect(backoff.IsTemporaryBackoffError(permWithMsg)).To(BeFalse())
 			Expect(backoff.IsPermanentFailureError(permWithMsg)).To(BeTrue())
 			Expect(backoff.IsBackoffError(permWithMsg)).To(BeTrue())
 
 			// Wrapped error
-			origErr := errors.New("invalid configuration")
+			origErr := errors.New("invalid configuration") //nolint:err113 // Test needs dynamic error
 			wrappedErr := fmt.Errorf("%s: %w", backoff.PermanentFailureError, origErr)
 			Expect(backoff.IsTemporaryBackoffError(wrappedErr)).To(BeFalse())
 			Expect(backoff.IsPermanentFailureError(wrappedErr)).To(BeTrue())
@@ -75,13 +75,13 @@ var _ = Describe("Error Helpers", func() {
 			Expect(backoff.IsBackoffError(nil)).To(BeFalse())
 
 			// Regular error
-			regularErr := errors.New("just a normal error")
+			regularErr := errors.New("just a normal error") //nolint:err113 // Test needs dynamic error
 			Expect(backoff.IsTemporaryBackoffError(regularErr)).To(BeFalse())
 			Expect(backoff.IsPermanentFailureError(regularErr)).To(BeFalse())
 			Expect(backoff.IsBackoffError(regularErr)).To(BeFalse())
 
 			// Error that contains both strings (edge case, should match first pattern)
-			mixedErr := errors.New(backoff.TemporaryBackoffError + " and also " + backoff.PermanentFailureError)
+			mixedErr := errors.New(backoff.TemporaryBackoffError + " and also " + backoff.PermanentFailureError) //nolint:err113 // Test needs dynamic error
 			Expect(backoff.IsTemporaryBackoffError(mixedErr)).To(BeTrue())
 			Expect(backoff.IsPermanentFailureError(mixedErr)).To(BeTrue())
 			Expect(backoff.IsBackoffError(mixedErr)).To(BeTrue())
@@ -91,7 +91,7 @@ var _ = Describe("Error Helpers", func() {
 	Context("when extracting original errors", func() {
 		It("should extract the original error from wrapped errors", func() {
 			// Create an original error
-			origErr := errors.New("original error")
+			origErr := errors.New("original error") //nolint:err113 // Test needs dynamic error
 
 			// Wrap it with fmt.Errorf
 			wrappedErr := fmt.Errorf("%s: %w", backoff.TemporaryBackoffError, origErr)
@@ -103,7 +103,7 @@ var _ = Describe("Error Helpers", func() {
 
 		It("should handle unwrapped errors", func() {
 			// Simple error without wrapping
-			simpleErr := errors.New("simple error")
+			simpleErr := errors.New("simple error") //nolint:err113 // Test needs dynamic error
 			extracted := backoff.ExtractOriginalError(simpleErr)
 			Expect(extracted).To(Equal(simpleErr))
 		})
@@ -115,7 +115,7 @@ var _ = Describe("Error Helpers", func() {
 
 		It("should handle deeply nested errors", func() {
 			// Create a chain of wrapped errors
-			level1 := errors.New("level 1 error")
+			level1 := errors.New("level 1 error") //nolint:err113 // Test needs dynamic error
 			level2 := fmt.Errorf("level 2: %w", level1)
 			level3 := fmt.Errorf("%s: %w", backoff.TemporaryBackoffError, level2)
 

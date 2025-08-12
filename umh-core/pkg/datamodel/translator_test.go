@@ -283,25 +283,39 @@ var _ = Describe("Translator", func() {
 					Expect(stringExists).To(BeTrue())
 
 					// Verify the injected timeseries-number schema structure
-					numberProps := numberSchema["properties"].(map[string]interface{})
-					numberFields := numberProps["fields"].(map[string]interface{})
-					numberFieldProps := numberFields["properties"].(map[string]interface{})
+					numberProps, ok := numberSchema["properties"].(map[string]interface{})
+					Expect(ok).To(BeTrue(), "numberSchema should have properties")
 
-					timestampField := numberFieldProps["timestamp_ms"].(map[string]interface{})
+					numberFields, ok := numberProps["fields"].(map[string]interface{})
+					Expect(ok).To(BeTrue(), "numberProps should have fields")
+
+					numberFieldProps, ok := numberFields["properties"].(map[string]interface{})
+					Expect(ok).To(BeTrue(), "numberFields should have properties")
+
+					timestampField, ok := numberFieldProps["timestamp_ms"].(map[string]interface{})
+					Expect(ok).To(BeTrue(), "numberFieldProps should have timestamp_ms")
 					Expect(timestampField["type"]).To(Equal("number"))
 
-					valueField := numberFieldProps["value"].(map[string]interface{})
+					valueField, ok := numberFieldProps["value"].(map[string]interface{})
+					Expect(ok).To(BeTrue(), "numberFieldProps should have value")
 					Expect(valueField["type"]).To(Equal("number"))
 
 					// Verify the injected timeseries-string schema structure
-					stringProps := stringSchema["properties"].(map[string]interface{})
-					stringFields := stringProps["fields"].(map[string]interface{})
-					stringFieldProps := stringFields["properties"].(map[string]interface{})
+					stringProps, ok := stringSchema["properties"].(map[string]interface{})
+					Expect(ok).To(BeTrue(), "stringSchema should have properties")
 
-					timestampField = stringFieldProps["timestamp_ms"].(map[string]interface{})
+					stringFields, ok := stringProps["fields"].(map[string]interface{})
+					Expect(ok).To(BeTrue(), "stringProps should have fields")
+
+					stringFieldProps, ok := stringFields["properties"].(map[string]interface{})
+					Expect(ok).To(BeTrue(), "stringFields should have properties")
+
+					timestampField, ok = stringFieldProps["timestamp_ms"].(map[string]interface{})
+					Expect(ok).To(BeTrue(), "stringFieldProps should have timestamp_ms")
 					Expect(timestampField["type"]).To(Equal("number"))
 
-					valueField = stringFieldProps["value"].(map[string]interface{})
+					valueField, ok = stringFieldProps["value"].(map[string]interface{})
+					Expect(ok).To(BeTrue(), "stringFieldProps should have value")
 					Expect(valueField["type"]).To(Equal("string"))
 
 					// Verify payload shape usage

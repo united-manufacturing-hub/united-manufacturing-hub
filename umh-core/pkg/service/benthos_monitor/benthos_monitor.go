@@ -740,7 +740,8 @@ func ParseReadyData(dataReader io.Reader) (bool, readyResponse, error) {
 	curlError := monitor.ParseCurlError(string(data))
 	if curlError != nil {
 		// If we have any curl error, we can assume the service is not ready (but we do not need to return the error)
-		return false, readyResponse{}, nil
+		// This is not a function error - just reporting that the service isn't ready
+		return false, readyResponse{}, nil //nolint:nilerr // Service not ready is not an error condition
 	}
 
 	var readyResp readyResponse

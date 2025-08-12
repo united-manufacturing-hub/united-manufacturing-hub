@@ -16,6 +16,7 @@ package redpanda_monitor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -28,6 +29,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_orig"
+)
+
+var (
+	// Static errors for redpanda monitor
+	ErrInvalidDesiredState = errors.New("invalid desired state")
 )
 
 // NewRedpandaMonitorInstance creates a new RedpandaMonitorInstance with the standard transitions.
@@ -90,8 +96,8 @@ func NewRedpandaMonitorInstanceWithService(config config.RedpandaMonitorConfig, 
 func (a *RedpandaMonitorInstance) SetDesiredFSMState(state string) error {
 	// We only allow "active" or "stopped"
 	if state != OperationalStateActive && state != OperationalStateStopped {
-		return fmt.Errorf("invalid desired state: %s (only '%s' or '%s' allowed)",
-			state, OperationalStateActive, OperationalStateStopped)
+		return fmt.Errorf("%w: %s (only '%s' or '%s' allowed)",
+			ErrInvalidDesiredState, state, OperationalStateActive, OperationalStateStopped)
 	}
 
 	a.baseFSMInstance.SetDesiredFSMState(state)

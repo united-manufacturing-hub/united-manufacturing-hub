@@ -83,7 +83,8 @@ nested:
 			Expect(vb.User).To(HaveKeyWithValue("PORT", "8080"))
 			Expect(vb.User).To(HaveKey("nested"))
 
-			nested := vb.User["nested"].(map[string]any)
+			nested, ok := vb.User["nested"].(map[string]any)
+			Expect(ok).To(BeTrue())
 			Expect(nested).To(HaveKeyWithValue("key", "value"))
 			Expect(nested).To(HaveKeyWithValue("number", 42))
 

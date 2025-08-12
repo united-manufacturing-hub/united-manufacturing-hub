@@ -101,10 +101,19 @@ func (s *DefaultService) removeDirectoryWithTimeout(ctx context.Context, path st
 	s.logDirectoryContentsIfNotEmpty(ctx, path, "directory", fsService)
 
 	// Use a short timeout for chunk-based deletion
-	// Use background context to ensure we get the full timeout regardless of outer context
+	// Inherit from parent context but ensure we have at least the chunk timeout
 	const chunkTimeout = 750 * time.Millisecond
 
-	chunkCtx, cancel := context.WithTimeout(context.Background(), chunkTimeout)
+	var chunkCtx context.Context
+	var cancel context.CancelFunc
+
+	// Check if parent context has enough time remaining, otherwise use background
+	if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) >= chunkTimeout {
+		chunkCtx, cancel = context.WithTimeout(ctx, chunkTimeout)
+	} else {
+		// Parent context doesn't have enough time, use background for full timeout
+		chunkCtx, cancel = context.WithTimeout(context.Background(), chunkTimeout)
+	}
 	defer cancel()
 
 	err := fsService.RemoveAll(chunkCtx, path)

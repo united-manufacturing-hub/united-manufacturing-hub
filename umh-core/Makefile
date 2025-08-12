@@ -769,3 +769,6 @@ run:
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
+
+mcp-serena:
+	uvx --from git+https://github.com/oraios/serena serena start-mcp-server

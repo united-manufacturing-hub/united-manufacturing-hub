@@ -366,7 +366,7 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	// this leads to the behavior that the config update always takes at least two ticks (two calls of GetConfig)
 	if m.refreshMu.TryLock() {
 		// Start background refresh only if we have a cached config to return
-		go m.backgroundRefresh(context.Background(), info.ModTime())
+		go m.backgroundRefresh(ctx, info.ModTime())
 		// Note: mutex will be unlocked in backgroundRefresh
 	}
 

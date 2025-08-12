@@ -16,6 +16,7 @@ package agent_monitor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -29,6 +30,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/agent_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_orig"
+)
+
+var (
+	// Static errors for agent monitor
+	ErrInvalidDesiredState = errors.New("invalid desired state")
 )
 
 // NewAgentInstance creates a new AgentInstance with the standard transitions.
@@ -88,8 +94,8 @@ func NewAgentInstanceWithService(config config.AgentMonitorConfig, service agent
 func (a *AgentInstance) SetDesiredFSMState(state string) error {
 	// We only allow "active" or "stopped"
 	if state != OperationalStateActive && state != OperationalStateStopped {
-		return fmt.Errorf("invalid desired state: %s (only '%s' or '%s' allowed)",
-			state, OperationalStateActive, OperationalStateStopped)
+		return fmt.Errorf("%w: %s (only '%s' or '%s' allowed)",
+			ErrInvalidDesiredState, state, OperationalStateActive, OperationalStateStopped)
 	}
 
 	a.baseFSMInstance.SetDesiredFSMState(state)

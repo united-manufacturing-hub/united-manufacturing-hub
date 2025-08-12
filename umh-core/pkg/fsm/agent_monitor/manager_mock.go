@@ -15,7 +15,6 @@
 package agent_monitor
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
@@ -56,7 +55,7 @@ func NewAgentManagerWithMockedService(name string, mockSvc agent_monitor.MockSer
 		func(instance public_fsm.FSMInstance, fc config.AgentMonitorConfig) (bool, error) {
 			ai, ok := instance.(*AgentInstance)
 			if !ok {
-				return false, errors.New("instance not an AgentInstance")
+				return false, ErrNotAgentInstance
 			}
 
 			return ai.config.DesiredFSMState == fc.DesiredFSMState, nil
@@ -64,7 +63,7 @@ func NewAgentManagerWithMockedService(name string, mockSvc agent_monitor.MockSer
 		func(instance public_fsm.FSMInstance, fc config.AgentMonitorConfig) error {
 			ai, ok := instance.(*AgentInstance)
 			if !ok {
-				return errors.New("instance not an AgentInstance")
+				return ErrNotAgentInstance
 			}
 
 			ai.config = fc
@@ -74,7 +73,7 @@ func NewAgentManagerWithMockedService(name string, mockSvc agent_monitor.MockSer
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
 			ai, ok := instance.(*AgentInstance)
 			if !ok {
-				return 0, errors.New("instance not an AgentInstance")
+				return 0, ErrNotAgentInstance
 			}
 
 			return ai.GetMinimumRequiredTime(), nil

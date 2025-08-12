@@ -44,3 +44,4 @@ linters:
     - forbidigo
     - exhaustruct
     - fatcontext
+    - nestif

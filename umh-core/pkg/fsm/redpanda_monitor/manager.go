@@ -25,6 +25,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 )
 
+var (
+	// Static errors for redpanda monitor manager
+	ErrNotRedpandaMonitorInstance = errors.New("instance is not a RedpandaMonitorInstance")
+)
+
 // RedpandaMonitorManager is the FSM manager for the redpanda monitor instance.
 type RedpandaMonitorManager struct {
 	*public_fsm.BaseFSMManager[config.RedpandaMonitorConfig]
@@ -67,7 +72,7 @@ func NewRedpandaMonitorManager(name string) *RedpandaMonitorManager {
 		func(instance public_fsm.FSMInstance, fc config.RedpandaMonitorConfig) (bool, error) {
 			bi, ok := instance.(*RedpandaMonitorInstance)
 			if !ok {
-				return false, errors.New("instance is not a RedpandaMonitorInstance")
+				return false, ErrNotRedpandaMonitorInstance
 			}
 			// If same config => return true, else false
 			// Minimal check:
@@ -77,7 +82,7 @@ func NewRedpandaMonitorManager(name string) *RedpandaMonitorManager {
 		func(instance public_fsm.FSMInstance, fc config.RedpandaMonitorConfig) error {
 			bi, ok := instance.(*RedpandaMonitorInstance)
 			if !ok {
-				return errors.New("instance is not a RedpandaMonitorInstance")
+				return ErrNotRedpandaMonitorInstance
 			}
 
 			bi.config = fc
@@ -88,7 +93,7 @@ func NewRedpandaMonitorManager(name string) *RedpandaMonitorManager {
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
 			bi, ok := instance.(*RedpandaMonitorInstance)
 			if !ok {
-				return 0, errors.New("instance is not a RedpandaMonitorInstance")
+				return 0, ErrNotRedpandaMonitorInstance
 			}
 
 			return bi.GetMinimumRequiredTime(), nil

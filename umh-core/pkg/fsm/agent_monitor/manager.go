@@ -26,6 +26,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 )
 
+var (
+	// Static errors for agent monitor manager
+	ErrNotAgentInstance = errors.New("instance is not an AgentInstance")
+)
+
 // AgentManager is the FSM manager for the agent monitor instance.
 type AgentManager struct {
 	*public_fsm.BaseFSMManager[config.AgentMonitorConfig]
@@ -76,7 +81,7 @@ func NewAgentManager(name string) *AgentManager {
 		func(instance public_fsm.FSMInstance, fc config.AgentMonitorConfig) (bool, error) {
 			ai, ok := instance.(*AgentInstance)
 			if !ok {
-				return false, errors.New("instance is not an AgentInstance")
+				return false, ErrNotAgentInstance
 			}
 			// If same config => return true, else false
 			// Minimal check:
@@ -86,7 +91,7 @@ func NewAgentManager(name string) *AgentManager {
 		func(instance public_fsm.FSMInstance, fc config.AgentMonitorConfig) error {
 			ai, ok := instance.(*AgentInstance)
 			if !ok {
-				return errors.New("instance is not an AgentInstance")
+				return ErrNotAgentInstance
 			}
 
 			ai.config = fc
@@ -97,7 +102,7 @@ func NewAgentManager(name string) *AgentManager {
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
 			ai, ok := instance.(*AgentInstance)
 			if !ok {
-				return 0, errors.New("instance is not an AgentInstance")
+				return 0, ErrNotAgentInstance
 			}
 
 			return ai.GetMinimumRequiredTime(), nil

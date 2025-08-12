@@ -89,11 +89,12 @@ type InternalConfig struct {
 
 type AgentConfig struct {
 	CommunicatorConfig `yaml:"communicator,omitempty"`
-	Location           map[int]string `yaml:"location,omitempty"`
-	ReleaseChannel     ReleaseChannel `yaml:"releaseChannel,omitempty"`
-	GraphQLConfig      GraphQLConfig  `yaml:"graphql,omitempty"` // GraphQL server configuration
-	MetricsPort        int            `yaml:"metricsPort"`       // Port to expose metrics on
-	Simulator          bool           `yaml:"simulator,omitempty"`
+
+	Location       map[int]string `yaml:"location,omitempty"`
+	ReleaseChannel ReleaseChannel `yaml:"releaseChannel,omitempty"`
+	GraphQLConfig  GraphQLConfig  `yaml:"graphql,omitempty"` // GraphQL server configuration
+	MetricsPort    int            `yaml:"metricsPort"`       // Port to expose metrics on
+	Simulator      bool           `yaml:"simulator,omitempty"`
 }
 
 type CommunicatorConfig struct {

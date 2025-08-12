@@ -69,7 +69,7 @@ func GetClient(insecureTLS bool) *http.Client {
 			TLSNextProto:      make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
 			Proxy:             http.ProxyFromEnvironment,
 			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: insecureTLS,
+				InsecureSkipVerify: insecureTLS,      // #nosec G402 - Intentionally insecure for development/testing
 				MinVersion:         tls.VersionTLS10, // Allow older TLS versions
 			},
 		}
@@ -257,7 +257,7 @@ func DoHTTPRequest(ctx context.Context, url string, header map[string]string, co
 	// Send request
 	requestStart = time.Now()
 
-	response, err := GetClient(insecureTLS).Do(req.WithContext(httptrace.WithClientTrace(req.Context(), trace)))
+	response, err := GetClient(insecureTLS).Do(req.WithContext(httptrace.WithClientTrace(ctx, trace)))
 	if err != nil {
 		if response != nil {
 			return response, err
@@ -335,11 +335,15 @@ func processJSONResponse[R any](response *http.Response, cookies *map[string]str
 // GetRequest does a GET request to the given endpoint, with optional header and cookies
 // It is a wrapper around DoHTTPRequest.
 func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (result *R, statusCode int, responseErr error) {
-	// Set up context with default 30 second timeout if none provided
+	// Set up context with default 30 second timeout if none provided or no timeout
 	if ctx == nil {
-		var cancel context.CancelFunc
+		ctx = context.Background()
+	}
 
-		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+	// Always set a timeout if there isn't one already
+	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > 30*time.Second {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 	}
 
@@ -415,7 +419,7 @@ func DoHTTPPostRequest[T any](ctx context.Context, url string, data *T, header m
 	// Send the request
 	start = time.Now()
 
-	response, err := GetClient(insecureTLS).Do(req.WithContext(httptrace.WithClientTrace(req.Context(), trace)))
+	response, err := GetClient(insecureTLS).Do(req.WithContext(httptrace.WithClientTrace(ctx, trace)))
 	if err != nil {
 		if response != nil {
 			return response, err
@@ -433,11 +437,15 @@ func DoHTTPPostRequest[T any](ctx context.Context, url string, data *T, header m
 // Note: Cookies will be updated with the response cookies, if not nil
 // It is a wrapper around DoHTTPPostRequest.
 func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (result *R, statusCode int, responseErr error) {
-	// Set up context with default 30 second timeout if none provided
+	// Set up context with default 30 second timeout if none provided or no timeout
 	if ctx == nil {
-		var cancel context.CancelFunc
+		ctx = context.Background()
+	}
 
-		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+	// Always set a timeout if there isn't one already
+	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > 30*time.Second {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 	}
 
