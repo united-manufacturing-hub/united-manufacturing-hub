@@ -341,7 +341,7 @@ func (i *TopicBrowserInstance) isRedpandaRunning() bool {
 // getRedpandaStatusReason returns the status reason for Redpanda.
 func (i *TopicBrowserInstance) getRedpandaStatusReason() string {
 	// Since RedpandaStatus doesn't have a StatusReason field, we can use the FSM state
-	return string(i.ObservedState.ServiceInfo.RedpandaFSMState)
+	return i.ObservedState.ServiceInfo.RedpandaFSMState
 }
 
 // shouldTransitionToIdle determines if the service should transition to idle state.

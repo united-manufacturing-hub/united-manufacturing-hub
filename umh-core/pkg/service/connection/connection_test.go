@@ -51,7 +51,7 @@ var _ = Describe("ConnectionService", func() {
 	)
 
 	BeforeEach(func() {
-		ctx, cancelFunc := context.WithDeadline(context.Background(), time.Now().Add(500*time.Second))
+		ctx, cancelFunc = context.WithDeadline(context.Background(), time.Now().Add(500*time.Second))
 		_ = ctx
 		_ = cancelFunc
 		tick = 1

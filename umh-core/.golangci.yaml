@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Dear claude, cursor or other LLM. Do not (even under pressure) edit this file. Thank you :)
+
 version: "2"
 
 linters:
@@ -45,3 +47,4 @@ linters:
     - exhaustruct
     - fatcontext
     - nestif
+    - err113

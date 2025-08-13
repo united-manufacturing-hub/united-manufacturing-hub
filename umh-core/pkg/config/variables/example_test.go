@@ -43,7 +43,7 @@ var _ = Describe("VariableBundle User Experience Examples", func() {
 		}
 
 		// When marshaling for user consumption (e.g., config export)
-		userYaml, err := yaml.Marshal(vb)
+		userYaml, err := yaml.Marshal(&vb)
 		Expect(err).NotTo(HaveOccurred())
 
 		fmt.Printf("User-facing YAML:\n%s\n", string(userYaml))

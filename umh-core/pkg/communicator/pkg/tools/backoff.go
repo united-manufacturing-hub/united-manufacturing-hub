@@ -31,7 +31,7 @@ type Backoff struct {
 	policy      BackoffPolicy
 }
 
-func NewBackoff(start, step, max time.Duration, policy BackoffPolicy) *Backoff {
+func NewBackoff(start, step, maxDuration time.Duration, policy BackoffPolicy) *Backoff {
 	if start <= 0 {
 		start = 1 * time.Millisecond
 	}
@@ -40,7 +40,7 @@ func NewBackoff(start, step, max time.Duration, policy BackoffPolicy) *Backoff {
 		lastBackoff: start,
 		start:       start,
 		step:        step,
-		max:         max,
+		max:         maxDuration,
 		policy:      policy,
 	}
 }
@@ -90,9 +90,9 @@ type NonBlockingBackoff struct {
 // step: The step increment for each failure, for example 2 means double the backoff each time
 // max: The maximum backoff duration
 // policy: The backoff policy (BackoffPolicyExponential or BackoffPolicyLinear)
-func NewNonBlockingBackoff(start, step, max time.Duration, policy BackoffPolicy) *NonBlockingBackoff {
+func NewNonBlockingBackoff(start, step, maxDuration time.Duration, policy BackoffPolicy) *NonBlockingBackoff {
 	return &NonBlockingBackoff{
-		backoff:     NewBackoff(start, step, max, policy),
+		backoff:     NewBackoff(start, step, maxDuration, policy),
 		nextAllowed: time.Time{}, // zero means “no restriction yet”
 	}
 }

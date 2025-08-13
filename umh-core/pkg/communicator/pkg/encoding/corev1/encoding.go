@@ -141,6 +141,7 @@ func getBase64Buffer() *[]byte {
 	}
 	// If pool returns wrong type, create new buffer
 	newBuf := make([]byte, 0, 1024)
+
 	return &newBuf
 }
 

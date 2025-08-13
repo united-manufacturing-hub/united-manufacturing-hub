@@ -213,7 +213,7 @@ func (s *NmapService) parseScanLogs(logs []s6_shared.LogEntry, port uint16) *Nma
 	result := &NmapScanResult{
 		RawOutput: scanOutput,
 		PortResult: PortResult{
-			Port: uint16(port),
+			Port: port,
 		},
 		Metrics: ScanMetrics{},
 	}

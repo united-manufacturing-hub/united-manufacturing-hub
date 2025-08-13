@@ -361,6 +361,7 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 					logger.Warnf("Failed to close response body: %v", closeErr)
 				}
 			}()
+
 			return nil, response.StatusCode, err
 		}
 
@@ -465,6 +466,7 @@ func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, 
 					logger.Warnf("Failed to close response body: %v", closeErr)
 				}
 			}()
+
 			return nil, response.StatusCode, err
 		}
 

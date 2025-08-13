@@ -94,6 +94,7 @@ func (p *Puller) pull() {
 		if !ok {
 			p.logger.Errorf("JWT token has unexpected type: %T", jwtValue)
 			time.Sleep(1 * time.Second)
+
 			continue
 		}
 

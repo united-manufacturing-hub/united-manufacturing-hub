@@ -43,7 +43,7 @@ var _ = Describe("BufferedService", func() {
 	)
 
 	BeforeEach(func() {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel = context.WithCancel(context.Background())
 		_ = ctx
 		_ = cancel
 
@@ -435,7 +435,7 @@ var _ = Describe("BufferedService with MockFileSystem", func() {
 	)
 
 	BeforeEach(func() {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel = context.WithCancel(context.Background())
 		_ = ctx
 		_ = cancel
 		mockFs = filesystem.NewMockFileSystem()
@@ -620,7 +620,7 @@ var _ = Describe("BufferedService Directory Creation Issues", func() {
 	)
 
 	BeforeEach(func() {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel = context.WithCancel(context.Background())
 		_ = ctx
 		_ = cancel
 
@@ -836,7 +836,7 @@ var _ = Describe("BufferedService Permission Checking", func() {
 	)
 
 	BeforeEach(func() {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel = context.WithCancel(context.Background())
 		_ = ctx
 		_ = cancel
 

@@ -66,7 +66,7 @@ var _ = Describe("Benthos Monitor Service", func() {
 		tick = 0
 
 		// Cleanup the data directory
-		ctx, cancel := newTimeoutContext()
+		ctx, cancel = newTimeoutContext()
 		_ = cancel
 		err := mockServices.GetFileSystem().RemoveAll(ctx, getTmpDir())
 		Expect(err).NotTo(HaveOccurred())

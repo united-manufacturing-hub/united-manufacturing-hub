@@ -40,7 +40,7 @@ var _ = Describe("VariableBundle YAML Marshaling", func() {
 				},
 			}
 
-			yamlBytes, err := yaml.Marshal(vb)
+			yamlBytes, err := yaml.Marshal(&vb)
 			Expect(err).NotTo(HaveOccurred())
 
 			yamlStr := string(yamlBytes)

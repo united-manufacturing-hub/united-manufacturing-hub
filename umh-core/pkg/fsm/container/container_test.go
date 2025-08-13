@@ -39,7 +39,7 @@ var _ = Describe("Container FSM", func() {
 	)
 
 	BeforeEach(func() {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel = context.WithCancel(context.Background())
 		_ = ctx
 		_ = cancel
 

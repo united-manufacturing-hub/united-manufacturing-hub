@@ -130,6 +130,7 @@ func (p *Pusher) push() {
 			jwt, ok := jwtValue.(string)
 			if !ok {
 				p.logger.Errorf("JWT token has unexpected type: %T", jwtValue)
+
 				continue
 			}
 

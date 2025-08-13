@@ -536,7 +536,7 @@ var _ = Describe("Benthos Service", func() {
 		)
 
 		BeforeEach(func() {
-			ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(100*time.Second))
+			ctx, cancel = context.WithDeadline(context.Background(), time.Now().Add(100*time.Second))
 			_ = cancel
 			mockS6Service = s6service.NewMockService()
 			mockSvcRegistry = serviceregistry.NewMockRegistry()
@@ -759,7 +759,7 @@ logger:
 		)
 
 		BeforeEach(func() {
-			ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(1*time.Second))
+			ctx, cancel = context.WithDeadline(context.Background(), time.Now().Add(1*time.Second))
 			_ = cancel
 			mockS6Service = s6service.NewMockService()
 			benthosMonitorMockService = benthos_monitor.NewMockBenthosMonitorService()

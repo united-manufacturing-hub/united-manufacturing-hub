@@ -29,7 +29,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gmeasure"
 	corev1 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding/corev1"
-	new "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding/new"
+	newenc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding/new"
 	old "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding/old"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/safejson"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -49,7 +49,7 @@ var _ = Describe("Encode", func() {
 		})
 
 		It("should encode message from user to UMH instance (New)", func() {
-			encodedMessage, err := new.EncodeMessageFromUserToUMHInstance(messageContent)
+			encodedMessage, err := newenc.EncodeMessageFromUserToUMHInstance(messageContent)
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(encodedMessage).ToNot(BeEmpty())
@@ -70,7 +70,7 @@ var _ = Describe("Encode", func() {
 		})
 
 		It("should encode message from UMH instance to user (New)", func() {
-			encodedMessage, err := new.EncodeMessageFromUMHInstanceToUser(messageContent)
+			encodedMessage, err := newenc.EncodeMessageFromUMHInstanceToUser(messageContent)
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(encodedMessage).ToNot(BeEmpty())
@@ -104,29 +104,29 @@ var _ = Describe("Encode", func() {
 					Payload:     `{"hello": "world"}`,
 				}
 				var err error
-				encodedMessage, err = new.EncodeMessageFromUserToUMHInstance(messageContent)
+				encodedMessage, err = newenc.EncodeMessageFromUserToUMHInstance(messageContent)
 				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should decode message from user to UMH instance", func() {
-				decodedMessage, err := new.DecodeMessageFromUserToUMHInstance(encodedMessage)
+				decodedMessage, err := newenc.DecodeMessageFromUserToUMHInstance(encodedMessage)
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(decodedMessage).To(Equal(messageContent))
 			})
 
 			It("should decode message from UMH instance to user", func() {
-				decodedMessage, err := new.DecodeMessageFromUMHInstanceToUser(encodedMessage)
+				decodedMessage, err := newenc.DecodeMessageFromUMHInstanceToUser(encodedMessage)
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(decodedMessage).To(Equal(messageContent))
 			})
 
 			It("should decode an compressed message from UMH Instance to User", func() {
-				encodedMessage, err := new.EncodeMessageFromUMHInstanceToUser(messageContent)
+				encodedMessage, err := newenc.EncodeMessageFromUMHInstanceToUser(messageContent)
 				Expect(err).ToNot(HaveOccurred())
 
-				decodedMessage, err := new.DecodeMessageFromUMHInstanceToUser(encodedMessage)
+				decodedMessage, err := newenc.DecodeMessageFromUMHInstanceToUser(encodedMessage)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(decodedMessage).To(Equal(messageContent))
 			})
@@ -223,19 +223,19 @@ var _ = Describe("ZSTD", func() {
 		xData, err := safejson.Marshal(data)
 		Expect(err).ToNot(HaveOccurred())
 
-		compressedData, err := new.Compress(xData)
+		compressedData, err := newenc.Compress(xData)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Base64 encode the string to be able to test against frontend
-		encodedData := base64.StdEncoding.EncodeToString([]byte(compressedData))
+		encodedData := base64.StdEncoding.EncodeToString(compressedData)
 		_, err = GinkgoWriter.Write([]byte(encodedData))
 		Expect(err).ToNot(HaveOccurred())
 
-		decompressedData, err := new.Decompress(compressedData)
+		decompressedData, err := newenc.Decompress(compressedData)
 		Expect(err).ToNot(HaveOccurred())
 
 		var data2 models.UMHMessageContent
-		err = safejson.Unmarshal([]byte(decompressedData), &data2)
+		err = safejson.Unmarshal(decompressedData, &data2)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -251,7 +251,7 @@ var _ = Describe("ZSTD", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		// Base64 encode the string to be able to test against frontend
-		encodedData := base64.StdEncoding.EncodeToString([]byte(compressedData))
+		encodedData := base64.StdEncoding.EncodeToString(compressedData)
 		_, err = GinkgoWriter.Write([]byte(encodedData))
 		Expect(err).ToNot(HaveOccurred())
 
@@ -259,7 +259,7 @@ var _ = Describe("ZSTD", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		var data2 models.UMHMessageContent
-		err = safejson.Unmarshal([]byte(decompressedData), &data2)
+		err = safejson.Unmarshal(decompressedData, &data2)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -316,7 +316,7 @@ var _ = Describe("Compatibility", func() {
 			oldEncoded, err := old.EncodeMessageFromUMHInstanceToUser(smallMessage)
 			Expect(err).NotTo(HaveOccurred())
 
-			decoded, err := new.DecodeMessageFromUMHInstanceToUser(oldEncoded)
+			decoded, err := newenc.DecodeMessageFromUMHInstanceToUser(oldEncoded)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(decoded).To(Equal(smallMessage))
 		})
@@ -334,7 +334,7 @@ var _ = Describe("Compatibility", func() {
 			oldEncoded, err := old.EncodeMessageFromUMHInstanceToUser(largeMessage)
 			Expect(err).NotTo(HaveOccurred())
 
-			decoded, err := new.DecodeMessageFromUMHInstanceToUser(oldEncoded)
+			decoded, err := newenc.DecodeMessageFromUMHInstanceToUser(oldEncoded)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(decoded).To(Equal(largeMessage))
 		})
@@ -349,7 +349,7 @@ var _ = Describe("Compatibility", func() {
 		})
 
 		It("should decode new-encoded messages with old decoder", func() {
-			newEncoded, err := new.EncodeMessageFromUMHInstanceToUser(largeMessage)
+			newEncoded, err := newenc.EncodeMessageFromUMHInstanceToUser(largeMessage)
 			Expect(err).NotTo(HaveOccurred())
 
 			decoded, err := old.DecodeMessageFromUMHInstanceToUser(newEncoded)
@@ -358,7 +358,7 @@ var _ = Describe("Compatibility", func() {
 		})
 
 		It("should decode new-encoded messages with corev1 decoder", func() {
-			newEncoded, err := new.EncodeMessageFromUMHInstanceToUser(largeMessage)
+			newEncoded, err := newenc.EncodeMessageFromUMHInstanceToUser(largeMessage)
 			Expect(err).NotTo(HaveOccurred())
 
 			decoded, err := corev1.DecodeMessageFromUMHInstanceToUser(newEncoded)
@@ -370,7 +370,7 @@ var _ = Describe("Compatibility", func() {
 			corev1Encoded, err := corev1.EncodeMessageFromUMHInstanceToUser(largeMessage)
 			Expect(err).NotTo(HaveOccurred())
 
-			decoded, err := new.DecodeMessageFromUMHInstanceToUser(corev1Encoded)
+			decoded, err := newenc.DecodeMessageFromUMHInstanceToUser(corev1Encoded)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(decoded).To(Equal(largeMessage))
 		})
@@ -388,10 +388,10 @@ var _ = Describe("Compatibility", func() {
 			// Encode a message just below and just above the threshold
 			mediumMessage := models.UMHMessageContent{
 				MessageType: models.Status,
-				Payload:     strings.Repeat("x", new.CompressionThreshold-100), // Just below threshold
+				Payload:     strings.Repeat("x", newenc.CompressionThreshold-100), // Just below threshold
 			}
 
-			newEncoded, err := new.EncodeMessageFromUMHInstanceToUser(mediumMessage)
+			newEncoded, err := newenc.EncodeMessageFromUMHInstanceToUser(mediumMessage)
 			Expect(err).NotTo(HaveOccurred())
 
 			decoded, err := old.DecodeMessageFromUMHInstanceToUser(newEncoded)
@@ -399,8 +399,8 @@ var _ = Describe("Compatibility", func() {
 			Expect(decoded).To(Equal(mediumMessage))
 
 			// Now with a message just above threshold
-			mediumMessage.Payload = strings.Repeat("x", new.CompressionThreshold+100)
-			newEncoded, err = new.EncodeMessageFromUMHInstanceToUser(mediumMessage)
+			mediumMessage.Payload = strings.Repeat("x", newenc.CompressionThreshold+100)
+			newEncoded, err = newenc.EncodeMessageFromUMHInstanceToUser(mediumMessage)
 			Expect(err).NotTo(HaveOccurred())
 
 			decoded, err = old.DecodeMessageFromUMHInstanceToUser(newEncoded)
@@ -468,8 +468,8 @@ var _ = Describe("Performance Comparison", Serial, Label("measurement"), func() 
 		By("Warming up encoders and decoders")
 		for range 1000 {
 			// Warm up with both small and large messages
-			_, _ = new.EncodeMessageFromUMHInstanceToUser(smallMessage)
-			_, _ = new.EncodeMessageFromUMHInstanceToUser(largeMessage)
+			_, _ = newenc.EncodeMessageFromUMHInstanceToUser(smallMessage)
+			_, _ = newenc.EncodeMessageFromUMHInstanceToUser(largeMessage)
 			_, _ = old.EncodeMessageFromUMHInstanceToUser(smallMessage)
 			_, _ = old.EncodeMessageFromUMHInstanceToUser(largeMessage)
 		}
@@ -482,7 +482,7 @@ var _ = Describe("Performance Comparison", Serial, Label("measurement"), func() 
 			experiment.Sample(func(idx int) {
 				runtime.GC() // Ensure clean state before each sample
 				experiment.MeasureDuration("new-large-encode", func() {
-					_, err := new.EncodeMessageFromUMHInstanceToUser(largeMessage)
+					_, err := newenc.EncodeMessageFromUMHInstanceToUser(largeMessage)
 					Expect(err).NotTo(HaveOccurred())
 				})
 			}, gmeasure.SamplingConfig{N: 1000, Duration: time.Second * 10})
@@ -526,14 +526,14 @@ var _ = Describe("Performance Comparison", Serial, Label("measurement"), func() 
 
 			// Additional warmup specific to allocation testing
 			for range 100 {
-				_, _ = new.EncodeMessageFromUMHInstanceToUser(largeMessage)
+				_, _ = newenc.EncodeMessageFromUMHInstanceToUser(largeMessage)
 				_, _ = old.EncodeMessageFromUMHInstanceToUser(largeMessage)
 			}
 			runtime.GC()
 
 			// Measure new implementation
 			runtime.ReadMemStats(&m1)
-			_, err := new.EncodeMessageFromUMHInstanceToUser(largeMessage)
+			_, err := newenc.EncodeMessageFromUMHInstanceToUser(largeMessage)
 			Expect(err).NotTo(HaveOccurred())
 			runtime.ReadMemStats(&m2)
 
@@ -583,16 +583,16 @@ var _ = Describe("Performance Comparison", Serial, Label("measurement"), func() 
 
 		BeforeEach(func() {
 			var err error
-			encodedLargeMessage, err = new.EncodeMessageFromUMHInstanceToUser(largeMessage)
+			encodedLargeMessage, err = newenc.EncodeMessageFromUMHInstanceToUser(largeMessage)
 			Expect(err).NotTo(HaveOccurred())
-			encodedSmallMessage, err = new.EncodeMessageFromUMHInstanceToUser(smallMessage)
+			encodedSmallMessage, err = newenc.EncodeMessageFromUMHInstanceToUser(smallMessage)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Add warmup phase specific to decoding
 			By("Warming up decoders")
 			for range 1000 {
-				_, _ = new.DecodeMessageFromUMHInstanceToUser(encodedSmallMessage)
-				_, _ = new.DecodeMessageFromUMHInstanceToUser(encodedLargeMessage)
+				_, _ = newenc.DecodeMessageFromUMHInstanceToUser(encodedSmallMessage)
+				_, _ = newenc.DecodeMessageFromUMHInstanceToUser(encodedLargeMessage)
 				_, _ = old.DecodeMessageFromUMHInstanceToUser(encodedSmallMessage)
 				_, _ = old.DecodeMessageFromUMHInstanceToUser(encodedLargeMessage)
 			}
@@ -605,7 +605,7 @@ var _ = Describe("Performance Comparison", Serial, Label("measurement"), func() 
 				runtime.GC() // Ensure clean state before each sample
 				experiment.MeasureDuration("new-small-decode", func() {
 					for range 100 { // Batch decode for more realistic measurement
-						_, err := new.DecodeMessageFromUMHInstanceToUser(encodedSmallMessage)
+						_, err := newenc.DecodeMessageFromUMHInstanceToUser(encodedSmallMessage)
 						Expect(err).NotTo(HaveOccurred())
 					}
 				})
@@ -626,7 +626,7 @@ var _ = Describe("Performance Comparison", Serial, Label("measurement"), func() 
 				runtime.GC() // Ensure clean state before each sample
 				experiment.MeasureDuration("new-large-decode", func() {
 					for range 100 {
-						_, err := new.DecodeMessageFromUMHInstanceToUser(encodedLargeMessage)
+						_, err := newenc.DecodeMessageFromUMHInstanceToUser(encodedLargeMessage)
 						Expect(err).NotTo(HaveOccurred())
 					}
 				})
@@ -676,14 +676,14 @@ var _ = Describe("Performance Comparison", Serial, Label("measurement"), func() 
 
 			// Additional warmup specific to allocation testing
 			for range 100 {
-				_, _ = new.DecodeMessageFromUMHInstanceToUser(encodedLargeMessage)
+				_, _ = newenc.DecodeMessageFromUMHInstanceToUser(encodedLargeMessage)
 				_, _ = old.DecodeMessageFromUMHInstanceToUser(encodedLargeMessage)
 			}
 			runtime.GC()
 
 			// Measure new implementation with large message
 			runtime.ReadMemStats(&m1)
-			_, err := new.DecodeMessageFromUMHInstanceToUser(encodedLargeMessage)
+			_, err := newenc.DecodeMessageFromUMHInstanceToUser(encodedLargeMessage)
 			Expect(err).NotTo(HaveOccurred())
 			runtime.ReadMemStats(&m2)
 
@@ -748,13 +748,13 @@ var _ = Describe("Batch Processing Performance", Serial, Label("measurement"), f
 		// Pre-generate messages of varying sizes
 		messages = make([]models.UMHMessageContent, messageCount)
 		sizes := []int{
-			500,                          // 500B - below compression threshold
-			new.CompressionThreshold - 1, // Just below threshold
-			new.CompressionThreshold + 1, // Just above threshold
-			5 * 1024,                     // 5KB
-			50 * 1024,                    // 50KB
-			500 * 1024,                   // 500KB
-			2 * 1024 * 1024,              // 2MB
+			500,                             // 500B - below compression threshold
+			newenc.CompressionThreshold - 1, // Just below threshold
+			newenc.CompressionThreshold + 1, // Just above threshold
+			5 * 1024,                        // 5KB
+			50 * 1024,                       // 50KB
+			500 * 1024,                      // 500KB
+			2 * 1024 * 1024,                 // 2MB
 		}
 
 		By("Preparing test messages")
@@ -775,7 +775,7 @@ var _ = Describe("Batch Processing Performance", Serial, Label("measurement"), f
 		By("Pre-encoding messages")
 		encodedMessages = make([]string, messageCount)
 		for i, msg := range messages {
-			encoded, err := new.EncodeMessageFromUMHInstanceToUser(msg)
+			encoded, err := newenc.EncodeMessageFromUMHInstanceToUser(msg)
 			Expect(err).NotTo(HaveOccurred())
 			encodedMessages[i] = encoded
 		}
@@ -789,7 +789,7 @@ var _ = Describe("Batch Processing Performance", Serial, Label("measurement"), f
 			experiment.Sample(func(idx int) {
 				experiment.MeasureDuration("new-batch-encode", func() {
 					for _, msg := range messages {
-						_, err := new.EncodeMessageFromUMHInstanceToUser(msg)
+						_, err := newenc.EncodeMessageFromUMHInstanceToUser(msg)
 						Expect(err).NotTo(HaveOccurred())
 					}
 				})
@@ -831,7 +831,7 @@ var _ = Describe("Batch Processing Performance", Serial, Label("measurement"), f
 			warmupBatchSize := len(encodedMessages) / 10 // Use 10% of messages for warmup
 			for range 3 {                                // Run warmup 3 times
 				for _, encoded := range encodedMessages[:warmupBatchSize] {
-					_, _ = new.DecodeMessageFromUMHInstanceToUser(encoded)
+					_, _ = newenc.DecodeMessageFromUMHInstanceToUser(encoded)
 					_, _ = old.DecodeMessageFromUMHInstanceToUser(encoded)
 				}
 			}
@@ -841,7 +841,7 @@ var _ = Describe("Batch Processing Performance", Serial, Label("measurement"), f
 			experiment.Sample(func(idx int) {
 				experiment.MeasureDuration("new-batch-decode", func() {
 					for _, encoded := range encodedMessages {
-						_, err := new.DecodeMessageFromUMHInstanceToUser(encoded)
+						_, err := newenc.DecodeMessageFromUMHInstanceToUser(encoded)
 						Expect(err).NotTo(HaveOccurred())
 					}
 				})
@@ -883,7 +883,7 @@ var _ = Describe("Batch Processing Performance", Serial, Label("measurement"), f
 			// Warm up
 			for range 3 {
 				for _, msg := range messages[:10] { // Use first 10 messages for warmup
-					_, _ = new.EncodeMessageFromUMHInstanceToUser(msg)
+					_, _ = newenc.EncodeMessageFromUMHInstanceToUser(msg)
 					_, _ = old.EncodeMessageFromUMHInstanceToUser(msg)
 				}
 			}
@@ -893,7 +893,7 @@ var _ = Describe("Batch Processing Performance", Serial, Label("measurement"), f
 			// Measure new implementation
 			runtime.ReadMemStats(&m1)
 			for _, msg := range messages {
-				_, err := new.EncodeMessageFromUMHInstanceToUser(msg)
+				_, err := newenc.EncodeMessageFromUMHInstanceToUser(msg)
 				Expect(err).NotTo(HaveOccurred())
 			}
 			runtime.ReadMemStats(&m2)
@@ -960,14 +960,14 @@ var _ = Describe("Thread Safety", func() {
 			go func() {
 				defer wg.Done()
 				for range iterationsPerGoroutine {
-					encoded, err := new.EncodeMessageFromUMHInstanceToUser(message)
+					encoded, err := newenc.EncodeMessageFromUMHInstanceToUser(message)
 					if err != nil {
 						results <- err
 
 						return
 					}
 					// Verify the encoded message can be decoded
-					_, err = new.DecodeMessageFromUMHInstanceToUser(encoded)
+					_, err = newenc.DecodeMessageFromUMHInstanceToUser(encoded)
 					if err != nil {
 						results <- err
 
@@ -1075,7 +1075,7 @@ var _ = Describe("Thread Safety", func() {
 				defer wg.Done()
 				for range iterationsPerGoroutine {
 					// Test compression
-					compressed, err := new.Compress([]byte(largeString))
+					compressed, err := newenc.Compress([]byte(largeString))
 					if err != nil {
 						results <- fmt.Errorf("compression error: %w", err)
 
@@ -1083,7 +1083,7 @@ var _ = Describe("Thread Safety", func() {
 					}
 
 					// Test decompression
-					decompressed, err := new.Decompress(compressed)
+					decompressed, err := newenc.Decompress(compressed)
 					if err != nil {
 						results <- fmt.Errorf("decompression error: %w", err)
 
@@ -1215,10 +1215,10 @@ var _ = Describe("Thread Safety", func() {
 
 		// Test with varying message sizes to stress the pools
 		messageSizes := []int{
-			100,                           // Small message
-			new.CompressionThreshold - 10, // Just below threshold
-			new.CompressionThreshold + 10, // Just above threshold
-			new.CompressionThreshold * 2,  // Large message
+			100,                              // Small message
+			newenc.CompressionThreshold - 10, // Just below threshold
+			newenc.CompressionThreshold + 10, // Just above threshold
+			newenc.CompressionThreshold * 2,  // Large message
 		}
 
 		wg.Add(numGoroutines)
@@ -1234,7 +1234,7 @@ var _ = Describe("Thread Safety", func() {
 					}
 
 					// Encode
-					encoded, err := new.EncodeMessageFromUMHInstanceToUser(msg)
+					encoded, err := newenc.EncodeMessageFromUMHInstanceToUser(msg)
 					if err != nil {
 						results <- fmt.Errorf("encoding error: %w", err)
 
@@ -1242,7 +1242,7 @@ var _ = Describe("Thread Safety", func() {
 					}
 
 					// Decode
-					decoded, err := new.DecodeMessageFromUMHInstanceToUser(encoded)
+					decoded, err := newenc.DecodeMessageFromUMHInstanceToUser(encoded)
 					if err != nil {
 						results <- fmt.Errorf("decoding error: %w", err)
 
@@ -1403,7 +1403,7 @@ var _ = Describe("PPROF tests", func() {
 	It("should measure compression performance (New)", func() {
 		runtime.GC()
 		defer runtime.GC()
-		cpuFile, err := os.Create("cpu-compression-new.prof")
+		cpuFile, err := os.Create("cpu-compression-newenc.prof")
 		Expect(err).NotTo(HaveOccurred())
 		defer func() {
 			err := cpuFile.Close()
@@ -1418,7 +1418,7 @@ var _ = Describe("PPROF tests", func() {
 		data := []byte(strings.Repeat("test data for compression", 1000))
 
 		for range iterations {
-			result, err := new.Compress(data)
+			result, err := newenc.Compress(data)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
 		}
@@ -1473,13 +1473,13 @@ var _ = Describe("PPROF tests", func() {
 	})
 
 	It("should measure decompression performance (New)", func() {
-		data, err := new.Compress([]byte(strings.Repeat("test data for compression", 1000)))
+		data, err := newenc.Compress([]byte(strings.Repeat("test data for compression", 1000)))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(data).NotTo(BeNil())
 
 		runtime.GC()
 		defer runtime.GC()
-		cpuFile, err := os.Create("cpu-decompression-new.prof")
+		cpuFile, err := os.Create("cpu-decompression-newenc.prof")
 		Expect(err).NotTo(HaveOccurred())
 		defer func() {
 			err := cpuFile.Close()
@@ -1493,7 +1493,7 @@ var _ = Describe("PPROF tests", func() {
 		defer pprof.StopCPUProfile()
 
 		for range iterations {
-			result, err := new.Decompress(data)
+			result, err := newenc.Decompress(data)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
 		}

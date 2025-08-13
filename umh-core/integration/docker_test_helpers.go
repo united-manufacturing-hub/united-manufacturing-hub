@@ -342,7 +342,7 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 	// Total CPU-time the container may consume inside **one** period
 	// (cpu.cfs_quota_us).  quota = cpus × period, so if 'cpus' is 2 you
 	// grant 40 ms every 20 ms → an average of 2 fully-loaded logical cores.
-	cpuQuota := uint(cpus) * cpuPeriod
+	cpuQuota := cpus * cpuPeriod
 
 	out, err = runDockerCommand(
 		"create",
