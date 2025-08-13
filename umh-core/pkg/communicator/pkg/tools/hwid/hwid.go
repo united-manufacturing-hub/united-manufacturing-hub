@@ -17,6 +17,7 @@ package hwid
 import (
 	"crypto/rand"
 	"os"
+	"regexp"
 
 	hash2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/hash"
 	"go.uber.org/zap"
@@ -37,8 +38,13 @@ func GenerateHWID() string {
 	}
 
 	// Allocate buffer for sha3-512 hash (hex encoded)
-	file, err := os.ReadFile(hwidPath)
+	file, err := os.ReadFile(hwidPath) //nolint:gosec // G304: File path from environment variable or default, controlled by deployment
 	if err != nil {
+		return ""
+	}
+
+	// Ensure the HWID is 64 characters long and hex only
+	if len(file) != 64 || !regexp.MustCompile(`^[0-9a-fA-F]+$`).Match(file) {
 		return ""
 	}
 
@@ -60,7 +66,7 @@ func generateNewHWID(hwidPath string) {
 
 	hash := hash2.Sha3Hash(string(buffer))
 
-	file, err := os.Create(hwidPath)
+	file, err := os.Create(hwidPath) //nolint:gosec // G304: File path from environment variable or default, controlled by deployment for HWID generation
 	if err != nil {
 		zap.S().Warnf("Failed to create HWID file: %s", err)
 

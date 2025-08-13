@@ -166,7 +166,7 @@ func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, err
 
 	// Run file operation in goroutine
 	go func() {
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) //nolint:gosec // G304: Core filesystem service ReadFile method, path managed by filesystem abstraction
 		resCh <- result{err: err, data: data}
 	}()
 
@@ -222,7 +222,7 @@ func (s *DefaultService) ReadFileRange(
 	resCh := make(chan result, 1)
 
 	go func() {
-		f, err := os.Open(path)
+		f, err := os.Open(path) //nolint:gosec // G304: Core filesystem service ReadFileRange method, path managed by filesystem abstraction
 		if err != nil {
 			resCh <- result{err: err, data: nil, newSize: 0}
 
@@ -585,7 +585,7 @@ func (s *DefaultService) Chown(ctx context.Context, path string, user string, gr
 	// Run file operation in goroutine
 	go func() {
 		// Use chown command as os.Chown needs numeric user/group IDs
-		cmd := exec.Command("chown", fmt.Sprintf("%s:%s", user, group), path)
+		cmd := exec.Command("chown", fmt.Sprintf("%s:%s", user, group), path) //nolint:gosec // G204: Inputs validated by validateChownInputs, safe subprocess execution
 		errCh <- cmd.Run()
 	}()
 

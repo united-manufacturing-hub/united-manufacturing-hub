@@ -78,7 +78,7 @@ func containsMarker(content string, marker []byte) bool {
 
 	// Use unsafe conversion to avoid string->[]byte allocation
 	// This is safe because we're only reading from the bytes, not modifying them
-	contentBytes := unsafe.Slice(unsafe.StringData(content), len(content))
+	contentBytes := unsafe.Slice(unsafe.StringData(content), len(content)) //nolint:gosec // G103: Safe unsafe conversion for performance, only reading bytes without modification
 
 	return bytes.Contains(contentBytes, marker)
 }

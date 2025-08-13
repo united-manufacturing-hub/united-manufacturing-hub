@@ -93,7 +93,7 @@ func fetchSchemaViaHTTP(subject SubjectName) (JSONSchemaDefinition, error) {
 	// Get the latest version of the schema
 	url := fmt.Sprintf("%s/subjects/%s/versions/latest", redpandaSchemaRegistryURL, string(subject))
 
-	resp, err := http.Get(url)
+	resp, err := http.Get(url) //nolint:gosec // G107: URL constructed from test environment variables for integration testing, safe in test context
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch schema for subject %s: %w", subject, err)
 	}

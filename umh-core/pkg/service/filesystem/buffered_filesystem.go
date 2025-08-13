@@ -1604,7 +1604,7 @@ func getFileInode(path string) uint64 {
 
 // readFileIncrementally reads only the new content from a file starting at the previousSize position.
 func (bs *BufferedService) readFileIncrementally(absPath string, previousSize int64, previousContent []byte, logger *zap.SugaredLogger) ([]byte, error) {
-	file, err := os.Open(absPath)
+	file, err := os.Open(absPath) //nolint:gosec // G304: Core filesystem service method, absPath managed by filesystem abstraction layer
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file for incremental read: %w", err)
 	}

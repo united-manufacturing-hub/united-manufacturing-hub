@@ -44,7 +44,7 @@ var (
 )
 
 func ParseLogFile(filename string) (*LogAnalyzer, error) {
-	file, err := os.Open(filename)
+	file, err := os.Open(filename) //nolint:gosec // G304: Log analyzer tool function, filename provided by user for legitimate log parsing
 	if err != nil {
 		return nil, fmt.Errorf("failed to open log file: %w", err)
 	}

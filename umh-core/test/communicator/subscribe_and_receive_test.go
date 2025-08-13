@@ -73,7 +73,7 @@ var _ = Describe("Subscribe and Receive Test", func() {
 
 		// Initialize test variables
 		instanceID = uuid.New()
-		authToken = "test-auth-token"
+		authToken = "test-auth-token" //nolint:gosec // G101: Test credential for testing purposes, not production sensitive data
 		testEmail = "test-user@example.com"
 
 		// Set up a channel to capture outbound messages

@@ -702,7 +702,7 @@ var _ = Describe("BufferedService Directory Creation Issues", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(string(baseContent)).To(Equal("base content"))
 
-		downContent, err := os.ReadFile(downPath)
+		downContent, err := os.ReadFile(downPath) //nolint:gosec // G304: File path is controlled within test context, safe for test verification
 		Expect(err).NotTo(HaveOccurred())
 		Expect(string(downContent)).To(Equal(""))
 	})
@@ -746,7 +746,7 @@ var _ = Describe("BufferedService Directory Creation Issues", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Verify new file exists
-		content, err := os.ReadFile(newFile)
+		content, err := os.ReadFile(newFile) //nolint:gosec // G304: File path is controlled within test context, safe for test verification
 		Expect(err).NotTo(HaveOccurred())
 		Expect(string(content)).To(Equal("new content"))
 
@@ -761,11 +761,11 @@ var _ = Describe("BufferedService Directory Creation Issues", func() {
 
 		// First create and sync a basic structure
 		baseDir := filepath.Join(tmpDir, "complex")
-		err = os.MkdirAll(filepath.Join(baseDir, "service", "old"), 0755)
+		err = os.MkdirAll(filepath.Join(baseDir, "service", "old"), 0755) //nolint:gosec // G301: Test requires permissive permissions for complex directory structure testing
 		Expect(err).NotTo(HaveOccurred())
 
 		// Write a few files
-		err = os.WriteFile(filepath.Join(baseDir, "service", "old", "config"), []byte("old"), 0644)
+		err = os.WriteFile(filepath.Join(baseDir, "service", "old", "config"), []byte("old"), 0644) //nolint:gosec // G306: Test requires standard file permissions for complex file structure testing
 		Expect(err).NotTo(HaveOccurred())
 
 		// Sync from disk
@@ -811,15 +811,15 @@ var _ = Describe("BufferedService Directory Creation Issues", func() {
 		Expect(os.IsNotExist(err)).To(BeTrue())
 
 		// New directories and files should exist
-		content1, err := os.ReadFile(file1)
+		content1, err := os.ReadFile(file1) //nolint:gosec // G304: File path is controlled within test context, safe for test verification
 		Expect(err).NotTo(HaveOccurred())
 		Expect(string(content1)).To(Equal("content1"))
 
-		content2, err := os.ReadFile(file2)
+		content2, err := os.ReadFile(file2) //nolint:gosec // G304: File path is controlled within test context, safe for test verification
 		Expect(err).NotTo(HaveOccurred())
 		Expect(string(content2)).To(Equal("content2"))
 
-		content3, err := os.ReadFile(file3)
+		content3, err := os.ReadFile(file3) //nolint:gosec // G304: File path is controlled within test context, safe for test verification
 		Expect(err).NotTo(HaveOccurred())
 		Expect(string(content3)).To(Equal("content3"))
 	})
@@ -972,7 +972,7 @@ func setupTestFilesWithPermissions(root string) {
 	// Create a read-only file
 	readOnlyFile := filepath.Join(root, "readonly.txt")
 
-	err := os.WriteFile(readOnlyFile, []byte("Read-only content\n"), 0644)
+	err := os.WriteFile(readOnlyFile, []byte("Read-only content\n"), 0644) //nolint:gosec // G306: Test helper requires standard file permissions for read-only test setup
 	if err != nil {
 		panic(err)
 	}
@@ -985,14 +985,14 @@ func setupTestFilesWithPermissions(root string) {
 	// Create a read-only directory
 	readOnlyDir := filepath.Join(root, "readonly_dir")
 
-	err = os.MkdirAll(readOnlyDir, 0755)
+	err = os.MkdirAll(readOnlyDir, 0755) //nolint:gosec // G301: Test helper requires permissive permissions for read-only directory test setup
 	if err != nil {
 		panic(err)
 	}
 	// Make a file inside it for testing
 	inDirFile := filepath.Join(readOnlyDir, "existing.txt")
 
-	err = os.WriteFile(inDirFile, []byte("Existing file\n"), 0644)
+	err = os.WriteFile(inDirFile, []byte("Existing file\n"), 0644) //nolint:gosec // G306: Test helper requires standard file permissions for directory test setup
 	if err != nil {
 		panic(err)
 	}
@@ -1005,14 +1005,14 @@ func setupTestFilesWithPermissions(root string) {
 	// Create a writable directory/file for comparison
 	writableDir := filepath.Join(root, "writable_dir")
 
-	err = os.MkdirAll(writableDir, 0755)
+	err = os.MkdirAll(writableDir, 0755) //nolint:gosec // G301: Test helper requires permissive permissions for writable directory test setup
 	if err != nil {
 		panic(err)
 	}
 
 	writableFile := filepath.Join(writableDir, "writable.txt")
 
-	err = os.WriteFile(writableFile, []byte("Writable content\n"), 0644)
+	err = os.WriteFile(writableFile, []byte("Writable content\n"), 0644) //nolint:gosec // G306: Test helper requires standard file permissions for writable file test setup
 	if err != nil {
 		panic(err)
 	}

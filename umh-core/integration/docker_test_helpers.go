@@ -563,7 +563,7 @@ func PrintLogsAndStopContainer() {
 
 		configPath := getConfigFilePath()
 
-		config, err := os.ReadFile(configPath)
+		config, err := os.ReadFile(configPath) //nolint:gosec // G304: Config path is controlled within integration test context, safe for test configuration reading
 		if err != nil {
 			fmt.Printf("Failed to read config file %s: %v\n", configPath, err)
 		} else {

@@ -625,7 +625,7 @@ func BenchmarkFindLatestRotatedFileRealistic(b *testing.B) {
 
 // readLogLines reads lines from the test data file.
 func readLogLines(filePath string) ([]string, error) {
-	file, err := os.Open(filePath)
+	file, err := os.Open(filePath) //nolint:gosec // G304: File path is controlled within benchmark test context, safe for test data access
 	if err != nil {
 		return nil, err
 	}
