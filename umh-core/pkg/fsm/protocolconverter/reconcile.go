@@ -361,7 +361,6 @@ func (p *ProtocolConverterInstance) reconcileStartingStates(ctx context.Context,
 		return p.baseFSMInstance.SendEvent(ctx, EventStartDFCUp), true
 	case OperationalStateStartingFailedDFCMissing:
 		// For OperationalStateStartingFailedDFCMissing, check if a DFC is now available and retry starting
-
 		// CRITICAL FIX: Recovery mechanism for OperationalStateStartingFailedDFCMissing
 		//
 		// PROBLEM DESCRIPTION:

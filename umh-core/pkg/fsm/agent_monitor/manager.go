@@ -27,7 +27,7 @@ import (
 )
 
 var (
-	// Static errors for agent monitor manager
+	// Static errors for agent monitor manager.
 	ErrNotAgentInstance = errors.New("instance is not an AgentInstance")
 )
 

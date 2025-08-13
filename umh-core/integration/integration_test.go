@@ -129,9 +129,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 				return strings.Contains(string(body), "umh_core_reconcile_duration_milliseconds")
 			}, 10*time.Second, 1*time.Second).Should(BeTrue(), "Metrics endpoint should contain the expected metrics")
 
-			Eventually(func() int {
-				return checkGoldenServiceStatusOnly()
-			}, 10*time.Second, 1*time.Second).Should(Equal(200),
+			Eventually(checkGoldenServiceStatusOnly, 10*time.Second, 1*time.Second).Should(Equal(200),
 				"Golden service should respond with 200 OK on the mapped port")
 		})
 	})
@@ -150,9 +148,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			Expect(waitForMetrics()).To(Succeed(), "Metrics endpoint should be available with golden + sleep service config")
 
 			// Verify that the golden service is ready
-			Eventually(func() int {
-				return checkGoldenServiceStatusOnly()
-			}, 10*time.Second, 1*time.Second).Should(Equal(200),
+			Eventually(checkGoldenServiceStatusOnly, 10*time.Second, 1*time.Second).Should(Equal(200),
 				"Golden service should respond with 200 OK on the mapped port")
 			GinkgoWriter.Println("Golden service is up and running")
 		})
@@ -180,9 +176,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			}, 10*time.Second, 1*time.Second).Should(BeTrue(), "Metrics endpoint should contain the expected metrics")
 
 			By("Verifying that the golden service is returning 200 OK")
-			Eventually(func() int {
-				return checkGoldenServiceStatusOnly()
-			}, 10*time.Second, 1*time.Second).Should(Equal(200),
+			Eventually(checkGoldenServiceStatusOnly, 10*time.Second, 1*time.Second).Should(Equal(200),
 				"Golden service should respond with 200 OK on the mapped port")
 		})
 	})

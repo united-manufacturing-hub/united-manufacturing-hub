@@ -317,14 +317,12 @@ func (v *Validator) validateRefModelFormat(modelRef *config.ModelRef, path strin
 				Path:    path,
 				Message: fmt.Sprintf("version '%s' does not match pattern ^v\\d+$", modelRef.Version),
 			})
-		} else {
+		} else if modelRef.Version == "v0" {
 			// Check that version starts at v1, not v0
-			if modelRef.Version == "v0" {
-				*errors = append(*errors, ValidationError{
-					Path:    path,
-					Message: "version must start at v1, v0 is not allowed",
-				})
-			}
+			*errors = append(*errors, ValidationError{
+				Path:    path,
+				Message: "version must start at v1, v0 is not allowed",
+			})
 		}
 	}
 }

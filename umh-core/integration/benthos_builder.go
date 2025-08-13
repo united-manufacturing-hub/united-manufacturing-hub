@@ -178,7 +178,7 @@ func (b *BenthosBuilder) CountActiveBenthos() int {
 
 // BuildYAML converts the configuration to YAML format.
 func (b *BenthosBuilder) BuildYAML() string {
-	out, _ := yaml.Marshal(b.full)
+	out, _ := yaml.Marshal(b.full) //nolint:musttag // Test builder with dynamic struct
 
 	return string(out)
 }

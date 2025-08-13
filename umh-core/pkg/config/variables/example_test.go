@@ -63,7 +63,7 @@ var _ = Describe("VariableBundle User Experience Examples", func() {
 		internalYaml, err := generator.RenderConfig(vb)
 		Expect(err).NotTo(HaveOccurred())
 
-		fmt.Printf("Internal/debugging YAML:\n%s\n", string(internalYaml))
+		fmt.Printf("Internal/debugging YAML:\n%s\n", internalYaml)
 
 		// Should contain all namespaces
 		Expect(internalYaml).To(ContainSubstring("user:"))

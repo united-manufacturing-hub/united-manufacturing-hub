@@ -504,6 +504,7 @@ func NewFileConfigManagerWithBackoff() (*FileConfigManagerWithBackoff, error) {
 	if fcm, ok := instance.(*FileConfigManagerWithBackoff); ok {
 		return fcm, nil
 	}
+
 	return nil, errors.New("config manager instance has unexpected type")
 }
 
@@ -546,7 +547,7 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 	}
 
 	// Marshal the config to YAML
-	data, err := yaml.Marshal(yamlConfig)
+	data, err := yaml.Marshal(yamlConfig) //nolint:musttag // yamlConfig is dynamically generated interface{}
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
@@ -602,7 +603,7 @@ func ParseConfig(data []byte, ctx context.Context, allowUnknownFields bool) (Ful
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(!allowUnknownFields) // Only reject unknown keys if allowUnknownFields is false
 
-	if err := dec.Decode(&rawConfig); err != nil {
+	if err := dec.Decode(&rawConfig); err != nil { //nolint:musttag // FullConfig has complex nested types
 		return FullConfig{}, fmt.Errorf("failed to decode config: %w", err)
 	}
 

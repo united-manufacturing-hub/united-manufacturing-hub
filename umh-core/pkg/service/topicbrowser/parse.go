@@ -17,6 +17,7 @@ package topicbrowser
 import (
 	"bytes"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -201,7 +202,7 @@ func extractBlockData(entries []s6_shared.LogEntry, startIndex, dataEndIndex, bl
 
 	bufPtr, ok := bufPtrRaw.(*[]byte)
 	if !ok {
-		return nil, 0, 0, fmt.Errorf("parseBufferPool returned unexpected type")
+		return nil, 0, 0, errors.New("parseBufferPool returned unexpected type")
 	}
 
 	buf := *bufPtr

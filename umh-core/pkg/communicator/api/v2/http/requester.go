@@ -336,10 +336,12 @@ func processJSONResponse[R any](response *http.Response, cookies *map[string]str
 
 // GetRequest does a GET request to the given endpoint, with optional header and cookies
 // It is a wrapper around DoHTTPRequest.
+//
+//nolint:contextcheck // This is an API function that legitimately accepts context from callers
 func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (result *R, statusCode int, responseErr error) {
 	// Set up context with default 30 second timeout if none provided or no timeout
 	if ctx == nil {
-		ctx = context.TODO()
+		ctx = context.Background()
 	}
 
 	// Always set a timeout if there isn't one already
@@ -441,10 +443,12 @@ func DoHTTPPostRequest[T any](ctx context.Context, url string, data *T, header m
 // PostRequest does a POST request to the given endpoint, with optional header and cookies
 // Note: Cookies will be updated with the response cookies, if not nil
 // It is a wrapper around DoHTTPPostRequest.
+//
+//nolint:contextcheck // This is an API function that legitimately accepts context from callers
 func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (result *R, statusCode int, responseErr error) {
 	// Set up context with default 30 second timeout if none provided or no timeout
 	if ctx == nil {
-		ctx = context.TODO()
+		ctx = context.Background()
 	}
 
 	// Always set a timeout if there isn't one already

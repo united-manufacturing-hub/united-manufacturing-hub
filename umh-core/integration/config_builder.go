@@ -107,7 +107,7 @@ func (b *Builder) AddService(s config.S6FSMConfig) *Builder {
 }
 
 func (b *Builder) BuildYAML() string {
-	out, _ := yaml.Marshal(b.full)
+	out, _ := yaml.Marshal(b.full) //nolint:musttag // Test builder with dynamic struct
 
 	return string(out)
 }

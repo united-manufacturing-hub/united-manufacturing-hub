@@ -69,6 +69,7 @@ func main() {
 	configManager, err := config.NewFileConfigManagerWithBackoff()
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to create config manager: %w", err)
+		cancel() // Ensure cleanup before exit
 		os.Exit(1)
 	}
 

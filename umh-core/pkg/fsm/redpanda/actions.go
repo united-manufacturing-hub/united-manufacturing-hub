@@ -379,11 +379,9 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#retention_bytes
 			if r.config.Topic.DefaultTopicRetentionBytes != 0 {
 				changes["retention_bytes"] = r.config.Topic.DefaultTopicRetentionBytes
-			} else {
+			} else if r.PreviousObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionBytes != constants.DefaultRedpandaTopicDefaultTopicRetentionBytes {
 				// If the config does not set a value, we update as needed
-				if r.PreviousObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionBytes != constants.DefaultRedpandaTopicDefaultTopicRetentionBytes {
-					changes["retention_bytes"] = constants.DefaultRedpandaTopicDefaultTopicRetentionBytes
-				}
+				changes["retention_bytes"] = constants.DefaultRedpandaTopicDefaultTopicRetentionBytes
 			}
 		}
 
@@ -391,11 +389,9 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#log_retention_ms
 			if r.config.Topic.DefaultTopicRetentionMs != 0 {
 				changes["log_retention_ms"] = r.config.Topic.DefaultTopicRetentionMs
-			} else {
+			} else if r.PreviousObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionMs != constants.DefaultRedpandaTopicDefaultTopicRetentionMs {
 				// If the config does not set a value, we update as needed
-				if r.PreviousObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionMs != constants.DefaultRedpandaTopicDefaultTopicRetentionMs {
-					changes["log_retention_ms"] = constants.DefaultRedpandaTopicDefaultTopicRetentionMs
-				}
+				changes["log_retention_ms"] = constants.DefaultRedpandaTopicDefaultTopicRetentionMs
 			}
 		}
 
@@ -403,11 +399,9 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#log_compression_type
 			if r.config.Topic.DefaultTopicCompressionAlgorithm != "" {
 				changes["log_compression_type"] = r.config.Topic.DefaultTopicCompressionAlgorithm
-			} else {
+			} else if r.PreviousObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicCompressionAlgorithm != constants.DefaultRedpandaTopicDefaultTopicCompressionAlgorithm {
 				// If the config does not set a value, we update as needed
-				if r.PreviousObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicCompressionAlgorithm != constants.DefaultRedpandaTopicDefaultTopicCompressionAlgorithm {
-					changes["log_compression_type"] = constants.DefaultRedpandaTopicDefaultTopicCompressionAlgorithm
-				}
+				changes["log_compression_type"] = constants.DefaultRedpandaTopicDefaultTopicCompressionAlgorithm
 			}
 		}
 
@@ -415,11 +409,9 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#log_cleanup_policy
 			if r.config.Topic.DefaultTopicCleanupPolicy != "" {
 				changes["log_cleanup_policy"] = r.config.Topic.DefaultTopicCleanupPolicy
-			} else {
+			} else if r.PreviousObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicCleanupPolicy != constants.DefaultRedpandaTopicDefaultTopicCleanupPolicy {
 				// If the config does not set a value, we update as needed
-				if r.PreviousObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicCleanupPolicy != constants.DefaultRedpandaTopicDefaultTopicCleanupPolicy {
-					changes["log_cleanup_policy"] = constants.DefaultRedpandaTopicDefaultTopicCleanupPolicy
-				}
+				changes["log_cleanup_policy"] = constants.DefaultRedpandaTopicDefaultTopicCleanupPolicy
 			}
 		}
 

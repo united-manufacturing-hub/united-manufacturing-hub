@@ -716,7 +716,7 @@ func (s *DefaultService) Symlink(ctx context.Context, target, linkPath string) e
 	}
 }
 
-// validateChownInputs validates user, group, and path inputs to prevent command injection
+// validateChownInputs validates user, group, and path inputs to prevent command injection.
 func validateChownInputs(path, user, group string) error {
 	// Validate path - must be absolute and not contain shell metacharacters
 	if !filepath.IsAbs(path) {

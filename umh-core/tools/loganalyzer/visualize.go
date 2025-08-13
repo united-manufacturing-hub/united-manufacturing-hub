@@ -163,7 +163,7 @@ func (a *LogAnalyzer) ShowConcurrentActivity() {
 			activity := fmt.Sprintf("%s: %s→%s",
 				fsmName, transition.FromState, transition.ToState)
 			if !transition.Success {
-				activity = activity + " (failed)"
+				activity += " (failed)"
 			}
 
 			tickActivity[transition.Tick] = append(tickActivity[transition.Tick], activity)

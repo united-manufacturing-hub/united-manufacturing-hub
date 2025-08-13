@@ -33,7 +33,7 @@ import (
 )
 
 var (
-	// Static errors for agent monitor
+	// Static errors for agent monitor.
 	ErrInvalidDesiredState = errors.New("invalid desired state")
 )
 

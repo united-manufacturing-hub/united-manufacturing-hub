@@ -218,7 +218,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 		models.GetAuditLog, models.EditInstanceLocation, models.GetDataFlowComponentLog,
 		models.GetKubernetesEvents, models.GetOPCUATags, models.RollbackDataFlowComponent,
 		models.AllowAppSecretAccess, models.GetConfiguration, models.UpdateConfiguration,
-		models.DeployOPCUAConnection:
+		models.DeployOPCUAConnection: //nolint:staticcheck // deprecated but must handle for exhaustive check
 		log.Errorf("Unsupported action type: %s", payload.ActionType)
 		SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, "Action type not implemented", outboundChannel, payload.ActionType)
 

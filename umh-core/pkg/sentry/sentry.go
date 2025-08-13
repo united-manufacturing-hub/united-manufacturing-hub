@@ -58,10 +58,8 @@ func InitSentry(appVersion string, debounceErrors bool) {
 	version, err := semver.NewVersion(appVersion)
 	if err != nil {
 		zap.S().Errorf("Failed to parse app version, using default environment (development): %s", err)
-	} else {
-		if version.Prerelease() == "" {
-			environment = constants.DefaultProductionEnvironment
-		}
+	} else if version.Prerelease() == "" {
+		environment = constants.DefaultProductionEnvironment
 	}
 
 	err = sentry.Init(sentry.ClientOptions{

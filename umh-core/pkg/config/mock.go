@@ -147,7 +147,7 @@ func (m *MockConfigManager) writeConfig(ctx context.Context, cfg FullConfig) err
 	}
 
 	// Marshal the config to YAML
-	data, err := yaml.Marshal(yamlConfig)
+	data, err := yaml.Marshal(yamlConfig) //nolint:musttag // yamlConfig is dynamically generated interface{}
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}

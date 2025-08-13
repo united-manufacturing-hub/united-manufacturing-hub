@@ -200,6 +200,7 @@ func performWarmup(b *testing.B, registry *SchemaRegistry) {
 
 // benchmarkSingleSchema measures performance of reconciling a single schema.
 func benchmarkSingleSchema(b *testing.B, registry *SchemaRegistry) {
+	b.Helper()
 	schema := map[SubjectName]JSONSchemaDefinition{
 		"benchmark-single": JSONSchemaDefinition(`{
 			"type": "object",
@@ -231,6 +232,7 @@ func benchmarkSingleSchema(b *testing.B, registry *SchemaRegistry) {
 
 // benchmarkMultipleSchemas measures performance with varying numbers of schemas.
 func benchmarkMultipleSchemas(b *testing.B, registry *SchemaRegistry) {
+	b.Helper()
 	schemaCounts := []int{5, 10, 25, 50, 100}
 
 	for _, count := range schemaCounts {
@@ -268,6 +270,7 @@ func benchmarkMultipleSchemas(b *testing.B, registry *SchemaRegistry) {
 
 // benchmarkIncrementalUpdates measures performance of incremental schema updates.
 func benchmarkIncrementalUpdates(b *testing.B, registry *SchemaRegistry) {
+	b.Helper()
 	baseSchemas := generateSchemas(20, "incremental-base")
 
 	// Setup base schemas

@@ -197,7 +197,8 @@ var _ = Describe("StateMocker", func() {
 			// Update state and verify component creation process starts
 			stateMocker.Tick()
 			state := stateMocker.GetStateManager().GetDeepCopySnapshot()
-			mockManager := state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			mockManager, ok := state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			Expect(ok).To(BeTrue())
 			component := mockManager.GetInstance(componentName)
 			Expect(component).ToNot(BeNil())
 			Expect(component.CurrentState).To(Equal(internalfsm.LifecycleStateToBeCreated))
@@ -209,7 +210,8 @@ var _ = Describe("StateMocker", func() {
 
 			// Component should now be active
 			state = stateMocker.GetStateManager().GetDeepCopySnapshot()
-			mockManager = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			mockManager, ok = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			Expect(ok).To(BeTrue())
 			component = mockManager.GetInstance(componentName)
 			Expect(component.CurrentState).To(Equal(dataflowcomponent.OperationalStateActive))
 		})
@@ -233,7 +235,8 @@ var _ = Describe("StateMocker", func() {
 
 			// Verify component exists and is active
 			state := stateMocker.GetStateManager().GetDeepCopySnapshot()
-			mockManager := state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			mockManager, ok := state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			Expect(ok).To(BeTrue())
 			component := mockManager.GetInstance(componentName)
 			Expect(component).ToNot(BeNil())
 			Expect(component.CurrentState).To(Equal(dataflowcomponent.OperationalStateActive))
@@ -242,14 +245,12 @@ var _ = Describe("StateMocker", func() {
 			cfg.DataFlow = []config.DataFlowComponentConfig{}
 			configManager.WithConfig(*cfg)
 
-					// Update state and verify removal process starts
-		stateMocker.Tick()
-		state = stateMocker.GetStateManager().GetDeepCopySnapshot()
-		mockManager, ok := state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
-		if !ok {
-			panic("expected MockManagerSnapshot")
-		}
-		component = mockManager.GetInstance(componentName)
+			// Update state and verify removal process starts
+			stateMocker.Tick()
+			state = stateMocker.GetStateManager().GetDeepCopySnapshot()
+			mockManager, ok = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			Expect(ok).To(BeTrue())
+			component = mockManager.GetInstance(componentName)
 			Expect(component).ToNot(BeNil())
 			Expect(component.CurrentState).To(Equal(internalfsm.LifecycleStateRemoving))
 
@@ -260,7 +261,8 @@ var _ = Describe("StateMocker", func() {
 
 			// Component should be in removed state
 			state = stateMocker.GetStateManager().GetDeepCopySnapshot()
-			mockManager = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			mockManager, ok = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			Expect(ok).To(BeTrue())
 			component = mockManager.GetInstance(componentName)
 			Expect(component.CurrentState).To(Equal(internalfsm.LifecycleStateRemoved))
 		})
@@ -284,7 +286,8 @@ var _ = Describe("StateMocker", func() {
 
 			// Verify component exists and is active
 			state := stateMocker.GetStateManager().GetDeepCopySnapshot()
-			mockManager := state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			mockManager, ok := state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			Expect(ok).To(BeTrue())
 			component := mockManager.GetInstance(componentName)
 			Expect(component).ToNot(BeNil())
 			Expect(component.CurrentState).To(Equal(dataflowcomponent.OperationalStateActive))
@@ -312,16 +315,14 @@ var _ = Describe("StateMocker", func() {
 			}
 			configManager.WithConfig(*cfg)
 
-					// Update state and verify component goes through reconfiguration
-		stateMocker.Tick()
-		state = stateMocker.GetStateManager().GetDeepCopySnapshot()
-		mockManager, ok := state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
-		if !ok {
-			panic("expected MockManagerSnapshot")
-		}
-		component = mockManager.GetInstance(componentName)
-		Expect(component).ToNot(BeNil())
-		Expect(component.CurrentState).To(Equal(dataflowcomponent.EventBenthosDegraded))
+			// Update state and verify component goes through reconfiguration
+			stateMocker.Tick()
+			state = stateMocker.GetStateManager().GetDeepCopySnapshot()
+			mockManager, ok = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			Expect(ok).To(BeTrue())
+			component = mockManager.GetInstance(componentName)
+			Expect(component).ToNot(BeNil())
+			Expect(component.CurrentState).To(Equal(dataflowcomponent.EventBenthosDegraded))
 
 			// Advance ticks to simulate component reconfiguration
 			for range 8 {
@@ -330,7 +331,8 @@ var _ = Describe("StateMocker", func() {
 
 			// Component should be active again with updated config
 			state = stateMocker.GetStateManager().GetDeepCopySnapshot()
-			mockManager = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			mockManager, ok = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			Expect(ok).To(BeTrue())
 			component = mockManager.GetInstance(componentName)
 			Expect(component.CurrentState).To(Equal(dataflowcomponent.OperationalStateActive))
 
@@ -359,7 +361,8 @@ var _ = Describe("StateMocker", func() {
 
 			// Verify component exists and is active
 			state := stateMocker.GetStateManager().GetDeepCopySnapshot()
-			mockManager := state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			mockManager, ok := state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			Expect(ok).To(BeTrue())
 			component := mockManager.GetInstance(oldComponentName)
 			Expect(component).ToNot(BeNil())
 			Expect(component.CurrentState).To(Equal(dataflowcomponent.OperationalStateActive))
@@ -380,7 +383,8 @@ var _ = Describe("StateMocker", func() {
 			// Update state and verify old component starts removal process
 			stateMocker.Tick()
 			state = stateMocker.GetStateManager().GetDeepCopySnapshot()
-			mockManager = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			mockManager, ok = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			Expect(ok).To(BeTrue())
 			oldComponent := mockManager.GetInstance(oldComponentName)
 			Expect(oldComponent).ToNot(BeNil())
 			Expect(oldComponent.CurrentState).To(Equal(internalfsm.LifecycleStateRemoving))
@@ -392,7 +396,8 @@ var _ = Describe("StateMocker", func() {
 
 			// Verify old component is now in removed state
 			state = stateMocker.GetStateManager().GetDeepCopySnapshot()
-			mockManager = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			mockManager, ok = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			Expect(ok).To(BeTrue())
 			oldComponent = mockManager.GetInstance(oldComponentName)
 			Expect(oldComponent).ToNot(BeNil())
 			Expect(oldComponent.CurrentState).To(Equal(internalfsm.LifecycleStateRemoved))
@@ -404,7 +409,8 @@ var _ = Describe("StateMocker", func() {
 
 			// Verify new component has appeared and is in creating state
 			state = stateMocker.GetStateManager().GetDeepCopySnapshot()
-			mockManager = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			mockManager, ok = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			Expect(ok).To(BeTrue())
 			newComponent := mockManager.GetInstance(newComponentName)
 			Expect(newComponent).ToNot(BeNil())
 			Expect(newComponent.CurrentState).To(Equal(internalfsm.LifecycleStateCreating))
@@ -416,7 +422,8 @@ var _ = Describe("StateMocker", func() {
 
 			// Verify old component has disappeared
 			state = stateMocker.GetStateManager().GetDeepCopySnapshot()
-			mockManager = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			mockManager, ok = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			Expect(ok).To(BeTrue())
 			oldComponent = mockManager.GetInstance(oldComponentName)
 			Expect(oldComponent).To(BeNil())
 
