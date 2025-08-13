@@ -38,7 +38,7 @@ func (c *ContainerMonitorService) getMacOSAdjustedDiskMetrics() (usedBytes, tota
 	}
 
 	// Use Frsize if available; it represents the fundamental block size for macOS.
-	bSize := uint64(stat.Bsize)
+	bSize := uint64(stat.Bsize) //nolint:gosec // G115: Safe conversion, filesystem block size is valid
 	if stat.Frsize > 0 {
 		bSize = uint64(stat.Frsize)
 	}

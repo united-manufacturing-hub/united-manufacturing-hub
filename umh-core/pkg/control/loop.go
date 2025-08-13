@@ -385,7 +385,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	if len(c.managers) > constants.MaxConcurrentFSMOperations {
 		// Calculate rotation based on current tick
 		totalBatches := (len(c.managers) + constants.MaxConcurrentFSMOperations - 1) / constants.MaxConcurrentFSMOperations
-		currentBatch := int(c.currentTick % uint64(totalBatches))
+		currentBatch := int(c.currentTick % uint64(totalBatches)) //nolint:gosec // G115: Safe conversion, batch count is reasonable size
 
 		startIdx = currentBatch * constants.MaxConcurrentFSMOperations
 

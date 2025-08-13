@@ -81,7 +81,7 @@ func (m *MockPortManager) AllocatePort(ctx context.Context, serviceName string) 
 	}
 
 	// Otherwise allocate a new port (simple implementation for testing)
-	port := uint16(9000 + len(m.Ports))
+	port := uint16(9000 + len(m.Ports)) //nolint:gosec // G115: Safe conversion, test ports in valid range
 	m.Ports[serviceName] = port
 	m.AllocatedPorts[port] = serviceName
 
@@ -158,7 +158,7 @@ func (m *MockPortManager) PreReconcile(ctx context.Context, instanceNames []stri
 	for _, name := range instanceNames {
 		if _, exists := m.Ports[name]; !exists {
 			// Simple allocation logic matching AllocatePort's behavior
-			port := uint16(9000 + len(m.Ports))
+			port := uint16(9000 + len(m.Ports)) //nolint:gosec // G115: Safe conversion, test ports in valid range
 			m.Ports[name] = port
 			m.AllocatedPorts[port] = name
 		}

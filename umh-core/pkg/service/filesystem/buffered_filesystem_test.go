@@ -71,7 +71,7 @@ var _ = Describe("BufferedService", func() {
 		// Make read-only directories writable before removal
 		readOnlyDir := filepath.Join(tmpDir, "readonly_dir")
 		if _, err := os.Stat(readOnlyDir); err == nil {
-			err = os.Chmod(readOnlyDir, 0755)
+			err = os.Chmod(readOnlyDir, 0755) //nolint:gosec // G302: Test cleanup requires permissive permissions to delete read-only directories
 			if err != nil {
 				// Log instead of failing - we're in cleanup
 				fmt.Println("Warning: Failed to chmod directory:", err)
@@ -121,15 +121,15 @@ var _ = Describe("BufferedService", func() {
 		It("should handle directories correctly during SyncFromDisk", func() {
 			// Create a nested directory structure similar to production
 			dirPath := filepath.Join(tmpDir, "run", "service", "umh-core")
-			err := os.MkdirAll(dirPath, 0755)
+			err := os.MkdirAll(dirPath, 0755) //nolint:gosec // G301: Test requires permissive permissions for directory creation testing
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create a file in one path
-			err = os.WriteFile(filepath.Join(dirPath, "somefile.txt"), []byte("test"), 0644)
+			err = os.WriteFile(filepath.Join(dirPath, "somefile.txt"), []byte("test"), 0644) //nolint:gosec // G306: Test requires standard file permissions for testing filesystem operations
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create a directory where a file might be expected
-			err = os.MkdirAll(filepath.Join(dirPath, "log"), 0755)
+			err = os.MkdirAll(filepath.Join(dirPath, "log"), 0755) //nolint:gosec // G301: Test requires permissive permissions for directory creation testing
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create a new buffered service with this root
@@ -143,22 +143,22 @@ var _ = Describe("BufferedService", func() {
 		It("should handle symlinked directories correctly during SyncFromDisk", func() {
 			// Create a directory structure similar to production with symlinks
 			targetDir := filepath.Join(tmpDir, "run", "s6-rc", "servicedirs", "umh-core")
-			err := os.MkdirAll(targetDir, 0755)
+			err := os.MkdirAll(targetDir, 0755) //nolint:gosec // G301: Test requires permissive permissions for service directory creation testing
 			Expect(err).NotTo(HaveOccurred())
 
 			// Also create a log dir
 			targetLogDir := filepath.Join(tmpDir, "run", "s6-rc", "servicedirs", "umh-core-log")
-			err = os.MkdirAll(targetLogDir, 0755)
+			err = os.MkdirAll(targetLogDir, 0755) //nolint:gosec // G301: Test requires permissive permissions for log directory creation testing
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create a sample file in the target directory
 			sampleFile := filepath.Join(targetDir, "config.json")
-			err = os.WriteFile(sampleFile, []byte("{\"test\": true}"), 0644)
+			err = os.WriteFile(sampleFile, []byte("{\"test\": true}"), 0644) //nolint:gosec // G306: Test requires standard file permissions for config file testing
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create the service directory
 			serviceDir := filepath.Join(tmpDir, "run", "service")
-			err = os.MkdirAll(serviceDir, 0755)
+			err = os.MkdirAll(serviceDir, 0755) //nolint:gosec // G301: Test requires permissive permissions for service directory creation testing
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create symlinks in service directory like in production
@@ -371,9 +371,9 @@ var _ = Describe("BufferedService", func() {
 
 			// Create a file with the same name as the directory we need to create
 			// This will cause EnsureDirectory to fail since it can't create a directory over a file
-			err = os.MkdirAll(filepath.Dir(tmpDir), 0755)
+			err = os.MkdirAll(filepath.Dir(tmpDir), 0755) //nolint:gosec // G301: Test requires permissive permissions for error simulation directory setup
 			Expect(err).NotTo(HaveOccurred())
-			err = os.WriteFile(tmpDir, []byte("blocking file"), 0644)
+			err = os.WriteFile(tmpDir, []byte("blocking file"), 0644) //nolint:gosec // G306: Test requires standard file permissions for error simulation testing
 			Expect(err).NotTo(HaveOccurred())
 
 			// Now flush - this should fail because we can't create the directory
@@ -391,22 +391,22 @@ var _ = Describe("BufferedService", func() {
 func setupTestFiles(root string) {
 	// Create a sample file
 	samplePath := filepath.Join(root, "sample.txt")
-	err := os.WriteFile(samplePath, []byte("Hello, world!\n"), 0644)
+	err := os.WriteFile(samplePath, []byte("Hello, world!\n"), 0644) //nolint:gosec // G306: Test requires standard file permissions for sample file creation
 	Expect(err).NotTo(HaveOccurred())
 
 	// Create nested directories
 	nestedDir := filepath.Join(root, "nested")
-	err = os.MkdirAll(nestedDir, 0755)
+	err = os.MkdirAll(nestedDir, 0755) //nolint:gosec // G301: Test requires permissive permissions for nested directory creation
 	Expect(err).NotTo(HaveOccurred())
 
 	// Create a nested file
 	nestedFile := filepath.Join(nestedDir, "sample2.txt")
-	err = os.WriteFile(nestedFile, []byte("Nested file\n"), 0644)
+	err = os.WriteFile(nestedFile, []byte("Nested file\n"), 0644) //nolint:gosec // G306: Test requires standard file permissions for nested file creation
 	Expect(err).NotTo(HaveOccurred())
 }
 
 func createLargeFile(path string, sizeBytes int64) {
-	f, err := os.Create(path)
+	f, err := os.Create(path) //nolint:gosec // G304: File path is controlled within test context, safe for test file creation
 	Expect(err).NotTo(HaveOccurred())
 
 	defer func() {
@@ -645,7 +645,7 @@ var _ = Describe("BufferedService Directory Creation Issues", func() {
 		// Make read-only directories writable before removal
 		readOnlyDir := filepath.Join(tmpDir, "readonly_dir")
 		if _, err := os.Stat(readOnlyDir); err == nil {
-			err = os.Chmod(readOnlyDir, 0755)
+			err = os.Chmod(readOnlyDir, 0755) //nolint:gosec // G302: Test cleanup requires permissive permissions to delete read-only directories
 			if err != nil {
 				// Log instead of failing - we're in cleanup
 				fmt.Println("Warning: Failed to chmod directory:", err)
@@ -669,7 +669,7 @@ var _ = Describe("BufferedService Directory Creation Issues", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Verify file was written
-		content, err := os.ReadFile(nestedFilePath)
+		content, err := os.ReadFile(nestedFilePath) //nolint:gosec // G304: File path is controlled within test context, safe for test verification
 		Expect(err).NotTo(HaveOccurred())
 		Expect(string(content)).To(Equal("content"))
 
@@ -698,7 +698,7 @@ var _ = Describe("BufferedService Directory Creation Issues", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Verify files exist
-		baseContent, err := os.ReadFile(basePath)
+		baseContent, err := os.ReadFile(basePath) //nolint:gosec // G304: File path is controlled within test context, safe for test verification
 		Expect(err).NotTo(HaveOccurred())
 		Expect(string(baseContent)).To(Equal("base content"))
 
@@ -710,12 +710,12 @@ var _ = Describe("BufferedService Directory Creation Issues", func() {
 	It("should handle mix of directory removal and creation in correct order", func() {
 		// Create a directory structure on disk first
 		oldPath := filepath.Join(tmpDir, "service", "old-service")
-		err = os.MkdirAll(oldPath, 0755)
+		err = os.MkdirAll(oldPath, 0755) //nolint:gosec // G301: Test requires permissive permissions for old service directory creation
 		Expect(err).NotTo(HaveOccurred())
 
 		// Write a file in it
 		oldFile := filepath.Join(oldPath, "config")
-		err = os.WriteFile(oldFile, []byte("old content"), 0644)
+		err = os.WriteFile(oldFile, []byte("old content"), 0644) //nolint:gosec // G306: Test requires standard file permissions for old config file creation
 		Expect(err).NotTo(HaveOccurred())
 
 		// Sync to load existing structure
@@ -870,7 +870,7 @@ var _ = Describe("BufferedService Permission Checking", func() {
 		// Make read-only directories writable before removal
 		readOnlyDir := filepath.Join(tmpDir, "readonly_dir")
 		if _, err := os.Stat(readOnlyDir); err == nil {
-			err = os.Chmod(readOnlyDir, 0755)
+			err = os.Chmod(readOnlyDir, 0755) //nolint:gosec // G302: Test cleanup requires permissive permissions to delete read-only directories
 			if err != nil {
 				// Log instead of failing - we're in cleanup
 				fmt.Println("Warning: Failed to chmod directory:", err)
@@ -912,7 +912,7 @@ var _ = Describe("BufferedService Permission Checking", func() {
 		Expect(content).To(Equal(newContent))
 
 		// Make the file writable for the sync test
-		err = os.Chmod(readOnlyFile, 0644)
+		err = os.Chmod(readOnlyFile, 0644) //nolint:gosec // G302: Test requires manipulating file permissions for testing sync functionality
 		Expect(err).NotTo(HaveOccurred())
 
 		// SyncToDisk should succeed now that both our checks and OS permissions allow writing
@@ -920,7 +920,7 @@ var _ = Describe("BufferedService Permission Checking", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Restore read-only for future tests
-		err = os.Chmod(readOnlyFile, 0444)
+		err = os.Chmod(readOnlyFile, 0444) //nolint:gosec // G302: Test requires setting read-only permissions for testing filesystem behavior
 		Expect(err).NotTo(HaveOccurred())
 
 		// Re-sync from disk to update our cached permission information
@@ -977,7 +977,7 @@ func setupTestFilesWithPermissions(root string) {
 		panic(err)
 	}
 	// Make it read-only
-	err = os.Chmod(readOnlyFile, 0444)
+	err = os.Chmod(readOnlyFile, 0444) //nolint:gosec // G302: Test requires setting read-only permissions for testing filesystem behavior
 	if err != nil {
 		panic(err)
 	}
@@ -997,7 +997,7 @@ func setupTestFilesWithPermissions(root string) {
 		panic(err)
 	}
 	// Make the directory read-only
-	err = os.Chmod(readOnlyDir, 0555)
+	err = os.Chmod(readOnlyDir, 0555) //nolint:gosec // G302: Test requires setting read-only permissions for testing directory behavior
 	if err != nil {
 		panic(err)
 	}

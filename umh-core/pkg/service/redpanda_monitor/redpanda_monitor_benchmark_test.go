@@ -1479,7 +1479,7 @@ func BenchmarkParseRedpandaLogsWithPercentiles(b *testing.B) {
 
 		b.StartTimer()
 
-		_, err := service.ParseRedpandaLogs(ctx, logs, uint64(i))
+		_, err := service.ParseRedpandaLogs(ctx, logs, uint64(i)) //nolint:gosec // G115: Safe conversion, benchmark iteration counter is positive
 
 		b.StopTimer()
 

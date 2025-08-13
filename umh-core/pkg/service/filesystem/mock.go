@@ -82,7 +82,7 @@ func (m *MockFileSystem) simulateRandomBehavior(operation string) (bool, time.Du
 	}
 
 	// Check if this operation should fail
-	shouldFail := rand.Float64() < m.FailureRate
+	shouldFail := rand.Float64() < m.FailureRate //nolint:gosec // G404: math/rand is appropriate for mock failure simulation in tests
 	if shouldFail {
 		m.FailedOperations[operation] = true
 	}
@@ -90,7 +90,7 @@ func (m *MockFileSystem) simulateRandomBehavior(operation string) (bool, time.Du
 	// Apply random delay (0 to DelayRange)
 	delay := time.Duration(0)
 	if m.DelayRange > 0 {
-		delay = time.Duration(rand.Int63n(int64(m.DelayRange)))
+		delay = time.Duration(rand.Int63n(int64(m.DelayRange))) //nolint:gosec // G404: math/rand is appropriate for mock delay simulation in tests
 	}
 
 	return shouldFail, delay

@@ -145,8 +145,8 @@ func ParseS6StatusFile(ctx context.Context, statusFilePath string, fsService fil
 	return &S6StatusData{
 		StampTime:   stampTime,
 		ReadyTime:   readyTime,
-		Pid:         int(pid),
-		Pgid:        int(pgid),
+		Pid:         int(pid),  //nolint:gosec // G115: Safe conversion, process IDs fit in int
+		Pgid:        int(pgid), //nolint:gosec // G115: Safe conversion, process group IDs fit in int
 		Wstat:       wstat,
 		IsPaused:    flagPaused,
 		IsFinishing: flagFinishing,

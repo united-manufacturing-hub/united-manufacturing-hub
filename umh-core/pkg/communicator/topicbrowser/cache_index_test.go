@@ -203,7 +203,7 @@ func createMockBufferWithSequence(events map[string]int64, timestamp time.Time, 
 	for treeId, ts := range events {
 		entry := &tbproto.EventTableEntry{
 			UnsTreeId:    treeId,
-			ProducedAtMs: uint64(ts),
+			ProducedAtMs: uint64(ts), //nolint:gosec // G115: Safe conversion, timestamp is positive
 		}
 		bundle.Events.Entries = append(bundle.Events.Entries, entry)
 

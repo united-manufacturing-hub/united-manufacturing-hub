@@ -244,7 +244,7 @@ func TestStreamProcessorStateTransition(
 	for range maxAttempts {
 		snapshot := fsm.SystemSnapshot{
 			Tick:         tick,
-			SnapshotTime: startTimestamp.Add(time.Duration(tick) * time.Second),
+			SnapshotTime: startTimestamp.Add(time.Duration(tick) * time.Second), //nolint:gosec // G115: Safe conversion, test tick count is reasonable duration
 		}
 
 		err, _ := instance.Reconcile(ctx, snapshot, services)

@@ -37,7 +37,7 @@ import (
 // Generates defective configurations.
 func generateDefectiveConfig() config.FullConfig {
 	// Create a local random generator
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	rng := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec // G404: math/rand is appropriate for test data generation, not security
 
 	defects := []func(config.FullConfig) config.FullConfig{
 		// Empty services
@@ -360,7 +360,7 @@ var _ = Describe("ControlLoop", func() {
 		// This randomizes the behavior of the control loop
 		FuzzRandomDelays := func() {
 			// Create a local random generator
-			rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+			rng := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec // G404: math/rand is appropriate for test data generation, not security
 
 			// Set up random delays in mocks
 			mockConfig.ConfigDelay = time.Duration(rng.Intn(30)) * time.Millisecond
@@ -463,7 +463,7 @@ var _ = Describe("ControlLoop", func() {
 
 			for i := range 5 {
 				// Create a local random generator for each iteration
-				rng := rand.New(rand.NewSource(time.Now().UnixNano() + int64(i)))
+				rng := rand.New(rand.NewSource(time.Now().UnixNano() + int64(i))) //nolint:gosec // G404: math/rand is appropriate for test data generation, not security
 
 				// Mix of defective configs, file system failures, and delays
 				mockConfig.Config = generateDefectiveConfig()

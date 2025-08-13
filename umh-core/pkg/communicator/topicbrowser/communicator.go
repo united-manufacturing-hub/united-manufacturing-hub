@@ -252,7 +252,7 @@ func (tbc *TopicBrowserCommunicator) processIncrementalBuffers(buffers []*topicb
 	result := &ProcessingResult{}
 
 	// Buffers are newest-to-oldest, so we need the last N items
-	startIndex := len(buffers) - int(newBufferCount)
+	startIndex := len(buffers) - int(newBufferCount) //nolint:gosec // G115: Safe conversion, buffer count is reasonable size
 	if startIndex < 0 {
 		startIndex = 0
 	}

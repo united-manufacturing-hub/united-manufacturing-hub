@@ -209,7 +209,7 @@ func (r *Resolver) mapMetadataToGraphQL(metadata map[string]string) []*MetadataK
 }
 
 func (r *Resolver) mapEventEntryToGraphQL(entry *tbproto.EventTableEntry) Event {
-	timestamp := time.UnixMilli(int64(entry.GetProducedAtMs()))
+	timestamp := time.UnixMilli(int64(entry.GetProducedAtMs())) //nolint:gosec // G115: Safe conversion, timestamp milliseconds are positive
 
 	// Determine event type based on payload format
 	switch entry.GetPayloadFormat() {

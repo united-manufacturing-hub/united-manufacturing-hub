@@ -215,7 +215,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 			By("Simulating random stop/start actions on sleep services (chaos monkey)")
 			// Create a deterministic random number generator for reproducibility
-			r := rand.New(rand.NewSource(42))
+			r := rand.New(rand.NewSource(42)) //nolint:gosec // G404: math/rand with fixed seed is appropriate for deterministic integration testing
 			for range 100 {
 				// Pick a random sleep service index (0-9)
 				randomIndex := r.Intn(10)
@@ -261,7 +261,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			testDuration := 3 * time.Minute
 
 			// Create deterministic random number generator
-			r := rand.New(rand.NewSource(42))
+			r := rand.New(rand.NewSource(42)) //nolint:gosec // G404: math/rand with fixed seed is appropriate for deterministic integration testing
 
 			// Add golden service as constant baseline
 			builder := NewBuilder().AddGoldenService()
@@ -568,7 +568,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 			By("Simulating random stop/start/update actions on benthos services")
 			// Create a deterministic random number generator for reproducibility
-			r := rand.New(rand.NewSource(42))
+			r := rand.New(rand.NewSource(42)) //nolint:gosec // G404: math/rand with fixed seed is appropriate for deterministic integration testing
 			for i := range 50 {
 				// Pick a random benthos service index (0-9)
 				randomIndex := r.Intn(10)
@@ -759,7 +759,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 			By("Simulating random stop/start/update actions on dataflow components")
 			// Create a deterministic random number generator for reproducibility
-			r := rand.New(rand.NewSource(42))
+			r := rand.New(rand.NewSource(42)) //nolint:gosec // G404: math/rand with fixed seed is appropriate for deterministic integration testing
 			for i := range 50 {
 				// Pick a random dataflow component index (0-9)
 				randomIndex := r.Intn(10)

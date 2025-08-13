@@ -162,7 +162,7 @@ func (s *NmapService) GetConfig(ctx context.Context, filesystemService filesyste
 	if matches := portRegex.FindStringSubmatch(string(scriptData)); len(matches) > 1 {
 		port, err := strconv.Atoi(matches[1])
 		if err == nil {
-			result.Port = uint16(port)
+			result.Port = uint16(port) //nolint:gosec // G115: Safe conversion, port parsed from nmap output is valid port number
 		}
 	}
 

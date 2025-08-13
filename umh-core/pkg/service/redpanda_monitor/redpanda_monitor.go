@@ -635,7 +635,7 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 			return nil, fmt.Errorf("failed to parse timestamp data: %w", err)
 		}
 		// Convert the nano seconds to a time.Time object
-		lastUpdatedAt = time.Unix(0, int64(timestampNs))
+		lastUpdatedAt = time.Unix(0, int64(timestampNs)) //nolint:gosec // G115: Safe conversion, timestamp nanoseconds are positive
 	}
 
 	// Update previous values

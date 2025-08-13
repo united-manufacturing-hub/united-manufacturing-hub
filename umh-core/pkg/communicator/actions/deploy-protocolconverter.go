@@ -323,7 +323,7 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(ctx context.Con
 					found = true
 
 					// check the nmap configuration
-					if pcSnapshot.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ObservedNmapServiceConfig.Port != uint16(a.payload.Connection.Port) {
+					if pcSnapshot.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ObservedNmapServiceConfig.Port != uint16(a.payload.Connection.Port) { //nolint:gosec // G115: Safe conversion, port numbers are valid uint16 range
 						stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for nmap to apply the connection configuration"
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 							stateMessage, a.outboundChannel, models.DeployProtocolConverter)

@@ -95,7 +95,7 @@ func getConfigFilePath() string {
 		tmpDir := filepath.Join(currentDir, "umh-config")
 
 		// Create the directory
-		err := os.MkdirAll(tmpDir, 0o777)
+		err := os.MkdirAll(tmpDir, 0o777) //nolint:gosec // G301: Integration test requires permissive permissions for temp directory creation
 		if err != nil {
 			// Fallback to current directory if directory creation fails
 			tmpDir = currentDir
@@ -158,12 +158,12 @@ func writeConfigFile(yamlContent string, containerName ...string) error {
 
 	// Ensure the directory exists with wide permissions
 	dir := filepath.Dir(configPath)
-	if err := os.MkdirAll(dir, 0o777); err != nil {
+	if err := os.MkdirAll(dir, 0o777); err != nil { //nolint:gosec // G301: Integration test requires permissive permissions for config directory
 		return fmt.Errorf("failed to create config dir: %w", err)
 	}
 
 	// Write the file with permissions that allow anyone to read/write
-	if err := os.WriteFile(configPath, []byte(yamlContent), 0o666); err != nil {
+	if err := os.WriteFile(configPath, []byte(yamlContent), 0o666); err != nil { //nolint:gosec // G306: Integration test requires permissive file permissions for config sharing
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
@@ -174,7 +174,7 @@ func writeConfigFile(yamlContent string, containerName ...string) error {
 
 		// Create a temporary file with the actual config content
 		tmpFile := configPath + ".tmp"
-		if err := os.WriteFile(tmpFile, []byte(yamlContent), 0o666); err != nil {
+		if err := os.WriteFile(tmpFile, []byte(yamlContent), 0o666); err != nil { //nolint:gosec // G306: Integration test requires permissive file permissions for temp config sharing
 			return fmt.Errorf("failed to write temp config file: %w", err)
 		}
 
@@ -291,8 +291,8 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 	// Store these ports for later use
 	portMu.Lock()
 
-	metricsPort = uint16(metricsPrt)
-	goldenPort = uint16(goldenPrt)
+	metricsPort = uint16(metricsPrt) //nolint:gosec // G115: Safe conversion, port in valid range 8080-9080
+	goldenPort = uint16(goldenPrt)   //nolint:gosec // G115: Safe conversion, port in valid range 8082-9082
 
 	portMu.Unlock()
 
@@ -319,11 +319,11 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 	tmpLogsDir := filepath.Join(getTmpDir(), containerName, "logs")
 
 	// 4. Create the directories
-	if err := os.MkdirAll(tmpRedpandaDir, 0o777); err != nil {
+	if err := os.MkdirAll(tmpRedpandaDir, 0o777); err != nil { //nolint:gosec // G301: Integration test requires permissive permissions for redpanda directory
 		return fmt.Errorf("failed to create redpanda dir: %w", err)
 	}
 
-	if err := os.MkdirAll(tmpLogsDir, 0o777); err != nil {
+	if err := os.MkdirAll(tmpLogsDir, 0o777); err != nil { //nolint:gosec // G301: Integration test requires permissive permissions for logs directory
 		return fmt.Errorf("failed to create logs dir: %w", err)
 	}
 
@@ -535,7 +535,7 @@ func printContainerLogs() {
 		}
 	}
 	// Create the dir
-	err = os.MkdirAll(tmpDir, 0o777)
+	err = os.MkdirAll(tmpDir, 0o777) //nolint:gosec // G301: Integration test requires permissive permissions for temp directory
 	if err != nil {
 		fmt.Printf("Failed to create tmp dir: %v\n", err)
 	} else {

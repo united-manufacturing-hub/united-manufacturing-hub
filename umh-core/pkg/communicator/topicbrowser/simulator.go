@@ -89,12 +89,12 @@ func (s *Simulator) GenerateNewUnsBundle() []byte {
 					TimestampMs: time.Now().UnixMilli(),
 					Value: &tbproto.TimeSeriesPayload_NumericValue{
 						NumericValue: &wrapperspb.DoubleValue{
-							Value: rand.Float64() * 100,
+							Value: rand.Float64() * 100, //nolint:gosec // G404: math/rand is appropriate for simulator test data generation
 						},
 					},
 				},
 			},
-			ProducedAtMs: uint64(time.Now().UnixMilli()),
+			ProducedAtMs: uint64(time.Now().UnixMilli()), //nolint:gosec // G115: Safe conversion, Unix timestamp is positive
 		}
 		entries = append(entries, data)
 	}
@@ -123,7 +123,7 @@ func (s *Simulator) AddUnsBundleToSimObservedState(bundle []byte) {
 	newItem := &topicbrowserservice.BufferItem{
 		Payload:     bundle,
 		Timestamp:   time.Now(),
-		SequenceNum: uint64(len(s.simObservedState.ServiceInfo.Status.BufferSnapshot.Items) + 1),
+		SequenceNum: uint64(len(s.simObservedState.ServiceInfo.Status.BufferSnapshot.Items) + 1), //nolint:gosec // G115: Safe conversion, test sequence number
 	}
 
 	s.simObservedState.ServiceInfo.Status.BufferSnapshot.Items = append(s.simObservedState.ServiceInfo.Status.BufferSnapshot.Items, newItem)

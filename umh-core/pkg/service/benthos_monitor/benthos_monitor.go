@@ -626,7 +626,7 @@ func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6_
 		return nil, fmt.Errorf("failed to parse timestamp data: %w", err)
 	}
 
-	lastUpdatedAt := time.Unix(0, int64(timestampNs))
+	lastUpdatedAt := time.Unix(0, int64(timestampNs)) //nolint:gosec // G115: Safe conversion, timestamp nanoseconds are positive
 
 	return &BenthosMetricsScan{
 		HealthCheck:    healthCheck,
@@ -1372,7 +1372,7 @@ func updateLatencyFromFamily(latency *Latency, family *dto.MetricFamily) {
 		}
 
 		latency.Sum = metric.GetSummary().GetSampleSum()
-		latency.Count = int64(metric.GetSummary().GetSampleCount())
+		latency.Count = int64(metric.GetSummary().GetSampleCount()) //nolint:gosec // G115: Safe conversion, sample count is positive
 
 		for _, quantile := range metric.GetSummary().GetQuantile() {
 			switch quantile.GetQuantile() {
@@ -1393,7 +1393,7 @@ func updateLatencyFromMetric(latency *Latency, metric *dto.Metric) {
 	}
 
 	latency.Sum = metric.GetSummary().GetSampleSum()
-	latency.Count = int64(metric.GetSummary().GetSampleCount())
+	latency.Count = int64(metric.GetSummary().GetSampleCount()) //nolint:gosec // G115: Safe conversion, sample count is positive
 
 	for _, quantile := range metric.GetSummary().GetQuantile() {
 		switch quantile.GetQuantile() {

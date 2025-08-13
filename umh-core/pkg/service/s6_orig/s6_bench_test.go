@@ -455,7 +455,7 @@ func BenchmarkFindLatestRotatedFile(b *testing.B) {
 			tempDir := b.TempDir()
 			logDir := filepath.Join(tempDir, "logs")
 
-			err := os.MkdirAll(logDir, 0755)
+			err := os.MkdirAll(logDir, 0755) //nolint:gosec // G301: Benchmark test requires permissive permissions for log directory creation
 			if err != nil {
 				b.Fatalf("Failed to create log directory: %v", err)
 			}
@@ -473,7 +473,7 @@ func BenchmarkFindLatestRotatedFile(b *testing.B) {
 				filename := tai64.FormatNano(timestamp) + ".s"
 				filepath := filepath.Join(logDir, filename)
 
-				err := os.WriteFile(filepath, []byte(fmt.Sprintf("log content %d", i)), 0644)
+				err := os.WriteFile(filepath, []byte(fmt.Sprintf("log content %d", i)), 0644) //nolint:gosec // G306: Benchmark test requires standard file permissions for log file creation
 				if err != nil {
 					b.Fatalf("Failed to create test file: %v", err)
 				}
@@ -537,7 +537,7 @@ func BenchmarkFindLatestRotatedFileRealistic(b *testing.B) {
 	tempDir := b.TempDir()
 	logDir := filepath.Join(tempDir, "logs")
 
-	err := os.MkdirAll(logDir, 0755)
+	err := os.MkdirAll(logDir, 0755) //nolint:gosec // G301: Benchmark test requires permissive permissions for log directory creation
 	if err != nil {
 		b.Fatalf("Failed to create log directory: %v", err)
 	}
@@ -558,7 +558,7 @@ func BenchmarkFindLatestRotatedFileRealistic(b *testing.B) {
 		filename := tai64.FormatNano(timestamp) + ".s"
 		filepath := filepath.Join(logDir, filename)
 
-		err := os.WriteFile(filepath, []byte(fmt.Sprintf("rotated log %d", i)), 0644)
+		err := os.WriteFile(filepath, []byte(fmt.Sprintf("rotated log %d", i)), 0644) //nolint:gosec // G306: Benchmark test requires standard file permissions for log file creation
 		if err != nil {
 			b.Fatalf("Failed to create rotated file: %v", err)
 		}
@@ -573,7 +573,7 @@ func BenchmarkFindLatestRotatedFileRealistic(b *testing.B) {
 	for _, filename := range standardFiles {
 		filepath := filepath.Join(logDir, filename)
 
-		err := os.WriteFile(filepath, []byte("standard s6 file content"), 0644)
+		err := os.WriteFile(filepath, []byte("standard s6 file content"), 0644) //nolint:gosec // G306: Benchmark test requires standard file permissions for log file creation
 		if err != nil {
 			b.Fatalf("Failed to create standard file: %v", err)
 		}

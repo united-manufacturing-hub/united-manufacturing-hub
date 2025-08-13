@@ -302,7 +302,7 @@ func (s *Watchdog) ReportHeartbeatStatus(uniqueIdentifier uuid.UUID, status Hear
 		return
 	}
 
-	heartbeat.lastReportedStatus.Store(int32(status))
+	heartbeat.lastReportedStatus.Store(int32(status)) //nolint:gosec // G115: Safe conversion, HeartbeatStatus enum values fit in int32
 	heartbeat.lastHeatbeatTime.Store(time.Now().UTC().Unix())
 	heartbeat.heartbeatsReceived.Add(1)
 

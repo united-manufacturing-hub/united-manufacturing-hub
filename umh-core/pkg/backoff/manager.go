@@ -113,8 +113,8 @@ func NewBackoffManager(config Config) *BackoffManager {
 	// Create exponential backoff with the provided settings
 	baseBackoff := backoff.NewExponentialBackOff()
 	// We're using ticks, so we use time.Duration(1) to represent 1 tick
-	baseBackoff.InitialInterval = time.Duration(config.InitialInterval) * time.Millisecond
-	baseBackoff.MaxInterval = time.Duration(config.MaxInterval) * time.Millisecond
+	baseBackoff.InitialInterval = time.Duration(config.InitialInterval) * time.Millisecond //nolint:gosec // G115: Safe conversion, backoff intervals are reasonable duration values
+	baseBackoff.MaxInterval = time.Duration(config.MaxInterval) * time.Millisecond         //nolint:gosec // G115: Safe conversion, backoff intervals are reasonable duration values
 	// Use our dummy clock instead of nil
 	baseBackoff.Clock = &TickClock{}
 
@@ -160,7 +160,7 @@ func (m *BackoffManager) SetError(err error, currentTick uint64) bool {
 	// Extract tick count
 	millis := next.Milliseconds()
 
-	ticksToWait := uint64(millis)
+	ticksToWait := uint64(millis) //nolint:gosec // G115: Safe conversion, duration milliseconds are positive
 	if ticksToWait < 1 {
 		ticksToWait = 1 // Minimum of 1 tick
 	}
@@ -267,7 +267,7 @@ func (m *BackoffManager) SetErrorWithBackoffForTesting(err error, customBackoff 
 	}
 
 	// Extract tick count
-	ticksToWait := uint64(next)
+	ticksToWait := uint64(next) //nolint:gosec // G115: Safe conversion, backoff duration is positive
 	if ticksToWait < 1 {
 		ticksToWait = 1 // Minimum of 1 tick
 	}

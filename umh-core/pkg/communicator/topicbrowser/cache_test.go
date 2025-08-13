@@ -312,7 +312,7 @@ func createMockUnsBundle(events map[string]int64, unsTopics map[string]string) [
 	for treeId, timestamp := range events {
 		entry := &tbproto.EventTableEntry{
 			UnsTreeId:    treeId,
-			ProducedAtMs: uint64(timestamp),
+			ProducedAtMs: uint64(timestamp), //nolint:gosec // G115: Safe conversion, timestamp is positive
 			// Add other required fields as needed
 		}
 		bundle.Events.Entries = append(bundle.Events.Entries, entry)

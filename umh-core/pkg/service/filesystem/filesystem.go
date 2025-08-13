@@ -133,7 +133,7 @@ func (s *DefaultService) EnsureDirectory(ctx context.Context, path string) error
 
 	// Run operation in goroutine
 	go func() {
-		errCh <- os.MkdirAll(path, 0755)
+		errCh <- os.MkdirAll(path, 0750)
 	}()
 
 	// Wait for either completion or context cancellation

@@ -160,7 +160,7 @@ func getEphemeralPortRange(fs filesystem.Service) (uint16, uint16) {
 		if len(parts) == 2 {
 			if min, err1 := strconv.Atoi(parts[0]); err1 == nil {
 				if max, err2 := strconv.Atoi(parts[1]); err2 == nil {
-					return uint16(min), uint16(max)
+					return uint16(min), uint16(max) //nolint:gosec // G115: Safe conversion, system port range values are valid uint16
 				}
 			}
 		}
@@ -214,8 +214,8 @@ func (pm *DefaultPortManager) AllocatePort(ctx context.Context, instanceName str
 
 		// Generate a random port in the ephemeral range
 		portRange := pm.maxPort - pm.minPort + 1
-		randomOffset := rand.IntN(int(portRange))
-		port := pm.minPort + uint16(randomOffset)
+		randomOffset := rand.IntN(int(portRange)) //nolint:gosec // G404: math/rand is appropriate for port randomization, not cryptographic use
+		port := pm.minPort + uint16(randomOffset) //nolint:gosec // G115: Safe conversion, randomOffset is within port range bounds
 
 		// Skip if we've already allocated this port
 		if pm.allocatedPorts[port] {

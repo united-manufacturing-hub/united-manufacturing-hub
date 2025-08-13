@@ -609,7 +609,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 	if len(instanceNames) > constants.MaxConcurrentFSMOperations {
 		// Calculate rotation based on manager tick
 		totalBatches := (len(instanceNames) + constants.MaxConcurrentFSMOperations - 1) / constants.MaxConcurrentFSMOperations
-		currentBatch := int(m.managerTick % uint64(totalBatches))
+		currentBatch := int(m.managerTick % uint64(totalBatches)) //nolint:gosec // G115: Safe conversion, batch count is reasonable size
 
 		startIdx = currentBatch * constants.MaxConcurrentFSMOperations
 
@@ -834,7 +834,7 @@ type ObservedStateConverter interface {
 //	next := m.schedule(10)   // 10 ticks ± 25 %  →  7 … 13
 func (m *BaseFSMManager[C]) schedule(base uint64) uint64 {
 	// Pick a random factor in [1‑j, 1+j]
-	factor := 1 + (rand.Float64()*2-1)*constants.JitterFraction
+	factor := 1 + (rand.Float64()*2-1)*constants.JitterFraction //nolint:gosec // G404: math/rand is appropriate for scheduling jitter, not cryptographic use
 	delta := float64(base) * factor
 
 	// Round to nearest integer tick and add to the current manager tick

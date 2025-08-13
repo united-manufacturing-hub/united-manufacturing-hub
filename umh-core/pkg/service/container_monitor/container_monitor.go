@@ -308,8 +308,8 @@ func (c *ContainerMonitorService) getMemoryMetrics(ctx context.Context) (*models
 			DesiredState:  models.Active.String(),
 			Category:      category,
 		},
-		CGroupUsedBytes:  int64(usedBytes),
-		CGroupTotalBytes: int64(totalBytes),
+		CGroupUsedBytes:  int64(usedBytes),  //nolint:gosec // G115: Safe conversion, memory bytes value is positive
+		CGroupTotalBytes: int64(totalBytes), //nolint:gosec // G115: Safe conversion, memory bytes value is positive
 	}
 
 	return memStat, nil
@@ -365,8 +365,8 @@ func (c *ContainerMonitorService) getDiskMetrics(ctx context.Context) (*models.D
 			DesiredState:  models.Active.String(),
 			Category:      category,
 		},
-		DataPartitionUsedBytes:  int64(usedBytes),
-		DataPartitionTotalBytes: int64(totalBytes),
+		DataPartitionUsedBytes:  int64(usedBytes),  //nolint:gosec // G115: Safe conversion, disk bytes value is positive
+		DataPartitionTotalBytes: int64(totalBytes), //nolint:gosec // G115: Safe conversion, disk bytes value is positive
 	}
 
 	return diskStat, nil

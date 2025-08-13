@@ -209,8 +209,8 @@ func (a *EditDataModelAction) Execute(ctx context.Context) (interface{}, map[str
 				for versionKey := range dmc.Versions {
 					if strings.HasPrefix(versionKey, "v") {
 						if versionNum, err := strconv.Atoi(versionKey[1:]); err == nil {
-							if uint64(versionNum) > maxVersion {
-								maxVersion = uint64(versionNum)
+							if uint64(versionNum) > maxVersion { //nolint:gosec // G115: Safe conversion, version numbers are positive and small
+								maxVersion = uint64(versionNum) //nolint:gosec // G115: Safe conversion, version numbers are positive and small
 							}
 						}
 					}
