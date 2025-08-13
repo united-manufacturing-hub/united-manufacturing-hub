@@ -475,11 +475,12 @@ func printContainerLogs() {
 	fmt.Printf("\n=== UMH CORE INTERNAL LOGS ===\n")
 
 	out, err = runDockerCommand("exec", containerName, "cat", "/data/logs/umh-core/current")
-	if err != nil {
+	switch {
+	case err != nil:
 		fmt.Printf("Failed to get UMH Core internal logs: %v\n", err)
-	} else if out == "" {
+	case out == "":
 		fmt.Printf("UMH Core internal logs are empty or not found\n")
-	} else {
+	default:
 		fmt.Printf("%s\n", out)
 	}
 
@@ -487,11 +488,12 @@ func printContainerLogs() {
 	fmt.Printf("\n=== GOLDEN SERVICE INTERNAL LOGS ===\n")
 
 	out, err = runDockerCommand("exec", containerName, "cat", "/data/logs/golden-service/current")
-	if err != nil {
+	switch {
+	case err != nil:
 		fmt.Printf("Failed to get Golden Service internal logs: %v\n", err)
-	} else if out == "" {
+	case out == "":
 		fmt.Printf("Golden Service internal logs are empty or not found\n")
-	} else {
+	default:
 		fmt.Printf("%s\n", out)
 	}
 
@@ -499,11 +501,12 @@ func printContainerLogs() {
 	fmt.Printf("\n=== GOLDEN BENTHOS INTERNAL LOGS ===\n")
 
 	out, err = runDockerCommand("exec", containerName, "cat", "/data/logs/golden-benthos/current")
-	if err != nil {
+	switch {
+	case err != nil:
 		fmt.Printf("Failed to get Benthos internal logs: %v\n", err)
-	} else if out == "" {
+	case out == "":
 		fmt.Printf("Benthos internal logs are empty or not found\n")
-	} else {
+	default:
 		fmt.Printf("%s\n", out)
 	}
 
@@ -511,11 +514,12 @@ func printContainerLogs() {
 	fmt.Printf("\n=== AVAILABLE LOG FILES ===\n")
 
 	out, err = runDockerCommand("exec", containerName, "find", "/data/logs", "-type", "f")
-	if err != nil {
+	switch {
+	case err != nil:
 		fmt.Printf("Failed to list log files: %v\n", err)
-	} else if out == "" {
+	case out == "":
 		fmt.Printf("No log files found in /data/logs\n")
-	} else {
+	default:
 		fmt.Printf("%s\n", out)
 	}
 

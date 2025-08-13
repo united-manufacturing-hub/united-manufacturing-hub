@@ -47,11 +47,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	if *interactive {
+	switch {
+	case *interactive:
 		runInteractive(analyzer)
-	} else if *command != "" {
+	case *command != "":
 		runCommand(analyzer, *command, *fsmName, *startTick, *endTick)
-	} else {
+	default:
 		analyzer.ShowSummary()
 	}
 }

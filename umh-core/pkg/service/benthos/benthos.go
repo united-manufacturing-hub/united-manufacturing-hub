@@ -523,22 +523,25 @@ func (s *BenthosService) Status(ctx context.Context, services serviceregistry.Pr
 
 	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, services.GetFileSystem())
 	if err != nil {
-		if errors.Is(err, s6_shared.ErrServiceNotExist) {
+		switch {
+		case errors.Is(err, s6_shared.ErrServiceNotExist):
 			s.logger.Debugf("Service %s does not exist, returning empty logs", s6ServiceName)
 
 			return ServiceInfo{}, ErrServiceNotExist
-		} else if errors.Is(err, s6_shared.ErrLogFileNotFound) {
+		case errors.Is(err, s6_shared.ErrLogFileNotFound):
 			s.logger.Debugf("Log file for service %s not found, returning empty logs", s6ServiceName)
 
 			return ServiceInfo{}, ErrServiceNotExist
-		} else {
+		default:
 			return ServiceInfo{}, fmt.Errorf("failed to get logs: %w", err)
 		}
 	}
 
 	benthosStatus, err := s.GetHealthCheckAndMetrics(ctx, services.GetFileSystem(), tick, loopStartTime, benthosName, logs)
 	if err != nil {
-		if strings.Contains(err.Error(), ErrLastObservedStateNil.Error()) {
+		errMsg := err.Error()
+		switch {
+		case strings.Contains(errMsg, ErrLastObservedStateNil.Error()):
 			return ServiceInfo{
 				S6ObservedState: s6ServiceObservedState,
 				S6FSMState:      s6FSMState,
@@ -546,12 +549,12 @@ func (s *BenthosService) Status(ctx context.Context, services serviceregistry.Pr
 					BenthosLogs: logs,
 				},
 			}, ErrLastObservedStateNil
-		} else if strings.Contains(err.Error(), "instance "+s6ServiceName+" not found") ||
-			strings.Contains(err.Error(), "not found") {
+		case strings.Contains(errMsg, "instance "+s6ServiceName+" not found") ||
+			strings.Contains(errMsg, "not found"):
 			s.logger.Debugf("Service %s was removed during status check", s6ServiceName)
 
 			return ServiceInfo{}, ErrServiceNotExist
-		} else if strings.Contains(err.Error(), ErrBenthosMonitorNotRunning.Error()) {
+		case strings.Contains(errMsg, ErrBenthosMonitorNotRunning.Error()):
 			s.logger.Debugf("Service %s is not running, returning empty logs", s6ServiceName)
 
 			return ServiceInfo{
@@ -559,9 +562,9 @@ func (s *BenthosService) Status(ctx context.Context, services serviceregistry.Pr
 				S6FSMState:      s6FSMState,
 				BenthosStatus:   benthosStatus,
 			}, ErrBenthosMonitorNotRunning
+		default:
+			return ServiceInfo{}, fmt.Errorf("failed to get health check: %w", err)
 		}
-
-		return ServiceInfo{}, fmt.Errorf("failed to get health check: %w", err)
 	}
 
 	serviceInfo := ServiceInfo{

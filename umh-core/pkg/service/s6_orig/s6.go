@@ -702,23 +702,25 @@ func parseCommandLine(cmdLine string) ([]string, error) {
 			continue
 		}
 
-		if (cmdLine[i] == '"' || cmdLine[i] == '\'') && !escaped {
-			if inQuote && cmdLine[i] == quoteChar {
+		switch {
+		case (cmdLine[i] == '"' || cmdLine[i] == '\'') && !escaped:
+			switch {
+			case inQuote && cmdLine[i] == quoteChar:
 				inQuote = false
 				quoteChar = 0
-			} else if !inQuote {
+			case !inQuote:
 				inQuote = true
 				quoteChar = cmdLine[i]
-			} else {
+			default:
 				// This is a different quote character inside a quote
 				currentPart.WriteByte(cmdLine[i])
 			}
-		} else if escaped {
+		case escaped:
 			// Handle the escaped character
 			currentPart.WriteByte(cmdLine[i])
 
 			escaped = false
-		} else {
+		default:
 			if cmdLine[i] == ' ' && !inQuote {
 				if currentPart.Len() > 0 {
 					cmdParts = append(cmdParts, currentPart.String())

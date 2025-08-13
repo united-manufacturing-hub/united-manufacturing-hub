@@ -206,15 +206,16 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 
 			// Handle errors differently based on type
 			if err != nil {
-				if errors.Is(err, context.DeadlineExceeded) {
+				switch {
+				case errors.Is(err, context.DeadlineExceeded):
 					// For timeouts, log warning but continue
 					sentry.ReportIssuef(sentry.IssueTypeWarning, c.logger, "Control loop reconcile timed out: %v", err)
-				} else if errors.Is(err, context.Canceled) {
+				case errors.Is(err, context.Canceled):
 					// For cancellation, exit the loop
 					c.logger.Infof("Control loop cancelled")
 
 					return nil
-				} else {
+				default:
 					metrics.IncErrorCountAndLog(metrics.ComponentControlLoop, "main", err, c.logger)
 					// Any other unhandled error will result in the control loop stopping
 					sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Control loop error: %v", err)
@@ -297,11 +298,12 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	cfg, err := c.configManager.GetConfig(ctx, ticker)
 	if err != nil {
 		// Handle temporary backoff errors --> we want to continue reconciling
-		if backoff.IsTemporaryBackoffError(err) {
+		switch {
+		case backoff.IsTemporaryBackoffError(err):
 			c.logger.Debugf("Skipping reconcile cycle due to temporary config backoff: %v", err)
 
 			return nil
-		} else if backoff.IsPermanentFailureError(err) { // Handle permanent failure errors --> we want to stop the control loop
+		case backoff.IsPermanentFailureError(err): // Handle permanent failure errors --> we want to stop the control loop
 			originalErr := backoff.ExtractOriginalError(err)
 			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Config manager has permanently failed after max retries: %v (original error: %v)",
 				err, originalErr)
@@ -309,7 +311,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 
 			// Propagate the error to the parent component so it can potentially restart the system
 			return fmt.Errorf("config permanently failed, system needs intervention: %w", err)
-		} else {
+		default:
 			// Handle other errors --> we want to continue reconciling
 			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Config manager error: %v", err)
 

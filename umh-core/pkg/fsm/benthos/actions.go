@@ -173,7 +173,8 @@ func (b *BenthosInstance) getServiceStatus(ctx context.Context, services service
 	info, err := b.service.Status(ctx, services, b.baseFSMInstance.GetID(), b.config.MetricsPort, tick, loopStartTime)
 	if err != nil {
 		// If there's an error getting the service status, we need to distinguish between cases
-		if errors.Is(err, benthos_service.ErrServiceNotExist) {
+		switch {
+		case errors.Is(err, benthos_service.ErrServiceNotExist):
 			// If the service is being created, we don't want to count this as an error
 			// The instance is likely in Creating or ToBeCreated state, so service doesn't exist yet
 			// This will be handled in the reconcileStateTransition where the service gets created
@@ -186,14 +187,14 @@ func (b *BenthosInstance) getServiceStatus(ctx context.Context, services service
 			b.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation")
 
 			return benthos_service.ServiceInfo{}, nil
-		} else if errors.Is(err, benthos_service.ErrLastObservedStateNil) {
+		case errors.Is(err, benthos_service.ErrLastObservedStateNil):
 			// If the last observed state is nil, we can ignore this error
 			infoWithFailedHealthChecks := info
 			infoWithFailedHealthChecks.BenthosStatus.HealthCheck.IsLive = false
 			infoWithFailedHealthChecks.BenthosStatus.HealthCheck.IsReady = false
 
 			return infoWithFailedHealthChecks, nil
-		} else if errors.Is(err, benthos_service.ErrBenthosMonitorNotRunning) {
+		case errors.Is(err, benthos_service.ErrBenthosMonitorNotRunning):
 			// If the metrics service is not running, we are unable to get the logs/metrics, therefore we must return an empty status
 			if !IsRunningState(b.baseFSMInstance.GetCurrentFSMState()) {
 				return info, nil

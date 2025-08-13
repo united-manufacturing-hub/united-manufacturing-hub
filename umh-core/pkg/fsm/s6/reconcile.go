@@ -117,7 +117,8 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 	//
 	// This single rule, combined with "children first", breaks the restart dead‑loop while still recording real problems.
 	//
-	if err = s.reconcileExternalChanges(ctx, services, snapshot); err != nil {
+	err = s.reconcileExternalChanges(ctx, services, snapshot)
+	if err != nil {
 		if s.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
 			return nil, false
 		}

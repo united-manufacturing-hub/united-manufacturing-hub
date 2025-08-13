@@ -149,13 +149,14 @@ func (a *EditProtocolConverterAction) Parse(ctx context.Context, payload interfa
 	// Determine which DFC is being updated and convert it to CDFCPayload
 	var dfcToUpdate *models.ProtocolConverterDFC
 
-	if pcPayload.ReadDFC != nil {
+	switch {
+	case pcPayload.ReadDFC != nil:
 		a.dfcType = DFCTypeRead
 		dfcToUpdate = pcPayload.ReadDFC
-	} else if pcPayload.WriteDFC != nil {
+	case pcPayload.WriteDFC != nil:
 		a.dfcType = DFCTypeWrite
 		dfcToUpdate = pcPayload.WriteDFC
-	} else {
+	default:
 		a.dfcType = DFCTypeEmpty
 		dfcToUpdate = &models.ProtocolConverterDFC{}
 	}

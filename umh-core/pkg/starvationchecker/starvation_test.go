@@ -29,7 +29,7 @@ var _ = Describe("StarvationChecker", func() {
 	var cancel context.CancelFunc
 
 	BeforeEach(func() {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel = context.WithCancel(context.Background())
 		_ = ctx
 		_ = cancel
 		checker = NewStarvationChecker(100 * time.Millisecond)

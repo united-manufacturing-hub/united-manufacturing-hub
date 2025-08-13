@@ -569,8 +569,14 @@ var _ = Describe("StreamProcessorService", func() {
 			Expect(spRuntimeCfg.Sources["test_source"]).To(Equal("factory-from-agent.line-from-agent.test"))
 
 			// Verify DFC config has the agent location in UNS topics
-			unsInput := dfcRuntimeCfg.BenthosConfig.Input["uns"].(map[string]any)
-			umhTopics := unsInput["umh_topics"].([]any)
+			unsInputRaw, ok := dfcRuntimeCfg.BenthosConfig.Input["uns"]
+			Expect(ok).To(BeTrue(), "uns input should exist in benthos config")
+			unsInput, ok := unsInputRaw.(map[string]any)
+			Expect(ok).To(BeTrue(), "uns input should be a map[string]any")
+			umhTopicsRaw, ok := unsInput["umh_topics"]
+			Expect(ok).To(BeTrue(), "umh_topics should exist in uns input")
+			umhTopics, ok := umhTopicsRaw.([]any)
+			Expect(ok).To(BeTrue(), "umh_topics should be a []any")
 			Expect(umhTopics).To(ContainElement("umh.v1.factory-from-agent.line-from-agent.test"))
 		})
 	})

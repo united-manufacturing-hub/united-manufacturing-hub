@@ -430,15 +430,16 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 
 	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, filesystemService)
 	if err != nil {
-		if errors.Is(err, s6_shared.ErrServiceNotExist) {
+		switch {
+		case errors.Is(err, s6_shared.ErrServiceNotExist):
 			s.logger.Debugf("Service %s does not exist, returning empty logs", s6ServiceName)
 
 			return ServiceInfo{}, ErrServiceNotExist
-		} else if errors.Is(err, s6_shared.ErrLogFileNotFound) {
+		case errors.Is(err, s6_shared.ErrLogFileNotFound):
 			s.logger.Debugf("Log file for service %s not found, returning empty logs", s6ServiceName)
 
 			return ServiceInfo{}, ErrServiceNotExist
-		} else {
+		default:
 			return ServiceInfo{}, fmt.Errorf("failed to get logs: %w", err)
 		}
 	}

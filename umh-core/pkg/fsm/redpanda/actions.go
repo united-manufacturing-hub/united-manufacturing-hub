@@ -136,7 +136,8 @@ func (r *RedpandaInstance) GetServiceStatus(ctx context.Context, filesystemServi
 	info, err := r.service.Status(ctx, filesystemService, r.baseFSMInstance.GetID(), tick, loopStartTime)
 	if err != nil {
 		// If there's an error getting the service status, we need to distinguish between cases
-		if errors.Is(err, redpanda_service.ErrServiceNotExist) {
+		switch {
+		case errors.Is(err, redpanda_service.ErrServiceNotExist):
 			// If the service is being created, we don't want to count this as an error
 			// The instance is likely in Creating or ToBeCreated state, so service doesn't exist yet
 			// This will be handled in the reconcileStateTransition where the service gets created
@@ -149,7 +150,7 @@ func (r *RedpandaInstance) GetServiceStatus(ctx context.Context, filesystemServi
 			r.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation")
 
 			return redpanda_service.ServiceInfo{}, nil
-		} else if errors.Is(err, redpanda_service.ErrServiceNoLogFile) {
+		case errors.Is(err, redpanda_service.ErrServiceNoLogFile):
 			// This is only an error, if redpanda is already running, otherwise there are simply no logs
 			// This includes degraded states, as he can only go from active/idle to degraded, and therefore there should be logs
 			if IsRunningState(r.baseFSMInstance.GetCurrentFSMState()) {
@@ -164,7 +165,7 @@ func (r *RedpandaInstance) GetServiceStatus(ctx context.Context, filesystemServi
 				// We have no running service, therefore we can simply return nil as error
 				return info, nil
 			}
-		} else if errors.Is(err, monitor.ErrServiceConnectionRefused) {
+		case errors.Is(err, monitor.ErrServiceConnectionRefused):
 			// If we are in the starting phase or stopped, ..., we can ignore this error, as it is expected
 			if !IsRunningState(r.baseFSMInstance.GetCurrentFSMState()) {
 				infoWithFailedHealthChecks := info
@@ -173,12 +174,12 @@ func (r *RedpandaInstance) GetServiceStatus(ctx context.Context, filesystemServi
 
 				return infoWithFailedHealthChecks, nil
 			}
-		} else if errors.Is(err, redpanda_service.ErrRedpandaMonitorNotRunning) {
+		case errors.Is(err, redpanda_service.ErrRedpandaMonitorNotRunning):
 			// If the metrics service is not running, we are unable to get the logs/metrics, therefore we must return an empty status
 			if !IsRunningState(r.baseFSMInstance.GetCurrentFSMState()) {
 				return info, nil
 			}
-		} else if errors.Is(err, redpanda_service.ErrLastObservedStateNil) {
+		case errors.Is(err, redpanda_service.ErrLastObservedStateNil):
 			// If the last observed state is nil, we can ignore this error
 			infoWithFailedHealthChecks := info
 			infoWithFailedHealthChecks.RedpandaStatus.HealthCheck.IsLive = false
@@ -238,19 +239,20 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 		info, err := r.GetServiceStatus(gctx, services.GetFileSystem(), snapshot.Tick, snapshot.SnapshotTime)
 		metrics.ObserveReconcileTime(logger.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
 
-		if err == nil {
+		switch {
+		case err == nil:
 			// Store the raw service info
 			observedStateMu.Lock()
 
 			r.PreviousObservedState.ServiceInfo = info
 
 			observedStateMu.Unlock()
-		} else if strings.Contains(err.Error(), redpanda_service.ErrServiceNotExist.Error()) ||
+		case strings.Contains(err.Error(), redpanda_service.ErrServiceNotExist.Error()) ||
 			strings.Contains(err.Error(), redpanda_service.ErrServiceNoLogFile.Error()) ||
 			strings.Contains(err.Error(), redpanda_service.ErrRedpandaMonitorInstanceNotFound.Error()) ||
-			strings.Contains(err.Error(), redpanda_service.ErrLastObservedStateNil.Error()) {
+			strings.Contains(err.Error(), redpanda_service.ErrLastObservedStateNil.Error()):
 			return nil
-		} else if strings.Contains(err.Error(), redpanda_service.ErrRedpandaMonitorNotRunning.Error()) {
+		case strings.Contains(err.Error(), redpanda_service.ErrRedpandaMonitorNotRunning.Error()):
 			// This is expected during the startup phase of the redpanda service, when the redpanda monitor service is not yet running
 			r.baseFSMInstance.GetLogger().Debugf("Redpanda monitor service not yet running: %v", err)
 

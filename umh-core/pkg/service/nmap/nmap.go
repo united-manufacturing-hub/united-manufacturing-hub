@@ -185,17 +185,18 @@ func (s *NmapService) parseScanLogs(logs []s6_shared.LogEntry, port uint16) *Nma
 
 	// First, extract complete scan blocks from logs
 	for _, log := range logs {
-		if strings.Contains(log.Content, "NMAP_SCAN_START") {
+		switch {
+		case strings.Contains(log.Content, "NMAP_SCAN_START"):
 			inScanBlock = true
 			currentScan = []string{log.Content}
-		} else if strings.Contains(log.Content, "NMAP_SCAN_END") {
+		case strings.Contains(log.Content, "NMAP_SCAN_END"):
 			if inScanBlock {
 				currentScan = append(currentScan, log.Content)
 				scanBlocks = append(scanBlocks, currentScan)
 				currentScan = []string{}
 				inScanBlock = false
 			}
-		} else if inScanBlock {
+		case inScanBlock:
 			currentScan = append(currentScan, log.Content)
 		}
 	}

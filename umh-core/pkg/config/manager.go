@@ -270,7 +270,8 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 	}
 
 	// Persist the updated config
-	if err := m.writeConfig(ctx, config); err != nil {
+	err = m.writeConfig(ctx, config)
+	if err != nil {
 		return FullConfig{}, fmt.Errorf("failed to write new config: %w", err)
 	}
 

@@ -109,7 +109,8 @@ func (m *FileConfigManager) AtomicEditDataModel(ctx context.Context, name string
 
 	for versionKey := range currentDataModel.Versions {
 		if strings.HasPrefix(versionKey, "v") {
-			if versionNum, err := strconv.Atoi(versionKey[1:]); err == nil {
+			versionNum, err := strconv.Atoi(versionKey[1:])
+			if err == nil {
 				if versionNum > maxVersion {
 					maxVersion = versionNum
 				}
