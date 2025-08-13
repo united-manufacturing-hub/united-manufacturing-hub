@@ -343,6 +343,7 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 	// Always set a timeout if there isn't one already
 	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > 30*time.Second {
 		var cancel context.CancelFunc
+
 		ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 	}
@@ -445,6 +446,7 @@ func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, 
 	// Always set a timeout if there isn't one already
 	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > 30*time.Second {
 		var cancel context.CancelFunc
+
 		ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 	}

@@ -158,6 +158,7 @@ func verifySchemaViaHTTP(subject SubjectName, expectedSchema JSONSchemaDefinitio
 	if err != nil {
 		return fmt.Errorf("failed to marshal expected schema for comparison: %w", err)
 	}
+
 	fetchedNormalized, err := json.Marshal(fetchedParsed)
 	if err != nil {
 		return fmt.Errorf("failed to marshal fetched schema for comparison: %w", err)

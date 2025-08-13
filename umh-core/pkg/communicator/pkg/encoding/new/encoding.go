@@ -118,6 +118,7 @@ func Compress(message []byte) ([]byte, error) {
 	} else {
 		// If pool returns wrong type, create new encoder
 		var err error
+
 		encoder, err = zstd.NewWriter(nil)
 		if err != nil {
 			return nil, err
@@ -162,6 +163,7 @@ func Decompress(message []byte) ([]byte, error) {
 	} else {
 		// If pool returns wrong type, create new decoder
 		var err error
+
 		decoder, err = zstd.NewReader(nil)
 		if err != nil {
 			return nil, err

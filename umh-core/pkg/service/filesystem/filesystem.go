@@ -731,6 +731,7 @@ func validateChownInputs(path, user, group string) error {
 	if user == "" {
 		return errors.New("user cannot be empty")
 	}
+
 	if !validName.MatchString(user) {
 		return errors.New("user contains illegal characters")
 	}
@@ -738,6 +739,7 @@ func validateChownInputs(path, user, group string) error {
 	if group == "" {
 		return errors.New("group cannot be empty")
 	}
+
 	if !validName.MatchString(group) {
 		return errors.New("group contains illegal characters")
 	}

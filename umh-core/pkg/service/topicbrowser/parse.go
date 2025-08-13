@@ -198,10 +198,12 @@ func extractNextBlock(entries []s6_shared.LogEntry, lastProcessedTimestamp time.
 func extractBlockData(entries []s6_shared.LogEntry, startIndex, dataEndIndex, blockEndIndex int, epochMS int64) ([]byte, int64, int, error) {
 	// Extract hex payload using parseBufferPool (see memory management docs above)
 	bufPtrRaw := parseBufferPool.Get()
+
 	bufPtr, ok := bufPtrRaw.(*[]byte)
 	if !ok {
 		return nil, 0, 0, fmt.Errorf("parseBufferPool returned unexpected type")
 	}
+
 	buf := *bufPtr
 
 	// Reset buffer and estimate needed capacity based on S6 log line limits
@@ -265,6 +267,7 @@ func (svc *Service) parseBlock(entries []s6_shared.LogEntry) error {
 
 	// Get pooled BufferItem (ownership transfer pattern - see docs above)
 	itemRaw := bufferItemPool.Get()
+
 	item, ok := itemRaw.(*BufferItem)
 	if !ok {
 		return nil
