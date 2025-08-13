@@ -31,7 +31,10 @@ import (
 // Helper function to convert a struct to map[string]interface{}
 // to simulate how payloads are received from the router.
 func structToEncodedMap(v interface{}) map[string]interface{} {
-	payload := v.(models.AddDataModelPayload)
+	payload, ok := v.(models.AddDataModelPayload)
+	if !ok {
+		panic("expected AddDataModelPayload")
+	}
 
 	// Marshal the DataModelVersion to YAML
 	yamlData, err := yaml.Marshal(payload.Structure)

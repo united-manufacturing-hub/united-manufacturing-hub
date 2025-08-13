@@ -148,13 +148,13 @@ var _ = Describe("Simulator", func() {
 			Expect(ok).To(BeTrue(), "event2 payload should be EventTableEntry_Ts for type check")
 			Expect(payload2Check.Ts.GetScalarType()).To(Equal(tbproto.ScalarType_NUMERIC))
 
-			payload1, ok := event1.Payload.(*tbproto.EventTableEntry_Ts)
+			payload1, ok := event1.GetPayload().(*tbproto.EventTableEntry_Ts)
 			Expect(ok).To(BeTrue(), "event1 payload should be EventTableEntry_Ts")
 			value1, ok := payload1.Ts.GetValue().(*tbproto.TimeSeriesPayload_NumericValue)
 			Expect(ok).To(BeTrue(), "event1 value should be NumericValue")
 			val1 := value1.NumericValue.GetValue()
 
-			payload2, ok := event2.Payload.(*tbproto.EventTableEntry_Ts)
+			payload2, ok := event2.GetPayload().(*tbproto.EventTableEntry_Ts)
 			Expect(ok).To(BeTrue(), "event2 payload should be EventTableEntry_Ts")
 			value2, ok := payload2.Ts.GetValue().(*tbproto.TimeSeriesPayload_NumericValue)
 			Expect(ok).To(BeTrue(), "event2 value should be NumericValue")

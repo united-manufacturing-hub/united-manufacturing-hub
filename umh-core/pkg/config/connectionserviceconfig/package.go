@@ -27,7 +27,7 @@ var (
 	defaultNormalizer = NewNormalizer()
 	defaultComparator = NewComparator()
 
-	// ErrConnectionTemplateNilOrEmpty is returned when the connection template is nil or empty
+	// ErrConnectionTemplateNilOrEmpty is returned when the connection template is nil or empty.
 	ErrConnectionTemplateNilOrEmpty = errors.New("connection template is nil or empty")
 )
 

@@ -30,7 +30,7 @@ import (
 )
 
 var (
-	// Static errors for redpanda monitor reconcile
+	// Static errors for redpanda monitor reconcile.
 	ErrInvalidState                 = errors.New("invalid state")
 	ErrInvalidDesiredStateReconcile = errors.New("invalid desired state")
 	ErrInvalidCurrentState          = errors.New("invalid current state")

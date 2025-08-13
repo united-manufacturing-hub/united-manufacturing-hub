@@ -92,7 +92,8 @@ func (a *AgentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsh
 	}
 
 	// Step 2: Detect external changes
-	if err = a.reconcileExternalChanges(ctx, services, snapshot); err != nil {
+	err = a.reconcileExternalChanges(ctx, services, snapshot)
+	if err != nil {
 		if a.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
 			return nil, false
 		}

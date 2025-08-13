@@ -48,7 +48,7 @@ var (
 	containerCPUCoreCount = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespace,
 		Subsystem: subsystem,
-		Name:      "cpu_core_count",
+		Name:      "cpu_cores",
 		Help:      "Number of CPU cores available",
 	}, []string{"instance"})
 

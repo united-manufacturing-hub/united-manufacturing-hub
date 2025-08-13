@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -118,9 +119,10 @@ func GetMetricsURL() string {
 		port = 8080 // Fallback to default port
 	}
 
-	fmt.Printf("Using localhost URL with host port: http://%s:%d/metrics\n", "localhost", port)
+	hostPort := net.JoinHostPort("localhost", strconv.Itoa(int(port)))
+	fmt.Printf("Using localhost URL with host port: http://%s/metrics\n", hostPort)
 
-	return fmt.Sprintf("http://%s:%d/metrics", "localhost", port)
+	return fmt.Sprintf("http://%s/metrics", hostPort)
 }
 
 // GetGoldenServiceURL returns the URL for the golden service.
@@ -135,9 +137,10 @@ func GetGoldenServiceURL() string {
 		port = 8082 // Fallback to default port
 	}
 
-	fmt.Printf("Using localhost URL with host port: http://%s:%d/health\n", "localhost", port)
+	hostPort := net.JoinHostPort("localhost", strconv.Itoa(int(port)))
+	fmt.Printf("Using localhost URL with host port: http://%s/health\n", hostPort)
 
-	return fmt.Sprintf("http://%s:%d", "localhost", port)
+	return "http://" + hostPort
 }
 
 // writeConfigFile writes the given YAML content to a config file for the container to read.
@@ -238,7 +241,7 @@ func buildContainer() error {
 	var outmake []byte
 
 	// #nosec G204 - Command arguments are validated and controlled in test environment
-	cmd := exec.Command("make", "build", "IMAGE_NAME="+imageName, "TAG="+tag)
+	cmd := exec.CommandContext(context.Background(), "make", "build", "IMAGE_NAME="+imageName, "TAG="+tag)
 	cmd.Dir = coreDir // Set working directory to coreDir
 
 	outmake, err = cmd.Output()

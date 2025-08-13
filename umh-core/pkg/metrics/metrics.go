@@ -88,8 +88,8 @@ var (
 		prometheus.SummaryOpts{
 			Namespace: namespace,
 			Subsystem: subsystem,
-			Name:      "reconcile_duration_milliseconds",
-			Help:      "Time taken to reconcile (in milliseconds)",
+			Name:      "reconcile_duration_seconds",
+			Help:      "Time taken to reconcile (in seconds)",
 			Objectives: map[float64]float64{
 				0.5:  0.01, // 50th percentile with 1% error
 				0.9:  0.01, // 90th percentile with 1% error
@@ -105,7 +105,7 @@ var (
 		prometheus.CounterOpts{
 			Namespace: namespace,
 			Subsystem: subsystem,
-			Name:      "reconcile_starved_total_seconds",
+			Name:      "reconcile_starved_seconds_total",
 			Help:      "Total seconds the reconcile loop was starved",
 		},
 	)

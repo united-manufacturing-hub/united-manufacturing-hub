@@ -150,6 +150,7 @@ func generateBinaryData(size int) []byte {
 
 // Generic benchmark functions.
 func benchmarkCompress(b *testing.B, impl EncodingImpl, size int) {
+	b.Helper()
 	b.Run(impl.Name, func(b *testing.B) {
 		data := generateBinaryData(size)
 
@@ -178,6 +179,7 @@ func BenchmarkCompress_Large(b *testing.B) {
 }
 
 func benchmarkEncodeMessage(b *testing.B, impl EncodingImpl, msgGenerator func() models.UMHMessageContent) {
+	b.Helper()
 	b.Run(impl.Name, func(b *testing.B) {
 		msg := msgGenerator()
 
@@ -212,6 +214,7 @@ func BenchmarkEncodeMessage_Large(b *testing.B) {
 }
 
 func benchmarkDecodeMessage(b *testing.B, impl EncodingImpl, msgGenerator func() models.UMHMessageContent) {
+	b.Helper()
 	b.Run(impl.Name, func(b *testing.B) {
 		msg := msgGenerator()
 

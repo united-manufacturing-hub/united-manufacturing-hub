@@ -51,7 +51,7 @@ func CheckIfAPIIsReachable(insecureTLS bool, apiURL string, logger *zap.SugaredL
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, "GET", baseUrl, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseUrl, nil)
 	if err != nil {
 		logger.Errorf("Error creating request for API reachability check: %v", err)
 

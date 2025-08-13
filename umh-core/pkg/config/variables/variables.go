@@ -26,12 +26,12 @@ type VariableBundle struct {
 }
 
 // Equal checks if two VariableBundles are equal.
-func (vb VariableBundle) Equal(other VariableBundle) bool {
-	return NewComparator().ConfigsEqual(vb, other)
+func (vb *VariableBundle) Equal(other VariableBundle) bool {
+	return NewComparator().ConfigsEqual(*vb, other)
 }
 
 // Convenient helper – flat view the template engine will see.
-func (vb VariableBundle) Flatten() map[string]any {
+func (vb *VariableBundle) Flatten() map[string]any {
 	out := map[string]any{}
 	// move user variables to the top level
 	for k, v := range vb.User {
@@ -51,7 +51,7 @@ func (vb VariableBundle) Flatten() map[string]any {
 
 // MarshalYAML implements yaml.Marshaler to provide user-friendly YAML output
 // User variables are flattened to the top level, while global and internal are omitted.
-func (vb VariableBundle) MarshalYAML() (interface{}, error) {
+func (vb *VariableBundle) MarshalYAML() (interface{}, error) {
 	// If no user variables, return empty map
 	if len(vb.User) == 0 {
 		return map[string]any{}, nil

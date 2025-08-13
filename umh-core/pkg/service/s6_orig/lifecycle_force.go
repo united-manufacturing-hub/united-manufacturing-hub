@@ -104,16 +104,15 @@ func (s *DefaultService) removeDirectoryWithTimeout(ctx context.Context, path st
 	// Inherit from parent context but ensure we have at least the chunk timeout
 	const chunkTimeout = 750 * time.Millisecond
 
-	var chunkCtx context.Context
-
 	var cancel context.CancelFunc
+	var chunkCtx context.Context
 
 	// Check if parent context has enough time remaining, otherwise use background
 	if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) >= chunkTimeout {
 		chunkCtx, cancel = context.WithTimeout(ctx, chunkTimeout)
 	} else {
 		// Parent context doesn't have enough time, use background for full timeout
-		chunkCtx, cancel = context.WithTimeout(context.Background(), chunkTimeout)
+		chunkCtx, cancel = context.WithTimeout(context.TODO(), chunkTimeout)
 	}
 
 	defer cancel()

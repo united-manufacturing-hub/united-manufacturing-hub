@@ -318,7 +318,9 @@ func processJSONResponse[R any](response *http.Response, cookies *map[string]str
 	}
 
 	var typedResult R
-	if err := safejson.Unmarshal(bodyBytes, &typedResult); err != nil {
+
+	err = safejson.Unmarshal(bodyBytes, &typedResult)
+	if err != nil {
 		return nil, response.StatusCode, err
 	}
 
@@ -337,7 +339,7 @@ func processJSONResponse[R any](response *http.Response, cookies *map[string]str
 func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (result *R, statusCode int, responseErr error) {
 	// Set up context with default 30 second timeout if none provided or no timeout
 	if ctx == nil {
-		ctx = context.Background()
+		ctx = context.TODO()
 	}
 
 	// Always set a timeout if there isn't one already
@@ -354,7 +356,8 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 	if err != nil {
 		if response != nil {
 			defer func() {
-				if closeErr := response.Body.Close(); closeErr != nil {
+				closeErr := response.Body.Close()
+				if closeErr != nil {
 					logger.Warnf("Failed to close response body: %v", closeErr)
 				}
 			}()
@@ -366,7 +369,7 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 
 	result, statusCode, responseErr = processJSONResponse[R](response, cookies, endpoint, logger)
 
-	return
+	return result, statusCode, responseErr
 }
 
 // DoHTTPPostRequest performs the actual HTTP POST request and returns the response and any errors.
@@ -440,7 +443,7 @@ func DoHTTPPostRequest[T any](ctx context.Context, url string, data *T, header m
 func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (result *R, statusCode int, responseErr error) {
 	// Set up context with default 30 second timeout if none provided or no timeout
 	if ctx == nil {
-		ctx = context.Background()
+		ctx = context.TODO()
 	}
 
 	// Always set a timeout if there isn't one already
@@ -457,7 +460,8 @@ func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, 
 	if err != nil {
 		if response != nil {
 			defer func() {
-				if closeErr := response.Body.Close(); closeErr != nil {
+				closeErr := response.Body.Close()
+				if closeErr != nil {
 					logger.Warnf("Failed to close response body: %v", closeErr)
 				}
 			}()
@@ -469,5 +473,5 @@ func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, 
 
 	result, statusCode, responseErr = processJSONResponse[R](response, cookies, endpoint, logger)
 
-	return
+	return result, statusCode, responseErr
 }

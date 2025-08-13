@@ -32,7 +32,7 @@ import (
 )
 
 var (
-	// Static errors for redpanda monitor
+	// Static errors for redpanda monitor.
 	ErrInvalidDesiredState = errors.New("invalid desired state")
 )
 

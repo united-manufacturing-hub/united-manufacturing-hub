@@ -179,7 +179,8 @@ func buildProtocolConverterAsDfc(
 
 // getProtocolConverterStatusMessage returns a human-readable status message for the given state.
 func getProtocolConverterStatusMessage(state string, statusReason string, connectionState string, nmapState string) string {
-	baseMessage := ""
+	var baseMessage string
+
 	connectionSuffix := ""
 
 	// Get base message from protocol converter state
@@ -227,7 +228,7 @@ func getProtocolConverterStatusMessage(state string, statusReason string, connec
 
 	// Add Nmap state information if available
 	if nmapState != "" {
-		nmapSuffix := ""
+		var nmapSuffix string
 
 		switch nmapState {
 		case nmap.OperationalStateOpen:

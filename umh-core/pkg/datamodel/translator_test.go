@@ -329,9 +329,12 @@ var _ = Describe("Translator", func() {
 					schema, exists := result.Schemas[subjectName]
 					Expect(exists).To(BeTrue())
 
-					props := schema["properties"].(map[string]interface{})
-					fields := props["fields"].(map[string]interface{})
-					fieldProps := fields["properties"].(map[string]interface{})
+					props, ok := schema["properties"].(map[string]interface{})
+					Expect(ok).To(BeTrue(), "schema should have properties")
+					fields, ok := props["fields"].(map[string]interface{})
+					Expect(ok).To(BeTrue(), "properties should have fields")
+					fieldProps, ok := fields["properties"].(map[string]interface{})
+					Expect(ok).To(BeTrue(), "fields should have properties")
 
 					// Check for custom fields
 					for _, fieldName := range tc.customFieldsToCheck {

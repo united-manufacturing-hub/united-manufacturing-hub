@@ -161,7 +161,8 @@ var _ = Describe("StreamProcessorService", func() {
 						Expect(streamprocessor["output_topic"]).To(Equal("umh.v1.factory-A.line-1"))
 
 						// Verify sources mapping
-						sources := streamprocessor["sources"].(map[string]any)
+						sources, ok := streamprocessor["sources"].(map[string]any)
+						Expect(ok).To(BeTrue(), "sources should be a map[string]any")
 						Expect(sources["vibration_sensor"]).To(Equal("umh.v1.factory-A.line-1.vibration"))
 						Expect(sources["count_sensor"]).To(Equal("umh.v1.factory-A.line-1.count"))
 						Expect(sources["motor_data"]).To(Equal("umh.v1.factory-A.line-1.motor"))
@@ -481,8 +482,10 @@ var _ = Describe("StreamProcessorService", func() {
 			}
 			Expect(ok).To(BeTrue())
 			// Check UNS input topics
-			unsInput := dfcRuntimeCfg.BenthosConfig.Input["uns"].(map[string]any)
-			umhTopics := unsInput["umh_topics"].([]any)
+			unsInput, ok := dfcRuntimeCfg.BenthosConfig.Input["uns"].(map[string]any)
+			Expect(ok).To(BeTrue(), "uns input should be a map[string]any")
+			umhTopics, ok := unsInput["umh_topics"].([]any)
+			Expect(ok).To(BeTrue(), "umh_topics should be a []any")
 			Expect(umhTopics).To(ContainElement("umh.v1.factory-A.line-1.station-7.pump-001.vibration"))
 			Expect(umhTopics).To(ContainElement("umh.v1.factory-A.line-1.station-7.pump-001.count"))
 			Expect(umhTopics).To(ContainElement("umh.v1.factory-A.line-1.station-7.pump-001.motor"))

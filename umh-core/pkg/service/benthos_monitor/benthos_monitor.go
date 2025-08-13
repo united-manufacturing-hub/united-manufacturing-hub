@@ -745,7 +745,9 @@ func ParseReadyData(dataReader io.Reader) (bool, readyResponse, error) {
 	}
 
 	var readyResp readyResponse
-	if err := json.Unmarshal(data, &readyResp); err != nil {
+
+	err = json.Unmarshal(data, &readyResp)
+	if err != nil {
 		return false, readyResponse{}, fmt.Errorf("failed to unmarshal ready data: %w", err)
 	}
 

@@ -178,7 +178,8 @@ func (tbc *TopicBrowserCommunicator) processNewBuffers(obs *topicbrowserfsm.Obse
 	}
 
 	// Validate buffer sizes before processing
-	if err := validateBufferSizeFromSnapshot(snapshot); err != nil {
+	err := validateBufferSizeFromSnapshot(snapshot)
+	if err != nil {
 		sentry.ReportIssue(err, sentry.IssueTypeError, tbc.logger)
 
 		return nil, fmt.Errorf("buffer size validation failed: %w", err)
@@ -187,7 +188,6 @@ func (tbc *TopicBrowserCommunicator) processNewBuffers(obs *topicbrowserfsm.Obse
 	var result *ProcessingResult
 
 	// Process the buffers and update internal cache
-	var err error
 	if tbc.lastProcessedSequence == 0 {
 		// First time processing or reset: process all buffers
 		result, err = tbc.processAllBuffers(snapshot.Items, source)

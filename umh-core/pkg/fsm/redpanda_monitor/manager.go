@@ -26,7 +26,7 @@ import (
 )
 
 var (
-	// Static errors for redpanda monitor manager
+	// Static errors for redpanda monitor manager.
 	ErrNotRedpandaMonitorInstance = errors.New("instance is not a RedpandaMonitorInstance")
 )
 

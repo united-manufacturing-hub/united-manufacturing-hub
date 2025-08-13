@@ -28,7 +28,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// Static errors for login functionality
+// Static errors for login functionality.
 var (
 	ErrNoCookieReturned      = errors.New("no cookie returned")
 	ErrNoTokenCookieReturned = errors.New("no token cookie returned")

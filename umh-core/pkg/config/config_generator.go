@@ -20,7 +20,7 @@ import (
 	"fmt"
 )
 
-// ErrNoProtocolConverterFound is returned when no protocol converter is found in the configuration
+// ErrNoProtocolConverterFound is returned when no protocol converter is found in the configuration.
 var ErrNoProtocolConverterFound = errors.New("no protocol converter found")
 
 // GenerateConfig creates a test configuration with a specified number of processors.

@@ -903,7 +903,7 @@ func (m *BaseFSMManager[C]) maybeEscalateRemoval(ctx context.Context, inst FSMIn
 	case internalfsm.LifecycleStateRemoving:
 		// Instance is stuck in removing state - try force removal if possible
 		if forceRemover, ok := inst.(interface {
-			ForceRemove(context.Context, filesystem.Service) error
+			ForceRemove(ctx context.Context, fs filesystem.Service) error
 		}); ok {
 			// Run force removal in a detached goroutine to avoid blocking the main reconciliation loop
 			go func() {
@@ -940,7 +940,7 @@ func (m *BaseFSMManager[C]) maybeEscalateRemoval(ctx context.Context, inst FSMIn
 			)
 
 			if forceRemover, ok := inst.(interface {
-				ForceRemove(context.Context, filesystem.Service) error
+				ForceRemove(ctx context.Context, fs filesystem.Service) error
 			}); ok {
 				// Run force removal in a detached goroutine to avoid blocking the main reconciliation loop
 				go func() {

@@ -67,7 +67,7 @@ func getLogRunScript(config s6serviceconfig.S6ServiceConfig, logDir string) (str
 	// Create logutil-service command line, see also https://skarnet.org/software/s6/s6-log.html
 	// logutil-service is a wrapper around s6_log and reads from the S6_LOGGING_SCRIPT environment variable
 	// We overwrite the default S6_LOGGING_SCRIPT with our own if config.LogFilesize is set
-	logutilServiceCmd := ""
+	var logutilServiceCmd string
 
 	logutilEnv := ""
 	if config.LogFilesize > 0 {

@@ -279,7 +279,10 @@ func (s *DefaultService) ReadFileRange(
 
 		// BUFFER POOL USAGE: Get reusable 1MB buffer to minimize allocations
 		// The buffer gets completely overwritten by io.ReadFull each time
-		smallBuf := chunkBufferPool.Get().(*[]byte)
+		smallBuf, ok := chunkBufferPool.Get().(*[]byte)
+		if !ok {
+			panic("chunkBufferPool returned unexpected type")
+		}
 		// Sanity check (can't happen unless code changes)
 		if smallBuf == nil {
 			resCh <- result{err: errors.New("smallBuf is nil"), data: nil, newSize: 0}
