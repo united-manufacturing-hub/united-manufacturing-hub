@@ -57,11 +57,7 @@ func IsOperationalState(state string) bool {
 
 // IsStartingState returns true if the given state is a starting state.
 func IsStartingState(state string) bool {
-	if state == OperationalStateStarting {
-		return true
-	}
-
-	return false
+	return state == OperationalStateStarting
 }
 
 // IsRunningState returns true if the given state is a running state.

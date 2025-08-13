@@ -120,7 +120,7 @@ func (b *NmapBuilder) CountActiveNmap() int {
 
 // BuildYAML converts the configuration to YAML format.
 func (b *NmapBuilder) BuildYAML() string {
-	out, _ := yaml.Marshal(b.full)
+	out, _ := yaml.Marshal(b.full) //nolint:musttag // test builder with dynamic struct
 
 	return string(out)
 }

@@ -70,6 +70,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/binary"
+	"errors"
 	"io"
 	"strings"
 	"sync"
@@ -153,7 +154,12 @@ func putBase64Buffer(b *[]byte) {
 }
 
 func getCompressBuffer() *bytes.Buffer {
-	return compressBufferPool.Get().(*bytes.Buffer)
+	buf, ok := compressBufferPool.Get().(*bytes.Buffer)
+	if !ok {
+		return &bytes.Buffer{}
+	}
+
+	return buf
 }
 
 func putCompressBuffer(buf *bytes.Buffer) {
@@ -164,7 +170,12 @@ func putCompressBuffer(buf *bytes.Buffer) {
 }
 
 func getDecompressBuffer() *bytes.Buffer {
-	return decompressBufferPool.Get().(*bytes.Buffer)
+	buf, ok := decompressBufferPool.Get().(*bytes.Buffer)
+	if !ok {
+		return &bytes.Buffer{}
+	}
+
+	return buf
 }
 
 func putDecompressBuffer(buf *bytes.Buffer) {
@@ -190,7 +201,10 @@ func Compress(message []byte) ([]byte, error) {
 		return message, nil // Zero-copy for small messages
 	}
 
-	encoder := encoderPool.Get().(*zstd.Encoder)
+	encoder, ok := encoderPool.Get().(*zstd.Encoder)
+	if !ok {
+		return nil, errors.New("failed to get encoder from pool")
+	}
 	defer encoderPool.Put(encoder)
 
 	buf := getCompressBuffer()
@@ -241,7 +255,10 @@ func Decompress(message []byte) ([]byte, error) {
 		return result, nil
 	}
 
-	decoder := decoderPool.Get().(*zstd.Decoder)
+	decoder, ok := decoderPool.Get().(*zstd.Decoder)
+	if !ok {
+		return nil, errors.New("failed to get decoder from pool")
+	}
 	defer decoderPool.Put(decoder)
 
 	buf := getDecompressBuffer()

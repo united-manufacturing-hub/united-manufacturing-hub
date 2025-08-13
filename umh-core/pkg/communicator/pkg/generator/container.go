@@ -33,14 +33,14 @@ func ContainerFromSnapshot(
 		return defaultContainer()
 	}
 
-	c, err := buildContainer(*inst, log)
+	container, err := buildContainer(*inst, log)
 	if err != nil {
 		log.Error("unable to build container data", zap.Error(err))
 
 		return defaultContainer()
 	}
 
-	return c
+	return container
 }
 
 // buildContainer assumes a *valid* snapshot and fills models.Container

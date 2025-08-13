@@ -34,14 +34,14 @@ func RedpandaFromSnapshot(
 		return defaultRedpanda()
 	}
 
-	rp, err := buildRedpanda(*inst, log)
+	redpanda, err := buildRedpanda(*inst, log)
 	if err != nil {
 		log.Error("unable to build redpanda data", zap.Error(err))
 
 		return defaultRedpanda()
 	}
 
-	return rp
+	return redpanda
 }
 
 // buildRedpanda maps a **non-nil** instance snapshot to models.Redpanda.

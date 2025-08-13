@@ -31,7 +31,7 @@ import (
 )
 
 var (
-	// Static errors for agent monitor reconcile
+	// Static errors for agent monitor reconcile.
 	ErrInvalidState                 = errors.New("invalid state")
 	ErrInvalidDesiredStateReconcile = errors.New("invalid desired state")
 	ErrInvalidCurrentState          = errors.New("invalid current state")

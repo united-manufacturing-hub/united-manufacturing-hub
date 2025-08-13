@@ -145,7 +145,8 @@ func (a *AddDataModelAction) Validate(ctx context.Context) error {
 	}
 
 	// Validate with references and payload shapes (handles cases with no references gracefully)
-	if err := validator.ValidateWithReferences(timeoutCtx, dmVersion, allDataModels, currentConfig.PayloadShapes); err != nil {
+	err = validator.ValidateWithReferences(timeoutCtx, dmVersion, allDataModels, currentConfig.PayloadShapes)
+	if err != nil {
 		return fmt.Errorf("data model validation failed: %w", err)
 	}
 
@@ -171,7 +172,11 @@ func (a *AddDataModelAction) Execute(ctx context.Context) (interface{}, map[stri
 
 	// Safety validation before adding to config
 	validator := datamodel.NewValidator()
-	if err := validator.ValidateStructureOnly(timeoutCtx, dmVersion); err != nil {
+
+	var err error
+
+	err = validator.ValidateStructureOnly(timeoutCtx, dmVersion)
+	if err != nil {
 		errorMsg := fmt.Sprintf("Final validation failed before adding data model: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.AddDataModel)
@@ -183,7 +188,7 @@ func (a *AddDataModelAction) Execute(ctx context.Context) (interface{}, map[stri
 		"Adding data model to configuration...", a.outboundChannel, models.AddDataModel)
 
 	// Use context for execution
-	err := a.configManager.AtomicAddDataModel(timeoutCtx, a.payload.Name, dmVersion, a.payload.Description)
+	err = a.configManager.AtomicAddDataModel(timeoutCtx, a.payload.Name, dmVersion, a.payload.Description)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to add data model: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,

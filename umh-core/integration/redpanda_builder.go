@@ -97,7 +97,7 @@ func (r *RedpandaBuilder) StopRedpanda(name string) *RedpandaBuilder {
 
 // BuildYAML converts the configuration to YAML format.
 func (r *RedpandaBuilder) BuildYAML() string {
-	out, _ := yaml.Marshal(r.full)
+	out, _ := yaml.Marshal(r.full) //nolint:musttag // test builder with dynamic struct
 
 	return string(out)
 }

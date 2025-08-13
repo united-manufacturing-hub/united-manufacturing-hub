@@ -142,9 +142,12 @@ var _ = Describe("Subscribe and Receive Test", func() {
 		}
 
 		// Initialize communication state with our outbound channel
+		watchdogInstance, ok := dog.(*watchdog.Watchdog)
+		Expect(ok).To(BeTrue(), "dog should be a *watchdog.Watchdog")
+
 		state = &communication_state.CommunicationState{
 			LoginResponse:   login,
-			Watchdog:        dog.(*watchdog.Watchdog),
+			Watchdog:        watchdogInstance,
 			InboundChannel:  make(chan *models.UMHMessage, 100),
 			OutboundChannel: outboundChan, // Use our custom outbound channel
 			InsecureTLS:     false,

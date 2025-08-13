@@ -201,6 +201,7 @@ func performWarmup(b *testing.B, registry *SchemaRegistry) {
 // benchmarkSingleSchema measures performance of reconciling a single schema.
 func benchmarkSingleSchema(b *testing.B, registry *SchemaRegistry) {
 	b.Helper()
+
 	schema := map[SubjectName]JSONSchemaDefinition{
 		"benchmark-single": JSONSchemaDefinition(`{
 			"type": "object",
@@ -233,6 +234,7 @@ func benchmarkSingleSchema(b *testing.B, registry *SchemaRegistry) {
 // benchmarkMultipleSchemas measures performance with varying numbers of schemas.
 func benchmarkMultipleSchemas(b *testing.B, registry *SchemaRegistry) {
 	b.Helper()
+
 	schemaCounts := []int{5, 10, 25, 50, 100}
 
 	for _, count := range schemaCounts {
@@ -271,6 +273,7 @@ func benchmarkMultipleSchemas(b *testing.B, registry *SchemaRegistry) {
 // benchmarkIncrementalUpdates measures performance of incremental schema updates.
 func benchmarkIncrementalUpdates(b *testing.B, registry *SchemaRegistry) {
 	b.Helper()
+
 	baseSchemas := generateSchemas(20, "incremental-base")
 
 	// Setup base schemas
@@ -337,6 +340,8 @@ func benchmarkIncrementalUpdates(b *testing.B, registry *SchemaRegistry) {
 
 // benchmarkLargeSchemaPayload measures performance with large schema definitions.
 func benchmarkLargeSchemaPayload(b *testing.B, registry *SchemaRegistry) {
+	b.Helper()
+
 	// Pre-generate large schema outside benchmark timing
 	largeSchema := generateLargeSchema(100) // 100 properties
 	schemas := map[SubjectName]JSONSchemaDefinition{
@@ -372,6 +377,8 @@ func benchmarkLargeSchemaPayload(b *testing.B, registry *SchemaRegistry) {
 
 // benchmarkMetricsAccess measures performance of metrics retrieval.
 func benchmarkMetricsAccess(b *testing.B, registry *SchemaRegistry) {
+	b.Helper()
+
 	// Benchmark-specific warmup
 	for range 10000 {
 		_ = registry.GetMetrics()
@@ -390,6 +397,8 @@ func benchmarkMetricsAccess(b *testing.B, registry *SchemaRegistry) {
 
 // benchmarkConcurrentReconciliation measures performance under concurrent load.
 func benchmarkConcurrentReconciliation(b *testing.B, registry *SchemaRegistry) {
+	b.Helper()
+
 	schema := map[SubjectName]JSONSchemaDefinition{
 		"concurrent-bench": JSONSchemaDefinition(`{
 			"type": "object",

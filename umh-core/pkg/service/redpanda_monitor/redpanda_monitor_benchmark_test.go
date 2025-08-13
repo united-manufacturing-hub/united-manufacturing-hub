@@ -1445,7 +1445,7 @@ func BenchmarkCompleteProcessing(b *testing.B) {
 
 	for range b.N {
 		// Step 1: Hex decode
-		decodedMetricsDataBytes, _ := hex.DecodeString(string(encodedAndHexedData))
+		decodedMetricsDataBytes, _ := hex.DecodeString(encodedAndHexedData)
 
 		// Step 2: Gzip decompress
 		gzipReader, err := gzip.NewReader(bytes.NewReader(decodedMetricsDataBytes))

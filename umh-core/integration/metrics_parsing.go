@@ -216,13 +216,13 @@ func displayReconcileTimeQuantiles(body string) error {
 	GinkgoWriter.Println("\nControl loop reconcile time quantiles:")
 
 	quantiles := []string{"0.5", "0.9", "0.95", "0.99"}
-	for _, q := range quantiles {
+	for _, quantile := range quantiles {
 		val, found := parseSummaryQuantile(body,
-			"umh_core_reconcile_duration_milliseconds", q, "control_loop", "main")
+			"umh_core_reconcile_duration_milliseconds", quantile, "control_loop", "main")
 		if found {
-			GinkgoWriter.Printf("  %s quantile: %.2f ms\n", q, val)
+			GinkgoWriter.Printf("  %s quantile: %.2f ms\n", quantile, val)
 		} else {
-			GinkgoWriter.Printf("  %s quantile: not found\n", q)
+			GinkgoWriter.Printf("  %s quantile: not found\n", quantile)
 		}
 	}
 

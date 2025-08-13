@@ -534,8 +534,10 @@ var _ = Describe("StreamProcessorService", func() {
 			Expect(spRuntimeCfg.Mapping["id"]).To(Equal("test-sp"))
 
 			// Verify DFC config has proper UNS input with rendered topic
-			unsInput := dfcRuntimeCfg.BenthosConfig.Input["uns"].(map[string]any)
-			umhTopics := unsInput["umh_topics"].([]any)
+			unsInput, ok := dfcRuntimeCfg.BenthosConfig.Input["uns"].(map[string]any)
+			Expect(ok).To(BeTrue(), "uns input should be a map[string]any")
+			umhTopics, ok := unsInput["umh_topics"].([]any)
+			Expect(ok).To(BeTrue(), "umh_topics should be a []any")
 			Expect(umhTopics).To(ContainElement("umh.v1.factory.line1.sensor"))
 		})
 

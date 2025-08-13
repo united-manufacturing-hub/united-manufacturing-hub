@@ -100,10 +100,10 @@ func buildProtocolConverterAsDfc(
 		// we need to replace the variables with the actual values therefore we need to get the variable name and check the values in the user variables
 		// if the variable is not found, we use the default value
 
-		re := regexp.MustCompile(`{{\s*\.(\w+)\s*}}`)
+		regex := regexp.MustCompile(`{{\s*\.(\w+)\s*}}`)
 
 		target := specTarget
-		if match := re.FindStringSubmatch(specTarget); len(match) > 1 {
+		if match := regex.FindStringSubmatch(specTarget); len(match) > 1 {
 			if userValue, ok := observed.ObservedProtocolConverterSpecConfig.Variables.User[match[1]]; ok {
 				if strValue, ok := userValue.(string); ok {
 					target = strValue
@@ -112,7 +112,7 @@ func buildProtocolConverterAsDfc(
 		}
 
 		port := specPort
-		if match := re.FindStringSubmatch(specPort); len(match) > 1 {
+		if match := regex.FindStringSubmatch(specPort); len(match) > 1 {
 			if userValue, ok := observed.ObservedProtocolConverterSpecConfig.Variables.User[match[1]]; ok {
 				if strValue, ok := userValue.(string); ok {
 					port = strValue

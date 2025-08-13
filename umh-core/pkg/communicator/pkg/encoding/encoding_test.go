@@ -522,7 +522,7 @@ var _ = Describe("Performance Comparison", Serial, Label("measurement"), func() 
 
 		It("measures memory allocations", func() {
 			runtime.GC()
-			var m1, m2 runtime.MemStats
+			var memStats1, memStats2 runtime.MemStats
 
 			// Additional warmup specific to allocation testing
 			for range 100 {
@@ -532,23 +532,23 @@ var _ = Describe("Performance Comparison", Serial, Label("measurement"), func() 
 			runtime.GC()
 
 			// Measure new implementation
-			runtime.ReadMemStats(&m1)
+			runtime.ReadMemStats(&memStats1)
 			_, err := newenc.EncodeMessageFromUMHInstanceToUser(largeMessage)
 			Expect(err).NotTo(HaveOccurred())
-			runtime.ReadMemStats(&m2)
+			runtime.ReadMemStats(&memStats2)
 
-			newAllocs := m2.Mallocs - m1.Mallocs
-			newBytes := m2.TotalAlloc - m1.TotalAlloc
+			newAllocs := memStats2.Mallocs - memStats1.Mallocs
+			newBytes := memStats2.TotalAlloc - memStats1.TotalAlloc
 
 			// Measure old implementation
 			runtime.GC()
-			runtime.ReadMemStats(&m1)
+			runtime.ReadMemStats(&memStats1)
 			_, err = old.EncodeMessageFromUMHInstanceToUser(largeMessage)
 			Expect(err).NotTo(HaveOccurred())
-			runtime.ReadMemStats(&m2)
+			runtime.ReadMemStats(&memStats2)
 
-			oldAllocs := m2.Mallocs - m1.Mallocs
-			oldBytes := m2.TotalAlloc - m1.TotalAlloc
+			oldAllocs := memStats2.Mallocs - memStats1.Mallocs
+			oldBytes := memStats2.TotalAlloc - memStats1.TotalAlloc
 
 			experiment.RecordValue("new-allocs", float64(newAllocs))
 			experiment.RecordValue("old-allocs", float64(oldAllocs))
@@ -672,7 +672,7 @@ var _ = Describe("Performance Comparison", Serial, Label("measurement"), func() 
 
 		It("measures decoding memory allocations", func() {
 			runtime.GC()
-			var m1, m2 runtime.MemStats
+			var memStats1, memStats2 runtime.MemStats
 
 			// Additional warmup specific to allocation testing
 			for range 100 {
@@ -682,23 +682,23 @@ var _ = Describe("Performance Comparison", Serial, Label("measurement"), func() 
 			runtime.GC()
 
 			// Measure new implementation with large message
-			runtime.ReadMemStats(&m1)
+			runtime.ReadMemStats(&memStats1)
 			_, err := newenc.DecodeMessageFromUMHInstanceToUser(encodedLargeMessage)
 			Expect(err).NotTo(HaveOccurred())
-			runtime.ReadMemStats(&m2)
+			runtime.ReadMemStats(&memStats2)
 
-			newAllocs := m2.Mallocs - m1.Mallocs
-			newBytes := m2.TotalAlloc - m1.TotalAlloc
+			newAllocs := memStats2.Mallocs - memStats1.Mallocs
+			newBytes := memStats2.TotalAlloc - memStats1.TotalAlloc
 
 			// Measure old implementation
 			runtime.GC()
-			runtime.ReadMemStats(&m1)
+			runtime.ReadMemStats(&memStats1)
 			_, err = old.DecodeMessageFromUMHInstanceToUser(encodedLargeMessage)
 			Expect(err).NotTo(HaveOccurred())
-			runtime.ReadMemStats(&m2)
+			runtime.ReadMemStats(&memStats2)
 
-			oldAllocs := m2.Mallocs - m1.Mallocs
-			oldBytes := m2.TotalAlloc - m1.TotalAlloc
+			oldAllocs := memStats2.Mallocs - memStats1.Mallocs
+			oldBytes := memStats2.TotalAlloc - memStats1.TotalAlloc
 
 			experiment.RecordValue("new-decode-allocs", float64(newAllocs))
 			experiment.RecordValue("old-decode-allocs", float64(oldAllocs))
@@ -878,7 +878,7 @@ var _ = Describe("Batch Processing Performance", Serial, Label("measurement"), f
 
 		It("measures batch memory usage", func() {
 			runtime.GC()
-			var m1, m2 runtime.MemStats
+			var memStats1, memStats2 runtime.MemStats
 
 			// Warm up
 			for range 3 {
@@ -891,27 +891,27 @@ var _ = Describe("Batch Processing Performance", Serial, Label("measurement"), f
 			runtime.GC()
 
 			// Measure new implementation
-			runtime.ReadMemStats(&m1)
+			runtime.ReadMemStats(&memStats1)
 			for _, msg := range messages {
 				_, err := newenc.EncodeMessageFromUMHInstanceToUser(msg)
 				Expect(err).NotTo(HaveOccurred())
 			}
-			runtime.ReadMemStats(&m2)
+			runtime.ReadMemStats(&memStats2)
 
-			newAllocs := m2.Mallocs - m1.Mallocs
-			newBytes := m2.TotalAlloc - m1.TotalAlloc
+			newAllocs := memStats2.Mallocs - memStats1.Mallocs
+			newBytes := memStats2.TotalAlloc - memStats1.TotalAlloc
 
 			// Measure old implementation
 			runtime.GC()
-			runtime.ReadMemStats(&m1)
+			runtime.ReadMemStats(&memStats1)
 			for _, msg := range messages {
 				_, err := old.EncodeMessageFromUMHInstanceToUser(msg)
 				Expect(err).NotTo(HaveOccurred())
 			}
-			runtime.ReadMemStats(&m2)
+			runtime.ReadMemStats(&memStats2)
 
-			oldAllocs := m2.Mallocs - m1.Mallocs
-			oldBytes := m2.TotalAlloc - m1.TotalAlloc
+			oldAllocs := memStats2.Mallocs - memStats1.Mallocs
+			oldBytes := memStats2.TotalAlloc - memStats1.TotalAlloc
 
 			By(fmt.Sprintf("Batch processing - New implementation: %d allocs (%.2f MB)",
 				newAllocs, float64(newBytes)/(1024*1024)))

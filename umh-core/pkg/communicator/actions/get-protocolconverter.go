@@ -243,7 +243,7 @@ func (a *GetProtocolConverterAction) Execute(ctx context.Context) (interface{}, 
 				// Extract template information and variables from the observed spec config
 				var (
 					templateInfo *models.ProtocolConverterTemplateInfo
-					ip           string
+					ipAddress    string
 					port         uint32
 					variables    []models.ProtocolConverterVariable
 					isTemplated  bool
@@ -262,7 +262,7 @@ func (a *GetProtocolConverterAction) Execute(ctx context.Context) (interface{}, 
 						// Extract IP and Port from variables
 						switch key {
 						case "IP", "ip", "target", "Target":
-							ip = valueStr
+							ipAddress = valueStr
 						case "Port", "port", "PORT":
 							if portInt, err := strconv.ParseUint(valueStr, 10, 32); err == nil {
 								port = uint32(portInt)
@@ -279,7 +279,7 @@ func (a *GetProtocolConverterAction) Execute(ctx context.Context) (interface{}, 
 				if !isTemplated {
 					if specConfig.Config.ConnectionServiceConfig.NmapTemplate != nil {
 						if specConfig.Config.ConnectionServiceConfig.NmapTemplate.Target != "" {
-							ip = specConfig.Config.ConnectionServiceConfig.NmapTemplate.Target
+							ipAddress = specConfig.Config.ConnectionServiceConfig.NmapTemplate.Target
 						}
 
 						if specConfig.Config.ConnectionServiceConfig.NmapTemplate.Port != "" {
@@ -354,7 +354,7 @@ func (a *GetProtocolConverterAction) Execute(ctx context.Context) (interface{}, 
 					Name:     instance.ID,
 					Location: location,
 					Connection: models.ProtocolConverterConnection{
-						IP:   ip,
+						IP:   ipAddress,
 						Port: port,
 					},
 					ReadDFC:      readDFC,

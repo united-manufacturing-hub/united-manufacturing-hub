@@ -44,7 +44,7 @@ type Puller struct {
 }
 
 func NewPuller(jwt string, dog watchdog.Iface, inboundChannel chan *models.UMHMessage, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) *Puller {
-	p := Puller{
+	puller := Puller{
 		inboundMessageChannel: inboundChannel,
 		shallRun:              atomic.Bool{},
 		jwt:                   atomic.Value{},
@@ -53,9 +53,9 @@ func NewPuller(jwt string, dog watchdog.Iface, inboundChannel chan *models.UMHMe
 		apiURL:                apiURL,
 		logger:                logger,
 	}
-	p.jwt.Store(jwt)
+	puller.jwt.Store(jwt)
 
-	return &p
+	return &puller
 }
 
 func (p *Puller) UpdateJWT(jwt string) {

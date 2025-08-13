@@ -56,7 +56,9 @@ func setLastDeployedTime(servicePath string, timestamp time.Time) {
 // getLastDeploymentTime gets the last config change timestamp for a service path.
 func getLastDeploymentTime(servicePath string) time.Time {
 	if timestamp, ok := configChangeTimestamps.Load(servicePath); ok {
-		return timestamp.(time.Time)
+		if timeVal, ok := timestamp.(time.Time); ok {
+			return timeVal
+		}
 	}
 
 	return time.Time{} // zero time if not found
@@ -918,11 +920,11 @@ func (s *DefaultService) ForceRemove(
 
 // appendToRingBuffer appends entries to the ring buffer, extracted from existing GetLogs logic.
 func (s *DefaultService) appendToRingBuffer(entries []s6_shared.LogEntry, st *s6_shared.LogState) {
-	const max = constants.S6MaxLines
+	const maxLines = constants.S6MaxLines
 
 	// Preallocate backing storage to full size once - it's recycled at runtime and never dropped
 	if st.Logs == nil {
-		st.Logs = make([]s6_shared.LogEntry, max) // len == max, cap == max
+		st.Logs = make([]s6_shared.LogEntry, maxLines) // len == maxLines, cap == maxLines
 		st.Head = 0
 		st.Full = false
 	}
@@ -930,7 +932,7 @@ func (s *DefaultService) appendToRingBuffer(entries []s6_shared.LogEntry, st *s6
 	for _, e := range entries {
 		st.Logs[st.Head] = e
 
-		st.Head = (st.Head + 1) % max
+		st.Head = (st.Head + 1) % maxLines
 		if !st.Full && st.Head == 0 {
 			st.Full = true // wrapped around for the first time
 		}
@@ -1041,7 +1043,10 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 
 	// ── 1. grab / create state ──────────────────────────────────────
 	stAny, _ := s.logCursors.LoadOrStore(logFile, &s6_shared.LogState{})
-	st := stAny.(*s6_shared.LogState)
+	st, ok := stAny.(*s6_shared.LogState)
+	if !ok {
+		return nil, errors.New("failed to get log state from cursor")
+	}
 
 	st.Mu.Lock()
 	defer st.Mu.Unlock()

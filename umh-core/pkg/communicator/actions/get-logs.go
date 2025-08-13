@@ -259,8 +259,8 @@ func (a *GetLogsAction) Execute(ctx context.Context) (interface{}, map[string]in
 
 		res.Logs = mapS6LogsToSlice(observedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs, reqStartTime)
 	case models.StreamProcessorLogType:
-		streamProcessorInstance, ok := FindStreamProcessorInstanceByUUID(systemSnapshot, a.payload.UUID)
-		if !ok || streamProcessorInstance == nil {
+		streamProcessorInstance, found := FindStreamProcessorInstanceByUUID(systemSnapshot, a.payload.UUID)
+		if !found || streamProcessorInstance == nil {
 			err := logsRetrievalError(errors.New("stream processor instance not found"), logType)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
 

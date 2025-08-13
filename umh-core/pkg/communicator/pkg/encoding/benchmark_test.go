@@ -248,6 +248,8 @@ func BenchmarkDecodeMessage_Large(b *testing.B) {
 }
 
 func benchmarkRoundTrip(b *testing.B, impl EncodingImpl, msgGenerator func() models.UMHMessageContent) {
+	b.Helper()
+
 	b.Run(impl.Name, func(b *testing.B) {
 		msg := msgGenerator()
 
@@ -281,6 +283,8 @@ func BenchmarkRoundTrip_Large(b *testing.B) {
 }
 
 func benchmarkConcurrent(b *testing.B, impl EncodingImpl) {
+	b.Helper()
+
 	b.Run(impl.Name, func(b *testing.B) {
 		msg := generateMediumMessage()
 
@@ -310,6 +314,8 @@ func BenchmarkConcurrent(b *testing.B) {
 }
 
 func benchmarkMemoryIntensive(b *testing.B, impl EncodingImpl) {
+	b.Helper()
+
 	b.Run(impl.Name, func(b *testing.B) {
 		messages := make([]models.UMHMessageContent, 100)
 		for i := range messages {

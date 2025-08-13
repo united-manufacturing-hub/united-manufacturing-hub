@@ -24,7 +24,7 @@ import (
 )
 
 var _ = Describe("Ringbuffer", func() {
-	const cap uint64 = 3
+	const capacity uint64 = 3
 	var rb *Ringbuffer
 
 	newBuf := func(id byte) *BufferItem {
@@ -36,7 +36,7 @@ var _ = Describe("Ringbuffer", func() {
 	}
 
 	BeforeEach(func() {
-		rb = NewRingbuffer(cap)
+		rb = NewRingbuffer(capacity)
 	})
 
 	Context("Add / Get basics", func() {
@@ -62,7 +62,7 @@ var _ = Describe("Ringbuffer", func() {
 			rb.Add(newBuf(3))
 
 			snapshot := rb.GetSnapshot()
-			Expect(snapshot.Items).To(HaveLen(int(cap))) // still full capacity
+			Expect(snapshot.Items).To(HaveLen(int(capacity))) // still full capacity
 			ids := []byte{snapshot.Items[0].Payload[0], snapshot.Items[1].Payload[0], snapshot.Items[2].Payload[0]}
 			// oldest (0) must be gone, newest (3) present
 			Expect(ids).To(Equal([]byte{3, 2, 1}))

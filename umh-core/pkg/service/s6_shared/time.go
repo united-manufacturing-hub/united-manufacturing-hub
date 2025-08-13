@@ -46,7 +46,7 @@ func ParseNano(s string) (time.Time, error) {
 	month := toInt(s[5], s[6])
 	day := toInt(s[8], s[9])
 	hour := toInt(s[11], s[12])
-	min := toInt(s[14], s[15])
+	minute := toInt(s[14], s[15])
 	sec := toInt(s[17], s[18])
 
 	// 9-digit nanoseconds: positions 20–28 are guaranteed digits by the s6 format and length check
@@ -55,5 +55,5 @@ func ParseNano(s string) (time.Time, error) {
 		nano = nano*10 + int(s[i]-'0')
 	}
 
-	return time.Date(year, time.Month(month), day, hour, min, sec, nano, time.UTC), nil
+	return time.Date(year, time.Month(month), day, hour, minute, sec, nano, time.UTC), nil
 }

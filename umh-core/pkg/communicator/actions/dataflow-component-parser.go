@@ -53,7 +53,8 @@ func ParseDataflowComponentTopLevel(payload interface{}) (DataflowComponentTopLe
 		return DataflowComponentTopLevelPayload{}, fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
-	if err := json.Unmarshal(payloadBytes, &topLevel); err != nil {
+	err = json.Unmarshal(payloadBytes, &topLevel)
+	if err != nil {
 		return DataflowComponentTopLevelPayload{}, fmt.Errorf("failed to unmarshal top level payload: %w", err)
 	}
 
@@ -81,8 +82,8 @@ func ParseCustomDataFlowComponent(payload interface{}) (models.CDFCPayload, erro
 	}
 
 	// Extract the customDataFlowComponent section
-	cdfc, ok := customPayloadMap["customDataFlowComponent"]
-	if !ok {
+	cdfc, exists := customPayloadMap["customDataFlowComponent"]
+	if !exists {
 		return models.CDFCPayload{}, errors.New("missing customDataFlowComponent in payload")
 	}
 
@@ -233,13 +234,13 @@ func CreateBenthosConfigFromCDFCPayload(payload models.CDFCPayload, componentNam
 	}
 
 	// Parse cache resources, rate limit resources and buffer from the inject data
-	cacheResources, ok := benthosYamlInject["cache_resources"].([]interface{})
-	if !ok {
+	cacheResources, exists := benthosYamlInject["cache_resources"].([]interface{})
+	if !exists {
 		cacheResources = []interface{}{}
 	}
 
-	rateLimitResources, ok := benthosYamlInject["rate_limit_resources"].([]interface{})
-	if !ok {
+	rateLimitResources, exists := benthosYamlInject["rate_limit_resources"].([]interface{})
+	if !exists {
 		rateLimitResources = []interface{}{}
 	}
 

@@ -61,7 +61,7 @@ type Pusher struct {
 }
 
 func NewPusher(instanceUUID uuid.UUID, jwt string, dog watchdog.Iface, outboundChannel chan *models.UMHMessage, deadletterCh chan DeadLetter, backoff *tools.Backoff, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) *Pusher {
-	p := Pusher{
+	pusher := Pusher{
 		instanceUUID:           instanceUUID,
 		outboundMessageChannel: outboundChannel,
 		deadletterCh:           deadletterCh,
@@ -72,9 +72,9 @@ func NewPusher(instanceUUID uuid.UUID, jwt string, dog watchdog.Iface, outboundC
 		apiURL:                 apiURL,
 		logger:                 logger,
 	}
-	p.jwt.Store(jwt)
+	pusher.jwt.Store(jwt)
 
-	return &p
+	return &pusher
 }
 
 func (p *Pusher) UpdateJWT(jwt string) {
@@ -167,29 +167,29 @@ func (p *Pusher) push() {
 			error_handler.ResetErrorCounter()
 			boPostRequest.Reset()
 
-		case d, ok := <-p.deadletterCh:
+		case deadLetter, ok := <-p.deadletterCh:
 			if !ok {
 				continue
 			}
 
-			if len(d.messages) == 0 {
+			if len(deadLetter.messages) == 0 {
 				continue
 			}
 
 			p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
 			// Retry the messages in deadletter channel only thrice. If it fails after 3 retryAttempts, log the message and drop.
-			if d.retryAttempts > 2 {
+			if deadLetter.retryAttempts > 2 {
 				continue
 			}
 
-			d.retryAttempts++
+			deadLetter.retryAttempts++
 
-			_, _, err := http.PostRequest[any, backend_api_structs.PushPayload](context.Background(), http.PushEndpoint, &backend_api_structs.PushPayload{UMHMessages: d.messages}, nil, &d.cookies, p.insecureTLS, p.apiURL, p.logger)
+			_, _, err := http.PostRequest[any, backend_api_structs.PushPayload](context.Background(), http.PushEndpoint, &backend_api_structs.PushPayload{UMHMessages: deadLetter.messages}, nil, &deadLetter.cookies, p.insecureTLS, p.apiURL, p.logger)
 			if err != nil {
 				p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 				boPostRequest.IncrementAndSleep()
 				// In case of an error, push the message back to the deadletter channel.
-				go enqueueToDeadLetterChannel(p.deadletterCh, d.messages, d.cookies, d.retryAttempts, p.logger)
+				go enqueueToDeadLetterChannel(p.deadletterCh, deadLetter.messages, deadLetter.cookies, deadLetter.retryAttempts, p.logger)
 			}
 
 			boPostRequest.Reset()

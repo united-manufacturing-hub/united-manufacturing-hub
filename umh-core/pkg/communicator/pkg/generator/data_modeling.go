@@ -128,8 +128,8 @@ func generateDataModelHash(dataModel config.DataModelsConfig) string {
 	}
 
 	// Create a hash from the data model name and version content
-	h := sha256.New()
-	h.Write([]byte(dataModel.Name))
+	hasher := sha256.New()
+	hasher.Write([]byte(dataModel.Name))
 
 	// Sort version keys for deterministic hashing
 	versionKeys := make([]string, 0, len(dataModel.Versions))
@@ -142,17 +142,17 @@ func generateDataModelHash(dataModel config.DataModelsConfig) string {
 	// Add each version and its content to the hash
 	for _, versionKey := range versionKeys {
 		version := dataModel.Versions[versionKey]
-		h.Write([]byte(versionKey))
+		hasher.Write([]byte(versionKey))
 
 		// Hash the structure content
-		hashStructure(h, version.Structure)
+		hashStructure(hasher, version.Structure)
 	}
 
-	return hex.EncodeToString(h.Sum(nil))[:16] // Return first 16 characters
+	return hex.EncodeToString(hasher.Sum(nil))[:16] // Return first 16 characters
 }
 
 // hashStructure recursively hashes the structure map.
-func hashStructure(h hash.Hash, structure map[string]config.Field) {
+func hashStructure(hasher hash.Hash, structure map[string]config.Field) {
 	if len(structure) == 0 {
 		return
 	}
@@ -168,16 +168,16 @@ func hashStructure(h hash.Hash, structure map[string]config.Field) {
 	// Hash each field and its content
 	for _, fieldKey := range fieldKeys {
 		field := structure[fieldKey]
-		h.Write([]byte(fieldKey))
-		h.Write([]byte(field.PayloadShape))
+		hasher.Write([]byte(fieldKey))
+		hasher.Write([]byte(field.PayloadShape))
 
 		// Handle ModelRef which is now a struct pointer
 		if field.ModelRef != nil {
-			h.Write([]byte(field.ModelRef.Name))
-			h.Write([]byte(field.ModelRef.Version))
+			hasher.Write([]byte(field.ModelRef.Name))
+			hasher.Write([]byte(field.ModelRef.Version))
 		}
 
 		// Recursively hash subfields
-		hashStructure(h, field.Subfields)
+		hashStructure(hasher, field.Subfields)
 	}
 }

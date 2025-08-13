@@ -367,18 +367,18 @@ func (a *EditDataflowComponentAction) Execute(ctx context.Context) (interface{},
 	}
 
 	// parse the cache resources, rate limit resources and buffer from the inject data
-	cacheResources, ok := benthosYamlInject["cache_resources"].([]interface{})
-	if !ok {
+	cacheResources, exists := benthosYamlInject["cache_resources"].([]interface{})
+	if !exists {
 		cacheResources = []interface{}{}
 	}
 
-	rateLimitResources, ok := benthosYamlInject["rate_limit_resources"].([]interface{})
-	if !ok {
+	rateLimitResources, exists := benthosYamlInject["rate_limit_resources"].([]interface{})
+	if !exists {
 		rateLimitResources = []interface{}{}
 	}
 
-	buffer, ok := benthosYamlInject["buffer"].(map[string]interface{})
-	if !ok {
+	buffer, exists := benthosYamlInject["buffer"].(map[string]interface{})
+	if !exists {
 		buffer = map[string]interface{}{}
 	}
 

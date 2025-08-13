@@ -43,7 +43,7 @@ var _ = Describe("DeleteStreamProcessor", func() {
 		messages        []*models.UMHMessage
 		spName          string
 		spUUID          uuid.UUID
-		mu              sync.Mutex
+		mutex           sync.Mutex
 	)
 
 	// Setup before each test
@@ -118,7 +118,7 @@ var _ = Describe("DeleteStreamProcessor", func() {
 
 		action = actions.NewDeleteStreamProcessorAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, nil)
 
-		go actions.ConsumeOutboundMessages(outboundChannel, &messages, &mu, true)
+		go actions.ConsumeOutboundMessages(outboundChannel, &messages, &mutex, true)
 	})
 
 	// Cleanup after each test

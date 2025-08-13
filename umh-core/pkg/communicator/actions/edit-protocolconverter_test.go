@@ -44,7 +44,7 @@ var _ = Describe("EditProtocolConverter", func() {
 		messages        []*models.UMHMessage
 		pcName          string
 		pcUUID          uuid.UUID
-		mu              sync.Mutex
+		mutex           sync.Mutex
 	)
 
 	// Setup before each test
@@ -113,7 +113,7 @@ var _ = Describe("EditProtocolConverter", func() {
 
 		action = actions.NewEditProtocolConverterAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, nil)
 
-		go actions.ConsumeOutboundMessages(outboundChannel, &messages, &mu, true)
+		go actions.ConsumeOutboundMessages(outboundChannel, &messages, &mutex, true)
 	})
 
 	// Cleanup after each test
