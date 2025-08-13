@@ -77,7 +77,8 @@ func ParseCustomDataFlowComponent(payload interface{}) (models.CDFCPayload, erro
 		return models.CDFCPayload{}, fmt.Errorf("failed to marshal nested payload: %w", err)
 	}
 
-	if err := json.Unmarshal(nestedPayloadBytes, &customPayloadMap); err != nil {
+	err = json.Unmarshal(nestedPayloadBytes, &customPayloadMap)
+	if err != nil {
 		return models.CDFCPayload{}, fmt.Errorf("failed to unmarshal nested payload: %w", err)
 	}
 

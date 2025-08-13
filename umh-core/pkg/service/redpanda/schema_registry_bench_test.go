@@ -429,6 +429,8 @@ func benchmarkConcurrentReconciliation(b *testing.B, registry *SchemaRegistry) {
 
 // benchmarkAddOnly measures performance when only adding schemas (empty registry → populated).
 func benchmarkAddOnly(b *testing.B, registry *SchemaRegistry) {
+	b.Helper()
+
 	// Pre-generate schemas for adding
 	schemasToAdd := generateSchemas(20, "add-only")
 
@@ -469,6 +471,8 @@ func benchmarkAddOnly(b *testing.B, registry *SchemaRegistry) {
 
 // benchmarkRemoveOnly measures performance when only removing schemas (populated registry → empty).
 func benchmarkRemoveOnly(b *testing.B, registry *SchemaRegistry) {
+	b.Helper()
+
 	// Pre-generate schemas for setup
 	schemasToRemove := generateSchemas(20, "remove-only")
 
@@ -520,6 +524,8 @@ func benchmarkRemoveOnly(b *testing.B, registry *SchemaRegistry) {
 
 // benchmarkMixedOperations measures performance when both adding and removing schemas.
 func benchmarkMixedOperations(b *testing.B, registry *SchemaRegistry) {
+	b.Helper()
+
 	// Pre-generate schemas for mixed operations
 	baseSchemas := generateSchemas(20, "mixed-base")
 

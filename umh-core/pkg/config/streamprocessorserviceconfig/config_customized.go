@@ -31,7 +31,7 @@ func (c StreamProcessorServiceConfigSpec) GetDFCServiceConfig(spName string) dat
 
 	// Extract topics from sources for input configuration
 	// These are template strings that will be rendered with variables later
-	var umhTopics []string
+	umhTopics := make([]string, 0, len(c.Config.Sources))
 
 	enhancedSources := make(map[string]string)
 

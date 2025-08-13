@@ -379,7 +379,8 @@ func (w *writeFailingMockConfigManager) AtomicSetLocation(ctx context.Context, l
 	}
 
 	// Write config (will fail with this mock)
-	if err := w.writeConfig(ctx, config); err != nil {
+	err = w.writeConfig(ctx, config)
+	if err != nil {
 		return err
 	}
 

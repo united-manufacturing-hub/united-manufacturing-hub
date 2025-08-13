@@ -362,7 +362,9 @@ func (s *BenthosService) GetConfig(ctx context.Context, filesystemService filesy
 
 	// ---------- slow path: YAML changed ----------
 	var benthosConfig map[string]interface{}
-	if err := yaml.Unmarshal(yamlData, &benthosConfig); err != nil {
+
+	err = yaml.Unmarshal(yamlData, &benthosConfig)
+	if err != nil {
 		return benthosserviceconfig.BenthosServiceConfig{}, fmt.Errorf("error parsing benthos config file for service %s: %w", s6ServiceName, err)
 	}
 

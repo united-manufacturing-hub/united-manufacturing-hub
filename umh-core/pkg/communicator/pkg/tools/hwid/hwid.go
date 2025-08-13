@@ -31,7 +31,8 @@ func GenerateHWID() string {
 	// Try to read the HWID from the file (/data/hwid)
 	// If it doesn't exist, generate a new one and write it to the file
 
-	if _, err := os.Stat(hwidPath); os.IsNotExist(err) {
+	_, err := os.Stat(hwidPath)
+	if os.IsNotExist(err) {
 		generateNewHWID(hwidPath)
 	}
 

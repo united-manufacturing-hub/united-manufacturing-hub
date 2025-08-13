@@ -464,7 +464,7 @@ func (s *DefaultService) createS6ConfigFiles(ctx context.Context, servicePath st
 
 	configPath := filepath.Join(servicePath, "config")
 
-	var createdFiles []string
+	createdFiles := make([]string, 0, len(configFiles))
 
 	for path, content := range configFiles {
 		// Validate config file path for security and correctness

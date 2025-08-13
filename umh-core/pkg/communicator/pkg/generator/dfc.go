@@ -43,7 +43,8 @@ func DfcsFromSnapshot(
 	var out []models.Dfc
 
 	for _, inst := range mgr.GetInstances() {
-		if d, err := buildDfc(*inst, log); err == nil {
+		d, err := buildDfc(*inst, log)
+		if err == nil {
 			out = append(out, d)
 		}
 	}

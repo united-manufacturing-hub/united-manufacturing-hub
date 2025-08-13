@@ -100,7 +100,8 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 	}
 
 	// Step 2: Detect external changes.
-	if err = b.reconcileExternalChanges(ctx, services, snapshot); err != nil {
+	err = b.reconcileExternalChanges(ctx, services, snapshot)
+	if err != nil {
 		if b.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
 			return nil, false
 		}

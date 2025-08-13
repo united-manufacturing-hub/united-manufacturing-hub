@@ -610,7 +610,8 @@ func (s *RedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *redpa
 	}
 
 	// Ensure the required directories exist
-	if err := s.ensureRedpandaDirectories(ctx, cfg.BaseDir, filesystemService); err != nil {
+	err := s.ensureRedpandaDirectories(ctx, cfg.BaseDir, filesystemService)
+	if err != nil {
 		return err
 	}
 
@@ -1125,7 +1126,9 @@ func (s *RedpandaService) setRedpandaClusterConfig(ctx context.Context, configUp
 	var response struct {
 		ConfigVersion int `json:"config_version"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+
+	err = json.NewDecoder(resp.Body).Decode(&response)
+	if err != nil {
 		return fmt.Errorf("failed to decode response: %w", err)
 	}
 

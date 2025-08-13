@@ -95,7 +95,8 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 	}
 
 	// Step 2: Detect external changes.
-	if err = n.reconcileExternalChanges(ctx, services, snapshot); err != nil {
+	err = n.reconcileExternalChanges(ctx, services, snapshot)
+	if err != nil {
 		if n.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
 			return nil, false
 		}

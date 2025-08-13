@@ -419,11 +419,9 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#log_segment_ms
 			if r.config.Topic.DefaultTopicSegmentMs != 0 {
 				changes["log_segment_ms"] = r.config.Topic.DefaultTopicSegmentMs
-			} else {
+			} else if r.PreviousObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicSegmentMs != constants.DefaultRedpandaTopicDefaultTopicSegmentMs {
 				// If the config does not set a value, we update as needed
-				if r.PreviousObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicSegmentMs != constants.DefaultRedpandaTopicDefaultTopicSegmentMs {
-					changes["log_segment_ms"] = constants.DefaultRedpandaTopicDefaultTopicSegmentMs
-				}
+				changes["log_segment_ms"] = constants.DefaultRedpandaTopicDefaultTopicSegmentMs
 			}
 		}
 

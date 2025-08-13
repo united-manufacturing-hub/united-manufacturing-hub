@@ -90,7 +90,10 @@ var _ = Describe("S6 Log Rotation", func() {
 	)
 
 	BeforeEach(func() {
-		service = NewDefaultService().(*DefaultService)
+		serviceInterface := NewDefaultService()
+		var ok bool
+		service, ok = serviceInterface.(*DefaultService)
+		Expect(ok).To(BeTrue(), "NewDefaultService should return a *DefaultService")
 		fsService = filesystem.NewMockFileSystem()
 		ctx = context.Background()
 
@@ -378,7 +381,8 @@ var _ = Describe("S6 Log Rotation", func() {
 			servicePath = filepath.Join(serviceBaseDir, serviceName)
 
 			// Set up mock filesystem to simulate service directory existence
-			mockFS := fsService.(*filesystem.MockFileSystem)
+			mockFS, ok := fsService.(*filesystem.MockFileSystem)
+			Expect(ok).To(BeTrue(), "fsService should be a *MockFileSystem")
 			mockFS.WithPathExistsFunc(func(ctx context.Context, path string) (bool, error) {
 				if path == servicePath {
 					return true, nil
@@ -395,7 +399,8 @@ var _ = Describe("S6 Log Rotation", func() {
 			logContent := "2025-01-20 10:00:00.000000000  initial message\n"
 
 			// Set up mock filesystem
-			mockFS := fsService.(*filesystem.MockFileSystem)
+			mockFS, ok := fsService.(*filesystem.MockFileSystem)
+			Expect(ok).To(BeTrue(), "fsService should be a *MockFileSystem")
 			mockFS.WithPathExistsFunc(func(ctx context.Context, path string) (bool, error) {
 				if path == currentFile {
 					return true, nil
@@ -459,7 +464,8 @@ var _ = Describe("S6 Log Rotation", func() {
 			combinedContent := initialContent + additionalContent
 
 			// Set up mock filesystem
-			mockFS := fsService.(*filesystem.MockFileSystem)
+			mockFS, ok := fsService.(*filesystem.MockFileSystem)
+			Expect(ok).To(BeTrue(), "fsService should be a *MockFileSystem")
 			var currentContent = initialContent
 			var currentInode = 12345
 
@@ -535,7 +541,8 @@ var _ = Describe("S6 Log Rotation", func() {
 			newContent := "2025-01-20 10:00:02.000000000  after rotation\n"
 
 			// Set up mock filesystem
-			mockFS := fsService.(*filesystem.MockFileSystem)
+			mockFS, ok := fsService.(*filesystem.MockFileSystem)
+			Expect(ok).To(BeTrue(), "fsService should be a *MockFileSystem")
 			var currentContent = initialContent
 			var currentInode = 12345
 
@@ -620,7 +627,8 @@ var _ = Describe("S6 Log Rotation", func() {
 			rotatedFile := filepath.Join(actualLogDir, rotatedFileName)
 
 			// Set up mock filesystem
-			mockFS := fsService.(*filesystem.MockFileSystem)
+			mockFS, ok := fsService.(*filesystem.MockFileSystem)
+			Expect(ok).To(BeTrue(), "fsService should be a *MockFileSystem")
 			var currentContent = initialContent
 			var currentInode = 12345
 			var rotatedFiles = []string{}
@@ -735,7 +743,8 @@ var _ = Describe("S6 Log Rotation", func() {
 			rotatedFile := filepath.Join(actualLogDir, rotatedFileName)
 
 			// Set up mock filesystem with state tracking
-			mockFS := fsService.(*filesystem.MockFileSystem)
+			mockFS, ok := fsService.(*filesystem.MockFileSystem)
+			Expect(ok).To(BeTrue(), "fsService should be a *MockFileSystem")
 			var currentContent = phase1Content
 			var currentInode = 12345
 			var rotatedFiles = []string{}

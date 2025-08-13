@@ -210,14 +210,17 @@ func Compress(message []byte) ([]byte, error) {
 	buf := getCompressBuffer()
 	defer putCompressBuffer(buf)
 
+	var err error
+
 	buf.Grow(len(message) / 2) // Estimate compressed size
 	encoder.Reset(buf)
 
-	if _, err := encoder.Write(message); err != nil {
+	_, err = encoder.Write(message)
+	if err != nil {
 		return nil, err
 	}
 
-	err := encoder.Close()
+	err = encoder.Close()
 	if err != nil {
 		return nil, err
 	}
@@ -269,7 +272,8 @@ func Decompress(message []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	if _, err := io.Copy(buf, decoder); err != nil {
+	_, err = io.Copy(buf, decoder)
+	if err != nil {
 		return nil, err
 	}
 
@@ -327,10 +331,10 @@ func decodeBase64(data string) ([]byte, error) {
 }
 
 // Core encoding functions.
-func EncodeMessageFromUserToUMHInstance(UMHMessage models.UMHMessageContent) (string, error) {
-	messageBytes, err := safejson.Marshal(UMHMessage)
+func EncodeMessageFromUserToUMHInstance(umhMessage models.UMHMessageContent) (string, error) {
+	messageBytes, err := safejson.Marshal(umhMessage)
 	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to marshal UMHMessage: %v (%+v)", err, UMHMessage)
+		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to marshal UMHMessage: %v (%+v)", err, umhMessage)
 
 		return "", err
 	}
@@ -338,10 +342,10 @@ func EncodeMessageFromUserToUMHInstance(UMHMessage models.UMHMessageContent) (st
 	return encodeBase64(messageBytes), nil
 }
 
-func EncodeMessageFromUMHInstanceToUser(UMHMessage models.UMHMessageContent) (string, error) {
-	messageBytes, err := safejson.Marshal(UMHMessage)
+func EncodeMessageFromUMHInstanceToUser(umhMessage models.UMHMessageContent) (string, error) {
+	messageBytes, err := safejson.Marshal(umhMessage)
 	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to marshal UMHMessage: %v (%+v)", err, UMHMessage)
+		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to marshal UMHMessage: %v (%+v)", err, umhMessage)
 
 		return "", err
 	}

@@ -74,7 +74,7 @@ func (r *queryResolver) Topics(ctx context.Context, filter *TopicFilter, limit *
 		maxLimit = *limit
 	}
 
-	var topics []*Topic
+	topics := make([]*Topic, 0, len(unsMap.GetEntries()))
 
 	// Convert protobuf data to GraphQL models with early termination
 	processedCount := 0
@@ -197,7 +197,7 @@ func (r *Resolver) hashUNSTableEntry(info *tbproto.TopicInfo) string {
 }
 
 func (r *Resolver) mapMetadataToGraphQL(metadata map[string]string) []*MetadataKv {
-	var result []*MetadataKv
+	result := make([]*MetadataKv, 0, len(metadata))
 	for key, value := range metadata {
 		result = append(result, &MetadataKv{
 			Key:   key,

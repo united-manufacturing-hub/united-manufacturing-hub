@@ -937,7 +937,9 @@ func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigData
 
 	// Parse the JSON response
 	var redpandaConfig map[string]interface{}
-	if err := json.NewDecoder(bytes.NewReader(data)).Decode(&redpandaConfig); err != nil {
+
+	err = json.NewDecoder(bytes.NewReader(data)).Decode(&redpandaConfig)
+	if err != nil {
 		return nil, fmt.Errorf("failed to parse cluster config data: %w", err)
 	}
 

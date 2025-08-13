@@ -419,14 +419,22 @@ var _ = Describe("S6 Service", func() {
 		// helper – PathExists reads from our map
 		pathExists := func(p string) bool {
 			exists, ok := exists.Load(p)
+			if !ok {
+				return false
+			}
 
-			return ok && exists.(bool)
+			boolExists, ok := exists.(bool)
+
+			return ok && boolExists
 		}
 
 		BeforeEach(func() {
 			ctx = context.Background()
 			mockFS = filesystem.NewMockFileSystem()
-			svc = NewDefaultService().(*DefaultService)
+			serviceInterface := NewDefaultService()
+			var ok bool
+			svc, ok = serviceInterface.(*DefaultService)
+			Expect(ok).To(BeTrue(), "NewDefaultService should return a *DefaultService")
 			svcPath = filepath.Join(constants.S6BaseDir, "my-service")
 			logDir = filepath.Join(constants.S6LogBaseDir, "my-service")
 
@@ -654,7 +662,9 @@ var _ = Describe("MaxFunc Approach for Rotated Files", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		// Use MaxFunc to find latest file
-		service := NewDefaultService().(*DefaultService)
+		serviceInterface := NewDefaultService()
+		service, ok := serviceInterface.(*DefaultService)
+		Expect(ok).To(BeTrue(), "NewDefaultService should return a *DefaultService")
 		result := service.findLatestRotatedFile(entries)
 
 		// Should return the chronologically latest file
@@ -662,7 +672,9 @@ var _ = Describe("MaxFunc Approach for Rotated Files", func() {
 	})
 
 	It("should handle empty directory gracefully", func() {
-		service := NewDefaultService().(*DefaultService)
+		serviceInterface := NewDefaultService()
+		service, ok := serviceInterface.(*DefaultService)
+		Expect(ok).To(BeTrue(), "NewDefaultService should return a *DefaultService")
 		result := service.findLatestRotatedFile(entries)
 		Expect(result).To(BeEmpty())
 	})
@@ -679,7 +691,9 @@ var _ = Describe("MaxFunc Approach for Rotated Files", func() {
 		entries, err := fsService.Glob(ctx, filepath.Join(logDir, "@*.s"))
 		Expect(err).ToNot(HaveOccurred())
 
-		service := NewDefaultService().(*DefaultService)
+		serviceInterface := NewDefaultService()
+		service, ok := serviceInterface.(*DefaultService)
+		Expect(ok).To(BeTrue(), "NewDefaultService should return a *DefaultService")
 		result := service.findLatestRotatedFile(entries)
 		Expect(result).To(Equal(filePath))
 	})
@@ -705,7 +719,9 @@ var _ = Describe("MaxFunc Approach for Rotated Files", func() {
 		entries, err := fsService.Glob(ctx, filepath.Join(logDir, "@*.s"))
 		Expect(err).ToNot(HaveOccurred())
 
-		service := NewDefaultService().(*DefaultService)
+		serviceInterface := NewDefaultService()
+		service, ok := serviceInterface.(*DefaultService)
+		Expect(ok).To(BeTrue(), "NewDefaultService should return a *DefaultService")
 		result := service.findLatestRotatedFile(entries)
 		Expect(result).To(Equal(rotatedFilePath))
 	})
@@ -740,7 +756,9 @@ var _ = Describe("MaxFunc Approach for Rotated Files", func() {
 		entries, err := fsService.Glob(ctx, filepath.Join(logDir, "@*.s"))
 		Expect(err).ToNot(HaveOccurred())
 
-		service := NewDefaultService().(*DefaultService)
+		serviceInterface := NewDefaultService()
+		service, ok := serviceInterface.(*DefaultService)
+		Expect(ok).To(BeTrue(), "NewDefaultService should return a *DefaultService")
 		result := service.findLatestRotatedFile(entries)
 		Expect(result).To(Equal(expectedLatest))
 	})

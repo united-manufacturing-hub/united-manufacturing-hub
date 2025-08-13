@@ -132,11 +132,12 @@ func Compress(message []byte) ([]byte, error) {
 
 	encoder.Reset(b)
 
-	if _, err := encoder.Write(message); err != nil {
+	_, err := encoder.Write(message)
+	if err != nil {
 		return nil, err
 	}
 
-	err := encoder.Close()
+	err = encoder.Close()
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +181,8 @@ func Decompress(message []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	if _, err := io.Copy(b, decoder); err != nil {
+	_, err = io.Copy(b, decoder)
+	if err != nil {
 		return nil, err
 	}
 

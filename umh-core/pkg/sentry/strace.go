@@ -40,7 +40,7 @@ func captureGoroutinesAsThreads() ([]sentry.Thread, []byte) {
 	}
 
 	// Convert parsed goroutines to Sentry.Thread format
-	var threads []sentry.Thread
+	threads := make([]sentry.Thread, 0, len(goroutines))
 
 	for _, g := range goroutines {
 		thread := convertGoroutineToThread(g)
@@ -85,7 +85,7 @@ func convertGoroutineToThread(g *gostackparse.Goroutine) sentry.Thread {
 
 // convertFrames converts a slice of gostackparse.Frame to a slice of sentry.Frame.
 func convertFrames(goroutineFrames []*gostackparse.Frame) []sentry.Frame {
-	var frames []sentry.Frame
+	frames := make([]sentry.Frame, 0, len(goroutineFrames))
 
 	for _, gf := range goroutineFrames {
 		absPath := gf.File

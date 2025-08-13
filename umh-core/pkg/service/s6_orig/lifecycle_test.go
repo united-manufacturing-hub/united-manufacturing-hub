@@ -168,8 +168,12 @@ var _ = Describe("LifecycleManager", func() {
 
 			mockFS.WithPathExistsFunc(func(ctx context.Context, path string) (bool, error) {
 				val, ok := existingPaths.Load(path)
+				if !ok {
+					return false, nil
+				}
+				boolVal, ok := val.(bool)
 
-				return ok && val.(bool), nil
+				return ok && boolVal, nil
 			})
 
 			mockFS.WithRenameFunc(func(ctx context.Context, oldPath, newPath string) error {
@@ -254,8 +258,12 @@ var _ = Describe("LifecycleManager", func() {
 
 			mockFS.WithPathExistsFunc(func(ctx context.Context, path string) (bool, error) {
 				val, ok := existingPaths.Load(path)
+				if !ok {
+					return false, nil
+				}
+				boolVal, ok := val.(bool)
 
-				return ok && val.(bool), nil
+				return ok && boolVal, nil
 			})
 
 			mockFS.WithRemoveAllFunc(func(ctx context.Context, path string) error {

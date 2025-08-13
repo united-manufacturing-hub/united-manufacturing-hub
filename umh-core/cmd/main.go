@@ -69,8 +69,8 @@ func main() {
 	configManager, err := config.NewFileConfigManagerWithBackoff()
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to create config manager: %w", err)
-		cancel() // Ensure cleanup before exit
-		os.Exit(1)
+		cancel()   // Ensure cleanup before exit
+		os.Exit(1) //nolint:gocritic // exitAfterDefer: defer cancel() explicitly called above
 	}
 
 	// Load or create configuration with environment variable overrides

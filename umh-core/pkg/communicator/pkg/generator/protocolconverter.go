@@ -44,7 +44,8 @@ func ProtocolConvertersFromSnapshot(
 	var out []models.Dfc
 
 	for _, inst := range mgr.GetInstances() {
-		if pc, err := buildProtocolConverterAsDfc(*inst, log); err == nil {
+		pc, err := buildProtocolConverterAsDfc(*inst, log)
+		if err == nil {
 			out = append(out, pc)
 		}
 	}

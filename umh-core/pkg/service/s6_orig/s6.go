@@ -1061,7 +1061,11 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 		return nil, fmt.Errorf("stat returned nil for log file: %s", logFile)
 	}
 
-	sys := fi.Sys().(*syscall.Stat_t) // on Linux / Alpine
+	sys, ok := fi.Sys().(*syscall.Stat_t) // on Linux / Alpine
+	if !ok {
+		return nil, fmt.Errorf("failed to get file system info for %s", logFile)
+	}
+
 	size, ino := fi.Size(), sys.Ino
 
 	// Check for rotation or truncation

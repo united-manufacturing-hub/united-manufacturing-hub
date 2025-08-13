@@ -90,7 +90,8 @@ func ParseLogFile(filename string) (*LogAnalyzer, error) {
 		}
 	}
 
-	if err := scanner.Err(); err != nil {
+	err = scanner.Err()
+	if err != nil {
 		return nil, fmt.Errorf("error reading log file: %w", err)
 	}
 

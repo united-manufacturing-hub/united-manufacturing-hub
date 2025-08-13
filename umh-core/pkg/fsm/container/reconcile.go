@@ -92,7 +92,8 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSn
 	}
 
 	// Step 2: Detect external changes
-	if err = c.reconcileExternalChanges(ctx, services, snapshot); err != nil {
+	err = c.reconcileExternalChanges(ctx, services, snapshot)
+	if err != nil {
 		if c.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
 			return nil, false
 		}

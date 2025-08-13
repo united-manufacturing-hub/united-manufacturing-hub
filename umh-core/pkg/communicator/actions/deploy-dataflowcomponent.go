@@ -139,7 +139,9 @@ func (a *DeployDataflowComponentAction) Parse(ctx context.Context, payload inter
 	a.ignoreHealthCheck = topLevel.IgnoreHealthCheck
 
 	a.state = topLevel.State
-	if err := ValidateDataFlowComponentState(a.state); err != nil {
+
+	err = ValidateDataFlowComponentState(a.state)
+	if err != nil {
 		return err
 	}
 

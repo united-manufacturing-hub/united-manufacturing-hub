@@ -179,7 +179,8 @@ func (m *BenthosManager) Reconcile(ctx context.Context, snapshot public_fsm.Syst
 		instanceNames[i] = cfg.Name
 	}
 
-	if err := portManager.PreReconcile(ctx, instanceNames); err != nil {
+	err := portManager.PreReconcile(ctx, instanceNames)
+	if err != nil {
 		return fmt.Errorf("port pre-allocation failed: %w", err), false
 	}
 
@@ -210,7 +211,8 @@ func (m *BenthosManager) Reconcile(ctx context.Context, snapshot public_fsm.Syst
 	}
 
 	// Phase 3: Port Management Post-reconciliation
-	if err := portManager.PostReconcile(ctx); err != nil {
+	err = portManager.PostReconcile(ctx)
+	if err != nil {
 		return fmt.Errorf("port post-reconciliation failed: %w", err), reconciled || instancesWereRemoved
 	}
 

@@ -200,9 +200,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			Expect(writeConfigFile(cfg, getContainerName())).To(Succeed())
 
 			By("Waiting for the golden service to become responsive")
-			Eventually(func() int {
-				return checkGoldenServiceStatusOnly()
-			}, 20*time.Second, 1*time.Second).Should(Equal(200),
+			Eventually(checkGoldenServiceStatusOnly, 20*time.Second, 1*time.Second).Should(Equal(200),
 				"Golden service should respond with 200 OK")
 
 			By("Scaling up by adding 10 sleep services")
@@ -270,9 +268,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			Expect(writeConfigFile(builder.BuildYAML(), getContainerName())).To(Succeed())
 
 			// Wait for golden service to be ready
-			Eventually(func() int {
-				return checkGoldenServiceStatusOnly()
-			}, 20*time.Second, 1*time.Second).Should(Equal(200),
+			Eventually(checkGoldenServiceStatusOnly, 20*time.Second, 1*time.Second).Should(Equal(200),
 				"Golden service should respond with 200 OK")
 
 			GinkgoWriter.Println("Starting comprehensive chaos test")
@@ -551,9 +547,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			Expect(writeConfigFile(cfg, getContainerName())).To(Succeed())
 
 			By("Waiting for the golden service to become responsive")
-			Eventually(func() int {
-				return checkGoldenServiceStatusOnly()
-			}, 20*time.Second, 1*time.Second).Should(Equal(200),
+			Eventually(checkGoldenServiceStatusOnly, 20*time.Second, 1*time.Second).Should(Equal(200),
 				"Golden service should respond with 200 OK")
 
 			By("Scaling up by adding 10 benthos generator services")
@@ -721,9 +715,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			Expect(writeConfigFile(cfg, getContainerName())).To(Succeed())
 
 			By("Waiting for the golden service to become responsive")
-			Eventually(func() int {
-				return checkGoldenServiceStatusOnly()
-			}, 20*time.Second, 1*time.Second).Should(Equal(200),
+			Eventually(checkGoldenServiceStatusOnly, 20*time.Second, 1*time.Second).Should(Equal(200),
 				"Golden service should respond with 200 OK")
 
 			By("Waiting for the metrics endpoint to be healthy")

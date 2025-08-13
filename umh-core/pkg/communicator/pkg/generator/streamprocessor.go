@@ -41,7 +41,8 @@ func StreamProcessorsFromSnapshot(
 	var out []models.Dfc
 
 	for _, inst := range mgr.GetInstances() {
-		if sp, err := buildStreamProcessorAsDfc(*inst); err == nil {
+		sp, err := buildStreamProcessorAsDfc(*inst)
+		if err == nil {
 			out = append(out, sp)
 		}
 	}

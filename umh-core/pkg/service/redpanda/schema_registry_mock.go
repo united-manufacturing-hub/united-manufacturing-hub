@@ -125,7 +125,7 @@ func (m *MockSchemaRegistry) handleSubjects(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Collect all subjects
-	var subjects []string
+	subjects := make([]string, 0, len(m.schemas))
 	for subject := range m.schemas {
 		subjects = append(subjects, subject)
 	}
@@ -538,7 +538,7 @@ func (m *MockSchemaRegistry) SimulateNetworkError(enable bool) {
 
 // GetRegisteredSubjects returns all subjects currently in the mock registry.
 func (m *MockSchemaRegistry) GetRegisteredSubjects() []string {
-	var subjects []string
+	subjects := make([]string, 0, len(m.schemas))
 	for subject := range m.schemas {
 		subjects = append(subjects, subject)
 	}

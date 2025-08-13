@@ -44,7 +44,8 @@ func StartGraphQLServer(
 	}
 
 	// Start the server
-	if err := server.Start(context.Background()); err != nil {
+	err = server.Start(context.Background())
+	if err != nil {
 		return nil, fmt.Errorf("failed to start GraphQL server: %w", err)
 	}
 

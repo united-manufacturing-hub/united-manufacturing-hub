@@ -136,7 +136,7 @@ func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, f
 	// Calculate the number of records.
 	numRecords := len(data) / s6_shared.S6_DTALLY_PACK
 
-	var history []s6_shared.ExitEvent
+	history := make([]s6_shared.ExitEvent, 0, numRecords)
 
 	// Process each dtally record.
 	for i := range numRecords {
