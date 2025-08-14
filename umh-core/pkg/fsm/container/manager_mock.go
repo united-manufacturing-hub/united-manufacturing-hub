@@ -53,31 +53,31 @@ func NewContainerManagerWithMockedService(name string, mockSvc container_monitor
 
 			return inst, nil
 		},
-		func(instance public_fsm.FSMInstance, cc config.ContainerConfig) (bool, error) {
-			ci, ok := instance.(*ContainerInstance)
+		func(instance public_fsm.FSMInstance, containerConfig config.ContainerConfig) (bool, error) {
+			containerInstance, ok := instance.(*ContainerInstance)
 			if !ok {
 				return false, errors.New("instance not a ContainerInstance")
 			}
 
-			return ci.config.DesiredFSMState == cc.DesiredFSMState, nil
+			return containerInstance.config.DesiredFSMState == containerConfig.DesiredFSMState, nil
 		},
-		func(instance public_fsm.FSMInstance, cc config.ContainerConfig) error {
-			ci, ok := instance.(*ContainerInstance)
+		func(instance public_fsm.FSMInstance, containerConfig config.ContainerConfig) error {
+			containerInstance, ok := instance.(*ContainerInstance)
 			if !ok {
 				return errors.New("instance not a ContainerInstance")
 			}
 
-			ci.config = cc
+			containerInstance.config = containerConfig
 
-			return ci.SetDesiredFSMState(cc.DesiredFSMState)
+			return containerInstance.SetDesiredFSMState(containerConfig.DesiredFSMState)
 		},
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
-			ci, ok := instance.(*ContainerInstance)
+			containerInstance, ok := instance.(*ContainerInstance)
 			if !ok {
 				return 0, errors.New("instance not a ContainerInstance")
 			}
 
-			return ci.GetMinimumRequiredTime(), nil
+			return containerInstance.GetMinimumRequiredTime(), nil
 		},
 	)
 

@@ -73,7 +73,7 @@ func NewGetMetricsActionWithProvider(userEmail string, actionUUID uuid.UUID, ins
 
 // Parse extracts the business fields from the raw JSON payload.
 // Shape errors are detected here, while semantic validation is done in Validate.
-func (a *GetMetricsAction) Parse(ctx context.Context, payload interface{}) (err error) {
+func (a *GetMetricsAction) Parse(ctx context.Context, payload interface{}) error {
 	a.actionLogger.Info("Parsing the payload")
 	a.payload, err = ParseActionPayload[models.GetMetricsRequest](payload)
 	a.actionLogger.Infow("Payload parsed", "payload", a.payload)

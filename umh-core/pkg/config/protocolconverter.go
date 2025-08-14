@@ -32,7 +32,7 @@ import (
 // Fails if:
 // - Another converter with the same name already exists
 // - Adding a child converter but the referenced template doesn't exist.
-func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc ProtocolConverterConfig) error {
+func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, protocolConverterConfig ProtocolConverterConfig) error {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to lock config file: %w", err)
@@ -47,14 +47,14 @@ func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 
 	// check for duplicate name before add
 	for _, cmp := range config.ProtocolConverter {
-		if cmp.Name == pc.Name {
-			return fmt.Errorf("another protocol converter with name %q already exists – choose a unique name", pc.Name)
+		if cmp.Name == protocolConverterConfig.Name {
+			return fmt.Errorf("another protocol converter with name %q already exists – choose a unique name", protocolConverterConfig.Name)
 		}
 	}
 
 	// If it's a child (TemplateRef is non-empty and != Name), verify that a root with that TemplateRef exists
-	if pc.ProtocolConverterServiceConfig.TemplateRef != "" && pc.ProtocolConverterServiceConfig.TemplateRef != pc.Name {
-		templateRef := pc.ProtocolConverterServiceConfig.TemplateRef
+	if protocolConverterConfig.ProtocolConverterServiceConfig.TemplateRef != "" && protocolConverterConfig.ProtocolConverterServiceConfig.TemplateRef != protocolConverterConfig.Name {
+		templateRef := protocolConverterConfig.ProtocolConverterServiceConfig.TemplateRef
 		rootExists := false
 
 		// Scan existing protocol converters to find a root with matching name
@@ -67,12 +67,12 @@ func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 		}
 
 		if !rootExists {
-			return fmt.Errorf("template %q not found for child %s", templateRef, pc.Name)
+			return fmt.Errorf("template %q not found for child %s", templateRef, protocolConverterConfig.Name)
 		}
 	}
 
 	// Add the protocol converter - let convertSpecToYAML handle template generation
-	config.ProtocolConverter = append(config.ProtocolConverter, pc)
+	config.ProtocolConverter = append(config.ProtocolConverter, protocolConverterConfig)
 
 	// write the config
 	err = m.writeConfig(ctx, config)
@@ -84,13 +84,13 @@ func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 }
 
 // AtomicAddProtocolConverter delegates to the underlying FileConfigManager.
-func (m *FileConfigManagerWithBackoff) AtomicAddProtocolConverter(ctx context.Context, pc ProtocolConverterConfig) error {
+func (m *FileConfigManagerWithBackoff) AtomicAddProtocolConverter(ctx context.Context, protocolConverterConfig ProtocolConverterConfig) error {
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
-	return m.configManager.AtomicAddProtocolConverter(ctx, pc)
+	return m.configManager.AtomicAddProtocolConverter(ctx, protocolConverterConfig)
 }
 
 // AtomicEditProtocolConverter edits a protocol converter in the config atomically.
@@ -109,7 +109,7 @@ func (m *FileConfigManagerWithBackoff) AtomicAddProtocolConverter(ctx context.Co
 // - Converter with given UUID doesn't exist
 // - New name conflicts with another converter (excluding the one being edited)
 // - Child converter references a non-existent template.
-func (m *FileConfigManager) AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc ProtocolConverterConfig) (ProtocolConverterConfig, error) {
+func (m *FileConfigManager) AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, protocolConverterConfig ProtocolConverterConfig) (ProtocolConverterConfig, error) {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
 		return ProtocolConverterConfig{}, fmt.Errorf("failed to lock config file: %w", err)
@@ -144,36 +144,36 @@ func (m *FileConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 
 	// Duplicate-name check (exclude the edited one)
 	for i, cmp := range config.ProtocolConverter {
-		if i != targetIndex && cmp.Name == pc.Name {
-			return ProtocolConverterConfig{}, fmt.Errorf("another protocol converter with name %q already exists – choose a unique name", pc.Name)
+		if i != targetIndex && cmp.Name == protocolConverterConfig.Name {
+			return ProtocolConverterConfig{}, fmt.Errorf("another protocol converter with name %q already exists – choose a unique name", protocolConverterConfig.Name)
 		}
 	}
 
-	newIsRoot := pc.ProtocolConverterServiceConfig.TemplateRef != "" &&
-		pc.ProtocolConverterServiceConfig.TemplateRef == pc.Name
+	newIsRoot := protocolConverterConfig.ProtocolConverterServiceConfig.TemplateRef != "" &&
+		protocolConverterConfig.ProtocolConverterServiceConfig.TemplateRef == protocolConverterConfig.Name
 	oldIsRoot := oldConfig.ProtocolConverterServiceConfig.TemplateRef != "" &&
 		oldConfig.ProtocolConverterServiceConfig.TemplateRef == oldConfig.Name
 
 	// Handle root rename - propagate to children
-	if oldIsRoot && newIsRoot && oldConfig.Name != pc.Name {
+	if oldIsRoot && newIsRoot && oldConfig.Name != protocolConverterConfig.Name {
 		// Update all children that reference the old root name
 		for i, inst := range config.ProtocolConverter {
 			if i != targetIndex && inst.ProtocolConverterServiceConfig.TemplateRef == oldConfig.Name {
-				inst.ProtocolConverterServiceConfig.TemplateRef = pc.Name
+				inst.ProtocolConverterServiceConfig.TemplateRef = protocolConverterConfig.Name
 				config.ProtocolConverter[i] = inst
 			}
 		}
 	}
 
 	// If it's a child (TemplateRef is non-empty and not a root), reject the edit
-	if !oldIsRoot && pc.ProtocolConverterServiceConfig.TemplateRef != "" {
+	if !oldIsRoot && protocolConverterConfig.ProtocolConverterServiceConfig.TemplateRef != "" {
 		return ProtocolConverterConfig{},
 			fmt.Errorf("cannot edit child %q; it is not a root. Edit the root instead: %q",
 				oldConfig.Name, oldConfig.ProtocolConverterServiceConfig.TemplateRef)
 	}
 
 	// Commit the edit
-	config.ProtocolConverter[targetIndex] = pc
+	config.ProtocolConverter[targetIndex] = protocolConverterConfig
 
 	// write the config
 	err = m.writeConfig(ctx, config)
@@ -276,13 +276,13 @@ func (m *FileConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 }
 
 // AtomicEditProtocolConverter delegates to the underlying FileConfigManager.
-func (m *FileConfigManagerWithBackoff) AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc ProtocolConverterConfig) (ProtocolConverterConfig, error) {
+func (m *FileConfigManagerWithBackoff) AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, protocolConverterConfig ProtocolConverterConfig) (ProtocolConverterConfig, error) {
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return ProtocolConverterConfig{}, ctx.Err()
 	}
 
-	return m.configManager.AtomicEditProtocolConverter(ctx, componentUUID, pc)
+	return m.configManager.AtomicEditProtocolConverter(ctx, componentUUID, protocolConverterConfig)
 }
 
 // AtomicDeleteProtocolConverter delegates to the underlying FileConfigManager.

@@ -42,7 +42,7 @@ var _ = Describe("extractRaw / parseBlock", func() {
 		compressed []byte // hex line from rawLog
 		payload    []byte // expected decoded payload
 		epochMS    int64  // timestamp parsed from rawLog
-		rb         *Ringbuffer
+		ringBuffer *Ringbuffer
 		service    *Service
 	)
 
@@ -60,8 +60,8 @@ var _ = Describe("extractRaw / parseBlock", func() {
 
 		compressed = []byte(hexLine)
 
-		rb = NewRingbuffer(4)
-		service = &Service{ringbuffer: rb}
+		ringBuffer = NewRingbuffer(4)
+		service = &Service{ringbuffer: ringBuffer}
 	})
 
 	Context("extraction and hex-decoding", func() {
@@ -69,9 +69,9 @@ var _ = Describe("extractRaw / parseBlock", func() {
 			logs := buildLogs(true, string(compressed), epochMS)
 
 			Expect(service.parseBlock(logs)).To(Succeed())
-			Expect(rb.Len()).To(Equal(1))
+			Expect(ringBuffer.Len()).To(Equal(1))
 
-			got := rb.GetSnapshot().Items[0]
+			got := ringBuffer.GetSnapshot().Items[0]
 			Expect(got.Payload).To(Equal(payload))
 			Expect(got.Timestamp).To(Equal(time.UnixMilli(epochMS)))
 		})
@@ -85,7 +85,7 @@ var _ = Describe("extractRaw / parseBlock", func() {
 			}
 
 			Expect(service.parseBlock(logs)).To(Succeed())
-			Expect(rb.Len()).To(Equal(0))
+			Expect(ringBuffer.Len()).To(Equal(0))
 		})
 	})
 
@@ -96,7 +96,7 @@ var _ = Describe("extractRaw / parseBlock", func() {
 			// Should succeed by skipping the bad block
 			err := service.parseBlock(logs)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(rb.Len()).To(Equal(0)) // Block was skipped, nothing added
+			Expect(ringBuffer.Len()).To(Equal(0)) // Block was skipped, nothing added
 		})
 	})
 
@@ -107,7 +107,7 @@ var _ = Describe("extractRaw / parseBlock", func() {
 			// Should succeed by skipping the bad block
 			err := service.parseBlock(logs)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(rb.Len()).To(Equal(0)) // Block was skipped, nothing added
+			Expect(ringBuffer.Len()).To(Equal(0)) // Block was skipped, nothing added
 		})
 	})
 
@@ -126,17 +126,17 @@ var _ = Describe("extractRaw / parseBlock", func() {
 
 			// Process first good block
 			Expect(service.parseBlock(allLogs)).To(Succeed())
-			Expect(rb.Len()).To(Equal(1)) // First block processed
+			Expect(ringBuffer.Len()).To(Equal(1)) // First block processed
 			Expect(service.lastProcessedTimestamp).To(Equal(baseTime))
 
 			// Process bad block - should be skipped
 			Expect(service.parseBlock(allLogs)).To(Succeed())
-			Expect(rb.Len()).To(Equal(1))                                                   // Still only one block, bad block skipped
+			Expect(ringBuffer.Len()).To(Equal(1))                                           // Still only one block, bad block skipped
 			Expect(service.lastProcessedTimestamp).To(Equal(baseTime.Add(5 * time.Minute))) // Timestamp advanced
 
 			// Process second good block
 			Expect(service.parseBlock(allLogs)).To(Succeed())
-			Expect(rb.Len()).To(Equal(2)) // Second good block processed
+			Expect(ringBuffer.Len()).To(Equal(2)) // Second good block processed
 			Expect(service.lastProcessedTimestamp).To(Equal(baseTime.Add(10 * time.Minute)))
 		})
 	})
@@ -152,9 +152,9 @@ var _ = Describe("extractRaw / parseBlock", func() {
 			}
 
 			Expect(service.parseBlock(logs)).To(Succeed())
-			Expect(rb.Len()).To(Equal(1))
+			Expect(ringBuffer.Len()).To(Equal(1))
 
-			got := rb.GetSnapshot().Items[0]
+			got := ringBuffer.GetSnapshot().Items[0]
 
 			Expect(got.Timestamp).To(Equal(time.UnixMilli(epochMS)))
 			Expect(got.Payload).To(Equal(payload))
@@ -169,15 +169,15 @@ var _ = Describe("extractRaw / parseBlock", func() {
 
 			// First call should process the block
 			Expect(service.parseBlock(logs)).To(Succeed())
-			Expect(rb.Len()).To(Equal(1))
+			Expect(ringBuffer.Len()).To(Equal(1))
 
 			// Second call with same logs should not add another block
 			Expect(service.parseBlock(logs)).To(Succeed())
-			Expect(rb.Len()).To(Equal(1)) // Still only 1 block
+			Expect(ringBuffer.Len()).To(Equal(1)) // Still only 1 block
 
 			// Third call should also not add another block
 			Expect(service.parseBlock(logs)).To(Succeed())
-			Expect(rb.Len()).To(Equal(1)) // Still only 1 block
+			Expect(ringBuffer.Len()).To(Equal(1)) // Still only 1 block
 		})
 
 		It("processes new blocks when they appear", func() {
@@ -186,11 +186,11 @@ var _ = Describe("extractRaw / parseBlock", func() {
 
 			// Process first block
 			Expect(service.parseBlock(logs1)).To(Succeed())
-			Expect(rb.Len()).To(Equal(1))
+			Expect(ringBuffer.Len()).To(Equal(1))
 
 			// Process with both blocks - should add the second block
 			Expect(service.parseBlock(logs2)).To(Succeed())
-			Expect(rb.Len()).To(Equal(2))
+			Expect(ringBuffer.Len()).To(Equal(2))
 		})
 	})
 
@@ -203,7 +203,7 @@ var _ = Describe("extractRaw / parseBlock", func() {
 			logs := buildLogsWithTimestamps(true, string(compressed), epochMS)
 
 			Expect(service.parseBlock(logs)).To(Succeed())
-			Expect(rb.Len()).To(Equal(1))
+			Expect(ringBuffer.Len()).To(Equal(1))
 
 			// Verify the timestamp was updated
 			Expect(service.lastProcessedTimestamp).To(Equal(time.UnixMilli(epochMS)))
@@ -222,17 +222,17 @@ var _ = Describe("extractRaw / parseBlock", func() {
 			// Process first block
 			service.ResetBlockProcessing()
 			Expect(service.parseBlock(logs1)).To(Succeed())
-			Expect(rb.Len()).To(Equal(1))
+			Expect(ringBuffer.Len()).To(Equal(1))
 			Expect(service.lastProcessedTimestamp).To(Equal(baseTime))
 
 			// Process all logs - should find and process the next unprocessed block (logs2)
 			Expect(service.parseBlock(allLogs)).To(Succeed())
-			Expect(rb.Len()).To(Equal(2)) // 1 original + 1 new
+			Expect(ringBuffer.Len()).To(Equal(2)) // 1 original + 1 new
 			Expect(service.lastProcessedTimestamp).To(Equal(baseTime.Add(5 * time.Minute)))
 
 			// Process again to get the third block (logs3)
 			Expect(service.parseBlock(allLogs)).To(Succeed())
-			Expect(rb.Len()).To(Equal(3)) // 1 original + 2 new
+			Expect(ringBuffer.Len()).To(Equal(3)) // 1 original + 2 new
 			Expect(service.lastProcessedTimestamp).To(Equal(baseTime.Add(10 * time.Minute)))
 		})
 
@@ -248,12 +248,12 @@ var _ = Describe("extractRaw / parseBlock", func() {
 			firstBatch := append(logs1, logs2...)
 
 			Expect(service.parseBlock(firstBatch)).To(Succeed())
-			Expect(rb.Len()).To(Equal(1)) // Only processes one block per call
+			Expect(ringBuffer.Len()).To(Equal(1)) // Only processes one block per call
 			Expect(service.lastProcessedTimestamp).To(Equal(baseTime))
 
 			// Process again to get the second block
 			Expect(service.parseBlock(firstBatch)).To(Succeed())
-			Expect(rb.Len()).To(Equal(2))
+			Expect(ringBuffer.Len()).To(Equal(2))
 			Expect(service.lastProcessedTimestamp).To(Equal(baseTime.Add(5 * time.Minute)))
 
 			// Now simulate ring buffer wrap by creating new logs that would appear
@@ -266,12 +266,12 @@ var _ = Describe("extractRaw / parseBlock", func() {
 			wrappedLogs := append(append(logs3, logs4...), firstBatch...)
 
 			Expect(service.parseBlock(wrappedLogs)).To(Succeed())
-			Expect(rb.Len()).To(Equal(3)) // First new block processed
+			Expect(ringBuffer.Len()).To(Equal(3)) // First new block processed
 			Expect(service.lastProcessedTimestamp).To(Equal(baseTime.Add(15 * time.Minute)))
 
 			// Process again to get the fourth block
 			Expect(service.parseBlock(wrappedLogs)).To(Succeed())
-			Expect(rb.Len()).To(Equal(4)) // Should have processed both new blocks
+			Expect(ringBuffer.Len()).To(Equal(4)) // Should have processed both new blocks
 			Expect(service.lastProcessedTimestamp).To(Equal(baseTime.Add(20 * time.Minute)))
 		})
 
@@ -286,11 +286,11 @@ var _ = Describe("extractRaw / parseBlock", func() {
 
 			service.ResetBlockProcessing()
 			Expect(service.parseBlock(allLogs)).To(Succeed())
-			Expect(rb.Len()).To(Equal(1)) // First block processed
+			Expect(ringBuffer.Len()).To(Equal(1)) // First block processed
 
 			// Process again - since second block has same timestamp, it won't be processed
 			Expect(service.parseBlock(allLogs)).To(Succeed())
-			Expect(rb.Len()).To(Equal(1)) // Still only one block (timestamp-based tracking prevents duplicate timestamps)
+			Expect(ringBuffer.Len()).To(Equal(1)) // Still only one block (timestamp-based tracking prevents duplicate timestamps)
 		})
 
 		It("skips processing when no newer entries exist", func() {
@@ -300,18 +300,18 @@ var _ = Describe("extractRaw / parseBlock", func() {
 			logs := buildLogsWithTimestamps(true, string(compressed), baseTime.UnixMilli())
 			service.ResetBlockProcessing()
 			Expect(service.parseBlock(logs)).To(Succeed())
-			Expect(rb.Len()).To(Equal(1))
+			Expect(ringBuffer.Len()).To(Equal(1))
 
 			// Process same logs again - should not add anything
 			Expect(service.parseBlock(logs)).To(Succeed())
-			Expect(rb.Len()).To(Equal(1)) // No new blocks added
+			Expect(ringBuffer.Len()).To(Equal(1)) // No new blocks added
 
 			// Add an older block - should not be processed
 			olderLogs := buildLogsWithTimestamps(true, string(compressed), baseTime.Add(-5*time.Minute).UnixMilli())
 			allLogsWithOlder := append(olderLogs, logs...)
 
 			Expect(service.parseBlock(allLogsWithOlder)).To(Succeed())
-			Expect(rb.Len()).To(Equal(1)) // Still no new blocks added
+			Expect(ringBuffer.Len()).To(Equal(1)) // Still no new blocks added
 		})
 
 		It("handles S6 ring buffer wrap at 10k entries correctly", func() {
@@ -348,17 +348,17 @@ var _ = Describe("extractRaw / parseBlock", func() {
 
 			// Process the wrapped log buffer - should find first new block
 			Expect(service.parseBlock(wrappedLogs)).To(Succeed())
-			Expect(rb.Len()).To(Equal(1)) // First new block processed
+			Expect(ringBuffer.Len()).To(Equal(1)) // First new block processed
 
 			// Process again to get the second new block
 			Expect(service.parseBlock(wrappedLogs)).To(Succeed())
-			Expect(rb.Len()).To(Equal(2)) // Both new blocks processed
+			Expect(ringBuffer.Len()).To(Equal(2)) // Both new blocks processed
 
 			// Verify that the service tracked the latest timestamp
 			Expect(service.lastProcessedTimestamp).To(Equal(newTime2))
 
 			// Verify the blocks in the ring buffer have the correct timestamps
-			snapshot := rb.GetSnapshot()
+			snapshot := ringBuffer.GetSnapshot()
 			Expect(snapshot.Items).To(HaveLen(2))
 			// The actual order depends on which block was found first by the search algorithm
 			timestamps := []time.Time{snapshot.Items[0].Timestamp, snapshot.Items[1].Timestamp}

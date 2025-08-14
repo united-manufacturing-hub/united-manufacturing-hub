@@ -52,7 +52,7 @@ var _ = Describe("DeployStreamProcessor", func() {
 		encodedConfig   string
 		stateMocker     *actions.StateMocker
 		messages        []*models.UMHMessage
-		mu              sync.Mutex
+		mutex           sync.Mutex
 	)
 
 	// Setup before each test
@@ -125,7 +125,7 @@ var _ = Describe("DeployStreamProcessor", func() {
 		stateMocker.Tick()
 		action = actions.NewDeployStreamProcessorAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, nil)
 
-		go actions.ConsumeOutboundMessages(outboundChannel, &messages, &mu, true)
+		go actions.ConsumeOutboundMessages(outboundChannel, &messages, &mutex, true)
 	})
 
 	// Cleanup after each test

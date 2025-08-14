@@ -1,4 +1,3 @@
-//go:build (!amd64 && !arm64) || go1.26 || !go1.16 || (arm64 && !go1.20)
 // +build !amd64,!arm64 go1.26 !go1.16 arm64,!go1.20
 
 /**
@@ -20,11 +19,11 @@
 package alg
 
 import (
+	_ "unsafe"
+	"unicode/utf8"
+	"strconv"
 	"bytes"
 	"encoding/json"
-	"strconv"
-	"unicode/utf8"
-	_ "unsafe"
 
 	"github.com/bytedance/sonic/internal/rt"
 )
@@ -128,22 +127,22 @@ func HtmlEscape(dst []byte, src []byte) []byte {
 	return buf.Bytes()
 }
 
-func F64toa(buf []byte, v float64) []byte {
+func F64toa(buf []byte, v float64) ([]byte) {
 	bs := bytes.NewBuffer(buf)
 	_ = json.NewEncoder(bs).Encode(v)
 	return bs.Bytes()
 }
 
-func F32toa(buf []byte, v float32) []byte {
+func F32toa(buf []byte, v float32) ([]byte) {
 	bs := bytes.NewBuffer(buf)
 	_ = json.NewEncoder(bs).Encode(v)
 	return bs.Bytes()
 }
 
-func I64toa(buf []byte, v int64) []byte {
+func I64toa(buf []byte, v int64) ([]byte) {
 	return strconv.AppendInt(buf, int64(v), 10)
 }
 
-func U64toa(buf []byte, v uint64) []byte {
+func U64toa(buf []byte, v uint64) ([]byte) {
 	return strconv.AppendUint(buf, v, 10)
 }

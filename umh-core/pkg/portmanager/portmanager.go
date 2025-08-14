@@ -99,12 +99,12 @@ func GetDefaultPortManager() *DefaultPortManager {
 
 // initDefaultPortManager initializes the singleton DefaultPortManager.
 // It ensures the DefaultPortManager is initialized only once.
-func initDefaultPortManager(fs filesystem.Service) *DefaultPortManager {
+func initDefaultPortManager(fileSystem filesystem.Service) *DefaultPortManager {
 	defaultPortManagerOnce.Do(func() {
 		defaultPortManagerMutex.Lock()
 		defer defaultPortManagerMutex.Unlock()
 
-		manager := newDefaultPortManager(fs)
+		manager := newDefaultPortManager(fileSystem)
 		defaultPortManagerInstance = manager
 	})
 
@@ -118,14 +118,14 @@ func initDefaultPortManager(fs filesystem.Service) *DefaultPortManager {
 // NewDefaultPortManager creates a new DefaultPortManager using OS port allocation.
 // If a singleton instance already exists, it returns that instance.
 // Otherwise, it creates and initializes the singleton instance.
-func NewDefaultPortManager(fs filesystem.Service) (*DefaultPortManager, error) {
+func NewDefaultPortManager(fileSystem filesystem.Service) (*DefaultPortManager, error) {
 	// Check if singleton already exists
 	if existing := GetDefaultPortManager(); existing != nil {
 		return existing, nil
 	}
 
 	// Initialize singleton if it doesn't exist
-	instance := initDefaultPortManager(fs)
+	instance := initDefaultPortManager(fileSystem)
 	if instance == nil {
 		return nil, errors.New("failed to initialize port manager")
 	}
@@ -136,7 +136,7 @@ func NewDefaultPortManager(fs filesystem.Service) (*DefaultPortManager, error) {
 // getEphemeralPortRange returns the OS ephemeral port range.
 // On Linux, it reads from /proc/sys/net/ipv4/ip_local_port_range.
 // Falls back to default range 32768-65535 if unable to read from OS.
-func getEphemeralPortRange(fs filesystem.Service) (uint16, uint16) {
+func getEphemeralPortRange(fileSystem filesystem.Service) (uint16, uint16) {
 	// Try to read from Linux proc filesystem (at max 500ms timeout)
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
@@ -146,8 +146,8 @@ func getEphemeralPortRange(fs filesystem.Service) (uint16, uint16) {
 		err  error
 	)
 
-	if fs != nil {
-		data, err = fs.ReadFile(ctx, "/proc/sys/net/ipv4/ip_local_port_range")
+	if fileSystem != nil {
+		data, err = fileSystem.ReadFile(ctx, "/proc/sys/net/ipv4/ip_local_port_range")
 	} else {
 		// Unit test path
 		data, err = os.ReadFile("/proc/sys/net/ipv4/ip_local_port_range")
@@ -178,8 +178,8 @@ func getEphemeralPortRange(fs filesystem.Service) (uint16, uint16) {
 
 // newDefaultPortManager is an internal function that creates a new DefaultPortManager instance
 // without using the singleton pattern. This is used by initDefaultPortManager.
-func newDefaultPortManager(fs filesystem.Service) *DefaultPortManager {
-	minPort, maxPort := getEphemeralPortRange(fs)
+func newDefaultPortManager(fileSystem filesystem.Service) *DefaultPortManager {
+	minPort, maxPort := getEphemeralPortRange(fileSystem)
 
 	return &DefaultPortManager{
 		instanceToPorts: make(map[string]uint16),
@@ -204,7 +204,7 @@ func (pm *DefaultPortManager) AllocatePort(ctx context.Context, instanceName str
 	// Try up to 5 times to find an available port
 	const maxRetries = 5
 
-	lc := &net.ListenConfig{}
+	listenConfig := &net.ListenConfig{}
 
 	for range maxRetries {
 		// Check if context is cancelled
@@ -227,7 +227,7 @@ func (pm *DefaultPortManager) AllocatePort(ctx context.Context, instanceName str
 		// Try to bind to the port to verify it's available
 		addr := fmt.Sprintf(":%d", port)
 
-		listener, err := lc.Listen(ctx, "tcp", addr)
+		listener, err := listenConfig.Listen(ctx, "tcp", addr)
 		if err != nil {
 			// Port not available, try another one
 			continue
@@ -304,9 +304,9 @@ func (pm *DefaultPortManager) ReservePort(ctx context.Context, instanceName stri
 
 	// Try to bind to the specific port to verify it's available
 	addr := fmt.Sprintf(":%d", port)
-	lc := &net.ListenConfig{}
+	listenConfig := &net.ListenConfig{}
 
-	listener, err := lc.Listen(ctx, "tcp", addr)
+	listener, err := listenConfig.Listen(ctx, "tcp", addr)
 	if err != nil {
 		return fmt.Errorf("port %d is not available: %w", port, err)
 	}

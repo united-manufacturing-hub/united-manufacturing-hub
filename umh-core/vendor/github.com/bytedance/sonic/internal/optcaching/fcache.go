@@ -27,8 +27,8 @@ import (
 	"github.com/bytedance/sonic/internal/rt"
 )
 
-const _AlignSize = 32
-const _PaddingSize = 32
+const _AlignSize =  32
+const _PaddingSize =  32
 
 type FieldLookup interface {
 	Set(fields []resolver.FieldMeta)
@@ -36,7 +36,7 @@ type FieldLookup interface {
 }
 
 func isAscii(s string) bool {
-	for i := 0; i < len(s); i++ {
+	for i :=0; i < len(s); i++ {
 		if s[i] > unicode.MaxASCII {
 			return false
 		}
@@ -58,11 +58,11 @@ func NewFieldLookup(fields []resolver.FieldMeta) FieldLookup {
 	}
 
 	if n <= 8 {
-		f = NewSmallFieldMap(n)
+		f =  NewSmallFieldMap(n)
 	} else if envs.UseFastMap && n <= 128 && isAsc {
-		f = NewNormalFieldMap(n)
+		f =   NewNormalFieldMap(n)
 	} else {
-		f = NewFallbackFieldMap(n)
+		f =   NewFallbackFieldMap(n)
 	}
 
 	f.Set(fields)
@@ -71,13 +71,13 @@ func NewFieldLookup(fields []resolver.FieldMeta) FieldLookup {
 
 // Map for keys nums max 8, idx is in [0, 8)
 type SmallFieldMap struct {
-	keys      []string
+	keys []string
 	lowerKeys []string
 }
 
-func NewSmallFieldMap(hint int) *SmallFieldMap {
+func NewSmallFieldMap (hint int) *SmallFieldMap {
 	return &SmallFieldMap{
-		keys:      make([]string, hint, hint),
+		keys: make([]string, hint, hint),
 		lowerKeys: make([]string, hint, hint),
 	}
 }
@@ -111,12 +111,13 @@ func (self *SmallFieldMap) Get(name string, caseSensitive bool) int {
 	return -1
 }
 
+
 /*
 1. select by the length: 0 ~ 32 and larger lengths
 2. simd match the aligned prefix of the keys: 4/8/16/32 bytes or larger keys
 3. check the key with strict match
 4. check the key with case-insensitive match
-5. find the index
+5. find the index 
 
 Mem Layout:
      fixed 33 * 5 bytes  165 bytes |||  variable keys  ||| variable lowerkeys
@@ -133,20 +134,21 @@ Mem Layout:
 // > 32 keys use the long keys entry lists
 // use bytes to reduce GC
 type NormalFieldMap struct {
-	keys     []byte
-	longKeys []keyEntry
+	keys  			[]byte
+	longKeys		[]keyEntry
 	// offset for lower
-	lowOffset int
+	lowOffset	    int
 }
 
 type keyEntry struct {
-	key      string
-	lowerKey string
-	index    uint
+	key 		string
+	lowerKey	string
+	index		uint
 }
 
 func NewNormalFieldMap(n int) *NormalFieldMap {
-	return &NormalFieldMap{}
+	return &NormalFieldMap{
+	}
 }
 
 const _HdrSlot = 33
@@ -161,7 +163,7 @@ func (self *NormalFieldMap) Get(name string, caseSensitive bool) int {
 		if caseSensitive {
 			lowOffset = -1
 		}
-		return native.LookupSmallKey(&name, &self.keys, lowOffset)
+		return native.LookupSmallKey(&name, &self.keys, lowOffset);
 	}
 	return self.getLongKey(name, caseSensitive)
 }
@@ -169,7 +171,7 @@ func (self *NormalFieldMap) Get(name string, caseSensitive bool) int {
 func (self *NormalFieldMap) getLongKey(name string, caseSensitive bool) int {
 	for _, k := range self.longKeys {
 		if len(k.key) != len(name) {
-			continue
+			continue;
 		}
 		if k.key == name {
 			return int(k.index)
@@ -183,7 +185,7 @@ func (self *NormalFieldMap) getLongKey(name string, caseSensitive bool) int {
 	lower := strings.ToLower(name)
 	for _, k := range self.longKeys {
 		if len(k.key) != len(name) {
-			continue
+			continue;
 		}
 
 		if k.lowerKey == lower {
@@ -197,7 +199,7 @@ func (self *NormalFieldMap) Getdouble(name string) int {
 	if len(name) > 32 {
 		for _, k := range self.longKeys {
 			if len(k.key) != len(name) {
-				continue
+				continue;
 			}
 			if k.key == name {
 				return int(k.index)
@@ -207,16 +209,16 @@ func (self *NormalFieldMap) Getdouble(name string) int {
 	}
 
 	// check the fixed length keys, not found the target length
-	cnt := int(self.keys[5*len(name)])
+	cnt := int(self.keys[5 * len(name)])
 	if cnt == 0 {
 		return -1
 	}
 	p := ((*rt.GoSlice)(unsafe.Pointer(&self.keys))).Ptr
-	offset := int(*(*int32)(unsafe.Pointer(uintptr(p) + uintptr(5*len(name)+1)))) + _HdrSize
+	offset := int(*(*int32)(unsafe.Pointer(uintptr(p) + uintptr(5 * len(name) + 1)))) + _HdrSize
 	for i := 0; i < cnt; i++ {
-		key := rt.Mem2Str(self.keys[offset : offset+len(name)])
+		key := rt.Mem2Str(self.keys[offset: offset + len(name)])
 		if key == name {
-			return int(self.keys[offset+len(name)])
+			return int(self.keys[offset + len(name)])
 		}
 		offset += len(name) + 1
 	}
@@ -229,7 +231,7 @@ func (self *NormalFieldMap) getCaseInsensitive(name string) int {
 	if len(name) > 32 {
 		for _, k := range self.longKeys {
 			if len(k.key) != len(name) {
-				continue
+				continue;
 			}
 
 			if k.lowerKey == lower {
@@ -239,13 +241,13 @@ func (self *NormalFieldMap) getCaseInsensitive(name string) int {
 		return -1
 	}
 
-	cnt := int(self.keys[5*len(name)])
+	cnt := int(self.keys[5 * len(name)])
 	p := ((*rt.GoSlice)(unsafe.Pointer(&self.keys))).Ptr
-	offset := int(*(*int32)(unsafe.Pointer(uintptr(p) + uintptr(5*len(name)+1)))) + self.lowOffset
+	offset := int(*(*int32)(unsafe.Pointer(uintptr(p) + uintptr(5 * len(name) + 1)))) + self.lowOffset
 	for i := 0; i < cnt; i++ {
-		key := rt.Mem2Str(self.keys[offset : offset+len(name)])
+		key := rt.Mem2Str(self.keys[offset: offset + len(name)])
 		if key == lower {
-			return int(self.keys[offset+len(name)])
+			return int(self.keys[offset + len(name)])
 		}
 		offset += len(name) + 1
 	}
@@ -261,7 +263,7 @@ type keysInfo struct {
 }
 
 func (self *NormalFieldMap) Set(fields []resolver.FieldMeta) {
-	if len(fields) <= 8 || len(fields) > 128 {
+	if len(fields) <=8 || len(fields) > 128 {
 		panic("normal field map should use in small struct")
 	}
 
@@ -276,7 +278,7 @@ func (self *NormalFieldMap) Set(fields []resolver.FieldMeta) {
 	}
 
 	kvLen := 0
-	for _, f := range fields {
+	for _, f := range(fields) {
 		len := len(f.Name)
 		if len <= 32 {
 			kvLen += len + 1 // key + index
@@ -287,7 +289,7 @@ func (self *NormalFieldMap) Set(fields []resolver.FieldMeta) {
 	}
 
 	// add a padding size at last to make it friendly for SIMD.
-	self.keys = make([]byte, _HdrSize+2*kvLen, _HdrSize+2*kvLen+_PaddingSize)
+	self.keys = make([]byte, _HdrSize + 2 * kvLen, _HdrSize + 2 * kvLen + _PaddingSize)
 	self.lowOffset = _HdrSize + kvLen
 
 	// initialize all keys offset
@@ -297,22 +299,22 @@ func (self *NormalFieldMap) Set(fields []resolver.FieldMeta) {
 	p := ((*rt.GoSlice)(unsafe.Pointer(&self.keys))).Ptr
 	for i < _HdrSlot {
 		keyLenSum[i].offset = keyLenSum[i-1].offset + keyLenSum[i-1].lenSum
-		self.keys[i*5] = byte(keyLenSum[i].counts)
+		self.keys[i * 5] = byte(keyLenSum[i].counts)
 		// write the offset into []byte
-		*(*int32)(unsafe.Pointer(uintptr(p) + uintptr(i*5+1))) = int32(keyLenSum[i].offset)
+		*(*int32)(unsafe.Pointer(uintptr(p) + uintptr(i * 5 + 1))) = int32(keyLenSum[i].offset)
 		i += 1
 
 	}
 
 	// fill the key into bytes
-	for i, f := range fields {
+	for i, f := range(fields) {
 		len := len(f.Name)
 		if len <= 32 {
-			offset := keyLenSum[len].offset + keyLenSum[len].cur
-			copy(self.keys[_HdrSize+offset:], f.Name)
-			copy(self.keys[self.lowOffset+offset:], strings.ToLower(f.Name))
-			self.keys[_HdrSize+offset+len] = byte(i)
-			self.keys[self.lowOffset+offset+len] = byte(i)
+			offset := keyLenSum[len].offset +  keyLenSum[len].cur
+			copy(self.keys[_HdrSize + offset: ], f.Name)
+			copy(self.keys[self.lowOffset + offset: ], strings.ToLower(f.Name))
+			self.keys[_HdrSize + offset + len] = byte(i)
+			self.keys[self.lowOffset + offset + len] = byte(i)
 			keyLenSum[len].cur += len + 1
 
 		} else {
@@ -328,44 +330,45 @@ type FallbackFieldMap struct {
 	inner  map[string]int
 	backup map[string]int
 }
-
-func NewFallbackFieldMap(n int) *FallbackFieldMap {
-	return &FallbackFieldMap{
-		oders:  make([]string, n, n),
-		inner:  make(map[string]int, n*2),
-		backup: make(map[string]int, n*2),
-	}
-}
-
-func (self *FallbackFieldMap) Get(name string, caseSensitive bool) int {
-	if i, ok := self.inner[name]; ok {
-		return i
-	} else if !caseSensitive {
-		return self.getCaseInsensitive(name)
-	} else {
+ 
+ func NewFallbackFieldMap(n int) *FallbackFieldMap {
+	 return &FallbackFieldMap{
+		 oders:  make([]string, n, n),
+		 inner:  make(map[string]int, n*2),
+		 backup: make(map[string]int, n*2),
+	 }
+ }
+ 
+ func (self *FallbackFieldMap) Get(name string, caseSensitive bool) int {
+	 if i, ok := self.inner[name]; ok {
+		 return i
+	 } else if !caseSensitive {
+		 return self.getCaseInsensitive(name)
+	 } else {
 		return -1
-	}
-}
+	 }
+ }
+ 
+ func (self *FallbackFieldMap) Set(fields []resolver.FieldMeta) {
 
-func (self *FallbackFieldMap) Set(fields []resolver.FieldMeta) {
-
-	for i, f := range fields {
+	for i, f := range(fields) {
 		name := f.Name
 		self.oders[i] = name
 		self.inner[name] = i
-
+	
 		/* add the case-insensitive version, prefer the one with smaller field ID */
 		key := strings.ToLower(name)
 		if v, ok := self.backup[key]; !ok || i < v {
 			self.backup[key] = i
 		}
 	}
-}
-
-func (self *FallbackFieldMap) getCaseInsensitive(name string) int {
-	if i, ok := self.backup[strings.ToLower(name)]; ok {
-		return i
-	} else {
-		return -1
-	}
-}
+ }
+ 
+ func (self *FallbackFieldMap) getCaseInsensitive(name string) int {
+	 if i, ok := self.backup[strings.ToLower(name)]; ok {
+		 return i
+	 } else {
+		 return -1
+	 }
+ }
+ 

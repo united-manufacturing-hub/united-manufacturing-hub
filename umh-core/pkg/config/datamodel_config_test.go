@@ -163,26 +163,26 @@ dataModels:
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(config.DataModels).To(HaveLen(1))
-				dm := config.DataModels[0]
-				Expect(dm.Name).To(Equal("sensor-data"))
-				Expect(dm.Versions).To(HaveLen(2))
+				dataModel := config.DataModels[0]
+				Expect(dataModel.Name).To(Equal("sensor-data"))
+				Expect(dataModel.Versions).To(HaveLen(2))
 
 				// Check v1
-				Expect(dm.Versions).To(HaveKey("v1"))
-				v1 := dm.Versions["v1"]
+				Expect(dataModel.Versions).To(HaveKey("v1"))
+				v1 := dataModel.Versions["v1"]
 				Expect(v1.Structure).To(HaveLen(1))
 				Expect(v1.Structure).To(HaveKey("value"))
 
 				// Check v2
-				Expect(dm.Versions).To(HaveKey("v2"))
-				v2 := dm.Versions["v2"]
-				Expect(v2.Structure).To(HaveLen(3))
-				Expect(v2.Structure).To(HaveKey("value"))
-				Expect(v2.Structure).To(HaveKey("timestamp"))
-				Expect(v2.Structure).To(HaveKey("metadata"))
-				Expect(v2.Structure["metadata"].ModelRef).NotTo(BeNil())
-				Expect(v2.Structure["metadata"].ModelRef.Name).To(Equal("sensor-metadata"))
-				Expect(v2.Structure["metadata"].ModelRef.Version).To(Equal("v1"))
+				Expect(dataModel.Versions).To(HaveKey("v2"))
+				version2 := dataModel.Versions["v2"]
+				Expect(version2.Structure).To(HaveLen(3))
+				Expect(version2.Structure).To(HaveKey("value"))
+				Expect(version2.Structure).To(HaveKey("timestamp"))
+				Expect(version2.Structure).To(HaveKey("metadata"))
+				Expect(version2.Structure["metadata"].ModelRef).NotTo(BeNil())
+				Expect(version2.Structure["metadata"].ModelRef.Name).To(Equal("sensor-metadata"))
+				Expect(version2.Structure["metadata"].ModelRef.Version).To(Equal("v1"))
 			})
 		})
 	})

@@ -127,10 +127,10 @@ func Compress(message []byte) ([]byte, error) {
 	defer encoderPool.Put(encoder)
 
 	// Create a new buffer for each compression
-	b := new(bytes.Buffer)
-	b.Grow(len(message)) // Pre-allocate with input size
+	buffer := new(bytes.Buffer)
+	buffer.Grow(len(message)) // Pre-allocate with input size
 
-	encoder.Reset(b)
+	encoder.Reset(buffer)
 
 	_, err := encoder.Write(message)
 	if err != nil {
@@ -143,8 +143,8 @@ func Compress(message []byte) ([]byte, error) {
 	}
 
 	// Return a copy of the bytes to avoid data races
-	result := make([]byte, b.Len())
-	copy(result, b.Bytes())
+	result := make([]byte, buffer.Len())
+	copy(result, buffer.Bytes())
 
 	return result, nil
 }
@@ -173,22 +173,22 @@ func Decompress(message []byte) ([]byte, error) {
 	defer decoderPool.Put(decoder)
 
 	// Get buffer from pool
-	b := getDecompressBuffer()
-	defer putDecompressBuffer(b)
+	buffer := getDecompressBuffer()
+	defer putDecompressBuffer(buffer)
 
 	err := decoder.Reset(bytes.NewReader(message))
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = io.Copy(b, decoder)
+	_, err = io.Copy(buffer, decoder)
 	if err != nil {
 		return nil, err
 	}
 
 	// Return a copy of the bytes to avoid data races
-	result := make([]byte, b.Len())
-	copy(result, b.Bytes())
+	result := make([]byte, buffer.Len())
+	copy(result, buffer.Bytes())
 
 	return result, nil
 }
@@ -283,14 +283,14 @@ func decodeBase64(data string) ([]byte, error) {
 	}
 	defer putBase64Buffer(buf)
 
-	n, err := base64.StdEncoding.Decode(buf, []byte(data))
+	bytesDecoded, err := base64.StdEncoding.Decode(buf, []byte(data))
 	if err != nil {
 		return nil, err
 	}
 
 	// Return a copy of the exact size needed
-	result := make([]byte, n)
-	copy(result, buf[:n])
+	result := make([]byte, bytesDecoded)
+	copy(result, buf[:bytesDecoded])
 
 	return result, nil
 }

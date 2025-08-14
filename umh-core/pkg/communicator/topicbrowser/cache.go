@@ -216,9 +216,9 @@ func (c *Cache) ProcessIncrementalUpdates(obs *topicbrowserfsm.ObservedStateSnap
 // processBuffer processes a single buffer and updates the cache.
 func (c *Cache) processBuffer(buf *topicbrowserservice.BufferItem, log *zap.SugaredLogger) error {
 	// Unmarshal the protobuf data
-	var ub tbproto.UnsBundle
+	var unsBundle tbproto.UnsBundle
 
-	err := proto.Unmarshal(buf.Payload, &ub)
+	err := proto.Unmarshal(buf.Payload, &unsBundle)
 	if err != nil {
 		// Log the unmarshal error with context and report to Sentry
 		log.Errorf("Failed to unmarshal protobuf data in topic browser cache: %v", err)
@@ -237,7 +237,7 @@ func (c *Cache) processBuffer(buf *topicbrowserservice.BufferItem, log *zap.Suga
 	// upsert the latest event by UnsTreeId (key)
 	// if the event is newer, we overwrite the existing event
 	// if the event is older, we skip it
-	for _, entry := range ub.GetEvents().GetEntries() {
+	for _, entry := range unsBundle.GetEvents().GetEntries() {
 		existing, exists := c.eventMap[entry.GetUnsTreeId()]
 		if !exists || entry.GetProducedAtMs() > existing.GetProducedAtMs() {
 			c.eventMap[entry.GetUnsTreeId()] = entry
@@ -248,7 +248,7 @@ func (c *Cache) processBuffer(buf *topicbrowserservice.BufferItem, log *zap.Suga
 	}
 
 	// upsert the uns map
-	for _, entry := range ub.GetUnsMap().GetEntries() {
+	for _, entry := range unsBundle.GetUnsMap().GetEntries() {
 		// generate a hash from the entry by calling HashUNSTableEntry
 		hash := HashUNSTableEntry(entry)
 		c.unsMap.Entries[hash] = entry
@@ -284,7 +284,7 @@ func (c *Cache) ToUnsBundleProto() []byte {
 	defer c.mu.RUnlock()
 
 	// create a new uns bundle
-	ub := &tbproto.UnsBundle{
+	unsBundle := &tbproto.UnsBundle{
 		Events: &tbproto.EventTable{
 			Entries: make([]*tbproto.EventTableEntry, 0, len(c.eventMap)),
 		},
@@ -295,16 +295,16 @@ func (c *Cache) ToUnsBundleProto() []byte {
 
 	// add the latest events to the uns bundle
 	for _, entry := range c.eventMap {
-		ub.Events.Entries = append(ub.Events.Entries, entry)
+		unsBundle.Events.Entries = append(unsBundle.Events.Entries, entry)
 	}
 
 	// add the uns map to the uns bundle
 	for _, entry := range c.unsMap.GetEntries() {
-		ub.UnsMap.Entries[HashUNSTableEntry(entry)] = entry
+		unsBundle.UnsMap.Entries[HashUNSTableEntry(entry)] = entry
 	}
 
 	// proto encode the uns bundle
-	encoded, err := proto.Marshal(ub)
+	encoded, err := proto.Marshal(unsBundle)
 	if err != nil {
 		// Log the marshal error with context and report to Sentry
 		log := logger.For(logger.ComponentCommunicator)
@@ -312,8 +312,8 @@ func (c *Cache) ToUnsBundleProto() []byte {
 
 		context := map[string]interface{}{
 			"operation":    "marshal_protobuf",
-			"events_count": len(ub.GetEvents().GetEntries()),
-			"unsmap_count": len(ub.GetUnsMap().GetEntries()),
+			"events_count": len(unsBundle.GetEvents().GetEntries()),
+			"unsmap_count": len(unsBundle.GetUnsMap().GetEntries()),
 			"component":    "topic_browser_cache",
 		}
 		sentry.ReportIssueWithContext(err, sentry.IssueTypeError, log, context)

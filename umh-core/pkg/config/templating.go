@@ -52,16 +52,16 @@ import (
 //
 //	// ─ recursively true because of the child ─
 //	hasAnchors("root: {cfg: *tpl}")     == true
-func hasAnchors(n *yaml.Node) bool {
-	if n == nil {
+func hasAnchors(yamlNode *yaml.Node) bool {
+	if yamlNode == nil {
 		return false
 	}
 
-	if n.Anchor != "" || n.Kind == yaml.AliasNode {
+	if yamlNode.Anchor != "" || yamlNode.Kind == yaml.AliasNode {
 		return true
 	}
 
-	for _, c := range n.Content {
+	for _, c := range yamlNode.Content {
 		if hasAnchors(c) {
 			return true
 		}
@@ -233,13 +233,17 @@ func RenderTemplate[T any](tmpl T, scope map[string]any) (T, error) {
 	}
 
 	var buf bytes.Buffer
-	if err := tpl.Execute(&buf, scope); err != nil {
+
+	err = tpl.Execute(&buf, scope)
+	if err != nil {
 		return *new(T), fmt.Errorf("failed to execute template for type %T: %w", tmpl, err)
 	}
 
 	// C. unmarshal back into the *same* Go type
 	var out T
-	if err := yaml.Unmarshal(buf.Bytes(), &out); err != nil {
+
+	err = yaml.Unmarshal(buf.Bytes(), &out)
+	if err != nil {
 		return *new(T), fmt.Errorf("failed to unmarshal rendered template back to type %T: %w", tmpl, err)
 	}
 

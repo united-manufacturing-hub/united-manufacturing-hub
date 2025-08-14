@@ -314,9 +314,9 @@ func (tbc *TopicBrowserCommunicator) processIncrementalBuffers(buffers []*topicb
 // updateInternalCache processes a single buffer and updates the internal cache maps.
 func (tbc *TopicBrowserCommunicator) updateInternalCache(buf *topicbrowserservice.BufferItem) error {
 	// Unmarshal the protobuf data
-	var ub tbproto.UnsBundle
+	var unsBundle tbproto.UnsBundle
 
-	err := proto.Unmarshal(buf.Payload, &ub)
+	err := proto.Unmarshal(buf.Payload, &unsBundle)
 	if err != nil {
 		context := map[string]interface{}{
 			"operation":   "unmarshal_protobuf",
@@ -330,7 +330,7 @@ func (tbc *TopicBrowserCommunicator) updateInternalCache(buf *topicbrowserservic
 	}
 
 	// Update event map: keep only the latest event per topic
-	for _, entry := range ub.GetEvents().GetEntries() {
+	for _, entry := range unsBundle.GetEvents().GetEntries() {
 		existing, exists := tbc.eventMap[entry.GetUnsTreeId()]
 		if !exists || entry.GetProducedAtMs() > existing.GetProducedAtMs() {
 			tbc.eventMap[entry.GetUnsTreeId()] = entry
@@ -338,7 +338,7 @@ func (tbc *TopicBrowserCommunicator) updateInternalCache(buf *topicbrowserservic
 	}
 
 	// Update topic map
-	for _, entry := range ub.GetUnsMap().GetEntries() {
+	for _, entry := range unsBundle.GetUnsMap().GetEntries() {
 		hash := HashUNSTableEntry(entry)
 		tbc.unsMap.Entries[hash] = entry
 	}
@@ -439,7 +439,7 @@ func (tbc *TopicBrowserCommunicator) cleanupOldPendingBuffers() {
 // getCacheBundle returns the complete cache as a protobuf-encoded UnsBundle.
 func (tbc *TopicBrowserCommunicator) getCacheBundle() []byte {
 	// Create bundle with all current cache data
-	ub := &tbproto.UnsBundle{
+	unsBundle := &tbproto.UnsBundle{
 		Events: &tbproto.EventTable{
 			Entries: make([]*tbproto.EventTableEntry, 0, len(tbc.eventMap)),
 		},
@@ -450,23 +450,23 @@ func (tbc *TopicBrowserCommunicator) getCacheBundle() []byte {
 
 	// Add all events from cache
 	for _, entry := range tbc.eventMap {
-		ub.Events.Entries = append(ub.Events.Entries, entry)
+		unsBundle.Events.Entries = append(unsBundle.Events.Entries, entry)
 	}
 
 	// Add all topic info from cache
 	for hash, entry := range tbc.unsMap.GetEntries() {
-		ub.UnsMap.Entries[hash] = entry
+		unsBundle.UnsMap.Entries[hash] = entry
 	}
 
 	// Encode to protobuf
-	encoded, err := proto.Marshal(ub)
+	encoded, err := proto.Marshal(unsBundle)
 	if err != nil {
 		tbc.logger.Errorf("Failed to marshal cache bundle: %v", err)
 
 		context := map[string]interface{}{
 			"operation":    "marshal_cache_bundle",
-			"events_count": len(ub.GetEvents().GetEntries()),
-			"unsmap_count": len(ub.GetUnsMap().GetEntries()),
+			"events_count": len(unsBundle.GetEvents().GetEntries()),
+			"unsmap_count": len(unsBundle.GetUnsMap().GetEntries()),
 			"component":    "topic_browser_communicator",
 		}
 		sentry.ReportIssueWithContext(err, sentry.IssueTypeError, tbc.logger, context)

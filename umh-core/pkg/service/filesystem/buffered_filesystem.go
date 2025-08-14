@@ -100,7 +100,7 @@ type DirectoryCache struct {
 
 // ReadDirectoryTree reads a directory tree from disk and returns a cache of its contents.
 func ReadDirectoryTree(ctx context.Context, service Service, root string) (*DirectoryCache, error) {
-	dc := &DirectoryCache{
+	directoryCache := &DirectoryCache{
 		Files: make(map[string]*CachedFile),
 	}
 
@@ -168,7 +168,7 @@ func ReadDirectoryTree(ctx context.Context, service Service, root string) (*Dire
 			isDir = targetInfo.IsDir()
 		}
 
-		dc.Files[relPath] = &CachedFile{
+		directoryCache.Files[relPath] = &CachedFile{
 			Info:  info,
 			IsDir: isDir,
 		}
@@ -181,12 +181,12 @@ func ReadDirectoryTree(ctx context.Context, service Service, root string) (*Dire
 			}
 			// Add all files from subdirectory
 			for subPath, subFile := range subDc.Files {
-				dc.Files[filepath.Join(relPath, subPath)] = subFile
+				directoryCache.Files[filepath.Join(relPath, subPath)] = subFile
 			}
 		}
 	}
 
-	return dc, nil
+	return directoryCache, nil
 }
 
 // BufferedService implements the Service interface in a "buffered" fashion.
@@ -320,7 +320,7 @@ func (bs *BufferedService) Chown(ctx context.Context, path string, username stri
 	defer bs.mu.Unlock()
 
 	// Check if file exists
-	st, ok := bs.files[path]
+	stat, ok := bs.files[path]
 	if !ok {
 		return os.ErrNotExist
 	}
@@ -331,18 +331,18 @@ func (bs *BufferedService) Chown(ctx context.Context, path string, username stri
 	if username != "" {
 		// Note: This is a call outside of the buffered service
 		// We could later cache this information
-		u, err := user.Lookup(username)
+		userInfo, err := user.Lookup(username)
 		if err != nil {
 			return fmt.Errorf("failed to lookup user %s: %w", username, err)
 		}
 
-		if u == nil {
+		if userInfo == nil {
 			return fmt.Errorf("user lookup returned nil for user %s", username)
 		}
 
-		uid, _ = strconv.Atoi(u.Uid)
+		uid, _ = strconv.Atoi(userInfo.Uid)
 	} else {
-		uid = st.uid // Keep existing
+		uid = stat.uid // Keep existing
 	}
 
 	// Convert groupname to gid
@@ -351,18 +351,18 @@ func (bs *BufferedService) Chown(ctx context.Context, path string, username stri
 	if groupname != "" {
 		// Note: This is a call outside of the buffered service
 		// We could later cache this information
-		g, err := user.LookupGroup(groupname)
+		groupInfo, err := user.LookupGroup(groupname)
 		if err != nil {
 			return fmt.Errorf("failed to lookup group %s: %w", groupname, err)
 		}
 
-		if g == nil {
+		if groupInfo == nil {
 			return fmt.Errorf("group lookup returned nil for group %s", groupname)
 		}
 
-		gid, _ = strconv.Atoi(g.Gid)
+		gid, _ = strconv.Atoi(groupInfo.Gid)
 	} else {
-		gid = st.gid // Keep existing
+		gid = stat.gid // Keep existing
 	}
 
 	// Check permissions - only root can change ownership
@@ -374,9 +374,9 @@ func (bs *BufferedService) Chown(ctx context.Context, path string, username stri
 	}
 
 	// Update file state in memory
-	st.uid = uid
-	st.gid = gid
-	bs.files[path] = st
+	stat.uid = uid
+	stat.gid = gid
+	bs.files[path] = stat
 
 	// Mark as changed for SyncToDisk
 	chg, inChg := bs.changed[path]
@@ -633,14 +633,14 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 		filesMutex.Unlock()
 
 		// Read the directory tree
-		dc, err := ReadDirectoryTree(ctx, bs.base, dir)
+		directoryCache, err := ReadDirectoryTree(ctx, bs.base, dir)
 		if err != nil {
 			return fmt.Errorf("failed to read directory tree for %s: %w", dir, err)
 		}
 
 		// Process directories first (they're lightweight and don't need parallelization)
-		for path, cf := range dc.Files {
-			if !cf.IsDir {
+		for path, cachedFile := range directoryCache.Files {
+			if !cachedFile.IsDir {
 				continue
 			}
 
@@ -656,8 +656,8 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 			newFiles[absPath] = fileState{
 				isDir:    true,
 				content:  nil,
-				modTime:  cf.Info.ModTime(),
-				fileMode: cf.Info.Mode(),
+				modTime:  cachedFile.Info.ModTime(),
+				fileMode: cachedFile.Info.Mode(),
 				size:     0,
 				uid:      uid,
 				gid:      gid,
@@ -680,7 +680,7 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 		}
 
 		// Count files to properly size channels
-		fileCount := countFiles(dc.Files)
+		fileCount := countFiles(directoryCache.Files)
 		if fileCount == 0 {
 			// No files to process in this directory
 			continue
@@ -889,8 +889,8 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 		}()
 
 		// Queue all file jobs
-		for path, cf := range dc.Files {
-			if cf.IsDir {
+		for path, cachedFile := range directoryCache.Files {
+			if cachedFile.IsDir {
 				continue // Skip directories, already processed
 			}
 
@@ -900,7 +900,7 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 			}
 
 			select {
-			case jobs <- fileReadJob{absPath: absPath, cf: cf}:
+			case jobs <- fileReadJob{absPath: absPath, cf: cachedFile}:
 				// Job queued successfully
 			case <-ctx.Done():
 				cancel()
@@ -1164,21 +1164,21 @@ func (bs *BufferedService) ReadFile(ctx context.Context, path string) ([]byte, e
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
-	st, ok := bs.files[path]
-	if !ok || st.isDir {
+	stat, ok := bs.files[path]
+	if !ok || stat.isDir {
 		return nil, os.ErrNotExist
 	}
 	// If it's a large file (content is nil but size is set), return not exist
 	// TODO: "Would be nice to have a distinct error here."
-	if st.content == nil && st.size > bs.maxFileSize {
+	if stat.content == nil && stat.size > bs.maxFileSize {
 		return nil, os.ErrNotExist
 	}
 	// Return empty slice instead of nil if content is nil
-	if st.content == nil {
+	if stat.content == nil {
 		return []byte{}, nil
 	}
 
-	return st.content, nil
+	return stat.content, nil
 }
 
 // WriteFile does not immediately write to disk; it marks the file as changed in memory.
@@ -1337,27 +1337,27 @@ func (bs *BufferedService) Stat(ctx context.Context, path string) (os.FileInfo, 
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
-	st, ok := bs.files[path]
+	stat, ok := bs.files[path]
 	if !ok {
 		return nil, os.ErrNotExist
 	}
 
-	if st.isDir {
+	if stat.isDir {
 		// Return a synthetic fileInfo for a directory
 		return &memFileInfo{
 			name:  filepathBase(path),
 			size:  0,
-			mode:  st.fileMode,
-			mtime: st.modTime,
+			mode:  stat.fileMode,
+			mtime: stat.modTime,
 			dir:   true,
 		}, nil
 	}
 
 	return &memFileInfo{
 		name:  filepathBase(path),
-		size:  st.size,
-		mode:  st.fileMode,
-		mtime: st.modTime,
+		size:  stat.size,
+		mode:  stat.fileMode,
+		mtime: stat.modTime,
 		dir:   false,
 	}, nil
 }

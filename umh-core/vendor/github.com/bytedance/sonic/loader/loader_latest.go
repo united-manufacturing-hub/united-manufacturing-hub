@@ -1,3 +1,4 @@
+
 /*
  * Copyright 2021 ByteDance Inc.
  *
@@ -17,94 +18,94 @@
 package loader
 
 import (
-	"github.com/bytedance/sonic/loader/internal/rt"
+    `github.com/bytedance/sonic/loader/internal/rt`
 )
 
 // LoadFuncs loads only one function as module, and returns the function pointer
 //   - text: machine code
 //   - funcName: function name
-//   - frameSize: stack frame size.
+//   - frameSize: stack frame size. 
 //   - argSize: argument total size (in bytes)
 //   - argPtrs: indicates if a slot (8 Bytes) of arguments memory stores pointer, from low to high
 //   - localPtrs: indicates if a slot (8 Bytes) of local variants memory stores pointer, from low to high
-//
-// WARN:
+// 
+// WARN: 
 //   - the function MUST has fixed SP offset equaling to this, otherwise it go.gentraceback will fail
 //   - the function MUST has only one stack map for all arguments and local variants
 func (self Loader) LoadOne(text []byte, funcName string, frameSize int, argSize int, argPtrs []bool, localPtrs []bool) Function {
-	size := uint32(len(text))
+    size := uint32(len(text))
 
-	fn := Func{
-		Name:     funcName,
-		TextSize: size,
-		ArgsSize: int32(argSize),
-	}
+    fn := Func{
+        Name: funcName,
+        TextSize: size,
+        ArgsSize: int32(argSize),
+    }
 
-	// NOTICE: suppose the function has fixed SP offset equaling to frameSize, thus make only one pcsp pair
-	fn.Pcsp = &Pcdata{
-		{PC: size, Val: int32(frameSize)},
-	}
+    // NOTICE: suppose the function has fixed SP offset equaling to frameSize, thus make only one pcsp pair
+    fn.Pcsp = &Pcdata{
+        {PC: size, Val: int32(frameSize)},
+    }
 
-	if self.NoPreempt {
-		fn.PcUnsafePoint = &Pcdata{
-			{PC: size, Val: PCDATA_UnsafePointUnsafe},
-		}
-	} else {
-		fn.PcUnsafePoint = &Pcdata{
-			{PC: size, Val: PCDATA_UnsafePointSafe},
-		}
-	}
+    if self.NoPreempt {
+        fn.PcUnsafePoint = &Pcdata{
+            {PC: size, Val: PCDATA_UnsafePointUnsafe},
+        }
+    } else {
+        fn.PcUnsafePoint = &Pcdata{
+            {PC: size, Val: PCDATA_UnsafePointSafe},
+        }
+    }
 
-	// NOTICE: suppose the function has only one stack map at index 0
-	fn.PcStackMapIndex = &Pcdata{
-		{PC: size, Val: 0},
-	}
+    // NOTICE: suppose the function has only one stack map at index 0
+    fn.PcStackMapIndex = &Pcdata{
+        {PC: size, Val: 0},
+    }
 
-	if argPtrs != nil {
-		args := rt.StackMapBuilder{}
-		for _, b := range argPtrs {
-			args.AddField(b)
-		}
-		fn.ArgsPointerMaps = args.Build()
-	}
+    if argPtrs != nil {
+        args := rt.StackMapBuilder{}
+        for _, b := range argPtrs {
+            args.AddField(b)
+        }
+        fn.ArgsPointerMaps = args.Build()
+    }
+    
+    if localPtrs != nil {
+        locals := rt.StackMapBuilder{}
+        for _, b := range localPtrs {
+            locals.AddField(b)
+        }
+        fn.LocalsPointerMaps = locals.Build()
+    }
 
-	if localPtrs != nil {
-		locals := rt.StackMapBuilder{}
-		for _, b := range localPtrs {
-			locals.AddField(b)
-		}
-		fn.LocalsPointerMaps = locals.Build()
-	}
-
-	out := Load(text, []Func{fn}, self.Name+funcName, []string{self.File})
-	return out[0]
+    out := Load(text, []Func{fn}, self.Name + funcName, []string{self.File})
+    return out[0]
 }
 
 // Load loads given machine codes and corresponding function information into go moduledata
 // and returns runnable function pointer
 // WARN: this API is experimental, use it carefully
 func Load(text []byte, funcs []Func, modulename string, filenames []string) (out []Function) {
-	ids := make([]string, len(funcs))
-	for i, f := range funcs {
-		ids[i] = f.Name
-	}
-	// generate module data and allocate memory address
-	mod := makeModuledata(modulename, filenames, &funcs, text)
+    ids := make([]string, len(funcs))
+    for i, f := range funcs {
+        ids[i] = f.Name
+    }
+    // generate module data and allocate memory address
+    mod := makeModuledata(modulename, filenames, &funcs, text)
 
-	// verify and register the new module
-	moduledataverify1(mod)
-	registerModule(mod)
+    // verify and register the new module
+    moduledataverify1(mod)
+    registerModule(mod)
 
-	//
-	// encapsulate function address
-	out = make([]Function, len(funcs))
-	for i, s := range ids {
-		for _, f := range funcs {
-			if f.Name == s {
-				m := uintptr(mod.text + uintptr(f.EntryOff))
-				out[i] = Function(&m)
-			}
-		}
-	}
-	return
+    // 
+    // encapsulate function address
+    out = make([]Function, len(funcs))
+    for i, s := range ids {
+        for _, f := range funcs {
+            if f.Name == s {
+                m := uintptr(mod.text + uintptr(f.EntryOff))
+                out[i] = Function(&m)
+            }
+        }
+    }
+    return 
 }

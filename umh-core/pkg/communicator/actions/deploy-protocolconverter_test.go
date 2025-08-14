@@ -47,7 +47,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 		pcLocation      map[int]string
 		stateMocker     *actions.StateMocker
 		messages        []*models.UMHMessage
-		mu              sync.Mutex
+		mutex           sync.Mutex
 	)
 
 	// Setup before each test
@@ -86,7 +86,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 		stateMocker.Tick()
 		action = actions.NewDeployProtocolConverterAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, nil)
 
-		go actions.ConsumeOutboundMessages(outboundChannel, &messages, &mu, true)
+		go actions.ConsumeOutboundMessages(outboundChannel, &messages, &mutex, true)
 	})
 
 	// Cleanup after each test

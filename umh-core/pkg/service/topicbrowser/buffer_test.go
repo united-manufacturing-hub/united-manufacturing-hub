@@ -25,7 +25,7 @@ import (
 
 var _ = Describe("Ringbuffer", func() {
 	const capacity uint64 = 3
-	var rb *Ringbuffer
+	var ringBuffer *Ringbuffer
 
 	newBuf := func(id byte) *BufferItem {
 		// tiny helper to create distinct payloads & timestamps
@@ -36,16 +36,16 @@ var _ = Describe("Ringbuffer", func() {
 	}
 
 	BeforeEach(func() {
-		rb = NewRingbuffer(capacity)
+		ringBuffer = NewRingbuffer(capacity)
 	})
 
 	Context("Add / Get basics", func() {
 		It("stores elements and returns them newest-first", func() {
-			rb.Add(newBuf(0))
-			rb.Add(newBuf(1))
-			Expect(rb.Len()).To(Equal(2))
+			ringBuffer.Add(newBuf(0))
+			ringBuffer.Add(newBuf(1))
+			Expect(ringBuffer.Len()).To(Equal(2))
 
-			snapshot := rb.GetSnapshot()
+			snapshot := ringBuffer.GetSnapshot()
 			Expect(snapshot.Items).To(HaveLen(2))
 			// expect newest first (id 1, then id 0)
 			Expect(snapshot.Items[0].Payload[0]).To(Equal(byte(1)))
@@ -55,13 +55,13 @@ var _ = Describe("Ringbuffer", func() {
 
 	Context("Overwrite when full", func() {
 		It("drops the oldest element once capacity is exceeded", func() {
-			rb.Add(newBuf(0))
-			rb.Add(newBuf(1))
-			rb.Add(newBuf(2))
+			ringBuffer.Add(newBuf(0))
+			ringBuffer.Add(newBuf(1))
+			ringBuffer.Add(newBuf(2))
 			// Overwrite
-			rb.Add(newBuf(3))
+			ringBuffer.Add(newBuf(3))
 
-			snapshot := rb.GetSnapshot()
+			snapshot := ringBuffer.GetSnapshot()
 			Expect(snapshot.Items).To(HaveLen(int(capacity))) // still full capacity
 			ids := []byte{snapshot.Items[0].Payload[0], snapshot.Items[1].Payload[0], snapshot.Items[2].Payload[0]}
 			// oldest (0) must be gone, newest (3) present
@@ -108,7 +108,7 @@ var _ = Describe("Ringbuffer", func() {
 			rb := NewRingbuffer(4)
 			rb.Add(helperBuf(42))
 
-			snapshot := rb.GetSnapshot()
+			snapshot := ringBuffer.GetSnapshot()
 			Expect(snapshot.Items).To(HaveLen(1))
 
 			// Verify immutable access - snapshot won't change if we add more items
@@ -128,7 +128,7 @@ var _ = Describe("Ringbuffer", func() {
 			rb.Add(helperBuf(43))
 
 			// Consumer pattern: get snapshot and always return items to pool
-			snapshot := rb.GetSnapshot()
+			snapshot := ringBuffer.GetSnapshot()
 			defer PutBufferItems(snapshot.Items) // CRITICAL: Always return to pool when done
 
 			// Process the items
@@ -147,7 +147,7 @@ var _ = Describe("Ringbuffer", func() {
 			rb := NewRingbuffer(2)
 			rb.Add(helperBuf(100))
 
-			snapshot := rb.GetSnapshot()
+			snapshot := ringBuffer.GetSnapshot()
 			Expect(snapshot.Items).To(HaveLen(1))
 			Expect(snapshot.Items[0].Payload[0]).To(Equal(byte(100)))
 
@@ -163,17 +163,17 @@ var _ = Describe("Ringbuffer", func() {
 
 	Context("Sequence number tracking", func() {
 		It("assigns monotonically increasing sequence numbers", func() {
-			rb := NewRingbuffer(3)
+			ringBuffer := NewRingbuffer(3)
 
 			buf1 := newBuf(1)
 			buf2 := newBuf(2)
 			buf3 := newBuf(3)
 
-			rb.Add(buf1)
-			rb.Add(buf2)
-			rb.Add(buf3)
+			ringBuffer.Add(buf1)
+			ringBuffer.Add(buf2)
+			ringBuffer.Add(buf3)
 
-			snapshot := rb.GetSnapshot()
+			snapshot := ringBuffer.GetSnapshot()
 			Expect(snapshot.LastSequenceNum).To(Equal(uint64(3)))
 			Expect(snapshot.Items).To(HaveLen(3))
 
@@ -184,17 +184,17 @@ var _ = Describe("Ringbuffer", func() {
 		})
 
 		It("handles sequence numbers with ring buffer overflow", func() {
-			rb := NewRingbuffer(2) // Small buffer to test overflow
+			localRingBuffer := NewRingbuffer(2) // Small buffer to test overflow
 
 			buf1 := newBuf(1)
 			buf2 := newBuf(2)
 			buf3 := newBuf(3) // This will overwrite buf1
 
-			rb.Add(buf1)
-			rb.Add(buf2)
-			rb.Add(buf3)
+			localRingBuffer.Add(buf1)
+			localRingBuffer.Add(buf2)
+			localRingBuffer.Add(buf3)
 
-			snapshot := rb.GetSnapshot()
+			snapshot := localRingBuffer.GetSnapshot()
 			Expect(snapshot.LastSequenceNum).To(Equal(uint64(3)))
 			Expect(snapshot.Items).To(HaveLen(2)) // Buffer capacity
 
@@ -207,12 +207,12 @@ var _ = Describe("Ringbuffer", func() {
 
 	Context("GetSnapshot method", func() {
 		It("returns consistent snapshot data", func() {
-			rb := NewRingbuffer(3)
+			ringBuffer := NewRingbuffer(3)
 
-			rb.Add(newBuf(10))
-			rb.Add(newBuf(20))
+			ringBuffer.Add(newBuf(10))
+			ringBuffer.Add(newBuf(20))
 
-			snapshot := rb.GetSnapshot()
+			snapshot := ringBuffer.GetSnapshot()
 
 			Expect(snapshot.LastSequenceNum).To(Equal(uint64(2)))
 			Expect(snapshot.Items).To(HaveLen(2))

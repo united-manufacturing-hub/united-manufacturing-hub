@@ -38,7 +38,11 @@ import (
 // This function is intended to be called repeatedly (e.g. in a periodic control loop).
 // Over multiple calls, it converges the actual state to the desired state. Transitions
 // that fail are retried in subsequent reconcile calls after a backoff period.
-func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
+func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool) {
+	var err error
+
+	var reconciled bool
+
 	start := time.Now()
 	tbInstanceName := i.baseFSMInstance.GetID()
 
@@ -202,7 +206,11 @@ func (i *TopicBrowserInstance) reconcileExternalChanges(ctx context.Context, ser
 // Any functions that fetch information are disallowed here and must be called in reconcileExternalChanges
 // and exist in ObservedState.
 // This is to ensure full testability of the FSM.
-func (i *TopicBrowserInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider, currentTime time.Time, snapshot fsm.SystemSnapshot) (err error, reconciled bool) {
+func (i *TopicBrowserInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider, currentTime time.Time, _ fsm.SystemSnapshot) (error, bool) {
+	var err error
+
+	var reconciled bool
+
 	start := time.Now()
 
 	defer func() {
@@ -245,7 +253,7 @@ func (i *TopicBrowserInstance) reconcileStateTransition(ctx context.Context, ser
 }
 
 // reconcileOperationalStates handles states related to instance operations (starting/stopping).
-func (i *TopicBrowserInstance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time) (err error, reconciled bool) {
+func (i *TopicBrowserInstance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -264,7 +272,7 @@ func (i *TopicBrowserInstance) reconcileOperationalStates(ctx context.Context, s
 
 // reconcileTransitionToActive handles transitions when the desired state is Active.
 // It deals with moving from various states to the Active state.
-func (i *TopicBrowserInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (i *TopicBrowserInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -281,9 +289,9 @@ func (i *TopicBrowserInstance) reconcileTransitionToActive(ctx context.Context, 
 		// Send event to transition from Stopped to Starting
 		return i.baseFSMInstance.SendEvent(ctx, EventStart), true
 	case IsStartingState(currentState):
-		return i.reconcileStartingStates(ctx, services, currentState, currentTime)
+		return i.reconcileStartingStates(ctx, currentState)
 	case IsRunningState(currentState):
-		return i.reconcileRunningStates(ctx, services, currentState, currentTime)
+		return i.reconcileRunningStates(ctx, currentState)
 	case currentState == OperationalStateStopping:
 		// There can be the edge case where an fsm is set to stopped, and then a cycle later again to active
 		// It will cause the stopping process to start, but then the deisred state is again active, so it will land up in reconcileTransitionToActive
@@ -295,7 +303,7 @@ func (i *TopicBrowserInstance) reconcileTransitionToActive(ctx context.Context, 
 }
 
 // reconcileStartingStates handles the various starting phase states when transitioning to Active.
-func (i *TopicBrowserInstance) reconcileStartingStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (i *TopicBrowserInstance) reconcileStartingStates(ctx context.Context, currentState string) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -376,7 +384,7 @@ func (i *TopicBrowserInstance) reconcileStartingStates(ctx context.Context, serv
 }
 
 // reconcileRunningStates handles the various running states when transitioning to Active.
-func (i *TopicBrowserInstance) reconcileRunningStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (i *TopicBrowserInstance) reconcileRunningStates(ctx context.Context, currentState string) (error, bool) {
 	start := time.Now()
 
 	defer func() {

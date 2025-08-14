@@ -285,12 +285,12 @@ func FindInstance(
 	snap SystemSnapshot,
 	managerName, instanceName string,
 ) (*FSMInstanceSnapshot, bool) {
-	mgr, ok := FindManager(snap, managerName)
+	manager, ok := FindManager(snap, managerName)
 	if !ok {
 		return nil, false
 	}
 
-	inst, ok := mgr.GetInstances()[instanceName]
+	inst, ok := manager.GetInstances()[instanceName]
 
 	return inst, ok
 }

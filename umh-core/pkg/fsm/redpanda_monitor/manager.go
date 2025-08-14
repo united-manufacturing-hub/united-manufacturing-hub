@@ -69,23 +69,23 @@ func NewRedpandaMonitorManager(name string) *RedpandaMonitorManager {
 			return inst, nil
 		},
 		// Compare config => if same, no recreation needed
-		func(instance public_fsm.FSMInstance, fc config.RedpandaMonitorConfig) (bool, error) {
-			bi, ok := instance.(*RedpandaMonitorInstance)
+		func(instance public_fsm.FSMInstance, redpandaConfig config.RedpandaMonitorConfig) (bool, error) {
+			redpandaInstance, ok := instance.(*RedpandaMonitorInstance)
 			if !ok {
 				return false, ErrNotRedpandaMonitorInstance
 			}
 			// If same config => return true, else false
 			// Minimal check:
-			return bi.config.DesiredFSMState == fc.DesiredFSMState, nil
+			return redpandaInstance.config.DesiredFSMState == redpandaConfig.DesiredFSMState, nil
 		},
 		// Set config if only small changes
-		func(instance public_fsm.FSMInstance, fc config.RedpandaMonitorConfig) error {
-			bi, ok := instance.(*RedpandaMonitorInstance)
+		func(instance public_fsm.FSMInstance, redpandaConfig config.RedpandaMonitorConfig) error {
+			redpandaInstance, ok := instance.(*RedpandaMonitorInstance)
 			if !ok {
 				return ErrNotRedpandaMonitorInstance
 			}
 
-			bi.config = fc
+			redpandaInstance.config = redpandaConfig
 
 			return nil
 		},

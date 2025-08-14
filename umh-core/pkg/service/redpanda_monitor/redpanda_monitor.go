@@ -1347,7 +1347,7 @@ func (s *RedpandaMonitorService) StopRedpandaMonitor(ctx context.Context) error 
 }
 
 // ReconcileManager reconciles the Redpanda manager.
-func (s *RedpandaMonitorService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (err error, reconciled bool) {
+func (s *RedpandaMonitorService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool) {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized"), false
 	}

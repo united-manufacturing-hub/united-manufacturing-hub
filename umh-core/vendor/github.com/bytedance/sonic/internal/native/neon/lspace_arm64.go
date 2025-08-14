@@ -19,13 +19,14 @@
 package neon
 
 import (
-	"unsafe"
-	// `github.com/bytedance/sonic/internal/native/types`
+    `unsafe`
+
+    // `github.com/bytedance/sonic/internal/native/types`
 )
 
 //go:nosplit
 func lspace(sp unsafe.Pointer, nb int, off int) (ret int) {
-	return __lspace(sp, nb, off)
+    return __lspace(sp, nb, off)
 }
 
 //go:nosplit

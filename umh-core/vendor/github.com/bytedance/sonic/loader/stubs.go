@@ -17,7 +17,7 @@
 package loader
 
 import (
-	_ "unsafe"
+    _ `unsafe`
 )
 
 //go:linkname lastmoduledatap runtime.lastmoduledatap

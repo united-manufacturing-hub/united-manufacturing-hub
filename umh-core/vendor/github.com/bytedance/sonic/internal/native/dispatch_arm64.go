@@ -50,14 +50,14 @@ var (
 )
 
 var (
-	S_skip_one           uintptr
-	S_skip_one_fast      uintptr
-	S_get_by_path        uintptr
-	S_skip_array         uintptr
-	S_skip_object        uintptr
-	S_skip_number        uintptr
+	S_skip_one    uintptr
+	S_skip_one_fast    uintptr
+	S_get_by_path    uintptr
+	S_skip_array  uintptr
+	S_skip_object uintptr
+	S_skip_number uintptr
 	S_parse_with_padding uintptr
-	S_lookup_small_key   uintptr
+	S_lookup_small_key uintptr
 )
 
 //go:nosplit
@@ -133,12 +133,13 @@ func ValidateUTF8Fast(s *string) (ret int)
 //go:nosplit
 //go:noescape
 //go:linkname ParseWithPadding github.com/bytedance/sonic/internal/native/neon.__parse_with_padding
-func ParseWithPadding(parser unsafe.Pointer) (ret int)
+func ParseWithPadding(parser unsafe.Pointer) (ret int) 
 
 //go:nosplit
 //go:noescape
 //go:linkname LookupSmallKey github.com/bytedance/sonic/internal/native/neon.__lookup_small_key
 func LookupSmallKey(key *string, table *[]byte, lowerOff int) (index int)
+
 
 func useNeon() {
 	S_f64toa = neon.S_f64toa

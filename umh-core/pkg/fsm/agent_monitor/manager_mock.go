@@ -52,31 +52,31 @@ func NewAgentManagerWithMockedService(name string, mockSvc agent_monitor.MockSer
 
 			return inst, nil
 		},
-		func(instance public_fsm.FSMInstance, fc config.AgentMonitorConfig) (bool, error) {
-			ai, ok := instance.(*AgentInstance)
+		func(instance public_fsm.FSMInstance, agentConfig config.AgentMonitorConfig) (bool, error) {
+			agentInstance, ok := instance.(*AgentInstance)
 			if !ok {
 				return false, ErrNotAgentInstance
 			}
 
-			return ai.config.DesiredFSMState == fc.DesiredFSMState, nil
+			return agentInstance.config.DesiredFSMState == agentConfig.DesiredFSMState, nil
 		},
-		func(instance public_fsm.FSMInstance, fc config.AgentMonitorConfig) error {
-			ai, ok := instance.(*AgentInstance)
+		func(instance public_fsm.FSMInstance, agentConfig config.AgentMonitorConfig) error {
+			agentInstance, ok := instance.(*AgentInstance)
 			if !ok {
 				return ErrNotAgentInstance
 			}
 
-			ai.config = fc
+			agentInstance.config = agentConfig
 
-			return ai.SetDesiredFSMState(fc.DesiredFSMState)
+			return agentInstance.SetDesiredFSMState(agentConfig.DesiredFSMState)
 		},
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
-			ai, ok := instance.(*AgentInstance)
+			agentInstance, ok := instance.(*AgentInstance)
 			if !ok {
 				return 0, ErrNotAgentInstance
 			}
 
-			return ai.GetMinimumRequiredTime(), nil
+			return agentInstance.GetMinimumRequiredTime(), nil
 		},
 	)
 

@@ -60,16 +60,16 @@ func NewHandler(
 	logger *zap.SugaredLogger,
 	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator,
 ) *Handler {
-	s := &Handler{}
-	s.subscriberRegistry = subscribers.NewRegistry(cull, ttl)
-	s.dog = dog
-	s.pusher = pusher
-	s.instanceUUID = instanceUUID
-	s.systemSnapshotManager = systemSnapshotManager
-	s.configManager = configManager
-	s.topicBrowserCommunicator = topicBrowserCommunicator
-	s.logger = logger
-	s.StatusCollector = generator.NewStatusCollector(
+	handler := &Handler{}
+	handler.subscriberRegistry = subscribers.NewRegistry(cull, ttl)
+	handler.dog = dog
+	handler.pusher = pusher
+	handler.instanceUUID = instanceUUID
+	handler.systemSnapshotManager = systemSnapshotManager
+	handler.configManager = configManager
+	handler.topicBrowserCommunicator = topicBrowserCommunicator
+	handler.logger = logger
+	handler.StatusCollector = generator.NewStatusCollector(
 		dog,
 		systemSnapshotManager,
 		configManager,
@@ -77,7 +77,7 @@ func NewHandler(
 		topicBrowserCommunicator,
 	)
 
-	return s
+	return handler
 }
 
 func (s *Handler) StartNotifier() {

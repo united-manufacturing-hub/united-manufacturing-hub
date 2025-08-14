@@ -176,7 +176,7 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 
 // reconcileExternalChanges checks if the RedpandaInstance service status has changed
 // externally (e.g., if someone manually stopped or started it, or if it crashed).
-func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (err error, reconciled bool) {
+func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -188,7 +188,7 @@ func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, service
 	updateCtx, cancel := constants.CreateUpdateObservedStateContextWithMinimum(ctx, constants.RedpandaUpdateObservedStateTimeout)
 	defer cancel()
 
-	err = r.UpdateObservedStateOfInstance(updateCtx, services, snapshot)
+	err := r.UpdateObservedStateOfInstance(updateCtx, services, snapshot)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err), false
 	}

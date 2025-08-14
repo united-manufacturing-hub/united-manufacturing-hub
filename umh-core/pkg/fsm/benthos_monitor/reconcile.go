@@ -33,7 +33,11 @@ import (
 // The filesystemService parameter allows for filesystem operations during reconciliation,
 // enabling the method to read configuration or state information from the filesystem.
 // Currently not used in this implementation but added for consistency with the interface.
-func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
+func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool) {
+	var err error
+
+	var reconciled bool
+
 	start := time.Now()
 	instanceName := b.baseFSMInstance.GetID()
 
@@ -180,7 +184,7 @@ func (b *BenthosMonitorInstance) reconcileExternalChanges(ctx context.Context, s
 // Any functions that fetch information are disallowed here and must be called in reconcileExternalChanges
 // and exist in ExternalState.
 // This is to ensure full testability of the FSM.
-func (b *BenthosMonitorInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider) (err error, reconciled bool) {
+func (b *BenthosMonitorInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -222,7 +226,7 @@ func (b *BenthosMonitorInstance) reconcileStateTransition(ctx context.Context, s
 }
 
 // reconcileOperationalStates handles states related to instance operations (starting/stopping).
-func (b *BenthosMonitorInstance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time) (err error, reconciled bool) {
+func (b *BenthosMonitorInstance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -241,7 +245,7 @@ func (b *BenthosMonitorInstance) reconcileOperationalStates(ctx context.Context,
 
 // reconcileTransitionToActive handles transitions when the desired state is Active.
 // It deals with moving from various states to the Active state.
-func (b *BenthosMonitorInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (b *BenthosMonitorInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -258,9 +262,9 @@ func (b *BenthosMonitorInstance) reconcileTransitionToActive(ctx context.Context
 		// Send event to transition from Stopped to Starting
 		return b.baseFSMInstance.SendEvent(ctx, EventStart), true
 	case IsStartingState(currentState):
-		return b.reconcileStartingStates(ctx, services, currentState, currentTime)
+		return b.reconcileStartingStates(ctx, currentState)
 	case IsRunningState(currentState):
-		return b.reconcileRunningStates(ctx, services, currentState, currentTime)
+		return b.reconcileRunningStates(ctx, currentState, currentTime)
 	case currentState == OperationalStateStopping:
 		// There can be the edge case where an fsm is set to stopped, and then a cycle later again to active
 		// It will cause the stopping process to start, but then the deisred state is again active, so it will land up in reconcileTransitionToActive
@@ -273,7 +277,7 @@ func (b *BenthosMonitorInstance) reconcileTransitionToActive(ctx context.Context
 
 // reconcileStartingStates handles the various starting phase states when transitioning to a running state
 // no big startup process here.
-func (b *BenthosMonitorInstance) reconcileStartingStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (b *BenthosMonitorInstance) reconcileStartingStates(ctx context.Context, currentState string) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -290,7 +294,7 @@ func (b *BenthosMonitorInstance) reconcileStartingStates(ctx context.Context, se
 }
 
 // reconcileRunningStates handles the various running states when transitioning to Active.
-func (b *BenthosMonitorInstance) reconcileRunningStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (b *BenthosMonitorInstance) reconcileRunningStates(ctx context.Context, currentState string, currentTime time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {

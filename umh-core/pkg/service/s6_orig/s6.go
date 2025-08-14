@@ -186,7 +186,8 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 		// 6. Different config → remove and recreate
 		s.logger.Debugf("Service %s config changed, removing and recreating", servicePath)
 
-		if err := s.RemoveArtifacts(ctx, s.artifacts, fsService); err != nil {
+		err = s.RemoveArtifacts(ctx, s.artifacts, fsService)
+		if err != nil {
 			return fmt.Errorf("failed to remove service for recreation: %w", err)
 		}
 
@@ -1047,6 +1048,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 
 	// ── 1. grab / create state ──────────────────────────────────────
 	stAny, _ := s.logCursors.LoadOrStore(logFile, &s6_shared.LogState{})
+
 	st, ok := stAny.(*s6_shared.LogState)
 	if !ok {
 		return nil, errors.New("failed to get log state from cursor")

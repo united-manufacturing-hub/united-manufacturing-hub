@@ -76,13 +76,13 @@ func normalizeConfig(raw map[string]any) map[string]any {
 	normalized := make(map[string]any)
 
 	// Extract template and variables
-	template, ok := raw["template"].(map[string]any)
-	if !ok {
+	template, isValidTemplate := raw["template"].(map[string]any)
+	if !isValidTemplate {
 		template = raw
 	}
 
-	rawVariables, ok := raw["variables"].(map[string]any)
-	if !ok {
+	rawVariables, isValidVariables := raw["variables"].(map[string]any)
+	if !isValidVariables {
 		rawVariables = make(map[string]any)
 	}
 

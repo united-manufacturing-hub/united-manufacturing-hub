@@ -396,14 +396,14 @@ func (p *Service) RemoveFromManager(
 
 	dfcName := p.getUnderlyingDFCReadName(spName)
 
-	dfcSliceRemoveByName := func(in []config.DataFlowComponentConfig, name string) []config.DataFlowComponentConfig {
-		for i, v := range in {
+	dfcSliceRemoveByName := func(inputSlice []config.DataFlowComponentConfig, name string) []config.DataFlowComponentConfig {
+		for i, v := range inputSlice {
 			if v.Name == name {
-				return append(in[:i], in[i+1:]...)
+				return append(inputSlice[:i], inputSlice[i+1:]...)
 			}
 		}
 
-		return in // already gone
+		return inputSlice // already gone
 	}
 
 	//--------------------------------------------

@@ -289,7 +289,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 	})
 	It("should parse the metrics", func() {
 
-		m, err := redpanda_monitor.ParseMetrics(getMetricsReader())
+		metrics, err := redpanda_monitor.ParseMetrics(getMetricsReader())
 		Expect(err).NotTo(HaveOccurred())
 		mShould := redpanda_monitor.Metrics{
 			Infrastructure: redpanda_monitor.InfrastructureMetrics{
@@ -311,7 +311,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 				TopicPartitionMap: map[string]int64{},
 			},
 		}
-		Expect(m).To(Equal(mShould))
+		Expect(metrics).To(Equal(mShould))
 	})
 
 	It("should parse the test_metrics", func() {

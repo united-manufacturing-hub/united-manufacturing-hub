@@ -37,11 +37,11 @@ var _ = Describe("PortManager", func() {
 
 	Describe("NewDefaultPortManager", func() {
 		It("creates a port manager successfully", func() {
-			pm, err := NewDefaultPortManager(nil)
+			portManager, err := NewDefaultPortManager(nil)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(pm).NotTo(BeNil())
-			Expect(pm.instanceToPorts).NotTo(BeNil())
-			Expect(pm.portToInstances).NotTo(BeNil())
+			Expect(portManager).NotTo(BeNil())
+			Expect(portManager.instanceToPorts).NotTo(BeNil())
+			Expect(portManager.portToInstances).NotTo(BeNil())
 		})
 
 		It("returns the same instance when called multiple times", func() {

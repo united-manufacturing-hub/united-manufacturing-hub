@@ -78,14 +78,14 @@ func (b *BenthosInstance) CreateInstance(ctx context.Context, filesystemService 
 //     decorator can suspend operations.
 func (b *BenthosInstance) RemoveInstance(
 	ctx context.Context,
-	fs filesystem.Service,
+	fileSystem filesystem.Service,
 ) error {
 	b.baseFSMInstance.GetLogger().
 		Infof("Removing Benthos service %s from S6 manager …",
 			b.baseFSMInstance.GetID())
 
 	err := b.service.RemoveBenthosFromS6Manager(
-		ctx, fs, b.baseFSMInstance.GetID())
+		ctx, fileSystem, b.baseFSMInstance.GetID())
 
 	switch {
 	// ---------------------------------------------------------------

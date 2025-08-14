@@ -407,18 +407,18 @@ func setupTestFiles(root string) {
 }
 
 func createLargeFile(path string, sizeBytes int64) {
-	f, err := os.Create(path) //nolint:gosec // G304: File path is controlled within test context, safe for test file creation
+	file, err := os.Create(path) //nolint:gosec // G304: File path is controlled within test context, safe for test file creation
 	Expect(err).NotTo(HaveOccurred())
 
 	defer func() {
-		err := f.Close()
+		err := file.Close()
 		if err != nil {
 			sentry.ReportIssuef(sentry.IssueTypeError, logger.For(logger.ComponentFilesystem), "failed to close file: %v", err)
 		}
 	}()
 
 	// Just write N zeroes
-	err = f.Truncate(sizeBytes)
+	err = file.Truncate(sizeBytes)
 	Expect(err).NotTo(HaveOccurred())
 }
 

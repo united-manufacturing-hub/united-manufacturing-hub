@@ -26,7 +26,7 @@ import (
 var _ = Describe("VariableBundle User Experience Examples", func() {
 	It("should demonstrate user-friendly YAML marshaling", func() {
 		// Create a bundle with all namespaces (as would happen internally)
-		vb := variables.VariableBundle{
+		variableBundle := variables.VariableBundle{
 			User: map[string]any{
 				"HOST":    "wttr.in",
 				"PORT":    "8080",
@@ -43,7 +43,7 @@ var _ = Describe("VariableBundle User Experience Examples", func() {
 		}
 
 		// When marshaling for user consumption (e.g., config export)
-		userYaml, err := yaml.Marshal(&vb)
+		userYaml, err := yaml.Marshal(&variableBundle)
 		Expect(err).NotTo(HaveOccurred())
 
 		fmt.Printf("User-facing YAML:\n%s\n", string(userYaml))
@@ -60,7 +60,7 @@ var _ = Describe("VariableBundle User Experience Examples", func() {
 
 		// When using the generator for internal/debugging purposes
 		generator := variables.NewGenerator()
-		internalYaml, err := generator.RenderConfig(vb)
+		internalYaml, err := generator.RenderConfig(variableBundle)
 		Expect(err).NotTo(HaveOccurred())
 
 		fmt.Printf("Internal/debugging YAML:\n%s\n", internalYaml)

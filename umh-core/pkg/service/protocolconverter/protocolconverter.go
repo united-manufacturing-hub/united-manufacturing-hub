@@ -336,8 +336,8 @@ func (p *ProtocolConverterService) Status(
 
 	// redpandaObservedStateSnapshot is slightly different from the others as it comes from the snapshot
 	// and not from the fsm-instance
-	redpandaObservedStateSnapshot, ok := redpandaStatus.(*redpandafsm.RedpandaObservedStateSnapshot)
-	if !ok {
+	redpandaObservedStateSnapshot, isValidRedpandaStatus := redpandaStatus.(*redpandafsm.RedpandaObservedStateSnapshot)
+	if !isValidRedpandaStatus {
 		return ServiceInfo{}, fmt.Errorf("redpanda status for redpanda %s is not a RedpandaObservedStateSnapshot", protConvName)
 	}
 
@@ -642,24 +642,24 @@ func (p *ProtocolConverterService) RemoveFromManager(
 	dfcReadName := p.getUnderlyingDFCReadName(protConvName)
 	dfcWriteName := p.getUnderlyingDFCWriteName(protConvName)
 
-	connSliceRemoveByName := func(in []config.ConnectionConfig, name string) []config.ConnectionConfig {
-		for i, v := range in {
+	connSliceRemoveByName := func(inputSlice []config.ConnectionConfig, name string) []config.ConnectionConfig {
+		for i, v := range inputSlice {
 			if v.Name == name {
-				return append(in[:i], in[i+1:]...)
+				return append(inputSlice[:i], inputSlice[i+1:]...)
 			}
 		}
 
-		return in // already gone
+		return inputSlice // already gone
 	}
 
-	dfcSliceRemoveByName := func(in []config.DataFlowComponentConfig, name string) []config.DataFlowComponentConfig {
-		for i, v := range in {
+	dfcSliceRemoveByName := func(inputSlice []config.DataFlowComponentConfig, name string) []config.DataFlowComponentConfig {
+		for i, v := range inputSlice {
 			if v.Name == name {
-				return append(in[:i], in[i+1:]...)
+				return append(inputSlice[:i], inputSlice[i+1:]...)
 			}
 		}
 
-		return in // already gone
+		return inputSlice // already gone
 	}
 
 	//--------------------------------------------
@@ -743,16 +743,16 @@ func (p *ProtocolConverterService) EvaluateDFCDesiredStates(protConvName string,
 	}
 
 	// Find and update our cached config for write DFC
-	for i, config := range p.dataflowComponentConfig {
+	for index, config := range p.dataflowComponentConfig {
 		if config.Name == dfcWriteName {
 			if protocolConverterDesiredState == "stopped" {
-				p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateStopped
+				p.dataflowComponentConfig[index].DesiredFSMState = dfcfsm.OperationalStateStopped
 			} else {
 				// Only start the DFC, if it has been configured
-				if len(p.dataflowComponentConfig[i].DataFlowComponentServiceConfig.BenthosConfig.Input) > 0 {
-					p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateActive
+				if len(p.dataflowComponentConfig[index].DataFlowComponentServiceConfig.BenthosConfig.Input) > 0 {
+					p.dataflowComponentConfig[index].DesiredFSMState = dfcfsm.OperationalStateActive
 				} else {
-					p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateStopped
+					p.dataflowComponentConfig[index].DesiredFSMState = dfcfsm.OperationalStateStopped
 				}
 			}
 

@@ -67,8 +67,8 @@ func (a *EditInstanceAction) Parse(ctx context.Context, payload interface{}) err
 	a.actionLogger.Debug("Parsing EditInstance action payload")
 
 	// Convert the payload to a map
-	payloadMap, ok := payload.(map[string]interface{})
-	if !ok {
+	payloadMap, isValidMap := payload.(map[string]interface{})
+	if !isValidMap {
 		return errors.New("invalid payload format, expected map")
 	}
 

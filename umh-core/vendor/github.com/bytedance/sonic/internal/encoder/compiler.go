@@ -501,7 +501,7 @@ func (self *Compiler) compileStructBody(p *ir.Program, sp int, vt reflect.Type) 
 
 func (self *Compiler) compileStructFieldStr(p *ir.Program, sp int, vt reflect.Type) {
 	// NOTICE: according to encoding/json, Marshaler type has higher priority than string option
-	// see issue:
+	// see issue: 
 	if self.tryCompileMarshaler(p, vt, self.pv) {
 		return
 	}
@@ -654,6 +654,7 @@ func (self *Compiler) compileUnsupportedType(p *ir.Program, vt reflect.Type) {
 	p.Rtt(ir.OP_unsupported, vt)
 }
 
+
 func (self *Compiler) compileMarshaler(p *ir.Program, op ir.Op, vt reflect.Type, mt reflect.Type) {
 	pc := p.PC()
 	vk := vt.Kind()
@@ -680,7 +681,7 @@ func addMarshalerOp(p *ir.Program, op ir.Op, vt reflect.Type, mt reflect.Type) {
 		itab := rt.GetItab(rt.IfaceType(rt.UnpackType(mt)), rt.UnpackType(vt), true)
 		p.Vtab(op, vt, itab)
 	} else {
-		// OPT: get itab here
+		// OPT: get itab here 
 		p.Rtt(op, vt)
 	}
 }

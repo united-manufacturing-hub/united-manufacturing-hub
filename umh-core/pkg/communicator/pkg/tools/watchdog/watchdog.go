@@ -139,18 +139,18 @@ func (s *Watchdog) Start() {
 					secondsOverdue int64
 				}
 
-				for name, hb := range s.registeredHeartbeats {
-					lastHeartbeat := now.UTC().Unix() - hb.lastHeatbeatTime.Load()
+				for name, heartbeat := range s.registeredHeartbeats {
+					lastHeartbeat := now.UTC().Unix() - heartbeat.lastHeatbeatTime.Load()
 					if lastHeartbeat < 0 {
 						s.logger.Warnf("Time went backwards: [%s] ", s.watchdogID)
 					}
 
-					onlyIfHasSub := hb.onlyIfSubscribers
+					onlyIfHasSub := heartbeat.onlyIfSubscribers
 					hasSubs := s.hasSubscribers.Load()
-					secondsOverdue := int64(hb.timeout) - lastHeartbeat
+					secondsOverdue := int64(heartbeat.timeout) - lastHeartbeat
 					secondsOverdue *= -1
 					// timeout = 0 disables this check
-					if secondsOverdue > 0 && hb.timeout != 0 {
+					if secondsOverdue > 0 && heartbeat.timeout != 0 {
 						if (onlyIfHasSub && hasSubs) || !onlyIfHasSub {
 							// Found an overdue heartbeat
 							overdueHeartbeat = &struct {
@@ -159,7 +159,7 @@ func (s *Watchdog) Start() {
 								secondsOverdue int64
 							}{
 								name:           name,
-								hb:             hb,
+								hb:             heartbeat,
 								secondsOverdue: secondsOverdue,
 							}
 							// Remove from the map and break the loop
@@ -167,7 +167,7 @@ func (s *Watchdog) Start() {
 
 							break
 						} else {
-							s.logger.Infof("Heartbeat: [%s] %s (%s) would fail, but no subscribers are present", s.watchdogID, name, hb.uniqueIdentifier)
+							s.logger.Infof("Heartbeat: [%s] %s (%s) would fail, but no subscribers are present", s.watchdogID, name, heartbeat.uniqueIdentifier)
 						}
 					}
 				}
@@ -374,14 +374,14 @@ func (s *Watchdog) reportStateToNiceFail() {
 
 	/*
 		heartbeatReports := make([]string, 0, len(s.registeredHeartbeats))
-		for name, hb := range s.registeredHeartbeats {
-			if hb == nil {
-				// Skip nil heartbeats
-				continue
-			}
-			lastReportedStatus := hb.lastReportedStatus.Load()
-			lastHeartbeat := hb.lastHeatbeatTime.Load()
-			warningCount := hb.warningCount.Load()
+			for name, heartbeat := range s.registeredHeartbeats {
+		if heartbeat == nil {
+			// Skip nil heartbeats
+			continue
+		}
+		lastReportedStatus := heartbeat.lastReportedStatus.Load()
+		lastHeartbeat := heartbeat.lastHeatbeatTime.Load()
+		warningCount := heartbeat.warningCount.Load()
 
 			var status string
 			switch lastReportedStatus {

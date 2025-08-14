@@ -41,14 +41,14 @@ func NewNmapManagerWithMockedService(name string) (*NmapManager, *nmap.MockNmapS
 			// In a real test, you'd define fc.Nmap with test data
 			return fc.Internal.Nmap, nil
 		},
-		func(nc config.NmapConfig) (string, error) {
-			return nc.Name, nil
+		func(nmapConfig config.NmapConfig) (string, error) {
+			return nmapConfig.Name, nil
 		},
-		func(nc config.NmapConfig) (string, error) {
-			return nc.DesiredFSMState, nil
+		func(nmapConfig config.NmapConfig) (string, error) {
+			return nmapConfig.DesiredFSMState, nil
 		},
-		func(nc config.NmapConfig) (public_fsm.FSMInstance, error) {
-			inst := NewNmapInstance(nc)
+		func(nmapConfig config.NmapConfig) (public_fsm.FSMInstance, error) {
+			inst := NewNmapInstance(nmapConfig)
 
 			// Create a mock S6 service and attach it to the Benthos mock
 			s6MockService := s6svc.NewMockService()
@@ -68,7 +68,7 @@ func NewNmapManagerWithMockedService(name string) (*NmapManager, *nmap.MockNmapS
 			mockService.S6Service = s6MockService
 
 			// Setup default config result
-			mockService.GetConfigResult = nc.NmapServiceConfig
+			mockService.GetConfigResult = nmapConfig.NmapServiceConfig
 
 			// Attach the shared mock service to this instance
 			inst.monitorService = mockService
@@ -90,27 +90,27 @@ func NewNmapManagerWithMockedService(name string) (*NmapManager, *nmap.MockNmapS
 			// Always return true in mocked tests to avoid unnecessary recreation
 			return true, nil
 		},
-		func(instance public_fsm.FSMInstance, nc config.NmapConfig) error {
-			ni, ok := instance.(*NmapInstance)
+		func(instance public_fsm.FSMInstance, nmapConfig config.NmapConfig) error {
+			nmapInstance, ok := instance.(*NmapInstance)
 			if !ok {
 				return errors.New("instance not a NmapInstance")
 			}
 
-			ni.config = nc
+			nmapInstance.config = nmapConfig
 
-			if mockService, ok := ni.monitorService.(*nmap.MockNmapService); ok {
-				mockService.GetConfigResult = nc.NmapServiceConfig
+			if mockService, ok := nmapInstance.monitorService.(*nmap.MockNmapService); ok {
+				mockService.GetConfigResult = nmapConfig.NmapServiceConfig
 			}
 
 			return nil
 		},
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
-			ni, ok := instance.(*NmapInstance)
+			nmapInstance, ok := instance.(*NmapInstance)
 			if !ok {
 				return 0, errors.New("instance not a NmapInstance")
 			}
 
-			return ni.GetMinimumRequiredTime(), nil
+			return nmapInstance.GetMinimumRequiredTime(), nil
 		},
 	)
 

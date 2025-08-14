@@ -233,10 +233,10 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 
 	// Start an errgroup with the **same context** so if one sub-task
 	// fails or the context is canceled, all sub-tasks are signaled to stop.
-	g, gctx := errgroup.WithContext(ctx)
+	group, gctx := errgroup.WithContext(ctx)
 	observedStateMu := sync.Mutex{}
 
-	g.Go(func() error {
+	group.Go(func() error {
 		start := time.Now()
 		info, err := r.GetServiceStatus(gctx, services.GetFileSystem(), snapshot.Tick, snapshot.SnapshotTime)
 		metrics.ObserveReconcileTime(logger.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
@@ -264,7 +264,7 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 		return err
 	})
 
-	g.Go(func() error {
+	group.Go(func() error {
 		start := time.Now()
 		// This GetConfig requires the tick parameter, which will be used to calculate the metrics state
 		observedConfig, err := r.service.GetConfig(gctx, services.GetFileSystem(), r.baseFSMInstance.GetID(), snapshot.Tick, snapshot.SnapshotTime)
@@ -313,18 +313,18 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 	// The channel is buffered so that the goroutine sending on it doesn't block.
 	errc := make(chan error, 1)
 
-	// Run g.Wait() in a separate goroutine.
+	// Run group.Wait() in a separate goroutine.
 	// This allows us to use a select statement to return early if the context is canceled.
 	go func() {
-		// g.Wait() blocks until all goroutines launched with g.Go() have returned.
+		// group.Wait() blocks until all goroutines launched with group.Go() have returned.
 		// It returns the first non-nil error, if any.
-		errc <- g.Wait()
+		errc <- group.Wait()
 	}()
 
-	// Use a select statement to wait for either the g.Wait() result or the context's cancellation.
+	// Use a select statement to wait for either the group.Wait() result or the context's cancellation.
 	select {
 	case err := <-errc:
-		// g.Wait() has finished, so check if any goroutine returned an error.
+		// group.Wait() has finished, so check if any goroutine returned an error.
 		if err != nil {
 			// If there was an error in any sub-call, return that error.
 			return err

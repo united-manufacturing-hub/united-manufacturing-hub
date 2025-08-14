@@ -342,13 +342,13 @@ func checkPendingTransitions(componentName string, currentState string, pendingT
 	// Check if there are pending transitions for this component
 	if transitions, exists := pendingTransitions[componentName]; exists {
 		// Find transitions that should be applied at this tick
-		for i, transition := range transitions {
+		for index, transition := range transitions {
 			if transition.TickAt <= tickCounter {
 				currentState = transition.State
 				zap.S().Info("Transition applied", zap.String("component", componentName), zap.String("state", currentState))
 				// Remove applied transitions if they've been processed
-				if i < len(transitions)-1 {
-					pendingTransitions[componentName] = transitions[i+1:]
+				if index < len(transitions)-1 {
+					pendingTransitions[componentName] = transitions[index+1:]
 				} else {
 					// All transitions applied, clear the list
 					delete(pendingTransitions, componentName)

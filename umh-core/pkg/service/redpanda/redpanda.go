@@ -884,7 +884,7 @@ func (s *RedpandaService) StopRedpanda(ctx context.Context, redpandaName string)
 
 // ReconcileManager reconciles the Redpanda manager
 // This basically just calls the Reconcile method of the S6 manager, resulting in a (re)start of the Redpanda service with the latest configuration.
-func (s *RedpandaService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (err error, reconciled bool) {
+func (s *RedpandaService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (error, bool) {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized"), false
 	}

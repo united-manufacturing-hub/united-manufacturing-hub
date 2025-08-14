@@ -631,7 +631,7 @@ func (s *SchemaRegistry) GetMetrics() SchemaRegistryMetrics {
 // Memory management:
 // - Each phase cleans up its data when transitioning (e.g., decode clears rawSubjectsData)
 // - Work queues are reset at compare phase start to ensure clean state.
-func (s *SchemaRegistry) reconcileInternal(ctx context.Context, expectedSubjects map[SubjectName]JSONSchemaDefinition) (err error) {
+func (s *SchemaRegistry) reconcileInternal(ctx context.Context, expectedSubjects map[SubjectName]JSONSchemaDefinition) error {
 	// Run through phases until we complete the reconciliation cycle or hit an error
 	for {
 		// Early abort if context is done
@@ -639,7 +639,10 @@ func (s *SchemaRegistry) reconcileInternal(ctx context.Context, expectedSubjects
 			return ctx.Err()
 		}
 
-		var changePhase bool
+		var (
+			err         error
+			changePhase bool
+		)
 
 		switch s.currentPhase {
 		case SchemaRegistryPhaseLookup:
@@ -700,7 +703,7 @@ func (s *SchemaRegistry) reconcileInternal(ctx context.Context, expectedSubjects
 // Returns: (error, changePhase)
 // - error: nil on success, non-nil on network/HTTP errors
 // - changePhase: true to advance to decode phase, false to retry this phase.
-func (s *SchemaRegistry) lookup(ctx context.Context) (err error, changePhase bool) {
+func (s *SchemaRegistry) lookup(ctx context.Context) (error, bool) {
 	// Check if context has enough time remaining for this operation
 	// Each phase has a minimum time requirement to prevent partial operations that might leave
 	// the registry in an inconsistent state. Better to fail fast than start an operation

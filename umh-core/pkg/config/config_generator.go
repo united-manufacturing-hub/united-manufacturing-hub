@@ -36,7 +36,7 @@ func GenerateConfig(processors int, fcm *FileConfigManager) (FullConfig, error) 
 		return FullConfig{}, ErrNoProtocolConverterFound
 	}
 
-	pc := fullConfig.ProtocolConverter[0]
+	protocolConverter := fullConfig.ProtocolConverter[0]
 	pipeline := make(map[string]any)
 	pipeline["processors"] = make(map[string]any)
 
@@ -51,9 +51,9 @@ func GenerateConfig(processors int, fcm *FileConfigManager) (FullConfig, error) 
 		}
 	}
 
-	pc.ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline = pipeline
+	protocolConverter.ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline = pipeline
 
-	fullConfig.ProtocolConverter[0] = pc
+	fullConfig.ProtocolConverter[0] = protocolConverter
 
 	return fullConfig, nil
 }

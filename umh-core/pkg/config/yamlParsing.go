@@ -56,7 +56,9 @@ func convertYamlToSpec(config FullConfig, ctx context.Context) (FullConfig, erro
 		}
 
 		var template protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate
-		if err := yaml.Unmarshal(templateBytes, &template); err != nil {
+
+		err = yaml.Unmarshal(templateBytes, &template)
+		if err != nil {
 			return FullConfig{}, fmt.Errorf("failed to unmarshal protocol converter template %s: %w", templateName, err)
 		}
 
@@ -82,7 +84,9 @@ func convertYamlToSpec(config FullConfig, ctx context.Context) (FullConfig, erro
 		}
 
 		var template streamprocessorserviceconfig.StreamProcessorServiceConfigTemplate
-		if err := yaml.Unmarshal(templateBytes, &template); err != nil {
+
+		err = yaml.Unmarshal(templateBytes, &template)
+		if err != nil {
 			return FullConfig{}, fmt.Errorf("failed to unmarshal stream processor template %s: %w", templateName, err)
 		}
 
@@ -90,7 +94,7 @@ func convertYamlToSpec(config FullConfig, ctx context.Context) (FullConfig, erro
 	}
 
 	// Process each protocol converter to resolve templateRef
-	for i, pc := range processedConfig.ProtocolConverter {
+	for i, protocolConverter := range processedConfig.ProtocolConverter {
 		// Check for context cancellation
 		select {
 		case <-ctx.Done():
@@ -99,17 +103,17 @@ func convertYamlToSpec(config FullConfig, ctx context.Context) (FullConfig, erro
 		}
 
 		// Only resolve templateRef if it's not empty/null and there's no inline config
-		if pc.ProtocolConverterServiceConfig.TemplateRef != "" {
+		if protocolConverter.ProtocolConverterServiceConfig.TemplateRef != "" {
 			// Resolve the template reference
-			templateName := pc.ProtocolConverterServiceConfig.TemplateRef
+			templateName := protocolConverter.ProtocolConverterServiceConfig.TemplateRef
 
 			template, exists := protocolConverterTemplateMap[templateName]
 			if !exists {
-				return FullConfig{}, fmt.Errorf("protocol converter template reference %q not found for protocol converter %s", templateName, pc.Name)
+				return FullConfig{}, fmt.Errorf("protocol converter template reference %q not found for protocol converter %s", templateName, protocolConverter.Name)
 			}
 
 			// Create a new spec with the resolved template
-			resolvedSpec := pc.ProtocolConverterServiceConfig
+			resolvedSpec := protocolConverter.ProtocolConverterServiceConfig
 			resolvedSpec.Config = template
 
 			// Update the config
@@ -119,7 +123,7 @@ func convertYamlToSpec(config FullConfig, ctx context.Context) (FullConfig, erro
 	}
 
 	// Process each stream processor to resolve templateRef
-	for i, sp := range processedConfig.StreamProcessor {
+	for i, streamProcessor := range processedConfig.StreamProcessor {
 		// Check for context cancellation
 		select {
 		case <-ctx.Done():
@@ -128,17 +132,17 @@ func convertYamlToSpec(config FullConfig, ctx context.Context) (FullConfig, erro
 		}
 
 		// Only resolve templateRef if it's not empty/null and there's no inline config
-		if sp.StreamProcessorServiceConfig.TemplateRef != "" {
+		if streamProcessor.StreamProcessorServiceConfig.TemplateRef != "" {
 			// Resolve the template reference
-			templateName := sp.StreamProcessorServiceConfig.TemplateRef
+			templateName := streamProcessor.StreamProcessorServiceConfig.TemplateRef
 
 			template, exists := streamProcessorTemplateMap[templateName]
 			if !exists {
-				return FullConfig{}, fmt.Errorf("stream processor template reference %q not found for stream processor %s", templateName, sp.Name)
+				return FullConfig{}, fmt.Errorf("stream processor template reference %q not found for stream processor %s", templateName, streamProcessor.Name)
 			}
 
 			// Create a new spec with the resolved template
-			resolvedSpec := sp.StreamProcessorServiceConfig
+			resolvedSpec := streamProcessor.StreamProcessorServiceConfig
 			resolvedSpec.Config = template
 
 			// Update the config
@@ -221,7 +225,7 @@ func convertSpecToYaml(spec FullConfig, ctx context.Context) (FullConfig, error)
 	//------------------------------------
 	// 3) walk every PC once
 	//------------------------------------
-	for i, pc := range clone.ProtocolConverter {
+	for i, protocolConverter := range clone.ProtocolConverter {
 		// Check for context cancellation
 		select {
 		case <-ctx.Done():
@@ -229,12 +233,12 @@ func convertSpecToYaml(spec FullConfig, ctx context.Context) (FullConfig, error)
 		default:
 		}
 
-		tr := pc.ProtocolConverterServiceConfig.TemplateRef
+		templateRef := protocolConverter.ProtocolConverterServiceConfig.TemplateRef
 
 		// ─────────────────────────────
 		// 3a) Stand-alone (no template)
 		// ─────────────────────────────
-		if tr == "" {
+		if templateRef == "" {
 			// keep Config as-is → nothing else to do
 			continue
 		}
@@ -242,15 +246,15 @@ func convertSpecToYaml(spec FullConfig, ctx context.Context) (FullConfig, error)
 		// ─────────────────────────────
 		// 3b) Root  (golden instance)
 		// ─────────────────────────────
-		if tr == pc.Name {
-			if prev, dup := protocolConverterTplMap[tr]; dup {
+		if templateRef == protocolConverter.Name {
+			if prev, dup := protocolConverterTplMap[templateRef]; dup {
 				// second root with same name ⇒ must be byte-identical
-				if !reflect.DeepEqual(prev, pc.ProtocolConverterServiceConfig.Config) {
+				if !reflect.DeepEqual(prev, protocolConverter.ProtocolConverterServiceConfig.Config) {
 					return FullConfig{}, fmt.Errorf(
-						"duplicate protocol converter root %q with different Config blocks", tr)
+						"duplicate protocol converter root %q with different Config blocks", templateRef)
 				}
 			} else {
-				protocolConverterTplMap[tr] = pc.ProtocolConverterServiceConfig.Config
+				protocolConverterTplMap[templateRef] = protocolConverter.ProtocolConverterServiceConfig.Config
 			}
 		} else {
 			// ─────────────────────────
@@ -270,24 +274,24 @@ func convertSpecToYaml(spec FullConfig, ctx context.Context) (FullConfig, error)
 			// storing an empty struct is the most memory-efficient and idiomatic way to
 			// represent a "set" in Go.  At the end of the loop we simply iterate over the
 			// keys to verify that every referenced template has a corresponding root.
-			protocolConverterPendingRefs[tr] = struct{}{}
+			protocolConverterPendingRefs[templateRef] = struct{}{}
 		}
 
 		// Strip Config from every templated instance (root or child) ─ the full
 		// definition will live once in the templates section, so we avoid
 		// duplicating it inside each instance.
-		pc.ProtocolConverterServiceConfig.Config =
+		protocolConverter.ProtocolConverterServiceConfig.Config =
 			protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{}
 		// remove the location and location_path from the user variables
-		delete(pc.ProtocolConverterServiceConfig.Variables.User, "location")
-		delete(pc.ProtocolConverterServiceConfig.Variables.User, "location_path")
-		clone.ProtocolConverter[i] = pc
+		delete(protocolConverter.ProtocolConverterServiceConfig.Variables.User, "location")
+		delete(protocolConverter.ProtocolConverterServiceConfig.Variables.User, "location_path")
+		clone.ProtocolConverter[i] = protocolConverter
 	}
 
 	//------------------------------------
 	// 4) walk every SP once
 	//------------------------------------
-	for i, sp := range clone.StreamProcessor {
+	for i, streamProcessor := range clone.StreamProcessor {
 		// Check for context cancellation
 		select {
 		case <-ctx.Done():
@@ -295,12 +299,12 @@ func convertSpecToYaml(spec FullConfig, ctx context.Context) (FullConfig, error)
 		default:
 		}
 
-		tr := sp.StreamProcessorServiceConfig.TemplateRef
+		streamProcessorTemplateRef := streamProcessor.StreamProcessorServiceConfig.TemplateRef
 
 		// ─────────────────────────────
 		// 4a) Stand-alone (no template)
 		// ─────────────────────────────
-		if tr == "" {
+		if streamProcessorTemplateRef == "" {
 			// keep Config as-is → nothing else to do
 			continue
 		}
@@ -308,32 +312,32 @@ func convertSpecToYaml(spec FullConfig, ctx context.Context) (FullConfig, error)
 		// ─────────────────────────────
 		// 4b) Root  (golden instance)
 		// ─────────────────────────────
-		if tr == sp.Name {
-			if prev, dup := streamProcessorTplMap[tr]; dup {
+		if streamProcessorTemplateRef == streamProcessor.Name {
+			if prev, dup := streamProcessorTplMap[streamProcessorTemplateRef]; dup {
 				// second root with same name ⇒ must be byte-identical
-				if !reflect.DeepEqual(prev, sp.StreamProcessorServiceConfig.Config) {
+				if !reflect.DeepEqual(prev, streamProcessor.StreamProcessorServiceConfig.Config) {
 					return FullConfig{}, fmt.Errorf(
-						"duplicate stream processor root %q with different Config blocks", tr)
+						"duplicate stream processor root %q with different Config blocks", streamProcessorTemplateRef)
 				}
 			} else {
-				streamProcessorTplMap[tr] = sp.StreamProcessorServiceConfig.Config
+				streamProcessorTplMap[streamProcessorTemplateRef] = streamProcessor.StreamProcessorServiceConfig.Config
 			}
 		} else {
 			// ─────────────────────────
 			// 4c) Child (inherits root)
 			// ─────────────────────────
-			streamProcessorPendingRefs[tr] = struct{}{}
+			streamProcessorPendingRefs[streamProcessorTemplateRef] = struct{}{}
 		}
 
 		// Strip Config from every templated instance (root or child) ─ the full
 		// definition will live once in the templates section, so we avoid
 		// duplicating it inside each instance.
-		sp.StreamProcessorServiceConfig.Config =
+		streamProcessor.StreamProcessorServiceConfig.Config =
 			streamprocessorserviceconfig.StreamProcessorServiceConfigTemplate{}
 		// remove the location and location_path from the user variables
-		delete(sp.StreamProcessorServiceConfig.Variables.User, "location")
-		delete(sp.StreamProcessorServiceConfig.Variables.User, "location_path")
-		clone.StreamProcessor[i] = sp
+		delete(streamProcessor.StreamProcessorServiceConfig.Variables.User, "location")
+		delete(streamProcessor.StreamProcessorServiceConfig.Variables.User, "location_path")
+		clone.StreamProcessor[i] = streamProcessor
 	}
 
 	//------------------------------------
@@ -361,7 +365,7 @@ func convertSpecToYaml(spec FullConfig, ctx context.Context) (FullConfig, error)
 
 	// Convert orphaned stream processor references to inline configs
 	if len(orphanedStreamProcessorRefs) > 0 {
-		for i, sp := range clone.StreamProcessor {
+		for i, streamProcessor := range clone.StreamProcessor {
 			// Check for context cancellation
 			select {
 			case <-ctx.Done():
@@ -369,12 +373,12 @@ func convertSpecToYaml(spec FullConfig, ctx context.Context) (FullConfig, error)
 			default:
 			}
 
-			if sp.StreamProcessorServiceConfig.TemplateRef != "" {
-				if _, isOrphaned := orphanedStreamProcessorRefs[sp.StreamProcessorServiceConfig.TemplateRef]; isOrphaned {
+			if streamProcessor.StreamProcessorServiceConfig.TemplateRef != "" {
+				if _, isOrphaned := orphanedStreamProcessorRefs[streamProcessor.StreamProcessorServiceConfig.TemplateRef]; isOrphaned {
 					// Clear the template reference since it points to an external template
 					// The config should already be expanded inline from convertYamlToSpec
-					sp.StreamProcessorServiceConfig.TemplateRef = ""
-					clone.StreamProcessor[i] = sp
+					streamProcessor.StreamProcessorServiceConfig.TemplateRef = ""
+					clone.StreamProcessor[i] = streamProcessor
 				}
 			}
 		}

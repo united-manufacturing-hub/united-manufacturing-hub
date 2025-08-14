@@ -644,7 +644,8 @@ func readLogLines(filePath string) ([]string, error) {
 		lines = append(lines, scanner.Text())
 	}
 
-	if err := scanner.Err(); err != nil {
+	err = scanner.Err()
+	if err != nil {
 		return nil, err
 	}
 

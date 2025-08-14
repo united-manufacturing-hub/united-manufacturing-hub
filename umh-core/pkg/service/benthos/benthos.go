@@ -939,7 +939,7 @@ func (s *BenthosService) StopBenthos(ctx context.Context, filesystemService file
 }
 
 // ReconcileManager reconciles the Benthos manager.
-func (s *BenthosService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (err error, reconciled bool) {
+func (s *BenthosService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool) {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized"), false
 	}

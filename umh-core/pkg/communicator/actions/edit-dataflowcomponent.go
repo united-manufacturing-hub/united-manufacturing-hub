@@ -396,13 +396,13 @@ func (a *EditDataflowComponentAction) Execute(ctx context.Context) (interface{},
 	}
 
 	benthosRateLimitResources := make([]map[string]interface{}, len(rateLimitResources))
-	for i, resource := range rateLimitResources {
+	for index, resource := range rateLimitResources {
 		resourceMap, ok := resource.(map[string]interface{})
 		if !ok {
-			return nil, nil, fmt.Errorf("rate limit resource %d is not a valid object", i)
+			return nil, nil, fmt.Errorf("rate limit resource %d is not a valid object", index)
 		}
 
-		benthosRateLimitResources[i] = resourceMap
+		benthosRateLimitResources[index] = resourceMap
 	}
 
 	benthosBuffer := make(map[string]interface{})

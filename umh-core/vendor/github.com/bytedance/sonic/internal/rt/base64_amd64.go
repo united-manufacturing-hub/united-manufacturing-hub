@@ -1,11 +1,10 @@
-//go:build amd64 && go1.17 && !go1.26
 // +build amd64,go1.17,!go1.26
 
 package rt
 
 import (
-	"github.com/cloudwego/base64x"
 	_ "unsafe"
+	"github.com/cloudwego/base64x"
 )
 
 func DecodeBase64(raw []byte) ([]byte, error) {
@@ -18,7 +17,7 @@ func DecodeBase64(raw []byte) ([]byte, error) {
 }
 
 func EncodeBase64ToString(src []byte) string {
-	return base64x.StdEncoding.EncodeToString(src)
+    return base64x.StdEncoding.EncodeToString(src)
 }
 
 func EncodeBase64(buf []byte, src []byte) []byte {
@@ -27,13 +26,13 @@ func EncodeBase64(buf []byte, src []byte) []byte {
 	}
 	buf = append(buf, '"')
 	need := base64x.StdEncoding.EncodedLen(len(src))
-	if cap(buf)-len(buf) < need {
-		tmp := make([]byte, len(buf), len(buf)+need*2)
+	if cap(buf) - len(buf) < need {
+		tmp := make([]byte, len(buf), len(buf) + need*2)
 		copy(tmp, buf)
 		buf = tmp
 	}
 	base64x.StdEncoding.Encode(buf[len(buf):cap(buf)], src)
-	buf = buf[:len(buf)+need]
+	buf = buf[:len(buf) + need]
 	buf = append(buf, '"')
 	return buf
 }

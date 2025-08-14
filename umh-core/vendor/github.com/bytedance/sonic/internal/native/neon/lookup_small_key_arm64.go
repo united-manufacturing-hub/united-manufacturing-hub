@@ -24,7 +24,7 @@ import (
 
 //go:nosplit
 func lookup_small_key(key *string, table *[]byte, lowerOff int) (ret int) {
-	return __lookup_small_key(rt.NoEscape(unsafe.Pointer(key)), rt.NoEscape(unsafe.Pointer(table)), lowerOff)
+    return __lookup_small_key(rt.NoEscape(unsafe.Pointer(key)), rt.NoEscape(unsafe.Pointer(table)), lowerOff)
 }
 
 //go:nosplit

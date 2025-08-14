@@ -20,7 +20,7 @@ package neon
 
 //go:nosplit
 func skip_number(s *string, p *int) (ret int) {
-	return __skip_number(s, p)
+    return __skip_number(s, p)
 }
 
 //go:nosplit

@@ -24,7 +24,7 @@ import (
 
 //go:nosplit
 func mem2ptr(s []byte) unsafe.Pointer {
-	return (*rt.GoSlice)(unsafe.Pointer(&s)).Ptr
+    return (*rt.GoSlice)(unsafe.Pointer(&s)).Ptr
 }
 
 //go:linkname unquoteBytes encoding/json.unquoteBytes

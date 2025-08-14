@@ -391,10 +391,10 @@ func (i *Instance) IsDFCHealthy() (bool, string) {
 // returning a zero-value metrics struct if any part of the chain is nil.
 // This prevents panics during startup or error conditions when the full
 // observedState structure may not be populated yet.
-func (i *Instance) safeBenthosMetrics() (input, output struct{ ConnectionUp, ConnectionLost int64 }) {
+func (i *Instance) safeBenthosMetrics() (struct{ ConnectionUp, ConnectionLost int64 }, struct{ ConnectionUp, ConnectionLost int64 }) {
 	// Return zero values if the MetricsState pointer is nil (this is the only field that can actually be nil)
 	if i.ObservedState.ServiceInfo.DFCObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState == nil {
-		return
+		return struct{ ConnectionUp, ConnectionLost int64 }{}, struct{ ConnectionUp, ConnectionLost int64 }{}
 	}
 
 	metrics := i.ObservedState.ServiceInfo.DFCObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics

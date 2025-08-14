@@ -161,7 +161,7 @@ func NewFileConfigManager() *FileConfigManager {
 	configPath := DefaultConfigPath
 	logger := logger.For(logger.ComponentConfigManager)
 
-	fc := &FileConfigManager{
+	fileConfigManager := &FileConfigManager{
 		configPath:        configPath,
 		fsService:         filesystem.NewDefaultService(),
 		logger:            logger,
@@ -177,24 +177,24 @@ func NewFileConfigManager() *FileConfigManager {
 	initCtx, cancel := context.WithTimeout(context.Background(), constants.ConfigBackgroundRefreshTimeout)
 	defer cancel()
 
-	config, rawConfig, err := fc.readAndParseConfig(initCtx)
+	config, rawConfig, err := fileConfigManager.readAndParseConfig(initCtx)
 	// Populate cache with initial config
-	info, statErr := fc.fsService.Stat(initCtx, fc.configPath)
+	info, statErr := fileConfigManager.fsService.Stat(initCtx, fileConfigManager.configPath)
 	if statErr == nil && info != nil {
 		// Acquire lock to prevent race conditions during initialization
 		// Update all cache fields atomically
-		fc.cacheMu.Lock()
-		fc.cacheConfig = config
-		fc.cacheRawConfig = rawConfig
-		fc.cacheError = err
-		fc.cacheModTime = info.ModTime()
-		fc.cacheMu.Unlock()
+		fileConfigManager.cacheMu.Lock()
+		fileConfigManager.cacheConfig = config
+		fileConfigManager.cacheRawConfig = rawConfig
+		fileConfigManager.cacheError = err
+		fileConfigManager.cacheModTime = info.ModTime()
+		fileConfigManager.cacheMu.Unlock()
 		logger.Debugf("Initial config cache populated successfully")
 	} else {
-		fc.cacheError = statErr
+		fileConfigManager.cacheError = statErr
 	}
 
-	return fc
+	return fileConfigManager
 }
 
 // WithFileSystemService allows setting a custom filesystem service

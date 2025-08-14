@@ -71,22 +71,22 @@ func NewNmapManager(name string) *NmapManager {
 		},
 		// Compare config => if same, no recreation needed
 		func(instance public_fsm.FSMInstance, cfg config.NmapConfig) (bool, error) {
-			ni, ok := instance.(*NmapInstance)
+			nmapInstance, ok := instance.(*NmapInstance)
 			if !ok {
 				return false, errors.New("instance is not a NmapInstance")
 			}
 			// If same config => return true, else false
-			return ni.config.FSMInstanceConfig == cfg.FSMInstanceConfig &&
-				ni.config.NmapServiceConfig.Equal(cfg.NmapServiceConfig), nil
+			return nmapInstance.config.FSMInstanceConfig == cfg.FSMInstanceConfig &&
+				nmapInstance.config.NmapServiceConfig.Equal(cfg.NmapServiceConfig), nil
 		},
 		// Set config if only small changes
 		func(instance public_fsm.FSMInstance, cfg config.NmapConfig) error {
-			ni, ok := instance.(*NmapInstance)
+			nmapInstance, ok := instance.(*NmapInstance)
 			if !ok {
 				return errors.New("instance is not a NmapInstance")
 			}
 
-			ni.config = cfg
+			nmapInstance.config = cfg
 
 			return nil
 		},

@@ -545,7 +545,7 @@ func (m *MockConfigManager) AtomicEditDataflowcomponent(ctx context.Context, com
 }
 
 // AtomicAddProtocolConverter implements the ConfigManager interface.
-func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc ProtocolConverterConfig) error {
+func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, protocolConverterConfig ProtocolConverterConfig) error {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
 
@@ -563,14 +563,14 @@ func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 
 	// check for duplicate name before add
 	for _, cmp := range config.ProtocolConverter {
-		if cmp.Name == pc.Name {
-			return fmt.Errorf("another protocol converter with name %q already exists – choose a unique name", pc.Name)
+		if cmp.Name == protocolConverterConfig.Name {
+			return fmt.Errorf("another protocol converter with name %q already exists – choose a unique name", protocolConverterConfig.Name)
 		}
 	}
 
 	// If it's a child (TemplateRef is non-empty and != Name), verify that a root with that TemplateRef exists
-	if pc.ProtocolConverterServiceConfig.TemplateRef != "" && pc.ProtocolConverterServiceConfig.TemplateRef != pc.Name {
-		templateRef := pc.ProtocolConverterServiceConfig.TemplateRef
+	if protocolConverterConfig.ProtocolConverterServiceConfig.TemplateRef != "" && protocolConverterConfig.ProtocolConverterServiceConfig.TemplateRef != protocolConverterConfig.Name {
+		templateRef := protocolConverterConfig.ProtocolConverterServiceConfig.TemplateRef
 		rootExists := false
 
 		// Scan existing protocol converters to find a root with matching name
@@ -583,12 +583,12 @@ func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 		}
 
 		if !rootExists {
-			return fmt.Errorf("template %q not found for child %s", templateRef, pc.Name)
+			return fmt.Errorf("template %q not found for child %s", templateRef, protocolConverterConfig.Name)
 		}
 	}
 
 	// Add the protocol converter - let convertSpecToYAML handle template generation
-	config.ProtocolConverter = append(config.ProtocolConverter, pc)
+	config.ProtocolConverter = append(config.ProtocolConverter, protocolConverterConfig)
 
 	// write the config
 	err = m.writeConfig(ctx, config)
@@ -600,7 +600,7 @@ func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 }
 
 // AtomicEditProtocolConverter implements the ConfigManager interface.
-func (m *MockConfigManager) AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc ProtocolConverterConfig) (ProtocolConverterConfig, error) {
+func (m *MockConfigManager) AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, protocolConverterConfig ProtocolConverterConfig) (ProtocolConverterConfig, error) {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
 
@@ -637,30 +637,30 @@ func (m *MockConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 
 	// Duplicate-name check (exclude the edited one)
 	for i, cmp := range config.ProtocolConverter {
-		if i != targetIndex && cmp.Name == pc.Name {
-			return ProtocolConverterConfig{}, fmt.Errorf("another protocol converter with name %q already exists – choose a unique name", pc.Name)
+		if i != targetIndex && cmp.Name == protocolConverterConfig.Name {
+			return ProtocolConverterConfig{}, fmt.Errorf("another protocol converter with name %q already exists – choose a unique name", protocolConverterConfig.Name)
 		}
 	}
 
-	newIsRoot := pc.ProtocolConverterServiceConfig.TemplateRef != "" &&
-		pc.ProtocolConverterServiceConfig.TemplateRef == pc.Name
+	newIsRoot := protocolConverterConfig.ProtocolConverterServiceConfig.TemplateRef != "" &&
+		protocolConverterConfig.ProtocolConverterServiceConfig.TemplateRef == protocolConverterConfig.Name
 	oldIsRoot := oldConfig.ProtocolConverterServiceConfig.TemplateRef != "" &&
 		oldConfig.ProtocolConverterServiceConfig.TemplateRef == oldConfig.Name
 
 	// Handle root rename - propagate to children
-	if oldIsRoot && newIsRoot && oldConfig.Name != pc.Name {
+	if oldIsRoot && newIsRoot && oldConfig.Name != protocolConverterConfig.Name {
 		// Update all children that reference the old root name
 		for i, inst := range config.ProtocolConverter {
 			if i != targetIndex && inst.ProtocolConverterServiceConfig.TemplateRef == oldConfig.Name {
-				inst.ProtocolConverterServiceConfig.TemplateRef = pc.Name
+				inst.ProtocolConverterServiceConfig.TemplateRef = protocolConverterConfig.Name
 				config.ProtocolConverter[i] = inst
 			}
 		}
 	}
 
 	// If it's a child (TemplateRef is non-empty and not a root), validate that the template reference exists
-	if !newIsRoot && pc.ProtocolConverterServiceConfig.TemplateRef != "" {
-		templateRef := pc.ProtocolConverterServiceConfig.TemplateRef
+	if !newIsRoot && protocolConverterConfig.ProtocolConverterServiceConfig.TemplateRef != "" {
+		templateRef := protocolConverterConfig.ProtocolConverterServiceConfig.TemplateRef
 		rootExists := false
 
 		// Scan existing protocol converters to find a root with matching name
@@ -679,17 +679,17 @@ func (m *MockConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 		}
 
 		// Also check if the new instance itself becomes the root for this template
-		if pc.Name == templateRef && newIsRoot {
+		if protocolConverterConfig.Name == templateRef && newIsRoot {
 			rootExists = true
 		}
 
 		if !rootExists {
-			return ProtocolConverterConfig{}, fmt.Errorf("template %q not found for child %s", templateRef, pc.Name)
+			return ProtocolConverterConfig{}, fmt.Errorf("template %q not found for child %s", templateRef, protocolConverterConfig.Name)
 		}
 	}
 
 	// Commit the edit
-	config.ProtocolConverter[targetIndex] = pc
+	config.ProtocolConverter[targetIndex] = protocolConverterConfig
 
 	// write the config
 	err = m.writeConfig(ctx, config)
@@ -760,7 +760,7 @@ func (m *MockConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 }
 
 // AtomicAddStreamProcessor implements the ConfigManager interface.
-func (m *MockConfigManager) AtomicAddStreamProcessor(ctx context.Context, sp StreamProcessorConfig) error {
+func (m *MockConfigManager) AtomicAddStreamProcessor(ctx context.Context, streamProcessorConfig StreamProcessorConfig) error {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
 
@@ -778,14 +778,14 @@ func (m *MockConfigManager) AtomicAddStreamProcessor(ctx context.Context, sp Str
 
 	// check for duplicate name before add
 	for _, cmp := range config.StreamProcessor {
-		if cmp.Name == sp.Name {
-			return fmt.Errorf("another stream processor with name %q already exists – choose a unique name", sp.Name)
+		if cmp.Name == streamProcessorConfig.Name {
+			return fmt.Errorf("another stream processor with name %q already exists – choose a unique name", streamProcessorConfig.Name)
 		}
 	}
 
 	// If it's a child (TemplateRef is non-empty and != Name), verify that a root with that TemplateRef exists
-	if sp.StreamProcessorServiceConfig.TemplateRef != "" && sp.StreamProcessorServiceConfig.TemplateRef != sp.Name {
-		templateRef := sp.StreamProcessorServiceConfig.TemplateRef
+	if streamProcessorConfig.StreamProcessorServiceConfig.TemplateRef != "" && streamProcessorConfig.StreamProcessorServiceConfig.TemplateRef != streamProcessorConfig.Name {
+		templateRef := streamProcessorConfig.StreamProcessorServiceConfig.TemplateRef
 		rootExists := false
 
 		// Scan existing stream processors to find a root with matching name
@@ -798,12 +798,12 @@ func (m *MockConfigManager) AtomicAddStreamProcessor(ctx context.Context, sp Str
 		}
 
 		if !rootExists {
-			return fmt.Errorf("template %q not found for child %s", templateRef, sp.Name)
+			return fmt.Errorf("template %q not found for child %s", templateRef, streamProcessorConfig.Name)
 		}
 	}
 
 	// Add the stream processor - let convertSpecToYAML handle template generation
-	config.StreamProcessor = append(config.StreamProcessor, sp)
+	config.StreamProcessor = append(config.StreamProcessor, streamProcessorConfig)
 
 	// write the config
 	err = m.writeConfig(ctx, config)
@@ -815,7 +815,7 @@ func (m *MockConfigManager) AtomicAddStreamProcessor(ctx context.Context, sp Str
 }
 
 // AtomicEditStreamProcessor implements the ConfigManager interface.
-func (m *MockConfigManager) AtomicEditStreamProcessor(ctx context.Context, sp StreamProcessorConfig) (StreamProcessorConfig, error) {
+func (m *MockConfigManager) AtomicEditStreamProcessor(ctx context.Context, streamProcessorConfig StreamProcessorConfig) (StreamProcessorConfig, error) {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
 
@@ -837,7 +837,7 @@ func (m *MockConfigManager) AtomicEditStreamProcessor(ctx context.Context, sp St
 	var oldConfig StreamProcessorConfig
 
 	for i, component := range config.StreamProcessor {
-		if component.Name == sp.Name {
+		if component.Name == streamProcessorConfig.Name {
 			targetIndex = i
 			oldConfig = config.StreamProcessor[i]
 
@@ -846,28 +846,28 @@ func (m *MockConfigManager) AtomicEditStreamProcessor(ctx context.Context, sp St
 	}
 
 	if targetIndex == -1 {
-		return StreamProcessorConfig{}, fmt.Errorf("stream processor with name %s not found", sp.Name)
+		return StreamProcessorConfig{}, fmt.Errorf("stream processor with name %s not found", streamProcessorConfig.Name)
 	}
 
-	newIsRoot := sp.StreamProcessorServiceConfig.TemplateRef != "" &&
-		sp.StreamProcessorServiceConfig.TemplateRef == sp.Name
+	newIsRoot := streamProcessorConfig.StreamProcessorServiceConfig.TemplateRef != "" &&
+		streamProcessorConfig.StreamProcessorServiceConfig.TemplateRef == streamProcessorConfig.Name
 	oldIsRoot := oldConfig.StreamProcessorServiceConfig.TemplateRef != "" &&
 		oldConfig.StreamProcessorServiceConfig.TemplateRef == oldConfig.Name
 
 	// Handle root rename - propagate to children
-	if oldIsRoot && newIsRoot && oldConfig.Name != sp.Name {
+	if oldIsRoot && newIsRoot && oldConfig.Name != streamProcessorConfig.Name {
 		// Update all children that reference the old root name
 		for i, inst := range config.StreamProcessor {
 			if i != targetIndex && inst.StreamProcessorServiceConfig.TemplateRef == oldConfig.Name {
-				inst.StreamProcessorServiceConfig.TemplateRef = sp.Name
+				inst.StreamProcessorServiceConfig.TemplateRef = streamProcessorConfig.Name
 				config.StreamProcessor[i] = inst
 			}
 		}
 	}
 
 	// If it's a child (TemplateRef is non-empty and not a root), validate that the template reference exists
-	if !newIsRoot && sp.StreamProcessorServiceConfig.TemplateRef != "" {
-		templateRef := sp.StreamProcessorServiceConfig.TemplateRef
+	if !newIsRoot && streamProcessorConfig.StreamProcessorServiceConfig.TemplateRef != "" {
+		templateRef := streamProcessorConfig.StreamProcessorServiceConfig.TemplateRef
 		rootExists := false
 
 		// Scan existing stream processors to find a root with matching name
@@ -886,17 +886,17 @@ func (m *MockConfigManager) AtomicEditStreamProcessor(ctx context.Context, sp St
 		}
 
 		// Also check if the new instance itself becomes the root for this template
-		if sp.Name == templateRef && newIsRoot {
+		if streamProcessorConfig.Name == templateRef && newIsRoot {
 			rootExists = true
 		}
 
 		if !rootExists {
-			return StreamProcessorConfig{}, fmt.Errorf("template %q not found for child %s", templateRef, sp.Name)
+			return StreamProcessorConfig{}, fmt.Errorf("template %q not found for child %s", templateRef, streamProcessorConfig.Name)
 		}
 	}
 
 	// Commit the edit
-	config.StreamProcessor[targetIndex] = sp
+	config.StreamProcessor[targetIndex] = streamProcessorConfig
 
 	// write the config
 	err = m.writeConfig(ctx, config)

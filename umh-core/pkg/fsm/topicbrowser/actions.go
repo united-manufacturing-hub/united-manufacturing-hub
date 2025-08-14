@@ -274,7 +274,11 @@ func (i *TopicBrowserInstance) IsTopicBrowserBenthosStopped() bool {
 
 // IsTopicBrowserDegraded determines if the Topic Browser should be considered degraded
 // This leverages the service's sophisticated cross-component analysis.
-func (i *TopicBrowserInstance) IsTopicBrowserDegraded() (isDegraded bool, reason string) {
+func (i *TopicBrowserInstance) IsTopicBrowserDegraded() (bool, string) {
+	var isDegraded bool
+
+	var reason string
+
 	defer func() {
 		i.baseFSMInstance.GetLogger().Debugf("isTopicBrowserDegraded: %t, reason: %s", isDegraded, reason)
 	}()

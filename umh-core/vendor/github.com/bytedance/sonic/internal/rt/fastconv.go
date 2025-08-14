@@ -1,8 +1,8 @@
 package rt
 
 import (
-	"encoding/json"
 	"unsafe"
+	"encoding/json"
 )
 
 // Copied from Golang
@@ -44,12 +44,13 @@ var staticuint64s = [...]uint64{
 const maxZero = 1024 // must match value in reflect/value.go:maxZero cmd/compile/internal/gc/walk.go:zeroValSize
 var zeroVal [maxZero]byte
 
+
 type TslicePool struct {
-	pool  []GoSlice
-	index int
+	pool   []GoSlice
+	index  int
 }
 
-func NewTslicePool(hint int) TslicePool {
+func NewTslicePool (hint int) TslicePool {
 	return TslicePool{
 		pool:  make([]GoSlice, hint, hint),
 		index: 0,
@@ -72,7 +73,7 @@ func (self *TslicePool) Conv(val GoSlice, typ *GoType, ep *interface{}) {
 	*((*GoEface)(unsafe.Pointer(ep))) = GoEface{Type: typ, Value: vp}
 }
 
-func (self *TslicePool) Free() {
+func (self *TslicePool) Free()  {
 	self.pool = nil
 }
 
@@ -81,9 +82,9 @@ type TstringPool struct {
 	index int
 }
 
-func NewTstringPool(hint int) TstringPool {
+func NewTstringPool (hint int) TstringPool {
 	return TstringPool{
-		pool:  make([]string, hint),
+		pool: make([]string, hint),
 		index: 0,
 	}
 }
@@ -105,6 +106,7 @@ func (self *TstringPool) Conv(val string, ep *interface{}) {
 	*((*GoEface)(unsafe.Pointer(ep))) = GoEface{Type: StringType, Value: vp}
 }
 
+
 func (self *TstringPool) ConvNum(val json.Number, ep *interface{}) {
 	var vp unsafe.Pointer
 	if val == "" {
@@ -122,7 +124,8 @@ func (self *TstringPool) ConvNum(val json.Number, ep *interface{}) {
 	*((*GoEface)(unsafe.Pointer(ep))) = GoEface{Type: JsonNumberType, Value: vp}
 }
 
-func (self *TstringPool) Free() {
+
+func (self *TstringPool) Free()  {
 	self.pool = nil
 }
 
@@ -131,9 +134,9 @@ type T64Pool struct {
 	index int
 }
 
-func NewT64Pool(hint int) T64Pool {
+func NewT64Pool (hint int) T64Pool {
 	return T64Pool{
-		pool:  make([]uint64, hint, hint),
+		pool: make([]uint64, hint, hint),
 		index: 0,
 	}
 }
@@ -155,7 +158,7 @@ func (self *T64Pool) Conv(val uint64, typ *GoType, ep *interface{}) {
 	*((*GoEface)(unsafe.Pointer(ep))) = GoEface{Type: typ, Value: vp}
 }
 
-func (self *T64Pool) Free() {
+func (self *T64Pool) Free()  {
 	self.pool = nil
 }
 
@@ -169,3 +172,4 @@ func ConvTBool(val bool, ep *interface{}) {
 
 	*((*GoEface)(unsafe.Pointer(ep))) = GoEface{Type: BoolType, Value: vp}
 }
+

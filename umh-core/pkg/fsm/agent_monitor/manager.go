@@ -78,23 +78,23 @@ func NewAgentManager(name string) *AgentManager {
 			return inst, nil
 		},
 		// Compare config => if same, no recreation needed
-		func(instance public_fsm.FSMInstance, fc config.AgentMonitorConfig) (bool, error) {
-			ai, ok := instance.(*AgentInstance)
+		func(instance public_fsm.FSMInstance, agentConfig config.AgentMonitorConfig) (bool, error) {
+			agentInstance, ok := instance.(*AgentInstance)
 			if !ok {
 				return false, ErrNotAgentInstance
 			}
 			// If same config => return true, else false
 			// Minimal check:
-			return ai.config.DesiredFSMState == fc.DesiredFSMState, nil
+			return agentInstance.config.DesiredFSMState == agentConfig.DesiredFSMState, nil
 		},
 		// Set config if only small changes
-		func(instance public_fsm.FSMInstance, fc config.AgentMonitorConfig) error {
-			ai, ok := instance.(*AgentInstance)
+		func(instance public_fsm.FSMInstance, agentConfig config.AgentMonitorConfig) error {
+			agentInstance, ok := instance.(*AgentInstance)
 			if !ok {
 				return ErrNotAgentInstance
 			}
 
-			ai.config = fc
+			agentInstance.config = agentConfig
 
 			return nil
 		},

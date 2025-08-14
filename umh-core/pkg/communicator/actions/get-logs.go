@@ -78,7 +78,7 @@ func NewGetLogsAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.
 
 // Parse extracts the business fields from the raw JSON payload.
 // Shape errors are detected here, while semantic validation is done in Validate.
-func (a *GetLogsAction) Parse(ctx context.Context, payload interface{}) (err error) {
+func (a *GetLogsAction) Parse(ctx context.Context, payload interface{}) error {
 	a.actionLogger.Info("Parsing the payload")
 	a.payload, err = ParseActionPayload[models.GetLogsRequest](payload)
 	a.actionLogger.Info("Payload parsed: %v", a.payload)
@@ -90,7 +90,7 @@ func (a *GetLogsAction) Parse(ctx context.Context, payload interface{}) (err err
 // This includes checking that the provided start time is a valid timestamp,
 // and that the log type is one of the allowed types.
 // The UUID is necessary for DFC logs to identify the correct instance.
-func (a *GetLogsAction) Validate(ctx context.Context) (err error) {
+func (a *GetLogsAction) Validate(ctx context.Context) error {
 	a.actionLogger.Info("Validating the payload")
 
 	if a.payload.StartTime <= 0 {
@@ -183,8 +183,8 @@ func (a *GetLogsAction) Execute(ctx context.Context) (interface{}, map[string]in
 
 		res.Logs = mapS6LogsToSlice(observedState.ServiceInfoSnapshot.RedpandaStatus.Logs, reqStartTime)
 	case models.AgentLogType:
-		agentInstance, ok := fsm.FindInstance(systemSnapshot, constants.AgentManagerName, constants.AgentInstanceName)
-		if !ok || agentInstance == nil {
+		agentInstance, found := fsm.FindInstance(systemSnapshot, constants.AgentManagerName, constants.AgentInstanceName)
+		if !found || agentInstance == nil {
 			err := logsRetrievalError(errors.New("agent instance not found"), logType)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
 

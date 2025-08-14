@@ -452,14 +452,14 @@ func (c *ConnectionService) RemoveConnectionFromNmapManager(
 
 	nmapName := c.getNmapName(connectionName)
 
-	sliceRemoveByName := func(in []config.NmapConfig, name string) []config.NmapConfig {
-		for i, v := range in {
+	sliceRemoveByName := func(inputSlice []config.NmapConfig, name string) []config.NmapConfig {
+		for i, v := range inputSlice {
 			if v.Name == name {
-				return append(in[:i], in[i+1:]...)
+				return append(inputSlice[:i], inputSlice[i+1:]...)
 			}
 		}
 
-		return in // already gone
+		return inputSlice // already gone
 	}
 
 	//--------------------------------------------

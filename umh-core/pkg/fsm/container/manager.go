@@ -80,23 +80,23 @@ func NewContainerManager(name string) *ContainerManager {
 			return inst, nil
 		},
 		// Compare config => if same, no recreation needed
-		func(instance public_fsm.FSMInstance, cc config.ContainerConfig) (bool, error) {
-			ci, ok := instance.(*ContainerInstance)
+		func(instance public_fsm.FSMInstance, containerConfig config.ContainerConfig) (bool, error) {
+			containerInstance, ok := instance.(*ContainerInstance)
 			if !ok {
 				return false, errors.New("instance is not a ContainerInstance")
 			}
 			// If same config => return true, else false
 			// Minimal check:
-			return ci.config.DesiredFSMState == cc.DesiredFSMState, nil
+			return containerInstance.config.DesiredFSMState == containerConfig.DesiredFSMState, nil
 		},
 		// Set config if only small changes
-		func(instance public_fsm.FSMInstance, cc config.ContainerConfig) error {
-			ci, ok := instance.(*ContainerInstance)
+		func(instance public_fsm.FSMInstance, containerConfig config.ContainerConfig) error {
+			containerInstance, ok := instance.(*ContainerInstance)
 			if !ok {
 				return errors.New("instance is not a ContainerInstance")
 			}
 
-			ci.config = cc
+			containerInstance.config = containerConfig
 
 			return nil
 		},

@@ -26,6 +26,7 @@ import (
 	"github.com/bytedance/sonic/option"
 )
 
+
 func ForceUseJit() {
 	x86.SetCompiler(makeEncoderX86)
 	pretouchType = pretouchTypeX86
@@ -74,3 +75,4 @@ func pretouchTypeX86(_vt reflect.Type, opts option.CompileOptions, v uint8) (map
 		return nil, err
 	}
 }
+

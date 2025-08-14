@@ -260,8 +260,8 @@ func (svc *Service) Status(
 		return ServiceInfo{}, fmt.Errorf("failed to get benthos observed state: %w", err)
 	}
 
-	benthosObservedState, ok := benthosObservedStateRaw.(benthosfsm.BenthosObservedState)
-	if !ok {
+	benthosObservedState, isValidBenthosState := benthosObservedStateRaw.(benthosfsm.BenthosObservedState)
+	if !isValidBenthosState {
 		return ServiceInfo{}, fmt.Errorf("observed state is not a BenthosObservedState: %v", benthosObservedStateRaw)
 	}
 

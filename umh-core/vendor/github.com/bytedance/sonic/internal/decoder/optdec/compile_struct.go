@@ -5,12 +5,12 @@ import (
 	"reflect"
 
 	caching "github.com/bytedance/sonic/internal/optcaching"
-	"github.com/bytedance/sonic/internal/resolver"
 	"github.com/bytedance/sonic/internal/rt"
+	"github.com/bytedance/sonic/internal/resolver"
 )
 
 const (
-	_MAX_FIELDS = 50 // cutoff at 50 fields struct
+    _MAX_FIELDS = 50        // cutoff at 50 fields struct
 )
 
 func (c *compiler) compileIntStringOption(vt reflect.Type) decFunc {
@@ -41,10 +41,8 @@ func (c *compiler) compileIntStringOption(vt reflect.Type) decFunc {
 
 func isInteger(vt reflect.Type) bool {
 	switch vt.Kind() {
-	case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uint, reflect.Uintptr, reflect.Int:
-		return true
-	default:
-		return false
+		case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uint, reflect.Uintptr, reflect.Int: return true
+		default: return false
 	}
 }
 
@@ -54,7 +52,7 @@ func (c *compiler) assertStringOptTypes(vt reflect.Type) {
 	}
 
 	c.depth += 1
-	defer func() {
+	defer func ()  {
 		c.depth -= 1
 	}()
 
@@ -65,8 +63,7 @@ func (c *compiler) assertStringOptTypes(vt reflect.Type) {
 	switch vt.Kind() {
 	case reflect.String, reflect.Bool, reflect.Float32, reflect.Float64:
 		return
-	case reflect.Ptr:
-		c.assertStringOptTypes(vt.Elem())
+	case reflect.Ptr: c.assertStringOptTypes(vt.Elem())
 	default:
 		panicForInvalidStrType(vt)
 	}
@@ -75,9 +72,9 @@ func (c *compiler) assertStringOptTypes(vt reflect.Type) {
 func (c *compiler) compileFieldStringOption(vt reflect.Type) decFunc {
 	c.assertStringOptTypes(vt)
 	unmDec := c.tryCompilePtrUnmarshaler(vt, true)
-	if unmDec != nil {
+	if unmDec != nil { 
 		return unmDec
-	}
+	} 
 
 	switch vt.Kind() {
 	case reflect.String:
@@ -132,7 +129,7 @@ func (c *compiler) compileStruct(vt reflect.Type) decFunc {
 		return c.compileStructBody(vt)
 	}
 
-	if c.depth >= c.opts.MaxInlineDepth+1 || (c.counts > 0 && vt.NumField() >= _MAX_FIELDS) {
+	if c.depth >= c.opts.MaxInlineDepth + 1 || (c.counts > 0 &&  vt.NumField() >= _MAX_FIELDS) {
 		return &recuriveDecoder{
 			typ: rt.UnpackType(vt),
 		}
@@ -157,9 +154,9 @@ func (c *compiler) compileStructBody(vt reflect.Type) decFunc {
 		/* deal with embedded pointer fields */
 		if f.Path[0].Kind == resolver.F_deref {
 			dec = &embeddedFieldPtrDecoder{
-				field:     f,
-				fieldDec:  dec,
-				fieldName: f.Name,
+				field:    	f,
+				fieldDec:   dec,
+				fieldName:  f.Name,
 			}
 		}
 
@@ -169,9 +166,9 @@ func (c *compiler) compileStructBody(vt reflect.Type) decFunc {
 		})
 	}
 	return &structDecoder{
-		fieldMap:   caching.NewFieldLookup(fv),
+		fieldMap:  	caching.NewFieldLookup(fv),
 		fields:     entries,
 		structName: vt.Name(),
-		typ:        vt,
+		typ: 		vt,
 	}
 }

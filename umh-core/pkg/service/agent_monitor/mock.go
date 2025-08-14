@@ -42,13 +42,13 @@ type MockService struct {
 }
 
 // NewMockService creates a new mock service instance.
-func NewMockService(fs filesystem.Service) *MockService {
+func NewMockService(fileSystem filesystem.Service) *MockService {
 	return &MockService{
 		// Default to Active health
 		healthState: models.Active,
 		// Initialize with default healthy status
 		GetStatusResult: CreateDefaultAgentStatus(),
-		fs:              fs,
+		fs:              fileSystem,
 	}
 }
 

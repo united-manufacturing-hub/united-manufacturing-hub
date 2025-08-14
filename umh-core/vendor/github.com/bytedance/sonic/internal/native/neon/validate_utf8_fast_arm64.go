@@ -19,11 +19,11 @@
 package neon
 
 //go:nosplit
-func validate_utf8_fast(s *string) (ret int) {
-	return __validate_utf8_fast(s)
+func validate_utf8_fast(s *string)  (ret int) {
+    return __validate_utf8_fast(s)
 }
 
 //go:nosplit
 //go:noescape
 //goland:noinspection GoUnusedParameter
-func __validate_utf8_fast(s *string) (ret int)
+func __validate_utf8_fast(s *string)  (ret int)

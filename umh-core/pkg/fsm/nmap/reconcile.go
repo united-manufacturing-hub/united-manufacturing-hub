@@ -38,7 +38,11 @@ import (
 // This function is intended to be called repeatedly (e.g. in a periodic control loop).
 // Over multiple calls, it converges the actual state to the desired state. Transitions
 // that fail are retried in subsequent reconcile calls after a backoff period.
-func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
+func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool) {
+	var err error
+
+	var reconciled bool
+
 	start := time.Now()
 	instanceName := n.baseFSMInstance.GetID()
 
@@ -178,7 +182,7 @@ func (n *NmapInstance) reconcileExternalChanges(ctx context.Context, services se
 // Any functions that fetch information are disallowed here and must be called in reconcileExternalChanges
 // and exist in ExternalState.
 // This is to ensure full testability of the FSM.
-func (n *NmapInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider, currentTime time.Time) (err error, reconciled bool) {
+func (n *NmapInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider, currentTime time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -215,7 +219,7 @@ func (n *NmapInstance) reconcileStateTransition(ctx context.Context, services se
 }
 
 // reconcileOperationalStates handles operational (i.e. start/stop and sub-state).
-func (n *NmapInstance) reconcileOperationalStates(ctx context.Context, currentState string, desiredState string, services serviceregistry.Provider, currentTime time.Time) (err error, reconciled bool) {
+func (n *NmapInstance) reconcileOperationalStates(ctx context.Context, currentState string, desiredState string, services serviceregistry.Provider, currentTime time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {

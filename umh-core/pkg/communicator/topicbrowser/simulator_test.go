@@ -232,14 +232,14 @@ var _ = Describe("Simulator", func() {
 		})
 
 		It("should be thread-safe", func() {
-			var wg sync.WaitGroup
+			var waitGroup sync.WaitGroup
 			numGoroutines := 10
 			bundlesPerGoroutine := 5
 
 			for range numGoroutines {
-				wg.Add(1)
+				waitGroup.Add(1)
 				go func() {
-					defer wg.Done()
+					defer waitGroup.Done()
 					for range bundlesPerGoroutine {
 						bundle := simulator.GenerateNewUnsBundle()
 						simulator.AddUnsBundleToSimObservedState(bundle)
@@ -247,7 +247,7 @@ var _ = Describe("Simulator", func() {
 				}()
 			}
 
-			wg.Wait()
+			waitGroup.Wait()
 
 			state := simulator.GetSimObservedState()
 			expectedCount := numGoroutines * bundlesPerGoroutine
@@ -270,28 +270,28 @@ var _ = Describe("Simulator", func() {
 		})
 
 		It("should be thread-safe for concurrent reads", func() {
-			var wg sync.WaitGroup
+			var waitGroup sync.WaitGroup
 			numReaders := 10
 
 			for range numReaders {
-				wg.Add(1)
+				waitGroup.Add(1)
 				go func() {
-					defer wg.Done()
+					defer waitGroup.Done()
 					state := simulator.GetSimObservedState()
 					Expect(state).NotTo(BeNil())
 				}()
 			}
 
-			wg.Wait()
+			waitGroup.Wait()
 		})
 
 		It("should be thread-safe for concurrent read/write", func() {
-			var wg sync.WaitGroup
+			var waitGroup sync.WaitGroup
 
 			// Start a writer
-			wg.Add(1)
+			waitGroup.Add(1)
 			go func() {
-				defer wg.Done()
+				defer waitGroup.Done()
 				for range 10 {
 					bundle := simulator.GenerateNewUnsBundle()
 					simulator.AddUnsBundleToSimObservedState(bundle)
@@ -301,9 +301,9 @@ var _ = Describe("Simulator", func() {
 
 			// Start multiple readers
 			for range 5 {
-				wg.Add(1)
+				waitGroup.Add(1)
 				go func() {
-					defer wg.Done()
+					defer waitGroup.Done()
 					for range 10 {
 						state := simulator.GetSimObservedState()
 						Expect(state).NotTo(BeNil())
@@ -312,7 +312,7 @@ var _ = Describe("Simulator", func() {
 				}()
 			}
 
-			wg.Wait()
+			waitGroup.Wait()
 		})
 	})
 

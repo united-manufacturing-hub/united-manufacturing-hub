@@ -251,13 +251,13 @@ func CreateBenthosConfigFromCDFCPayload(payload models.CDFCPayload, componentNam
 	}
 
 	benthosCacheResources := make([]map[string]interface{}, len(cacheResources))
-	for i, resource := range cacheResources {
+	for index, resource := range cacheResources {
 		resourceMap, ok := resource.(map[string]interface{})
 		if !ok {
-			return dataflowcomponentserviceconfig.BenthosConfig{}, fmt.Errorf("cache resource %d is not a valid object", i)
+			return dataflowcomponentserviceconfig.BenthosConfig{}, fmt.Errorf("cache resource %d is not a valid object", index)
 		}
 
-		benthosCacheResources[i] = resourceMap
+		benthosCacheResources[index] = resourceMap
 	}
 
 	benthosRateLimitResources := make([]map[string]interface{}, len(rateLimitResources))
