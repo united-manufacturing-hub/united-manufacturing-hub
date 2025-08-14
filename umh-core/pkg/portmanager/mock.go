@@ -25,16 +25,16 @@ var ErrPortInUse = errors.New("port is already in use by another service")
 
 // MockPortManager is a mock implementation of PortManager for testing.
 type MockPortManager struct {
+	AllocatePortError  error
+	ReleasePortError   error
+	ReservePortError   error
+	PreReconcileError  error
+	PostReconcileError error
+	Ports              map[string]uint16
+	AllocatedPorts     map[uint16]string
+	ReservedPorts      map[uint16]bool
 	sync.Mutex
 
-	AllocatePortError   error
-	ReleasePortError    error
-	ReservePortError    error
-	PreReconcileError   error
-	PostReconcileError  error
-	Ports               map[string]uint16
-	AllocatedPorts      map[uint16]string
-	ReservedPorts       map[uint16]bool
 	AllocatePortResult  uint16
 	AllocatePortCalled  bool
 	ReleasePortCalled   bool
