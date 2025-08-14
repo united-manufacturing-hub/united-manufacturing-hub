@@ -182,7 +182,7 @@ func (tbc *TopicBrowserCommunicator) processNewBuffers(obs *topicbrowserfsm.Obse
 	if err != nil {
 		sentry.ReportIssue(err, sentry.IssueTypeError, tbc.logger)
 
-		return nil, fmt.Errorf("buffer size validation failed: %w", err)
+		return &ProcessingResult{}, fmt.Errorf("buffer size validation failed: %w", err)
 	}
 
 	var result *ProcessingResult
@@ -190,15 +190,11 @@ func (tbc *TopicBrowserCommunicator) processNewBuffers(obs *topicbrowserfsm.Obse
 	// Process the buffers and update internal cache
 	if tbc.lastProcessedSequence == 0 {
 		// First time processing or reset: process all buffers
-		result, err = tbc.processAllBuffers(snapshot.Items, source)
+		result = tbc.processAllBuffers(snapshot.Items, source)
 	} else {
 		// Incremental processing: only process new buffers
 		newBufferCount := snapshot.LastSequenceNum - tbc.lastProcessedSequence
-		result, err = tbc.processIncrementalBuffers(snapshot.Items, newBufferCount, source)
-	}
-
-	if err != nil {
-		return nil, err
+		result = tbc.processIncrementalBuffers(snapshot.Items, newBufferCount, source)
 	}
 
 	// Update the last processed sequence number
@@ -211,7 +207,7 @@ func (tbc *TopicBrowserCommunicator) processNewBuffers(obs *topicbrowserfsm.Obse
 }
 
 // processAllBuffers processes all buffers in the snapshot (used after overwrite detection).
-func (tbc *TopicBrowserCommunicator) processAllBuffers(buffers []*topicbrowserservice.BufferItem, source ProcessingSource) (*ProcessingResult, error) {
+func (tbc *TopicBrowserCommunicator) processAllBuffers(buffers []*topicbrowserservice.BufferItem, source ProcessingSource) *ProcessingResult {
 	result := &ProcessingResult{}
 
 	for _, buf := range buffers {
@@ -244,11 +240,11 @@ func (tbc *TopicBrowserCommunicator) processAllBuffers(buffers []*topicbrowserse
 
 	tbc.logger.Debugf("TopicBrowserCommunicator DebugInfo: %s", result.DebugInfo)
 
-	return result, nil
+	return result
 }
 
 // processIncrementalBuffers processes only new buffers since last processing.
-func (tbc *TopicBrowserCommunicator) processIncrementalBuffers(buffers []*topicbrowserservice.BufferItem, newBufferCount uint64, source ProcessingSource) (*ProcessingResult, error) {
+func (tbc *TopicBrowserCommunicator) processIncrementalBuffers(buffers []*topicbrowserservice.BufferItem, newBufferCount uint64, source ProcessingSource) *ProcessingResult {
 	result := &ProcessingResult{}
 
 	// Buffers are newest-to-oldest, so we need the last N items
@@ -312,7 +308,7 @@ func (tbc *TopicBrowserCommunicator) processIncrementalBuffers(buffers []*topicb
 	result.DebugInfo = debugInfo
 	tbc.logger.Infof("TopicBrowserCommunicator: %s", result.DebugInfo)
 
-	return result, nil
+	return result
 }
 
 // updateInternalCache processes a single buffer and updates the internal cache maps.

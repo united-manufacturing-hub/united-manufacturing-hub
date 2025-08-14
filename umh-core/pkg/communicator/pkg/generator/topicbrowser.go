@@ -88,6 +88,8 @@ func buildTopicBrowserAsDfc(
 	instance fsm.FSMInstanceSnapshot,
 	logger *zap.SugaredLogger,
 ) (*models.Health, error) {
+	_ = logger // TODO: add logging if needed
+
 	observed, ok := instance.LastObservedState.(*topicbrowserfsm.ObservedStateSnapshot)
 	if !ok {
 		return nil, errors.New("last observed state is not a topic browser observed state snapshot")

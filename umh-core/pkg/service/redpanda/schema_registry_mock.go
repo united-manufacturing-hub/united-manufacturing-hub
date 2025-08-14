@@ -179,6 +179,8 @@ func (m *MockSchemaRegistry) handleSubjectOperations(w http.ResponseWriter, r *h
 
 // handleDeleteSubject handles DELETE /subjects/{subject}.
 func (m *MockSchemaRegistry) handleDeleteSubject(w http.ResponseWriter, r *http.Request, subject string) {
+	_ = r // HTTP request parameter required by handler interface
+
 	// Check if subject exists
 	if _, exists := m.schemas[subject]; !exists {
 		// Subject not found
@@ -261,6 +263,8 @@ func (m *MockSchemaRegistry) handlePostSubjectVersion(w http.ResponseWriter, r *
 
 // handleGetSubjectVersions handles GET /subjects/{subject}/versions/{version}.
 func (m *MockSchemaRegistry) handleGetSubjectVersions(w http.ResponseWriter, r *http.Request, subject string, parts []string) {
+	_ = r // HTTP request parameter required by handler interface
+
 	if len(parts) < 3 || parts[1] != "versions" {
 		http.Error(w, "Invalid path", http.StatusBadRequest)
 

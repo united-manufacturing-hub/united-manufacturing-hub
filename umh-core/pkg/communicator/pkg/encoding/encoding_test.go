@@ -939,8 +939,8 @@ var _ = Describe("Batch Processing Performance", Serial, Label("measurement"), f
 
 var _ = Describe("Thread Safety", func() {
 	var (
-		message models.UMHMessageContent
-		wg      sync.WaitGroup
+		message   models.UMHMessageContent
+		waitGroup sync.WaitGroup
 	)
 
 	BeforeEach(func() {
@@ -955,10 +955,10 @@ var _ = Describe("Thread Safety", func() {
 		const iterationsPerGoroutine = 100
 		results := make(chan error, numGoroutines*iterationsPerGoroutine)
 
-		wg.Add(numGoroutines)
+		waitGroup.Add(numGoroutines)
 		for range numGoroutines {
 			go func() {
-				defer wg.Done()
+				defer waitGroup.Done()
 				for range iterationsPerGoroutine {
 					encoded, err := newenc.EncodeMessageFromUMHInstanceToUser(message)
 					if err != nil {
@@ -978,7 +978,7 @@ var _ = Describe("Thread Safety", func() {
 		}
 
 		// Wait for all goroutines to complete
-		wg.Wait()
+		waitGroup.Wait()
 		close(results)
 
 		// Check for any errors
@@ -992,10 +992,10 @@ var _ = Describe("Thread Safety", func() {
 		const iterationsPerGoroutine = 100
 		results := make(chan error, numGoroutines*iterationsPerGoroutine)
 
-		wg.Add(numGoroutines)
+		waitGroup.Add(numGoroutines)
 		for range numGoroutines {
 			go func() {
-				defer wg.Done()
+				defer waitGroup.Done()
 				for range iterationsPerGoroutine {
 					encoded, err := corev1.EncodeMessageFromUMHInstanceToUser(message)
 					if err != nil {
@@ -1015,7 +1015,7 @@ var _ = Describe("Thread Safety", func() {
 		}
 
 		// Wait for all goroutines to complete
-		wg.Wait()
+		waitGroup.Wait()
 		close(results)
 
 		// Check for any errors
@@ -1029,10 +1029,10 @@ var _ = Describe("Thread Safety", func() {
 		const iterationsPerGoroutine = 100
 		results := make(chan error, numGoroutines*iterationsPerGoroutine)
 
-		wg.Add(numGoroutines)
+		waitGroup.Add(numGoroutines)
 		for range numGoroutines {
 			go func() {
-				defer wg.Done()
+				defer waitGroup.Done()
 				for range iterationsPerGoroutine {
 					encoded, err := old.EncodeMessageFromUMHInstanceToUser(message)
 					if err != nil {
@@ -1052,7 +1052,7 @@ var _ = Describe("Thread Safety", func() {
 		}
 
 		// Wait for all goroutines to complete
-		wg.Wait()
+		waitGroup.Wait()
 		close(results)
 
 		// Check for any errors
@@ -1069,10 +1069,10 @@ var _ = Describe("Thread Safety", func() {
 		// Create a large string that will definitely be compressed
 		largeString := strings.Repeat("test data for compression", 1000)
 
-		wg.Add(numGoroutines)
+		waitGroup.Add(numGoroutines)
 		for range numGoroutines {
 			go func() {
-				defer wg.Done()
+				defer waitGroup.Done()
 				for range iterationsPerGoroutine {
 					// Test compression
 					compressed, err := newenc.Compress([]byte(largeString))
@@ -1101,7 +1101,7 @@ var _ = Describe("Thread Safety", func() {
 		}
 
 		// Wait for all goroutines to complete
-		wg.Wait()
+		waitGroup.Wait()
 		close(results)
 
 		// Check for any errors
@@ -1118,10 +1118,10 @@ var _ = Describe("Thread Safety", func() {
 		// Create a large string that will definitely be compressed
 		largeString := strings.Repeat("test data for compression", 1000)
 
-		wg.Add(numGoroutines)
+		waitGroup.Add(numGoroutines)
 		for range numGoroutines {
 			go func() {
-				defer wg.Done()
+				defer waitGroup.Done()
 				for range iterationsPerGoroutine {
 					// Test compression
 					compressed, err := corev1.Compress([]byte(largeString))
@@ -1150,7 +1150,7 @@ var _ = Describe("Thread Safety", func() {
 		}
 
 		// Wait for all goroutines to complete
-		wg.Wait()
+		waitGroup.Wait()
 		close(results)
 
 		// Check for any errors
@@ -1167,10 +1167,10 @@ var _ = Describe("Thread Safety", func() {
 		// Create a large string that will definitely be compressed
 		largeString := strings.Repeat("test data for compression", 1000)
 
-		wg.Add(numGoroutines)
+		waitGroup.Add(numGoroutines)
 		for range numGoroutines {
 			go func() {
-				defer wg.Done()
+				defer waitGroup.Done()
 				for range iterationsPerGoroutine {
 					// Test compression
 					compressed, err := old.Compress(largeString)
@@ -1199,7 +1199,7 @@ var _ = Describe("Thread Safety", func() {
 		}
 
 		// Wait for all goroutines to complete
-		wg.Wait()
+		waitGroup.Wait()
 		close(results)
 
 		// Check for any errors
@@ -1221,13 +1221,13 @@ var _ = Describe("Thread Safety", func() {
 			newenc.CompressionThreshold * 2,  // Large message
 		}
 
-		wg.Add(numGoroutines)
+		waitGroup.Add(numGoroutines)
 		for i := range numGoroutines {
 			go func(routineNum int) {
-				defer wg.Done()
-				for j := range iterationsPerGoroutine {
+				defer waitGroup.Done()
+				for iteration := range iterationsPerGoroutine {
 					// Use different message sizes to exercise different paths
-					size := messageSizes[j%len(messageSizes)]
+					size := messageSizes[iteration%len(messageSizes)]
 					msg := models.UMHMessageContent{
 						MessageType: models.Status,
 						Payload:     strings.Repeat("x", size),
@@ -1251,7 +1251,7 @@ var _ = Describe("Thread Safety", func() {
 
 					// Verify
 					if decoded.Payload != msg.Payload {
-						results <- fmt.Errorf("data mismatch in routine %d, iteration %d", routineNum, j)
+						results <- fmt.Errorf("data mismatch in routine %d, iteration %d", routineNum, iteration)
 
 						return
 					}
@@ -1260,7 +1260,7 @@ var _ = Describe("Thread Safety", func() {
 		}
 
 		// Wait for all goroutines to complete
-		wg.Wait()
+		waitGroup.Wait()
 		close(results)
 
 		// Check for any errors
@@ -1282,13 +1282,13 @@ var _ = Describe("Thread Safety", func() {
 			corev1.CompressionThreshold * 2,  // Large message
 		}
 
-		wg.Add(numGoroutines)
+		waitGroup.Add(numGoroutines)
 		for i := range numGoroutines {
 			go func(routineNum int) {
-				defer wg.Done()
-				for j := range iterationsPerGoroutine {
+				defer waitGroup.Done()
+				for iteration := range iterationsPerGoroutine {
 					// Use different message sizes to exercise different paths
-					size := messageSizes[j%len(messageSizes)]
+					size := messageSizes[iteration%len(messageSizes)]
 					msg := models.UMHMessageContent{
 						MessageType: models.Status,
 						Payload:     strings.Repeat("x", size),
@@ -1312,7 +1312,7 @@ var _ = Describe("Thread Safety", func() {
 
 					// Verify
 					if decoded.Payload != msg.Payload {
-						results <- fmt.Errorf("data mismatch in routine %d, iteration %d", routineNum, j)
+						results <- fmt.Errorf("data mismatch in routine %d, iteration %d", routineNum, iteration)
 
 						return
 					}
@@ -1321,7 +1321,7 @@ var _ = Describe("Thread Safety", func() {
 		}
 
 		// Wait for all goroutines to complete
-		wg.Wait()
+		waitGroup.Wait()
 		close(results)
 
 		// Check for any errors
@@ -1343,13 +1343,13 @@ var _ = Describe("Thread Safety", func() {
 			5000, // Very large message
 		}
 
-		wg.Add(numGoroutines)
+		waitGroup.Add(numGoroutines)
 		for i := range numGoroutines {
 			go func(routineNum int) {
-				defer wg.Done()
-				for j := range iterationsPerGoroutine {
+				defer waitGroup.Done()
+				for iteration := range iterationsPerGoroutine {
 					// Use different message sizes to exercise different paths
-					size := messageSizes[j%len(messageSizes)]
+					size := messageSizes[iteration%len(messageSizes)]
 					msg := models.UMHMessageContent{
 						MessageType: models.Status,
 						Payload:     strings.Repeat("x", size),
@@ -1373,7 +1373,7 @@ var _ = Describe("Thread Safety", func() {
 
 					// Verify
 					if decoded.Payload != msg.Payload {
-						results <- fmt.Errorf("data mismatch in routine %d, iteration %d", routineNum, j)
+						results <- fmt.Errorf("data mismatch in routine %d, iteration %d", routineNum, iteration)
 
 						return
 					}
@@ -1382,7 +1382,7 @@ var _ = Describe("Thread Safety", func() {
 		}
 
 		// Wait for all goroutines to complete
-		wg.Wait()
+		waitGroup.Wait()
 		close(results)
 
 		// Check for any errors

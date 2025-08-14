@@ -35,10 +35,12 @@ func NewComparator() *Comparator {
 }
 
 // ConfigsEqual compares two BenthosServiceConfigs after normalization.
-func (c *Comparator) ConfigsEqual(desired, observed BenthosServiceConfig) (isEqual bool) {
+func (c *Comparator) ConfigsEqual(desired, observed BenthosServiceConfig) bool {
 	// First normalize both configs
 	normDesired := c.normalizer.NormalizeConfig(desired)
 	normObserved := c.normalizer.NormalizeConfig(observed)
+
+	var isEqual bool
 
 	defer func() {
 		if !isEqual {
@@ -50,7 +52,9 @@ func (c *Comparator) ConfigsEqual(desired, observed BenthosServiceConfig) (isEqu
 	// Compare essential fields that must match exactly
 	// Ignoring MetricsPort since it's allocated by the port manager
 	if normDesired.LogLevel != normObserved.LogLevel {
-		return false
+		isEqual = false
+
+		return isEqual
 	}
 
 	// Compare maps with deep equality
@@ -58,7 +62,9 @@ func (c *Comparator) ConfigsEqual(desired, observed BenthosServiceConfig) (isEqu
 		!reflect.DeepEqual(normDesired.Output, normObserved.Output) ||
 		!isResourcesEqual(normDesired.CacheResources, normObserved.CacheResources) ||
 		!isResourcesEqual(normDesired.RateLimitResources, normObserved.RateLimitResources) {
-		return false
+		isEqual = false
+
+		return isEqual
 	}
 
 	// Special handling for pipeline processors
@@ -74,10 +80,14 @@ func (c *Comparator) ConfigsEqual(desired, observed BenthosServiceConfig) (isEqu
 		delete(pipeObservedCopy, "processors")
 
 		if !reflect.DeepEqual(pipeDesiredCopy, pipeObservedCopy) {
-			return false
+			isEqual = false
+
+			return isEqual
 		}
 	} else if !reflect.DeepEqual(desiredProcs, observedProcs) {
-		return false
+		isEqual = false
+
+		return isEqual
 	}
 
 	// Special handling for buffer
@@ -85,12 +95,16 @@ func (c *Comparator) ConfigsEqual(desired, observed BenthosServiceConfig) (isEqu
 		if _, hasNoneDesired := normDesired.Buffer["none"]; hasNoneDesired {
 			if _, hasNoneObserved := normObserved.Buffer["none"]; hasNoneObserved {
 				// Both have "none" buffer, consider them equal
-				return true
+				isEqual = true
+
+				return isEqual
 			}
 		}
 	}
 
-	return reflect.DeepEqual(normDesired.Buffer, normObserved.Buffer)
+	isEqual = reflect.DeepEqual(normDesired.Buffer, normObserved.Buffer)
+
+	return isEqual
 }
 
 // ConfigDiff returns a human-readable string describing differences between configs.
@@ -193,13 +207,13 @@ func getProcessors(pipeline map[string]interface{}) []interface{} {
 }
 
 // copyMap creates a shallow copy of a map.
-func copyMap(m map[string]interface{}) map[string]interface{} {
-	if m == nil {
+func copyMap(mapInput map[string]interface{}) map[string]interface{} {
+	if mapInput == nil {
 		return nil
 	}
 
-	result := make(map[string]interface{}, len(m))
-	for k, v := range m {
+	result := make(map[string]interface{}, len(mapInput))
+	for k, v := range mapInput {
 		result[k] = v
 	}
 
@@ -239,10 +253,10 @@ func compareMapKeys(desired, observed map[string]interface{}, prefix string, dif
 }
 
 // isResourcesEqual handles comparison of resource slices, properly handling nil and empty slices.
-func isResourcesEqual(a, b interface{}) bool {
+func isResourcesEqual(first, second interface{}) bool {
 	// For nil or empty slices
-	aIsNilOrEmpty := isNilOrEmpty(a)
-	bIsNilOrEmpty := isNilOrEmpty(b)
+	aIsNilOrEmpty := isNilOrEmpty(first)
+	bIsNilOrEmpty := isNilOrEmpty(second)
 
 	// If both are nil or empty, consider them equal
 	if aIsNilOrEmpty && bIsNilOrEmpty {
@@ -250,17 +264,17 @@ func isResourcesEqual(a, b interface{}) bool {
 	}
 
 	// Otherwise, use standard deep equality
-	return reflect.DeepEqual(a, b)
+	return reflect.DeepEqual(first, second)
 }
 
 // isNilOrEmpty checks if a value is nil or an empty slice.
-func isNilOrEmpty(v interface{}) bool {
-	if v == nil {
+func isNilOrEmpty(value interface{}) bool {
+	if value == nil {
 		return true
 	}
 
 	// Check if it's a slice
-	rv := reflect.ValueOf(v)
+	rv := reflect.ValueOf(value)
 	if rv.Kind() == reflect.Slice {
 		return rv.Len() == 0
 	}

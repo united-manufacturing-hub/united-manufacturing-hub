@@ -48,3 +48,6 @@ linters:
     - fatcontext
     - nestif
     - err113
+    - interfacebloat
+    - maintidx
+    - ireturn

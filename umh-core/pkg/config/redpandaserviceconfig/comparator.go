@@ -35,10 +35,12 @@ func NewComparator() *Comparator {
 }
 
 // ConfigsEqual compares two RedpandaServiceConfigs after normalization.
-func (c *Comparator) ConfigsEqual(desired, observed RedpandaServiceConfig) (isEqual bool) {
+func (c *Comparator) ConfigsEqual(desired, observed RedpandaServiceConfig) bool {
 	// First normalize both configs
 	normDesired := c.normalizer.NormalizeConfig(desired)
 	normObserved := c.normalizer.NormalizeConfig(observed)
+
+	var isEqual bool
 
 	defer func() {
 		if !isEqual {
@@ -47,7 +49,9 @@ func (c *Comparator) ConfigsEqual(desired, observed RedpandaServiceConfig) (isEq
 		}
 	}()
 
-	return reflect.DeepEqual(normDesired, normObserved)
+	isEqual = reflect.DeepEqual(normDesired, normObserved)
+
+	return isEqual
 }
 
 // ConfigDiff returns a human-readable string describing differences between configs.

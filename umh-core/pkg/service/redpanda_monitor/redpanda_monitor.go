@@ -307,7 +307,7 @@ const READYNESS_END_MARKER = "READYNESSENDREADYNESSENDREADYNESSENDREADYNESSENDRE
 // BLOCK_END_MARKER marks the end of the cluster config data.
 const BLOCK_END_MARKER = "ENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDEND"
 
-func (s *RedpandaMonitorService) generateRedpandaScript() (string, error) {
+func (s *RedpandaMonitorService) generateRedpandaScript() (string, error) { //nolint:unparam // error return may be needed for future error handling
 	// Build the redpanda command - curl http://localhost:9644/public_metrics
 	// Create the script content with a loop that executes redpanda every second
 	// Also let's use gzip to compress the output & hex encode it
@@ -903,6 +903,8 @@ func (s *RedpandaMonitorService) parseReadynessData(readynessDataBytes []byte) (
 }
 
 func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigDataBytes []byte, tick uint64) (*ClusterConfig, error) {
+	_ = tick // TODO: use tick for time-based processing if needed
+
 	clusterConfigDataString := string(clusterConfigDataBytes)
 	// Strip any newlines
 	clusterConfigDataString = strings.ReplaceAll(clusterConfigDataString, "\n", "")

@@ -95,8 +95,8 @@ func (s *StatusCollectorType) updateTopicBrowserCacheFromFSM() error {
 	snapshot := s.systemSnapshotManager.GetDeepCopySnapshot()
 
 	// Find the topic browser instance in the snapshot
-	tbInstance, ok := fsm.FindInstance(snapshot, constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
-	if !ok || tbInstance == nil {
+	tbInstance, found := fsm.FindInstance(snapshot, constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
+	if !found || tbInstance == nil {
 		s.logger.Debug("Topic browser instance not found in snapshot - system not ready yet")
 
 		return nil // Not an error, just not ready yet
@@ -149,8 +149,8 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 	// --- container (only one instance) ---------------------------------------------------------
 	var containerData models.Container
 
-	contInst, ok := fsm.FindInstance(snapshot, constants.ContainerManagerName, constants.CoreInstanceName)
-	if ok {
+	contInst, exists := fsm.FindInstance(snapshot, constants.ContainerManagerName, constants.CoreInstanceName)
+	if exists {
 		containerData = ContainerFromSnapshot(contInst, s.logger)
 	}
 
@@ -162,8 +162,8 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 		agentDataVersions       []models.Version
 	)
 
-	agInst, ok := fsm.FindInstance(snapshot, constants.AgentManagerName, constants.AgentInstanceName)
-	if ok {
+	agInst, found := fsm.FindInstance(snapshot, constants.AgentManagerName, constants.AgentInstanceName)
+	if found {
 		agentData, agentDataReleaseChannel, agentDataCurrentVersion, agentDataVersions = AgentFromSnapshot(agInst, s.logger)
 	}
 

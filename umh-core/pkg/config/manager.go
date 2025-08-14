@@ -59,7 +59,7 @@ var (
 
 // ConfigManager is the interface for config management.
 //
-//nolint:interfacebloat // Core configuration manager interface requires comprehensive methods for config lifecycle management
+
 type ConfigManager interface {
 	// GetConfig returns the current config
 	GetConfig(ctx context.Context, tick uint64) (FullConfig, error)

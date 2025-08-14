@@ -215,7 +215,7 @@ func (c *AgentMonitorService) Status(ctx context.Context, systemSnapshot fsm.Sys
 	return status, nil
 }
 
-func (c *AgentMonitorService) getReleaseInfo(cfg config.FullConfig) (*models.Release, error) {
+func (c *AgentMonitorService) getReleaseInfo(cfg config.FullConfig) (*models.Release, error) { //nolint:unparam // error return may be needed for future error handling
 	release := &models.Release{}
 
 	release.Channel = string(cfg.Agent.ReleaseChannel)

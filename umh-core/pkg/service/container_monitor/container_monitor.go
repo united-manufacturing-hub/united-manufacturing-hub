@@ -253,7 +253,7 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	return cpuStat, nil
 }
 
-func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMCores float64, coreCount int, usagePercent float64, err error) {
+func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (float64, int, float64, error) {
 	// Fetching from cgroup is incredibly difficult, so we fallback to host-level usage
 
 	// -- FALLBACK: host-level usage with cpu.Percent() --
@@ -264,6 +264,7 @@ func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMC
 		return 0, 0, 0, err
 	}
 
+	var usagePercent float64
 	if len(usagePercentages) > 0 {
 		usagePercent = usagePercentages[0]
 	}
@@ -271,9 +272,9 @@ func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMC
 	// Convert usage percent to mCPU (i.e. 1000 mCPU = 1 core).
 	// For example, if usage is 50% on a system with 4 cores,
 	// the container is effectively using 2 cores => 2000 mCPU.
-	coreCount = runtime.NumCPU()
+	coreCount := runtime.NumCPU()
 	usageCores := (usagePercent / 100.0) * float64(coreCount)
-	usageMCores = usageCores * 1000
+	usageMCores := usageCores * 1000
 
 	return usageMCores, coreCount, usagePercent, nil
 }

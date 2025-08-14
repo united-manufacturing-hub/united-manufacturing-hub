@@ -89,20 +89,20 @@ func ParseCustomDataFlowComponent(payload interface{}) (models.CDFCPayload, erro
 	}
 
 	// Convert to the expected structure
-	cdfcMap, ok := cdfc.(map[string]interface{})
-	if !ok {
+	cdfcMap, isValidMap := cdfc.(map[string]interface{})
+	if !isValidMap {
 		return models.CDFCPayload{}, errors.New("customDataFlowComponent is not a valid object")
 	}
 
 	// Only check that required top-level sections exist for parsing
 	// Detailed validation will be done in Validate()
-	_, ok = cdfcMap["inputs"].(map[string]interface{})
-	if !ok {
+	_, hasInputs := cdfcMap["inputs"].(map[string]interface{})
+	if !hasInputs {
 		return models.CDFCPayload{}, errors.New("missing required field inputs")
 	}
 
-	_, ok = cdfcMap["outputs"].(map[string]interface{})
-	if !ok {
+	_, hasOutputs := cdfcMap["outputs"].(map[string]interface{})
+	if !hasOutputs {
 		return models.CDFCPayload{}, errors.New("missing required field outputs")
 	}
 
@@ -454,8 +454,8 @@ func BuildCommonDataFlowComponentPropertiesFromConfig(dfcConfig dataflowcomponen
 	processors := models.CommonDataFlowComponentPipelineConfigProcessors{}
 
 	// Extract processors from the pipeline if they exist
-	if pipeline, ok := dfcConfig.BenthosConfig.Pipeline["processors"].([]interface{}); ok {
-		for i, proc := range pipeline {
+	if pipeline, hasPipeline := dfcConfig.BenthosConfig.Pipeline["processors"].([]interface{}); hasPipeline {
+		for procIndex, proc := range pipeline {
 			procData, err := yaml.Marshal(proc)
 			if err != nil {
 				log.Warnf("Failed to marshal processor data: %v", err)
@@ -466,7 +466,7 @@ func BuildCommonDataFlowComponentPropertiesFromConfig(dfcConfig dataflowcomponen
 			// Determine processor type by looking at the processor structure
 			processorType := "bloblang" // Default type
 
-			if procMap, ok := proc.(map[string]interface{}); ok {
+			if procMap, isValidProcessor := proc.(map[string]interface{}); isValidProcessor {
 				// Get the first key in the processor map as the type
 				for key := range procMap {
 					processorType = key
@@ -476,7 +476,7 @@ func BuildCommonDataFlowComponentPropertiesFromConfig(dfcConfig dataflowcomponen
 			}
 
 			// Use index as processor name to allow sorting in the frontend
-			procName := strconv.Itoa(i)
+			procName := strconv.Itoa(procIndex)
 			processors[procName] = struct {
 				Data string `json:"data" mapstructure:"data" yaml:"data"`
 				Type string `json:"type" mapstructure:"type" yaml:"type"`

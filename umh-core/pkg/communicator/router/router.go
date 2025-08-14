@@ -144,6 +144,8 @@ func (r *Router) handleSub(message *models.UMHMessage, messageContent models.UMH
 }
 
 func (r *Router) handleAction(messageContent models.UMHMessageContent, message *models.UMHMessage, watcherUUID uuid.UUID) {
+	_ = watcherUUID // TODO: use watcherUUID if needed for action tracking
+
 	var actionPayload models.ActionMessagePayload
 
 	payloadMap, ok := messageContent.Payload.(map[string]interface{})

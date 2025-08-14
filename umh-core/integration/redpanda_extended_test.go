@@ -149,7 +149,7 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 	})
 })
 
-func checkRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time, lossToleranceWarning float64, lossToleranceFail float64, messagesPerSecond int) (newOffset int, err error) {
+func checkRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time, lossToleranceWarning float64, lossToleranceFail float64, messagesPerSecond int) (int, error) {
 	// Fetch the latest Messages and validate that:
 	// 1) The timestamp is within reason (+-1m)
 	// 2) The offsets are increasing (e.g the last offset of the batch is higher then the current one)
@@ -164,7 +164,10 @@ func checkRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time, los
 		return 0, err
 	}
 
-	var lastTimestamp int64
+	var (
+		lastTimestamp int64
+		newOffset     int
+	)
 
 	if len(messages) > 0 {
 		newOffset = int(messages[len(messages)-1].Offset)

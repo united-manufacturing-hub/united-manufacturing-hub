@@ -50,7 +50,7 @@ import (
 
 // IRedpandaService is the interface for managing Redpanda.
 //
-//nolint:interfacebloat // Core Redpanda service interface requires comprehensive methods for streaming platform lifecycle management
+
 type IRedpandaService interface {
 	// GenerateS6ConfigForRedpanda generates a S6 config for a given redpanda instance
 	GenerateS6ConfigForRedpanda(redpandaConfig *redpandaserviceconfig.RedpandaServiceConfig, redpandaName string) (s6serviceconfig.S6ServiceConfig, error)

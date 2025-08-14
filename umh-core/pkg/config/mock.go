@@ -92,7 +92,7 @@ func (m *MockConfigManager) GetDataFlowConfig() []DataFlowComponentConfig {
 }
 
 // getConfigInternal returns the config without locking - for use by atomic methods that already hold the lock.
-func (m *MockConfigManager) getConfigInternal(ctx context.Context, tick uint64) (FullConfig, error) {
+func (m *MockConfigManager) getConfigInternal(ctx context.Context) (FullConfig, error) {
 	atomic.StoreInt32(&m.GetConfigCalled, 1)
 
 	if m.ConfigDelay > 0 {
@@ -118,7 +118,7 @@ func (m *MockConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
 
-	return m.getConfigInternal(ctx, tick)
+	return m.getConfigInternal(ctx)
 }
 
 // GetFileSystemService returns the mock filesystem service.
@@ -357,7 +357,7 @@ func (m *MockConfigManager) AtomicSetLocation(ctx context.Context, location mode
 	defer m.mutexReadAndWrite.Unlock()
 
 	// get the current config
-	config, err := m.getConfigInternal(ctx, 0)
+	config, err := m.getConfigInternal(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
@@ -434,7 +434,7 @@ func (m *MockConfigManager) AtomicAddDataflowcomponent(ctx context.Context, dfc 
 	}
 
 	// get the current config
-	config, err := m.getConfigInternal(ctx, 0)
+	config, err := m.getConfigInternal(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
@@ -463,7 +463,7 @@ func (m *MockConfigManager) AtomicDeleteDataflowcomponent(ctx context.Context, c
 	}
 
 	// get the current config
-	config, err := m.getConfigInternal(ctx, 0)
+	config, err := m.getConfigInternal(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
@@ -489,7 +489,8 @@ func (m *MockConfigManager) AtomicDeleteDataflowcomponent(ctx context.Context, c
 	config.DataFlow = filteredComponents
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	err = m.writeConfig(ctx, config)
+	if err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
@@ -508,7 +509,7 @@ func (m *MockConfigManager) AtomicEditDataflowcomponent(ctx context.Context, com
 	}
 
 	// get the current config
-	config, err := m.getConfigInternal(ctx, 0)
+	config, err := m.getConfigInternal(ctx)
 	if err != nil {
 		return DataFlowComponentConfig{}, fmt.Errorf("failed to get config: %w", err)
 	}
@@ -535,7 +536,8 @@ func (m *MockConfigManager) AtomicEditDataflowcomponent(ctx context.Context, com
 	}
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	err = m.writeConfig(ctx, config)
+	if err != nil {
 		return DataFlowComponentConfig{}, fmt.Errorf("failed to write config: %w", err)
 	}
 
@@ -554,7 +556,7 @@ func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 	}
 
 	// get the current config
-	config, err := m.getConfigInternal(ctx, 0)
+	config, err := m.getConfigInternal(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
@@ -589,7 +591,8 @@ func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 	config.ProtocolConverter = append(config.ProtocolConverter, pc)
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	err = m.writeConfig(ctx, config)
+	if err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
@@ -608,7 +611,7 @@ func (m *MockConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 	}
 
 	// get the current config
-	config, err := m.getConfigInternal(ctx, 0)
+	config, err := m.getConfigInternal(ctx)
 	if err != nil {
 		return ProtocolConverterConfig{}, fmt.Errorf("failed to get config: %w", err)
 	}
@@ -689,7 +692,8 @@ func (m *MockConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 	config.ProtocolConverter[targetIndex] = pc
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	err = m.writeConfig(ctx, config)
+	if err != nil {
 		return ProtocolConverterConfig{}, fmt.Errorf("failed to write config: %w", err)
 	}
 
@@ -708,7 +712,7 @@ func (m *MockConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 	}
 
 	// get the current config
-	config, err := m.getConfigInternal(ctx, 0)
+	config, err := m.getConfigInternal(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
@@ -747,7 +751,8 @@ func (m *MockConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 	config.ProtocolConverter = append(config.ProtocolConverter[:targetIndex], config.ProtocolConverter[targetIndex+1:]...)
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	err = m.writeConfig(ctx, config)
+	if err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
@@ -766,7 +771,7 @@ func (m *MockConfigManager) AtomicAddStreamProcessor(ctx context.Context, sp Str
 	}
 
 	// get the current config
-	config, err := m.getConfigInternal(ctx, 0)
+	config, err := m.getConfigInternal(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
@@ -801,7 +806,8 @@ func (m *MockConfigManager) AtomicAddStreamProcessor(ctx context.Context, sp Str
 	config.StreamProcessor = append(config.StreamProcessor, sp)
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	err = m.writeConfig(ctx, config)
+	if err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
@@ -820,7 +826,7 @@ func (m *MockConfigManager) AtomicEditStreamProcessor(ctx context.Context, sp St
 	}
 
 	// get the current config
-	config, err := m.getConfigInternal(ctx, 0)
+	config, err := m.getConfigInternal(ctx)
 	if err != nil {
 		return StreamProcessorConfig{}, fmt.Errorf("failed to get config: %w", err)
 	}
@@ -893,7 +899,8 @@ func (m *MockConfigManager) AtomicEditStreamProcessor(ctx context.Context, sp St
 	config.StreamProcessor[targetIndex] = sp
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	err = m.writeConfig(ctx, config)
+	if err != nil {
 		return StreamProcessorConfig{}, fmt.Errorf("failed to write config: %w", err)
 	}
 
@@ -912,7 +919,7 @@ func (m *MockConfigManager) AtomicDeleteStreamProcessor(ctx context.Context, nam
 	}
 
 	// get the current config
-	config, err := m.getConfigInternal(ctx, 0)
+	config, err := m.getConfigInternal(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
@@ -950,7 +957,8 @@ func (m *MockConfigManager) AtomicDeleteStreamProcessor(ctx context.Context, nam
 	config.StreamProcessor = append(config.StreamProcessor[:targetIndex], config.StreamProcessor[targetIndex+1:]...)
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	err = m.writeConfig(ctx, config)
+	if err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
@@ -969,7 +977,7 @@ func (m *MockConfigManager) AtomicAddDataModel(ctx context.Context, name string,
 	}
 
 	// get the current config
-	config, err := m.getConfigInternal(ctx, 0)
+	config, err := m.getConfigInternal(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
@@ -991,7 +999,8 @@ func (m *MockConfigManager) AtomicAddDataModel(ctx context.Context, name string,
 	})
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	err = m.writeConfig(ctx, config)
+	if err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
@@ -1010,7 +1019,7 @@ func (m *MockConfigManager) AtomicEditDataModel(ctx context.Context, name string
 	}
 
 	// get the current config
-	config, err := m.getConfigInternal(ctx, 0)
+	config, err := m.getConfigInternal(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
@@ -1037,7 +1046,8 @@ func (m *MockConfigManager) AtomicEditDataModel(ctx context.Context, name string
 
 	for versionKey := range currentDataModel.Versions {
 		if strings.HasPrefix(versionKey, "v") {
-			if versionNum, err := strconv.Atoi(versionKey[1:]); err == nil {
+			versionNum, err := strconv.Atoi(versionKey[1:])
+			if err == nil {
 				if versionNum > maxVersion {
 					maxVersion = versionNum
 				}
@@ -1056,7 +1066,8 @@ func (m *MockConfigManager) AtomicEditDataModel(ctx context.Context, name string
 	config.DataModels[targetIndex] = currentDataModel
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	err = m.writeConfig(ctx, config)
+	if err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
@@ -1075,7 +1086,7 @@ func (m *MockConfigManager) AtomicDeleteDataModel(ctx context.Context, name stri
 	}
 
 	// get the current config
-	config, err := m.getConfigInternal(ctx, 0)
+	config, err := m.getConfigInternal(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
@@ -1099,7 +1110,8 @@ func (m *MockConfigManager) AtomicDeleteDataModel(ctx context.Context, name stri
 	config.DataModels = append(config.DataModels[:targetIndex], config.DataModels[targetIndex+1:]...)
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	err = m.writeConfig(ctx, config)
+	if err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
@@ -1118,7 +1130,7 @@ func (m *MockConfigManager) AtomicAddDataContract(ctx context.Context, dataContr
 	}
 
 	// get the current config
-	config, err := m.getConfigInternal(ctx, 0)
+	config, err := m.getConfigInternal(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
@@ -1134,7 +1146,8 @@ func (m *MockConfigManager) AtomicAddDataContract(ctx context.Context, dataContr
 	config.DataContracts = append(config.DataContracts, dataContract)
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	err = m.writeConfig(ctx, config)
+	if err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 

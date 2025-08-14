@@ -41,7 +41,7 @@ import (
 // a logical unit that combines **one Connection + one Data-Flow-Component (DFC)**
 // and surfaces them as a single object to the rest of UMH-Core.
 //
-//nolint:interfacebloat // Core protocol converter service interface requires comprehensive methods for protocol conversion lifecycle management
+
 type IProtocolConverterService interface {
 
 	// GetConfig pulls the **actual** runtime configuration that is currently

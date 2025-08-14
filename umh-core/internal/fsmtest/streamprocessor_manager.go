@@ -218,8 +218,8 @@ func ReconcileOnceStreamProcessorManager(
 	snapshot fsm.SystemSnapshot,
 	manager *spfsm.Manager,
 	services serviceregistry.Provider,
-) (newTick uint64, err error, reconciled bool) {
-	err, reconciled = manager.Reconcile(ctx, snapshot, services)
+) (uint64, error, bool) {
+	err, reconciled := manager.Reconcile(ctx, snapshot, services)
 
 	return snapshot.Tick + 1, err, reconciled
 }

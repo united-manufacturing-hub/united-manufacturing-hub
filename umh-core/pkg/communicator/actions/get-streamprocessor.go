@@ -179,14 +179,7 @@ func (a *GetStreamProcessorAction) Execute(ctx context.Context) (interface{}, ma
 		"Building stream processor response...", a.outboundChannel, models.GetStreamProcessor)
 
 	// Build the response from the config
-	streamProcessor, err := a.buildStreamProcessorFromConfig(foundStreamProcessor, foundStreamProcessorName)
-	if err != nil {
-		errorMsg := fmt.Sprintf("Failed to build stream processor data: %v", err)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errorMsg, a.outboundChannel, models.GetStreamProcessor)
-
-		return nil, nil, fmt.Errorf("%s", errorMsg)
-	}
+	streamProcessor := a.buildStreamProcessorFromConfig(foundStreamProcessor, foundStreamProcessorName)
 
 	a.actionLogger.Info("Stream processor retrieved successfully")
 
@@ -194,7 +187,8 @@ func (a *GetStreamProcessorAction) Execute(ctx context.Context) (interface{}, ma
 }
 
 // buildStreamProcessorFromConfig constructs a models.StreamProcessor from the config data.
-func (a *GetStreamProcessorAction) buildStreamProcessorFromConfig(streamProcessorConfig *config.StreamProcessorConfig, instanceName string) (*models.StreamProcessor, error) {
+func (a *GetStreamProcessorAction) buildStreamProcessorFromConfig(streamProcessorConfig *config.StreamProcessorConfig, instanceName string) *models.StreamProcessor {
+	_ = instanceName // TODO: use instanceName if needed for instance-specific configuration
 	// Build location map from agent location - convert map[int]string to map[int]string
 	locationMap := make(map[int]string)
 
@@ -223,7 +217,9 @@ func (a *GetStreamProcessorAction) buildStreamProcessorFromConfig(streamProcesso
 		"sources": spConfig.Sources,
 		"mapping": spConfig.Mapping,
 	}
-	if configData, err := yaml.Marshal(toEncode); err == nil {
+
+	configData, err := yaml.Marshal(toEncode)
+	if err == nil {
 		encodedConfig = base64.StdEncoding.EncodeToString(configData)
 	}
 
@@ -267,7 +263,7 @@ func (a *GetStreamProcessorAction) buildStreamProcessorFromConfig(streamProcesso
 		TemplateInfo:  templateInfo,
 	}
 
-	return streamProcessor, nil
+	return streamProcessor
 }
 
 // getUserEmail returns the user email for this action.

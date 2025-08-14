@@ -34,7 +34,7 @@ const (
 
 // INmapService defines the interface for managing nmap scan services.
 //
-//nolint:interfacebloat // Core nmap service interface requires comprehensive methods for network scanning lifecycle management
+
 type INmapService interface {
 	// GenerateS6ConfigForNmap generates a S6 config for a given nmap instance
 	GenerateS6ConfigForNmap(nmapConfig *nmapserviceconfig.NmapServiceConfig, s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error)

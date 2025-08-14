@@ -59,6 +59,8 @@ func buildProtocolConverterAsDfc(
 	instance fsm.FSMInstanceSnapshot,
 	log *zap.SugaredLogger,
 ) (models.Dfc, error) {
+	_ = log // TODO: add logging if needed
+
 	observed, ok := instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot)
 	if !ok || observed == nil {
 		return models.Dfc{}, fmt.Errorf("observed state %T is not ProtocolConverterObservedStateSnapshot", instance.LastObservedState)

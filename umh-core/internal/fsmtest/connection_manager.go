@@ -213,7 +213,7 @@ func ReconcileOnceConnectionManager(
 	snapshot fsm.SystemSnapshot,
 	manager *connectionfsm.ConnectionManager,
 	services serviceregistry.Provider,
-) (newTick uint64, err error, reconciled bool) {
+) (uint64, error, bool) {
 	err, rec := manager.Reconcile(ctx, snapshot, services)
 
 	return snapshot.Tick + 1, err, rec

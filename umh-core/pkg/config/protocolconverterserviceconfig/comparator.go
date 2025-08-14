@@ -33,7 +33,7 @@ func NewComparator() *Comparator {
 
 // ConfigsEqual compares two ConnectionServiceConfigs by converting to NmapServiceConfig
 // and using the existing comparison utilization.
-func (c *Comparator) ConfigsEqual(desired, observed ProtocolConverterServiceConfigSpec) (isEqual bool) {
+func (c *Comparator) ConfigsEqual(desired, observed ProtocolConverterServiceConfigSpec) bool {
 	connectionD := desired.GetConnectionServiceConfig()
 	connectionO := observed.GetConnectionServiceConfig()
 
@@ -51,10 +51,12 @@ func (c *Comparator) ConfigsEqual(desired, observed ProtocolConverterServiceConf
 
 	connectionEqual := reflect.DeepEqual(connectionD, connectionO)
 
-	return connectionEqual &&
+	isEqual := connectionEqual &&
 		comparatorDFC.ConfigsEqual(dfcReadD, dfcReadO) &&
 		comparatorDFC.ConfigsEqual(dfcWriteD, dfcWriteO) &&
 		comparatorVariable.ConfigsEqual(desired.Variables, observed.Variables)
+
+	return isEqual
 }
 
 // ConfigDiff returns a human-readable string describing differences between configs.

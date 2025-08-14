@@ -146,16 +146,16 @@ func (s *Server) Stop(ctx context.Context) error {
 
 // loggingMiddleware provides request logging.
 func (s *Server) loggingMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
+	return func(ctx *gin.Context) {
 		start := time.Now()
 
-		c.Next()
+		ctx.Next()
 
 		if s.config.Debug {
 			s.logger.Infow("GraphQL request",
-				"method", c.Request.Method,
-				"path", c.Request.URL.Path,
-				"status", c.Writer.Status(),
+				"method", ctx.Request.Method,
+				"path", ctx.Request.URL.Path,
+				"status", ctx.Writer.Status(),
 				"duration", time.Since(start),
 			)
 		}
@@ -164,27 +164,27 @@ func (s *Server) loggingMiddleware() gin.HandlerFunc {
 
 // corsMiddleware provides CORS support.
 func (s *Server) corsMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		origin := c.Request.Header.Get("Origin")
+	return func(ctx *gin.Context) {
+		origin := ctx.Request.Header.Get("Origin")
 
 		// Check if origin is allowed
 		for _, allowedOrigin := range s.config.CORSOrigins {
 			if allowedOrigin == "*" || allowedOrigin == origin {
-				c.Header("Access-Control-Allow-Origin", allowedOrigin)
-				c.Header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-				c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+				ctx.Header("Access-Control-Allow-Origin", allowedOrigin)
+				ctx.Header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+				ctx.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
 				break
 			}
 		}
 
 		// Handle preflight requests
-		if c.Request.Method == http.MethodOptions {
-			c.AbortWithStatus(204)
+		if ctx.Request.Method == http.MethodOptions {
+			ctx.AbortWithStatus(204)
 
 			return
 		}
 
-		c.Next()
+		ctx.Next()
 	}
 }

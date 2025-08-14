@@ -291,7 +291,7 @@ const METRICS_END_MARKER = "METRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSENDME
 // BLOCK_END_MARKER marks the end of the cluster config data.
 const BLOCK_END_MARKER = "ENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDEND"
 
-func (s *BenthosMonitorService) generateBenthosScript(port uint16) (string, error) {
+func (s *BenthosMonitorService) generateBenthosScript(port uint16) (string, error) { //nolint:unparam // error return may be needed for future error handling
 	// Build the benthos command - curl http://localhost:9644/public_metrics
 	// Create the script content with a loop that executes benthos every second
 	// Also let's use gzip to compress the output & hex encode it
@@ -399,7 +399,7 @@ func StripMarkers(b []byte) []byte {
 
 // ParseBenthosLogs parses the logs of a benthos service and extracts metrics.
 //
-//nolint:maintidx // Core log parsing function requires complex logic for extracting metrics from diverse Benthos log formats and handling various edge cases
+
 func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6_shared.LogEntry, tick uint64) (*BenthosMetricsScan, error) {
 	/*
 		A normal log entry looks like this:

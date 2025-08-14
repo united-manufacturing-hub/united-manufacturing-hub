@@ -1562,7 +1562,7 @@ func (m *memDirEntry) Type() os.FileMode          { return m.info.Mode().Type() 
 func (m *memDirEntry) Info() (os.FileInfo, error) { return m.info, nil }
 
 // getFileOwner gets the UID and GID of a file.
-func getFileOwner(path string) (uid, gid int) {
+func getFileOwner(path string) (int, int) {
 	info, err := os.Stat(path)
 	if err != nil {
 		return -1, -1 // Couldn't determine

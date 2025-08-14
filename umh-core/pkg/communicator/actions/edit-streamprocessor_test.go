@@ -51,7 +51,7 @@ var _ = Describe("EditStreamProcessor", func() {
 		spVariables     []models.StreamProcessorVariable
 		spLocation      map[int]string
 		encodedConfig   string
-		mu              sync.Mutex
+		mutex           sync.Mutex
 	)
 
 	// Setup before each test
@@ -166,7 +166,7 @@ var _ = Describe("EditStreamProcessor", func() {
 
 		action = actions.NewEditStreamProcessorAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, nil)
 
-		go actions.ConsumeOutboundMessages(outboundChannel, &messages, &mu, true)
+		go actions.ConsumeOutboundMessages(outboundChannel, &messages, &mutex, true)
 	})
 
 	// Cleanup after each test
@@ -628,16 +628,16 @@ var _ = Describe("EditStreamProcessor", func() {
 			var ok bool
 
 			// Handle different possible types
-			switch v := motorValue.(type) {
+			switch value := motorValue.(type) {
 			case map[string]interface{}:
-				motorMapping = models.StreamProcessorMapping(v)
+				motorMapping = models.StreamProcessorMapping(value)
 				ok = true
 			case models.StreamProcessorMapping:
-				motorMapping = v
+				motorMapping = value
 				ok = true
 			case map[interface{}]interface{}:
 				motorMapping = make(models.StreamProcessorMapping)
-				for k, val := range v {
+				for k, val := range value {
 					if keyStr, keyOk := k.(string); keyOk {
 						motorMapping[keyStr] = val
 					}

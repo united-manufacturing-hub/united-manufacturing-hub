@@ -33,9 +33,9 @@ func Unmarshal(val []byte, decoded any) (err error) {
 
 	// Attempt decoding with goccy, fallback to stdlib on panic
 	defer func() {
-		if r := recover(); r != nil {
+		if recovered := recover(); recovered != nil {
 			b64payload := base64.StdEncoding.EncodeToString(val)
-			zap.S().Warnf("goccy failed to decode, attempting to use stdlib, error: %v (Payload: %s)", r, b64payload)
+			zap.S().Warnf("goccy failed to decode, attempting to use stdlib, error: %v (Payload: %s)", recovered, b64payload)
 			// Validate that valuePtr is still a valid pointer before attempting further actions
 			if !valuePtr.IsNil() && valuePtr.IsValid() && !valuePtr.Elem().IsNil() && valuePtr.Elem().IsValid() {
 				temp := reflect.New(valuePtr.Elem().Type()).Interface()
@@ -45,7 +45,7 @@ func Unmarshal(val []byte, decoded any) (err error) {
 					valuePtr.Elem().Set(reflect.ValueOf(temp).Elem())
 				}
 			} else {
-				err = fmt.Errorf("decoded type became invalid: %v", r)
+				err = fmt.Errorf("decoded type became invalid: %v", recovered)
 			}
 		}
 	}()
@@ -67,7 +67,11 @@ func Unmarshal(val []byte, decoded any) (err error) {
 	return err
 }
 
-func Marshal(val any) (encoded []byte, err error) {
+func Marshal(val any) ([]byte, error) {
+	var encoded []byte
+
+	var err error
+
 	// This will attempt encoding with goccy, if goccy panics it will attempt to use stdlib
 	defer func() {
 		if r := recover(); r != nil {
@@ -82,7 +86,11 @@ func Marshal(val any) (encoded []byte, err error) {
 	return encoded, err
 }
 
-func MarshalIndent(val any, prefix, indent string) (encoded []byte, err error) {
+func MarshalIndent(val any, prefix, indent string) ([]byte, error) {
+	var encoded []byte
+
+	var err error
+
 	// This will attempt encoding with goccy, if goccy panics it will attempt to use stdlib
 	defer func() {
 		if r := recover(); r != nil {

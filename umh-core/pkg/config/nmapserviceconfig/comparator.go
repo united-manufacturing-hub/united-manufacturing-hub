@@ -34,10 +34,12 @@ func NewComparator() *Comparator {
 }
 
 // ConfigsEqual compares two NmapServiceConfigs after normalization.
-func (c *Comparator) ConfigsEqual(desired, observed NmapServiceConfig) (isEqual bool) {
+func (c *Comparator) ConfigsEqual(desired, observed NmapServiceConfig) bool {
 	// First normalize both configs
 	normDesired := c.normalizer.NormalizeConfig(desired)
 	normObserved := c.normalizer.NormalizeConfig(observed)
+
+	var isEqual bool
 
 	defer func() {
 		if !isEqual {
@@ -48,14 +50,20 @@ func (c *Comparator) ConfigsEqual(desired, observed NmapServiceConfig) (isEqual 
 
 	// Compare essential fields that must match exactly
 	if normDesired.Target != normObserved.Target {
-		return false
+		isEqual = false
+
+		return isEqual
 	}
 
 	if normDesired.Port != normObserved.Port {
-		return false
+		isEqual = false
+
+		return isEqual
 	}
 
-	return true
+	isEqual = true
+
+	return isEqual
 }
 
 // ConfigDiff returns a human-readable string describing differences between configs.

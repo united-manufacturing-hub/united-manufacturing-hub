@@ -23,7 +23,7 @@ import (
 
 // Service defines the interface for interacting with S6 services.
 //
-//nolint:interfacebloat // Core S6 service interface requires comprehensive methods for process management lifecycle
+
 type Service interface {
 	// Create creates the service with specific configuration
 	Create(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, fsService filesystem.Service) error

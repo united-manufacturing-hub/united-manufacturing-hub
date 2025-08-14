@@ -290,8 +290,8 @@ func (s *BaseFSMInstance) Remove(ctx context.Context) error {
 
 	// (3) Not there yet – arm a one-shot callback that will fire the
 	//     event the moment we enter <preRemove>.
-	const cb = "auto_remove_once"
-	if _, ok := s.callbacks[cb]; !ok {
+	const callbackName = "auto_remove_once"
+	if _, exists := s.callbacks[callbackName]; !exists {
 		s.AddCallback("enter_"+preRemove, func(ctx context.Context, e *fsm.Event) {
 			err := s.SendEvent(ctx, LifecycleEventRemove)
 			if err != nil {
@@ -304,7 +304,7 @@ func (s *BaseFSMInstance) Remove(ctx context.Context) error {
 				sentry.ReportFSMErrorf(s.logger, s.cfg.ID, "BaseFSM", "permanent_failure", "auto-remove of %s failed: %v", s.cfg.ID, err)
 			}
 
-			delete(s.callbacks, cb) // detach – run only once
+			delete(s.callbacks, callbackName) // detach – run only once
 		})
 	}
 

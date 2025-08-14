@@ -165,8 +165,8 @@ func (a *GetLogsAction) Execute(ctx context.Context) (interface{}, map[string]in
 	// TODO: We should use provider pattern here, will make this more maintainable and easier to test
 	switch logType {
 	case models.RedpandaLogType:
-		redpandaInst, ok := fsm.FindInstance(systemSnapshot, constants.RedpandaManagerName, constants.RedpandaInstanceName)
-		if !ok || redpandaInst == nil {
+		redpandaInst, found := fsm.FindInstance(systemSnapshot, constants.RedpandaManagerName, constants.RedpandaInstanceName)
+		if !found || redpandaInst == nil {
 			err := logsRetrievalError(errors.New("redpanda instance not found"), logType)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
 
@@ -241,8 +241,8 @@ func (a *GetLogsAction) Execute(ctx context.Context) (interface{}, map[string]in
 			res.Logs = mapS6LogsToSlice(observedState.ServiceInfo.DataflowComponentWriteObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs, reqStartTime)
 		}
 	case models.TopicBrowserLogType:
-		tbInstance, ok := fsm.FindInstance(systemSnapshot, constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
-		if !ok || tbInstance == nil {
+		tbInstance, found := fsm.FindInstance(systemSnapshot, constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
+		if !found || tbInstance == nil {
 			err := logsRetrievalError(errors.New("topic browser instance not found"), logType)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
 

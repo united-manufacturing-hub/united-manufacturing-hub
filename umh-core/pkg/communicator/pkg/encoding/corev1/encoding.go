@@ -318,14 +318,14 @@ func decodeBase64(data string) ([]byte, error) {
 	}
 	defer putBase64Buffer(buf)
 
-	n, err := base64.StdEncoding.Decode(*buf, []byte(data))
+	bytesRead, err := base64.StdEncoding.Decode(*buf, []byte(data))
 	if err != nil {
 		return nil, err
 	}
 
 	// Return exact size
-	result := make([]byte, n)
-	copy(result, (*buf)[:n])
+	result := make([]byte, bytesRead)
+	copy(result, (*buf)[:bytesRead])
 
 	return result, nil
 }

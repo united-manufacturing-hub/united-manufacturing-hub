@@ -46,7 +46,7 @@ var _ = Describe("EditDataflowComponent", func() {
 		componentUUID   uuid.UUID
 		stateMocker     *actions.StateMocker
 		messages        []*models.UMHMessage
-		mu              sync.Mutex
+		mutex           sync.Mutex
 	)
 
 	// Setup before each test
@@ -109,7 +109,7 @@ var _ = Describe("EditDataflowComponent", func() {
 
 		action = actions.NewEditDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockManagerSnapshot)
 
-		go actions.ConsumeOutboundMessages(outboundChannel, &messages, &mu, true)
+		go actions.ConsumeOutboundMessages(outboundChannel, &messages, &mutex, true)
 
 	})
 
@@ -831,9 +831,9 @@ buffer:
 			Expect(metadata).To(BeNil())
 
 			// Verify the failure message content
-			mu.Lock()
+			mutex.Lock()
 			decodedMessage, err := encoding.DecodeMessageFromUMHInstanceToUser(messages[1].Content)
-			mu.Unlock()
+			mutex.Unlock()
 			Expect(err).NotTo(HaveOccurred())
 
 			// Extract the ActionReplyPayload from the decoded message

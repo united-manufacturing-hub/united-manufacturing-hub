@@ -33,13 +33,13 @@ var (
 // - remaining: time remaining until deadline (0 if no deadline)
 // - sufficient: true if enough time remains
 // - err: error if no deadline or other issue.
-func HasSufficientTime(ctx context.Context, requiredTime time.Duration) (remaining time.Duration, sufficient bool, err error) {
+func HasSufficientTime(ctx context.Context, requiredTime time.Duration) (time.Duration, bool, error) {
 	deadline, ok := ctx.Deadline()
 	if !ok {
 		return 0, false, ErrNoDeadline
 	}
 
-	remaining = time.Until(deadline)
+	remaining := time.Until(deadline)
 	if remaining < requiredTime {
 		return remaining, false, nil // no error, because we want to continue
 	}

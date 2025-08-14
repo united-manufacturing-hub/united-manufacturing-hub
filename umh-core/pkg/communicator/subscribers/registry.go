@@ -85,7 +85,7 @@ func (r *Registry) IsBootstrapped(email string) bool {
 }
 
 // ForEach iterates over all active subscribers and their bootstrapped state.
-func (r *Registry) ForEach(fn func(email string, bootstrapped bool)) {
+func (r *Registry) ForEach(callback func(email string, bootstrapped bool)) {
 	// Collect all subscriber data first to avoid holding locks during callback
 	type subscriberInfo struct {
 		email        string
@@ -107,7 +107,7 @@ func (r *Registry) ForEach(fn func(email string, bootstrapped bool)) {
 
 	// Now call callbacks without holding any locks
 	for _, sub := range subscribers {
-		fn(sub.email, sub.bootstrapped)
+		callback(sub.email, sub.bootstrapped)
 	}
 }
 

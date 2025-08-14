@@ -177,24 +177,21 @@ func TransitionToStreamProcessorState(mockService *spsvc.MockService, serviceNam
 func SetupStreamProcessorInstance(serviceName string, desiredState string) (*spfsm.Instance, *spsvc.MockService, config.StreamProcessorConfig) {
 	cfg := CreateStreamProcessorTestConfig(serviceName, desiredState)
 	mockService := spsvc.NewMockService()
-	mockSvcRegistry := serviceregistry.NewMockRegistry()
 
-	return setUpMockStreamProcessorInstance(cfg, mockService, mockSvcRegistry), mockService, cfg
+	return setUpMockStreamProcessorInstance(cfg, mockService), mockService, cfg
 }
 
 // SetupStreamProcessorInstanceWithMissingDfc creates and configures a StreamProcessor instance with missing DFC for testing.
 func SetupStreamProcessorInstanceWithMissingDfc(serviceName string, desiredState string) (*spfsm.Instance, *spsvc.MockService, config.StreamProcessorConfig) {
 	cfg := CreateStreamProcessorTestConfigWithMissingDfc(serviceName, desiredState)
 	mockService := spsvc.NewMockService()
-	mockSvcRegistry := serviceregistry.NewMockRegistry()
 
-	return setUpMockStreamProcessorInstance(cfg, mockService, mockSvcRegistry), mockService, cfg
+	return setUpMockStreamProcessorInstance(cfg, mockService), mockService, cfg
 }
 
 func setUpMockStreamProcessorInstance(
 	cfg config.StreamProcessorConfig,
 	mockService *spsvc.MockService,
-	mockSvcRegistry *serviceregistry.Registry,
 ) *spfsm.Instance {
 	// Create and configure the mock service
 	mockService.ExistingComponents = make(map[string]bool)

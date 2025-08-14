@@ -761,6 +761,8 @@ func generateLargeSchema(propertyCount int) JSONSchemaDefinition {
 
 // reconcileUntilComplete calls reconcile repeatedly until completion.
 func reconcileUntilComplete(ctx context.Context, registry *SchemaRegistry, schemas map[SubjectName]JSONSchemaDefinition) error {
+	_ = schemas // TODO: use schemas for reconciliation if needed
+
 	for {
 		select {
 		case <-ctx.Done():

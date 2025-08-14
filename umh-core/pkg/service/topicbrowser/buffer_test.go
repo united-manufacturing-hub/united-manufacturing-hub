@@ -90,16 +90,16 @@ var _ = Describe("Ringbuffer", func() {
 
 			// spawn goroutines to perform concurrent write and read and wait for all
 			// iterations to be done
-			var wg sync.WaitGroup
+			var waitGroup sync.WaitGroup
 			for w := range writers {
-				wg.Add(1)
-				go helperWriter(rb, byte(w), iterations, &wg)
+				waitGroup.Add(1)
+				go helperWriter(rb, byte(w), iterations, &waitGroup)
 			}
 			for range readers {
-				wg.Add(1)
-				go helperReaderGet(rb, int(capacity), iterations, &wg)
+				waitGroup.Add(1)
+				go helperReaderGet(rb, int(capacity), iterations, &waitGroup)
 			}
-			wg.Wait()
+			waitGroup.Wait()
 		})
 	})
 

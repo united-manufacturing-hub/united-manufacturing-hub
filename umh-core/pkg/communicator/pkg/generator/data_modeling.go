@@ -40,7 +40,7 @@ func DataModelsFromConfig(ctx context.Context, configManager config.ConfigManage
 	dataModels := fullConfig.DataModels
 	dataModelData := make([]models.DataModel, len(dataModels))
 
-	for i, dataModel := range dataModels {
+	for index, dataModel := range dataModels {
 		// Extract the latest version from the versions map
 		latestVersion := ""
 
@@ -69,7 +69,7 @@ func DataModelsFromConfig(ctx context.Context, configManager config.ConfigManage
 		// Generate a simple hash from the structure
 		hash := generateDataModelHash(dataModel)
 
-		dataModelData[i] = models.DataModel{
+		dataModelData[index] = models.DataModel{
 			Name:          dataModel.Name,
 			Description:   dataModel.Description,
 			LatestVersion: latestVersion,
@@ -92,7 +92,7 @@ func DataContractsFromConfig(ctx context.Context, configManager config.ConfigMan
 	dataContracts := fullConfig.DataContracts
 	dataContractData := make([]models.DataContract, len(dataContracts))
 
-	for i, dataContract := range dataContracts {
+	for index, dataContract := range dataContracts {
 		var dataModelRef models.DataContractRef
 		if dataContract.Model != nil {
 			dataModelRef = models.DataContractRef{
@@ -101,7 +101,7 @@ func DataContractsFromConfig(ctx context.Context, configManager config.ConfigMan
 			}
 		}
 
-		dataContractData[i] = models.DataContract{
+		dataContractData[index] = models.DataContract{
 			Name:      dataContract.Name,
 			DataModel: dataModelRef,
 			Flows:     0, // Set to 0 for now (TODO: add flows)

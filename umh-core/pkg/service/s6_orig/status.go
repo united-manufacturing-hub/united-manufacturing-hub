@@ -56,13 +56,13 @@ func (s *DefaultService) buildFullServiceInfo(ctx context.Context, servicePath s
 	} else {
 		info.Status = s6_shared.ServiceDown
 		// Interpret wstat as a wait status
-		ws := syscall.WaitStatus(statusData.Wstat)
+		waitStatus := syscall.WaitStatus(statusData.Wstat)
 		switch {
-		case ws.Exited():
-			info.ExitCode = ws.ExitStatus()
-		case ws.Signaled():
+		case waitStatus.Exited():
+			info.ExitCode = waitStatus.ExitStatus()
+		case waitStatus.Signaled():
 			// Record the signal number as a negative exit code
-			info.ExitCode = -int(ws.Signal())
+			info.ExitCode = -int(waitStatus.Signal())
 		default:
 			info.ExitCode = int(statusData.Wstat)
 		}

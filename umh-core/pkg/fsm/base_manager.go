@@ -318,7 +318,7 @@ func (m *BaseFSMManager[C]) GetNextStateTick() uint64 {
 //   - error: Any error encountered during reconciliation, nil if all succeeded
 //   - bool: True if any instance performed reconciliation work
 //
-//nolint:maintidx // Core FSM reconciliation function requires complex logic for coordinating finite state machines, lifecycle states, and error handling across multiple instances
+
 func (m *BaseFSMManager[C]) Reconcile(
 	ctx context.Context,
 	snapshot SystemSnapshot,
@@ -969,7 +969,7 @@ func (m *BaseFSMManager[C]) maybeEscalateRemoval(ctx context.Context, inst FSMIn
 	}
 }
 
-func (m *BaseFSMManager[C]) reconcileInstanceWithTimeout(ctx context.Context, instance FSMInstance, services serviceregistry.Provider, name string, snapshot SystemSnapshot, minimumRequiredTime time.Duration) (reconciled bool, shallBeRemoved bool, err error) {
+func (m *BaseFSMManager[C]) reconcileInstanceWithTimeout(ctx context.Context, instance FSMInstance, services serviceregistry.Provider, name string, snapshot SystemSnapshot, minimumRequiredTime time.Duration) (bool, bool, error) {
 	reconcileStart := time.Now()
 
 	// Time budget check is now done upfront before goroutine creation

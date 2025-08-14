@@ -124,20 +124,20 @@ func BuildRuntimeConfig(
 	//----------------------------------------------------------------------
 	// 2. Assemble the **complete** variable bundle
 	//----------------------------------------------------------------------
-	vb := spec.Variables // start with user bundle (flat)
-	if vb.User == nil {
-		vb.User = map[string]any{}
+	variableBundle := spec.Variables // start with user bundle (flat)
+	if variableBundle.User == nil {
+		variableBundle.User = map[string]any{}
 	}
 
-	vb.User["location"] = loc // merged map
-	vb.User["location_path"] = locationPath
+	variableBundle.User["location"] = loc // merged map
+	variableBundle.User["location_path"] = locationPath
 
 	if len(globalVars) != 0 {
-		vb.Global = globalVars
+		variableBundle.Global = globalVars
 	}
 
 	// Internal namespace
-	vb.Internal = map[string]any{
+	variableBundle.Internal = map[string]any{
 		"id": spName,
 	}
 
@@ -148,12 +148,12 @@ func BuildRuntimeConfig(
 		nodeName = "unknown"
 	}
 
-	vb.Internal["bridged_by"] = config.GenerateBridgedBy(config.ComponentTypeStreamProcessor, nodeName, spName)
+	variableBundle.Internal["bridged_by"] = config.GenerateBridgedBy(config.ComponentTypeStreamProcessor, nodeName, spName)
 
 	//----------------------------------------------------------------------
 	// 4. Render both configs
 	//----------------------------------------------------------------------
-	scope := vb.Flatten()
+	scope := variableBundle.Flatten()
 
 	// Render the streamprocessor runtime config
 	spRuntime, err := renderConfig(spec, scope)

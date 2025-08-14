@@ -50,7 +50,7 @@ import (
 
 // IBenthosService is the interface for managing Benthos services.
 //
-//nolint:interfacebloat // Core Benthos service interface requires comprehensive methods for stream processing lifecycle management
+
 type IBenthosService interface {
 	// GenerateS6ConfigForBenthos generates a S6 config for a given benthos instance
 	// Expects s6ServiceName (e.g. "benthos-myservice"), not the raw benthosName
@@ -309,7 +309,7 @@ func (s *BenthosService) GetS6ServiceName(benthosName string) string {
 
 // generateS6ConfigForBenthos creates a S6 config for a given benthos instance
 // Expects s6ServiceName (e.g. "benthos-myservice"), not the raw benthosName.
-func (s *BenthosService) GenerateS6ConfigForBenthos(benthosConfig *benthosserviceconfig.BenthosServiceConfig, s6ServiceName string) (s6Config s6serviceconfig.S6ServiceConfig, err error) {
+func (s *BenthosService) GenerateS6ConfigForBenthos(benthosConfig *benthosserviceconfig.BenthosServiceConfig, s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error) {
 	configPath := fmt.Sprintf("%s/%s/config/%s", constants.S6BaseDir, s6ServiceName, constants.BenthosConfigFileName)
 
 	yamlConfig, err := s.generateBenthosYaml(benthosConfig)
@@ -317,7 +317,7 @@ func (s *BenthosService) GenerateS6ConfigForBenthos(benthosConfig *benthosservic
 		return s6serviceconfig.S6ServiceConfig{}, err
 	}
 
-	s6Config = s6serviceconfig.S6ServiceConfig{
+	s6Config := s6serviceconfig.S6ServiceConfig{
 		Command: []string{
 			"/usr/local/bin/benthos",
 			"-c",

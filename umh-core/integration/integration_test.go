@@ -215,15 +215,15 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 			By("Simulating random stop/start actions on sleep services (chaos monkey)")
 			// Create a deterministic random number generator for reproducibility
-			r := rand.New(rand.NewSource(42)) //nolint:gosec // G404: math/rand with fixed seed is appropriate for deterministic integration testing
+			chaosRand := rand.New(rand.NewSource(42)) //nolint:gosec // G404: math/rand with fixed seed is appropriate for deterministic integration testing
 			for range 100 {
 				// Pick a random sleep service index (0-9)
-				randomIndex := r.Intn(10)
+				randomIndex := chaosRand.Intn(10)
 				randomServiceName := fmt.Sprintf("sleepy-%d", randomIndex)
 
 				// Randomly decide to start or stop the service
 				action := "start"
-				if r.Float64() < 0.5 {
+				if chaosRand.Float64() < 0.5 {
 					action = "stop"
 					builder.StopService(randomServiceName)
 				} else {
@@ -234,7 +234,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 				Expect(writeConfigFile(builder.BuildYAML(), getContainerName())).To(Succeed())
 
 				// Random delay between operations
-				delay := time.Duration(100+r.Intn(500)) * time.Millisecond
+				delay := time.Duration(100+chaosRand.Intn(500)) * time.Millisecond
 
 				// Check the health of the system
 				monitorHealth()
@@ -261,7 +261,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			testDuration := 3 * time.Minute
 
 			// Create deterministic random number generator
-			r := rand.New(rand.NewSource(42)) //nolint:gosec // G404: math/rand with fixed seed is appropriate for deterministic integration testing
+			chaosRand := rand.New(rand.NewSource(42)) //nolint:gosec // G404: math/rand with fixed seed is appropriate for deterministic integration testing
 
 			// Add golden service as constant baseline
 			builder := NewBuilder().AddGoldenService()
@@ -278,7 +278,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			// Add tracking of sleep durations
 			serviceDurations := map[string]string{} // serviceName -> sleep duration
 			maxServices := 100
-			bulkSize := 5 + r.Intn(6) // Random bulk size between 5-10 services
+			bulkSize := 5 + chaosRand.Intn(6) // Random bulk size between 5-10 services
 
 			// ---------- WARMUP PHASE: Build up to target service count ----------
 			targetServiceCount := 100
@@ -308,7 +308,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 				GinkgoWriter.Printf("Adding batch of %d services\n", batchSize)
 				for range batchSize {
 					serviceName := fmt.Sprintf("warmup-svc-%d", len(existingServices))
-					duration := strconv.Itoa(60 + r.Intn(600))
+					duration := strconv.Itoa(60 + chaosRand.Intn(600))
 					builder.AddSleepService(serviceName, duration)
 					existingServices[serviceName] = "running"
 					serviceDurations[serviceName] = duration
@@ -348,7 +348,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 				// If we haven't done a bulk operation recently, do one
 				if timeSinceLastBulk > stabilizationPeriod {
 					// Randomly choose between bulk add or bulk remove
-					if r.Float64() < 0.7 || len(existingServices) == 0 { // 70% chance to add, or 100% if no services
+					if chaosRand.Float64() < 0.7 || len(existingServices) == 0 { // 70% chance to add, or 100% if no services
 						// Bulk add services
 						numToAdd := min(bulkSize, maxServices-len(existingServices))
 						if numToAdd > 0 {
@@ -366,7 +366,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 							// Add new services
 							for i := range numToAdd {
 								serviceName := fmt.Sprintf("bulk-add-%d-%d", actionCount, i)
-								duration := strconv.Itoa(60 + r.Intn(600))
+								duration := strconv.Itoa(60 + chaosRand.Intn(600))
 								builder.AddSleepService(serviceName, duration)
 								existingServices[serviceName] = "running"
 								serviceDurations[serviceName] = duration
@@ -384,7 +384,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 							indicesToRemove := make(map[int]bool)
 							for range numToRemove {
 								for {
-									idx := r.Intn(len(keys))
+									idx := chaosRand.Intn(len(keys))
 									if !indicesToRemove[idx] {
 										indicesToRemove[idx] = true
 
@@ -416,8 +416,8 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 				} else {
 					// During stabilization period, only do minimal operations
 					// Randomly choose between start/stop single service (30% chance)
-					if r.Float64() < 0.3 {
-						operationType := r.Float64()
+					if chaosRand.Float64() < 0.3 {
+						operationType := chaosRand.Float64()
 
 						// Find stopped services
 						stoppedServices := []string{}
@@ -429,7 +429,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 						if operationType < 0.6 && len(stoppedServices) > 0 {
 							// 60% chance to start a stopped service if any are stopped
-							serviceToStart := stoppedServices[r.Intn(len(stoppedServices))]
+							serviceToStart := stoppedServices[chaosRand.Intn(len(stoppedServices))]
 							// Add all services with their current state and original durations
 							for svc, state := range existingServices {
 								duration := serviceDurations[svc]
@@ -456,7 +456,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 							// Only stop a service if we have plenty of running services (>80% of total)
 							runningThreshold := int(float64(len(existingServices)) * 0.8)
 							if len(runningServices) > runningThreshold && len(runningServices) > 0 {
-								serviceToStop := runningServices[r.Intn(len(runningServices))]
+								serviceToStop := runningServices[chaosRand.Intn(len(runningServices))]
 
 								// Add all services with their current state and original durations
 								for svc, state := range existingServices {
@@ -491,10 +491,10 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 				}
 
 				// Longer delay between operations
-				delay := time.Duration(2000+r.Intn(2000)) * time.Millisecond
+				delay := time.Duration(2000+chaosRand.Intn(2000)) * time.Millisecond
 				if timeSinceLastBulk < stabilizationPeriod {
 					// During stabilization, use longer delays
-					delay = time.Duration(5000+r.Intn(5000)) * time.Millisecond
+					delay = time.Duration(5000+chaosRand.Intn(5000)) * time.Millisecond
 				}
 
 				// Check the health of the system
@@ -568,14 +568,14 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 			By("Simulating random stop/start/update actions on benthos services")
 			// Create a deterministic random number generator for reproducibility
-			r := rand.New(rand.NewSource(42)) //nolint:gosec // G404: math/rand with fixed seed is appropriate for deterministic integration testing
+			chaosRand := rand.New(rand.NewSource(42)) //nolint:gosec // G404: math/rand with fixed seed is appropriate for deterministic integration testing
 			for i := range 50 {
 				// Pick a random benthos service index (0-9)
-				randomIndex := r.Intn(10)
+				randomIndex := chaosRand.Intn(10)
 				randomServiceName := fmt.Sprintf("benthos-%d", randomIndex)
 
 				// Randomly decide operation: start, stop, or update
-				opType := r.Intn(3)
+				opType := chaosRand.Intn(3)
 				switch opType {
 				case 0: // Start
 					GinkgoWriter.Printf("Starting benthos service %s\n", randomServiceName)
@@ -584,7 +584,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 					GinkgoWriter.Printf("Stopping benthos service %s\n", randomServiceName)
 					builder.StopBenthos(randomServiceName)
 				case 2: // Update config
-					newInterval := fmt.Sprintf("%ds", 1+r.Intn(5))
+					newInterval := fmt.Sprintf("%ds", 1+chaosRand.Intn(5))
 					GinkgoWriter.Printf("Updating benthos service %s with new interval %s\n", randomServiceName, newInterval)
 					builder.UpdateGeneratorBenthos(randomServiceName, newInterval)
 				}
@@ -593,7 +593,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 				Expect(writeConfigFile(builder.BuildYAML(), getContainerName())).To(Succeed())
 
 				// Random delay between operations
-				delay := time.Duration(1000+r.Intn(2000)) * time.Millisecond
+				delay := time.Duration(1000+chaosRand.Intn(2000)) * time.Millisecond
 				time.Sleep(delay)
 
 				// Check the health of the system
@@ -759,14 +759,14 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 			By("Simulating random stop/start/update actions on dataflow components")
 			// Create a deterministic random number generator for reproducibility
-			r := rand.New(rand.NewSource(42)) //nolint:gosec // G404: math/rand with fixed seed is appropriate for deterministic integration testing
+			chaosRand := rand.New(rand.NewSource(42)) //nolint:gosec // G404: math/rand with fixed seed is appropriate for deterministic integration testing
 			for i := range 50 {
 				// Pick a random dataflow component index (0-9)
-				randomIndex := r.Intn(10)
+				randomIndex := chaosRand.Intn(10)
 				randomComponentName := fmt.Sprintf("dataflow-%d", randomIndex)
 
 				// Randomly decide operation: start, stop, or update
-				opType := r.Intn(3)
+				opType := chaosRand.Intn(3)
 				switch opType {
 				case 0: // Start
 					GinkgoWriter.Printf("Starting dataflow component %s\n", randomComponentName)
@@ -775,7 +775,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 					GinkgoWriter.Printf("Stopping dataflow component %s\n", randomComponentName)
 					builder.StopDataFlowComponent(randomComponentName)
 				case 2: // Update config
-					newInterval := fmt.Sprintf("%ds", 1+r.Intn(5))
+					newInterval := fmt.Sprintf("%ds", 1+chaosRand.Intn(5))
 					GinkgoWriter.Printf("Updating dataflow component %s with new interval %s\n", randomComponentName, newInterval)
 					builder.UpdateGeneratorDataFlowComponent(randomComponentName, newInterval)
 				}
@@ -784,7 +784,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 				Expect(writeConfigFile(builder.BuildYAML(), getContainerName())).To(Succeed())
 
 				// Random delay between operations
-				delay := time.Duration(1000+r.Intn(2000)) * time.Millisecond
+				delay := time.Duration(1000+chaosRand.Intn(2000)) * time.Millisecond
 				time.Sleep(delay)
 
 				// Check the health of the system

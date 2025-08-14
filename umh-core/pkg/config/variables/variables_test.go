@@ -24,7 +24,7 @@ import (
 var _ = Describe("VariableBundle YAML Marshaling", func() {
 	Describe("MarshalYAML", func() {
 		It("should marshal user variables as flat structure", func() {
-			vb := variables.VariableBundle{
+			variableBundle := variables.VariableBundle{
 				User: map[string]any{
 					"HOST": "localhost",
 					"PORT": "8080",
@@ -40,7 +40,7 @@ var _ = Describe("VariableBundle YAML Marshaling", func() {
 				},
 			}
 
-			yamlBytes, err := yaml.Marshal(&vb)
+			yamlBytes, err := yaml.Marshal(&variableBundle)
 			Expect(err).NotTo(HaveOccurred())
 
 			yamlStr := string(yamlBytes)
@@ -57,9 +57,9 @@ var _ = Describe("VariableBundle YAML Marshaling", func() {
 		})
 
 		It("should marshal empty bundle as empty map", func() {
-			vb := variables.VariableBundle{}
+			variableBundle := variables.VariableBundle{}
 
-			yamlBytes, err := yaml.Marshal(vb)
+			yamlBytes, err := yaml.Marshal(variableBundle)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(string(yamlBytes)).To(Equal("{}\n"))
@@ -75,21 +75,21 @@ nested:
   key: value
   number: 42
 `
-			var vb variables.VariableBundle
-			err := yaml.Unmarshal([]byte(yamlStr), &vb)
+			var variableBundle variables.VariableBundle
+			err := yaml.Unmarshal([]byte(yamlStr), &variableBundle)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(vb.User).To(HaveKeyWithValue("HOST", "localhost"))
-			Expect(vb.User).To(HaveKeyWithValue("PORT", "8080"))
-			Expect(vb.User).To(HaveKey("nested"))
+			Expect(variableBundle.User).To(HaveKeyWithValue("HOST", "localhost"))
+			Expect(variableBundle.User).To(HaveKeyWithValue("PORT", "8080"))
+			Expect(variableBundle.User).To(HaveKey("nested"))
 
-			nested, ok := vb.User["nested"].(map[string]any)
+			nested, ok := variableBundle.User["nested"].(map[string]any)
 			Expect(ok).To(BeTrue())
 			Expect(nested).To(HaveKeyWithValue("key", "value"))
 			Expect(nested).To(HaveKeyWithValue("number", 42))
 
-			Expect(vb.Global).To(BeNil())
-			Expect(vb.Internal).To(BeNil())
+			Expect(variableBundle.Global).To(BeNil())
+			Expect(variableBundle.Internal).To(BeNil())
 		})
 
 		It("should unmarshal explicit namespace structure", func() {
@@ -102,19 +102,19 @@ global:
 internal:
   internal_key: internal_value
 `
-			var vb variables.VariableBundle
-			err := yaml.Unmarshal([]byte(yamlStr), &vb)
+			var variableBundle variables.VariableBundle
+			err := yaml.Unmarshal([]byte(yamlStr), &variableBundle)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(vb.User).To(HaveKeyWithValue("HOST", "localhost"))
-			Expect(vb.User).To(HaveKeyWithValue("PORT", "8080"))
-			Expect(vb.Global).To(HaveKeyWithValue("global_key", "global_value"))
-			Expect(vb.Internal).To(HaveKeyWithValue("internal_key", "internal_value"))
+			Expect(variableBundle.User).To(HaveKeyWithValue("HOST", "localhost"))
+			Expect(variableBundle.User).To(HaveKeyWithValue("PORT", "8080"))
+			Expect(variableBundle.Global).To(HaveKeyWithValue("global_key", "global_value"))
+			Expect(variableBundle.Internal).To(HaveKeyWithValue("internal_key", "internal_value"))
 		})
 
 		It("should preserve existing Global and Internal when unmarshaling flat structure", func() {
 			// Start with a bundle that has global and internal set
-			vb := variables.VariableBundle{
+			variableBundle := variables.VariableBundle{
 				Global: map[string]any{
 					"existing_global": "value",
 				},
@@ -127,27 +127,27 @@ internal:
 HOST: localhost
 PORT: "8080"
 `
-			err := yaml.Unmarshal([]byte(yamlStr), &vb)
+			err := yaml.Unmarshal([]byte(yamlStr), &variableBundle)
 			Expect(err).NotTo(HaveOccurred())
 
 			// User variables should be set
-			Expect(vb.User).To(HaveKeyWithValue("HOST", "localhost"))
-			Expect(vb.User).To(HaveKeyWithValue("PORT", "8080"))
+			Expect(variableBundle.User).To(HaveKeyWithValue("HOST", "localhost"))
+			Expect(variableBundle.User).To(HaveKeyWithValue("PORT", "8080"))
 
 			// Existing Global and Internal should be preserved
-			Expect(vb.Global).To(HaveKeyWithValue("existing_global", "value"))
-			Expect(vb.Internal).To(HaveKeyWithValue("existing_internal", "value"))
+			Expect(variableBundle.Global).To(HaveKeyWithValue("existing_global", "value"))
+			Expect(variableBundle.Internal).To(HaveKeyWithValue("existing_internal", "value"))
 		})
 
 		It("should handle empty YAML", func() {
 			yamlStr := `{}`
-			var vb variables.VariableBundle
-			err := yaml.Unmarshal([]byte(yamlStr), &vb)
+			var variableBundle variables.VariableBundle
+			err := yaml.Unmarshal([]byte(yamlStr), &variableBundle)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(vb.User).To(BeEmpty())
-			Expect(vb.Global).To(BeNil())
-			Expect(vb.Internal).To(BeNil())
+			Expect(variableBundle.User).To(BeEmpty())
+			Expect(variableBundle.Global).To(BeNil())
+			Expect(variableBundle.Internal).To(BeNil())
 		})
 	})
 

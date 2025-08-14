@@ -29,10 +29,10 @@ import (
 // We use unix.Statfs directly instead of relying on gopsutil's disk.Usage because:
 // 1. It gives us direct access to the Frsize field which is crucial for proper block size calculation
 // 2. gopsutil doesn't handle the Docker Desktop for macOS edge case correctly.
-func (c *ContainerMonitorService) getMacOSAdjustedDiskMetrics() (usedBytes, totalBytes uint64, err error) {
+func (c *ContainerMonitorService) getMacOSAdjustedDiskMetrics() (uint64, uint64, error) {
 	var stat unix.Statfs_t
 
-	err = unix.Statfs(c.dataPath, &stat)
+	err := unix.Statfs(c.dataPath, &stat)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to stat filesystem at %s: %w", c.dataPath, err)
 	}
@@ -44,8 +44,8 @@ func (c *ContainerMonitorService) getMacOSAdjustedDiskMetrics() (usedBytes, tota
 	}
 
 	// Compute total and used bytes based on the corrected block size.
-	totalBytes = stat.Blocks * bSize
-	usedBytes = (stat.Blocks - stat.Bfree) * bSize
+	totalBytes := stat.Blocks * bSize
+	usedBytes := (stat.Blocks - stat.Bfree) * bSize
 
 	return usedBytes, totalBytes, nil
 }

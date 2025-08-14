@@ -89,26 +89,22 @@ umh_core_reconcile_starved_total_seconds 3`
 	Describe("parseSummaryQuantile", Label("integration"), func() {
 		It("should parse quantile metrics correctly when filtering by component and instance", func() {
 			// Test finding the 99th percentile for control_loop/main
-			p99, found := parseSummaryQuantile(testMetrics,
-				"umh_core_reconcile_duration_milliseconds", "0.99", "control_loop", "main")
+			p99, found := parseSummaryQuantile(testMetrics, "0.99", "control_loop", "main")
 			Expect(found).To(BeTrue(), "Should find the 0.99 quantile for control_loop/main")
 			Expect(p99).To(BeNumerically("==", 16), "Should parse the 99th percentile correctly")
 
 			// Test finding the 95th percentile for control_loop/main
-			p95, found := parseSummaryQuantile(testMetrics,
-				"umh_core_reconcile_duration_milliseconds", "0.95", "control_loop", "main")
+			p95, found := parseSummaryQuantile(testMetrics, "0.95", "control_loop", "main")
 			Expect(found).To(BeTrue(), "Should find the 0.95 quantile for control_loop/main")
 			Expect(p95).To(BeNumerically("==", 2), "Should parse the 95th percentile correctly")
 
 			// Test finding a metric for a different component
-			p99s6, found := parseSummaryQuantile(testMetrics,
-				"umh_core_reconcile_duration_milliseconds", "0.99", "base_fsm_manager", "S6ManagerCore")
+			p99s6, found := parseSummaryQuantile(testMetrics, "0.99", "base_fsm_manager", "S6ManagerCore")
 			Expect(found).To(BeTrue(), "Should find the 0.99 quantile for base_fsm_manager/S6ManagerCore")
 			Expect(p99s6).To(BeNumerically("==", 0), "Should parse the S6 manager 99th percentile correctly")
 
 			// Test a non-existent component/instance
-			_, found = parseSummaryQuantile(testMetrics,
-				"umh_core_reconcile_duration_milliseconds", "0.99", "non_existent", "component")
+			_, found = parseSummaryQuantile(testMetrics, "0.99", "non_existent", "component")
 			Expect(found).To(BeFalse(), "Should not find a non-existent component")
 		})
 	})

@@ -177,7 +177,9 @@ func writeConfigFile(yamlContent string, containerName ...string) error {
 
 		// Create a temporary file with the actual config content
 		tmpFile := configPath + ".tmp"
-		if err := os.WriteFile(tmpFile, []byte(yamlContent), 0o666); err != nil { //nolint:gosec // G306: Integration test requires permissive file permissions for temp config sharing
+
+		err := os.WriteFile(tmpFile, []byte(yamlContent), 0o666) //nolint:gosec // G306: Integration test requires permissive file permissions for temp config sharing
+		if err != nil {
 			return fmt.Errorf("failed to write temp config file: %w", err)
 		}
 
@@ -313,7 +315,8 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 	}
 
 	// 2. Build image
-	if err := buildContainer(); err != nil {
+	err = buildContainer()
+	if err != nil {
 		return err
 	}
 
@@ -322,11 +325,13 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 	tmpLogsDir := filepath.Join(getTmpDir(), containerName, "logs")
 
 	// 4. Create the directories
-	if err := os.MkdirAll(tmpRedpandaDir, 0o777); err != nil { //nolint:gosec // G301: Integration test requires permissive permissions for redpanda directory
+	err = os.MkdirAll(tmpRedpandaDir, 0o777) //nolint:gosec // G301: Integration test requires permissive permissions for redpanda directory
+	if err != nil {
 		return fmt.Errorf("failed to create redpanda dir: %w", err)
 	}
 
-	if err := os.MkdirAll(tmpLogsDir, 0o777); err != nil { //nolint:gosec // G301: Integration test requires permissive permissions for logs directory
+	err = os.MkdirAll(tmpLogsDir, 0o777) //nolint:gosec // G301: Integration test requires permissive permissions for logs directory
+	if err != nil {
 		return fmt.Errorf("failed to create logs dir: %w", err)
 	}
 
@@ -531,7 +536,8 @@ func printContainerLogs() {
 	tmpDir := filepath.Join(getTmpDir(), "logs")
 
 	// If the dir exists, remove it
-	if _, err := os.Stat(tmpDir); err == nil {
+	_, err = os.Stat(tmpDir)
+	if err == nil {
 		err = os.RemoveAll(tmpDir)
 		if err != nil {
 			fmt.Printf("Failed to remove tmp dir: %v\n", err)
@@ -680,7 +686,8 @@ func runDockerCommandWithCtx(ctx context.Context, args ...string) (string, error
 	fmt.Printf("Running docker command: %v\n", args)
 	// Check if we use docker or podman
 	dockerCmd := "docker"
-	if _, err := exec.LookPath("podman"); err == nil {
+	_, err := exec.LookPath("podman")
+	if err == nil {
 		dockerCmd = "podman"
 	}
 

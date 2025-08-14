@@ -339,7 +339,7 @@ func processJSONResponse[R any](response *http.Response, cookies *map[string]str
 // It is a wrapper around DoHTTPRequest.
 //
 //nolint:contextcheck // This is an API function that legitimately accepts context from callers
-func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (result *R, statusCode int, responseErr error) {
+func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (*R, int, error) {
 	// Set up context with default 30 second timeout if none provided or no timeout
 	if ctx == nil {
 		ctx = context.Background()
@@ -371,9 +371,7 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 		return nil, 0, err
 	}
 
-	result, statusCode, responseErr = processJSONResponse[R](response, cookies, endpoint, logger)
-
-	return result, statusCode, responseErr
+	return processJSONResponse[R](response, cookies, endpoint, logger)
 }
 
 // DoHTTPPostRequest performs the actual HTTP POST request and returns the response and any errors.
@@ -446,7 +444,7 @@ func DoHTTPPostRequest[T any](ctx context.Context, url string, data *T, header m
 // It is a wrapper around DoHTTPPostRequest.
 //
 //nolint:contextcheck // This is an API function that legitimately accepts context from callers
-func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (result *R, statusCode int, responseErr error) {
+func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (*R, int, error) {
 	// Set up context with default 30 second timeout if none provided or no timeout
 	if ctx == nil {
 		ctx = context.Background()
@@ -478,7 +476,5 @@ func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, 
 		return nil, 0, err
 	}
 
-	result, statusCode, responseErr = processJSONResponse[R](response, cookies, endpoint, logger)
-
-	return result, statusCode, responseErr
+	return processJSONResponse[R](response, cookies, endpoint, logger)
 }

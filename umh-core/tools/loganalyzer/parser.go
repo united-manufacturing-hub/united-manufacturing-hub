@@ -101,7 +101,7 @@ func ParseLogFile(filename string) (*LogAnalyzer, error) {
 	return analyzer, nil
 }
 
-func parseLine(line string) (LogEntry, error) {
+func parseLine(line string) (LogEntry, error) { //nolint:unparam // error return may be needed for future error handling
 	entry := LogEntry{
 		EntryType: EntryTypeUnknown,
 	}

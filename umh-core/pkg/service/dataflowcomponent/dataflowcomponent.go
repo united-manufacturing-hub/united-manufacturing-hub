@@ -38,7 +38,7 @@ import (
 
 // IDataFlowComponentService is the interface for managing DataFlowComponent services.
 //
-//nolint:interfacebloat // Core dataflow component service interface requires comprehensive methods for data flow lifecycle management
+
 type IDataFlowComponentService interface {
 	// GenerateBenthosConfigForDataFlowComponent generates a Benthos config for a given dataflow component
 	GenerateBenthosConfigForDataFlowComponent(dataflowConfig *dataflowcomponentserviceconfig.DataflowComponentServiceConfig, componentName string) (benthosserviceconfig.BenthosServiceConfig, error)

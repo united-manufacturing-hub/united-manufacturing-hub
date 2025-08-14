@@ -85,27 +85,27 @@ nested:
 `
 
 		// System unmarshals it
-		var vb variables.VariableBundle
-		err := yaml.Unmarshal([]byte(userConfig), &vb)
+		var variableBundle variables.VariableBundle
+		err := yaml.Unmarshal([]byte(userConfig), &variableBundle)
 		Expect(err).NotTo(HaveOccurred())
 
 		// All variables end up in User namespace automatically
-		Expect(vb.User).To(HaveKeyWithValue("HOST", "wttr.in"))
-		Expect(vb.User).To(HaveKeyWithValue("PORT", "8080"))
-		Expect(vb.User).To(HaveKeyWithValue("TIMEOUT", 30))
-		Expect(vb.User).To(HaveKey("nested"))
+		Expect(variableBundle.User).To(HaveKeyWithValue("HOST", "wttr.in"))
+		Expect(variableBundle.User).To(HaveKeyWithValue("PORT", "8080"))
+		Expect(variableBundle.User).To(HaveKeyWithValue("TIMEOUT", 30))
+		Expect(variableBundle.User).To(HaveKey("nested"))
 
 		// System can then add global and internal variables programmatically
-		vb.Global = map[string]any{
+		variableBundle.Global = map[string]any{
 			"cluster_id": "prod-cluster-1",
 		}
-		vb.Internal = map[string]any{
+		variableBundle.Internal = map[string]any{
 			"id":         "pc-123",
 			"bridged_by": "protocol-converter-node1-pc123",
 		}
 
 		// Template rendering works as expected
-		scope := vb.Flatten()
+		scope := variableBundle.Flatten()
 		Expect(scope).To(HaveKeyWithValue("HOST", "wttr.in"))
 		Expect(scope).To(HaveKey("global"))
 		Expect(scope).To(HaveKey("internal"))

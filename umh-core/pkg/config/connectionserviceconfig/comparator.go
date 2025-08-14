@@ -32,7 +32,7 @@ func NewComparator() *Comparator {
 
 // ConfigsEqual compares two ConnectionServiceConfigs by converting to NmapServiceConfig
 // and using the existing comparison utilization.
-func (c *Comparator) ConfigsEqual(desired, observed ConnectionServiceConfig) (isEqual bool) {
+func (c *Comparator) ConfigsEqual(desired, observed ConnectionServiceConfig) bool {
 	nmapD := desired.GetNmapServiceConfig()
 	nmapO := observed.GetNmapServiceConfig()
 

@@ -390,7 +390,9 @@ func buildLogs(includeTimestamp bool, dataLine string, epochMS int64) []s6_share
 // It wraps the supplied hex-encoded data line between BLOCK_START / DATA_END / BLOCK_END
 // markers and sets the given timestamp on all log entries. This is useful for testing
 // timestamp-based processing logic.
-func buildLogsWithTimestamps(includeTimestamp bool, dataLine string, epochMS int64) []s6_shared.LogEntry {
+func buildLogsWithTimestamps(includeTimestamp bool, dataLine string, epochMS int64) []s6_shared.LogEntry { //nolint:unparam // includeTimestamp may be used conditionally in future
+	_ = includeTimestamp // TODO: implement conditional timestamp logic if needed
+
 	timestamp := time.UnixMilli(epochMS)
 
 	logs := []s6_shared.LogEntry{

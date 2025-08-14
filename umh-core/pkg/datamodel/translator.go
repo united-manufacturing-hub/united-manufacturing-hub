@@ -180,8 +180,10 @@ func (t *Translator) extractVirtualPaths(
 	ctx context.Context,
 	structure map[string]config.Field,
 	currentPath string,
-	payloadShapes map[string]config.PayloadShape,
+	payloadShapes map[string]config.PayloadShape, //nolint:unparam // will be used for future payload shape extraction
 ) (map[string][]string, error) {
+	_ = payloadShapes // TODO: implement payload shape extraction logic
+
 	// Check context cancellation
 	select {
 	case <-ctx.Done():

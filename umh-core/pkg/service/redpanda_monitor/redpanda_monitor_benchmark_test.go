@@ -1337,7 +1337,7 @@ var clusterConfig = `{"iceberg_rest_catalog_crl_file":null,"iceberg_rest_catalog
 
 // Returns a gzip compressed string of the sample metrics
 // Also returns the same data but hex encoded.
-func prepareDataForBenchmark(rawData string) (string, []byte) {
+func prepareDataForBenchmark(rawData string) (string, []byte) { //nolint:unparam // second return value may be used in future benchmarks
 	var buf bytes.Buffer
 
 	gzipWriter := gzip.NewWriter(&buf)

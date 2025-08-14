@@ -250,7 +250,7 @@ func VerifyConnectionStableState(
 
 	// Execute reconcile cycles and check state stability
 	tick := snapshot.Tick
-	for i := range numCycles {
+	for cycle := range numCycles {
 		snapshot.Tick = tick
 		_, _ = instance.Reconcile(ctx, snapshot, services)
 		tick++
@@ -258,7 +258,7 @@ func VerifyConnectionStableState(
 		if instance.GetCurrentFSMState() != expectedState {
 			return tick, fmt.Errorf(
 				"state changed from %s to %s during cycle %d/%d",
-				expectedState, instance.GetCurrentFSMState(), i+1, numCycles)
+				expectedState, instance.GetCurrentFSMState(), cycle+1, numCycles)
 		}
 	}
 

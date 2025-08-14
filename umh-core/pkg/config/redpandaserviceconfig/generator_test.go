@@ -27,18 +27,18 @@ var _ = Describe("Redpanda YAML Generator", func() {
 	}
 
 	DescribeTable("generator rendering",
-		func(tc testCase) {
+		func(testCase testCase) {
 			generator := NewGenerator()
-			yamlStr, err := generator.RenderConfig(*tc.config)
+			yamlStr, err := generator.RenderConfig(*testCase.config)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Check for expected strings
-			for _, exp := range tc.expected {
+			for _, exp := range testCase.expected {
 				Expect(yamlStr).To(ContainSubstring(exp))
 			}
 
 			// Check for strings that should not be present
-			for _, notExp := range tc.notExpected {
+			for _, notExp := range testCase.notExpected {
 				Expect(yamlStr).NotTo(ContainSubstring(notExp))
 			}
 		},

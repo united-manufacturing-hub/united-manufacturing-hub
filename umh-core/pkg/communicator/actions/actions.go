@@ -61,7 +61,7 @@ type Action interface {
 // After execution, it handles sending the success reply if the action completed successfully.
 // Error handling for each step is done within this function.
 //
-//nolint:maintidx // Core action message routing function requires complex logic for handling diverse action types and error scenarios
+
 func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePayload, sender string, outboundChannel chan *models.UMHMessage, releaseChannel config.ReleaseChannel, dog watchdog.Iface, traceID uuid.UUID, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager) {
 	log := logger.For(logger.ComponentCommunicator)
 
@@ -346,7 +346,7 @@ func sendActionReplyInternal(instanceUUID uuid.UUID, userEmail string, actionUUI
 // There is no check for matching message type and payload, so ensure the payload
 // is compatible with the message type. The content is encrypted using the
 // encoding package before being added to the message.
-func generateUMHMessage(instanceUUID uuid.UUID, userEmail string, messageType models.MessageType, payload any) (umhMessage models.UMHMessage, err error) {
+func generateUMHMessage(instanceUUID uuid.UUID, userEmail string, messageType models.MessageType, payload any) (models.UMHMessage, error) {
 	messageContent := models.UMHMessageContent{
 		MessageType: messageType,
 		Payload:     payload,
@@ -354,16 +354,16 @@ func generateUMHMessage(instanceUUID uuid.UUID, userEmail string, messageType mo
 
 	encryptedContent, err := encoding.EncodeMessageFromUMHInstanceToUser(messageContent)
 	if err != nil {
-		return
+		return models.UMHMessage{}, err
 	}
 
-	umhMessage = models.UMHMessage{
+	umhMessage := models.UMHMessage{
 		Email:        userEmail,
 		Content:      encryptedContent,
 		InstanceUUID: instanceUUID,
 	}
 
-	return
+	return umhMessage, nil
 }
 
 // ParseActionPayload is a generic helper function that converts raw payload data into a typed struct.
@@ -431,6 +431,8 @@ func sendActionReplyWithAdditionalContextV2(
 	actionContext map[string]interface{},
 ) bool {
 	// TODO: The 'action' parameter will be used in the future for action-specific logic or logging
+	_ = action // suppress unused parameter warning until TODO is implemented
+
 	err := sendActionReplyInternalV2(instanceUUID, userEmail, actionUUID, arstate, message, errorCode, payloadV2, outboundChannel, actionContext)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, logger.For(logger.ComponentCommunicator), "Error generating action reply: %w", err)

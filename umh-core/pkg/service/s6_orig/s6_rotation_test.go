@@ -209,26 +209,26 @@ var _ = Describe("S6 Log Rotation", func() {
 	//
 	Describe("appendToRingBuffer", func() {
 		It("should append entries to empty ring buffer", func() {
-			st := &s6_shared.LogState{}
+			logState := &s6_shared.LogState{}
 			entries := []s6_shared.LogEntry{
 				{Timestamp: time.Now(), Content: "test1"},
 				{Timestamp: time.Now(), Content: "test2"},
 			}
 
-			service.appendToRingBuffer(entries, st)
+			service.appendToRingBuffer(entries, logState)
 
-			// With preallocation optimization, st.Logs always has length constants.S6MaxLines
-			Expect(st.Logs).To(HaveLen(constants.S6MaxLines))
+			// With preallocation optimization, logState.Logs always has length constants.S6MaxLines
+			Expect(logState.Logs).To(HaveLen(constants.S6MaxLines))
 			// Check logical state: head should point to position 2 (next write position)
-			Expect(st.Head).To(Equal(2))
+			Expect(logState.Head).To(Equal(2))
 			// Check the actual entries are in the correct positions
-			Expect(st.Logs[0].Content).To(Equal("test1"))
-			Expect(st.Logs[1].Content).To(Equal("test2"))
-			Expect(st.Full).To(BeFalse())
+			Expect(logState.Logs[0].Content).To(Equal("test1"))
+			Expect(logState.Logs[1].Content).To(Equal("test2"))
+			Expect(logState.Full).To(BeFalse())
 		})
 
 		It("should handle ring buffer wrapping correctly", func() {
-			st := &s6_shared.LogState{}
+			logState := &s6_shared.LogState{}
 
 			// Use the actual S6MaxLines constant (10000)
 			maxLines := constants.S6MaxLines
@@ -247,51 +247,51 @@ var _ = Describe("S6 Log Rotation", func() {
 			}
 
 			// Append all entries to trigger wrapping
-			service.appendToRingBuffer(entries, st)
+			service.appendToRingBuffer(entries, logState)
 
 			// Verify ring buffer is marked as full
-			Expect(st.Full).To(BeTrue(), "Ring buffer should be marked as full after wrapping")
+			Expect(logState.Full).To(BeTrue(), "Ring buffer should be marked as full after wrapping")
 
 			// Verify we only kept the maximum number of entries
-			Expect(st.Logs).To(HaveLen(maxLines), "Ring buffer should contain exactly maxLines entries")
+			Expect(logState.Logs).To(HaveLen(maxLines), "Ring buffer should contain exactly maxLines entries")
 
 			// Verify head pointer wrapped correctly
 			expectedHead := totalEntries % maxLines // Should be 50 for our test
-			Expect(st.Head).To(Equal(expectedHead), "Head pointer should wrap correctly")
+			Expect(logState.Head).To(Equal(expectedHead), "Head pointer should wrap correctly")
 
 			// The ring buffer should contain the LAST maxLines entries
-			// Due to wrapping, the oldest entry in the buffer should be at index st.Head
-			// and the newest should be at index (st.Head - 1 + maxLines) % maxLines
+			// Due to wrapping, the oldest entry in the buffer should be at index logState.Head
+			// and the newest should be at index (logState.Head - 1 + maxLines) % maxLines
 
 			// Find the oldest entry that should be in the buffer
 			oldestKeptIndex := totalEntries - maxLines // Should be 50
 			newestKeptIndex := totalEntries - 1        // Should be maxLines + 49
 
-			// The entry at st.Head should be the oldest kept entry
-			oldestInBuffer := st.Logs[st.Head]
+			// The entry at logState.Head should be the oldest kept entry
+			oldestInBuffer := logState.Logs[logState.Head]
 			Expect(oldestInBuffer.Content).To(Equal(fmt.Sprintf("entry_%d", oldestKeptIndex)),
 				"Oldest entry in ring buffer should be correct")
 
-			// The entry just before st.Head should be the newest entry
-			newestIndex := (st.Head - 1 + maxLines) % maxLines
-			newestInBuffer := st.Logs[newestIndex]
+			// The entry just before logState.Head should be the newest entry
+			newestIndex := (logState.Head - 1 + maxLines) % maxLines
+			newestInBuffer := logState.Logs[newestIndex]
 			Expect(newestInBuffer.Content).To(Equal(fmt.Sprintf("entry_%d", newestKeptIndex)),
 				"Newest entry in ring buffer should be correct")
 
 			// Verify chronological ordering is maintained in the buffer
 			// All entries should be sequential when read in ring order
 			for i := range maxLines {
-				bufferIndex := (st.Head + i) % maxLines
+				bufferIndex := (logState.Head + i) % maxLines
 				expectedEntryIndex := oldestKeptIndex + i
 				expectedContent := fmt.Sprintf("entry_%d", expectedEntryIndex)
 
-				Expect(st.Logs[bufferIndex].Content).To(Equal(expectedContent),
+				Expect(logState.Logs[bufferIndex].Content).To(Equal(expectedContent),
 					"Entry at buffer position %d should have correct content", bufferIndex)
 			}
 		})
 
 		It("should handle exact ring buffer capacity without wrapping", func() {
-			st := &s6_shared.LogState{}
+			logState := &s6_shared.LogState{}
 			maxLines := constants.S6MaxLines
 
 			// Create exactly maxLines entries (should fill but not wrap)
@@ -303,22 +303,22 @@ var _ = Describe("S6 Log Rotation", func() {
 				}
 			}
 
-			service.appendToRingBuffer(entries, st)
+			service.appendToRingBuffer(entries, logState)
 
 			// Should be full but head should point to 0 (ready for next write)
-			Expect(st.Full).To(BeTrue(), "Buffer should be full at exact capacity")
-			Expect(st.Head).To(Equal(0), "Head should be at 0 when exactly full")
-			Expect(st.Logs).To(HaveLen(maxLines), "Should contain exactly maxLines entries")
+			Expect(logState.Full).To(BeTrue(), "Buffer should be full at exact capacity")
+			Expect(logState.Head).To(Equal(0), "Head should be at 0 when exactly full")
+			Expect(logState.Logs).To(HaveLen(maxLines), "Should contain exactly maxLines entries")
 
 			// All entries should be in order from 0 to maxLines-1
 			for i := range maxLines {
-				Expect(st.Logs[i].Content).To(Equal(fmt.Sprintf("exact_entry_%d", i)),
+				Expect(logState.Logs[i].Content).To(Equal(fmt.Sprintf("exact_entry_%d", i)),
 					"Entry at position %d should be correct", i)
 			}
 		})
 
 		It("should handle multiple wrapping cycles", func() {
-			st := &s6_shared.LogState{}
+			logState := &s6_shared.LogState{}
 			maxLines := constants.S6MaxLines
 
 			// First fill: exactly maxLines entries
@@ -326,23 +326,23 @@ var _ = Describe("S6 Log Rotation", func() {
 			for i := range maxLines {
 				firstBatch[i] = s6_shared.LogEntry{Content: fmt.Sprintf("first_%d", i)}
 			}
-			service.appendToRingBuffer(firstBatch, st)
+			service.appendToRingBuffer(firstBatch, logState)
 
 			// Second fill: another maxLines entries (complete wrap)
 			secondBatch := make([]s6_shared.LogEntry, maxLines)
 			for i := range maxLines {
 				secondBatch[i] = s6_shared.LogEntry{Content: fmt.Sprintf("second_%d", i)}
 			}
-			service.appendToRingBuffer(secondBatch, st)
+			service.appendToRingBuffer(secondBatch, logState)
 
 			// Should still be full, head should be back to 0
-			Expect(st.Full).To(BeTrue())
-			Expect(st.Head).To(Equal(0))
-			Expect(st.Logs).To(HaveLen(maxLines))
+			Expect(logState.Full).To(BeTrue())
+			Expect(logState.Head).To(Equal(0))
+			Expect(logState.Logs).To(HaveLen(maxLines))
 
 			// Buffer should contain only second batch entries
 			for i := range maxLines {
-				Expect(st.Logs[i].Content).To(Equal(fmt.Sprintf("second_%d", i)),
+				Expect(logState.Logs[i].Content).To(Equal(fmt.Sprintf("second_%d", i)),
 					"After complete wrap, should contain second batch at position %d", i)
 			}
 		})

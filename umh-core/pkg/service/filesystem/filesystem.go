@@ -36,7 +36,7 @@ import (
 // Service provides an interface for filesystem operations
 // This allows for easier testing and separation of concerns.
 //
-//nolint:interfacebloat // Core filesystem service interface requires comprehensive methods for file system operations and lifecycle management
+
 type Service interface {
 	// EnsureDirectory creates a directory if it doesn't exist
 	EnsureDirectory(ctx context.Context, path string) error

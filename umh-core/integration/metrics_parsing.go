@@ -58,10 +58,11 @@ func parseMetricValue(metricsBody, metricName string) (float64, bool) {
 //
 // We'll look for lines that start with metricName and contain 'quantile="<quantile>"'
 // (and optionally we can also filter by component=..., instance=..., if needed).
-func parseSummaryQuantile(metricsBody, metricName, quantile, component, instance string) (float64, bool) {
+func parseSummaryQuantile(metricsBody, quantile, component, instance string) (float64, bool) {
 	// Build a regex that matches the line with specific labels including component and instance
 	// For example:
 	//   umh_core_reconcile_duration_milliseconds{component="control_loop",instance="main",quantile="0.99"}  31
+	metricName := "umh_core_reconcile_duration_milliseconds"
 	pattern := fmt.Sprintf(`^%s\{[^}]*component="%s"[^}]*instance="%s"[^}]*quantile="%s"[^}]*\}\s+([0-9.+-eE]+)$`,
 		regexp.QuoteMeta(metricName), regexp.QuoteMeta(component), regexp.QuoteMeta(instance), regexp.QuoteMeta(quantile))
 
@@ -137,10 +138,7 @@ func checkWhetherMetricsHealthy(body string, enforceP99ReconcileTime bool, enfor
 		errors = append(errors, err)
 	}
 
-	err = displayReconcileTimeQuantiles(body)
-	if err != nil {
-		errors = append(errors, err)
-	}
+	displayReconcileTimeQuantiles(body)
 
 	// Print all reconcile durations over threshold for debugging
 	printAllReconcileDurations(body, 20.0)
@@ -212,29 +210,25 @@ func checkErrorCounters(body string) error {
 }
 
 // displayReconcileTimeQuantiles displays the reconcile time quantiles for the control loop.
-func displayReconcileTimeQuantiles(body string) error {
+func displayReconcileTimeQuantiles(body string) {
 	GinkgoWriter.Println("\nControl loop reconcile time quantiles:")
 
 	quantiles := []string{"0.5", "0.9", "0.95", "0.99"}
 	for _, quantile := range quantiles {
-		val, found := parseSummaryQuantile(body,
-			"umh_core_reconcile_duration_milliseconds", quantile, "control_loop", "main")
+		val, found := parseSummaryQuantile(body, quantile, "control_loop", "main")
 		if found {
 			GinkgoWriter.Printf("  %s quantile: %.2f ms\n", quantile, val)
 		} else {
 			GinkgoWriter.Printf("  %s quantile: not found\n", quantile)
 		}
 	}
-
-	return nil
 }
 
 // checkReconcileTimeThresholds checks the reconcile time thresholds based on configuration.
 func checkReconcileTimeThresholds(body string, enforceP99ReconcileTime bool, enforceP95ReconcileTime bool) error {
 	if enforceP99ReconcileTime {
 		// Enforce the 99th percentile threshold
-		recon99, found := parseSummaryQuantile(body,
-			"umh_core_reconcile_duration_milliseconds", "0.99", "control_loop", "main")
+		recon99, found := parseSummaryQuantile(body, "0.99", "control_loop", "main")
 		if !found {
 			return errors.New("expected to find 0.99 quantile for control_loop's reconcile time")
 		}
@@ -244,8 +238,7 @@ func checkReconcileTimeThresholds(body string, enforceP99ReconcileTime bool, enf
 		}
 	} else if enforceP95ReconcileTime {
 		// Enforce the 95th percentile threshold
-		recon95, found := parseSummaryQuantile(body,
-			"umh_core_reconcile_duration_milliseconds", "0.95", "control_loop", "main")
+		recon95, found := parseSummaryQuantile(body, "0.95", "control_loop", "main")
 		if !found {
 			return errors.New("expected to find 0.95 quantile for control_loop's reconcile time")
 		}

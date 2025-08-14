@@ -34,10 +34,12 @@ func NewComparator() *Comparator {
 }
 
 // ConfigsEqual compares two Topic Browser Configs after normalization.
-func (c *Comparator) ConfigsEqual(desired, observed Config) (isEqual bool) {
+func (c *Comparator) ConfigsEqual(desired, observed Config) bool {
 	// First normalize both configs
 	normDesired := c.normalizer.NormalizeConfig(desired)
 	normObserved := c.normalizer.NormalizeConfig(observed)
+
+	var isEqual bool
 
 	defer func() {
 		if !isEqual {
@@ -48,7 +50,9 @@ func (c *Comparator) ConfigsEqual(desired, observed Config) (isEqual bool) {
 
 	// Since Config is currently empty, they are always equal
 	// When fields are added to Config, add comparison logic here
-	return c.benthosConfigComparator.ConfigsEqual(normDesired.BenthosConfig, normObserved.BenthosConfig)
+	isEqual = c.benthosConfigComparator.ConfigsEqual(normDesired.BenthosConfig, normObserved.BenthosConfig)
+
+	return isEqual
 }
 
 // ConfigDiff returns a human-readable string describing differences between configs.

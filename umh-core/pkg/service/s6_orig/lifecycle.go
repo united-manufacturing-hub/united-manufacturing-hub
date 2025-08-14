@@ -364,7 +364,9 @@ func (s *DefaultService) createS6FilesInRepository(ctx context.Context, reposito
 
 	// Create log service type file (required for S6 to recognize it as a service)
 	logTypeFile := filepath.Join(logServicePath, "type")
-	if err := fsService.WriteFile(ctx, logTypeFile, []byte("longrun"), 0644); err != nil {
+
+	err = fsService.WriteFile(ctx, logTypeFile, []byte("longrun"), 0644)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create log service type file: %w", err)
 	}
 
@@ -372,7 +374,9 @@ func (s *DefaultService) createS6FilesInRepository(ctx context.Context, reposito
 
 	// Create log service down file to prevent automatic startup during creation
 	logDownFile := filepath.Join(logServicePath, "down")
-	if err := fsService.WriteFile(ctx, logDownFile, []byte{}, 0644); err != nil {
+
+	err = fsService.WriteFile(ctx, logDownFile, []byte{}, 0644)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create log service down file: %w", err)
 	}
 

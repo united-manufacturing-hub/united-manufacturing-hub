@@ -254,7 +254,7 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 //   - Manager-specific errors include manager name for debugging
 //   - System continues operation even if individual managers fail
 //
-//nolint:maintidx // Core system reconciliation function requires complex logic for coordinating multiple managers and handling diverse error scenarios
+
 func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	// Get the config
 	if c.configManager == nil {
@@ -453,7 +453,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 
 	if hasAnyReconciles {
 		// Create a snapshot after any successful reconciliation
-		c.updateSystemSnapshot(ctx, cfg)
+		c.updateSystemSnapshot(cfg)
 
 		return nil
 	}
@@ -474,14 +474,14 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	}
 
 	// 6) Finally, persist the updated snapshot
-	c.updateSystemSnapshot(ctx, cfg)
+	c.updateSystemSnapshot(cfg)
 
 	// Return nil if no errors occurred
 	return nil
 }
 
 // updateSystemSnapshot creates a snapshot of the current system state.
-func (c *ControlLoop) updateSystemSnapshot(ctx context.Context, cfg config.FullConfig) {
+func (c *ControlLoop) updateSystemSnapshot(cfg config.FullConfig) {
 	// Check if logger is nil to prevent panic
 	if c.logger == nil {
 		// If logger is nil, initialize it with a default logger

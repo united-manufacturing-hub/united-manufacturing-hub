@@ -63,7 +63,7 @@ var logFilesizeParser = regexp.MustCompile(`export\s+S6_LOGGING_SCRIPT\s+"n\d+\s
 // memoryLimitParser is a regexp to extract the memory limit from the run script.
 var memoryLimitParser = regexp.MustCompile(`s6-softlimit -m\s+(\d+)`)
 
-func getLogRunScript(config s6serviceconfig.S6ServiceConfig, logDir string) (string, error) {
+func getLogRunScript(config s6serviceconfig.S6ServiceConfig, logDir string) (string, error) { //nolint:unparam // error return may be needed for future error handling
 	// Create logutil-service command line, see also https://skarnet.org/software/s6/s6-log.html
 	// logutil-service is a wrapper around s6_log and reads from the S6_LOGGING_SCRIPT environment variable
 	// We overwrite the default S6_LOGGING_SCRIPT with our own if config.LogFilesize is set

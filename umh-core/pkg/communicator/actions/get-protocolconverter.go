@@ -178,14 +178,14 @@ func determineProtocol(readDFC *models.ProtocolConverterDFC) string {
 
 // buildProtocolConverterDFCFromConfig converts a dataflow component service config
 // into the models.ProtocolConverterDFC format expected by the API using the shared function.
-func buildProtocolConverterDFCFromConfig(dfcConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig, a *GetProtocolConverterAction) (*models.ProtocolConverterDFC, error) {
+func buildProtocolConverterDFCFromConfig(dfcConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig, action *GetProtocolConverterAction) (*models.ProtocolConverterDFC, error) {
 	if len(dfcConfig.BenthosConfig.Input) == 0 {
 		// No DFC configuration present - return empty DFC instead of nil
 		return &models.ProtocolConverterDFC{}, nil
 	}
 
 	// Use the shared function to build the common DFC properties
-	commonPayload, err := BuildCommonDataFlowComponentPropertiesFromConfig(dfcConfig, a.actionLogger)
+	commonPayload, err := BuildCommonDataFlowComponentPropertiesFromConfig(dfcConfig, action.actionLogger)
 	if err != nil {
 		return nil, err
 	}
