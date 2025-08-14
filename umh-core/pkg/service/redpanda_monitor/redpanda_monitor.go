@@ -904,7 +904,6 @@ func (s *RedpandaMonitorService) parseReadynessData(readynessDataBytes []byte) (
 
 func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigDataBytes []byte, tick uint64) (*ClusterConfig, error) {
 	_ = tick // TODO: use tick for time-based processing if needed
-
 	clusterConfigDataString := string(clusterConfigDataBytes)
 	// Strip any newlines
 	clusterConfigDataString = strings.ReplaceAll(clusterConfigDataString, "\n", "")
