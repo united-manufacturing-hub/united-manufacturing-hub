@@ -69,8 +69,8 @@ func getDFCMetrics(uuid string, snapshot fsm.SystemSnapshot) (models.GetMetricsR
 		return res, fmt.Errorf("failed to find the %s instance: %w", models.DFCMetricResourceType, err)
 	}
 
-	observedState, ok := dfcInstance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
-	if !ok || observedState == nil {
+	observedState, success := dfcInstance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
+	if !success || observedState == nil {
 		err = fmt.Errorf("DFC instance %s has no observed state", uuid)
 
 		return res, err
@@ -135,13 +135,13 @@ func getDFCMetrics(uuid string, snapshot fsm.SystemSnapshot) (models.GetMetricsR
 func getRedpandaMetrics(snapshot fsm.SystemSnapshot) (models.GetMetricsResponse, error) {
 	res := models.GetMetricsResponse{Metrics: []models.Metric{}}
 
-	redpandaInst, ok := fsm.FindInstance(snapshot, constants.RedpandaManagerName, constants.RedpandaInstanceName)
-	if !ok || redpandaInst == nil {
+	redpandaInst, found := fsm.FindInstance(snapshot, constants.RedpandaManagerName, constants.RedpandaInstanceName)
+	if !found || redpandaInst == nil {
 		return res, fmt.Errorf("failed to find the %s instance", models.RedpandaMetricResourceType)
 	}
 
-	observedState, ok := redpandaInst.LastObservedState.(*redpanda.RedpandaObservedStateSnapshot)
-	if !ok || observedState == nil {
+	observedState, success := redpandaInst.LastObservedState.(*redpanda.RedpandaObservedStateSnapshot)
+	if !success || observedState == nil {
 		return res, fmt.Errorf("redpanda instance %s has no observed state", redpandaInst.ID)
 	}
 
@@ -186,13 +186,13 @@ func getTopicBrowserMetrics(snapshot fsm.SystemSnapshot) (models.GetMetricsRespo
 	res := models.GetMetricsResponse{Metrics: []models.Metric{}}
 
 	// Create empty observed state for now
-	inst, ok := fsm.FindInstance(snapshot, constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
-	if !ok || inst == nil {
+	inst, found := fsm.FindInstance(snapshot, constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
+	if !found || inst == nil {
 		return res, fmt.Errorf("failed to find the %s instance", models.TopicBrowserMetricResourceType)
 	}
 
-	observedState, ok := inst.LastObservedState.(*topicbrowser.ObservedStateSnapshot)
-	if !ok || observedState == nil {
+	observedState, success := inst.LastObservedState.(*topicbrowser.ObservedStateSnapshot)
+	if !success || observedState == nil {
 		return res, fmt.Errorf("topic browser instance %s has no observed state", inst.ID)
 	}
 

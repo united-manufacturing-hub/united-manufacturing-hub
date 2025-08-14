@@ -64,34 +64,34 @@ func NewBenthosMonitorManager(name string) *BenthosMonitorManager {
 			return inst, nil
 		},
 		// Compare config => if same, no recreation needed
-		func(instance public_fsm.FSMInstance, fc config.BenthosMonitorConfig) (bool, error) {
-			bi, ok := instance.(*BenthosMonitorInstance)
-			if !ok {
+		func(instance public_fsm.FSMInstance, monitorConfig config.BenthosMonitorConfig) (bool, error) {
+			benthosInstance, exists := instance.(*BenthosMonitorInstance)
+			if !exists {
 				return false, errors.New("instance is not a BenthosMonitorInstance")
 			}
 			// If same config => return true, else false
 			// Minimal check:
-			return bi.config.DesiredFSMState == fc.DesiredFSMState && bi.config.MetricsPort == fc.MetricsPort, nil
+			return benthosInstance.config.DesiredFSMState == monitorConfig.DesiredFSMState && benthosInstance.config.MetricsPort == monitorConfig.MetricsPort, nil
 		},
 		// Set config if only small changes
-		func(instance public_fsm.FSMInstance, fc config.BenthosMonitorConfig) error {
-			bi, ok := instance.(*BenthosMonitorInstance)
-			if !ok {
+		func(instance public_fsm.FSMInstance, monitorConfig config.BenthosMonitorConfig) error {
+			benthosInstance, exists := instance.(*BenthosMonitorInstance)
+			if !exists {
 				return errors.New("instance is not a BenthosMonitorInstance")
 			}
 
-			bi.config = fc
+			benthosInstance.config = monitorConfig
 
 			return nil
 		},
 		// Get expected max p95 execution time per instance
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
-			bi, ok := instance.(*BenthosMonitorInstance)
-			if !ok {
+			benthosInstance, exists := instance.(*BenthosMonitorInstance)
+			if !exists {
 				return 0, errors.New("instance is not a BenthosMonitorInstance")
 			}
 
-			return bi.GetMinimumRequiredTime(), nil
+			return benthosInstance.GetMinimumRequiredTime(), nil
 		},
 	)
 

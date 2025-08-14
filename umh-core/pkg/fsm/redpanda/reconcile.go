@@ -38,9 +38,14 @@ import (
 // This function is intended to be called repeatedly (e.g. in a periodic control loop).
 // Over multiple calls, it converges the actual state to the desired state. Transitions
 // that fail are retried in subsequent reconcile calls after a backoff period.
-func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
+func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool) {
 	start := time.Now()
 	redpandaInstanceName := r.baseFSMInstance.GetID()
+
+	var (
+		err        error
+		reconciled bool
+	)
 
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, redpandaInstanceName, time.Since(start))
@@ -201,8 +206,13 @@ func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, service
 // Any functions that fetch information are disallowed here and must be called in reconcileExternalChanges
 // and exist in ObservedState.
 // This is to ensure full testability of the FSM.
-func (r *RedpandaInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider, currentTime time.Time) (err error, reconciled bool) {
+func (r *RedpandaInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider, currentTime time.Time) (error, bool) {
 	start := time.Now()
+
+	var (
+		err        error
+		reconciled bool
+	)
 
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".reconcileStateTransition", time.Since(start))
@@ -216,7 +226,7 @@ func (r *RedpandaInstance) reconcileStateTransition(ctx context.Context, service
 
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {
-		err, reconciled := r.baseFSMInstance.ReconcileLifecycleStates(ctx, services, currentState, r.CreateInstance, r.RemoveInstance, r.CheckForCreation)
+		err, reconciled = r.baseFSMInstance.ReconcileLifecycleStates(ctx, services, currentState, r.CreateInstance, r.RemoveInstance, r.CheckForCreation)
 		if err != nil {
 			return err, false
 		}
@@ -231,7 +241,7 @@ func (r *RedpandaInstance) reconcileStateTransition(ctx context.Context, service
 
 	// Handle operational states
 	if IsOperationalState(currentState) {
-		err, reconciled := r.reconcileOperationalStates(ctx, services, currentState, desiredState, currentTime)
+		err, reconciled = r.reconcileOperationalStates(ctx, services, currentState, desiredState, currentTime)
 		if err != nil {
 			return err, false
 		}
@@ -243,7 +253,7 @@ func (r *RedpandaInstance) reconcileStateTransition(ctx context.Context, service
 }
 
 // reconcileOperationalStates handles states related to instance operations (starting/stopping).
-func (r *RedpandaInstance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time) (err error, reconciled bool) {
+func (r *RedpandaInstance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -262,7 +272,7 @@ func (r *RedpandaInstance) reconcileOperationalStates(ctx context.Context, servi
 
 // reconcileTransitionToActive handles transitions when the desired state is Active.
 // It deals with moving from various states to the Active state.
-func (r *RedpandaInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (r *RedpandaInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -293,7 +303,7 @@ func (r *RedpandaInstance) reconcileTransitionToActive(ctx context.Context, serv
 }
 
 // reconcileStartingStates handles the various starting phase states when transitioning to Active.
-func (r *RedpandaInstance) reconcileStartingStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (r *RedpandaInstance) reconcileStartingStates(ctx context.Context, _ serviceregistry.Provider, currentState string, currentTime time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -330,7 +340,7 @@ func (r *RedpandaInstance) reconcileStartingStates(ctx context.Context, services
 }
 
 // reconcileRunningStates handles the various running states when transitioning to Active.
-func (r *RedpandaInstance) reconcileRunningStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (r *RedpandaInstance) reconcileRunningStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -408,7 +418,7 @@ func (r *RedpandaInstance) reconcileRunningStates(ctx context.Context, services 
 
 // reconcileTransitionToStopped handles transitions when the desired state is Stopped.
 // It deals with moving from any operational state to Stopping and then to Stopped.
-func (r *RedpandaInstance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
+func (r *RedpandaInstance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (error, bool) {
 	start := time.Now()
 
 	defer func() {

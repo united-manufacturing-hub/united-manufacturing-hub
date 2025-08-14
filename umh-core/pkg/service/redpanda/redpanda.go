@@ -1264,28 +1264,28 @@ func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpa
 
 // anyToString converts common data types to string for easier comparison.
 func anyToString(input any) (string, error) {
-	switch v := input.(type) {
+	switch value := input.(type) {
 	case string:
-		return v, nil
+		return value, nil
 	case int:
-		return strconv.Itoa(v), nil
+		return strconv.Itoa(value), nil
 	case int64:
-		return strconv.FormatInt(v, 10), nil
+		return strconv.FormatInt(value, 10), nil
 	case float64:
 		// Check if it's actually an integer represented as float
-		if v == float64(int64(v)) {
-			return fmt.Sprintf("%.0f", v), nil
+		if value == float64(int64(value)) {
+			return fmt.Sprintf("%.0f", value), nil
 		}
 
-		return fmt.Sprintf("%g", v), nil
+		return fmt.Sprintf("%g", value), nil
 	case float32:
-		if v == float32(int32(v)) {
-			return fmt.Sprintf("%.0f", v), nil
+		if value == float32(int32(value)) {
+			return fmt.Sprintf("%.0f", value), nil
 		}
 
-		return fmt.Sprintf("%g", v), nil
+		return fmt.Sprintf("%g", value), nil
 	case bool:
-		if v {
+		if value {
 			return "true", nil
 		}
 

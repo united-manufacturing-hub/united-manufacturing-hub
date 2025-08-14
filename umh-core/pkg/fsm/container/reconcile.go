@@ -283,7 +283,7 @@ func (c *ContainerInstance) reconcileStateTransition(ctx context.Context, servic
 }
 
 // reconcileOperationalStates handles states related to instance operations (starting/stopping).
-func (c *ContainerInstance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time) (err error, reconciled bool) {
+func (c *ContainerInstance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -302,7 +302,7 @@ func (c *ContainerInstance) reconcileOperationalStates(ctx context.Context, serv
 
 // reconcileTransitionToActive handles transitions when the desired state is Active.
 // It deals with moving from various states to the Active state.
-func (c *ContainerInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (c *ContainerInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -334,7 +334,7 @@ func (c *ContainerInstance) reconcileTransitionToActive(ctx context.Context, ser
 
 // reconcileStartingStates handles the various starting phase states when transitioning to a running state
 // no big startup process here.
-func (c *ContainerInstance) reconcileStartingStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (c *ContainerInstance) reconcileStartingStates(ctx context.Context, _ serviceregistry.Provider, currentState string, _ time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -351,7 +351,7 @@ func (c *ContainerInstance) reconcileStartingStates(ctx context.Context, service
 }
 
 // reconcileRunningStates handles the various running states when transitioning to Active.
-func (c *ContainerInstance) reconcileRunningStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (c *ContainerInstance) reconcileRunningStates(ctx context.Context, _ serviceregistry.Provider, currentState string, _ time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -380,7 +380,7 @@ func (c *ContainerInstance) reconcileRunningStates(ctx context.Context, services
 
 // reconcileTransitionToStopped handles transitions when the desired state is Stopped.
 // It deals with moving from any operational state to Stopping and then to Stopped.
-func (c *ContainerInstance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
+func (c *ContainerInstance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (error, bool) {
 	start := time.Now()
 
 	defer func() {

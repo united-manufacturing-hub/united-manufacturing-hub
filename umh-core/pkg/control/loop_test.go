@@ -461,9 +461,9 @@ var _ = Describe("ControlLoop", func() {
 			complexCtx, complexCancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 			defer complexCancel()
 
-			for i := range 5 {
+			for iteration := range 5 {
 				// Create a local random generator for each iteration
-				rng := rand.New(rand.NewSource(time.Now().UnixNano() + int64(i))) //nolint:gosec // G404: math/rand is appropriate for test data generation, not security
+				rng := rand.New(rand.NewSource(time.Now().UnixNano() + int64(iteration))) //nolint:gosec // G404: math/rand is appropriate for test data generation, not security
 
 				// Mix of defective configs, file system failures, and delays
 				mockConfig.Config = generateDefectiveConfig()
@@ -472,7 +472,7 @@ var _ = Describe("ControlLoop", func() {
 
 				// Add random manager failures
 				if rng.Float64() < 0.3 {
-					mockManager.ReconcileError = fmt.Errorf("random manager error #%d", i)
+					mockManager.ReconcileError = fmt.Errorf("random manager error #%d", iteration)
 				} else {
 					mockManager.ReconcileError = nil
 				}

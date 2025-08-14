@@ -744,28 +744,28 @@ func (m *FileConfigManager) AtomicSetLocation(ctx context.Context, location mode
 	}
 
 	// Update all ProtocolConverter locations to match the agent location
-	for i := range config.ProtocolConverter {
-		if config.ProtocolConverter[i].ProtocolConverterServiceConfig.Location == nil {
-			config.ProtocolConverter[i].ProtocolConverterServiceConfig.Location = make(map[string]string)
+	for index := range config.ProtocolConverter {
+		if config.ProtocolConverter[index].ProtocolConverterServiceConfig.Location == nil {
+			config.ProtocolConverter[index].ProtocolConverterServiceConfig.Location = make(map[string]string)
 		}
 
 		// Update each level in the protocol converter location with the agent location
 		// Only update levels that exist in the agent location
 		for levelStr, value := range agentLocationStr {
-			config.ProtocolConverter[i].ProtocolConverterServiceConfig.Location[levelStr] = value
+			config.ProtocolConverter[index].ProtocolConverterServiceConfig.Location[levelStr] = value
 		}
 	}
 
 	// Update all StreamProcessor locations to match the agent location
-	for i := range config.StreamProcessor {
-		if config.StreamProcessor[i].StreamProcessorServiceConfig.Location == nil {
-			config.StreamProcessor[i].StreamProcessorServiceConfig.Location = make(map[string]string)
+	for index := range config.StreamProcessor {
+		if config.StreamProcessor[index].StreamProcessorServiceConfig.Location == nil {
+			config.StreamProcessor[index].StreamProcessorServiceConfig.Location = make(map[string]string)
 		}
 
 		// Update each level in the stream processor location with the agent location
 		// Only update levels that exist in the agent location
 		for levelStr, value := range agentLocationStr {
-			config.StreamProcessor[i].StreamProcessorServiceConfig.Location[levelStr] = value
+			config.StreamProcessor[index].StreamProcessorServiceConfig.Location[levelStr] = value
 		}
 	}
 

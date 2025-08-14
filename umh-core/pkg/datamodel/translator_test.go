@@ -54,29 +54,29 @@ var _ = Describe("Translator", func() {
 		}
 
 		DescribeTable("basic translation scenarios",
-			func(tc translationTestCase) {
+			func(testCaseValue translationTestCase) {
 				result, err := translator.TranslateDataModel(
 					ctx,
-					tc.contractName,
-					tc.version,
-					tc.dataModel,
+					testCaseValue.contractName,
+					testCaseValue.version,
+					testCaseValue.dataModel,
 					payloadShapes,
 					nil, // No model references
 				)
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(result).ToNot(BeNil())
-				Expect(result.Schemas).To(HaveLen(tc.expectedSchemas))
+				Expect(result.Schemas).To(HaveLen(testCaseValue.expectedSchemas))
 
 				// Check expected subjects exist
-				for _, subject := range tc.expectedSubjects {
+				for _, subject := range testCaseValue.expectedSubjects {
 					schema, exists := result.Schemas[subject]
 					Expect(exists).To(BeTrue(), "Subject %s should exist", subject)
 					Expect(schema["type"]).To(Equal("object"))
 				}
 
 				// Check payload shape usage
-				for shape, expectedPaths := range tc.expectedPaths {
+				for shape, expectedPaths := range testCaseValue.expectedPaths {
 					Expect(result.PayloadShapeUsage[shape]).To(ConsistOf(expectedPaths),
 						"Payload shape %s should have paths %v", shape, expectedPaths)
 				}
@@ -160,19 +160,19 @@ var _ = Describe("Translator", func() {
 		}
 
 		DescribeTable("error scenarios",
-			func(tc errorTestCase) {
+			func(testCaseValue errorTestCase) {
 				result, err := translator.TranslateDataModel(
 					ctx,
-					tc.contractName,
-					tc.version,
-					tc.dataModel,
+					testCaseValue.contractName,
+					testCaseValue.version,
+					testCaseValue.dataModel,
 					payloadShapes,
 					nil, // No model references
 				)
 
 				Expect(err).To(HaveOccurred())
 				Expect(result).To(BeNil())
-				Expect(err.Error()).To(ContainSubstring(tc.expectedErrorMsg))
+				Expect(err.Error()).To(ContainSubstring(testCaseValue.expectedErrorMsg))
 			},
 			Entry("invalid data model", errorTestCase{
 				description:  "should validate the data model before translation",
@@ -257,21 +257,21 @@ var _ = Describe("Translator", func() {
 		}
 
 		DescribeTable("default payload shapes injection",
-			func(tc defaultPayloadShapesTestCase) {
+			func(testCaseValue defaultPayloadShapesTestCase) {
 				result, err := translator.TranslateDataModel(
 					ctx,
 					"_pump_data",
 					"v1",
-					tc.dataModel,
-					tc.payloadShapes,
+					testCaseValue.dataModel,
+					testCaseValue.payloadShapes,
 					nil, // No model references
 				)
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(result).ToNot(BeNil())
-				Expect(result.Schemas).To(HaveLen(tc.expectedSchemas))
+				Expect(result.Schemas).To(HaveLen(testCaseValue.expectedSchemas))
 
-				if tc.verifyDefaultFields {
+				if testCaseValue.verifyDefaultFields {
 					// Verify both default payload shapes were used successfully
 					numberSubject := "_pump_data_v1-timeseries-number"
 					stringSubject := "_pump_data_v1-timeseries-string"
@@ -283,39 +283,39 @@ var _ = Describe("Translator", func() {
 					Expect(stringExists).To(BeTrue())
 
 					// Verify the injected timeseries-number schema structure
-					numberProps, ok := numberSchema["properties"].(map[string]interface{})
-					Expect(ok).To(BeTrue(), "numberSchema should have properties")
+					numberProps, exists := numberSchema["properties"].(map[string]interface{})
+					Expect(exists).To(BeTrue(), "numberSchema should have properties")
 
-					numberFields, ok := numberProps["fields"].(map[string]interface{})
-					Expect(ok).To(BeTrue(), "numberProps should have fields")
+					numberFields, exists := numberProps["fields"].(map[string]interface{})
+					Expect(exists).To(BeTrue(), "numberProps should have fields")
 
-					numberFieldProps, ok := numberFields["properties"].(map[string]interface{})
-					Expect(ok).To(BeTrue(), "numberFields should have properties")
+					numberFieldProps, exists := numberFields["properties"].(map[string]interface{})
+					Expect(exists).To(BeTrue(), "numberFields should have properties")
 
-					timestampField, ok := numberFieldProps["timestamp_ms"].(map[string]interface{})
-					Expect(ok).To(BeTrue(), "numberFieldProps should have timestamp_ms")
+					timestampField, exists := numberFieldProps["timestamp_ms"].(map[string]interface{})
+					Expect(exists).To(BeTrue(), "numberFieldProps should have timestamp_ms")
 					Expect(timestampField["type"]).To(Equal("number"))
 
-					valueField, ok := numberFieldProps["value"].(map[string]interface{})
-					Expect(ok).To(BeTrue(), "numberFieldProps should have value")
+					valueField, exists := numberFieldProps["value"].(map[string]interface{})
+					Expect(exists).To(BeTrue(), "numberFieldProps should have value")
 					Expect(valueField["type"]).To(Equal("number"))
 
 					// Verify the injected timeseries-string schema structure
-					stringProps, ok := stringSchema["properties"].(map[string]interface{})
-					Expect(ok).To(BeTrue(), "stringSchema should have properties")
+					stringProps, exists := stringSchema["properties"].(map[string]interface{})
+					Expect(exists).To(BeTrue(), "stringSchema should have properties")
 
-					stringFields, ok := stringProps["fields"].(map[string]interface{})
-					Expect(ok).To(BeTrue(), "stringProps should have fields")
+					stringFields, exists := stringProps["fields"].(map[string]interface{})
+					Expect(exists).To(BeTrue(), "stringProps should have fields")
 
-					stringFieldProps, ok := stringFields["properties"].(map[string]interface{})
-					Expect(ok).To(BeTrue(), "stringFields should have properties")
+					stringFieldProps, exists := stringFields["properties"].(map[string]interface{})
+					Expect(exists).To(BeTrue(), "stringFields should have properties")
 
-					timestampField, ok = stringFieldProps["timestamp_ms"].(map[string]interface{})
-					Expect(ok).To(BeTrue(), "stringFieldProps should have timestamp_ms")
+					timestampField, exists = stringFieldProps["timestamp_ms"].(map[string]interface{})
+					Expect(exists).To(BeTrue(), "stringFieldProps should have timestamp_ms")
 					Expect(timestampField["type"]).To(Equal("number"))
 
-					valueField, ok = stringFieldProps["value"].(map[string]interface{})
-					Expect(ok).To(BeTrue(), "stringFieldProps should have value")
+					valueField, exists = stringFieldProps["value"].(map[string]interface{})
+					Expect(exists).To(BeTrue(), "stringFieldProps should have value")
 					Expect(valueField["type"]).To(Equal("string"))
 
 					// Verify payload shape usage
@@ -323,21 +323,21 @@ var _ = Describe("Translator", func() {
 					Expect(result.PayloadShapeUsage["timeseries-string"]).To(ConsistOf("serialNumber"))
 				}
 
-				if tc.verifyCustomFields {
+				if testCaseValue.verifyCustomFields {
 					// Verify the custom payload shape was used (not the default)
 					subjectName := "_pump_data_v1-timeseries-number"
 					schema, exists := result.Schemas[subjectName]
 					Expect(exists).To(BeTrue())
 
-					props, ok := schema["properties"].(map[string]interface{})
-					Expect(ok).To(BeTrue(), "schema should have properties")
-					fields, ok := props["fields"].(map[string]interface{})
-					Expect(ok).To(BeTrue(), "properties should have fields")
-					fieldProps, ok := fields["properties"].(map[string]interface{})
-					Expect(ok).To(BeTrue(), "fields should have properties")
+					props, exists := schema["properties"].(map[string]interface{})
+					Expect(exists).To(BeTrue(), "schema should have properties")
+					fields, exists := props["fields"].(map[string]interface{})
+					Expect(exists).To(BeTrue(), "properties should have fields")
+					fieldProps, exists := fields["properties"].(map[string]interface{})
+					Expect(exists).To(BeTrue(), "fields should have properties")
 
 					// Check for custom fields
-					for _, fieldName := range tc.customFieldsToCheck {
+					for _, fieldName := range testCaseValue.customFieldsToCheck {
 						_, hasField := fieldProps[fieldName]
 						Expect(hasField).To(BeTrue(), "Should have custom field: %s", fieldName)
 					}
@@ -450,19 +450,19 @@ var _ = Describe("Translator", func() {
 		}
 
 		DescribeTable("circular reference detection",
-			func(tc circularReferenceTestCase) {
+			func(testCaseValue circularReferenceTestCase) {
 				result, err := translator.TranslateDataModel(
 					ctx,
 					"_test_data",
 					"v1",
-					tc.mainModel,
+					testCaseValue.mainModel,
 					payloadShapes,
-					tc.models,
+					testCaseValue.models,
 				)
 
 				Expect(err).To(HaveOccurred())
 				Expect(result).To(BeNil())
-				Expect(err.Error()).To(ContainSubstring(tc.expectedErrorMsg))
+				Expect(err.Error()).To(ContainSubstring(testCaseValue.expectedErrorMsg))
 			},
 			Entry("direct self-reference", circularReferenceTestCase{
 				description: "should detect direct self-reference (A -> A)",
@@ -681,11 +681,11 @@ var _ = Describe("Translator", func() {
 			allDataModels := map[string]config.DataModelsConfig{}
 
 			// Create a chain of 12 models to exceed the limit
-			for i := 1; i <= 12; i++ {
-				modelName := fmt.Sprintf("level%d", i)
+			for month := 1; month <= 12; month++ {
+				modelName := fmt.Sprintf("level%d", month)
 				var structure map[string]config.Field
 
-				if i == 12 {
+				if month == 12 {
 					// Final level - just a payload shape
 					structure = map[string]config.Field{
 						"finalField": {
@@ -697,7 +697,7 @@ var _ = Describe("Translator", func() {
 					structure = map[string]config.Field{
 						"nextRef": {
 							ModelRef: &config.ModelRef{
-								Name:    fmt.Sprintf("level%d", i+1),
+								Name:    fmt.Sprintf("level%d", month+1),
 								Version: "v1",
 							},
 						},

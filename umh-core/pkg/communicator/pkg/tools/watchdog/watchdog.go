@@ -226,7 +226,7 @@ type Heartbeat struct {
 // Keep that identifier to unregister the heartbeat later.
 func (s *Watchdog) RegisterHeartbeat(name string, warningsUntilFailure uint64, timeout uint64, onlyIfSubscribers bool) uuid.UUID {
 	uniqueIdentifier := uuid.New()
-	_, file, line, ok := runtime.Caller(1)
+	_, file, line, callerFound := runtime.Caller(1)
 
 	s.logger.Infof("[%s] Registering heartbeat %s (%s)", s.watchdogID, name, uniqueIdentifier)
 	heartbeat := Heartbeat{
@@ -237,7 +237,7 @@ func (s *Watchdog) RegisterHeartbeat(name string, warningsUntilFailure uint64, t
 	}
 	heartbeat.lastHeatbeatTime.Store(time.Now().UTC().Unix())
 
-	if ok {
+	if callerFound {
 		heartbeat.file = file
 		heartbeat.line = line
 	} else {

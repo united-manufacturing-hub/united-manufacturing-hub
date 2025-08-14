@@ -778,7 +778,7 @@ func (s *SchemaRegistry) lookup(ctx context.Context) (error, bool) {
 // Returns: (error, changePhase)
 // - error: nil on success, non-nil on JSON parsing errors
 // - changePhase: true to advance to compare phase, false to retry this phase.
-func (s *SchemaRegistry) decode(ctx context.Context) (err error, changePhase bool) {
+func (s *SchemaRegistry) decode(ctx context.Context) (error, bool) {
 	// Check if context has enough time remaining
 	if deadline, ok := ctx.Deadline(); ok {
 		remaining := time.Until(deadline)
@@ -794,7 +794,7 @@ func (s *SchemaRegistry) decode(ctx context.Context) (err error, changePhase boo
 	// Parse JSON into temporary string slice, then convert to typed slice
 	var subjects []string
 
-	err = json.Unmarshal(s.rawSubjectsData, &subjects)
+	err := json.Unmarshal(s.rawSubjectsData, &subjects)
 	if err != nil {
 		return fmt.Errorf("failed to decode subjects: %w", err), false
 	}
@@ -829,7 +829,7 @@ func (s *SchemaRegistry) decode(ctx context.Context) (err error, changePhase boo
 // Returns: (error, changePhase)
 // - error: nil on success (analysis operations don't typically fail)
 // - changePhase: always true (analysis complete, time to act or start new cycle).
-func (s *SchemaRegistry) compare(ctx context.Context, expectedSubjects map[SubjectName]JSONSchemaDefinition) (err error, changePhase bool) {
+func (s *SchemaRegistry) compare(ctx context.Context, expectedSubjects map[SubjectName]JSONSchemaDefinition) (error, bool) {
 	// Check if context has enough time remaining
 	if deadline, ok := ctx.Deadline(); ok {
 		remaining := time.Until(deadline)
@@ -893,7 +893,7 @@ func (s *SchemaRegistry) compare(ctx context.Context, expectedSubjects map[Subje
 // Returns: (error, changePhase)
 // - error: nil on success, non-nil on network/HTTP/registry errors
 // - changePhase: true if work queue empty (advance), false if more subjects to delete (stay).
-func (s *SchemaRegistry) removeUnknown(ctx context.Context) (err error, changePhase bool) {
+func (s *SchemaRegistry) removeUnknown(ctx context.Context) (error, bool) {
 	// Check if context has enough time remaining
 	if deadline, ok := ctx.Deadline(); ok {
 		remaining := time.Until(deadline)
@@ -1032,7 +1032,7 @@ func (s *SchemaRegistry) removeUnknown(ctx context.Context) (err error, changePh
 // Returns: (error, changePhase)
 // - error: nil on success, non-nil on network/HTTP/registry errors
 // - changePhase: true if work queue empty (start new cycle), false if more subjects to add (stay).
-func (s *SchemaRegistry) addNew(ctx context.Context) (err error, changePhase bool) {
+func (s *SchemaRegistry) addNew(ctx context.Context) (error, bool) {
 	// Check if context has enough time remaining
 	if deadline, ok := ctx.Deadline(); ok {
 		remaining := time.Until(deadline)

@@ -462,13 +462,13 @@ func (m *MockBenthosService) UpdateBenthosInS6Manager(ctx context.Context, files
 	// Check if the service exists
 	found := false
 
-	for i, s6Config := range m.S6ServiceConfigs {
+	for index, s6Config := range m.S6ServiceConfigs {
 		if s6Config.Name == serviceName {
 			found = true
 
 			// Update the config
 			s6Config.S6ServiceConfig = m.GenerateS6ConfigForBenthosResult
-			m.S6ServiceConfigs[i] = s6Config
+			m.S6ServiceConfigs[index] = s6Config
 
 			break
 		}

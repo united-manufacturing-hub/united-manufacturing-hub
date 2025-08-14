@@ -468,17 +468,17 @@ func BenchmarkFindLatestRotatedFile(b *testing.B) {
 
 			var expectedLatest string
 
-			for i := range fileCount {
-				timestamp := baseTime.Add(time.Duration(i) * time.Minute)
+			for fileIndex := range fileCount {
+				timestamp := baseTime.Add(time.Duration(fileIndex) * time.Minute)
 				filename := tai64.FormatNano(timestamp) + ".s"
 				filepath := filepath.Join(logDir, filename)
 
-				err := os.WriteFile(filepath, []byte(fmt.Sprintf("log content %d", i)), 0644) //nolint:gosec // G306: Benchmark test requires standard file permissions for log file creation
+				err := os.WriteFile(filepath, []byte(fmt.Sprintf("log content %d", fileIndex)), 0644) //nolint:gosec // G306: Benchmark test requires standard file permissions for log file creation
 				if err != nil {
 					b.Fatalf("Failed to create test file: %v", err)
 				}
 
-				if i == fileCount-1 {
+				if fileIndex == fileCount-1 {
 					expectedLatest = filepath
 				}
 			}
@@ -553,17 +553,17 @@ func BenchmarkFindLatestRotatedFileRealistic(b *testing.B) {
 	var expectedLatest string
 
 	// Create 15 rotated files over 2 hours
-	for i := range 15 {
-		timestamp := baseTime.Add(time.Duration(i*8) * time.Minute) // Every 8 minutes
+	for fileIndex := range 15 {
+		timestamp := baseTime.Add(time.Duration(fileIndex*8) * time.Minute) // Every 8 minutes
 		filename := tai64.FormatNano(timestamp) + ".s"
 		filepath := filepath.Join(logDir, filename)
 
-		err := os.WriteFile(filepath, []byte(fmt.Sprintf("rotated log %d", i)), 0644) //nolint:gosec // G306: Benchmark test requires standard file permissions for log file creation
+		err := os.WriteFile(filepath, []byte(fmt.Sprintf("rotated log %d", fileIndex)), 0644) //nolint:gosec // G306: Benchmark test requires standard file permissions for log file creation
 		if err != nil {
 			b.Fatalf("Failed to create rotated file: %v", err)
 		}
 
-		if i == 14 {
+		if fileIndex == 14 {
 			expectedLatest = filepath
 		}
 	}

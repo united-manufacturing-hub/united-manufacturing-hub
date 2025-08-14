@@ -328,8 +328,8 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 		return errors.New("service registry is nil, possible initialization failure")
 	}
 	// 4) If your filesystem service is a buffered FS, sync once per loop:
-	bufferedFs, ok := c.services.GetFileSystem().(*filesystem.BufferedService)
-	if ok {
+	bufferedFs, isBuffered := c.services.GetFileSystem().(*filesystem.BufferedService)
+	if isBuffered {
 		// Step 1: Flush all pending writes to disk
 		err = bufferedFs.SyncToDisk(ctx)
 		if err != nil {

@@ -261,13 +261,13 @@ func CreateBenthosConfigFromCDFCPayload(payload models.CDFCPayload, componentNam
 	}
 
 	benthosRateLimitResources := make([]map[string]interface{}, len(rateLimitResources))
-	for i, resource := range rateLimitResources {
-		resourceMap, ok := resource.(map[string]interface{})
-		if !ok {
-			return dataflowcomponentserviceconfig.BenthosConfig{}, fmt.Errorf("rate limit resource %d is not a valid object", i)
+	for resourceIndex, resource := range rateLimitResources {
+		resourceMap, isValid := resource.(map[string]interface{})
+		if !isValid {
+			return dataflowcomponentserviceconfig.BenthosConfig{}, fmt.Errorf("rate limit resource %d is not a valid object", resourceIndex)
 		}
 
-		benthosRateLimitResources[i] = resourceMap
+		benthosRateLimitResources[resourceIndex] = resourceMap
 	}
 
 	benthosBuffer := make(map[string]interface{})

@@ -144,18 +144,18 @@ func createSentryEventWithContext(level sentry.Level, err error, context map[str
 		// Add all context values as tags for easy filtering in Sentry
 		for key, value := range context {
 			// Convert the value to string for tags
-			switch v := value.(type) {
+			switch convertedValue := value.(type) {
 			case string:
-				event.Tags[key] = v
+				event.Tags[key] = convertedValue
 			case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64, bool:
-				event.Tags[key] = convertToString(v)
+				event.Tags[key] = convertToString(convertedValue)
 			default:
 				// For complex types, add them to the extra data instead
 				if event.Extra == nil {
 					event.Extra = make(map[string]interface{})
 				}
 
-				event.Extra[key] = v
+				event.Extra[key] = convertedValue
 			}
 
 			// If the tag is called operation, add it to the fingerprint

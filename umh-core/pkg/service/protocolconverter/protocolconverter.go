@@ -358,8 +358,8 @@ func (p *ProtocolConverterService) Status(
 	}
 
 	// check observed state types
-	connectionObservedState, ok := connectionStatus.(connectionfsm.ConnectionObservedState)
-	if !ok {
+	connectionObservedState, isValidConnectionState := connectionStatus.(connectionfsm.ConnectionObservedState)
+	if !isValidConnectionState {
 		return ServiceInfo{}, fmt.Errorf("connection status for connection %s is not a ConnectionObservedState", protConvName)
 	}
 
@@ -380,8 +380,8 @@ func (p *ProtocolConverterService) Status(
 	)
 
 	if dfcReadExists {
-		dfcReadObservedState, ok = dfcReadStatus.(dfcfsm.DataflowComponentObservedState)
-		if !ok {
+		_, isValidDFCReadState := dfcReadStatus.(dfcfsm.DataflowComponentObservedState)
+		if !isValidDFCReadState {
 			return ServiceInfo{}, fmt.Errorf("read dataflowcomponent status for dataflowcomponent %s is not a DataflowComponentObservedState", protConvName)
 		}
 
@@ -402,8 +402,8 @@ func (p *ProtocolConverterService) Status(
 	)
 
 	if dfcWriteExists {
-		dfcWriteObservedState, ok = dfcWriteStatus.(dfcfsm.DataflowComponentObservedState)
-		if !ok {
+		_, isValidDFCWriteState := dfcWriteStatus.(dfcfsm.DataflowComponentObservedState)
+		if !isValidDFCWriteState {
 			return ServiceInfo{}, fmt.Errorf("write dataflowcomponent status for dataflowcomponent %s is not a DataflowComponentObservedState", protConvName)
 		}
 
@@ -723,16 +723,16 @@ func (p *ProtocolConverterService) EvaluateDFCDesiredStates(protConvName string,
 	dfcReadFound := false
 	dfcWriteFound := false
 
-	for i, config := range p.dataflowComponentConfig {
+	for idx, config := range p.dataflowComponentConfig {
 		if config.Name == dfcReadName {
 			if protocolConverterDesiredState == "stopped" {
-				p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateStopped
+				p.dataflowComponentConfig[idx].DesiredFSMState = dfcfsm.OperationalStateStopped
 			} else {
 				// Only start the DFC, if it has been configured
-				if len(p.dataflowComponentConfig[i].DataFlowComponentServiceConfig.BenthosConfig.Input) > 0 {
-					p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateActive
+				if len(p.dataflowComponentConfig[idx].DataFlowComponentServiceConfig.BenthosConfig.Input) > 0 {
+					p.dataflowComponentConfig[idx].DesiredFSMState = dfcfsm.OperationalStateActive
 				} else {
-					p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateStopped
+					p.dataflowComponentConfig[idx].DesiredFSMState = dfcfsm.OperationalStateStopped
 				}
 			}
 

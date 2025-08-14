@@ -43,12 +43,12 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
+	"go.uber.org/zap"
 
 	dto "github.com/prometheus/client_model/go"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_orig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6_shared"
-	"go.uber.org/zap"
 
 	"github.com/cespare/xxhash/v2"
 	"github.com/prometheus/prometheus/model/labels"
@@ -441,34 +441,34 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 	// This implementation scans the logs in a single pass, which is more efficient than scanning for each marker separately
 	// If the there are multiple sections, we will have multiple entries in the sections list
 	// This ensures that we always have a valid section, even if the markers of later sections are missing (e.g the end marker for example was not yet written)
-	for i := range logs {
+	for index := range logs {
 		switch {
-		case strings.Contains(logs[i].Content, BLOCK_START_MARKER):
-			currentSection.StartMarkerIndex = i
-		case strings.Contains(logs[i].Content, METRICS_END_MARKER):
+		case strings.Contains(logs[index].Content, BLOCK_START_MARKER):
+			currentSection.StartMarkerIndex = index
+		case strings.Contains(logs[index].Content, METRICS_END_MARKER):
 			// Dont even try to find an end marker, if we dont have a start marker
 			if currentSection.StartMarkerIndex == -1 {
 				continue
 			}
 
-			currentSection.MetricsEndMarkerIndex = i
-		case strings.Contains(logs[i].Content, CLUSTERCONFIG_END_MARKER):
+			currentSection.MetricsEndMarkerIndex = index
+		case strings.Contains(logs[index].Content, CLUSTERCONFIG_END_MARKER):
 			// Dont even try to find an end marker, if we dont have a start marker
 			if currentSection.StartMarkerIndex == -1 {
 				continue
 			}
 
-			currentSection.ClusterConfigEndMarkerIndex = i
-		case strings.Contains(logs[i].Content, READYNESS_END_MARKER):
+			currentSection.ClusterConfigEndMarkerIndex = index
+		case strings.Contains(logs[index].Content, READYNESS_END_MARKER):
 			// Dont even try to find an end marker, if we dont have a start marker
 			if currentSection.StartMarkerIndex == -1 {
 				continue
 			}
 
-			currentSection.ReadynessEndMarkerIndex = i
-		case strings.Contains(logs[i].Content, BLOCK_END_MARKER):
+			currentSection.ReadynessEndMarkerIndex = index
+		case strings.Contains(logs[index].Content, BLOCK_END_MARKER):
 			// We dont break here, as there might be multiple end markers
-			currentSection.BlockEndMarkerIndex = i
+			currentSection.BlockEndMarkerIndex = index
 
 			// If we have all sections add it to the list, otherwise discard !
 			if currentSection.StartMarkerIndex != -1 && currentSection.MetricsEndMarkerIndex != -1 && currentSection.ClusterConfigEndMarkerIndex != -1 && currentSection.ReadynessEndMarkerIndex != -1 && currentSection.BlockEndMarkerIndex != -1 {
@@ -564,10 +564,10 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 	ctxProcessMetrics, cancelProcessMetrics := context.WithTimeout(ctx, constants.RedpandaMonitorProcessMetricsTimeout)
 	defer cancelProcessMetrics()
 
-	g, _ := errgroup.WithContext(ctxProcessMetrics)
+	errorGroup, _ := errgroup.WithContext(ctxProcessMetrics)
 
 	if metricsChanged {
-		g.Go(func() error {
+		errorGroup.Go(func() error {
 			var err error
 
 			metrics, err = s.processMetricsDataBytes(metricsDataBytes, tick)
@@ -579,7 +579,7 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 	}
 
 	if clusterConfigChanged {
-		g.Go(func() error {
+		errorGroup.Go(func() error {
 			var err error
 
 			clusterConfig, err = s.processClusterConfigDataBytes(clusterConfigDataBytes, tick)
@@ -591,22 +591,22 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 	}
 
 	if metricsChanged || clusterConfigChanged {
-		// Create a buffered channel to receive the result from g.Wait().
+		// Create a buffered channel to receive the result from errorGroup.Wait().
 		// The channel is buffered so that the goroutine sending on it doesn't block.
 		errc := make(chan error, 1)
 
-		// Run g.Wait() in a separate goroutine.
+		// Run errorGroup.Wait() in a separate goroutine.
 		// This allows us to use a select statement to return early if the context is canceled.
 		go func() {
-			// g.Wait() blocks until all goroutines launched with g.Go() have returned.
+			// errorGroup.Wait() blocks until all goroutines launched with errorGroup.Go() have returned.
 			// It returns the first non-nil error, if any.
-			errc <- g.Wait()
+			errc <- errorGroup.Wait()
 		}()
 
-		// Use a select statement to wait for either the g.Wait() result or the context's cancellation.
+		// Use a select statement to wait for either the errorGroup.Wait() result or the context's cancellation.
 		select {
 		case err := <-errc:
-			// g.Wait() has finished, so check if any goroutine returned an error.
+			// errorGroup.Wait() has finished, so check if any goroutine returned an error.
 			if err != nil {
 				// If there was an error in any sub-call, return that error.
 				return nil, err
@@ -723,9 +723,9 @@ func parseMetricsBlob(r io.Reader) (Metrics, error) {
 // By specialising the parser we squeeze > 10× more throughput out of the
 // reconciler loop compared to the generic `expfmt` decoder, which in turn
 // allows the agent to monitor dozens of brokers on sub-millisecond budgets.
-func ParseMetricsFast(b []byte) (Metrics, error) {
+func ParseMetricsFast(data []byte) (Metrics, error) {
 	var (
-		m Metrics
+		metrics Metrics
 
 		foundFreeBytes, foundTotalBytes, foundFreeSpaceAlert bool
 		foundClusterTopics, foundUnavailablePartitions       bool
@@ -733,53 +733,53 @@ func ParseMetricsFast(b []byte) (Metrics, error) {
 		sawPartitionsMetric                                  bool
 	)
 
-	p := textparse.NewPromParser(b, labels.NewSymbolTable(), false)
+	parser := textparse.NewPromParser(data, labels.NewSymbolTable(), false)
 
 	for {
-		typ, err := p.Next()
+		typ, err := parser.Next()
 		if errors.Is(err, io.EOF) {
 			break
 		}
 
 		if err != nil {
-			return m, fmt.Errorf("iterating metric stream: %w", err)
+			return metrics, fmt.Errorf("iterating metric stream: %w", err)
 		}
 
 		if typ != textparse.EntrySeries {
 			continue
 		}
 
-		metricBytes, _, val := p.Series()
+		metricBytes, _, val := parser.Series()
 		mName := seriesName(metricBytes) // ← metric id without labels
 
 		// Allocate a new slice only when we need labels.
 		var lbls labels.Labels
 		if mName == "redpanda_kafka_request_bytes_total" ||
 			mName == "redpanda_kafka_partitions" {
-			p.Labels(&lbls) // fills lbls; never nil afterwards
+			parser.Labels(&lbls) // fills lbls; never nil afterwards
 		}
 
 		switch mName {
 		// ── infrastructure ────────────────────────────────────────────────
 		case "redpanda_storage_disk_free_bytes":
-			m.Infrastructure.Storage.FreeBytes = int64(val)
+			metrics.Infrastructure.Storage.FreeBytes = int64(val)
 			foundFreeBytes = true
 
 		case "redpanda_storage_disk_total_bytes":
-			m.Infrastructure.Storage.TotalBytes = int64(val)
+			metrics.Infrastructure.Storage.TotalBytes = int64(val)
 			foundTotalBytes = true
 
 		case "redpanda_storage_disk_free_space_alert":
-			m.Infrastructure.Storage.FreeSpaceAlert = val != 0
+			metrics.Infrastructure.Storage.FreeSpaceAlert = val != 0
 			foundFreeSpaceAlert = true
 
 		// ── cluster ───────────────────────────────────────────────────────
 		case "redpanda_cluster_topics":
-			m.Cluster.Topics = int64(val)
+			metrics.Cluster.Topics = int64(val)
 			foundClusterTopics = true
 
 		case "redpanda_cluster_unavailable_partitions":
-			m.Cluster.UnavailableTopics = int64(val)
+			metrics.Cluster.UnavailableTopics = int64(val)
 			foundUnavailablePartitions = true
 
 		// ── throughput  (needs a label) ───────────────────────────────────
@@ -800,31 +800,31 @@ func ParseMetricsFast(b []byte) (Metrics, error) {
 					redpanda_kafka_request_bytes_total{redpanda_namespace="kafka",redpanda_request="consume",redpanda_topic="messages"} 0
 			*/
 			if lbls.IsEmpty() {
-				return m, errors.New("metric redpanda_kafka_request_bytes_total has no labels")
+				return metrics, errors.New("metric redpanda_kafka_request_bytes_total has no labels")
 			}
 
 			switch lbls.Get("redpanda_request") {
 			case "produce":
-				m.Throughput.BytesIn += int64(val)
+				metrics.Throughput.BytesIn += int64(val)
 				foundProduce = true
 			case "consume":
-				m.Throughput.BytesOut += int64(val)
+				metrics.Throughput.BytesOut += int64(val)
 				foundConsume = true
 			}
 
 		// ── per-topic (needs a label) ─────────────────────────────────────
 		case "redpanda_kafka_partitions":
 			if lbls.IsEmpty() {
-				return m, errors.New("metric redpanda_kafka_partitions has no labels")
+				return metrics, errors.New("metric redpanda_kafka_partitions has no labels")
 			}
 
 			if topic := lbls.Get("redpanda_topic"); topic != "" {
-				if m.Topic.TopicPartitionMap == nil {
+				if metrics.Topic.TopicPartitionMap == nil {
 					// a small, non-zero initial capacity
-					m.Topic.TopicPartitionMap = make(map[string]int64, 16)
+					metrics.Topic.TopicPartitionMap = make(map[string]int64, 16)
 				}
 
-				m.Topic.TopicPartitionMap[topic] = int64(val)
+				metrics.Topic.TopicPartitionMap[topic] = int64(val)
 				sawPartitionsMetric = true
 			}
 		}
@@ -833,38 +833,38 @@ func ParseMetricsFast(b []byte) (Metrics, error) {
 	// ── validation – mirrors the old expfmt version ──────────────────────
 	switch {
 	case !foundFreeBytes:
-		return m, errors.New("metric redpanda_storage_disk_free_bytes not found")
+		return metrics, errors.New("metric redpanda_storage_disk_free_bytes not found")
 	case !foundTotalBytes:
-		return m, errors.New("metric redpanda_storage_disk_total_bytes not found")
+		return metrics, errors.New("metric redpanda_storage_disk_total_bytes not found")
 	case !foundFreeSpaceAlert:
-		return m, errors.New("metric redpanda_storage_disk_free_space_alert not found")
+		return metrics, errors.New("metric redpanda_storage_disk_free_space_alert not found")
 	case !foundClusterTopics:
-		return m, errors.New("metric redpanda_cluster_topics not found")
+		return metrics, errors.New("metric redpanda_cluster_topics not found")
 	case !foundUnavailablePartitions:
-		return m, errors.New("metric redpanda_cluster_unavailable_partitions not found")
+		return metrics, errors.New("metric redpanda_cluster_unavailable_partitions not found")
 	case !foundProduce:
-		return m, errors.New(`metric redpanda_kafka_request_bytes_total with label redpanda_request="produce" not found`)
+		return metrics, errors.New(`metric redpanda_kafka_request_bytes_total with label redpanda_request="produce" not found`)
 	case !foundConsume:
-		return m, errors.New(`metric redpanda_kafka_request_bytes_total with label redpanda_request="consume" not found`)
-	case m.Cluster.Topics > 0 && !sawPartitionsMetric:
-		return m, fmt.Errorf("metric redpanda_kafka_partitions not found but redpanda_cluster_topics reports %d topics",
-			m.Cluster.Topics)
+		return metrics, errors.New(`metric redpanda_kafka_request_bytes_total with label redpanda_request="consume" not found`)
+	case metrics.Cluster.Topics > 0 && !sawPartitionsMetric:
+		return metrics, fmt.Errorf("metric redpanda_kafka_partitions not found but redpanda_cluster_topics reports %d topics",
+			metrics.Cluster.Topics)
 	}
 
-	return m, nil
+	return metrics, nil
 }
 
 // helper – cheap split without allocations.
-func seriesName(b []byte) string {
-	if b == nil {
+func seriesName(data []byte) string {
+	if data == nil {
 		return ""
 	}
 
-	if i := bytes.IndexByte(b, '{'); i > 0 {
-		return string(b[:i])
+	if i := bytes.IndexByte(data, '{'); i > 0 {
+		return string(data[:i])
 	}
 
-	return string(b)
+	return string(data)
 }
 
 func (s *RedpandaMonitorService) parseReadynessData(readynessDataBytes []byte) (bool, string, error) {
@@ -1029,26 +1029,26 @@ func ParseMetrics(dataReader io.Reader) (Metrics, error) {
 	}
 
 	// Parse the metrics text into prometheus format
-	mf, err := parser.TextToMetricFamilies(bytes.NewReader(data))
+	metricFamilies, err := parser.TextToMetricFamilies(bytes.NewReader(data))
 	if err != nil {
 		return metrics, fmt.Errorf("failed to parse metrics: %w", err)
 	}
 
 	// Directly extract only the metrics we need instead of iterating all metrics
 	// Infrastructure metrics - Storage
-	if family, ok := mf["redpanda_storage_disk_free_bytes"]; ok && len(family.GetMetric()) > 0 {
+	if family, ok := metricFamilies["redpanda_storage_disk_free_bytes"]; ok && len(family.GetMetric()) > 0 {
 		metrics.Infrastructure.Storage.FreeBytes = getMetricValue(family.GetMetric()[0])
 	} else {
 		return metrics, errors.New("metric redpanda_storage_disk_free_bytes not found")
 	}
 
-	if family, ok := mf["redpanda_storage_disk_total_bytes"]; ok && len(family.GetMetric()) > 0 {
+	if family, ok := metricFamilies["redpanda_storage_disk_total_bytes"]; ok && len(family.GetMetric()) > 0 {
 		metrics.Infrastructure.Storage.TotalBytes = getMetricValue(family.GetMetric()[0])
 	} else {
 		return metrics, errors.New("metric redpanda_storage_disk_total_bytes not found")
 	}
 
-	if family, ok := mf["redpanda_storage_disk_free_space_alert"]; ok && len(family.GetMetric()) > 0 {
+	if family, ok := metricFamilies["redpanda_storage_disk_free_space_alert"]; ok && len(family.GetMetric()) > 0 {
 		// Any non-zero value indicates an alert condition
 		metrics.Infrastructure.Storage.FreeSpaceAlert = getMetricValue(family.GetMetric()[0]) != 0
 	} else {
@@ -1056,20 +1056,20 @@ func ParseMetrics(dataReader io.Reader) (Metrics, error) {
 	}
 
 	// Cluster metrics
-	if family, ok := mf["redpanda_cluster_topics"]; ok && len(family.GetMetric()) > 0 {
+	if family, ok := metricFamilies["redpanda_cluster_topics"]; ok && len(family.GetMetric()) > 0 {
 		metrics.Cluster.Topics = getMetricValue(family.GetMetric()[0])
 	} else {
 		return metrics, errors.New("metric redpanda_cluster_topics not found")
 	}
 
-	if family, ok := mf["redpanda_cluster_unavailable_partitions"]; ok && len(family.GetMetric()) > 0 {
+	if family, ok := metricFamilies["redpanda_cluster_unavailable_partitions"]; ok && len(family.GetMetric()) > 0 {
 		metrics.Cluster.UnavailableTopics = getMetricValue(family.GetMetric()[0])
 	} else {
 		return metrics, errors.New("metric redpanda_cluster_unavailable_partitions not found")
 	}
 
 	// Throughput metrics
-	if family, ok := mf["redpanda_kafka_request_bytes_total"]; ok {
+	if family, ok := metricFamilies["redpanda_kafka_request_bytes_total"]; ok {
 		// Process only produce/consume metrics in a single pass
 		produceFound := false
 		consumeFound := false
@@ -1100,7 +1100,7 @@ func ParseMetrics(dataReader io.Reader) (Metrics, error) {
 
 	// Topic metrics
 	// If we have topics, then topic metrics should be available
-	if family, ok := mf["redpanda_kafka_partitions"]; ok {
+	if family, ok := metricFamilies["redpanda_kafka_partitions"]; ok {
 		for _, metric := range family.GetMetric() {
 			if topic := getLabel(metric, "redpanda_topic"); topic != "" {
 				metrics.Topic.TopicPartitionMap[topic] = getMetricValue(metric)
@@ -1115,17 +1115,17 @@ func ParseMetrics(dataReader io.Reader) (Metrics, error) {
 }
 
 // getMetricValue extracts numeric value from a metric.
-func getMetricValue(m *dto.Metric) int64 {
-	if m.GetCounter() != nil {
-		return int64(m.GetCounter().GetValue())
+func getMetricValue(metric *dto.Metric) int64 {
+	if metric.GetCounter() != nil {
+		return int64(metric.GetCounter().GetValue())
 	}
 
-	if m.GetGauge() != nil {
-		return int64(m.GetGauge().GetValue())
+	if metric.GetGauge() != nil {
+		return int64(metric.GetGauge().GetValue())
 	}
 
-	if m.GetUntyped() != nil {
-		return int64(m.GetUntyped().GetValue())
+	if metric.GetUntyped() != nil {
+		return int64(metric.GetUntyped().GetValue())
 	}
 
 	return 0
@@ -1394,7 +1394,7 @@ func ParseRedpandaIntegerlikeValue(value interface{}) (int64, error) {
 	// This can be a very large value (18446744073709552000 or 18446744073709551615) if set to 0 via the config.
 	// We need to handle this, by saying that everything larger then 9223372036854775807 (max int64) is 0
 	// Our generate handles 0 correctly (either as -1 or null, depending on the value)
-	v, err := ParseValue(value)
+	parsedValue, err := ParseValue(value)
 	if err != nil {
 		// If "value is nil", return 0, nil, as redpanda for "some" values returns nil instead of a high value :/
 		if strings.Contains(err.Error(), "value is nil") || strings.Contains(err.Error(), "value is negative") {
@@ -1404,46 +1404,46 @@ func ParseRedpandaIntegerlikeValue(value interface{}) (int64, error) {
 		return 0, err
 	}
 
-	if v > math.MaxInt64 {
+	if parsedValue > math.MaxInt64 {
 		return 0, nil
 	}
 	// We can now safely cast to int64, as we checked above
-	return int64(v), nil
+	return int64(parsedValue), nil
 }
 
 func ParseValue(value interface{}) (uint64, error) {
 	var result uint64
 
-	switch v := value.(type) {
+	switch convertedValue := value.(type) {
 	case uint64:
-		result = v
+		result = convertedValue
 	case float64:
 		// If v is negative, return 0, with "value is negative"
-		if v < 0 {
+		if convertedValue < 0 {
 			return 0, errors.New("value is negative")
 		}
 		// We remove fractional parts, as redpanda uses integer values only
-		result = uint64(v)
+		result = uint64(convertedValue)
 	case int:
 		// If v is negative, return 0, with "value is negative"
-		if v < 0 {
+		if convertedValue < 0 {
 			return 0, errors.New("value is negative")
 		}
 
-		result = uint64(v)
+		result = uint64(convertedValue)
 	case int64:
 		// If v is negative, return 0, with "value is negative"
-		if v < 0 {
+		if convertedValue < 0 {
 			return 0, errors.New("value is negative")
 		}
 
-		result = uint64(v)
+		result = uint64(convertedValue)
 	case string:
 		// Try to parse the string as a number
-		parsed, err := strconv.ParseUint(v, 10, 64)
+		parsed, err := strconv.ParseUint(convertedValue, 10, 64)
 		if err != nil {
 			// Try to parse the string as a float
-			parsedFloat, err := strconv.ParseFloat(v, 64)
+			parsedFloat, err := strconv.ParseFloat(convertedValue, 64)
 			if err != nil {
 				return 0, fmt.Errorf("failed to parse string value as uint64: %w", err)
 			}

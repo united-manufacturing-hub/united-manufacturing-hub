@@ -127,7 +127,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 
 	Describe("Concurrent Access Scenarios", func() {
 		It("should handle files being modified during creation", func() {
-			var mu sync.Mutex
+			var mutex sync.Mutex
 			writeCount := 0
 
 			mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
@@ -135,8 +135,8 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			})
 
 			mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
-				mu.Lock()
-				defer mu.Unlock()
+				mutex.Lock()
+				defer mutex.Unlock()
 				writeCount++
 
 				// Simulate another process modifying files during creation
@@ -312,22 +312,22 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 		})
 
 		It("should handle files created by other processes during removal", func() {
-			var mu sync.Mutex
+			var mutex sync.Mutex
 			existingFiles := make(map[string]bool)
 			existingFiles[artifacts.ServiceDir] = true
 			existingFiles[artifacts.LogDir] = true
 
 			mockFS.WithPathExistsFunc(func(ctx context.Context, path string) (bool, error) {
-				mu.Lock()
-				defer mu.Unlock()
+				mutex.Lock()
+				defer mutex.Unlock()
 
 				return existingFiles[path], nil
 			})
 
 			renameCount := 0
 			mockFS.WithRenameFunc(func(ctx context.Context, oldPath, newPath string) error {
-				mu.Lock()
-				defer mu.Unlock()
+				mutex.Lock()
+				defer mutex.Unlock()
 				renameCount++
 
 				// Simulate another process recreating files during removal
@@ -342,8 +342,8 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			})
 
 			mockFS.WithRemoveAllFunc(func(ctx context.Context, path string) error {
-				mu.Lock()
-				defer mu.Unlock()
+				mutex.Lock()
+				defer mutex.Unlock()
 				delete(existingFiles, path)
 
 				return nil
@@ -669,8 +669,8 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 
 	Describe("Concurrency Edge Cases", func() {
 		It("should handle concurrent creation attempts", func() {
-			var wg sync.WaitGroup
-			var mu sync.Mutex
+			var waitGroup sync.WaitGroup
+			var mutex sync.Mutex
 			results := make([]*s6_shared.ServiceArtifacts, 0)
 			errors := make([]error, 0)
 
@@ -680,18 +680,18 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 
 			// Try to create the same service concurrently
 			for range 10 {
-				wg.Add(1)
+				waitGroup.Add(1)
 				go func() {
-					defer wg.Done()
+					defer waitGroup.Done()
 					result, err := service.CreateArtifacts(ctx, artifacts.ServiceDir, config, mockFS)
-					mu.Lock()
+					mutex.Lock()
 					results = append(results, result)
 					errors = append(errors, err)
-					mu.Unlock()
+					mutex.Unlock()
 				}()
 			}
 
-			wg.Wait()
+			waitGroup.Wait()
 
 			// At least one should succeed
 			successCount := 0
@@ -705,23 +705,23 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 		})
 
 		It("should handle concurrent removal operations", func() {
-			var wg sync.WaitGroup
-			var mu sync.Mutex
+			var waitGroup sync.WaitGroup
+			var mutex sync.Mutex
 			errors := make([]error, 0)
 
 			// Run multiple removals concurrently
 			for range 10 {
-				wg.Add(1)
+				waitGroup.Add(1)
 				go func() {
-					defer wg.Done()
+					defer waitGroup.Done()
 					err := service.RemoveArtifacts(ctx, artifacts, mockFS)
-					mu.Lock()
+					mutex.Lock()
 					errors = append(errors, err)
-					mu.Unlock()
+					mutex.Unlock()
 				}()
 			}
 
-			wg.Wait()
+			waitGroup.Wait()
 
 			// All should succeed (idempotent)
 			for _, err := range errors {

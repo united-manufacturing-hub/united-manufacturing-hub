@@ -42,7 +42,7 @@ var _ = Describe("Requester", func() {
 	// doHTTPRequestWithRetry is a test helper that retries HTTP requests on connection issues
 	doHTTPRequestWithRetry := func(ctx context.Context, url string, header map[string]string, cookies *map[string]string, insecureTLS bool, logger *zap.SugaredLogger) (*netHTTP.Response, error) {
 		var lastErr error
-		for i := range 10 {
+		for attempt := range 10 {
 			response, err := http.DoHTTPRequest(ctx, url, header, cookies, insecureTLS, logger)
 			if err == nil {
 				return response, nil
@@ -53,7 +53,7 @@ var _ = Describe("Requester", func() {
 				strings.Contains(err.Error(), "timeout") ||
 				strings.Contains(err.Error(), "EOF") {
 				lastErr = err
-				time.Sleep(time.Second * time.Duration(i+1)) // Exponential backoff
+				time.Sleep(time.Second * time.Duration(attempt+1)) // Exponential backoff
 
 				continue
 			}

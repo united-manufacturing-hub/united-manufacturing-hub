@@ -569,7 +569,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			By("Simulating random stop/start/update actions on benthos services")
 			// Create a deterministic random number generator for reproducibility
 			chaosRand := rand.New(rand.NewSource(42)) //nolint:gosec // G404: math/rand with fixed seed is appropriate for deterministic integration testing
-			for i := range 50 {
+			for iteration := range 50 {
 				// Pick a random benthos service index (0-9)
 				randomIndex := chaosRand.Intn(10)
 				randomServiceName := fmt.Sprintf("benthos-%d", randomIndex)
@@ -600,13 +600,13 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 				monitorHealth()
 
 				// Every 10 operations, print a status update
-				if i%10 == 0 {
+				if iteration%10 == 0 {
 					activeCount := builder.CountActiveBenthos()
 					GinkgoWriter.Printf("\n=== Benthos Scaling Test Status ===\n"+
 						"Actions completed: %d\n"+
 						"Total benthos services: %d\n"+
 						"Active benthos services: %d\n",
-						i+1, 11, activeCount) // 11 includes golden service
+						iteration+1, 11, activeCount) // 11 includes golden service
 				}
 			}
 
@@ -760,7 +760,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			By("Simulating random stop/start/update actions on dataflow components")
 			// Create a deterministic random number generator for reproducibility
 			chaosRand := rand.New(rand.NewSource(42)) //nolint:gosec // G404: math/rand with fixed seed is appropriate for deterministic integration testing
-			for i := range 50 {
+			for iteration := range 50 {
 				// Pick a random dataflow component index (0-9)
 				randomIndex := chaosRand.Intn(10)
 				randomComponentName := fmt.Sprintf("dataflow-%d", randomIndex)
@@ -791,13 +791,13 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 				monitorHealth()
 
 				// Every 10 operations, print a status update
-				if i%10 == 0 {
+				if iteration%10 == 0 {
 					activeCount := builder.CountActiveDataFlowComponents()
 					GinkgoWriter.Printf("\n=== DataFlowComponent Scaling Test Status ===\n"+
 						"Actions completed: %d\n"+
 						"Total dataflow components: %d\n"+
 						"Active dataflow components: %d\n",
-						i+1, 11, activeCount) // 11 includes golden component
+						iteration+1, 11, activeCount) // 11 includes golden component
 				}
 			}
 

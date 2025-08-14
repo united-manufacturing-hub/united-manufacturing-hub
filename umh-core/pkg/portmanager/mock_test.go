@@ -24,103 +24,103 @@ import (
 
 var _ = Describe("MockPortManager", func() {
 	It("implements basic functionality correctly", func() {
-		pm := NewMockPortManager()
+		portManager := NewMockPortManager()
 
 		// Allocate a port
 		instanceName := "test-instance"
-		port, err := pm.AllocatePort(context.Background(), instanceName)
+		port, err := portManager.AllocatePort(context.Background(), instanceName)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(port).To(Equal(uint16(9000)))
-		Expect(pm.AllocatePortCalled).To(BeTrue())
+		Expect(portManager.AllocatePortCalled).To(BeTrue())
 
 		// Get the port
-		gotPort, exists := pm.GetPort(instanceName)
+		gotPort, exists := portManager.GetPort(instanceName)
 		Expect(exists).To(BeTrue())
 		Expect(gotPort).To(Equal(port))
-		Expect(pm.GetPortCalled).To(BeTrue())
+		Expect(portManager.GetPortCalled).To(BeTrue())
 
 		// Release the port
-		err = pm.ReleasePort(instanceName)
+		err = portManager.ReleasePort(instanceName)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(pm.ReleasePortCalled).To(BeTrue())
+		Expect(portManager.ReleasePortCalled).To(BeTrue())
 
 		// Verify port is released
-		_, exists = pm.GetPort(instanceName)
+		_, exists = portManager.GetPort(instanceName)
 		Expect(exists).To(BeFalse())
 	})
 
 	It("handles predefined results correctly", func() {
-		pm := NewMockPortManager()
+		portManager := NewMockPortManager()
 
 		// Set predefined return values
 		expectedPort := uint16(8888)
-		pm.AllocatePortResult = expectedPort
+		portManager.AllocatePortResult = expectedPort
 		expectedErr := errors.New("test error")
-		pm.ReleasePortError = expectedErr
+		portManager.ReleasePortError = expectedErr
 
 		// Allocate a port
-		port, err := pm.AllocatePort(context.Background(), "test-instance")
+		port, err := portManager.AllocatePort(context.Background(), "test-instance")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(port).To(Equal(expectedPort))
 
 		// Try to release with error
-		err = pm.ReleasePort("test-instance")
+		err = portManager.ReleasePort("test-instance")
 		Expect(err).To(Equal(expectedErr))
 	})
 
 	It("handles port reservation correctly", func() {
-		pm := NewMockPortManager()
+		portManager := NewMockPortManager()
 
 		// Reserve a port
 		instanceName := "test-instance"
 		portToReserve := uint16(8500)
-		err := pm.ReservePort(context.Background(), instanceName, portToReserve)
+		err := portManager.ReservePort(context.Background(), instanceName, portToReserve)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(pm.ReservePortCalled).To(BeTrue())
+		Expect(portManager.ReservePortCalled).To(BeTrue())
 
 		// Verify the port is reserved
-		gotPort, exists := pm.GetPort(instanceName)
+		gotPort, exists := portManager.GetPort(instanceName)
 		Expect(exists).To(BeTrue())
 		Expect(gotPort).To(Equal(portToReserve))
 
 		// Try to reserve the same port for another instance
-		err = pm.ReservePort(context.Background(), "another-instance", portToReserve)
+		err = portManager.ReservePort(context.Background(), "another-instance", portToReserve)
 		Expect(err).To(HaveOccurred())
 	})
 
 	It("handles pre-reconciliation correctly", func() {
-		pm := NewMockPortManager()
+		portManager := NewMockPortManager()
 
 		// Test with multiple instances
 		instanceNames := []string{"instance-1", "instance-2", "instance-3"}
-		err := pm.PreReconcile(context.Background(), instanceNames)
+		err := portManager.PreReconcile(context.Background(), instanceNames)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(pm.PreReconcileCalled).To(BeTrue())
+		Expect(portManager.PreReconcileCalled).To(BeTrue())
 
 		// Verify ports were allocated
 		for _, name := range instanceNames {
-			port, exists := pm.GetPort(name)
+			port, exists := portManager.GetPort(name)
 			Expect(exists).To(BeTrue())
 			Expect(port).To(BeNumerically(">=", 9000))
 		}
 
 		// Test error handling
-		pm.PreReconcileError = errors.New("test error")
-		err = pm.PreReconcile(context.Background(), []string{"new-instance"})
-		Expect(err).To(Equal(pm.PreReconcileError))
+		portManager.PreReconcileError = errors.New("test error")
+		err = portManager.PreReconcile(context.Background(), []string{"new-instance"})
+		Expect(err).To(Equal(portManager.PreReconcileError))
 	})
 
 	It("handles post-reconciliation correctly", func() {
-		pm := NewMockPortManager()
+		portManager := NewMockPortManager()
 
 		// Test normal operation
-		err := pm.PostReconcile(context.Background())
+		err := portManager.PostReconcile(context.Background())
 		Expect(err).NotTo(HaveOccurred())
-		Expect(pm.PostReconcileCalled).To(BeTrue())
+		Expect(portManager.PostReconcileCalled).To(BeTrue())
 
 		// Test error handling
-		pm.PostReconcileError = errors.New("test error")
-		err = pm.PostReconcile(context.Background())
-		Expect(err).To(Equal(pm.PostReconcileError))
+		portManager.PostReconcileError = errors.New("test error")
+		err = portManager.PostReconcile(context.Background())
+		Expect(err).To(Equal(portManager.PostReconcileError))
 	})
 })

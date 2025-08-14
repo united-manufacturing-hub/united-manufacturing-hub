@@ -77,8 +77,8 @@ func NewS6ManagerWithMockedServices(name string) *S6Manager {
 		},
 		// Compare S6 configs - this is critical - always return true to avoid removal
 		func(instance public_fsm.FSMInstance, cfg config.S6FSMConfig) (bool, error) {
-			s6Instance, ok := instance.(*S6Instance)
-			if !ok {
+			s6Instance, isValidInstance := instance.(*S6Instance)
+			if !isValidInstance {
 				return false, errors.New("instance is not an S6Instance")
 			}
 

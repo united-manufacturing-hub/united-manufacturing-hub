@@ -430,7 +430,7 @@ func BenchmarkValidateStructureOnly_Large(b *testing.B) {
 	}
 
 	// Add 10 complex nested structures
-	for i := range 10 {
+	for iteration := range 10 {
 		subfields := make(map[string]config.Field)
 		for j := range 10 {
 			subfields[fmt.Sprintf("subfield_%d", j)] = config.Field{
@@ -438,7 +438,7 @@ func BenchmarkValidateStructureOnly_Large(b *testing.B) {
 			}
 		}
 
-		structure[fmt.Sprintf("nested_%d", i)] = config.Field{
+		structure[fmt.Sprintf("nested_%d", iteration)] = config.Field{
 			Subfields: subfields,
 		}
 	}

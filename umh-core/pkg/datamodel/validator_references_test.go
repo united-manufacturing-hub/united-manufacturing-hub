@@ -253,18 +253,18 @@ var _ = Describe("Validator References", func() {
 			allDataModels := make(map[string]config.DataModelsConfig)
 
 			// Create a chain of 9 models (level0 -> level1 -> ... -> level8)
-			for i := range 9 {
-				modelName := fmt.Sprintf("level%d", i)
+			for index := range 9 {
+				modelName := fmt.Sprintf("level%d", index)
 				var structure map[string]config.Field
 
-				if i == 8 { // Last level - no reference
+				if index == 8 { // Last level - no reference
 					structure = map[string]config.Field{
 						"finalField": {
 							PayloadShape: "timeseries-number",
 						},
 					}
 				} else { // Reference next level
-					nextLevel := fmt.Sprintf("level%d", i+1)
+					nextLevel := fmt.Sprintf("level%d", index+1)
 					structure = map[string]config.Field{
 						"field": {
 							PayloadShape: "timeseries-number",
@@ -298,18 +298,18 @@ var _ = Describe("Validator References", func() {
 
 			// Create a chain of 12 models (level0 -> level1 -> ... -> level11)
 			// This ensures we definitely exceed 10 levels
-			for i := range 12 {
-				modelName := fmt.Sprintf("level%d", i)
+			for month := range 12 {
+				modelName := fmt.Sprintf("level%d", month)
 				var structure map[string]config.Field
 
-				if i == 11 { // Last level - no reference
+				if month == 11 { // Last level - no reference
 					structure = map[string]config.Field{
 						"finalField": {
 							PayloadShape: "timeseries-number",
 						},
 					}
 				} else { // Reference next level
-					nextLevel := fmt.Sprintf("level%d", i+1)
+					nextLevel := fmt.Sprintf("level%d", month+1)
 					structure = map[string]config.Field{
 						"field": {
 							PayloadShape: "timeseries-number",

@@ -76,23 +76,23 @@ var _ = Describe("Benthos YAML Normalizer", func() {
 			Expect(normalizedLogLevel).To(Equal("DEBUG"))
 
 			// Check input preserved
-			inputMqtt, ok := normalizedInput["mqtt"].(map[string]interface{})
-			Expect(ok).To(BeTrue(), "mqtt input should be a map[string]interface{}")
+			inputMqtt, exists := normalizedInput["mqtt"].(map[string]interface{})
+			Expect(exists).To(BeTrue(), "mqtt input should be a map[string]interface{}")
 			Expect(inputMqtt["topic"]).To(Equal("test/topic"))
 
 			// Check output preserved
-			outputKafka, ok := normalizedOutput["kafka"].(map[string]interface{})
-			Expect(ok).To(BeTrue(), "kafka output should be a map[string]interface{}")
+			outputKafka, exists := normalizedOutput["kafka"].(map[string]interface{})
+			Expect(exists).To(BeTrue(), "kafka output should be a map[string]interface{}")
 			Expect(outputKafka["topic"]).To(Equal("test-output"))
 
 			// Check pipeline processors preserved
-			processors, ok := normalizedPipeline["processors"].([]interface{})
-			Expect(ok).To(BeTrue(), "processors should be a []interface{}")
+			processors, exists := normalizedPipeline["processors"].([]interface{})
+			Expect(exists).To(BeTrue(), "processors should be a []interface{}")
 			Expect(processors).To(HaveLen(1))
-			processor, ok := processors[0].(map[string]interface{})
-			Expect(ok).To(BeTrue(), "processor should be a map[string]interface{}")
-			processorText, ok := processor["text"].(map[string]interface{})
-			Expect(ok).To(BeTrue(), "processor text should be a map[string]interface{}")
+			processor, exists := processors[0].(map[string]interface{})
+			Expect(exists).To(BeTrue(), "processor should be a map[string]interface{}")
+			processorText, exists := processor["text"].(map[string]interface{})
+			Expect(exists).To(BeTrue(), "processor text should be a map[string]interface{}")
 			Expect(processorText["operator"]).To(Equal("to_upper"))
 		})
 

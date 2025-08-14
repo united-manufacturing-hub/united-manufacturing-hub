@@ -481,8 +481,8 @@ var _ = Describe("AddDataModelAction", func() {
 				Expect(metadata).To(BeNil())
 				Expect(response).ToNot(BeNil())
 
-				responseMap, ok := response.(map[string]interface{})
-				Expect(ok).To(BeTrue())
+				responseMap, isValidMap := response.(map[string]interface{})
+				Expect(isValidMap).To(BeTrue())
 				Expect(responseMap["name"]).To(Equal("test-model"))
 				Expect(responseMap["description"]).To(Equal("Test data model"))
 				Expect(responseMap["version"]).To(Equal(1))
@@ -529,8 +529,8 @@ var _ = Describe("AddDataModelAction", func() {
 				Expect(metadata).To(BeNil())
 				Expect(response).ToNot(BeNil())
 
-				responseMap, ok := response.(map[string]interface{})
-				Expect(ok).To(BeTrue())
+				responseMap, isValidMap := response.(map[string]interface{})
+				Expect(isValidMap).To(BeTrue())
 				Expect(responseMap["name"]).To(Equal("test-model"))
 				Expect(responseMap["description"]).To(Equal("Test data model"))
 				Expect(responseMap["version"]).To(Equal(1))
@@ -647,8 +647,8 @@ var _ = Describe("AddDataModelAction", func() {
 			Expect(metadata).To(BeNil())
 
 			// Verify data contract was created for complex model
-			responseMap, ok := response.(map[string]interface{})
-			Expect(ok).To(BeTrue())
+			responseMap, isValidMap := response.(map[string]interface{})
+			Expect(isValidMap).To(BeTrue())
 			dataContract, exists := responseMap["dataContract"]
 			Expect(exists).To(BeTrue())
 			dataContractMap, ok := dataContract.(map[string]interface{})

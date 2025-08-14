@@ -431,8 +431,8 @@ var _ = Describe("EditStreamProcessor", func() {
 			Expect(mockConfig.AtomicEditStreamProcessorCalled).To(BeTrue())
 
 			// Verify the response contains the expected UUID
-			responseMap, ok := result.(map[string]any)
-			Expect(ok).To(BeTrue(), "Result should be a map")
+			responseMap, exists := result.(map[string]any)
+			Expect(exists).To(BeTrue(), "Result should be a map")
 			Expect(responseMap).To(HaveKey("uuid"))
 
 			// Verify the UUID was generated correctly
@@ -543,8 +543,8 @@ var _ = Describe("EditStreamProcessor", func() {
 			Expect(editedSP.StreamProcessorServiceConfig.Variables.User["site"]).To(Equal("test-site"))
 
 			// Verify the response contains the expected UUID
-			responseMap, ok := result.(map[string]any)
-			Expect(ok).To(BeTrue(), "Result should be a map")
+			responseMap, exists := result.(map[string]any)
+			Expect(exists).To(BeTrue(), "Result should be a map")
 			Expect(responseMap).To(HaveKey("uuid"))
 		})
 
@@ -625,16 +625,16 @@ var _ = Describe("EditStreamProcessor", func() {
 			// Check nested mapping
 			motorValue := editedSP.StreamProcessorServiceConfig.Config.Mapping["motor"]
 			var motorMapping models.StreamProcessorMapping
-			var ok bool
+			var success bool
 
 			// Handle different possible types
 			switch value := motorValue.(type) {
 			case map[string]interface{}:
 				motorMapping = models.StreamProcessorMapping(value)
-				ok = true
+				success = true
 			case models.StreamProcessorMapping:
 				motorMapping = value
-				ok = true
+				success = true
 			case map[interface{}]interface{}:
 				motorMapping = make(models.StreamProcessorMapping)
 				for k, val := range value {
@@ -642,18 +642,18 @@ var _ = Describe("EditStreamProcessor", func() {
 						motorMapping[keyStr] = val
 					}
 				}
-				ok = true
+				success = true
 			}
 
-			Expect(ok).To(BeTrue(), "motor mapping should be convertible to map[string]interface{}")
+			Expect(success).To(BeTrue(), "motor mapping should be convertible to map[string]interface{}")
 			Expect(motorMapping).To(HaveKey("speed"))
 			Expect(motorMapping).To(HaveKey("current"))
 			Expect(motorMapping["speed"]).To(Equal("motor_data.speed"))
 			Expect(motorMapping["current"]).To(Equal("motor_data.current"))
 
 			// Verify the response contains the expected UUID
-			responseMap, ok := result.(map[string]any)
-			Expect(ok).To(BeTrue(), "Result should be a map")
+			responseMap, exists := result.(map[string]any)
+			Expect(exists).To(BeTrue(), "Result should be a map")
 			Expect(responseMap).To(HaveKey("uuid"))
 		})
 	})

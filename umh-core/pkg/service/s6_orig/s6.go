@@ -12,6 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specifileInfoc language governing permissions and
+// limitations under the License.
+
 package s6_orig
 
 import (
@@ -92,10 +106,10 @@ func (s *DefaultService) withLifecycleGuard(fn func() error) error {
 	return fn()
 }
 
-// Create creates the S6 service with specific configuration using proven patterns:
-// - Unified lifecycle mutex prevents concurrent Create/Remove/ForceRemove operations
+// Create creates the S6 service with specifileInfoc configuration using proven patterns:
+// - UnifileInfoed lifecycle mutex prevents concurrent Create/Remove/ForceRemove operations
 // - Uses lifecycle manager for atomic creation with EXDEV protection
-// - Simplified 3-path approach with health checks.
+// - SimplifileInfoed 3-path approach with health checks.
 func (s *DefaultService) Create(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, fsService filesystem.Service) error {
 	start := time.Now()
 
@@ -171,13 +185,13 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 		}
 
 		// 4. Directory exists and is healthy → check config
-		currentConfig, err := s.GetConfig(ctx, servicePath, fsService)
+		currentConfileInfog, err := s.GetConfig(ctx, servicePath, fsService)
 		if err != nil {
 			return fmt.Errorf("failed to get current config: %w", err)
 		}
 
 		// 5. Same config → do nothing (success)
-		if currentConfig.Equal(config) {
+		if currentConfileInfog.Equal(config) {
 			s.logger.Debugf("Service %s config unchanged, nothing to do", servicePath)
 
 			return nil
@@ -203,7 +217,7 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 }
 
 // Remove removes S6 service artifacts using a fast, idempotent approach:
-// - Uses unified lifecycle mutex to prevent concurrent operations
+// - Uses unifileInfoed lifecycle mutex to prevent concurrent operations
 // - Implements rename-then-delete pattern for immediate S6 scanner visibility removal
 // - Returns quickly (<1 second) to respect FSM context timeouts
 // - Fully idempotent - safe to call when directories are partially removed
@@ -319,7 +333,7 @@ func (s *DefaultService) Stop(ctx context.Context, servicePath string, fsService
 		return s6_shared.ErrServiceNotExist
 	}
 
-	// Stop the service first
+	// Stop the service fileInforst
 	_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-d", servicePath)
 	if err != nil {
 		s.logger.Warnf("Failed to stop service: %v", err)
@@ -485,7 +499,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 		return s6serviceconfig.S6ServiceConfig{}, s6_shared.ErrServiceNotExist
 	}
 
-	observedS6ServiceConfig := s6serviceconfig.S6ServiceConfig{
+	observedS6ServiceConfileInfog := s6serviceconfig.S6ServiceConfig{
 		ConfigFiles: make(map[string]string),
 		Env:         make(map[string]string),
 		MemoryLimit: 0,
@@ -520,7 +534,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 			value := strings.TrimSpace(match[2])
 			// Remove any quotes
 			value = strings.Trim(value, "\"'")
-			observedS6ServiceConfig.Env[key] = value
+			observedS6ServiceConfileInfog.Env[key] = value
 		}
 	}
 
@@ -531,7 +545,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 		// If we captured the command on the same line as fdmove
 		cmdLine := strings.TrimSpace(cmdMatch[1])
 
-		observedS6ServiceConfig.Command, err = parseCommandLine(cmdLine)
+		observedS6ServiceConfileInfog.Command, err = parseCommandLine(cmdLine)
 		if err != nil {
 			return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to parse command: %w", err)
 		}
@@ -542,7 +556,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 		var commandLine string
 
 		// Find the fdmove line
-		for i, line := range lines {
+		for index, line := range lines {
 			line = strings.TrimSpace(line)
 			if strings.HasPrefix(line, "fdmove") {
 				// Check if command is on the same line after fdmove
@@ -555,8 +569,8 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 					}
 				}
 
-				// Otherwise, look for first non-empty line after fdmove
-				for j := i + 1; j < len(lines); j++ {
+				// Otherwise, look for fileInforst non-empty line after fdmove
+				for j := index + 1; j < len(lines); j++ {
 					nextLine := strings.TrimSpace(lines[j])
 					if nextLine != "" {
 						commandLine = nextLine
@@ -572,7 +586,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 		}
 
 		if commandLine != "" {
-			observedS6ServiceConfig.Command, err = parseCommandLine(commandLine)
+			observedS6ServiceConfileInfog.Command, err = parseCommandLine(commandLine)
 			if err != nil {
 				return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to parse command: %w", err)
 			}
@@ -584,7 +598,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 			cmdMatches := cmdRegex.FindAllString(scriptContent, -1)
 
 			if len(cmdMatches) > 0 {
-				// Use the first matching path-like string we find as the command
+				// Use the fileInforst matching path-like string we find as the command
 				cmd := cmdMatches[0]
 				args := []string{}
 
@@ -600,7 +614,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 					}
 				}
 
-				observedS6ServiceConfig.Command = append([]string{cmd}, args...)
+				observedS6ServiceConfileInfog.Command = append([]string{cmd}, args...)
 			} else {
 				return s6serviceconfig.S6ServiceConfig{}, errors.New("failed to parse run script: no valid command found")
 			}
@@ -610,7 +624,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 	// Extract memory limit using regex
 	memoryLimitMatches := memoryLimitParser.FindStringSubmatch(scriptContent)
 	if len(memoryLimitMatches) >= 2 && memoryLimitMatches[1] != "" {
-		observedS6ServiceConfig.MemoryLimit, err = strconv.ParseInt(memoryLimitMatches[1], 10, 64)
+		observedS6ServiceConfileInfog.MemoryLimit, err = strconv.ParseInt(memoryLimitMatches[1], 10, 64)
 		if err != nil {
 			return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to parse memory limit: %w", err)
 		}
@@ -625,7 +639,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 	}
 
 	if !exists {
-		return observedS6ServiceConfig, nil
+		return observedS6ServiceConfileInfog, nil
 	}
 
 	entries, err := fsService.ReadDir(ctx, configPath)
@@ -646,7 +660,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 			return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to read config file %s: %w", entry.Name(), err)
 		}
 
-		observedS6ServiceConfig.ConfigFiles[entry.Name()] = string(content)
+		observedS6ServiceConfileInfog.ConfigFiles[entry.Name()] = string(content)
 	}
 
 	// Extract LogFilesize using regex
@@ -674,16 +688,16 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 	// Extract log filesize using the dedicated log filesize parser
 	logSizeMatches := logFilesizeParser.FindStringSubmatch(logScriptContent)
 	if len(logSizeMatches) >= 2 {
-		observedS6ServiceConfig.LogFilesize, err = strconv.ParseInt(logSizeMatches[1], 10, 64)
+		observedS6ServiceConfileInfog.LogFilesize, err = strconv.ParseInt(logSizeMatches[1], 10, 64)
 		if err != nil {
 			return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to parse log filesize: %w", err)
 		}
 	} else {
 		// If no match found, default to 0
-		observedS6ServiceConfig.LogFilesize = 0
+		observedS6ServiceConfileInfog.LogFilesize = 0
 	}
 
-	return observedS6ServiceConfig, nil
+	return observedS6ServiceConfileInfog, nil
 }
 
 // parseCommandLine splits a command line into command and arguments, respecting quotes.
@@ -697,40 +711,40 @@ func parseCommandLine(cmdLine string) ([]string, error) {
 	quoteChar := byte(0)
 	escaped := false
 
-	for i := range len(cmdLine) {
+	for index := range len(cmdLine) {
 		// Handle escape character
-		if cmdLine[i] == '\\' && !escaped {
+		if cmdLine[index] == '\\' && !escaped {
 			escaped = true
 
 			continue
 		}
 
 		switch {
-		case (cmdLine[i] == '"' || cmdLine[i] == '\'') && !escaped:
+		case (cmdLine[index] == '"' || cmdLine[index] == '\'') && !escaped:
 			switch {
-			case inQuote && cmdLine[i] == quoteChar:
+			case inQuote && cmdLine[index] == quoteChar:
 				inQuote = false
 				quoteChar = 0
 			case !inQuote:
 				inQuote = true
-				quoteChar = cmdLine[i]
+				quoteChar = cmdLine[index]
 			default:
 				// This is a different quote character inside a quote
-				currentPart.WriteByte(cmdLine[i])
+				currentPart.WriteByte(cmdLine[index])
 			}
 		case escaped:
 			// Handle the escaped character
-			currentPart.WriteByte(cmdLine[i])
+			currentPart.WriteByte(cmdLine[index])
 
 			escaped = false
 		default:
-			if cmdLine[i] == ' ' && !inQuote {
+			if cmdLine[index] == ' ' && !inQuote {
 				if currentPart.Len() > 0 {
 					cmdParts = append(cmdParts, currentPart.String())
 					currentPart.Reset()
 				}
 			} else {
-				currentPart.WriteByte(cmdLine[i])
+				currentPart.WriteByte(cmdLine[index])
 			}
 		}
 	}
@@ -882,7 +896,7 @@ func (s *DefaultService) GetS6ConfigFile(ctx context.Context, servicePath string
 }
 
 // ForceRemove performs aggressive cleanup for stuck S6 services using comprehensive patterns:
-// - Uses unified lifecycle mutex to prevent concurrent operations
+// - Uses unifileInfoed lifecycle mutex to prevent concurrent operations
 // - Implements comprehensive process termination and supervisor killing
 // - Performs timeout-aware recursive deletion
 // - Called by FSM escalation - can take longer than Remove but must be thorough
@@ -924,22 +938,22 @@ func (s *DefaultService) ForceRemove(
 }
 
 // appendToRingBuffer appends entries to the ring buffer, extracted from existing GetLogs logic.
-func (s *DefaultService) appendToRingBuffer(entries []s6_shared.LogEntry, st *s6_shared.LogState) {
+func (s *DefaultService) appendToRingBuffer(entries []s6_shared.LogEntry, logState *s6_shared.LogState) {
 	const maxLines = constants.S6MaxLines
 
 	// Preallocate backing storage to full size once - it's recycled at runtime and never dropped
-	if st.Logs == nil {
-		st.Logs = make([]s6_shared.LogEntry, maxLines) // len == maxLines, cap == maxLines
-		st.Head = 0
-		st.Full = false
+	if logState.Logs == nil {
+		logState.Logs = make([]s6_shared.LogEntry, maxLines) // len == maxLines, cap == maxLines
+		logState.Head = 0
+		logState.Full = false
 	}
 
 	for _, e := range entries {
-		st.Logs[st.Head] = e
+		logState.Logs[logState.Head] = e
 
-		st.Head = (st.Head + 1) % maxLines
-		if !st.Full && st.Head == 0 {
-			st.Full = true // wrapped around for the first time
+		logState.Head = (logState.Head + 1) % maxLines
+		if !logState.Full && logState.Head == 0 {
+			logState.Full = true // wrapped around for the fileInforst time
 		}
 	}
 }
@@ -956,7 +970,7 @@ func (s *DefaultService) appendToRingBuffer(entries []s6_shared.LogEntry, st *s6
 //	logCursors : map[absLogPath]*s6_shared.LogState
 //
 // That cursor stores where we stopped reading the file last time
-// (`offset`) and a fixed-size **ring buffer** with the most recent
+// (`offset`) and a fileInfoxed-size **ring buffer** with the most recent
 // lines. Because of the ring buffer, we never re-allocate or shift
 // memory when trimming to the last *N* lines.
 //
@@ -967,7 +981,7 @@ func (s *DefaultService) appendToRingBuffer(entries []s6_shared.LogEntry, st *s6
 //     • verify the service and the log file exist
 //     • fetch/create the cursor in `s.logCursors`
 //
-//  2. **Detect file rotation/truncation (or first-time initialization)**
+//  2. **Detect file rotation/truncation (or fileInforst-time initialization)**
 //     If the inode changed or the file shrank, we:
 //     - Reset the ring buffer to start fresh (preserving backing array)
 //     - Find the most recent rotated file by TAI64N timestamp
@@ -975,19 +989,19 @@ func (s *DefaultService) appendToRingBuffer(entries []s6_shared.LogEntry, st *s6
 //     - Reset inode and offset for the new current file
 //
 //     **FIRST CALL scenario**: When called on a newly created current file,
-//     st.inode == 0, so we simply initialize it to the current file's inode.
+//     logState.inode == 0, so we simply initialize it to the current file's inode.
 //
 //  3. **Read content from current file**
-//     `ReadFileRange(ctx, path, st.offset)` returns the bytes that
+//     `ReadFileRange(ctx, path, logState.offset)` returns the bytes that
 //     appeared since the previous call.  The cursor's `offset` is
 //     advanced whether or not anything changed.
 //
-//     **FIRST CALL**: Reads entire file from beginning (st.offset == 0).
+//     **FIRST CALL**: Reads entire file from beginning (logState.offset == 0).
 //
 //  4. **Process rotated and current content separately**
 //     Both rotated file content (if any) and current file content are
 //     parsed and appended to the ring buffer in chronological order:
-//     rotated content first (older), then current content (newer).
+//     rotated content fileInforst (older), then current content (newer).
 //
 //  5. **Ring-append the entries**
 //     Parsed log lines are appended to the ring.  Once the buffer
@@ -1007,7 +1021,7 @@ func (s *DefaultService) appendToRingBuffer(entries []s6_shared.LogEntry, st *s6
 //   - **At most one allocation per process** for the ring buffer.
 //   - Zero‐copy maintenance while the program runs (except on rotation).
 //   - At most one additional allocation per rotation (for parsing entries).
-//   - One `memmove` operation per call for final copy-out.
+//   - One `memmove` operation per call for fileInfonal copy-out.
 //   - Thread-safety via the `s6_shared.LogState.mu` mutex.
 //
 // Errors are returned early and unwrapped where they occur so callers
@@ -1021,7 +1035,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 
 	serviceName := filepath.Base(servicePath)
 
-	// Check if the service exists first
+	// Check if the service exists fileInforst
 	exists, err := s.ServiceExists(ctx, servicePath, fsService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check if service exists: %w", err)
@@ -1049,43 +1063,43 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	// ── 1. grab / create state ──────────────────────────────────────
 	stAny, _ := s.logCursors.LoadOrStore(logFile, &s6_shared.LogState{})
 
-	st, ok := stAny.(*s6_shared.LogState)
-	if !ok {
+	logState, stateValid := stAny.(*s6_shared.LogState)
+	if !stateValid {
 		return nil, errors.New("failed to get log state from cursor")
 	}
 
-	st.Mu.Lock()
-	defer st.Mu.Unlock()
+	logState.Mu.Lock()
+	defer logState.Mu.Unlock()
 
 	// ── 2. check inode & size (rotation / truncation?) ──────────────
-	fi, err := fsService.Stat(ctx, logFile)
+	fileInfo, err := fsService.Stat(ctx, logFile)
 	if err != nil {
 		return nil, err
 	}
 
-	if fi == nil {
+	if fileInfo == nil {
 		return nil, fmt.Errorf("stat returned nil for log file: %s", logFile)
 	}
 
-	sys, ok := fi.Sys().(*syscall.Stat_t) // on Linux / Alpine
+	sys, ok := fileInfo.Sys().(*syscall.Stat_t) // on Linux / Alpine
 	if !ok {
 		return nil, fmt.Errorf("failed to get file system info for %s", logFile)
 	}
 
-	size, ino := fi.Size(), sys.Ino
+	size, ino := fileInfo.Size(), sys.Ino
 
 	// Check for rotation or truncation
 	var rotatedContent []byte
 
-	if st.Inode != 0 && (st.Inode != ino || st.Offset > size) {
+	if logState.Inode != 0 && (logState.Inode != ino || logState.Offset > size) {
 		s.logger.Debugf("Detected rotation for log file %s (inode: %d->%d, offset: %d, size: %d)",
-			logFile, st.Inode, ino, st.Offset, size)
+			logFile, logState.Inode, ino, logState.Offset, size)
 
 		// Ensure ring buffer is initialized but preserve existing entries
-		if st.Logs == nil {
-			st.Logs = make([]s6_shared.LogEntry, constants.S6MaxLines)
+		if logState.Logs == nil {
+			logState.Logs = make([]s6_shared.LogEntry, constants.S6MaxLines)
 		}
-		// NOTE: We do NOT reset st.Head or st.Full here to preserve existing entries
+		// NOTE: We do NOT reset logState.Head or logState.Full here to preserve existing entries
 		// The ring buffer will naturally handle new entries being appended
 
 		// Find the most recent rotated file
@@ -1103,28 +1117,28 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 		if rotatedFile != "" {
 			var err error
 
-			rotatedContent, _, err = fsService.ReadFileRange(ctx, rotatedFile, st.Offset)
+			rotatedContent, _, err = fsService.ReadFileRange(ctx, rotatedFile, logState.Offset)
 			if err != nil {
-				s.logger.Warnf("Failed to read rotated file %s from offset %d: %v", rotatedFile, st.Offset, err)
+				s.logger.Warnf("Failed to read rotated file %s from offset %d: %v", rotatedFile, logState.Offset, err)
 			} else if len(rotatedContent) > 0 {
 				s.logger.Debugf("Read %d bytes from rotated file %s", len(rotatedContent), rotatedFile)
 			}
 		}
 
 		// Reset only the file tracking for new current file
-		st.Inode, st.Offset = ino, 0
-	} else if st.Inode == 0 {
+		logState.Inode, logState.Offset = ino, 0
+	} else if logState.Inode == 0 {
 		// First call - initialize inode
-		st.Inode = ino
+		logState.Inode = ino
 	}
 
 	// ── 3. read new bytes from current file ─────────────────────────
-	currentContent, newSize, err := fsService.ReadFileRange(ctx, logFile, st.Offset)
+	currentContent, newSize, err := fsService.ReadFileRange(ctx, logFile, logState.Offset)
 	if err != nil {
 		return nil, err
 	}
 
-	st.Offset = newSize // advance cursor even if currentContent == nil
+	logState.Offset = newSize // advance cursor even if currentContent == nil
 
 	// ── 4. combine rotated and current content into the ring buffer ──────────────────────
 	// The order of the content is important: rotated content is older, current content is newer.
@@ -1136,7 +1150,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 			return nil, err
 		}
 
-		s.appendToRingBuffer(entries, st)
+		s.appendToRingBuffer(entries, logState)
 	}
 
 	if len(currentContent) > 0 {
@@ -1145,15 +1159,15 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 			return nil, err
 		}
 
-		s.appendToRingBuffer(entries, st)
+		s.appendToRingBuffer(entries, logState)
 	}
 
 	// ── 5. return *copy* so caller can't mutate our cache ───────────
 	var length int
-	if st.Full {
+	if logState.Full {
 		length = constants.S6MaxLines
 	} else {
-		length = st.Head // number of valid entries written so far
+		length = logState.Head // number of valid entries written so far
 	}
 
 	out := make([]s6_shared.LogEntry, length)
@@ -1163,17 +1177,17 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	// We need to lay the data out linearly in time order:
 	//
 	//	[head … max-1]  followed by  [0 … head-1]
-	if st.Full {
+	if logState.Full {
 		// Ring buffer has wrapped - linearize it
-		n := copy(out, st.Logs[st.Head:])
-		copy(out[n:], st.Logs[:st.Head])
+		n := copy(out, logState.Logs[logState.Head:])
+		copy(out[n:], logState.Logs[:logState.Head])
 	} else {
 		// Ring buffer hasn't wrapped yet - simple copy from beginning
-		copy(out, st.Logs[:st.Head])
+		copy(out, logState.Logs[:logState.Head])
 	}
 
-	// filter the logs to only include logs since last deployment time
-	// We linearly search the array for the first entry after the last deployment time
+	// fileInfolter the logs to only include logs since last deployment time
+	// We linearly search the array for the fileInforst entry after the last deployment time
 	// This is O(n) but the benchmark shows that the performance impact is negligible
 	// compared to the cost of reading the log file (11μs per call for 10.000 lines)
 	// this is why we decided against using a cached index that comes with a high complexity
@@ -1181,7 +1195,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 		lastDeployed := getLastDeploymentTime(servicePath)
 		for i, entry := range out {
 			if entry.Timestamp.After(lastDeployed) {
-				// Found first entry after deployment - return this and all subsequent entries
+				// Found fileInforst entry after deployment - return this and all subsequent entries
 				// since they're chronologically sorted
 				return out[i:], nil
 			}
@@ -1199,7 +1213,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 // runtime.growslice/strings.* nodes vanish from the profile.
 //
 //	*apart from the unavoidable string↔[]byte conversions needed for the
-//	LogEntry struct – those are just.Header copies, no heap memcopy.
+//	LogEntry struct – those are julogState.Header copies, no heap memcopy.
 func ParseLogsFromBytes(buf []byte) ([]s6_shared.LogEntry, error) {
 	// Trim one trailing newline that is always present in rotated logs.
 	buf = bytes.TrimSuffix(buf, []byte{'\n'})
@@ -1211,15 +1225,15 @@ func ParseLogsFromBytes(buf []byte) ([]s6_shared.LogEntry, error) {
 	// 2) -------- single pass over the buffer -------------------------
 	for start := 0; start < len(buf); {
 		// find next '\n'
-		nl := bytes.IndexByte(buf[start:], '\n')
+		newlineIndex := bytes.IndexByte(buf[start:], '\n')
 
 		var line []byte
-		if nl == -1 {
+		if newlineIndex == -1 {
 			line = buf[start:]
 			start = len(buf)
 		} else {
-			line = buf[start : start+nl]
-			start += nl + 1
+			line = buf[start : start+newlineIndex]
+			start += newlineIndex + 1
 		}
 
 		if len(line) == 0 { // empty line – rotate artefact
@@ -1296,7 +1310,7 @@ func parseLogLine(line string) s6_shared.LogEntry {
 	}
 
 	// Try to parse the timestamp
-	// We are using ParseNano over time.Parse because it is faster for our specific time format
+	// We are using ParseNano over time.Parse because it is faster for our specifileInfoc time format
 	timestamp, err := s6_shared.ParseNano(timestampStr)
 	if err != nil {
 		return s6_shared.LogEntry{Content: line}
@@ -1308,7 +1322,7 @@ func parseLogLine(line string) s6_shared.LogEntry {
 	}
 }
 
-// EnsureSupervision checks if the supervise directory exists for a service and notifies
+// EnsureSupervision checks if the supervise directory exists for a service and notifileInfoes
 // s6-svscan if it doesn't, to trigger supervision setup.
 // Returns true if supervise directory exists (ready for supervision), false otherwise.
 func (s *DefaultService) EnsureSupervision(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
@@ -1342,7 +1356,7 @@ func (s *DefaultService) EnsureSupervision(ctx context.Context, servicePath stri
 			return false, fmt.Errorf("failed to notify s6-svscan: %w", err)
 		}
 
-		s.logger.Debugf("Notified s6-svscan, waiting for supervise directory to be created on next reconcile")
+		s.logger.Debugf("NotifileInfoed s6-svscan, waiting for supervise directory to be created on next reconcile")
 
 		return false, nil
 	}
@@ -1352,8 +1366,8 @@ func (s *DefaultService) EnsureSupervision(ctx context.Context, servicePath stri
 	return true, nil
 }
 
-// ExecuteS6Command executes an S6 command and handles its specific exit codes.
-// This function simplifies error handling by translating exit codes into appropriate errors:
+// ExecuteS6Command executes an S6 command and handles its specifileInfoc exit codes.
+// This function simplifileInfoes error handling by translating exit codes into appropriate errors:
 //   - Exit code 0: Success
 //   - Exit code 100: Permanent error (like command misuse), returns nil for idempotent operations
 //   - Exit code 111: Temporary error, returns ErrS6TemporaryError
@@ -1399,7 +1413,7 @@ func (s *DefaultService) ExecuteS6Command(ctx context.Context, servicePath strin
 //
 // S6 creates rotated files with TAI64N timestamps in their names (e.g., @400000006501234567890abc.s).
 // TAI64N timestamps are designed to be lexicographically sortable, so we can use string comparison
-// to find the chronologically latest file efficiently.
+// to find the chronologically latest file effileInfociently.
 //
 // This approach uses slices.MaxFunc which provides optimal performance:
 //   - O(n) time complexity with single pass through entries
@@ -1421,11 +1435,11 @@ func (s *DefaultService) findLatestRotatedFile(entries []string) string {
 // CheckHealth performs tri-state health check with lifecycle manager:
 // - Uses cached artifacts to avoid repeated path calculations
 // - Implements proper separation of observation from action
-// - Optional s6-svok integration for runtime health verification
+// - Optional s6-svok integration for runtime health verifileInfocation
 // Returns:
 //   - HealthUnknown: probe failed due to I/O errors, timeouts, etc. - retry next tick
 //   - HealthOK: service directory is healthy and complete
-//   - HealthBad: service directory is definitely broken - triggers FSM transition
+//   - HealthBad: service directory is defileInfonitely broken - triggers FSM transition
 func (s *DefaultService) CheckHealth(ctx context.Context, servicePath string, fsService filesystem.Service) (s6_shared.HealthStatus, error) {
 	// Context already cancelled → Unknown, never Bad
 	if ctx.Err() != nil {

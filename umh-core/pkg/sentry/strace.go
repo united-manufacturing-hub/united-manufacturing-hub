@@ -64,9 +64,9 @@ func entireStack() []byte {
 }
 
 // convertGoroutineToThread converts a parsed Goroutine to a Sentry Thread object.
-func convertGoroutineToThread(g *gostackparse.Goroutine) sentry.Thread {
+func convertGoroutineToThread(goroutine *gostackparse.Goroutine) sentry.Thread {
 	// Convert each Goroutine's stack frames to Sentry frames
-	frames := convertFrames(g.Stack)
+	frames := convertFrames(goroutine.Stack)
 
 	// Create a Sentry stacktrace
 	stacktrace := &sentry.Stacktrace{
@@ -75,8 +75,8 @@ func convertGoroutineToThread(g *gostackparse.Goroutine) sentry.Thread {
 
 	// Create a Sentry thread
 	return sentry.Thread{
-		ID:         strconv.Itoa(g.ID),
-		Name:       fmt.Sprintf("Goroutine %d", g.ID),
+		ID:         strconv.Itoa(goroutine.ID),
+		Name:       fmt.Sprintf("Goroutine %d", goroutine.ID),
 		Stacktrace: stacktrace,
 		Crashed:    false, // Adjust based on actual crash status if needed
 		Current:    false, // You can refine this if you track the "current" thread
@@ -87,13 +87,13 @@ func convertGoroutineToThread(g *gostackparse.Goroutine) sentry.Thread {
 func convertFrames(goroutineFrames []*gostackparse.Frame) []sentry.Frame {
 	frames := make([]sentry.Frame, 0, len(goroutineFrames))
 
-	for _, gf := range goroutineFrames {
-		absPath := gf.File
+	for _, goroutineFrame := range goroutineFrames {
+		absPath := goroutineFrame.File
 		fileName := filepath.Base(absPath)
 		frame := sentry.Frame{
-			Function: gf.Func,
+			Function: goroutineFrame.Func,
 			Filename: fileName,
-			Lineno:   gf.Line,
+			Lineno:   goroutineFrame.Line,
 			AbsPath:  absPath,
 		}
 		frames = append(frames, frame)

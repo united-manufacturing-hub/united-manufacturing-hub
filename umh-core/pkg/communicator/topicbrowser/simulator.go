@@ -40,14 +40,14 @@ type Simulator struct {
 }
 
 func NewSimulator() *Simulator {
-	s := &Simulator{
+	simulator := &Simulator{
 		simObservedState:   &topicbrowserfsm.ObservedStateSnapshot{},
 		simObservedStateMu: &sync.RWMutex{},
 		ticker:             0,
 		simulatorEnabled:   false,
 	}
 
-	return s
+	return simulator
 }
 
 // InitializeSimulator initializes the simulator and adds some hardcoded topics to the simulator.

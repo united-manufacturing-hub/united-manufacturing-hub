@@ -37,9 +37,14 @@ import (
 // This function is intended to be called repeatedly (e.g. in a periodic control loop).
 // Over multiple calls, it converges the actual state to the desired state. Transitions
 // that fail are retried in subsequent reconcile calls after a backoff period.
-func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
+func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool) {
 	start := time.Now()
 	dataflowComponentInstanceName := d.baseFSMInstance.GetID()
+
+	var (
+		err        error
+		reconciled bool
+	)
 
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentDataflowComponentInstance, dataflowComponentInstanceName, time.Since(start))
@@ -192,8 +197,13 @@ func (d *DataflowComponentInstance) reconcileExternalChanges(ctx context.Context
 // Any functions that fetch information are disallowed here and must be called in reconcileExternalChanges
 // and exist in ObservedState.
 // This is to ensure full testability of the FSM.
-func (d *DataflowComponentInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider, currentTime time.Time) (err error, reconciled bool) {
+func (d *DataflowComponentInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider, currentTime time.Time) (error, bool) {
 	start := time.Now()
+
+	var (
+		err        error
+		reconciled bool
+	)
 
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentDataflowComponentInstance, d.baseFSMInstance.GetID()+".reconcileStateTransition", time.Since(start))
@@ -207,7 +217,7 @@ func (d *DataflowComponentInstance) reconcileStateTransition(ctx context.Context
 
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {
-		err, reconciled := d.baseFSMInstance.ReconcileLifecycleStates(ctx, services, currentState, d.CreateInstance, d.RemoveInstance, d.CheckForCreation)
+		err, reconciled = d.baseFSMInstance.ReconcileLifecycleStates(ctx, services, currentState, d.CreateInstance, d.RemoveInstance, d.CheckForCreation)
 		if err != nil {
 			return err, false
 		}
@@ -217,7 +227,7 @@ func (d *DataflowComponentInstance) reconcileStateTransition(ctx context.Context
 
 	// Handle operational states
 	if IsOperationalState(currentState) {
-		err, reconciled := d.reconcileOperationalStates(ctx, services, currentState, desiredState, currentTime)
+		err, reconciled = d.reconcileOperationalStates(ctx, services, currentState, desiredState, currentTime)
 		if err != nil {
 			return err, false
 		}
@@ -229,7 +239,7 @@ func (d *DataflowComponentInstance) reconcileStateTransition(ctx context.Context
 }
 
 // reconcileOperationalStates handles states related to instance operations (starting/stopping).
-func (d *DataflowComponentInstance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time) (err error, reconciled bool) {
+func (d *DataflowComponentInstance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -248,7 +258,7 @@ func (d *DataflowComponentInstance) reconcileOperationalStates(ctx context.Conte
 
 // reconcileTransitionToActive handles transitions when the desired state is Active.
 // It deals with moving from various states to the Active state.
-func (d *DataflowComponentInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (d *DataflowComponentInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -279,7 +289,7 @@ func (d *DataflowComponentInstance) reconcileTransitionToActive(ctx context.Cont
 }
 
 // reconcileStartingStates handles the various starting phase states when transitioning to Active.
-func (d *DataflowComponentInstance) reconcileStartingStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (d *DataflowComponentInstance) reconcileStartingStates(ctx context.Context, _ serviceregistry.Provider, currentState string, currentTime time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -337,7 +347,7 @@ func (d *DataflowComponentInstance) reconcileStartingStates(ctx context.Context,
 }
 
 // reconcileRunningStates handles the various running states when transitioning to Active.
-func (d *DataflowComponentInstance) reconcileRunningStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (d *DataflowComponentInstance) reconcileRunningStates(ctx context.Context, _ serviceregistry.Provider, currentState string, _ time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -401,7 +411,7 @@ func (d *DataflowComponentInstance) reconcileRunningStates(ctx context.Context, 
 
 // reconcileTransitionToStopped handles transitions when the desired state is Stopped.
 // It deals with moving from any operational state to Stopping and then to Stopped.
-func (d *DataflowComponentInstance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
+func (d *DataflowComponentInstance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (error, bool) {
 	start := time.Now()
 
 	defer func() {

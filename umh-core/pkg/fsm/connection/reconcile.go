@@ -258,7 +258,7 @@ func (c *ConnectionInstance) reconcileOperationalStates(ctx context.Context, ser
 
 // reconcileTransitionToActive handles transitions when the desired state is Active.
 // It deals with moving from various states to the Active state.
-func (c *ConnectionInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (c *ConnectionInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -289,7 +289,7 @@ func (c *ConnectionInstance) reconcileTransitionToActive(ctx context.Context, se
 }
 
 // reconcileStartingStates handles the various starting phase states when transitioning to Active.
-func (c *ConnectionInstance) reconcileStartingStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (c *ConnectionInstance) reconcileStartingStates(ctx context.Context, _ serviceregistry.Provider, currentState string, _ time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -311,7 +311,7 @@ func (c *ConnectionInstance) reconcileStartingStates(ctx context.Context, servic
 }
 
 // reconcileRunningStates handles the various running states when transitioning to Active.
-func (c *ConnectionInstance) reconcileRunningStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (c *ConnectionInstance) reconcileRunningStates(ctx context.Context, _ serviceregistry.Provider, currentState string, _ time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -359,7 +359,7 @@ func (c *ConnectionInstance) reconcileRunningStates(ctx context.Context, service
 
 // reconcileTransitionToStopped handles transitions when the desired state is Stopped.
 // It deals with moving from any operational state to Stopping and then to Stopped.
-func (c *ConnectionInstance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
+func (c *ConnectionInstance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (error, bool) {
 	start := time.Now()
 
 	defer func() {

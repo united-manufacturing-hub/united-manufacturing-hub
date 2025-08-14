@@ -691,7 +691,7 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 		results := make(chan fileReadResult, fileCount)
 		errChan := make(chan error, 1)
 
-		var wg sync.WaitGroup
+		var waitGroup sync.WaitGroup
 
 		// Determine worker count
 		workerCount := bs.fileReadWorkers
@@ -705,10 +705,10 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 
 		// Start workers
 		for range workerCount {
-			wg.Add(1)
+			waitGroup.Add(1)
 
 			go func() {
-				defer wg.Done()
+				defer waitGroup.Done()
 
 				for job := range jobs {
 					// Check for cancellation
@@ -913,7 +913,7 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 		close(jobs)
 
 		// Wait for workers to finish
-		wg.Wait()
+		waitGroup.Wait()
 
 		// Close results channel
 		close(results)
@@ -1205,14 +1205,14 @@ func (bs *BufferedService) WriteFile(ctx context.Context, path string, data []by
 	}
 
 	// If there's an existing fileState, update it so subsequent ReadFile sees new content
-	st, exists := bs.files[path]
+	existingState, exists := bs.files[path]
 	if exists {
-		st.isDir = false
-		st.content = data
-		st.fileMode = perm
-		st.size = int64(len(data))
+		existingState.isDir = false
+		existingState.content = data
+		existingState.fileMode = perm
+		existingState.size = int64(len(data))
 		// Update the map with the modified state
-		bs.files[path] = st
+		bs.files[path] = existingState
 	} else {
 		// Create a new file state
 		bs.files[path] = fileState{

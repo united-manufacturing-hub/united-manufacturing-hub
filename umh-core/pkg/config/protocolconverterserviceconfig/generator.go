@@ -91,13 +91,13 @@ func normalizeConfig(raw map[string]any) map[string]any {
 	normalized := make(map[string]any)
 
 	// Extract template and variables
-	template, ok := raw["template"].(map[string]any)
-	if !ok {
+	template, exists := raw["template"].(map[string]any)
+	if !exists {
 		template = raw
 	}
 
-	rawVariables, ok := raw["variables"].(map[string]any)
-	if !ok {
+	rawVariables, exists := raw["variables"].(map[string]any)
+	if !exists {
 		rawVariables = make(map[string]any)
 	}
 
@@ -117,13 +117,13 @@ func normalizeConfig(raw map[string]any) map[string]any {
 	}
 
 	// Extract and normalize template components
-	dfcReadConfig, ok := template["dataflowcomponent_read"].(map[string]any)
-	if !ok {
+	dfcReadConfig, exists := template["dataflowcomponent_read"].(map[string]any)
+	if !exists {
 		dfcReadConfig = template
 	}
 
-	dfcWriteConfig, ok := template["dataflowcomponent_write"].(map[string]any)
-	if !ok {
+	dfcWriteConfig, exists := template["dataflowcomponent_write"].(map[string]any)
+	if !exists {
 		dfcWriteConfig = template
 	}
 

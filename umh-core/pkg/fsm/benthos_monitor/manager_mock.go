@@ -56,31 +56,31 @@ func NewBenthosMonitorManagerWithMockedService(name string, mockSvc benthos_moni
 
 			return inst, nil
 		},
-		func(instance public_fsm.FSMInstance, fc config.BenthosMonitorConfig) (bool, error) {
-			bi, ok := instance.(*BenthosMonitorInstance)
-			if !ok {
+		func(instance public_fsm.FSMInstance, monitorConfig config.BenthosMonitorConfig) (bool, error) {
+			benthosInstance, exists := instance.(*BenthosMonitorInstance)
+			if !exists {
 				return false, errors.New("instance not an BenthosMonitorInstance")
 			}
 
-			return bi.config.DesiredFSMState == fc.DesiredFSMState, nil
+			return benthosInstance.config.DesiredFSMState == monitorConfig.DesiredFSMState, nil
 		},
-		func(instance public_fsm.FSMInstance, fc config.BenthosMonitorConfig) error {
-			bi, ok := instance.(*BenthosMonitorInstance)
-			if !ok {
+		func(instance public_fsm.FSMInstance, monitorConfig config.BenthosMonitorConfig) error {
+			benthosInstance, exists := instance.(*BenthosMonitorInstance)
+			if !exists {
 				return errors.New("instance not an BenthosMonitorInstance")
 			}
 
-			bi.config = fc
+			benthosInstance.config = monitorConfig
 
-			return bi.SetDesiredFSMState(fc.DesiredFSMState)
+			return benthosInstance.SetDesiredFSMState(monitorConfig.DesiredFSMState)
 		},
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
-			bi, ok := instance.(*BenthosMonitorInstance)
-			if !ok {
+			benthosInstance, exists := instance.(*BenthosMonitorInstance)
+			if !exists {
 				return 0, errors.New("instance not an BenthosMonitorInstance")
 			}
 
-			return bi.GetMinimumRequiredTime(), nil
+			return benthosInstance.GetMinimumRequiredTime(), nil
 		},
 	)
 

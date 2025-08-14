@@ -238,7 +238,7 @@ func (n *NmapInstance) reconcileOperationalStates(ctx context.Context, currentSt
 
 // reconcileTransitionToActive handles transitions when the desired state is Active.
 // It deals with moving from various states to the Active state.
-func (n *NmapInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (n *NmapInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -273,7 +273,7 @@ func (n *NmapInstance) reconcileTransitionToActive(ctx context.Context, services
 //
 //	from any running state (open, filtered, closed, degraded) -> stopping (EventStop)
 //	then from stopping -> stopped (EventStopped)
-func (n *NmapInstance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
+func (n *NmapInstance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -303,7 +303,7 @@ func (n *NmapInstance) reconcileTransitionToStopped(ctx context.Context, service
 }
 
 // reconcileStartingStates handles the various starting phase states when transitioning to Active.
-func (n *NmapInstance) reconcileStartingStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (n *NmapInstance) reconcileStartingStates(ctx context.Context, _ serviceregistry.Provider, currentState string, _ time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -319,7 +319,7 @@ func (n *NmapInstance) reconcileStartingStates(ctx context.Context, services ser
 }
 
 // reconcileRunningStates handles the various running states when transitioning to Active.
-func (n *NmapInstance) reconcileRunningStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (n *NmapInstance) reconcileRunningStates(ctx context.Context, _ serviceregistry.Provider, currentState string, currentTime time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {

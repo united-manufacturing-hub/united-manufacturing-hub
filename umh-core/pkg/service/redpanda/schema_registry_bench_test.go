@@ -291,28 +291,28 @@ func benchmarkIncrementalUpdates(b *testing.B, registry *SchemaRegistry) {
 
 	preGeneratedSchemas := make([]map[SubjectName]JSONSchemaDefinition, maxIterations)
 
-	for i := range maxIterations {
+	for iteration := range maxIterations {
 		// Create incremental update: keep 15, remove 5, add 10
 		updatedSchemas := make(map[SubjectName]JSONSchemaDefinition)
 
 		// Keep first 15 from base
-		j := 0
+		keptCount := 0
 		for subject, schema := range baseSchemas {
-			if j >= 15 {
+			if keptCount >= 15 {
 				break
 			}
 
 			updatedSchemas[subject] = schema
-			j++
+			keptCount++
 		}
 
 		// Add 10 new schemas (pre-generated)
-		newSchemas := generateSchemas(10, fmt.Sprintf("incremental-new-%d", i))
+		newSchemas := generateSchemas(10, fmt.Sprintf("incremental-new-%d", iteration))
 		for subject, schema := range newSchemas {
 			updatedSchemas[subject] = schema
 		}
 
-		preGeneratedSchemas[i] = updatedSchemas
+		preGeneratedSchemas[iteration] = updatedSchemas
 	}
 
 	// Benchmark-specific warmup using pre-generated schemas
@@ -534,31 +534,31 @@ func benchmarkMixedOperations(b *testing.B, registry *SchemaRegistry) {
 
 	preGeneratedMixedSchemas := make([]map[SubjectName]JSONSchemaDefinition, maxIterations)
 
-	for i := range maxIterations {
+	for iteration := range maxIterations {
 		mixedSchemas := make(map[SubjectName]JSONSchemaDefinition)
 
 		// Keep first 10 from base (remove 10)
-		j := 0
+		retainedCount := 0
 		for subject, schema := range baseSchemas {
-			if j >= 10 {
+			if retainedCount >= 10 {
 				break
 			}
 
 			mixedSchemas[subject] = schema
-			j++
+			retainedCount++
 		}
 
 		// Add 10 new schemas
-		newSchemas := generateSchemas(10, fmt.Sprintf("mixed-new-%d", i))
+		newSchemas := generateSchemas(10, fmt.Sprintf("mixed-new-%d", iteration))
 		for subject, schema := range newSchemas {
 			mixedSchemas[subject] = schema
 		}
 
-		preGeneratedMixedSchemas[i] = mixedSchemas
+		preGeneratedMixedSchemas[iteration] = mixedSchemas
 	}
 
 	// Warmup: practice mixed operations
-	for i := range 3 {
+	for warmupRound := range 3 {
 		// Setup base schemas
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		_ = reconcileUntilComplete(ctx, registry, baseSchemas)
@@ -567,14 +567,14 @@ func benchmarkMixedOperations(b *testing.B, registry *SchemaRegistry) {
 
 		// Perform mixed operation
 		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
-		_ = reconcileUntilComplete(ctx, registry, preGeneratedMixedSchemas[i])
+		_ = reconcileUntilComplete(ctx, registry, preGeneratedMixedSchemas[warmupRound])
 
 		cancel()
 	}
 
 	b.ResetTimer()
 
-	for i := range b.N {
+	for iteration := range b.N {
 		// Setup: start with base schemas
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 
@@ -586,7 +586,7 @@ func benchmarkMixedOperations(b *testing.B, registry *SchemaRegistry) {
 		cancel()
 
 		// Measure mixed operation (remove 10, add 10)
-		mixedSchemas := preGeneratedMixedSchemas[i%maxIterations]
+		mixedSchemas := preGeneratedMixedSchemas[iteration%maxIterations]
 
 		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
 		start := time.Now()
@@ -699,8 +699,8 @@ func warmupConcurrentReconciliation(b *testing.B, registry *SchemaRegistry, sche
 // generateSchemas creates a map of schemas with specified count and prefix.
 func generateSchemas(count int, prefix string) map[SubjectName]JSONSchemaDefinition {
 	schemas := make(map[SubjectName]JSONSchemaDefinition)
-	for i := range count {
-		subject := SubjectName(fmt.Sprintf("%s-%d", prefix, i))
+	for idx := range count {
+		subject := SubjectName(fmt.Sprintf("%s-%d", prefix, idx))
 		schema := JSONSchemaDefinition(fmt.Sprintf(`{
 			"type": "object",
 			"properties": {
@@ -718,7 +718,7 @@ func generateSchemas(count int, prefix string) map[SubjectName]JSONSchemaDefinit
 				}
 			},
 			"required": ["id", "index", "timestamp"]
-		}`, i, i+1000))
+		}`, idx, idx+1000))
 		schemas[subject] = schema
 	}
 
@@ -730,15 +730,15 @@ func generateLargeSchema(propertyCount int) JSONSchemaDefinition {
 	properties := make(map[string]interface{})
 	required := make([]string, 0, propertyCount/2)
 
-	for i := range propertyCount {
-		propName := fmt.Sprintf("property_%d", i)
+	for propertyIndex := range propertyCount {
+		propName := fmt.Sprintf("property_%d", propertyIndex)
 		properties[propName] = map[string]interface{}{
 			"type":        "string",
-			"description": fmt.Sprintf("Property %d for large schema testing", i),
+			"description": fmt.Sprintf("Property %d for large schema testing", propertyIndex),
 		}
 
 		// Make half of them required
-		if i%2 == 0 {
+		if propertyIndex%2 == 0 {
 			required = append(required, propName)
 		}
 	}

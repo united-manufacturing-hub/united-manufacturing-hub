@@ -167,8 +167,8 @@ var _ = Describe("LifecycleManager", func() {
 			existingPaths.Store(artifacts.LogDir, true)
 
 			mockFS.WithPathExistsFunc(func(ctx context.Context, path string) (bool, error) {
-				val, ok := existingPaths.Load(path)
-				if !ok {
+				val, pathExists := existingPaths.Load(path)
+				if !pathExists {
 					return false, nil
 				}
 				boolVal, ok := val.(bool)
@@ -257,8 +257,8 @@ var _ = Describe("LifecycleManager", func() {
 			existingPaths.Store(artifacts.LogDir, true)
 
 			mockFS.WithPathExistsFunc(func(ctx context.Context, path string) (bool, error) {
-				val, ok := existingPaths.Load(path)
-				if !ok {
+				val, pathExists := existingPaths.Load(path)
+				if !pathExists {
 					return false, nil
 				}
 				boolVal, ok := val.(bool)

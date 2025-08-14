@@ -80,6 +80,9 @@ func NewGetLogsAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.
 // Shape errors are detected here, while semantic validation is done in Validate.
 func (a *GetLogsAction) Parse(ctx context.Context, payload interface{}) error {
 	a.actionLogger.Info("Parsing the payload")
+
+	var err error
+
 	a.payload, err = ParseActionPayload[models.GetLogsRequest](payload)
 	a.actionLogger.Info("Payload parsed: %v", a.payload)
 
@@ -119,7 +122,7 @@ func (a *GetLogsAction) Validate(ctx context.Context) error {
 			return errors.New("uuid must be set to retrieve logs for a DFC, Protocol Converter, or Stream Processor")
 		}
 
-		_, err = uuid.Parse(a.payload.UUID)
+		_, err := uuid.Parse(a.payload.UUID)
 		if err != nil {
 			return fmt.Errorf("invalid UUID format: %w", err)
 		}

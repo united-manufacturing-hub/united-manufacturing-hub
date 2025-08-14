@@ -285,14 +285,14 @@ func FindInstance(
 	snap SystemSnapshot,
 	managerName, instanceName string,
 ) (*FSMInstanceSnapshot, bool) {
-	manager, ok := FindManager(snap, managerName)
-	if !ok {
+	manager, found := FindManager(snap, managerName)
+	if !found {
 		return nil, false
 	}
 
-	inst, ok := manager.GetInstances()[instanceName]
+	inst, exists := manager.GetInstances()[instanceName]
 
-	return inst, ok
+	return inst, exists
 }
 
 // FindDfcInstanceByUUID finds a dataflow component instance with the given UUID.

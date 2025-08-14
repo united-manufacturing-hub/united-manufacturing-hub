@@ -73,21 +73,21 @@ func (a *EditInstanceAction) Parse(ctx context.Context, payload interface{}) err
 	}
 
 	// Check if we have a location field
-	locationData, ok := payloadMap["location"]
-	if !ok {
+	locationData, exists := payloadMap["location"]
+	if !exists {
 		// No location provided, which is fine since it's optional
 		return nil
 	}
 
 	// Parse location data
-	locationMap, ok := locationData.(map[string]interface{})
-	if !ok {
+	locationMap, isValidMap := locationData.(map[string]interface{})
+	if !isValidMap {
 		return errors.New("invalid location format, expected map")
 	}
 
 	// Extract enterprise (required)
-	enterprise, ok := locationMap["enterprise"].(string)
-	if !ok || enterprise == "" {
+	enterprise, enterpriseExists := locationMap["enterprise"].(string)
+	if !enterpriseExists || enterprise == "" {
 		return errors.New("missing or invalid enterprise in location")
 	}
 

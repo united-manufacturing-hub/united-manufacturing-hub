@@ -207,8 +207,8 @@ func (c *CommunicationState) UpdateTopicBrowserCache() error {
 		}
 	} else {
 		// get observed state from system snapshot manager
-		tbInstance, ok := fsm.FindInstance(c.SystemSnapshotManager.GetDeepCopySnapshot(), constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
-		if !ok || tbInstance == nil {
+		tbInstance, instanceFound := fsm.FindInstance(c.SystemSnapshotManager.GetDeepCopySnapshot(), constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
+		if !instanceFound || tbInstance == nil {
 			c.Logger.Error("Topic browser instance not found")
 
 			return nil // Not an error, just not ready yet

@@ -73,23 +73,23 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 			config = normalizer.NormalizeConfig(config)
 
 			// Check input preserved
-			inputMqtt, ok := config.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input["mqtt"].(map[string]any)
-			Expect(ok).To(BeTrue(), "mqtt input should be a map[string]any")
+			inputMqtt, exists := config.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input["mqtt"].(map[string]any)
+			Expect(exists).To(BeTrue(), "mqtt input should be a map[string]any")
 			Expect(inputMqtt["topic"]).To(Equal("test/topic"))
 
 			// Check output preserved
-			outputUns, ok := config.Config.DataflowComponentReadServiceConfig.BenthosConfig.Output["uns"].(map[string]any) // note that this is NOT kafka, but uns
-			Expect(ok).To(BeTrue(), "uns output should be a map[string]any")
+			outputUns, exists := config.Config.DataflowComponentReadServiceConfig.BenthosConfig.Output["uns"].(map[string]any) // note that this is NOT kafka, but uns
+			Expect(exists).To(BeTrue(), "uns output should be a map[string]any")
 			Expect(outputUns["bridged_by"]).To(Equal("{{ .internal.bridged_by }}"))
 
 			// Check pipeline processors preserved
-			processors, ok := config.Config.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline["processors"].([]any)
-			Expect(ok).To(BeTrue(), "processors should be a []any")
+			processors, exists := config.Config.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline["processors"].([]any)
+			Expect(exists).To(BeTrue(), "processors should be a []any")
 			Expect(processors).To(HaveLen(1))
-			processor, ok := processors[0].(map[string]any)
-			Expect(ok).To(BeTrue(), "processor should be a map[string]any")
-			processorText, ok := processor["text"].(map[string]any)
-			Expect(ok).To(BeTrue(), "processor text should be a map[string]any")
+			processor, exists := processors[0].(map[string]any)
+			Expect(exists).To(BeTrue(), "processor should be a map[string]any")
+			processorText, exists := processor["text"].(map[string]any)
+			Expect(exists).To(BeTrue(), "processor text should be a map[string]any")
 			Expect(processorText["operator"]).To(Equal("to_upper"))
 		})
 

@@ -272,12 +272,12 @@ func (svc *Service) Status(
 	}
 
 	// get the redpanda instance from the redpanda manager
-	rpInst, ok := fsm.FindInstance(snapshot, constants.RedpandaManagerName, constants.RedpandaInstanceName)
-	if !ok || rpInst == nil {
+	redpandaInstance, instanceExists := fsm.FindInstance(snapshot, constants.RedpandaManagerName, constants.RedpandaInstanceName)
+	if !instanceExists || redpandaInstance == nil {
 		return ServiceInfo{}, errors.New("redpanda instance not found")
 	}
 
-	redpandaStatus := rpInst.LastObservedState
+	redpandaStatus := redpandaInstance.LastObservedState
 
 	// redpandaObservedStateSnapshot is slightly different from the others as it comes from the snapshot
 	// and not from the fsm-instance
@@ -292,7 +292,7 @@ func (svc *Service) Status(
 		ObservedRedpandaServiceConfig: redpandaObservedStateSnapshot.Config,
 	}
 
-	redpandaFSMState := rpInst.CurrentState
+	redpandaFSMState := redpandaInstance.CurrentState
 
 	// Get logs
 	logs := benthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs

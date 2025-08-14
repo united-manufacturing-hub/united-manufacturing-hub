@@ -90,12 +90,12 @@ func (r *ReactorStalledFailure) IsFailure(log s6_shared.LogEntry, transitionToRu
 	}
 
 	// Convert the number of milliseconds to an integer
-	ms, err := strconv.Atoi(matches[1])
+	milliseconds, err := strconv.Atoi(matches[1])
 	if err != nil {
 		return false
 	}
 
 	// Return failure if the reactor stalled for more than 500ms
 	// 500ms was chosen, as it is very unlikely to happen during normal operation
-	return ms > 500
+	return milliseconds > 500
 }

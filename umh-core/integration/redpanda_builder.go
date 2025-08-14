@@ -194,13 +194,13 @@ func (b *RedpandaBuilder) CountActiveBenthos() int {
 
 // UpdateBenthosProducer updates the configuration of an existing Benthos producer.
 func (b *RedpandaBuilder) UpdateBenthosProducer(name string, productionInterval string) *RedpandaBuilder {
-	for i, benthos := range b.full.Internal.Benthos {
+	for index, benthos := range b.full.Internal.Benthos {
 		if benthos.Name == name {
 			// Update the interval in the input configuration
 			if input, ok := benthos.BenthosServiceConfig.Input["generate"].(map[string]interface{}); ok {
 				input["interval"] = productionInterval
 				benthos.BenthosServiceConfig.Input["generate"] = input
-				b.full.Internal.Benthos[i] = benthos
+				b.full.Internal.Benthos[index] = benthos
 			}
 
 			break

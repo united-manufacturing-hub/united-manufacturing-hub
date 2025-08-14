@@ -348,7 +348,7 @@ func (s *BenthosService) GetConfig(ctx context.Context, filesystemService filesy
 		return benthosserviceconfig.BenthosServiceConfig{}, fmt.Errorf("failed to get benthos config file for service %s: %w", s6ServiceName, err)
 	}
 
-	h := hash(yamlData)
+	hashValue := hash(yamlData)
 
 	// ---------- fast path: YAML identical to last call ----------
 	if v, ok := s.configCache.Load(benthosName); ok {
@@ -356,7 +356,7 @@ func (s *BenthosService) GetConfig(ctx context.Context, filesystemService filesy
 		if !ok {
 			// Cache entry has unexpected type, clear and continue
 			s.configCache.Delete(benthosName)
-		} else if entry.hash == h {
+		} else if entry.hash == hashValue {
 			// Nothing changed – return the cached, already-normalised struct
 			return entry.parsed, nil
 		}
@@ -425,7 +425,7 @@ func (s *BenthosService) GetConfig(ctx context.Context, filesystemService filesy
 
 	// Store the parsed config in the cache
 	s.configCache.Store(benthosName, configCacheEntry{
-		hash:   h,
+		hash:   hashValue,
 		parsed: parsed,
 	})
 
@@ -437,13 +437,13 @@ func (s *BenthosService) GetConfig(ctx context.Context, filesystemService filesy
 // Returns 0 if any part of the path is missing or invalid.
 func (s *BenthosService) extractMetricsPort(config map[string]interface{}) uint16 {
 	// Check each level of nesting
-	metrics, ok := config["metrics"].(map[string]interface{})
-	if !ok {
+	metrics, isValidMetrics := config["metrics"].(map[string]interface{})
+	if !isValidMetrics {
 		return 0
 	}
 
-	http, ok := metrics["http"].(map[string]interface{})
-	if !ok {
+	http, isValidHTTP := metrics["http"].(map[string]interface{})
+	if !isValidHTTP {
 		return 0
 	}
 
@@ -997,31 +997,31 @@ func (s *BenthosService) IsLogsFine(
 		"failed to", "connection lost", "unable to",
 	}
 
-	for _, l := range logs {
-		if l.Timestamp.Before(cutoff) {
+	for _, logEntry := range logs {
+		if logEntry.Timestamp.Before(cutoff) {
 			continue // outside the window
 		}
 
 		// Very cheap checks first — just bytes/prefix matches.
 		switch {
-		case strings.HasPrefix(l.Content, "configuration file read error:"),
-			strings.HasPrefix(l.Content, "failed to create logger:"),
-			strings.HasPrefix(l.Content, "Config lint error:"):
-			return false, l
+		case strings.HasPrefix(logEntry.Content, "configuration file read error:"),
+			strings.HasPrefix(logEntry.Content, "failed to create logger:"),
+			strings.HasPrefix(logEntry.Content, "Config lint error:"):
+			return false, logEntry
 		}
 
 		// Only one regexp call per line.
-		if m := benthosLogRe.FindStringSubmatch(l.Content); m != nil {
+		if m := benthosLogRe.FindStringSubmatch(logEntry.Content); m != nil {
 			level, msg := m[1], m[2]
 
 			if level == "error" {
-				return false, l
+				return false, logEntry
 			}
 
 			if level == "warning" {
 				for _, sub := range critWarnSubstrings {
 					if strings.Contains(msg, sub) {
-						return false, l
+						return false, logEntry
 					}
 				}
 			}

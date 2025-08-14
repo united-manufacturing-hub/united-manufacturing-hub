@@ -1474,12 +1474,12 @@ func BenchmarkParseRedpandaLogsWithPercentiles(b *testing.B) {
 	b.ResetTimer()
 	b.StopTimer()
 
-	for i := range b.N {
+	for iteration := range b.N {
 		start := time.Now()
 
 		b.StartTimer()
 
-		_, err := service.ParseRedpandaLogs(ctx, logs, uint64(i)) //nolint:gosec // G115: Safe conversion, benchmark iteration counter is positive
+		_, err := service.ParseRedpandaLogs(ctx, logs, uint64(iteration)) //nolint:gosec // G115: Safe conversion, benchmark iteration counter is positive
 
 		b.StopTimer()
 
@@ -1487,7 +1487,7 @@ func BenchmarkParseRedpandaLogsWithPercentiles(b *testing.B) {
 			b.Fatal(err)
 		}
 
-		times[i] = time.Since(start)
+		times[iteration] = time.Since(start)
 	}
 
 	// Sort times for percentile calculation

@@ -496,20 +496,20 @@ var _ = Describe("DeployDataflowComponent", func() {
 			Expect(mockConfig.Config.DataFlow[0].DesiredFSMState).To(Equal("active"))
 
 			// Verify processor order is preserved
-			processorsPipeline, ok := mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.Pipeline["processors"].([]interface{})
-			Expect(ok).To(BeTrue(), "Pipeline processors should be a slice of interfaces")
+			processorsPipeline, isValidPipeline := mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.Pipeline["processors"].([]interface{})
+			Expect(isValidPipeline).To(BeTrue(), "Pipeline processors should be a slice of interfaces")
 			Expect(processorsPipeline).To(HaveLen(3), "Should have 3 processors")
 
 			// Verify the order is preserved by checking the descriptions added to each processor
-			firstProcessor, ok := processorsPipeline[0].(map[string]interface{})
-			Expect(ok).To(BeTrue(), "Processor should be a map")
+			firstProcessor, isValidProcessor := processorsPipeline[0].(map[string]interface{})
+			Expect(isValidProcessor).To(BeTrue(), "Processor should be a map")
 			Expect(firstProcessor["type"]).To(Equal("mapping"))
 			Expect(firstProcessor["procs"]).To(Equal([]interface{}{}))
 			Expect(firstProcessor).To(HaveKey("description"), "First processor should have a description")
 			Expect(firstProcessor["description"]).To(Equal("First processor - position 0"))
 
-			secondProcessor, ok := processorsPipeline[1].(map[string]interface{})
-			Expect(ok).To(BeTrue(), "Processor should be a map")
+			secondProcessor, isValidProcessor := processorsPipeline[1].(map[string]interface{})
+			Expect(isValidProcessor).To(BeTrue(), "Processor should be a map")
 			Expect(secondProcessor["type"]).To(Equal("mapping"))
 			Expect(secondProcessor["procs"]).To(Equal([]interface{}{}))
 			Expect(secondProcessor).To(HaveKey("description"), "Second processor should have a description")

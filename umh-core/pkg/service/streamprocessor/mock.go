@@ -482,16 +482,16 @@ func (m *MockService) EvaluateDFCDesiredStates(
 	underlyingReadName := "streamprocessor-" + spName
 
 	// Find and update read DFC config
-	for i, config := range m.dfcConfigs {
+	for idx, config := range m.dfcConfigs {
 		if config.Name == underlyingReadName {
 			if spDesiredState == "stopped" {
-				m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateStopped
+				m.dfcConfigs[idx].DesiredFSMState = dfcfsm.OperationalStateStopped
 			} else {
 				// Only start the DFC, if it has been configured
-				if len(m.dfcConfigs[i].DataFlowComponentServiceConfig.BenthosConfig.Input) > 0 {
-					m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateActive
+				if len(m.dfcConfigs[idx].DataFlowComponentServiceConfig.BenthosConfig.Input) > 0 {
+					m.dfcConfigs[idx].DesiredFSMState = dfcfsm.OperationalStateActive
 				} else {
-					m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateStopped
+					m.dfcConfigs[idx].DesiredFSMState = dfcfsm.OperationalStateStopped
 				}
 			}
 

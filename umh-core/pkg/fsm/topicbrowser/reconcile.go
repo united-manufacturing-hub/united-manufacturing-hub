@@ -206,7 +206,7 @@ func (i *TopicBrowserInstance) reconcileExternalChanges(ctx context.Context, ser
 // Any functions that fetch information are disallowed here and must be called in reconcileExternalChanges
 // and exist in ObservedState.
 // This is to ensure full testability of the FSM.
-func (i *TopicBrowserInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider, currentTime time.Time, _ fsm.SystemSnapshot) (error, bool) {
+func (i *TopicBrowserInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider, _ time.Time, _ fsm.SystemSnapshot) (error, bool) {
 	var err error
 
 	var reconciled bool
@@ -241,7 +241,7 @@ func (i *TopicBrowserInstance) reconcileStateTransition(ctx context.Context, ser
 
 	// Handle operational states
 	if IsOperationalState(currentState) {
-		err, reconciled = i.reconcileOperationalStates(ctx, services, currentState, desiredState, currentTime)
+		err, reconciled = i.reconcileOperationalStates(ctx, services, currentState, desiredState)
 		if err != nil {
 			return err, false
 		}
@@ -253,7 +253,7 @@ func (i *TopicBrowserInstance) reconcileStateTransition(ctx context.Context, ser
 }
 
 // reconcileOperationalStates handles states related to instance operations (starting/stopping).
-func (i *TopicBrowserInstance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time) (error, bool) {
+func (i *TopicBrowserInstance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -262,7 +262,7 @@ func (i *TopicBrowserInstance) reconcileOperationalStates(ctx context.Context, s
 
 	switch desiredState {
 	case OperationalStateActive:
-		return i.reconcileTransitionToActive(ctx, services, currentState, currentTime)
+		return i.reconcileTransitionToActive(ctx, services, currentState)
 	case OperationalStateStopped:
 		return i.reconcileTransitionToStopped(ctx, services, currentState)
 	default:
@@ -272,7 +272,7 @@ func (i *TopicBrowserInstance) reconcileOperationalStates(ctx context.Context, s
 
 // reconcileTransitionToActive handles transitions when the desired state is Active.
 // It deals with moving from various states to the Active state.
-func (i *TopicBrowserInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (error, bool) {
+func (i *TopicBrowserInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -463,7 +463,7 @@ func (i *TopicBrowserInstance) reconcileRunningStates(ctx context.Context, curre
 
 // reconcileTransitionToStopped handles transitions when the desired state is Stopped.
 // It deals with moving from any operational state to Stopping and then to Stopped.
-func (i *TopicBrowserInstance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
+func (i *TopicBrowserInstance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (error, bool) {
 	start := time.Now()
 
 	defer func() {

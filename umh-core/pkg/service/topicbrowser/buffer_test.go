@@ -71,9 +71,9 @@ var _ = Describe("Ringbuffer", func() {
 
 	Context("capacity overflow guard", func() {
 		It("falls back to the default when asked for an absurd capacity", func() {
-			rb := NewRingbuffer(math.MaxUint64) // far above MaxInt
-			Expect(rb.buf).ToNot(BeEmpty())
-			Expect(len(rb.buf)).To(BeNumerically("<=", 8)) // defaultCap
+			ringBuffer := NewRingbuffer(math.MaxUint64) // far above MaxInt
+			Expect(ringBuffer.buf).ToNot(BeEmpty())
+			Expect(len(ringBuffer.buf)).To(BeNumerically("<=", 8)) // defaultCap
 		})
 	})
 
@@ -86,18 +86,18 @@ var _ = Describe("Ringbuffer", func() {
 				readers    = 16
 				iterations = 1_000
 			)
-			rb := NewRingbuffer(capacity)
+			ringBuffer := NewRingbuffer(capacity)
 
 			// spawn goroutines to perform concurrent write and read and wait for all
 			// iterations to be done
 			var waitGroup sync.WaitGroup
 			for w := range writers {
 				waitGroup.Add(1)
-				go helperWriter(rb, byte(w), iterations, &waitGroup)
+				go helperWriter(ringBuffer, byte(w), iterations, &waitGroup)
 			}
 			for range readers {
 				waitGroup.Add(1)
-				go helperReaderGet(rb, int(capacity), iterations, &waitGroup)
+				go helperReaderGet(ringBuffer, int(capacity), iterations, &waitGroup)
 			}
 			waitGroup.Wait()
 		})
@@ -105,27 +105,27 @@ var _ = Describe("Ringbuffer", func() {
 
 	Context("GetSnapshot / memory management", func() {
 		It("provides immutable snapshot access", func() {
-			rb := NewRingbuffer(4)
-			rb.Add(helperBuf(42))
+			ringBuffer := NewRingbuffer(4)
+			ringBuffer.Add(helperBuf(42))
 
 			snapshot := ringBuffer.GetSnapshot()
 			Expect(snapshot.Items).To(HaveLen(1))
 
 			// Verify immutable access - snapshot won't change if we add more items
-			rb.Add(helperBuf(99))
+			ringBuffer.Add(helperBuf(99))
 			Expect(snapshot.Items).To(HaveLen(1))                    // Original snapshot unchanged
 			Expect(snapshot.Items[0].Payload[0]).To(Equal(byte(42))) // Original data preserved
 
 			// New snapshot reflects updates
-			newSnapshot := rb.GetSnapshot()
+			newSnapshot := ringBuffer.GetSnapshot()
 			Expect(newSnapshot.Items).To(HaveLen(2))
 			Expect(newSnapshot.Items[0].Payload[0]).To(Equal(byte(99))) // Newest first
 		})
 
 		It("demonstrates proper consumer memory management", func() {
-			rb := NewRingbuffer(4)
-			rb.Add(helperBuf(42))
-			rb.Add(helperBuf(43))
+			ringBuffer := NewRingbuffer(4)
+			ringBuffer.Add(helperBuf(42))
+			ringBuffer.Add(helperBuf(43))
 
 			// Consumer pattern: get snapshot and always return items to pool
 			snapshot := ringBuffer.GetSnapshot()
@@ -144,8 +144,8 @@ var _ = Describe("Ringbuffer", func() {
 		})
 
 		It("shows that PutBufferItems clears the items", func() {
-			rb := NewRingbuffer(2)
-			rb.Add(helperBuf(100))
+			ringBuffer := NewRingbuffer(2)
+			ringBuffer.Add(helperBuf(100))
 
 			snapshot := ringBuffer.GetSnapshot()
 			Expect(snapshot.Items).To(HaveLen(1))
@@ -230,22 +230,22 @@ func helperBuf(id byte) *BufferItem {
 }
 
 // helper to Add to ringbuffer.
-func helperWriter(rb *Ringbuffer, id byte, n int, wg *sync.WaitGroup) {
+func helperWriter(ringBuffer *Ringbuffer, id byte, n int, wg *sync.WaitGroup) {
 	defer GinkgoRecover()
 	defer wg.Done()
 
 	for range n {
-		rb.Add(helperBuf(id))
+		ringBuffer.Add(helperBuf(id))
 	}
 }
 
 // helper to Get from ringbuffer using GetSnapshot.
-func helperReaderGet(rb *Ringbuffer, capacity int, n int, wg *sync.WaitGroup) {
+func helperReaderGet(ringBuffer *Ringbuffer, capacity int, n int, wg *sync.WaitGroup) {
 	defer GinkgoRecover()
 	defer wg.Done()
 
 	for range n {
-		snapshot := rb.GetSnapshot()
+		snapshot := ringBuffer.GetSnapshot()
 		Expect(len(snapshot.Items)).To(BeNumerically("<=", capacity))
 
 		for _, b := range snapshot.Items {

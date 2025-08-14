@@ -101,13 +101,13 @@ func LoadConfigWithEnvOverrides(ctx context.Context, configManager *FileConfigMa
 	// Location values are numbered 0-6 and passed as LOCATION_0, LOCATION_1, etc.
 	locations := make(map[int]string)
 
-	for i := range 7 {
-		location, err := env.GetAsString(fmt.Sprintf("LOCATION_%d", i), false, "")
+	for index := range 7 {
+		location, err := env.GetAsString(fmt.Sprintf("LOCATION_%d", index), false, "")
 		if err != nil {
-			sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to get LOCATION_%d: %w", i, err)
+			sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to get LOCATION_%d: %w", index, err)
 		}
 
-		locations[i] = location
+		locations[index] = location
 	}
 
 	// Build the config override structure from environment variables

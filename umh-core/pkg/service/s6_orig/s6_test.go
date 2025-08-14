@@ -644,15 +644,15 @@ var _ = Describe("MaxFunc Approach for Rotated Files", func() {
 		var expectedLatest string
 
 		// Create files in random order
-		for i, ts := range timestamps {
+		for index, ts := range timestamps {
 			filename := tai64.FormatNano(ts) + ".s"
 			filepath := filepath.Join(logDir, filename)
 
-			err := fsService.WriteFile(ctx, filepath, []byte(fmt.Sprintf("log content %d", i)), 0644)
+			err := fsService.WriteFile(ctx, filepath, []byte(fmt.Sprintf("log content %d", index)), 0644)
 			Expect(err).ToNot(HaveOccurred())
 
 			// The third timestamp (index 2) is the newest
-			if i == 2 {
+			if index == 2 {
 				expectedLatest = filepath
 			}
 		}
@@ -739,15 +739,15 @@ var _ = Describe("MaxFunc Approach for Rotated Files", func() {
 
 		var expectedLatest string
 
-		for i, ts := range timestamps {
+		for index, ts := range timestamps {
 			filename := tai64.FormatNano(ts) + ".s"
 			filePath := filepath.Join(logDir, filename)
 
-			err := fsService.WriteFile(ctx, filePath, []byte(fmt.Sprintf("precise log %d", i)), 0644)
+			err := fsService.WriteFile(ctx, filePath, []byte(fmt.Sprintf("precise log %d", index)), 0644)
 			Expect(err).ToNot(HaveOccurred())
 
 			// The file with 500ms offset (index 1) should be latest
-			if i == 1 {
+			if index == 1 {
 				expectedLatest = filePath
 			}
 		}

@@ -221,8 +221,8 @@ func (p *Service) Status(
 	underlyingDFCName := p.getUnderlyingDFCReadName(spName)
 
 	// --- redpanda (only one instance) -------------------------------------------------------------
-	rpInst, ok := fsm.FindInstance(snapshot, constants.RedpandaManagerName, constants.RedpandaInstanceName)
-	if !ok || rpInst == nil {
+	rpInst, found := fsm.FindInstance(snapshot, constants.RedpandaManagerName, constants.RedpandaInstanceName)
+	if !found || rpInst == nil {
 		return ServiceInfo{}, errors.New("redpanda instance not found")
 	}
 
@@ -230,8 +230,8 @@ func (p *Service) Status(
 
 	// redpandaObservedStateSnapshot is slightly different from the others as it comes from the snapshot
 	// and not from the fsm-instance
-	redpandaObservedStateSnapshot, ok := redpandaStatus.(*redpandafsm.RedpandaObservedStateSnapshot)
-	if !ok {
+	redpandaObservedStateSnapshot, isValidSnapshot := redpandaStatus.(*redpandafsm.RedpandaObservedStateSnapshot)
+	if !isValidSnapshot {
 		return ServiceInfo{}, fmt.Errorf("redpanda status for redpanda %s is not a RedpandaObservedStateSnapshot", spName)
 	}
 
@@ -254,6 +254,8 @@ func (p *Service) Status(
 	)
 
 	if dfcExists {
+		var ok bool
+
 		dfcObservedState, ok = dfcStatus.(dfcfsm.DataflowComponentObservedState)
 		if !ok {
 			return ServiceInfo{}, fmt.Errorf("read dataflowcomponent status for dataflowcomponent %s is not a DataflowComponentObservedState", spName)
@@ -457,16 +459,16 @@ func (p *Service) EvaluateDFCDesiredStates(
 	// Find and update our cached config for read DFC
 	dfcFound := false
 
-	for i, config := range p.dataflowComponentConfig {
+	for idx, config := range p.dataflowComponentConfig {
 		if config.Name == dfcName {
 			if spDesiredState == "stopped" {
-				p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateStopped
+				p.dataflowComponentConfig[idx].DesiredFSMState = dfcfsm.OperationalStateStopped
 			} else {
 				// Only start the DFC, if it has been configured
-				if len(p.dataflowComponentConfig[i].DataFlowComponentServiceConfig.BenthosConfig.Input) > 0 {
-					p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateActive
+				if len(p.dataflowComponentConfig[idx].DataFlowComponentServiceConfig.BenthosConfig.Input) > 0 {
+					p.dataflowComponentConfig[idx].DesiredFSMState = dfcfsm.OperationalStateActive
 				} else {
-					p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateStopped
+					p.dataflowComponentConfig[idx].DesiredFSMState = dfcfsm.OperationalStateStopped
 				}
 			}
 

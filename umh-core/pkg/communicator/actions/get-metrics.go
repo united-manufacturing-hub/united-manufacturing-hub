@@ -75,6 +75,9 @@ func NewGetMetricsActionWithProvider(userEmail string, actionUUID uuid.UUID, ins
 // Shape errors are detected here, while semantic validation is done in Validate.
 func (a *GetMetricsAction) Parse(ctx context.Context, payload interface{}) error {
 	a.actionLogger.Info("Parsing the payload")
+
+	var err error
+
 	a.payload, err = ParseActionPayload[models.GetMetricsRequest](payload)
 	a.actionLogger.Infow("Payload parsed", "payload", a.payload)
 
@@ -83,8 +86,10 @@ func (a *GetMetricsAction) Parse(ctx context.Context, payload interface{}) error
 
 // Validate performs semantic validation of the parsed payload.
 // This verifies that the metric type is allowed and that the UUID is valid for DFC metrics.
-func (a *GetMetricsAction) Validate(ctx context.Context) (err error) {
+func (a *GetMetricsAction) Validate(ctx context.Context) error {
 	a.actionLogger.Info("Validating the payload")
+
+	var err error
 
 	allowedMetricTypes := []models.MetricResourceType{models.DFCMetricResourceType, models.RedpandaMetricResourceType, models.TopicBrowserMetricResourceType, models.StreamProcessorMetricResourceType, models.ProtocolConverterMetricResourceType}
 	if !slices.Contains(allowedMetricTypes, a.payload.Type) {

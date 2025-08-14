@@ -117,7 +117,7 @@ func (m *MockSchemaRegistry) ClearSchemas() {
 }
 
 // handleSubjects handles GET /subjects - returns all available subjects.
-func (m *MockSchemaRegistry) handleSubjects(w http.ResponseWriter, r *http.Request) {
+func (m *MockSchemaRegistry) handleSubjects(w http.ResponseWriter, r *http.Request) { //nolint:varnamelen // Mock HTTP handler - standard HTTP param names
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 
@@ -178,7 +178,7 @@ func (m *MockSchemaRegistry) handleSubjectOperations(w http.ResponseWriter, r *h
 }
 
 // handleDeleteSubject handles DELETE /subjects/{subject}.
-func (m *MockSchemaRegistry) handleDeleteSubject(w http.ResponseWriter, r *http.Request, subject string) {
+func (m *MockSchemaRegistry) handleDeleteSubject(w http.ResponseWriter, r *http.Request, subject string) { //nolint:varnamelen // Mock HTTP handler - standard HTTP param names
 	_ = r // HTTP request parameter required by handler interface
 
 	// Check if subject exists
@@ -316,7 +316,7 @@ func (m *MockSchemaRegistry) handleGetSubjectVersions(w http.ResponseWriter, r *
 }
 
 // handleLatestVersion handles requests for the latest version of a subject.
-func (m *MockSchemaRegistry) handleLatestVersion(w http.ResponseWriter, subject string) {
+func (m *MockSchemaRegistry) handleLatestVersion(w http.ResponseWriter, subject string) { //nolint:varnamelen // Mock HTTP handler - standard HTTP param names
 	versions, subjectExists := m.schemas[subject]
 	if !subjectExists {
 		http.Error(w, fmt.Sprintf(`{"error_code":40401,"message":"Subject '%s' not found."}`, subject), http.StatusNotFound)

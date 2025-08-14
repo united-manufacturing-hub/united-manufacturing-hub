@@ -87,31 +87,31 @@ var _ = Describe("Translator Examples", func() {
 			Expect(schema["additionalProperties"]).To(BeFalse())
 			Expect(schema["required"]).To(ConsistOf("virtual_path", "fields"))
 
-			properties, ok := schema["properties"].(map[string]interface{})
-			Expect(ok).To(BeTrue())
+			properties, exists := schema["properties"].(map[string]interface{})
+			Expect(exists).To(BeTrue())
 
 			// Check virtual_path property
-			virtualPath, ok := properties["virtual_path"].(map[string]interface{})
-			Expect(ok).To(BeTrue())
+			virtualPath, exists := properties["virtual_path"].(map[string]interface{})
+			Expect(exists).To(BeTrue())
 			Expect(virtualPath["type"]).To(Equal("string"))
 			Expect(virtualPath["enum"]).To(ConsistOf("count", "vibration.x-axis"))
 
 			// Check fields property
-			fields, ok := properties["fields"].(map[string]interface{})
-			Expect(ok).To(BeTrue())
+			fields, exists := properties["fields"].(map[string]interface{})
+			Expect(exists).To(BeTrue())
 			Expect(fields["type"]).To(Equal("object"))
 			Expect(fields["additionalProperties"]).To(BeFalse())
 			Expect(fields["required"]).To(ConsistOf("timestamp_ms", "value"))
 
-			fieldsProps, ok := fields["properties"].(map[string]interface{})
-			Expect(ok).To(BeTrue())
+			fieldsProps, exists := fields["properties"].(map[string]interface{})
+			Expect(exists).To(BeTrue())
 
-			timestampMs, ok := fieldsProps["timestamp_ms"].(map[string]interface{})
-			Expect(ok).To(BeTrue())
+			timestampMs, exists := fieldsProps["timestamp_ms"].(map[string]interface{})
+			Expect(exists).To(BeTrue())
 			Expect(timestampMs["type"]).To(Equal("number"))
 
-			value, ok := fieldsProps["value"].(map[string]interface{})
-			Expect(ok).To(BeTrue())
+			value, exists := fieldsProps["value"].(map[string]interface{})
+			Expect(exists).To(BeTrue())
 			Expect(value["type"]).To(Equal("number"))
 
 			// Verify this schema would validate the example UNS message:

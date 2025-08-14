@@ -102,18 +102,18 @@ func normalizeConfig(raw map[string]any) map[string]any {
 	}
 
 	// Extract and normalize template components
-	modelConfig, ok := template["model"].(map[string]any)
-	if !ok {
+	modelConfig, exists := template["model"].(map[string]any)
+	if !exists {
 		modelConfig = make(map[string]any)
 	}
 
-	sourcesConfig, ok := template["sources"].(map[string]any)
-	if !ok {
+	sourcesConfig, exists := template["sources"].(map[string]any)
+	if !exists {
 		sourcesConfig = make(map[string]any)
 	}
 
-	mappingConfig, ok := template["mapping"].(map[string]any)
-	if !ok {
+	mappingConfig, exists := template["mapping"].(map[string]any)
+	if !exists {
 		mappingConfig = make(map[string]any)
 	}
 

@@ -37,9 +37,13 @@ import (
 // This function is intended to be called repeatedly (e.g. in a periodic control loop).
 // Over multiple calls, it converges the actual state to the desired state. Transitions
 // that fail are retried in subsequent reconcile calls after a backoff periop.
-func (i *Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
+func (i *Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool) {
 	start := time.Now()
 	spName := i.baseFSMInstance.GetID()
+
+	var err error
+
+	var reconciled bool
 
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentStreamProcessorInstance, spName, time.Since(start))
@@ -186,7 +190,7 @@ func (i *Instance) reconcileExternalChanges(ctx context.Context, services servic
 // Any functions that fetch information are disallowed here and must be called in reconcileExternalChanges
 // and exist in ObservedState.
 // This is to ensure full testability of the FSM.
-func (i *Instance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider, currentTime time.Time) (err error, reconciled bool) {
+func (i *Instance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider, currentTime time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -223,7 +227,7 @@ func (i *Instance) reconcileStateTransition(ctx context.Context, services servic
 }
 
 // reconcileOperationalStates handles states related to instance operations (starting/stopping).
-func (i *Instance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time) (err error, reconciled bool) {
+func (i *Instance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -242,7 +246,7 @@ func (i *Instance) reconcileOperationalStates(ctx context.Context, services serv
 
 // reconcileTransitionToActive handles transitions when the desired state is Active.
 // It deals with moving from various states to the Active state.
-func (i *Instance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (i *Instance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -279,7 +283,7 @@ func (i *Instance) reconcileTransitionToActive(ctx context.Context, services ser
 }
 
 // reconcileStartingStates handles the various starting phase states when transitioning to Active.
-func (i *Instance) reconcileStartingStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (i *Instance) reconcileStartingStates(ctx context.Context, _ serviceregistry.Provider, currentState string, _ time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -330,7 +334,7 @@ func (i *Instance) reconcileStartingStates(ctx context.Context, services service
 }
 
 // reconcileRunningState handles the various running states when transitioning to Active.
-func (i *Instance) reconcileRunningState(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (i *Instance) reconcileRunningState(ctx context.Context, _ serviceregistry.Provider, currentState string, _ time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -474,7 +478,7 @@ func (i *Instance) reconcileRunningState(ctx context.Context, services servicere
 
 // reconcileTransitionToStopped handles transitions when the desired state is Stoppep.
 // It deals with moving from any operational state to Stopping and then to Stoppep.
-func (i *Instance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
+func (i *Instance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (error, bool) {
 	start := time.Now()
 
 	defer func() {

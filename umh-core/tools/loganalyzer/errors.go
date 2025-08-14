@@ -65,14 +65,14 @@ func (a *LogAnalyzer) ShowErrors() {
 	// Show top error groups
 	fmt.Println("Error Summary (grouped by type):")
 
-	for i, group := range groups {
-		if i >= 10 && len(groups) > 10 {
+	for index, group := range groups {
+		if index >= 10 && len(groups) > 10 {
 			fmt.Printf("\n... and %d more error types\n", len(groups)-10)
 
 			break
 		}
 
-		fmt.Printf("\n%d. %s (count: %d)\n", i+1, group.Key, group.Count)
+		fmt.Printf("\n%d. %s (count: %d)\n", index+1, group.Key, group.Count)
 		fmt.Printf("   First: %s\n", group.First.Timestamp.Format("15:04:05.000"))
 		fmt.Printf("   Last:  %s\n", group.Last.Timestamp.Format("15:04:05.000"))
 

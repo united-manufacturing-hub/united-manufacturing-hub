@@ -29,18 +29,18 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 	}
 
 	DescribeTable("generator rendering",
-		func(tc testCase) {
+		func(testCaseValue testCase) {
 			generator := NewGenerator()
-			yamlStr, err := generator.RenderConfig(*tc.config)
+			yamlStr, err := generator.RenderConfig(*testCaseValue.config)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Check for expected strings
-			for _, exp := range tc.expected {
+			for _, exp := range testCaseValue.expected {
 				Expect(yamlStr).To(ContainSubstring(exp))
 			}
 
 			// Check for strings that should not be present
-			for _, notExp := range tc.notExpected {
+			for _, notExp := range testCaseValue.notExpected {
 				Expect(yamlStr).NotTo(ContainSubstring(notExp))
 			}
 		},

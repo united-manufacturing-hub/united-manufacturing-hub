@@ -317,12 +317,12 @@ func BenchmarkParseBenthosLogsWithPercentiles(b *testing.B) {
 	b.ResetTimer()
 	b.StopTimer()
 
-	for i := range b.N {
+	for iteration := range b.N {
 		start := time.Now()
 
 		b.StartTimer()
 
-		_, err := service.ParseBenthosLogs(ctx, logs, uint64(i)) //nolint:gosec // G115: Safe conversion, benchmark iteration counter is positive
+		_, err := service.ParseBenthosLogs(ctx, logs, uint64(iteration)) //nolint:gosec // G115: Safe conversion, benchmark iteration counter is positive
 
 		b.StopTimer()
 
@@ -330,7 +330,7 @@ func BenchmarkParseBenthosLogsWithPercentiles(b *testing.B) {
 			b.Fatal(err)
 		}
 
-		times[i] = time.Since(start)
+		times[iteration] = time.Since(start)
 	}
 
 	// Sort times for percentile calculation
@@ -410,7 +410,7 @@ func BenchmarkUpdateFromMetricsWithPercentiles(b *testing.B) {
 	b.ResetTimer()
 	b.StopTimer()
 
-	for i := range b.N {
+	for iteration := range b.N {
 		// Simulate increasing counters for realistic benchmark
 		metrics.Input.Received++
 		metrics.Output.Sent++
@@ -428,10 +428,10 @@ func BenchmarkUpdateFromMetricsWithPercentiles(b *testing.B) {
 		start := time.Now()
 
 		b.StartTimer()
-		metricsState.UpdateFromMetrics(metrics, uint64(i)) //nolint:gosec // G115: Safe conversion, benchmark iteration counter is positive
+		metricsState.UpdateFromMetrics(metrics, uint64(iteration)) //nolint:gosec // G115: Safe conversion, benchmark iteration counter is positive
 		b.StopTimer()
 
-		times[i] = time.Since(start)
+		times[iteration] = time.Since(start)
 	}
 
 	// Sort times for percentile calculation

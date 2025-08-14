@@ -111,8 +111,11 @@ func NewGetStreamProcessorAction(userEmail string, actionUUID uuid.UUID, instanc
 
 // Parse stores the UUID we should resolve.  The heavy lifting
 // happens later in Execute.
-func (a *GetStreamProcessorAction) Parse(ctx context.Context, payload interface{}) (err error) {
+func (a *GetStreamProcessorAction) Parse(ctx context.Context, payload interface{}) error {
 	a.actionLogger.Info("Parsing the payload")
+
+	var err error
+
 	a.payload, err = ParseActionPayload[models.GetStreamProcessorPayload](payload)
 	a.actionLogger.Info("Payload parsed, uuid: ", a.payload.UUID)
 

@@ -357,32 +357,32 @@ func BenchmarkTranslateDataModel_Large(b *testing.B) {
 	structure := make(map[string]config.Field)
 
 	// Create 10 major subsystems
-	for i := range 10 {
+	for subsystemIndex := range 10 {
 		subsystemFields := make(map[string]config.Field)
 
 		// Each subsystem has 5-8 components
-		for j := range 5 + i%4 {
+		for componentIndex := range 5 + subsystemIndex%4 {
 			componentFields := make(map[string]config.Field)
 
 			// Each component has 3-6 measurements
-			for k := range 3 + j%4 {
-				if k%2 == 0 {
-					componentFields[fmt.Sprintf("measurement_%d", k)] = config.Field{
+			for measurementIndex := range 3 + componentIndex%4 {
+				if measurementIndex%2 == 0 {
+					componentFields[fmt.Sprintf("measurement_%d", measurementIndex)] = config.Field{
 						PayloadShape: "timeseries-number",
 					}
 				} else {
-					componentFields[fmt.Sprintf("status_%d", k)] = config.Field{
+					componentFields[fmt.Sprintf("status_%d", measurementIndex)] = config.Field{
 						PayloadShape: "timeseries-string",
 					}
 				}
 			}
 
-			subsystemFields[fmt.Sprintf("component_%d", j)] = config.Field{
+			subsystemFields[fmt.Sprintf("component_%d", componentIndex)] = config.Field{
 				Subfields: componentFields,
 			}
 		}
 
-		structure[fmt.Sprintf("subsystem_%d", i)] = config.Field{
+		structure[fmt.Sprintf("subsystem_%d", subsystemIndex)] = config.Field{
 			Subfields: subsystemFields,
 		}
 	}

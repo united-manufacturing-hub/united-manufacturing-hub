@@ -758,14 +758,14 @@ var _ = Describe("Batch Processing Performance", Serial, Label("measurement"), f
 		}
 
 		By("Preparing test messages")
-		for i := range messageCount {
-			size := sizes[i%len(sizes)] // Cycle through different sizes
+		for msgIndex := range messageCount {
+			size := sizes[msgIndex%len(sizes)] // Cycle through different sizes
 			payload := make([]byte, size)
-			for j := range payload {
-				payload[j] = byte(65 + (j % 26)) // Fill with repeating A-Z
+			for byteIndex := range payload {
+				payload[byteIndex] = byte(65 + (byteIndex % 26)) // Fill with repeating A-Z
 			}
 
-			messages[i] = models.UMHMessageContent{
+			messages[msgIndex] = models.UMHMessageContent{
 				MessageType: models.Status,
 				Payload:     string(payload),
 			}
@@ -1222,7 +1222,7 @@ var _ = Describe("Thread Safety", func() {
 		}
 
 		waitGroup.Add(numGoroutines)
-		for i := range numGoroutines {
+		for goroutineIndex := range numGoroutines {
 			go func(routineNum int) {
 				defer waitGroup.Done()
 				for iteration := range iterationsPerGoroutine {
@@ -1256,7 +1256,7 @@ var _ = Describe("Thread Safety", func() {
 						return
 					}
 				}
-			}(i)
+			}(goroutineIndex)
 		}
 
 		// Wait for all goroutines to complete
@@ -1283,7 +1283,7 @@ var _ = Describe("Thread Safety", func() {
 		}
 
 		waitGroup.Add(numGoroutines)
-		for i := range numGoroutines {
+		for goroutineIndex := range numGoroutines {
 			go func(routineNum int) {
 				defer waitGroup.Done()
 				for iteration := range iterationsPerGoroutine {
@@ -1317,7 +1317,7 @@ var _ = Describe("Thread Safety", func() {
 						return
 					}
 				}
-			}(i)
+			}(goroutineIndex)
 		}
 
 		// Wait for all goroutines to complete
@@ -1344,7 +1344,7 @@ var _ = Describe("Thread Safety", func() {
 		}
 
 		waitGroup.Add(numGoroutines)
-		for i := range numGoroutines {
+		for goroutineIndex := range numGoroutines {
 			go func(routineNum int) {
 				defer waitGroup.Done()
 				for iteration := range iterationsPerGoroutine {
@@ -1378,7 +1378,7 @@ var _ = Describe("Thread Safety", func() {
 						return
 					}
 				}
-			}(i)
+			}(goroutineIndex)
 		}
 
 		// Wait for all goroutines to complete

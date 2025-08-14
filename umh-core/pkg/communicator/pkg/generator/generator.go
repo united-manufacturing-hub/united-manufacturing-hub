@@ -170,8 +170,8 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 	// --- redpanda (only one instance) -------------------------------------------------------------
 	var redpandaData models.Redpanda
 
-	rpInst, ok := fsm.FindInstance(snapshot, constants.RedpandaManagerName, constants.RedpandaInstanceName)
-	if ok {
+	rpInst, found := fsm.FindInstance(snapshot, constants.RedpandaManagerName, constants.RedpandaInstanceName)
+	if found {
 		redpandaData = RedpandaFromSnapshot(rpInst, s.logger)
 	}
 
@@ -194,14 +194,14 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 	// --- dfc (multiple instances) ----------------------	---------------------------------------
 	var dfcData []models.Dfc
 
-	dfcMgr, ok := fsm.FindManager(snapshot, constants.DataflowcomponentManagerName)
-	if ok {
+	dfcMgr, managerFound := fsm.FindManager(snapshot, constants.DataflowcomponentManagerName)
+	if managerFound {
 		dfcData = DfcsFromSnapshot(dfcMgr, s.logger)
 	}
 
 	// --- protocol converters (multiple instances) as DFCs --------------------------
-	protocolConverterMgr, ok := fsm.FindManager(snapshot, constants.ProtocolConverterManagerName)
-	if ok {
+	protocolConverterMgr, managerFound := fsm.FindManager(snapshot, constants.ProtocolConverterManagerName)
+	if managerFound {
 		protocolConverterDfcs := ProtocolConvertersFromSnapshot(protocolConverterMgr, s.logger)
 		dfcData = append(dfcData, protocolConverterDfcs...)
 	}

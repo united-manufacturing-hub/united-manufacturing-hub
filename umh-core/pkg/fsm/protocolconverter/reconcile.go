@@ -258,7 +258,7 @@ func (p *ProtocolConverterInstance) reconcileOperationalStates(ctx context.Conte
 
 // reconcileTransitionToActive handles transitions when the desired state is Active.
 // It deals with moving from various states to the Active state.
-func (p *ProtocolConverterInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (p *ProtocolConverterInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -295,7 +295,7 @@ func (p *ProtocolConverterInstance) reconcileTransitionToActive(ctx context.Cont
 }
 
 // reconcileStartingStates handles the various starting phase states when transitioning to Active.
-func (p *ProtocolConverterInstance) reconcileStartingStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (p *ProtocolConverterInstance) reconcileStartingStates(ctx context.Context, _ serviceregistry.Provider, currentState string, _ time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -436,7 +436,7 @@ func (p *ProtocolConverterInstance) reconcileStartingStates(ctx context.Context,
 }
 
 // reconcileRunningState handles the various running states when transitioning to Active.
-func (p *ProtocolConverterInstance) reconcileRunningState(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (p *ProtocolConverterInstance) reconcileRunningState(ctx context.Context, _ serviceregistry.Provider, currentState string, _ time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -605,7 +605,7 @@ func (p *ProtocolConverterInstance) reconcileRunningState(ctx context.Context, s
 
 // reconcileTransitionToStopped handles transitions when the desired state is Stoppep.
 // It deals with moving from any operational state to Stopping and then to Stoppep.
-func (p *ProtocolConverterInstance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
+func (p *ProtocolConverterInstance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (error, bool) {
 	start := time.Now()
 
 	defer func() {

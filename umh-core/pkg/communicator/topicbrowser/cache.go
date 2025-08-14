@@ -155,7 +155,7 @@ func (c *Cache) ProcessIncrementalUpdates(obs *topicbrowserfsm.ObservedStateSnap
 		minSequenceNum, maxSequenceNum uint64
 	)
 
-	for i, buf := range itemsToProcess {
+	for bufferIndex, buf := range itemsToProcess {
 		// Track latest timestamp for cache management
 		if buf.Timestamp.After(latestTimestamp) {
 			latestTimestamp = buf.Timestamp
@@ -180,7 +180,7 @@ func (c *Cache) ProcessIncrementalUpdates(obs *topicbrowserfsm.ObservedStateSnap
 			// Log details about first few skipped buffers to avoid spam
 			if result.SkippedCount <= 3 {
 				log.Warnf("Skipped buffer %d: timestamp=%s, size=%d bytes, error=%v",
-					i, buf.Timestamp.Format(time.RFC3339), len(buf.Payload), err)
+					bufferIndex, buf.Timestamp.Format(time.RFC3339), len(buf.Payload), err)
 			}
 
 			continue

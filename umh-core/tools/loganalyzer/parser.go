@@ -239,16 +239,16 @@ func (a *LogAnalyzer) buildSessions() {
 		return a.Starts[i].Before(a.Starts[j])
 	})
 
-	for i := range len(a.Starts) {
+	for index := range len(a.Starts) {
 		session := SessionInfo{
-			StartTime: a.Starts[i],
+			StartTime: a.Starts[index],
 			StartTick: -1,
 			EndTick:   -1,
 		}
 
 		// Find end time (next start or last entry)
-		if i+1 < len(a.Starts) {
-			session.EndTime = a.Starts[i+1]
+		if index+1 < len(a.Starts) {
+			session.EndTime = a.Starts[index+1]
 		} else if len(a.Entries) > 0 {
 			session.EndTime = a.Entries[len(a.Entries)-1].Timestamp
 		}

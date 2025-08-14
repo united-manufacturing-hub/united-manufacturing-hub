@@ -259,8 +259,8 @@ var _ = Describe("GetDataFlowComponent", func() {
 			Expect(metadata).To(BeNil())
 
 			// Check the response content
-			response, ok := result.(models.GetDataflowcomponentResponse)
-			Expect(ok).To(BeTrue(), "Result should be a GetDataflowcomponentResponse")
+			response, isValidResponse := result.(models.GetDataflowcomponentResponse)
+			Expect(isValidResponse).To(BeTrue(), "Result should be a GetDataflowcomponentResponse")
 
 			// Check that we have the expected component in the response
 			Expect(response).To(HaveKey(testComponentUUID))
@@ -452,8 +452,8 @@ var _ = Describe("GetDataFlowComponent", func() {
 			result, _, err := testAction.Execute(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 
-			response, ok := result.(models.GetDataflowcomponentResponse)
-			Expect(ok).To(BeTrue())
+			response, isValidResponse := result.(models.GetDataflowcomponentResponse)
+			Expect(isValidResponse).To(BeTrue())
 			Expect(response).To(HaveKey(testUUID))
 
 			// Verify the data was correctly extracted

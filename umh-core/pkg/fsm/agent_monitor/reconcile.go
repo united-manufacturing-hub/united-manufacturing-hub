@@ -43,9 +43,14 @@ var (
 // The filesystemService parameter allows for filesystem operations during reconciliation,
 // enabling the method to read configuration or state information from the filesystem.
 // Currently not used in this implementation but added for consistency with the interface.
-func (a *AgentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
+func (a *AgentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool) {
 	start := time.Now()
 	instanceName := a.baseFSMInstance.GetID()
+
+	var (
+		err        error
+		reconciled bool
+	)
 
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentAgentMonitor, instanceName, time.Since(start))
@@ -217,6 +222,11 @@ func healthCategoryToString(category models.HealthCategory) string {
 func (a *AgentInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider) (error, bool) {
 	start := time.Now()
 
+	var (
+		err        error
+		reconciled bool
+	)
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentAgentMonitor, a.baseFSMInstance.GetID()+".reconcileStateTransition", time.Since(start))
 	}()
@@ -234,7 +244,7 @@ func (a *AgentInstance) reconcileStateTransition(ctx context.Context, services s
 
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {
-		err, reconciled := a.baseFSMInstance.ReconcileLifecycleStates(ctx, services, currentState, a.CreateInstance, a.RemoveInstance, a.CheckForCreation)
+		err, reconciled = a.baseFSMInstance.ReconcileLifecycleStates(ctx, services, currentState, a.CreateInstance, a.RemoveInstance, a.CheckForCreation)
 		if err != nil {
 			return err, false
 		}
@@ -248,7 +258,7 @@ func (a *AgentInstance) reconcileStateTransition(ctx context.Context, services s
 
 	// Handle operational states
 	if IsOperationalState(currentState) {
-		err, reconciled := a.reconcileOperationalStates(ctx, services, currentState, desiredState, time.Now())
+		err, reconciled = a.reconcileOperationalStates(ctx, services, currentState, desiredState, time.Now())
 		if err != nil {
 			return err, false
 		}
@@ -283,7 +293,7 @@ func (a *AgentInstance) reconcileOperationalStates(ctx context.Context, services
 
 // reconcileTransitionToActive handles transitions when the desired state is Active.
 // It deals with moving from various states to the Active state.
-func (a *AgentInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (a *AgentInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -315,7 +325,7 @@ func (a *AgentInstance) reconcileTransitionToActive(ctx context.Context, service
 
 // reconcileStartingStates handles the various starting phase states when transitioning to a running state
 // no big startup process here.
-func (a *AgentInstance) reconcileStartingStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (a *AgentInstance) reconcileStartingStates(ctx context.Context, _ serviceregistry.Provider, currentState string, _ time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -332,7 +342,7 @@ func (a *AgentInstance) reconcileStartingStates(ctx context.Context, services se
 }
 
 // reconcileRunningStates handles the various running states when transitioning to Active.
-func (a *AgentInstance) reconcileRunningStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (a *AgentInstance) reconcileRunningStates(ctx context.Context, _ serviceregistry.Provider, currentState string, _ time.Time) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -361,7 +371,7 @@ func (a *AgentInstance) reconcileRunningStates(ctx context.Context, services ser
 
 // reconcileTransitionToStopped handles transitions when the desired state is Stopped.
 // It deals with moving from any operational state to Stopping and then to Stopped.
-func (a *AgentInstance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
+func (a *AgentInstance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (error, bool) {
 	start := time.Now()
 
 	defer func() {

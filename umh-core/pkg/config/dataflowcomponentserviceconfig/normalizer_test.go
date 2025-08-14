@@ -61,23 +61,23 @@ var _ = Describe("DFC YAML Normalizer", func() {
 			config = normalizer.NormalizeConfig(config)
 
 			// Check input preserved
-			inputMqtt, ok := config.BenthosConfig.Input["mqtt"].(map[string]any)
-			Expect(ok).To(BeTrue(), "mqtt input should be a map[string]any")
+			inputMqtt, isMqttInputValid := config.BenthosConfig.Input["mqtt"].(map[string]any)
+			Expect(isMqttInputValid).To(BeTrue(), "mqtt input should be a map[string]any")
 			Expect(inputMqtt["topic"]).To(Equal("test/topic"))
 
 			// Check output preserved
-			outputKafka, ok := config.BenthosConfig.Output["kafka"].(map[string]any)
-			Expect(ok).To(BeTrue(), "kafka output should be a map[string]any")
+			outputKafka, isKafkaOutputValid := config.BenthosConfig.Output["kafka"].(map[string]any)
+			Expect(isKafkaOutputValid).To(BeTrue(), "kafka output should be a map[string]any")
 			Expect(outputKafka["topic"]).To(Equal("test-output"))
 
 			// Check pipeline processors preserved
-			processors, ok := config.BenthosConfig.Pipeline["processors"].([]any)
-			Expect(ok).To(BeTrue(), "processors should be a []any")
+			processors, areProcessorsValid := config.BenthosConfig.Pipeline["processors"].([]any)
+			Expect(areProcessorsValid).To(BeTrue(), "processors should be a []any")
 			Expect(processors).To(HaveLen(1))
-			processor, ok := processors[0].(map[string]any)
-			Expect(ok).To(BeTrue(), "processor should be a map[string]any")
-			processorText, ok := processor["text"].(map[string]any)
-			Expect(ok).To(BeTrue(), "processor text should be a map[string]any")
+			processor, isProcessorValid := processors[0].(map[string]any)
+			Expect(isProcessorValid).To(BeTrue(), "processor should be a map[string]any")
+			processorText, isProcessorTextValid := processor["text"].(map[string]any)
+			Expect(isProcessorTextValid).To(BeTrue(), "processor text should be a map[string]any")
 			Expect(processorText["operator"]).To(Equal("to_upper"))
 		})
 

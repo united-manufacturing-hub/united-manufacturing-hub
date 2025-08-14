@@ -37,9 +37,14 @@ import (
 // This function is intended to be called repeatedly (e.g. in a periodic control loop).
 // Over multiple calls, it converges the actual state to the desired state. Transitions
 // that fail are retried in subsequent reconcile calls after a backoff period.
-func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
+func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool) {
 	start := time.Now()
 	s6InstanceName := s.baseFSMInstance.GetID()
+
+	var (
+		err        error
+		reconciled bool
+	)
 
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s6InstanceName, time.Since(start))
@@ -183,8 +188,13 @@ func (s *S6Instance) reconcileExternalChanges(ctx context.Context, services serv
 // Any functions that fetch information are disallowed here and must be called in reconcileExternalChanges
 // and exist in ExternalState.
 // This is to ensure full testability of the FSM.
-func (s *S6Instance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider) (err error, reconciled bool) {
+func (s *S6Instance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider) (error, bool) {
 	start := time.Now()
+
+	var (
+		err        error
+		reconciled bool
+	)
 
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".reconcileStateTransition", time.Since(start))
@@ -200,7 +210,7 @@ func (s *S6Instance) reconcileStateTransition(ctx context.Context, services serv
 
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {
-		err, reconciled := s.baseFSMInstance.ReconcileLifecycleStates(ctx, services, currentState, s.CreateInstance, s.RemoveInstance, s.CheckForCreation)
+		err, reconciled = s.baseFSMInstance.ReconcileLifecycleStates(ctx, services, currentState, s.CreateInstance, s.RemoveInstance, s.CheckForCreation)
 		if err != nil {
 			return err, false
 		}
@@ -214,7 +224,7 @@ func (s *S6Instance) reconcileStateTransition(ctx context.Context, services serv
 
 	// Handle operational states
 	if IsOperationalState(currentState) {
-		err, reconciled := s.reconcileOperationalStates(ctx, services, currentState, desiredState)
+		err, reconciled = s.reconcileOperationalStates(ctx, services, currentState, desiredState)
 		if err != nil {
 			return err, false
 		}
@@ -230,7 +240,7 @@ func (s *S6Instance) reconcileStateTransition(ctx context.Context, services serv
 }
 
 // reconcileOperationalStates handles states related to instance operations (starting/stopping).
-func (s *S6Instance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string) (err error, reconciled bool) {
+func (s *S6Instance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -249,7 +259,7 @@ func (s *S6Instance) reconcileOperationalStates(ctx context.Context, services se
 
 // reconcileTransitionToRunning handles transitions when the desired state is Running.
 // It deals with moving from Stopped/Failed to Starting and then to Running.
-func (s *S6Instance) reconcileTransitionToRunning(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
+func (s *S6Instance) reconcileTransitionToRunning(ctx context.Context, services serviceregistry.Provider, currentState string) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -282,7 +292,7 @@ func (s *S6Instance) reconcileTransitionToRunning(ctx context.Context, services 
 // reconcileTransitionToStopped handles transitions when the desired state is Stopped.
 // It deals with moving from Running/Starting/Failed to Stopping and then to Stopped.
 // It returns a boolean indicating whether the instance is stopped.
-func (s *S6Instance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
+func (s *S6Instance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (error, bool) {
 	start := time.Now()
 
 	defer func() {
