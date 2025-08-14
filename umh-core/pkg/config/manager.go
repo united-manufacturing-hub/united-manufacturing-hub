@@ -58,6 +58,8 @@ var (
 )
 
 // ConfigManager is the interface for config management.
+//
+//nolint:interfacebloat // Core configuration manager interface requires comprehensive methods for config lifecycle management
 type ConfigManager interface {
 	// GetConfig returns the current config
 	GetConfig(ctx context.Context, tick uint64) (FullConfig, error)
@@ -316,7 +318,9 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 
 	// Create the directory if it doesn't exist
 	dir := filepath.Dir(m.configPath)
-	if err := m.fsService.EnsureDirectory(ctx, dir); err != nil {
+
+	err = m.fsService.EnsureDirectory(ctx, dir)
+	if err != nil {
 		return FullConfig{}, fmt.Errorf("failed to create config directory: %w", err)
 	}
 
@@ -537,7 +541,9 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 
 	// Create the directory if it doesn't exist
 	dir := filepath.Dir(m.configPath)
-	if err := m.fsService.EnsureDirectory(ctx, dir); err != nil {
+
+	err = m.fsService.EnsureDirectory(ctx, dir)
+	if err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
@@ -554,7 +560,8 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 	}
 
 	// Write the file (give everybody read & write access)
-	if err := m.fsService.WriteFile(ctx, m.configPath, data, 0666); err != nil {
+	err = m.fsService.WriteFile(ctx, m.configPath, data, 0666)
+	if err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
@@ -604,7 +611,8 @@ func ParseConfig(data []byte, ctx context.Context, allowUnknownFields bool) (Ful
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(!allowUnknownFields) // Only reject unknown keys if allowUnknownFields is false
 
-	if err := dec.Decode(&rawConfig); err != nil { //nolint:musttag // FullConfig has complex nested types
+	err := dec.Decode(&rawConfig) //nolint:musttag // FullConfig has complex nested types
+	if err != nil {
 		return FullConfig{}, fmt.Errorf("failed to decode config: %w", err)
 	}
 
@@ -762,7 +770,8 @@ func (m *FileConfigManager) AtomicSetLocation(ctx context.Context, location mode
 	}
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	err = m.writeConfig(ctx, config)
+	if err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
@@ -804,7 +813,8 @@ func (m *FileConfigManager) AtomicAddDataflowcomponent(ctx context.Context, dfc 
 	config.DataFlow = append(config.DataFlow, dfc)
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	err = m.writeConfig(ctx, config)
+	if err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
@@ -856,7 +866,8 @@ func (m *FileConfigManager) AtomicDeleteDataflowcomponent(ctx context.Context, c
 	config.DataFlow = filteredComponents
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	err = m.writeConfig(ctx, config)
+	if err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
@@ -948,7 +959,8 @@ func (m *FileConfigManager) AtomicEditDataflowcomponent(ctx context.Context, com
 	}
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	err = m.writeConfig(ctx, config)
+	if err != nil {
 		return DataFlowComponentConfig{}, fmt.Errorf("failed to write config: %w", err)
 	}
 
@@ -1084,12 +1096,15 @@ func (m *FileConfigManager) WriteYAMLConfigFromString(ctx context.Context, confi
 
 	// Create the directory if it doesn't exist
 	dir := filepath.Dir(m.configPath)
-	if err := m.fsService.EnsureDirectory(ctx, dir); err != nil {
+
+	err = m.fsService.EnsureDirectory(ctx, dir)
+	if err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
 	// Write the raw string directly to file to preserve all YAML features
-	if err := m.fsService.WriteFile(ctx, m.configPath, []byte(configStr), 0666); err != nil {
+	err = m.fsService.WriteFile(ctx, m.configPath, []byte(configStr), 0666)
+	if err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 

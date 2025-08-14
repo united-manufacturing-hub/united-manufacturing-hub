@@ -317,6 +317,8 @@ func (m *BaseFSMManager[C]) GetNextStateTick() uint64 {
 // Returns:
 //   - error: Any error encountered during reconciliation, nil if all succeeded
 //   - bool: True if any instance performed reconciliation work
+//
+//nolint:maintidx // Core FSM reconciliation function requires complex logic for coordinating finite state machines, lifecycle states, and error handling across multiple instances
 func (m *BaseFSMManager[C]) Reconcile(
 	ctx context.Context,
 	snapshot SystemSnapshot,

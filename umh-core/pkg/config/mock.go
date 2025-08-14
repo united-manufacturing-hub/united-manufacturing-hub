@@ -136,7 +136,9 @@ func (m *MockConfigManager) writeConfig(ctx context.Context, cfg FullConfig) err
 
 	// Create the directory if it doesn't exist (using mock filesystem)
 	dir := filepath.Dir(DefaultConfigPath)
-	if err := m.MockFileSystem.EnsureDirectory(ctx, dir); err != nil {
+
+	err := m.MockFileSystem.EnsureDirectory(ctx, dir)
+	if err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
@@ -154,7 +156,9 @@ func (m *MockConfigManager) writeConfig(ctx context.Context, cfg FullConfig) err
 
 	// Write the file via mock filesystem (give everybody read & write access)
 	configPath := DefaultConfigPath
-	if err := m.MockFileSystem.WriteFile(ctx, configPath, data, 0666); err != nil {
+
+	err = m.MockFileSystem.WriteFile(ctx, configPath, data, 0666)
+	if err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
@@ -410,7 +414,8 @@ func (m *MockConfigManager) AtomicSetLocation(ctx context.Context, location mode
 	}
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	err = m.writeConfig(ctx, config)
+	if err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
@@ -438,7 +443,8 @@ func (m *MockConfigManager) AtomicAddDataflowcomponent(ctx context.Context, dfc 
 	config.DataFlow = append(config.DataFlow, dfc)
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	err = m.writeConfig(ctx, config)
+	if err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 

@@ -790,7 +790,9 @@ func (s *SchemaRegistry) decode(ctx context.Context) (err error, changePhase boo
 
 	// Parse JSON into temporary string slice, then convert to typed slice
 	var subjects []string
-	if err := json.Unmarshal(s.rawSubjectsData, &subjects); err != nil {
+
+	err = json.Unmarshal(s.rawSubjectsData, &subjects)
+	if err != nil {
 		return fmt.Errorf("failed to decode subjects: %w", err), false
 	}
 

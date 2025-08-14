@@ -398,6 +398,8 @@ func StripMarkers(b []byte) []byte {
 }
 
 // ParseBenthosLogs parses the logs of a benthos service and extracts metrics.
+//
+//nolint:maintidx // Core log parsing function requires complex logic for extracting metrics from diverse Benthos log formats and handling various edge cases
 func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6_shared.LogEntry, tick uint64) (*BenthosMetricsScan, error) {
 	/*
 		A normal log entry looks like this:
@@ -803,7 +805,9 @@ func ParseVersionData(dataReader io.Reader) (versionResponse, error) {
 	}
 
 	var versionResp versionResponse
-	if err := json.Unmarshal(data, &versionResp); err != nil {
+
+	err = json.Unmarshal(data, &versionResp)
+	if err != nil {
 		return versionResponse{}, fmt.Errorf("failed to unmarshal version data: %w", err)
 	}
 

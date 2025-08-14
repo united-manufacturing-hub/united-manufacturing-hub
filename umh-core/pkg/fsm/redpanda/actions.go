@@ -198,6 +198,8 @@ func (r *RedpandaInstance) GetServiceStatus(ctx context.Context, filesystemServi
 }
 
 // UpdateObservedStateOfInstance updates the observed state of the service.
+//
+//nolint:maintidx // Core state synchronization function requires complex logic for handling Redpanda service state, configuration, and health monitoring across multiple components
 func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
 		if r.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "UpdateObservedStateOfInstance") {

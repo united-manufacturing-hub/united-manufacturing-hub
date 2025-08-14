@@ -145,7 +145,8 @@ func (a *EditDataModelAction) Validate(ctx context.Context) error {
 	}
 
 	// Validate with references and payload shapes (handles cases with no references gracefully)
-	if err := validator.ValidateWithReferences(timeoutCtx, dmVersion, allDataModels, currentConfig.PayloadShapes); err != nil {
+	err = validator.ValidateWithReferences(timeoutCtx, dmVersion, allDataModels, currentConfig.PayloadShapes)
+	if err != nil {
 		return fmt.Errorf("data model validation failed: %w", err)
 	}
 
@@ -171,7 +172,9 @@ func (a *EditDataModelAction) Execute(ctx context.Context) (interface{}, map[str
 
 	// Safety validation before editing the data model
 	validator := datamodel.NewValidator()
-	if err := validator.ValidateStructureOnly(timeoutCtx, dmVersion); err != nil {
+
+	err := validator.ValidateStructureOnly(timeoutCtx, dmVersion)
+	if err != nil {
 		errorMsg := fmt.Sprintf("Final validation failed before editing data model: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.EditDataModel)
@@ -182,7 +185,7 @@ func (a *EditDataModelAction) Execute(ctx context.Context) (interface{}, map[str
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		"Adding new version to data model configuration...", a.outboundChannel, models.EditDataModel)
 
-	err := a.configManager.AtomicEditDataModel(timeoutCtx, a.payload.Name, dmVersion, a.payload.Description)
+	err = a.configManager.AtomicEditDataModel(timeoutCtx, a.payload.Name, dmVersion, a.payload.Description)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to edit data model: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -208,7 +211,8 @@ func (a *EditDataModelAction) Execute(ctx context.Context) (interface{}, map[str
 
 				for versionKey := range dmc.Versions {
 					if strings.HasPrefix(versionKey, "v") {
-						if versionNum, err := strconv.Atoi(versionKey[1:]); err == nil {
+						versionNum, err := strconv.Atoi(versionKey[1:])
+						if err == nil {
 							if uint64(versionNum) > maxVersion { //nolint:gosec // G115: Safe conversion, version numbers are positive and small
 								maxVersion = uint64(versionNum) //nolint:gosec // G115: Safe conversion, version numbers are positive and small
 							}

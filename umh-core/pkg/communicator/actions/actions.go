@@ -60,6 +60,8 @@ type Action interface {
 //
 // After execution, it handles sending the success reply if the action completed successfully.
 // Error handling for each step is done within this function.
+//
+//nolint:maintidx // Core action message routing function requires complex logic for handling diverse action types and error scenarios
 func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePayload, sender string, outboundChannel chan *models.UMHMessage, releaseChannel config.ReleaseChannel, dog watchdog.Iface, traceID uuid.UUID, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager) {
 	log := logger.For(logger.ComponentCommunicator)
 

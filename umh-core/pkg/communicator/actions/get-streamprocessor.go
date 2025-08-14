@@ -201,7 +201,8 @@ func (a *GetStreamProcessorAction) buildStreamProcessorFromConfig(streamProcesso
 	if streamProcessorConfig.StreamProcessorServiceConfig.Location != nil {
 		// Convert the location map[string]string to map[int]string
 		for key, value := range streamProcessorConfig.StreamProcessorServiceConfig.Location {
-			if intKey, err := strconv.Atoi(key); err == nil {
+			intKey, err := strconv.Atoi(key)
+			if err == nil {
 				locationMap[intKey] = value
 			}
 		}

@@ -49,6 +49,8 @@ import (
 )
 
 // IBenthosService is the interface for managing Benthos services.
+//
+//nolint:interfacebloat // Core Benthos service interface requires comprehensive methods for stream processing lifecycle management
 type IBenthosService interface {
 	// GenerateS6ConfigForBenthos generates a S6 config for a given benthos instance
 	// Expects s6ServiceName (e.g. "benthos-myservice"), not the raw benthosName

@@ -70,7 +70,8 @@ var _ = Describe("BufferedService", func() {
 
 		// Make read-only directories writable before removal
 		readOnlyDir := filepath.Join(tmpDir, "readonly_dir")
-		if _, err := os.Stat(readOnlyDir); err == nil {
+		_, err := os.Stat(readOnlyDir)
+		if err == nil {
 			err = os.Chmod(readOnlyDir, 0755) //nolint:gosec // G302: Test cleanup requires permissive permissions to delete read-only directories
 			if err != nil {
 				// Log instead of failing - we're in cleanup
@@ -78,7 +79,7 @@ var _ = Describe("BufferedService", func() {
 			}
 		}
 
-		err := os.RemoveAll(tmpDir)
+		err = os.RemoveAll(tmpDir)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -644,7 +645,8 @@ var _ = Describe("BufferedService Directory Creation Issues", func() {
 
 		// Make read-only directories writable before removal
 		readOnlyDir := filepath.Join(tmpDir, "readonly_dir")
-		if _, err := os.Stat(readOnlyDir); err == nil {
+		_, err := os.Stat(readOnlyDir)
+		if err == nil {
 			err = os.Chmod(readOnlyDir, 0755) //nolint:gosec // G302: Test cleanup requires permissive permissions to delete read-only directories
 			if err != nil {
 				// Log instead of failing - we're in cleanup
@@ -652,7 +654,7 @@ var _ = Describe("BufferedService Directory Creation Issues", func() {
 			}
 		}
 
-		err := os.RemoveAll(tmpDir)
+		err = os.RemoveAll(tmpDir)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -869,7 +871,8 @@ var _ = Describe("BufferedService Permission Checking", func() {
 
 		// Make read-only directories writable before removal
 		readOnlyDir := filepath.Join(tmpDir, "readonly_dir")
-		if _, err := os.Stat(readOnlyDir); err == nil {
+		_, err := os.Stat(readOnlyDir)
+		if err == nil {
 			err = os.Chmod(readOnlyDir, 0755) //nolint:gosec // G302: Test cleanup requires permissive permissions to delete read-only directories
 			if err != nil {
 				// Log instead of failing - we're in cleanup
@@ -877,7 +880,7 @@ var _ = Describe("BufferedService Permission Checking", func() {
 			}
 		}
 
-		err := os.RemoveAll(tmpDir)
+		err = os.RemoveAll(tmpDir)
 		Expect(err).NotTo(HaveOccurred())
 	})
 

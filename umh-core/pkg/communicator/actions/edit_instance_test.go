@@ -398,7 +398,8 @@ func (w *writeFailingMockConfigManager) AtomicAddDataflowcomponent(ctx context.C
 	// do not append anything
 
 	// Write config (will fail with this mock)
-	if err := w.writeConfig(ctx, config); err != nil {
+	err = w.writeConfig(ctx, config)
+	if err != nil {
 		return err
 	}
 
@@ -416,7 +417,8 @@ func (w *writeFailingMockConfigManager) AtomicDeleteDataflowcomponent(ctx contex
 	// do not delete anything
 
 	// Write config (will fail with this mock)
-	if err := w.writeConfig(ctx, config); err != nil {
+	err = w.writeConfig(ctx, config)
+	if err != nil {
 		return err
 	}
 
@@ -434,7 +436,8 @@ func (w *writeFailingMockConfigManager) AtomicEditDataflowcomponent(ctx context.
 	// do not edit anything
 
 	// Write config (will fail with this mock)
-	if err := w.writeConfig(ctx, configData); err != nil {
+	err = w.writeConfig(ctx, configData)
+	if err != nil {
 		return config.DataFlowComponentConfig{}, err
 	}
 
@@ -452,7 +455,8 @@ func (w *writeFailingMockConfigManager) AtomicAddProtocolConverter(ctx context.C
 	// do not add anything
 
 	// Write config (will fail with this mock)
-	if err := w.writeConfig(ctx, configData); err != nil {
+	err = w.writeConfig(ctx, configData)
+	if err != nil {
 		return err
 	}
 
@@ -470,7 +474,8 @@ func (w *writeFailingMockConfigManager) AtomicEditProtocolConverter(ctx context.
 	// do not edit anything
 
 	// Write config (will fail with this mock)
-	if err := w.writeConfig(ctx, configData); err != nil {
+	err = w.writeConfig(ctx, configData)
+	if err != nil {
 		return config.ProtocolConverterConfig{}, err
 	}
 
@@ -488,7 +493,8 @@ func (w *writeFailingMockConfigManager) AtomicDeleteProtocolConverter(ctx contex
 	// do not delete anything
 
 	// Write config (will fail with this mock)
-	if err := w.writeConfig(ctx, configData); err != nil {
+	err = w.writeConfig(ctx, configData)
+	if err != nil {
 		return err
 	}
 
@@ -526,7 +532,8 @@ func (w *writeFailingMockConfigManager) AtomicAddDataModel(ctx context.Context, 
 	// do not add anything
 
 	// Write config (will fail with this mock)
-	if err := w.writeConfig(ctx, configData); err != nil {
+	err = w.writeConfig(ctx, configData)
+	if err != nil {
 		return err
 	}
 
@@ -544,7 +551,8 @@ func (w *writeFailingMockConfigManager) AtomicEditDataModel(ctx context.Context,
 	// do not edit anything
 
 	// Write config (will fail with this mock)
-	if err := w.writeConfig(ctx, configData); err != nil {
+	err = w.writeConfig(ctx, configData)
+	if err != nil {
 		return err
 	}
 
@@ -562,7 +570,8 @@ func (w *writeFailingMockConfigManager) AtomicDeleteDataModel(ctx context.Contex
 	// do not delete anything
 
 	// Write config (will fail with this mock)
-	if err := w.writeConfig(ctx, configData); err != nil {
+	err = w.writeConfig(ctx, configData)
+	if err != nil {
 		return err
 	}
 
@@ -580,7 +589,8 @@ func (w *writeFailingMockConfigManager) AtomicAddDataContract(ctx context.Contex
 	// do not add anything
 
 	// Write config (will fail with this mock)
-	if err := w.writeConfig(ctx, configData); err != nil {
+	err = w.writeConfig(ctx, configData)
+	if err != nil {
 		return err
 	}
 
@@ -598,7 +608,8 @@ func (w *writeFailingMockConfigManager) AtomicAddStreamProcessor(ctx context.Con
 	// do not add anything
 
 	// Write config (will fail with this mock)
-	if err := w.writeConfig(ctx, configData); err != nil {
+	err = w.writeConfig(ctx, configData)
+	if err != nil {
 		return err
 	}
 
@@ -616,7 +627,8 @@ func (w *writeFailingMockConfigManager) AtomicEditStreamProcessor(ctx context.Co
 	// do not edit anything
 
 	// Write config (will fail with this mock)
-	if err := w.writeConfig(ctx, configData); err != nil {
+	err = w.writeConfig(ctx, configData)
+	if err != nil {
 		return config.StreamProcessorConfig{}, err
 	}
 
@@ -634,7 +646,8 @@ func (w *writeFailingMockConfigManager) AtomicDeleteStreamProcessor(ctx context.
 	// do not delete anything
 
 	// Write config (will fail with this mock)
-	if err := w.writeConfig(ctx, configData); err != nil {
+	err = w.writeConfig(ctx, configData)
+	if err != nil {
 		return err
 	}
 

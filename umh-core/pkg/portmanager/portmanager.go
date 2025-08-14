@@ -158,9 +158,11 @@ func getEphemeralPortRange(fs filesystem.Service) (uint16, uint16) {
 
 		parts := strings.Fields(content)
 		if len(parts) == 2 {
-			if min, err1 := strconv.Atoi(parts[0]); err1 == nil {
-				if max, err2 := strconv.Atoi(parts[1]); err2 == nil {
-					return uint16(min), uint16(max) //nolint:gosec // G115: Safe conversion, system port range values are valid uint16
+			minPort, err1 := strconv.Atoi(parts[0])
+			if err1 == nil {
+				maxPort, err2 := strconv.Atoi(parts[1])
+				if err2 == nil {
+					return uint16(minPort), uint16(maxPort) //nolint:gosec // G115: Safe conversion, system port range values are valid uint16
 				}
 			}
 		}
@@ -310,7 +312,8 @@ func (pm *DefaultPortManager) ReservePort(ctx context.Context, instanceName stri
 	}
 
 	// Close the listener immediately to allow external apps to use the port
-	if err := listener.Close(); err != nil {
+	err = listener.Close()
+	if err != nil {
 		return fmt.Errorf("failed to close listener for port %d: %w", port, err)
 	}
 

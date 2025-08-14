@@ -158,12 +158,15 @@ func writeConfigFile(yamlContent string, containerName ...string) error {
 
 	// Ensure the directory exists with wide permissions
 	dir := filepath.Dir(configPath)
-	if err := os.MkdirAll(dir, 0o777); err != nil { //nolint:gosec // G301: Integration test requires permissive permissions for config directory
+
+	err = os.MkdirAll(dir, 0o777) //nolint:gosec // G301: Integration test requires permissive permissions for config directory
+	if err != nil {
 		return fmt.Errorf("failed to create config dir: %w", err)
 	}
 
 	// Write the file with permissions that allow anyone to read/write
-	if err := os.WriteFile(configPath, []byte(yamlContent), 0o666); err != nil { //nolint:gosec // G306: Integration test requires permissive file permissions for config sharing
+	err = os.WriteFile(configPath, []byte(yamlContent), 0o666) //nolint:gosec // G306: Integration test requires permissive file permissions for config sharing
+	if err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 

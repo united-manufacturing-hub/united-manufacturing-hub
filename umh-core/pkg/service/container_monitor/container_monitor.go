@@ -198,6 +198,7 @@ func (c *ContainerMonitorService) GetHealth(ctx context.Context) (*models.Health
 	// Generate an appropriate message
 	if status.OverallHealth == models.Degraded {
 		var message string
+
 		switch {
 		case status.CPUHealth == models.Degraded:
 			message = "CPU metrics degraded"

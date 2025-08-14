@@ -253,6 +253,8 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 //   - Timeout scenarios handled gracefully with partial success logging
 //   - Manager-specific errors include manager name for debugging
 //   - System continues operation even if individual managers fail
+//
+//nolint:maintidx // Core system reconciliation function requires complex logic for coordinating multiple managers and handling diverse error scenarios
 func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	// Get the config
 	if c.configManager == nil {

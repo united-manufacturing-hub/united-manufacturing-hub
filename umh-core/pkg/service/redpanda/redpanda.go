@@ -49,6 +49,8 @@ import (
 )
 
 // IRedpandaService is the interface for managing Redpanda.
+//
+//nolint:interfacebloat // Core Redpanda service interface requires comprehensive methods for streaming platform lifecycle management
 type IRedpandaService interface {
 	// GenerateS6ConfigForRedpanda generates a S6 config for a given redpanda instance
 	GenerateS6ConfigForRedpanda(redpandaConfig *redpandaserviceconfig.RedpandaServiceConfig, redpandaName string) (s6serviceconfig.S6ServiceConfig, error)
@@ -1173,7 +1175,9 @@ func (s *RedpandaService) verifyRedpandaClusterConfig(ctx context.Context, redpa
 
 	// Parse as JSON
 	var readbackConfig map[string]interface{}
-	if err := json.Unmarshal(readbackBody, &readbackConfig); err != nil {
+
+	err = json.Unmarshal(readbackBody, &readbackConfig)
+	if err != nil {
 		return fmt.Errorf("failed to unmarshal readback response body: %w", err)
 	}
 

@@ -35,6 +35,8 @@ import (
 
 // Service provides an interface for filesystem operations
 // This allows for easier testing and separation of concerns.
+//
+//nolint:interfacebloat // Core filesystem service interface requires comprehensive methods for file system operations and lifecycle management
 type Service interface {
 	// EnsureDirectory creates a directory if it doesn't exist
 	EnsureDirectory(ctx context.Context, path string) error
@@ -255,7 +257,8 @@ func (s *DefaultService) ReadFileRange(
 			return
 		}
 
-		if _, err = f.Seek(from, io.SeekStart); err != nil {
+		_, err = f.Seek(from, io.SeekStart)
+		if err != nil {
 			resCh <- result{err: err, data: nil, newSize: 0}
 
 			return
@@ -575,7 +578,8 @@ func (s *DefaultService) Chown(ctx context.Context, path string, user string, gr
 	}
 
 	// Validate inputs to prevent command injection
-	if err := validateChownInputs(path, user, group); err != nil {
+	err = validateChownInputs(path, user, group)
+	if err != nil {
 		return fmt.Errorf("invalid chown parameters: %w", err)
 	}
 
@@ -585,7 +589,7 @@ func (s *DefaultService) Chown(ctx context.Context, path string, user string, gr
 	// Run file operation in goroutine
 	go func() {
 		// Use chown command as os.Chown needs numeric user/group IDs
-		cmd := exec.Command("chown", fmt.Sprintf("%s:%s", user, group), path) //nolint:gosec // G204: Inputs validated by validateChownInputs, safe subprocess execution
+		cmd := exec.CommandContext(ctx, "chown", fmt.Sprintf("%s:%s", user, group), path) //nolint:gosec // G204: Inputs validated by validateChownInputs, safe subprocess execution
 		errCh <- cmd.Run()
 	}()
 
@@ -610,7 +614,8 @@ func (s *DefaultService) ExecuteCommand(ctx context.Context, name string, args .
 		metrics.ObserveReconcileTime(metrics.ComponentFilesystem, name+".executeCommand."+name, time.Since(start))
 	}()
 
-	if err := s.checkContext(ctx); err != nil {
+	err := s.checkContext(ctx)
+	if err != nil {
 		return nil, fmt.Errorf("failed to check context: %w", err)
 	}
 

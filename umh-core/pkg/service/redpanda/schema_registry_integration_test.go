@@ -93,7 +93,12 @@ func fetchSchemaViaHTTP(subject SubjectName) (JSONSchemaDefinition, error) {
 	// Get the latest version of the schema
 	url := fmt.Sprintf("%s/subjects/%s/versions/latest", redpandaSchemaRegistryURL, string(subject))
 
-	resp, err := http.Get(url) //nolint:gosec // G107: URL constructed from test environment variables for integration testing, safe in test context
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request for subject %s: %w", subject, err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch schema for subject %s: %w", subject, err)
 	}
@@ -128,7 +133,8 @@ func fetchSchemaViaHTTP(subject SubjectName) (JSONSchemaDefinition, error) {
 		Schema string `json:"schema"`
 	}
 
-	if err := json.Unmarshal(body, &response); err != nil {
+	err = json.Unmarshal(body, &response)
+	if err != nil {
 		return "", fmt.Errorf("failed to parse response for subject %s: %w", subject, err)
 	}
 
@@ -145,11 +151,13 @@ func verifySchemaViaHTTP(subject SubjectName, expectedSchema JSONSchemaDefinitio
 	// Parse both schemas to compare them structurally (ignoring whitespace differences)
 	var expectedParsed, fetchedParsed interface{}
 
-	if err := json.Unmarshal([]byte(expectedSchema), &expectedParsed); err != nil {
+	err = json.Unmarshal([]byte(expectedSchema), &expectedParsed)
+	if err != nil {
 		return fmt.Errorf("failed to parse expected schema for %s: %w", subject, err)
 	}
 
-	if err := json.Unmarshal([]byte(fetchedSchema), &fetchedParsed); err != nil {
+	err = json.Unmarshal([]byte(fetchedSchema), &fetchedParsed)
+	if err != nil {
 		return fmt.Errorf("failed to parse fetched schema for %s: %w", subject, err)
 	}
 

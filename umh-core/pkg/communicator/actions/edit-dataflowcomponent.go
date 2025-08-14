@@ -182,7 +182,8 @@ func (a *EditDataflowComponentAction) Parse(ctx context.Context, payload interfa
 		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
-	if err := json.Unmarshal(payloadBytes, &topLevel); err != nil {
+	err = json.Unmarshal(payloadBytes, &topLevel)
+	if err != nil {
 		return fmt.Errorf("failed to unmarshal top level payload: %w", err)
 	}
 
@@ -192,7 +193,9 @@ func (a *EditDataflowComponentAction) Parse(ctx context.Context, payload interfa
 	}
 
 	a.state = topLevel.State
-	if err := ValidateDataFlowComponentState(a.state); err != nil {
+
+	err = ValidateDataFlowComponentState(a.state)
+	if err != nil {
 		return err
 	}
 

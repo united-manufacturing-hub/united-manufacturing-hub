@@ -283,7 +283,8 @@ func (svc *Service) parseBlock(entries []s6_shared.LogEntry) error {
 	}
 
 	// now := time.Now()
-	if _, err := hex.Decode(item.Payload, hexBuf); err != nil {
+	_, err = hex.Decode(item.Payload, hexBuf)
+	if err != nil {
 		// Return to pool on error
 		bufferItemPool.Put(item)
 

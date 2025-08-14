@@ -264,7 +264,8 @@ func (a *GetProtocolConverterAction) Execute(ctx context.Context) (interface{}, 
 						case "IP", "ip", "target", "Target":
 							ipAddress = valueStr
 						case "Port", "port", "PORT":
-							if portInt, err := strconv.ParseUint(valueStr, 10, 32); err == nil {
+							portInt, err := strconv.ParseUint(valueStr, 10, 32)
+							if err == nil {
 								port = uint32(portInt)
 							} else {
 								a.actionLogger.Warnw("Failed to parse port from variable", "port", valueStr, "error", err)
@@ -283,7 +284,8 @@ func (a *GetProtocolConverterAction) Execute(ctx context.Context) (interface{}, 
 						}
 
 						if specConfig.Config.ConnectionServiceConfig.NmapTemplate.Port != "" {
-							if portInt, err := strconv.ParseUint(specConfig.Config.ConnectionServiceConfig.NmapTemplate.Port, 10, 32); err == nil {
+							portInt, err := strconv.ParseUint(specConfig.Config.ConnectionServiceConfig.NmapTemplate.Port, 10, 32)
+							if err == nil {
 								port = uint32(portInt)
 							} else {
 								a.actionLogger.Warnw("Failed to parse port number", "port", specConfig.Config.ConnectionServiceConfig.NmapTemplate.Port, "error", err)
@@ -336,7 +338,9 @@ func (a *GetProtocolConverterAction) Execute(ctx context.Context) (interface{}, 
 				if len(specConfig.Location) > 0 {
 					for k, v := range specConfig.Location {
 						var intKey int
-						if _, err := fmt.Sscanf(k, "%d", &intKey); err == nil {
+
+						_, err := fmt.Sscanf(k, "%d", &intKey)
+						if err == nil {
 							location[intKey] = v
 						}
 					}

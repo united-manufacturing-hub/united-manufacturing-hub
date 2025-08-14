@@ -78,7 +78,8 @@ func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string
 	}
 
 	// NOW create the atomic symlink - this makes the service visible to scanner
-	if err := fsService.Symlink(ctx, repositoryDir, servicePath); err != nil {
+	err = fsService.Symlink(ctx, repositoryDir, servicePath)
+	if err != nil {
 		// Clean up repository on symlink failure
 		_ = fsService.RemoveAll(ctx, repositoryDir)
 
@@ -92,7 +93,8 @@ func (s *DefaultService) CreateArtifacts(ctx context.Context, servicePath string
 	setLastDeployedTime(servicePath, time.Now())
 
 	// Notify S6 scanner of new service
-	if _, err := s.EnsureSupervision(ctx, servicePath, fsService); err != nil {
+	_, err = s.EnsureSupervision(ctx, servicePath, fsService)
+	if err != nil {
 		s.logger.Warnf("Failed to notify S6 scanner: %v", err)
 	}
 
@@ -326,13 +328,16 @@ func (s *DefaultService) createS6FilesInRepository(ctx context.Context, reposito
 	var createdFiles []string
 
 	// Create service directory structure
-	if err := fsService.EnsureDirectory(ctx, repositoryDir); err != nil {
+	err := fsService.EnsureDirectory(ctx, repositoryDir)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create repository directory: %w", err)
 	}
 
 	// Create down file to prevent automatic startup
 	downFilePath := filepath.Join(repositoryDir, "down")
-	if err := fsService.WriteFile(ctx, downFilePath, []byte{}, 0644); err != nil {
+
+	err = fsService.WriteFile(ctx, downFilePath, []byte{}, 0644)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create down file: %w", err)
 	}
 
@@ -340,7 +345,9 @@ func (s *DefaultService) createS6FilesInRepository(ctx context.Context, reposito
 
 	// Create type file (required for s6-rc)
 	typeFile := filepath.Join(repositoryDir, "type")
-	if err := fsService.WriteFile(ctx, typeFile, []byte("longrun"), 0644); err != nil {
+
+	err = fsService.WriteFile(ctx, typeFile, []byte("longrun"), 0644)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create type file: %w", err)
 	}
 

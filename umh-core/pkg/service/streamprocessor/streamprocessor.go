@@ -36,6 +36,7 @@ import (
 	"go.uber.org/zap"
 )
 
+//nolint:interfacebloat // Core stream processor service interface requires comprehensive methods for stream processing lifecycle management
 type IStreamProcessorService interface {
 	// GetConfig pulls the **actual** runtime configuration that is currently
 	// deployed for the given Stream Processor.

@@ -38,6 +38,7 @@ import (
 	"go.uber.org/zap"
 )
 
+//nolint:interfacebloat // Core topic browser service interface requires comprehensive methods for message browsing lifecycle management
 type ITopicBrowserService interface {
 	// GenerateConfig generates a topic browser config
 	GenerateConfig(tbName string) (benthossvccfg.BenthosServiceConfig, error)

@@ -303,7 +303,8 @@ func (m *MockSchemaRegistry) handleGetSubjectVersions(w http.ResponseWriter, r *
 	// Return the schema version (Redpanda format)
 	w.Header().Set("Content-Type", "application/json")
 
-	if err := json.NewEncoder(w).Encode(schema); err != nil {
+	err = json.NewEncoder(w).Encode(schema)
+	if err != nil {
 		http.Error(w, "Failed to encode schema", http.StatusInternalServerError)
 
 		return

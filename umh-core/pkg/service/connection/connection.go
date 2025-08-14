@@ -52,6 +52,8 @@ import (
 // IConnectionService abstracts "is the remote asset reachable?" functionality
 // using Nmap for checking connectivity. It provides methods for managing the
 // lifecycle of connections and monitoring their health.
+//
+//nolint:interfacebloat // Core connection service interface requires comprehensive methods for connection lifecycle management
 type IConnectionService interface {
 	// GenerateNmapConfigForConnection generates a Nmap config for a given connection
 	GenerateNmapConfigForConnection(connectionConfig *connectionserviceconfig.ConnectionServiceConfig, connectionName string) (nmapserviceconfig.NmapServiceConfig, error)
