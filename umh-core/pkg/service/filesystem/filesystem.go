@@ -135,7 +135,7 @@ func (s *DefaultService) EnsureDirectory(ctx context.Context, path string) error
 
 	// Run operation in goroutine
 	go func() {
-		errCh <- os.MkdirAll(path, 0750)
+		errCh <- os.MkdirAll(path, 0755) //nolint:gosec // G301: Service directories need to be accessible by containers running as different users
 	}()
 
 	// Wait for either completion or context cancellation
