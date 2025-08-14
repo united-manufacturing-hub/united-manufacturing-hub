@@ -112,8 +112,11 @@ func NewGetDataFlowComponentAction(userEmail string, actionUUID uuid.UUID, insta
 
 // Parse stores the list of version UUIDs we should resolve.  The heavy lifting
 // happens later in Execute.
-func (a *GetDataFlowComponentAction) Parse(ctx context.Context, payload interface{}) (err error) {
+func (a *GetDataFlowComponentAction) Parse(ctx context.Context, payload interface{}) error {
 	a.actionLogger.Info("Parsing the payload")
+
+	var err error
+
 	a.payload, err = ParseActionPayload[models.GetDataflowcomponentRequestSchemaJson](payload)
 	a.actionLogger.Info("Payload parsed, uuids: ", a.payload.VersionUUIDs)
 

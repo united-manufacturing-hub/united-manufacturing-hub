@@ -224,7 +224,7 @@ func (s *DefaultService) ReadFileRange(
 	resCh := make(chan result, 1)
 
 	go func() {
-		f, err := os.Open(path) //nolint:gosec // G304: Core filesystem service ReadFileRange method, path managed by filesystem abstraction
+		f, err := os.Open(path) //nolint:gosec,varnamelen // G304: Core filesystem service ReadFileRange method, path managed by filesystem abstraction
 		if err != nil {
 			resCh <- result{err: err, data: nil, newSize: 0}
 
@@ -241,7 +241,7 @@ func (s *DefaultService) ReadFileRange(
 		}()
 
 		// stat *after* open so we have a consistent view
-		fi, err := f.Stat()
+		fi, err := f.Stat() //nolint:varnamelen // File info - acceptable short name in file operations
 		if err != nil {
 			resCh <- result{err: err, data: nil, newSize: 0}
 
@@ -266,7 +266,7 @@ func (s *DefaultService) ReadFileRange(
 
 		// CONTEXT-AWARE TIMING: Check remaining time before each chunk to avoid timeout failures
 		// If less than timeBuffer remains, gracefully exit with partial data instead of timing out
-		deadline, ok := ctx.Deadline()
+		deadline, ok := ctx.Deadline() //nolint:varnamelen // Standard Go idiom for context deadline check
 		if !ok {
 			resCh <- result{err: errors.New("context deadline not set"), data: nil, newSize: 0}
 

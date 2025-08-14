@@ -75,7 +75,8 @@ func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 	config.ProtocolConverter = append(config.ProtocolConverter, pc)
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	err = m.writeConfig(ctx, config)
+	if err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
@@ -175,7 +176,8 @@ func (m *FileConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 	config.ProtocolConverter[targetIndex] = pc
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	err = m.writeConfig(ctx, config)
+	if err != nil {
 		return ProtocolConverterConfig{}, fmt.Errorf("failed to write config: %w", err)
 	}
 
@@ -265,7 +267,8 @@ func (m *FileConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 	config.ProtocolConverter = filteredConverters
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	err = m.writeConfig(ctx, config)
+	if err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 

@@ -58,22 +58,25 @@ func NewGetDataflowcomponentMetricsAction(userEmail string, actionUUID uuid.UUID
 	}
 }
 
-func (a *GetDataflowcomponentMetricsAction) Parse(ctx context.Context, payload interface{}) (err error) {
+func (a *GetDataflowcomponentMetricsAction) Parse(ctx context.Context, payload interface{}) error {
 	a.actionLogger.Info("Parsing the payload")
+
+	var err error
+
 	a.payload, err = ParseActionPayload[models.GetDataflowcomponentMetricsRequest](payload) //nolint:staticcheck // Deprecated but kept for back compat
 	a.actionLogger.Info("Payload parsed: %v", a.payload)
 
 	return err
 }
 
-func (a *GetDataflowcomponentMetricsAction) Validate(ctx context.Context) (err error) {
+func (a *GetDataflowcomponentMetricsAction) Validate(ctx context.Context) error {
 	a.actionLogger.Info("Validating the payload")
 
 	if a.payload.UUID == "" {
 		return errors.New("uuid must be set to retrieve metrics for a dataflowcomponent")
 	}
 
-	_, err = uuid.Parse(a.payload.UUID)
+	_, err := uuid.Parse(a.payload.UUID)
 	if err != nil {
 		return fmt.Errorf("invalid UUID format: %w", err)
 	}

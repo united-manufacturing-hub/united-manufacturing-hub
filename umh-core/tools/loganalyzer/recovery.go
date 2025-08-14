@@ -70,7 +70,7 @@ func (a *LogAnalyzer) AnalyzeRecovery() {
 	a.analyzeAgentRecovery()
 }
 
-func (a *LogAnalyzer) findFSMsAtTime(t time.Time) map[string]string {
+func (a *LogAnalyzer) findFSMsAtTime(timestamp time.Time) map[string]string {
 	states := make(map[string]string)
 
 	for fsmName, history := range a.FSMHistories {
@@ -81,7 +81,7 @@ func (a *LogAnalyzer) findFSMsAtTime(t time.Time) map[string]string {
 		var lastState string
 
 		for _, transition := range history.Transitions {
-			if transition.Timestamp.Before(t) && transition.Success {
+			if transition.Timestamp.Before(timestamp) && transition.Success {
 				lastState = transition.ToState
 			}
 		}

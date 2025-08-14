@@ -24,7 +24,7 @@ import (
 
 // ParseNano returns a UTC time.Time.
 // The input must be exactly "YYYY-MM-DD HH:MM:SS.NNNNNNNNN".
-func ParseNano(s string) (time.Time, error) {
+func ParseNano(s string) (time.Time, error) { //nolint:varnamelen // Performance-critical parsing function - standard string param name
 	if len(s) != 29 {
 		return time.Time{}, errors.New("invalid length")
 	}

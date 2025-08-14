@@ -413,10 +413,10 @@ func (p *ProtocolConverterInstance) IsDFCHealthy() (bool, string) {
 // returning a zero-value metrics struct if any part of the chain is nil.
 // This prevents panics during startup or error conditions when the full
 // observedState structure may not be populated yet.
-func (p *ProtocolConverterInstance) safeBenthosMetrics() (input, output struct{ ConnectionUp, ConnectionLost int64 }) {
+func (p *ProtocolConverterInstance) safeBenthosMetrics() (struct{ ConnectionUp, ConnectionLost int64 }, struct{ ConnectionUp, ConnectionLost int64 }) {
 	// Return zero values if the MetricsState pointer is nil (this is the only field that can actually be nil)
 	if p.ObservedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState == nil {
-		return
+		return struct{ ConnectionUp, ConnectionLost int64 }{}, struct{ ConnectionUp, ConnectionLost int64 }{}
 	}
 
 	metrics := p.ObservedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics

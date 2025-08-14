@@ -141,7 +141,7 @@ func (m *MockSchemaRegistry) handleSubjects(w http.ResponseWriter, r *http.Reque
 }
 
 // handleSubjectOperations handles all operations under /subjects/{subject}/...
-func (m *MockSchemaRegistry) handleSubjectOperations(w http.ResponseWriter, r *http.Request) {
+func (m *MockSchemaRegistry) handleSubjectOperations(w http.ResponseWriter, r *http.Request) { //nolint:varnamelen // Mock HTTP handler - standard HTTP param names
 	// Parse the URL path: /subjects/{subject} or /subjects/{subject}/versions
 	path := strings.TrimPrefix(r.URL.Path, "/subjects/")
 	parts := strings.Split(path, "/")
@@ -201,7 +201,7 @@ func (m *MockSchemaRegistry) handleDeleteSubject(w http.ResponseWriter, r *http.
 }
 
 // handlePostSubjectVersion handles POST /subjects/{subject}/versions.
-func (m *MockSchemaRegistry) handlePostSubjectVersion(w http.ResponseWriter, r *http.Request, subject string) {
+func (m *MockSchemaRegistry) handlePostSubjectVersion(w http.ResponseWriter, r *http.Request, subject string) { //nolint:varnamelen // Mock HTTP handler - standard HTTP param names
 	// Parse JSON body
 	var req struct {
 		Schema     string `json:"schema"`
@@ -246,7 +246,7 @@ func (m *MockSchemaRegistry) handlePostSubjectVersion(w http.ResponseWriter, r *
 	}
 
 	// Generate unique ID
-	id := len(m.schemas)*1000 + version
+	id := len(m.schemas)*1000 + version //nolint:varnamelen // Schema ID - acceptable short name in mock context
 
 	m.schemas[subject][version] = &MockSchemaVersion{
 		ID:      id,
@@ -262,7 +262,7 @@ func (m *MockSchemaRegistry) handlePostSubjectVersion(w http.ResponseWriter, r *
 }
 
 // handleGetSubjectVersions handles GET /subjects/{subject}/versions/{version}.
-func (m *MockSchemaRegistry) handleGetSubjectVersions(w http.ResponseWriter, r *http.Request, subject string, parts []string) {
+func (m *MockSchemaRegistry) handleGetSubjectVersions(w http.ResponseWriter, r *http.Request, subject string, parts []string) { //nolint:varnamelen // Mock HTTP handler - standard HTTP param names
 	_ = r // HTTP request parameter required by handler interface
 
 	if len(parts) < 3 || parts[1] != "versions" {

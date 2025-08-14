@@ -60,7 +60,7 @@ type StarvationChecker struct {
 // Returns a StarvationChecker that must be stopped with Stop() when no longer needed.
 func NewStarvationChecker(threshold time.Duration) *StarvationChecker {
 	ctx, cancel := context.WithCancel(context.Background())
-	sc := &StarvationChecker{
+	checker := &StarvationChecker{
 		starvationThreshold: threshold,
 		lastReconcileTime:   time.Now(),
 		logger:              logger.For(logger.ComponentStarvationChecker),
@@ -68,13 +68,13 @@ func NewStarvationChecker(threshold time.Duration) *StarvationChecker {
 		cancel:              cancel,
 	}
 
-	sc.wg.Add(1)
+	checker.wg.Add(1)
 
-	go sc.checkStarvationLoop()
+	go checker.checkStarvationLoop()
 
-	sc.logger.Infof("Starvation checker created with threshold %s", threshold)
+	checker.logger.Infof("Starvation checker created with threshold %s", threshold)
 
-	return sc
+	return checker
 }
 
 // checkStarvationLoop continuously monitors the time since the last reconciliation

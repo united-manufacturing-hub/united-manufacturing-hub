@@ -159,28 +159,28 @@ func BuildRuntimeConfig(
 	//----------------------------------------------------------------------
 	// 2. Assemble the **complete** variable bundle
 	//----------------------------------------------------------------------
-	vb := spec.Variables
+	variables := spec.Variables
 	// Deep copy the User map to avoid mutating the original
-	if vb.User != nil {
-		userCopy := make(map[string]any, len(vb.User)+2) // +2 for location keys
-		for k, v := range vb.User {
+	if variables.User != nil {
+		userCopy := make(map[string]any, len(variables.User)+2) // +2 for location keys
+		for k, v := range variables.User {
 			userCopy[k] = v
 		}
 
-		vb.User = userCopy
+		variables.User = userCopy
 	} else {
-		vb.User = map[string]any{}
+		variables.User = map[string]any{}
 	}
 
-	vb.User["location"] = loc
-	vb.User["location_path"] = locationPath
+	variables.User["location"] = loc
+	variables.User["location_path"] = locationPath
 
 	if len(globalVars) != 0 {
-		vb.Global = globalVars
+		variables.Global = globalVars
 	}
 
 	// Internal namespace
-	vb.Internal = map[string]any{
+	variables.Internal = map[string]any{
 		"id": pcName,
 	}
 
@@ -191,12 +191,12 @@ func BuildRuntimeConfig(
 		nodeName = "unknown"
 	}
 
-	vb.Internal["bridged_by"] = config.GenerateBridgedBy(config.ComponentTypeProtocolConverter, nodeName, pcName)
+	variables.Internal["bridged_by"] = config.GenerateBridgedBy(config.ComponentTypeProtocolConverter, nodeName, pcName)
 
 	//----------------------------------------------------------------------
 	// 4. Render all three sub-templates
 	//----------------------------------------------------------------------
-	scope := vb.Flatten()
+	scope := variables.Flatten()
 
 	return renderConfig(spec, scope) // unexported helper that enforces UNS
 }

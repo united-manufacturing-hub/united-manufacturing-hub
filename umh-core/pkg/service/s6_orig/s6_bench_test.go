@@ -256,7 +256,7 @@ func BenchmarkParseLogLine(b *testing.B) {
 		},
 	}
 
-	for _, tc := range testCases {
+	for _, tc := range testCases { //nolint:varnamelen // Test case variable - acceptable short name in test context
 		b.Run(tc.name, func(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
@@ -319,7 +319,7 @@ func BenchmarkParseLogLineOptimized(b *testing.B) {
 		},
 	}
 
-	for _, tc := range testCases {
+	for _, tc := range testCases { //nolint:varnamelen // Test case variable - acceptable short name in test context
 		b.Run(tc.name, func(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()

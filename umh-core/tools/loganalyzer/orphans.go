@@ -237,14 +237,14 @@ func (a *LogAnalyzer) ShowInstanceNotFoundTimeline() {
 	}
 }
 
-func (a *LogAnalyzer) findTickForTimestamp(t time.Time) int {
+func (a *LogAnalyzer) findTickForTimestamp(timestamp time.Time) int {
 	for tick, tickData := range a.TickMap {
 		if tickData == nil {
 			continue
 		}
 
-		if t.After(tickData.Timestamp.Add(-time.Second)) &&
-			t.Before(tickData.Timestamp.Add(time.Second)) {
+		if timestamp.After(tickData.Timestamp.Add(-time.Second)) &&
+			timestamp.Before(tickData.Timestamp.Add(time.Second)) {
 			return tick
 		}
 	}

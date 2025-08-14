@@ -270,7 +270,7 @@ func (s *RedpandaService) generateRedpandaYaml(config *redpandaserviceconfig.Red
 
 // generateS6ConfigForRedpanda creates a S6 config for a given redpanda instance
 // Expects s6ServiceName (e.g. "redpanda-myservice"), not the raw redpandaName.
-func (s *RedpandaService) GenerateS6ConfigForRedpanda(redpandaConfig *redpandaserviceconfig.RedpandaServiceConfig, s6ServiceName string) (s6Config s6serviceconfig.S6ServiceConfig, err error) {
+func (s *RedpandaService) GenerateS6ConfigForRedpanda(redpandaConfig *redpandaserviceconfig.RedpandaServiceConfig, s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error) {
 	configPath := fmt.Sprintf("%s/%s/config/%s", constants.S6BaseDir, s6ServiceName, constants.RedpandaConfigFileName)
 
 	yamlConfig, err := s.generateRedpandaYaml(redpandaConfig)
@@ -286,7 +286,7 @@ func (s *RedpandaService) GenerateS6ConfigForRedpanda(redpandaConfig *redpandase
 		redpandaConfig.Resources.MemoryPerCoreInBytes = 2048 * 1024 * 1024 // 2GB
 	}
 
-	s6Config = s6serviceconfig.S6ServiceConfig{
+	s6Config := s6serviceconfig.S6ServiceConfig{
 		Command: []string{
 			"/opt/redpanda/bin/redpanda",
 			"--redpanda-cfg",
@@ -1263,7 +1263,7 @@ func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpa
 }
 
 // anyToString converts common data types to string for easier comparison.
-func anyToString(input any) (result string, err error) {
+func anyToString(input any) (string, error) {
 	switch v := input.(type) {
 	case string:
 		return v, nil
@@ -1291,6 +1291,6 @@ func anyToString(input any) (result string, err error) {
 
 		return "false", nil
 	default:
-		return result, fmt.Errorf("cannot convert %T to string", input)
+		return "", fmt.Errorf("cannot convert %T to string", input)
 	}
 }

@@ -327,8 +327,8 @@ func (p *ProtocolConverterService) Status(
 	underlyingDFCWriteName := p.getUnderlyingDFCWriteName(protConvName)
 
 	// --- redpanda (only one instance) -------------------------------------------------------------
-	rpInst, ok := fsm.FindInstance(snapshot, constants.RedpandaManagerName, constants.RedpandaInstanceName)
-	if !ok || rpInst == nil {
+	rpInst, found := fsm.FindInstance(snapshot, constants.RedpandaManagerName, constants.RedpandaInstanceName)
+	if !found || rpInst == nil {
 		return ServiceInfo{}, errors.New("redpanda instance not found")
 	}
 

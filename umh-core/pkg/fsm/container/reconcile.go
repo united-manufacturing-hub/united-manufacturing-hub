@@ -34,9 +34,13 @@ import (
 // The filesystemService parameter allows for filesystem operations during reconciliation,
 // enabling the method to read configuration or state information from the filesystem.
 // Currently not used in this implementation but added for consistency with the interface.
-func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
+func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool) {
 	start := time.Now()
 	instanceName := c.baseFSMInstance.GetID()
+
+	var err error
+
+	var reconciled bool
 
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentContainerMonitor, instanceName, time.Since(start))
@@ -229,7 +233,7 @@ func healthCategoryToString(category models.HealthCategory) string {
 // Any functions that fetch information are disallowed here and must be called in reconcileExternalChanges
 // and exist in ExternalState.
 // This is to ensure full testability of the FSM.
-func (c *ContainerInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider) (err error, reconciled bool) {
+func (c *ContainerInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider) (error, bool) {
 	start := time.Now()
 
 	defer func() {

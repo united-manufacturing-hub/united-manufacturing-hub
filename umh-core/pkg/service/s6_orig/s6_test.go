@@ -418,8 +418,8 @@ var _ = Describe("S6 Service", func() {
 
 		// helper – PathExists reads from our map
 		pathExists := func(p string) bool {
-			exists, ok := exists.Load(p)
-			if !ok {
+			exists, found := exists.Load(p)
+			if !found {
 				return false
 			}
 

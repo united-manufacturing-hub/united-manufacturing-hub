@@ -358,7 +358,8 @@ func (s *DefaultService) createS6FilesInRepository(ctx context.Context, reposito
 	logDir := filepath.Join(constants.S6LogBaseDir, serviceName)
 	logServicePath := filepath.Join(repositoryDir, "log")
 
-	if err := fsService.EnsureDirectory(ctx, logServicePath); err != nil {
+	err = fsService.EnsureDirectory(ctx, logServicePath)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create log service directory: %w", err)
 	}
 
@@ -389,7 +390,9 @@ func (s *DefaultService) createS6FilesInRepository(ctx context.Context, reposito
 	}
 
 	logRunPath := filepath.Join(logServicePath, "run")
-	if err := fsService.WriteFile(ctx, logRunPath, []byte(logRunContent), 0755); err != nil {
+
+	err = fsService.WriteFile(ctx, logRunPath, []byte(logRunContent), 0755)
+	if err != nil {
 		return nil, fmt.Errorf("failed to write log run script: %w", err)
 	}
 
@@ -417,12 +420,16 @@ func (s *DefaultService) createS6FilesInRepository(ctx context.Context, reposito
 
 	// Create dependencies
 	dependenciesDPath := filepath.Join(repositoryDir, "dependencies.d")
-	if err := fsService.EnsureDirectory(ctx, dependenciesDPath); err != nil {
+
+	err = fsService.EnsureDirectory(ctx, dependenciesDPath)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create dependencies.d directory: %w", err)
 	}
 
 	baseDepFile := filepath.Join(dependenciesDPath, "base")
-	if err := fsService.WriteFile(ctx, baseDepFile, []byte{}, 0644); err != nil {
+
+	err = fsService.WriteFile(ctx, baseDepFile, []byte{}, 0644)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create base dependency file: %w", err)
 	}
 
@@ -455,12 +462,15 @@ func (s *DefaultService) createS6RunScript(ctx context.Context, servicePath stri
 	}
 
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
+
+	err = tmpl.Execute(&buf, data)
+	if err != nil {
 		return fmt.Errorf("failed to execute run script template: %w", err)
 	}
 
 	// Write the templated content directly to the file with executable permissions
-	if err := fsService.WriteFile(ctx, runScript, buf.Bytes(), 0755); err != nil {
+	err = fsService.WriteFile(ctx, runScript, buf.Bytes(), 0755)
+	if err != nil {
 		return fmt.Errorf("failed to write run script: %w", err)
 	}
 
@@ -652,7 +662,8 @@ func (s *DefaultService) unsuperviseService(ctx context.Context, servicePath str
 
 	// Verify that supervision actually ended by checking the lock file
 	// This follows the same logic as s6-svstat to detect if supervisor is still running
-	if err := s.verifySupervisionEnded(ctx, servicePath, fsService); err != nil {
+	err = s.verifySupervisionEnded(ctx, servicePath, fsService)
+	if err != nil {
 		return fmt.Errorf("supervision verification failed for service %s: %w", servicePath, err)
 	}
 

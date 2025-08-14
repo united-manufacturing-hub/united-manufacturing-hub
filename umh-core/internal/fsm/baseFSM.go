@@ -466,7 +466,7 @@ func (s *BaseFSMInstance) ReconcileLifecycleStates(
 	createInstance func(ctx context.Context, filesystemService filesystem.Service) error,
 	removeInstance func(ctx context.Context, filesystemService filesystem.Service) error,
 	checkForCreation func(ctx context.Context, filesystemService filesystem.Service) bool,
-) (err error, reconciled bool) {
+) (error, bool) {
 	start := time.Now()
 
 	defer func() {

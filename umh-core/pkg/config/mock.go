@@ -1255,7 +1255,8 @@ func (m *MockConfigManager) WriteYAMLConfigFromString(ctx context.Context, confi
 	}
 
 	// write the config
-	if err := m.writeConfig(ctx, parsedConfig); err != nil {
+	err = m.writeConfig(ctx, parsedConfig)
+	if err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 

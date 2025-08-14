@@ -686,6 +686,7 @@ func runDockerCommandWithCtx(ctx context.Context, args ...string) (string, error
 	fmt.Printf("Running docker command: %v\n", args)
 	// Check if we use docker or podman
 	dockerCmd := "docker"
+
 	_, err := exec.LookPath("podman")
 	if err == nil {
 		dockerCmd = "podman"
@@ -697,7 +698,7 @@ func runDockerCommandWithCtx(ctx context.Context, args ...string) (string, error
 
 	cmd.Stdout = &out
 	cmd.Stderr = &out
-	err := cmd.Run()
+	err = cmd.Run()
 
 	return out.String(), err
 }

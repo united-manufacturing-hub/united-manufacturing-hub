@@ -78,16 +78,16 @@ func NewArchiveEventStorage(maxPointsPerState int) *ArchiveEventStorage {
 		maxPointsPerState = 1000 // Default limit
 	}
 
-	a := &ArchiveEventStorage{
+	archive := &ArchiveEventStorage{
 		dataPoints:        make(map[string][]DataPoint),
 		dataPointQueue:    make(chan DataPoint, 100),
 		done:              make(chan struct{}),
 		maxPointsPerState: maxPointsPerState,
 	}
 
-	go a.storeDataPoints()
+	go archive.storeDataPoints()
 
-	return a
+	return archive
 }
 
 func (a *ArchiveEventStorage) storeDataPoints() {
@@ -123,7 +123,7 @@ func (a *ArchiveEventStorage) StoreDataPoint(ctx context.Context, dataPoint Data
 	}
 }
 
-func (a *ArchiveEventStorage) GetDataPoints(ctx context.Context, id string, options QueryOptions) ([]DataPoint, error) {
+func (a *ArchiveEventStorage) GetDataPoints(ctx context.Context, identifier string, options QueryOptions) ([]DataPoint, error) {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 
@@ -131,7 +131,7 @@ func (a *ArchiveEventStorage) GetDataPoints(ctx context.Context, id string, opti
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
-		points := a.dataPoints[id]
+		points := a.dataPoints[identifier]
 		if points == nil {
 			return []DataPoint{}, nil
 		}
@@ -139,13 +139,13 @@ func (a *ArchiveEventStorage) GetDataPoints(ctx context.Context, id string, opti
 		// Filter by time range
 		var filtered []DataPoint
 
-		for _, p := range points {
-			if (!options.StartTime.IsZero() && p.Time.Before(options.StartTime)) ||
-				(!options.EndTime.IsZero() && p.Time.After(options.EndTime)) {
+		for _, point := range points {
+			if (!options.StartTime.IsZero() && point.Time.Before(options.StartTime)) ||
+				(!options.EndTime.IsZero() && point.Time.After(options.EndTime)) {
 				continue
 			}
 
-			filtered = append(filtered, p)
+			filtered = append(filtered, point)
 		}
 
 		// Filter by states

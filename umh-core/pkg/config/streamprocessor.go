@@ -72,7 +72,8 @@ func (m *FileConfigManager) AtomicAddStreamProcessor(ctx context.Context, sp Str
 	config.StreamProcessor = append(config.StreamProcessor, sp)
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	err = m.writeConfig(ctx, config)
+	if err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
@@ -227,7 +228,8 @@ func (m *FileConfigManager) AtomicDeleteStreamProcessor(ctx context.Context, nam
 	config.StreamProcessor = append(config.StreamProcessor[:index], config.StreamProcessor[index+1:]...)
 
 	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
+	err = m.writeConfig(ctx, config)
+	if err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 

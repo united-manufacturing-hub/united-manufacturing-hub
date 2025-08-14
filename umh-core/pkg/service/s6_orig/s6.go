@@ -131,7 +131,8 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 		if s.artifacts == nil {
 			s.logger.Debugf("Service %s exists but has no artifacts (orphaned from restart), removing and recreating", servicePath)
 			// Remove the orphaned directory immediately - we can't track what files were created
-			if err := fsService.RemoveAll(ctx, servicePath); err != nil {
+			err = fsService.RemoveAll(ctx, servicePath)
+			if err != nil {
 				return fmt.Errorf("failed to remove orphaned service directory: %w", err)
 			}
 			// Proceed with fresh creation
@@ -154,7 +155,8 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 		if health == s6_shared.HealthBad {
 			s.logger.Debugf("Service %s is unhealthy, removing and recreating", servicePath)
 
-			if err := s.ForceCleanup(ctx, s.artifacts, fsService); err != nil {
+			err = s.ForceCleanup(ctx, s.artifacts, fsService)
+			if err != nil {
 				return fmt.Errorf("failed to remove unhealthy service: %w", err)
 			}
 
@@ -1231,7 +1233,7 @@ func ParseLogsFromBytes(buf []byte) ([]s6_shared.LogEntry, error) {
 			continue
 		}
 
-		ts, err := s6_shared.ParseNano(string(line[:sep])) // ParseNano is already fast
+		timestamp, err := s6_shared.ParseNano(string(line[:sep])) // ParseNano is already fast
 		if err != nil {
 			entries = append(entries, s6_shared.LogEntry{Content: string(line)})
 
@@ -1239,7 +1241,7 @@ func ParseLogsFromBytes(buf []byte) ([]s6_shared.LogEntry, error) {
 		}
 
 		entries = append(entries, s6_shared.LogEntry{
-			Timestamp: ts,
+			Timestamp: timestamp,
 			Content:   string(line[sep+2:]),
 		})
 	}
