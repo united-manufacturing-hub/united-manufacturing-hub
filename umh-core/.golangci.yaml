@@ -51,3 +51,4 @@ linters:
     - interfacebloat
     - maintidx
     - ireturn
+    - embeddedstructfieldcheck
