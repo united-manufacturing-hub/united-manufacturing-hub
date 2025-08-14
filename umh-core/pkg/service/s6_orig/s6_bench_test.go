@@ -383,7 +383,7 @@ func BenchmarkParseLogLineCombinedOptimized(b *testing.B) {
 
 // BenchmarkParseRealLogData benchmarks parsing real log data from the test file.
 func BenchmarkParseRealLogData(b *testing.B) {
-	lines, err := readLogLines("s6_test_data.txt")
+	lines, err := readLogLines("../s6/s6_test_data.txt")
 	if err != nil {
 		b.Fatalf("Failed to read test data: %v", err)
 	}

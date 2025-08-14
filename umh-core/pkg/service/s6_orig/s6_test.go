@@ -394,7 +394,7 @@ var _ = Describe("S6 Service", func() {
 
 	Describe("ParseLogsFromBytes", func() {
 		It("should parse logs from bytes", func() {
-			data, err := os.ReadFile("s6_test_log_data.txt")
+			data, err := os.ReadFile("../s6/s6_test_log_data.txt")
 			Expect(data).ToNot(BeEmpty())
 			Expect(err).NotTo(HaveOccurred())
 			entries, err := ParseLogsFromBytes(data)
