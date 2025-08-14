@@ -64,7 +64,7 @@ DLV_VERSION = v1.25.1
 # Default values for build arguments
 GOLANG_VERSION = 1.25.0
 ALPINE_VERSION = 3.22
-NMAP_VERSION = 7.95-r1
+NMAP_VERSION = 7.97-r0
 S6_OVERLAY_VERSION = 3.2.0.2
 REDPANDA_VERSION = 24.3.8
 ## Benthos version is a tag or a sha-<commit hash> (e.g. 0.9.4 or sha-a51a685) to be used in the docker image
