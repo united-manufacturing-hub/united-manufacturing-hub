@@ -346,7 +346,7 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 		"--cpu-period", strconv.FormatUint(uint64(cpuPeriod), 10), // 20 ms CFS window
 		"--cpu-quota", strconv.FormatUint(uint64(cpuQuota), 10), // e.g. 40 ms budget ⇒ 2 vCPUs
 		"-v", tmpRedpandaDir+":/data/redpanda",
-		"-v", tmpLogsDir+":/data/logs",
+		"-v", tmpLogsDir+":/logs",
 		getImageName(),
 	)
 	if err != nil {
@@ -465,7 +465,7 @@ func printContainerLogs() {
 	// 2. Internal UMH Core logs
 	fmt.Printf("\n=== UMH CORE INTERNAL LOGS ===\n")
 
-	out, err = runDockerCommand("exec", containerName, "cat", "/data/logs/umh-core/current")
+	out, err = runDockerCommand("exec", containerName, "cat", "/logs/umh-core/current")
 	switch {
 	case err != nil:
 		fmt.Printf("Failed to get UMH Core internal logs: %v\n", err)
@@ -478,7 +478,7 @@ func printContainerLogs() {
 	// 3. Golden Service logs
 	fmt.Printf("\n=== GOLDEN SERVICE INTERNAL LOGS ===\n")
 
-	out, err = runDockerCommand("exec", containerName, "cat", "/data/logs/golden-service/current")
+	out, err = runDockerCommand("exec", containerName, "cat", "/logs/golden-service/current")
 	switch {
 	case err != nil:
 		fmt.Printf("Failed to get Golden Service internal logs: %v\n", err)
@@ -491,7 +491,7 @@ func printContainerLogs() {
 	// 4. Golden Benthos logs
 	fmt.Printf("\n=== GOLDEN BENTHOS INTERNAL LOGS ===\n")
 
-	out, err = runDockerCommand("exec", containerName, "cat", "/data/logs/golden-benthos/current")
+	out, err = runDockerCommand("exec", containerName, "cat", "/logs/golden-benthos/current")
 	switch {
 	case err != nil:
 		fmt.Printf("Failed to get Benthos internal logs: %v\n", err)
@@ -504,12 +504,12 @@ func printContainerLogs() {
 	// 5. List all available log files for reference
 	fmt.Printf("\n=== AVAILABLE LOG FILES ===\n")
 
-	out, err = runDockerCommand("exec", containerName, "find", "/data/logs", "-type", "f")
+	out, err = runDockerCommand("exec", containerName, "find", "/logs", "-type", "f")
 	switch {
 	case err != nil:
 		fmt.Printf("Failed to list log files: %v\n", err)
 	case out == "":
-		fmt.Printf("No log files found in /data/logs\n")
+		fmt.Printf("No log files found in /logs\n")
 	default:
 		fmt.Printf("%s\n", out)
 	}
@@ -532,7 +532,7 @@ func printContainerLogs() {
 	} else {
 		containerName := getContainerName()
 
-		_, err = runDockerCommand("cp", containerName+":/data/logs", tmpDir)
+		_, err = runDockerCommand("cp", containerName+":/logs", tmpDir)
 		if err != nil {
 			fmt.Printf("Failed to copy out logs: %v\n", err)
 		}

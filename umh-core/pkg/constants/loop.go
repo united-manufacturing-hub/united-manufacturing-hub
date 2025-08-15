@@ -16,12 +16,14 @@ package constants
 
 import (
 	"context"
+	"math"
+	"sync/atomic"
 	"time"
 )
 
 const (
 	// DefaultTickerTime is the default time between ticks.
-	DefaultTickerTime = 100 * time.Millisecond
+	DefaultTickerTime = 1000 * time.Millisecond
 
 	// Time budget percentages for parallel execution
 	// These percentages are applied to whatever context time budget is available,
@@ -55,6 +57,28 @@ const (
 	// Set high for I/O-bound operations like filesystem access, health checks, and network calls.
 	MaxConcurrentFSMOperations = 1000
 )
+
+var serviceNumber = atomic.Uint64{}
+
+func GetServiceNumber() uint64 {
+	return serviceNumber.Load()
+}
+
+// 1000 works well for 25
+// 100 works well for 15
+// Y = 18N - 1250
+const scaleFactor = 18
+const minimumCycleTime = 100
+
+func GetTickerTime() time.Duration {
+	serviceNumbers := serviceNumber.Load()
+	y := math.Max(float64(int64(serviceNumbers)*scaleFactor-1250), minimumCycleTime)
+	return time.Duration(y) * time.Millisecond
+}
+
+func SetServiceNumber(cnt uint64) {
+	serviceNumber.Store(cnt)
+}
 
 // CreateSubContext applies a percentage to the parent context's remaining time.
 // This enables hierarchical time budgets where each level respects its parent's constraints.

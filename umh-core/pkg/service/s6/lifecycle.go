@@ -39,9 +39,9 @@ type ServiceArtifacts struct {
 	RemovalProgress *RemovalProgress
 	// ServiceDir is the scan directory symlink path (e.g., /run/service/foo)
 	ServiceDir string
-	// RepositoryDir is the repository directory path (e.g., /data/services/foo)
+	// RepositoryDir is the repository directory path (e.g., /services/foo)
 	RepositoryDir string
-	// LogDir is the external log directory (e.g., /data/logs/foo)
+	// LogDir is the external log directory (e.g., /logs/foo)
 	LogDir string
 	// TempDir is populated only during Create() for atomic operations (DEPRECATED: no longer used with symlink approach)
 	TempDir string

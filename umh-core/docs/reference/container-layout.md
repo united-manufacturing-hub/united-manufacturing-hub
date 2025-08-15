@@ -37,10 +37,10 @@ See also [configuration-reference.md](configuration-reference.md "mention")
 
     ```bash
     # live stream
-    tail -f /data/logs/<service>/current
+    tail -f /logs/<service>/current
 
     # inspect an old file (the '@…s' ones are plain text)
-    less /data/logs/<service>/@20250530T131218Z.
+    less /logs/<service>/@20250530T131218Z.
     ```
 
 ### /redpanda

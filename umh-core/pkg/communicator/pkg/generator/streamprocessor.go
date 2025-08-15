@@ -98,7 +98,7 @@ func buildStreamProcessorAsDfc(
 	if m := svcInfo.DFCObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState; m != nil &&
 		m.Input.LastCount > 0 {
 		dfc.Metrics = &models.DfcMetrics{
-			AvgInputThroughputPerMinuteInMsgSec: m.Output.MessagesPerTick / constants.DefaultTickerTime.Seconds(),
+			AvgInputThroughputPerMinuteInMsgSec: m.Output.MessagesPerTick / constants.GetTickerTime().Seconds(),
 		}
 	}
 

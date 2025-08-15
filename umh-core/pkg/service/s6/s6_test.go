@@ -578,7 +578,7 @@ var _ = Describe("S6 Service", func() {
 // their own S6 service instances but need to share configuration change timestamps.
 var _ = Describe("LastDeploymentTime Sharing", func() {
 	It("should share timestamps across different service instances", func() {
-		servicePath := "/data/services/test-shared-service"
+		servicePath := "/services/test-shared-service"
 
 		// Manually set a timestamp for the service path to simulate a config change
 		testTime := time.Now()
@@ -593,7 +593,7 @@ var _ = Describe("LastDeploymentTime Sharing", func() {
 		Expect(timestamp1).ToNot(BeZero())
 
 		// Test that a different service path has a different (zero) timestamp
-		differentPath := "/data/services/different-service"
+		differentPath := "/services/different-service"
 		differentTimestamp := getLastDeploymentTime(differentPath)
 		Expect(differentTimestamp).To(BeZero())
 	})

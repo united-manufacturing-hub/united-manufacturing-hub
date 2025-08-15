@@ -127,8 +127,8 @@ COPY --from=downloader / /
 # Copy built application
 COPY --from=build /go/bin/umh-core /usr/local/bin/umh-core
 
-# Install coreutils (this allows date resolution beyond seconds)
-RUN apk add --no-cache coreutils
+# Install coreutils (this allows date resolution beyond seconds), fio for disk performance testing, iotop for I/O monitoring, procps for vmstat
+RUN apk add --no-cache coreutils fio procps
 
 # Handle DEBUG mode - install Go and Delve when DEBUG=true
 # Delve is a debugger for Go (https://github.com/go-delve/delve/)
@@ -150,24 +150,22 @@ COPY ./s6-base/s6-rc.d /etc/s6-overlay/s6-rc.d/
 # Use either standard or debug service based on DEBUG flag
 ARG DEBUG=false
 RUN if [ "$DEBUG" = "true" ]; then \
-    # Use debug service instead of regular service
     cp -f /etc/s6-overlay/s6-rc.d/umh-core-debug/run /etc/s6-overlay/s6-rc.d/umh-core/run && \
     rm -rf /etc/s6-overlay/s6-rc.d/umh-core-debug; \
     chmod +x /etc/s6-overlay/s6-rc.d/umh-core/run; \
     else \
-    # Use regular service
     rm -rf /etc/s6-overlay/s6-rc.d/umh-core-debug; \
     chmod +x /etc/s6-overlay/s6-rc.d/umh-core/run; \
     fi
 
 # Set environment variables and volume
 # S6_SYNC_DISKS=1: Sync the disks to ensure that the data is persisted, this is needed for the redpanda service
+# Important: This needs to be T (ISO 8861) as our time parser expects this format
 ENV S6_KEEP_ENV=1 \
     S6_BEHAVIOUR_IF_STAGE2_FAILS=2 \
     S6_CMD_WAIT_FOR_SERVICES=1 \
     S6_SERVICES_READYTIME=50 \
     S6_SYNC_DISKS=1 \
-    # Important: This needs to be T (ISO 8861) as our time parser expects this format
     S6_LOGGING_SCRIPT="n5 s10000000 T" \
     PATH="/opt/redpanda/bin:$PATH"
 VOLUME ["/data"]

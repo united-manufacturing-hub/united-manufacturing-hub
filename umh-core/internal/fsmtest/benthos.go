@@ -287,7 +287,7 @@ func TestBenthosStateTransition(
 
 		// Perform a reconcile cycle
 		// the current time is is the start time * the amount of ticks that have passed
-		currentTime := startTime.Add(time.Duration(tick) * constants.DefaultTickerTime)
+		currentTime := startTime.Add(time.Duration(tick) * constants.GetTickerTime())
 		_, _ = instance.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick, SnapshotTime: currentTime}, services)
 		tick++
 	}

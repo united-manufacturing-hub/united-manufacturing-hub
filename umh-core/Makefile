@@ -608,7 +608,7 @@ test-benthos-monitor: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 # - Single:     { topic(topic: "uns.topic1") { topic } }
 #
 # TROUBLESHOOTING:
-# - If GraphQL server doesn't start, check internal logs: /data/logs/umh-core/current
+# - If GraphQL server doesn't start, check internal logs: /logs/umh-core/current
 # - Look for "Starting GraphQL server on port 8090" in logs
 # - Ensure ports 8090 and 8081 are not in use
 # - Container must have config.yaml with graphql.enabled=true
@@ -674,6 +674,8 @@ test-no-copy: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 	docker run \
 		--name $(IMAGE_NAME) \
 		-v $(PWD)/data:/data \
+		--tmpfs /services:rw,nosuid,size=4g \
+		--tmpfs /logs:rw,nosuid,noexec,size=10g \
 		-e LOGGING_LEVEL=DEBUG \
 		-p 8081:8080 \
 		-p 4195:4195 \
@@ -705,6 +707,9 @@ test-mitm: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 
 pod-shell:
 	docker exec -it $(IMAGE_NAME) /bin/bash
+
+pod-log:
+	docker exec -it $(IMAGE_NAME) tail -F /logs/umh-core/current
 
 stop-all-pods:
 	# Stops all pods starting with $(IMAGE_NAME)

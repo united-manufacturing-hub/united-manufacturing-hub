@@ -136,7 +136,7 @@ var _ = Describe("ControlLoop", func() {
 		It("should set default values", func() {
 			loop := NewControlLoop(mockConfig)
 			Expect(loop).NotTo(BeNil())
-			Expect(loop.tickerTime).To(Equal(constants.DefaultTickerTime))
+			Expect(loop.tickerTime).To(Equal(constants.GetTickerTime()))
 			Expect(loop.managers).To(HaveLen(11))
 			Expect(loop.configManager).NotTo(BeNil())
 		})

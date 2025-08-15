@@ -446,7 +446,7 @@ func TestProtocolConverterStateTransition(
 		// Call reconcile directly on the instance
 		snapshot := fsm.SystemSnapshot{
 			Tick:         tick,
-			SnapshotTime: startTimestamp.Add(time.Duration(tick) * constants.DefaultTickerTime),
+			SnapshotTime: startTimestamp.Add(time.Duration(tick) * constants.GetTickerTime()),
 			CurrentConfig: config.FullConfig{
 				Agent: config.AgentConfig{
 					Location: map[int]string{

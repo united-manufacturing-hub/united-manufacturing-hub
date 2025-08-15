@@ -62,7 +62,7 @@ func WaitForBenthosManagerInstanceState(
 	for i := 0; i < maxAttempts; i++ {
 
 		// Update the snapshot time and tick to simulate the passage of time
-		snapshot.SnapshotTime = snapshot.SnapshotTime.Add(constants.DefaultTickerTime)
+		snapshot.SnapshotTime = snapshot.SnapshotTime.Add(constants.GetTickerTime())
 		snapshot.Tick = tick
 		err, _ := manager.Reconcile(ctx, snapshot, services)
 		if err != nil {
@@ -121,7 +121,7 @@ func WaitForBenthosManagerMultiState(
 	for i := 0; i < maxAttempts; i++ {
 
 		// Update the snapshot time and tick to simulate the passage of time
-		snapshot.SnapshotTime = snapshot.SnapshotTime.Add(constants.DefaultTickerTime)
+		snapshot.SnapshotTime = snapshot.SnapshotTime.Add(constants.GetTickerTime())
 		snapshot.Tick = tick
 		err, _ := manager.Reconcile(ctx, snapshot, services)
 		if err != nil {

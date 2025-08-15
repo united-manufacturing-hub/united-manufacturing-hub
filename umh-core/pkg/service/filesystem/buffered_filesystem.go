@@ -309,7 +309,7 @@ func NewBufferedServiceWithDefaultAppendDirs(base Service, syncDirectories []str
 	bs := NewBufferedServiceWithDirs(base, syncDirectories, pathsToIgnore)
 
 	// By default, consider log directories as append-only
-	bs.appendOnlyDirs = []string{"/data/logs"}
+	bs.appendOnlyDirs = []string{"/logs"}
 
 	return bs
 }

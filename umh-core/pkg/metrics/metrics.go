@@ -16,7 +16,6 @@ package metrics
 
 import (
 	"net/http"
-	"runtime"
 	"time"
 
 	"errors"
@@ -155,23 +154,11 @@ func SetupMetricsEndpoint(addr string) *http.Server {
 	return server
 }
 
-// printDetailedStackTrace prints a detailed stack trace with more information.
-func printDetailedStackTrace() {
-	// Get stack trace for all goroutines with a large buffer
-	buf := make([]byte, 1024*1024) // Allocate 1MB buffer
-	n := runtime.Stack(buf, true)
-
-	// Print the full stack trace
-	logger.For("stacktrace").Debugf("=== DETAILED STACK TRACE ===\n%s", string(buf[:n]))
-}
-
-// IncErrorCountAndLog increments the error counter for a component and logs a debug message if a logger is provided.
+// IncErrorCountAndLog increments the error counter for a component and logs a debug message if a logger is provided
 func IncErrorCountAndLog(component, instance string, err error, logger *zap.SugaredLogger) {
 	IncErrorCount(component, instance)
 
 	if logger != nil {
-		// Display detailed stacktrace
-		printDetailedStackTrace()
 		logger.Debugf("Component %s instance %s reconciliation failed: %v", component, instance, err)
 	}
 }

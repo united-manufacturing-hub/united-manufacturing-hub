@@ -479,7 +479,7 @@ func (s *StateMocker) Run() error {
 		return ErrAlreadyRunning
 	}
 
-	ticker := time.NewTicker(constants.DefaultTickerTime)
+	ticker := time.NewTicker(constants.GetTickerTime())
 
 	// Get a reference to the done channel under mutex protection
 	s.mu.RLock()

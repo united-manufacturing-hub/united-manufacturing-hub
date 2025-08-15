@@ -170,7 +170,7 @@ func buildProtocolConverterAsDfc(
 	if m := svcInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState; m != nil &&
 		m.Input.LastCount > 0 {
 		dfc.Metrics = &models.DfcMetrics{
-			AvgInputThroughputPerMinuteInMsgSec: m.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds(),
+			AvgInputThroughputPerMinuteInMsgSec: m.Input.MessagesPerTick / constants.GetTickerTime().Seconds(),
 		}
 	}
 

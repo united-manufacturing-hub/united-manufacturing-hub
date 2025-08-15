@@ -15,3 +15,7 @@ compass_artifact*
 
 # Test results
 *.result.txt
+
+# MCP & Claude
+.claude/settings.local.json
+.serena/cache

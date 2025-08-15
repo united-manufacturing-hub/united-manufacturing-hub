@@ -1,5 +1,6 @@
-foreground { mkdir -p /data/logs }
-foreground { mkdir -p /data/logs/umh-core }
+foreground { mkdir -p /logs }
+foreground { mkdir -p /logs/umh-core }
 foreground { mkdir -p /data/redpanda/coredump }
 foreground { chown -R nobody:nobody /data }
+foreground { chown -R nobody:nobody /logs }
 foreground { chmod o+w /data/config.yaml }

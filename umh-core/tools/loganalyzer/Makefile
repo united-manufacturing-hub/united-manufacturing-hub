@@ -13,7 +13,7 @@ test:
 	$(GO) test -v ./...
 
 run-example:
-	./$(BINARY_NAME) -f ../../data/logs/umh-core/current -i
+	./$(BINARY_NAME) -f ../../logs/umh-core/current -i
 
 install:
 	$(GO) install

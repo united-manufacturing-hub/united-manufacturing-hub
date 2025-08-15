@@ -1,2 +1,2 @@
 #!/command/execlineb -P
-logutil-service /data/logs/umh-core 
+logutil-service /logs/umh-core 

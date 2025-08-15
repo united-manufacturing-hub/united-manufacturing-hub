@@ -1068,11 +1068,11 @@ func (s *DefaultService) ForceRemove(
 
 // appendToRingBuffer appends entries to the ring buffer, extracted from existing GetLogs logic.
 func (s *DefaultService) appendToRingBuffer(entries []LogEntry, st *logState) {
-	const max = constants.S6MaxLines
+	const maxLines = constants.S6MaxLines
 
 	// Preallocate backing storage to full size once - it's recycled at runtime and never dropped
 	if st.logs == nil {
-		st.logs = make([]LogEntry, max) // len == max, cap == max
+		st.logs = make([]LogEntry, maxLines) // len == maxLines, cap == maxLines
 		st.head = 0
 		st.full = false
 	}
@@ -1080,7 +1080,7 @@ func (s *DefaultService) appendToRingBuffer(entries []LogEntry, st *logState) {
 	for _, e := range entries {
 		st.logs[st.head] = e
 
-		st.head = (st.head + 1) % max
+		st.head = (st.head + 1) % maxLines
 		if !st.full && st.head == 0 {
 			st.full = true // wrapped around for the first time
 		}
@@ -1089,7 +1089,7 @@ func (s *DefaultService) appendToRingBuffer(entries []LogEntry, st *logState) {
 
 // GetLogs reads "just the new bytes" of the log file located at
 //
-//	/data/logs/<service-name>/current
+//	/logs/<service-name>/current
 //
 // and returns — *always in a brand-new backing array* — the last
 // `constants.S6MaxLines` log lines parsed as `LogEntry` objects.
@@ -1176,7 +1176,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 		return nil, ErrServiceNotExist
 	}
 
-	// Get the log file from /data/logs/<service-name>/current
+	// Get the log file from /logs/<service-name>/current
 	logFile := filepath.Join(constants.S6LogBaseDir, serviceName, "current")
 
 	exists, err = fsService.PathExists(ctx, logFile)

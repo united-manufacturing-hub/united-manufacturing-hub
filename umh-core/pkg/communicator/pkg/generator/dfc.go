@@ -88,7 +88,7 @@ func buildDfc(
 	svcInfo := observed.ServiceInfo
 	if m := svcInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState; m != nil &&
 		m.Input.LastCount > 0 {
-		avgThroughput := m.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds()
+		avgThroughput := m.Input.MessagesPerTick / constants.GetTickerTime().Seconds()
 		if instance.DesiredState == dataflowcomponent.OperationalStateStopped {
 			avgThroughput = 0
 		}

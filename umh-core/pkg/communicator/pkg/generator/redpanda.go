@@ -78,9 +78,9 @@ func buildRedpanda(
 	m := snap.ServiceInfoSnapshot.RedpandaStatus.RedpandaMetrics.MetricsState
 	if m != nil {
 		out.AvgIncomingThroughputPerMinuteInBytesSec =
-			float64(m.Input.BytesPerTick) / constants.DefaultTickerTime.Seconds()
+			float64(m.Input.BytesPerTick) / constants.GetTickerTime().Seconds()
 		out.AvgOutgoingThroughputPerMinuteInBytesSec =
-			float64(m.Output.BytesPerTick) / constants.DefaultTickerTime.Seconds()
+			float64(m.Output.BytesPerTick) / constants.GetTickerTime().Seconds()
 	}
 
 	return out, nil

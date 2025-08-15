@@ -1064,9 +1064,8 @@ func (s *BenthosService) HasProcessingActivity(status BenthosStatus) (bool, stri
 		return true, ""
 	}
 
-	msgPerSecInput := status.BenthosMetrics.MetricsState.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds()
-	msgPerSecOutput := status.BenthosMetrics.MetricsState.Output.MessagesPerTick / constants.DefaultTickerTime.Seconds()
-
+	msgPerSecInput := status.BenthosMetrics.MetricsState.Input.MessagesPerTick / constants.GetTickerTime().Seconds()
+	msgPerSecOutput := status.BenthosMetrics.MetricsState.Output.MessagesPerTick / constants.GetTickerTime().Seconds()
 	return false, fmt.Sprintf("no input throughput (in=%.2f msg/s, out=%.2f msg/s)",
 		msgPerSecInput, msgPerSecOutput)
 }

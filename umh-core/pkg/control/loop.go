@@ -38,6 +38,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -88,9 +89,9 @@ type ControlLoop struct {
 	managerTimes      map[string]time.Duration // Tracks execution time for each manager
 	services          *serviceregistry.Registry
 	managers          []fsm.FSMManager[any]
-	tickerTime        time.Duration
 	currentTick       uint64
 	managerTimesMutex sync.RWMutex
+	tickerTime        time.Duration
 }
 
 // NewControlLoop creates a new control loop with all necessary managers.
@@ -141,7 +142,6 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 
 	return &ControlLoop{
 		managers:          managers,
-		tickerTime:        constants.DefaultTickerTime,
 		configManager:     configManager,
 		logger:            log,
 		starvationChecker: starvationChecker,
@@ -166,13 +166,37 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 // - Context cancelled: Clean shutdown
 // - Other errors: Abort the loop.
 func (c *ControlLoop) Execute(ctx context.Context) error {
-	ticker := time.NewTicker(c.tickerTime)
+	currentCycleTime := constants.GetTickerTime()
+	previousCycleTime := currentCycleTime
+
+	ticker := time.NewTicker(currentCycleTime)
 	defer ticker.Stop()
 
 	// Initialize tick counter
 	c.currentTick = 0
 
 	for {
+		// Scan the /services folder (e.g get number of folders in it)
+		dir, err := os.ReadDir("/services")
+		if err != nil {
+			c.logger.Errorf("Failed to read /services directory: %s", err)
+		} else {
+			cnt := 0
+			for _, file := range dir {
+				if file.IsDir() {
+					cnt += 1
+				}
+			}
+			constants.SetServiceNumber(uint64(cnt))
+		}
+
+		currentCycleTime = constants.GetTickerTime()
+		if previousCycleTime != currentCycleTime {
+			ticker.Reset(currentCycleTime)
+			previousCycleTime = currentCycleTime
+			serviceNumber := constants.GetServiceNumber()
+			c.logger.Infof("Adjusted cycle time for %d services. Previous: %s vs New: %s", serviceNumber, previousCycleTime.String(), currentCycleTime.String())
+		}
 		select {
 		case <-ctx.Done():
 			return nil
@@ -184,7 +208,7 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 			start := time.Now()
 
 			// Create a timeout context for the reconcile
-			timeoutCtx, cancel := context.WithTimeout(ctx, c.tickerTime)
+			timeoutCtx, cancel := context.WithTimeout(ctx, currentCycleTime)
 			// Reconcile the managers
 			err := c.Reconcile(timeoutCtx, c.currentTick)
 
@@ -194,10 +218,10 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 			cycleTime := time.Since(start)
 
 			// If cycleTime is greater than tickerTime, log a warning
-			if cycleTime > c.tickerTime {
+			if cycleTime > currentCycleTime {
 				c.logger.Warnf("Control loop reconcile cycle time is greater then ticker time: %v", cycleTime)
 				// If cycleTime is greater than 2*tickerTime, log an error
-				if cycleTime > 2*c.tickerTime {
+				if cycleTime > 2*currentCycleTime {
 					c.logger.Errorf("Control loop reconcile cycle time is greater then 2*ticker time: %v", cycleTime)
 				}
 			}

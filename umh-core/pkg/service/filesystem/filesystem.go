@@ -120,9 +120,24 @@ func (s *DefaultService) checkContext(ctx context.Context) error {
 	}
 }
 
+// wrapWithTimeout wraps the context with a 1-second timeout
+func (s *DefaultService) wrapWithTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
+	// We ignore the original ctx for testing
+	return context.WithTimeout(context.Background(), time.Second)
+}
+
+// logContextCancellation logs when a context is cancelled
+func logContextCancellation(operation string) {
+	logger.For(logger.ComponentFilesystemService).Warnf("Operation %s cancelled due to context done", operation)
+}
+
 // EnsureDirectory creates a directory if it doesn't exist.
 func (s *DefaultService) EnsureDirectory(ctx context.Context, path string) error {
-	if err := s.checkContext(ctx); err != nil {
+	// Wrap context with 1-second timeout
+	timeoutCtx, cancel := s.wrapWithTimeout(ctx)
+	defer cancel()
+
+	if err := s.checkContext(timeoutCtx); err != nil {
 		return fmt.Errorf("failed to check context: %w", err)
 	}
 
@@ -142,14 +157,19 @@ func (s *DefaultService) EnsureDirectory(ctx context.Context, path string) error
 		}
 
 		return nil
-	case <-ctx.Done():
-		return ctx.Err()
+	case <-timeoutCtx.Done():
+		logContextCancellation("EnsureDirectory")
+		return timeoutCtx.Err()
 	}
 }
 
 // ReadFile reads a file's contents respecting the context.
 func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, error) {
-	if err := s.checkContext(ctx); err != nil {
+	// Wrap context with 1-second timeout
+	timeoutCtx, cancel := s.wrapWithTimeout(ctx)
+	defer cancel()
+
+	if err := s.checkContext(timeoutCtx); err != nil {
 		return nil, fmt.Errorf("failed to check context: %w", err)
 	}
 
@@ -175,8 +195,9 @@ func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, err
 		}
 
 		return res.data, nil
-	case <-ctx.Done():
-		err := ctx.Err()
+	case <-timeoutCtx.Done():
+		logContextCancellation("ReadFile")
+		err := timeoutCtx.Err()
 		if err == nil {
 			err = errors.New("context cancelled")
 		}
@@ -205,7 +226,12 @@ func (s *DefaultService) ReadFileRange(
 	path string,
 	from int64,
 ) ([]byte, int64, error) {
-	if err := s.checkContext(ctx); err != nil {
+
+	// Wrap context with 1-second timeout
+	timeoutCtx, cancel := s.wrapWithTimeout(ctx)
+	defer cancel()
+
+	if err := s.checkContext(timeoutCtx); err != nil {
 		return nil, 0, err
 	}
 
@@ -258,7 +284,7 @@ func (s *DefaultService) ReadFileRange(
 
 		// CONTEXT-AWARE TIMING: Check remaining time before each chunk to avoid timeout failures
 		// If less than timeBuffer remains, gracefully exit with partial data instead of timing out
-		deadline, ok := ctx.Deadline()
+		deadline, ok := timeoutCtx.Deadline()
 		if !ok {
 			resCh <- result{err: errors.New("context deadline not set"), data: nil, newSize: 0}
 
@@ -287,7 +313,7 @@ func (s *DefaultService) ReadFileRange(
 		for {
 			// GRACEFUL EARLY EXIT: Check if enough time remains for another chunk
 			// Returns SUCCESS with partial data instead of TIMEOUT failure
-			if deadline, ok := ctx.Deadline(); ok {
+			if deadline, ok := timeoutCtx.Deadline(); ok {
 				if remaining := time.Until(deadline); remaining < timeBuffer {
 					// NEWSIZE CALCULATION: from + bytes_read = next offset to read from
 					resCh <- result{err: nil, data: buf, newSize: from + int64(len(buf))}
@@ -326,14 +352,19 @@ func (s *DefaultService) ReadFileRange(
 	select {
 	case res := <-resCh:
 		return res.data, res.newSize, res.err
-	case <-ctx.Done():
-		return nil, 0, ctx.Err()
+	case <-timeoutCtx.Done():
+		logContextCancellation("ReadFileRange")
+		return nil, 0, timeoutCtx.Err()
 	}
 }
 
 // WriteFile writes data to a file respecting the context.
 func (s *DefaultService) WriteFile(ctx context.Context, path string, data []byte, perm os.FileMode) error {
-	if err := s.checkContext(ctx); err != nil {
+	// Wrap context with 1-second timeout
+	timeoutCtx, cancel := s.wrapWithTimeout(ctx)
+	defer cancel()
+
+	if err := s.checkContext(timeoutCtx); err != nil {
 		return fmt.Errorf("failed to check context: %w", err)
 	}
 
@@ -353,14 +384,19 @@ func (s *DefaultService) WriteFile(ctx context.Context, path string, data []byte
 		}
 
 		return nil
-	case <-ctx.Done():
-		return ctx.Err()
+	case <-timeoutCtx.Done():
+		logContextCancellation("WriteFile")
+		return timeoutCtx.Err()
 	}
 }
 
 // PathExists checks if a path (file or directory) exists.
 func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, error) {
-	if err := s.checkContext(ctx); err != nil {
+	// Wrap context with 1-second timeout
+	timeoutCtx, cancel := s.wrapWithTimeout(ctx)
+	defer cancel()
+
+	if err := s.checkContext(timeoutCtx); err != nil {
 		return false, err
 	}
 
@@ -398,8 +434,9 @@ func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, err
 		}
 
 		return res.exists, nil
-	case <-ctx.Done():
-		return false, ctx.Err()
+	case <-timeoutCtx.Done():
+		logContextCancellation("PathExists")
+		return false, timeoutCtx.Err()
 	}
 }
 
@@ -411,7 +448,11 @@ func (s *DefaultService) FileExists(ctx context.Context, path string) (bool, err
 
 // Remove removes a file or directory.
 func (s *DefaultService) Remove(ctx context.Context, path string) error {
-	if err := s.checkContext(ctx); err != nil {
+	// Wrap context with 1-second timeout
+	timeoutCtx, cancel := s.wrapWithTimeout(ctx)
+	defer cancel()
+
+	if err := s.checkContext(timeoutCtx); err != nil {
 		return err
 	}
 
@@ -427,14 +468,19 @@ func (s *DefaultService) Remove(ctx context.Context, path string) error {
 	select {
 	case err := <-errCh:
 		return err
-	case <-ctx.Done():
-		return ctx.Err()
+	case <-timeoutCtx.Done():
+		logContextCancellation("Remove")
+		return timeoutCtx.Err()
 	}
 }
 
 // RemoveAll removes a directory and all its contents.
 func (s *DefaultService) RemoveAll(ctx context.Context, path string) error {
-	if err := s.checkContext(ctx); err != nil {
+	// Wrap context with 1-second timeout
+	timeoutCtx, cancel := s.wrapWithTimeout(ctx)
+	defer cancel()
+
+	if err := s.checkContext(timeoutCtx); err != nil {
 		return err
 	}
 
@@ -454,14 +500,19 @@ func (s *DefaultService) RemoveAll(ctx context.Context, path string) error {
 		}
 
 		return nil
-	case <-ctx.Done():
-		return ctx.Err()
+	case <-timeoutCtx.Done():
+		logContextCancellation("RemoveAll")
+		return timeoutCtx.Err()
 	}
 }
 
 // Stat returns file info.
 func (s *DefaultService) Stat(ctx context.Context, path string) (os.FileInfo, error) {
-	if err := s.checkContext(ctx); err != nil {
+	// Wrap context with 1-second timeout
+	timeoutCtx, cancel := s.wrapWithTimeout(ctx)
+	defer cancel()
+
+	if err := s.checkContext(timeoutCtx); err != nil {
 		return nil, fmt.Errorf("failed to check context: %w", err)
 	}
 
@@ -487,8 +538,9 @@ func (s *DefaultService) Stat(ctx context.Context, path string) (os.FileInfo, er
 		}
 
 		return res.info, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
+	case <-timeoutCtx.Done():
+		logContextCancellation("Stat")
+		return nil, timeoutCtx.Err()
 	}
 }
 
@@ -515,13 +567,18 @@ func (s *DefaultService) Chmod(ctx context.Context, path string, mode os.FileMod
 
 		return nil
 	case <-ctx.Done():
+		logContextCancellation("Chmod")
 		return ctx.Err()
 	}
 }
 
 // ReadDir reads a directory, returning all its directory entries.
 func (s *DefaultService) ReadDir(ctx context.Context, path string) ([]os.DirEntry, error) {
-	if err := s.checkContext(ctx); err != nil {
+	// Wrap context with 1-second timeout
+	timeoutCtx, cancel := s.wrapWithTimeout(ctx)
+	defer cancel()
+
+	if err := s.checkContext(timeoutCtx); err != nil {
 		return nil, fmt.Errorf("failed to check context: %w", err)
 	}
 
@@ -547,8 +604,9 @@ func (s *DefaultService) ReadDir(ctx context.Context, path string) ([]os.DirEntr
 		}
 
 		return res.entries, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
+	case <-timeoutCtx.Done():
+		logContextCancellation("ReadDir")
+		return nil, timeoutCtx.Err()
 	}
 }
 
@@ -577,6 +635,7 @@ func (s *DefaultService) Chown(ctx context.Context, path string, user string, gr
 
 		return nil
 	case <-ctx.Done():
+		logContextCancellation("Chown")
 		return ctx.Err()
 	}
 }
@@ -633,6 +692,7 @@ func (s *DefaultService) Glob(ctx context.Context, pattern string) ([]string, er
 
 		return res.matches, nil
 	case <-ctx.Done():
+		logContextCancellation("Glob")
 		return nil, ctx.Err()
 	}
 }
@@ -661,6 +721,7 @@ func (s *DefaultService) Rename(ctx context.Context, oldPath, newPath string) er
 
 		return nil
 	case <-ctx.Done():
+		logContextCancellation("Rename")
 		return ctx.Err()
 	}
 }
@@ -688,6 +749,7 @@ func (s *DefaultService) Symlink(ctx context.Context, target, linkPath string) e
 
 		return nil
 	case <-ctx.Done():
+		logContextCancellation("Symlink")
 		return ctx.Err()
 	}
 }

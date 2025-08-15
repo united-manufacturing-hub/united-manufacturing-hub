@@ -79,7 +79,7 @@ func getLogRunScript(config s6serviceconfig.S6ServiceConfig, logDir string) (str
 	// ----------  ⚠️ Logging caveat (2025-07-04)  ----------
 	//
 	// We observed occasional binary blobs in `docker logs ...` that also
-	// appeared in /data/logs/<svc>/current. After deep-dive investigation:
+	// appeared in /logs/<svc>/current. After deep-dive investigation:
 	//
 	//   • s6-log writes only its own diagnostics to stderr; it never mirrors
 	//     service output to stdout unless the `1` directive is present.

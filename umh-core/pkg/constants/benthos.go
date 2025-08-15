@@ -19,7 +19,7 @@ import "time"
 const (
 	BenthosBaseDir        = "/data/benthos"
 	BenthosConfigDirName  = "config"
-	BenthosLogBaseDir     = "/data/logs"
+	BenthosLogBaseDir     = LogBaseDir // Use global log directory constant
 	BenthosConfigFileName = "benthos.yaml"
 	BenthosLogWindow      = time.Minute * 10
 )
