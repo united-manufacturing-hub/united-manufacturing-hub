@@ -246,11 +246,12 @@ func (a *LogAnalyzer) CompareSessionStates() {
 		marker := " "
 
 		if state1 != state2 {
-			if state2 == "not found" {
+			switch {
+			case state2 == "not found":
 				marker = "❌"
-			} else if state1 == "not found" {
+			case state1 == "not found":
 				marker = "✓"
-			} else {
+			default:
 				marker = "⚠️"
 			}
 		}

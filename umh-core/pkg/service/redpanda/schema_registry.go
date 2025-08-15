@@ -532,11 +532,12 @@ func (s *SchemaRegistry) getNextPhase(currentPhase SchemaRegistryPhase, changePh
 		return SchemaRegistryPhaseCompare
 	case SchemaRegistryPhaseCompare:
 		// Decision logic based on what needs to be done
-		if len(s.inRegistryButUnknownLocally) > 0 {
+		switch {
+		case len(s.inRegistryButUnknownLocally) > 0:
 			return SchemaRegistryPhaseRemoveUnknown
-		} else if len(s.missingInRegistry) > 0 {
+		case len(s.missingInRegistry) > 0:
 			return SchemaRegistryPhaseAddNew
-		} else {
+		default:
 			return SchemaRegistryPhaseLookup // Fully in sync, restart cycle
 		}
 	case SchemaRegistryPhaseRemoveUnknown:

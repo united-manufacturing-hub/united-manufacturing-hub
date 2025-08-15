@@ -143,8 +143,8 @@ var _ = Describe("Simulator", func() {
 			Expect(event1.GetPayload().(*tbproto.EventTableEntry_Ts).Ts.GetScalarType()).To(Equal(tbproto.ScalarType_NUMERIC))
 			Expect(event2.GetPayload().(*tbproto.EventTableEntry_Ts).Ts.GetScalarType()).To(Equal(tbproto.ScalarType_NUMERIC))
 
-			val1 := event1.Payload.(*tbproto.EventTableEntry_Ts).Ts.GetValue().(*tbproto.TimeSeriesPayload_NumericValue).NumericValue.GetValue()
-			val2 := event2.Payload.(*tbproto.EventTableEntry_Ts).Ts.GetValue().(*tbproto.TimeSeriesPayload_NumericValue).NumericValue.GetValue()
+			val1 := event1.GetPayload().(*tbproto.EventTableEntry_Ts).Ts.GetValue().(*tbproto.TimeSeriesPayload_NumericValue).NumericValue.GetValue()
+			val2 := event2.GetPayload().(*tbproto.EventTableEntry_Ts).Ts.GetValue().(*tbproto.TimeSeriesPayload_NumericValue).NumericValue.GetValue()
 
 			// Values should be between 0 and 100
 			Expect(val1).To(BeNumerically(">=", 0))

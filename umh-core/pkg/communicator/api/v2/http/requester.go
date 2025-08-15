@@ -210,11 +210,13 @@ func processLatencyHeaders(response *http.Response, timeTillFirstByte time.Durat
 
 // enhanceConnectionError adds detailed context to common connection errors.
 func enhanceConnectionError(err error) error {
-	if strings.Contains(err.Error(), "EOF") {
+	errStr := err.Error()
+	switch {
+	case strings.Contains(errStr, "EOF"):
 		return fmt.Errorf("connection closed unexpectedly before receiving response: %w (possible causes: network issues, server timeout, or firewall blocking)", err)
-	} else if strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "deadline exceeded") {
+	case strings.Contains(errStr, "timeout") || strings.Contains(errStr, "deadline exceeded"):
 		return fmt.Errorf("request timed out: %w (possible causes: slow network, server overload, or request too large)", err)
-	} else if strings.Contains(err.Error(), "connection refused") {
+	case strings.Contains(errStr, "connection refused"):
 		return fmt.Errorf("connection refused: %w (possible causes: server down, incorrect URL, or firewall blocking)", err)
 	}
 

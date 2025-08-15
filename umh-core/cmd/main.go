@@ -17,7 +17,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/pprof"
@@ -69,7 +68,9 @@ func main() {
 	configManager, err := config.NewFileConfigManagerWithBackoff()
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to create config manager: %w", err)
-		os.Exit(1)
+		cancel()
+
+		return
 	}
 
 	// Load or create configuration with environment variable overrides
@@ -78,7 +79,8 @@ func main() {
 	configData, err := config.LoadConfigWithEnvOverrides(ctx, configManager, log)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to load config: %w", err)
-		os.Exit(1)
+
+		return
 	}
 
 	// Start the metrics server

@@ -261,11 +261,12 @@ func (i *Instance) reconcileTransitionToActive(ctx context.Context, services ser
 	}
 
 	// Handle starting phase states
-	if IsStartingState(currentState) {
+	switch {
+	case IsStartingState(currentState):
 		return i.reconcileStartingStates(ctx, services, currentState, currentTime)
-	} else if IsRunningState(currentState) {
+	case IsRunningState(currentState):
 		return i.reconcileRunningState(ctx, services, currentState, currentTime)
-	} else if currentState == OperationalStateStopping {
+	case currentState == OperationalStateStopping:
 		// There can be the edge case where an fsm is set to stopped, and then a cycle later again to active
 		// It will cause the stopping process to start, but then the deisred state is again active, so it will land up in reconcileTransitionToActive
 		// if it is stopping, we will first finish the stopping process and then we will go to active
@@ -342,28 +343,29 @@ func (i *Instance) reconcileRunningState(ctx context.Context, services servicere
 		otherDegraded, reasonOtherDegraded := i.IsOtherDegraded()
 
 		hasActivity, reasonActivity := i.IsDataflowComponentWithProcessingActivity()
-		if otherDegraded {
+		switch {
+		case otherDegraded:
 			i.ObservedState.ServiceInfo.StatusReason = "other degraded: " + reasonOtherDegraded
 			if currentState != OperationalStateDegradedOther {
 				return i.baseFSMInstance.SendEvent(ctx, EventDegradedOther), true
 			}
 
 			return nil, false
-		} else if !redpandaHealthy {
+		case !redpandaHealthy:
 			i.ObservedState.ServiceInfo.StatusReason = "redpanda degraded: " + reasonRedpanda
 			if currentState != OperationalStateDegradedRedpanda {
 				return i.baseFSMInstance.SendEvent(ctx, EventRedpandaDegraded), true
 			}
 
 			return nil, false
-		} else if !dfcHealthy {
+		case !dfcHealthy:
 			i.ObservedState.ServiceInfo.StatusReason = "DFC degraded: " + reasonDFC
 			if currentState != OperationalStateDegradedDFC {
 				return i.baseFSMInstance.SendEvent(ctx, EventDFCDegraded), true
 			}
 
 			return nil, false
-		} else if !hasActivity { // if there is no activity, we move to Idle
+		case !hasActivity: // if there is no activity, we move to Idle
 			i.ObservedState.ServiceInfo.StatusReason = "idling: " + reasonActivity
 
 			return i.baseFSMInstance.SendEvent(ctx, EventDFCIdle), true
@@ -380,28 +382,29 @@ func (i *Instance) reconcileRunningState(ctx context.Context, services servicere
 		otherDegraded, reasonOtherDegraded := i.IsOtherDegraded()
 
 		hasActivity, reasonActivity := i.IsDataflowComponentWithProcessingActivity()
-		if otherDegraded {
+		switch {
+		case otherDegraded:
 			i.ObservedState.ServiceInfo.StatusReason = "other degraded: " + reasonOtherDegraded
 			if currentState != OperationalStateDegradedOther {
 				return i.baseFSMInstance.SendEvent(ctx, EventDegradedOther), true
 			}
 
 			return nil, false
-		} else if !redpandaHealthy {
+		case !redpandaHealthy:
 			i.ObservedState.ServiceInfo.StatusReason = "redpanda degraded: " + reasonRedpanda
 			if currentState != OperationalStateDegradedRedpanda {
 				return i.baseFSMInstance.SendEvent(ctx, EventRedpandaDegraded), true
 			}
 
 			return nil, false
-		} else if !dfcHealthy {
+		case !dfcHealthy:
 			i.ObservedState.ServiceInfo.StatusReason = "DFC degraded: " + reasonDFC
 			if currentState != OperationalStateDegradedDFC {
 				return i.baseFSMInstance.SendEvent(ctx, EventDFCDegraded), true
 			}
 
 			return nil, false
-		} else if !hasActivity { // if there is no activity, we stay in idle
+		case !hasActivity: // if there is no activity, we stay in idle
 			i.ObservedState.ServiceInfo.StatusReason = "idling: " + reasonActivity
 
 			return nil, false
@@ -434,21 +437,22 @@ func (i *Instance) reconcileRunningState(ctx context.Context, services servicere
 		// - Transitioning to different degraded state when new issues arise
 		// - Recovering to idle when all issues resolve (EventRecovered)
 
-		if otherDegraded {
+		switch {
+		case otherDegraded:
 			i.ObservedState.ServiceInfo.StatusReason = "other degraded: " + reasonOtherDegraded // Always set status reason
 			if currentState != OperationalStateDegradedOther {
 				return i.baseFSMInstance.SendEvent(ctx, EventDegradedOther), true // Send event for NEW degraded issue
 			}
 
 			return nil, false // Stay in current degraded state (same issue persists)
-		} else if !redpandaHealthy {
+		case !redpandaHealthy:
 			i.ObservedState.ServiceInfo.StatusReason = "redpanda degraded: " + reasonRedpanda
 			if currentState != OperationalStateDegradedRedpanda {
 				return i.baseFSMInstance.SendEvent(ctx, EventRedpandaDegraded), true
 			}
 
 			return nil, false
-		} else if !dfcHealthy {
+		case !dfcHealthy:
 			i.ObservedState.ServiceInfo.StatusReason = "DFC degraded: " + reasonDFC
 			if currentState != OperationalStateDegradedDFC {
 				return i.baseFSMInstance.SendEvent(ctx, EventDFCDegraded), true

@@ -517,22 +517,25 @@ func (s *BenthosService) Status(ctx context.Context, services serviceregistry.Pr
 
 	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, services.GetFileSystem())
 	if err != nil {
-		if errors.Is(err, s6service.ErrServiceNotExist) {
+		switch {
+		case errors.Is(err, s6service.ErrServiceNotExist):
 			s.logger.Debugf("Service %s does not exist, returning empty logs", s6ServiceName)
 
 			return ServiceInfo{}, ErrServiceNotExist
-		} else if errors.Is(err, s6service.ErrLogFileNotFound) {
+		case errors.Is(err, s6service.ErrLogFileNotFound):
 			s.logger.Debugf("Log file for service %s not found, returning empty logs", s6ServiceName)
 
 			return ServiceInfo{}, ErrServiceNotExist
-		} else {
+		default:
 			return ServiceInfo{}, fmt.Errorf("failed to get logs: %w", err)
 		}
 	}
 
 	benthosStatus, err := s.GetHealthCheckAndMetrics(ctx, services.GetFileSystem(), tick, loopStartTime, benthosName, logs)
 	if err != nil {
-		if strings.Contains(err.Error(), ErrLastObservedStateNil.Error()) {
+		errStr := err.Error()
+		switch {
+		case strings.Contains(errStr, ErrLastObservedStateNil.Error()):
 			return ServiceInfo{
 				S6ObservedState: s6ServiceObservedState,
 				S6FSMState:      s6FSMState,
@@ -540,12 +543,12 @@ func (s *BenthosService) Status(ctx context.Context, services serviceregistry.Pr
 					BenthosLogs: logs,
 				},
 			}, ErrLastObservedStateNil
-		} else if strings.Contains(err.Error(), "instance "+s6ServiceName+" not found") ||
-			strings.Contains(err.Error(), "not found") {
+		case strings.Contains(errStr, "instance "+s6ServiceName+" not found") ||
+			strings.Contains(errStr, "not found"):
 			s.logger.Debugf("Service %s was removed during status check", s6ServiceName)
 
 			return ServiceInfo{}, ErrServiceNotExist
-		} else if strings.Contains(err.Error(), ErrBenthosMonitorNotRunning.Error()) {
+		case strings.Contains(errStr, ErrBenthosMonitorNotRunning.Error()):
 			s.logger.Debugf("Service %s is not running, returning empty logs", s6ServiceName)
 
 			return ServiceInfo{

@@ -1394,7 +1394,7 @@ func BenchmarkGzipDecode(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
-		reader, err := gzip.NewReader(bytes.NewReader([]byte(decodedData)))
+		reader, err := gzip.NewReader(bytes.NewReader(decodedData))
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -1418,7 +1418,7 @@ func BenchmarkHexDecode(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
-		_, err := hex.DecodeString(string(encodedAndHexedData))
+		_, err := hex.DecodeString(encodedAndHexedData)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -1445,7 +1445,7 @@ func BenchmarkCompleteProcessing(b *testing.B) {
 
 	for range b.N {
 		// Step 1: Hex decode
-		decodedMetricsDataBytes, _ := hex.DecodeString(string(encodedAndHexedData))
+		decodedMetricsDataBytes, _ := hex.DecodeString(encodedAndHexedData)
 
 		// Step 2: Gzip decompress
 		gzipReader, err := gzip.NewReader(bytes.NewReader(decodedMetricsDataBytes))

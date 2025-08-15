@@ -187,12 +187,13 @@ func (s *DefaultService) buildFullServiceInfo(ctx context.Context, servicePath s
 		info.Status = ServiceDown
 		// Interpret wstat as a wait status
 		ws := syscall.WaitStatus(statusData.Wstat)
-		if ws.Exited() {
+		switch {
+		case ws.Exited():
 			info.ExitCode = ws.ExitStatus()
-		} else if ws.Signaled() {
+		case ws.Signaled():
 			// Record the signal number as a negative exit code
 			info.ExitCode = -int(ws.Signal())
-		} else {
+		default:
 			info.ExitCode = int(statusData.Wstat)
 		}
 

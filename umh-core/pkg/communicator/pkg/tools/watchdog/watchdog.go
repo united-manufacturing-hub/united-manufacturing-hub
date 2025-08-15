@@ -148,7 +148,7 @@ func (s *Watchdog) Start() {
 					onlyIfHasSub := hb.onlyIfSubscribers
 					hasSubs := s.hasSubscribers.Load()
 					secondsOverdue := int64(hb.timeout) - lastHeartbeat
-					secondsOverdue = secondsOverdue * -1
+					secondsOverdue *= -1
 					// timeout = 0 disables this check
 					if secondsOverdue > 0 && hb.timeout != 0 {
 						if (onlyIfHasSub && hasSubs) || !onlyIfHasSub {

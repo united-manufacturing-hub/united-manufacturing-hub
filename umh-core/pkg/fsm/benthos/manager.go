@@ -253,7 +253,7 @@ func (m *BenthosManager) ReconcilePortAllocations(snapshot *BenthosManagerSnapsh
 	// Add port allocations
 	for name := range snapshot.GetInstances() {
 		if port, exists := portManager.GetPort(name); exists {
-			snapshot.PortAllocations[name] = uint16(port)
+			snapshot.PortAllocations[name] = port
 		}
 	}
 }

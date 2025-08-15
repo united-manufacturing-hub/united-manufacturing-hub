@@ -220,11 +220,12 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 		topicBrowserData = GenerateTopicBrowserFromCommunicator(s.topicBrowserCommunicator, isBootstrapped, s.logger, nil)
 	} else {
 		inst, ok := fsm.FindInstance(snapshot, constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
-		if !ok {
+		switch {
+		case !ok:
 			s.logger.Error("Topic browser instance not found")
-		} else if inst == nil || inst.LastObservedState == nil {
+		case inst == nil || inst.LastObservedState == nil:
 			s.logger.Error("Topic browser instance has nil observed state or is nil")
-		} else {
+		default:
 			topicBrowserData = GenerateTopicBrowserFromCommunicator(s.topicBrowserCommunicator, isBootstrapped, s.logger, inst)
 		}
 	}

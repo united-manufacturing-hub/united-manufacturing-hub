@@ -86,7 +86,7 @@ func (s *Simulator) GenerateNewUnsBundle() []byte {
 			Payload: &tbproto.EventTableEntry_Ts{
 				Ts: &tbproto.TimeSeriesPayload{
 					ScalarType:  tbproto.ScalarType_NUMERIC,
-					TimestampMs: int64(time.Now().UnixMilli()),
+					TimestampMs: time.Now().UnixMilli(),
 					Value: &tbproto.TimeSeriesPayload_NumericValue{
 						NumericValue: &wrapperspb.DoubleValue{
 							Value: rand.Float64() * 100,

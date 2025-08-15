@@ -272,11 +272,12 @@ func (p *ProtocolConverterInstance) reconcileTransitionToActive(ctx context.Cont
 	}
 
 	// Handle starting phase states
-	if IsStartingState(currentState) {
+	switch {
+	case IsStartingState(currentState):
 		return p.reconcileStartingStates(ctx, services, currentState, currentTime)
-	} else if IsRunningState(currentState) {
+	case IsRunningState(currentState):
 		return p.reconcileRunningState(ctx, services, currentState, currentTime)
-	} else if currentState == OperationalStateStopping {
+	case currentState == OperationalStateStopping:
 		// There can be the edge case where an fsm is set to stopped, and then a cycle later again to active
 		// It will cause the stopping process to start, but then the deisred state is again active, so it will land up in reconcileTransitionToActive
 		// if it is stopping, we will first finish the stopping process and then we will go to active
@@ -359,7 +360,6 @@ func (p *ProtocolConverterInstance) reconcileStartingStates(ctx context.Context,
 		return p.baseFSMInstance.SendEvent(ctx, EventStartDFCUp), true
 	case OperationalStateStartingFailedDFCMissing:
 		// For OperationalStateStartingFailedDFCMissing, check if a DFC is now available and retry starting
-
 		// CRITICAL FIX: Recovery mechanism for OperationalStateStartingFailedDFCMissing
 		//
 		// PROBLEM DESCRIPTION:
@@ -445,35 +445,36 @@ func (p *ProtocolConverterInstance) reconcileRunningState(ctx context.Context, s
 		otherDegraded, reasonOtherDegraded := p.IsOtherDegraded()
 
 		hasActivity, reasonActivity := p.IsDataflowComponentWithProcessingActivity()
-		if otherDegraded {
+		switch {
+		case otherDegraded:
 			p.ObservedState.ServiceInfo.StatusReason = "other degraded: " + reasonOtherDegraded
 			if currentState != OperationalStateDegradedOther {
 				return p.baseFSMInstance.SendEvent(ctx, EventDegradedOther), true
 			}
 
 			return nil, false
-		} else if !connectionUp {
+		case !connectionUp:
 			p.ObservedState.ServiceInfo.StatusReason = "connection degraded: " + reasonConnection
 			if currentState != OperationalStateDegradedConnection {
 				return p.baseFSMInstance.SendEvent(ctx, EventConnectionUnhealthy), true
 			}
 
 			return nil, false
-		} else if !redpandaHealthy {
+		case !redpandaHealthy:
 			p.ObservedState.ServiceInfo.StatusReason = "redpanda degraded: " + reasonRedpanda
 			if currentState != OperationalStateDegradedRedpanda {
 				return p.baseFSMInstance.SendEvent(ctx, EventRedpandaDegraded), true
 			}
 
 			return nil, false
-		} else if !dfcHealthy {
+		case !dfcHealthy:
 			p.ObservedState.ServiceInfo.StatusReason = "DFC degraded: " + reasonDFC
 			if currentState != OperationalStateDegradedDFC {
 				return p.baseFSMInstance.SendEvent(ctx, EventDFCDegraded), true
 			}
 
 			return nil, false
-		} else if !hasActivity { // if there is no activity, we move to Idle
+		case !hasActivity: // if there is no activity, we move to Idle
 			p.ObservedState.ServiceInfo.StatusReason = "idling: " + reasonActivity
 
 			return p.baseFSMInstance.SendEvent(ctx, EventDFCIdle), true
@@ -491,35 +492,36 @@ func (p *ProtocolConverterInstance) reconcileRunningState(ctx context.Context, s
 		otherDegraded, reasonOtherDegraded := p.IsOtherDegraded()
 
 		hasActivity, reasonActivity := p.IsDataflowComponentWithProcessingActivity()
-		if otherDegraded {
+		switch {
+		case otherDegraded:
 			p.ObservedState.ServiceInfo.StatusReason = "other degraded: " + reasonOtherDegraded
 			if currentState != OperationalStateDegradedOther {
 				return p.baseFSMInstance.SendEvent(ctx, EventDegradedOther), true
 			}
 
 			return nil, false
-		} else if !connectionUp {
+		case !connectionUp:
 			p.ObservedState.ServiceInfo.StatusReason = "connection degraded: " + reasonConnection
 			if currentState != OperationalStateDegradedConnection {
 				return p.baseFSMInstance.SendEvent(ctx, EventConnectionUnhealthy), true
 			}
 
 			return nil, false
-		} else if !redpandaHealthy {
+		case !redpandaHealthy:
 			p.ObservedState.ServiceInfo.StatusReason = "redpanda degraded: " + reasonRedpanda
 			if currentState != OperationalStateDegradedRedpanda {
 				return p.baseFSMInstance.SendEvent(ctx, EventRedpandaDegraded), true
 			}
 
 			return nil, false
-		} else if !dfcHealthy {
+		case !dfcHealthy:
 			p.ObservedState.ServiceInfo.StatusReason = "DFC degraded: " + reasonDFC
 			if currentState != OperationalStateDegradedDFC {
 				return p.baseFSMInstance.SendEvent(ctx, EventDFCDegraded), true
 			}
 
 			return nil, false
-		} else if !hasActivity { // if there is no activity, we stay in idle
+		case !hasActivity: // if there is no activity, we stay in idle
 			p.ObservedState.ServiceInfo.StatusReason = "idling: " + reasonActivity
 
 			return nil, false
@@ -554,28 +556,29 @@ func (p *ProtocolConverterInstance) reconcileRunningState(ctx context.Context, s
 		// - Transitioning to different degraded state when new issues arise
 		// - Recovering to idle when all issues resolve (EventRecovered)
 
-		if otherDegraded {
+		switch {
+		case otherDegraded:
 			p.ObservedState.ServiceInfo.StatusReason = "other degraded: " + reasonOtherDegraded // Always set status reason
 			if currentState != OperationalStateDegradedOther {
 				return p.baseFSMInstance.SendEvent(ctx, EventDegradedOther), true // Send event for NEW degraded issue
 			}
 
 			return nil, false // Stay in current degraded state (same issue persists)
-		} else if !connectionUp {
+		case !connectionUp:
 			p.ObservedState.ServiceInfo.StatusReason = "connection degraded: " + reasonConnection
 			if currentState != OperationalStateDegradedConnection {
 				return p.baseFSMInstance.SendEvent(ctx, EventConnectionUnhealthy), true
 			}
 
 			return nil, false
-		} else if !redpandaHealthy {
+		case !redpandaHealthy:
 			p.ObservedState.ServiceInfo.StatusReason = "redpanda degraded: " + reasonRedpanda
 			if currentState != OperationalStateDegradedRedpanda {
 				return p.baseFSMInstance.SendEvent(ctx, EventRedpandaDegraded), true
 			}
 
 			return nil, false
-		} else if !dfcHealthy {
+		case !dfcHealthy:
 			p.ObservedState.ServiceInfo.StatusReason = "DFC degraded: " + reasonDFC
 			if currentState != OperationalStateDegradedDFC {
 				return p.baseFSMInstance.SendEvent(ctx, EventDFCDegraded), true

@@ -227,7 +227,7 @@ var _ = Describe("ZSTD", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		// Base64 encode the string to be able to test against frontend
-		encodedData := base64.StdEncoding.EncodeToString([]byte(compressedData))
+		encodedData := base64.StdEncoding.EncodeToString(compressedData)
 		_, err = GinkgoWriter.Write([]byte(encodedData))
 		Expect(err).ToNot(HaveOccurred())
 
@@ -235,7 +235,7 @@ var _ = Describe("ZSTD", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		var data2 models.UMHMessageContent
-		err = safejson.Unmarshal([]byte(decompressedData), &data2)
+		err = safejson.Unmarshal(decompressedData, &data2)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -251,7 +251,7 @@ var _ = Describe("ZSTD", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		// Base64 encode the string to be able to test against frontend
-		encodedData := base64.StdEncoding.EncodeToString([]byte(compressedData))
+		encodedData := base64.StdEncoding.EncodeToString(compressedData)
 		_, err = GinkgoWriter.Write([]byte(encodedData))
 		Expect(err).ToNot(HaveOccurred())
 
@@ -259,7 +259,7 @@ var _ = Describe("ZSTD", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		var data2 models.UMHMessageContent
-		err = safejson.Unmarshal([]byte(decompressedData), &data2)
+		err = safejson.Unmarshal(decompressedData, &data2)
 		Expect(err).ToNot(HaveOccurred())
 	})
 

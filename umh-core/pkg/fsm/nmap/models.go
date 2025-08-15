@@ -94,12 +94,7 @@ const (
 
 // IsStartingState returns whether the given state is a starting state.
 func IsStartingState(state string) bool {
-	switch state {
-	case OperationalStateStarting:
-		return true
-	}
-
-	return false
+	return state == OperationalStateStarting
 }
 
 // IsRunningState returns whether the given state is a running state.

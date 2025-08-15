@@ -302,10 +302,10 @@ func decodeBase64(data string) ([]byte, error) {
 }
 
 // Core encoding functions.
-func EncodeMessageFromUserToUMHInstance(UMHMessage models.UMHMessageContent) (string, error) {
-	messageBytes, err := safejson.Marshal(UMHMessage)
+func EncodeMessageFromUserToUMHInstance(umhMessage models.UMHMessageContent) (string, error) {
+	messageBytes, err := safejson.Marshal(umhMessage)
 	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to marshal UMHMessage: %v (%+v)", err, UMHMessage)
+		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to marshal UMHMessage: %v (%+v)", err, umhMessage)
 
 		return "", err
 	}
@@ -313,10 +313,10 @@ func EncodeMessageFromUserToUMHInstance(UMHMessage models.UMHMessageContent) (st
 	return encodeBase64(messageBytes), nil
 }
 
-func EncodeMessageFromUMHInstanceToUser(UMHMessage models.UMHMessageContent) (string, error) {
-	messageBytes, err := safejson.Marshal(UMHMessage)
+func EncodeMessageFromUMHInstanceToUser(umhMessage models.UMHMessageContent) (string, error) {
+	messageBytes, err := safejson.Marshal(umhMessage)
 	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to marshal UMHMessage: %v (%+v)", err, UMHMessage)
+		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to marshal UMHMessage: %v (%+v)", err, umhMessage)
 
 		return "", err
 	}
