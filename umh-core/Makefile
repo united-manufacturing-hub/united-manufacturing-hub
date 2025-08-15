@@ -747,7 +747,7 @@ dump-metrics:
 	curl -s http://localhost:8081/metrics > metrics.txt
 
 # Start monitoring stack (Prometheus + Grafana + UMH Core)
-monitor:
+monitor: build
 	mkdir -p $(PWD)/docker-compose/data
 	docker stop umh-core || true
 	docker rm umh-core || true

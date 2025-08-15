@@ -172,10 +172,16 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 	c.currentTick = 0
 
 	for {
+		// Update active services and cycle time metric
+		c.setActiveServices(ctx)
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-c.loopController.TickerChannel():
+			// Update the loop cycle time metric
+			metrics.UpdateAllocatedLoopCycleTime(c.loopController.GetTickerTime())
+			metrics.UpdateActiveServices(c.loopController.GetNumberOfManagedServices())
+
 			// Increment tick counter on each iteration
 			c.currentTick++
 
@@ -191,9 +197,6 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 
 			// Record metrics for the reconcile cycle
 			cycleTime := time.Since(start)
-			
-			// Update active services and cycle time metric
-			c.setActiveServices(ctx, cycleTime)
 
 			// If cycleTime is greater than tickerTime, log a warning
 			if cycleTime > c.loopController.GetTickerTime() {
@@ -229,10 +232,8 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 	}
 }
 
-func (c *ControlLoop) setActiveServices(ctx context.Context, cycleTime time.Duration) {
-	// Update the loop cycle time metric
-	metrics.UpdateLoopCycleTime(cycleTime)
-	
+func (c *ControlLoop) setActiveServices(ctx context.Context) {
+
 	// Get number of services
 	readDirCtx, readDirCancel := context.WithTimeout(ctx, time.Second*1)
 	serviceDirs, err := c.services.GetFileSystem().ReadDir(readDirCtx, constants.S6RepositoryBaseDir)

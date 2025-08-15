@@ -10,7 +10,7 @@
     {
       "id": 1,
       "title": "CPU Usage",
-      "type": "stat",
+      "type": "gauge",
       "targets": [
         {
           "expr": "rate(process_cpu_seconds_total[5m]) * 100",
@@ -26,8 +26,8 @@
           "thresholds": {
             "steps": [
               {"color": "green", "value": null},
-              {"color": "yellow", "value": 70},
-              {"color": "red", "value": 90}
+              {"color": "yellow", "value": 30},
+              {"color": "red", "value": 60}
             ]
           }
         }
@@ -58,7 +58,33 @@
           }
         }
       },
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+      "gridPos": {"h": 8, "w": 8, "x": 12, "y": 0}
+    },
+    {
+      "id": 10,
+      "title": "Goroutines",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "go_goroutines",
+          "legendFormat": "Active Goroutines",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 100},
+              {"color": "red", "value": 500}
+            ]
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 4, "x": 20, "y": 0}
     },
     {
       "id": 3,
@@ -154,12 +180,12 @@
     },
     {
       "id": 7,
-      "title": "Control Loop Cycle Time",
+      "title": "Control Loop Allocated Cycle Time",
       "type": "stat",
       "targets": [
         {
-          "expr": "loop_cycle_time_milliseconds",
-          "legendFormat": "Current Cycle Time",
+          "expr": "umh_core_loop_cycle_time_milliseconds_max",
+          "legendFormat": "Current allocated Cycle Time",
           "refId": "A"
         }
       ],
@@ -176,31 +202,223 @@
           }
         }
       },
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32}
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 32}
+    },
+    {
+      "id": 16,
+      "title": "Active Services",
+      "type": "gauge",
+      "targets": [
+        {
+          "expr": "umh_core_loop_cycle_time_active_services",
+          "legendFormat": "Active Services",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "max": 200,
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 100},
+              {"color": "red", "value": 150}
+            ]
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 4, "x": 8, "y": 32}
     },
     {
       "id": 8,
-      "title": "Control Loop Cycle Time Over Time",
+      "title": "Reconcile Starved Time",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "umh_core_reconcile_starved_total_seconds",
+          "legendFormat": "Total Starved Time",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 5}
+            ]
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32}
+    },
+    {
+      "id": 9,
+      "title": "Error Counter",
       "type": "timeseries",
       "targets": [
         {
-          "expr": "loop_cycle_time_milliseconds",
-          "legendFormat": "Cycle Time",
+          "expr": "sum(rate(umh_core_errors_total[5m]))",
+          "legendFormat": "Errors/sec",
           "refId": "A"
         },
         {
-          "expr": "avg_over_time(loop_cycle_time_milliseconds[5m])",
-          "legendFormat": "5min Average",
+          "expr": "sum(increase(umh_core_errors_total[1h]))",
+          "legendFormat": "Errors (1h)",
           "refId": "B"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "ms",
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "stacking": {"mode": "none", "group": "A"},
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "scaleDistribution": {"type": "linear"},
+            "hideFrom": {"legend": false, "tooltip": false, "vis": false},
+            "thresholdsStyle": {"mode": "off"}
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 40}
+    },
+    {
+      "id": 11,
+      "title": "Connection Failures",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(net_conntrack_dialer_conn_failed_total[5m])) by (reason)",
+          "legendFormat": "Failed - {{reason}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
           "min": 0
         }
       },
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32}
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 48}
+    },
+    {
+      "id": 12,
+      "title": "File Descriptor Usage",
+      "type": "gauge",
+      "targets": [
+        {
+          "expr": "(process_open_fds / process_max_fds) * 100",
+          "legendFormat": "FD Usage %",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 70},
+              {"color": "red", "value": 90}
+            ]
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 48}
+    },
+    {
+      "id": 13,
+      "title": "GC Frequency & Duration",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(go_gc_cycles_total_gc_cycles_total[5m]) * 60",
+          "legendFormat": "GC Cycles/min",
+          "refId": "A"
+        },
+        {
+          "expr": "(rate(go_gc_duration_seconds_sum[5m]) / rate(go_gc_duration_seconds_count[5m])) * 1000",
+          "legendFormat": "Avg GC Duration (ms)",
+          "refId": "B"
+        },
+        {
+          "expr": "go_memstats_gc_sys_bytes / 1024 / 1024",
+          "legendFormat": "GC System Memory (MB)",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byRegexp", "options": ".*Duration.*"},
+            "properties": [{"id": "unit", "value": "ms"}]
+          }
+        ]
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 56}
+    },
+    {
+      "id": 14,
+      "title": "Network I/O Throughput",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(process_network_receive_bytes_total[5m]) * 8",
+          "legendFormat": "RX (bits/sec)",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(process_network_transmit_bytes_total[5m]) * 8",
+          "legendFormat": "TX (bits/sec)",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(process_network_receive_bytes_total[5m])",
+          "legendFormat": "RX (bytes/sec)",
+          "refId": "C"
+        },
+        {
+          "expr": "rate(process_network_transmit_bytes_total[5m])",
+          "legendFormat": "TX (bytes/sec)",
+          "refId": "D"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bps",
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byRegexp", "options": ".*bytes/sec.*"},
+            "properties": [{"id": "unit", "value": "Bps"}]
+          }
+        ]
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 64}
     }
   ],
   "time": {"from": "now-1h", "to": "now"},

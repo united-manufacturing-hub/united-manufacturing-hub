@@ -132,12 +132,21 @@ var (
 		[]string{"component", "instance"},
 	)
 
-	loopCycleTime = promauto.NewGauge(
+	loopCycleTimeMax = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Namespace: namespace,
 			Subsystem: subsystem,
-			Name:      "loop_cycle_time_milliseconds",
-			Help:      "Current control loop cycle time in milliseconds",
+			Name:      "loop_cycle_time_milliseconds_max",
+			Help:      "Current max control loop cycle time in milliseconds",
+		},
+	)
+
+	loopActiveServices = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "loop_cycle_time_active_services",
+			Help:      "Current active services for loop cycle time",
 		},
 	)
 	// TODO: observed state.
@@ -215,9 +224,14 @@ func UpdateServiceState(component, instance string, currentState, desiredState s
 	serviceDesiredState.WithLabelValues(component, instance).Set(desiredValue)
 }
 
-// UpdateLoopCycleTime updates the control loop cycle time metric.
-func UpdateLoopCycleTime(duration time.Duration) {
-	loopCycleTime.Set(float64(duration.Milliseconds()))
+// UpdateAllocatedLoopCycleTime updates the control loop cycle time metric.
+func UpdateAllocatedLoopCycleTime(duration time.Duration) {
+	loopCycleTimeMax.Set(float64(duration.Milliseconds()))
+}
+
+// UpdateActiveServices updates the control loop active services metric.
+func UpdateActiveServices(numberOfActiveServices uint64) {
+	loopActiveServices.Set(float64(numberOfActiveServices))
 }
 
 // getStateValue converts a state string to a numeric value for the metric.
