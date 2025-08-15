@@ -78,7 +78,6 @@ func (s *Simulator) InitializeSimulator() {
 // it contains some hardcoded data for the topics in the simulated namespace.
 func (s *Simulator) GenerateNewUnsBundle() []byte {
 	// generate some new random data for the topics in the simulated namespace (s.topics)
-
 	entries := []*tbproto.EventTableEntry{}
 
 	for key := range s.topics {

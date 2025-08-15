@@ -53,7 +53,7 @@ func (i *Instance) registerCallbacks() {
 		//		SourceEvent: e.Event,
 		//	},
 		//	Time: time.Now(),
-		//})
+		// })
 	})
 
 	i.baseFSMInstance.AddCallback("enter_"+OperationalStateStartingDFC, func(ctx context.Context, e *fsm.Event) {
@@ -64,7 +64,7 @@ func (i *Instance) registerCallbacks() {
 		//		SourceEvent: e.Event,
 		//	},
 		//	Time: time.Now(),
-		//})
+		// })
 	})
 
 	i.baseFSMInstance.AddCallback("enter_"+OperationalStateStartingFailedDFC, func(ctx context.Context, e *fsm.Event) {
@@ -75,7 +75,7 @@ func (i *Instance) registerCallbacks() {
 		//		SourceEvent: e.Event,
 		//	},
 		//	Time: time.Now(),
-		//})
+		// })
 	})
 
 	// Running phase state callbacks

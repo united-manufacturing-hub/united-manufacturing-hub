@@ -136,7 +136,7 @@ var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("i
 
 			By(fmt.Sprintf("Waiting %s before restart", containerDownWait))
 			waitSeconds := int(containerDownWait.Seconds())
-			for i := 0; i < waitSeconds; i++ {
+			for i := range waitSeconds {
 				time.Sleep(time.Second)
 				GinkgoWriter.Printf("Waiting until we can restart: %d seconds\n", waitSeconds-i)
 			}

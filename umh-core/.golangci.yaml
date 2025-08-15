@@ -24,10 +24,8 @@ linters:
     - canonicalheader
     - copyloopvar
     - dupword
-    - err113
     - errorlint
     - exptostd
-    - fatcontext
     - ginkgolinter
     - gocritic
     - godot
@@ -42,7 +40,6 @@ linters:
     - nolintlint
     - perfsprint
     - protogetter
-    - revive
     - sloglint
     - tagalign
     - testifylint

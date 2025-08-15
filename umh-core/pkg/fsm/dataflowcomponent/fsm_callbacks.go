@@ -32,7 +32,7 @@ func (instance *DataflowComponentInstance) registerCallbacks() {
 		//		SourceEvent: e.Event,
 		//	},
 		//	Time: time.Now(),
-		//})
+		// })
 	})
 
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStartingFailed, func(ctx context.Context, e *fsm.Event) {
@@ -43,7 +43,7 @@ func (instance *DataflowComponentInstance) registerCallbacks() {
 		//		SourceEvent: e.Event,
 		//	},
 		//	Time: time.Now(),
-		//})
+		// })
 	})
 
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStopping, func(ctx context.Context, e *fsm.Event) {
