@@ -132,6 +132,14 @@ var (
 		[]string{"component", "instance"},
 	)
 
+	loopCycleTime = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "loop_cycle_time_milliseconds",
+			Help:      "Current control loop cycle time in milliseconds",
+		},
+	)
 	// TODO: observed state.
 )
 
@@ -205,6 +213,11 @@ func UpdateServiceState(component, instance string, currentState, desiredState s
 	// Update the metrics
 	serviceCurrentState.WithLabelValues(component, instance).Set(currentValue)
 	serviceDesiredState.WithLabelValues(component, instance).Set(desiredValue)
+}
+
+// UpdateLoopCycleTime updates the control loop cycle time metric.
+func UpdateLoopCycleTime(duration time.Duration) {
+	loopCycleTime.Set(float64(duration.Milliseconds()))
 }
 
 // getStateValue converts a state string to a numeric value for the metric.

@@ -172,7 +172,6 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 	c.currentTick = 0
 
 	for {
-		c.setActiveServices(ctx)
 		select {
 		case <-ctx.Done():
 			return nil
@@ -192,6 +191,9 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 
 			// Record metrics for the reconcile cycle
 			cycleTime := time.Since(start)
+			
+			// Update active services and cycle time metric
+			c.setActiveServices(ctx, cycleTime)
 
 			// If cycleTime is greater than tickerTime, log a warning
 			if cycleTime > c.loopController.GetTickerTime() {
@@ -227,7 +229,10 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 	}
 }
 
-func (c *ControlLoop) setActiveServices(ctx context.Context) {
+func (c *ControlLoop) setActiveServices(ctx context.Context, cycleTime time.Duration) {
+	// Update the loop cycle time metric
+	metrics.UpdateLoopCycleTime(cycleTime)
+	
 	// Get number of services
 	readDirCtx, readDirCancel := context.WithTimeout(ctx, time.Second*1)
 	serviceDirs, err := c.services.GetFileSystem().ReadDir(readDirCtx, constants.S6RepositoryBaseDir)
