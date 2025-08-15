@@ -62,10 +62,11 @@ func NewGetMetricsAction(userEmail string, actionUUID uuid.UUID, instanceUUID uu
 	}
 }
 
-// For testing - allow injection of a custom provider
+// For testing - allow injection of a custom provider.
 func NewGetMetricsActionWithProvider(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, systemSnapshotManager *fsm.SnapshotManager, logger *zap.SugaredLogger, provider providers.MetricsProvider) *GetMetricsAction {
 	action := NewGetMetricsAction(userEmail, actionUUID, instanceUUID, outboundChannel, systemSnapshotManager, logger)
 	action.provider = provider
+
 	return action
 }
 
@@ -75,6 +76,7 @@ func (a *GetMetricsAction) Parse(payload interface{}) (err error) {
 	a.actionLogger.Info("Parsing the payload")
 	a.payload, err = ParseActionPayload[models.GetMetricsRequest](payload)
 	a.actionLogger.Infow("Payload parsed", "payload", a.payload)
+
 	return err
 }
 
@@ -93,25 +95,28 @@ func (a *GetMetricsAction) Validate() (err error) {
 		if a.payload.UUID == "" {
 			return errors.New("uuid must be set to retrieve metrics for a DFC")
 		}
+
 		_, err = uuid.Parse(a.payload.UUID)
 		if err != nil {
-			return fmt.Errorf("invalid UUID format: %v", err)
+			return fmt.Errorf("invalid UUID format: %w", err)
 		}
 	case models.StreamProcessorMetricResourceType:
 		if a.payload.UUID == "" {
 			return errors.New("uuid must be set to retrieve metrics for a Stream Processor")
 		}
+
 		_, err = uuid.Parse(a.payload.UUID)
 		if err != nil {
-			return fmt.Errorf("invalid UUID format: %v", err)
+			return fmt.Errorf("invalid UUID format: %w", err)
 		}
 	case models.ProtocolConverterMetricResourceType:
 		if a.payload.UUID == "" {
 			return errors.New("uuid must be set to retrieve metrics for a Protocol Converter")
 		}
+
 		_, err = uuid.Parse(a.payload.UUID)
 		if err != nil {
-			return fmt.Errorf("invalid UUID format: %v", err)
+			return fmt.Errorf("invalid UUID format: %w", err)
 		}
 	}
 
@@ -126,6 +131,7 @@ func (a *GetMetricsAction) Execute() (interface{}, map[string]interface{}, error
 	metrics, err := a.provider.GetMetrics(a.payload, a.systemSnapshotManager.GetDeepCopySnapshot())
 	if err != nil {
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetMetrics)
+
 		return nil, nil, err
 	}
 

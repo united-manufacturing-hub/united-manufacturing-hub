@@ -22,19 +22,19 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 )
 
-// ProtocolConverterObservedStateSnapshot is a deep-copyable snapshot of ProtocolConverterObservedState
+// ProtocolConverterObservedStateSnapshot is a deep-copyable snapshot of ProtocolConverterObservedState.
 type ProtocolConverterObservedStateSnapshot struct {
 	ObservedProtocolConverterRuntimeConfig protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
 	ObservedProtocolConverterSpecConfig    protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
 	ServiceInfo                            protocolconverter.ServiceInfo
 }
 
-// IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface
+// IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface.
 func (s *ProtocolConverterObservedStateSnapshot) IsObservedStateSnapshot() {
 	// Marker method implementation
 }
 
-// CreateObservedStateSnapshot implements the fsm.ObservedStateConverter interface for ProtocolConverterInstance
+// CreateObservedStateSnapshot implements the fsm.ObservedStateConverter interface for ProtocolConverterInstance.
 func (d *ProtocolConverterInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	// Create a deep copy of the observed state
 	snapshot := &ProtocolConverterObservedStateSnapshot{}
@@ -43,6 +43,7 @@ func (d *ProtocolConverterInstance) CreateObservedStateSnapshot() fsm.ObservedSt
 	err := deepcopy.Copy(&snapshot.ObservedProtocolConverterRuntimeConfig, &d.ObservedState.ObservedProtocolConverterRuntimeConfig)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, d.baseFSMInstance.GetLogger(), "failed to deep copy observed protocol converter runtime config: %v", err)
+
 		return nil
 	}
 
@@ -50,6 +51,7 @@ func (d *ProtocolConverterInstance) CreateObservedStateSnapshot() fsm.ObservedSt
 	err = deepcopy.Copy(&snapshot.ObservedProtocolConverterSpecConfig, &d.ObservedState.ObservedProtocolConverterSpecConfig)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, d.baseFSMInstance.GetLogger(), "failed to deep copy observed protocol converter spec config: %v", err)
+
 		return nil
 	}
 
@@ -57,6 +59,7 @@ func (d *ProtocolConverterInstance) CreateObservedStateSnapshot() fsm.ObservedSt
 	err = deepcopy.Copy(&snapshot.ServiceInfo, &d.ObservedState.ServiceInfo)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, d.baseFSMInstance.GetLogger(), "failed to deep copy service info: %v", err)
+
 		return nil
 	}
 

@@ -25,7 +25,7 @@ import (
 )
 
 // convertYamlToSpec processes protocol converter configs to resolve templateRef fields
-// This translates between the "unrendered" config (with templateRef) and "rendered" config (with actual template content)
+// This translates between the "unrendered" config (with templateRef) and "rendered" config (with actual template content).
 func convertYamlToSpec(config FullConfig, ctx context.Context) (FullConfig, error) {
 	// Check if context is already cancelled
 	select {
@@ -102,6 +102,7 @@ func convertYamlToSpec(config FullConfig, ctx context.Context) (FullConfig, erro
 		if pc.ProtocolConverterServiceConfig.TemplateRef != "" {
 			// Resolve the template reference
 			templateName := pc.ProtocolConverterServiceConfig.TemplateRef
+
 			template, exists := protocolConverterTemplateMap[templateName]
 			if !exists {
 				return FullConfig{}, fmt.Errorf("protocol converter template reference %q not found for protocol converter %s", templateName, pc.Name)
@@ -130,6 +131,7 @@ func convertYamlToSpec(config FullConfig, ctx context.Context) (FullConfig, erro
 		if sp.StreamProcessorServiceConfig.TemplateRef != "" {
 			// Resolve the template reference
 			templateName := sp.StreamProcessorServiceConfig.TemplateRef
+
 			template, exists := streamProcessorTemplateMap[templateName]
 			if !exists {
 				return FullConfig{}, fmt.Errorf("stream processor template reference %q not found for stream processor %s", templateName, sp.Name)
@@ -176,7 +178,7 @@ func convertYamlToSpec(config FullConfig, ctx context.Context) (FullConfig, erro
 //	Spec (instances) ──› convertSpecToYaml() ──› YAML (templates + refs)
 //
 // In short: **Spec is expanded, YAML is compressed – with an escape hatch for
-// stand-alone converters.**
+// stand-alone converters.**.
 func convertSpecToYaml(spec FullConfig, ctx context.Context) (FullConfig, error) {
 	// Check if context is already cancelled
 	select {
@@ -350,6 +352,7 @@ func convertSpecToYaml(spec FullConfig, ctx context.Context) (FullConfig, error)
 
 	// For stream processors with orphaned references, convert to inline configs
 	orphanedStreamProcessorRefs := make(map[string]struct{})
+
 	for ref := range streamProcessorPendingRefs {
 		if _, ok := streamProcessorTplMap[ref]; !ok {
 			orphanedStreamProcessorRefs[ref] = struct{}{}
@@ -384,6 +387,7 @@ func convertSpecToYaml(spec FullConfig, ctx context.Context) (FullConfig, error)
 		if clone.Templates.ProtocolConverter == nil {
 			clone.Templates.ProtocolConverter = make(map[string]interface{})
 		}
+
 		for name, tpl := range protocolConverterTplMap {
 			clone.Templates.ProtocolConverter[name] = tpl
 		}
@@ -393,6 +397,7 @@ func convertSpecToYaml(spec FullConfig, ctx context.Context) (FullConfig, error)
 		if clone.Templates.StreamProcessor == nil {
 			clone.Templates.StreamProcessor = make(map[string]interface{})
 		}
+
 		for name, tpl := range streamProcessorTplMap {
 			clone.Templates.StreamProcessor[name] = tpl
 		}

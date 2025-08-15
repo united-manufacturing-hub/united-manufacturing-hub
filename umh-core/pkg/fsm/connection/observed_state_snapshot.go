@@ -22,18 +22,18 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
 )
 
-// ConnectionObservedStateSnapshot is a deep-copyable snapshot of BenthosObservedState
+// ConnectionObservedStateSnapshot is a deep-copyable snapshot of BenthosObservedState.
 type ConnectionObservedStateSnapshot struct {
 	Config      connectionserviceconfig.ConnectionServiceConfig
 	ServiceInfo connection.ServiceInfo
 }
 
-// IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface
+// IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface.
 func (s *ConnectionObservedStateSnapshot) IsObservedStateSnapshot() {
 	// Marker method implementation
 }
 
-// CreateObservedStateSnapshot implements the fsm.ObservedStateConverter interface for DataflowComponentInstance
+// CreateObservedStateSnapshot implements the fsm.ObservedStateConverter interface for DataflowComponentInstance.
 func (c *ConnectionInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	// Create a deep copy of the observed state
 	snapshot := &ConnectionObservedStateSnapshot{}
@@ -42,6 +42,7 @@ func (c *ConnectionInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnap
 	err := deepcopy.Copy(&snapshot.Config, &c.config)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.baseFSMInstance.GetLogger(), "failed to deep copy config: %v", err)
+
 		return nil
 	}
 
@@ -49,6 +50,7 @@ func (c *ConnectionInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnap
 	err = deepcopy.Copy(&snapshot.ServiceInfo, &c.ObservedState.ServiceInfo)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.baseFSMInstance.GetLogger(), "failed to deep copy service info: %v", err)
+
 		return nil
 	}
 

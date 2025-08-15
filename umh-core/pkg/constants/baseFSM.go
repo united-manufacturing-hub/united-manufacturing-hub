@@ -44,7 +44,7 @@ const (
 	// If you lengthen these values you reduce peak load but also slow down
 	// convergence; if you shorten them the system reacts faster but risks
 	// starving later managers in the loop.
-	// ─────────────────────────────────────────────────────────────────────────────
+	// ─────────────────────────────────────────────────────────────────────────────.
 	TicksBeforeNextAdd    = 3  // base cooldown (in ticks) after adding an instance
 	TicksBeforeNextUpdate = 5  // base cooldown after changing an instance configuration
 	TicksBeforeNextRemove = 10 // base cooldown after starting a removal

@@ -23,7 +23,7 @@ import (
 )
 
 // DeriveCoreHealth determines the overall health of the core component
-// based on the health of all child components
+// based on the health of all child components.
 func DeriveCoreHealth(
 	agentHealth *models.Health,
 	containerHealth *models.Health,
@@ -38,27 +38,27 @@ func DeriveCoreHealth(
 	// Check each component's health
 	// Agent health check - only consider degraded as unhealthy
 	if agentHealth != nil && agentHealth.Category == models.Degraded {
-		unhealthyComponents = append(unhealthyComponents, fmt.Sprintf("Agent: %s", agentHealth.Message))
+		unhealthyComponents = append(unhealthyComponents, "Agent: "+agentHealth.Message)
 	}
 
 	// Container health check - only consider degraded as unhealthy
 	if containerHealth != nil && containerHealth.Category == models.Degraded {
-		unhealthyComponents = append(unhealthyComponents, fmt.Sprintf("Container: %s", containerHealth.Message))
+		unhealthyComponents = append(unhealthyComponents, "Container: "+containerHealth.Message)
 	}
 
 	// Redpanda health check - both active and neutral (idle) states are acceptable
 	if redpandaHealth != nil && redpandaHealth.Category != models.Active && redpandaHealth.Category != models.Neutral {
-		unhealthyComponents = append(unhealthyComponents, fmt.Sprintf("Redpanda: %s", redpandaHealth.Message))
+		unhealthyComponents = append(unhealthyComponents, "Redpanda: "+redpandaHealth.Message)
 	}
 
 	// Topic Browser health check - both active and neutral (idle) states are acceptable
 	if topicBrowserHealth != nil && topicBrowserHealth.Category != models.Active && topicBrowserHealth.Category != models.Neutral {
-		unhealthyComponents = append(unhealthyComponents, fmt.Sprintf("TopicBrowser: %s", topicBrowserHealth.Message))
+		unhealthyComponents = append(unhealthyComponents, "TopicBrowser: "+topicBrowserHealth.Message)
 	}
 
 	// Release health check - only consider degraded as unhealthy
 	if releaseHealth != nil && releaseHealth.Category == models.Degraded {
-		unhealthyComponents = append(unhealthyComponents, fmt.Sprintf("Release: %s", releaseHealth.Message))
+		unhealthyComponents = append(unhealthyComponents, "Release: "+releaseHealth.Message)
 	}
 
 	// DFCs health check
@@ -80,7 +80,7 @@ func DeriveCoreHealth(
 
 	if len(unhealthyComponents) > 0 {
 		coreHealth.Category = models.Degraded
-		coreHealth.Message = fmt.Sprintf("Unhealthy components:\n%s", strings.Join(unhealthyComponents, "\n"))
+		coreHealth.Message = "Unhealthy components:\n" + strings.Join(unhealthyComponents, "\n")
 		logger.Debugf("Core health is degraded: %s", coreHealth.Message)
 	}
 

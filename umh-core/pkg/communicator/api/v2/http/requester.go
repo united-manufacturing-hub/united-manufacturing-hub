@@ -61,6 +61,7 @@ func GetClient(insecureTLS bool) *http.Client {
 			Timeout:   30 * time.Second,
 		}
 	}
+
 	if insecureTLS && insecureHTTPClient == nil {
 		// Create a custom transport with HTTP/2 disabled and insecure TLS
 		transport := &http.Transport{
@@ -83,12 +84,13 @@ func GetClient(insecureTLS bool) *http.Client {
 	if insecureTLS {
 		return insecureHTTPClient
 	}
+
 	return secureHTTPClient
 }
 
 // LatestExternalIp is the latest external IP address
 // Our backend server is configured to set a header containing the client's external IP address
-// Note: This is best effort, and may not be accurate if the client is behind a proxy
+// Note: This is best effort, and may not be accurate if the client is behind a proxy.
 var LatestExternalIp net.IP
 
 var latenciesFRB = expiremap.NewEx[time.Time, time.Duration](5*time.Minute, 5*time.Minute)
@@ -119,7 +121,7 @@ func GetRealLatency() models.Latency {
 	return latency.CalculateLatency(latenciesReal)
 }
 
-// setupClientTrace creates and returns an http trace with timing measurements
+// setupClientTrace creates and returns an http trace with timing measurements.
 func setupClientTrace(requestStart *time.Time, timings *struct {
 	firstByte time.Duration
 	dns       time.Duration
@@ -153,7 +155,7 @@ func setupClientTrace(requestStart *time.Time, timings *struct {
 	}
 }
 
-// processCookies handles cookie updates from response headers
+// processCookies handles cookie updates from response headers.
 func processCookies(response *http.Response, cookies *map[string]string) {
 	if cookies == nil {
 		return
@@ -170,6 +172,7 @@ func processCookies(response *http.Response, cookies *map[string]string) {
 		header := response.Header.Get(headerName)
 		for _, pair := range strings.Split(header, ";") {
 			pair = strings.TrimSpace(pair)
+
 			parts := strings.Split(pair, "=")
 			if len(parts) == 2 {
 				cookieMap[parts[0]] = parts[1]
@@ -180,7 +183,7 @@ func processCookies(response *http.Response, cookies *map[string]string) {
 	*cookies = cookieMap
 }
 
-// processLatencyHeaders handles X-Response-Time header processing and latency calculations
+// processLatencyHeaders handles X-Response-Time header processing and latency calculations.
 func processLatencyHeaders(response *http.Response, timeTillFirstByte time.Duration, logger *zap.SugaredLogger) {
 	if response == nil {
 		return
@@ -189,12 +192,14 @@ func processLatencyHeaders(response *http.Response, timeTillFirstByte time.Durat
 	xResponseTime := response.Header.Get("X-Response-Time")
 	if xResponseTime == "" {
 		logger.Warn("X-Response-Time header not found")
+
 		return
 	}
 
 	elapsedTime, err := time.ParseDuration(xResponseTime + "ns")
 	if err != nil {
 		logger.Warnf("Failed to parse X-Response-Time header: %s", xResponseTime)
+
 		return
 	}
 
@@ -203,7 +208,7 @@ func processLatencyHeaders(response *http.Response, timeTillFirstByte time.Durat
 	latenciesReal.Set(now, timeTillFirstByte-elapsedTime)
 }
 
-// enhanceConnectionError adds detailed context to common connection errors
+// enhanceConnectionError adds detailed context to common connection errors.
 func enhanceConnectionError(err error) error {
 	if strings.Contains(err.Error(), "EOF") {
 		return fmt.Errorf("connection closed unexpectedly before receiving response: %w (possible causes: network issues, server timeout, or firewall blocking)", err)
@@ -212,11 +217,12 @@ func enhanceConnectionError(err error) error {
 	} else if strings.Contains(err.Error(), "connection refused") {
 		return fmt.Errorf("connection refused: %w (possible causes: server down, incorrect URL, or firewall blocking)", err)
 	}
+
 	return fmt.Errorf("connection error: %w (no response received from server, status code 0)", err)
 }
 
 // DoHTTPRequest performs the actual HTTP request and returns the response and any errors
-// This is an internal function, better use GetRequest or PostRequest instead
+// This is an internal function, better use GetRequest or PostRequest instead.
 func DoHTTPRequest(ctx context.Context, url string, header map[string]string, cookies *map[string]string, insecureTLS bool, logger *zap.SugaredLogger) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -241,14 +247,16 @@ func DoHTTPRequest(ctx context.Context, url string, header map[string]string, co
 	req.Header.Set("X-Features", "longpoll;")
 
 	// Setup request tracing
-	var requestStart time.Time
-	var timings struct {
-		firstByte, dns, tls, conn time.Duration
-	}
+	var (
+		requestStart time.Time
+		timings      struct{ firstByte, dns, tls, conn time.Duration }
+	)
+
 	trace := setupClientTrace(&requestStart, &timings)
 
 	// Send request
 	requestStart = time.Now()
+
 	response, err := GetClient(insecureTLS).Do(req.WithContext(httptrace.WithClientTrace(req.Context(), trace)))
 	if err != nil {
 		if response != nil {
@@ -270,7 +278,7 @@ func DoHTTPRequest(ctx context.Context, url string, header map[string]string, co
 	return response, nil
 }
 
-// processJSONResponse processes the HTTP response and unmarshals the JSON body
+// processJSONResponse processes the HTTP response and unmarshals the JSON body.
 func processJSONResponse[R any](response *http.Response, cookies *map[string]string, endpoint Endpoint, logger *zap.SugaredLogger) (*R, int, error) {
 	defer func() {
 		if err := response.Body.Close(); err != nil {
@@ -287,7 +295,7 @@ func processJSONResponse[R any](response *http.Response, cookies *map[string]str
 
 	if response.StatusCode < 200 || response.StatusCode > 399 {
 		// if the error is 401, we want to report it as a login error
-		if response.StatusCode == 401 {
+		if response.StatusCode == http.StatusUnauthorized {
 			// no need to report it to sentry
 			return nil, response.StatusCode, errors.New("unauthorized: Authentication failed. Either your API key is invalid or your instance has been removed. Please verify your API key or recreate the instance")
 		} else {
@@ -300,6 +308,7 @@ func processJSONResponse[R any](response *http.Response, cookies *map[string]str
 				bodyBytes,
 			)
 		}
+
 		return nil, response.StatusCode, errors.New("error response code: " + response.Status)
 	}
 
@@ -315,7 +324,7 @@ func processJSONResponse[R any](response *http.Response, cookies *map[string]str
 	processCookies(response, cookies)
 
 	// Process client IP
-	if ip := net.ParseIP(response.Header.Get("X-Client-IP")); ip != nil {
+	if ip := net.ParseIP(response.Header.Get("X-Client-Ip")); ip != nil {
 		LatestExternalIp = ip
 	}
 
@@ -323,29 +332,33 @@ func processJSONResponse[R any](response *http.Response, cookies *map[string]str
 }
 
 // GetRequest does a GET request to the given endpoint, with optional header and cookies
-// It is a wrapper around DoHTTPRequest
+// It is a wrapper around DoHTTPRequest.
 func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (result *R, statusCode int, responseErr error) {
 	// Set up context with default 30 second timeout if none provided
 	if ctx == nil {
 		var cancel context.CancelFunc
+
 		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 	}
 
 	url := apiURL + string(endpoint)
+
 	response, err := DoHTTPRequest(ctx, url, header, cookies, insecureTLS, logger)
 	if err != nil {
 		if response != nil {
 			return nil, response.StatusCode, err
 		}
+
 		return nil, 0, err
 	}
 
 	result, statusCode, responseErr = processJSONResponse[R](response, cookies, endpoint, logger)
+
 	return
 }
 
-// DoHTTPPostRequest performs the actual HTTP POST request and returns the response and any errors
+// DoHTTPPostRequest performs the actual HTTP POST request and returns the response and any errors.
 func DoHTTPPostRequest[T any](ctx context.Context, url string, data *T, header map[string]string, cookies *map[string]string, insecureTLS bool, logger *zap.SugaredLogger) (*http.Response, error) {
 	// Marshal the data into JSON format
 	body, err := safejson.Marshal(data)
@@ -381,8 +394,11 @@ func DoHTTPPostRequest[T any](ctx context.Context, url string, data *T, header m
 	req.ContentLength = -1
 
 	// Enable trace for response time tracking
-	var start time.Time
-	var timeTillFirstByte time.Duration
+	var (
+		start             time.Time
+		timeTillFirstByte time.Duration
+	)
+
 	trace := setupClientTrace(&start, &struct {
 		firstByte time.Duration
 		dns       time.Duration
@@ -392,6 +408,7 @@ func DoHTTPPostRequest[T any](ctx context.Context, url string, data *T, header m
 
 	// Send the request
 	start = time.Now()
+
 	response, err := GetClient(insecureTLS).Do(req.WithContext(httptrace.WithClientTrace(req.Context(), trace)))
 	if err != nil {
 		if response != nil {
@@ -400,6 +417,7 @@ func DoHTTPPostRequest[T any](ctx context.Context, url string, data *T, header m
 		// Enhance error message for connection failures
 		return nil, enhanceConnectionError(err)
 	}
+
 	latenciesFRB.Set(time.Now(), timeTillFirstByte)
 
 	return response, nil
@@ -407,24 +425,28 @@ func DoHTTPPostRequest[T any](ctx context.Context, url string, data *T, header m
 
 // PostRequest does a POST request to the given endpoint, with optional header and cookies
 // Note: Cookies will be updated with the response cookies, if not nil
-// It is a wrapper around DoHTTPPostRequest
+// It is a wrapper around DoHTTPPostRequest.
 func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (result *R, statusCode int, responseErr error) {
 	// Set up context with default 30 second timeout if none provided
 	if ctx == nil {
 		var cancel context.CancelFunc
+
 		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 	}
 
 	url := apiURL + string(endpoint)
+
 	response, err := DoHTTPPostRequest(ctx, url, data, header, cookies, insecureTLS, logger)
 	if err != nil {
 		if response != nil {
 			return nil, response.StatusCode, err
 		}
+
 		return nil, 0, err
 	}
 
 	result, statusCode, responseErr = processJSONResponse[R](response, cookies, endpoint, logger)
+
 	return
 }

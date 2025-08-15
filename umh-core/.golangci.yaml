@@ -20,3 +20,34 @@ linters:
   # Default: standard
   default: standard
   
+  enable:
+    - canonicalheader
+    - copyloopvar
+    - dupword
+    - err113
+    - errorlint
+    - exptostd
+    - fatcontext
+    - ginkgolinter
+    - gocritic
+    - godot
+    - goheader
+    - iface
+    - importas
+    - intrange
+    - mirror
+    - misspell
+    - nakedret
+    - nlreturn
+    - nolintlint
+    - perfsprint
+    - protogetter
+    - revive
+    - sloglint
+    - tagalign
+    - testifylint
+    - unconvert
+    - usestdlibvars
+    - usetesting
+    - whitespace
+    - wsl_v5

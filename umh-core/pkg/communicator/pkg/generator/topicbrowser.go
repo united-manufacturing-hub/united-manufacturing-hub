@@ -15,7 +15,7 @@
 package generator
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -25,7 +25,7 @@ import (
 )
 
 // GenerateTopicBrowserFromCommunicator generates topic browser data from the communicator
-// This function uses the new TopicBrowserCommunicator to get subscriber data
+// This function uses the new TopicBrowserCommunicator to get subscriber data.
 func GenerateTopicBrowserFromCommunicator(
 	communicator *topicbrowser.TopicBrowserCommunicator,
 	isBootstrapped bool,
@@ -34,6 +34,7 @@ func GenerateTopicBrowserFromCommunicator(
 ) *models.TopicBrowser {
 	if communicator == nil {
 		logger.Error("Topic browser communicator is nil")
+
 		return &models.TopicBrowser{
 			Health: &models.Health{
 				Message:       "Topic browser communicator not initialized",
@@ -48,6 +49,7 @@ func GenerateTopicBrowserFromCommunicator(
 	subscriberData, err := communicator.GetSubscriberData(isBootstrapped)
 	if err != nil {
 		logger.Errorf("Failed to get subscriber data from topic browser communicator: %v", err)
+
 		return &models.TopicBrowser{
 			Health: &models.Health{
 				Message:       "Failed to get topic browser data",
@@ -86,15 +88,15 @@ func buildTopicBrowserAsDfc(
 	instance fsm.FSMInstanceSnapshot,
 	logger *zap.SugaredLogger,
 ) (*models.Health, error) {
-
 	observed, ok := instance.LastObservedState.(*topicbrowserfsm.ObservedStateSnapshot)
 	if !ok {
-		return nil, fmt.Errorf("last observed state is not a topic browser observed state snapshot")
+		return nil, errors.New("last observed state is not a topic browser observed state snapshot")
 	}
 
 	serviceInfo := observed.ServiceInfo
 
 	healthCat := models.Neutral
+
 	switch serviceInfo.BenthosFSMState {
 	case topicbrowserfsm.OperationalStateActive:
 		healthCat = models.Active

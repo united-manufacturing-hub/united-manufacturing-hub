@@ -31,7 +31,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
-// MockBenthosService is a mock implementation of the IBenthosService interface for testing
+// MockBenthosService is a mock implementation of the IBenthosService interface for testing.
 type MockBenthosService struct {
 	GenerateS6ConfigForBenthosError error
 	GetConfigError                  error
@@ -94,10 +94,10 @@ type MockBenthosService struct {
 	ServiceExistsResult                            bool
 }
 
-// Ensure MockBenthosService implements IBenthosService
+// Ensure MockBenthosService implements IBenthosService.
 var _ IBenthosService = (*MockBenthosService)(nil)
 
-// ServiceStateFlags contains all the state flags needed for FSM testing
+// ServiceStateFlags contains all the state flags needed for FSM testing.
 type ServiceStateFlags struct {
 	S6FSMState             string
 	IsS6Running            bool
@@ -109,7 +109,7 @@ type ServiceStateFlags struct {
 	IsS6Stopped            bool
 }
 
-// NewMockBenthosService creates a new mock Benthos service
+// NewMockBenthosService creates a new mock Benthos service.
 func NewMockBenthosService() *MockBenthosService {
 	return &MockBenthosService{
 		ServiceStates:    make(map[string]*ServiceInfo),
@@ -120,7 +120,7 @@ func NewMockBenthosService() *MockBenthosService {
 	}
 }
 
-// SetServiceState sets all state flags for a service at once
+// SetServiceState sets all state flags for a service at once.
 func (m *MockBenthosService) SetServiceState(serviceName string, flags ServiceStateFlags) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -143,7 +143,7 @@ func (m *MockBenthosService) SetServiceState(serviceName string, flags ServiceSt
 	m.stateFlags[serviceName] = &flags
 }
 
-// GetServiceState gets the state flags for a service
+// GetServiceState gets the state flags for a service.
 func (m *MockBenthosService) GetServiceState(serviceName string) *ServiceStateFlags {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -154,19 +154,21 @@ func (m *MockBenthosService) GetServiceState(serviceName string) *ServiceStateFl
 	// Initialize with default flags if not exists
 	flags := &ServiceStateFlags{}
 	m.stateFlags[serviceName] = flags
+
 	return flags
 }
 
-// GenerateS6ConfigForBenthos mocks generating S6 config for Benthos
+// GenerateS6ConfigForBenthos mocks generating S6 config for Benthos.
 func (m *MockBenthosService) GenerateS6ConfigForBenthos(benthosConfig *benthosserviceconfig.BenthosServiceConfig, name string) (s6serviceconfig.S6ServiceConfig, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.GenerateS6ConfigForBenthosCalled = true
+
 	return m.GenerateS6ConfigForBenthosResult, m.GenerateS6ConfigForBenthosError
 }
 
-// GetConfig mocks getting the Benthos configuration
+// GetConfig mocks getting the Benthos configuration.
 func (m *MockBenthosService) GetConfig(ctx context.Context, filesystemService filesystem.Service, serviceName string) (benthosserviceconfig.BenthosServiceConfig, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -193,7 +195,7 @@ func (m *MockBenthosService) GetConfig(ctx context.Context, filesystemService fi
 	}, nil
 }
 
-// Status mocks getting the status of a Benthos service
+// Status mocks getting the status of a Benthos service.
 func (m *MockBenthosService) Status(ctx context.Context, services serviceregistry.Provider, serviceName string, metricsPort uint16, tick uint64, loopStartTime time.Time) (ServiceInfo, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -219,7 +221,7 @@ func (m *MockBenthosService) Status(ctx context.Context, services serviceregistr
 	return m.StatusResult, m.StatusError
 }
 
-// Helper methods for state checks
+// Helper methods for state checks.
 func (m *MockBenthosService) IsBenthosS6Running(serviceName string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -228,6 +230,7 @@ func (m *MockBenthosService) IsBenthosS6Running(serviceName string) bool {
 	if flags := m.GetServiceState(serviceName); flags != nil {
 		return flags.IsS6Running
 	}
+
 	return false
 }
 
@@ -239,6 +242,7 @@ func (m *MockBenthosService) IsBenthosConfigLoaded(serviceName string) bool {
 	if flags := m.GetServiceState(serviceName); flags != nil {
 		return flags.IsConfigLoaded
 	}
+
 	return false
 }
 
@@ -250,6 +254,7 @@ func (m *MockBenthosService) IsBenthosHealthchecksPassed(serviceName string, cur
 	if flags := m.GetServiceState(serviceName); flags != nil {
 		return flags.IsHealthchecksPassed
 	}
+
 	return false
 }
 
@@ -261,6 +266,7 @@ func (m *MockBenthosService) IsBenthosRunningForSomeTimeWithoutErrors(serviceNam
 	if flags := m.GetServiceState(serviceName); flags != nil {
 		return flags.IsRunningWithoutErrors, s6service.LogEntry{}
 	}
+
 	return false, s6service.LogEntry{}
 }
 
@@ -272,6 +278,7 @@ func (m *MockBenthosService) IsBenthosDegraded(serviceName string) bool {
 	if flags := m.GetServiceState(serviceName); flags != nil {
 		return flags.IsDegraded
 	}
+
 	return false
 }
 
@@ -283,6 +290,7 @@ func (m *MockBenthosService) IsBenthosS6Stopped(serviceName string) bool {
 	if flags := m.GetServiceState(serviceName); flags != nil {
 		return flags.IsS6Stopped
 	}
+
 	return false
 }
 
@@ -294,10 +302,11 @@ func (m *MockBenthosService) HasProcessingActivity(status BenthosStatus) (bool, 
 	if status.BenthosMetrics.MetricsState.IsActive {
 		return true, ""
 	}
+
 	return false, "benthos metrics state is not active"
 }
 
-// AddBenthosToS6Manager mocks adding a Benthos instance to the S6 manager
+// AddBenthosToS6Manager mocks adding a Benthos instance to the S6 manager.
 func (m *MockBenthosService) AddBenthosToS6Manager(ctx context.Context, filesystemService filesystem.Service, cfg *benthosserviceconfig.BenthosServiceConfig, serviceName string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -329,7 +338,7 @@ func (m *MockBenthosService) AddBenthosToS6Manager(ctx context.Context, filesyst
 	return m.AddBenthosToS6ManagerError
 }
 
-// RemoveBenthosFromS6Manager mocks removing a Benthos instance from the S6 manager
+// RemoveBenthosFromS6Manager mocks removing a Benthos instance from the S6 manager.
 func (m *MockBenthosService) RemoveBenthosFromS6Manager(ctx context.Context, filesystemService filesystem.Service, serviceName string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -343,6 +352,7 @@ func (m *MockBenthosService) RemoveBenthosFromS6Manager(ctx context.Context, fil
 		if s6Config.Name == serviceName {
 			m.S6ServiceConfigs = append(m.S6ServiceConfigs[:i], m.S6ServiceConfigs[i+1:]...)
 			found = true
+
 			break
 		}
 	}
@@ -358,7 +368,7 @@ func (m *MockBenthosService) RemoveBenthosFromS6Manager(ctx context.Context, fil
 	return m.RemoveBenthosFromS6ManagerError
 }
 
-// StartBenthos mocks starting a Benthos instance
+// StartBenthos mocks starting a Benthos instance.
 func (m *MockBenthosService) StartBenthos(ctx context.Context, filesystemService filesystem.Service, serviceName string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -372,6 +382,7 @@ func (m *MockBenthosService) StartBenthos(ctx context.Context, filesystemService
 		if s6Config.Name == serviceName {
 			m.S6ServiceConfigs[i].DesiredFSMState = s6_fsm.OperationalStateRunning
 			found = true
+
 			break
 		}
 	}
@@ -383,7 +394,7 @@ func (m *MockBenthosService) StartBenthos(ctx context.Context, filesystemService
 	return m.StartBenthosError
 }
 
-// StopBenthos mocks stopping a Benthos instance
+// StopBenthos mocks stopping a Benthos instance.
 func (m *MockBenthosService) StopBenthos(ctx context.Context, filesystemService filesystem.Service, serviceName string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -397,6 +408,7 @@ func (m *MockBenthosService) StopBenthos(ctx context.Context, filesystemService 
 		if s6Config.Name == serviceName {
 			m.S6ServiceConfigs[i].DesiredFSMState = s6_fsm.OperationalStateStopped
 			found = true
+
 			break
 		}
 	}
@@ -408,16 +420,17 @@ func (m *MockBenthosService) StopBenthos(ctx context.Context, filesystemService 
 	return m.StopBenthosError
 }
 
-// ReconcileManager mocks reconciling the Benthos manager
+// ReconcileManager mocks reconciling the Benthos manager.
 func (m *MockBenthosService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.ReconcileManagerCalled = true
+
 	return m.ReconcileManagerError, m.ReconcileManagerReconciled
 }
 
-// IsLogsFine mocks checking if the logs are fine
+// IsLogsFine mocks checking if the logs are fine.
 func (m *MockBenthosService) IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) (bool, s6service.LogEntry) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -427,7 +440,7 @@ func (m *MockBenthosService) IsLogsFine(logs []s6service.LogEntry, currentTime t
 	return true, s6service.LogEntry{}
 }
 
-// IsMetricsErrorFree mocks checking if metrics are error-free
+// IsMetricsErrorFree mocks checking if metrics are error-free.
 func (m *MockBenthosService) IsMetricsErrorFree(metrics benthos_monitor.BenthosMetrics) (bool, string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -438,7 +451,7 @@ func (m *MockBenthosService) IsMetricsErrorFree(metrics benthos_monitor.BenthosM
 	return true, ""
 }
 
-// UpdateBenthosInS6Manager mocks updating a Benthos service configuration in the S6 manager
+// UpdateBenthosInS6Manager mocks updating a Benthos service configuration in the S6 manager.
 func (m *MockBenthosService) UpdateBenthosInS6Manager(ctx context.Context, filesystemService filesystem.Service, cfg *benthosserviceconfig.BenthosServiceConfig, serviceName string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -447,6 +460,7 @@ func (m *MockBenthosService) UpdateBenthosInS6Manager(ctx context.Context, files
 
 	// Check if the service exists
 	found := false
+
 	for i, s6Config := range m.S6ServiceConfigs {
 		if s6Config.Name == serviceName {
 			found = true
@@ -454,6 +468,7 @@ func (m *MockBenthosService) UpdateBenthosInS6Manager(ctx context.Context, files
 			// Update the config
 			s6Config.S6ServiceConfig = m.GenerateS6ConfigForBenthosResult
 			m.S6ServiceConfigs[i] = s6Config
+
 			break
 		}
 	}
@@ -465,20 +480,22 @@ func (m *MockBenthosService) UpdateBenthosInS6Manager(ctx context.Context, files
 	return m.UpdateBenthosInS6ManagerError
 }
 
-// ServiceExists mocks checking if a Benthos service exists
+// ServiceExists mocks checking if a Benthos service exists.
 func (m *MockBenthosService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, serviceName string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.ServiceExistsCalled = true
+
 	return m.ServiceExistsResult
 }
 
-// ForceRemoveBenthos mocks removing a Benthos instance from the S6 manager
+// ForceRemoveBenthos mocks removing a Benthos instance from the S6 manager.
 func (m *MockBenthosService) ForceRemoveBenthos(ctx context.Context, filesystemService filesystem.Service, benthosName string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.ForceRemoveBenthosCalled = true
+
 	return m.ForceRemoveBenthosError
 }

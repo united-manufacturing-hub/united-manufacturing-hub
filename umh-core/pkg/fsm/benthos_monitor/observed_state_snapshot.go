@@ -27,10 +27,10 @@ type BenthosMonitorObservedStateSnapshot struct {
 	// No need for the config, as it is basically empty
 }
 
-// Ensure it satisfies fsm.ObservedStateSnapshot
+// Ensure it satisfies fsm.ObservedStateSnapshot.
 func (b *BenthosMonitorObservedStateSnapshot) IsObservedStateSnapshot() {}
 
-// CreateObservedStateSnapshot is called by the manager to record the state
+// CreateObservedStateSnapshot is called by the manager to record the state.
 func (b *BenthosMonitorInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	snapshot := &BenthosMonitorObservedStateSnapshot{}
 	if b.ObservedState.ServiceInfo != nil {
@@ -39,5 +39,6 @@ func (b *BenthosMonitorInstance) CreateObservedStateSnapshot() fsm.ObservedState
 			sentry.ReportIssue(err, sentry.IssueTypeError, b.baseFSMInstance.GetLogger())
 		}
 	}
+
 	return snapshot
 }

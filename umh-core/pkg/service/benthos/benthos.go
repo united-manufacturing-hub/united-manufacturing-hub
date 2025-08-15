@@ -47,7 +47,7 @@ import (
 	"github.com/cespare/xxhash/v2"
 )
 
-// IBenthosService is the interface for managing Benthos services
+// IBenthosService is the interface for managing Benthos services.
 type IBenthosService interface {
 	// GenerateS6ConfigForBenthos generates a S6 config for a given benthos instance
 	// Expects s6ServiceName (e.g. "benthos-myservice"), not the raw benthosName
@@ -110,7 +110,7 @@ type IBenthosService interface {
 	HasProcessingActivity(status BenthosStatus) (bool, string)
 }
 
-// ServiceInfo contains information about a Benthos service
+// ServiceInfo contains information about a Benthos service.
 type ServiceInfo struct {
 	// S6FSMState contains the current state of the S6 FSM
 	S6FSMState string
@@ -172,10 +172,11 @@ type BenthosStatus struct {
 // See also: https://github.com/tiendc/go-deepcopy?tab=readme-ov-file#copy-struct-fields-via-struct-methods
 func (bs *BenthosStatus) CopyBenthosLogs(src []s6service.LogEntry) error {
 	bs.BenthosLogs = src
+
 	return nil
 }
 
-// BenthosService is the default implementation of the IBenthosService interface
+// BenthosService is the default implementation of the IBenthosService interface.
 type BenthosService struct {
 	s6Service s6service.Service // S6 service for direct S6 operations
 	logger    *zap.SugaredLogger
@@ -224,30 +225,30 @@ type configCacheEntry struct {
 	hash uint64
 }
 
-// hash is a helper function for configCacheEntry.hash
+// hash is a helper function for configCacheEntry.hash.
 func hash(buf []byte) uint64 { return xxhash.Sum64(buf) }
 
-// benthosLogRe is a helper function for BenthosService.IsLogsFine
+// benthosLogRe is a helper function for BenthosService.IsLogsFine.
 var benthosLogRe = regexp.MustCompile(`^level=(error|warning)\s+msg=(.+)`)
 
-// BenthosServiceOption is a function that modifies a BenthosService
+// BenthosServiceOption is a function that modifies a BenthosService.
 type BenthosServiceOption func(*BenthosService)
 
-// WithS6Service sets a custom S6 service for the BenthosService
+// WithS6Service sets a custom S6 service for the BenthosService.
 func WithS6Service(s6Service s6service.Service) BenthosServiceOption {
 	return func(s *BenthosService) {
 		s.s6Service = s6Service
 	}
 }
 
-// WithMonitorManager sets a custom monitor manager for the BenthosService
+// WithMonitorManager sets a custom monitor manager for the BenthosService.
 func WithMonitorManager(monitorManager *benthos_monitor_fsm.BenthosMonitorManager) BenthosServiceOption {
 	return func(s *BenthosService) {
 		s.benthosMonitorManager = monitorManager
 	}
 }
 
-// WithS6Manager sets a custom S6 manager for the BenthosService
+// WithS6Manager sets a custom S6 manager for the BenthosService.
 func WithS6Manager(s6Manager *s6fsm.S6Manager) BenthosServiceOption {
 	return func(s *BenthosService) {
 		s.s6Manager = s6Manager
@@ -255,7 +256,7 @@ func WithS6Manager(s6Manager *s6fsm.S6Manager) BenthosServiceOption {
 }
 
 // NewDefaultBenthosService creates a new default Benthos service
-// name is the name of the Benthos service as defined in the UMH config
+// name is the name of the Benthos service as defined in the UMH config.
 func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) *BenthosService {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentBenthosService, benthosName)
 	service := &BenthosService{
@@ -273,10 +274,10 @@ func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) 
 	return service
 }
 
-// generateBenthosYaml generates a Benthos YAML configuration from a BenthosServiceConfig
+// generateBenthosYaml generates a Benthos YAML configuration from a BenthosServiceConfig.
 func (s *BenthosService) generateBenthosYaml(config *benthosserviceconfig.BenthosServiceConfig) (string, error) {
 	if config == nil {
-		return "", fmt.Errorf("config is nil")
+		return "", errors.New("config is nil")
 	}
 
 	if config.LogLevel == "" {
@@ -298,13 +299,13 @@ func (s *BenthosService) generateBenthosYaml(config *benthosserviceconfig.Bentho
 // GetS6ServiceName converts a logical Benthos name ("my-pipe") into the
 // canonical S6 service name ("benthos-my-pipe").
 //
-// It is exported ONLY because tests and other packages need the mapping
+// It is exported ONLY because tests and other packages need the mapping.
 func (s *BenthosService) GetS6ServiceName(benthosName string) string {
-	return fmt.Sprintf("benthos-%s", benthosName)
+	return "benthos-" + benthosName
 }
 
 // generateS6ConfigForBenthos creates a S6 config for a given benthos instance
-// Expects s6ServiceName (e.g. "benthos-myservice"), not the raw benthosName
+// Expects s6ServiceName (e.g. "benthos-myservice"), not the raw benthosName.
 func (s *BenthosService) GenerateS6ConfigForBenthos(benthosConfig *benthosserviceconfig.BenthosServiceConfig, s6ServiceName string) (s6Config s6serviceconfig.S6ServiceConfig, err error) {
 	configPath := fmt.Sprintf("%s/%s/config/%s", constants.S6BaseDir, s6ServiceName, constants.BenthosConfigFileName)
 
@@ -329,7 +330,7 @@ func (s *BenthosService) GenerateS6ConfigForBenthos(benthosConfig *benthosservic
 }
 
 // GetConfig returns the actual Benthos config from the S6 service
-// Expects benthosName (e.g. "myservice") as defined in the UMH config
+// Expects benthosName (e.g. "myservice") as defined in the UMH config.
 func (s *BenthosService) GetConfig(ctx context.Context, filesystemService filesystem.Service, benthosName string) (benthosserviceconfig.BenthosServiceConfig, error) {
 	if ctx.Err() != nil {
 		return benthosserviceconfig.BenthosServiceConfig{}, ctx.Err()
@@ -425,7 +426,7 @@ func (s *BenthosService) GetConfig(ctx context.Context, filesystemService filesy
 }
 
 // extractMetricsPort safely extracts the metrics port from the config map
-// Returns 0 if any part of the path is missing or invalid
+// Returns 0 if any part of the path is missing or invalid.
 func (s *BenthosService) extractMetricsPort(config map[string]interface{}) uint16 {
 	// Check each level of nesting
 	metrics, ok := config["metrics"].(map[string]interface{})
@@ -450,6 +451,7 @@ func (s *BenthosService) extractMetricsPort(config map[string]interface{}) uint1
 	}
 
 	portStr := parts[len(parts)-1]
+
 	port, err := strconv.ParseUint(portStr, 10, 16)
 	if err != nil {
 		return 0
@@ -459,7 +461,7 @@ func (s *BenthosService) extractMetricsPort(config map[string]interface{}) uint1
 }
 
 // Status checks the status of a Benthos service and returns ServiceInfo
-// Expects benthosName (e.g. "myservice") as defined in the UMH config
+// Expects benthosName (e.g. "myservice") as defined in the UMH config.
 func (s *BenthosService) Status(ctx context.Context, services serviceregistry.Provider, benthosName string, metricsPort uint16, tick uint64, loopStartTime time.Time) (ServiceInfo, error) {
 	if ctx.Err() != nil {
 		return ServiceInfo{}, ctx.Err()
@@ -472,6 +474,7 @@ func (s *BenthosService) Status(ctx context.Context, services serviceregistry.Pr
 	// during reconciliation when a service is being created or removed
 	if _, exists := s.s6Manager.GetInstance(s6ServiceName); !exists {
 		s.logger.Debugf("Service %s not found in S6 manager", s6ServiceName)
+
 		return ServiceInfo{}, ErrServiceNotExist
 	}
 
@@ -483,8 +486,10 @@ func (s *BenthosService) Status(ctx context.Context, services serviceregistry.Pr
 		if strings.Contains(err.Error(), "instance "+s6ServiceName+" not found") ||
 			strings.Contains(err.Error(), "not found") {
 			s.logger.Debugf("Service %s was removed during status check", s6ServiceName)
+
 			return ServiceInfo{}, ErrServiceNotExist
 		}
+
 		return ServiceInfo{}, fmt.Errorf("failed to get last observed state: %w", err)
 	}
 
@@ -500,20 +505,25 @@ func (s *BenthosService) Status(ctx context.Context, services serviceregistry.Pr
 		if strings.Contains(err.Error(), "instance "+s6ServiceName+" not found") ||
 			strings.Contains(err.Error(), "not found") {
 			s.logger.Debugf("Service %s was removed during status check", s6ServiceName)
+
 			return ServiceInfo{}, ErrServiceNotExist
 		}
+
 		return ServiceInfo{}, fmt.Errorf("failed to get current FSM state: %w", err)
 	}
 
 	// Let's get the logs of the Benthos service
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
+
 	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, services.GetFileSystem())
 	if err != nil {
 		if errors.Is(err, s6service.ErrServiceNotExist) {
 			s.logger.Debugf("Service %s does not exist, returning empty logs", s6ServiceName)
+
 			return ServiceInfo{}, ErrServiceNotExist
 		} else if errors.Is(err, s6service.ErrLogFileNotFound) {
 			s.logger.Debugf("Log file for service %s not found, returning empty logs", s6ServiceName)
+
 			return ServiceInfo{}, ErrServiceNotExist
 		} else {
 			return ServiceInfo{}, fmt.Errorf("failed to get logs: %w", err)
@@ -533,9 +543,11 @@ func (s *BenthosService) Status(ctx context.Context, services serviceregistry.Pr
 		} else if strings.Contains(err.Error(), "instance "+s6ServiceName+" not found") ||
 			strings.Contains(err.Error(), "not found") {
 			s.logger.Debugf("Service %s was removed during status check", s6ServiceName)
+
 			return ServiceInfo{}, ErrServiceNotExist
 		} else if strings.Contains(err.Error(), ErrBenthosMonitorNotRunning.Error()) {
 			s.logger.Debugf("Service %s is not running, returning empty logs", s6ServiceName)
+
 			return ServiceInfo{
 				S6ObservedState: s6ServiceObservedState,
 				S6FSMState:      s6FSMState,
@@ -562,6 +574,7 @@ func (s *BenthosService) Status(ctx context.Context, services serviceregistry.Pr
 
 func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time, benthosName string, logs []s6service.LogEntry) (BenthosStatus, error) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(logger.ComponentBenthosService, metrics.ComponentBenthosService+"_get_health_check_and_metrics", time.Since(start))
 	}()
@@ -578,6 +591,7 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, filesyste
 
 	// Get the last observed state of the benthos monitor
 	s6ServiceName := s.GetS6ServiceName(benthosName)
+
 	lastObservedState, err := s.benthosMonitorManager.GetLastObservedState(s6ServiceName)
 	if err != nil {
 		return BenthosStatus{}, fmt.Errorf("failed to get last observed state in GetHealthCheckAndMetrics: %w", err)
@@ -605,7 +619,7 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, filesyste
 		benthosStatus.BenthosMetrics = *lastBenthosMonitorObservedState.ServiceInfo.BenthosStatus.LastScan.BenthosMetrics
 		benthosStatus.BenthosLogs = lastBenthosMonitorObservedState.ServiceInfo.BenthosStatus.Logs
 	} else {
-		return BenthosStatus{}, fmt.Errorf("last scan is nil")
+		return BenthosStatus{}, errors.New("last scan is nil")
 	}
 
 	// If the service is not running, we can return immediately
@@ -615,11 +629,10 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, filesyste
 	}
 
 	return benthosStatus, nil
-
 }
 
 // AddBenthosToS6Manager adds a Benthos instance to the S6 manager
-// Expects benthosName (e.g. "myservice") as defined in the UMH config
+// Expects benthosName (e.g. "myservice") as defined in the UMH config.
 func (s *BenthosService) AddBenthosToS6Manager(ctx context.Context, filesystemService filesystem.Service, cfg *benthosserviceconfig.BenthosServiceConfig, benthosName string) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
@@ -674,7 +687,7 @@ func (s *BenthosService) AddBenthosToS6Manager(ctx context.Context, filesystemSe
 }
 
 // UpdateBenthosInS6Manager updates an existing Benthos instance in the S6 manager
-// Expects benthosName (e.g. "myservice") as defined in the UMH config
+// Expects benthosName (e.g. "myservice") as defined in the UMH config.
 func (s *BenthosService) UpdateBenthosInS6Manager(ctx context.Context, filesystemService filesystem.Service, cfg *benthosserviceconfig.BenthosServiceConfig, benthosName string) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
@@ -689,10 +702,12 @@ func (s *BenthosService) UpdateBenthosInS6Manager(ctx context.Context, filesyste
 	// Check if the service exists
 	found := false
 	index := -1
+
 	for i, s6Config := range s.s6ServiceConfigs {
 		if s6Config.Name == s6ServiceName {
 			found = true
 			index = i
+
 			break
 		}
 	}
@@ -722,6 +737,7 @@ func (s *BenthosService) UpdateBenthosInS6Manager(ctx context.Context, filesyste
 	if currentDesiredState == s6fsm.OperationalStateStopped {
 		benthosMonitorDesiredState = benthos_monitor_fsm.OperationalStateStopped
 	}
+
 	s.benthosMonitorConfigs[index] = config.BenthosMonitorConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            s6ServiceName,
@@ -760,6 +776,7 @@ func (s *BenthosService) RemoveBenthosFromS6Manager(
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
 	}
+
 	if ctx.Err() != nil { // context already cancelled / timed-out
 		return ctx.Err()
 	}
@@ -779,6 +796,7 @@ func (s *BenthosService) RemoveBenthosFromS6Manager(
 				return append(arr[:i], arr[i+1:]...)
 			}
 		}
+
 		return arr
 	}
 
@@ -789,6 +807,7 @@ func (s *BenthosService) RemoveBenthosFromS6Manager(
 				return append(arr[:i], arr[i+1:]...)
 			}
 		}
+
 		return arr
 	}
 
@@ -802,6 +821,7 @@ func (s *BenthosService) RemoveBenthosFromS6Manager(
 		return fmt.Errorf("%w: S6 instance state=%s",
 			standarderrors.ErrRemovalPending, inst.GetCurrentFSMState())
 	}
+
 	if inst, ok := s.benthosMonitorManager.GetInstance(s6Name); ok {
 		return fmt.Errorf("%w: monitor instance state=%s",
 			standarderrors.ErrRemovalPending, inst.GetCurrentFSMState())
@@ -812,7 +832,7 @@ func (s *BenthosService) RemoveBenthosFromS6Manager(
 }
 
 // StartBenthos starts a Benthos instance
-// Expects benthosName (e.g. "myservice") as defined in the UMH config
+// Expects benthosName (e.g. "myservice") as defined in the UMH config.
 func (s *BenthosService) StartBenthos(ctx context.Context, filesystemService filesystem.Service, benthosName string) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
@@ -831,6 +851,7 @@ func (s *BenthosService) StartBenthos(ctx context.Context, filesystemService fil
 		if s6Config.Name == s6ServiceName {
 			s.s6ServiceConfigs[i].DesiredFSMState = s6fsm.OperationalStateRunning
 			found = true
+
 			break
 		}
 	}
@@ -846,6 +867,7 @@ func (s *BenthosService) StartBenthos(ctx context.Context, filesystemService fil
 		if benthosMonitorConfig.Name == s6ServiceName {
 			s.benthosMonitorConfigs[i].DesiredFSMState = benthos_monitor_fsm.OperationalStateActive
 			found = true
+
 			break
 		}
 	}
@@ -858,7 +880,7 @@ func (s *BenthosService) StartBenthos(ctx context.Context, filesystemService fil
 }
 
 // StopBenthos stops a Benthos instance
-// Expects benthosName (e.g. "myservice") as defined in the UMH config
+// Expects benthosName (e.g. "myservice") as defined in the UMH config.
 func (s *BenthosService) StopBenthos(ctx context.Context, filesystemService filesystem.Service, benthosName string) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
@@ -877,6 +899,7 @@ func (s *BenthosService) StopBenthos(ctx context.Context, filesystemService file
 		if s6Config.Name == s6ServiceName {
 			s.s6ServiceConfigs[i].DesiredFSMState = s6fsm.OperationalStateStopped
 			found = true
+
 			break
 		}
 	}
@@ -892,6 +915,7 @@ func (s *BenthosService) StopBenthos(ctx context.Context, filesystemService file
 		if benthosMonitorConfig.Name == s6ServiceName {
 			s.benthosMonitorConfigs[i].DesiredFSMState = benthos_monitor_fsm.OperationalStateStopped
 			found = true
+
 			break
 		}
 	}
@@ -903,7 +927,7 @@ func (s *BenthosService) StopBenthos(ctx context.Context, filesystemService file
 	return nil
 }
 
-// ReconcileManager reconciles the Benthos manager
+// ReconcileManager reconciles the Benthos manager.
 func (s *BenthosService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (err error, reconciled bool) {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized"), false
@@ -953,7 +977,6 @@ func (s *BenthosService) IsLogsFine(
 	now time.Time,
 	window time.Duration,
 ) (bool, s6service.LogEntry) {
-
 	if len(logs) == 0 {
 		return true, s6service.LogEntry{}
 	}
@@ -983,6 +1006,7 @@ func (s *BenthosService) IsLogsFine(
 			if level == "error" {
 				return false, l
 			}
+
 			if level == "warning" {
 				for _, sub := range critWarnSubstrings {
 					if strings.Contains(msg, sub) {
@@ -992,6 +1016,7 @@ func (s *BenthosService) IsLogsFine(
 			}
 		}
 	}
+
 	return true, s6service.LogEntry{}
 }
 
@@ -1038,11 +1063,12 @@ func (s *BenthosService) HasProcessingActivity(status BenthosStatus) (bool, stri
 
 	msgPerSecInput := status.BenthosMetrics.MetricsState.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds()
 	msgPerSecOutput := status.BenthosMetrics.MetricsState.Output.MessagesPerTick / constants.DefaultTickerTime.Seconds()
+
 	return false, fmt.Sprintf("no input throughput (in=%.2f msg/s, out=%.2f msg/s)",
 		msgPerSecInput, msgPerSecOutput)
 }
 
-// ServiceExists checks if a Benthos service exists in the S6 manager
+// ServiceExists checks if a Benthos service exists in the S6 manager.
 func (s *BenthosService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, benthosName string) bool {
 	s6ServiceName := s.GetS6ServiceName(benthosName)
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
@@ -1058,9 +1084,10 @@ func (s *BenthosService) ServiceExists(ctx context.Context, filesystemService fi
 // ForceRemoveBenthos removes a Benthos instance from the S6 manager
 // This should only be called if the Benthos instance is in a permanent failure state
 // and the instance itself cannot be stopped or removed
-// Expects benthosName (e.g. "myservice") as defined in the UMH config
+// Expects benthosName (e.g. "myservice") as defined in the UMH config.
 func (s *BenthosService) ForceRemoveBenthos(ctx context.Context, filesystemService filesystem.Service, benthosName string) error {
 	s6ServiceName := s.GetS6ServiceName(benthosName)
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
+
 	return s.s6Service.ForceRemove(ctx, s6ServicePath, filesystemService)
 }

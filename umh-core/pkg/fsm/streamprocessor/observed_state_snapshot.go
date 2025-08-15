@@ -22,19 +22,19 @@ import (
 	spsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/streamprocessor"
 )
 
-// ObservedStateSnapshot is a deep-copyable snapshot of the ObservedState
+// ObservedStateSnapshot is a deep-copyable snapshot of the ObservedState.
 type ObservedStateSnapshot struct {
 	ObservedRuntimeConfig streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime
 	ObservedSpecConfig    streamprocessorserviceconfig.StreamProcessorServiceConfigSpec
 	ServiceInfo           spsvc.ServiceInfo
 }
 
-// IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface
+// IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface.
 func (s *ObservedStateSnapshot) IsObservedStateSnapshot() {
 	// Marker method implementation
 }
 
-// CreateObservedStateSnapshot implements the fsm.ObservedStateConverter interface for Instance
+// CreateObservedStateSnapshot implements the fsm.ObservedStateConverter interface for Instance.
 func (i *Instance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	// Create a deep copy of the observed state
 	snapshot := &ObservedStateSnapshot{}
@@ -43,6 +43,7 @@ func (i *Instance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	err := deepcopy.Copy(&snapshot.ObservedRuntimeConfig, &i.ObservedState.ObservedRuntimeConfig)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, i.baseFSMInstance.GetLogger(), "failed to deep copy observed stream processor runtime config: %v", err)
+
 		return nil
 	}
 
@@ -50,6 +51,7 @@ func (i *Instance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	err = deepcopy.Copy(&snapshot.ObservedSpecConfig, &i.ObservedState.ObservedSpecConfig)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, i.baseFSMInstance.GetLogger(), "failed to deep copy observed stream processor spec config: %v", err)
+
 		return nil
 	}
 
@@ -57,6 +59,7 @@ func (i *Instance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	err = deepcopy.Copy(&snapshot.ServiceInfo, &i.ObservedState.ServiceInfo)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, i.baseFSMInstance.GetLogger(), "failed to deep copy service info: %v", err)
+
 		return nil
 	}
 

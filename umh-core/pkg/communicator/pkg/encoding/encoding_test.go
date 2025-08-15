@@ -16,6 +16,7 @@ package encoding_test
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
@@ -50,42 +51,42 @@ var _ = Describe("Encode", func() {
 		It("should encode message from user to UMH instance (New)", func() {
 			encodedMessage, err := new.EncodeMessageFromUserToUMHInstance(messageContent)
 
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(encodedMessage).ToNot(BeEmpty())
 		})
 
 		It("should encode message from user to UMH instance (CoreV1)", func() {
 			encodedMessage, err := corev1.EncodeMessageFromUserToUMHInstance(messageContent)
 
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(encodedMessage).ToNot(BeEmpty())
 		})
 
 		It("should encode message from user to UMH instance (Old)", func() {
 			encodedMessage, err := old.EncodeMessageFromUserToUMHInstance(messageContent)
 
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(encodedMessage).ToNot(BeEmpty())
 		})
 
 		It("should encode message from UMH instance to user (New)", func() {
 			encodedMessage, err := new.EncodeMessageFromUMHInstanceToUser(messageContent)
 
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(encodedMessage).ToNot(BeEmpty())
 		})
 
 		It("should encode message from UMH instance to user (CoreV1)", func() {
 			encodedMessage, err := corev1.EncodeMessageFromUMHInstanceToUser(messageContent)
 
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(encodedMessage).ToNot(BeEmpty())
 		})
 
 		It("should encode message from UMH instance to user (Old)", func() {
 			encodedMessage, err := old.EncodeMessageFromUMHInstanceToUser(messageContent)
 
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(encodedMessage).ToNot(BeEmpty())
 		})
 	})
@@ -104,29 +105,29 @@ var _ = Describe("Encode", func() {
 				}
 				var err error
 				encodedMessage, err = new.EncodeMessageFromUserToUMHInstance(messageContent)
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should decode message from user to UMH instance", func() {
 				decodedMessage, err := new.DecodeMessageFromUserToUMHInstance(encodedMessage)
 
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(decodedMessage).To(Equal(messageContent))
 			})
 
 			It("should decode message from UMH instance to user", func() {
 				decodedMessage, err := new.DecodeMessageFromUMHInstanceToUser(encodedMessage)
 
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(decodedMessage).To(Equal(messageContent))
 			})
 
 			It("should decode an compressed message from UMH Instance to User", func() {
 				encodedMessage, err := new.EncodeMessageFromUMHInstanceToUser(messageContent)
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 
 				decodedMessage, err := new.DecodeMessageFromUMHInstanceToUser(encodedMessage)
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(decodedMessage).To(Equal(messageContent))
 			})
 		})
@@ -144,29 +145,29 @@ var _ = Describe("Encode", func() {
 				}
 				var err error
 				encodedMessage, err = corev1.EncodeMessageFromUserToUMHInstance(messageContent)
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should decode message from user to UMH instance", func() {
 				decodedMessage, err := corev1.DecodeMessageFromUserToUMHInstance(encodedMessage)
 
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(decodedMessage).To(Equal(messageContent))
 			})
 
 			It("should decode message from UMH instance to user", func() {
 				decodedMessage, err := corev1.DecodeMessageFromUMHInstanceToUser(encodedMessage)
 
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(decodedMessage).To(Equal(messageContent))
 			})
 
 			It("should decode an compressed message from UMH Instance to User", func() {
 				encodedMessage, err := corev1.EncodeMessageFromUMHInstanceToUser(messageContent)
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 
 				decodedMessage, err := corev1.DecodeMessageFromUMHInstanceToUser(encodedMessage)
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(decodedMessage).To(Equal(messageContent))
 			})
 		})
@@ -184,29 +185,29 @@ var _ = Describe("Encode", func() {
 				}
 				var err error
 				encodedMessage, err = old.EncodeMessageFromUserToUMHInstance(messageContent)
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should decode message from user to UMH instance", func() {
 				decodedMessage, err := old.DecodeMessageFromUserToUMHInstance(encodedMessage)
 
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(decodedMessage).To(Equal(messageContent))
 			})
 
 			It("should decode message from UMH instance to user", func() {
 				decodedMessage, err := old.DecodeMessageFromUMHInstanceToUser(encodedMessage)
 
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(decodedMessage).To(Equal(messageContent))
 			})
 
 			It("should decode an compressed message from UMH Instance to User", func() {
 				encodedMessage, err := old.EncodeMessageFromUMHInstanceToUser(messageContent)
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 
 				decodedMessage, err := old.DecodeMessageFromUMHInstanceToUser(encodedMessage)
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(decodedMessage).To(Equal(messageContent))
 			})
 		})
@@ -216,74 +217,74 @@ var _ = Describe("Encode", func() {
 var _ = Describe("ZSTD", func() {
 	It("compresses and decompresses data (New)", func() {
 		data := models.UMHMessageContent{
-			Payload:     "hello worldhello worldhello world",
+			Payload:     "hello worldhello world",
 			MessageType: models.ActionReply,
 		}
 		xData, err := safejson.Marshal(data)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 
 		compressedData, err := new.Compress(xData)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 
 		// Base64 encode the string to be able to test against frontend
 		encodedData := base64.StdEncoding.EncodeToString([]byte(compressedData))
 		_, err = GinkgoWriter.Write([]byte(encodedData))
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 
 		decompressedData, err := new.Decompress(compressedData)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 
 		var data2 models.UMHMessageContent
 		err = safejson.Unmarshal([]byte(decompressedData), &data2)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 	})
 
 	It("compresses and decompresses data (CoreV1)", func() {
 		data := models.UMHMessageContent{
-			Payload:     "hello worldhello worldhello world",
+			Payload:     "hello worldhello world",
 			MessageType: models.ActionReply,
 		}
 		xData, err := safejson.Marshal(data)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 
 		compressedData, err := corev1.Compress(xData)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 
 		// Base64 encode the string to be able to test against frontend
 		encodedData := base64.StdEncoding.EncodeToString([]byte(compressedData))
 		_, err = GinkgoWriter.Write([]byte(encodedData))
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 
 		decompressedData, err := corev1.Decompress(compressedData)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 
 		var data2 models.UMHMessageContent
 		err = safejson.Unmarshal([]byte(decompressedData), &data2)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 	})
 
 	It("compresses and decompresses data (Old)", func() {
 		data := models.UMHMessageContent{
-			Payload:     "hello worldhello worldhello world",
+			Payload:     "hello worldhello world",
 			MessageType: models.ActionReply,
 		}
 		xData, err := safejson.Marshal(data)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 
 		compressedData, err := old.Compress(string(xData))
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 
 		// Base64 encode the string to be able to test against frontend
 		encodedData := base64.StdEncoding.EncodeToString([]byte(compressedData))
 		_, err = GinkgoWriter.Write([]byte(encodedData))
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 
 		decompressedData, err := old.Decompress(compressedData)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 
 		var data2 models.UMHMessageContent
 		err = safejson.Unmarshal([]byte(decompressedData), &data2)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 	})
 })
 
@@ -465,7 +466,7 @@ var _ = Describe("Performance Comparison", Serial, Label("measurement"), func() 
 
 		// Add warmup phase
 		By("Warming up encoders and decoders")
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			// Warm up with both small and large messages
 			_, _ = new.EncodeMessageFromUMHInstanceToUser(smallMessage)
 			_, _ = new.EncodeMessageFromUMHInstanceToUser(largeMessage)
@@ -524,7 +525,7 @@ var _ = Describe("Performance Comparison", Serial, Label("measurement"), func() 
 			var m1, m2 runtime.MemStats
 
 			// Additional warmup specific to allocation testing
-			for i := 0; i < 100; i++ {
+			for range 100 {
 				_, _ = new.EncodeMessageFromUMHInstanceToUser(largeMessage)
 				_, _ = old.EncodeMessageFromUMHInstanceToUser(largeMessage)
 			}
@@ -589,7 +590,7 @@ var _ = Describe("Performance Comparison", Serial, Label("measurement"), func() 
 
 			// Add warmup phase specific to decoding
 			By("Warming up decoders")
-			for i := 0; i < 1000; i++ {
+			for range 1000 {
 				_, _ = new.DecodeMessageFromUMHInstanceToUser(encodedSmallMessage)
 				_, _ = new.DecodeMessageFromUMHInstanceToUser(encodedLargeMessage)
 				_, _ = old.DecodeMessageFromUMHInstanceToUser(encodedSmallMessage)
@@ -603,7 +604,7 @@ var _ = Describe("Performance Comparison", Serial, Label("measurement"), func() 
 			experiment.Sample(func(idx int) {
 				runtime.GC() // Ensure clean state before each sample
 				experiment.MeasureDuration("new-small-decode", func() {
-					for i := 0; i < 100; i++ { // Batch decode for more realistic measurement
+					for range 100 { // Batch decode for more realistic measurement
 						_, err := new.DecodeMessageFromUMHInstanceToUser(encodedSmallMessage)
 						Expect(err).NotTo(HaveOccurred())
 					}
@@ -613,7 +614,7 @@ var _ = Describe("Performance Comparison", Serial, Label("measurement"), func() 
 			experiment.Sample(func(idx int) {
 				runtime.GC() // Ensure clean state before each sample
 				experiment.MeasureDuration("old-small-decode", func() {
-					for i := 0; i < 100; i++ {
+					for range 100 {
 						_, err := old.DecodeMessageFromUMHInstanceToUser(encodedSmallMessage)
 						Expect(err).NotTo(HaveOccurred())
 					}
@@ -624,7 +625,7 @@ var _ = Describe("Performance Comparison", Serial, Label("measurement"), func() 
 			experiment.Sample(func(idx int) {
 				runtime.GC() // Ensure clean state before each sample
 				experiment.MeasureDuration("new-large-decode", func() {
-					for i := 0; i < 100; i++ {
+					for range 100 {
 						_, err := new.DecodeMessageFromUMHInstanceToUser(encodedLargeMessage)
 						Expect(err).NotTo(HaveOccurred())
 					}
@@ -634,7 +635,7 @@ var _ = Describe("Performance Comparison", Serial, Label("measurement"), func() 
 			experiment.Sample(func(idx int) {
 				runtime.GC() // Ensure clean state before each sample
 				experiment.MeasureDuration("old-large-decode", func() {
-					for i := 0; i < 100; i++ {
+					for range 100 {
 						_, err := old.DecodeMessageFromUMHInstanceToUser(encodedLargeMessage)
 						Expect(err).NotTo(HaveOccurred())
 					}
@@ -652,11 +653,11 @@ var _ = Describe("Performance Comparison", Serial, Label("measurement"), func() 
 				Expect(float64(medianNew)).To(BeNumerically("<", float64(medianOld)*1.5))
 
 				improvement := float64(medianOld-medianNew) / float64(medianOld) * 100
-				experiment.RecordValue(fmt.Sprintf("%s-decode-improvement-%%", size), improvement)
+				experiment.RecordValue(size+"-decode-improvement-%", improvement)
 
 				// Print detailed statistics for this size
 				By("Performance Statistics:")
-				By(fmt.Sprintf("%s Implementation:", size))
+				By(size + " Implementation:")
 				By("New Implementation:")
 				By(fmt.Sprintf("  Median: %v", medianNew))
 				By(fmt.Sprintf("  Mean: %v", newStats.DurationFor(gmeasure.StatMean)))
@@ -674,7 +675,7 @@ var _ = Describe("Performance Comparison", Serial, Label("measurement"), func() 
 			var m1, m2 runtime.MemStats
 
 			// Additional warmup specific to allocation testing
-			for i := 0; i < 100; i++ {
+			for range 100 {
 				_, _ = new.DecodeMessageFromUMHInstanceToUser(encodedLargeMessage)
 				_, _ = old.DecodeMessageFromUMHInstanceToUser(encodedLargeMessage)
 			}
@@ -757,7 +758,7 @@ var _ = Describe("Batch Processing Performance", Serial, Label("measurement"), f
 		}
 
 		By("Preparing test messages")
-		for i := 0; i < messageCount; i++ {
+		for i := range messageCount {
 			size := sizes[i%len(sizes)] // Cycle through different sizes
 			payload := make([]byte, size)
 			for j := range payload {
@@ -828,7 +829,7 @@ var _ = Describe("Batch Processing Performance", Serial, Label("measurement"), f
 			// Add a more thorough warmup phase
 			By("Warming up decoders")
 			warmupBatchSize := len(encodedMessages) / 10 // Use 10% of messages for warmup
-			for i := 0; i < 3; i++ {                     // Run warmup 3 times
+			for range 3 {                                // Run warmup 3 times
 				for _, encoded := range encodedMessages[:warmupBatchSize] {
 					_, _ = new.DecodeMessageFromUMHInstanceToUser(encoded)
 					_, _ = old.DecodeMessageFromUMHInstanceToUser(encoded)
@@ -880,7 +881,7 @@ var _ = Describe("Batch Processing Performance", Serial, Label("measurement"), f
 			var m1, m2 runtime.MemStats
 
 			// Warm up
-			for i := 0; i < 3; i++ {
+			for range 3 {
 				for _, msg := range messages[:10] { // Use first 10 messages for warmup
 					_, _ = new.EncodeMessageFromUMHInstanceToUser(msg)
 					_, _ = old.EncodeMessageFromUMHInstanceToUser(msg)
@@ -955,19 +956,21 @@ var _ = Describe("Thread Safety", func() {
 		results := make(chan error, numGoroutines*iterationsPerGoroutine)
 
 		wg.Add(numGoroutines)
-		for i := 0; i < numGoroutines; i++ {
+		for range numGoroutines {
 			go func() {
 				defer wg.Done()
-				for j := 0; j < iterationsPerGoroutine; j++ {
+				for range iterationsPerGoroutine {
 					encoded, err := new.EncodeMessageFromUMHInstanceToUser(message)
 					if err != nil {
 						results <- err
+
 						return
 					}
 					// Verify the encoded message can be decoded
 					_, err = new.DecodeMessageFromUMHInstanceToUser(encoded)
 					if err != nil {
 						results <- err
+
 						return
 					}
 				}
@@ -990,19 +993,21 @@ var _ = Describe("Thread Safety", func() {
 		results := make(chan error, numGoroutines*iterationsPerGoroutine)
 
 		wg.Add(numGoroutines)
-		for i := 0; i < numGoroutines; i++ {
+		for range numGoroutines {
 			go func() {
 				defer wg.Done()
-				for j := 0; j < iterationsPerGoroutine; j++ {
+				for range iterationsPerGoroutine {
 					encoded, err := corev1.EncodeMessageFromUMHInstanceToUser(message)
 					if err != nil {
 						results <- err
+
 						return
 					}
 					// Verify the encoded message can be decoded
 					_, err = corev1.DecodeMessageFromUMHInstanceToUser(encoded)
 					if err != nil {
 						results <- err
+
 						return
 					}
 				}
@@ -1025,19 +1030,21 @@ var _ = Describe("Thread Safety", func() {
 		results := make(chan error, numGoroutines*iterationsPerGoroutine)
 
 		wg.Add(numGoroutines)
-		for i := 0; i < numGoroutines; i++ {
+		for range numGoroutines {
 			go func() {
 				defer wg.Done()
-				for j := 0; j < iterationsPerGoroutine; j++ {
+				for range iterationsPerGoroutine {
 					encoded, err := old.EncodeMessageFromUMHInstanceToUser(message)
 					if err != nil {
 						results <- err
+
 						return
 					}
 					// Verify the encoded message can be decoded
 					_, err = old.DecodeMessageFromUMHInstanceToUser(encoded)
 					if err != nil {
 						results <- err
+
 						return
 					}
 				}
@@ -1063,27 +1070,30 @@ var _ = Describe("Thread Safety", func() {
 		largeString := strings.Repeat("test data for compression", 1000)
 
 		wg.Add(numGoroutines)
-		for i := 0; i < numGoroutines; i++ {
+		for range numGoroutines {
 			go func() {
 				defer wg.Done()
-				for j := 0; j < iterationsPerGoroutine; j++ {
+				for range iterationsPerGoroutine {
 					// Test compression
 					compressed, err := new.Compress([]byte(largeString))
 					if err != nil {
-						results <- fmt.Errorf("compression error: %v", err)
+						results <- fmt.Errorf("compression error: %w", err)
+
 						return
 					}
 
 					// Test decompression
 					decompressed, err := new.Decompress(compressed)
 					if err != nil {
-						results <- fmt.Errorf("decompression error: %v", err)
+						results <- fmt.Errorf("decompression error: %w", err)
+
 						return
 					}
 
 					// Verify the result
 					if string(decompressed) != largeString {
-						results <- fmt.Errorf("data mismatch after compression/decompression")
+						results <- errors.New("data mismatch after compression/decompression")
+
 						return
 					}
 				}
@@ -1109,27 +1119,30 @@ var _ = Describe("Thread Safety", func() {
 		largeString := strings.Repeat("test data for compression", 1000)
 
 		wg.Add(numGoroutines)
-		for i := 0; i < numGoroutines; i++ {
+		for range numGoroutines {
 			go func() {
 				defer wg.Done()
-				for j := 0; j < iterationsPerGoroutine; j++ {
+				for range iterationsPerGoroutine {
 					// Test compression
 					compressed, err := corev1.Compress([]byte(largeString))
 					if err != nil {
-						results <- fmt.Errorf("compression error: %v", err)
+						results <- fmt.Errorf("compression error: %w", err)
+
 						return
 					}
 
 					// Test decompression
 					decompressed, err := corev1.Decompress(compressed)
 					if err != nil {
-						results <- fmt.Errorf("decompression error: %v", err)
+						results <- fmt.Errorf("decompression error: %w", err)
+
 						return
 					}
 
 					// Verify the result
 					if string(decompressed) != largeString {
-						results <- fmt.Errorf("data mismatch after compression/decompression")
+						results <- errors.New("data mismatch after compression/decompression")
+
 						return
 					}
 				}
@@ -1155,27 +1168,30 @@ var _ = Describe("Thread Safety", func() {
 		largeString := strings.Repeat("test data for compression", 1000)
 
 		wg.Add(numGoroutines)
-		for i := 0; i < numGoroutines; i++ {
+		for range numGoroutines {
 			go func() {
 				defer wg.Done()
-				for j := 0; j < iterationsPerGoroutine; j++ {
+				for range iterationsPerGoroutine {
 					// Test compression
 					compressed, err := old.Compress(largeString)
 					if err != nil {
-						results <- fmt.Errorf("compression error: %v", err)
+						results <- fmt.Errorf("compression error: %w", err)
+
 						return
 					}
 
 					// Test decompression
 					decompressed, err := old.Decompress(compressed)
 					if err != nil {
-						results <- fmt.Errorf("decompression error: %v", err)
+						results <- fmt.Errorf("decompression error: %w", err)
+
 						return
 					}
 
 					// Verify the result
 					if decompressed != largeString {
-						results <- fmt.Errorf("data mismatch after compression/decompression")
+						results <- errors.New("data mismatch after compression/decompression")
+
 						return
 					}
 				}
@@ -1206,10 +1222,10 @@ var _ = Describe("Thread Safety", func() {
 		}
 
 		wg.Add(numGoroutines)
-		for i := 0; i < numGoroutines; i++ {
+		for i := range numGoroutines {
 			go func(routineNum int) {
 				defer wg.Done()
-				for j := 0; j < iterationsPerGoroutine; j++ {
+				for j := range iterationsPerGoroutine {
 					// Use different message sizes to exercise different paths
 					size := messageSizes[j%len(messageSizes)]
 					msg := models.UMHMessageContent{
@@ -1220,20 +1236,23 @@ var _ = Describe("Thread Safety", func() {
 					// Encode
 					encoded, err := new.EncodeMessageFromUMHInstanceToUser(msg)
 					if err != nil {
-						results <- fmt.Errorf("encoding error: %v", err)
+						results <- fmt.Errorf("encoding error: %w", err)
+
 						return
 					}
 
 					// Decode
 					decoded, err := new.DecodeMessageFromUMHInstanceToUser(encoded)
 					if err != nil {
-						results <- fmt.Errorf("decoding error: %v", err)
+						results <- fmt.Errorf("decoding error: %w", err)
+
 						return
 					}
 
 					// Verify
 					if decoded.Payload != msg.Payload {
 						results <- fmt.Errorf("data mismatch in routine %d, iteration %d", routineNum, j)
+
 						return
 					}
 				}
@@ -1264,10 +1283,10 @@ var _ = Describe("Thread Safety", func() {
 		}
 
 		wg.Add(numGoroutines)
-		for i := 0; i < numGoroutines; i++ {
+		for i := range numGoroutines {
 			go func(routineNum int) {
 				defer wg.Done()
-				for j := 0; j < iterationsPerGoroutine; j++ {
+				for j := range iterationsPerGoroutine {
 					// Use different message sizes to exercise different paths
 					size := messageSizes[j%len(messageSizes)]
 					msg := models.UMHMessageContent{
@@ -1278,20 +1297,23 @@ var _ = Describe("Thread Safety", func() {
 					// Encode
 					encoded, err := corev1.EncodeMessageFromUMHInstanceToUser(msg)
 					if err != nil {
-						results <- fmt.Errorf("encoding error: %v", err)
+						results <- fmt.Errorf("encoding error: %w", err)
+
 						return
 					}
 
 					// Decode
 					decoded, err := corev1.DecodeMessageFromUMHInstanceToUser(encoded)
 					if err != nil {
-						results <- fmt.Errorf("decoding error: %v", err)
+						results <- fmt.Errorf("decoding error: %w", err)
+
 						return
 					}
 
 					// Verify
 					if decoded.Payload != msg.Payload {
 						results <- fmt.Errorf("data mismatch in routine %d, iteration %d", routineNum, j)
+
 						return
 					}
 				}
@@ -1322,10 +1344,10 @@ var _ = Describe("Thread Safety", func() {
 		}
 
 		wg.Add(numGoroutines)
-		for i := 0; i < numGoroutines; i++ {
+		for i := range numGoroutines {
 			go func(routineNum int) {
 				defer wg.Done()
-				for j := 0; j < iterationsPerGoroutine; j++ {
+				for j := range iterationsPerGoroutine {
 					// Use different message sizes to exercise different paths
 					size := messageSizes[j%len(messageSizes)]
 					msg := models.UMHMessageContent{
@@ -1336,20 +1358,23 @@ var _ = Describe("Thread Safety", func() {
 					// Encode
 					encoded, err := old.EncodeMessageFromUMHInstanceToUser(msg)
 					if err != nil {
-						results <- fmt.Errorf("encoding error: %v", err)
+						results <- fmt.Errorf("encoding error: %w", err)
+
 						return
 					}
 
 					// Decode
 					decoded, err := old.DecodeMessageFromUMHInstanceToUser(encoded)
 					if err != nil {
-						results <- fmt.Errorf("decoding error: %v", err)
+						results <- fmt.Errorf("decoding error: %w", err)
+
 						return
 					}
 
 					// Verify
 					if decoded.Payload != msg.Payload {
 						results <- fmt.Errorf("data mismatch in routine %d, iteration %d", routineNum, j)
+
 						return
 					}
 				}
@@ -1391,7 +1416,7 @@ var _ = Describe("PPROF tests", func() {
 		defer pprof.StopCPUProfile()
 		data := []byte(strings.Repeat("test data for compression", 1000))
 
-		for i := 0; i < iterations; i++ {
+		for range iterations {
 			result, err := new.Compress(data)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
@@ -1414,7 +1439,7 @@ var _ = Describe("PPROF tests", func() {
 		defer pprof.StopCPUProfile()
 		data := []byte(strings.Repeat("test data for compression", 1000))
 
-		for i := 0; i < iterations; i++ {
+		for range iterations {
 			result, err := corev1.Compress(data)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
@@ -1437,7 +1462,7 @@ var _ = Describe("PPROF tests", func() {
 		defer pprof.StopCPUProfile()
 		data := strings.Repeat("test data for compression", 1000)
 
-		for i := 0; i < iterations; i++ {
+		for range iterations {
 			result, err := old.Compress(data)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
@@ -1463,7 +1488,7 @@ var _ = Describe("PPROF tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 		defer pprof.StopCPUProfile()
 
-		for i := 0; i < iterations; i++ {
+		for range iterations {
 			result, err := new.Decompress(data)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
@@ -1489,7 +1514,7 @@ var _ = Describe("PPROF tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 		defer pprof.StopCPUProfile()
 
-		for i := 0; i < iterations; i++ {
+		for range iterations {
 			result, err := corev1.Decompress(data)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
@@ -1515,7 +1540,7 @@ var _ = Describe("PPROF tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 		defer pprof.StopCPUProfile()
 
-		for i := 0; i < iterations; i++ {
+		for range iterations {
 			result, err := old.Decompress(data)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())

@@ -92,20 +92,23 @@ func (a *AddDataModelAction) Parse(payload interface{}) error {
 	// Parse the payload to get the data model configuration
 	parsedPayload, err := ParseActionPayload[models.AddDataModelPayload](payload)
 	if err != nil {
-		return fmt.Errorf("failed to parse payload: %v", err)
+		return fmt.Errorf("failed to parse payload: %w", err)
 	}
 
 	a.payload = parsedPayload
+
 	decodedStructure, err := base64.StdEncoding.DecodeString(a.payload.EncodedStructure)
 	if err != nil {
-		return fmt.Errorf("failed to decode data model version: %v", err)
+		return fmt.Errorf("failed to decode data model version: %w", err)
 	}
 
 	var structure map[string]models.Field
+
 	err = yaml.Unmarshal(decodedStructure, &structure)
 	if err != nil {
-		return fmt.Errorf("failed to unmarshal data model version: %v", err)
+		return fmt.Errorf("failed to unmarshal data model version: %w", err)
 	}
+
 	a.payload.Structure = structure
 
 	a.actionLogger.Debugf("Parsed AddDataModel action payload: name=%s, description=%s",
@@ -138,7 +141,7 @@ func (a *AddDataModelAction) Validate() error {
 	// Get all existing data models and payload shapes for validation
 	currentConfig, err := a.configManager.GetConfig(a.ctx, 0)
 	if err != nil {
-		return fmt.Errorf("failed to get current config for validation: %v", err)
+		return fmt.Errorf("failed to get current config for validation: %w", err)
 	}
 
 	// Convert existing data models to the format expected by the validator
@@ -149,7 +152,7 @@ func (a *AddDataModelAction) Validate() error {
 
 	// Validate with references and payload shapes (handles cases with no references gracefully)
 	if err := validator.ValidateWithReferences(a.ctx, dmVersion, allDataModels, currentConfig.PayloadShapes); err != nil {
-		return fmt.Errorf("data model validation failed: %v", err)
+		return fmt.Errorf("data model validation failed: %w", err)
 	}
 
 	return nil
@@ -177,6 +180,7 @@ func (a *AddDataModelAction) Execute() (interface{}, map[string]interface{}, err
 		errorMsg := fmt.Sprintf("Final validation failed before adding data model: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.AddDataModel)
+
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
@@ -189,6 +193,7 @@ func (a *AddDataModelAction) Execute() (interface{}, map[string]interface{}, err
 		errorMsg := fmt.Sprintf("Failed to add data model: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.AddDataModel)
+
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
@@ -230,6 +235,7 @@ func (a *AddDataModelAction) Execute() (interface{}, map[string]interface{}, err
 				if dataContractErr != nil {
 					return "failed"
 				}
+
 				return "created"
 			}(),
 		},
@@ -238,7 +244,7 @@ func (a *AddDataModelAction) Execute() (interface{}, map[string]interface{}, err
 	return response, nil, nil
 }
 
-// convertModelsFieldsToConfigFields converts models.Field map to config.Field map
+// convertModelsFieldsToConfigFields converts models.Field map to config.Field map.
 func (a *AddDataModelAction) convertModelsFieldsToConfigFields(modelsFields map[string]models.Field) map[string]config.Field {
 	if modelsFields == nil {
 		return nil

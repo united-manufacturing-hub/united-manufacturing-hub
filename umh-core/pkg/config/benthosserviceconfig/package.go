@@ -22,7 +22,7 @@ var (
 	defaultComparator = NewComparator()
 )
 
-// BenthosServiceConfig represents the configuration for a Benthos service
+// BenthosServiceConfig represents the configuration for a Benthos service.
 type BenthosServiceConfig struct {
 	// Benthos-specific configuration
 	Input    map[string]interface{} `yaml:"input"`
@@ -39,7 +39,7 @@ type BenthosServiceConfig struct {
 }
 
 // DefaultTopicBrowserBenthosServiceConfig is the default Benthos service config for the topic browser
-// It is considered immutable and MUST NOT be modified at runtime. (However Go does not support const for complex types)
+// It is considered immutable and MUST NOT be modified at runtime. (However Go does not support const for complex types).
 var DefaultTopicBrowserBenthosServiceConfig = BenthosServiceConfig{
 	Input: map[string]any{
 		"uns": map[string]any{
@@ -63,12 +63,12 @@ var DefaultTopicBrowserBenthosServiceConfig = BenthosServiceConfig{
 	LogLevel: constants.DefaultBenthosLogLevel,
 }
 
-// Equal checks if two BenthosServiceConfigs are equal
+// Equal checks if two BenthosServiceConfigs are equal.
 func (c BenthosServiceConfig) Equal(other BenthosServiceConfig) bool {
 	return NewComparator().ConfigsEqual(c, other)
 }
 
-// RenderBenthosYAML is a package-level function for easy YAML generation
+// RenderBenthosYAML is a package-level function for easy YAML generation.
 func RenderBenthosYAML(input, output, pipeline, cacheResources, rateLimitResources, buffer interface{}, metricsPort uint16, logLevel string) (string, error) {
 	// Create a config object from the individual components
 	cfg := BenthosServiceConfig{
@@ -132,17 +132,17 @@ func RenderBenthosYAML(input, output, pipeline, cacheResources, rateLimitResourc
 	return defaultGenerator.RenderConfig(cfg)
 }
 
-// NormalizeBenthosConfig is a package-level function for easy config normalization
+// NormalizeBenthosConfig is a package-level function for easy config normalization.
 func NormalizeBenthosConfig(cfg BenthosServiceConfig) BenthosServiceConfig {
 	return defaultNormalizer.NormalizeConfig(cfg)
 }
 
-// ConfigsEqual is a package-level function for easy config comparison
+// ConfigsEqual is a package-level function for easy config comparison.
 func ConfigsEqual(desired, observed BenthosServiceConfig) bool {
 	return defaultComparator.ConfigsEqual(desired, observed)
 }
 
-// ConfigDiff is a package-level function for easy config diff generation
+// ConfigDiff is a package-level function for easy config diff generation.
 func ConfigDiff(desired, observed BenthosServiceConfig) string {
 	return defaultComparator.ConfigDiff(desired, observed)
 }

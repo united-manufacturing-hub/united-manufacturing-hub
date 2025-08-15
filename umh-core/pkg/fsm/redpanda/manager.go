@@ -16,6 +16,7 @@ package redpanda
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -36,7 +37,7 @@ type RedpandaManager struct {
 	*public_fsm.BaseFSMManager[config.RedpandaConfig]
 }
 
-// RedpandaManagerSnapshot extends the base ManagerSnapshot with Redpanda-specific information
+// RedpandaManagerSnapshot extends the base ManagerSnapshot with Redpanda-specific information.
 type RedpandaManagerSnapshot struct {
 	// Embed the BaseManagerSnapshot to inherit its methods
 	*public_fsm.BaseManagerSnapshot
@@ -59,8 +60,9 @@ func NewRedpandaManager(name string) *RedpandaManager {
 		// Get name from Redpanda config
 		func(cfg config.RedpandaConfig) (string, error) {
 			if cfg.Name == "" {
-				return "", fmt.Errorf("redpanda config name cannot be empty")
+				return "", errors.New("redpanda config name cannot be empty")
 			}
+
 			return cfg.Name, nil
 		},
 		// Get desired state from Redpanda config
@@ -75,16 +77,18 @@ func NewRedpandaManager(name string) *RedpandaManager {
 		func(instance public_fsm.FSMInstance, cfg config.RedpandaConfig) (bool, error) {
 			RedpandaInstance, ok := instance.(*RedpandaInstance)
 			if !ok {
-				return false, fmt.Errorf("instance is not a RedpandaInstance")
+				return false, errors.New("instance is not a RedpandaInstance")
 			}
+
 			return RedpandaInstance.config.Equal(cfg.RedpandaServiceConfig), nil
 		},
 		// Set Redpanda config
 		func(instance public_fsm.FSMInstance, cfg config.RedpandaConfig) error {
 			RedpandaInstance, ok := instance.(*RedpandaInstance)
 			if !ok {
-				return fmt.Errorf("instance is not a RedpandaInstance")
+				return errors.New("instance is not a RedpandaInstance")
 			}
+
 			RedpandaInstance.config = cfg.RedpandaServiceConfig
 
 			return nil
@@ -93,8 +97,9 @@ func NewRedpandaManager(name string) *RedpandaManager {
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
 			redpandaInstance, ok := instance.(*RedpandaInstance)
 			if !ok {
-				return 0, fmt.Errorf("instance is not a RedpandaInstance")
+				return 0, errors.New("instance is not a RedpandaInstance")
 			}
+
 			return redpandaInstance.GetMinimumRequiredTime(), nil
 		},
 	)
@@ -108,6 +113,7 @@ func NewRedpandaManager(name string) *RedpandaManager {
 
 func (m *RedpandaManager) Reconcile(ctx context.Context, snapshot public_fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool) {
 	start := time.Now()
+
 	defer func() {
 		duration := time.Since(start)
 		metrics.ObserveReconcileTime(logger.ComponentRedpandaManager, m.GetManagerName(), duration)
@@ -126,6 +132,7 @@ func (m *RedpandaManager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	if !ok {
 		logger.For(logger.ComponentRedpandaManager).Errorf(
 			"Failed to convert base snapshot to BaseManagerSnapshot, using generic snapshot")
+
 		return baseSnapshot
 	}
 

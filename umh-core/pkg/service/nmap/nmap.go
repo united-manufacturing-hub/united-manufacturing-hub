@@ -38,7 +38,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// NmapService is the implementation of the INmapService interface
+// NmapService is the implementation of the INmapService interface.
 type NmapService struct {
 	s6Service        s6service.Service
 	logger           *zap.SugaredLogger
@@ -47,17 +47,17 @@ type NmapService struct {
 	s6ServiceConfigs []config.S6FSMConfig
 }
 
-// NmapServiceOption is a function that modifies a NmapService
+// NmapServiceOption is a function that modifies a NmapService.
 type NmapServiceOption func(*NmapService)
 
-// WithS6Service sets a custom S6 service for the NmapService
+// WithS6Service sets a custom S6 service for the NmapService.
 func WithS6Service(s6Service s6service.Service) NmapServiceOption {
 	return func(s *NmapService) {
 		s.s6Service = s6Service
 	}
 }
 
-// NewDefaultNmapService creates a new default Nmap service manager
+// NewDefaultNmapService creates a new default Nmap service manager.
 func NewDefaultNmapService(nmapName string, opts ...NmapServiceOption) *NmapService {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentNmapService, nmapName)
 	service := &NmapService{
@@ -75,10 +75,10 @@ func NewDefaultNmapService(nmapName string, opts ...NmapServiceOption) *NmapServ
 	return service
 }
 
-// generateNmapScript generates a shell script to run nmap periodically
+// generateNmapScript generates a shell script to run nmap periodically.
 func (s *NmapService) generateNmapScript(config *nmapserviceconfig.NmapServiceConfig) (string, error) {
 	if config == nil {
-		return "", fmt.Errorf("config is nil")
+		return "", errors.New("config is nil")
 	}
 
 	// Build the nmap command - fixed format with -n -Pn -p PORT TARGET -v
@@ -106,12 +106,12 @@ done
 	return scriptContent, nil
 }
 
-// getS6ServiceName converts a nmapName (e.g. "myscan") to its S6 service name (e.g. "nmap-myscan")
+// getS6ServiceName converts a nmapName (e.g. "myscan") to its S6 service name (e.g. "nmap-myscan").
 func (s *NmapService) getS6ServiceName(nmapName string) string {
-	return fmt.Sprintf("nmap-%s", nmapName)
+	return "nmap-" + nmapName
 }
 
-// GenerateS6ConfigForNmap creates a S6 config for a given nmap instance
+// GenerateS6ConfigForNmap creates a S6 config for a given nmap instance.
 func (s *NmapService) GenerateS6ConfigForNmap(nmapConfig *nmapserviceconfig.NmapServiceConfig, s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error) {
 	scriptContent, err := s.generateNmapScript(nmapConfig)
 	if err != nil {
@@ -132,7 +132,7 @@ func (s *NmapService) GenerateS6ConfigForNmap(nmapConfig *nmapserviceconfig.Nmap
 	return s6Config, nil
 }
 
-// GetConfig returns the actual nmap config from the S6 service
+// GetConfig returns the actual nmap config from the S6 service.
 func (s *NmapService) GetConfig(ctx context.Context, filesystemService filesystem.Service, nmapName string) (nmapserviceconfig.NmapServiceConfig, error) {
 	if ctx.Err() != nil {
 		return nmapserviceconfig.NmapServiceConfig{}, ctx.Err()
@@ -168,15 +168,17 @@ func (s *NmapService) GetConfig(ctx context.Context, filesystemService filesyste
 	return result, nil
 }
 
-// parseScanLogs parses the logs of an nmap service and extracts scan results
+// parseScanLogs parses the logs of an nmap service and extracts scan results.
 func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port uint16) *NmapScanResult {
 	if len(logs) == 0 {
 		return nil
 	}
 
 	// We'll reconstruct scan blocks from the logs
-	var currentScan []string
-	var scanBlocks [][]string
+	var (
+		currentScan []string
+		scanBlocks  [][]string
+	)
 
 	inScanBlock := false
 
@@ -243,6 +245,7 @@ func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port uint16) *Nma
 
 	// Extract latency (sample line: "Host is up (0.016s latency).")
 	latencyRegex := regexp.MustCompile(`Host is up \(([0-9.]+)s latency\).`)
+
 	matches := latencyRegex.FindStringSubmatch(scanOutput)
 	if len(matches) >= 2 {
 		latency, err := strconv.ParseFloat(matches[1], 64)
@@ -253,7 +256,7 @@ func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port uint16) *Nma
 		}
 	}
 
-	// Extract errors if occured (case-insensitive)
+	// Extract errors if occurred (case-insensitive)
 	errorRegex := regexp.MustCompile(`(?im)^.*error.*$`)
 	if matches := errorRegex.FindString(scanOutput); matches != "" {
 		result.Error = matches
@@ -262,7 +265,7 @@ func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port uint16) *Nma
 	return result
 }
 
-// Status checks the status of a nmap service
+// Status checks the status of a nmap service.
 func (s *NmapService) Status(ctx context.Context, filesystemService filesystem.Service, nmapName string, tick uint64) (ServiceInfo, error) {
 	if ctx.Err() != nil {
 		return ServiceInfo{}, ctx.Err()
@@ -282,6 +285,7 @@ func (s *NmapService) Status(ctx context.Context, filesystemService filesystem.S
 			strings.Contains(err.Error(), "not found") {
 			return ServiceInfo{}, ErrServiceNotExist
 		}
+
 		return ServiceInfo{}, fmt.Errorf("failed to get last observed state: %w", err)
 	}
 
@@ -297,13 +301,14 @@ func (s *NmapService) Status(ctx context.Context, filesystemService filesystem.S
 			strings.Contains(err.Error(), "not found") {
 			return ServiceInfo{}, ErrServiceNotExist
 		}
+
 		return ServiceInfo{}, fmt.Errorf("failed to get current FSM state: %w", err)
 	}
 
 	// Now only proceed if the s6 service underneath it is running
 	// otherwise the following code doesn't make sense and will just throw errors
 	// and if it throws errors (that is not ErrServiceNotExist), it will stop the reconilation from happening
-	// might prevent teh service from ever moving from starting to running
+	// might prevent the service from ever moving from starting to running
 	if fsmState != s6fsm.OperationalStateRunning {
 		return ServiceInfo{
 			S6ObservedState: s6State,
@@ -316,6 +321,7 @@ func (s *NmapService) Status(ctx context.Context, filesystemService filesystem.S
 
 	// Get logs
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
+
 	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, filesystemService)
 	if err != nil {
 		if errors.Is(err, s6service.ErrServiceNotExist) {
@@ -323,6 +329,7 @@ func (s *NmapService) Status(ctx context.Context, filesystemService filesystem.S
 		} else if errors.Is(err, s6service.ErrLogFileNotFound) {
 			return ServiceInfo{}, ErrServiceNotExist
 		}
+
 		return ServiceInfo{}, fmt.Errorf("failed to get logs: %w", err)
 	}
 
@@ -356,7 +363,7 @@ func (s *NmapService) Status(ctx context.Context, filesystemService filesystem.S
 	}, nil
 }
 
-// AddNmapToS6Manager adds a nmap instance to the S6 manager
+// AddNmapToS6Manager adds a nmap instance to the S6 manager.
 func (s *NmapService) AddNmapToS6Manager(ctx context.Context, cfg *nmapserviceconfig.NmapServiceConfig, nmapName string) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
@@ -396,7 +403,7 @@ func (s *NmapService) AddNmapToS6Manager(ctx context.Context, cfg *nmapserviceco
 	return nil
 }
 
-// UpdateNmapInS6Manager updates an existing nmap instance in the S6 manager
+// UpdateNmapInS6Manager updates an existing nmap instance in the S6 manager.
 func (s *NmapService) UpdateNmapInS6Manager(ctx context.Context, cfg *nmapserviceconfig.NmapServiceConfig, nmapName string) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
@@ -411,10 +418,12 @@ func (s *NmapService) UpdateNmapInS6Manager(ctx context.Context, cfg *nmapservic
 	// Check if the service exists
 	found := false
 	index := -1
+
 	for i, s6Config := range s.s6ServiceConfigs {
 		if s6Config.Name == s6ServiceName {
 			found = true
 			index = i
+
 			break
 		}
 	}
@@ -442,7 +451,7 @@ func (s *NmapService) UpdateNmapInS6Manager(ctx context.Context, cfg *nmapservic
 	return nil
 }
 
-// RemoveNmapFromS6Manager removes a nmap instance from the S6 manager
+// RemoveNmapFromS6Manager removes a nmap instance from the S6 manager.
 func (s *NmapService) RemoveNmapFromS6Manager(ctx context.Context, nmapName string) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
@@ -465,6 +474,7 @@ func (s *NmapService) RemoveNmapFromS6Manager(ctx context.Context, nmapName stri
 				return append(arr[:i], arr[i+1:]...)
 			}
 		}
+
 		return arr
 	}
 
@@ -483,7 +493,7 @@ func (s *NmapService) RemoveNmapFromS6Manager(ctx context.Context, nmapName stri
 	return nil
 }
 
-// StartNmap starts a nmap instance
+// StartNmap starts a nmap instance.
 func (s *NmapService) StartNmap(ctx context.Context, nmapName string) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
@@ -502,6 +512,7 @@ func (s *NmapService) StartNmap(ctx context.Context, nmapName string) error {
 		if s6Config.Name == s6ServiceName {
 			s.s6ServiceConfigs[i].DesiredFSMState = s6fsm.OperationalStateRunning
 			found = true
+
 			break
 		}
 	}
@@ -513,7 +524,7 @@ func (s *NmapService) StartNmap(ctx context.Context, nmapName string) error {
 	return nil
 }
 
-// StopNmap stops a nmap instance
+// StopNmap stops a nmap instance.
 func (s *NmapService) StopNmap(ctx context.Context, nmapName string) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
@@ -532,6 +543,7 @@ func (s *NmapService) StopNmap(ctx context.Context, nmapName string) error {
 		if s6Config.Name == s6ServiceName {
 			s.s6ServiceConfigs[i].DesiredFSMState = s6fsm.OperationalStateStopped
 			found = true
+
 			break
 		}
 	}
@@ -543,7 +555,7 @@ func (s *NmapService) StopNmap(ctx context.Context, nmapName string) error {
 	return nil
 }
 
-// ReconcileManager reconciles the Nmap manager
+// ReconcileManager reconciles the Nmap manager.
 func (s *NmapService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (err error, reconciled bool) {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized"), false
@@ -562,7 +574,7 @@ func (s *NmapService) ReconcileManager(ctx context.Context, services serviceregi
 	return s.s6Manager.Reconcile(ctx, snapshot, services)
 }
 
-// ServiceExists checks if a nmap service exists
+// ServiceExists checks if a nmap service exists.
 func (s *NmapService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, nmapName string) bool {
 	s6ServiceName := s.getS6ServiceName(nmapName)
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
@@ -578,7 +590,7 @@ func (s *NmapService) ServiceExists(ctx context.Context, filesystemService files
 // ForceRemoveNmap removes a Nmap instance from the S6 manager
 // This should only be called if the Nmap instance is in a permanent failure state
 // and the instance itself cannot be stopped or removed
-// Expects nmapName (e.g. "myservice") as defined in the UMH config
+// Expects nmapName (e.g. "myservice") as defined in the UMH config.
 func (s *NmapService) ForceRemoveNmap(
 	ctx context.Context,
 	filesystemService filesystem.Service,
@@ -586,5 +598,6 @@ func (s *NmapService) ForceRemoveNmap(
 ) error {
 	s6ServiceName := s.getS6ServiceName(nmapName)
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
+
 	return s.s6Service.ForceRemove(ctx, s6ServicePath, filesystemService)
 }

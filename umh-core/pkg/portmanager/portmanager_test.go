@@ -104,7 +104,7 @@ var _ = Describe("PortManager", func() {
 				}
 
 				// Verify we got 3 different ports
-				Expect(len(ports)).To(Equal(3))
+				Expect(ports).To(HaveLen(3))
 			})
 
 			It("handles port release and reallocation", func() {
@@ -225,6 +225,7 @@ var _ = Describe("PortManager", func() {
 			if err != nil {
 				// Port might already be in use by system, skip this test
 				Skip("Port not available for testing")
+
 				return
 			}
 
@@ -244,6 +245,7 @@ var _ = Describe("PortManager", func() {
 			if err != nil {
 				// Port might already be in use by system, skip this test
 				Skip("Port not available for testing")
+
 				return
 			}
 
@@ -264,6 +266,7 @@ var _ = Describe("PortManager", func() {
 			if err != nil {
 				// Port might already be in use by system, skip this test
 				Skip("Port not available for testing")
+
 				return
 			}
 
@@ -294,7 +297,7 @@ var _ = Describe("PortManager", func() {
 			errors := make([]error, numGoroutines)
 			ports := make([]uint16, numGoroutines)
 
-			for i := 0; i < numGoroutines; i++ {
+			for i := range numGoroutines {
 				go func(id int) {
 					defer wg.Done()
 					instance := fmt.Sprintf("instance-%d", id)
@@ -339,14 +342,14 @@ var _ = Describe("PortManager", func() {
 
 			// Pre-allocate some instances for releasing
 			instances := make([]string, numGoroutines)
-			for i := 0; i < numGoroutines; i++ {
+			for i := range numGoroutines {
 				instances[i] = fmt.Sprintf("instance-%d", i)
 				_, err := pm.AllocatePort(context.Background(), instances[i])
 				Expect(err).NotTo(HaveOccurred())
 			}
 
 			// Concurrent allocations
-			for i := 0; i < numGoroutines; i++ {
+			for i := range numGoroutines {
 				go func(id int) {
 					defer GinkgoRecover()
 					defer wg.Done()
@@ -357,7 +360,7 @@ var _ = Describe("PortManager", func() {
 			}
 
 			// Concurrent reservations
-			for i := 0; i < numGoroutines; i++ {
+			for i := range numGoroutines {
 				go func(id int) {
 					defer GinkgoRecover()
 					defer wg.Done()
@@ -376,7 +379,7 @@ var _ = Describe("PortManager", func() {
 			}
 
 			// Concurrent releases
-			for i := 0; i < numGoroutines; i++ {
+			for i := range numGoroutines {
 				go func(id int) {
 					defer wg.Done()
 					err := pm.ReleasePort(instances[id]) // Release pre-allocated instances

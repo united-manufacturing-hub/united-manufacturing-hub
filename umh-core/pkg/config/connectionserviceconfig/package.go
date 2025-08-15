@@ -15,6 +15,7 @@
 package connectionserviceconfig
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -110,7 +111,7 @@ func ConfigDiff(desired, observed ConnectionServiceConfigRuntime) string {
 }
 
 // ConvertRuntimeToTemplate converts a runtime configuration to a template configuration
-// This is a helper function, so that when we comapre configs, we can simply use the template comparison and don't need
+// This is a helper function, so that when we compare configs, we can simply use the template comparison and don't need
 // to create runtime normalizer, comparator, etc.
 func ConvertRuntimeToTemplate(cfg ConnectionServiceConfigRuntime) ConnectionServiceConfigTemplate {
 	return ConnectionServiceConfigTemplate{
@@ -142,7 +143,7 @@ func ConvertRuntimeToTemplate(cfg ConnectionServiceConfigRuntime) ConnectionServ
 func ConvertTemplateToRuntime(cfg ConnectionServiceConfigTemplate) (ConnectionServiceConfigRuntime, error) {
 	// Handle nil NmapTemplate (e.g., from empty/uninitialized configs)
 	if cfg.NmapTemplate == nil {
-		return ConnectionServiceConfigRuntime{}, fmt.Errorf("connection template is nil or empty")
+		return ConnectionServiceConfigRuntime{}, errors.New("connection template is nil or empty")
 	}
 
 	// Parse string port to uint16 for runtime type safety

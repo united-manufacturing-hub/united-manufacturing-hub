@@ -23,21 +23,21 @@ import (
 )
 
 const (
-	// ComponentContainerMonitor is the component label for container monitoring metrics
+	// ComponentContainerMonitor is the component label for container monitoring metrics.
 	ComponentContainerMonitor = "container_monitor"
 
-	// DefaultInstanceName is the instance name used for the single core container
+	// DefaultInstanceName is the instance name used for the single core container.
 	DefaultInstanceName = "Core"
 )
 
 var (
 	metricsOnce sync.Once
 
-	// Standard namespace and subsystem for all metrics
+	// Standard namespace and subsystem for all metrics.
 	namespace = "umh"
 	subsystem = "container"
 
-	// CPU metrics
+	// CPU metrics.
 	containerCPUUsageMCores = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespace,
 		Subsystem: subsystem,
@@ -59,7 +59,7 @@ var (
 		Help:      "Current CPU load as percentage (0-100)",
 	}, []string{"instance"})
 
-	// Memory metrics
+	// Memory metrics.
 	containerMemoryUsedBytes = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespace,
 		Subsystem: subsystem,
@@ -81,7 +81,7 @@ var (
 		Help:      "Memory usage as percentage of total (0-100)",
 	}, []string{"instance"})
 
-	// Disk metrics
+	// Disk metrics.
 	containerDiskUsedBytes = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespace,
 		Subsystem: subsystem,
@@ -103,7 +103,7 @@ var (
 		Help:      "Disk usage as percentage of total (0-100)",
 	}, []string{"instance"})
 
-	// Health status metrics
+	// Health status metrics.
 	containerHealthStatus = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespace,
 		Subsystem: subsystem,
@@ -112,7 +112,7 @@ var (
 	}, []string{"instance", "component"})
 )
 
-// RecordContainerStatus updates Prometheus metrics based on the new ContainerStatus type
+// RecordContainerStatus updates Prometheus metrics based on the new ContainerStatus type.
 func RecordContainerStatus(status *ServiceInfo, instanceName string) {
 	if status == nil {
 		return

@@ -16,6 +16,7 @@ package config
 
 import (
 	"context"
+	"errors"
 	"fmt"
 )
 
@@ -24,20 +25,19 @@ import (
 // as we only use it to test runtime of the parsing of the config.
 func GenerateConfig(processors int, fcm *FileConfigManager) (FullConfig, error) {
 	fullConfig, err := fcm.GetConfig(context.Background(), 0)
-
 	if err != nil {
 		return FullConfig{}, err
 	}
 
 	if len(fullConfig.ProtocolConverter) == 0 {
-		return FullConfig{}, fmt.Errorf("no protocol converter found")
+		return FullConfig{}, errors.New("no protocol converter found")
 	}
 
 	pc := fullConfig.ProtocolConverter[0]
 	pipeline := make(map[string]any)
 	pipeline["processors"] = make(map[string]any)
 
-	for i := 0; i < processors; i++ {
+	for i := range processors {
 		pipeline["processors"].(map[string]any)[fmt.Sprintf("processor_%d", i)] = map[string]any{
 			"name": "long_processor",
 			"config": map[string]any{
@@ -45,6 +45,7 @@ func GenerateConfig(processors int, fcm *FileConfigManager) (FullConfig, error) 
 			},
 		}
 	}
+
 	pc.ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline = pipeline
 
 	fullConfig.ProtocolConverter[0] = pc

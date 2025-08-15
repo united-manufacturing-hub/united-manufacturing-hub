@@ -15,6 +15,7 @@
 package agent_monitor
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -24,7 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/agent_monitor"
 )
 
-// NewAgentManagerWithMockedService creates an AgentManager that uses a mock agent_monitor.Service
+// NewAgentManagerWithMockedService creates an AgentManager that uses a mock agent_monitor.Service.
 func NewAgentManagerWithMockedService(name string, mockSvc agent_monitor.MockService) *AgentManager {
 	managerName := fmt.Sprintf("%s_mock_%s", logger.AgentManagerComponentName, name)
 
@@ -49,33 +50,39 @@ func NewAgentManagerWithMockedService(name string, mockSvc agent_monitor.MockSer
 		},
 		func(fc config.AgentMonitorConfig) (public_fsm.FSMInstance, error) {
 			inst := NewAgentInstanceWithService(fc, &mockSvc)
+
 			return inst, nil
 		},
 		func(instance public_fsm.FSMInstance, fc config.AgentMonitorConfig) (bool, error) {
 			ai, ok := instance.(*AgentInstance)
 			if !ok {
-				return false, fmt.Errorf("instance not an AgentInstance")
+				return false, errors.New("instance not an AgentInstance")
 			}
+
 			return ai.config.DesiredFSMState == fc.DesiredFSMState, nil
 		},
 		func(instance public_fsm.FSMInstance, fc config.AgentMonitorConfig) error {
 			ai, ok := instance.(*AgentInstance)
 			if !ok {
-				return fmt.Errorf("instance not an AgentInstance")
+				return errors.New("instance not an AgentInstance")
 			}
+
 			ai.config = fc
+
 			return ai.SetDesiredFSMState(fc.DesiredFSMState)
 		},
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
 			ai, ok := instance.(*AgentInstance)
 			if !ok {
-				return 0, fmt.Errorf("instance not an AgentInstance")
+				return 0, errors.New("instance not an AgentInstance")
 			}
+
 			return ai.GetMinimumRequiredTime(), nil
 		},
 	)
 
 	logger.For(managerName).Info("Created AgentManager with mocked service.")
+
 	return &AgentManager{
 		BaseFSMManager: baseMgr,
 	}

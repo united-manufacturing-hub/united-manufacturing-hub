@@ -21,13 +21,13 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-// Registry holds all services required by the application
+// Registry holds all services required by the application.
 type Registry struct {
 	FileSystem  filesystem.Service
 	PortManager portmanager.PortManager
 }
 
-// Provider interface defines the methods to access different services
+// Provider interface defines the methods to access different services.
 type Provider interface {
 	GetFileSystem() filesystem.Service
 	GetPortManager() portmanager.PortManager
@@ -35,13 +35,13 @@ type Provider interface {
 
 var _ Provider = (*Registry)(nil)
 
-// GetFileSystem returns the filesystem service
+// GetFileSystem returns the filesystem service.
 func (r *Registry) GetFileSystem() filesystem.Service {
 	//nolint:nilaway
 	return r.FileSystem
 }
 
-// GetPortManager returns the port manager service
+// GetPortManager returns the port manager service.
 func (r *Registry) GetPortManager() portmanager.PortManager {
 	//nolint:nilaway
 	return r.PortManager

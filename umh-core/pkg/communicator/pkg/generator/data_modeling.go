@@ -17,7 +17,7 @@ package generator
 import (
 	"context"
 	"crypto/sha256"
-	"fmt"
+	"encoding/hex"
 	"hash"
 	"sort"
 	"strconv"
@@ -27,12 +27,13 @@ import (
 	"go.uber.org/zap"
 )
 
-// DataModelsFromConfig extracts data models from the configuration and converts them to status message format
+// DataModelsFromConfig extracts data models from the configuration and converts them to status message format.
 func DataModelsFromConfig(ctx context.Context, configManager config.ConfigManager, logger *zap.SugaredLogger) ([]models.DataModel, error) {
 	// Get the full config and extract data models from it
 	fullConfig, err := configManager.GetConfig(ctx, 0)
 	if err != nil {
 		logger.Warnf("Failed to get config for data models: %v", err)
+
 		return []models.DataModel{}, err
 	}
 
@@ -42,9 +43,11 @@ func DataModelsFromConfig(ctx context.Context, configManager config.ConfigManage
 	for i, dataModel := range dataModels {
 		// Extract the latest version from the versions map
 		latestVersion := ""
+
 		if len(dataModel.Versions) > 0 {
 			// Find the highest version number
 			highestVersion := 0
+
 			for versionKey := range dataModel.Versions {
 				if len(versionKey) > 1 && versionKey[0] == 'v' {
 					if versionNum := parseVersionNumber(versionKey); versionNum > highestVersion {
@@ -57,6 +60,7 @@ func DataModelsFromConfig(ctx context.Context, configManager config.ConfigManage
 			if latestVersion == "" {
 				for versionKey := range dataModel.Versions {
 					latestVersion = versionKey
+
 					break
 				}
 			}
@@ -76,12 +80,12 @@ func DataModelsFromConfig(ctx context.Context, configManager config.ConfigManage
 	return dataModelData, nil
 }
 
-// DataContractsFromConfig extracts data contracts from the configuration and converts them to status message format
+// DataContractsFromConfig extracts data contracts from the configuration and converts them to status message format.
 func DataContractsFromConfig(ctx context.Context, configManager config.ConfigManager, logger *zap.SugaredLogger) ([]models.DataContract, error) {
-
 	fullConfig, err := configManager.GetConfig(ctx, 0)
 	if err != nil {
 		logger.Warnf("Failed to get config for data contracts: %v", err)
+
 		return []models.DataContract{}, err
 	}
 
@@ -107,16 +111,17 @@ func DataContractsFromConfig(ctx context.Context, configManager config.ConfigMan
 	return dataContractData, nil
 }
 
-// parseVersionNumber parses a version string (e.g., "v1", "v2") to an integer
+// parseVersionNumber parses a version string (e.g., "v1", "v2") to an integer.
 func parseVersionNumber(versionStr string) int {
 	versionNum, err := strconv.Atoi(versionStr[1:])
 	if err != nil {
 		return 0
 	}
+
 	return versionNum
 }
 
-// generateDataModelHash generates a simple hash from the data model structure
+// generateDataModelHash generates a simple hash from the data model structure.
 func generateDataModelHash(dataModel config.DataModelsConfig) string {
 	if len(dataModel.Versions) == 0 {
 		return ""
@@ -131,6 +136,7 @@ func generateDataModelHash(dataModel config.DataModelsConfig) string {
 	for versionKey := range dataModel.Versions {
 		versionKeys = append(versionKeys, versionKey)
 	}
+
 	sort.Strings(versionKeys)
 
 	// Add each version and its content to the hash
@@ -142,10 +148,10 @@ func generateDataModelHash(dataModel config.DataModelsConfig) string {
 		hashStructure(h, version.Structure)
 	}
 
-	return fmt.Sprintf("%x", h.Sum(nil))[:16] // Return first 16 characters
+	return hex.EncodeToString(h.Sum(nil))[:16] // Return first 16 characters
 }
 
-// hashStructure recursively hashes the structure map
+// hashStructure recursively hashes the structure map.
 func hashStructure(h hash.Hash, structure map[string]config.Field) {
 	if len(structure) == 0 {
 		return
@@ -156,6 +162,7 @@ func hashStructure(h hash.Hash, structure map[string]config.Field) {
 	for fieldKey := range structure {
 		fieldKeys = append(fieldKeys, fieldKey)
 	}
+
 	sort.Strings(fieldKeys)
 
 	// Hash each field and its content

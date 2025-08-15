@@ -39,7 +39,7 @@ import (
 //
 // When starvation is detected, it:
 // - Increments Prometheus metrics for monitoring and alerting
-// - Logs warnings with the starvation duration
+// - Logs warnings with the starvation duration.
 type StarvationChecker struct {
 	lastReconcileTime   time.Time
 	ctx                 context.Context
@@ -69,6 +69,7 @@ func NewStarvationChecker(threshold time.Duration) *StarvationChecker {
 	}
 
 	sc.wg.Add(1)
+
 	go sc.checkStarvationLoop()
 
 	sc.logger.Infof("Starvation checker created with threshold %s", threshold)
@@ -82,6 +83,7 @@ func NewStarvationChecker(threshold time.Duration) *StarvationChecker {
 // reconciliation loop is completely blocked.
 func (s *StarvationChecker) checkStarvationLoop() {
 	defer s.wg.Done()
+
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
@@ -119,6 +121,7 @@ func (s *StarvationChecker) Stop() {
 func (s *StarvationChecker) UpdateLastReconcileTime() {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+
 	s.lastReconcileTime = time.Now()
 }
 
@@ -126,6 +129,7 @@ func (s *StarvationChecker) UpdateLastReconcileTime() {
 func (s *StarvationChecker) GetLastReconcileTime() time.Time {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
+
 	return s.lastReconcileTime
 }
 
@@ -140,7 +144,7 @@ func (s *StarvationChecker) GetManagerName() string {
 //
 // Returns:
 // - error: Always nil in this implementation as starvation is a warning, not an error
-// - bool: Always false, as there is no reconciliation to be done, but this needs to be implemented to satisfy the interface
+// - bool: Always false, as there is no reconciliation to be done, but this needs to be implemented to satisfy the interface.
 func (s *StarvationChecker) Reconcile(ctx context.Context, config config.FullConfig) (error, bool) {
 	// We update the timestamp first to mark that the loop is running.
 	// This ensures that even if nothing else in the control loop runs,

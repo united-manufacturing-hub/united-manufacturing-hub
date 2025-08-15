@@ -37,8 +37,10 @@ import (
 func (a *AgentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
 	start := time.Now()
 	instanceName := a.baseFSMInstance.GetID()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentAgentMonitor, instanceName, time.Since(start))
+
 		if err != nil {
 			a.baseFSMInstance.GetLogger().Errorf("error reconciling agent instance %s: %s", instanceName, err)
 			a.PrintState()
@@ -52,6 +54,7 @@ func (a *AgentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsh
 		if a.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "start of reconciliation") {
 			return nil, false
 		}
+
 		return ctx.Err(), false
 	}
 
@@ -63,15 +66,19 @@ func (a *AgentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsh
 			// For now, let's just remove it from the manager:
 			if a.IsRemoved() || a.IsRemoving() || a.IsStopping() || a.IsStopped() {
 				a.baseFSMInstance.GetLogger().Errorf("Permanent error on agent monitor %s but it is already in a terminal/removing state", instanceName)
+
 				return backErr, false
 			} else {
 				a.baseFSMInstance.GetLogger().Errorf("Permanent error on agent monitor %s => removing it", instanceName)
 				a.baseFSMInstance.ResetState() // clear the error
 				_ = a.Remove(ctx)              // attempt removal
+
 				return nil, false
 			}
 		}
+
 		a.baseFSMInstance.GetLogger().Debugf("Skipping reconcile for agent monitor %s: %v", instanceName, backErr)
+
 		return nil, false
 	}
 
@@ -84,7 +91,7 @@ func (a *AgentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsh
 		// Log the error but always continue reconciling - we need reconcileStateTransition to run
 		// to restore services after restart, even if we can't read their status yet
 		a.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)
-		
+
 		// For all other errors, just continue reconciling without setting backoff
 		err = nil
 	}
@@ -109,6 +116,7 @@ func (a *AgentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsh
 
 		a.baseFSMInstance.SetError(err, snapshot.Tick)
 		a.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
+
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
@@ -119,9 +127,10 @@ func (a *AgentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsh
 }
 
 // reconcileExternalChanges checks if the AgentInstance service status has changed
-// externally and updates the observed state accordingly
+// externally and updates the observed state accordingly.
 func (a *AgentInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentAgentMonitor, a.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
 	}()
@@ -135,11 +144,12 @@ func (a *AgentInstance) reconcileExternalChanges(ctx context.Context, services s
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}
+
 	return nil
 }
 
 // printSystemState prints the full system state in a human-readable format
-// TODO: move this into status reason as well to be shown centrally in the system snapshot logger
+// TODO: move this into status reason as well to be shown centrally in the system snapshot logger.
 func (a *AgentInstance) printSystemState(instanceName string, tick uint64) {
 	logger := a.baseFSMInstance.GetLogger()
 	status := a.ObservedState.ServiceInfo
@@ -165,15 +175,17 @@ func (a *AgentInstance) printSystemState(instanceName string, tick uint64) {
 
 		if status.Release != nil {
 			logger.Infof("Release: Channel=%s, Version=%s", status.Release.Channel, status.Release.Version)
+
 			if len(status.Release.Versions) > 0 {
 				logger.Infof("Component Versions: %v", status.Release.Versions)
 			}
 		}
 	}
+
 	logger.Infof("=================================================")
 }
 
-// healthCategoryToString converts a HealthCategory to a human-readable string
+// healthCategoryToString converts a HealthCategory to a human-readable string.
 func healthCategoryToString(category models.HealthCategory) string {
 	switch category {
 	case models.Neutral:
@@ -194,6 +206,7 @@ func healthCategoryToString(category models.HealthCategory) string {
 // This is to ensure full testability of the FSM.
 func (a *AgentInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentAgentMonitor, a.baseFSMInstance.GetID()+".reconcileStateTransition", time.Since(start))
 	}()
@@ -215,6 +228,7 @@ func (a *AgentInstance) reconcileStateTransition(ctx context.Context, services s
 		if err != nil {
 			return err, false
 		}
+
 		if reconciled {
 			return nil, true
 		} else {
@@ -228,6 +242,7 @@ func (a *AgentInstance) reconcileStateTransition(ctx context.Context, services s
 		if err != nil {
 			return err, false
 		}
+
 		if reconciled {
 			return nil, true
 		} else {
@@ -238,9 +253,10 @@ func (a *AgentInstance) reconcileStateTransition(ctx context.Context, services s
 	return fmt.Errorf("invalid state: %s", currentState), false
 }
 
-// reconcileOperationalStates handles states related to instance operations (starting/stopping)
+// reconcileOperationalStates handles states related to instance operations (starting/stopping).
 func (a *AgentInstance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentAgentMonitor, a.baseFSMInstance.GetID()+".reconcileOperationalStates", time.Since(start))
 	}()
@@ -259,6 +275,7 @@ func (a *AgentInstance) reconcileOperationalStates(ctx context.Context, services
 // It deals with moving from various states to the Active state.
 func (a *AgentInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentAgentMonitor, a.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
 	}()
@@ -287,16 +304,16 @@ func (a *AgentInstance) reconcileTransitionToActive(ctx context.Context, service
 }
 
 // reconcileStartingStates handles the various starting phase states when transitioning to a running state
-// no big startup process here
+// no big startup process here.
 func (a *AgentInstance) reconcileStartingStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentAgentMonitor, a.baseFSMInstance.GetID()+".reconcileStartingStates", time.Since(start))
 	}()
 
 	switch currentState {
 	case OperationalStateStarting:
-
 		// nothing to verify here, just for consistency with other fsms
 		return a.baseFSMInstance.SendEvent(ctx, EventStartDone), true
 	default:
@@ -307,6 +324,7 @@ func (a *AgentInstance) reconcileStartingStates(ctx context.Context, services se
 // reconcileRunningStates handles the various running states when transitioning to Active.
 func (a *AgentInstance) reconcileRunningStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentAgentMonitor, a.baseFSMInstance.GetID()+".reconcileRunningStates", time.Since(start))
 	}()
@@ -317,12 +335,14 @@ func (a *AgentInstance) reconcileRunningStates(ctx context.Context, services ser
 		if !a.areAllMetricsHealthy() {
 			return a.baseFSMInstance.SendEvent(ctx, EventMetricsNotOK), true
 		}
+
 		return nil, false
 	case OperationalStateDegraded:
 		// If we're in Degraded, we need to recover to move to Active
 		if a.areAllMetricsHealthy() {
 			return a.baseFSMInstance.SendEvent(ctx, EventMetricsAllOK), true
 		}
+
 		return nil, false
 	default:
 		return fmt.Errorf("invalid running state: %s", currentState), false
@@ -333,6 +353,7 @@ func (a *AgentInstance) reconcileRunningStates(ctx context.Context, services ser
 // It deals with moving from any operational state to Stopping and then to Stopped.
 func (a *AgentInstance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentAgentMonitor, a.baseFSMInstance.GetID()+".reconcileTransitionToStopped", time.Since(start))
 	}()

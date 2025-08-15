@@ -22,7 +22,7 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
-// MockComponent demonstrates how to use BackoffManager in a component
+// MockComponent demonstrates how to use BackoffManager in a component.
 type MockComponent struct {
 	backoffManager *BackoffManager
 	failNextNTimes int
@@ -44,7 +44,7 @@ func NewMockComponent(maxRetries uint64) *MockComponent {
 
 // DoOperation attempts an operation with backoff handling
 // Unlike the previous version, we'll make this deterministic by not relying on ShouldSkipOperation
-// Instead we'll explicitly check if we've reached our operation count or if we're permanently failed
+// Instead we'll explicitly check if we've reached our operation count or if we're permanently failed.
 func (m *MockComponent) DoOperation(tick uint64) error {
 	// If permanently failed, always return permanent error
 	if m.backoffManager.IsPermanentlyFailed() {
@@ -63,11 +63,13 @@ func (m *MockComponent) DoOperation(tick uint64) error {
 		if isPermanent {
 			return m.backoffManager.GetBackoffError(tick) // Permanent failure
 		}
+
 		return m.backoffManager.GetBackoffError(tick) // Temporary failure
 	}
 
 	// Success case
 	m.backoffManager.Reset()
+
 	return nil
 }
 
@@ -84,7 +86,7 @@ func (m *MockComponent) GetLastError() error {
 	return m.backoffManager.GetLastError()
 }
 
-// Parent demonstrates a parent component that uses MockComponent
+// Parent demonstrates a parent component that uses MockComponent.
 type MockParent struct {
 	component *MockComponent
 }
@@ -97,7 +99,6 @@ func NewMockParent(component *MockComponent) *MockParent {
 
 func (p *MockParent) Execute(tick uint64) error {
 	err := p.component.DoOperation(tick)
-
 	if err != nil {
 		if IsTemporaryBackoffError(err) {
 			// For temporary errors, log but continue
@@ -135,19 +136,19 @@ var _ = Describe("Integration Tests", func() {
 			// First attempt - fails (1)
 			err := parent.Execute(tick)
 			tick++
-			Expect(err).To(BeNil(), "Parent should return nil for temporary failures")
+			Expect(err).ToNot(HaveOccurred(), "Parent should return nil for temporary failures")
 			Expect(mockComponent.operationCount).To(Equal(1), "Should have attempted once")
 
 			// Second attempt - fails (2)
 			err = parent.Execute(tick)
 			tick++
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(mockComponent.operationCount).To(Equal(2), "Should have attempted twice")
 
 			// Third attempt - succeeds
 			err = parent.Execute(tick)
 			tick++
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(mockComponent.operationCount).To(Equal(3), "Should have attempted three times")
 			Expect(mockComponent.IsPermanentlyFailed()).To(BeFalse(), "Should not be permanently failed")
 		})
@@ -162,20 +163,20 @@ var _ = Describe("Integration Tests", func() {
 			// First attempt - temporary failure
 			err := parent.Execute(tick)
 			tick++
-			Expect(err).To(BeNil(), "First failure should return nil")
+			Expect(err).ToNot(HaveOccurred(), "First failure should return nil")
 			Expect(mockComponent.IsPermanentlyFailed()).To(BeFalse())
 
 			// Second attempt - triggers permanent failure
 			err = parent.Execute(tick)
 			tick++
-			Expect(err).NotTo(BeNil(), "Should return error for permanent failure")
+			Expect(err).To(HaveOccurred(), "Should return error for permanent failure")
 			Expect(err.Error()).To(ContainSubstring("permanently failed"))
 			Expect(mockComponent.IsPermanentlyFailed()).To(BeTrue())
 
 			// Additional attempts - should remain permanently failed
 			err = parent.Execute(tick)
 			tick++
-			Expect(err).NotTo(BeNil(), "Should still return error for permanent failure")
+			Expect(err).To(HaveOccurred(), "Should still return error for permanent failure")
 		})
 
 		It("should succeed after failures and reset error state", func() {
@@ -187,15 +188,15 @@ var _ = Describe("Integration Tests", func() {
 			// First attempt - fails
 			err := parent.Execute(tick)
 			tick++
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(mockComponent.operationCount).To(Equal(1), "Should have attempted once")
 
 			// Second attempt - succeeds
 			err = parent.Execute(tick)
 			tick++
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(mockComponent.operationCount).To(Equal(2), "Should have attempted twice")
-			Expect(mockComponent.GetLastError()).To(BeNil(), "Error should be reset after success")
+			Expect(mockComponent.GetLastError()).To(Succeed(), "Error should be reset after success")
 		})
 	})
 })

@@ -15,7 +15,7 @@
 package connection
 
 import (
-	"fmt"
+	"errors"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -26,7 +26,6 @@ import (
 )
 
 func NewConnectionManagerWithMockedServices(name string) (*ConnectionManager, *connection.MockConnectionService) {
-
 	mockSvc := connection.NewMockConnectionService()
 
 	// Create a new manager instance
@@ -38,7 +37,7 @@ func NewConnectionManagerWithMockedServices(name string) (*ConnectionManager, *c
 			return config.Internal.Connection, nil
 		},
 		func(config config.ConnectionConfig) (string, error) {
-			return fmt.Sprintf("connection-%s", config.Name), nil
+			return "connection-" + config.Name, nil
 		},
 		// Get desired state for Connection config
 		func(cfg config.ConnectionConfig) (string, error) {
@@ -58,38 +57,44 @@ func NewConnectionManagerWithMockedServices(name string) (*ConnectionManager, *c
 			nmapMockService.S6Service = s6MockService
 			mockSvc.NmapService = nmapMockService
 			instance.service = mockSvc
+
 			return instance, nil
 		},
 		// Compare Connection configs
 		func(instance public_fsm.FSMInstance, cfg config.ConnectionConfig) (bool, error) {
 			connectionInstance, ok := instance.(*ConnectionInstance)
 			if !ok {
-				return false, fmt.Errorf("instance is not a ConnectionInstance")
+				return false, errors.New("instance is not a ConnectionInstance")
 			}
+
 			connectionInstance.config = cfg.ConnectionServiceConfig
 			if mockSvc, ok := connectionInstance.service.(*connection.MockConnectionService); ok {
 				mockSvc.GetConfigResult = cfg.ConnectionServiceConfig
 			}
+
 			return true, nil
 		},
 		// Set Connection config
 		func(instance public_fsm.FSMInstance, cfg config.ConnectionConfig) error {
 			connectionInstance, ok := instance.(*ConnectionInstance)
 			if !ok {
-				return fmt.Errorf("instance is not a ConnectionInstance")
+				return errors.New("instance is not a ConnectionInstance")
 			}
+
 			connectionInstance.config = cfg.ConnectionServiceConfig
 			if mockSvc, ok := connectionInstance.service.(*connection.MockConnectionService); ok {
 				mockSvc.GetConfigResult = cfg.ConnectionServiceConfig
 			}
+
 			return nil
 		},
 		// Get expected max p95 execution time per instance
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
 			connectionInstance, ok := instance.(*ConnectionInstance)
 			if !ok {
-				return 0, fmt.Errorf("instance is not a ConnectionInstance")
+				return 0, errors.New("instance is not a ConnectionInstance")
 			}
+
 			return connectionInstance.GetMinimumRequiredTime(), nil
 		},
 	)

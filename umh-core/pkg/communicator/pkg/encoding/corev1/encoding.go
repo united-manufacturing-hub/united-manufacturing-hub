@@ -81,7 +81,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// Constants for buffer management
+// Constants for buffer management.
 const (
 	CompressionThreshold = 1024       // 1KB
 	MaxPooledBufferSize  = 256 * 1024 // 256KB max for all pools
@@ -93,12 +93,13 @@ const (
 )
 
 var (
-	// Encoder/decoder pools - optimized for speed
+	// Encoder/decoder pools - optimized for speed.
 	encoderPool = sync.Pool{
 		New: func() interface{} {
 			encoder, _ := zstd.NewWriter(nil,
 				zstd.WithEncoderLevel(zstd.SpeedFastest),
 				zstd.WithWindowSize(32*1024)) // Smaller window for faster encoding
+
 			return encoder
 		},
 	}
@@ -106,14 +107,16 @@ var (
 	decoderPool = sync.Pool{
 		New: func() interface{} {
 			decoder, _ := zstd.NewReader(nil)
+
 			return decoder
 		},
 	}
 
-	// Buffer pools - store slices directly, not pointers
+	// Buffer pools - store slices directly, not pointers.
 	base64BufferPool = sync.Pool{
 		New: func() any {
 			b := make([]byte, 0, Base64BufferSize)
+
 			return &b
 		},
 	}
@@ -131,7 +134,7 @@ var (
 	}
 )
 
-// Buffer management functions
+// Buffer management functions.
 func getBase64Buffer() *[]byte {
 	return base64BufferPool.Get().(*[]byte)
 }
@@ -165,7 +168,7 @@ func putDecompressBuffer(buf *bytes.Buffer) {
 	}
 }
 
-// Optimized magic number check using unsafe for single memory read
+// Optimized magic number check using unsafe for single memory read.
 func isCompressed(data []byte) bool {
 	if len(data) < 4 {
 		return false
@@ -175,7 +178,7 @@ func isCompressed(data []byte) bool {
 }
 
 // Compress compresses message if above threshold
-// Returns original slice for small messages (zero-copy)
+// Returns original slice for small messages (zero-copy).
 func Compress(message []byte) ([]byte, error) {
 	if len(message) < CompressionThreshold {
 		return message, nil // Zero-copy for small messages
@@ -201,10 +204,11 @@ func Compress(message []byte) ([]byte, error) {
 	// Return copy of the compressed data
 	result := make([]byte, buf.Len())
 	copy(result, buf.Bytes())
+
 	return result, nil
 }
 
-// CompressWithContext adds cancellation support for large messages
+// CompressWithContext adds cancellation support for large messages.
 func CompressWithContext(ctx context.Context, message []byte) ([]byte, error) {
 	if len(message) < CompressionThreshold {
 		return message, nil
@@ -220,12 +224,13 @@ func CompressWithContext(ctx context.Context, message []byte) ([]byte, error) {
 	return Compress(message)
 }
 
-// Decompress decompresses message if compressed
+// Decompress decompresses message if compressed.
 func Decompress(message []byte) ([]byte, error) {
 	if !isCompressed(message) {
 		// Return copy to maintain consistent behavior
 		result := make([]byte, len(message))
 		copy(result, message)
+
 		return result, nil
 	}
 
@@ -246,10 +251,11 @@ func Decompress(message []byte) ([]byte, error) {
 	// Return copy of decompressed data
 	result := make([]byte, buf.Len())
 	copy(result, buf.Bytes())
+
 	return result, nil
 }
 
-// Optimized base64 encoding using strings.Builder
+// Optimized base64 encoding using strings.Builder.
 func encodeBase64(data []byte) string {
 	encodedLen := base64.StdEncoding.EncodedLen(len(data))
 
@@ -267,10 +273,11 @@ func encodeBase64(data []byte) string {
 
 	base64.StdEncoding.Encode(*buf, data)
 	builder.Write(*buf)
+
 	return builder.String()
 }
 
-// Optimized base64 decoding with buffer reuse
+// Optimized base64 decoding with buffer reuse.
 func decodeBase64(data string) ([]byte, error) {
 	decodedLen := base64.StdEncoding.DecodedLen(len(data))
 
@@ -290,16 +297,19 @@ func decodeBase64(data string) ([]byte, error) {
 	// Return exact size
 	result := make([]byte, n)
 	copy(result, (*buf)[:n])
+
 	return result, nil
 }
 
-// Core encoding functions
+// Core encoding functions.
 func EncodeMessageFromUserToUMHInstance(UMHMessage models.UMHMessageContent) (string, error) {
 	messageBytes, err := safejson.Marshal(UMHMessage)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to marshal UMHMessage: %v (%+v)", err, UMHMessage)
+
 		return "", err
 	}
+
 	return encodeBase64(messageBytes), nil
 }
 
@@ -307,6 +317,7 @@ func EncodeMessageFromUMHInstanceToUser(UMHMessage models.UMHMessageContent) (st
 	messageBytes, err := safejson.Marshal(UMHMessage)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to marshal UMHMessage: %v (%+v)", err, UMHMessage)
+
 		return "", err
 	}
 
@@ -315,21 +326,24 @@ func EncodeMessageFromUMHInstanceToUser(UMHMessage models.UMHMessageContent) (st
 		compressed, err := Compress(messageBytes)
 		if err != nil {
 			sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to compress message: %v", err)
+
 			return "", err
 		}
+
 		return encodeBase64(compressed), nil
 	}
 
 	return encodeBase64(messageBytes), nil
 }
 
-// Optimized decode with single function for both paths
+// Optimized decode with single function for both paths.
 func decodeBase64AndUnmarshal(base64Message string) (models.UMHMessageContent, error) {
 	var UMHMessage models.UMHMessageContent
 
 	messageBytes, err := decodeBase64(base64Message)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to decode base64 message: %v", err)
+
 		return UMHMessage, err
 	}
 
@@ -339,6 +353,7 @@ func decodeBase64AndUnmarshal(base64Message string) (models.UMHMessageContent, e
 		if err != nil {
 			sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to unmarshal UMHMessage: %v", err)
 		}
+
 		return UMHMessage, err
 	}
 
@@ -346,6 +361,7 @@ func decodeBase64AndUnmarshal(base64Message string) (models.UMHMessageContent, e
 	decompressedMessage, err := Decompress(messageBytes)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to decompress message: %v", err)
+
 		return UMHMessage, err
 	}
 
@@ -353,6 +369,7 @@ func decodeBase64AndUnmarshal(base64Message string) (models.UMHMessageContent, e
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to unmarshal UMHMessage: %v", err)
 	}
+
 	return UMHMessage, err
 }
 

@@ -16,6 +16,7 @@ package streamprocessor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -31,12 +32,12 @@ const (
 	baseStreamProcessorDir = constants.S6BaseDir
 )
 
-// Manager implements the FSM management for StreamProcessor services
+// Manager implements the FSM management for StreamProcessor services.
 type Manager struct {
 	*public_fsm.BaseFSMManager[config.StreamProcessorConfig]
 }
 
-// Snapshot extends the base ManagerSnapshot with StreamProcessor specific information
+// Snapshot extends the base ManagerSnapshot with StreamProcessor specific information.
 type Snapshot struct {
 	// Embed BaseManagerSnapshot to include its methods using composition
 	*public_fsm.BaseManagerSnapshot
@@ -68,29 +69,35 @@ func NewManager(name string) *Manager {
 		func(instance public_fsm.FSMInstance, cfg config.StreamProcessorConfig) (bool, error) {
 			spInstance, ok := instance.(*Instance)
 			if !ok {
-				return false, fmt.Errorf("instance is not a StreamProcessorInstance")
+				return false, errors.New("instance is not a StreamProcessorInstance")
 			}
+
 			return spInstance.specConfig.Equal(cfg.StreamProcessorServiceConfig), nil
 		},
 		// Set StreamProcessor config
 		func(instance public_fsm.FSMInstance, cfg config.StreamProcessorConfig) error {
 			spInstance, ok := instance.(*Instance)
 			if !ok {
-				return fmt.Errorf("instance is not a StreamProcessorInstance")
+				return errors.New("instance is not a StreamProcessorInstance")
 			}
+
 			spInstance.specConfig = cfg.StreamProcessorServiceConfig
+
 			return nil
 		},
 		// Get expected max p95 execution time per instance
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
 			spInstance, ok := instance.(*Instance)
 			if !ok {
-				return 0, fmt.Errorf("instance is not a Stream Processor Instance")
+				return 0, errors.New("instance is not a Stream Processor Instance")
 			}
+
 			return spInstance.GetExpectedMaxP95ExecutionTimePerInstance(), nil
 		},
 	)
+
 	metrics.InitErrorCounter(metrics.ComponentStreamProcessorManager, name)
+
 	return &Manager{
 		BaseFSMManager: baseManager,
 	}
@@ -105,14 +112,16 @@ func (m *Manager) Reconcile(
 	services serviceregistry.Provider,
 ) (error, bool) {
 	start := time.Now()
+
 	defer func() {
 		duration := time.Since(start)
 		metrics.ObserveReconcileTime(logger.ComponentStreamProcessorManager, m.GetManagerName(), duration)
 	}()
+
 	return m.BaseFSMManager.Reconcile(ctx, snapshot, services)
 }
 
-// CreateSnapshot overrides the base CreateSnapshot to include StreamProcessorManager-specific information
+// CreateSnapshot overrides the base CreateSnapshot to include StreamProcessorManager-specific information.
 func (m *Manager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	// Get base snapshot from parent
 	baseSnapshot := m.BaseFSMManager.CreateSnapshot()
@@ -122,6 +131,7 @@ func (m *Manager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	if !ok {
 		logger.For(logger.ComponentStreamProcessorManager).Errorf(
 			"Failed to convert base snapshot to BaseManagerSnapshot, using generic snapshot")
+
 		return baseSnapshot
 	}
 
@@ -129,10 +139,11 @@ func (m *Manager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	snap := &Snapshot{
 		BaseManagerSnapshot: baseManagerSnapshot,
 	}
+
 	return snap
 }
 
-// IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface
+// IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface.
 func (s *Snapshot) IsObservedStateSnapshot() {
 	// Marker method implementation
 }

@@ -25,7 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
-// EncodingImpl holds the functions for a specific encoding implementation
+// EncodingImpl holds the functions for a specific encoding implementation.
 type EncodingImpl struct {
 	Name                               string
 	EncodeMessageFromUMHInstanceToUser func(models.UMHMessageContent) ([]byte, error)
@@ -33,9 +33,10 @@ type EncodingImpl struct {
 	Compress                           func([]byte) ([]byte, error)
 }
 
-// Wrapper functions to normalize different implementations
+// Wrapper functions to normalize different implementations.
 func wrapNewEncode(msg models.UMHMessageContent) ([]byte, error) {
 	result, err := encoding_new.EncodeMessageFromUMHInstanceToUser(msg)
+
 	return []byte(result), err
 }
 
@@ -45,6 +46,7 @@ func wrapNewDecode(data []byte) (models.UMHMessageContent, error) {
 
 func wrapCorev1Encode(msg models.UMHMessageContent) ([]byte, error) {
 	result, err := encoding_corev1.EncodeMessageFromUMHInstanceToUser(msg)
+
 	return []byte(result), err
 }
 
@@ -54,6 +56,7 @@ func wrapCorev1Decode(data []byte) (models.UMHMessageContent, error) {
 
 func wrapOldEncode(msg models.UMHMessageContent) ([]byte, error) {
 	result, err := encoding_old.EncodeMessageFromUMHInstanceToUser(msg)
+
 	return []byte(result), err
 }
 
@@ -74,10 +77,11 @@ func wrapOldCompress(data []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return []byte(compressed), nil
 }
 
-// encodingImplementations holds all the encoding implementations to benchmark
+// encodingImplementations holds all the encoding implementations to benchmark.
 var encodingImplementations = map[string]EncodingImpl{
 	"New": {
 		Name:                               "New",
@@ -99,7 +103,7 @@ var encodingImplementations = map[string]EncodingImpl{
 	},
 }
 
-// Test data generators
+// Test data generators.
 func generateSmallMessage() models.UMHMessageContent {
 	return models.UMHMessageContent{
 		MessageType: "test",
@@ -113,7 +117,7 @@ func generateSmallMessage() models.UMHMessageContent {
 
 func generateMediumMessage() models.UMHMessageContent {
 	data := make(map[string]interface{})
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		data[fmt.Sprintf("field_%d", i)] = fmt.Sprintf("value_%d_%s", i, strings.Repeat("x", 20))
 	}
 
@@ -125,7 +129,7 @@ func generateMediumMessage() models.UMHMessageContent {
 
 func generateLargeMessage() models.UMHMessageContent {
 	data := make(map[string]interface{})
-	for i := 0; i < 20000; i++ {
+	for i := range 20000 {
 		data[fmt.Sprintf("field_%d", i)] = fmt.Sprintf("value_%d_%s", i, strings.Repeat("data", 50))
 	}
 
@@ -140,17 +144,19 @@ func generateBinaryData(size int) []byte {
 	for i := range data {
 		data[i] = byte(i % 256)
 	}
+
 	return data
 }
 
-// Generic benchmark functions
+// Generic benchmark functions.
 func benchmarkCompress(b *testing.B, impl EncodingImpl, size int) {
 	b.Run(impl.Name, func(b *testing.B) {
 		data := generateBinaryData(size)
+
 		b.ResetTimer()
 		b.ReportAllocs()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			_, err := impl.Compress(data)
 			if err != nil {
 				b.Fatal(err)
@@ -174,10 +180,11 @@ func BenchmarkCompress_Large(b *testing.B) {
 func benchmarkEncodeMessage(b *testing.B, impl EncodingImpl, msgGenerator func() models.UMHMessageContent) {
 	b.Run(impl.Name, func(b *testing.B) {
 		msg := msgGenerator()
+
 		b.ResetTimer()
 		b.ReportAllocs()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			_, err := impl.EncodeMessageFromUMHInstanceToUser(msg)
 			if err != nil {
 				b.Fatal(err)
@@ -207,6 +214,7 @@ func BenchmarkEncodeMessage_Large(b *testing.B) {
 func benchmarkDecodeMessage(b *testing.B, impl EncodingImpl, msgGenerator func() models.UMHMessageContent) {
 	b.Run(impl.Name, func(b *testing.B) {
 		msg := msgGenerator()
+
 		encoded, err := impl.EncodeMessageFromUMHInstanceToUser(msg)
 		if err != nil {
 			b.Fatal(err)
@@ -215,7 +223,7 @@ func benchmarkDecodeMessage(b *testing.B, impl EncodingImpl, msgGenerator func()
 		b.ResetTimer()
 		b.ReportAllocs()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			_, err := impl.DecodeMessageFromUMHInstanceToUser(encoded)
 			if err != nil {
 				b.Fatal(err)
@@ -239,14 +247,16 @@ func BenchmarkDecodeMessage_Large(b *testing.B) {
 func benchmarkRoundTrip(b *testing.B, impl EncodingImpl, msgGenerator func() models.UMHMessageContent) {
 	b.Run(impl.Name, func(b *testing.B) {
 		msg := msgGenerator()
+
 		b.ResetTimer()
 		b.ReportAllocs()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			encoded, err := impl.EncodeMessageFromUMHInstanceToUser(msg)
 			if err != nil {
 				b.Fatal(err)
 			}
+
 			_, err = impl.DecodeMessageFromUMHInstanceToUser(encoded)
 			if err != nil {
 				b.Fatal(err)
@@ -280,6 +290,7 @@ func benchmarkConcurrent(b *testing.B, impl EncodingImpl) {
 				if err != nil {
 					b.Fatal(err)
 				}
+
 				_, err = impl.DecodeMessageFromUMHInstanceToUser(encoded)
 				if err != nil {
 					b.Fatal(err)
@@ -309,12 +320,13 @@ func benchmarkMemoryIntensive(b *testing.B, impl EncodingImpl) {
 		b.ResetTimer()
 		b.ReportAllocs()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			for _, msg := range messages {
 				encoded, err := impl.EncodeMessageFromUMHInstanceToUser(msg)
 				if err != nil {
 					b.Fatal(err)
 				}
+
 				_, err = impl.DecodeMessageFromUMHInstanceToUser(encoded)
 				if err != nil {
 					b.Fatal(err)

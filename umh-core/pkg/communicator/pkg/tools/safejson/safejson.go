@@ -17,6 +17,7 @@ package safejson
 import (
 	"encoding/base64"
 	jsonstd "encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 
@@ -27,7 +28,7 @@ import (
 func Unmarshal(val []byte, decoded any) (err error) {
 	valuePtr := reflect.ValueOf(decoded)
 	if valuePtr.Kind() != reflect.Ptr || valuePtr.IsNil() || !valuePtr.IsValid() {
-		return fmt.Errorf("decoded must be a non-nil pointer")
+		return errors.New("decoded must be a non-nil pointer")
 	}
 
 	// Attempt decoding with goccy, fallback to stdlib on panic
@@ -38,6 +39,7 @@ func Unmarshal(val []byte, decoded any) (err error) {
 			// Validate that valuePtr is still a valid pointer before attempting further actions
 			if !valuePtr.IsNil() && valuePtr.IsValid() && !valuePtr.Elem().IsNil() && valuePtr.Elem().IsValid() {
 				temp := reflect.New(valuePtr.Elem().Type()).Interface()
+
 				err = jsonstd.Unmarshal(val, &temp)
 				if err == nil {
 					valuePtr.Elem().Set(reflect.ValueOf(temp).Elem())
@@ -51,10 +53,12 @@ func Unmarshal(val []byte, decoded any) (err error) {
 	if valuePtr.Elem().Kind() != reflect.Struct {
 		// Try stdlib unmarshal
 		err = jsonstd.Unmarshal(val, decoded)
+
 		return err
 	}
 
 	temp := reflect.New(valuePtr.Elem().Type()).Interface()
+
 	err = json.Unmarshal(val, &temp)
 	if err == nil {
 		valuePtr.Elem().Set(reflect.ValueOf(temp).Elem())
@@ -68,10 +72,13 @@ func Marshal(val any) (encoded []byte, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			zap.S().Warnf("goccy failed to encode, attempting to use stdlib, error: %v", r)
+
 			encoded, err = jsonstd.Marshal(val)
 		}
 	}()
+
 	encoded, err = json.Marshal(val)
+
 	return encoded, err
 }
 
@@ -80,10 +87,13 @@ func MarshalIndent(val any, prefix, indent string) (encoded []byte, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			zap.S().Warnf("goccy failed to encode, attempting to use stdlib, error: %v", r)
+
 			encoded, err = jsonstd.MarshalIndent(val, prefix, indent)
 		}
 	}()
+
 	encoded, err = json.MarshalIndent(val, prefix, indent)
+
 	return encoded, err
 }
 
@@ -103,5 +113,6 @@ func MustMarshal(val any) []byte {
 	if err != nil {
 		panic(err)
 	}
+
 	return encoded
 }

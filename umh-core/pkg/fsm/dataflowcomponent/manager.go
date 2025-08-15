@@ -16,6 +16,7 @@ package dataflowcomponent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -31,12 +32,12 @@ const (
 	baseDataflowComponentDir = constants.S6BaseDir
 )
 
-// DataflowComponentManager implements the FSM management for DataflowComponent services
+// DataflowComponentManager implements the FSM management for DataflowComponent services.
 type DataflowComponentManager struct {
 	*public_fsm.BaseFSMManager[config.DataFlowComponentConfig]
 }
 
-// DataFlowComponentSnapshot extends the base ManagerSnapshot with Dataflowcomponent specific information
+// DataFlowComponentSnapshot extends the base ManagerSnapshot with Dataflowcomponent specific information.
 type DataflowComponentSnapshot struct {
 	// Embed BaseManagerSnapshot to include its methods using composition
 	*public_fsm.BaseManagerSnapshot
@@ -68,29 +69,35 @@ func NewDataflowComponentManager(name string) *DataflowComponentManager {
 		func(instance public_fsm.FSMInstance, cfg config.DataFlowComponentConfig) (bool, error) {
 			dataflowComponentInstance, ok := instance.(*DataflowComponentInstance)
 			if !ok {
-				return false, fmt.Errorf("instance is not a DataflowComponentInstance")
+				return false, errors.New("instance is not a DataflowComponentInstance")
 			}
+
 			return dataflowComponentInstance.config.Equal(cfg.DataFlowComponentServiceConfig), nil
 		},
 		// Set DataflowComponent config
 		func(instance public_fsm.FSMInstance, cfg config.DataFlowComponentConfig) error {
 			dataflowComponentInstance, ok := instance.(*DataflowComponentInstance)
 			if !ok {
-				return fmt.Errorf("instance is not a DataflowComponentInstance")
+				return errors.New("instance is not a DataflowComponentInstance")
 			}
+
 			dataflowComponentInstance.config = cfg.DataFlowComponentServiceConfig
+
 			return nil
 		},
 		// Get expected max p95 execution time per instance
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
 			dataflowComponentInstance, ok := instance.(*DataflowComponentInstance)
 			if !ok {
-				return 0, fmt.Errorf("instance is not a DataflowComponentInstance")
+				return 0, errors.New("instance is not a DataflowComponentInstance")
 			}
+
 			return dataflowComponentInstance.GetMinimumRequiredTime(), nil
 		},
 	)
+
 	metrics.InitErrorCounter(metrics.ComponentDataFlowCompManager, name)
+
 	return &DataflowComponentManager{
 		BaseFSMManager: baseManager,
 	}
@@ -101,14 +108,16 @@ func NewDataflowComponentManager(name string) *DataflowComponentManager {
 // enabling the method to read configuration or state information from the filesystem.
 func (m *DataflowComponentManager) Reconcile(ctx context.Context, snapshot public_fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool) {
 	start := time.Now()
+
 	defer func() {
 		duration := time.Since(start)
 		metrics.ObserveReconcileTime(logger.ComponentDataFlowComponentManager, m.GetManagerName(), duration)
 	}()
+
 	return m.BaseFSMManager.Reconcile(ctx, snapshot, services)
 }
 
-// CreateSnapshot overrides the base CreateSnapshot to include DataflowComponentManager-specific information
+// CreateSnapshot overrides the base CreateSnapshot to include DataflowComponentManager-specific information.
 func (m *DataflowComponentManager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	// Get base snapshot from parent
 	baseSnapshot := m.BaseFSMManager.CreateSnapshot()
@@ -118,6 +127,7 @@ func (m *DataflowComponentManager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	if !ok {
 		logger.For(logger.ComponentDataFlowComponentManager).Errorf(
 			"Failed to convert base snapshot to BaseManagerSnapshot, using generic snapshot")
+
 		return baseSnapshot
 	}
 
@@ -125,10 +135,11 @@ func (m *DataflowComponentManager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	snap := &DataflowComponentSnapshot{
 		BaseManagerSnapshot: baseManagerSnapshot,
 	}
+
 	return snap
 }
 
-// IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface
+// IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface.
 func (s *DataflowComponentSnapshot) IsObservedStateSnapshot() {
 	// Marker method implementation
 }

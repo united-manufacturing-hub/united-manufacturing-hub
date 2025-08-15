@@ -102,22 +102,22 @@ type ProtocolConverterServiceConfigSpec struct {
 	Config      ProtocolConverterServiceConfigTemplate `yaml:"config,omitempty"`
 }
 
-// Equal checks if two ProtocolConverterServiceConfigs are equal
+// Equal checks if two ProtocolConverterServiceConfigs are equal.
 func (c ProtocolConverterServiceConfigSpec) Equal(other ProtocolConverterServiceConfigSpec) bool {
 	return defaultComparator.ConfigsEqual(c, other)
 }
 
-// NormalizeProtocolConverterConfig is a package-level function for easy config normalization
+// NormalizeProtocolConverterConfig is a package-level function for easy config normalization.
 func NormalizeProtocolConverterConfig(cfg ProtocolConverterServiceConfigSpec) ProtocolConverterServiceConfigSpec {
 	return defaultNormalizer.NormalizeConfig(cfg)
 }
 
-// ConfigsEqual is a package-level function for easy config comparison
+// ConfigsEqual is a package-level function for easy config comparison.
 func ConfigsEqual(desired, observed ProtocolConverterServiceConfigSpec) bool {
 	return defaultComparator.ConfigsEqual(desired, observed)
 }
 
-// ConfigDiff is a package-level function for easy config diff generation
+// ConfigDiff is a package-level function for easy config diff generation.
 func ConfigDiff(desired, observed ProtocolConverterServiceConfigSpec) string {
 	return defaultComparator.ConfigDiff(desired, observed)
 }
@@ -142,7 +142,7 @@ func convertRuntimeToTemplate(runtime ProtocolConverterServiceConfigRuntime) Pro
 	}
 }
 
-// ConfigsEqualRuntime is a package-level function for comparing runtime configurations
+// ConfigsEqualRuntime is a package-level function for comparing runtime configurations.
 func ConfigsEqualRuntime(desired, observed ProtocolConverterServiceConfigRuntime) bool {
 	// Convert runtime configs back to template format for comparison
 	// This is necessary because our comparison logic operates on template types
@@ -155,10 +155,11 @@ func ConfigsEqualRuntime(desired, observed ProtocolConverterServiceConfigRuntime
 	// The comparison will handle deep equality checking of all nested fields
 	desiredSpec := ProtocolConverterServiceConfigSpec{Config: protocolConverterDesiredTemplate}
 	observedSpec := ProtocolConverterServiceConfigSpec{Config: protocolConverterObservedTemplate}
+
 	return defaultComparator.ConfigsEqual(desiredSpec, observedSpec)
 }
 
-// ConfigDiffRuntime is a package-level function for generating diffs between runtime configurations
+// ConfigDiffRuntime is a package-level function for generating diffs between runtime configurations.
 func ConfigDiffRuntime(desired, observed ProtocolConverterServiceConfigRuntime) string {
 	// Convert runtime configs back to template format for diffing
 	// This allows us to reuse the existing diff generation logic
@@ -168,6 +169,7 @@ func ConfigDiffRuntime(desired, observed ProtocolConverterServiceConfigRuntime) 
 	// Convert to spec configs for diffing
 	desiredSpec := ProtocolConverterServiceConfigSpec{Config: protocolConverterDesiredTemplate}
 	observedSpec := ProtocolConverterServiceConfigSpec{Config: protocolConverterObservedTemplate}
+
 	return defaultComparator.ConfigDiff(desiredSpec, observedSpec)
 }
 

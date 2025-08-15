@@ -17,7 +17,7 @@ package constants
 import "time"
 
 // BenthosMonitor Operation Timeouts - Level 2 Service (depends on Benthos)
-// BenthosMonitorUpdateObservedStateTimeout is the timeout for updating the observed state
+// BenthosMonitorUpdateObservedStateTimeout is the timeout for updating the observed state.
 const BenthosMonitorUpdateObservedStateTimeout = 10 * time.Millisecond
 
 const BenthosMonitorProcessMetricsTimeout = 10 * time.Millisecond // needs to be smaller than BenthosMonitorUpdateObservedStateTimeout

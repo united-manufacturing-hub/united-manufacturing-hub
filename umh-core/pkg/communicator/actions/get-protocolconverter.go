@@ -48,6 +48,7 @@
 package actions
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -114,6 +115,7 @@ func (a *GetProtocolConverterAction) Parse(payload interface{}) (err error) {
 	a.actionLogger.Info("Parsing the payload")
 	a.payload, err = ParseActionPayload[models.GetProtocolConverterPayload](payload)
 	a.actionLogger.Info("Payload parsed, uuid: ", a.payload.UUID)
+
 	return err
 }
 
@@ -122,7 +124,7 @@ func (a *GetProtocolConverterAction) Parse(payload interface{}) (err error) {
 func (a *GetProtocolConverterAction) Validate() error {
 	// Check if UUID is the zero value (empty UUID)
 	if a.payload.UUID == uuid.Nil {
-		return fmt.Errorf("uuid must be set to retrieve protocol converter")
+		return errors.New("uuid must be set to retrieve protocol converter")
 	}
 
 	return nil
@@ -162,7 +164,7 @@ func determineProcessingMode(readDFC *models.ProtocolConverterDFC) string {
 	return "custom"
 }
 
-// determineProtocol analyzes the input processors to determine the protocol
+// determineProtocol analyzes the input processors to determine the protocol.
 func determineProtocol(readDFC *models.ProtocolConverterDFC) string {
 	if readDFC == nil {
 		return "" // reply with empty string to indicate that no DFC is present
@@ -209,6 +211,7 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 
 	if protocolconverterManager, exists := systemSnapshot.Managers[constants.ProtocolConverterManagerName]; exists {
 		a.actionLogger.Debugf("Protocol converter manager found, getting the protocol converter")
+
 		instances := protocolconverterManager.GetInstances()
 
 		for _, instance := range instances {
@@ -223,6 +226,7 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 						fmt.Sprintf("Warning: Invalid observed state for protocol converter '%s'", instance.ID),
 						a.outboundChannel, models.GetProtocolConverter)
+
 					return nil, nil, fmt.Errorf("invalid observed state type for protocol converter %s", instance.ID)
 				}
 
@@ -231,15 +235,18 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 						fmt.Sprintf("Warning: No observed state found for protocol converter '%s'", instance.ID),
 						a.outboundChannel, models.GetProtocolConverter)
+
 					return nil, nil, fmt.Errorf("no observed state found for protocol converter %s", instance.ID)
 				}
 
 				// Extract template information and variables from the observed spec config
-				var templateInfo *models.ProtocolConverterTemplateInfo
-				var ip string
-				var port uint32
-				var variables []models.ProtocolConverterVariable
-				var isTemplated bool
+				var (
+					templateInfo *models.ProtocolConverterTemplateInfo
+					ip           string
+					port         uint32
+					variables    []models.ProtocolConverterVariable
+					isTemplated  bool
+				)
 
 				// Extract variables from observed spec config
 				specConfig := observedState.ObservedProtocolConverterSpecConfig
@@ -263,6 +270,7 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 							}
 						}
 					}
+
 					isTemplated = len(variables) > 0
 				}
 
@@ -272,6 +280,7 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 						if specConfig.Config.ConnectionServiceConfig.NmapTemplate.Target != "" {
 							ip = specConfig.Config.ConnectionServiceConfig.NmapTemplate.Target
 						}
+
 						if specConfig.Config.ConnectionServiceConfig.NmapTemplate.Port != "" {
 							if portInt, err := strconv.ParseUint(specConfig.Config.ConnectionServiceConfig.NmapTemplate.Port, 10, 32); err == nil {
 								port = uint32(portInt)
@@ -291,8 +300,10 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 
 				// Build ReadDFC if present
 				var readDFC *models.ProtocolConverterDFC
+
 				if readDFCConfig := specConfig.Config.DataflowComponentReadServiceConfig; len(readDFCConfig.BenthosConfig.Input) > 0 {
 					var err error
+
 					readDFC, err = buildProtocolConverterDFCFromConfig(readDFCConfig, a)
 					if err != nil {
 						a.actionLogger.Warnf("Failed to build read DFC: %v", err)
@@ -304,8 +315,10 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 
 				// Build WriteDFC if present
 				var writeDFC *models.ProtocolConverterDFC
+
 				if writeDFCConfig := specConfig.Config.DataflowComponentWriteServiceConfig; len(writeDFCConfig.BenthosConfig.Input) > 0 {
 					var err error
+
 					writeDFC, err = buildProtocolConverterDFCFromConfig(writeDFCConfig, a)
 					if err != nil {
 						a.actionLogger.Warnf("Failed to build write DFC: %v", err)
@@ -350,6 +363,7 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 				}
 
 				a.actionLogger.Info("Protocol converter found and built, returning response")
+
 				return response, nil, nil
 			}
 		}
@@ -359,6 +373,7 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 	errorMsg := fmt.Sprintf("Protocol converter with UUID %s not found", a.payload.UUID)
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 		errorMsg, a.outboundChannel, models.GetProtocolConverter)
+
 	return nil, nil, fmt.Errorf("%s", errorMsg)
 }
 

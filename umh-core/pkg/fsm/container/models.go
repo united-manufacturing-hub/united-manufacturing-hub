@@ -24,19 +24,19 @@ import (
 // These are the container-monitor operational states, in addition
 // to the lifecycle states from internal_fsm.
 const (
-	// monitoring_stopped is the operational state when monitoring is disabled
+	// monitoring_stopped is the operational state when monitoring is disabled.
 	OperationalStateStopped = "monitoring_stopped"
 
-	// monitoring_stopping is the operational state when monitoring is stopping
+	// monitoring_stopping is the operational state when monitoring is stopping.
 	OperationalStateStopping = "monitoring_stopping"
 
-	// monitoring_starting is the operational state when monitoring is starting
+	// monitoring_starting is the operational state when monitoring is starting.
 	OperationalStateStarting = "monitoring_starting"
 
-	// degraded means monitoring is running, but metrics are not OK
+	// degraded means monitoring is running, but metrics are not OK.
 	OperationalStateDegraded = "degraded"
 
-	// active means monitoring is running, and metrics are OK
+	// active means monitoring is running, and metrics are OK.
 	OperationalStateActive = "active"
 )
 
@@ -51,25 +51,28 @@ func IsOperationalState(state string) bool {
 		OperationalStateActive:
 		return true
 	}
+
 	return false
 }
 
-// IsStartingState returns true if the given state is a starting state
+// IsStartingState returns true if the given state is a starting state.
 func IsStartingState(state string) bool {
 	switch state {
 	case OperationalStateStarting:
 		return true
 	}
+
 	return false
 }
 
-// IsRunningState returns true if the given state is a running state
+// IsRunningState returns true if the given state is a running state.
 func IsRunningState(state string) bool {
 	switch state {
 	case OperationalStateActive,
 		OperationalStateDegraded:
 		return true
 	}
+
 	return false
 }
 
@@ -84,7 +87,7 @@ const (
 	EventMetricsNotOK = "metrics_not_ok"
 )
 
-// ContainerObservedState holds the last known container metrics and health status
+// ContainerObservedState holds the last known container metrics and health status.
 type ContainerObservedState struct {
 	// We store the container data from container_monitor.GetStatus
 	ServiceInfo *container_monitor.ServiceInfo
@@ -92,12 +95,12 @@ type ContainerObservedState struct {
 	// Normally this would have also have an ObservedContainerConfig, but we don't need it here
 }
 
-// Ensure it implements the ObservedState interface
+// Ensure it implements the ObservedState interface.
 func (c ContainerObservedState) IsObservedState() {}
 
 // ContainerMonitorInstance implements fsm.FSMInstance
 // If ContainerInstance does not implement the FSMInstance interface, this will
-// be detected at compile time
+// be detected at compile time.
 var _ publicfsm.FSMInstance = (*ContainerInstance)(nil)
 
 // ContainerInstance holds the FSM instance and references to the container monitor service.
@@ -116,14 +119,14 @@ type ContainerInstance struct {
 	config config.ContainerConfig
 }
 
-// GetLastObservedState returns the last known observed data
+// GetLastObservedState returns the last known observed data.
 func (c *ContainerInstance) GetLastObservedState() publicfsm.ObservedState {
 	return c.ObservedState
 }
 
 // IsTransientStreakCounterMaxed returns whether the transient streak counter
 // has reached the maximum number of ticks, which means that the FSM is stuck in a state
-// and should be removed
+// and should be removed.
 func (c *ContainerInstance) IsTransientStreakCounterMaxed() bool {
 	return c.baseFSMInstance.IsTransientStreakCounterMaxed()
 }

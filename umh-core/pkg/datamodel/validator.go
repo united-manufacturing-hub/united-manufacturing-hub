@@ -51,7 +51,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 )
 
-// Pre-compiled regex for version validation to avoid repeated compilation
+// Pre-compiled regex for version validation to avoid repeated compilation.
 var versionRegex = regexp.MustCompile(`^v\d+$`)
 
 // ensureDefaultPayloadShapes creates a copy of the payload shapes map with default payload shapes injected if not present.
@@ -110,15 +110,16 @@ func NewValidator() *Validator {
 	return &Validator{}
 }
 
-// safeContextError safely extracts an error message from context error, handling nil cases
+// safeContextError safely extracts an error message from context error, handling nil cases.
 func safeContextError(ctx context.Context) string {
 	if err := ctx.Err(); err != nil {
 		return err.Error()
 	}
+
 	return "context cancelled"
 }
 
-// ValidationError represents a validation error with a path and message
+// ValidationError represents a validation error with a path and message.
 type ValidationError struct {
 	Path    string
 	Message string
@@ -134,7 +135,7 @@ func (e ValidationError) Error() string {
 // - A node can either be a leaf node or a non-leaf node
 // - A leaf node must have either _payloadshape or _refModel (but not both)
 // - A non-leaf node (folder) can only have subfields, no _payloadshape, _description, or _unit
-// - _refModel format and version validation
+// - _refModel format and version validation.
 func (v *Validator) ValidateStructureOnly(ctx context.Context, dataModel config.DataModelVersion) error {
 	return v.validateDataModel(ctx, dataModel)
 }
@@ -146,7 +147,7 @@ func (v *Validator) ValidateStructureOnly(ctx context.Context, dataModel config.
 // - dataModel: the data model to validate
 // - allDataModels: map of all available data models for reference resolution
 // - payloadShapes: map of all available payload shapes for payload shape validation
-// Returns error if validation fails or circular references are detected
+// Returns error if validation fails or circular references are detected.
 func (v *Validator) ValidateWithReferences(ctx context.Context, dataModel config.DataModelVersion, allDataModels map[string]config.DataModelsConfig, payloadShapes map[string]config.PayloadShape) error {
 	// Ensure default payload shapes are available
 	enrichedPayloadShapes := ensureDefaultPayloadShapes(payloadShapes)
@@ -163,10 +164,11 @@ func (v *Validator) ValidateWithReferences(ctx context.Context, dataModel config
 
 	// Finally validate all references
 	visitedModels := make(map[string]bool)
+
 	return v.validateReferences(ctx, dataModel, allDataModels, visitedModels, 0)
 }
 
-// validateDataModel validates a data model version (private method)
+// validateDataModel validates a data model version (private method).
 func (v *Validator) validateDataModel(ctx context.Context, dataModel config.DataModelVersion) error {
 	// Check if context is cancelled before starting validation
 	select {
@@ -183,17 +185,19 @@ func (v *Validator) validateDataModel(ctx context.Context, dataModel config.Data
 		// Build error message with all validation errors using strings.Builder
 		var errorMsg strings.Builder
 		errorMsg.WriteString("data model structure validation failed:")
+
 		for _, validationError := range errors {
 			errorMsg.WriteString("\n  - ")
 			errorMsg.WriteString(validationError.Error())
 		}
+
 		return fmt.Errorf("%s", errorMsg.String())
 	}
 
 	return nil
 }
 
-// validateStructure recursively validates the structure of a data model
+// validateStructure recursively validates the structure of a data model.
 func (v *Validator) validateStructure(ctx context.Context, structure map[string]config.Field, path string, errors *[]ValidationError) {
 	// Check if context is cancelled before processing this level
 	select {
@@ -202,6 +206,7 @@ func (v *Validator) validateStructure(ctx context.Context, structure map[string]
 			Path:    path,
 			Message: "validation cancelled: " + safeContextError(ctx),
 		})
+
 		return
 	default:
 	}
@@ -222,7 +227,7 @@ func (v *Validator) validateStructure(ctx context.Context, structure map[string]
 	}
 }
 
-// validateFieldNameWithPath validates field names with pre-constructed path
+// validateFieldNameWithPath validates field names with pre-constructed path.
 func (v *Validator) validateFieldNameWithPath(fieldName string, currentPath string, errors *[]ValidationError) {
 	// Check for empty field names
 	if fieldName == "" {
@@ -230,6 +235,7 @@ func (v *Validator) validateFieldNameWithPath(fieldName string, currentPath stri
 			Path:    currentPath,
 			Message: "field name cannot be empty",
 		})
+
 		return
 	}
 
@@ -248,12 +254,13 @@ func (v *Validator) validateFieldNameWithPath(fieldName string, currentPath stri
 				Path:    currentPath,
 				Message: "field name can only contain letters, numbers, dashes, and underscores",
 			})
+
 			break
 		}
 	}
 }
 
-// validateField validates a single field according to the rules
+// validateField validates a single field according to the rules.
 func (v *Validator) validateField(ctx context.Context, field config.Field, path string, errors *[]ValidationError) {
 	// Check if context is cancelled before processing this field
 	select {
@@ -262,6 +269,7 @@ func (v *Validator) validateField(ctx context.Context, field config.Field, path 
 			Path:    path,
 			Message: "validation cancelled: " + safeContextError(ctx),
 		})
+
 		return
 	default:
 	}
@@ -283,7 +291,7 @@ func (v *Validator) validateField(ctx context.Context, field config.Field, path 
 	}
 }
 
-// validateRefModelFormat validates the _refModel field format
+// validateRefModelFormat validates the _refModel field format.
 func (v *Validator) validateRefModelFormat(modelRef *config.ModelRef, path string, errors *[]ValidationError) {
 	// Check for empty model name
 	if modelRef.Name == "" {
@@ -318,7 +326,7 @@ func (v *Validator) validateRefModelFormat(modelRef *config.ModelRef, path strin
 	}
 }
 
-// validateFieldCombinations validates invalid field combinations
+// validateFieldCombinations validates invalid field combinations.
 func (v *Validator) validateFieldCombinations(field config.Field, path string, errors *[]ValidationError) {
 	hasPayloadShape := field.PayloadShape != ""
 	hasRefModel := field.ModelRef != nil
@@ -343,12 +351,12 @@ func (v *Validator) validateFieldCombinations(field config.Field, path string, e
 
 // isLeafNode determines if a field is a leaf node (has no subfields)
 // A field is considered a leaf node only if subfields is nil
-// An empty subfields map (len = 0 but not nil) is considered a non-leaf node
+// An empty subfields map (len = 0 but not nil) is considered a non-leaf node.
 func (v *Validator) isLeafNode(field config.Field) bool {
 	return field.Subfields == nil
 }
 
-// validateLeafNode validates a leaf node
+// validateLeafNode validates a leaf node.
 func (v *Validator) validateLeafNode(field config.Field, path string, errors *[]ValidationError) {
 	hasPayloadShape := field.PayloadShape != ""
 	hasRefModel := field.ModelRef != nil
@@ -373,7 +381,7 @@ func (v *Validator) validateLeafNode(field config.Field, path string, errors *[]
 	}
 }
 
-// validateNonLeafNode validates a non-leaf node
+// validateNonLeafNode validates a non-leaf node.
 func (v *Validator) validateNonLeafNode(ctx context.Context, field config.Field, path string, errors *[]ValidationError) {
 	// Non-leaf nodes (folders) should not have _payloadshape
 	if field.PayloadShape != "" {
@@ -387,7 +395,7 @@ func (v *Validator) validateNonLeafNode(ctx context.Context, field config.Field,
 	v.validateStructure(ctx, field.Subfields, path, errors)
 }
 
-// validateReferences recursively validates all _refModel references in a data model
+// validateReferences recursively validates all _refModel references in a data model.
 func (v *Validator) validateReferences(ctx context.Context, dataModel config.DataModelVersion, allDataModels map[string]config.DataModelsConfig, visitedModels map[string]bool, depth int) error {
 	// Check if context is cancelled before starting reference validation
 	select {
@@ -404,17 +412,19 @@ func (v *Validator) validateReferences(ctx context.Context, dataModel config.Dat
 		// Build error message with all validation errors using strings.Builder
 		var errorMsg strings.Builder
 		errorMsg.WriteString("data model reference validation failed:")
+
 		for _, validationError := range errors {
 			errorMsg.WriteString("\n  - ")
 			errorMsg.WriteString(validationError.Error())
 		}
+
 		return fmt.Errorf("%s", errorMsg.String())
 	}
 
 	return nil
 }
 
-// validateStructureReferences recursively validates references in a structure
+// validateStructureReferences recursively validates references in a structure.
 func (v *Validator) validateStructureReferences(ctx context.Context, structure map[string]config.Field, allDataModels map[string]config.DataModelsConfig, visitedModels map[string]bool, depth int, path string, errors *[]ValidationError) {
 	// Check if context is cancelled before processing this level
 	select {
@@ -423,6 +433,7 @@ func (v *Validator) validateStructureReferences(ctx context.Context, structure m
 			Path:    path,
 			Message: "validation cancelled: " + safeContextError(ctx),
 		})
+
 		return
 	default:
 	}
@@ -448,7 +459,7 @@ func (v *Validator) validateStructureReferences(ctx context.Context, structure m
 	}
 }
 
-// validatePayloadShapes validates that all payload shapes referenced in the data model exist
+// validatePayloadShapes validates that all payload shapes referenced in the data model exist.
 func (v *Validator) validatePayloadShapes(ctx context.Context, dataModel config.DataModelVersion, payloadShapes map[string]config.PayloadShape) error {
 	// Check if context is cancelled before starting payload shape validation
 	select {
@@ -465,17 +476,19 @@ func (v *Validator) validatePayloadShapes(ctx context.Context, dataModel config.
 		// Build error message with all validation errors using strings.Builder
 		var errorMsg strings.Builder
 		errorMsg.WriteString("data model payload shape validation failed:")
+
 		for _, validationError := range errors {
 			errorMsg.WriteString("\n  - ")
 			errorMsg.WriteString(validationError.Error())
 		}
+
 		return fmt.Errorf("%s", errorMsg.String())
 	}
 
 	return nil
 }
 
-// validateStructurePayloadShapes recursively validates payload shapes in a structure
+// validateStructurePayloadShapes recursively validates payload shapes in a structure.
 func (v *Validator) validateStructurePayloadShapes(ctx context.Context, structure map[string]config.Field, payloadShapes map[string]config.PayloadShape, path string, errors *[]ValidationError) {
 	// Check if context is cancelled before processing this level
 	select {
@@ -484,6 +497,7 @@ func (v *Validator) validateStructurePayloadShapes(ctx context.Context, structur
 			Path:    path,
 			Message: "validation cancelled: " + safeContextError(ctx),
 		})
+
 		return
 	default:
 	}
@@ -509,7 +523,7 @@ func (v *Validator) validateStructurePayloadShapes(ctx context.Context, structur
 	}
 }
 
-// validateSinglePayloadShape validates a single payload shape reference
+// validateSinglePayloadShape validates a single payload shape reference.
 func (v *Validator) validateSinglePayloadShape(payloadShape string, path string, payloadShapes map[string]config.PayloadShape, errors *[]ValidationError) {
 	// Check if the payload shape exists
 	if _, exists := payloadShapes[payloadShape]; !exists {
@@ -520,7 +534,7 @@ func (v *Validator) validateSinglePayloadShape(payloadShape string, path string,
 	}
 }
 
-// validateSingleReference validates a single _refModel reference
+// validateSingleReference validates a single _refModel reference.
 func (v *Validator) validateSingleReference(ctx context.Context, modelRef *config.ModelRef, path string, allDataModels map[string]config.DataModelsConfig, visitedModels map[string]bool, depth int, errors *[]ValidationError) {
 	// Check if context is cancelled before processing this reference
 	select {
@@ -529,6 +543,7 @@ func (v *Validator) validateSingleReference(ctx context.Context, modelRef *confi
 			Path:    path,
 			Message: "validation cancelled: " + safeContextError(ctx),
 		})
+
 		return
 	default:
 	}
@@ -539,6 +554,7 @@ func (v *Validator) validateSingleReference(ctx context.Context, modelRef *confi
 			Path:    path,
 			Message: "reference validation depth limit exceeded (10 levels) - possible deep nesting or circular reference",
 		})
+
 		return
 	}
 
@@ -551,8 +567,9 @@ func (v *Validator) validateSingleReference(ctx context.Context, modelRef *confi
 	if visitedModels[referenceKey] {
 		*errors = append(*errors, ValidationError{
 			Path:    path,
-			Message: fmt.Sprintf("circular reference detected: %s", referenceKey),
+			Message: "circular reference detected: " + referenceKey,
 		})
+
 		return
 	}
 
@@ -563,6 +580,7 @@ func (v *Validator) validateSingleReference(ctx context.Context, modelRef *confi
 			Path:    path,
 			Message: fmt.Sprintf("referenced model '%s' does not exist", modelName),
 		})
+
 		return
 	}
 
@@ -573,6 +591,7 @@ func (v *Validator) validateSingleReference(ctx context.Context, modelRef *confi
 			Path:    path,
 			Message: fmt.Sprintf("referenced model '%s' version '%s' does not exist", modelName, version),
 		})
+
 		return
 	}
 

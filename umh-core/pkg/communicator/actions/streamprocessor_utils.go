@@ -19,7 +19,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
-// convertStreamProcessorMappingToInterface converts StreamProcessorMapping to map[string]interface{}
+// convertStreamProcessorMappingToInterface converts StreamProcessorMapping to map[string]interface{}.
 func convertStreamProcessorMappingToInterface(mapping models.StreamProcessorMapping) map[string]interface{} {
 	// Since StreamProcessorMapping is already map[string]interface{}, we can return it directly
 	// but we make a copy to avoid any potential mutations
@@ -27,10 +27,11 @@ func convertStreamProcessorMappingToInterface(mapping models.StreamProcessorMapp
 	for key, value := range mapping {
 		result[key] = value
 	}
+
 	return result
 }
 
-// convertInterfaceToStreamProcessorMapping converts map[string]interface{} to StreamProcessorMapping
+// convertInterfaceToStreamProcessorMapping converts map[string]interface{} to StreamProcessorMapping.
 func convertInterfaceToStreamProcessorMapping(mapping map[string]interface{}) models.StreamProcessorMapping {
 	// Since StreamProcessorMapping is already map[string]interface{}, we can assign directly
 	// but we make a copy to avoid any potential mutations
@@ -38,5 +39,6 @@ func convertInterfaceToStreamProcessorMapping(mapping map[string]interface{}) mo
 	for key, value := range mapping {
 		result[key] = value
 	}
+
 	return result
 }

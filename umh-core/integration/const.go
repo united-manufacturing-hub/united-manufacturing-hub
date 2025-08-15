@@ -27,7 +27,7 @@
 // limitations under the License.
 package integration_test
 
-// Some example "expected" system behavior constraints
+// Some example "expected" system behavior constraints.
 const (
 	maxAllocBytes        = 1024 * 1024 * 1024 // 1 GB max heap usage
 	maxErrorCount        = 0                  // zero error policy

@@ -54,14 +54,17 @@ func (r *RedpandaInstance) CreateInstance(ctx context.Context, filesystemService
 
 	err := r.service.AddRedpandaToS6Manager(ctx, &r.config, filesystemService, r.baseFSMInstance.GetID())
 	if err != nil {
-		if err == redpanda_service.ErrServiceAlreadyExists {
+		if errors.Is(err, redpanda_service.ErrServiceAlreadyExists) {
 			r.baseFSMInstance.GetLogger().Debugf("Redpanda service %s already exists in S6 manager", r.baseFSMInstance.GetID())
+
 			return nil // do not throw an error, as each action is expected to be idempotent
 		}
+
 		return fmt.Errorf("failed to add Redpanda service %s to S6 manager: %w", r.baseFSMInstance.GetID(), err)
 	}
 
 	r.baseFSMInstance.GetLogger().Debugf("Redpanda service %s added to S6 manager", r.baseFSMInstance.GetID())
+
 	return nil
 }
 
@@ -73,18 +76,21 @@ func (r *RedpandaInstance) RemoveInstance(ctx context.Context, filesystemService
 	// Remove the Redpanda from the S6 manager
 	err := r.service.RemoveRedpandaFromS6Manager(ctx, r.baseFSMInstance.GetID())
 	if err != nil {
-		if err == redpanda_service.ErrServiceNotExist {
+		if errors.Is(err, redpanda_service.ErrServiceNotExist) {
 			r.baseFSMInstance.GetLogger().Debugf("Redpanda service %s not found in S6 manager", r.baseFSMInstance.GetID())
+
 			return nil // do not throw an error, as each action is expected to be idempotent
 		}
+
 		return fmt.Errorf("failed to remove Redpanda service %s from S6 manager: %w", r.baseFSMInstance.GetID(), err)
 	}
 
 	r.baseFSMInstance.GetLogger().Debugf("Redpanda service %s removed from S6 manager", r.baseFSMInstance.GetID())
+
 	return nil
 }
 
-// StartInstance attempts to start the redpanda by setting the desired state to running for the given instance
+// StartInstance attempts to start the redpanda by setting the desired state to running for the given instance.
 func (r *RedpandaInstance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	r.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting Redpanda service %s ...", r.baseFSMInstance.GetID())
 
@@ -98,10 +104,11 @@ func (r *RedpandaInstance) StartInstance(ctx context.Context, filesystemService 
 	}
 
 	r.baseFSMInstance.GetLogger().Debugf("Redpanda service %s start command executed", r.baseFSMInstance.GetID())
+
 	return nil
 }
 
-// StopInstance attempts to stop the Redpanda by setting the desired state to stopped for the given instance
+// StopInstance attempts to stop the Redpanda by setting the desired state to stopped for the given instance.
 func (r *RedpandaInstance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	r.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping Redpanda service %s ...", r.baseFSMInstance.GetID())
 
@@ -113,23 +120,22 @@ func (r *RedpandaInstance) StopInstance(ctx context.Context, filesystemService f
 	}
 
 	r.baseFSMInstance.GetLogger().Debugf("Redpanda service %s stop command executed", r.baseFSMInstance.GetID())
+
 	return nil
 }
 
 // CheckForCreation checks whether the creation was successful
-// For Redpanda, this is a no-op as we don't need to check anything
+// For Redpanda, this is a no-op as we don't need to check anything.
 func (r *RedpandaInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
 	return true
 }
 
 // getServiceStatus gets the status of the Redpanda service
-// its main purpose is to habdle the edge cases where the service is not yet created or not yet running
+// its main purpose is to habdle the edge cases where the service is not yet created or not yet running.
 func (r *RedpandaInstance) GetServiceStatus(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) (redpanda_service.ServiceInfo, error) {
-
 	info, err := r.service.Status(ctx, filesystemService, r.baseFSMInstance.GetID(), tick, loopStartTime)
 	if err != nil {
 		// If there's an error getting the service status, we need to distinguish between cases
-
 		if errors.Is(err, redpanda_service.ErrServiceNotExist) {
 			// If the service is being created, we don't want to count this as an error
 			// The instance is likely in Creating or ToBeCreated state, so service doesn't exist yet
@@ -141,12 +147,14 @@ func (r *RedpandaInstance) GetServiceStatus(ctx context.Context, filesystemServi
 
 			// Log the warning but don't treat it as a fatal error
 			r.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation")
+
 			return redpanda_service.ServiceInfo{}, nil
 		} else if errors.Is(err, redpanda_service.ErrServiceNoLogFile) {
 			// This is only an error, if redpanda is already running, otherwise there are simply no logs
 			// This includes degraded states, as he can only go from active/idle to degraded, and therefore there should be logs
 			if IsRunningState(r.baseFSMInstance.GetCurrentFSMState()) {
 				r.baseFSMInstance.GetLogger().Debugf("Health check had no logs to process for service %s, returning ServiceInfo with failed health checks", r.baseFSMInstance.GetID())
+
 				infoWithFailedHealthChecks := info
 				infoWithFailedHealthChecks.RedpandaStatus.HealthCheck.IsLive = false
 				infoWithFailedHealthChecks.RedpandaStatus.HealthCheck.IsReady = false
@@ -162,6 +170,7 @@ func (r *RedpandaInstance) GetServiceStatus(ctx context.Context, filesystemServi
 				infoWithFailedHealthChecks := info
 				infoWithFailedHealthChecks.RedpandaStatus.HealthCheck.IsLive = false
 				infoWithFailedHealthChecks.RedpandaStatus.HealthCheck.IsReady = false
+
 				return infoWithFailedHealthChecks, nil
 			}
 		} else if errors.Is(err, redpanda_service.ErrRedpandaMonitorNotRunning) {
@@ -174,23 +183,26 @@ func (r *RedpandaInstance) GetServiceStatus(ctx context.Context, filesystemServi
 			infoWithFailedHealthChecks := info
 			infoWithFailedHealthChecks.RedpandaStatus.HealthCheck.IsLive = false
 			infoWithFailedHealthChecks.RedpandaStatus.HealthCheck.IsReady = false
+
 			return infoWithFailedHealthChecks, nil
 		}
 
 		// For other errors, log them and return
 		r.baseFSMInstance.GetLogger().Errorf("error updating observed state for %s: %s (current state: %s, desired state: %s)", r.baseFSMInstance.GetID(), err, r.baseFSMInstance.GetCurrentFSMState(), r.baseFSMInstance.GetDesiredFSMState())
+
 		return redpanda_service.ServiceInfo{}, err
 	}
 
 	return info, nil
 }
 
-// UpdateObservedStateOfInstance updates the observed state of the service
+// UpdateObservedStateOfInstance updates the observed state of the service.
 func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
 		if r.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "UpdateObservedStateOfInstance") {
 			return nil
 		}
+
 		return ctx.Err()
 	}
 
@@ -205,6 +217,7 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 		if !exists {
 			// If the service doesn't exist, nothing more to do
 			r.PreviousObservedState = RedpandaObservedState{}
+
 			return nil
 		}
 	}
@@ -224,10 +237,13 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 		start := time.Now()
 		info, err := r.GetServiceStatus(gctx, services.GetFileSystem(), snapshot.Tick, snapshot.SnapshotTime)
 		metrics.ObserveReconcileTime(logger.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
+
 		if err == nil {
 			// Store the raw service info
 			observedStateMu.Lock()
+
 			r.PreviousObservedState.ServiceInfo = info
+
 			observedStateMu.Unlock()
 		} else if strings.Contains(err.Error(), redpanda_service.ErrServiceNotExist.Error()) ||
 			strings.Contains(err.Error(), redpanda_service.ErrServiceNoLogFile.Error()) ||
@@ -237,6 +253,7 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 		} else if strings.Contains(err.Error(), redpanda_service.ErrRedpandaMonitorNotRunning.Error()) {
 			// This is expected during the startup phase of the redpanda service, when the redpanda monitor service is not yet running
 			r.baseFSMInstance.GetLogger().Debugf("Redpanda monitor service not yet running: %v", err)
+
 			return nil
 		}
 
@@ -252,8 +269,11 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 		if err == nil {
 			// Only update if we successfully got the config
 			observedStateMu.Lock()
+
 			r.PreviousObservedState.ObservedRedpandaServiceConfig = observedConfig
+
 			observedStateMu.Unlock()
+
 			return nil
 		} else {
 			if strings.Contains(err.Error(), redpanda_service.ErrServiceNotExist.Error()) ||
@@ -263,17 +283,21 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 				// Log the error but don't fail - this might happen during creation when the config file doesn't exist yet
 				// Note: as we use the logs of the underlying redpanda_monitor service, we need to ignore ErrServiceNoLogFile here.
 				r.baseFSMInstance.GetLogger().Debugf("Monitor service not found, will be created during reconciliation: %v", err)
+
 				return nil
 			}
+
 			if strings.Contains(err.Error(), monitor.ErrServiceConnectionRefused.Error()) {
 				// This is expected during the startup phase of the redpanda service, when the service is not yet ready to receive connections
 				r.baseFSMInstance.GetLogger().Debugf("Monitor service not yet ready: %v", err)
+
 				return nil
 			}
 
 			if strings.Contains(err.Error(), redpanda_service.ErrRedpandaMonitorNotRunning.Error()) {
 				// This is expected during the startup phase of the redpanda service, when the redpanda monitor service is not yet running
 				r.baseFSMInstance.GetLogger().Debugf("Redpanda monitor service not yet running: %v", err)
+
 				return nil
 			}
 
@@ -312,6 +336,7 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 	// If the config could not be fetched, we can't update the S6 configuration
 	if r.PreviousObservedState.ObservedRedpandaServiceConfig.Resources.MaxCores == 0 {
 		r.baseFSMInstance.GetLogger().Debugf("Observed Redpanda config is not available, skipping update")
+
 		return nil
 	}
 
@@ -341,16 +366,17 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 	// We also check that the desired state is a running state,
 	// preventing issues when redpanda is currently stopping, but the current state is not yet updated
 	//
-	// Important: This *must* run after the rest of the update state, otherwise we will incorrectly look at an potential old state and infinitly loop.
+	// Important: This *must* run after the rest of the update state, otherwise we will incorrectly look at an potential old state and infinity loop.
 	currentState = r.baseFSMInstance.GetCurrentFSMState()
+
 	desiredState = r.baseFSMInstance.GetDesiredFSMState()
 	if IsRunningState(currentState) && IsRunningState(desiredState) {
 		// Reconcile the cluster config via HTTP
 		// 1. Check if we have changes in the config
 		var changes = make(map[string]interface{})
+
 		if r.PreviousObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionBytes != r.config.Topic.DefaultTopicRetentionBytes {
 			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#retention_bytes
-
 			if r.config.Topic.DefaultTopicRetentionBytes != 0 {
 				changes["retention_bytes"] = r.config.Topic.DefaultTopicRetentionBytes
 			} else {
@@ -363,7 +389,6 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 
 		if r.PreviousObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionMs != r.config.Topic.DefaultTopicRetentionMs {
 			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#log_retention_ms
-
 			if r.config.Topic.DefaultTopicRetentionMs != 0 {
 				changes["log_retention_ms"] = r.config.Topic.DefaultTopicRetentionMs
 			} else {
@@ -376,7 +401,6 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 
 		if r.PreviousObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicCompressionAlgorithm != r.config.Topic.DefaultTopicCompressionAlgorithm {
 			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#log_compression_type
-
 			if r.config.Topic.DefaultTopicCompressionAlgorithm != "" {
 				changes["log_compression_type"] = r.config.Topic.DefaultTopicCompressionAlgorithm
 			} else {
@@ -389,7 +413,6 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 
 		if r.PreviousObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicCleanupPolicy != r.config.Topic.DefaultTopicCleanupPolicy {
 			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#log_cleanup_policy
-
 			if r.config.Topic.DefaultTopicCleanupPolicy != "" {
 				changes["log_cleanup_policy"] = r.config.Topic.DefaultTopicCleanupPolicy
 			} else {
@@ -402,7 +425,6 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 
 		if r.PreviousObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicSegmentMs != r.config.Topic.DefaultTopicSegmentMs {
 			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#log_segment_ms
-
 			if r.config.Topic.DefaultTopicSegmentMs != 0 {
 				changes["log_segment_ms"] = r.config.Topic.DefaultTopicSegmentMs
 			} else {
@@ -419,6 +441,7 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 			if err != nil {
 				return fmt.Errorf("failed to update Redpanda cluster config: %w", err)
 			}
+
 			return nil
 		}
 	}
@@ -460,7 +483,8 @@ func (r *RedpandaInstance) IsRedpandaS6Running() (bool, string) {
 	if r.PreviousObservedState.ServiceInfo.S6FSMState == s6fsm.OperationalStateRunning {
 		return true, ""
 	}
-	return false, fmt.Sprintf("s6 is not running, current state: %s", r.PreviousObservedState.ServiceInfo.S6FSMState)
+
+	return false, "s6 is not running, current state: " + r.PreviousObservedState.ServiceInfo.S6FSMState
 }
 
 // IsRedpandaS6Stopped reports true when the FSM state is
@@ -475,7 +499,8 @@ func (r *RedpandaInstance) IsRedpandaS6Stopped() (bool, string) {
 	if r.PreviousObservedState.ServiceInfo.S6FSMState == s6fsm.OperationalStateStopped {
 		return true, ""
 	}
-	return false, fmt.Sprintf("s6 is not stopped, current state: %s", r.PreviousObservedState.ServiceInfo.S6FSMState)
+
+	return false, "s6 is not stopped, current state: " + r.PreviousObservedState.ServiceInfo.S6FSMState
 }
 
 // IsRedpandaHealthchecksPassed reports true when both liveness and readiness
@@ -490,6 +515,7 @@ func (r *RedpandaInstance) IsRedpandaHealthchecksPassed() (bool, string) {
 		r.PreviousObservedState.ServiceInfo.RedpandaStatus.HealthCheck.IsReady {
 		return true, ""
 	}
+
 	return false, fmt.Sprintf("healthchecks did not pass, live: %t, ready: %t", r.PreviousObservedState.ServiceInfo.RedpandaStatus.HealthCheck.IsLive, r.PreviousObservedState.ServiceInfo.RedpandaStatus.HealthCheck.IsReady)
 }
 
@@ -529,6 +555,7 @@ func (r *RedpandaInstance) AnyUnexpectedRestartsInTheLastHour() (bool, string) {
 	// Check if any of the exit codes are 0 (which means a restart)
 	// and if the time of the restart is within the last hour
 	var restarts []int
+
 	for _, exitCode := range r.PreviousObservedState.ServiceInfo.S6ObservedState.ServiceInfo.ExitHistory {
 		if exitCode.ExitCode != 0 && exitCode.Timestamp.After(time.Now().Add(-1*time.Hour)) {
 			restarts = append(restarts, exitCode.ExitCode)
@@ -578,6 +605,7 @@ func (r *RedpandaInstance) IsRedpandaLogsFine(currentTime time.Time, logWindow t
 	if !logsFine {
 		return false, fmt.Sprintf("log issue: [%s] %s", logEntry.Timestamp.Format(time.RFC3339), logEntry.Content)
 	}
+
 	return true, ""
 }
 
@@ -603,18 +631,23 @@ func (r *RedpandaInstance) IsRedpandaDegraded(currentTime time.Time, logWindow t
 	healthchecksPassed, reasonHealthchecksPassed := r.IsRedpandaHealthchecksPassed()
 	runningForSomeTimeWithoutErrors, reasonRunningForSomeTimeWithoutErrors := r.IsRedpandaRunningWithoutErrors(currentTime, logWindow)
 	unexpectedRestarts, reasonUnexpectedRestarts := r.AnyUnexpectedRestartsInTheLastHour()
+
 	if !s6Running {
 		return true, reasonS6Running
 	}
+
 	if !healthchecksPassed {
 		return true, reasonHealthchecksPassed
 	}
+
 	if !runningForSomeTimeWithoutErrors {
 		return true, reasonRunningForSomeTimeWithoutErrors
 	}
+
 	if unexpectedRestarts {
 		return true, reasonUnexpectedRestarts
 	}
+
 	return false, ""
 }
 
@@ -666,7 +699,7 @@ func (r *RedpandaInstance) IsRedpandaStarted(ctx context.Context) (bool, string)
 	}
 
 	if !hasSchemaRegistryReachable {
-		return false, fmt.Sprintf("schema registry not reachable: %s", schemaRegistryReason)
+		return false, "schema registry not reachable: " + schemaRegistryReason
 	}
 
 	return true, ""
@@ -689,13 +722,14 @@ func (r *RedpandaInstance) IsSchemaRegistryReachable(ctx context.Context) (bool,
 	}
 
 	resp, err := http.DefaultClient.Do(req)
-
 	if err != nil {
 		return false, fmt.Sprintf("failed to reach schema registry: %v", err)
 	}
+
 	if resp == nil {
 		return false, "received nil response from schema registry"
 	}
+
 	if resp.Body != nil {
 		err = resp.Body.Close()
 		if err != nil {
@@ -705,6 +739,7 @@ func (r *RedpandaInstance) IsSchemaRegistryReachable(ctx context.Context) (bool,
 	// It should return either a 2XX or a 4XX status code
 	if resp.StatusCode >= 200 && resp.StatusCode < 500 {
 		r.baseFSMInstance.GetLogger().Debugf("Schema registry reachable")
+
 		return true, ""
 	}
 

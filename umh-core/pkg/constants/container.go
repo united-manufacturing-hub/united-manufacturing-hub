@@ -16,18 +16,18 @@ package constants
 
 import "time"
 
-// Container monitor constants
+// Container monitor constants.
 const (
-	// Hardware information sources
+	// Hardware information sources.
 	HWIDFilePath  = "/data/hwid"
 	DataMountPath = "/data"
 )
 
 // Container Operation Timeouts - Level 1 Service (depends on S6)
-// ContainerUpdateObservedStateTimeout is the timeout for updating the observed state
+// ContainerUpdateObservedStateTimeout is the timeout for updating the observed state.
 const ContainerUpdateObservedStateTimeout = 10 * time.Millisecond
 
-// Health assessment thresholds
+// Health assessment thresholds.
 const (
 	CPUHighThresholdPercent   = 90.0 // Degraded if above this
 	CPUMediumThresholdPercent = 70.0 // Warning level (but still Active)

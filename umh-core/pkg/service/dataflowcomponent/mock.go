@@ -16,7 +16,6 @@ package dataflowcomponent
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -29,7 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
-// MockDataFlowComponentService is a mock implementation of the IDataFlowComponentService interface for testing
+// MockDataFlowComponentService is a mock implementation of the IDataFlowComponentService interface for testing.
 type MockDataFlowComponentService struct {
 	GenerateBenthosConfigForDataFlowComponentError error
 	GetConfigError                                 error
@@ -79,17 +78,17 @@ type MockDataFlowComponentService struct {
 	ReconcileManagerReconciled bool
 }
 
-// Ensure MockDataFlowComponentService implements IDataFlowComponentService
+// Ensure MockDataFlowComponentService implements IDataFlowComponentService.
 var _ IDataFlowComponentService = (*MockDataFlowComponentService)(nil)
 
-// ComponentStateFlags contains all the state flags needed for FSM testing
+// ComponentStateFlags contains all the state flags needed for FSM testing.
 type ComponentStateFlags struct {
 	BenthosFSMState                  string
 	IsBenthosRunning                 bool
 	IsBenthosProcessingMetricsActive bool
 }
 
-// NewMockDataFlowComponentService creates a new mock DataFlowComponent service
+// NewMockDataFlowComponentService creates a new mock DataFlowComponent service.
 func NewMockDataFlowComponentService() *MockDataFlowComponentService {
 	return &MockDataFlowComponentService{
 		ComponentStates:    make(map[string]*ServiceInfo),
@@ -100,7 +99,7 @@ func NewMockDataFlowComponentService() *MockDataFlowComponentService {
 	}
 }
 
-// SetComponentState sets all state flags for a component at once
+// SetComponentState sets all state flags for a component at once.
 func (m *MockDataFlowComponentService) SetComponentState(componentName string, flags ComponentStateFlags) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -140,7 +139,7 @@ func (m *MockDataFlowComponentService) SetComponentState(componentName string, f
 	m.stateFlags[componentName] = &flags
 }
 
-// GetComponentState gets the state flags for a component
+// GetComponentState gets the state flags for a component.
 func (m *MockDataFlowComponentService) GetComponentState(componentName string) *ComponentStateFlags {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -151,19 +150,21 @@ func (m *MockDataFlowComponentService) GetComponentState(componentName string) *
 	// Initialize with default flags if not exists
 	flags := &ComponentStateFlags{}
 	m.stateFlags[componentName] = flags
+
 	return flags
 }
 
-// GenerateBenthosConfigForDataFlowComponent mocks generating Benthos config for a DataFlowComponent
+// GenerateBenthosConfigForDataFlowComponent mocks generating Benthos config for a DataFlowComponent.
 func (m *MockDataFlowComponentService) GenerateBenthosConfigForDataFlowComponent(dataflowConfig *dataflowcomponentserviceconfig.DataflowComponentServiceConfig, componentName string) (benthosserviceconfig.BenthosServiceConfig, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.GenerateBenthosConfigForDataFlowComponentCalled = true
+
 	return m.GenerateBenthosConfigForDataFlowComponentResult, m.GenerateBenthosConfigForDataFlowComponentError
 }
 
-// GetConfig mocks getting the DataFlowComponent configuration
+// GetConfig mocks getting the DataFlowComponent configuration.
 func (m *MockDataFlowComponentService) GetConfig(ctx context.Context, filesystemService filesystem.Service, componentName string) (dataflowcomponentserviceconfig.DataflowComponentServiceConfig, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -179,7 +180,7 @@ func (m *MockDataFlowComponentService) GetConfig(ctx context.Context, filesystem
 	return m.GetConfigResult, nil
 }
 
-// Status mocks getting the status of a DataFlowComponent
+// Status mocks getting the status of a DataFlowComponent.
 func (m *MockDataFlowComponentService) Status(ctx context.Context, filesystemService filesystem.Service, componentName string, tick uint64) (ServiceInfo, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -200,14 +201,14 @@ func (m *MockDataFlowComponentService) Status(ctx context.Context, filesystemSer
 	return m.StatusResult, m.StatusError
 }
 
-// AddDataFlowComponentToBenthosManager mocks adding a DataFlowComponent to the Benthos manager
+// AddDataFlowComponentToBenthosManager mocks adding a DataFlowComponent to the Benthos manager.
 func (m *MockDataFlowComponentService) AddDataFlowComponentToBenthosManager(ctx context.Context, filesystemService filesystem.Service, cfg *dataflowcomponentserviceconfig.DataflowComponentServiceConfig, componentName string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.AddDataFlowComponentToBenthosManagerCalled = true
 
-	benthosName := fmt.Sprintf("dataflow-%s", componentName)
+	benthosName := "dataflow-" + componentName
 
 	// Check whether the component already exists
 	for _, benthosConfig := range m.BenthosConfigs {
@@ -234,22 +235,24 @@ func (m *MockDataFlowComponentService) AddDataFlowComponentToBenthosManager(ctx 
 	return m.AddDataFlowComponentToBenthosManagerError
 }
 
-// UpdateDataFlowComponentInBenthosManager mocks updating a DataFlowComponent in the Benthos manager
+// UpdateDataFlowComponentInBenthosManager mocks updating a DataFlowComponent in the Benthos manager.
 func (m *MockDataFlowComponentService) UpdateDataFlowComponentInBenthosManager(ctx context.Context, filesystemService filesystem.Service, cfg *dataflowcomponentserviceconfig.DataflowComponentServiceConfig, componentName string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.UpdateDataFlowComponentInBenthosManagerCalled = true
 
-	benthosName := fmt.Sprintf("dataflow-%s", componentName)
+	benthosName := "dataflow-" + componentName
 
 	// Check if the component exists
 	found := false
 	index := -1
+
 	for i, benthosConfig := range m.BenthosConfigs {
 		if benthosConfig.Name == benthosName {
 			found = true
 			index = i
+
 			break
 		}
 	}
@@ -271,14 +274,14 @@ func (m *MockDataFlowComponentService) UpdateDataFlowComponentInBenthosManager(c
 	return m.UpdateDataFlowComponentInBenthosManagerError
 }
 
-// RemoveDataFlowComponentFromBenthosManager mocks removing a DataFlowComponent from the Benthos manager
+// RemoveDataFlowComponentFromBenthosManager mocks removing a DataFlowComponent from the Benthos manager.
 func (m *MockDataFlowComponentService) RemoveDataFlowComponentFromBenthosManager(ctx context.Context, filesystemService filesystem.Service, componentName string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.RemoveDataFlowComponentFromBenthosManagerCalled = true
 
-	benthosName := fmt.Sprintf("dataflow-%s", componentName)
+	benthosName := "dataflow-" + componentName
 
 	found := false
 
@@ -287,6 +290,7 @@ func (m *MockDataFlowComponentService) RemoveDataFlowComponentFromBenthosManager
 		if benthosConfig.Name == benthosName {
 			m.BenthosConfigs = append(m.BenthosConfigs[:i], m.BenthosConfigs[i+1:]...)
 			found = true
+
 			break
 		}
 	}
@@ -302,14 +306,14 @@ func (m *MockDataFlowComponentService) RemoveDataFlowComponentFromBenthosManager
 	return m.RemoveDataFlowComponentFromBenthosManagerError
 }
 
-// StartDataFlowComponent mocks starting a DataFlowComponent
+// StartDataFlowComponent mocks starting a DataFlowComponent.
 func (m *MockDataFlowComponentService) StartDataFlowComponent(ctx context.Context, filesystemService filesystem.Service, componentName string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.StartDataFlowComponentCalled = true
 
-	benthosName := fmt.Sprintf("dataflow-%s", componentName)
+	benthosName := "dataflow-" + componentName
 
 	found := false
 
@@ -318,6 +322,7 @@ func (m *MockDataFlowComponentService) StartDataFlowComponent(ctx context.Contex
 		if benthosConfig.Name == benthosName {
 			m.BenthosConfigs[i].DesiredFSMState = benthosfsmmanager.OperationalStateActive
 			found = true
+
 			break
 		}
 	}
@@ -329,14 +334,14 @@ func (m *MockDataFlowComponentService) StartDataFlowComponent(ctx context.Contex
 	return m.StartDataFlowComponentError
 }
 
-// StopDataFlowComponent mocks stopping a DataFlowComponent
+// StopDataFlowComponent mocks stopping a DataFlowComponent.
 func (m *MockDataFlowComponentService) StopDataFlowComponent(ctx context.Context, filesystemService filesystem.Service, componentName string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.StopDataFlowComponentCalled = true
 
-	benthosName := fmt.Sprintf("dataflow-%s", componentName)
+	benthosName := "dataflow-" + componentName
 
 	found := false
 
@@ -345,6 +350,7 @@ func (m *MockDataFlowComponentService) StopDataFlowComponent(ctx context.Context
 		if benthosConfig.Name == benthosName {
 			m.BenthosConfigs[i].DesiredFSMState = benthosfsmmanager.OperationalStateStopped
 			found = true
+
 			break
 		}
 	}
@@ -356,37 +362,41 @@ func (m *MockDataFlowComponentService) StopDataFlowComponent(ctx context.Context
 	return m.StopDataFlowComponentError
 }
 
-// ForceRemoveDataFlowComponent mocks force removing a DataFlowComponent
+// ForceRemoveDataFlowComponent mocks force removing a DataFlowComponent.
 func (m *MockDataFlowComponentService) ForceRemoveDataFlowComponent(ctx context.Context, filesystemService filesystem.Service, componentName string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.ForceRemoveDataFlowComponentCalled = true
+
 	return m.ForceRemoveDataFlowComponentError
 }
 
-// ServiceExists mocks checking if a DataFlowComponent exists
+// ServiceExists mocks checking if a DataFlowComponent exists.
 func (m *MockDataFlowComponentService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, componentName string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.ServiceExistsCalled = true
+
 	return m.ServiceExistsResult
 }
 
-// ReconcileManager mocks reconciling the DataFlowComponent manager
+// ReconcileManager mocks reconciling the DataFlowComponent manager.
 func (m *MockDataFlowComponentService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.ReconcileManagerCalled = true
+
 	return m.ReconcileManagerError, m.ReconcileManagerReconciled
 }
 
-// boolToInt64 converts a boolean to int64 (1 for true, 0 for false)
+// boolToInt64 converts a boolean to int64 (1 for true, 0 for false).
 func boolToInt64(b bool) int64 {
 	if b {
 		return 1
 	}
+
 	return 0
 }

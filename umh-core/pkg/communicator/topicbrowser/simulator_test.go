@@ -71,25 +71,25 @@ var _ = Describe("Simulator", func() {
 			err := proto.Unmarshal(bundle, &unsBundle)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(unsBundle.UnsMap).NotTo(BeNil())
-			Expect(unsBundle.UnsMap.Entries).To(HaveLen(2))
+			Expect(unsBundle.GetUnsMap()).NotTo(BeNil())
+			Expect(unsBundle.GetUnsMap().GetEntries()).To(HaveLen(2))
 
 			// Verify the hardcoded topics exist
 			foundTopic1 := false
 			foundTopic2 := false
 
-			for _, topic := range unsBundle.UnsMap.Entries {
-				if topic.Name == "uns.topic1" {
+			for _, topic := range unsBundle.GetUnsMap().GetEntries() {
+				if topic.GetName() == "uns.topic1" {
 					foundTopic1 = true
-					Expect(topic.Level0).To(Equal("corpA"))
-					Expect(topic.LocationSublevels).To(Equal([]string{"plant-1", "line-4", "pump-41"}))
-					Expect(topic.DataContract).To(Equal("uns.topic1"))
+					Expect(topic.GetLevel0()).To(Equal("corpA"))
+					Expect(topic.GetLocationSublevels()).To(Equal([]string{"plant-1", "line-4", "pump-41"}))
+					Expect(topic.GetDataContract()).To(Equal("uns.topic1"))
 				}
-				if topic.Name == "uns.topic2" {
+				if topic.GetName() == "uns.topic2" {
 					foundTopic2 = true
-					Expect(topic.Level0).To(Equal("corpA"))
-					Expect(topic.LocationSublevels).To(Equal([]string{"plant-1", "line-4", "pump-42"}))
-					Expect(topic.DataContract).To(Equal("uns.topic2"))
+					Expect(topic.GetLevel0()).To(Equal("corpA"))
+					Expect(topic.GetLocationSublevels()).To(Equal([]string{"plant-1", "line-4", "pump-42"}))
+					Expect(topic.GetDataContract()).To(Equal("uns.topic2"))
 				}
 			}
 
@@ -107,12 +107,12 @@ var _ = Describe("Simulator", func() {
 			err := proto.Unmarshal(bundle, &unsBundle)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(unsBundle.UnsMap).NotTo(BeNil())
-			Expect(unsBundle.UnsMap.Entries).To(HaveLen(2))
-			Expect(unsBundle.Events).NotTo(BeNil())
-			Expect(unsBundle.Events.Entries).To(HaveLen(2))
-			Expect(unsBundle.Events.Entries[0].ProducedAtMs).To(BeNumerically(">=", 0))
-			Expect(unsBundle.Events.Entries[1].ProducedAtMs).To(BeNumerically(">=", unsBundle.Events.Entries[0].ProducedAtMs))
+			Expect(unsBundle.GetUnsMap()).NotTo(BeNil())
+			Expect(unsBundle.GetUnsMap().GetEntries()).To(HaveLen(2))
+			Expect(unsBundle.GetEvents()).NotTo(BeNil())
+			Expect(unsBundle.GetEvents().GetEntries()).To(HaveLen(2))
+			Expect(unsBundle.GetEvents().GetEntries()[0].GetProducedAtMs()).To(BeNumerically(">=", 0))
+			Expect(unsBundle.GetEvents().GetEntries()[1].GetProducedAtMs()).To(BeNumerically(">=", unsBundle.GetEvents().GetEntries()[0].GetProducedAtMs()))
 		})
 
 		It("should generate events for all topics", func() {
@@ -122,8 +122,8 @@ var _ = Describe("Simulator", func() {
 			err := proto.Unmarshal(bundle, &unsBundle)
 			Expect(err).NotTo(HaveOccurred())
 
-			topicCount := len(unsBundle.UnsMap.Entries)
-			eventCount := len(unsBundle.Events.Entries)
+			topicCount := len(unsBundle.GetUnsMap().GetEntries())
+			eventCount := len(unsBundle.GetEvents().GetEntries())
 
 			Expect(eventCount).To(Equal(topicCount))
 		})
@@ -137,14 +137,14 @@ var _ = Describe("Simulator", func() {
 			Expect(proto.Unmarshal(bundle2, &unsBundle2)).To(Succeed())
 
 			// Get first event from each bundle
-			event1 := unsBundle1.Events.Entries[0]
-			event2 := unsBundle2.Events.Entries[0]
+			event1 := unsBundle1.GetEvents().GetEntries()[0]
+			event2 := unsBundle2.GetEvents().GetEntries()[0]
 
-			Expect(event1.Payload.(*tbproto.EventTableEntry_Ts).Ts.ScalarType).To(Equal(tbproto.ScalarType_NUMERIC))
-			Expect(event2.Payload.(*tbproto.EventTableEntry_Ts).Ts.ScalarType).To(Equal(tbproto.ScalarType_NUMERIC))
+			Expect(event1.Payload.(*tbproto.EventTableEntry_Ts).Ts.GetScalarType()).To(Equal(tbproto.ScalarType_NUMERIC))
+			Expect(event2.Payload.(*tbproto.EventTableEntry_Ts).Ts.GetScalarType()).To(Equal(tbproto.ScalarType_NUMERIC))
 
-			val1 := event1.Payload.(*tbproto.EventTableEntry_Ts).Ts.Value.(*tbproto.TimeSeriesPayload_NumericValue).NumericValue.Value
-			val2 := event2.Payload.(*tbproto.EventTableEntry_Ts).Ts.Value.(*tbproto.TimeSeriesPayload_NumericValue).NumericValue.Value
+			val1 := event1.Payload.(*tbproto.EventTableEntry_Ts).Ts.Value.(*tbproto.TimeSeriesPayload_NumericValue).NumericValue.GetValue()
+			val2 := event2.Payload.(*tbproto.EventTableEntry_Ts).Ts.Value.(*tbproto.TimeSeriesPayload_NumericValue).NumericValue.GetValue()
 
 			// Values should be between 0 and 100
 			Expect(val1).To(BeNumerically(">=", 0))
@@ -165,8 +165,8 @@ var _ = Describe("Simulator", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// All events should have ProducedAtMs equal to current ticker value
-			for _, event := range unsBundle.Events.Entries {
-				Expect(event.ProducedAtMs).To(BeNumerically(">", 0))
+			for _, event := range unsBundle.GetEvents().GetEntries() {
+				Expect(event.GetProducedAtMs()).To(BeNumerically(">", 0))
 			}
 		})
 	})
@@ -189,7 +189,7 @@ var _ = Describe("Simulator", func() {
 
 		It("should limit buffer to 100 entries", func() {
 			// Add 102 bundles to test the limit
-			for i := 0; i < testBundleCount; i++ {
+			for range testBundleCount {
 				bundle := simulator.GenerateNewUnsBundle()
 				simulator.AddUnsBundleToSimObservedState(bundle)
 			}
@@ -204,7 +204,7 @@ var _ = Describe("Simulator", func() {
 			simulator.AddUnsBundleToSimObservedState(firstBundle)
 
 			// Fill up the buffer
-			for i := 0; i < bufferLimit; i++ {
+			for range bufferLimit {
 				bundle := simulator.GenerateNewUnsBundle()
 				simulator.AddUnsBundleToSimObservedState(bundle)
 			}
@@ -222,11 +222,11 @@ var _ = Describe("Simulator", func() {
 			numGoroutines := 10
 			bundlesPerGoroutine := 5
 
-			for i := 0; i < numGoroutines; i++ {
+			for range numGoroutines {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					for j := 0; j < bundlesPerGoroutine; j++ {
+					for range bundlesPerGoroutine {
 						bundle := simulator.GenerateNewUnsBundle()
 						simulator.AddUnsBundleToSimObservedState(bundle)
 					}
@@ -244,7 +244,7 @@ var _ = Describe("Simulator", func() {
 	Describe("GetSimObservedState", func() {
 		It("should return current observed state", func() {
 			// fill up the buffer
-			for i := 0; i < bufferLimit; i++ {
+			for range bufferLimit {
 				bundle := simulator.GenerateNewUnsBundle()
 				simulator.AddUnsBundleToSimObservedState(bundle)
 			}
@@ -259,7 +259,7 @@ var _ = Describe("Simulator", func() {
 			var wg sync.WaitGroup
 			numReaders := 10
 
-			for i := 0; i < numReaders; i++ {
+			for range numReaders {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
@@ -278,7 +278,7 @@ var _ = Describe("Simulator", func() {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				for i := 0; i < 10; i++ {
+				for range 10 {
 					bundle := simulator.GenerateNewUnsBundle()
 					simulator.AddUnsBundleToSimObservedState(bundle)
 					time.Sleep(time.Millisecond)
@@ -286,11 +286,11 @@ var _ = Describe("Simulator", func() {
 			}()
 
 			// Start multiple readers
-			for i := 0; i < 5; i++ {
+			for range 5 {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					for j := 0; j < 10; j++ {
+					for range 10 {
 						state := simulator.GetSimObservedState()
 						Expect(state).NotTo(BeNil())
 						time.Sleep(time.Millisecond)
@@ -435,10 +435,10 @@ var _ = Describe("Simulator", func() {
 			Expect(proto.Unmarshal(bundle2, &unsBundle2)).To(Succeed())
 
 			// ProducedAtMs should reflect ticker values
-			event1 := unsBundle1.Events.Entries[0]
-			event2 := unsBundle2.Events.Entries[0]
+			event1 := unsBundle1.GetEvents().GetEntries()[0]
+			event2 := unsBundle2.GetEvents().GetEntries()[0]
 
-			Expect(event2.ProducedAtMs).To(BeNumerically(">=", event1.ProducedAtMs))
+			Expect(event2.GetProducedAtMs()).To(BeNumerically(">=", event1.GetProducedAtMs()))
 		})
 
 		It("should work correctly with multiple ticks", func() {
@@ -446,7 +446,7 @@ var _ = Describe("Simulator", func() {
 			initialCount := len(initialState.ServiceInfo.Status.BufferSnapshot.Items)
 
 			numTicks := 5
-			for i := 0; i < numTicks; i++ {
+			for range numTicks {
 				simulator.Tick()
 			}
 
@@ -458,7 +458,7 @@ var _ = Describe("Simulator", func() {
 	Describe("Integration", func() {
 		It("should maintain data consistency across operations", func() {
 			// Perform multiple ticks
-			for i := 0; i < 3; i++ {
+			for range 3 {
 				simulator.Tick()
 			}
 
@@ -469,13 +469,13 @@ var _ = Describe("Simulator", func() {
 				var unsBundle tbproto.UnsBundle
 				Expect(proto.Unmarshal(buffer.Payload, &unsBundle)).To(Succeed())
 
-				Expect(unsBundle.UnsMap).NotTo(BeNil())
-				Expect(unsBundle.Events).NotTo(BeNil())
-				Expect(len(unsBundle.UnsMap.Entries)).To(Equal(len(unsBundle.Events.Entries)))
+				Expect(unsBundle.GetUnsMap()).NotTo(BeNil())
+				Expect(unsBundle.GetEvents()).NotTo(BeNil())
+				Expect(len(unsBundle.GetUnsMap().GetEntries())).To(Equal(len(unsBundle.GetEvents().GetEntries())))
 
 				// Verify each event has valid UnsTreeId that maps to a topic
-				for _, event := range unsBundle.Events.Entries {
-					_, exists := unsBundle.UnsMap.Entries[event.UnsTreeId]
+				for _, event := range unsBundle.GetEvents().GetEntries() {
+					_, exists := unsBundle.GetUnsMap().GetEntries()[event.GetUnsTreeId()]
 					Expect(exists).To(BeTrue(), "Event UnsTreeId should map to existing topic")
 				}
 			}
@@ -490,8 +490,8 @@ var _ = Describe("Simulator", func() {
 			var unsBundle tbproto.UnsBundle
 			err := proto.Unmarshal(bundle, &unsBundle)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(unsBundle.UnsMap).NotTo(BeNil())
-			Expect(unsBundle.Events).NotTo(BeNil())
+			Expect(unsBundle.GetUnsMap()).NotTo(BeNil())
+			Expect(unsBundle.GetEvents()).NotTo(BeNil())
 		})
 	})
 })

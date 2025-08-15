@@ -20,17 +20,17 @@ import (
 )
 
 var (
-	// ErrServiceNotExist indicates the requested service does not exist
+	// ErrServiceNotExist indicates the requested service does not exist.
 	ErrServiceNotExist = errors.New("service does not exist")
 
-	// ErrServiceAlreadyExists indicates the requested service already exists
+	// ErrServiceAlreadyExists indicates the requested service already exists.
 	ErrServiceAlreadyExists = errors.New("service already exists")
 
-	// ErrScanFailed indicates a scan operation failed
+	// ErrScanFailed indicates a scan operation failed.
 	ErrScanFailed = errors.New("nmap scan failed")
 )
 
-// WrapMetricsError wraps an error with additional context
+// WrapMetricsError wraps an error with additional context.
 func WrapMetricsError(baseErr error, message string) error {
 	return fmt.Errorf("%s: %w", message, baseErr)
 }

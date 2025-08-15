@@ -15,7 +15,7 @@
 package generator
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/agent_monitor"
@@ -33,7 +33,6 @@ func AgentFromSnapshot(
 	inst *fsm.FSMInstanceSnapshot,
 	log *zap.SugaredLogger,
 ) (models.Agent, string, string, []models.Version) {
-
 	if inst == nil {
 		return defaultAgent(), "n/a", "n/a", []models.Version{}
 	}
@@ -41,8 +40,10 @@ func AgentFromSnapshot(
 	agent, channel, currentVersion, versions, err := buildAgent(*inst, log)
 	if err != nil {
 		log.Error("unable to build agent data", zap.Error(err))
+
 		return defaultAgent(), "n/a", "n/a", []models.Version{}
 	}
+
 	return agent, channel, currentVersion, versions
 }
 
@@ -52,12 +53,12 @@ func buildAgent(
 	instance fsm.FSMInstanceSnapshot,
 	log *zap.SugaredLogger,
 ) (models.Agent, string, string, []models.Version, error) {
-
 	snap, ok := instance.LastObservedState.(*agent_monitor.AgentObservedStateSnapshot)
 	if !ok || snap == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, log,
 			"[buildAgent] unexpected observed state %T", instance.LastObservedState)
-		return defaultAgent(), "n/a", "n/a", []models.Version{}, fmt.Errorf("invalid observed-state")
+
+		return defaultAgent(), "n/a", "n/a", []models.Version{}, errors.New("invalid observed-state")
 	}
 
 	agent := models.Agent{

@@ -18,7 +18,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 )
 
-// GetNmapServiceConfig converts the component config to a full NmapServiceConfig
+// GetNmapServiceConfig converts the component config to a full NmapServiceConfig.
 func (c ConnectionServiceConfig) GetNmapServiceConfig() nmapserviceconfig.NmapServiceConfig {
 	return c.NmapServiceConfig
 }

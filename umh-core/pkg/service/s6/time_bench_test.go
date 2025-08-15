@@ -26,7 +26,8 @@ var (
 
 func BenchmarkParseNano(b *testing.B) {
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, err := ParseNano(testTimestamp)
 		if err != nil {
 			b.Fatal(err)
@@ -36,7 +37,8 @@ func BenchmarkParseNano(b *testing.B) {
 
 func BenchmarkTimeParseStandard(b *testing.B) {
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, err := time.Parse(timeLayout, testTimestamp)
 		if err != nil {
 			b.Fatal(err)
@@ -44,7 +46,7 @@ func BenchmarkTimeParseStandard(b *testing.B) {
 	}
 }
 
-// Test for result equality to verify both functions produce the same result
+// Test for result equality to verify both functions produce the same result.
 func TestParseEquality(t *testing.T) {
 	nano, err := ParseNano(testTimestamp)
 	if err != nil {

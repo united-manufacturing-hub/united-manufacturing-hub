@@ -23,13 +23,13 @@ var (
 	defaultComparator = NewComparator()
 )
 
-// ModelRef represents a reference to a data model
+// ModelRef represents a reference to a data model.
 type ModelRef struct {
 	Name    string `yaml:"name"`    // name of the referenced data model
 	Version string `yaml:"version"` // version of the referenced data model
 }
 
-// SourceMapping represents the mapping of source aliases to UNS topics
+// SourceMapping represents the mapping of source aliases to UNS topics.
 type SourceMapping map[string]string
 
 // StreamProcessorServiceConfigTemplate is the *blueprint* for deploying a
@@ -95,22 +95,22 @@ type StreamProcessorServiceConfigSpec struct {
 	TemplateRef string                               `yaml:"templateRef,omitempty"`
 }
 
-// Equal checks if two StreamProcessorServiceConfigs are equal
+// Equal checks if two StreamProcessorServiceConfigs are equal.
 func (c StreamProcessorServiceConfigSpec) Equal(other StreamProcessorServiceConfigSpec) bool {
 	return defaultComparator.ConfigsEqual(c, other)
 }
 
-// NormalizeStreamProcessorConfig is a package-level function for easy config normalization
+// NormalizeStreamProcessorConfig is a package-level function for easy config normalization.
 func NormalizeStreamProcessorConfig(cfg StreamProcessorServiceConfigSpec) StreamProcessorServiceConfigSpec {
 	return defaultNormalizer.NormalizeConfig(cfg)
 }
 
-// ConfigsEqual is a package-level function for easy config comparison
+// ConfigsEqual is a package-level function for easy config comparison.
 func ConfigsEqual(desired, observed StreamProcessorServiceConfigSpec) bool {
 	return defaultComparator.ConfigsEqual(desired, observed)
 }
 
-// ConfigDiff is a package-level function for easy config diff generation
+// ConfigDiff is a package-level function for easy config diff generation.
 func ConfigDiff(desired, observed StreamProcessorServiceConfigSpec) string {
 	return defaultComparator.ConfigDiff(desired, observed)
 }
@@ -123,7 +123,7 @@ func convertRuntimeToTemplate(runtime StreamProcessorServiceConfigRuntime) Strea
 	return StreamProcessorServiceConfigTemplate(runtime)
 }
 
-// ConfigsEqualRuntime is a package-level function for comparing runtime configurations
+// ConfigsEqualRuntime is a package-level function for comparing runtime configurations.
 func ConfigsEqualRuntime(desired, observed StreamProcessorServiceConfigRuntime) bool {
 	// Convert runtime configs back to template format for comparison
 	streamProcessorDesiredTemplate := convertRuntimeToTemplate(desired)
@@ -132,10 +132,11 @@ func ConfigsEqualRuntime(desired, observed StreamProcessorServiceConfigRuntime) 
 	// Convert runtime configs to spec configs for comparison
 	desiredSpec := StreamProcessorServiceConfigSpec{Config: streamProcessorDesiredTemplate}
 	observedSpec := StreamProcessorServiceConfigSpec{Config: streamProcessorObservedTemplate}
+
 	return defaultComparator.ConfigsEqual(desiredSpec, observedSpec)
 }
 
-// ConfigDiffRuntime is a package-level function for generating diffs between runtime configurations
+// ConfigDiffRuntime is a package-level function for generating diffs between runtime configurations.
 func ConfigDiffRuntime(desired, observed StreamProcessorServiceConfigRuntime) string {
 	// Convert runtime configs back to template format for diffing
 	streamProcessorDesiredTemplate := convertRuntimeToTemplate(desired)
@@ -144,6 +145,7 @@ func ConfigDiffRuntime(desired, observed StreamProcessorServiceConfigRuntime) st
 	// Convert to spec configs for diffing
 	desiredSpec := StreamProcessorServiceConfigSpec{Config: streamProcessorDesiredTemplate}
 	observedSpec := StreamProcessorServiceConfigSpec{Config: streamProcessorObservedTemplate}
+
 	return defaultComparator.ConfigDiff(desiredSpec, observedSpec)
 }
 

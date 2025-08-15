@@ -22,18 +22,18 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 )
 
-// DataflowComponentObservedStateSnapshot is a deep-copyable snapshot of DataflowComponentObservedState
+// DataflowComponentObservedStateSnapshot is a deep-copyable snapshot of DataflowComponentObservedState.
 type DataflowComponentObservedStateSnapshot struct {
 	Config      dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 	ServiceInfo dataflowcomponent.ServiceInfo
 }
 
-// IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface
+// IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface.
 func (s *DataflowComponentObservedStateSnapshot) IsObservedStateSnapshot() {
 	// Marker method implementation
 }
 
-// CreateObservedStateSnapshot implements the fsm.ObservedStateConverter interface for DataflowComponentInstance
+// CreateObservedStateSnapshot implements the fsm.ObservedStateConverter interface for DataflowComponentInstance.
 func (d *DataflowComponentInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	// Create a deep copy of the observed state
 	snapshot := &DataflowComponentObservedStateSnapshot{}
@@ -42,6 +42,7 @@ func (d *DataflowComponentInstance) CreateObservedStateSnapshot() fsm.ObservedSt
 	err := deepcopy.Copy(&snapshot.Config, &d.config)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, d.baseFSMInstance.GetLogger(), "failed to deep copy config: %v", err)
+
 		return nil
 	}
 
@@ -49,6 +50,7 @@ func (d *DataflowComponentInstance) CreateObservedStateSnapshot() fsm.ObservedSt
 	err = deepcopy.Copy(&snapshot.ServiceInfo, &d.ObservedState.ServiceInfo)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, d.baseFSMInstance.GetLogger(), "failed to deep copy service info: %v", err)
+
 		return nil
 	}
 

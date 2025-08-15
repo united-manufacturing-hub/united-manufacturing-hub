@@ -20,22 +20,22 @@ var (
 	defaultComparator = NewComparator()
 )
 
-// RenderVariablesYAML is a package-level function for easy YAML generation
+// RenderVariablesYAML is a package-level function for easy YAML generation.
 func RenderVariablesYAML(vb VariableBundle) (string, error) {
 	return defaultGenerator.RenderConfig(vb)
 }
 
-// NormalizeVariables is a package-level function for easy config normalization
+// NormalizeVariables is a package-level function for easy config normalization.
 func NormalizeVariables(vb VariableBundle) VariableBundle {
 	return defaultNormalizer.NormalizeConfig(vb)
 }
 
-// ConfigsEqual is a package-level function for easy config comparison
+// ConfigsEqual is a package-level function for easy config comparison.
 func ConfigsEqual(desired, observed VariableBundle) bool {
 	return defaultComparator.ConfigsEqual(desired, observed)
 }
 
-// ConfigDiff is a package-level function for easy config diff generation
+// ConfigDiff is a package-level function for easy config diff generation.
 func ConfigDiff(desired, observed VariableBundle) string {
 	return defaultComparator.ConfigDiff(desired, observed)
 }
