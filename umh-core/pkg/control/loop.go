@@ -172,13 +172,7 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 	c.currentTick = 0
 
 	for {
-		// Get number of services
-		readDirCtx, readDirCancel := context.WithTimeout(ctx, time.Second*1)
-		serviceDirs, err := c.services.GetFileSystem().ReadDir(readDirCtx, constants.S6RepositoryBaseDir)
-		readDirCancel()
-		if err != nil {
-			c.loopController.SetTickParameters(len(serviceDirs))
-		}
+		c.setActiveServices(ctx)
 		select {
 		case <-ctx.Done():
 			return nil
@@ -230,6 +224,18 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 				}
 			}
 		}
+	}
+}
+
+func (c *ControlLoop) setActiveServices(ctx context.Context) {
+	// Get number of services
+	readDirCtx, readDirCancel := context.WithTimeout(ctx, time.Second*1)
+	serviceDirs, err := c.services.GetFileSystem().ReadDir(readDirCtx, constants.S6RepositoryBaseDir)
+	readDirCancel()
+	if err == nil {
+		c.loopController.SetTickParameters(len(serviceDirs))
+	} else {
+		c.logger.Warnf("Failed to scan service directory")
 	}
 }
 

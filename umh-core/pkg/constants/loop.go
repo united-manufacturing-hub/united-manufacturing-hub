@@ -147,18 +147,21 @@ var FilesAndDirectoriesToIgnore = []string{".s6-svscan", "s6-linux-init-shutdown
 // LoopControllerReadOnly is a read only view for usage in the service registry
 type LoopControllerReadOnly interface {
 	GetTickerTime() time.Duration
+	GetNumberOfManagedServices() uint64
 }
 
 type LoopController interface {
 	GetTickerTime() time.Duration
+	GetNumberOfManagedServices() uint64
 	TickerChannel() <-chan time.Time
 	SetTickParameters(numberOfManagedServices int)
 	StopTicker()
 }
 
 type BaseLoopController struct {
-	ticker     *time.Ticker
-	tickerTime time.Duration
+	ticker                  *time.Ticker
+	tickerTime              time.Duration
+	numberOfManagedServices atomic.Uint64
 }
 
 func (controller *BaseLoopController) GetTickerTime() time.Duration {
@@ -169,8 +172,12 @@ func (controller *BaseLoopController) TickerChannel() <-chan time.Time {
 	return controller.ticker.C
 }
 
-func (controller *BaseLoopController) SetTickParameters(_ int) {
-	// No-op
+func (controller *BaseLoopController) SetTickParameters(numberOfManagedServices int) {
+	controller.numberOfManagedServices.Store(uint64(numberOfManagedServices))
+}
+
+func (controller *BaseLoopController) GetNumberOfManagedServices() uint64 {
+	return controller.numberOfManagedServices.Load()
 }
 
 func (controller *BaseLoopController) StopTicker() {
@@ -195,10 +202,9 @@ func NewBaseLoopControllerForFastTests() LoopController {
 // LinearScalingController is a controller that scales the execution time linearly with the number of controlled services
 // Initial testing shows that Z = NoMS * 18 - 1250 scales quite well
 type LinearScalingController struct {
-	scalingFactor           int
-	scalingOffset           int
-	scalingMinimum          time.Duration
-	numberOfManagedServices atomic.Uint64
+	scalingFactor  int
+	scalingOffset  int
+	scalingMinimum time.Duration
 	BaseLoopController
 }
 
@@ -207,7 +213,7 @@ func (controller *LinearScalingController) GetTickerTime() time.Duration {
 }
 
 func (controller *LinearScalingController) SetTickParameters(numberOfManagedServices int) {
-	controller.numberOfManagedServices.Store(uint64(numberOfManagedServices))
+	controller.BaseLoopController.SetTickParameters(numberOfManagedServices)
 	// Calculate scaled time
 	z := math.Max(float64(numberOfManagedServices*controller.scalingFactor+controller.scalingOffset), float64(controller.scalingMinimum.Milliseconds()))
 	tickerTime := time.Duration(z) * time.Millisecond

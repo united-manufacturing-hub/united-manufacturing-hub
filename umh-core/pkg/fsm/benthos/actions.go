@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -417,10 +418,10 @@ func (b *BenthosInstance) IsBenthosHealthchecksPassed(currentTick uint64, curren
 			return true, ""
 		}
 
-		percentage := (100 * elapsedDurationInSeconds) / constants.BenthosHealthCheckStableDurationInSeconds.Seconds()
+		percentage := math.Round((100 * elapsedDurationInSeconds) / constants.BenthosHealthCheckStableDurationInSeconds.Seconds())
 
 		return false, fmt.Sprintf("healthchecks passing but not stable yet (%d %%)",
-			percentage)
+			int(percentage))
 	}
 
 	return false, fmt.Sprintf("healthchecks not passing: live=%t, ready=%t",

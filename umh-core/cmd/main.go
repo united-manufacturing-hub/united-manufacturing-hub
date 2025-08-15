@@ -214,7 +214,7 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop,
 
 			snap_logger.Infof("=== System Snapshot (Tick %d) - %d Managers ===",
 				snapshot.Tick, len(snapshot.Managers))
-			snap_logger.Infof("Cycle Time: %s", controller.GetTickerTime())
+			snap_logger.Infof("Cycle Time: %s [%d managed services]", controller.GetTickerTime(), controller.GetNumberOfManagedServices())
 
 			// Log manager information
 			for managerName, manager := range snapshot.Managers {
