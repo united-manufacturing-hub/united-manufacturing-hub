@@ -194,10 +194,10 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 
 			// If cycleTime is greater than tickerTime, log a warning
 			if cycleTime > c.loopController.GetTickerTime() {
-				c.logger.Warnf("Control loop reconcile cycle time is greater then ticker time: %v", cycleTime)
+				c.logger.Warnf("Control loop reconcile cycle time is greater then ticker time: %s", cycleTime.String())
 				// If cycleTime is greater than 2*tickerTime, log an error
 				if cycleTime > 2*c.loopController.GetTickerTime() {
-					c.logger.Errorf("Control loop reconcile cycle time is greater then 2*ticker time: %v", cycleTime)
+					c.logger.Errorf("Control loop reconcile cycle time is greater then 2*ticker time: %s vs %s", cycleTime.String(), c.loopController.GetTickerTime().String())
 				}
 			}
 

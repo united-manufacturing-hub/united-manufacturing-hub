@@ -897,6 +897,7 @@ func WaitForBenthosManagerInstanceState(
 	instanceName string,
 	expectedState string,
 	maxAttempts int,
+	tickerTime time.Duration,
 ) (uint64, error) {
 	// Duplicate implementation from fsmtest package
 	tick := snapshot.Tick
@@ -904,7 +905,7 @@ func WaitForBenthosManagerInstanceState(
 	baseTime := snapshot.SnapshotTime
 	for range maxAttempts {
 		// Update the snapshot time and tick to simulate the passage of time deterministically
-		snapshot.SnapshotTime = baseTime.Add(time.Duration(tick) * constants.DefaultTickerTime)
+		snapshot.SnapshotTime = baseTime.Add(time.Duration(tick) * tickerTime)
 		snapshot.Tick = tick
 
 		err, _ := manager.Reconcile(ctx, snapshot, services)

@@ -197,7 +197,7 @@ func NewBaseLoopControllerForFastTests() LoopController {
 type LinearScalingController struct {
 	scalingFactor           int
 	scalingOffset           int
-	scalingMinimum          int
+	scalingMinimum          time.Duration
 	numberOfManagedServices atomic.Uint64
 	BaseLoopController
 }
@@ -209,7 +209,7 @@ func (controller *LinearScalingController) GetTickerTime() time.Duration {
 func (controller *LinearScalingController) SetTickParameters(numberOfManagedServices int) {
 	controller.numberOfManagedServices.Store(uint64(numberOfManagedServices))
 	// Calculate scaled time
-	z := math.Max(float64(numberOfManagedServices*controller.scalingFactor+controller.scalingOffset), float64(controller.scalingMinimum))
+	z := math.Max(float64(numberOfManagedServices*controller.scalingFactor+controller.scalingOffset), float64(controller.scalingMinimum.Milliseconds()))
 	tickerTime := time.Duration(z) * time.Millisecond
 	if tickerTime != controller.tickerTime {
 		controller.tickerTime = tickerTime
@@ -218,25 +218,17 @@ func (controller *LinearScalingController) SetTickParameters(numberOfManagedServ
 }
 
 func NewLinearScalingController() LoopController {
-	return &LinearScalingController{
-		scalingFactor:  18,
-		scalingOffset:  -1250,
-		scalingMinimum: 100,
-		BaseLoopController: BaseLoopController{
-			tickerTime: 100,
-			ticker:     time.NewTicker(100 * time.Millisecond),
-		},
-	}
+	return NewLinearScalingControllerWithOptions(18, -1250, 100*time.Millisecond)
 }
 
-func NewLinearScalingControllerWithOptions(scalingFactor, scalingOffset, scalingMinimum int) LoopController {
+func NewLinearScalingControllerWithOptions(scalingFactor, scalingOffset int, scalingMinimum time.Duration) LoopController {
 	return &LinearScalingController{
 		scalingFactor:  scalingFactor,
 		scalingOffset:  scalingOffset,
 		scalingMinimum: scalingMinimum,
 		BaseLoopController: BaseLoopController{
-			tickerTime: time.Duration(scalingMinimum) * time.Millisecond,
-			ticker:     time.NewTicker(time.Duration(scalingMinimum) * time.Millisecond),
+			tickerTime: scalingMinimum,
+			ticker:     time.NewTicker(scalingMinimum),
 		},
 	}
 }

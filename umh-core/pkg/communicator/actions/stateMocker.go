@@ -63,10 +63,11 @@ type StateMocker struct {
 	TickCounter        int
 	running            atomic.Bool // flag to track if the mocker is running
 	lastConfigSet      bool        // flag to track if the last config has been set
+	tickerTime         time.Duration // ticker time for the state mocker
 }
 
 // NewStateMocker creates a new StateMocker.
-func NewStateMocker(configManager ConfigManager) *StateMocker {
+func NewStateMocker(configManager ConfigManager, tickerTime time.Duration) *StateMocker {
 	return &StateMocker{
 		ConfigManager:      configManager,
 		StateManager:       fsm.NewSnapshotManager(),
@@ -77,6 +78,7 @@ func NewStateMocker(configManager ConfigManager) *StateMocker {
 		lastConfig:         config.FullConfig{},
 		lastConfigSet:      false,
 		IgnoreDfcUntilTick: make(map[string]int),
+		tickerTime:         tickerTime,
 	}
 }
 
@@ -479,7 +481,7 @@ func (s *StateMocker) Run() error {
 		return ErrAlreadyRunning
 	}
 
-	ticker := time.NewTicker(constants.DefaultTickerTime)
+	ticker := time.NewTicker(s.tickerTime)
 
 	// Get a reference to the done channel under mutex protection
 	s.mu.RLock()

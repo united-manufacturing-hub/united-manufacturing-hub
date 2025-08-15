@@ -35,6 +35,7 @@ type StatusCollectorType struct {
 	logger                   *zap.SugaredLogger
 	configManager            config.ConfigManager
 	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator
+	loopController           constants.LoopControllerReadOnly
 }
 
 func NewStatusCollector(
@@ -43,6 +44,7 @@ func NewStatusCollector(
 	configManager config.ConfigManager,
 	logger *zap.SugaredLogger,
 	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator,
+	loopController constants.LoopControllerReadOnly,
 ) *StatusCollectorType {
 	collector := &StatusCollectorType{
 		dog:                      dog,
@@ -50,6 +52,7 @@ func NewStatusCollector(
 		logger:                   logger,
 		configManager:            configManager,
 		topicBrowserCommunicator: topicBrowserCommunicator,
+		loopController:           loopController,
 	}
 
 	return collector
@@ -172,7 +175,7 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 
 	rpInst, ok := fsm.FindInstance(snapshot, constants.RedpandaManagerName, constants.RedpandaInstanceName)
 	if ok {
-		redpandaData = RedpandaFromSnapshot(rpInst, s.logger)
+		redpandaData = RedpandaFromSnapshot(rpInst, s.logger, s.loopController.GetTickerTime())
 	}
 
 	// --- data models (multiple instances, extracted from the config directly) -------------------------------------------------------------
@@ -196,20 +199,20 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 
 	dfcMgr, ok := fsm.FindManager(snapshot, constants.DataflowcomponentManagerName)
 	if ok {
-		dfcData = DfcsFromSnapshot(dfcMgr, s.logger)
+		dfcData = DfcsFromSnapshot(dfcMgr, s.logger, s.loopController.GetTickerTime())
 	}
 
 	// --- protocol converters (multiple instances) as DFCs --------------------------
 	protocolConverterMgr, ok := fsm.FindManager(snapshot, constants.ProtocolConverterManagerName)
 	if ok {
-		protocolConverterDfcs := ProtocolConvertersFromSnapshot(protocolConverterMgr, s.logger)
+		protocolConverterDfcs := ProtocolConvertersFromSnapshot(protocolConverterMgr, s.logger, s.loopController.GetTickerTime())
 		dfcData = append(dfcData, protocolConverterDfcs...)
 	}
 
 	// --- stream processors (multiple instances) as DFCs --------------------------
 	streamProcessorMgr, ok := fsm.FindManager(snapshot, constants.StreamProcessorManagerName)
 	if ok {
-		streamProcessorDfcs := StreamProcessorsFromSnapshot(streamProcessorMgr, s.logger)
+		streamProcessorDfcs := StreamProcessorsFromSnapshot(streamProcessorMgr, s.logger, s.loopController.GetTickerTime())
 		dfcData = append(dfcData, streamProcessorDfcs...)
 	}
 

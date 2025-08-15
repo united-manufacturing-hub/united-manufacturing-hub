@@ -17,9 +17,9 @@ package generator
 import (
 	"fmt"
 	"regexp"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
@@ -36,6 +36,7 @@ import (
 func ProtocolConvertersFromSnapshot(
 	mgr fsm.ManagerSnapshot,
 	log *zap.SugaredLogger,
+	tickerTime time.Duration,
 ) []models.Dfc {
 	if mgr == nil {
 		return []models.Dfc{}
@@ -44,7 +45,7 @@ func ProtocolConvertersFromSnapshot(
 	var out []models.Dfc
 
 	for _, inst := range mgr.GetInstances() {
-		if pc, err := buildProtocolConverterAsDfc(*inst, log); err == nil {
+		if pc, err := buildProtocolConverterAsDfc(*inst, log, tickerTime); err == nil {
 			out = append(out, pc)
 		}
 	}
@@ -57,6 +58,7 @@ func ProtocolConvertersFromSnapshot(
 func buildProtocolConverterAsDfc(
 	instance fsm.FSMInstanceSnapshot,
 	log *zap.SugaredLogger,
+	tickerTime time.Duration,
 ) (models.Dfc, error) {
 	observed, ok := instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot)
 	if !ok || observed == nil {
@@ -170,7 +172,7 @@ func buildProtocolConverterAsDfc(
 	if m := svcInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState; m != nil &&
 		m.Input.LastCount > 0 {
 		dfc.Metrics = &models.DfcMetrics{
-			AvgInputThroughputPerMinuteInMsgSec: m.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds(),
+			AvgInputThroughputPerMinuteInMsgSec: m.Input.MessagesPerTick / tickerTime.Seconds(),
 		}
 	}
 

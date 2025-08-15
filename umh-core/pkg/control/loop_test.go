@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -116,14 +117,20 @@ var _ = Describe("ControlLoop", func() {
 
 		starvationChecker := starvationchecker.NewStarvationChecker(constants.StarvationThreshold)
 
+		// Create a mock loop controller with the desired ticker time
+		mockController := constants.NewBaseLoopControllerWithTickTime(100 * time.Millisecond)
+
 		// Initialize control loop with mocks
 		controlLoop = &ControlLoop{
-			tickerTime:        100 * time.Millisecond,
+			loopController:    mockController,
 			managers:          []fsm.FSMManager[any]{mockManager},
 			configManager:     mockConfig,
 			logger:            logger.For(logger.ComponentControlLoop),
 			starvationChecker: starvationChecker,
 			services:          mockSvcRegistry,
+			snapshotManager:   fsm.NewSnapshotManager(),
+			managerTimes:      make(map[string]time.Duration),
+			managerTimesMutex: sync.RWMutex{},
 		}
 		tick = uint64(0)
 	})
@@ -134,9 +141,10 @@ var _ = Describe("ControlLoop", func() {
 
 	Describe("Creating a new control loop", func() {
 		It("should set default values", func() {
-			loop := NewControlLoop(mockConfig, nil)
+			defaultController := constants.NewBaseLoopController()
+			loop := NewControlLoop(mockConfig, defaultController)
 			Expect(loop).NotTo(BeNil())
-			Expect(loop.tickerTime).To(Equal(constants.DefaultTickerTime))
+			Expect(loop.loopController.GetTickerTime()).To(Equal(defaultController.GetTickerTime()))
 			Expect(loop.managers).To(HaveLen(11))
 			Expect(loop.configManager).NotTo(BeNil())
 		})

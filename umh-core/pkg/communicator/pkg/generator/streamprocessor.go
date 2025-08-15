@@ -16,9 +16,9 @@ package generator
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/streamprocessor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -33,6 +33,7 @@ import (
 func StreamProcessorsFromSnapshot(
 	mgr fsm.ManagerSnapshot,
 	log *zap.SugaredLogger,
+	tickerTime time.Duration,
 ) []models.Dfc {
 	if mgr == nil {
 		return []models.Dfc{}
@@ -41,7 +42,7 @@ func StreamProcessorsFromSnapshot(
 	var out []models.Dfc
 
 	for _, inst := range mgr.GetInstances() {
-		if sp, err := buildStreamProcessorAsDfc(*inst); err == nil {
+		if sp, err := buildStreamProcessorAsDfc(*inst, tickerTime); err == nil {
 			out = append(out, sp)
 		}
 	}
@@ -53,6 +54,7 @@ func StreamProcessorsFromSnapshot(
 // with type "stream-processor". It returns an error when the observed state cannot be interpreted.
 func buildStreamProcessorAsDfc(
 	instance fsm.FSMInstanceSnapshot,
+	tickerTime time.Duration,
 ) (models.Dfc, error) {
 	observed, ok := instance.LastObservedState.(*streamprocessor.ObservedStateSnapshot)
 	if !ok || observed == nil {
@@ -98,7 +100,7 @@ func buildStreamProcessorAsDfc(
 	if m := svcInfo.DFCObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState; m != nil &&
 		m.Input.LastCount > 0 {
 		dfc.Metrics = &models.DfcMetrics{
-			AvgInputThroughputPerMinuteInMsgSec: m.Output.MessagesPerTick / constants.DefaultTickerTime.Seconds(),
+			AvgInputThroughputPerMinuteInMsgSec: m.Output.MessagesPerTick / tickerTime.Seconds(),
 		}
 	}
 
