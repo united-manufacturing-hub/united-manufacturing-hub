@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -372,7 +373,7 @@ func (b *BenthosInstance) IsBenthosConfigLoaded() (bool, string) {
 //     *tick* (`currentTick uint64`).  We remember the first tick at which
 //     Benthos became healthy and only report `ok=true` once
 //
-//     currentTick - healthChecksPassingSinceTick >= BenthosHealthCheckStableDurationInTicks
+//     currentTick - healthChecksPassingSinceTick >= BenthosHealthCheckStableDuration
 //
 //     If health ever drops back to false, `healthChecksPassingSinceTick` is
 //     reset and the timer restarts.
@@ -388,7 +389,7 @@ func (b *BenthosInstance) IsBenthosConfigLoaded() (bool, string) {
 //	reason – empty on success; otherwise why we’re still waiting or which probe
 //	         failed (“healthchecks passing but not stable yet …”, or
 //	         “healthchecks did not pass: live=false, ready=true”, etc.)
-func (b *BenthosInstance) IsBenthosHealthchecksPassed(currentTick uint64) (bool, string) {
+func (b *BenthosInstance) IsBenthosHealthchecksPassed(currentTick uint64, currentTickerTimer time.Duration) (bool, string) {
 	// Check if all health checks are currently passing
 	allChecksPassing := b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive &&
 		b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady
@@ -409,15 +410,18 @@ func (b *BenthosInstance) IsBenthosHealthchecksPassed(currentTick uint64) (bool,
 
 	// If we have a timestamp and enough time has passed, return success
 	if b.healthChecksPassingSinceTick != 0 {
-		elapsed := currentTick - b.healthChecksPassingSinceTick
-		if elapsed >= constants.BenthosHealthCheckStableDurationInTicks {
+		elapsedTicks := currentTick - b.healthChecksPassingSinceTick
+
+		elapsedDurationInSeconds := float64(elapsedTicks) * currentTickerTimer.Seconds()
+
+		if elapsedDurationInSeconds >= constants.BenthosHealthCheckStableDuration.Seconds() {
 			return true, ""
 		}
 
-		percentage := (100 * elapsed) / constants.BenthosHealthCheckStableDurationInTicks
+		percentage := math.Round((100 * elapsedDurationInSeconds) / constants.BenthosHealthCheckStableDuration.Seconds())
 
 		return false, fmt.Sprintf("healthchecks passing but not stable yet (%d %%)",
-			percentage)
+			int(percentage))
 	}
 
 	return false, fmt.Sprintf("healthchecks not passing: live=%t, ready=%t",
@@ -499,7 +503,7 @@ func (b *BenthosInstance) IsBenthosMetricsErrorFree() (bool, string) {
 //
 //	degraded – true when degraded, false when still healthy.
 //	reason   – empty when degraded is false; otherwise the first failure cause.
-func (b *BenthosInstance) IsBenthosDegraded(currentTime time.Time, logWindow time.Duration, currentTick uint64) (bool, string) {
+func (b *BenthosInstance) IsBenthosDegraded(currentTime time.Time, logWindow time.Duration, currentTick uint64, tickerTime time.Duration) (bool, string) {
 	// Same order as during starting phase
 	running, reason := b.IsBenthosS6Running()
 	if !running {
@@ -516,7 +520,7 @@ func (b *BenthosInstance) IsBenthosDegraded(currentTime time.Time, logWindow tim
 		return true, reason
 	}
 
-	healthy, reason := b.IsBenthosHealthchecksPassed(currentTick)
+	healthy, reason := b.IsBenthosHealthchecksPassed(currentTick, tickerTime)
 	if !healthy {
 		return true, reason
 	}
@@ -531,8 +535,8 @@ func (b *BenthosInstance) IsBenthosDegraded(currentTime time.Time, logWindow tim
 //
 //	ok     – true when processing activity is detected, false otherwise.
 //	reason – empty when ok is true; otherwise a service‑provided explanation.
-func (b *BenthosInstance) IsBenthosWithProcessingActivity() (bool, string) {
-	hasActivity, reason := b.service.HasProcessingActivity(b.ObservedState.ServiceInfo.BenthosStatus)
+func (b *BenthosInstance) IsBenthosWithProcessingActivity(tickerTime time.Duration) (bool, string) {
+	hasActivity, reason := b.service.HasProcessingActivity(b.ObservedState.ServiceInfo.BenthosStatus, tickerTime)
 	if !hasActivity {
 		return false, reason
 	}

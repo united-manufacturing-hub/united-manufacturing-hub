@@ -16,9 +16,9 @@ package generator
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -35,6 +35,7 @@ import (
 func DfcsFromSnapshot(
 	mgr fsm.ManagerSnapshot,
 	log *zap.SugaredLogger,
+	tickerTime time.Duration,
 ) []models.Dfc {
 	if mgr == nil {
 		return defaultDfcs()
@@ -43,7 +44,7 @@ func DfcsFromSnapshot(
 	var out []models.Dfc
 
 	for _, inst := range mgr.GetInstances() {
-		if d, err := buildDfc(*inst, log); err == nil {
+		if d, err := buildDfc(*inst, log, tickerTime); err == nil {
 			out = append(out, d)
 		}
 	}
@@ -56,6 +57,7 @@ func DfcsFromSnapshot(
 func buildDfc(
 	instance fsm.FSMInstanceSnapshot,
 	_ *zap.SugaredLogger,
+	tickerTime time.Duration,
 ) (models.Dfc, error) {
 	observed, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
 	if !ok || observed == nil {
@@ -88,7 +90,7 @@ func buildDfc(
 	svcInfo := observed.ServiceInfo
 	if m := svcInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState; m != nil &&
 		m.Input.LastCount > 0 {
-		avgThroughput := m.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds()
+		avgThroughput := m.Input.MessagesPerTick / tickerTime.Seconds()
 		if instance.DesiredState == dataflowcomponent.OperationalStateStopped {
 			avgThroughput = 0
 		}

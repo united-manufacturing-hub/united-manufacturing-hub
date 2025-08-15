@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__serena__get_symbols_overview",
+      "mcp__serena__find_file",
+      "mcp__serena__find_symbol",
+      "mcp__serena__search_for_pattern",
+      "mcp__serena__find_referencing_symbols",
+      "Bash(make:*)",
+      "Bash(go vet:*)",
+      "mcp__serena__replace_symbol_body",
+      "Bash(go test:*)",
+      "Bash(mkdir:*)",
+      "mcp__serena__list_dir",
+      "Bash(curl:*)",
+      "Bash(find:*)"
+    ],
+    "deny": [],
+    "ask": [],
+    "defaultMode": "acceptEdits"
+  }
+}

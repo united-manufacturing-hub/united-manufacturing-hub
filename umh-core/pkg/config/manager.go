@@ -491,7 +491,8 @@ func NewFileConfigManagerWithBackoff() (*FileConfigManagerWithBackoff, error) {
 
 		// Create backoff manager with default settings
 		backoffConfig := backoff.DefaultConfig("ConfigManager", logger)
-		backoffConfig.MaxRetries = uint64((time.Minute * 10) / constants.DefaultTickerTime) // 10 minutes
+		// TODO: Use divisor based on actual loop time
+		backoffConfig.MaxRetries = uint64((time.Minute * 10) / 100 * time.Millisecond) // 10 minutes
 		backoffManager := backoff.NewBackoffManager(backoffConfig)
 
 		instance = &FileConfigManagerWithBackoff{

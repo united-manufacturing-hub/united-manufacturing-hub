@@ -16,13 +16,12 @@ package constants
 
 import (
 	"context"
+	"math"
+	"sync/atomic"
 	"time"
 )
 
 const (
-	// DefaultTickerTime is the default time between ticks.
-	DefaultTickerTime = 100 * time.Millisecond
-
 	// Time budget percentages for parallel execution
 	// These percentages are applied to whatever context time budget is available,
 	// naturally creating a hierarchy without hardcoded absolute timeouts.
@@ -144,3 +143,104 @@ func CreateManagerContext(controlLoopCtx context.Context) (context.Context, cont
 // All older archived logs begin with @40000000
 // As we retain up to 20 logs, this will otherwise lead to reading a lot of logs.
 var FilesAndDirectoriesToIgnore = []string{".s6-svscan", "s6-linux-init-shutdown", "s6rc-fdholder", "s6rc-oneshot-runner", "syslogd", "syslogd-log", "/control", "/lock", "@40000000"}
+
+// LoopControllerReadOnly is a read only view for usage in the service registry.
+type LoopControllerReadOnly interface {
+	GetTickerTime() time.Duration
+	GetNumberOfManagedServices() uint64
+}
+
+type LoopController interface {
+	GetTickerTime() time.Duration
+	GetNumberOfManagedServices() uint64
+	TickerChannel() <-chan time.Time
+	SetTickParameters(numberOfManagedServices int)
+	StopTicker()
+}
+
+type ConstantLoopController struct {
+	ticker                  *time.Ticker
+	tickerTime              time.Duration
+	numberOfManagedServices atomic.Uint64
+}
+
+func (controller *ConstantLoopController) GetTickerTime() time.Duration {
+	return controller.tickerTime
+}
+
+func (controller *ConstantLoopController) TickerChannel() <-chan time.Time {
+	return controller.ticker.C
+}
+
+func (controller *ConstantLoopController) SetTickParameters(numberOfManagedServices int) {
+	controller.numberOfManagedServices.Store(uint64(numberOfManagedServices))
+}
+
+func (controller *ConstantLoopController) GetNumberOfManagedServices() uint64 {
+	return controller.numberOfManagedServices.Load()
+}
+
+func (controller *ConstantLoopController) StopTicker() {
+	controller.ticker.Stop()
+}
+
+func NewConstantLoopControllerWithTickTime(tickerTime time.Duration) *ConstantLoopController {
+	return &ConstantLoopController{
+		tickerTime: tickerTime,
+		ticker:     time.NewTicker(tickerTime),
+	}
+}
+
+func NewConstantLoopController() LoopController {
+	return NewConstantLoopControllerWithTickTime(100 * time.Millisecond)
+}
+
+func NewConstantLoopControllerForFastTests() LoopController {
+	return NewConstantLoopControllerWithTickTime(5 * time.Millisecond)
+}
+
+// LinearScalingController is a controller that scales the execution time linearly with the number of controlled services
+// Initial testing shows that Z = NoMS * 18 - 1250 scales quite well.
+type LinearScalingController struct {
+	ConstantLoopController
+	scalingFactor  int
+	scalingOffset  int
+	scalingMinimum time.Duration
+}
+
+func (controller *LinearScalingController) GetTickerTime() time.Duration {
+	return controller.tickerTime
+}
+
+func (controller *LinearScalingController) SetTickParameters(numberOfManagedServices int) {
+	controller.ConstantLoopController.SetTickParameters(numberOfManagedServices)
+	// Calculate scaled time
+	z := math.Max(float64(numberOfManagedServices*controller.scalingFactor+controller.scalingOffset), float64(controller.scalingMinimum.Milliseconds()))
+
+	tickerTime := time.Duration(z) * time.Millisecond
+	if tickerTime != controller.tickerTime {
+		controller.tickerTime = tickerTime
+		controller.ticker.Reset(tickerTime)
+	}
+}
+
+func NewLinearScalingController() LoopController {
+	return NewLinearScalingControllerWithOptions(18, -1250, 100*time.Millisecond)
+}
+
+func NewLinearScalingControllerWithOptions(scalingFactor, scalingOffset int, scalingMinimum time.Duration) LoopController {
+	return &LinearScalingController{
+		scalingFactor:  scalingFactor,
+		scalingOffset:  scalingOffset,
+		scalingMinimum: scalingMinimum,
+		ConstantLoopController: ConstantLoopController{
+			tickerTime: scalingMinimum,
+			ticker:     time.NewTicker(scalingMinimum),
+		},
+	}
+}
+
+// NewDefaultLoopController is a shortcut to not have to modify every single test when switching :).
+func NewDefaultLoopController() LoopController {
+	return NewLinearScalingController()
+}

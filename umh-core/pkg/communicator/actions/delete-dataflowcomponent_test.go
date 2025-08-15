@@ -25,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
@@ -78,9 +79,10 @@ var _ = Describe("DeleteDataflowComponent", func() {
 		}
 
 		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)
+		loopController := constants.NewDefaultLoopController()
 
 		// Startup the state mocker and get the mock snapshot
-		stateMocker = actions.NewStateMocker(mockConfig)
+		stateMocker = actions.NewStateMocker(mockConfig, loopController.GetTickerTime())
 		stateMocker.Tick()
 		mockStateManager := stateMocker.GetStateManager()
 		action = actions.NewDeleteDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockStateManager)

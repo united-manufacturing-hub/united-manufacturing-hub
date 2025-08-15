@@ -17,6 +17,7 @@
 package serviceregistry
 
 import (
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
@@ -25,10 +26,12 @@ import (
 func NewMockRegistry() *Registry {
 	mockFs := filesystem.NewMockFileSystem()
 	mockPm := portmanager.NewMockPortManager()
+	scalingController := constants.NewDefaultLoopController()
 
 	registry := &Registry{
 		FileSystem:  mockFs,
 		PortManager: mockPm,
+		LoopController: scalingController,
 	}
 
 	return registry

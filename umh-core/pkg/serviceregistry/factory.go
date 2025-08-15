@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
@@ -30,7 +31,7 @@ var (
 	initMutex      sync.Mutex
 )
 
-func NewRegistry() (*Registry, error) {
+func NewRegistry(controller constants.LoopControllerReadOnly) (*Registry, error) {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 
@@ -46,8 +47,9 @@ func NewRegistry() (*Registry, error) {
 	}
 
 	registry := &Registry{
-		PortManager: pm,
-		FileSystem:  fs,
+		PortManager:    pm,
+		FileSystem:     fs,
+		LoopController: controller,
 	}
 
 	globalRegistry = registry

@@ -27,7 +27,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	connectionservicefsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	dataflowcomponentfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
@@ -446,7 +445,7 @@ func TestProtocolConverterStateTransition(
 		// Call reconcile directly on the instance
 		snapshot := fsm.SystemSnapshot{
 			Tick:         tick,
-			SnapshotTime: startTimestamp.Add(time.Duration(tick) * constants.DefaultTickerTime),
+			SnapshotTime: startTimestamp.Add(time.Duration(tick) * services.GetLoopManager().GetTickerTime()),
 			CurrentConfig: config.FullConfig{
 				Agent: config.AgentConfig{
 					Location: map[int]string{

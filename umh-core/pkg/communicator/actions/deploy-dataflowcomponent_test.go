@@ -24,6 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
@@ -68,8 +69,9 @@ var _ = Describe("DeployDataflowComponent", func() {
 
 		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)
 
-		// Startup the state mocker and get the mock snapshot
-		stateMocker = actions.NewStateMocker(mockConfig)
+		loopController := constants.NewDefaultLoopController()
+		// Setup the state mocker and get the mock snapshot
+		stateMocker = actions.NewStateMocker(mockConfig, loopController.GetTickerTime())
 		stateMocker.Tick()
 		mockStateManager := stateMocker.GetStateManager()
 

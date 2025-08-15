@@ -20,6 +20,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/push"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 
 	"github.com/google/uuid"
 
@@ -47,19 +48,7 @@ type Handler struct {
 	disableHardwareStatusCheck bool //nolint:unused // will be used in the future
 }
 
-func NewHandler(
-	dog watchdog.Iface,
-	pusher *push.Pusher,
-	instanceUUID uuid.UUID,
-	ttl time.Duration,
-	cull time.Duration,
-	releaseChannel config.ReleaseChannel,
-	disableHardwareStatusCheck bool,
-	systemSnapshotManager *fsm.SnapshotManager,
-	configManager config.ConfigManager,
-	logger *zap.SugaredLogger,
-	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator,
-) *Handler {
+func NewHandler(dog watchdog.Iface, pusher *push.Pusher, instanceUUID uuid.UUID, ttl time.Duration, cull time.Duration, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager, logger *zap.SugaredLogger, topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator, loopController constants.LoopControllerReadOnly, ) *Handler {
 	s := &Handler{}
 	s.subscriberRegistry = subscribers.NewRegistry(cull, ttl)
 	s.dog = dog
@@ -75,6 +64,7 @@ func NewHandler(
 		configManager,
 		logger,
 		topicBrowserCommunicator,
+		loopController,
 	)
 
 	return s

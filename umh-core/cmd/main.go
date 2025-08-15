@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
@@ -96,8 +97,11 @@ func main() {
 		}
 	}()
 
+	// Loop controller
+	loopController := constants.NewDefaultLoopController()
+
 	// Start the control loop
-	controlLoop := control.NewControlLoop(configManager)
+	controlLoop := control.NewControlLoop(configManager, loopController)
 	systemSnapshotManager := controlLoop.GetSnapshotManager()
 
 	// Initialize the communication state
@@ -163,13 +167,13 @@ func main() {
 	}
 
 	if configData.Agent.APIURL != "" && configData.Agent.AuthToken != "" {
-		enableBackendConnection(&configData, communicationState, controlLoop, communicationState.Logger)
+		enableBackendConnection(&configData, communicationState, controlLoop, communicationState.Logger, loopController)
 	} else {
 		log.Warnf("No backend connection enabled, please set API_URL and AUTH_TOKEN")
 	}
 
 	// Start the system snapshot logger
-	go SystemSnapshotLogger(ctx, controlLoop)
+	go SystemSnapshotLogger(ctx, controlLoop, loopController)
 
 	// Start the control loop
 	err = controlLoop.Execute(ctx)
@@ -183,7 +187,7 @@ func main() {
 
 // SystemSnapshotLogger logs the system snapshot every 5 seconds
 // It is an example on how to access the system snapshot and log it for communication with other components.
-func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop) {
+func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop, controller constants.LoopControllerReadOnly) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
@@ -210,6 +214,7 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 
 			snap_logger.Infof("=== System Snapshot (Tick %d) - %d Managers ===",
 				snapshot.Tick, len(snapshot.Managers))
+			snap_logger.Infof("Cycle Time: %s [%d managed services]", controller.GetTickerTime(), controller.GetNumberOfManagedServices())
 
 			// Log manager information
 			for managerName, manager := range snapshot.Managers {
@@ -284,7 +289,7 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 	}
 }
 
-func enableBackendConnection(config *config.FullConfig, communicationState *communication_state.CommunicationState, controlLoop *control.ControlLoop, logger *zap.SugaredLogger) {
+func enableBackendConnection(config *config.FullConfig, communicationState *communication_state.CommunicationState, controlLoop *control.ControlLoop, logger *zap.SugaredLogger, loopController constants.LoopControllerReadOnly) {
 	logger.Info("Enabling backend connection")
 	// directly log the config to console, not to the logger
 	if config == nil {
@@ -313,7 +318,7 @@ func enableBackendConnection(config *config.FullConfig, communicationState *comm
 
 		communicationState.InitialiseAndStartPuller()
 		communicationState.InitialiseAndStartPusher()
-		communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config, snapshotManager, configManager)
+		communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config, snapshotManager, configManager, loopController)
 		communicationState.InitialiseAndStartRouter()
 		communicationState.InitialiseReAuthHandler(config.Agent.AuthToken, config.Agent.AllowInsecureTLS)
 	}

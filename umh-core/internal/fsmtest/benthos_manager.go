@@ -21,7 +21,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
@@ -62,7 +61,7 @@ func WaitForBenthosManagerInstanceState(
 	for i := 0; i < maxAttempts; i++ {
 
 		// Update the snapshot time and tick to simulate the passage of time
-		snapshot.SnapshotTime = snapshot.SnapshotTime.Add(constants.DefaultTickerTime)
+		snapshot.SnapshotTime = snapshot.SnapshotTime.Add(services.GetLoopManager().GetTickerTime())
 		snapshot.Tick = tick
 		err, _ := manager.Reconcile(ctx, snapshot, services)
 		if err != nil {
@@ -121,7 +120,7 @@ func WaitForBenthosManagerMultiState(
 	for i := 0; i < maxAttempts; i++ {
 
 		// Update the snapshot time and tick to simulate the passage of time
-		snapshot.SnapshotTime = snapshot.SnapshotTime.Add(constants.DefaultTickerTime)
+		snapshot.SnapshotTime = snapshot.SnapshotTime.Add(services.GetLoopManager().GetTickerTime())
 		snapshot.Tick = tick
 		err, _ := manager.Reconcile(ctx, snapshot, services)
 		if err != nil {

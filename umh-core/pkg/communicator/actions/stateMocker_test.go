@@ -40,7 +40,9 @@ var _ = Describe("StateMocker", func() {
 	BeforeEach(func() {
 		cfg = &config.FullConfig{}
 		configManager = config.NewMockConfigManager()
-		stateMocker = actions.NewStateMocker(configManager)
+		loopController := constants.NewDefaultLoopController()
+		// Setup the state mocker and get the mock snapshot
+		stateMocker = actions.NewStateMocker(configManager, loopController.GetTickerTime())
 		testConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 			BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 				Input: map[string]interface{}{

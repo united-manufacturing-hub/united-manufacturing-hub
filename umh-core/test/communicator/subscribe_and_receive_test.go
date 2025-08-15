@@ -24,6 +24,7 @@ import (
 	"github.com/h2non/gock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/mocks"
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
@@ -182,19 +183,8 @@ var _ = Describe("Subscribe and Receive Test", func() {
 		// Create topic browser communicator with simulator for testing
 		topicBrowserCommunicator := topicbrowser.NewTopicBrowserCommunicatorWithSimulator(logger.For(logger.ComponentCommunicator))
 
-		subHandler = subscriber.NewHandler(
-			dog,
-			state.Pusher,
-			instanceID,
-			ttl,
-			cull,
-			config.ReleaseChannel("stable"),
-			false,
-			systemSnapshotManager,
-			config.NewMockConfigManager(),
-			logger.For(logger.ComponentCommunicator),
-			topicBrowserCommunicator,
-		)
+		loopController := constants.NewDefaultLoopController()
+		subHandler = subscriber.NewHandler(dog, state.Pusher, instanceID, ttl, cull, systemSnapshotManager, config.NewMockConfigManager(), logger.For(logger.ComponentCommunicator), topicBrowserCommunicator, loopController)
 		subHandler.StartNotifier()
 
 		// Set subscriber handler in communication state

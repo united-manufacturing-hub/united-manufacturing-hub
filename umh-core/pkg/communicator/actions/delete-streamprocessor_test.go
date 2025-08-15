@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/streamprocessorserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
@@ -111,8 +112,9 @@ var _ = Describe("DeleteStreamProcessor", func() {
 
 		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)
 
+		loopController := constants.NewDefaultLoopController()
 		// Setup the state mocker and get the mock snapshot
-		stateMocker = actions.NewStateMocker(mockConfig)
+		stateMocker = actions.NewStateMocker(mockConfig, loopController.GetTickerTime())
 		stateMocker.Tick()
 
 		action = actions.NewDeleteStreamProcessorAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, nil)
