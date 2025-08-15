@@ -1569,7 +1569,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			Expect(reason).To(ContainSubstring("healthchecks passing but not stable yet"))
 
 			// Advance time past debounce duration
-			tick = tick + constants.BenthosHealthCheckStableDurationInTicks
+			tick = tick + constants.BenthosHealthCheckStableDurationInSeconds
 			passed, reason = instance.IsBenthosHealthchecksPassed(tick)
 			Expect(passed).To(BeTrue())
 			Expect(reason).To(BeEmpty())
@@ -1618,7 +1618,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			Expect(passed).To(BeFalse()) // cannot pass as it just detected that the healthchecks are passing now
 
 			// now set to half of the debounce duration
-			tick = tick + constants.BenthosHealthCheckStableDurationInTicks + 1
+			tick = tick + constants.BenthosHealthCheckStableDurationInSeconds + 1
 			passed, _ = instance.IsBenthosHealthchecksPassed(tick)
 			Expect(passed).To(BeTrue()) // is now passing
 
@@ -1643,7 +1643,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			Expect(reason).To(ContainSubstring("healthchecks did not pass"))
 
 			// Advance time past original debounce duration
-			tick = tick + constants.BenthosHealthCheckStableDurationInTicks
+			tick = tick + constants.BenthosHealthCheckStableDurationInSeconds
 			passed, _ = instance.IsBenthosHealthchecksPassed(tick)
 			Expect(passed).To(BeFalse()) // Should still fail because timer was reset
 		})

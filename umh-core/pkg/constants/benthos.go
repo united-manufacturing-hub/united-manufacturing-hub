@@ -50,7 +50,7 @@ const (
 const (
 	BenthosTimeUntilConfigLoadedInSeconds = 5
 	BenthosTimeUntilRunningInSeconds      = 10
-	// BenthosHealthCheckStableDurationInTicks represents the debounce period for
+	// BenthosHealthCheckStableDurationInSeconds represents the debounce period for
 	// Benthos readiness.
 	//
 	// ⚠️  Why we need it
@@ -69,6 +69,5 @@ const (
 	// advance the state machine.
 	//
 	// Change this constant if you need a different stability window.
-	// TODO: Use divisor based on actual loop time
-	BenthosHealthCheckStableDurationInTicks = uint64(5 * time.Second / 100*time.Millisecond) // 5 seconds
+	BenthosHealthCheckStableDurationInSeconds = 5 * time.Second // 5 seconds
 )

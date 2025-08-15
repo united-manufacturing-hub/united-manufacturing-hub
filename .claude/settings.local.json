@@ -8,7 +8,8 @@
       "mcp__serena__find_referencing_symbols",
       "Bash(make:*)",
       "Bash(go vet:*)",
-      "mcp__serena__replace_symbol_body"
+      "mcp__serena__replace_symbol_body",
+      "Bash(go test:*)"
     ],
     "deny": [],
     "ask": [],

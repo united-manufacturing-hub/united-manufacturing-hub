@@ -172,6 +172,13 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 	c.currentTick = 0
 
 	for {
+		// Get number of services
+		readDirCtx, readDirCancel := context.WithTimeout(ctx, time.Second*1)
+		serviceDirs, err := c.services.GetFileSystem().ReadDir(readDirCtx, constants.S6RepositoryBaseDir)
+		readDirCancel()
+		if err != nil {
+			c.loopController.SetTickParameters(len(serviceDirs))
+		}
 		select {
 		case <-ctx.Done():
 			return nil
