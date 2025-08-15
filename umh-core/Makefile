@@ -746,6 +746,14 @@ build-push: build push-platform
 dump-metrics:
 	curl -s http://localhost:8081/metrics > metrics.txt
 
+# Start monitoring stack (Prometheus + Grafana + UMH Core)
+monitor:
+	mkdir -p $(PWD)/docker-compose/data
+	docker stop umh-core || true
+	docker rm umh-core || true
+	cd $(PWD)/docker-compose && docker compose down || true
+	cd $(PWD)/docker-compose && docker compose up --build
+
 run:
 	@echo "Running $(IMAGE_NAME):$(TAG)"
 	docker rm -f $(IMAGE_NAME)
