@@ -69,5 +69,6 @@ const (
 	// advance the state machine.
 	//
 	// Change this constant if you need a different stability window.
-	BenthosHealthCheckStableDurationInTicks = uint64(5 * time.Second / DefaultTickerTime) // 5 seconds
+	// TODO: Use divisor based on actual loop time
+	BenthosHealthCheckStableDurationInTicks = uint64(5 * time.Second / 100*time.Millisecond) // 5 seconds
 )

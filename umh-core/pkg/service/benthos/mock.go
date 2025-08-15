@@ -294,7 +294,7 @@ func (m *MockBenthosService) IsBenthosS6Stopped(serviceName string) bool {
 	return false
 }
 
-func (m *MockBenthosService) HasProcessingActivity(status BenthosStatus) (bool, string) {
+func (m *MockBenthosService) HasProcessingActivity(status BenthosStatus, _ time.Duration) (bool, string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

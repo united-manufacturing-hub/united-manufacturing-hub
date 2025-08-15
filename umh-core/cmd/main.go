@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
@@ -96,8 +97,11 @@ func main() {
 		}
 	}()
 
+	// Loop controller
+	loopController := constants.NewLinearScalingController()
+
 	// Start the control loop
-	controlLoop := control.NewControlLoop(configManager)
+	controlLoop := control.NewControlLoop(configManager, loopController)
 	systemSnapshotManager := controlLoop.GetSnapshotManager()
 
 	// Initialize the communication state

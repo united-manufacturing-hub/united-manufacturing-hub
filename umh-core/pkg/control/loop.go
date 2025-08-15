@@ -88,9 +88,9 @@ type ControlLoop struct {
 	managerTimes      map[string]time.Duration // Tracks execution time for each manager
 	services          *serviceregistry.Registry
 	managers          []fsm.FSMManager[any]
-	tickerTime        time.Duration
 	currentTick       uint64
 	managerTimesMutex sync.RWMutex
+	loopController    constants.LoopController
 }
 
 // NewControlLoop creates a new control loop with all necessary managers.
@@ -102,7 +102,7 @@ type ControlLoop struct {
 //
 // The control loop runs at a fixed interval (defaultTickerTime) and orchestrates
 // all components according to the configuration.
-func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
+func NewControlLoop(configManager config.ConfigManager, controller constants.LoopController) *ControlLoop {
 	// Get a component-specific logger
 	log := logger.For(logger.ComponentControlLoop)
 	if log == nil {
@@ -111,7 +111,7 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 	}
 
 	// Create the service registry. The service registry will contain all services like filesystem, and portmanager
-	servicesRegistry, err := serviceregistry.NewRegistry()
+	servicesRegistry, err := serviceregistry.NewRegistry(controller)
 	if err != nil || servicesRegistry == nil {
 		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to create service registry: %s", err)
 	}
@@ -141,7 +141,7 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 
 	return &ControlLoop{
 		managers:          managers,
-		tickerTime:        constants.DefaultTickerTime,
+		loopController:    controller,
 		configManager:     configManager,
 		logger:            log,
 		starvationChecker: starvationChecker,
@@ -166,8 +166,7 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 // - Context cancelled: Clean shutdown
 // - Other errors: Abort the loop.
 func (c *ControlLoop) Execute(ctx context.Context) error {
-	ticker := time.NewTicker(c.tickerTime)
-	defer ticker.Stop()
+	defer c.loopController.StopTicker()
 
 	// Initialize tick counter
 	c.currentTick = 0
@@ -176,7 +175,7 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-ticker.C:
+		case <-c.loopController.TickerChannel():
 			// Increment tick counter on each iteration
 			c.currentTick++
 
@@ -184,9 +183,9 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 			start := time.Now()
 
 			// Create a timeout context for the reconcile
-			timeoutCtx, cancel := context.WithTimeout(ctx, c.tickerTime)
+			timeoutCtx, cancel := context.WithTimeout(ctx, c.loopController.GetTickerTime())
 			// Reconcile the managers
-			err := c.Reconcile(timeoutCtx, c.currentTick)
+			err := c.Reconcile(timeoutCtx, c.currentTick, c.loopController)
 
 			cancel()
 
@@ -194,10 +193,10 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 			cycleTime := time.Since(start)
 
 			// If cycleTime is greater than tickerTime, log a warning
-			if cycleTime > c.tickerTime {
+			if cycleTime > c.loopController.GetTickerTime() {
 				c.logger.Warnf("Control loop reconcile cycle time is greater then ticker time: %v", cycleTime)
 				// If cycleTime is greater than 2*tickerTime, log an error
-				if cycleTime > 2*c.tickerTime {
+				if cycleTime > 2*c.loopController.GetTickerTime() {
 					c.logger.Errorf("Control loop reconcile cycle time is greater then 2*ticker time: %v", cycleTime)
 				}
 			}
@@ -253,7 +252,7 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 //   - Timeout scenarios handled gracefully with partial success logging
 //   - Manager-specific errors include manager name for debugging
 //   - System continues operation even if individual managers fail
-func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
+func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64, controller constants.LoopController) error {
 	// Get the config
 	if c.configManager == nil {
 		return errors.New("config manager is not set")

@@ -388,7 +388,7 @@ func (b *BenthosInstance) IsBenthosConfigLoaded() (bool, string) {
 //	reason – empty on success; otherwise why we’re still waiting or which probe
 //	         failed (“healthchecks passing but not stable yet …”, or
 //	         “healthchecks did not pass: live=false, ready=true”, etc.)
-func (b *BenthosInstance) IsBenthosHealthchecksPassed(currentTick uint64) (bool, string) {
+func (b *BenthosInstance) IsBenthosHealthchecksPassed(currentTick uint64, currentTickerTimer time.Duration) (bool, string) {
 	// Check if all health checks are currently passing
 	allChecksPassing := b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive &&
 		b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady
@@ -499,7 +499,7 @@ func (b *BenthosInstance) IsBenthosMetricsErrorFree() (bool, string) {
 //
 //	degraded – true when degraded, false when still healthy.
 //	reason   – empty when degraded is false; otherwise the first failure cause.
-func (b *BenthosInstance) IsBenthosDegraded(currentTime time.Time, logWindow time.Duration, currentTick uint64) (bool, string) {
+func (b *BenthosInstance) IsBenthosDegraded(currentTime time.Time, logWindow time.Duration, currentTick uint64, tickerTime time.Duration) (bool, string) {
 	// Same order as during starting phase
 	running, reason := b.IsBenthosS6Running()
 	if !running {
@@ -516,7 +516,7 @@ func (b *BenthosInstance) IsBenthosDegraded(currentTime time.Time, logWindow tim
 		return true, reason
 	}
 
-	healthy, reason := b.IsBenthosHealthchecksPassed(currentTick)
+	healthy, reason := b.IsBenthosHealthchecksPassed(currentTick, tickerTime)
 	if !healthy {
 		return true, reason
 	}
@@ -531,8 +531,8 @@ func (b *BenthosInstance) IsBenthosDegraded(currentTime time.Time, logWindow tim
 //
 //	ok     – true when processing activity is detected, false otherwise.
 //	reason – empty when ok is true; otherwise a service‑provided explanation.
-func (b *BenthosInstance) IsBenthosWithProcessingActivity() (bool, string) {
-	hasActivity, reason := b.service.HasProcessingActivity(b.ObservedState.ServiceInfo.BenthosStatus)
+func (b *BenthosInstance) IsBenthosWithProcessingActivity(tickerTime time.Duration) (bool, string) {
+	hasActivity, reason := b.service.HasProcessingActivity(b.ObservedState.ServiceInfo.BenthosStatus, tickerTime)
 	if !hasActivity {
 		return false, reason
 	}

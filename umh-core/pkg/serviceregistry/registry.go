@@ -17,20 +17,23 @@
 package serviceregistry
 
 import (
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 // Registry holds all services required by the application.
 type Registry struct {
-	FileSystem  filesystem.Service
-	PortManager portmanager.PortManager
+	FileSystem     filesystem.Service
+	PortManager    portmanager.PortManager
+	LoopController constants.LoopControllerReadOnly
 }
 
 // Provider interface defines the methods to access different services.
 type Provider interface {
 	GetFileSystem() filesystem.Service
 	GetPortManager() portmanager.PortManager
+	GetLoopManager() constants.LoopControllerReadOnly
 }
 
 var _ Provider = (*Registry)(nil)
@@ -45,4 +48,8 @@ func (r *Registry) GetFileSystem() filesystem.Service {
 func (r *Registry) GetPortManager() portmanager.PortManager {
 	//nolint:nilaway
 	return r.PortManager
+}
+
+func (r *Registry) GetLoopManager() constants.LoopControllerReadOnly {
+	return r.LoopController
 }

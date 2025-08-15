@@ -16,13 +16,12 @@ package constants
 
 import (
 	"context"
+	"math"
+	"sync/atomic"
 	"time"
 )
 
 const (
-	// DefaultTickerTime is the default time between ticks.
-	DefaultTickerTime = 100 * time.Millisecond
-
 	// Time budget percentages for parallel execution
 	// These percentages are applied to whatever context time budget is available,
 	// naturally creating a hierarchy without hardcoded absolute timeouts.
@@ -144,3 +143,100 @@ func CreateManagerContext(controlLoopCtx context.Context) (context.Context, cont
 // All older archived logs begin with @40000000
 // As we retain up to 20 logs, this will otherwise lead to reading a lot of logs.
 var FilesAndDirectoriesToIgnore = []string{".s6-svscan", "s6-linux-init-shutdown", "s6rc-fdholder", "s6rc-oneshot-runner", "syslogd", "syslogd-log", "/control", "/lock", "@40000000"}
+
+// LoopControllerReadOnly is a read only view for usage in the service registry
+type LoopControllerReadOnly interface {
+	GetTickerTime() time.Duration
+}
+
+type LoopController interface {
+	GetTickerTime() time.Duration
+	TickerChannel() <-chan time.Time
+	SetTickParameters(numberOfManagedServices int)
+	StopTicker()
+}
+
+type BaseLoopController struct {
+	ticker     *time.Ticker
+	tickerTime time.Duration
+}
+
+func (controller *BaseLoopController) GetTickerTime() time.Duration {
+	return controller.tickerTime
+}
+
+func (controller *BaseLoopController) TickerChannel() <-chan time.Time {
+	return controller.ticker.C
+}
+
+func (controller *BaseLoopController) SetTickParameters(_ int) {
+	// No-op
+}
+
+func (controller *BaseLoopController) StopTicker() {
+	controller.ticker.Stop()
+}
+
+func NewBaseLoopControllerWithTickTime(tickerTime time.Duration) *BaseLoopController {
+	return &BaseLoopController{
+		tickerTime: tickerTime,
+		ticker:     time.NewTicker(tickerTime),
+	}
+}
+
+func NewBaseLoopController() LoopController {
+	return NewBaseLoopControllerWithTickTime(100 * time.Millisecond)
+}
+
+func NewBaseLoopControllerForFastTests() LoopController {
+	return NewBaseLoopControllerWithTickTime(5 * time.Millisecond)
+}
+
+// LinearScalingController is a controller that scales the execution time linearly with the number of controlled services
+// Initial testing shows that Z = NoMS * 18 - 1250 scales quite well
+type LinearScalingController struct {
+	scalingFactor           int
+	scalingOffset           int
+	scalingMinimum          int
+	numberOfManagedServices atomic.Uint64
+	BaseLoopController
+}
+
+func (controller *LinearScalingController) GetTickerTime() time.Duration {
+	return controller.tickerTime
+}
+
+func (controller *LinearScalingController) SetTickParameters(numberOfManagedServices int) {
+	controller.numberOfManagedServices.Store(uint64(numberOfManagedServices))
+	// Calculate scaled time
+	z := math.Max(float64(numberOfManagedServices*controller.scalingFactor+controller.scalingOffset), float64(controller.scalingMinimum))
+	tickerTime := time.Duration(z) * time.Millisecond
+	if tickerTime != controller.tickerTime {
+		controller.tickerTime = tickerTime
+		controller.ticker.Reset(tickerTime)
+	}
+}
+
+func NewLinearScalingController() LoopController {
+	return &LinearScalingController{
+		scalingFactor:  18,
+		scalingOffset:  -1250,
+		scalingMinimum: 100,
+		BaseLoopController: BaseLoopController{
+			tickerTime: 100,
+			ticker:     time.NewTicker(100 * time.Millisecond),
+		},
+	}
+}
+
+func NewLinearScalingControllerWithOptions(scalingFactor, scalingOffset, scalingMinimum int) LoopController {
+	return &LinearScalingController{
+		scalingFactor:  scalingFactor,
+		scalingOffset:  scalingOffset,
+		scalingMinimum: scalingMinimum,
+		BaseLoopController: BaseLoopController{
+			tickerTime: time.Duration(scalingMinimum) * time.Millisecond,
+			ticker:     time.NewTicker(time.Duration(scalingMinimum) * time.Millisecond),
+		},
+	}
+}

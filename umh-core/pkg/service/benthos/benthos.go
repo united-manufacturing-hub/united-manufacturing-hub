@@ -107,7 +107,7 @@ type IBenthosService interface {
 	//	ok     – true when activity is detected, false otherwise.
 	//	reason – empty when ok is true; otherwise a short explanation such as
 	//	         "no input throughput (in=0.00 msg/s, out=0.00 msg/s)".
-	HasProcessingActivity(status BenthosStatus) (bool, string)
+	HasProcessingActivity(status BenthosStatus, tickerTime time.Duration) (bool, string)
 }
 
 // ServiceInfo contains information about a Benthos service.
@@ -1055,7 +1055,7 @@ func (s *BenthosService) IsMetricsErrorFree(metrics benthos_monitor.BenthosMetri
 //	ok     – true when activity is detected, false otherwise.
 //	reason – empty when ok is true; otherwise a short explanation such as
 //	         "no input throughput (in=0.00 msg/s, out=0.00 msg/s)".
-func (s *BenthosService) HasProcessingActivity(status BenthosStatus) (bool, string) {
+func (s *BenthosService) HasProcessingActivity(status BenthosStatus, tickerTime time.Duration) (bool, string) {
 	if status.BenthosMetrics.MetricsState == nil {
 		return false, "benthos metrics state is nil"
 	}
@@ -1064,8 +1064,8 @@ func (s *BenthosService) HasProcessingActivity(status BenthosStatus) (bool, stri
 		return true, ""
 	}
 
-	msgPerSecInput := status.BenthosMetrics.MetricsState.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds()
-	msgPerSecOutput := status.BenthosMetrics.MetricsState.Output.MessagesPerTick / constants.DefaultTickerTime.Seconds()
+	msgPerSecInput := status.BenthosMetrics.MetricsState.Input.MessagesPerTick / tickerTime.Seconds()
+	msgPerSecOutput := status.BenthosMetrics.MetricsState.Output.MessagesPerTick / tickerTime.Seconds()
 
 	return false, fmt.Sprintf("no input throughput (in=%.2f msg/s, out=%.2f msg/s)",
 		msgPerSecInput, msgPerSecOutput)

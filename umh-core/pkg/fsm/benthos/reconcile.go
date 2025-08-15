@@ -326,7 +326,7 @@ func (b *BenthosInstance) reconcileStartingStates(ctx context.Context, services 
 		}
 
 		// Check if healthchecks have passed
-		passed, reason := b.IsBenthosHealthchecksPassed(currentTick)
+		passed, reason := b.IsBenthosHealthchecksPassed(currentTick, services.GetLoopManager().GetTickerTime())
 		if !passed {
 			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = "waiting for healthchecks to pass: " + reason
 
@@ -350,7 +350,7 @@ func (b *BenthosInstance) reconcileStartingStates(ctx context.Context, services 
 			return b.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
 
-		passed, reason := b.IsBenthosHealthchecksPassed(currentTick)
+		passed, reason := b.IsBenthosHealthchecksPassed(currentTick, services.GetLoopManager().GetTickerTime())
 		if !passed {
 			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = "start failed: " + reason
 
@@ -382,9 +382,9 @@ func (b *BenthosInstance) reconcileRunningStates(ctx context.Context, services s
 	switch currentState {
 	case OperationalStateActive:
 		// If we're in Active, we need to check whether it is degraded
-		degraded, reasonDegraded := b.IsBenthosDegraded(currentTime, constants.BenthosLogWindow, currentTick)
+		degraded, reasonDegraded := b.IsBenthosDegraded(currentTime, constants.BenthosLogWindow, currentTick, services.GetLoopManager().GetTickerTime())
 
-		processing, reasonProcessing := b.IsBenthosWithProcessingActivity()
+		processing, reasonProcessing := b.IsBenthosWithProcessingActivity(services.GetLoopManager().GetTickerTime())
 		if degraded {
 			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = "degrading: " + reasonDegraded
 
@@ -398,9 +398,9 @@ func (b *BenthosInstance) reconcileRunningStates(ctx context.Context, services s
 		return nil, false
 	case OperationalStateIdle:
 		// If we're in Idle, we need to check whether it is degraded
-		degraded, reasonDegraded := b.IsBenthosDegraded(currentTime, constants.BenthosLogWindow, currentTick)
+		degraded, reasonDegraded := b.IsBenthosDegraded(currentTime, constants.BenthosLogWindow, currentTick, services.GetLoopManager().GetTickerTime())
 
-		processing, reasonProcessing := b.IsBenthosWithProcessingActivity()
+		processing, reasonProcessing := b.IsBenthosWithProcessingActivity(services.GetLoopManager().GetTickerTime())
 		if degraded {
 			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = "degrading: " + reasonDegraded
 
@@ -416,7 +416,7 @@ func (b *BenthosInstance) reconcileRunningStates(ctx context.Context, services s
 		return nil, false
 	case OperationalStateDegraded:
 		// If we're in Degraded, we need to recover to move to Idle
-		degraded, reason := b.IsBenthosDegraded(currentTime, constants.BenthosLogWindow, currentTick)
+		degraded, reason := b.IsBenthosDegraded(currentTime, constants.BenthosLogWindow, currentTick, services.GetLoopManager().GetTickerTime())
 		if !degraded {
 			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = "recovering: " + reason
 
