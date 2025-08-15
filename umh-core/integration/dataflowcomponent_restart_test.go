@@ -15,6 +15,7 @@
 package integration_test
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -95,6 +96,7 @@ var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("i
 				newOffset, err := checkRPK(topicName, lastOffset, lastTimestamp, lossToleranceWarning, lossToleranceFail, messagesPerSecond)
 				lastOffset = newOffset
 				lastTimestamp = time.Now()
+
 				return err == nil && newOffset != -1
 			}, 30*time.Second, 1*time.Second).Should(BeTrue(), "Messages should be produced after restart")
 
@@ -107,9 +109,11 @@ var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("i
 					lastOffset = newOffset
 					lastTimestamp = time.Now()
 					failureCount = 0 // Reset failure count on success
+
 					return true
 				}
 				failureCount++
+
 				return failureCount < 5 // Allow up to 5 failures before returning false
 			}, testDuration, 1*time.Second).Should(BeTrue(), "Messages should be consistently produced before restart")
 
@@ -124,15 +128,17 @@ var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("i
 			for _, line := range lines {
 				if strings.Contains(line, getContainerName()) {
 					containerLine = line
+
 					break
 				}
 			}
 			Expect(containerLine).To(ContainSubstring("Exited"))
 
 			By(fmt.Sprintf("Waiting %s before restart", containerDownWait))
-			for i := 0; i < int(containerDownWait/time.Second); i++ {
+			waitSeconds := int(containerDownWait.Seconds())
+			for i := range waitSeconds {
 				time.Sleep(time.Second)
-				GinkgoWriter.Printf("Waiting until we can restart: %d seconds\n", int(containerDownWait.Seconds())-i)
+				GinkgoWriter.Printf("Waiting until we can restart: %d seconds\n", waitSeconds-i)
 			}
 
 			By("Starting the container again")
@@ -143,6 +149,7 @@ var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("i
 			By("Waiting for container to become healthy after restart")
 			Eventually(func() bool {
 				resp, err := httpGetWithTimeout(GetMetricsURL(), 1*time.Second)
+
 				return err == nil && resp == 200
 			}, 20*time.Second, 1*time.Second).Should(BeTrue(), "Metrics endpoint should be healthy after restart")
 
@@ -151,6 +158,7 @@ var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("i
 				// We set the offset to -1, to prevent it from hard failing if no messages are yet produced
 				// We also don't care about the timestamp, because we will check it later
 				newOffset, err := checkRPK(topicName, -1, lastTimestamp, lossToleranceWarning, lossToleranceFail, messagesPerSecond)
+
 				return err == nil && newOffset != -1
 			}, 30*time.Second, 1*time.Second).Should(BeTrue(), "Messages should be produced after restart")
 
@@ -163,9 +171,11 @@ var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("i
 					lastOffset = newOffset
 					lastTimestamp = time.Now()
 					postRestartFailureCount = 0 // Reset failure count on success
+
 					return true
 				}
 				postRestartFailureCount++
+
 				return postRestartFailureCount < 5 // Allow up to 5 failures before returning false
 			}, testDuration, 1*time.Second).Should(BeTrue(), "Messages should be consistently produced after restart")
 
@@ -175,6 +185,7 @@ var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("i
 				if err != nil {
 					return -1
 				}
+
 				return redpandaState
 			}, 10*time.Second, 1*time.Second).Should(BeNumerically("==", 3), "Redpanda should be in healthy state")
 
@@ -184,22 +195,26 @@ var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("i
 	)
 })
 
-// httpGetWithTimeout is a helper for Eventually to check endpoint health
+// httpGetWithTimeout is a helper for Eventually to check endpoint health.
 func httpGetWithTimeout(url string, timeout time.Duration) (int, error) {
 	client := &http.Client{Timeout: timeout}
+
 	resp, err := client.Get(url)
 	if err != nil {
 		return 0, err
 	}
+
 	err = resp.Body.Close()
 	if err != nil {
 		return 0, err
 	}
+
 	return resp.StatusCode, nil
 }
 
 func checkRedpandaState(url string, timeout time.Duration) (int, error) {
 	client := &http.Client{Timeout: timeout}
+
 	resp, err := client.Get(url)
 	if err != nil {
 		return 0, err
@@ -209,8 +224,10 @@ func checkRedpandaState(url string, timeout time.Duration) (int, error) {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		err = resp.Body.Close()
+
 		return 0, err
 	}
+
 	err = resp.Body.Close()
 	if err != nil {
 		return 0, err
@@ -218,10 +235,13 @@ func checkRedpandaState(url string, timeout time.Duration) (int, error) {
 
 	// Get the umh_core_service_current_state{component="redpanda_instance",instance="redpanda"}
 	re := regexp.MustCompile(`umh_core_service_current_state{component="redpanda_instance",instance="redpanda"} (\d)`)
+
 	matches := re.FindStringSubmatch(string(body))
 	if len(matches) != 2 {
-		return 0, fmt.Errorf("no match found for umh_core_service_current_state")
+		return 0, errors.New("no match found for umh_core_service_current_state")
 	}
+
 	GinkgoWriter.Printf("Redpanda state: %s\n", matches[1])
+
 	return strconv.Atoi(matches[1])
 }

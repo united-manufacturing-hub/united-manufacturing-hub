@@ -29,7 +29,7 @@ import (
 	tbsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/topicbrowser"
 )
 
-// NewInstance creates a new Instance with a given ID and service path
+// NewInstance creates a new Instance with a given ID and service path.
 func NewInstance(
 	s6BaseDir string,
 	config config.TopicBrowserConfig,
@@ -167,7 +167,7 @@ func NewInstance(
 
 // SetDesiredFSMState safely updates the desired state
 // But ensures that the desired state is a valid state and that it is also a reasonable state
-// e.g., nobody wants to have an instance in the "starting" state, that is just intermediate
+// e.g., nobody wants to have an instance in the "starting" state, that is just intermediate.
 func (i *TopicBrowserInstance) SetDesiredFSMState(state string) error {
 	if state != OperationalStateStopped &&
 		state != OperationalStateActive {
@@ -178,51 +178,52 @@ func (i *TopicBrowserInstance) SetDesiredFSMState(state string) error {
 	}
 
 	i.baseFSMInstance.SetDesiredFSMState(state)
+
 	return nil
 }
 
-// GetCurrentFSMState returns the current state of the FSM
+// GetCurrentFSMState returns the current state of the FSM.
 func (i *TopicBrowserInstance) GetCurrentFSMState() string {
 	return i.baseFSMInstance.GetCurrentFSMState()
 }
 
-// GetDesiredFSMState returns the desired state of the FSM
+// GetDesiredFSMState returns the desired state of the FSM.
 func (i *TopicBrowserInstance) GetDesiredFSMState() string {
 	return i.baseFSMInstance.GetDesiredFSMState()
 }
 
 // Remove starts the removal process, it is idempotent and can be called multiple times
-// Note: it is only removed once IsRemoved returns true
+// Note: it is only removed once IsRemoved returns true.
 func (i *TopicBrowserInstance) Remove(ctx context.Context) error {
 	return i.baseFSMInstance.Remove(ctx)
 }
 
-// IsRemoved returns true if the instance has been removed
+// IsRemoved returns true if the instance has been removed.
 func (i *TopicBrowserInstance) IsRemoved() bool {
 	return i.baseFSMInstance.IsRemoved()
 }
 
-// IsRemoving returns true if the instance is in the removing state
+// IsRemoving returns true if the instance is in the removing state.
 func (i *TopicBrowserInstance) IsRemoving() bool {
 	return i.baseFSMInstance.IsRemoving()
 }
 
-// IsStopping returns true if the instance is in the stopping state
+// IsStopping returns true if the instance is in the stopping state.
 func (i *TopicBrowserInstance) IsStopping() bool {
 	return i.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopping
 }
 
-// IsStopped returns true if the instance is in the stopped state
+// IsStopped returns true if the instance is in the stopped state.
 func (i *TopicBrowserInstance) IsStopped() bool {
 	return i.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopped
 }
 
-// WantsToBeStopped returns true if the instance wants to be stopped
+// WantsToBeStopped returns true if the instance wants to be stopped.
 func (i *TopicBrowserInstance) WantsToBeStopped() bool {
 	return i.baseFSMInstance.GetDesiredFSMState() == OperationalStateStopped
 }
 
-// PrintState prints the current state of the FSM for debugging
+// PrintState prints the current state of the FSM for debugging.
 func (i *TopicBrowserInstance) PrintState() {
 	i.baseFSMInstance.GetLogger().Debugf("Current state: %s", i.baseFSMInstance.GetCurrentFSMState())
 	i.baseFSMInstance.GetLogger().Debugf("Desired state: %s", i.baseFSMInstance.GetDesiredFSMState())
@@ -234,7 +235,7 @@ func (i *TopicBrowserInstance) PrintState() {
 		i.ObservedState.ServiceInfo.StatusReason)
 }
 
-// GetMinimumRequiredTime returns the minimum required time for this instance
+// GetMinimumRequiredTime returns the minimum required time for this instance.
 func (i *TopicBrowserInstance) GetMinimumRequiredTime() time.Duration {
 	return constants.TopicBrowserUpdateObservedStateTimeout
 }

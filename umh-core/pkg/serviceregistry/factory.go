@@ -37,6 +37,7 @@ func NewRegistry() (*Registry, error) {
 	if initialized {
 		panic("NewRegistry called more than once - registry must be initialized once and explicitly passed between components")
 	}
+
 	fs := filesystem.NewDefaultService()
 
 	pm, portErr := portmanager.NewDefaultPortManager(fs)
@@ -51,6 +52,7 @@ func NewRegistry() (*Registry, error) {
 
 	globalRegistry = registry
 	initialized = true
+
 	return registry, nil
 }
 
@@ -60,5 +62,6 @@ func GetGlobalRegistry() *Registry {
 	if !initialized || globalRegistry == nil {
 		panic("GetGlobalRegistry called before registry was initialized")
 	}
+
 	return globalRegistry
 }

@@ -21,23 +21,24 @@ import (
 	"go.uber.org/zap"
 )
 
-// Comparator handles the comparison of Nmap configurations
+// Comparator handles the comparison of Nmap configurations.
 type Comparator struct {
 	normalizer *Normalizer
 }
 
-// NewComparator creates a new configuration comparator for Nmap
+// NewComparator creates a new configuration comparator for Nmap.
 func NewComparator() *Comparator {
 	return &Comparator{
 		normalizer: NewNormalizer(),
 	}
 }
 
-// ConfigsEqual compares two NmapServiceConfigs after normalization
+// ConfigsEqual compares two NmapServiceConfigs after normalization.
 func (c *Comparator) ConfigsEqual(desired, observed NmapServiceConfig) (isEqual bool) {
 	// First normalize both configs
 	normDesired := c.normalizer.NormalizeConfig(desired)
 	normObserved := c.normalizer.NormalizeConfig(observed)
+
 	defer func() {
 		if !isEqual {
 			zap.S().Infof("Normalized desired:  %+v", normDesired)
@@ -57,7 +58,7 @@ func (c *Comparator) ConfigsEqual(desired, observed NmapServiceConfig) (isEqual 
 	return true
 }
 
-// ConfigDiff returns a human-readable string describing differences between configs
+// ConfigDiff returns a human-readable string describing differences between configs.
 func (c *Comparator) ConfigDiff(desired, observed NmapServiceConfig) string {
 	var diff strings.Builder
 

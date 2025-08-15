@@ -188,7 +188,7 @@ var _ = Describe("Cache Sequence-Based Processing", func() {
 	})
 })
 
-// Helper function to create mock buffers with sequence numbers
+// Helper function to create mock buffers with sequence numbers.
 func createMockBufferWithSequence(events map[string]int64, timestamp time.Time, sequenceNum uint64) *topicbrowserservice.BufferItem {
 	bundle := &tbproto.UnsBundle{
 		Events: &tbproto.EventTable{
@@ -215,6 +215,7 @@ func createMockBufferWithSequence(events map[string]int64, timestamp time.Time, 
 	}
 
 	encoded, _ := proto.Marshal(bundle)
+
 	return &topicbrowserservice.BufferItem{
 		Payload:     encoded,
 		Timestamp:   timestamp,
@@ -222,7 +223,7 @@ func createMockBufferWithSequence(events map[string]int64, timestamp time.Time, 
 	}
 }
 
-// Helper function to create mock buffers (backward compatibility)
+// Helper function to create mock buffers (backward compatibility).
 func createMockBuffer(events map[string]int64, timestamp time.Time) *topicbrowserservice.BufferItem {
 	return createMockBufferWithSequence(events, timestamp, 0)
 }

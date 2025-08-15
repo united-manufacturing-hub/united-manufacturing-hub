@@ -44,6 +44,7 @@ import (
 // CreateInstance is called when the FSM transitions from to_be_created -> creating.
 func (n *NmapInstance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentNmapInstance, n.baseFSMInstance.GetID()+".initiateS6Create", time.Since(start))
 	}()
@@ -53,15 +54,17 @@ func (n *NmapInstance) CreateInstance(ctx context.Context, filesystemService fil
 	err := n.monitorService.AddNmapToS6Manager(ctx, &n.config.NmapServiceConfig, n.baseFSMInstance.GetID())
 	// Create service with custom configuration
 	if err != nil {
-		if err == nmap_service.ErrServiceAlreadyExists {
+		if errors.Is(err, nmap_service.ErrServiceAlreadyExists) {
 			n.baseFSMInstance.GetLogger().Debugf("Nmap service %s already exists in S6 manager", n.baseFSMInstance.GetID())
+
 			return nil // do not throw an error, as each action is expected to be idempotent
 		}
-		return fmt.Errorf("failed to create service with config for %s: %w", n.baseFSMInstance.GetID(), err)
 
+		return fmt.Errorf("failed to create service with config for %s: %w", n.baseFSMInstance.GetID(), err)
 	}
 
 	n.baseFSMInstance.GetLogger().Debugf("Nmap service %s added to S6 manager", n.baseFSMInstance.GetID())
+
 	return nil
 }
 
@@ -69,6 +72,7 @@ func (n *NmapInstance) CreateInstance(ctx context.Context, filesystemService fil
 // It requires the service to be stopped before removal.
 func (n *NmapInstance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentNmapInstance, n.baseFSMInstance.GetID()+".initiateS6Remove", time.Since(start))
 	}()
@@ -85,6 +89,7 @@ func (n *NmapInstance) RemoveInstance(ctx context.Context, filesystemService fil
 		n.baseFSMInstance.GetLogger().
 			Debugf("Nmap service %s removed from S6 manager",
 				n.baseFSMInstance.GetID())
+
 		return nil
 
 	case errors.Is(err, nmap_service.ErrServiceNotExist):
@@ -113,7 +118,7 @@ func (n *NmapInstance) RemoveInstance(ctx context.Context, filesystemService fil
 	}
 }
 
-// StartInstance attempts to start the Nmap by setting the desired state to running for the given instance
+// StartInstance attempts to start the Nmap by setting the desired state to running for the given instance.
 func (n *NmapInstance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	n.baseFSMInstance.GetLogger().Infof("Starting Action: Starting Nmap service %s ...", n.baseFSMInstance.GetID())
 
@@ -124,10 +129,11 @@ func (n *NmapInstance) StartInstance(ctx context.Context, filesystemService file
 	}
 
 	n.baseFSMInstance.GetLogger().Debugf("Nmap service %s start command executed", n.baseFSMInstance.GetID())
+
 	return nil
 }
 
-// StopInstance attempts to stop the Nmap by setting the desired state to stopped for the given instance
+// StopInstance attempts to stop the Nmap by setting the desired state to stopped for the given instance.
 func (n *NmapInstance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	n.baseFSMInstance.GetLogger().Infof("Starting Action: Stopping Nmap service %s ...", n.baseFSMInstance.GetID())
 	// Set the desired state to stopped for the given instance
@@ -138,21 +144,23 @@ func (n *NmapInstance) StopInstance(ctx context.Context, filesystemService files
 	}
 
 	n.baseFSMInstance.GetLogger().Debugf("Nmap service %s stop command executed", n.baseFSMInstance.GetID())
+
 	return nil
 }
 
 // CheckForCreation checks whether the creation was successful
-// For Nmap, this is a no-op as we don't need to check anything
+// For Nmap, this is a no-op as we don't need to check anything.
 func (n *NmapInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
 	return true
 }
 
-// UpdateObservedStateOfInstance updates the observed state of the service
+// UpdateObservedStateOfInstance updates the observed state of the service.
 func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
 		if n.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "UpdateObservedStateOfInstance") {
 			return nil
 		}
+
 		return ctx.Err()
 	}
 
@@ -165,16 +173,19 @@ func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, servic
 	}
 
 	start := time.Now()
+
 	svcInfo, err := n.monitorService.Status(ctx, services.GetFileSystem(), n.config.Name, snapshot.Tick)
 	if err != nil {
 		if strings.Contains(err.Error(), nmap_service.ErrServiceNotExist.Error()) {
 			// Log the error but don't fail - this might happen during creation when nmap doesn't exist yet
 			n.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
+
 			return nil
 		} else {
 			return fmt.Errorf("failed to get nmap metrics: %w", err)
 		}
 	}
+
 	metrics.ObserveReconcileTime(logger.ComponentNmapInstance, n.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
 
 	// Stores the raw service info
@@ -188,6 +199,7 @@ func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, servic
 	start = time.Now()
 	observedConfig, err := n.monitorService.GetConfig(ctx, services.GetFileSystem(), n.baseFSMInstance.GetID())
 	metrics.ObserveReconcileTime(logger.ComponentNmapInstance, n.baseFSMInstance.GetID()+".getConfig", time.Since(start))
+
 	if err == nil {
 		// Only update if we successfully got the config
 		n.ObservedState.ObservedNmapServiceConfig = observedConfig
@@ -195,6 +207,7 @@ func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, servic
 		if strings.Contains(err.Error(), nmap_service.ErrServiceNotExist.Error()) {
 			// Log the error but don't fail - this might happen during creation when the config file doesn't exist yet
 			n.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
+
 			return nil
 		} else {
 			return fmt.Errorf("failed to get observed Nmap config: %w", err)
@@ -221,7 +234,7 @@ func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, servic
 	return nil
 }
 
-// IsNmapRunning is called to check on the state of Nmap
+// IsNmapRunning is called to check on the state of Nmap.
 func (n *NmapInstance) IsNmapRunning() bool {
 	return n.ObservedState.ServiceInfo.NmapStatus.IsRunning
 }

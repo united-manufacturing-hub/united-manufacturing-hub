@@ -23,7 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel"
 )
 
-// BenchmarkTranslateDataModel_Simple benchmarks simple data model translation
+// BenchmarkTranslateDataModel_Simple benchmarks simple data model translation.
 func BenchmarkTranslateDataModel_Simple(b *testing.B) {
 	translator := datamodel.NewTranslator()
 	ctx := context.Background()
@@ -48,7 +48,7 @@ func BenchmarkTranslateDataModel_Simple(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		result, err := translator.TranslateDataModel(
 			ctx,
 			"_pump_data",
@@ -60,13 +60,14 @@ func BenchmarkTranslateDataModel_Simple(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
+
 		if result == nil {
 			b.Fatal("result is nil")
 		}
 	}
 }
 
-// BenchmarkTranslateDataModel_Complex benchmarks complex nested data model translation
+// BenchmarkTranslateDataModel_Complex benchmarks complex nested data model translation.
 func BenchmarkTranslateDataModel_Complex(b *testing.B) {
 	translator := datamodel.NewTranslator()
 	ctx := context.Background()
@@ -155,7 +156,7 @@ func BenchmarkTranslateDataModel_Complex(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		result, err := translator.TranslateDataModel(
 			ctx,
 			"_complex_pump",
@@ -167,13 +168,14 @@ func BenchmarkTranslateDataModel_Complex(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
+
 		if result == nil {
 			b.Fatal("result is nil")
 		}
 	}
 }
 
-// BenchmarkTranslateDataModel_WithReferences benchmarks translation with model references
+// BenchmarkTranslateDataModel_WithReferences benchmarks translation with model references.
 func BenchmarkTranslateDataModel_WithReferences(b *testing.B) {
 	translator := datamodel.NewTranslator()
 	ctx := context.Background()
@@ -260,7 +262,7 @@ func BenchmarkTranslateDataModel_WithReferences(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		result, err := translator.TranslateDataModel(
 			ctx,
 			"_pump_with_refs",
@@ -272,13 +274,14 @@ func BenchmarkTranslateDataModel_WithReferences(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
+
 		if result == nil {
 			b.Fatal("result is nil")
 		}
 	}
 }
 
-// BenchmarkTranslateDataModel_MultiplePayloadShapes benchmarks translation with different payload shapes
+// BenchmarkTranslateDataModel_MultiplePayloadShapes benchmarks translation with different payload shapes.
 func BenchmarkTranslateDataModel_MultiplePayloadShapes(b *testing.B) {
 	translator := datamodel.NewTranslator()
 	ctx := context.Background()
@@ -326,7 +329,7 @@ func BenchmarkTranslateDataModel_MultiplePayloadShapes(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		result, err := translator.TranslateDataModel(
 			ctx,
 			"_multi_shape",
@@ -338,13 +341,14 @@ func BenchmarkTranslateDataModel_MultiplePayloadShapes(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
+
 		if result == nil {
 			b.Fatal("result is nil")
 		}
 	}
 }
 
-// BenchmarkTranslateDataModel_Large benchmarks large data model translation
+// BenchmarkTranslateDataModel_Large benchmarks large data model translation.
 func BenchmarkTranslateDataModel_Large(b *testing.B) {
 	translator := datamodel.NewTranslator()
 	ctx := context.Background()
@@ -353,15 +357,15 @@ func BenchmarkTranslateDataModel_Large(b *testing.B) {
 	structure := make(map[string]config.Field)
 
 	// Create 10 major subsystems
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		subsystemFields := make(map[string]config.Field)
 
 		// Each subsystem has 5-8 components
-		for j := 0; j < 5+i%4; j++ {
+		for j := range 5 + i%4 {
 			componentFields := make(map[string]config.Field)
 
 			// Each component has 3-6 measurements
-			for k := 0; k < 3+j%4; k++ {
+			for k := range 3 + j%4 {
 				if k%2 == 0 {
 					componentFields[fmt.Sprintf("measurement_%d", k)] = config.Field{
 						PayloadShape: "timeseries-number",
@@ -392,7 +396,7 @@ func BenchmarkTranslateDataModel_Large(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		result, err := translator.TranslateDataModel(
 			ctx,
 			"_large_system",
@@ -404,18 +408,19 @@ func BenchmarkTranslateDataModel_Large(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
+
 		if result == nil {
 			b.Fatal("result is nil")
 		}
 	}
 }
 
-// BenchmarkTranslatorCreation benchmarks translator instance creation
+// BenchmarkTranslatorCreation benchmarks translator instance creation.
 func BenchmarkTranslatorCreation(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		translator := datamodel.NewTranslator()
 		if translator == nil {
 			b.Fatal("translator is nil")

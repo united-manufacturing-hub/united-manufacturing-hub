@@ -14,15 +14,15 @@
 
 package variables
 
-// Normalizer handles normalization of VariableBundle
+// Normalizer handles normalization of VariableBundle.
 type Normalizer struct{}
 
-// NewNormalizer creates a new Normalizer instance
+// NewNormalizer creates a new Normalizer instance.
 func NewNormalizer() *Normalizer {
 	return &Normalizer{}
 }
 
-// NormalizeConfig normalizes a VariableBundle
+// NormalizeConfig normalizes a VariableBundle.
 func (n *Normalizer) NormalizeConfig(vb VariableBundle) VariableBundle {
 	// For now, just return the input as is since VariableBundle is already normalized
 	// This can be extended later if needed

@@ -23,7 +23,7 @@ var (
 )
 
 // Config represents the configuration for a Topic Browser service
-// In the TopicBrowser we do not have any user configurable settings, therefore these packages are bare-bones
+// In the TopicBrowser we do not have any user configurable settings, therefore these packages are bare-bones.
 type Config struct {
 	// to be filled
 	// If you add fields, make sure to update the ConfigsEqual and ConfigDiff functions
@@ -31,12 +31,12 @@ type Config struct {
 	BenthosConfig benthossvccfg.BenthosServiceConfig
 }
 
-// Equal checks if two BenthosServiceConfigs are equal
+// Equal checks if two BenthosServiceConfigs are equal.
 func (c Config) Equal(other Config) bool {
 	return NewComparator().ConfigsEqual(c, other)
 }
 
-// RenderYAML is a package-level function for easy YAML generation
+// RenderYAML is a package-level function for easy YAML generation.
 func RenderYAML(target string, port uint16) (string, error) {
 	// Create a config object from the individual components
 	cfg := Config{
@@ -49,17 +49,17 @@ func RenderYAML(target string, port uint16) (string, error) {
 	return defaultGenerator.RenderConfig(cfg)
 }
 
-// NormalizeTopicBrowserConfig is a package-level function for easy config normalization
+// NormalizeTopicBrowserConfig is a package-level function for easy config normalization.
 func NormalizeTopicBrowserConfig(cfg Config) Config {
 	return defaultNormalizer.NormalizeConfig(cfg)
 }
 
-// ConfigsEqual is a package-level function for easy config comparison
+// ConfigsEqual is a package-level function for easy config comparison.
 func ConfigsEqual(desired, observed Config) bool {
 	return defaultComparator.ConfigsEqual(desired, observed)
 }
 
-// ConfigDiff is a package-level function for easy config diff generation
+// ConfigDiff is a package-level function for easy config diff generation.
 func ConfigDiff(desired, observed Config) string {
 	return defaultComparator.ConfigDiff(desired, observed)
 }

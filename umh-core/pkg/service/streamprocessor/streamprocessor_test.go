@@ -16,8 +16,8 @@ package streamprocessor
 
 import (
 	"context"
-	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -402,7 +402,7 @@ var _ = Describe("StreamProcessorService", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the service was removed
-			Expect(service.dataflowComponentConfig).To(HaveLen(0))
+			Expect(service.dataflowComponentConfig).To(BeEmpty())
 		})
 	})
 
@@ -431,7 +431,7 @@ var _ = Describe("StreamProcessorService", func() {
 			// Extract agent location from the config
 			agentLocation := map[string]string{}
 			for k, v := range fullConfig.Agent.Location {
-				agentLocation[fmt.Sprintf("%d", k)] = v
+				agentLocation[strconv.Itoa(k)] = v
 			}
 
 			// Set up test data

@@ -33,6 +33,7 @@ import (
 // This function is present for structural consistency with other FSM packages.
 func (a *AgentInstance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	a.baseFSMInstance.GetLogger().Debugf("Creating agent monitor instance %s (no-op)", a.baseFSMInstance.GetID())
+
 	return nil
 }
 
@@ -41,6 +42,7 @@ func (a *AgentInstance) CreateInstance(ctx context.Context, filesystemService fi
 // This function is present for structural consistency with other FSM packages.
 func (a *AgentInstance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	a.baseFSMInstance.GetLogger().Debugf("Removing agent monitor instance %s (no-op)", a.baseFSMInstance.GetID())
+
 	return nil
 }
 
@@ -51,6 +53,7 @@ func (a *AgentInstance) RemoveInstance(ctx context.Context, filesystemService fi
 // Currently this is a no-op as the monitoring service runs independently.
 func (a *AgentInstance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	a.baseFSMInstance.GetLogger().Infof("Enabling agent monitoring for %s (no-op)", a.baseFSMInstance.GetID())
+
 	return nil
 }
 
@@ -58,11 +61,12 @@ func (a *AgentInstance) StartInstance(ctx context.Context, filesystemService fil
 // Currently this is a no-op as the monitoring service runs independently.
 func (a *AgentInstance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	a.baseFSMInstance.GetLogger().Infof("Disabling agent monitoring for %s (no-op)", a.baseFSMInstance.GetID())
+
 	return nil
 }
 
 // CheckForCreation is called when the FSM transitions to creating.
-// For agent monitoring, this is a no-op as we don't need to check anything
+// For agent monitoring, this is a no-op as we don't need to check anything.
 func (a *AgentInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
 	return true
 }
@@ -74,6 +78,7 @@ func (a *AgentInstance) UpdateObservedStateOfInstance(ctx context.Context, servi
 		if a.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "UpdateObservedStateOfInstance") {
 			return nil
 		}
+
 		return ctx.Err()
 	}
 
@@ -84,10 +89,11 @@ func (a *AgentInstance) UpdateObservedStateOfInstance(ctx context.Context, servi
 	}
 	// Save to observed state
 	a.ObservedState.ServiceInfo = status
+
 	return nil
 }
 
-// areAllMetricsHealthy decides if the agent health is Active
+// areAllMetricsHealthy decides if the agent health is Active.
 func (a *AgentInstance) areAllMetricsHealthy() bool {
 	status := a.ObservedState.ServiceInfo
 	if status == nil {

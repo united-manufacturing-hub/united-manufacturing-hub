@@ -15,6 +15,7 @@
 package nmap
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -29,17 +30,17 @@ const (
 	baseNmapDir = constants.S6BaseDir
 )
 
-// NmapManager is the FSM manager for multiple nmap monitor instances
+// NmapManager is the FSM manager for multiple nmap monitor instances.
 type NmapManager struct {
 	*public_fsm.BaseFSMManager[config.NmapConfig]
 }
 
-// NmapManagerSnapshot extends the base manager snapshot to hold any nmap-specific info
+// NmapManagerSnapshot extends the base manager snapshot to hold any nmap-specific info.
 type NmapManagerSnapshot struct {
 	*public_fsm.BaseManagerSnapshot
 }
 
-// Ensure it satisfies fsm.ObservedStateSnapshot
+// Ensure it satisfies fsm.ObservedStateSnapshot.
 func (n *NmapManagerSnapshot) IsObservedStateSnapshot() {}
 
 // NewNmapManager constructs a manager.
@@ -65,13 +66,14 @@ func NewNmapManager(name string) *NmapManager {
 		// Create instance
 		func(cfg config.NmapConfig) (public_fsm.FSMInstance, error) {
 			inst := NewNmapInstance(cfg)
+
 			return inst, nil
 		},
 		// Compare config => if same, no recreation needed
 		func(instance public_fsm.FSMInstance, cfg config.NmapConfig) (bool, error) {
 			ni, ok := instance.(*NmapInstance)
 			if !ok {
-				return false, fmt.Errorf("instance is not a NmapInstance")
+				return false, errors.New("instance is not a NmapInstance")
 			}
 			// If same config => return true, else false
 			return ni.config.FSMInstanceConfig == cfg.FSMInstanceConfig &&
@@ -81,20 +83,24 @@ func NewNmapManager(name string) *NmapManager {
 		func(instance public_fsm.FSMInstance, cfg config.NmapConfig) error {
 			ni, ok := instance.(*NmapInstance)
 			if !ok {
-				return fmt.Errorf("instance is not a NmapInstance")
+				return errors.New("instance is not a NmapInstance")
 			}
+
 			ni.config = cfg
+
 			return nil
 		},
 		// Get expected max p95 execution time per instance
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
 			ni, ok := instance.(*NmapInstance)
 			if !ok {
-				return 0, fmt.Errorf("instance is not a NmapInstance")
+				return 0, errors.New("instance is not a NmapInstance")
 			}
+
 			return ni.GetMinimumRequiredTime(), nil
 		},
 	)
+
 	metrics.InitErrorCounter(metrics.ComponentNmapManager, name)
 
 	return &NmapManager{
@@ -102,16 +108,20 @@ func NewNmapManager(name string) *NmapManager {
 	}
 }
 
-// CreateSnapshot overrides the base to add nmap-specific fields if desired
+// CreateSnapshot overrides the base to add nmap-specific fields if desired.
 func (m *NmapManager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	baseSnap := m.BaseFSMManager.CreateSnapshot()
+
 	baseSnapshot, ok := baseSnap.(*public_fsm.BaseManagerSnapshot)
 	if !ok {
 		logger.For(logger.ComponentNmapManager).Errorf("Could not cast nmap snapshot to BaseManagerSnapshot.")
+
 		return baseSnap
 	}
+
 	snap := &NmapManagerSnapshot{
 		BaseManagerSnapshot: baseSnapshot,
 	}
+
 	return snap
 }

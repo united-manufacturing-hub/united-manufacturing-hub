@@ -54,7 +54,7 @@ type Event struct {
 
 type SchemaName string
 
-// Schema definitions
+// Schema definitions.
 const (
 	SCHEMA_ERROR_NO_SCHEMA_PRESENT SchemaName = "ERROR_NO_SCHEMA" // Do not add this to the ValidSchemas array
 	SCHEMA_ERROR_NO_ENTERPRISE     SchemaName = "ERROR_NO_ENTERPRISE"
@@ -209,6 +209,7 @@ type UnifiedNamespaceV2 struct {
 
 func (u *UnifiedNamespaceV2) Len() int {
 	nodes := 0
+
 	for _, enterprise := range u.Enterprises {
 		for _, site := range enterprise.Sites {
 			nodes += len(site.Schemas)
@@ -226,6 +227,7 @@ func (u *UnifiedNamespaceV2) Len() int {
 			}
 		}
 	}
+
 	return nodes
 }
 
@@ -267,5 +269,6 @@ func HashUNSTableEntry(enterpriseName, siteName, areaName, lineName, workCellNam
 	_, _ = hasher.Write([]byte(schemaName))
 	_, _ = hasher.Write([]byte(eventGroup))
 	_, _ = hasher.Write([]byte(eventName))
+
 	return hex.EncodeToString(hasher.Sum(nil))
 }

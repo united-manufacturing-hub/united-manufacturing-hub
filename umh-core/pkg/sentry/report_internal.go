@@ -24,7 +24,7 @@ import (
 )
 
 // reportFatal sends a fatal error to Sentry, including a stack trace and a message
-// Afterwards it will report the error to the logger and panic
+// Afterwards it will report the error to the logger and panic.
 func reportFatal(err error, log *zap.SugaredLogger) {
 	log.Error("The UMH-Core has encountered a fatal error and will now terminate. Please contact our customer support.")
 	log.Errorf("Error: %s", err)
@@ -32,6 +32,7 @@ func reportFatal(err error, log *zap.SugaredLogger) {
 
 	event := createSentryEvent(sentry.LevelFatal, err)
 	sendSentryEvent(event)
+
 	ok := sentry.Flush(time.Second * 5)
 	if !ok {
 		log.Error("Failed to flush Sentry events")
@@ -46,7 +47,7 @@ var errorLastSent time.Time = time.Now().Add(-time.Hour * 24)
 var errorLastSentMutex sync.Mutex = sync.Mutex{}
 
 // reportError sends an error to Sentry, including a stack trace and a message
-// Afterwards it will report the error to the logger
+// Afterwards it will report the error to the logger.
 func reportError(err error, log *zap.SugaredLogger) {
 	errorLastSentMutex.Lock()
 	defer errorLastSentMutex.Unlock()
@@ -59,6 +60,7 @@ func reportError(err error, log *zap.SugaredLogger) {
 	log.Error(err)
 	event := createSentryEvent(sentry.LevelError, err)
 	sendSentryEvent(event)
+
 	errorLastSent = time.Now()
 }
 
@@ -66,7 +68,7 @@ var warningLastSent time.Time = time.Now().Add(-time.Hour * 24)
 var warningLastSentMutex sync.Mutex = sync.Mutex{}
 
 // reportWarning sends a warning to Sentry, including a stack trace and a message
-// Afterwards it will report the warning to the logger
+// Afterwards it will report the warning to the logger.
 func reportWarning(err error, log *zap.SugaredLogger) {
 	warningLastSentMutex.Lock()
 	defer warningLastSentMutex.Unlock()
@@ -79,11 +81,12 @@ func reportWarning(err error, log *zap.SugaredLogger) {
 	log.Warn(err)
 	event := createSentryEvent(sentry.LevelWarning, err)
 	sendSentryEvent(event)
+
 	warningLastSent = time.Now()
 }
 
 // reportFatalWithContext sends a fatal error to Sentry with additional context data
-// Afterwards it will report the error to the logger and panic
+// Afterwards it will report the error to the logger and panic.
 func reportFatalWithContext(err error, log *zap.SugaredLogger, context map[string]interface{}) {
 	log.Error("The UMH-Core has encountered a fatal error and will now terminate. Please contact our customer support.")
 	log.Errorf("Error: %s", err)
@@ -91,6 +94,7 @@ func reportFatalWithContext(err error, log *zap.SugaredLogger, context map[strin
 
 	event := createSentryEventWithContext(sentry.LevelFatal, err, context)
 	sendSentryEvent(event)
+
 	ok := sentry.Flush(time.Second * 5)
 	if !ok {
 		log.Error("Failed to flush Sentry events")
@@ -100,7 +104,7 @@ func reportFatalWithContext(err error, log *zap.SugaredLogger, context map[strin
 }
 
 // reportErrorWithContext sends an error to Sentry with additional context data
-// Afterwards it will report the error to the logger
+// Afterwards it will report the error to the logger.
 func reportErrorWithContext(err error, log *zap.SugaredLogger, context map[string]interface{}) {
 	errorLastSentMutex.Lock()
 	defer errorLastSentMutex.Unlock()
@@ -113,11 +117,12 @@ func reportErrorWithContext(err error, log *zap.SugaredLogger, context map[strin
 	log.Error(err)
 	event := createSentryEventWithContext(sentry.LevelError, err, context)
 	sendSentryEvent(event)
+
 	errorLastSent = time.Now()
 }
 
 // reportWarningWithContext sends a warning to Sentry with additional context data
-// Afterwards it will report the warning to the logger
+// Afterwards it will report the warning to the logger.
 func reportWarningWithContext(err error, log *zap.SugaredLogger, context map[string]interface{}) {
 	warningLastSentMutex.Lock()
 	defer warningLastSentMutex.Unlock()
@@ -130,5 +135,6 @@ func reportWarningWithContext(err error, log *zap.SugaredLogger, context map[str
 	log.Warn(err)
 	event := createSentryEventWithContext(sentry.LevelWarning, err, context)
 	sendSentryEvent(event)
+
 	warningLastSent = time.Now()
 }

@@ -41,8 +41,10 @@ import (
 func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
 	start := time.Now()
 	instanceName := n.baseFSMInstance.GetID()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentNmapInstance, instanceName, time.Since(start))
+
 		if err != nil {
 			n.baseFSMInstance.GetLogger().Errorf("error reconciling nmap instance %s: %s", instanceName, err)
 			n.PrintState()
@@ -56,6 +58,7 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 		if n.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "start of reconciliation") {
 			return nil, false
 		}
+
 		return ctx.Err(), false
 	}
 
@@ -85,7 +88,9 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 				},
 			)
 		}
+
 		n.baseFSMInstance.GetLogger().Debugf("Skipping reconcile for nmap monitor %s: %v", instanceName, backErr)
+
 		return nil, false
 	}
 
@@ -98,7 +103,7 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 		// Log the error but always continue reconciling - we need reconcileStateTransition to run
 		// to restore services after restart, even if we can't read their status yet
 		n.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)
-		
+
 		// For all other errors, just continue reconciling without setting backoff
 		err = nil
 	}
@@ -117,6 +122,7 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 
 		n.baseFSMInstance.SetError(err, snapshot.Tick)
 		n.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
+
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
@@ -126,13 +132,15 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 		if n.baseFSMInstance.IsDeadlineExceededAndHandle(s6Err, snapshot.Tick, "monitorService reconciliation") {
 			return nil, false
 		}
+
 		n.baseFSMInstance.SetError(s6Err, snapshot.Tick)
 		n.baseFSMInstance.GetLogger().Errorf("error reconciling monitorService: %s", s6Err)
+
 		return nil, false
 	}
 
 	// If either Nmap state or S6 state was reconciled, we return reconciled so that nothing happens anymore in this tick
-	// nothing should happen as we might have already taken up some significant time of the avaialble time per tick, so better
+	// nothing should happen as we might have already taken up some significant time of the available time per tick, so better
 	// to be on the safe side and let the rest handle in another tick
 	reconciled = reconciled || s6Reconciled
 
@@ -143,9 +151,10 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 }
 
 // reconcileExternalChanges checks if the Nmap service status has changed
-// externally (e.g., if someone manually stopped or started it, or if it crashed)
+// externally (e.g., if someone manually stopped or started it, or if it crashed).
 func (n *NmapInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentNmapInstance, n.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
 	}()
@@ -159,6 +168,7 @@ func (n *NmapInstance) reconcileExternalChanges(ctx context.Context, services se
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}
+
 	return nil
 }
 
@@ -169,6 +179,7 @@ func (n *NmapInstance) reconcileExternalChanges(ctx context.Context, services se
 // This is to ensure full testability of the FSM.
 func (n *NmapInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentNmapInstance, n.baseFSMInstance.GetID()+".reconcileStateTransition", time.Since(start))
 	}()
@@ -185,6 +196,7 @@ func (n *NmapInstance) reconcileStateTransition(ctx context.Context, services se
 		if err != nil {
 			return err, false
 		}
+
 		return nil, reconciled
 	}
 
@@ -194,15 +206,17 @@ func (n *NmapInstance) reconcileStateTransition(ctx context.Context, services se
 		if err != nil {
 			return err, false
 		}
+
 		return nil, reconciled
 	}
 
 	return fmt.Errorf("invalid state: %s", currentState), false
 }
 
-// reconcileOperationalStates handles operational (i.e. start/stop and sub-state)
+// reconcileOperationalStates handles operational (i.e. start/stop and sub-state).
 func (n *NmapInstance) reconcileOperationalStates(ctx context.Context, currentState string, desiredState string, services serviceregistry.Provider, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentNmapInstance, n.baseFSMInstance.GetID()+".reconcileOperationalStates", time.Since(start))
 	}()
@@ -221,6 +235,7 @@ func (n *NmapInstance) reconcileOperationalStates(ctx context.Context, currentSt
 // It deals with moving from various states to the Active state.
 func (n *NmapInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentNmapInstance, n.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
 	}()
@@ -255,6 +270,7 @@ func (n *NmapInstance) reconcileTransitionToActive(ctx context.Context, services
 //	then from stopping -> stopped (EventStopped)
 func (n *NmapInstance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentNmapInstance, n.baseFSMInstance.GetID()+".reconcileTransitionToStopped", time.Since(start))
 	}()
@@ -264,6 +280,7 @@ func (n *NmapInstance) reconcileTransitionToStopped(ctx context.Context, service
 		if err := n.StopInstance(ctx, services.GetFileSystem()); err != nil {
 			return err, true
 		}
+
 		return n.baseFSMInstance.SendEvent(ctx, EventStop), true
 	}
 
@@ -272,6 +289,7 @@ func (n *NmapInstance) reconcileTransitionToStopped(ctx context.Context, service
 		if !n.IsStopped() {
 			return n.baseFSMInstance.SendEvent(ctx, EventStopDone), true
 		}
+
 		return nil, false
 	}
 
@@ -281,6 +299,7 @@ func (n *NmapInstance) reconcileTransitionToStopped(ctx context.Context, service
 // reconcileStartingStates handles the various starting phase states when transitioning to Active.
 func (n *NmapInstance) reconcileStartingStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentNmapInstance, n.baseFSMInstance.GetID()+".reconcileStartingStates", time.Since(start))
 	}()
@@ -296,6 +315,7 @@ func (n *NmapInstance) reconcileStartingStates(ctx context.Context, services ser
 // reconcileRunningStates handles the various running states when transitioning to Active.
 func (n *NmapInstance) reconcileRunningStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentNmapInstance, n.baseFSMInstance.GetID()+".reconcileRunningStates", time.Since(start))
 	}()
@@ -424,7 +444,7 @@ func (n *NmapInstance) reconcileRunningStates(ctx context.Context, services serv
 	}
 }
 
-// isNmapHealthy decides if the nmap health is Active
+// isNmapHealthy decides if the nmap health is Active.
 func (n *NmapInstance) isNmapHealthy(currentTime time.Time) bool {
 	status := n.ObservedState.ServiceInfo.NmapStatus
 
@@ -433,7 +453,7 @@ func (n *NmapInstance) isNmapHealthy(currentTime time.Time) bool {
 		return false
 	}
 
-	// If there occured any error in the LastScan during parseScanLogs
+	// If there occurred any error in the LastScan during parseScanLogs
 	if status.LastScan.Error != "" {
 		return false
 	}
@@ -448,7 +468,7 @@ func (n *NmapInstance) isNmapHealthy(currentTime time.Time) bool {
 }
 
 // checkPortState checks on the port state and if it differs to the currentState
-// it returns true and the corresponding event
+// it returns true and the corresponding event.
 func (n *NmapInstance) checkPortState(currentState string) (bool, string) {
 	if n.ObservedState.ServiceInfo.NmapStatus.LastScan == nil {
 		return false, ""
@@ -461,31 +481,37 @@ func (n *NmapInstance) checkPortState(currentState string) (bool, string) {
 		if currentState == OperationalStateOpen {
 			return false, ""
 		}
+
 		return true, EventPortOpen
 	case PortStateFiltered:
 		if currentState == OperationalStateFiltered {
 			return false, ""
 		}
+
 		return true, EventPortFiltered
 	case PortStateClosed:
 		if currentState == OperationalStateClosed {
 			return false, ""
 		}
+
 		return true, EventPortClosed
 	case PortStateUnfiltered:
 		if currentState == OperationalStateUnfiltered {
 			return false, ""
 		}
+
 		return true, EventPortUnfiltered
 	case PortStateOpenFiltered:
 		if currentState == OperationalStateOpenFiltered {
 			return false, ""
 		}
+
 		return true, EventPortOpenFiltered
 	case PortStateClosedFiltered:
 		if currentState == OperationalStateClosedFiltered {
 			return false, ""
 		}
+
 		return true, EventPortClosedFiltered
 	default:
 		return false, ""

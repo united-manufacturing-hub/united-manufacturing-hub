@@ -24,7 +24,7 @@ import (
 )
 
 // Record is the record that is stored in the archive
-// It contains the state that the FSM is in and the event that caused the state transition
+// It contains the state that the FSM is in and the event that caused the state transition.
 type Record struct {
 	ID          string // The ID of the FSM
 	State       string // The state that the FSM is in
@@ -32,27 +32,27 @@ type Record struct {
 }
 
 // DataPoint is the individual data point that is stored in the archive
-// Its abstraction is very similar to a time series database's data point
+// Its abstraction is very similar to a time series database's data point.
 type DataPoint struct {
 	Time   time.Time // The time that the event occurred
 	Record Record    // The record that is stored
 }
 
 // ArchiveStorer is the interface for the archive storage service
-// This is intended to be used only in the FSMs themselves
+// This is intended to be used only in the FSMs themselves.
 type ArchiveStorer interface {
 	StoreDataPoint(ctx context.Context, dataPoint DataPoint) error
 	GetDataPoints(ctx context.Context, id string, options QueryOptions) ([]DataPoint, error)
 }
 
 // ArchiveStoreCloser is the interface for the archive storage service that also includes a Close method
-// This is intended to be used only in the supervising control loop, not in the FSMs themselves
+// This is intended to be used only in the supervising control loop, not in the FSMs themselves.
 type ArchiveStoreCloser interface {
 	ArchiveStorer
 	Close() error
 }
 
-// QueryOptions provides filtering options for retrieving data points
+// QueryOptions provides filtering options for retrieving data points.
 type QueryOptions struct {
 	StartTime time.Time
 	EndTime   time.Time
@@ -63,7 +63,7 @@ type QueryOptions struct {
 
 var _ ArchiveStoreCloser = &ArchiveEventStorage{}
 
-// ArchiveEventStorage is the implementation of the ArchiveStorer interface
+// ArchiveEventStorage is the implementation of the ArchiveStorer interface.
 type ArchiveEventStorage struct {
 	dataPoints        map[string][]DataPoint
 	dataPointQueue    chan DataPoint
@@ -72,7 +72,7 @@ type ArchiveEventStorage struct {
 	maxPointsPerState int
 }
 
-// NewArchiveEventStorage creates a new ArchiveEventStorage
+// NewArchiveEventStorage creates a new ArchiveEventStorage.
 func NewArchiveEventStorage(maxPointsPerState int) *ArchiveEventStorage {
 	if maxPointsPerState <= 0 {
 		maxPointsPerState = 1000 // Default limit
@@ -86,6 +86,7 @@ func NewArchiveEventStorage(maxPointsPerState int) *ArchiveEventStorage {
 	}
 
 	go a.storeDataPoints()
+
 	return a
 }
 
@@ -100,6 +101,7 @@ func (a *ArchiveEventStorage) storeDataPoints() {
 				// Remove oldest point
 				points = points[1:]
 			}
+
 			points = append(points, dataPoint)
 			a.dataPoints[dataPoint.Record.ID] = points
 			a.mu.Unlock()
@@ -136,11 +138,13 @@ func (a *ArchiveEventStorage) GetDataPoints(ctx context.Context, id string, opti
 
 		// Filter by time range
 		var filtered []DataPoint
+
 		for _, p := range points {
 			if (!options.StartTime.IsZero() && p.Time.Before(options.StartTime)) ||
 				(!options.EndTime.IsZero() && p.Time.After(options.EndTime)) {
 				continue
 			}
+
 			filtered = append(filtered, p)
 		}
 
@@ -165,7 +169,7 @@ func (a *ArchiveEventStorage) GetDataPoints(ctx context.Context, id string, opti
 	}
 }
 
-// filterByStates filters data points based on the provided states
+// filterByStates filters data points based on the provided states.
 func filterByStates(dataPoints []DataPoint, states []string) []DataPoint {
 	if len(states) == 0 {
 		return dataPoints
@@ -195,7 +199,7 @@ func (a *ArchiveEventStorage) Close() error {
 		a.mu.Lock()
 		a.dataPoints[dp.Record.ID] = append(a.dataPoints[dp.Record.ID], dp)
 		a.mu.Unlock()
-
 	}
+
 	return nil
 }

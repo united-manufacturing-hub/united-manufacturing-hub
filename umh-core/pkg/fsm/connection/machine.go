@@ -29,11 +29,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
 )
 
-// NewConnectionInstance creates a new ConnectionInstance with a given ID and service path
+// NewConnectionInstance creates a new ConnectionInstance with a given ID and service path.
 func NewConnectionInstance(
 	s6BaseDir string,
 	config config.ConnectionConfig) *ConnectionInstance {
-
 	cfg := internal_fsm.BaseFSMInstanceConfig{
 		ID:                           config.Name,
 		DesiredFSMState:              OperationalStateStopped,
@@ -126,7 +125,7 @@ func NewConnectionInstance(
 
 // SetDesiredFSMState safely updates the desired state
 // But ensures that the desired state is a valid state and that it is also a reasonable state
-// e.g., nobody wants to have an instance in the "starting" state, that is just intermediate
+// e.g., nobody wants to have an instance in the "starting" state, that is just intermediate.
 func (c *ConnectionInstance) SetDesiredFSMState(state string) error {
 	if state != OperationalStateStopped &&
 		state != OperationalStateUp {
@@ -137,46 +136,47 @@ func (c *ConnectionInstance) SetDesiredFSMState(state string) error {
 	}
 
 	c.baseFSMInstance.SetDesiredFSMState(state)
+
 	return nil
 }
 
-// GetCurrentFSMState returns the current state of the FSM
+// GetCurrentFSMState returns the current state of the FSM.
 func (c *ConnectionInstance) GetCurrentFSMState() string {
 	return c.baseFSMInstance.GetCurrentFSMState()
 }
 
-// GetDesiredFSMState returns the desired state of the FSM
+// GetDesiredFSMState returns the desired state of the FSM.
 func (c *ConnectionInstance) GetDesiredFSMState() string {
 	return c.baseFSMInstance.GetDesiredFSMState()
 }
 
 // Remove starts the removal process, it is idempotent and can be called multiple times
-// Note: it is only removed once IsRemoved returns true
+// Note: it is only removed once IsRemoved returns true.
 func (c *ConnectionInstance) Remove(ctx context.Context) error {
 	return c.baseFSMInstance.Remove(ctx)
 }
 
-// IsRemoved returns true if the instance has been removed
+// IsRemoved returns true if the instance has been removed.
 func (c *ConnectionInstance) IsRemoved() bool {
 	return c.baseFSMInstance.IsRemoved()
 }
 
-// IsRemoving returns true if the instance is in the removing state
+// IsRemoving returns true if the instance is in the removing state.
 func (c *ConnectionInstance) IsRemoving() bool {
 	return c.baseFSMInstance.IsRemoving()
 }
 
-// IsStopping returns true if the instance is in the stopping state
+// IsStopping returns true if the instance is in the stopping state.
 func (c *ConnectionInstance) IsStopping() bool {
 	return c.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopping
 }
 
-// IsStopped returns true if the instance is in the stopped state
+// IsStopped returns true if the instance is in the stopped state.
 func (c *ConnectionInstance) IsStopped() bool {
 	return c.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopped
 }
 
-// PrintState prints the current state of the FSM for debugging
+// PrintState prints the current state of the FSM for debugging.
 func (c *ConnectionInstance) PrintState() {
 	c.baseFSMInstance.GetLogger().Debugf("Current state: %s", c.baseFSMInstance.GetCurrentFSMState())
 	c.baseFSMInstance.GetLogger().Debugf("Desired state: %s", c.baseFSMInstance.GetDesiredFSMState())
@@ -185,7 +185,7 @@ func (c *ConnectionInstance) PrintState() {
 		c.ObservedState.ServiceInfo.IsFlaky)
 }
 
-// GetMinimumRequiredTime returns the minimum required time for this instance
+// GetMinimumRequiredTime returns the minimum required time for this instance.
 func (c *ConnectionInstance) GetMinimumRequiredTime() time.Duration {
 	return constants.ConnectionUpdateObservedStateTimeout
 }

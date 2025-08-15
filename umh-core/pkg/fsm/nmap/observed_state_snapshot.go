@@ -32,10 +32,10 @@ type NmapObservedStateSnapshot struct {
 	LastStateChange int64
 }
 
-// Ensure it satisfies fsm.ObservedStateSnapshot
+// Ensure it satisfies fsm.ObservedStateSnapshot.
 func (n *NmapObservedStateSnapshot) IsObservedStateSnapshot() {}
 
-// CreateObservedStateSnapshot is called by the manager to record the state
+// CreateObservedStateSnapshot is called by the manager to record the state.
 func (n *NmapInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	snapshot := &NmapObservedStateSnapshot{
 		LastStateChange: n.ObservedState.LastStateChange,
@@ -45,6 +45,7 @@ func (n *NmapInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	err := deepcopy.Copy(&snapshot.Config, &n.config)
 	if err != nil {
 		sentry.ReportFSMError(n.baseFSMInstance.GetLogger(), n.baseFSMInstance.GetID(), "nmap", "CreateObservedStateSnapshot", err)
+
 		return nil
 	}
 
@@ -52,6 +53,7 @@ func (n *NmapInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	err = deepcopy.Copy(&snapshot.ServiceInfo, &n.ObservedState.ServiceInfo)
 	if err != nil {
 		sentry.ReportFSMError(n.baseFSMInstance.GetLogger(), n.baseFSMInstance.GetID(), "nmap", "CreateObservedStateSnapshot", err)
+
 		return nil
 	}
 
@@ -59,6 +61,7 @@ func (n *NmapInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	err = deepcopy.Copy(&snapshot.ObservedNmapServiceConfig, &n.ObservedState.ObservedNmapServiceConfig)
 	if err != nil {
 		sentry.ReportFSMError(n.baseFSMInstance.GetLogger(), n.baseFSMInstance.GetID(), "nmap", "CreateObservedStateSnapshot", err)
+
 		return nil
 	}
 

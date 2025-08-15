@@ -72,7 +72,7 @@ var _ = Describe("Ringbuffer", func() {
 	Context("capacity overflow guard", func() {
 		It("falls back to the default when asked for an absurd capacity", func() {
 			rb := NewRingbuffer(math.MaxUint64) // far above MaxInt
-			Expect(len(rb.buf)).To(BeNumerically(">=", 1))
+			Expect(rb.buf).ToNot(BeEmpty())
 			Expect(len(rb.buf)).To(BeNumerically("<=", 8)) // defaultCap
 		})
 	})
@@ -175,7 +175,7 @@ var _ = Describe("Ringbuffer", func() {
 
 			snapshot := rb.GetSnapshot()
 			Expect(snapshot.LastSequenceNum).To(Equal(uint64(3)))
-			Expect(len(snapshot.Items)).To(Equal(3))
+			Expect(snapshot.Items).To(HaveLen(3))
 
 			// Verify sequence numbers are assigned correctly
 			Expect(buf1.SequenceNum).To(Equal(uint64(1)))
@@ -196,10 +196,10 @@ var _ = Describe("Ringbuffer", func() {
 
 			snapshot := rb.GetSnapshot()
 			Expect(snapshot.LastSequenceNum).To(Equal(uint64(3)))
-			Expect(len(snapshot.Items)).To(Equal(2)) // Buffer capacity
+			Expect(snapshot.Items).To(HaveLen(2)) // Buffer capacity
 
 			// Only buf2 and buf3 should remain
-			Expect(len(snapshot.Items)).To(Equal(2))
+			Expect(snapshot.Items).To(HaveLen(2))
 			Expect(snapshot.Items[0].SequenceNum).To(Equal(uint64(3))) // Newest first
 			Expect(snapshot.Items[1].SequenceNum).To(Equal(uint64(2)))
 		})
@@ -215,7 +215,7 @@ var _ = Describe("Ringbuffer", func() {
 			snapshot := rb.GetSnapshot()
 
 			Expect(snapshot.LastSequenceNum).To(Equal(uint64(2)))
-			Expect(len(snapshot.Items)).To(Equal(2))
+			Expect(snapshot.Items).To(HaveLen(2))
 
 			// Items should be newest-to-oldest
 			Expect(snapshot.Items[0].Payload[0]).To(Equal(byte(20))) // Newest
@@ -224,27 +224,30 @@ var _ = Describe("Ringbuffer", func() {
 	})
 })
 
-// helper for buffer format
+// helper for buffer format.
 func helperBuf(id byte) *BufferItem {
 	return &BufferItem{Payload: []byte{id}, Timestamp: time.Now()}
 }
 
-// helper to Add to ringbuffer
+// helper to Add to ringbuffer.
 func helperWriter(rb *Ringbuffer, id byte, n int, wg *sync.WaitGroup) {
 	defer GinkgoRecover()
 	defer wg.Done()
+
 	for range n {
 		rb.Add(helperBuf(id))
 	}
 }
 
-// helper to Get from ringbuffer using GetSnapshot
+// helper to Get from ringbuffer using GetSnapshot.
 func helperReaderGet(rb *Ringbuffer, capacity int, n int, wg *sync.WaitGroup) {
 	defer GinkgoRecover()
 	defer wg.Done()
+
 	for range n {
 		snapshot := rb.GetSnapshot()
 		Expect(len(snapshot.Items)).To(BeNumerically("<=", capacity))
+
 		for _, b := range snapshot.Items {
 			Expect(b).NotTo(BeNil())
 			Expect(b.Payload).NotTo(BeNil())

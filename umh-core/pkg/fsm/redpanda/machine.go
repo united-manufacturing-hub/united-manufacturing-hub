@@ -30,10 +30,9 @@ import (
 	redpanda_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
 )
 
-// NewRedpandaInstance creates a new RedpandaInstance with the given ID and service path
+// NewRedpandaInstance creates a new RedpandaInstance with the given ID and service path.
 func NewRedpandaInstance(
 	config config.RedpandaConfig) *RedpandaInstance {
-
 	cfg := internal_fsm.BaseFSMInstanceConfig{
 		ID:                           config.Name,
 		DesiredFSMState:              OperationalStateStopped,
@@ -98,7 +97,7 @@ func NewRedpandaInstance(
 
 // SetDesiredFSMState safely updates the desired state
 // But ensures that the desired state is a valid state and that it is also a reasonable state
-// e.g., nobody wants to have an instance in the "starting" state, that is just intermediate
+// e.g., nobody wants to have an instance in the "starting" state, that is just intermediate.
 func (r *RedpandaInstance) SetDesiredFSMState(state string) error {
 	// For Redpanda, we only allow setting Stopped or Active as desired states
 	if state != OperationalStateStopped &&
@@ -110,59 +109,61 @@ func (r *RedpandaInstance) SetDesiredFSMState(state string) error {
 	}
 
 	r.baseFSMInstance.SetDesiredFSMState(state)
+
 	return nil
 }
 
-// GetCurrentFSMState returns the current state of the FSM
+// GetCurrentFSMState returns the current state of the FSM.
 func (r *RedpandaInstance) GetCurrentFSMState() string {
 	return r.baseFSMInstance.GetCurrentFSMState()
 }
 
-// GetDesiredFSMState returns the desired state of the FSM
+// GetDesiredFSMState returns the desired state of the FSM.
 func (r *RedpandaInstance) GetDesiredFSMState() string {
 	return r.baseFSMInstance.GetDesiredFSMState()
 }
 
 // Remove starts the removal process, it is idempotent and can be called multiple times
-// Note: it is only removed once IsRemoved returns true
+// Note: it is only removed once IsRemoved returns true.
 func (r *RedpandaInstance) Remove(ctx context.Context) error {
 	return r.baseFSMInstance.Remove(ctx)
 }
 
-// IsRemoved returns true if the instance has been removed
+// IsRemoved returns true if the instance has been removed.
 func (r *RedpandaInstance) IsRemoved() bool {
 	return r.baseFSMInstance.IsRemoved()
 }
 
-// IsRemoving returns true if the instance is in the removing state
+// IsRemoving returns true if the instance is in the removing state.
 func (r *RedpandaInstance) IsRemoving() bool {
 	return r.baseFSMInstance.IsRemoving()
 }
 
-// IsStopping returns true if the instance is in the stopping state
+// IsStopping returns true if the instance is in the stopping state.
 func (r *RedpandaInstance) IsStopping() bool {
 	return r.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopping
 }
 
-// IsStopped returns true if the instance is in the stopped state
+// IsStopped returns true if the instance is in the stopped state.
 func (r *RedpandaInstance) IsStopped() bool {
 	return r.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopped
 }
 
-// IsRunning returns true if the instance is in any running state (active, idle, or degraded)
+// IsRunning returns true if the instance is in any running state (active, idle, or degraded).
 func (r *RedpandaInstance) IsRunning() bool {
 	currentState := r.baseFSMInstance.GetCurrentFSMState()
+
 	return currentState == OperationalStateActive ||
 		currentState == OperationalStateIdle ||
 		currentState == OperationalStateDegraded
 }
 
-// WantsToBeStopped returns true if the instance wants to be stopped
+// WantsToBeStopped returns true if the instance wants to be stopped.
 func (r *RedpandaInstance) WantsToBeStopped() bool {
 	return r.baseFSMInstance.GetDesiredFSMState() == OperationalStateStopped
 }
 
-// PrintState prints the current state of the FSM for debugging
+// PrintState prints the current state of the FSM for debugging.
 func (r *RedpandaInstance) PrintState() {
 	r.baseFSMInstance.GetLogger().Debugf("Current state: %s", r.baseFSMInstance.GetCurrentFSMState())
 	r.baseFSMInstance.GetLogger().Debugf("Desired state: %s", r.baseFSMInstance.GetDesiredFSMState())
@@ -177,7 +178,7 @@ func (r *RedpandaInstance) PrintState() {
 // - HasWarnings() - Checks if Redpanda is reporting warnings
 // - HasErrors() - Checks if Redpanda is reporting errors
 
-// GetMinimumRequiredTime returns the minimum required time for this instance
+// GetMinimumRequiredTime returns the minimum required time for this instance.
 func (r *RedpandaInstance) GetMinimumRequiredTime() time.Duration {
 	return constants.RedpandaUpdateObservedStateTimeout
 }

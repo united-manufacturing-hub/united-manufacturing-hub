@@ -16,14 +16,14 @@ package portmanager
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"sync"
 )
 
-// ErrPortInUse is returned when a port is already in use by another service
-var ErrPortInUse = fmt.Errorf("port is already in use by another service")
+// ErrPortInUse is returned when a port is already in use by another service.
+var ErrPortInUse = errors.New("port is already in use by another service")
 
-// MockPortManager is a mock implementation of PortManager for testing
+// MockPortManager is a mock implementation of PortManager for testing.
 type MockPortManager struct {
 	AllocatePortError  error
 	ReleasePortError   error
@@ -43,10 +43,10 @@ type MockPortManager struct {
 	PostReconcileCalled bool
 }
 
-// Ensure MockPortManager implements PortManager
+// Ensure MockPortManager implements PortManager.
 var _ PortManager = (*MockPortManager)(nil)
 
-// NewMockPortManager creates a new MockPortManager
+// NewMockPortManager creates a new MockPortManager.
 func NewMockPortManager() *MockPortManager {
 	return &MockPortManager{
 		Ports:          make(map[string]uint16),
@@ -55,7 +55,7 @@ func NewMockPortManager() *MockPortManager {
 	}
 }
 
-// AllocatePort allocates a port for the given service
+// AllocatePort allocates a port for the given service.
 func (m *MockPortManager) AllocatePort(ctx context.Context, serviceName string) (uint16, error) {
 	m.Lock()
 	defer m.Unlock()
@@ -70,6 +70,7 @@ func (m *MockPortManager) AllocatePort(ctx context.Context, serviceName string) 
 	if m.AllocatePortResult != 0 {
 		m.Ports[serviceName] = m.AllocatePortResult
 		m.AllocatedPorts[m.AllocatePortResult] = serviceName
+
 		return m.AllocatePortResult, nil
 	}
 
@@ -82,10 +83,11 @@ func (m *MockPortManager) AllocatePort(ctx context.Context, serviceName string) 
 	port := uint16(9000 + len(m.Ports))
 	m.Ports[serviceName] = port
 	m.AllocatedPorts[port] = serviceName
+
 	return port, nil
 }
 
-// ReleasePort releases a port for the given service
+// ReleasePort releases a port for the given service.
 func (m *MockPortManager) ReleasePort(serviceName string) error {
 	m.Lock()
 	defer m.Unlock()
@@ -104,7 +106,7 @@ func (m *MockPortManager) ReleasePort(serviceName string) error {
 	return nil
 }
 
-// GetPort returns the port for the given service
+// GetPort returns the port for the given service.
 func (m *MockPortManager) GetPort(serviceName string) (uint16, bool) {
 	m.Lock()
 	defer m.Unlock()
@@ -112,10 +114,11 @@ func (m *MockPortManager) GetPort(serviceName string) (uint16, bool) {
 	m.GetPortCalled = true
 
 	port, ok := m.Ports[serviceName]
+
 	return port, ok
 }
 
-// ReservePort reserves a specific port for the given service
+// ReservePort reserves a specific port for the given service.
 func (m *MockPortManager) ReservePort(ctx context.Context, serviceName string, port uint16) error {
 	m.Lock()
 	defer m.Unlock()
@@ -139,7 +142,7 @@ func (m *MockPortManager) ReservePort(ctx context.Context, serviceName string, p
 	return nil
 }
 
-// PreReconcile implements the PreReconcile method for MockPortManager
+// PreReconcile implements the PreReconcile method for MockPortManager.
 func (m *MockPortManager) PreReconcile(ctx context.Context, instanceNames []string) error {
 	m.Lock()
 	defer m.Unlock()
@@ -163,7 +166,7 @@ func (m *MockPortManager) PreReconcile(ctx context.Context, instanceNames []stri
 	return nil
 }
 
-// PostReconcile implements the PostReconcile method for MockPortManager
+// PostReconcile implements the PostReconcile method for MockPortManager.
 func (m *MockPortManager) PostReconcile(ctx context.Context) error {
 	m.Lock()
 	defer m.Unlock()

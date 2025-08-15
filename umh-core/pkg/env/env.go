@@ -30,8 +30,10 @@ func GetAsString(key string, required bool, defaultValue string) (string, error)
 		if required {
 			return "", fmt.Errorf("required environment variable %s is not set", key)
 		}
+
 		return defaultValue, nil
 	}
+
 	return value, nil
 }
 
@@ -49,6 +51,7 @@ func GetAsInt(key string, required bool, defaultValue int) (int, error) {
 		if required {
 			return 0, fmt.Errorf("environment variable %s must be an integer: %w", key, err)
 		}
+
 		return defaultValue, nil
 	}
 
@@ -77,6 +80,7 @@ func GetAsBool(key string, required bool, defaultValue bool) (bool, error) {
 		if required {
 			return false, fmt.Errorf("environment variable %s must be a boolean value", key)
 		}
+
 		return defaultValue, nil
 	}
 }
@@ -95,6 +99,7 @@ func GetAsFloat(key string, required bool, defaultValue float64) (float64, error
 		if required {
 			return 0, fmt.Errorf("environment variable %s must be a number: %w", key, err)
 		}
+
 		return defaultValue, nil
 	}
 

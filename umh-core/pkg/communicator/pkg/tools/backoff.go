@@ -35,6 +35,7 @@ func NewBackoff(start, step, max time.Duration, policy BackoffPolicy) *Backoff {
 	if start <= 0 {
 		start = 1 * time.Millisecond
 	}
+
 	return &Backoff{
 		lastBackoff: start,
 		start:       start,
@@ -64,6 +65,7 @@ func (b *Backoff) Next() time.Duration {
 	}
 
 	b.lastBackoff = backoff
+
 	return backoff
 }
 

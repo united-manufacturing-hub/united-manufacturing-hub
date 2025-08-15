@@ -21,29 +21,29 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
 )
 
-// Operational state constants (using internal_fsm compatible naming)
+// Operational state constants (using internal_fsm compatible naming).
 const (
-	// OperationalStateStopping is the state when the service is in the process of stopping
+	// OperationalStateStopping is the state when the service is in the process of stopping.
 	OperationalStateStopping = "stopping"
-	// OperationalStateStopped is the initial state and also the state when the service is stopped
+	// OperationalStateStopped is the initial state and also the state when the service is stopped.
 	OperationalStateStopped = "stopped"
 
 	// Starting phase states
-	// OperationalStateStarting is the state when connection builds up
+	// OperationalStateStarting is the state when connection builds up.
 	OperationalStateStarting = "starting"
 
 	// Running phase states
-	// OperationalStateDown is the state when the service is running but not actively processing data
+	// OperationalStateDown is the state when the service is running but not actively processing data.
 	OperationalStateDown = "down"
-	// OperationalStateUp is the state when the service is running and actively processing data
+	// OperationalStateUp is the state when the service is running and actively processing data.
 	OperationalStateUp = "up"
-	// OperationalStateDegraded is the state when the service is running but has encountered issues
+	// OperationalStateDegraded is the state when the service is running but has encountered issues.
 	OperationalStateDegraded = "degraded"
 )
 
-// Operational event constants
+// Operational event constants.
 const (
-	// Basic lifecycle events
+	// Basic lifecycle events.
 	EventStart     = "start"
 	EventStartDone = "start_done"
 	EventStop      = "stop"
@@ -53,10 +53,10 @@ const (
 	EventProbeFlaky = "probe_flaky"
 	EventProbeDown  = "probe_down"
 
-	// Running phase events
+	// Running phase events.
 )
 
-// IsOperationalState returns whether the given state is a valid operational state
+// IsOperationalState returns whether the given state is a valid operational state.
 func IsOperationalState(state string) bool {
 	switch state {
 	case OperationalStateStopped,
@@ -67,19 +67,16 @@ func IsOperationalState(state string) bool {
 		OperationalStateStopping:
 		return true
 	}
+
 	return false
 }
 
-// IsStartingState returns whether the given state is a starting state
+// IsStartingState returns whether the given state is a starting state.
 func IsStartingState(state string) bool {
-	switch state {
-	case OperationalStateStarting:
-		return true
-	}
-	return false
+	return state == OperationalStateStarting
 }
 
-// IsRunningState returns whether the given state is a running state
+// IsRunningState returns whether the given state is a running state.
 func IsRunningState(state string) bool {
 	switch state {
 	case OperationalStateDown,
@@ -87,10 +84,11 @@ func IsRunningState(state string) bool {
 		OperationalStateDegraded:
 		return true
 	}
+
 	return false
 }
 
-// ConnectionObservedState contains the observed runtime state of a Connection instance
+// ConnectionObservedState contains the observed runtime state of a Connection instance.
 type ConnectionObservedState struct {
 
 	// ObservedConnectionConfig contains the observed Connection service config
@@ -99,12 +97,12 @@ type ConnectionObservedState struct {
 	ServiceInfo connection.ServiceInfo
 }
 
-// IsObservedState implements the ObservedState interface
+// IsObservedState implements the ObservedState interface.
 func (c ConnectionObservedState) IsObservedState() {}
 
 // BenthosInstance implements the FSMInstance interface
 // If BenthosInstance does not implement the FSMInstance interface, this will
-// be detected at compile time
+// be detected at compile time.
 var _ publicfsm.FSMInstance = (*ConnectionInstance)(nil)
 
 // ConnectionInstance is a state-machine managed instance of a Connection service.
@@ -126,32 +124,32 @@ type ConnectionInstance struct {
 	ObservedState ConnectionObservedState
 }
 
-// GetLastObservedState returns the last known state of the instance
+// GetLastObservedState returns the last known state of the instance.
 func (c *ConnectionInstance) GetLastObservedState() publicfsm.ObservedState {
 	return c.ObservedState
 }
 
 // SetService sets the Connection service implementation to use
-// This is a testing-only utility to access the private service field
+// This is a testing-only utility to access the private service field.
 func (c *ConnectionInstance) SetService(service connection.IConnectionService) {
 	c.service = service
 }
 
 // GetConfig returns the ConnectionServiceConfig for this service
-// This is a testing-only utility to access the private service field
+// This is a testing-only utility to access the private service field.
 func (c *ConnectionInstance) GetConfig() connectionserviceconfig.ConnectionServiceConfig {
 	return c.config
 }
 
 // GetLastError returns the last error of the instance
-// This is a testing-only utility to access the private baseFSMInstance field
+// This is a testing-only utility to access the private baseFSMInstance field.
 func (c *ConnectionInstance) GetLastError() error {
 	return c.baseFSMInstance.GetLastError()
 }
 
 // IsTransientStreakCounterMaxed returns whether the transient streak counter
 // has reached the maximum number of ticks, which means that the FSM is stuck in a state
-// and should be removed
+// and should be removed.
 func (c *ConnectionInstance) IsTransientStreakCounterMaxed() bool {
 	return c.baseFSMInstance.IsTransientStreakCounterMaxed()
 }

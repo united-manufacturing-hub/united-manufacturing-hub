@@ -35,12 +35,15 @@ func (b *BenthosMonitorInstance) CreateInstance(ctx context.Context, filesystemS
 	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding Benthos Monitor service %s to S6 manager ...", b.baseFSMInstance.GetID())
 
 	b.baseFSMInstance.GetLogger().Debugf("Adding Benthos Monitor service %s to S6 manager with port %d", b.baseFSMInstance.GetID(), b.config.MetricsPort)
+
 	err := b.monitorService.AddBenthosMonitorToS6Manager(ctx, b.config.MetricsPort)
 	if err != nil {
-		if err == benthos_monitor_service.ErrServiceAlreadyExists {
+		if errors.Is(err, benthos_monitor_service.ErrServiceAlreadyExists) {
 			b.baseFSMInstance.GetLogger().Debugf("Benthos Monitor service %s already exists in S6 manager", b.baseFSMInstance.GetID())
+
 			return nil // do not throw an error, as each action is expected to be idempotent
 		}
+
 		return fmt.Errorf("failed to add Benthos Monitor service %s to S6 manager: %w", b.baseFSMInstance.GetID(), err)
 	}
 
@@ -64,6 +67,7 @@ func (b *BenthosMonitorInstance) RemoveInstance(ctx context.Context, filesystemS
 		b.baseFSMInstance.GetLogger().
 			Infof("Benthos monitor service %s removed from S6 manager",
 				b.baseFSMInstance.GetID())
+
 		return nil
 
 	case errors.Is(err, benthos_monitor_service.ErrServiceNotExist):
@@ -90,6 +94,7 @@ func (b *BenthosMonitorInstance) RemoveInstance(ctx context.Context, filesystemS
 		b.baseFSMInstance.GetLogger().
 			Errorf("failed to remove Benthos Monitor service %s: %s",
 				b.baseFSMInstance.GetID(), err)
+
 		return fmt.Errorf("failed to remove Benthos Monitor service %s: %w",
 			b.baseFSMInstance.GetID(), err)
 	}
@@ -110,6 +115,7 @@ func (b *BenthosMonitorInstance) StartInstance(ctx context.Context, filesystemSe
 	}
 
 	b.baseFSMInstance.GetLogger().Debugf("Benthos Monitor service %s start command executed", b.baseFSMInstance.GetID())
+
 	return nil
 }
 
@@ -125,10 +131,11 @@ func (b *BenthosMonitorInstance) StopInstance(ctx context.Context, filesystemSer
 	}
 
 	b.baseFSMInstance.GetLogger().Debugf("Benthos Monitor service %s stop command executed", b.baseFSMInstance.GetID())
+
 	return nil
 }
 
-// CheckForCreation checks if the Benthos Monitor service should be created
+// CheckForCreation checks if the Benthos Monitor service should be created.
 func (b *BenthosMonitorInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
 	return true
 }
@@ -140,18 +147,22 @@ func (b *BenthosMonitorInstance) UpdateObservedStateOfInstance(ctx context.Conte
 		if b.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "UpdateObservedStateOfInstance") {
 			return nil
 		}
+
 		return ctx.Err()
 	}
 
 	start := time.Now()
+
 	info, err := b.monitorService.Status(ctx, services, snapshot.Tick)
 	if err != nil {
 		return err
 	}
+
 	metrics.ObserveReconcileTime(logger.ComponentBenthosMonitorInstance, b.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
 
 	// Store the raw service info
 	b.ObservedState.ServiceInfo = &info
+
 	return nil
 }
 
@@ -168,6 +179,7 @@ func (b *BenthosMonitorInstance) isMonitorHealthy(loopStartTime time.Time) bool 
 	// Check that the last scan is not older then BenthosMaxMetricsAndConfigAge
 	if loopStartTime.Sub(b.ObservedState.ServiceInfo.BenthosStatus.LastScan.LastUpdatedAt) > constants.BenthosMaxMetricsAndConfigAge {
 		b.baseFSMInstance.GetLogger().Warnf("last scan is %s old, returning empty status", loopStartTime.Sub(b.ObservedState.ServiceInfo.BenthosStatus.LastScan.LastUpdatedAt))
+
 		return false
 	}
 

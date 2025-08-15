@@ -25,29 +25,32 @@ type VariableBundle struct {
 	Internal map[string]any `yaml:"internal,omitempty"`
 }
 
-// Equal checks if two VariableBundles are equal
+// Equal checks if two VariableBundles are equal.
 func (vb VariableBundle) Equal(other VariableBundle) bool {
 	return NewComparator().ConfigsEqual(vb, other)
 }
 
-// Convenient helper – flat view the template engine will see
+// Convenient helper – flat view the template engine will see.
 func (vb VariableBundle) Flatten() map[string]any {
 	out := map[string]any{}
 	// move user variables to the top level
 	for k, v := range vb.User {
 		out[k] = v
 	}
+
 	if len(vb.Global) > 0 {
 		out["global"] = vb.Global
 	}
+
 	if len(vb.Internal) > 0 {
 		out["internal"] = vb.Internal
 	}
+
 	return out
 }
 
 // MarshalYAML implements yaml.Marshaler to provide user-friendly YAML output
-// User variables are flattened to the top level, while global and internal are omitted
+// User variables are flattened to the top level, while global and internal are omitted.
 func (vb VariableBundle) MarshalYAML() (interface{}, error) {
 	// If no user variables, return empty map
 	if len(vb.User) == 0 {
@@ -59,7 +62,7 @@ func (vb VariableBundle) MarshalYAML() (interface{}, error) {
 }
 
 // UnmarshalYAML implements yaml.Unmarshaler to read user-friendly YAML input
-// All top-level variables are automatically placed in the User namespace
+// All top-level variables are automatically placed in the User namespace.
 func (vb *VariableBundle) UnmarshalYAML(value *yaml.Node) error {
 	// Handle the case where variables is explicitly structured with namespaces
 	type explicitBundle struct {
@@ -75,6 +78,7 @@ func (vb *VariableBundle) UnmarshalYAML(value *yaml.Node) error {
 			vb.User = explicit.User
 			vb.Global = explicit.Global
 			vb.Internal = explicit.Internal
+
 			return nil
 		}
 	}

@@ -36,8 +36,10 @@ import (
 func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
 	start := time.Now()
 	instanceName := b.baseFSMInstance.GetID()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentBenthosMonitor, instanceName, time.Since(start))
+
 		if err != nil {
 			b.baseFSMInstance.GetLogger().Errorf("error reconciling benthos monitor instance %s: %s", instanceName, err)
 			b.PrintState()
@@ -51,6 +53,7 @@ func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sys
 		if b.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "start of reconciliation") {
 			return nil, false
 		}
+
 		return ctx.Err(), false
 	}
 
@@ -83,6 +86,7 @@ func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sys
 				},
 			)
 		}
+
 		return nil, false
 	}
 
@@ -111,11 +115,13 @@ func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sys
 
 		if b.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileStateTransition") {
 			err = nil // Clear error so reconciliation continues
+
 			return nil, false
 		}
 
 		b.baseFSMInstance.SetError(err, snapshot.Tick)
 		b.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
+
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
@@ -125,15 +131,18 @@ func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sys
 			// Context deadline exceeded should be retried with backoff, not ignored
 			b.baseFSMInstance.SetError(s6Err, snapshot.Tick)
 			b.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in s6Manager reconciliation, will retry with backoff")
+
 			return nil, false
 		}
+
 		b.baseFSMInstance.SetError(s6Err, snapshot.Tick)
 		b.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
+
 		return nil, false
 	}
 
 	// If either benthos monitor state or S6 state was reconciled, we return reconciled so that nothing happens anymore in this tick
-	// nothing should happen as we might have already taken up some significant time of the avaialble time per tick, so better
+	// nothing should happen as we might have already taken up some significant time of the available time per tick, so better
 	// to be on the safe side and let the rest handle in another tick
 	reconciled = reconciled || s6Reconciled
 
@@ -144,9 +153,10 @@ func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sys
 }
 
 // reconcileExternalChanges checks if the Benthos monitor service status has changed
-// externally (e.g., if someone manually stopped or started it, or if it crashed)
+// externally (e.g., if someone manually stopped or started it, or if it crashed).
 func (b *BenthosMonitorInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentBenthosMonitor, b.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
 	}()
@@ -160,6 +170,7 @@ func (b *BenthosMonitorInstance) reconcileExternalChanges(ctx context.Context, s
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}
+
 	return nil
 }
 
@@ -170,6 +181,7 @@ func (b *BenthosMonitorInstance) reconcileExternalChanges(ctx context.Context, s
 // This is to ensure full testability of the FSM.
 func (b *BenthosMonitorInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentBenthosMonitor, b.baseFSMInstance.GetID()+".reconcileStateTransition", time.Since(start))
 	}()
@@ -183,6 +195,7 @@ func (b *BenthosMonitorInstance) reconcileStateTransition(ctx context.Context, s
 		if err != nil {
 			return err, false
 		}
+
 		if reconciled {
 			return nil, true
 		} else {
@@ -196,6 +209,7 @@ func (b *BenthosMonitorInstance) reconcileStateTransition(ctx context.Context, s
 		if err != nil {
 			return err, false
 		}
+
 		if reconciled {
 			return nil, true
 		} else {
@@ -206,9 +220,10 @@ func (b *BenthosMonitorInstance) reconcileStateTransition(ctx context.Context, s
 	return fmt.Errorf("invalid state: %s", currentState), false
 }
 
-// reconcileOperationalStates handles states related to instance operations (starting/stopping)
+// reconcileOperationalStates handles states related to instance operations (starting/stopping).
 func (b *BenthosMonitorInstance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentBenthosMonitor, b.baseFSMInstance.GetID()+".reconcileOperationalStates", time.Since(start))
 	}()
@@ -227,6 +242,7 @@ func (b *BenthosMonitorInstance) reconcileOperationalStates(ctx context.Context,
 // It deals with moving from various states to the Active state.
 func (b *BenthosMonitorInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentBenthosMonitor, b.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
 	}()
@@ -255,16 +271,16 @@ func (b *BenthosMonitorInstance) reconcileTransitionToActive(ctx context.Context
 }
 
 // reconcileStartingStates handles the various starting phase states when transitioning to a running state
-// no big startup process here
+// no big startup process here.
 func (b *BenthosMonitorInstance) reconcileStartingStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentBenthosMonitor, b.baseFSMInstance.GetID()+".reconcileStartingStates", time.Since(start))
 	}()
 
 	switch currentState {
 	case OperationalStateStarting:
-
 		// nothing to verify here, just for consistency with other fsms
 		return b.baseFSMInstance.SendEvent(ctx, EventStartDone), true
 	default:
@@ -275,6 +291,7 @@ func (b *BenthosMonitorInstance) reconcileStartingStates(ctx context.Context, se
 // reconcileRunningStates handles the various running states when transitioning to Active.
 func (b *BenthosMonitorInstance) reconcileRunningStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentBenthosMonitor, b.baseFSMInstance.GetID()+".reconcileRunningStates", time.Since(start))
 	}()
@@ -285,12 +302,14 @@ func (b *BenthosMonitorInstance) reconcileRunningStates(ctx context.Context, ser
 		if !b.isMonitorHealthy(currentTime) {
 			return b.baseFSMInstance.SendEvent(ctx, EventMetricsNotOK), true
 		}
+
 		return nil, false
 	case OperationalStateDegraded:
 		// If we're in Degraded, we need to recover to move to Active
 		if b.isMonitorHealthy(currentTime) {
 			return b.baseFSMInstance.SendEvent(ctx, EventMetricsAllOK), true
 		}
+
 		return nil, false
 	default:
 		return fmt.Errorf("invalid running state: %s", currentState), false
@@ -301,6 +320,7 @@ func (b *BenthosMonitorInstance) reconcileRunningStates(ctx context.Context, ser
 // It deals with moving from any operational state to Stopping and then to Stopped.
 func (b *BenthosMonitorInstance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentBenthosMonitor, b.baseFSMInstance.GetID()+".reconcileTransitionToStopped", time.Since(start))
 	}()

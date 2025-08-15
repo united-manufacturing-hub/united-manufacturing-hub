@@ -26,12 +26,14 @@ import (
 	"sync"
 	"time"
 
+	"errors"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-// PortManager is an interface that defines methods for managing ports
+// PortManager is an interface that defines methods for managing ports.
 type PortManager interface {
 	// AllocatePort allocates a port for a given instance and returns it
 	// Returns an error if no ports are available
@@ -60,7 +62,7 @@ type PortManager interface {
 }
 
 // DefaultPortManager is a thread-safe implementation of PortManager
-// that randomly selects ports from the OS ephemeral port range
+// that randomly selects ports from the OS ephemeral port range.
 type DefaultPortManager struct {
 
 	// instanceToPorts maps instance names to their allocated ports
@@ -80,7 +82,7 @@ type DefaultPortManager struct {
 	maxPort uint16
 }
 
-// Global singleton instance of DefaultPortManager
+// Global singleton instance of DefaultPortManager.
 var (
 	defaultPortManagerInstance *DefaultPortManager
 	defaultPortManagerOnce     sync.Once
@@ -92,6 +94,7 @@ var (
 func GetDefaultPortManager() *DefaultPortManager {
 	defaultPortManagerMutex.RLock()
 	defer defaultPortManagerMutex.RUnlock()
+
 	return defaultPortManagerInstance
 }
 
@@ -109,6 +112,7 @@ func initDefaultPortManager(fs filesystem.Service) *DefaultPortManager {
 	// Get the initialized instance
 	defaultPortManagerMutex.RLock()
 	defer defaultPortManagerMutex.RUnlock()
+
 	return defaultPortManagerInstance
 }
 
@@ -124,8 +128,9 @@ func NewDefaultPortManager(fs filesystem.Service) (*DefaultPortManager, error) {
 	// Initialize singleton if it doesn't exist
 	instance := initDefaultPortManager(fs)
 	if instance == nil {
-		return nil, fmt.Errorf("failed to initialize port manager")
+		return nil, errors.New("failed to initialize port manager")
 	}
+
 	return instance, nil
 }
 
@@ -136,8 +141,12 @@ func getEphemeralPortRange(fs filesystem.Service) (uint16, uint16) {
 	// Try to read from Linux proc filesystem (at max 500ms timeout)
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
-	var data []byte
-	var err error
+
+	var (
+		data []byte
+		err  error
+	)
+
 	if fs != nil {
 		data, err = fs.ReadFile(ctx, "/proc/sys/net/ipv4/ip_local_port_range")
 	} else {
@@ -147,6 +156,7 @@ func getEphemeralPortRange(fs filesystem.Service) (uint16, uint16) {
 
 	if err == nil {
 		content := strings.TrimSpace(string(data))
+
 		parts := strings.Fields(content)
 		if len(parts) == 2 {
 			if min, err1 := strconv.Atoi(parts[0]); err1 == nil {
@@ -180,7 +190,7 @@ func newDefaultPortManager(fs filesystem.Service) *DefaultPortManager {
 }
 
 // AllocatePort allocates an available port for a given instance using random selection
-// from the OS ephemeral port range with collision detection and retries
+// from the OS ephemeral port range with collision detection and retries.
 func (pm *DefaultPortManager) AllocatePort(ctx context.Context, instanceName string) (uint16, error) {
 	pm.mutex.Lock()
 	defer pm.mutex.Unlock()
@@ -192,9 +202,10 @@ func (pm *DefaultPortManager) AllocatePort(ctx context.Context, instanceName str
 
 	// Try up to 5 times to find an available port
 	const maxRetries = 5
+
 	lc := &net.ListenConfig{}
 
-	for attempt := 0; attempt < maxRetries; attempt++ {
+	for range maxRetries {
 		// Check if context is cancelled
 		select {
 		case <-ctx.Done():
@@ -214,6 +225,7 @@ func (pm *DefaultPortManager) AllocatePort(ctx context.Context, instanceName str
 
 		// Try to bind to the port to verify it's available
 		addr := fmt.Sprintf(":%d", port)
+
 		listener, err := lc.Listen(ctx, "tcp", addr)
 		if err != nil {
 			// Port not available, try another one
@@ -234,7 +246,7 @@ func (pm *DefaultPortManager) AllocatePort(ctx context.Context, instanceName str
 	return 0, fmt.Errorf("failed to allocate port for instance %s after %d attempts", instanceName, maxRetries)
 }
 
-// ReleasePort releases a port previously allocated to an instance
+// ReleasePort releases a port previously allocated to an instance.
 func (pm *DefaultPortManager) ReleasePort(instanceName string) error {
 	pm.mutex.Lock()
 	defer pm.mutex.Unlock()
@@ -252,16 +264,17 @@ func (pm *DefaultPortManager) ReleasePort(instanceName string) error {
 	return nil
 }
 
-// GetPort retrieves the port for a given instance
+// GetPort retrieves the port for a given instance.
 func (pm *DefaultPortManager) GetPort(instanceName string) (uint16, bool) {
 	pm.mutex.RLock()
 	defer pm.mutex.RUnlock()
 
 	port, exists := pm.instanceToPorts[instanceName]
+
 	return port, exists
 }
 
-// ReservePort attempts to reserve a specific port for an instance
+// ReservePort attempts to reserve a specific port for an instance.
 func (pm *DefaultPortManager) ReservePort(ctx context.Context, instanceName string, port uint16) error {
 	if port <= 0 {
 		return fmt.Errorf("invalid port: %d (must be positive)", port)
@@ -291,6 +304,7 @@ func (pm *DefaultPortManager) ReservePort(ctx context.Context, instanceName stri
 	// Try to bind to the specific port to verify it's available
 	addr := fmt.Sprintf(":%d", port)
 	lc := &net.ListenConfig{}
+
 	listener, err := lc.Listen(ctx, "tcp", addr)
 	if err != nil {
 		return fmt.Errorf("port %d is not available: %w", port, err)
@@ -309,7 +323,7 @@ func (pm *DefaultPortManager) ReservePort(ctx context.Context, instanceName stri
 	return nil
 }
 
-// PreReconcile implements the PreReconcile method for DefaultPortManager
+// PreReconcile implements the PreReconcile method for DefaultPortManager.
 func (pm *DefaultPortManager) PreReconcile(ctx context.Context, instanceNames []string) error {
 	// Track any errors during allocation
 	var errs []error
@@ -339,23 +353,25 @@ func (pm *DefaultPortManager) PreReconcile(ctx context.Context, instanceNames []
 		for _, err := range errs {
 			errMsg += "\n  - " + err.Error()
 		}
+
 		return fmt.Errorf("%s", errMsg)
 	}
 
 	return nil
 }
 
-// PostReconcile implements the PostReconcile method for DefaultPortManager
+// PostReconcile implements the PostReconcile method for DefaultPortManager.
 func (pm *DefaultPortManager) PostReconcile(ctx context.Context) error {
 	// No cleanup needed for DefaultPortManager as ports are released explicitly
 	// when instances are removed via ReleasePort
 	return nil
 }
 
-// ResetDefaultPortManager resets the singleton instance for testing purposes
+// ResetDefaultPortManager resets the singleton instance for testing purposes.
 func ResetDefaultPortManager() {
 	defaultPortManagerMutex.Lock()
 	defer defaultPortManagerMutex.Unlock()
+
 	defaultPortManagerInstance = nil
 	defaultPortManagerOnce = sync.Once{}
 }

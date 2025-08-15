@@ -27,14 +27,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Helper function for get datamodel action
+// Helper function for get datamodel action.
 func createGetDataModelPayload(name string) map[string]interface{} {
 	return map[string]interface{}{
 		"name": name,
 	}
 }
 
-// Helper function for get datamodel action with enriched tree
+// Helper function for get datamodel action with enriched tree.
 func createGetDataModelPayloadWithEnrichment(name string, getEnrichedTree bool) map[string]interface{} {
 	return map[string]interface{}{
 		"name":            name,

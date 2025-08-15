@@ -37,8 +37,10 @@ import (
 func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
 	start := time.Now()
 	instanceName := c.baseFSMInstance.GetID()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentContainerMonitor, instanceName, time.Since(start))
+
 		if err != nil {
 			c.baseFSMInstance.GetLogger().Errorf("error reconciling container instance %s: %s", instanceName, err)
 			c.PrintState()
@@ -52,6 +54,7 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSn
 		if c.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "start of reconciliation") {
 			return nil, false
 		}
+
 		return ctx.Err(), false
 	}
 
@@ -82,7 +85,9 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSn
 				},
 			)
 		}
+
 		c.baseFSMInstance.GetLogger().Debugf("Skipping reconcile for container monitor %s: %v", instanceName, backErr)
+
 		return nil, false
 	}
 
@@ -95,7 +100,7 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSn
 		// Log the error but always continue reconciling - we need reconcileStateTransition to run
 		// to restore services after restart, even if we can't read their status yet
 		c.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)
-		
+
 		// For all other errors, just continue reconciling without setting backoff
 		err = nil
 	}
@@ -120,6 +125,7 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSn
 
 		c.baseFSMInstance.SetError(err, snapshot.Tick)
 		c.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
+
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
@@ -130,9 +136,10 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSn
 }
 
 // reconcileExternalChanges checks if the ContainerInstance service status has changed
-// externally and updates the observed state accordingly
+// externally and updates the observed state accordingly.
 func (c *ContainerInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentContainerMonitor, c.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
 	}()
@@ -146,11 +153,12 @@ func (c *ContainerInstance) reconcileExternalChanges(ctx context.Context, servic
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}
+
 	return nil
 }
 
 // printSystemState prints the full system state in a human-readable format
-// TODO: move this into status reason as well to be shown centrally in the system snapshot logger
+// TODO: move this into status reason as well to be shown centrally in the system snapshot logger.
 func (c *ContainerInstance) printSystemState(instanceName string, tick uint64) {
 	logger := c.baseFSMInstance.GetLogger()
 	status := c.ObservedState.ServiceInfo
@@ -174,29 +182,34 @@ func (c *ContainerInstance) printSystemState(instanceName string, tick uint64) {
 		if status.Memory != nil {
 			usedMB := float64(status.Memory.CGroupUsedBytes) / 1024 / 1024
 			totalMB := float64(status.Memory.CGroupTotalBytes) / 1024 / 1024
+
 			usagePercent := 0.0
 			if status.Memory.CGroupTotalBytes > 0 {
 				usagePercent = float64(status.Memory.CGroupUsedBytes) / float64(status.Memory.CGroupTotalBytes) * 100
 			}
+
 			logger.Infof("Memory: Used=%.2f MB, Total=%.2f MB, Usage=%.2f%%", usedMB, totalMB, usagePercent)
 		}
 
 		if status.Disk != nil {
 			usedGB := float64(status.Disk.DataPartitionUsedBytes) / 1024 / 1024 / 1024
 			totalGB := float64(status.Disk.DataPartitionTotalBytes) / 1024 / 1024 / 1024
+
 			usagePercent := 0.0
 			if status.Disk.DataPartitionTotalBytes > 0 {
 				usagePercent = float64(status.Disk.DataPartitionUsedBytes) / float64(status.Disk.DataPartitionTotalBytes) * 100
 			}
+
 			logger.Infof("Disk: Used=%.2f GB, Total=%.2f GB, Usage=%.2f%%", usedGB, totalGB, usagePercent)
 		}
 
 		logger.Infof("Architecture: %s, HWID: %s", status.Architecture, status.Hwid)
 	}
+
 	logger.Infof("=================================================")
 }
 
-// healthCategoryToString converts a HealthCategory to a human-readable string
+// healthCategoryToString converts a HealthCategory to a human-readable string.
 func healthCategoryToString(category models.HealthCategory) string {
 	switch category {
 	case models.Neutral:
@@ -217,6 +230,7 @@ func healthCategoryToString(category models.HealthCategory) string {
 // This is to ensure full testability of the FSM.
 func (c *ContainerInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentContainerMonitor, c.baseFSMInstance.GetID()+".reconcileStateTransition", time.Since(start))
 	}()
@@ -238,6 +252,7 @@ func (c *ContainerInstance) reconcileStateTransition(ctx context.Context, servic
 		if err != nil {
 			return err, false
 		}
+
 		if reconciled {
 			return nil, true
 		} else {
@@ -251,6 +266,7 @@ func (c *ContainerInstance) reconcileStateTransition(ctx context.Context, servic
 		if err != nil {
 			return err, false
 		}
+
 		if reconciled {
 			return nil, true
 		} else {
@@ -261,9 +277,10 @@ func (c *ContainerInstance) reconcileStateTransition(ctx context.Context, servic
 	return fmt.Errorf("invalid state: %s", currentState), false
 }
 
-// reconcileOperationalStates handles states related to instance operations (starting/stopping)
+// reconcileOperationalStates handles states related to instance operations (starting/stopping).
 func (c *ContainerInstance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentContainerMonitor, c.baseFSMInstance.GetID()+".reconcileOperationalStates", time.Since(start))
 	}()
@@ -282,6 +299,7 @@ func (c *ContainerInstance) reconcileOperationalStates(ctx context.Context, serv
 // It deals with moving from various states to the Active state.
 func (c *ContainerInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentContainerMonitor, c.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
 	}()
@@ -310,16 +328,16 @@ func (c *ContainerInstance) reconcileTransitionToActive(ctx context.Context, ser
 }
 
 // reconcileStartingStates handles the various starting phase states when transitioning to a running state
-// no big startup process here
+// no big startup process here.
 func (c *ContainerInstance) reconcileStartingStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentContainerMonitor, c.baseFSMInstance.GetID()+".reconcileStartingStates", time.Since(start))
 	}()
 
 	switch currentState {
 	case OperationalStateStarting:
-
 		// nothing to verify here, just for consistency with other fsms
 		return c.baseFSMInstance.SendEvent(ctx, EventStartDone), true
 	default:
@@ -330,6 +348,7 @@ func (c *ContainerInstance) reconcileStartingStates(ctx context.Context, service
 // reconcileRunningStates handles the various running states when transitioning to Active.
 func (c *ContainerInstance) reconcileRunningStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentContainerMonitor, c.baseFSMInstance.GetID()+".reconcileRunningStates", time.Since(start))
 	}()
@@ -340,12 +359,14 @@ func (c *ContainerInstance) reconcileRunningStates(ctx context.Context, services
 		if !c.areAllMetricsHealthy() {
 			return c.baseFSMInstance.SendEvent(ctx, EventMetricsNotOK), true
 		}
+
 		return nil, false
 	case OperationalStateDegraded:
 		// If we're in Degraded, we need to recover to move to Active
 		if c.areAllMetricsHealthy() {
 			return c.baseFSMInstance.SendEvent(ctx, EventMetricsAllOK), true
 		}
+
 		return nil, false
 	default:
 		return fmt.Errorf("invalid running state: %s", currentState), false
@@ -356,6 +377,7 @@ func (c *ContainerInstance) reconcileRunningStates(ctx context.Context, services
 // It deals with moving from any operational state to Stopping and then to Stopped.
 func (c *ContainerInstance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentContainerMonitor, c.baseFSMInstance.GetID()+".reconcileTransitionToStopped", time.Since(start))
 	}()

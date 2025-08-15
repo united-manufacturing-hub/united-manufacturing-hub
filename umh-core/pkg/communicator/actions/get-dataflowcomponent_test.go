@@ -192,7 +192,7 @@ var _ = Describe("GetDataFlowComponent", func() {
 
 			// Check if the payload was properly parsed
 			parsedPayload := action.GetParsedVersionUUIDs()
-			Expect(parsedPayload.VersionUUIDs).To(HaveLen(0))
+			Expect(parsedPayload.VersionUUIDs).To(BeEmpty())
 		})
 
 		It("should handle invalid payload format gracefully", func() {

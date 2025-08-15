@@ -27,10 +27,10 @@ type AgentObservedStateSnapshot struct {
 	// No need for the config, as it is basically empty
 }
 
-// Ensure it satisfies fsm.ObservedStateSnapshot
+// Ensure it satisfies fsm.ObservedStateSnapshot.
 func (a *AgentObservedStateSnapshot) IsObservedStateSnapshot() {}
 
-// CreateObservedStateSnapshot is called by the manager to record the state
+// CreateObservedStateSnapshot is called by the manager to record the state.
 func (a *AgentInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	snapshot := &AgentObservedStateSnapshot{}
 	if a.ObservedState.ServiceInfo != nil {
@@ -39,5 +39,6 @@ func (a *AgentInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot 
 			sentry.ReportIssue(err, sentry.IssueTypeError, a.baseFSMInstance.GetLogger())
 		}
 	}
+
 	return snapshot
 }

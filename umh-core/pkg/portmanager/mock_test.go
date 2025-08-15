@@ -17,7 +17,6 @@ package portmanager
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -106,7 +105,7 @@ var _ = Describe("MockPortManager", func() {
 		}
 
 		// Test error handling
-		pm.PreReconcileError = fmt.Errorf("test error")
+		pm.PreReconcileError = errors.New("test error")
 		err = pm.PreReconcile(context.Background(), []string{"new-instance"})
 		Expect(err).To(Equal(pm.PreReconcileError))
 	})
@@ -120,7 +119,7 @@ var _ = Describe("MockPortManager", func() {
 		Expect(pm.PostReconcileCalled).To(BeTrue())
 
 		// Test error handling
-		pm.PostReconcileError = fmt.Errorf("test error")
+		pm.PostReconcileError = errors.New("test error")
 		err = pm.PostReconcile(context.Background())
 		Expect(err).To(Equal(pm.PostReconcileError))
 	})

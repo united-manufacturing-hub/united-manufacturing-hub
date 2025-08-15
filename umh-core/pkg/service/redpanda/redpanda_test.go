@@ -16,6 +16,7 @@ package redpanda
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -34,22 +35,23 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-// getTmpDir returns the temporary directory for a container
+// getTmpDir returns the temporary directory for a container.
 func getTmpDir() string {
 	tmpDir := "/tmp"
 	// If we are in a devcontainer, use the workspace as tmp dir
 	if os.Getenv("REMOTE_CONTAINERS") != "" || os.Getenv("CODESPACE_NAME") != "" || os.Getenv("USER") == "vscode" {
 		tmpDir = "/workspaces/united-manufacturing-hub/umh-core/tmp"
 	}
+
 	return tmpDir
 }
 
-// newTimeoutContext creates a context with a 30-second timeout
+// newTimeoutContext creates a context with a 30-second timeout.
 func newTimeoutContext() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), 30*time.Second)
 }
 
-// createTestSnapshot creates a test SystemSnapshot with the given tick value
+// createTestSnapshot creates a test SystemSnapshot with the given tick value.
 func createTestSnapshot(tick uint64) fsm.SystemSnapshot {
 	return fsm.SystemSnapshot{
 		Tick:         tick,
@@ -651,7 +653,7 @@ var _ = Describe("Redpanda Service", func() {
 			defer cancel()
 
 			// Set up mock to return an error
-			mockError := fmt.Errorf("mock force remove error")
+			mockError := errors.New("mock force remove error")
 			mockS6Service.ForceRemoveError = mockError
 
 			// Call ForceRemoveRedpanda

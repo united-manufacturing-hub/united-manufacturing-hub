@@ -54,15 +54,18 @@ func WaitForConnectionManagerInstanceState(
 ) (uint64, error) {
 	tick := snapshot.Tick
 	currentState := ""
-	for i := 0; i < maxAttempts; i++ {
+
+	for range maxAttempts {
 		snapshot.Tick = tick
+
 		err, _ := manager.Reconcile(ctx, snapshot, services)
 		if err != nil {
 			return tick, err
 		}
+
 		tick++
 
-		inst, found := manager.GetInstance(fmt.Sprintf("connection-%s", instanceName))
+		inst, found := manager.GetInstance("connection-" + instanceName)
 		if found {
 			currentState = inst.GetCurrentFSMState()
 			if currentState == desiredState {
@@ -70,6 +73,7 @@ func WaitForConnectionManagerInstanceState(
 			}
 		}
 	}
+
 	return tick, fmt.Errorf("instance %s did not reach state %s after %d attempts. Current state: %s",
 		instanceName, desiredState, maxAttempts, currentState)
 }
@@ -85,11 +89,12 @@ func WaitForConnectionManagerInstanceRemoval(
 	maxAttempts int,
 ) (uint64, error) {
 	tick := snapshot.Tick
-	for i := 0; i < maxAttempts; i++ {
+	for range maxAttempts {
 		err, _ := manager.Reconcile(ctx, snapshot, services)
 		if err != nil {
 			return tick, err
 		}
+
 		tick++
 
 		if _, found := manager.GetInstance(instanceName); !found {
@@ -97,6 +102,7 @@ func WaitForConnectionManagerInstanceRemoval(
 			return tick, nil
 		}
 	}
+
 	return tick, fmt.Errorf("instance %s not removed after %d attempts", instanceName, maxAttempts)
 }
 
@@ -111,29 +117,34 @@ func WaitForConnectionManagerMultiState(
 	maxAttempts int,
 ) (uint64, error) {
 	tick := snapshot.Tick
-	for i := 0; i < maxAttempts; i++ {
+	for range maxAttempts {
 		err, _ := manager.Reconcile(ctx, snapshot, services)
 		if err != nil {
 			return tick, err
 		}
+
 		tick++
 
 		allMatched := true
+
 		for comp, desired := range desiredMap {
-			inst, found := manager.GetInstance(fmt.Sprintf("connection-%s", comp))
+			inst, found := manager.GetInstance("connection-" + comp)
 			if !found || inst.GetCurrentFSMState() != desired {
 				allMatched = false
+
 				break
 			}
 		}
+
 		if allMatched {
 			return tick, nil
 		}
 	}
+
 	return tick, fmt.Errorf("not all instances reached desired states after %d attempts", maxAttempts)
 }
 
-// SetupServiceInConnectionManager adds a service to the manager and configures it
+// SetupServiceInConnectionManager adds a service to the manager and configures it.
 func SetupServiceInConnectionManager(
 	manager *connectionfsm.ConnectionManager,
 	mockService *connectionsvc.MockConnectionService,
@@ -155,7 +166,7 @@ func SetupServiceInConnectionManager(
 	}
 }
 
-// CreateMockConnectionManager creates a ConnectionManager with a mock service for testing
+// CreateMockConnectionManager creates a ConnectionManager with a mock service for testing.
 func CreateMockConnectionManager(name string) (*connectionfsm.ConnectionManager, *connectionsvc.MockConnectionService) {
 	mockManager, mockService := connectionfsm.NewConnectionManagerWithMockedServices(name)
 
@@ -178,12 +189,14 @@ func ConfigureConnectionManagerForState(
 	if mockService.ExistingConnections == nil {
 		mockService.ExistingConnections = make(map[string]bool)
 	}
+
 	mockService.ExistingConnections[connectionName] = true
 
 	// Make sure service state is initialized
 	if mockService.ConnectionStates == nil {
 		mockService.ConnectionStates = make(map[string]*connectionsvc.ServiceInfo)
 	}
+
 	if mockService.ConnectionStates[connectionName] == nil {
 		mockService.ConnectionStates[connectionName] = &connectionsvc.ServiceInfo{}
 	}
@@ -202,5 +215,6 @@ func ReconcileOnceConnectionManager(
 	services serviceregistry.Provider,
 ) (newTick uint64, err error, reconciled bool) {
 	err, rec := manager.Reconcile(ctx, snapshot, services)
+
 	return snapshot.Tick + 1, err, rec
 }

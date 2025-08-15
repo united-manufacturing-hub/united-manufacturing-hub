@@ -15,6 +15,7 @@
 package container
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -29,17 +30,17 @@ const (
 	ContainerManagerComponentName = "ContainerManager"
 )
 
-// ContainerManager is the FSM manager for multiple container monitor instances
+// ContainerManager is the FSM manager for multiple container monitor instances.
 type ContainerManager struct {
 	*public_fsm.BaseFSMManager[config.ContainerConfig]
 }
 
-// ContainerManagerSnapshot extends the base manager snapshot to hold any container-specific info
+// ContainerManagerSnapshot extends the base manager snapshot to hold any container-specific info.
 type ContainerManagerSnapshot struct {
 	*public_fsm.BaseManagerSnapshot
 }
 
-// Ensure it satisfies fsm.ObservedStateSnapshot
+// Ensure it satisfies fsm.ObservedStateSnapshot.
 func (c *ContainerManagerSnapshot) IsObservedStateSnapshot() {}
 
 // NewContainerManager constructs a manager.
@@ -54,10 +55,12 @@ func NewContainerManager(name string) *ContainerManager {
 		func(fc config.FullConfig) ([]config.ContainerConfig, error) {
 			// Always return a single config
 			var configs []config.ContainerConfig
+
 			configs = append(configs, config.ContainerConfig{
 				Name:            constants.DefaultInstanceName,
 				DesiredFSMState: OperationalStateActive,
 			})
+
 			return configs, nil
 		},
 		// Get name from config
@@ -73,13 +76,14 @@ func NewContainerManager(name string) *ContainerManager {
 			// Typically create a new container_monitor.Service or reuse shared
 			// Here let's reuse the shared:
 			inst := NewContainerInstance(cc)
+
 			return inst, nil
 		},
 		// Compare config => if same, no recreation needed
 		func(instance public_fsm.FSMInstance, cc config.ContainerConfig) (bool, error) {
 			ci, ok := instance.(*ContainerInstance)
 			if !ok {
-				return false, fmt.Errorf("instance is not a ContainerInstance")
+				return false, errors.New("instance is not a ContainerInstance")
 			}
 			// If same config => return true, else false
 			// Minimal check:
@@ -89,20 +93,24 @@ func NewContainerManager(name string) *ContainerManager {
 		func(instance public_fsm.FSMInstance, cc config.ContainerConfig) error {
 			ci, ok := instance.(*ContainerInstance)
 			if !ok {
-				return fmt.Errorf("instance is not a ContainerInstance")
+				return errors.New("instance is not a ContainerInstance")
 			}
+
 			ci.config = cc
+
 			return nil
 		},
 		// Get expected max p95 execution time per instance
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
 			ci, ok := instance.(*ContainerInstance)
 			if !ok {
-				return 0, fmt.Errorf("instance is not a ContainerInstance")
+				return 0, errors.New("instance is not a ContainerInstance")
 			}
+
 			return ci.GetMinimumRequiredTime(), nil
 		},
 	)
+
 	metrics.InitErrorCounter(ContainerManagerComponentName, name)
 
 	return &ContainerManager{
@@ -110,16 +118,20 @@ func NewContainerManager(name string) *ContainerManager {
 	}
 }
 
-// CreateSnapshot overrides the base to add container-specific fields if desired
+// CreateSnapshot overrides the base to add container-specific fields if desired.
 func (m *ContainerManager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	baseSnap := m.BaseFSMManager.CreateSnapshot()
+
 	baseSnapshot, ok := baseSnap.(*public_fsm.BaseManagerSnapshot)
 	if !ok {
 		logger.For(ContainerManagerComponentName).Errorf("Could not cast manager snapshot to BaseManagerSnapshot.")
+
 		return baseSnap
 	}
+
 	snap := &ContainerManagerSnapshot{
 		BaseManagerSnapshot: baseSnapshot,
 	}
+
 	return snap
 }

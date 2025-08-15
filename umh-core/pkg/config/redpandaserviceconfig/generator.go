@@ -23,19 +23,19 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 )
 
-// Generator handles the generation of Redpanda YAML configurations
+// Generator handles the generation of Redpanda YAML configurations.
 type Generator struct {
 	tmpl *template.Template
 }
 
-// NewGenerator creates a new YAML generator for Redpanda configurations
+// NewGenerator creates a new YAML generator for Redpanda configurations.
 func NewGenerator() *Generator {
 	return &Generator{
 		tmpl: template.Must(template.New("redpanda").Parse(simplifiedTemplate)),
 	}
 }
 
-// RenderConfig generates a Redpanda YAML configuration from a RedpandaServiceConfig
+// RenderConfig generates a Redpanda YAML configuration from a RedpandaServiceConfig.
 func (g *Generator) RenderConfig(cfg RedpandaServiceConfig) (string, error) {
 	if cfg.Topic.DefaultTopicRetentionBytes == 0 {
 		cfg.Topic.DefaultTopicRetentionBytes = constants.DefaultRedpandaTopicDefaultTopicRetentionBytes
@@ -66,7 +66,7 @@ func (g *Generator) RenderConfig(cfg RedpandaServiceConfig) (string, error) {
 
 	// Resources.MaxCores & Resources.MemoryPerCoreInBytes are not used in the template, but directly passed to the redpanda binary
 
-	// The admin api port is not configureable via the config, but we have it set in the constants.
+	// The admin api port is not configurable via the config, but we have it set in the constants.
 	type extendedRedpandaServiceConfig struct {
 		RedpandaServiceConfig
 		AdminAPIPort int

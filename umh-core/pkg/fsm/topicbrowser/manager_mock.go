@@ -15,7 +15,7 @@
 package topicbrowser
 
 import (
-	"fmt"
+	"errors"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -23,9 +23,8 @@ import (
 	topicbrowsersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/topicbrowser"
 )
 
-// NewTopicBrowserManagerWithMockedServices creates a TopicBrowserManager with fully mocked services
+// NewTopicBrowserManagerWithMockedServices creates a TopicBrowserManager with fully mocked services.
 func NewTopicBrowserManagerWithMockedServices(name string) (*Manager, *topicbrowsersvc.MockService) {
-
 	mockSvc := topicbrowsersvc.NewMockService()
 
 	// Create a new manager instance
@@ -34,10 +33,11 @@ func NewTopicBrowserManagerWithMockedServices(name string) (*Manager, *topicbrow
 		"/dev/null",
 		func(fullConfig config.FullConfig) ([]config.TopicBrowserConfig, error) {
 			tbConfig := fullConfig.Internal.TopicBrowser
+
 			return []config.TopicBrowserConfig{tbConfig}, nil
 		},
 		func(config config.TopicBrowserConfig) (string, error) {
-			return fmt.Sprintf("topicbrowser-%s", config.Name), nil
+			return "topicbrowser-" + config.Name, nil
 		},
 		// Get desired state for TopicBrowser config
 		func(cfg config.TopicBrowserConfig) (string, error) {
@@ -49,13 +49,14 @@ func NewTopicBrowserManagerWithMockedServices(name string) (*Manager, *topicbrow
 
 			// Attach the shared mock service to this instance
 			instance.SetService(mockSvc)
+
 			return instance, nil
 		},
 		// Compare TopicBrowser configs
 		func(instance public_fsm.FSMInstance, cfg config.TopicBrowserConfig) (bool, error) {
 			topicBrowserInstance, ok := instance.(*TopicBrowserInstance)
 			if !ok {
-				return false, fmt.Errorf("instance is not a TopicBrowserInstance")
+				return false, errors.New("instance is not a TopicBrowserInstance")
 			}
 
 			// Perform actual comparison - return true if configs are equal
@@ -73,17 +74,20 @@ func NewTopicBrowserManagerWithMockedServices(name string) (*Manager, *topicbrow
 		func(instance public_fsm.FSMInstance, cfg config.TopicBrowserConfig) error {
 			topicBrowserInstance, ok := instance.(*TopicBrowserInstance)
 			if !ok {
-				return fmt.Errorf("instance is not a TopicBrowserInstance")
+				return errors.New("instance is not a TopicBrowserInstance")
 			}
+
 			topicBrowserInstance.config = cfg.TopicBrowserServiceConfig
+
 			return nil
 		},
 		// Get expected max p95 execution time per instance
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
 			topicBrowserInstance, ok := instance.(*TopicBrowserInstance)
 			if !ok {
-				return 0, fmt.Errorf("instance is not a TopicBrowserInstance")
+				return 0, errors.New("instance is not a TopicBrowserInstance")
 			}
+
 			return topicBrowserInstance.GetMinimumRequiredTime(), nil
 		},
 	)

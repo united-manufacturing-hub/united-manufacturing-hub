@@ -46,9 +46,11 @@ func MockLogin() {
 				"uuid": uuid.New(),
 				"name": "SUCH_NAME",
 			}
+
 			bodyBytes, err := safejson.Marshal(body)
 			if err != nil {
 				sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to marshal the body: %v", err)
+
 				response.StatusCode = 500
 			}
 
@@ -60,10 +62,12 @@ func MockLogin() {
 }
 func MockSubscribeMessage() {
 	gock.InterceptClient(http2.GetClient(false))
+
 	message, err := encoding.EncodeMessageFromUserToUMHInstance(models.UMHMessageContent{MessageType: models.Subscribe, Payload: ""})
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to encrypt message: %v", err)
 	}
+
 	gock.New("https://management.umh.app").
 		Get("/api/v2/instance/pull").
 		Reply(200).
@@ -92,6 +96,7 @@ func MockPushEndpoint() {
 			if err != nil {
 				return false, err
 			}
+
 			return true, nil
 		}).
 		Post("/api/v2/instance/push").
@@ -106,6 +111,7 @@ func MockPushEndpointWithPayload(payload backend_api_structs.PushPayload) {
 			if err != nil {
 				return false, err
 			}
+
 			return true, nil
 		}).
 		Post("/api/v2/instance/push").

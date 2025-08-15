@@ -16,30 +16,32 @@ package dataflowcomponentserviceconfig
 
 import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 
-// Comparator handles the comparison of DFC configurations
+// Comparator handles the comparison of DFC configurations.
 type Comparator struct {
 }
 
-// NewComparator creates a new configuration comparator for DFC's
+// NewComparator creates a new configuration comparator for DFC's.
 func NewComparator() *Comparator {
 	return &Comparator{}
 }
 
 // ConfigsEqual compares two DataFlowComponentConfigs for equality
-// by converting to BenthosServiceConfig and using the existing comparison utilities
+// by converting to BenthosServiceConfig and using the existing comparison utilities.
 func (c *Comparator) ConfigsEqual(a, b DataflowComponentServiceConfig) bool {
 	benthosA := a.GetBenthosServiceConfig()
 	benthosB := b.GetBenthosServiceConfig()
 
 	comparator := benthosserviceconfig.NewComparator()
+
 	return comparator.ConfigsEqual(benthosA, benthosB)
 }
 
-// ConfigDiff returns a human-readable string describing differences between configs
+// ConfigDiff returns a human-readable string describing differences between configs.
 func (c *Comparator) ConfigDiff(a, b DataflowComponentServiceConfig) string {
 	benthosA := a.GetBenthosServiceConfig()
 	benthosB := b.GetBenthosServiceConfig()
 
 	comparator := benthosserviceconfig.NewComparator()
+
 	return comparator.ConfigDiff(benthosA, benthosB)
 }

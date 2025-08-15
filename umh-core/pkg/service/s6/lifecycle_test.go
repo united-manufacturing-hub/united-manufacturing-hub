@@ -16,7 +16,7 @@ package s6
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -168,6 +168,7 @@ var _ = Describe("LifecycleManager", func() {
 
 			mockFS.WithPathExistsFunc(func(ctx context.Context, path string) (bool, error) {
 				val, ok := existingPaths.Load(path)
+
 				return ok && val.(bool), nil
 			})
 
@@ -175,12 +176,14 @@ var _ = Describe("LifecycleManager", func() {
 				renameCalls = append(renameCalls, oldPath+"->"+newPath)
 				existingPaths.Delete(oldPath)
 				existingPaths.Store(newPath, true)
+
 				return nil
 			})
 
 			mockFS.WithRemoveAllFunc(func(ctx context.Context, path string) error {
 				removeAllCalls = append(removeAllCalls, path)
 				existingPaths.Delete(path)
+
 				return nil
 			})
 		})
@@ -189,7 +192,7 @@ var _ = Describe("LifecycleManager", func() {
 			err := service.RemoveArtifacts(ctx, artifacts, mockFS)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(len(removeAllCalls)).To(BeNumerically(">=", 1))
+			Expect(removeAllCalls).ToNot(BeEmpty())
 
 			// Check that original paths are no longer visible
 			exists, _ := mockFS.PathExists(ctx, artifacts.ServiceDir)
@@ -205,8 +208,8 @@ var _ = Describe("LifecycleManager", func() {
 			err := service.RemoveArtifacts(ctx, artifacts, mockFS)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(len(renameCalls)).To(Equal(0))
-			Expect(len(removeAllCalls)).To(Equal(0))
+			Expect(renameCalls).To(BeEmpty())
+			Expect(removeAllCalls).To(BeEmpty())
 		})
 
 		It("should handle context deadline exceeded", func() {
@@ -251,22 +254,26 @@ var _ = Describe("LifecycleManager", func() {
 
 			mockFS.WithPathExistsFunc(func(ctx context.Context, path string) (bool, error) {
 				val, ok := existingPaths.Load(path)
+
 				return ok && val.(bool), nil
 			})
 
 			mockFS.WithRemoveAllFunc(func(ctx context.Context, path string) error {
 				existingPaths.Delete(path)
+
 				return nil
 			})
 
 			mockFS.WithExecuteCommandFunc(func(ctx context.Context, name string, args ...string) ([]byte, error) {
 				processCalls = append(processCalls, name+" "+strings.Join(args, " "))
+
 				return []byte{}, nil
 			})
 
 			mockFS.WithRenameFunc(func(ctx context.Context, oldPath, newPath string) error {
 				existingPaths.Delete(oldPath)
 				existingPaths.Store(newPath, true)
+
 				return nil
 			})
 		})
@@ -354,7 +361,7 @@ var _ = Describe("LifecycleManager", func() {
 
 		It("should return HealthUnknown for filesystem errors", func() {
 			mockFS.WithPathExistsFunc(func(ctx context.Context, path string) (bool, error) {
-				return false, fmt.Errorf("filesystem error")
+				return false, errors.New("filesystem error")
 			})
 
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
@@ -378,7 +385,7 @@ var _ = Describe("LifecycleManager", func() {
 	Describe("Edge Cases and Error Handling", func() {
 		It("should handle filesystem permission errors", func() {
 			mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
-				return fmt.Errorf("permission denied")
+				return errors.New("permission denied")
 			})
 
 			config := s6serviceconfig.S6ServiceConfig{
@@ -402,6 +409,7 @@ var _ = Describe("LifecycleManager", func() {
 				if strings.Contains(path, constants.S6RepositoryBaseDir) {
 					repositoryDirCreated = true
 				}
+
 				return nil
 			})
 
@@ -409,11 +417,12 @@ var _ = Describe("LifecycleManager", func() {
 				if strings.Contains(path, constants.S6RepositoryBaseDir) {
 					repositoryDirRemoved = true
 				}
+
 				return nil
 			})
 
 			mockFS.WithSymlinkFunc(func(ctx context.Context, oldPath, newPath string) error {
-				return fmt.Errorf("simulated symlink failure")
+				return errors.New("simulated symlink failure")
 			})
 
 			config := s6serviceconfig.S6ServiceConfig{
@@ -432,7 +441,7 @@ var _ = Describe("LifecycleManager", func() {
 		It("should handle resource exhaustion gracefully", func() {
 			// Simulate resource exhaustion
 			mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
-				return fmt.Errorf("no space left on device")
+				return errors.New("no space left on device")
 			})
 
 			config := s6serviceconfig.S6ServiceConfig{

@@ -234,6 +234,7 @@ dataModels:
 
 				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
 					writtenData = data
+
 					return nil
 				})
 
@@ -256,6 +257,7 @@ dataModels:
 
 				Eventually(func() error {
 					err := configManager.AtomicAddDataModel(ctx, "temperature", dmVersion, "test description")
+
 					return err
 				}, TimeToWaitForConfigRefresh*2, "10ms").Should(Succeed())
 
@@ -366,6 +368,7 @@ dataModels:
 
 				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
 					writtenData = data
+
 					return nil
 				})
 
@@ -495,6 +498,7 @@ dataModels:
 
 				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
 					writtenData = data
+
 					return nil
 				})
 

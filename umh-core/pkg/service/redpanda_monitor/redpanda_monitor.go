@@ -441,30 +441,31 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 	// If the there are multiple sections, we will have multiple entries in the sections list
 	// This ensures that we always have a valid section, even if the markers of later sections are missing (e.g the end marker for example was not yet written)
 	for i := range logs {
-		if strings.Contains(logs[i].Content, BLOCK_START_MARKER) {
+		switch {
+		case strings.Contains(logs[i].Content, BLOCK_START_MARKER):
 			currentSection.StartMarkerIndex = i
-		} else if strings.Contains(logs[i].Content, METRICS_END_MARKER) {
+		case strings.Contains(logs[i].Content, METRICS_END_MARKER):
 			// Dont even try to find an end marker, if we dont have a start marker
 			if currentSection.StartMarkerIndex == -1 {
 				continue
 			}
 
 			currentSection.MetricsEndMarkerIndex = i
-		} else if strings.Contains(logs[i].Content, CLUSTERCONFIG_END_MARKER) {
+		case strings.Contains(logs[i].Content, CLUSTERCONFIG_END_MARKER):
 			// Dont even try to find an end marker, if we dont have a start marker
 			if currentSection.StartMarkerIndex == -1 {
 				continue
 			}
 
 			currentSection.ClusterConfigEndMarkerIndex = i
-		} else if strings.Contains(logs[i].Content, READYNESS_END_MARKER) {
+		case strings.Contains(logs[i].Content, READYNESS_END_MARKER):
 			// Dont even try to find an end marker, if we dont have a start marker
 			if currentSection.StartMarkerIndex == -1 {
 				continue
 			}
 
 			currentSection.ReadynessEndMarkerIndex = i
-		} else if strings.Contains(logs[i].Content, BLOCK_END_MARKER) {
+		case strings.Contains(logs[i].Content, BLOCK_END_MARKER):
 			// We dont break here, as there might be multiple end markers
 			currentSection.BlockEndMarkerIndex = i
 

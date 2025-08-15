@@ -35,7 +35,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
-// Helper function to create mock logs with valid format
+// Helper function to create mock logs with valid format.
 func createMonitorMockLogs(freBytes, totalBytes uint64, hasSpaceAlert bool, topics, unavailableTopics uint64, bytesIn, bytesOut uint64, topicPartitionMap map[string]int64) ([]s6service.LogEntry, error) {
 	// Create Prometheus-formatted metrics text
 	var promMetrics strings.Builder
@@ -50,10 +50,12 @@ func createMonitorMockLogs(freBytes, totalBytes uint64, hasSpaceAlert bool, topi
 
 	promMetrics.WriteString("# HELP redpanda_storage_disk_free_space_alert Free disk space alert (0=false, >0=true)\n")
 	promMetrics.WriteString("# TYPE redpanda_storage_disk_free_space_alert gauge\n")
+
 	alertValue := 0
 	if hasSpaceAlert {
 		alertValue = 1
 	}
+
 	promMetrics.WriteString(fmt.Sprintf("redpanda_storage_disk_free_space_alert %d\n\n", alertValue))
 
 	// Add cluster metrics
@@ -75,6 +77,7 @@ func createMonitorMockLogs(freBytes, totalBytes uint64, hasSpaceAlert bool, topi
 	if len(topicPartitionMap) > 0 {
 		promMetrics.WriteString("# HELP redpanda_kafka_partitions Number of partitions by topic\n")
 		promMetrics.WriteString("# TYPE redpanda_kafka_partitions gauge\n")
+
 		for topic, partitions := range topicPartitionMap {
 			promMetrics.WriteString(fmt.Sprintf("redpanda_kafka_partitions{redpanda_topic=\"%s\"} %d\n", topic, partitions))
 		}
@@ -93,41 +96,53 @@ func createMonitorMockLogs(freBytes, totalBytes uint64, hasSpaceAlert bool, topi
 
 	// Compress and hex-encode metrics data
 	var metricsBuffer bytes.Buffer
+
 	gzipWriter := gzip.NewWriter(&metricsBuffer)
+
 	_, err := gzipWriter.Write([]byte(promMetrics.String()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to write metrics: %w", err)
 	}
+
 	err = gzipWriter.Close()
 	if err != nil {
 		return nil, fmt.Errorf("failed to close gzip writer: %w", err)
 	}
+
 	metricsHex := hex.EncodeToString(metricsBuffer.Bytes())
 
 	// Compress and hex-encode cluster config
 	var configBuffer bytes.Buffer
+
 	gzipWriter = gzip.NewWriter(&configBuffer)
+
 	err = json.NewEncoder(gzipWriter).Encode(clusterConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode cluster config: %w", err)
 	}
+
 	err = gzipWriter.Close()
 	if err != nil {
 		return nil, fmt.Errorf("failed to close gzip writer: %w", err)
 	}
+
 	configHex := hex.EncodeToString(configBuffer.Bytes())
 
 	// Compress and hex-encode readyness data
 	var readynessBuffer bytes.Buffer
+
 	gzipWriter = gzip.NewWriter(&readynessBuffer)
+
 	_, err = gzipWriter.Write([]byte("{\"status\":\"ready\"}"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to write readyness data: %w", err)
 	}
+
 	err = gzipWriter.Close()
 	if err != nil {
 		return nil, fmt.Errorf("failed to close gzip writer: %w", err)
 	}
+
 	readynessHex := hex.EncodeToString(readynessBuffer.Bytes())
 
 	// Create timestamp
@@ -313,9 +328,10 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 })
 
 func reconcileMonitorUntilState(ctx context.Context, monitorService *redpanda_monitor.RedpandaMonitorService, services serviceregistry.Provider, tick uint64, expectedState string) uint64 {
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		err, _ := monitorService.ReconcileManager(ctx, services, tick)
 		Expect(err).NotTo(HaveOccurred())
+
 		tick++
 
 		// Check state
@@ -324,19 +340,22 @@ func reconcileMonitorUntilState(ctx context.Context, monitorService *redpanda_mo
 		if err != nil {
 			Expect(err.Error()).To(ContainSubstring("service is stopped"))
 		}
+
 		if serviceInfo.S6FSMState == expectedState {
 			return tick
 		}
 	}
 
 	Fail(fmt.Sprintf("Expected state %s not reached after 10 reconciliations", expectedState))
+
 	return 0
 }
 
 func ensureMonitorState(ctx context.Context, monitorService *redpanda_monitor.RedpandaMonitorService, services serviceregistry.Provider, tick uint64, expectedState string, iterations int) {
-	for i := 0; i < iterations; i++ {
+	for range iterations {
 		err, _ := monitorService.ReconcileManager(ctx, services, tick)
 		Expect(err).NotTo(HaveOccurred())
+
 		tick++
 
 		// Check state

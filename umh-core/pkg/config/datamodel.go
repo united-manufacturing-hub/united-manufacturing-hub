@@ -23,7 +23,7 @@ import (
 
 // AtomicAddDataModel adds a new data model to the config
 // the data model is added with the given name and version
-// the version is appended to the data model and the config is written back to the file
+// the version is appended to the data model and the config is written back to the file.
 func (m *FileConfigManager) AtomicAddDataModel(ctx context.Context, name string, dmVersion DataModelVersion, description string) error {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
@@ -63,7 +63,6 @@ func (m *FileConfigManager) AtomicAddDataModel(ctx context.Context, name string,
 }
 
 func (m *FileConfigManagerWithBackoff) AtomicAddDataModel(ctx context.Context, name string, dmVersion DataModelVersion, description string) error {
-
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -74,7 +73,7 @@ func (m *FileConfigManagerWithBackoff) AtomicAddDataModel(ctx context.Context, n
 
 // AtomicEditDataModel edits (append-only) the data model with the given name and appends the new version
 // the version is appended to the data model and the config is written back to the file
-// we do not allow, editing existing versions, as this would break the data contract
+// we do not allow, editing existing versions, as this would break the data contract.
 func (m *FileConfigManager) AtomicEditDataModel(ctx context.Context, name string, dmVersion DataModelVersion, description string) error {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
@@ -93,6 +92,7 @@ func (m *FileConfigManager) AtomicEditDataModel(ctx context.Context, name string
 	for i, dmc := range config.DataModels {
 		if dmc.Name == name {
 			targetIndex = i
+
 			break
 		}
 	}
@@ -106,6 +106,7 @@ func (m *FileConfigManager) AtomicEditDataModel(ctx context.Context, name string
 
 	// Find the highest version number to ensure we don't overwrite existing versions
 	var maxVersion = 0
+
 	for versionKey := range currentDataModel.Versions {
 		if strings.HasPrefix(versionKey, "v") {
 			if versionNum, err := strconv.Atoi(versionKey[1:]); err == nil {
@@ -136,7 +137,6 @@ func (m *FileConfigManager) AtomicEditDataModel(ctx context.Context, name string
 }
 
 func (m *FileConfigManagerWithBackoff) AtomicEditDataModel(ctx context.Context, name string, dmVersion DataModelVersion, description string) error {
-
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -160,9 +160,11 @@ func (m *FileConfigManager) AtomicDeleteDataModel(ctx context.Context, name stri
 
 	// find the data model to delete
 	targetIndex := -1
+
 	for i, dmc := range config.DataModels {
 		if dmc.Name == name {
 			targetIndex = i
+
 			break
 		}
 	}
@@ -184,7 +186,6 @@ func (m *FileConfigManager) AtomicDeleteDataModel(ctx context.Context, name stri
 }
 
 func (m *FileConfigManagerWithBackoff) AtomicDeleteDataModel(ctx context.Context, name string) error {
-
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return ctx.Err()

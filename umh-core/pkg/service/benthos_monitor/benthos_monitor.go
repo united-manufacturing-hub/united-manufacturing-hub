@@ -46,14 +46,14 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// Metrics contains information about the metrics of the Benthos service
+// Metrics contains information about the metrics of the Benthos service.
 type Metrics struct {
 	Process ProcessMetrics `json:"process,omitempty"`
 	Output  OutputMetrics  `json:"output,omitempty"`
 	Input   InputMetrics   `json:"input,omitempty"`
 }
 
-// InputMetrics contains input-specific metrics
+// InputMetrics contains input-specific metrics.
 type InputMetrics struct {
 	ConnectionFailed int64   `json:"connection_failed"`
 	ConnectionLost   int64   `json:"connection_lost"`
@@ -62,7 +62,7 @@ type InputMetrics struct {
 	Received         int64   `json:"received"`
 }
 
-// OutputMetrics contains output-specific metrics
+// OutputMetrics contains output-specific metrics.
 type OutputMetrics struct {
 	BatchSent        int64   `json:"batch_sent"`
 	ConnectionFailed int64   `json:"connection_failed"`
@@ -73,12 +73,12 @@ type OutputMetrics struct {
 	Sent             int64   `json:"sent"`
 }
 
-// ProcessMetrics contains processor-specific metrics
+// ProcessMetrics contains processor-specific metrics.
 type ProcessMetrics struct {
 	Processors map[string]ProcessorMetrics `json:"processors"` // key is the processor path (e.g. "root.pipeline.processors.0")
 }
 
-// ProcessorMetrics contains metrics for a single processor
+// ProcessorMetrics contains metrics for a single processor.
 type ProcessorMetrics struct {
 	Label         string  `json:"label"`
 	Received      int64   `json:"received"`
@@ -89,7 +89,7 @@ type ProcessorMetrics struct {
 	LatencyNS     Latency `json:"latency_ns"`
 }
 
-// Latency contains latency metrics
+// Latency contains latency metrics.
 type Latency struct {
 	P50   float64 `json:"p50"`   // 50th percentile
 	P90   float64 `json:"p90"`   // 90th percentile
@@ -113,13 +113,13 @@ type HealthCheck struct {
 	IsReady bool
 }
 
-// versionResponse represents the JSON structure returned by the /version endpoint
+// versionResponse represents the JSON structure returned by the /version endpoint.
 type versionResponse struct {
 	Version string `json:"version"`
 	Built   string `json:"built"`
 }
 
-// readyResponse represents the JSON structure returned by the /ready endpoint
+// readyResponse represents the JSON structure returned by the /ready endpoint.
 type readyResponse struct {
 	Error    string       `json:"error,omitempty"`
 	Statuses []connStatus `json:"statuses"`
@@ -132,7 +132,7 @@ type connStatus struct {
 	Connected bool   `json:"connected"`
 }
 
-// BenthosMetrics contains information about the metrics of the Benthos service
+// BenthosMetrics contains information about the metrics of the Benthos service.
 type BenthosMetrics struct {
 	// MetricsState contains the state of the metrics
 	MetricsState *BenthosMetricsState
@@ -140,7 +140,7 @@ type BenthosMetrics struct {
 	Metrics Metrics
 }
 
-// ServiceInfo contains information about a benthos service
+// ServiceInfo contains information about a benthos service.
 type ServiceInfo struct {
 	// S6FSMState contains the current state of the S6 FSM of the benthos_monitorservice
 	S6FSMState string
@@ -150,7 +150,7 @@ type ServiceInfo struct {
 	S6ObservedState s6fsm.S6ObservedState
 }
 
-// BenthosMonitorStatus contains information about the status of the Benthos service
+// BenthosMonitorStatus contains information about the status of the Benthos service.
 type BenthosMetricsScan struct {
 	// LastUpdatedAt contains the last time the metrics were updated
 	LastUpdatedAt time.Time
@@ -162,7 +162,7 @@ type BenthosMetricsScan struct {
 
 type BenthosMonitorStatus struct {
 	// LastScan contains the result of the last scan
-	// If this is nil, we never had a successfull scan
+	// If this is nil, we never had a successful scan
 	LastScan *BenthosMetricsScan
 	// Logs contains the structured s6 log entries emitted by the
 	// benthos_monitor service.
@@ -208,6 +208,7 @@ type BenthosMonitorStatus struct {
 // See also: https://github.com/tiendc/go-deepcopy?tab=readme-ov-file#copy-struct-fields-via-struct-methods
 func (bms *BenthosMonitorStatus) CopyLogs(src []s6service.LogEntry) error {
 	bms.Logs = src
+
 	return nil
 }
 
@@ -224,7 +225,7 @@ type IBenthosMonitorService interface {
 	ServiceExists(ctx context.Context, services serviceregistry.Provider) bool
 }
 
-// Ensure BenthosMonitorService implements IBenthosMonitorService
+// Ensure BenthosMonitorService implements IBenthosMonitorService.
 var _ IBenthosMonitorService = (*BenthosMonitorService)(nil)
 
 type BenthosMonitorService struct {
@@ -236,17 +237,17 @@ type BenthosMonitorService struct {
 	benthosName     string              // normally a service can handle multiple instances, the service monitor here is different and can only handle one instance
 }
 
-// BenthosMonitorServiceOption is a function that modifies a BenthosMonitorService
+// BenthosMonitorServiceOption is a function that modifies a BenthosMonitorService.
 type BenthosMonitorServiceOption func(*BenthosMonitorService)
 
-// WithS6Service sets a custom S6 service for the RedpandaMonitorService
+// WithS6Service sets a custom S6 service for the RedpandaMonitorService.
 func WithS6Service(s6Service s6service.Service) BenthosMonitorServiceOption {
 	return func(s *BenthosMonitorService) {
 		s.s6Service = s6Service
 	}
 }
 
-// WithS6Manager sets a custom S6 manager for the RedpandaMonitorService
+// WithS6Manager sets a custom S6 manager for the RedpandaMonitorService.
 func WithS6Manager(s6Manager *s6fsm.S6Manager) BenthosMonitorServiceOption {
 	return func(s *BenthosMonitorService) {
 		s.s6Manager = s6Manager
@@ -255,6 +256,7 @@ func WithS6Manager(s6Manager *s6fsm.S6Manager) BenthosMonitorServiceOption {
 
 func NewBenthosMonitorService(benthosName string, opts ...BenthosMonitorServiceOption) *BenthosMonitorService {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentBenthosService, "benthos-monitor-"+benthosName)
+
 	service := &BenthosMonitorService{
 		logger:       logger.For(managerName),
 		metricsState: NewBenthosMetricsState(),
@@ -265,6 +267,7 @@ func NewBenthosMonitorService(benthosName string, opts ...BenthosMonitorServiceO
 	for _, opt := range opts {
 		opt(service)
 	}
+
 	return service
 }
 
@@ -316,9 +319,9 @@ done
 	return scriptContent, nil
 }
 
-// GetS6ServiceName converts the benthosName (e.g. "myservice") that was given during NewBenthosMonitorService to its S6 service name (e.g. "benthos-myservice")
+// GetS6ServiceName converts the benthosName (e.g. "myservice") that was given during NewBenthosMonitorService to its S6 service name (e.g. "benthos-myservice").
 func (s *BenthosMonitorService) GetS6ServiceName() string {
-	return fmt.Sprintf("benthos-monitor-%s", s.benthosName)
+	return "benthos-monitor-" + s.benthosName
 }
 
 func (s *BenthosMonitorService) GenerateS6ConfigForBenthosMonitor(s6ServiceName string, port uint16) (s6serviceconfig.S6ServiceConfig, error) {
@@ -365,15 +368,17 @@ func ConcatContent(logs []s6service.LogEntry) []byte {
 
 	// 1 alloc, no re-growth
 	buf := make([]byte, size)
+
 	off := 0
 	for i := range logs {
 		off += copy(buf[off:], logs[i].Content)
 	}
+
 	return buf
 }
 
 // build one DFA-based replacer at package-init;
-// one pass over the input, no regex, no 4×ReplaceAll
+// one pass over the input, no regex, no 4×ReplaceAll.
 var markerReplacer = strings.NewReplacer(
 	BLOCK_START_MARKER, "",
 	PING_END_MARKER, "",
@@ -391,7 +396,7 @@ func StripMarkers(b []byte) []byte {
 	return []byte(markerReplacer.Replace(string(b)))
 }
 
-// ParseBenthosLogs parses the logs of a benthos service and extracts metrics
+// ParseBenthosLogs parses the logs of a benthos service and extracts metrics.
 func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6service.LogEntry, tick uint64) (*BenthosMetricsScan, error) {
 	/*
 		A normal log entry looks like this:
@@ -407,9 +412,8 @@ func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6s
 		Timestamp data
 		BLOCK_END_MARKER
 	*/
-
 	if len(logs) == 0 {
-		return nil, fmt.Errorf("no logs provided")
+		return nil, errors.New("no logs provided")
 	}
 	// Find the markers in a single pass through the logs
 	sections := make([]Section, 0)
@@ -426,34 +430,39 @@ func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6s
 	// This implementation scans the logs in a single pass, which is more efficient than scanning for each marker separately
 	// If the there are multiple sections, we will have multiple entries in the sections list
 	// This ensures that we always have a valid section, even if the markers of later sections are missing (e.g the end marker for example was not yet written)
-	for i := 0; i < len(logs); i++ {
-		if strings.Contains(logs[i].Content, BLOCK_START_MARKER) {
+	for i := range logs {
+		switch {
+		case strings.Contains(logs[i].Content, BLOCK_START_MARKER):
 			currentSection.StartMarkerIndex = i
-		} else if strings.Contains(logs[i].Content, PING_END_MARKER) {
+		case strings.Contains(logs[i].Content, PING_END_MARKER):
 			// Dont even try to find an end marker, if we dont have a start marker
 			if currentSection.StartMarkerIndex == -1 {
 				continue
 			}
+
 			currentSection.PingEndMarkerIndex = i
-		} else if strings.Contains(logs[i].Content, READY_END) {
+		case strings.Contains(logs[i].Content, READY_END):
 			// Dont even try to find an end marker, if we dont have a start marker
 			if currentSection.StartMarkerIndex == -1 && currentSection.PingEndMarkerIndex == -1 {
 				continue
 			}
+
 			currentSection.ReadyEndMarkerIndex = i
-		} else if strings.Contains(logs[i].Content, VERSION_END) {
+		case strings.Contains(logs[i].Content, VERSION_END):
 			// Dont even try to find an end marker, if we dont have a start marker
 			if currentSection.StartMarkerIndex == -1 && currentSection.PingEndMarkerIndex == -1 && currentSection.ReadyEndMarkerIndex == -1 {
 				continue
 			}
+
 			currentSection.VersionEndMarkerIndex = i
-		} else if strings.Contains(logs[i].Content, METRICS_END_MARKER) {
+		case strings.Contains(logs[i].Content, METRICS_END_MARKER):
 			// Dont even try to find an end marker, if we dont have a start marker
 			if currentSection.StartMarkerIndex == -1 && currentSection.PingEndMarkerIndex == -1 && currentSection.ReadyEndMarkerIndex == -1 && currentSection.VersionEndMarkerIndex == -1 {
 				continue
 			}
+
 			currentSection.MetricsEndMarkerIndex = i
-		} else if strings.Contains(logs[i].Content, BLOCK_END_MARKER) {
+		case strings.Contains(logs[i].Content, BLOCK_END_MARKER):
 			// We dont break here, as there might be multiple end markers
 			currentSection.BlockEndMarkerIndex = i
 
@@ -492,11 +501,13 @@ func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6s
 	metricsData := logs[actualSection.VersionEndMarkerIndex+1 : actualSection.MetricsEndMarkerIndex]
 	timestampData := logs[actualSection.MetricsEndMarkerIndex+1 : actualSection.BlockEndMarkerIndex]
 
-	var pingDataBytes []byte
-	var readyDataBytes []byte
-	var versionDataBytes []byte
-	var metricsDataBytes []byte
-	var timestampDataBytes []byte
+	var (
+		pingDataBytes      []byte
+		readyDataBytes     []byte
+		versionDataBytes   []byte
+		metricsDataBytes   []byte
+		timestampDataBytes []byte
+	)
 
 	pingDataBytes = ConcatContent(pingData)
 	readyDataBytes = ConcatContent(readyData)
@@ -511,55 +522,66 @@ func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6s
 	metricsDataBytes = StripMarkers(metricsDataBytes)
 	timestampDataBytes = StripMarkers(timestampDataBytes)
 
-	var metrics *BenthosMetrics
-	var healthCheck HealthCheck
-	var isLive bool
-	var readyResp readyResponse
-	var isReady bool
-	var versionResp versionResponse
+	var (
+		metrics     *BenthosMetrics
+		healthCheck HealthCheck
+		isLive      bool
+		readyResp   readyResponse
+		isReady     bool
+		versionResp versionResponse
+	)
 
 	// Process all data in parallel using errgroup
 	ctxBenthosMonitor, cancelBenthosMonitor := context.WithTimeout(ctx, constants.BenthosMonitorProcessMetricsTimeout)
 	defer cancelBenthosMonitor()
+
 	g, _ := errgroup.WithContext(ctxBenthosMonitor)
 
 	// Step 1: Process Liveness from /ping endpoint
 	g.Go(func() error {
 		var err error
+
 		isLive, err = s.ProcessPingData(pingDataBytes)
 		if err != nil {
 			return fmt.Errorf("failed to process ping data: %w", err)
 		}
+
 		return nil
 	})
 
 	// Step 2: Process Readiness from /ready endpoint
 	g.Go(func() error {
 		var err error
+
 		isReady, readyResp, err = s.ProcessReadyData(readyDataBytes)
 		if err != nil {
 			return fmt.Errorf("failed to process ready data: %w", err)
 		}
+
 		return nil
 	})
 
 	// Step 3: Process Version from /version endpoint
 	g.Go(func() error {
 		var err error
+
 		versionResp, err = s.ProcessVersionData(versionDataBytes)
 		if err != nil {
 			return fmt.Errorf("failed to process version data: %w", err)
 		}
+
 		return nil
 	})
 
 	// Step 4: Process the Metrics and update the metrics state
 	g.Go(func() error {
 		var err error
+
 		metrics, err = s.ProcessMetricsData(metricsDataBytes, tick)
 		if err != nil {
 			return fmt.Errorf("failed to parse metrics: %w", err)
 		}
+
 		return nil
 	})
 
@@ -604,6 +626,7 @@ func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6s
 	}
 
 	lastUpdatedAt := time.Unix(0, int64(timestampNs))
+
 	return &BenthosMetricsScan{
 		HealthCheck:    healthCheck,
 		BenthosMetrics: metrics,
@@ -613,9 +636,8 @@ func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6s
 
 // ProcessPingData processes the ping data and returns whether the service is live
 // It returns false if the service is not live, and an error if there is an error parsing the ping data
-// It is live, when it contains the string "pong"
+// It is live, when it contains the string "pong".
 func (s *BenthosMonitorService) ProcessPingData(pingDataBytes []byte) (bool, error) {
-
 	pingDataString := string(pingDataBytes)
 	// Strip any newlines
 	pingDataString = strings.ReplaceAll(pingDataString, "\n", "")
@@ -631,6 +653,7 @@ func (s *BenthosMonitorService) ProcessPingData(pingDataBytes []byte) (bool, err
 	if err != nil {
 		return false, fmt.Errorf("failed to decompress ping data: %w", err)
 	}
+
 	defer func() {
 		if err := gzipReader.Close(); err != nil {
 			sentry.ReportIssue(fmt.Errorf("failed to close gzip reader: %w", err), sentry.IssueTypeError, s.logger)
@@ -646,7 +669,7 @@ func (s *BenthosMonitorService) ProcessPingData(pingDataBytes []byte) (bool, err
 	return isLive, nil
 }
 
-// ParsePingData parses the ping data and returns whether the service is live
+// ParsePingData parses the ping data and returns whether the service is live.
 func ParsePingData(dataReader io.Reader) (bool, error) {
 	data, err := io.ReadAll(dataReader)
 	if err != nil {
@@ -658,6 +681,7 @@ func ParsePingData(dataReader io.Reader) (bool, error) {
 		// If we have any curl error, we can assume the service is not live (but we do not need to return the error)
 		return false, nil
 	}
+
 	if strings.Contains(string(data), "pong") {
 		return true, nil
 	}
@@ -667,9 +691,8 @@ func ParsePingData(dataReader io.Reader) (bool, error) {
 
 // ProcessReadyData processes the ready data and returns whether the service is ready
 // It returns false if the service is not ready, and an error if there is an error parsing the ready data
-// It is ready, when the error field is empty
+// It is ready, when the error field is empty.
 func (s *BenthosMonitorService) ProcessReadyData(readyDataBytes []byte) (bool, readyResponse, error) {
-
 	readyDataString := string(readyDataBytes)
 	// Strip any newlines
 	readyDataString = strings.ReplaceAll(readyDataString, "\n", "")
@@ -685,6 +708,7 @@ func (s *BenthosMonitorService) ProcessReadyData(readyDataBytes []byte) (bool, r
 	if err != nil {
 		return false, readyResponse{}, fmt.Errorf("failed to decompress ready data: %w", err)
 	}
+
 	defer func() {
 		if err := gzipReader.Close(); err != nil {
 			sentry.ReportIssue(fmt.Errorf("failed to close gzip reader: %w", err), sentry.IssueTypeError, s.logger)
@@ -702,7 +726,7 @@ func (s *BenthosMonitorService) ProcessReadyData(readyDataBytes []byte) (bool, r
 
 // ParseReadyData parses the ready data and returns whether the service is ready
 // It also returns the ready response
-// the service is ready, when the error field is empty
+// the service is ready, when the error field is empty.
 func ParseReadyData(dataReader io.Reader) (bool, readyResponse, error) {
 	data, err := io.ReadAll(dataReader)
 	if err != nil {
@@ -724,9 +748,8 @@ func ParseReadyData(dataReader io.Reader) (bool, readyResponse, error) {
 }
 
 // ProcessVersionData processes the version data and returns the version response
-// It returns an error if there is an error parsing the version data
+// It returns an error if there is an error parsing the version data.
 func (s *BenthosMonitorService) ProcessVersionData(versionDataBytes []byte) (versionResponse, error) {
-
 	versionDataString := string(versionDataBytes)
 	// Strip any newlines
 	versionDataString = strings.ReplaceAll(versionDataString, "\n", "")
@@ -742,6 +765,7 @@ func (s *BenthosMonitorService) ProcessVersionData(versionDataBytes []byte) (ver
 	if err != nil {
 		return versionResponse{}, fmt.Errorf("failed to decompress version data: %w", err)
 	}
+
 	defer func() {
 		if err := gzipReader.Close(); err != nil {
 			sentry.ReportIssue(fmt.Errorf("failed to close gzip reader: %w", err), sentry.IssueTypeError, s.logger)
@@ -757,7 +781,7 @@ func (s *BenthosMonitorService) ProcessVersionData(versionDataBytes []byte) (ver
 	return versionResp, nil
 }
 
-// ParseVersionData parses the version data and returns the version response
+// ParseVersionData parses the version data and returns the version response.
 func ParseVersionData(dataReader io.Reader) (versionResponse, error) {
 	data, err := io.ReadAll(dataReader)
 	if err != nil {
@@ -778,9 +802,8 @@ func ParseVersionData(dataReader io.Reader) (versionResponse, error) {
 }
 
 // ProcessMetricsData processes the metrics data and returns the metrics response
-// It returns an error if there is an error parsing the metrics data
+// It returns an error if there is an error parsing the metrics data.
 func (s *BenthosMonitorService) ProcessMetricsData(metricsDataBytes []byte, tick uint64) (*BenthosMetrics, error) {
-
 	metricsDataString := string(metricsDataBytes)
 	// Strip any newlines
 	metricsDataString = strings.ReplaceAll(metricsDataString, "\n", "")
@@ -796,6 +819,7 @@ func (s *BenthosMonitorService) ProcessMetricsData(metricsDataBytes []byte, tick
 	if err != nil {
 		return nil, fmt.Errorf("failed to decompress metrics data: %w", err)
 	}
+
 	defer func() {
 		if err := gzipReader.Close(); err != nil {
 			sentry.ReportIssue(fmt.Errorf("failed to close gzip reader: %w", err), sentry.IssueTypeError, s.logger)
@@ -817,7 +841,7 @@ func (s *BenthosMonitorService) ProcessMetricsData(metricsDataBytes []byte, tick
 	}, nil
 }
 
-// ParseMetricsData parses the metrics data and returns the metrics response
+// ParseMetricsData parses the metrics data and returns the metrics response.
 func ParseMetricsData(dataReader io.Reader) (Metrics, error) {
 	data, err := io.ReadAll(dataReader)
 	if err != nil {
@@ -849,44 +873,55 @@ func ParseMetricsData(dataReader io.Reader) (Metrics, error) {
 func TailInt(line []byte) (int64, error) {
 	i := bytes.LastIndexByte(line, ' ')
 	if i == -1 {
-		return 0, fmt.Errorf("failed to find space in line")
+		return 0, errors.New("failed to find space in line")
 	}
+
 	s := string(line[i+1:])
 	if strings.ContainsAny(s, "eE") {
 		f, err := strconv.ParseFloat(s, 64)
 		if err != nil {
 			return 0, fmt.Errorf("failed to parse float: %w", err)
 		}
+
 		return int64(f), nil
 	}
+
 	var v int64
+
 	for _, c := range s {
 		if c < '0' || c > '9' {
 			break
 		}
+
 		v = v*10 + int64(c-'0')
 	}
+
 	return v, nil
 }
 
 // ---------------------------------------------------------------------------
 
-// ParseMetricsFromBytesOpt – fixed & quantile aware
+// ParseMetricsFromBytesOpt – fixed & quantile aware.
 func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 	var m Metrics
+
 	m.Process.Processors = make(map[string]ProcessorMetrics, 8)
 
 	lineStart := 0
+
 	for i, b := range raw {
 		if b != '\n' && i != len(raw)-1 {
 			continue
 		}
+
 		end := i
 		if b != '\n' { // EOF w/o \n
 			end++
 		}
+
 		line := raw[lineStart:end]
 		lineStart = i + 1
+
 		if len(line) == 0 || line[0] == '#' {
 			continue
 		}
@@ -895,37 +930,41 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 		if nameEnd == -1 {
 			nameEnd = bytes.IndexByte(line, ' ')
 		}
+
 		if nameEnd == -1 {
 			continue
 		}
-		//name := unsafeString(line[:nameEnd])
+		// name := unsafeString(line[:nameEnd])
 		name := string(line[:nameEnd])
 		switch name {
-
 		// ---------- input ----------
 		case "input_connection_failed":
 			count, err := TailInt(line)
 			if err != nil {
 				return Metrics{}, fmt.Errorf("failed to parse input connection failed: %w", err)
 			}
+
 			m.Input.ConnectionFailed = count
 		case "input_connection_lost":
 			count, err := TailInt(line)
 			if err != nil {
 				return Metrics{}, fmt.Errorf("failed to parse input connection lost: %w", err)
 			}
+
 			m.Input.ConnectionLost = count
 		case "input_connection_up":
 			count, err := TailInt(line)
 			if err != nil {
 				return Metrics{}, fmt.Errorf("failed to parse input connection up: %w", err)
 			}
+
 			m.Input.ConnectionUp = count
 		case "input_received":
 			count, err := TailInt(line)
 			if err != nil {
 				return Metrics{}, fmt.Errorf("failed to parse input received: %w", err)
 			}
+
 			m.Input.Received = count
 		case "input_latency_ns":
 			switch extractLabel(line[nameEnd:], "quantile") {
@@ -934,18 +973,21 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 				if err != nil {
 					return Metrics{}, fmt.Errorf("failed to parse input latency ns p50: %w", err)
 				}
+
 				m.Input.LatencyNS.P50 = float64(p50)
 			case "0.9":
 				p90, err := TailInt(line)
 				if err != nil {
 					return Metrics{}, fmt.Errorf("failed to parse input latency ns p90: %w", err)
 				}
+
 				m.Input.LatencyNS.P90 = float64(p90)
 			case "0.99":
 				p99, err := TailInt(line)
 				if err != nil {
 					return Metrics{}, fmt.Errorf("failed to parse input latency ns p99: %w", err)
 				}
+
 				m.Input.LatencyNS.P99 = float64(p99)
 			}
 		case "input_latency_ns_sum":
@@ -953,12 +995,14 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 			if err != nil {
 				return Metrics{}, fmt.Errorf("failed to parse input latency ns sum: %w", err)
 			}
+
 			m.Input.LatencyNS.Sum = float64(sum)
 		case "input_latency_ns_count":
 			count, err := TailInt(line)
 			if err != nil {
 				return Metrics{}, fmt.Errorf("failed to parse input latency ns count: %w", err)
 			}
+
 			m.Input.LatencyNS.Count = count
 
 		// ---------- output ----------
@@ -967,36 +1011,42 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 			if err != nil {
 				return Metrics{}, fmt.Errorf("failed to parse output batch sent: %w", err)
 			}
+
 			m.Output.BatchSent = count
 		case "output_connection_failed":
 			count, err := TailInt(line)
 			if err != nil {
 				return Metrics{}, fmt.Errorf("failed to parse output connection failed: %w", err)
 			}
+
 			m.Output.ConnectionFailed = count
 		case "output_connection_lost":
 			count, err := TailInt(line)
 			if err != nil {
 				return Metrics{}, fmt.Errorf("failed to parse output connection lost: %w", err)
 			}
+
 			m.Output.ConnectionLost = count
 		case "output_connection_up":
 			count, err := TailInt(line)
 			if err != nil {
 				return Metrics{}, fmt.Errorf("failed to parse output connection up: %w", err)
 			}
+
 			m.Output.ConnectionUp = count
 		case "output_error":
 			count, err := TailInt(line)
 			if err != nil {
 				return Metrics{}, fmt.Errorf("failed to parse output error: %w", err)
 			}
+
 			m.Output.Error = count
 		case "output_sent":
 			count, err := TailInt(line)
 			if err != nil {
 				return Metrics{}, fmt.Errorf("failed to parse output sent: %w", err)
 			}
+
 			m.Output.Sent = count
 		case "output_latency_ns":
 			switch extractLabel(line[nameEnd:], "quantile") {
@@ -1005,18 +1055,21 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 				if err != nil {
 					return Metrics{}, fmt.Errorf("failed to parse output latency ns p50: %w", err)
 				}
+
 				m.Output.LatencyNS.P50 = float64(p50)
 			case "0.9":
 				p90, err := TailInt(line)
 				if err != nil {
 					return Metrics{}, fmt.Errorf("failed to parse output latency ns p90: %w", err)
 				}
+
 				m.Output.LatencyNS.P90 = float64(p90)
 			case "0.99":
 				p99, err := TailInt(line)
 				if err != nil {
 					return Metrics{}, fmt.Errorf("failed to parse output latency ns p99: %w", err)
 				}
+
 				m.Output.LatencyNS.P99 = float64(p99)
 			}
 		case "output_latency_ns_sum":
@@ -1024,12 +1077,14 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 			if err != nil {
 				return Metrics{}, fmt.Errorf("failed to parse output latency ns sum: %w", err)
 			}
+
 			m.Output.LatencyNS.Sum = float64(sum)
 		case "output_latency_ns_count":
 			count, err := TailInt(line)
 			if err != nil {
 				return Metrics{}, fmt.Errorf("failed to parse output latency ns count: %w", err)
 			}
+
 			m.Output.LatencyNS.Count = count
 
 		// ---------- processors ----------
@@ -1037,10 +1092,12 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 			if !bytes.HasPrefix(line, []byte("processor_")) {
 				continue
 			}
+
 			path := extractLabel(line[nameEnd:], "path")
 			if path == "" {
 				continue
 			}
+
 			pm := m.Process.Processors[path]
 			if pm.Label == "" {
 				pm.Label = extractLabel(line[nameEnd:], "label")
@@ -1052,30 +1109,35 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 				if err != nil {
 					return Metrics{}, fmt.Errorf("failed to parse processor received: %w", err)
 				}
+
 				pm.Received = count
 			case "processor_batch_received":
 				count, err := TailInt(line)
 				if err != nil {
 					return Metrics{}, fmt.Errorf("failed to parse processor batch received: %w", err)
 				}
+
 				pm.BatchReceived = count
 			case "processor_sent":
 				count, err := TailInt(line)
 				if err != nil {
 					return Metrics{}, fmt.Errorf("failed to parse processor sent: %w", err)
 				}
+
 				pm.Sent = count
 			case "processor_batch_sent":
 				count, err := TailInt(line)
 				if err != nil {
 					return Metrics{}, fmt.Errorf("failed to parse processor batch sent: %w", err)
 				}
+
 				pm.BatchSent = count
 			case "processor_error":
 				count, err := TailInt(line)
 				if err != nil {
 					return Metrics{}, fmt.Errorf("failed to parse processor error: %w", err)
 				}
+
 				pm.Error = count
 			case "processor_latency_ns":
 				switch extractLabel(line[nameEnd:], "quantile") {
@@ -1084,18 +1146,21 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 					if err != nil {
 						return Metrics{}, fmt.Errorf("failed to parse processor latency ns p50: %w", err)
 					}
+
 					pm.LatencyNS.P50 = float64(p50)
 				case "0.9":
 					p90, err := TailInt(line)
 					if err != nil {
 						return Metrics{}, fmt.Errorf("failed to parse processor latency ns p90: %w", err)
 					}
+
 					pm.LatencyNS.P90 = float64(p90)
 				case "0.99":
 					p99, err := TailInt(line)
 					if err != nil {
 						return Metrics{}, fmt.Errorf("failed to parse processor latency ns p99: %w", err)
 					}
+
 					pm.LatencyNS.P99 = float64(p99)
 				}
 			case "processor_latency_ns_sum":
@@ -1103,17 +1168,21 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 				if err != nil {
 					return Metrics{}, fmt.Errorf("failed to parse processor latency ns sum: %w", err)
 				}
+
 				pm.LatencyNS.Sum = float64(sum)
 			case "processor_latency_ns_count":
 				count, err := TailInt(line)
 				if err != nil {
 					return Metrics{}, fmt.Errorf("failed to parse processor latency ns count: %w", err)
 				}
+
 				pm.LatencyNS.Count = count
 			}
+
 			m.Process.Processors[path] = pm
 		}
 	}
+
 	return m, nil
 }
 
@@ -1126,27 +1195,31 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 func extractLabel(b []byte, key string) string {
 	// expects {label="...",path="..."} order irrelevant
 	key += "=\""
+
 	i := bytes.Index(b, []byte(key))
 	if i == -1 {
 		return ""
 	}
+
 	i += len(key)
+
 	j := bytes.IndexByte(b[i:], '"')
 	if j == -1 {
 		return ""
 	}
-	//return unsafeString(b[i : i+j])
+	// return unsafeString(b[i : i+j])
 	return string(b[i : i+j])
 }
 
 // unsafeString converts a []byte to string without allocation.
 // Use only for read-only parsing.
-//func unsafeString(b []byte) string { return *(*string)(unsafe.Pointer(&b)) }
+// func unsafeString(b []byte) string { return *(*string)(unsafe.Pointer(&b)) }
 
 // ParseMetricsFromBytes parses prometheus metrics into structured format
-// Deprecated: Use ParseMetricsFromBytes instead
+// Deprecated: Use ParseMetricsFromBytes instead.
 func ParseMetricsFromBytesSlow(data []byte) (Metrics, error) {
 	var parser expfmt.TextParser
+
 	metrics := Metrics{
 		Input:  InputMetrics{},
 		Output: OutputMetrics{},
@@ -1163,25 +1236,29 @@ func ParseMetricsFromBytesSlow(data []byte) (Metrics, error) {
 
 	// Helper function to get metric value
 	getValue := func(m *dto.Metric) float64 {
-		if m.Counter != nil {
-			return m.Counter.GetValue()
+		if m.GetCounter() != nil {
+			return m.GetCounter().GetValue()
 		}
-		if m.Gauge != nil {
-			return m.Gauge.GetValue()
+
+		if m.GetGauge() != nil {
+			return m.GetGauge().GetValue()
 		}
-		if m.Untyped != nil {
-			return m.Untyped.GetValue()
+
+		if m.GetUntyped() != nil {
+			return m.GetUntyped().GetValue()
 		}
+
 		return 0
 	}
 
 	// Helper function to get label value
 	getLabel := func(m *dto.Metric, name string) string {
-		for _, label := range m.Label {
+		for _, label := range m.GetLabel() {
 			if label.GetName() == name {
 				return label.GetValue()
 			}
 		}
+
 		return ""
 	}
 
@@ -1190,48 +1267,48 @@ func ParseMetricsFromBytesSlow(data []byte) (Metrics, error) {
 		switch name {
 		// Input metrics
 		case "input_connection_failed":
-			if len(family.Metric) > 0 {
-				metrics.Input.ConnectionFailed = int64(getValue(family.Metric[0]))
+			if len(family.GetMetric()) > 0 {
+				metrics.Input.ConnectionFailed = int64(getValue(family.GetMetric()[0]))
 			}
 		case "input_connection_lost":
-			if len(family.Metric) > 0 {
-				metrics.Input.ConnectionLost = int64(getValue(family.Metric[0]))
+			if len(family.GetMetric()) > 0 {
+				metrics.Input.ConnectionLost = int64(getValue(family.GetMetric()[0]))
 			}
 		case "input_connection_up":
-			if len(family.Metric) > 0 {
-				metrics.Input.ConnectionUp = int64(getValue(family.Metric[0]))
+			if len(family.GetMetric()) > 0 {
+				metrics.Input.ConnectionUp = int64(getValue(family.GetMetric()[0]))
 			}
 		case "input_received":
-			if len(family.Metric) > 0 {
-				metrics.Input.Received = int64(getValue(family.Metric[0]))
+			if len(family.GetMetric()) > 0 {
+				metrics.Input.Received = int64(getValue(family.GetMetric()[0]))
 			}
 		case "input_latency_ns":
 			updateLatencyFromFamily(&metrics.Input.LatencyNS, family)
 
 		// Output metrics
 		case "output_batch_sent":
-			if len(family.Metric) > 0 {
-				metrics.Output.BatchSent = int64(getValue(family.Metric[0]))
+			if len(family.GetMetric()) > 0 {
+				metrics.Output.BatchSent = int64(getValue(family.GetMetric()[0]))
 			}
 		case "output_connection_failed":
-			if len(family.Metric) > 0 {
-				metrics.Output.ConnectionFailed = int64(getValue(family.Metric[0]))
+			if len(family.GetMetric()) > 0 {
+				metrics.Output.ConnectionFailed = int64(getValue(family.GetMetric()[0]))
 			}
 		case "output_connection_lost":
-			if len(family.Metric) > 0 {
-				metrics.Output.ConnectionLost = int64(getValue(family.Metric[0]))
+			if len(family.GetMetric()) > 0 {
+				metrics.Output.ConnectionLost = int64(getValue(family.GetMetric()[0]))
 			}
 		case "output_connection_up":
-			if len(family.Metric) > 0 {
-				metrics.Output.ConnectionUp = int64(getValue(family.Metric[0]))
+			if len(family.GetMetric()) > 0 {
+				metrics.Output.ConnectionUp = int64(getValue(family.GetMetric()[0]))
 			}
 		case "output_error":
-			if len(family.Metric) > 0 {
-				metrics.Output.Error = int64(getValue(family.Metric[0]))
+			if len(family.GetMetric()) > 0 {
+				metrics.Output.Error = int64(getValue(family.GetMetric()[0]))
 			}
 		case "output_sent":
-			if len(family.Metric) > 0 {
-				metrics.Output.Sent = int64(getValue(family.Metric[0]))
+			if len(family.GetMetric()) > 0 {
+				metrics.Output.Sent = int64(getValue(family.GetMetric()[0]))
 			}
 		case "output_latency_ns":
 			updateLatencyFromFamily(&metrics.Output.LatencyNS, family)
@@ -1240,7 +1317,7 @@ func ParseMetricsFromBytesSlow(data []byte) (Metrics, error) {
 		case "processor_received", "processor_batch_received",
 			"processor_sent", "processor_batch_sent",
 			"processor_error", "processor_latency_ns":
-			for _, metric := range family.Metric {
+			for _, metric := range family.GetMetric() {
 				path := getLabel(metric, "path")
 				if path == "" {
 					continue
@@ -1254,6 +1331,7 @@ func ParseMetricsFromBytesSlow(data []byte) (Metrics, error) {
 				}
 
 				proc := metrics.Process.Processors[path]
+
 				switch name {
 				case "processor_received":
 					proc.Received = int64(getValue(metric))
@@ -1268,6 +1346,7 @@ func ParseMetricsFromBytesSlow(data []byte) (Metrics, error) {
 				case "processor_latency_ns":
 					updateLatencyFromMetric(&proc.LatencyNS, metric)
 				}
+
 				metrics.Process.Processors[path] = proc
 			}
 		}
@@ -1277,15 +1356,15 @@ func ParseMetricsFromBytesSlow(data []byte) (Metrics, error) {
 }
 
 func updateLatencyFromFamily(latency *Latency, family *dto.MetricFamily) {
-	for _, metric := range family.Metric {
-		if metric.Summary == nil {
+	for _, metric := range family.GetMetric() {
+		if metric.GetSummary() == nil {
 			continue
 		}
 
-		latency.Sum = metric.Summary.GetSampleSum()
-		latency.Count = int64(metric.Summary.GetSampleCount())
+		latency.Sum = metric.GetSummary().GetSampleSum()
+		latency.Count = int64(metric.GetSummary().GetSampleCount())
 
-		for _, quantile := range metric.Summary.Quantile {
+		for _, quantile := range metric.GetSummary().GetQuantile() {
 			switch quantile.GetQuantile() {
 			case 0.5:
 				latency.P50 = quantile.GetValue()
@@ -1299,14 +1378,14 @@ func updateLatencyFromFamily(latency *Latency, family *dto.MetricFamily) {
 }
 
 func updateLatencyFromMetric(latency *Latency, metric *dto.Metric) {
-	if metric.Summary == nil {
+	if metric.GetSummary() == nil {
 		return
 	}
 
-	latency.Sum = metric.Summary.GetSampleSum()
-	latency.Count = int64(metric.Summary.GetSampleCount())
+	latency.Sum = metric.GetSummary().GetSampleSum()
+	latency.Count = int64(metric.GetSummary().GetSampleCount())
 
-	for _, quantile := range metric.Summary.Quantile {
+	for _, quantile := range metric.GetSummary().GetQuantile() {
 		switch quantile.GetQuantile() {
 		case 0.5:
 			latency.P50 = quantile.GetValue()
@@ -1318,7 +1397,7 @@ func updateLatencyFromMetric(latency *Latency, metric *dto.Metric) {
 	}
 }
 
-// Status checks the status of a benthos service
+// Status checks the status of a benthos service.
 func (s *BenthosMonitorService) Status(ctx context.Context, services serviceregistry.Provider, tick uint64) (ServiceInfo, error) {
 	if ctx.Err() != nil {
 		return ServiceInfo{}, ctx.Err()
@@ -1339,6 +1418,7 @@ func (s *BenthosMonitorService) Status(ctx context.Context, services serviceregi
 			strings.Contains(err.Error(), "not found") {
 			return ServiceInfo{}, ErrServiceNotExist
 		}
+
 		return ServiceInfo{}, fmt.Errorf("failed to get S6 state: %w", err)
 	}
 
@@ -1354,6 +1434,7 @@ func (s *BenthosMonitorService) Status(ctx context.Context, services serviceregi
 			strings.Contains(err.Error(), "not found") {
 			return ServiceInfo{}, ErrServiceNotExist
 		}
+
 		return ServiceInfo{}, fmt.Errorf("failed to get current FSM state: %w", err)
 	}
 
@@ -1365,6 +1446,7 @@ func (s *BenthosMonitorService) Status(ctx context.Context, services serviceregi
 
 	// Get logs
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
+
 	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, services.GetFileSystem())
 	if err != nil {
 		return ServiceInfo{}, fmt.Errorf("failed to get logs: %w", err)
@@ -1391,7 +1473,7 @@ func (s *BenthosMonitorService) Status(ctx context.Context, services serviceregi
 	}, nil
 }
 
-// AddBenthosMonitorToS6Manager adds a benthos instance to the S6 manager
+// AddBenthosMonitorToS6Manager adds a benthos instance to the S6 manager.
 func (s *BenthosMonitorService) AddBenthosMonitorToS6Manager(ctx context.Context, port uint16) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
@@ -1433,7 +1515,7 @@ func (s *BenthosMonitorService) AddBenthosMonitorToS6Manager(ctx context.Context
 
 // UpdateBenthosMonitorInS6Manager updates the benthos monitor in the S6 manager
 // It will do it by re-generating the S6 config for the benthos instance
-// and letting the S6 manager reconcile the instance
+// and letting the S6 manager reconcile the instance.
 func (s *BenthosMonitorService) UpdateBenthosMonitorInS6Manager(ctx context.Context, port uint16) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
@@ -1449,6 +1531,7 @@ func (s *BenthosMonitorService) UpdateBenthosMonitorInS6Manager(ctx context.Cont
 
 	// Generate the S6 config for this instance
 	s6ServiceName := s.GetS6ServiceName()
+
 	s6Config, err := s.GenerateS6ConfigForBenthosMonitor(s6ServiceName, port)
 	if err != nil {
 		return fmt.Errorf("failed to generate S6 config for BenthosMonitor service %s: %w", s6ServiceName, err)
@@ -1496,7 +1579,7 @@ func (s *BenthosMonitorService) RemoveBenthosMonitorFromS6Manager(ctx context.Co
 	return nil
 }
 
-// StartBenthosMonitor starts a benthos instance
+// StartBenthosMonitor starts a benthos instance.
 func (s *BenthosMonitorService) StartBenthosMonitor(ctx context.Context) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
@@ -1515,7 +1598,7 @@ func (s *BenthosMonitorService) StartBenthosMonitor(ctx context.Context) error {
 	return nil
 }
 
-// StopBenthosMonitor stops a benthos instance
+// StopBenthosMonitor stops a benthos instance.
 func (s *BenthosMonitorService) StopBenthosMonitor(ctx context.Context) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
@@ -1534,7 +1617,7 @@ func (s *BenthosMonitorService) StopBenthosMonitor(ctx context.Context) error {
 	return nil
 }
 
-// ReconcileManager reconciles the Benthos manager
+// ReconcileManager reconciles the Benthos manager.
 func (s *BenthosMonitorService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (err error, reconciled bool) {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized"), false
@@ -1553,7 +1636,7 @@ func (s *BenthosMonitorService) ReconcileManager(ctx context.Context, services s
 	return s.s6Manager.Reconcile(ctx, fsm.SystemSnapshot{CurrentConfig: serviceMap}, services)
 }
 
-// ServiceExists checks if a benthos instance exists
+// ServiceExists checks if a benthos instance exists.
 func (s *BenthosMonitorService) ServiceExists(ctx context.Context, services serviceregistry.Provider) bool {
 	if s.s6Manager == nil {
 		return false
@@ -1574,9 +1657,10 @@ func (s *BenthosMonitorService) ServiceExists(ctx context.Context, services serv
 // ForceRemoveBenthosMonitor removes a Benthos monitor from the S6 manager
 // This should only be called if the Benthos monitor is in a permanent failure state
 // and the instance itself cannot be stopped or removed
-// Expects benthosName (e.g. "myservice") as defined in the UMH config
+// Expects benthosName (e.g. "myservice") as defined in the UMH config.
 func (s *BenthosMonitorService) ForceRemoveBenthosMonitor(ctx context.Context, services serviceregistry.Provider) error {
 	s6ServiceName := s.GetS6ServiceName()
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
+
 	return services.GetFileSystem().RemoveAll(ctx, s6ServicePath)
 }
