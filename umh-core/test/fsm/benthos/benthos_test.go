@@ -1551,7 +1551,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 
 			// First check - should not pass due to debounce
 			tick := uint64(1)
-			passed, reason := instance.IsBenthosHealthchecksPassed(tick)
+			passed, reason := instance.IsBenthosHealthchecksPassed(tick, mockSvcRegistry.GetLoopManager().GetTickerTime())
 			Expect(passed).To(BeFalse())
 			Expect(reason).To(ContainSubstring("healthchecks did not pass: live=false, ready=false")) // first execution of the healthcheck will always fail
 			tick++
@@ -1564,13 +1564,14 @@ var _ = Describe("BenthosInstance FSM", func() {
 			tick = tick + 1
 
 			// now lets check the healthcheck again
-			passed, reason = instance.IsBenthosHealthchecksPassed(tick)
+			passed, reason = instance.IsBenthosHealthchecksPassed(tick, mockSvcRegistry.GetLoopManager().GetTickerTime())
 			Expect(passed).To(BeFalse())
 			Expect(reason).To(ContainSubstring("healthchecks passing but not stable yet"))
 
 			// Advance time past debounce duration
-			tick = tick + constants.BenthosHealthCheckStableDurationInSeconds
-			passed, reason = instance.IsBenthosHealthchecksPassed(tick)
+			tx := constants.BenthosHealthCheckStableDuration / mockSvcRegistry.GetLoopManager().GetTickerTime()
+			tick = tick + uint64(tx.Seconds())
+			passed, reason = instance.IsBenthosHealthchecksPassed(tick, mockSvcRegistry.GetLoopManager().GetTickerTime())
 			Expect(passed).To(BeTrue())
 			Expect(reason).To(BeEmpty())
 		})
@@ -1585,7 +1586,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			})
 
 			tick := uint64(0)
-			passed, reason := instance.IsBenthosHealthchecksPassed(tick)
+			passed, reason := instance.IsBenthosHealthchecksPassed(tick, mockSvcRegistry.GetLoopManager().GetTickerTime())
 			Expect(passed).To(BeFalse())
 			Expect(reason).To(ContainSubstring("healthchecks did not pass: live=false, ready=false"))
 		})
@@ -1601,7 +1602,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 
 			// Initial check - should fail
 			tick := uint64(1)
-			passed, _ := instance.IsBenthosHealthchecksPassed(tick)
+			passed, _ := instance.IsBenthosHealthchecksPassed(tick, mockSvcRegistry.GetLoopManager().GetTickerTime())
 			Expect(passed).To(BeFalse())
 			tick++
 
@@ -1614,12 +1615,13 @@ var _ = Describe("BenthosInstance FSM", func() {
 
 			// now b.healthChecksPassingSinceTick is set
 			tick = tick + 1
-			passed, _ = instance.IsBenthosHealthchecksPassed(tick)
+			passed, _ = instance.IsBenthosHealthchecksPassed(tick, mockSvcRegistry.GetLoopManager().GetTickerTime())
 			Expect(passed).To(BeFalse()) // cannot pass as it just detected that the healthchecks are passing now
 
 			// now set to half of the debounce duration
-			tick = tick + constants.BenthosHealthCheckStableDurationInSeconds + 1
-			passed, _ = instance.IsBenthosHealthchecksPassed(tick)
+			tx := constants.BenthosHealthCheckStableDuration / mockSvcRegistry.GetLoopManager().GetTickerTime()
+			tick = tick + uint64(tx.Seconds()) + 1
+			passed, _ = instance.IsBenthosHealthchecksPassed(tick, mockSvcRegistry.GetLoopManager().GetTickerTime())
 			Expect(passed).To(BeTrue()) // is now passing
 
 			// Now make health checks fail
@@ -1638,13 +1640,14 @@ var _ = Describe("BenthosInstance FSM", func() {
 			tick++
 
 			// Check again - should fail and reset timer
-			passed, reason := instance.IsBenthosHealthchecksPassed(tick)
+			passed, reason := instance.IsBenthosHealthchecksPassed(tick, mockSvcRegistry.GetLoopManager().GetTickerTime())
 			Expect(passed).To(BeFalse())
 			Expect(reason).To(ContainSubstring("healthchecks did not pass"))
 
 			// Advance time past original debounce duration
-			tick = tick + constants.BenthosHealthCheckStableDurationInSeconds
-			passed, _ = instance.IsBenthosHealthchecksPassed(tick)
+			tx = constants.BenthosHealthCheckStableDuration / mockSvcRegistry.GetLoopManager().GetTickerTime()
+			tick = tick + uint64(tx.Seconds())
+			passed, _ = instance.IsBenthosHealthchecksPassed(tick, mockSvcRegistry.GetLoopManager().GetTickerTime())
 			Expect(passed).To(BeFalse()) // Should still fail because timer was reset
 		})
 	})

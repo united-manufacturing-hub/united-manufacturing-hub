@@ -278,20 +278,7 @@ func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 		topicBrowserCommunicator = topicbrowser.NewTopicBrowserCommunicator(c.Logger)
 	}
 
-	c.SubscriberHandler = subscriber.NewHandler(
-		c.Watchdog,
-		c.Pusher,
-		c.LoginResponse.UUID,
-		ttl,
-		cull,
-		c.ReleaseChannel,
-		false, // disableHardwareStatusCheck
-		systemSnapshotManager,
-		configManager,
-		c.Logger,
-		topicBrowserCommunicator,
-		loopController,
-	)
+	c.SubscriberHandler = subscriber.NewHandler(c.Watchdog, c.Pusher, c.LoginResponse.UUID, ttl, cull, systemSnapshotManager, configManager, c.Logger, topicBrowserCommunicator, loopController)
 	if c.SubscriberHandler == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create subscriber handler")
 	}

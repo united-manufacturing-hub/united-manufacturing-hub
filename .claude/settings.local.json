@@ -12,7 +12,8 @@
       "Bash(go test:*)",
       "Bash(mkdir:*)",
       "mcp__serena__list_dir",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": [],

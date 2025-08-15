@@ -98,7 +98,7 @@ func main() {
 	}()
 
 	// Loop controller
-	loopController := constants.NewLinearScalingController()
+	loopController := constants.NewDefaultLoopController()
 
 	// Start the control loop
 	controlLoop := control.NewControlLoop(configManager, loopController)

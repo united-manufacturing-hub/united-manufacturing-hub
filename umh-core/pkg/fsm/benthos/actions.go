@@ -373,7 +373,7 @@ func (b *BenthosInstance) IsBenthosConfigLoaded() (bool, string) {
 //     *tick* (`currentTick uint64`).  We remember the first tick at which
 //     Benthos became healthy and only report `ok=true` once
 //
-//     currentTick - healthChecksPassingSinceTick >= BenthosHealthCheckStableDurationInSeconds
+//     currentTick - healthChecksPassingSinceTick >= BenthosHealthCheckStableDuration
 //
 //     If health ever drops back to false, `healthChecksPassingSinceTick` is
 //     reset and the timer restarts.
@@ -414,11 +414,11 @@ func (b *BenthosInstance) IsBenthosHealthchecksPassed(currentTick uint64, curren
 
 		elapsedDurationInSeconds := float64(elapsedTicks) * currentTickerTimer.Seconds()
 
-		if elapsedDurationInSeconds >= constants.BenthosHealthCheckStableDurationInSeconds.Seconds() {
+		if elapsedDurationInSeconds >= constants.BenthosHealthCheckStableDuration.Seconds() {
 			return true, ""
 		}
 
-		percentage := math.Round((100 * elapsedDurationInSeconds) / constants.BenthosHealthCheckStableDurationInSeconds.Seconds())
+		percentage := math.Round((100 * elapsedDurationInSeconds) / constants.BenthosHealthCheckStableDuration.Seconds())
 
 		return false, fmt.Sprintf("healthchecks passing but not stable yet (%d %%)",
 			int(percentage))

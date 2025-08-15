@@ -82,6 +82,7 @@ import (
 // time-sliced approach allows responsive handling of multiple components.
 type ControlLoop struct {
 	configManager     config.ConfigManager
+	loopController    constants.LoopController
 	logger            *zap.SugaredLogger
 	starvationChecker *starvationchecker.StarvationChecker
 	snapshotManager   *fsm.SnapshotManager
@@ -90,7 +91,6 @@ type ControlLoop struct {
 	managers          []fsm.FSMManager[any]
 	currentTick       uint64
 	managerTimesMutex sync.RWMutex
-	loopController    constants.LoopController
 }
 
 // NewControlLoop creates a new control loop with all necessary managers.
@@ -174,6 +174,7 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 	for {
 		// Update active services and cycle time metric
 		c.setActiveServices(ctx)
+
 		select {
 		case <-ctx.Done():
 			return nil
@@ -233,11 +234,12 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 }
 
 func (c *ControlLoop) setActiveServices(ctx context.Context) {
-
 	// Get number of services
 	readDirCtx, readDirCancel := context.WithTimeout(ctx, time.Second*1)
 	serviceDirs, err := c.services.GetFileSystem().ReadDir(readDirCtx, constants.S6RepositoryBaseDir)
+
 	readDirCancel()
+
 	if err == nil {
 		c.loopController.SetTickParameters(len(serviceDirs))
 	} else {

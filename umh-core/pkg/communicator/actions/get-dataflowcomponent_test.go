@@ -141,8 +141,9 @@ var _ = Describe("GetDataFlowComponent", func() {
 
 		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)
 
-		// Startup the state mocker and get the mock snapshot
-		stateMocker := actions.NewStateMocker(mockConfig)
+		loopController := constants.NewDefaultLoopController()
+		// Setup the state mocker and get the mock snapshot
+		stateMocker := actions.NewStateMocker(mockConfig, loopController.GetTickerTime())
 		stateMocker.Tick()
 		mockManagerSnapshot := stateMocker.GetStateManager()
 

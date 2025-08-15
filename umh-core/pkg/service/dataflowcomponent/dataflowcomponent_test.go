@@ -24,7 +24,6 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
@@ -204,15 +203,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			ConfigureBenthosManagerForState(mockBenthosService, benthosName, benthosfsmmanager.OperationalStateStopped)
 
 			// Wait for the instance to be created and reach stopped state
-			newTick, err := WaitForBenthosManagerInstanceState(
-				ctx,
-				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick, SnapshotTime: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)},
-				manager,
-				mockSvcRegistry,
-				benthosName,
-				benthosfsmmanager.OperationalStateStopped,
-				10,
-			)
+			newTick, err := WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick, SnapshotTime: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)}, manager, mockSvcRegistry, benthosName, benthosfsmmanager.OperationalStateStopped, 10)
 			Expect(err).NotTo(HaveOccurred())
 			tick = newTick
 
@@ -224,15 +215,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Wait for the instance to reach running state
-			newTick, err = WaitForBenthosManagerInstanceState(
-				ctx,
-				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick, SnapshotTime: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)},
-				manager,
-				mockSvcRegistry,
-				benthosName,
-				benthosfsmmanager.OperationalStateActive,
-				60, // need to wait for at least 60 ticks for health check debouncing (5 seconds)
-			)
+			newTick, err = WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick, SnapshotTime: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)}, manager, mockSvcRegistry, benthosName, benthosfsmmanager.OperationalStateActive, 60)
 			Expect(err).NotTo(HaveOccurred())
 			tick = newTick
 
@@ -684,23 +667,14 @@ func SetupBenthosServiceState(
 }
 
 // WaitForBenthosManagerInstanceState waits for instance to reach desired state.
-func WaitForBenthosManagerInstanceState(
-	ctx context.Context,
-	snapshot fsm.SystemSnapshot,
-	manager *benthosfsmmanager.BenthosManager,
-	services serviceregistry.Provider,
-	instanceName string,
-	expectedState string,
-	maxAttempts int,
-	tickerTime time.Duration,
-) (uint64, error) {
+func WaitForBenthosManagerInstanceState(ctx context.Context, snapshot fsm.SystemSnapshot, manager *benthosfsmmanager.BenthosManager, services serviceregistry.Provider, instanceName string, expectedState string, maxAttempts int) (uint64, error) {
 	// Duplicate implementation from fsmtest package
 	tick := snapshot.Tick
 
 	baseTime := snapshot.SnapshotTime
 	for range maxAttempts {
 		// Update the snapshot time and tick to simulate the passage of time deterministically
-		snapshot.SnapshotTime = baseTime.Add(time.Duration(tick) * tickerTime)
+		snapshot.SnapshotTime = baseTime.Add(time.Duration(tick) * services.GetLoopManager().GetTickerTime())
 		snapshot.Tick = tick
 
 		err, _ := manager.Reconcile(ctx, snapshot, services)

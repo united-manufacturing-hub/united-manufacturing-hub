@@ -48,20 +48,7 @@ type Handler struct {
 	disableHardwareStatusCheck bool //nolint:unused // will be used in the future
 }
 
-func NewHandler(
-	dog watchdog.Iface,
-	pusher *push.Pusher,
-	instanceUUID uuid.UUID,
-	ttl time.Duration,
-	cull time.Duration,
-	releaseChannel config.ReleaseChannel,
-	disableHardwareStatusCheck bool,
-	systemSnapshotManager *fsm.SnapshotManager,
-	configManager config.ConfigManager,
-	logger *zap.SugaredLogger,
-	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator,
-	loopController constants.LoopControllerReadOnly,
-) *Handler {
+func NewHandler(dog watchdog.Iface, pusher *push.Pusher, instanceUUID uuid.UUID, ttl time.Duration, cull time.Duration, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager, logger *zap.SugaredLogger, topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator, loopController constants.LoopControllerReadOnly, ) *Handler {
 	s := &Handler{}
 	s.subscriberRegistry = subscribers.NewRegistry(cull, ttl)
 	s.dog = dog

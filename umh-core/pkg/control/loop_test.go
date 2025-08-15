@@ -118,7 +118,7 @@ var _ = Describe("ControlLoop", func() {
 		starvationChecker := starvationchecker.NewStarvationChecker(constants.StarvationThreshold)
 
 		// Create a mock loop controller with the desired ticker time
-		mockController := constants.NewBaseLoopControllerWithTickTime(100 * time.Millisecond)
+		mockController := constants.NewConstantLoopControllerWithTickTime(100 * time.Millisecond)
 
 		// Initialize control loop with mocks
 		controlLoop = &ControlLoop{
@@ -141,7 +141,7 @@ var _ = Describe("ControlLoop", func() {
 
 	Describe("Creating a new control loop", func() {
 		It("should set default values", func() {
-			defaultController := constants.NewBaseLoopController()
+			defaultController := constants.NewConstantLoopController()
 			loop := NewControlLoop(mockConfig, defaultController)
 			Expect(loop).NotTo(BeNil())
 			Expect(loop.loopController.GetTickerTime()).To(Equal(defaultController.GetTickerTime()))
@@ -216,7 +216,7 @@ var _ = Describe("ControlLoop", func() {
 
 			// We'll create a new control loop specifically for this test
 			testLoop := &ControlLoop{
-				tickerTime:        5 * time.Millisecond, // Fast ticker for tests
+				loopController:    constants.NewConstantLoopControllerForFastTests(),
 				managers:          []fsm.FSMManager[any]{fsm.NewMockFSMManager()},
 				configManager:     trackingConfig,
 				starvationChecker: starvationChecker,
@@ -299,7 +299,7 @@ var _ = Describe("ControlLoop", func() {
 
 			// Create a control loop with this config
 			timeoutLoop := &ControlLoop{
-				tickerTime:        5 * time.Millisecond,
+				loopController:    constants.NewConstantLoopControllerForFastTests(),
 				managers:          []fsm.FSMManager[any]{fsm.NewMockFSMManager()},
 				configManager:     timeoutConfig,
 				logger:            logger.For(logger.ComponentControlLoop),
