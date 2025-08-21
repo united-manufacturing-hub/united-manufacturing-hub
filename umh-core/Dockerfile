@@ -160,8 +160,18 @@ RUN if [ "$DEBUG" = "true" ]; then \
     chmod +x /etc/s6-overlay/s6-rc.d/umh-core/run; \
     fi
 
+# Create in-memory filesystem mount points for high-performance S6 operations
+# These directories will be mounted as tmpfs with 1GB limit for fast service management
+RUN mkdir -p /run/service \
+    && mkdir -p /data/services \
+    && mkdir -p /data/logs \
+    && mkdir -p /data/benthos \
+    && mkdir -p /data/redpanda \
+    && mkdir -p /data/tmp
+
 # Set environment variables and volume
 # S6_SYNC_DISKS=1: Sync the disks to ensure that the data is persisted, this is needed for the redpanda service
+# TMPFS_SIZE: Configure the size limit for in-memory filesystems (default 1GB)
 ENV S6_KEEP_ENV=1 \
     S6_BEHAVIOUR_IF_STAGE2_FAILS=2 \
     S6_CMD_WAIT_FOR_SERVICES=1 \
@@ -169,7 +179,18 @@ ENV S6_KEEP_ENV=1 \
     S6_SYNC_DISKS=1 \
     # Important: This needs to be T (ISO 8861) as our time parser expects this format
     S6_LOGGING_SCRIPT="n5 s10000000 T" \
-    PATH="/opt/redpanda/bin:$PATH"
+    PATH="/opt/redpanda/bin:$PATH" \
+    TMPFS_SIZE=1g
+
+# Configure tmpfs mounts for high-performance S6 service management
+# These mounts provide fast in-memory storage for:
+# - /run/service: S6 scan directory (symlinks to services)
+# - /data/services: S6 repository directory (actual service files)
+# - /data/logs: S6 and service logs
+# - /data/benthos: Benthos configuration files
+# - /data/tmp: Temporary files and operations
+# Benefits: Eliminates disk I/O bottlenecks, improves service start/stop times,
+# reduces container disk usage, and provides better performance under load
 VOLUME ["/data"]
 
 ENTRYPOINT ["/init"]

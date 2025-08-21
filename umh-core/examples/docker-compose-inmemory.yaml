@@ -1,0 +1,92 @@
+# Example Docker Compose configuration for UMH Core with in-memory filesystem
+# This configuration demonstrates optimal performance setup using tmpfs mounts
+
+version: '3.8'
+
+services:
+  umh-core:
+    image: umh/umh-core:latest
+    container_name: umh-core-inmemory
+    restart: unless-stopped
+
+    # In-memory filesystem mounts for optimal S6 performance
+    # These tmpfs mounts eliminate disk I/O bottlenecks
+    tmpfs:
+      # S6 scan directory - contains symlinks to services
+      # Small size needed since it only contains symlinks
+      - /run/service:rw,noexec,nosuid,size=256m
+
+      # S6 repository directory - contains actual service files
+      # Larger size needed for service configurations and scripts
+      - /data/services:rw,noexec,nosuid,size=512m
+
+      # Service logs directory - contains S6 and application logs
+      # Size depends on log retention and number of services
+      - /data/logs:rw,noexec,nosuid,size=256m
+
+      # Benthos configuration directory
+      # Moderate size for configuration files and metadata
+      - /data/benthos:rw,noexec,nosuid,size=128m
+
+      # Temporary files and operations
+      # Used for staging and temporary operations
+      - /data/tmp:rw,noexec,nosuid,size=128m
+
+    # Persistent volumes for data that must survive container restarts
+    volumes:
+      # Persistent application data (configuration, state, etc.)
+      - umh_persistent_data:/data/persistent
+      # Redpanda data (if using embedded Redpanda)
+      - umh_redpanda_data:/data/redpanda
+      # Optional: mount host directory for debugging
+      # - ./debug:/data/debug
+
+      # Environment variables
+    environment:
+      # Configure tmpfs size limit
+      - TMPFS_SIZE=1g
+
+      # S6 configuration
+      - S6_KEEP_ENV=1
+      - S6_BEHAVIOUR_IF_STAGE2_FAILS=2
+      - S6_CMD_WAIT_FOR_SERVICES=1
+      - S6_SERVICES_READYTIME=50
+      - S6_SYNC_DISKS=1
+      # Optional: Enable debug mode
+      # - DEBUG=true
+
+      # Resource limits to prevent tmpfs from consuming all host memory
+    deploy:
+      resources:
+        limits:
+          memory: 2G # Ensure enough memory for tmpfs + application
+        reservations:
+          memory: 1G
+
+    # Health check
+    healthcheck:
+      test: [ "CMD", "/usr/local/bin/umh-core", "--health-check" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    # Networking
+    ports:
+      # Expose ports as needed for your services
+      - "9644:9644" # Redpanda Admin API
+      - "9092:9092" # Kafka API
+      - "8080:8080" # HTTP API (if enabled)
+
+# Named volumes for persistent data
+volumes:
+  umh_persistent_data:
+    driver: local
+  umh_redpanda_data:
+    driver: local
+
+# Optional: Networks for service isolation
+networks:
+  default:
+    name: umh-network
+

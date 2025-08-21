@@ -19,6 +19,16 @@ Inside that one image you'll find:
 | **Lightweight** | Runs on almost everything                                                                                               |
 | **No lock-in**  | 100 % open-source stack: Redpanda, Benthos, S6, and much more                                                           |
 
+### Performance Features
+
+UMH Core includes advanced performance optimizations:
+
+- **In-Memory Filesystem**: Optional tmpfs mounts for S6 services provide 10-100x faster service operations
+- **High-Performance S6 Management**: Optimized service lifecycle management with sub-second response times
+- **Efficient Log Processing**: Ring-buffer based log handling with configurable retention
+
+See [In-Memory Filesystem Guide](in-memory-filesystem.md) for setup instructions.
+
 ### Key concepts at a glance
 
 ```
