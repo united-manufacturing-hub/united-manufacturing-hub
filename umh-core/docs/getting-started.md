@@ -89,6 +89,9 @@ From the Console you can :
 
 ## Quick troubleshooting
 
+**Volume permission errors**\
+If you see `s6-svscan: warning: unable to stat benthos-dataflow-*` or protocol converters failing to activate, the container cannot write to the mounted volume. Test without `-v` flag to confirm, then fix permissions with `:z` flag on SELinux systems or ensure write access for the container user.
+
 **SELinux volume permissions**\
 On RHEL, Rocky, or other SELinux-enabled systems, append `:z` to the volume mount so Docker can relabel the directory:
 
