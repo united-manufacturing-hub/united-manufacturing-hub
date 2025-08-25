@@ -50,41 +50,18 @@ import (
 // fns (`SetupConnectionServiceState`, `TransitionToDataflowComponentState`,
 // …) remain reusable.
 type MockProtocolConverterService struct {
-	// Tracks calls to methods
-	GenerateConfigCalled     bool
-	GetConfigCalled          bool
-	StatusCalled             bool
-	AddToManagerCalled       bool
-	UpdateInManagerCalled    bool
-	RemoveFromManagerCalled  bool
-	StartConnectionCalled    bool
-	StartDFCCalled           bool
-	StartCalled              bool
-	StopCalled               bool
-	ForceRemoveCalled        bool
-	ServiceExistsCalled      bool
-	ReconcileManagerCalled   bool
-	BuildRuntimeConfigCalled bool
-
-	// Return values for each method
-	GenerateConfigResultDFC        dataflowcomponentserviceconfig.DataflowComponentServiceConfig
-	GenerateConfigResultConnection connectionserviceconfig.ConnectionServiceConfig
-	GenerateConfigError            error
-	GetConfigResult                protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
-	GetConfigError                 error
-	StatusResult                   ServiceInfo
-	StatusError                    error
-	AddToManagerError              error
-	UpdateInManagerError           error
-	RemoveFromManagerError         error
-	StartConnectionError           error
-	StartDFCError                  error
-	StartError                     error
-	StopError                      error
-	ForceRemoveError               error
-	ServiceExistsResult            bool
-	ReconcileManagerError          error
-	ReconcileManagerReconciled     bool
+	GenerateConfigError    error
+	GetConfigError         error
+	StatusError            error
+	AddToManagerError      error
+	UpdateInManagerError   error
+	RemoveFromManagerError error
+	StartConnectionError   error
+	StartDFCError          error
+	StartError             error
+	StopError              error
+	ForceRemoveError       error
+	ReconcileManagerError  error
 
 	// For more complex testing scenarios
 	ConverterStates    map[string]*ServiceInfo
@@ -103,13 +80,38 @@ type MockProtocolConverterService struct {
 	   us full fidelity (e.g. Nmap scan results, Benthos metrics-active
 	   flag) and keeps all FSM helpers DRY.
 	*/
-	DfcService  *dataflowcomponent.MockDataFlowComponentService
-	ConnService *connection.MockConnectionService
-	dfcConfigs  []config.DataFlowComponentConfig
-	connConfigs []config.ConnectionConfig
+	DfcService      *dataflowcomponent.MockDataFlowComponentService
+	ConnService     *connection.MockConnectionService
+	GetConfigResult protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
+
+	// Return values for each method
+	GenerateConfigResultDFC        dataflowcomponentserviceconfig.DataflowComponentServiceConfig
+	GenerateConfigResultConnection connectionserviceconfig.ConnectionServiceConfig
+	dfcConfigs                     []config.DataFlowComponentConfig
+	connConfigs                    []config.ConnectionConfig
+
+	StatusResult ServiceInfo
 
 	// mu protects concurrent access to ExistingComponents and ConverterStates maps
 	mu sync.RWMutex
+	// Tracks calls to methods
+	GenerateConfigCalled     bool
+	GetConfigCalled          bool
+	StatusCalled             bool
+	AddToManagerCalled       bool
+	UpdateInManagerCalled    bool
+	RemoveFromManagerCalled  bool
+	StartConnectionCalled    bool
+	StartDFCCalled           bool
+	StartCalled              bool
+	StopCalled               bool
+	ForceRemoveCalled        bool
+	ServiceExistsCalled      bool
+	ReconcileManagerCalled   bool
+	BuildRuntimeConfigCalled bool
+
+	ServiceExistsResult        bool
+	ReconcileManagerReconciled bool
 }
 
 // Ensure MockProtocolConverterService implements IProtocolConverterService.
