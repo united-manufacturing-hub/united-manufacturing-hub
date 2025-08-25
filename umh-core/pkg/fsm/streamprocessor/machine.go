@@ -30,12 +30,11 @@ import (
 	spsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/streamprocessor"
 )
 
-// NewInstance creates a new StreamProcessorInstance with a given ID and service path
+// NewInstance creates a new StreamProcessorInstance with a given ID and service path.
 func NewInstance(
 	s6BaseDir string,
 	config config.StreamProcessorConfig,
 ) *Instance {
-
 	var degradedStates = []string{
 		OperationalStateDegradedRedpanda,
 		OperationalStateDegradedDFC,
@@ -46,6 +45,7 @@ func NewInstance(
 		OperationalStateIdle,
 		OperationalStateActive,
 	}
+
 	runningStates = append(runningStates, degradedStates...)
 
 	cfg := internal_fsm.BaseFSMInstanceConfig{
@@ -171,7 +171,7 @@ func NewInstance(
 
 // SetDesiredFSMState safely updates the desired state
 // But ensures that the desired state is a valid state and that it is also a reasonable state
-// e.g., nobody wants to have an instance in the "starting" state, that is just intermediate
+// e.g., nobody wants to have an instance in the "starting" state, that is just intermediate.
 func (i *Instance) SetDesiredFSMState(state string) error {
 	if state != OperationalStateStopped &&
 		state != OperationalStateActive {
@@ -182,58 +182,59 @@ func (i *Instance) SetDesiredFSMState(state string) error {
 	}
 
 	i.baseFSMInstance.SetDesiredFSMState(state)
+
 	return nil
 }
 
-// GetCurrentFSMState returns the current state of the FSM
+// GetCurrentFSMState returns the current state of the FSM.
 func (i *Instance) GetCurrentFSMState() string {
 	return i.baseFSMInstance.GetCurrentFSMState()
 }
 
-// GetDesiredFSMState returns the desired state of the FSM
+// GetDesiredFSMState returns the desired state of the FSM.
 func (i *Instance) GetDesiredFSMState() string {
 	return i.baseFSMInstance.GetDesiredFSMState()
 }
 
 // Remove starts the removal process, it is idempotent and can be called multiple times
-// Note: it is only removed once IsRemoved returns true
+// Note: it is only removed once IsRemoved returns true.
 func (i *Instance) Remove(ctx context.Context) error {
 	return i.baseFSMInstance.Remove(ctx)
 }
 
-// IsRemoved returns true if the instance has been removed
+// IsRemoved returns true if the instance has been removed.
 func (i *Instance) IsRemoved() bool {
 	return i.baseFSMInstance.IsRemoved()
 }
 
-// IsRemoving returns true if the instance is in the removing state
+// IsRemoving returns true if the instance is in the removing state.
 func (i *Instance) IsRemoving() bool {
 	return i.baseFSMInstance.IsRemoving()
 }
 
-// IsStopping returns true if the instance is in the stopping state
+// IsStopping returns true if the instance is in the stopping state.
 func (i *Instance) IsStopping() bool {
 	return i.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopping
 }
 
-// IsStopped returns true if the instance is in the stopped state
+// IsStopped returns true if the instance is in the stopped state.
 func (i *Instance) IsStopped() bool {
 	return i.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopped
 }
 
-// PrintState prints the current state of the FSM for debugging
+// PrintState prints the current state of the FSM for debugging.
 func (i *Instance) PrintState() {
 	i.baseFSMInstance.GetLogger().Debugf("Current state: %s", i.baseFSMInstance.GetCurrentFSMState())
 	i.baseFSMInstance.GetLogger().Debugf("Desired state: %s", i.baseFSMInstance.GetDesiredFSMState())
 	i.baseFSMInstance.GetLogger().Debugf("Observed state: %+v", i.ObservedState)
 }
 
-// GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance
+// GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance.
 func (i *Instance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
 	return constants.StreamProcessorExpectedMaxP95ExecutionTimePerInstance
 }
 
-// GetMinimumRequiredTime returns the minimum required time for this instance
+// GetMinimumRequiredTime returns the minimum required time for this instance.
 func (i *Instance) GetMinimumRequiredTime() time.Duration {
 	return constants.StreamProcessorUpdateObservedStateTimeout
 }

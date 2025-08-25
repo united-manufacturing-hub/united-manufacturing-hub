@@ -104,7 +104,7 @@ var _ = Describe("ConnectionManager", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Double-check the manager state
-			inst, exists := manager.GetInstance(fmt.Sprintf("connection-%s", connectionName))
+			inst, exists := manager.GetInstance("connection-" + connectionName)
 			Expect(exists).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(connection.OperationalStateStopped))
 		})
@@ -216,12 +216,12 @@ var _ = Describe("ConnectionManager", func() {
 				fsm.SystemSnapshot{CurrentConfig: emptyCfg, Tick: tick},
 				manager,
 				mockSvcRegistry,
-				fmt.Sprintf("connection-%s", serviceName),
+				"connection-"+serviceName,
 				20,
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
-			Expect(manager.GetInstances()).NotTo(HaveKey(fmt.Sprintf("connection-%s", serviceName)))
+			Expect(manager.GetInstances()).NotTo(HaveKey("connection-" + serviceName))
 
 		})
 
@@ -346,15 +346,15 @@ var _ = Describe("ConnectionManager", func() {
 
 			// Confirm manager sees both instances
 			Expect(manager.GetInstances()).To(HaveLen(2))
-			Expect(manager.GetInstances()).To(HaveKey(fmt.Sprintf("connection-%s", conn1Name)))
-			Expect(manager.GetInstances()).To(HaveKey(fmt.Sprintf("connection-%s", conn2Name)))
+			Expect(manager.GetInstances()).To(HaveKey("connection-" + conn1Name))
+			Expect(manager.GetInstances()).To(HaveKey("connection-" + conn2Name))
 
 			// Check the states
-			inst1, exists := manager.GetInstance(fmt.Sprintf("connection-%s", conn1Name))
+			inst1, exists := manager.GetInstance("connection-" + conn1Name)
 			Expect(exists).To(BeTrue())
 			Expect(inst1.GetCurrentFSMState()).To(Equal(connection.OperationalStateUp))
 
-			inst2, exists := manager.GetInstance(fmt.Sprintf("connection-%s", conn2Name))
+			inst2, exists := manager.GetInstance("connection-" + conn2Name)
 			Expect(exists).To(BeTrue())
 			Expect(inst2.GetCurrentFSMState()).To(Equal(connection.OperationalStateStopped))
 		})

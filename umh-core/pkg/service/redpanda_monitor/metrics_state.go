@@ -14,26 +14,26 @@
 
 package redpanda_monitor
 
-// ComponentThroughput tracks throughput metrics for a single component
+// ComponentThroughput tracks throughput metrics for a single component.
 type ComponentThroughput struct {
+	// Window stores the last N message counts for calculating sliding window average
+	// Do not deep-copy this field as it is not needed
+	Window []MessageCount `copy:"-"`
 	// LastTick is the last tick when metrics were updated
 	LastTick uint64
 	// LastCount is the last message count seen
 	LastCount int64
 	// BytesPerTick is the number of messages processed per tick (averaged over window)
 	BytesPerTick float64
-	// Window stores the last N message counts for calculating sliding window average
-	// Do not deep-copy this field as it is not needed
-	Window []MessageCount `copy:"-"`
 }
 
-// MessageCount stores a count at a specific tick
+// MessageCount stores a count at a specific tick.
 type MessageCount struct {
 	Tick  uint64
 	Count int64
 }
 
-// RedpandaMetricsState tracks the state of Redpanda metrics over time
+// RedpandaMetricsState tracks the state of Redpanda metrics over time.
 type RedpandaMetricsState struct {
 	// Input tracks input throughput
 	Input ComponentThroughput
@@ -47,13 +47,13 @@ type RedpandaMetricsState struct {
 	LastInputChange uint64
 }
 
-// Constants for throughput calculation
+// Constants for throughput calculation.
 const (
-	// ThroughputWindowSize is how many ticks to keep in the sliding window
+	// ThroughputWindowSize is how many ticks to keep in the sliding window.
 	ThroughputWindowSize = 10 * 60 // assuming 100ms per tick, this is 1 minute
 )
 
-// NewRedpandaMetricsState creates a new RedpandaMetricsState
+// NewRedpandaMetricsState creates a new RedpandaMetricsState.
 func NewRedpandaMetricsState() *RedpandaMetricsState {
 	return &RedpandaMetricsState{
 		LastTick:        0,
@@ -62,7 +62,7 @@ func NewRedpandaMetricsState() *RedpandaMetricsState {
 	}
 }
 
-// UpdateFromMetrics updates the metrics state based on new metrics
+// UpdateFromMetrics updates the metrics state based on new metrics.
 func (s *RedpandaMetricsState) UpdateFromMetrics(metrics Metrics, tick uint64) {
 	s.updateComponentThroughput(&s.Input, metrics.Throughput.BytesIn, tick)
 	s.updateComponentThroughput(&s.Output, metrics.Throughput.BytesOut, tick)
@@ -74,7 +74,7 @@ func (s *RedpandaMetricsState) UpdateFromMetrics(metrics Metrics, tick uint64) {
 	s.LastTick = tick
 }
 
-// updateComponentThroughput updates throughput metrics for a single component
+// updateComponentThroughput updates throughput metrics for a single component.
 func (s *RedpandaMetricsState) updateComponentThroughput(throughput *ComponentThroughput, count int64, tick uint64) {
 	// Initialize window if needed
 	if throughput.Window == nil {
@@ -113,5 +113,6 @@ func (s *RedpandaMetricsState) updateComponentThroughput(throughput *ComponentTh
 
 		throughput.LastCount = count
 	}
+
 	throughput.LastTick = tick
 }

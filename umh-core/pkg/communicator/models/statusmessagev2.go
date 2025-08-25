@@ -24,7 +24,9 @@ import "encoding/json"
 
 func UnmarshalStatusMessage(data []byte) (StatusMessage, error) {
 	var r StatusMessage
+
 	err := json.Unmarshal(data, &r)
+
 	return r, err
 }
 
@@ -32,27 +34,27 @@ func (r *StatusMessage) Marshal() ([]byte, error) {
 	return json.Marshal(r)
 }
 
-// Schema for the status message containing system state and DFC information
+// Schema for the status message containing system state and DFC information.
 type StatusMessage struct {
-	Core    Core                   `json:"core"`
 	General General                `json:"general"`
 	Plugins map[string]interface{} `json:"plugins"`
+	Core    Core                   `json:"core"`
 }
 
 type Core struct {
-	Agent     Agent     `json:"agent"`
-	Container Container `json:"container"`
-	// List of deployed DFCs. Different DFC types can have different properties
-	Dfcs           []Dfc      `json:"dfcs"`
 	EventsTable    EventTable `json:"eventsTable,omitempty"`
-	Latency        Latency    `json:"latency"`
-	Redpanda       Redpanda   `json:"redpanda"`
+	UnsTable       UnsTable   `json:"unsTable,omitempty"`
+	Agent          Agent      `json:"agent"`
 	ReleaseChannel string     `json:"releaseChannel"`
+	Version        string     `json:"version"`
+	// List of deployed DFCs. Different DFC types can have different properties
+	Dfcs []Dfc `json:"dfcs"`
 	// List of supported feature keywords. If a feature is supported, its corresponding keyword
 	// will be included in the array.
-	SupportedFeatures []string `json:"supportedFeatures"`
-	UnsTable          UnsTable `json:"unsTable,omitempty"`
-	Version           string   `json:"version"`
+	SupportedFeatures []string  `json:"supportedFeatures"`
+	Container         Container `json:"container"`
+	Redpanda          Redpanda  `json:"redpanda"`
+	Latency           Latency   `json:"latency"`
 }
 
 type Agent struct {
@@ -99,31 +101,31 @@ type Memory struct {
 
 type Dfc struct {
 	CurrentVersionUUID *string     `json:"currentVersionUUID"`
-	DeploySuccess      bool        `json:"deploySuccess"`
-	DfcType            DfcType     `json:"dfcType"`
 	Health             *Health     `json:"health"`
 	Metrics            *DFCMetrics `json:"metrics"`
 	Name               *string     `json:"name"`
+	DataContract       *string     `json:"dataContract,omitempty"`
+	InputType          *string     `json:"inputType,omitempty"`
+	IsReadOnly         *bool       `json:"isReadOnly,omitempty"`
+	OutputType         *string     `json:"outputType,omitempty"`
+	DfcType            DfcType     `json:"dfcType"`
 	UUID               string      `json:"uuid"`
 	// For 'protocol-converter' type, this array contains exactly one connection.
 	//
 	// For 'data-bridge' type, this array always contains exactly two connections.
-	Connections  []Connection `json:"connections,omitempty"`
-	DataContract *string      `json:"dataContract,omitempty"`
-	InputType    *string      `json:"inputType,omitempty"`
-	IsReadOnly   *bool        `json:"isReadOnly,omitempty"`
-	OutputType   *string      `json:"outputType,omitempty"`
+	Connections   []Connection `json:"connections,omitempty"`
+	DeploySuccess bool         `json:"deploySuccess"`
 }
 
 type Connection struct {
 	Health Health `json:"health"`
-	// Latency in milliseconds
-	Latency float64 `json:"latency"`
-	Name    string  `json:"name"`
+	Name   string `json:"name"`
 	// The connection URI in full, e.g., 'opc.tcp://hostname:port/path'. This includes the
 	// scheme, host, port, and any required path elements.
 	URI  string `json:"uri"`
 	UUID string `json:"uuid"`
+	// Latency in milliseconds
+	Latency float64 `json:"latency"`
 }
 
 type DFCMetrics struct {
@@ -135,14 +137,14 @@ type DFCMetrics struct {
 }
 
 type EventsTable struct {
-	Bridges         []string   `json:"bridges"`
-	Error           string     `json:"error"`
-	Origin          *string    `json:"origin"`
-	RawKafkaMessage EventKafka `json:"rawKafkaMessage"`
+	Value           interface{} `json:"value"`
+	Origin          *string     `json:"origin"`
+	Error           string      `json:"error"`
+	UnsTreeID       string      `json:"unsTreeId"`
+	Bridges         []string    `json:"bridges"`
+	RawKafkaMessage EventKafka  `json:"rawKafkaMessage"`
 	// Timestamp in milliseconds
-	TimestampMS float64     `json:"timestamp_ms"`
-	UnsTreeID   string      `json:"unsTreeId"`
-	Value       interface{} `json:"value"`
+	TimestampMS float64 `json:"timestamp_ms"`
 }
 
 type Latency struct {

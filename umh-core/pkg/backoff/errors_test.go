@@ -110,7 +110,7 @@ var _ = Describe("Error Helpers", func() {
 
 		It("should handle nil errors", func() {
 			extracted := backoff.ExtractOriginalError(nil)
-			Expect(extracted).To(BeNil())
+			Expect(extracted).ToNot(HaveOccurred())
 		})
 
 		It("should handle deeply nested errors", func() {

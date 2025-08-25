@@ -40,8 +40,10 @@ import (
 func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
 	start := time.Now()
 	s6InstanceName := s.baseFSMInstance.GetID()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s6InstanceName, time.Since(start))
+
 		if err != nil {
 			s.baseFSMInstance.GetLogger().Errorf("error reconciling s6 instance %s: %s", s6InstanceName, err)
 			s.PrintState()
@@ -55,6 +57,7 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 		if s.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "start of reconciliation") {
 			return nil, false
 		}
+
 		return ctx.Err(), false
 	}
 
@@ -142,6 +145,7 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 
 		s.baseFSMInstance.SetError(err, snapshot.Tick)
 		s.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
+
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
@@ -152,9 +156,10 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 }
 
 // reconcileExternalChanges checks if the S6Instance service status has changed
-// externally (e.g., if someone manually stopped or started it, or if it crashed)
+// externally (e.g., if someone manually stopped or started it, or if it crashed).
 func (s *S6Instance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
 	}()
@@ -168,6 +173,7 @@ func (s *S6Instance) reconcileExternalChanges(ctx context.Context, services serv
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}
+
 	return nil
 }
 
@@ -178,6 +184,7 @@ func (s *S6Instance) reconcileExternalChanges(ctx context.Context, services serv
 // This is to ensure full testability of the FSM.
 func (s *S6Instance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".reconcileStateTransition", time.Since(start))
 	}()
@@ -196,6 +203,7 @@ func (s *S6Instance) reconcileStateTransition(ctx context.Context, services serv
 		if err != nil {
 			return err, false
 		}
+
 		if reconciled {
 			return nil, true
 		} else {
@@ -209,6 +217,7 @@ func (s *S6Instance) reconcileStateTransition(ctx context.Context, services serv
 		if err != nil {
 			return err, false
 		}
+
 		if reconciled {
 			return nil, true
 		} else {
@@ -219,9 +228,10 @@ func (s *S6Instance) reconcileStateTransition(ctx context.Context, services serv
 	return fmt.Errorf("invalid state: %s", currentState), false
 }
 
-// reconcileOperationalStates handles states related to instance operations (starting/stopping)
+// reconcileOperationalStates handles states related to instance operations (starting/stopping).
 func (s *S6Instance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".reconcileOperationalStates", time.Since(start))
 	}()
@@ -240,6 +250,7 @@ func (s *S6Instance) reconcileOperationalStates(ctx context.Context, services se
 // It deals with moving from Stopped/Failed to Starting and then to Running.
 func (s *S6Instance) reconcileTransitionToRunning(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".reconcileTransitionToRunning", time.Since(start))
 	}()
@@ -271,6 +282,7 @@ func (s *S6Instance) reconcileTransitionToRunning(ctx context.Context, services 
 // It returns a boolean indicating whether the instance is stopped.
 func (s *S6Instance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".reconcileTransitionToStopped", time.Since(start))
 	}()
@@ -290,6 +302,7 @@ func (s *S6Instance) reconcileTransitionToStopped(ctx context.Context, services 
 			// Transition from Stopping to Stopped
 			return s.baseFSMInstance.SendEvent(ctx, EventStopDone), true
 		}
+
 		return nil, false
 	}
 

@@ -15,6 +15,8 @@
 package actions_test
 
 import (
+	"sync"
+
 	"encoding/base64"
 	"errors"
 
@@ -49,6 +51,7 @@ var _ = Describe("DeployStreamProcessor", func() {
 		encodedConfig   string
 		stateMocker     *actions.StateMocker
 		messages        []*models.UMHMessage
+		mu              sync.Mutex
 	)
 
 	// Setup before each test
@@ -121,7 +124,7 @@ var _ = Describe("DeployStreamProcessor", func() {
 		stateMocker.Tick()
 		action = actions.NewDeployStreamProcessorAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, nil)
 
-		go actions.ConsumeOutboundMessages(outboundChannel, &messages, true)
+		go actions.ConsumeOutboundMessages(outboundChannel, &messages, &mu, true)
 	})
 
 	// Cleanup after each test
@@ -250,7 +253,7 @@ var _ = Describe("DeployStreamProcessor", func() {
 			}
 
 			err := action.Parse(payload)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field Name"))
@@ -270,7 +273,7 @@ var _ = Describe("DeployStreamProcessor", func() {
 			}
 
 			err := action.Parse(payload)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field Model.Name"))
@@ -290,7 +293,7 @@ var _ = Describe("DeployStreamProcessor", func() {
 			}
 
 			err := action.Parse(payload)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field Model.Version"))
@@ -306,7 +309,7 @@ var _ = Describe("DeployStreamProcessor", func() {
 			}
 
 			err := action.Parse(payload)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("name can only contain letters"))

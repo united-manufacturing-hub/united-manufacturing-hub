@@ -16,6 +16,7 @@ package agent_monitor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"time"
@@ -33,7 +34,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version"
 )
 
-// IAgentMonitorService defines the interface for the agent monitor service
+// IAgentMonitorService defines the interface for the agent monitor service.
 type IAgentMonitorService interface {
 	// GetStatus returns the status of the agent, this is the main feature of this service
 	Status(ctx context.Context, systemSnapshot fsm.SystemSnapshot) (*ServiceInfo, error)
@@ -41,11 +42,15 @@ type IAgentMonitorService interface {
 	GetFilesystemService() filesystem.Service
 }
 
-// ServiceInfo contains both raw metrics and health assessments
+// ServiceInfo contains both raw metrics and health assessments.
 type ServiceInfo struct {
 	// General: Location, Latency, Agent Logs, Agent Metrics
-	Location map[int]string  `json:"location"`
-	Latency  *models.Latency `json:"latency"`
+	Location     map[int]string         `json:"location"`
+	Latency      *models.Latency        `json:"latency"`
+	AgentMetrics map[string]interface{} `json:"agentMetrics,omitempty"`
+	// Release: Channel, Version, Supported Feature
+	Release *models.Release `json:"release"`
+
 	// AgentLogs contains the structured s6 log entries emitted by the
 	// agent service.
 	//
@@ -63,10 +68,7 @@ type ServiceInfo struct {
 	//
 	// Therefore we override the default behaviour and copy only the 3-word
 	// slice header (24 B on amd64) — see CopyAgentLogs below.
-	AgentLogs    []s6.LogEntry          `json:"agentLogs"`
-	AgentMetrics map[string]interface{} `json:"agentMetrics,omitempty"`
-	// Release: Channel, Version, Supported Feature
-	Release *models.Release `json:"release"`
+	AgentLogs []s6.LogEntry `json:"agentLogs"`
 
 	// Health: Overall, Latency, Release
 	OverallHealth models.HealthCategory `json:"overallHealth"`
@@ -96,19 +98,20 @@ type ServiceInfo struct {
 // See also: https://github.com/tiendc/go-deepcopy?tab=readme-ov-file#copy-struct-fields-via-struct-methods
 func (si *ServiceInfo) CopyAgentLogs(src []s6.LogEntry) error {
 	si.AgentLogs = src
+
 	return nil
 }
 
-// AgentMonitorService implements the Service interface
+// AgentMonitorService implements the Service interface.
 type AgentMonitorService struct {
+	lastCollectedAt time.Time
 	fs              filesystem.Service
 	s6Service       s6.Service
 	logger          *zap.SugaredLogger
 	instanceName    string
-	lastCollectedAt time.Time
 }
 
-// NewAgentMonitorService creates a new agent monitor service instance
+// NewAgentMonitorService creates a new agent monitor service instance.
 func NewAgentMonitorService(opts ...AgentMonitorServiceOption) *AgentMonitorService {
 	log := logger.For(logger.ComponentAgentMonitorService)
 
@@ -127,7 +130,7 @@ func NewAgentMonitorService(opts ...AgentMonitorServiceOption) *AgentMonitorServ
 
 type AgentMonitorServiceOption func(*AgentMonitorService)
 
-// WithS6Service sets a custom S6 service for the AgentMonitorService
+// WithS6Service sets a custom S6 service for the AgentMonitorService.
 func WithS6Service(s6Service s6.Service) AgentMonitorServiceOption {
 	return func(s *AgentMonitorService) {
 		s.s6Service = s6Service
@@ -140,14 +143,15 @@ func WithFilesystemService(fs filesystem.Service) AgentMonitorServiceOption {
 	}
 }
 
-// GetFilesystemService returns the filesystem service - used for testing only
+// GetFilesystemService returns the filesystem service - used for testing only.
 func (c *AgentMonitorService) GetFilesystemService() filesystem.Service {
 	return c.fs
 }
 
-// Status collects and returns the current agent status
+// Status collects and returns the current agent status.
 func (c *AgentMonitorService) Status(ctx context.Context, systemSnapshot fsm.SystemSnapshot) (*ServiceInfo, error) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentAgentMonitor, c.instanceName+".status", time.Since(start))
 	}()
@@ -184,7 +188,9 @@ func (c *AgentMonitorService) Status(ctx context.Context, systemSnapshot fsm.Sys
 	logs, err := c.getAgentLogs(ctx)
 	if err != nil {
 		c.logger.Warnf("Failed to get agent logs: %v", err)
+
 		status.OverallHealth = models.Degraded
+
 		return nil, err
 	} else {
 		status.AgentLogs = logs
@@ -197,9 +203,12 @@ func (c *AgentMonitorService) Status(ctx context.Context, systemSnapshot fsm.Sys
 	release, err := c.getReleaseInfo(systemSnapshot.CurrentConfig)
 	if err != nil {
 		c.logger.Warnf("Failed to get release info: %v", err)
+
 		status.OverallHealth = models.Degraded
+
 		return nil, err
 	}
+
 	status.Release = release
 
 	return status, nil
@@ -219,14 +228,14 @@ func (c *AgentMonitorService) getReleaseInfo(cfg config.FullConfig) (*models.Rel
 	return release, nil
 }
 
-// getAgentLogs retrieves the logs for the umh-core service from the log file
+// getAgentLogs retrieves the logs for the umh-core service from the log file.
 func (c *AgentMonitorService) getAgentLogs(ctx context.Context) ([]s6.LogEntry, error) {
 	// Path to the umh-core service
 	servicePath := filepath.Join(constants.S6BaseDir, "umh-core")
 
 	// Check if s6Service is initialized
 	if c.s6Service == nil {
-		return nil, fmt.Errorf("s6 service not initialized")
+		return nil, errors.New("s6 service not initialized")
 	}
 	// Use the S6 service to get logs
 	entries, err := c.s6Service.GetLogs(ctx, servicePath, c.fs)

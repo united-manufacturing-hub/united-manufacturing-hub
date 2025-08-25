@@ -34,12 +34,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 )
 
-// BaseFSMInstance implements the public fsm.FSM interface
+// BaseFSMInstance implements the public fsm.FSM interface.
 type BaseFSMInstance struct {
-	cfg BaseFSMInstanceConfig
-
-	// mu is a mutex for protecting concurrent access to fields
-	mu sync.RWMutex
 
 	// fsm is the finite state machine that manages instance state
 	fsm *fsm.FSM
@@ -53,12 +49,16 @@ type BaseFSMInstance struct {
 	// logger is the logger for the FSM
 	logger *zap.SugaredLogger
 
-	// transientStreakCounter is the number of ticks a FSM has remained in a transient state
-	transientStreakCounter uint64
-
 	// lastObservedLifecycleState is the last state that was observed by the FSM
 	// Note: this is only temporary and should be replaced by a generalized implementation of the archive storage
 	lastObservedLifecycleState string
+	cfg                        BaseFSMInstanceConfig
+
+	// transientStreakCounter is the number of ticks a FSM has remained in a transient state
+	transientStreakCounter uint64
+
+	// mu is a mutex for protecting concurrent access to fields
+	mu sync.RWMutex
 }
 
 type BaseFSMInstanceConfig struct {
@@ -84,9 +84,8 @@ type BaseFSMInstanceConfig struct {
 	MaxTicksToRemainInTransientState uint64
 }
 
-// NewBaseFSMInstance creates a new FSM instance
+// NewBaseFSMInstance creates a new FSM instance.
 func NewBaseFSMInstance(cfg BaseFSMInstanceConfig, backoffConfig backoff.Config, logger *zap.SugaredLogger) *BaseFSMInstance {
-
 	// Set default max ticks to remain in transient state if not set
 	if cfg.MaxTicksToRemainInTransientState == 0 {
 		cfg.MaxTicksToRemainInTransientState = constants.DefaultMaxTicksToRemainInTransientState
@@ -146,54 +145,59 @@ func NewBaseFSMInstance(cfg BaseFSMInstanceConfig, backoffConfig backoff.Config,
 	return baseInstance
 }
 
-// AddCallback adds a callback for a given event name
+// AddCallback adds a callback for a given event name.
 func (s *BaseFSMInstance) AddCallback(eventName string, callback fsm.Callback) {
 	s.callbacks[eventName] = callback
 }
 
-// GetError returns the last error that occurred during a transition
+// GetError returns the last error that occurred during a transition.
 func (s *BaseFSMInstance) GetError() error {
 	return s.backoffManager.GetLastError()
 }
 
 // SetError sets the last error that occurred during a transition
-// and returns true if the error is considered a permanent failure
+// and returns true if the error is considered a permanent failure.
 func (s *BaseFSMInstance) SetError(err error, tick uint64) bool {
 	isPermanent := s.backoffManager.SetError(err, tick)
 	if isPermanent {
 		sentry.ReportFSMErrorf(s.logger, s.cfg.ID, "BaseFSM", "permanent_failure", "FSM has reached permanent failure state: %v", err)
 	}
+
 	return isPermanent
 }
 
 // setDesiredFSMState safely updates the desired state
-// but does not check if the desired state is valid
+// but does not check if the desired state is valid.
 func (s *BaseFSMInstance) SetDesiredFSMState(state string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	s.cfg.DesiredFSMState = state
 	s.logger.Infof("Setting desired state of FSM %s to %s", s.cfg.ID, state)
 }
 
-// GetDesiredFSMState returns the desired state of the FSM
+// GetDesiredFSMState returns the desired state of the FSM.
 func (s *BaseFSMInstance) GetDesiredFSMState() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	return s.cfg.DesiredFSMState
 }
 
-// GetCurrentFSMState returns the current state of the FSM
+// GetCurrentFSMState returns the current state of the FSM.
 func (s *BaseFSMInstance) GetCurrentFSMState() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	return s.fsm.Current()
 }
 
 // SetCurrentFSMState sets the current state of the FSM
-// This should only be called in tests
+// This should only be called in tests.
 func (s *BaseFSMInstance) SetCurrentFSMState(state string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	s.fsm.SetState(state)
 }
 
@@ -212,7 +216,6 @@ func (s *BaseFSMInstance) SetCurrentFSMState(state string) {
 // By ensuring transitions only start with sufficient context lifetime, we avoid the
 // cascade of failures that would otherwise occur when a transition is interrupted.
 func (s *BaseFSMInstance) SendEvent(ctx context.Context, eventName string, args ...interface{}) error {
-
 	// Context protection: We verify two distinct conditions before proceeding:
 	// 1. Context must not be cancelled - An already expired context will lead to immediate failure
 	if ctx.Err() != nil {
@@ -222,7 +225,7 @@ func (s *BaseFSMInstance) SendEvent(ctx context.Context, eventName string, args 
 	//    is worse than failing to start, as it leaves the FSM in an inconsistent state
 	if deadline, ok := ctx.Deadline(); ok {
 		if time.Until(deadline) < constants.ExpectedMaxP95ExecutionTimePerEvent {
-			return fmt.Errorf("context deadline exceeded")
+			return errors.New("context deadline exceeded")
 		}
 	}
 
@@ -257,7 +260,7 @@ func (s *BaseFSMInstance) SendEvent(ctx context.Context, eventName string, args 
 	return nil
 }
 
-// ClearError clears any error state and resets the backoff
+// ClearError clears any error state and resets the backoff.
 func (s *BaseFSMInstance) ClearError() {
 	s.backoffManager.Reset()
 }
@@ -293,13 +296,14 @@ func (s *BaseFSMInstance) Remove(ctx context.Context) error {
 			err := s.SendEvent(ctx, LifecycleEventRemove)
 			if err != nil {
 				// ── Wrap as *permanent* to force immediate escalation ─────────
-				perr := fmt.Errorf("%s: remove transition failed: %v",
+				perr := fmt.Errorf("%s: remove transition failed: %w",
 					backoff.PermanentFailureError, err)
 
 				// Record it; tick value is irrelevant here (we pass 0)
 				s.SetError(perr, 0)
 				sentry.ReportFSMErrorf(s.logger, s.cfg.ID, "BaseFSM", "permanent_failure", "auto-remove of %s failed: %v", s.cfg.ID, err)
 			}
+
 			delete(s.callbacks, cb) // detach – run only once
 		})
 	}
@@ -307,37 +311,37 @@ func (s *BaseFSMInstance) Remove(ctx context.Context) error {
 	return nil
 }
 
-// IsRemoved returns true if the instance has been removed
+// IsRemoved returns true if the instance has been removed.
 func (s *BaseFSMInstance) IsRemoved() bool {
 	return s.fsm.Current() == LifecycleStateRemoved
 }
 
-// IsRemoving returns true if the instance is in the removing state
+// IsRemoving returns true if the instance is in the removing state.
 func (s *BaseFSMInstance) IsRemoving() bool {
 	return s.fsm.Current() == LifecycleStateRemoving
 }
 
 // ShouldSkipReconcileBecauseOfError returns true if the reconcile should be skipped
 // because of an error that occurred in the last reconciliation and the backoff
-// period has not yet elapsed, or if the FSM is in permanent failure state
+// period has not yet elapsed, or if the FSM is in permanent failure state.
 func (s *BaseFSMInstance) ShouldSkipReconcileBecauseOfError(tick uint64) bool {
 	return s.backoffManager.ShouldSkipOperation(tick)
 }
 
-// ResetState clears the error and backoff after a successful reconcile
+// ResetState clears the error and backoff after a successful reconcile.
 func (s *BaseFSMInstance) ResetState() {
 	s.backoffManager.Reset()
 }
 
 // IsPermanentlyFailed returns true if the FSM has reached a permanent failure state
-// after exceeding the maximum retry attempts
+// after exceeding the maximum retry attempts.
 func (s *BaseFSMInstance) IsPermanentlyFailed() bool {
 	return s.backoffManager.IsPermanentlyFailed()
 }
 
 // GetBackoffError returns a structured error that includes backoff information
 // This will return a permanent failure error or a temporary backoff error
-// depending on the current state
+// depending on the current state.
 func (s *BaseFSMInstance) GetBackoffError(tick uint64) error {
 	return s.backoffManager.GetBackoffError(tick)
 }
@@ -354,28 +358,28 @@ func (s *BaseFSMInstance) GetLastError() error {
 	return s.backoffManager.GetLastError()
 }
 
-// Create provides a default implementation that can be overridden
+// Create provides a default implementation that can be overridden.
 func (s *BaseFSMInstance) Create(ctx context.Context, filesystemService filesystem.Service) error {
 	return fmt.Errorf("create action not implemented for %s", s.cfg.ID)
 }
 
 // Remove for FSMActions interface provides a default implementation that can be overridden
-// It's a separate implementation from the existing Remove method which handles removing through state transitions
+// It's a separate implementation from the existing Remove method which handles removing through state transitions.
 func (s *BaseFSMInstance) RemoveAction(ctx context.Context, filesystemService filesystem.Service) error {
 	return fmt.Errorf("remove action not implemented for %s", s.cfg.ID)
 }
 
-// Start provides a default implementation that can be overridden
+// Start provides a default implementation that can be overridden.
 func (s *BaseFSMInstance) Start(ctx context.Context, filesystemService filesystem.Service) error {
 	return fmt.Errorf("start action not implemented for %s", s.cfg.ID)
 }
 
-// Stop provides a default implementation that can be overridden
+// Stop provides a default implementation that can be overridden.
 func (s *BaseFSMInstance) Stop(ctx context.Context, filesystemService filesystem.Service) error {
 	return fmt.Errorf("stop action not implemented for %s", s.cfg.ID)
 }
 
-// UpdateObservedState provides a default implementation that can be overridden
+// UpdateObservedState provides a default implementation that can be overridden.
 func (s *BaseFSMInstance) UpdateObservedState(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
 	return fmt.Errorf("updateObservedState action not implemented for %s", s.cfg.ID)
 }
@@ -398,7 +402,7 @@ func (s *BaseFSMInstance) UpdateObservedState(ctx context.Context, filesystemSer
 //   - forceRemove: Function that performs a forceful removal when graceful removal fails, bypassing state transitions
 //
 // Returns:
-// - The original error (or nil if handled) and whether reconciliation should continue
+// - The original error (or nil if handled) and whether reconciliation should continue.
 func (s *BaseFSMInstance) HandlePermanentError(
 	ctx context.Context,
 	err error,
@@ -421,8 +425,10 @@ func (s *BaseFSMInstance) HandlePermanentError(
 			// If even the force removing doesn't work, the base-manager should delete the instance
 			// due to a permanent error
 			logger.Errorf("error force removing %s instance %s: %v", s.cfg.ID, instanceID, forceErr)
+
 			return fmt.Errorf("failed to force remove the %s instance: %s : %w", s.cfg.ID, backoff.PermanentFailureError, forceErr), false
 		}
+
 		return err, true
 	} else {
 		// Not in a shutdown state yet, so try normal removal first
@@ -435,21 +441,24 @@ func (s *BaseFSMInstance) HandlePermanentError(
 			// If removing doesn't work because the FSM isn't in the correct state,
 			// try force removal as a last resort
 			logger.Errorf("error removing %s instance %s: %v", s.cfg.ID, instanceID, removeErr)
+
 			forceErr := forceRemove(ctx)
 			if forceErr != nil {
 				// If even the force removing doesn't work, the base-manager should delete the instance
 				// due to a permanent error
 				logger.Errorf("error force removing %s instance %s: %v", s.cfg.ID, instanceID, forceErr)
+
 				return fmt.Errorf("failed to force remove the %s instance: %s : %w", s.cfg.ID, backoff.PermanentFailureError, forceErr), false
 			}
 		}
+
 		return nil, false // Let's try to at least reconcile towards a stopped/removed state
 	}
 }
 
 // ReconcileLifecycleStates reconciles the lifecycle states of the FSM instance
 // It will reconcile the lifecycle states of the FSM instance and return the error and whether the reconciliation was successful
-// It will also update the transient streak counter
+// It will also update the transient streak counter.
 func (s *BaseFSMInstance) ReconcileLifecycleStates(
 	ctx context.Context,
 	services serviceregistry.Provider,
@@ -459,6 +468,7 @@ func (s *BaseFSMInstance) ReconcileLifecycleStates(
 	checkForCreation func(ctx context.Context, filesystemService filesystem.Service) bool,
 ) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentBaseFSMInstance, s.GetID()+".reconcileLifecycleStates", time.Since(start))
 	}()
@@ -470,6 +480,7 @@ func (s *BaseFSMInstance) ReconcileLifecycleStates(
 	} else {
 		s.transientStreakCounter = 0
 	}
+
 	s.lastObservedLifecycleState = currentState
 
 	// Independent what the desired state is, we always need to reconcile the lifecycle states first
@@ -478,12 +489,14 @@ func (s *BaseFSMInstance) ReconcileLifecycleStates(
 		if err := createInstance(ctx, services.GetFileSystem()); err != nil {
 			return err, false
 		}
+
 		return s.SendEvent(ctx, LifecycleEventCreate), true
 	case LifecycleStateCreating:
 		// Check if the service is created
 		if !checkForCreation(ctx, services.GetFileSystem()) {
 			return nil, false // Don't transition state yet, retry next reconcile
 		}
+
 		return s.SendEvent(ctx, LifecycleEventCreateDone), true
 	case LifecycleStateRemoving:
 		if err := removeInstance(ctx, services.GetFileSystem()); err != nil {
@@ -493,8 +506,10 @@ func (s *BaseFSMInstance) ReconcileLifecycleStates(
 			if errors.Is(err, standarderrors.ErrRemovalPending) {
 				return nil, false
 			}
+
 			return err, false
 		}
+
 		return s.SendEvent(ctx, LifecycleEventRemoveDone), true
 	case LifecycleStateRemoved:
 		return standarderrors.ErrInstanceRemoved, true
@@ -506,7 +521,7 @@ func (s *BaseFSMInstance) ReconcileLifecycleStates(
 
 // IsTransientStreakCounterMaxed returns whether the transient streak counter
 // has reached the maximum number of ticks, which means that the FSM is stuck in a state
-// and should be removed
+// and should be removed.
 func (s *BaseFSMInstance) IsTransientStreakCounterMaxed() bool {
 	return s.transientStreakCounter >= s.cfg.MaxTicksToRemainInTransientState
 }
@@ -533,7 +548,9 @@ func (s *BaseFSMInstance) IsDeadlineExceededAndHandle(err error, tick uint64, lo
 		// Context deadline exceeded should be retried with backoff, not ignored
 		s.SetError(err, tick)
 		s.logger.Warnf("Context deadline exceeded in %s, will retry with backoff", location)
+
 		return true // handled, return early
 	}
+
 	return false // not handled, continue
 }

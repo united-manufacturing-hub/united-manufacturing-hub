@@ -217,7 +217,7 @@ var _ = Describe("Registry", func() {
 		Context("when registry is empty", func() {
 			It("should return an empty slice", func() {
 				subscribers := registry.List()
-				Expect(subscribers).To(HaveLen(0))
+				Expect(subscribers).To(BeEmpty())
 			})
 		})
 
@@ -461,7 +461,7 @@ var _ = Describe("Registry", func() {
 
 			// Goroutine 1: Adding subscribers
 			go func() {
-				for i := 0; i < 100; i++ {
+				for range 100 {
 					registry.AddOrRefresh(email, false)
 				}
 				done <- true
@@ -469,7 +469,7 @@ var _ = Describe("Registry", func() {
 
 			// Goroutine 2: Setting bootstrapped state
 			go func() {
-				for i := 0; i < 100; i++ {
+				for i := range 100 {
 					registry.SetBootstrapped(email, i%2 == 0)
 				}
 				done <- true
@@ -477,7 +477,7 @@ var _ = Describe("Registry", func() {
 
 			// Goroutine 3: Reading state
 			go func() {
-				for i := 0; i < 100; i++ {
+				for range 100 {
 					registry.IsBootstrapped(email)
 					registry.Length()
 				}
@@ -485,7 +485,7 @@ var _ = Describe("Registry", func() {
 			}()
 
 			// Wait for all goroutines to complete
-			for i := 0; i < 3; i++ {
+			for range 3 {
 				<-done
 			}
 

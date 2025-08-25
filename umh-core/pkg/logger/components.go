@@ -14,15 +14,15 @@
 
 package logger
 
-// Component name constants for standardized logging
+// Component name constants for standardized logging.
 const (
-	// Core components
+	// Core components.
 	ComponentCore              = "Core"
 	ComponentControlLoop       = "ControlLoop"
 	ComponentStarvationChecker = "StarveCheck"
 	ComponentFilesystem        = "Filesystem"
 
-	// Manager components
+	// Manager components.
 	ComponentS6Manager                = "S6Manager"
 	ComponentBenthosManager           = "BenthosManager"
 	ComponentBenthosMonitorManager    = "BenthosMonitorManager"
@@ -37,7 +37,7 @@ const (
 	ComponentStreamProcessorManager   = "StreamProcessorManager"
 	ComponentTopicBrowserManager      = "TopicBrowserManager"
 
-	// FSM components
+	// FSM components.
 	ComponentBaseFSM                   = "BaseFSM"
 	ComponentS6Instance                = "S6Instance"
 	ComponentBenthosInstance           = "BenthosInstance"
@@ -51,7 +51,7 @@ const (
 	ComponentStreamProcessorInstance   = "StreamProcessorInstance"
 	ComponentTopicBrowserInstance      = "TopicBrowserInstance"
 
-	// Service components
+	// Service components.
 	ComponentS6Service                = "S6Service"
 	ComponentBenthosService           = "BenthosService"
 	ComponentBenthosMonitorService    = "BenthosMonitorService"
@@ -66,13 +66,13 @@ const (
 	ComponentStreamProcessorService   = "StreamProcessorService"
 	ComponentFilesystemService        = "FilesystemService"
 	ComponentTopicBrowserService      = "TopicBrowserService"
-	// Configuration
+	// Configuration.
 	ComponentConfigManager = "ConfigManager"
 
-	// Agent
+	// Agent.
 	AgentManagerComponentName  = "AgentManager"
 	AgentInstanceComponentName = "agent"
 
-	// Communicator components
+	// Communicator components.
 	ComponentCommunicator = "Communicator"
 )

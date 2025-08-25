@@ -193,9 +193,9 @@ var _ = Describe("DataFlowComponentConfig", func() {
 
 			yaml, err := dataflowcomponentserviceconfig.RenderDataFlowComponentYAML(config.GetBenthosServiceConfig())
 			Expect(err).NotTo(HaveOccurred())
-			Expect(string(yaml)).To(ContainSubstring("kafka"))
-			Expect(string(yaml)).To(ContainSubstring("test-topic"))
-			Expect(string(yaml)).To(ContainSubstring("stdout"))
+			Expect(yaml).To(ContainSubstring("kafka"))
+			Expect(yaml).To(ContainSubstring("test-topic"))
+			Expect(yaml).To(ContainSubstring("stdout"))
 		})
 	})
 })

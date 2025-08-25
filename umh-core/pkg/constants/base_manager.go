@@ -26,6 +26,6 @@ const (
 	// for actual reconciliation work, impacting system responsiveness.
 	//
 	// CALCULATION: 1.0 - ManagerReservePercent (5%) = 0.95 (95% of manager time)
-	// With 90ms manager time: 90ms * 0.95 = 85.5ms for instances, 4.5ms for cleanup
+	// With 90ms manager time: 90ms * 0.95 = 85.5ms for instances, 4.5ms for cleanup.
 	BaseManagerControlLoopTimeFactor = 1.0 - ManagerReservePercent
 )

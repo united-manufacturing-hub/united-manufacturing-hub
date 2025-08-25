@@ -15,7 +15,7 @@
 package streamprocessor
 
 import (
-	"fmt"
+	"errors"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -26,7 +26,6 @@ import (
 )
 
 func NewManagerWithMockedServices(name string) (*Manager, *spsvc.MockService) {
-
 	mockSvc := spsvc.NewMockService()
 
 	// Create a new manager instance
@@ -38,7 +37,7 @@ func NewManagerWithMockedServices(name string) (*Manager, *spsvc.MockService) {
 			return config.StreamProcessor, nil
 		},
 		func(config config.StreamProcessorConfig) (string, error) {
-			return fmt.Sprintf("streamprocessor-%s", config.Name), nil
+			return "streamprocessor-" + config.Name, nil
 		},
 		// Get desired state for StreamProcessor config
 		func(cfg config.StreamProcessorConfig) (string, error) {
@@ -54,13 +53,14 @@ func NewManagerWithMockedServices(name string) (*Manager, *spsvc.MockService) {
 			// TODO: potentially pre-configure these mock services here
 
 			instance.service = mockSvc
+
 			return instance, nil
 		},
 		// Compare StreamProcessor configs
 		func(instance public_fsm.FSMInstance, cfg config.StreamProcessorConfig) (bool, error) {
 			streamProcessorInstance, ok := instance.(*Instance)
 			if !ok {
-				return false, fmt.Errorf("instance is not a StreamProcessorInstance")
+				return false, errors.New("instance is not a StreamProcessorInstance")
 			}
 
 			// Perform actual comparison - return true if configs are equal
@@ -81,21 +81,24 @@ func NewManagerWithMockedServices(name string) (*Manager, *spsvc.MockService) {
 		func(instance public_fsm.FSMInstance, cfg config.StreamProcessorConfig) error {
 			streamProcessorInstance, ok := instance.(*Instance)
 			if !ok {
-				return fmt.Errorf("instance is not a StreamProcessorInstance")
+				return errors.New("instance is not a StreamProcessorInstance")
 			}
+
 			streamProcessorInstance.specConfig = cfg.StreamProcessorServiceConfig
 			if mockSvc, ok := streamProcessorInstance.service.(*spsvc.MockService); ok {
 				runtimeConfig := streamprocessorserviceconfig.SpecToRuntime(cfg.StreamProcessorServiceConfig)
 				mockSvc.GetConfigResult = runtimeConfig
 			}
+
 			return nil
 		},
 		// Get expected max p95 execution time per instance
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
 			streamProcessorInstance, ok := instance.(*Instance)
 			if !ok {
-				return 0, fmt.Errorf("instance is not a StreamProcessorInstance")
+				return 0, errors.New("instance is not a StreamProcessorInstance")
 			}
+
 			return streamProcessorInstance.GetExpectedMaxP95ExecutionTimePerInstance(), nil
 		},
 	)

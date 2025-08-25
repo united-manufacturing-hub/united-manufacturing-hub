@@ -34,7 +34,7 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 		PrintLogsAndStopContainer()
 		CleanupDockerBuildCache()
 
-		//Keep temp dirs for debugging if the test failed
+		// Keep temp dirs for debugging if the test failed
 		if !CurrentSpecReport().Failed() {
 			cleanupTmpDirs(containerName)
 		}
@@ -70,7 +70,7 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 			builder.AddGoldenRedpanda()
 			testTopic := "test-throughput"
 
-			for i := 0; i < producers; i++ {
+			for i := range producers {
 				builder.AddBenthosProducer(fmt.Sprintf("benthos-%d", i), fmt.Sprintf("%dms", 1000/messagesPerSecond), testTopic)
 			}
 
@@ -153,17 +153,19 @@ func checkRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time, los
 	// Fetch the latest Messages and validate that:
 	// 1) The timestamp is within reason (+-1m)
 	// 2) The offsets are increasing (e.g the last offset of the batch is higher then the current one)
-
 	samplingStart := time.Now()
 	messages, err := getRPKSample(topic)
 	samplingDuration := time.Since(samplingStart)
+
 	if err != nil {
 		GinkgoWriter.Printf("❌ Error getting RPK sample: %v\n", err)
 		GinkgoWriter.Printf("❌ Messages: %v\n", messages)
+
 		return 0, err
 	}
 
 	var lastTimestamp int64
+
 	if len(messages) > 0 {
 		newOffset = int(messages[len(messages)-1].Offset)
 		lastTimestamp = messages[len(messages)-1].Timestamp
@@ -178,6 +180,7 @@ func checkRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time, los
 	// Redpanda logs in UTC, so we need to convert to local time
 	lastTime = lastTime.UTC()
 	currentNow := time.Now().UTC()
+
 	timeDifference := lastTime.Sub(currentNow)
 	if lastTime.Before(currentNow.Add(-1 * time.Minute)) {
 		return 0, fmt.Errorf("❌ Timestamp is too old: %s (%dms)", lastTime, lastTime.Sub(currentNow).Milliseconds())
@@ -201,6 +204,7 @@ func checkRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time, los
 	if msgPerSec <= 0 {
 		return 0, errors.New("❌ Msg per sec is not positive")
 	}
+
 	if msgPerSec < float64(messagesPerSecond)*lossToleranceFail {
 		return 0, fmt.Errorf("❌ Msg per sec is too low: %f (expected %d, tolerated %f [%.2f%%])\n", msgPerSec, messagesPerSecond, float64(messagesPerSecond)*lossToleranceFail, float64(messagesPerSecond)*lossToleranceFail/float64(messagesPerSecond)*100)
 	} else {
@@ -221,14 +225,16 @@ type Message struct {
 	Offset    int64
 }
 
-// getRPKSample connects to the redpanda cluster, and returns the last 10 messages from the given topic
+// getRPKSample connects to the redpanda cluster, and returns the last 10 messages from the given topic.
 func getRPKSample(topic string) ([]Message, error) {
 	ctx, cncl := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cncl()
+
 	out, err := runDockerCommandWithCtx(ctx, "exec", getContainerName(), "/opt/redpanda/bin/rpk", "topic", "consume", topic, "--offset", "-10", "-n", "10", "--format", "%d:%t:%o\n")
 	if err != nil {
 		GinkgoWriter.Printf("❌ Error getting RPK sample: %v\n", err)
 		GinkgoWriter.Printf("❌ Output: %s\n", out)
+
 		return nil, err
 	}
 	/*

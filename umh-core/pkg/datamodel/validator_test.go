@@ -79,7 +79,7 @@ var _ = Describe("Validator", func() {
 			}
 
 			err := validator.ValidateStructureOnly(ctx, dataModel)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should validate a leaf node with _type only", func() {
@@ -92,7 +92,7 @@ var _ = Describe("Validator", func() {
 			}
 
 			err := validator.ValidateStructureOnly(ctx, dataModel)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should validate a leaf node with _refModel", func() {
@@ -108,7 +108,7 @@ var _ = Describe("Validator", func() {
 			}
 
 			err := validator.ValidateStructureOnly(ctx, dataModel)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should validate a non-leaf node with only subfields", func() {
@@ -125,7 +125,7 @@ var _ = Describe("Validator", func() {
 			}
 
 			err := validator.ValidateStructureOnly(ctx, dataModel)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should fail validation for a non-leaf node with _type", func() {
@@ -287,7 +287,7 @@ var _ = Describe("Validator", func() {
 			}
 
 			err := validator.ValidateStructureOnly(ctx, dataModel)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should fail validation for invalid nested structures", func() {
@@ -316,7 +316,7 @@ var _ = Describe("Validator", func() {
 			}
 
 			err := validator.ValidateStructureOnly(ctx, dataModel)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 
@@ -388,7 +388,7 @@ var _ = Describe("Validator", func() {
 			}
 
 			err := validator.ValidateWithReferences(ctx, dataModel, dataModels, payloadShapes)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should fail validation when payload shape does not exist", func() {

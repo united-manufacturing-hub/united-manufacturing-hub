@@ -29,7 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-// mockFileInfoWithSys is a custom mock FileInfo that implements Sys() to return syscall.Stat_t
+// mockFileInfoWithSys is a custom mock FileInfo that implements Sys() to return syscall.Stat_t.
 type mockFileInfoWithSys struct {
 	name    string
 	size    int64
@@ -76,7 +76,7 @@ func (m *mockFileInfoWithSys) Sys() interface{} {
 // - No complex inode tracking across calls
 // - Immediate handling of rotated content using timestamps
 // - Guaranteed chronological order
-// - Robust error handling with graceful fallbacks
+// - Robust error handling with graceful fallbacks.
 var _ = Describe("S6 Log Rotation", func() {
 	var (
 		service     *DefaultService
@@ -235,7 +235,7 @@ var _ = Describe("S6 Log Rotation", func() {
 
 			// Create entries with sequential timestamps and identifiable content
 			baseTime := time.Now()
-			for i := 0; i < totalEntries; i++ {
+			for i := range totalEntries {
 				entries[i] = LogEntry{
 					Timestamp: baseTime.Add(time.Duration(i) * time.Second),
 					Content:   fmt.Sprintf("entry_%d", i),
@@ -249,7 +249,7 @@ var _ = Describe("S6 Log Rotation", func() {
 			Expect(st.full).To(BeTrue(), "Ring buffer should be marked as full after wrapping")
 
 			// Verify we only kept the maximum number of entries
-			Expect(len(st.logs)).To(Equal(maxLines), "Ring buffer should contain exactly maxLines entries")
+			Expect(st.logs).To(HaveLen(maxLines), "Ring buffer should contain exactly maxLines entries")
 
 			// Verify head pointer wrapped correctly
 			expectedHead := totalEntries % maxLines // Should be 50 for our test
@@ -276,7 +276,7 @@ var _ = Describe("S6 Log Rotation", func() {
 
 			// Verify chronological ordering is maintained in the buffer
 			// All entries should be sequential when read in ring order
-			for i := 0; i < maxLines; i++ {
+			for i := range maxLines {
 				bufferIndex := (st.head + i) % maxLines
 				expectedEntryIndex := oldestKeptIndex + i
 				expectedContent := fmt.Sprintf("entry_%d", expectedEntryIndex)
@@ -292,7 +292,7 @@ var _ = Describe("S6 Log Rotation", func() {
 
 			// Create exactly maxLines entries (should fill but not wrap)
 			entries := make([]LogEntry, maxLines)
-			for i := 0; i < maxLines; i++ {
+			for i := range maxLines {
 				entries[i] = LogEntry{
 					Timestamp: time.Now().Add(time.Duration(i) * time.Second),
 					Content:   fmt.Sprintf("exact_entry_%d", i),
@@ -304,10 +304,10 @@ var _ = Describe("S6 Log Rotation", func() {
 			// Should be full but head should point to 0 (ready for next write)
 			Expect(st.full).To(BeTrue(), "Buffer should be full at exact capacity")
 			Expect(st.head).To(Equal(0), "Head should be at 0 when exactly full")
-			Expect(len(st.logs)).To(Equal(maxLines), "Should contain exactly maxLines entries")
+			Expect(st.logs).To(HaveLen(maxLines), "Should contain exactly maxLines entries")
 
 			// All entries should be in order from 0 to maxLines-1
-			for i := 0; i < maxLines; i++ {
+			for i := range maxLines {
 				Expect(st.logs[i].Content).To(Equal(fmt.Sprintf("exact_entry_%d", i)),
 					"Entry at position %d should be correct", i)
 			}
@@ -319,14 +319,14 @@ var _ = Describe("S6 Log Rotation", func() {
 
 			// First fill: exactly maxLines entries
 			firstBatch := make([]LogEntry, maxLines)
-			for i := 0; i < maxLines; i++ {
+			for i := range maxLines {
 				firstBatch[i] = LogEntry{Content: fmt.Sprintf("first_%d", i)}
 			}
 			service.appendToRingBuffer(firstBatch, st)
 
 			// Second fill: another maxLines entries (complete wrap)
 			secondBatch := make([]LogEntry, maxLines)
-			for i := 0; i < maxLines; i++ {
+			for i := range maxLines {
 				secondBatch[i] = LogEntry{Content: fmt.Sprintf("second_%d", i)}
 			}
 			service.appendToRingBuffer(secondBatch, st)
@@ -334,10 +334,10 @@ var _ = Describe("S6 Log Rotation", func() {
 			// Should still be full, head should be back to 0
 			Expect(st.full).To(BeTrue())
 			Expect(st.head).To(Equal(0))
-			Expect(len(st.logs)).To(Equal(maxLines))
+			Expect(st.logs).To(HaveLen(maxLines))
 
 			// Buffer should contain only second batch entries
-			for i := 0; i < maxLines; i++ {
+			for i := range maxLines {
 				Expect(st.logs[i].Content).To(Equal(fmt.Sprintf("second_%d", i)),
 					"After complete wrap, should contain second batch at position %d", i)
 			}
@@ -382,6 +382,7 @@ var _ = Describe("S6 Log Rotation", func() {
 				if path == servicePath {
 					return true, nil
 				}
+
 				return false, nil
 			})
 		})
@@ -401,12 +402,14 @@ var _ = Describe("S6 Log Rotation", func() {
 				if path == servicePath {
 					return true, nil
 				}
+
 				return false, nil
 			})
 			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
 				if path == currentFile {
 					return []byte(logContent), nil
 				}
+
 				return nil, os.ErrNotExist
 			})
 			mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
@@ -420,6 +423,7 @@ var _ = Describe("S6 Log Rotation", func() {
 						inode:   12345,
 					}, nil
 				}
+
 				return nil, os.ErrNotExist
 			})
 			mockFS.WithGlobFunc(func(ctx context.Context, pattern string) ([]string, error) {
@@ -432,8 +436,10 @@ var _ = Describe("S6 Log Rotation", func() {
 					if from >= int64(len(content)) {
 						return nil, int64(len(content)), nil // No new data
 					}
+
 					return content[from:], int64(len(content)), nil
 				}
+
 				return nil, 0, os.ErrNotExist
 			})
 
@@ -463,12 +469,14 @@ var _ = Describe("S6 Log Rotation", func() {
 				if path == servicePath {
 					return true, nil
 				}
+
 				return false, nil
 			})
 			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
 				if path == currentFile {
 					return []byte(currentContent), nil
 				}
+
 				return nil, os.ErrNotExist
 			})
 			mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
@@ -482,6 +490,7 @@ var _ = Describe("S6 Log Rotation", func() {
 						inode:   uint64(currentInode),
 					}, nil
 				}
+
 				return nil, os.ErrNotExist
 			})
 			mockFS.WithGlobFunc(func(ctx context.Context, pattern string) ([]string, error) {
@@ -494,8 +503,10 @@ var _ = Describe("S6 Log Rotation", func() {
 					if from >= int64(len(content)) {
 						return nil, int64(len(content)), nil // No new data
 					}
+
 					return content[from:], int64(len(content)), nil
 				}
+
 				return nil, 0, os.ErrNotExist
 			})
 
@@ -534,12 +545,14 @@ var _ = Describe("S6 Log Rotation", func() {
 				if path == servicePath {
 					return true, nil
 				}
+
 				return false, nil
 			})
 			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
 				if path == currentFile {
 					return []byte(currentContent), nil
 				}
+
 				return nil, os.ErrNotExist
 			})
 			mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
@@ -553,6 +566,7 @@ var _ = Describe("S6 Log Rotation", func() {
 						inode:   uint64(currentInode),
 					}, nil
 				}
+
 				return nil, os.ErrNotExist
 			})
 			mockFS.WithGlobFunc(func(ctx context.Context, pattern string) ([]string, error) {
@@ -565,8 +579,10 @@ var _ = Describe("S6 Log Rotation", func() {
 					if from >= int64(len(content)) {
 						return nil, int64(len(content)), nil // No new data
 					}
+
 					return content[from:], int64(len(content)), nil
 				}
+
 				return nil, 0, os.ErrNotExist
 			})
 
@@ -618,6 +634,7 @@ var _ = Describe("S6 Log Rotation", func() {
 				if path == servicePath {
 					return true, nil
 				}
+
 				return false, nil
 			})
 			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
@@ -627,6 +644,7 @@ var _ = Describe("S6 Log Rotation", func() {
 				if path == rotatedFile && len(rotatedFiles) > 0 {
 					return []byte(rotatedContent), nil
 				}
+
 				return nil, os.ErrNotExist
 			})
 			mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
@@ -640,6 +658,7 @@ var _ = Describe("S6 Log Rotation", func() {
 						inode:   uint64(currentInode),
 					}, nil
 				}
+
 				return nil, os.ErrNotExist
 			})
 			mockFS.WithGlobFunc(func(ctx context.Context, pattern string) ([]string, error) {
@@ -651,6 +670,7 @@ var _ = Describe("S6 Log Rotation", func() {
 					if from >= int64(len(content)) {
 						return nil, int64(len(content)), nil // No new data
 					}
+
 					return content[from:], int64(len(content)), nil
 				}
 				if path == rotatedFile && len(rotatedFiles) > 0 {
@@ -658,8 +678,10 @@ var _ = Describe("S6 Log Rotation", func() {
 					if from >= int64(len(content)) {
 						return nil, int64(len(content)), nil // No new data
 					}
+
 					return content[from:], int64(len(content)), nil
 				}
+
 				return nil, 0, os.ErrNotExist
 			})
 
@@ -727,6 +749,7 @@ var _ = Describe("S6 Log Rotation", func() {
 				if path == servicePath {
 					return true, nil
 				}
+
 				return false, nil
 			})
 			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
@@ -736,6 +759,7 @@ var _ = Describe("S6 Log Rotation", func() {
 				if path == rotatedFile && len(rotatedFiles) > 0 {
 					return []byte(rotatedContent), nil
 				}
+
 				return nil, os.ErrNotExist
 			})
 			mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
@@ -749,6 +773,7 @@ var _ = Describe("S6 Log Rotation", func() {
 						inode:   uint64(currentInode),
 					}, nil
 				}
+
 				return nil, os.ErrNotExist
 			})
 			mockFS.WithGlobFunc(func(ctx context.Context, pattern string) ([]string, error) {
@@ -760,6 +785,7 @@ var _ = Describe("S6 Log Rotation", func() {
 					if from >= int64(len(content)) {
 						return nil, int64(len(content)), nil // No new data
 					}
+
 					return content[from:], int64(len(content)), nil
 				}
 				if path == rotatedFile && len(rotatedFiles) > 0 {
@@ -767,8 +793,10 @@ var _ = Describe("S6 Log Rotation", func() {
 					if from >= int64(len(content)) {
 						return nil, int64(len(content)), nil // No new data
 					}
+
 					return content[from:], int64(len(content)), nil
 				}
+
 				return nil, 0, os.ErrNotExist
 			})
 

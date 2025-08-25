@@ -25,31 +25,31 @@ import (
 // These are the nmap-monitor operational states, in addition
 // to the lifecycle states from internal_fsm.
 const (
-	// stopped is the initial state when the service is stopped
+	// stopped is the initial state when the service is stopped.
 	OperationalStateStopped = "stopped"
 
 	// Starting phase states
-	// starting is the operational state when nmap is starting
+	// starting is the operational state when nmap is starting.
 	OperationalStateStarting = "starting"
-	// degraded means nmap is running, but execution is not OK
+	// degraded means nmap is running, but execution is not OK.
 	OperationalStateDegraded = "degraded"
 
 	// Running phase states
 	// See nmap-states here: https://nmap.org/book/man-port-scanning-basics.html
-	// active means nmap is running and it shows port filtered
+	// active means nmap is running and it shows port filtered.
 	OperationalStateFiltered = "filtered"
-	// active means nmap is running and it shows port down
+	// active means nmap is running and it shows port down.
 	OperationalStateClosed = "closed"
-	// open means nmap is running and it shows port open
+	// open means nmap is running and it shows port open.
 	OperationalStateOpen = "open"
-	// unfiltered means nmap is running and it shows port unfiltered
+	// unfiltered means nmap is running and it shows port unfiltered.
 	OperationalStateUnfiltered = "unfiltered"
-	// unfiltered means nmap is running and it shows port open|filtered
+	// unfiltered means nmap is running and it shows port open|filtered.
 	OperationalStateOpenFiltered = "open_filtered"
-	// unfiltered means nmap is running and it shows port closed|filtered
+	// unfiltered means nmap is running and it shows port closed|filtered.
 	OperationalStateClosedFiltered = "closed_filtered"
 
-	// stopping is the operational state when nmap is stopping
+	// stopping is the operational state when nmap is stopping.
 	OperationalStateStopping = "stopping"
 )
 
@@ -69,6 +69,7 @@ func IsOperationalState(state string) bool {
 		OperationalStateOpen:
 		return true
 	}
+
 	return false
 }
 
@@ -91,17 +92,12 @@ const (
 	EventPortOpenFiltered   = "port_open_filtered"
 )
 
-// IsStartingState returns whether the given state is a starting state
+// IsStartingState returns whether the given state is a starting state.
 func IsStartingState(state string) bool {
-	switch state {
-	case OperationalStateStarting:
-		return true
-
-	}
-	return false
+	return state == OperationalStateStarting
 }
 
-// IsRunningState returns whether the given state is a running state
+// IsRunningState returns whether the given state is a running state.
 func IsRunningState(state string) bool {
 	switch state {
 	case OperationalStateOpen,
@@ -112,41 +108,42 @@ func IsRunningState(state string) bool {
 		OperationalStateOpenFiltered,
 		OperationalStateDegraded:
 		return true
-
 	}
+
 	return false
 }
 
-// NmapObservedState holds the last known nmap metrics and health status
+// NmapObservedState holds the last known nmap metrics and health status.
 type NmapObservedState struct {
-	// LastStateChange is the timestamp of the last observed state change
-	LastStateChange int64
-	// We store the nmap data from nmap_monitor.GetStatus
-	ServiceInfo nmap.ServiceInfo
 	// ObservedNmapServiceConfig contains the observed Nmap service config
 	ObservedNmapServiceConfig nmapserviceconfig.NmapServiceConfig
+	// We store the nmap data from nmap_monitor.GetStatus
+	ServiceInfo nmap.ServiceInfo
+	// LastStateChange is the timestamp of the last observed state change
+	LastStateChange int64
 }
 
-// Ensure it implements the ObservedState interface
+// Ensure it implements the ObservedState interface.
 func (n NmapObservedState) IsObservedState() {}
 
-// Verify at compile time that we implement fsm.FSMInstance
+// Verify at compile time that we implement fsm.FSMInstance.
 var _ publicfsm.FSMInstance = (*NmapInstance)(nil)
 
 // NmapInstance holds the FSM instance and references to the container monitor service.
 type NmapInstance struct {
-	// This embeds the "BaseFSMInstance" which handles lifecycle states,
-	// desired state, removal, etc.
-	baseFSMInstance *internal_fsm.BaseFSMInstance
-
-	// ObservedState: last known nmap metrics, updated in reconcile
-	ObservedState NmapObservedState
 
 	// The nmap service used to gather metrics
 	monitorService nmap.INmapService
 
+	// This embeds the "BaseFSMInstance" which handles lifecycle states,
+	// desired state, removal, etc.
+	baseFSMInstance *internal_fsm.BaseFSMInstance
+
 	// Possibly store config needed for nmap monitoring
 	config config.NmapConfig
+
+	// ObservedState: last known nmap metrics, updated in reconcile
+	ObservedState NmapObservedState
 }
 
 type PortState string
@@ -160,20 +157,20 @@ const (
 	PortStateClosedFiltered PortState = "closed|filtered"
 )
 
-// GetLastObservedState returns the last known observed data
+// GetLastObservedState returns the last known observed data.
 func (n *NmapInstance) GetLastObservedState() publicfsm.ObservedState {
 	return n.ObservedState
 }
 
 // SetService sets the Nmap service implementation
-// This is a testing-only utility to access the private field
+// This is a testing-only utility to access the private field.
 func (n *NmapInstance) SetService(service nmap.INmapService) {
 	n.monitorService = service
 }
 
 // IsTransientStreakCounterMaxed returns whether the transient streak counter
 // has reached the maximum number of ticks, which means that the FSM is stuck in a state
-// and should be removed
+// and should be removed.
 func (n *NmapInstance) IsTransientStreakCounterMaxed() bool {
 	return n.baseFSMInstance.IsTransientStreakCounterMaxed()
 }

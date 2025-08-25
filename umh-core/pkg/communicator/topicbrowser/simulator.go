@@ -34,8 +34,8 @@ import (
 type Simulator struct {
 	simObservedState   *topicbrowserfsm.ObservedStateSnapshot
 	simObservedStateMu *sync.RWMutex
-	ticker             int
 	topics             map[string]*tbproto.TopicInfo
+	ticker             int
 	simulatorEnabled   bool
 }
 
@@ -46,6 +46,7 @@ func NewSimulator() *Simulator {
 		ticker:             0,
 		simulatorEnabled:   false,
 	}
+
 	return s
 }
 
@@ -74,11 +75,9 @@ func (s *Simulator) InitializeSimulator() {
 }
 
 // this function is used to generate a new uns bundle for the simulator
-// it contains some hardcoded data for the topics in the simulated namespace
+// it contains some hardcoded data for the topics in the simulated namespace.
 func (s *Simulator) GenerateNewUnsBundle() []byte {
-
 	// generate some new random data for the topics in the simulated namespace (s.topics)
-
 	entries := []*tbproto.EventTableEntry{}
 
 	for key := range s.topics {
@@ -87,7 +86,7 @@ func (s *Simulator) GenerateNewUnsBundle() []byte {
 			Payload: &tbproto.EventTableEntry_Ts{
 				Ts: &tbproto.TimeSeriesPayload{
 					ScalarType:  tbproto.ScalarType_NUMERIC,
-					TimestampMs: int64(time.Now().UnixMilli()),
+					TimestampMs: time.Now().UnixMilli(),
 					Value: &tbproto.TimeSeriesPayload_NumericValue{
 						NumericValue: &wrapperspb.DoubleValue{
 							Value: rand.Float64() * 100,
@@ -111,10 +110,11 @@ func (s *Simulator) GenerateNewUnsBundle() []byte {
 	if err != nil {
 		return []byte{}
 	}
+
 	return marshaled
 }
 
-// AddUnsBundleToSimObservedState adds a new bundle to the simulated observed state
+// AddUnsBundleToSimObservedState adds a new bundle to the simulated observed state.
 func (s *Simulator) AddUnsBundleToSimObservedState(bundle []byte) {
 	s.simObservedStateMu.Lock()
 	defer s.simObservedStateMu.Unlock()
@@ -138,6 +138,7 @@ func (s *Simulator) AddUnsBundleToSimObservedState(bundle []byte) {
 func (s *Simulator) GetSimObservedState() *topicbrowserfsm.ObservedStateSnapshot {
 	s.simObservedStateMu.RLock()
 	defer s.simObservedStateMu.RUnlock()
+
 	return s.simObservedState
 }
 
@@ -156,22 +157,22 @@ func HashUNSTableEntry(info *tbproto.TopicInfo) string {
 		_, _ = hasher.Write(append([]byte(s), 0))
 	}
 
-	write(info.Level0)
+	write(info.GetLevel0())
 
 	// Hash all location sublevels
-	for _, level := range info.LocationSublevels {
+	for _, level := range info.GetLocationSublevels() {
 		write(level)
 	}
 
-	write(info.DataContract)
+	write(info.GetDataContract())
 
 	// Hash virtual path if it exists
 	if info.VirtualPath != nil {
-		write(*info.VirtualPath)
+		write(info.GetVirtualPath())
 	}
 
 	// Hash the name (new field)
-	write(info.Name)
+	write(info.GetName())
 
 	return hex.EncodeToString(hasher.Sum(nil))
 }
@@ -181,11 +182,12 @@ func (s *Simulator) Tick() {
 	if !s.simulatorEnabled {
 		return
 	}
+
 	s.ticker++
 	s.AddUnsBundleToSimObservedState(s.GenerateNewUnsBundle())
 }
 
-// getSimulatorEnabled returns true if the simulator is enabled
+// getSimulatorEnabled returns true if the simulator is enabled.
 func (s *Simulator) GetSimulatorEnabled() bool {
 	return s.simulatorEnabled
 }

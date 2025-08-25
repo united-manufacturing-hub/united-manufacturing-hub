@@ -20,14 +20,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// BenthosBuilder is used to build configuration with Benthos services
+// BenthosBuilder is used to build configuration with Benthos services.
 type BenthosBuilder struct {
-	full config.FullConfig
 	// Map to track which services are active by name
 	activeBenthos map[string]bool
+	full          config.FullConfig
 }
 
-// NewBenthosBuilder creates a new builder for Benthos configurations
+// NewBenthosBuilder creates a new builder for Benthos configurations.
 func NewBenthosBuilder() *BenthosBuilder {
 	return &BenthosBuilder{
 		full: config.FullConfig{
@@ -43,7 +43,7 @@ func NewBenthosBuilder() *BenthosBuilder {
 	}
 }
 
-// AddGoldenBenthos adds a Benthos service that serves HTTP requests on port 8082
+// AddGoldenBenthos adds a Benthos service that serves HTTP requests on port 8082.
 func (b *BenthosBuilder) AddGoldenBenthos() *BenthosBuilder {
 	// Create Benthos config with an HTTP server input
 	benthosConfig := config.BenthosConfig{
@@ -82,10 +82,11 @@ func (b *BenthosBuilder) AddGoldenBenthos() *BenthosBuilder {
 			DesiredFSMState: "stopped",
 		},
 	}
+
 	return b
 }
 
-// AddGeneratorBenthos adds a Benthos service that generates messages and sends to stdout
+// AddGeneratorBenthos adds a Benthos service that generates messages and sends to stdout.
 func (b *BenthosBuilder) AddGeneratorBenthos(name string, interval string) *BenthosBuilder {
 	// Create Benthos config with a generator input
 	benthosConfig := config.BenthosConfig{
@@ -112,10 +113,11 @@ func (b *BenthosBuilder) AddGeneratorBenthos(name string, interval string) *Bent
 	// Add to configuration
 	b.full.Internal.Benthos = append(b.full.Internal.Benthos, benthosConfig)
 	b.activeBenthos[name] = true
+
 	return b
 }
 
-// UpdateGeneratorBenthos updates the interval of an existing generator Benthos service
+// UpdateGeneratorBenthos updates the interval of an existing generator Benthos service.
 func (b *BenthosBuilder) UpdateGeneratorBenthos(name string, newInterval string) *BenthosBuilder {
 	// Find and update the service
 	for i, benthos := range b.full.Internal.Benthos {
@@ -125,49 +127,58 @@ func (b *BenthosBuilder) UpdateGeneratorBenthos(name string, newInterval string)
 				input["interval"] = newInterval
 				b.full.Internal.Benthos[i].BenthosServiceConfig.Input["generate"] = input
 			}
+
 			break
 		}
 	}
+
 	return b
 }
 
-// StartBenthos sets a Benthos service to active state
+// StartBenthos sets a Benthos service to active state.
 func (b *BenthosBuilder) StartBenthos(name string) *BenthosBuilder {
 	for i, benthos := range b.full.Internal.Benthos {
 		if benthos.Name == name {
 			b.full.Internal.Benthos[i].DesiredFSMState = "active"
 			b.activeBenthos[name] = true
+
 			break
 		}
 	}
+
 	return b
 }
 
-// StopBenthos sets a Benthos service to inactive state
+// StopBenthos sets a Benthos service to inactive state.
 func (b *BenthosBuilder) StopBenthos(name string) *BenthosBuilder {
 	for i, benthos := range b.full.Internal.Benthos {
 		if benthos.Name == name {
 			b.full.Internal.Benthos[i].DesiredFSMState = "stopped"
 			b.activeBenthos[name] = false
+
 			break
 		}
 	}
+
 	return b
 }
 
-// CountActiveBenthos returns the number of active Benthos services
+// CountActiveBenthos returns the number of active Benthos services.
 func (b *BenthosBuilder) CountActiveBenthos() int {
 	count := 0
+
 	for _, isActive := range b.activeBenthos {
 		if isActive {
 			count++
 		}
 	}
+
 	return count
 }
 
-// BuildYAML converts the configuration to YAML format
+// BuildYAML converts the configuration to YAML format.
 func (b *BenthosBuilder) BuildYAML() string {
 	out, _ := yaml.Marshal(b.full)
+
 	return string(out)
 }

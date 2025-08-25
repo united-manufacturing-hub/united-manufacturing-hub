@@ -54,7 +54,7 @@ type Event struct {
 
 type SchemaName string
 
-// Schema definitions
+// Schema definitions.
 const (
 	SCHEMA_ERROR_NO_SCHEMA_PRESENT SchemaName = "ERROR_NO_SCHEMA" // Do not add this to the ValidSchemas array
 	SCHEMA_ERROR_NO_ENTERPRISE     SchemaName = "ERROR_NO_ENTERPRISE"
@@ -209,6 +209,7 @@ type UnifiedNamespaceV2 struct {
 
 func (u *UnifiedNamespaceV2) Len() int {
 	nodes := 0
+
 	for _, enterprise := range u.Enterprises {
 		for _, site := range enterprise.Sites {
 			nodes += len(site.Schemas)
@@ -226,6 +227,7 @@ func (u *UnifiedNamespaceV2) Len() int {
 			}
 		}
 	}
+
 	return nodes
 }
 
@@ -247,13 +249,13 @@ type UnsTableEntry struct {
 type EventTable map[int]EventTableEntry
 
 type EventTableEntry struct {
-	UnsTreeId       string      `json:"unsTreeId"`
 	Value           interface{} `json:"value"`
-	TimestampMs     int64       `json:"timestamp_ms"`
-	Error           string      `json:"error"`
-	RawKafkaMessage EventKafka  `json:"rawKafkaMessage"`
 	Origin          *string     `json:"origin"`
+	UnsTreeId       string      `json:"unsTreeId"`
+	Error           string      `json:"error"`
 	Bridges         []string    `json:"bridges"`
+	RawKafkaMessage EventKafka  `json:"rawKafkaMessage"`
+	TimestampMs     int64       `json:"timestamp_ms"`
 }
 
 func HashUNSTableEntry(enterpriseName, siteName, areaName, lineName, workCellName, originId, schemaName, eventGroup, eventName string) string {
@@ -267,5 +269,6 @@ func HashUNSTableEntry(enterpriseName, siteName, areaName, lineName, workCellNam
 	_, _ = hasher.Write([]byte(schemaName))
 	_, _ = hasher.Write([]byte(eventGroup))
 	_, _ = hasher.Write([]byte(eventName))
+
 	return hex.EncodeToString(hasher.Sum(nil))
 }

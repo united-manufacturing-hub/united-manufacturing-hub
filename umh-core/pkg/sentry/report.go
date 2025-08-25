@@ -33,6 +33,7 @@ func ReportIssue(err error, issueType IssueType, log *zap.SugaredLogger) {
 		// If logger initialization failed somehow, create a no-op logger to avoid nil panics
 		log = zap.NewNop().Sugar()
 	}
+
 	switch issueType {
 	case IssueTypeFatal:
 		reportFatal(err, log)
@@ -47,12 +48,13 @@ func ReportIssuef(issueType IssueType, log *zap.SugaredLogger, template string, 
 	ReportIssue(fmt.Errorf(template, args...), issueType, log)
 }
 
-// ReportIssueWithContext reports an issue with additional context data that will be included in Sentry
+// ReportIssueWithContext reports an issue with additional context data that will be included in Sentry.
 func ReportIssueWithContext(err error, issueType IssueType, log *zap.SugaredLogger, context map[string]interface{}) {
 	if log == nil {
 		// If logger initialization failed somehow, create a no-op logger to avoid nil panics
 		log = zap.NewNop().Sugar()
 	}
+
 	switch issueType {
 	case IssueTypeFatal:
 		reportFatalWithContext(err, log, context)
@@ -63,14 +65,14 @@ func ReportIssueWithContext(err error, issueType IssueType, log *zap.SugaredLogg
 	}
 }
 
-// ReportIssuefWithContext formats an error message and reports it with additional context data
+// ReportIssuefWithContext formats an error message and reports it with additional context data.
 func ReportIssuefWithContext(issueType IssueType, log *zap.SugaredLogger, context map[string]interface{}, template string, args ...interface{}) {
 	ReportIssueWithContext(fmt.Errorf(template, args...), issueType, log, context)
 }
 
 // Helper functions for common error patterns
 
-// ReportFSMError reports an FSM-related error with proper context
+// ReportFSMError reports an FSM-related error with proper context.
 func ReportFSMError(log *zap.SugaredLogger, instanceID string, fsmType string, operation string, err error) {
 	context := map[string]interface{}{
 		"instance_id": instanceID,
@@ -80,7 +82,7 @@ func ReportFSMError(log *zap.SugaredLogger, instanceID string, fsmType string, o
 	ReportIssueWithContext(err, IssueTypeError, log, context)
 }
 
-// ReportFSMFatal reports an FSM-related fatal error with proper context
+// ReportFSMFatal reports an FSM-related fatal error with proper context.
 func ReportFSMFatal(log *zap.SugaredLogger, instanceID string, fsmType string, operation string, err error) {
 	context := map[string]interface{}{
 		"instance_id": instanceID,
@@ -90,7 +92,7 @@ func ReportFSMFatal(log *zap.SugaredLogger, instanceID string, fsmType string, o
 	ReportIssueWithContext(err, IssueTypeFatal, log, context)
 }
 
-// ReportFSMErrorf formats an FSM-related error message and reports it with proper context
+// ReportFSMErrorf formats an FSM-related error message and reports it with proper context.
 func ReportFSMErrorf(log *zap.SugaredLogger, instanceID string, fsmType string, operation string, template string, args ...interface{}) {
 	context := map[string]interface{}{
 		"instance_id": instanceID,
@@ -100,7 +102,7 @@ func ReportFSMErrorf(log *zap.SugaredLogger, instanceID string, fsmType string, 
 	ReportIssuefWithContext(IssueTypeError, log, context, template, args...)
 }
 
-// ReportServiceError reports a service-related error with proper context
+// ReportServiceError reports a service-related error with proper context.
 func ReportServiceError(log *zap.SugaredLogger, serviceID string, serviceType string, operation string, err error) {
 	context := map[string]interface{}{
 		"service_id":   serviceID,
@@ -110,7 +112,7 @@ func ReportServiceError(log *zap.SugaredLogger, serviceID string, serviceType st
 	ReportIssueWithContext(err, IssueTypeError, log, context)
 }
 
-// ReportServiceErrorf formats a service-related error message and reports it with proper context
+// ReportServiceErrorf formats a service-related error message and reports it with proper context.
 func ReportServiceErrorf(log *zap.SugaredLogger, serviceID string, serviceType string, operation string, template string, args ...interface{}) {
 	context := map[string]interface{}{
 		"service_id":   serviceID,

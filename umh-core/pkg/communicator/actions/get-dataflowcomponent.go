@@ -72,24 +72,25 @@ import (
 // ----------------------------------------------------------------------------
 
 type GetDataFlowComponentAction struct {
-
-	// ─── Request metadata ────────────────────────────────────────────────────
-	userEmail    string
-	actionUUID   uuid.UUID
-	instanceUUID uuid.UUID
+	configManager config.ConfigManager // currently unused but kept for symmetry
 
 	// ─── Plumbing ────────────────────────────────────────────────────────────
 	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager // currently unused but kept for symmetry
 
 	// ─── Runtime observation ────────────────────────────────────────────────
 	systemSnapshotManager *fsm.SnapshotManager
 
+	// ─── Utilities ──────────────────────────────────────────────────────────
+	actionLogger *zap.SugaredLogger
+
+	// ─── Request metadata ────────────────────────────────────────────────────
+	userEmail string
+
 	// ─── Parsed request payload ─────────────────────────────────────────────
 	payload models.GetDataflowcomponentRequestSchemaJson
 
-	// ─── Utilities ──────────────────────────────────────────────────────────
-	actionLogger *zap.SugaredLogger
+	actionUUID   uuid.UUID
+	instanceUUID uuid.UUID
 }
 
 // NewGetDataFlowComponentAction creates a new GetDataFlowComponentAction with the provided parameters.
@@ -114,6 +115,7 @@ func (a *GetDataFlowComponentAction) Parse(payload interface{}) (err error) {
 	a.actionLogger.Info("Parsing the payload")
 	a.payload, err = ParseActionPayload[models.GetDataflowcomponentRequestSchemaJson](payload)
 	a.actionLogger.Info("Payload parsed, uuids: ", a.payload.VersionUUIDs)
+
 	return err
 }
 
@@ -137,31 +139,35 @@ func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interfac
 
 	if dataflowcomponentManager, exists := systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
 		a.actionLogger.Debugf("Dataflowcomponent manager found, getting the dataflowcomponent")
+
 		instances := dataflowcomponentManager.GetInstances()
 		foundComponents := 0
+
 		for _, instance := range instances {
 			currentUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID).String()
 			if slices.Contains(a.payload.VersionUUIDs, currentUUID) {
 				a.actionLogger.Debugf("Adding %s to the response", instance.ID)
+
 				dfc, err := BuildDataFlowComponentDataFromSnapshot(*instance, a.actionLogger)
 				if err != nil {
 					a.actionLogger.Warnf("Failed to build dataflowcomponent data: %v", err)
 					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 						fmt.Sprintf("Warning: Failed to retrieve data for component '%s': %v",
 							instance.ID, err), a.outboundChannel, models.GetDataFlowComponent)
+
 					continue
 				}
+
 				dataFlowComponents = append(dataFlowComponents, dfc)
 				foundComponents++
 			}
-
 		}
+
 		if foundComponents < numUUIDs {
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 				fmt.Sprintf("Found %d of %d requested components. Some components might not exist in the system.",
 					foundComponents, numUUIDs), a.outboundChannel, models.GetDataFlowComponent)
 		}
-
 	}
 
 	// ─── 2  Build the public response object ────────────────────────────────
@@ -170,6 +176,7 @@ func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interfac
 		fmt.Sprintf("Processing configurations for %d dataflow components...",
 			len(dataFlowComponents)), a.outboundChannel, models.GetDataFlowComponent)
 	response := models.GetDataflowcomponentResponse{}
+
 	for _, component := range dataFlowComponents {
 		// build the payload using shared function
 		dfc_payload, err := BuildCommonDataFlowComponentPropertiesFromConfig(component.DataFlowComponentServiceConfig, a.actionLogger)
@@ -178,6 +185,7 @@ func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interfac
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 				fmt.Sprintf("Warning: Failed to build properties for component '%s': %v",
 					component.Name, err), a.outboundChannel, models.GetDataFlowComponent)
+
 			continue
 		}
 
@@ -195,9 +203,10 @@ func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interfac
 	}
 
 	// Send the success message
-	//SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedSuccessfull, response, a.outboundChannel, models.GetDataFlowComponent)
+	// SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedSuccessfull, response, a.outboundChannel, models.GetDataFlowComponent)
 
 	a.actionLogger.Info("Response built, returning, response: ", response)
+
 	return response, nil, nil
 }
 

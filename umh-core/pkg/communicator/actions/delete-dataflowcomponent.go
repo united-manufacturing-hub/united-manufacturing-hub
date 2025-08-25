@@ -58,25 +58,26 @@ import (
 // The struct only contains *immutable* data required throughout the whole
 // lifecycle of a deletion.  Any value that changes during execution is local to
 // the respective method to avoid lock contention and race conditions.
-// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------.
 type DeleteDataflowComponentAction struct {
+	configManager config.ConfigManager // abstraction over config store
+
+	// ─── Plumbing ────────────────────────────────────────────────────────────
+	outboundChannel chan *models.UMHMessage // channel for progress events
+
+	// ─── Runtime observation ────────────────────────────────────────────────
+	systemSnapshotManager *fsm.SnapshotManager
+
+	// ─── Utilities ──────────────────────────────────────────────────────────
+	actionLogger *zap.SugaredLogger
 	// ─── Request metadata ────────────────────────────────────────────────────
 	userEmail    string    // used for feedback messages
 	actionUUID   uuid.UUID // unique ID of *this* action instance
 	instanceUUID uuid.UUID // ID of the UMH instance we operate on
 
-	// ─── Plumbing ────────────────────────────────────────────────────────────
-	outboundChannel chan *models.UMHMessage // channel for progress events
-	configManager   config.ConfigManager    // abstraction over config store
-
-	// ─── Runtime observation ────────────────────────────────────────────────
-	systemSnapshotManager *fsm.SnapshotManager
-
 	// ─── Business data ──────────────────────────────────────────────────────
 	componentUUID uuid.UUID // the component slated for deletion
 
-	// ─── Utilities ──────────────────────────────────────────────────────────
-	actionLogger *zap.SugaredLogger
 }
 
 // NewDeleteDataflowComponentAction returns an *empty* action instance prepared
@@ -101,7 +102,7 @@ func (a *DeleteDataflowComponentAction) Parse(payload interface{}) error {
 	// Parse the payload to get the UUID
 	parsedPayload, err := ParseActionPayload[models.DeleteDFCPayload](payload)
 	if err != nil {
-		return fmt.Errorf("failed to parse payload: %v", err)
+		return fmt.Errorf("failed to parse payload: %w", err)
 	}
 
 	// Validate UUID is provided
@@ -112,7 +113,7 @@ func (a *DeleteDataflowComponentAction) Parse(payload interface{}) error {
 	// Parse string UUID into UUID object
 	componentUUID, err := uuid.Parse(parsedPayload.UUID)
 	if err != nil {
-		return fmt.Errorf("invalid UUID format: %v", err)
+		return fmt.Errorf("invalid UUID format: %w", err)
 	}
 
 	a.componentUUID = componentUUID
@@ -148,21 +149,24 @@ func (a *DeleteDataflowComponentAction) Execute() (interface{}, map[string]inter
 	defer cancel()
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Removing dataflow component from configuration...", a.outboundChannel, models.DeleteDataFlowComponent)
+
 	err := a.configManager.AtomicDeleteDataflowcomponent(ctx, a.componentUUID)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to delete dataflow component: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeleteDataFlowComponent)
+
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
 	// ─── 3  Observe the runtime until the FSM forgets the instance ─────────
 	if a.systemSnapshotManager != nil { // skipping this for the unit tests
-
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Configuration updated. Waiting for dataflow component to be fully removed from the system...", a.outboundChannel, models.DeleteDataFlowComponent)
+
 		err = a.waitForComponentToBeRemoved()
 		if err != nil {
 			errorMsg := fmt.Sprintf("Failed to wait for dataflow component to be removed: %v", err)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeleteDataFlowComponent)
+
 			return nil, nil, fmt.Errorf("%s", errorMsg)
 		}
 	}
@@ -189,9 +193,10 @@ func (a *DeleteDataflowComponentAction) GetComponentUUID() uuid.UUID {
 }
 
 func (a *DeleteDataflowComponentAction) waitForComponentToBeRemoved() error {
-	//check the system snapshot and waits for the instance to be removed
+	// check the system snapshot and waits for the instance to be removed
 	ticker := time.NewTicker(constants.ActionTickerTime)
 	defer ticker.Stop()
+
 	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
 	startTime := time.Now()
 	timeoutDuration := constants.DataflowComponentWaitForActiveTimeout
@@ -205,6 +210,7 @@ func (a *DeleteDataflowComponentAction) waitForComponentToBeRemoved() error {
 		for _, inst := range dataflowcomponentManager.GetInstances() {
 			if dataflowcomponentserviceconfig.GenerateUUIDFromName(inst.ID) == a.componentUUID {
 				componentName = inst.ID
+
 				break
 			}
 		}
@@ -226,21 +232,26 @@ func (a *DeleteDataflowComponentAction) waitForComponentToBeRemoved() error {
 			systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
 
 			removed := true
+
 			if mgr, ok := systemSnapshot.Managers[constants.DataflowcomponentManagerName]; ok {
 				for _, inst := range mgr.GetInstances() {
 					if dataflowcomponentserviceconfig.GenerateUUIDFromName(inst.ID) == a.componentUUID {
 						removed = false
+
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 							fmt.Sprintf("Component '%s' still exists in state '%s'. Waiting for removal (%ds remaining)...",
 								inst.ID, inst.CurrentState, remainingSeconds), a.outboundChannel, models.DeleteDataFlowComponent)
+
 						break
 					}
 				}
 			}
+
 			if removed {
 				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 					fmt.Sprintf("Dataflow component '%s' has been successfully removed from the system.", componentName),
 					a.outboundChannel, models.DeleteDataFlowComponent)
+
 				return nil
 			}
 		}

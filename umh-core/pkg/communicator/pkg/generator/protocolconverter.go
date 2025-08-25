@@ -16,6 +16,7 @@ package generator
 
 import (
 	"fmt"
+	"regexp"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -36,17 +37,18 @@ func ProtocolConvertersFromSnapshot(
 	mgr fsm.ManagerSnapshot,
 	log *zap.SugaredLogger,
 ) []models.Dfc {
-
 	if mgr == nil {
 		return []models.Dfc{}
 	}
 
 	var out []models.Dfc
+
 	for _, inst := range mgr.GetInstances() {
 		if pc, err := buildProtocolConverterAsDfc(*inst, log); err == nil {
 			out = append(out, pc)
 		}
 	}
+
 	return out
 }
 
@@ -56,7 +58,6 @@ func buildProtocolConverterAsDfc(
 	instance fsm.FSMInstanceSnapshot,
 	log *zap.SugaredLogger,
 ) (models.Dfc, error) {
-
 	observed, ok := instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot)
 	if !ok || observed == nil {
 		return models.Dfc{}, fmt.Errorf("observed state %T is not ProtocolConverterObservedStateSnapshot", instance.LastObservedState)
@@ -64,6 +65,7 @@ func buildProtocolConverterAsDfc(
 
 	// ---- health ---------------------------------------------------------
 	healthCat := models.Neutral
+
 	switch instance.CurrentState {
 	case protocolconverter.OperationalStateActive:
 		healthCat = models.Active
@@ -81,16 +83,47 @@ func buildProtocolConverterAsDfc(
 
 	// Create connection info for protocol converter
 	var connections []models.Connection
-	if observed.ObservedProtocolConverterRuntimeConfig.ConnectionServiceConfig.NmapServiceConfig.Target != "" {
+
+	if observed.ObservedProtocolConverterSpecConfig.Config.ConnectionServiceConfig.NmapTemplate != nil &&
+		observed.ObservedProtocolConverterSpecConfig.Config.ConnectionServiceConfig.NmapTemplate.Target != "" {
 		var lastLatencyMs float64
 		if observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ServiceInfo.NmapStatus.LastScan != nil {
 			lastLatencyMs = observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ServiceInfo.NmapStatus.LastScan.PortResult.LatencyMs
 		}
 
+		// check the variables for the target and port
+
+		specTarget := observed.ObservedProtocolConverterSpecConfig.Config.ConnectionServiceConfig.NmapTemplate.Target
+		specPort := observed.ObservedProtocolConverterSpecConfig.Config.ConnectionServiceConfig.NmapTemplate.Port
+
+		// targetConfig is e.g. "{{ .IP }}" and portConfig is e.g. "{{ .PORT }}"
+		// we need to replace the variables with the actual values therefore we need to get the variable name and check the values in the user variables
+		// if the variable is not found, we use the default value
+
+		re := regexp.MustCompile(`{{\s*\.(\w+)\s*}}`)
+
+		target := specTarget
+		if match := re.FindStringSubmatch(specTarget); len(match) > 1 {
+			if userValue, ok := observed.ObservedProtocolConverterSpecConfig.Variables.User[match[1]]; ok {
+				if strValue, ok := userValue.(string); ok {
+					target = strValue
+				}
+			}
+		}
+
+		port := specPort
+		if match := re.FindStringSubmatch(specPort); len(match) > 1 {
+			if userValue, ok := observed.ObservedProtocolConverterSpecConfig.Variables.User[match[1]]; ok {
+				if strValue, ok := userValue.(string); ok {
+					port = strValue
+				}
+			}
+		}
+
 		connection := models.Connection{
 			Name: instance.ID + "-connection",
 			UUID: dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID + "-connection").String(), // Derive connection UUID from PC UUID
-			URI:  fmt.Sprintf("%s:%d", observed.ObservedProtocolConverterRuntimeConfig.ConnectionServiceConfig.NmapServiceConfig.Target, observed.ObservedProtocolConverterRuntimeConfig.ConnectionServiceConfig.NmapServiceConfig.Port),
+			URI:  fmt.Sprintf("%s:%s", target, port),
 			Health: &models.Health{
 				Message:       observed.ServiceInfo.ConnectionFSMState,
 				ObservedState: observed.ServiceInfo.ConnectionFSMState,
@@ -102,16 +135,14 @@ func buildProtocolConverterAsDfc(
 		connections = append(connections, connection)
 	}
 
-	// var templatePort string
-	// if observed.ObservedProtocolConverterTemplateConfig.ConnectionServiceConfig.NmapTemplate != nil {
-	// 	templatePort = observed.ObservedProtocolConverterTemplateConfig.ConnectionServiceConfig.NmapTemplate.Port
-	// } else {
-	// 	templatePort = "not found"
-	// }
-
-	//check if the protocol converter is initialized by checking if a read dfc is present
+	// Check if the protocol converter is initialized by checking if a read dfc is present.
 	isInitialized := false
-	input := observed.ObservedProtocolConverterRuntimeConfig.DataflowComponentReadServiceConfig.BenthosConfig.Input
+
+	var input map[string]any
+	if observed.ObservedProtocolConverterSpecConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input != nil {
+		input = observed.ObservedProtocolConverterSpecConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input
+	}
+
 	if len(input) > 0 {
 		isInitialized = true
 	}
@@ -138,7 +169,6 @@ func buildProtocolConverterAsDfc(
 	svcInfo := observed.ServiceInfo
 	if m := svcInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState; m != nil &&
 		m.Input.LastCount > 0 {
-
 		dfc.Metrics = &models.DfcMetrics{
 			AvgInputThroughputPerMinuteInMsgSec: m.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds(),
 		}
@@ -147,7 +177,7 @@ func buildProtocolConverterAsDfc(
 	return dfc, nil
 }
 
-// getProtocolConverterStatusMessage returns a human-readable status message for the given state
+// getProtocolConverterStatusMessage returns a human-readable status message for the given state.
 func getProtocolConverterStatusMessage(state string, statusReason string, connectionState string, nmapState string) string {
 	baseMessage := ""
 	connectionSuffix := ""
@@ -171,7 +201,7 @@ func getProtocolConverterStatusMessage(state string, statusReason string, connec
 	case protocolconverter.OperationalStateStartingFailedDFCMissing:
 		baseMessage = "No DFC added yet"
 	default:
-		baseMessage = fmt.Sprintf("Protocol converter state: %s", state)
+		baseMessage = "Protocol converter state: " + state
 	}
 
 	// Add connection state information if available
@@ -190,7 +220,7 @@ func getProtocolConverterStatusMessage(state string, statusReason string, connec
 		default:
 			// For specific error states or unknown states, include the raw connection state
 			if connectionState != "unknown" && connectionState != "" {
-				connectionSuffix = fmt.Sprintf(" - connection: %s", connectionState)
+				connectionSuffix = " - connection: " + connectionState
 			}
 		}
 	}
@@ -198,6 +228,7 @@ func getProtocolConverterStatusMessage(state string, statusReason string, connec
 	// Add Nmap state information if available
 	if nmapState != "" {
 		nmapSuffix := ""
+
 		switch nmapState {
 		case nmap.OperationalStateOpen:
 			nmapSuffix = " (port is open)"
@@ -232,7 +263,7 @@ func getProtocolConverterStatusMessage(state string, statusReason string, connec
 	return baseMessage + connectionSuffix + " - " + statusReason
 }
 
-// getHealthCategoryFromState converts a FSM state string to models.HealthCategory
+// getHealthCategoryFromState converts a FSM state string to models.HealthCategory.
 func getHealthCategoryFromState(state string) models.HealthCategory {
 	switch state {
 	case connection.OperationalStateUp:

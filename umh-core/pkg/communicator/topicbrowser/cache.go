@@ -29,7 +29,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// ProcessingSource indicates the source of topic browser data
+// ProcessingSource indicates the source of topic browser data.
 type ProcessingSource int
 
 const (
@@ -37,7 +37,7 @@ const (
 	ProcessingSourceSimulator                         // Simulated data for testing/demo
 )
 
-// String returns the string representation of the processing source
+// String returns the string representation of the processing source.
 func (ps ProcessingSource) String() string {
 	switch ps {
 	case ProcessingSourceFSM:
@@ -49,26 +49,26 @@ func (ps ProcessingSource) String() string {
 	}
 }
 
-// ProcessingResult contains the result of processing incremental updates
+// ProcessingResult contains the result of processing incremental updates.
 type ProcessingResult struct {
-	ProcessedCount  int       // Number of buffers successfully processed
-	SkippedCount    int       // Number of buffers skipped due to errors
 	LatestTimestamp time.Time // Latest timestamp from processed buffers
 	DebugInfo       string    // Debug information about what was processed
+	ProcessedCount  int       // Number of buffers successfully processed
+	SkippedCount    int       // Number of buffers skipped due to errors
 }
 
 // Cache maintains the latest UnsBundle for each topic key
-// This provides fast bootstrap for new subscribers and avoids re-decompressing data
+// This provides fast bootstrap for new subscribers and avoids re-decompressing data.
 type Cache struct {
-	mu                       sync.RWMutex
+	lastSentTimestamp        time.Time                           // Timestamp of last bundle sent to subscribers
+	lastCachedTimestamp      time.Time                           // Timestamp of last cached/processed buffer
 	eventMap                 map[string]*tbproto.EventTableEntry // key = UnsTreeId from events
 	unsMap                   *tbproto.TopicMap
-	lastProcessedSequenceNum uint64    // Sequence number of last processed buffer
-	lastSentTimestamp        time.Time // Timestamp of last bundle sent to subscribers
-	lastCachedTimestamp      time.Time // Timestamp of last cached/processed buffer
+	lastProcessedSequenceNum uint64 // Sequence number of last processed buffer
+	mu                       sync.RWMutex
 }
 
-// NewCache creates a new topic browser cache
+// NewCache creates a new topic browser cache.
 func NewCache() *Cache {
 	return &Cache{
 		eventMap: make(map[string]*tbproto.EventTableEntry),
@@ -81,7 +81,7 @@ func NewCache() *Cache {
 	}
 }
 
-// generateDebugInfo creates debug information about the processing result
+// generateDebugInfo creates debug information about the processing result.
 func generateDebugInfo(result *ProcessingResult, dataLost bool, minSequenceNum, maxSequenceNum uint64) {
 	if result.ProcessedCount == 0 {
 		if dataLost {
@@ -101,7 +101,7 @@ func generateDebugInfo(result *ProcessingResult, dataLost bool, minSequenceNum, 
 }
 
 // ProcessIncrementalUpdates processes only new buffers based on sequence numbers
-// Uses ring buffer metadata (LastSequenceNum, Count) for efficient processing
+// Uses ring buffer metadata (LastSequenceNum, Count) for efficient processing.
 func (c *Cache) ProcessIncrementalUpdates(obs *topicbrowserfsm.ObservedStateSnapshot) (*ProcessingResult, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -125,6 +125,7 @@ func (c *Cache) ProcessIncrementalUpdates(obs *topicbrowserfsm.ObservedStateSnap
 		result.DebugInfo = fmt.Sprintf("No new buffers to process (last processed sequence: %d, current: %d)",
 			c.lastProcessedSequenceNum, lastSequenceNum)
 		log.Infof("Cache update: %s", result.DebugInfo)
+
 		return result, nil
 	}
 
@@ -132,6 +133,7 @@ func (c *Cache) ProcessIncrementalUpdates(obs *topicbrowserfsm.ObservedStateSnap
 
 	// Check for data loss (gap larger than buffer capacity)
 	dataLost := false
+
 	var itemsToProcess []*topicbrowserservice.BufferItem
 
 	if newItemCount > uint64(constants.RingBufferCapacity) {
@@ -148,8 +150,10 @@ func (c *Cache) ProcessIncrementalUpdates(obs *topicbrowserfsm.ObservedStateSnap
 	}
 
 	// Process the selected buffers
-	var latestTimestamp time.Time
-	var minSequenceNum, maxSequenceNum uint64
+	var (
+		latestTimestamp                time.Time
+		minSequenceNum, maxSequenceNum uint64
+	)
 
 	for i, buf := range itemsToProcess {
 		// Track latest timestamp for cache management
@@ -161,6 +165,7 @@ func (c *Cache) ProcessIncrementalUpdates(obs *topicbrowserfsm.ObservedStateSnap
 		if minSequenceNum == 0 || buf.SequenceNum < minSequenceNum {
 			minSequenceNum = buf.SequenceNum
 		}
+
 		if buf.SequenceNum > maxSequenceNum {
 			maxSequenceNum = buf.SequenceNum
 		}
@@ -169,6 +174,7 @@ func (c *Cache) ProcessIncrementalUpdates(obs *topicbrowserfsm.ObservedStateSnap
 		err := c.processBuffer(buf, log)
 		if err != nil {
 			log.Errorf("Failed to process buffer with sequence %d: %v", buf.SequenceNum, err)
+
 			result.SkippedCount++
 
 			// Log details about first few skipped buffers to avoid spam
@@ -176,6 +182,7 @@ func (c *Cache) ProcessIncrementalUpdates(obs *topicbrowserfsm.ObservedStateSnap
 				log.Warnf("Skipped buffer %d: timestamp=%s, size=%d bytes, error=%v",
 					i, buf.Timestamp.Format(time.RFC3339), len(buf.Payload), err)
 			}
+
 			continue
 		}
 
@@ -202,10 +209,11 @@ func (c *Cache) ProcessIncrementalUpdates(obs *topicbrowserfsm.ObservedStateSnap
 	generateDebugInfo(result, dataLost, minSequenceNum, maxSequenceNum)
 
 	log.Infof("Cache update: %s", result.DebugInfo)
+
 	return result, nil
 }
 
-// processBuffer processes a single buffer and updates the cache
+// processBuffer processes a single buffer and updates the cache.
 func (c *Cache) processBuffer(buf *topicbrowserservice.BufferItem, log *zap.SugaredLogger) error {
 	// Unmarshal the protobuf data
 	var ub tbproto.UnsBundle
@@ -220,23 +228,25 @@ func (c *Cache) processBuffer(buf *topicbrowserservice.BufferItem, log *zap.Suga
 			"component":   "topic_browser_cache",
 		}
 		sentry.ReportIssueWithContext(err, sentry.IssueTypeError, log, context)
+
 		return err
 	}
 
 	// upsert the latest event by UnsTreeId (key)
 	// if the event is newer, we overwrite the existing event
 	// if the event is older, we skip it
-	for _, entry := range ub.Events.Entries {
-		existing, exists := c.eventMap[entry.UnsTreeId]
-		if !exists || entry.ProducedAtMs > existing.ProducedAtMs {
-			c.eventMap[entry.UnsTreeId] = entry
+	for _, entry := range ub.GetEvents().GetEntries() {
+		existing, exists := c.eventMap[entry.GetUnsTreeId()]
+		if !exists || entry.GetProducedAtMs() > existing.GetProducedAtMs() {
+			c.eventMap[entry.GetUnsTreeId()] = entry
 		}
+
 		log.Infof("Processed event - UnsTreeId: %s, ProducedAtMs: %d, Payload: %s",
-			entry.UnsTreeId, entry.ProducedAtMs, entry.Payload)
+			entry.GetUnsTreeId(), entry.GetProducedAtMs(), entry.GetPayload())
 	}
 
 	// upsert the uns map
-	for _, entry := range ub.UnsMap.Entries {
+	for _, entry := range ub.GetUnsMap().GetEntries() {
 		// generate a hash from the entry by calling HashUNSTableEntry
 		hash := HashUNSTableEntry(entry)
 		c.unsMap.Entries[hash] = entry
@@ -246,7 +256,7 @@ func (c *Cache) processBuffer(buf *topicbrowserservice.BufferItem, log *zap.Suga
 }
 
 // GetPendingBuffers returns buffers that haven't been sent to subscribers yet
-// This replaces the timestamp-based filtering in getPendingBundlesFromObservedState
+// This replaces the timestamp-based filtering in getPendingBundlesFromObservedState.
 func (c *Cache) GetPendingBuffers(obs *topicbrowserfsm.ObservedStateSnapshot, thresholdTimestamp time.Time) ([]*topicbrowserservice.BufferItem, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -266,7 +276,7 @@ func (c *Cache) GetPendingBuffers(obs *topicbrowserfsm.ObservedStateSnapshot, th
 	return pendingBuffers, nil
 }
 
-// this function is used to convert the cache into one proto-encoded UnsBundle
+// this function is used to convert the cache into one proto-encoded UnsBundle.
 func (c *Cache) ToUnsBundleProto() []byte {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -287,7 +297,7 @@ func (c *Cache) ToUnsBundleProto() []byte {
 	}
 
 	// add the uns map to the uns bundle
-	for _, entry := range c.unsMap.Entries {
+	for _, entry := range c.unsMap.GetEntries() {
 		ub.UnsMap.Entries[HashUNSTableEntry(entry)] = entry
 	}
 
@@ -300,8 +310,8 @@ func (c *Cache) ToUnsBundleProto() []byte {
 
 		context := map[string]interface{}{
 			"operation":    "marshal_protobuf",
-			"events_count": len(ub.Events.Entries),
-			"unsmap_count": len(ub.UnsMap.Entries),
+			"events_count": len(ub.GetEvents().GetEntries()),
+			"unsmap_count": len(ub.GetUnsMap().GetEntries()),
 			"component":    "topic_browser_cache",
 		}
 		sentry.ReportIssueWithContext(err, sentry.IssueTypeError, log, context)
@@ -312,7 +322,7 @@ func (c *Cache) ToUnsBundleProto() []byte {
 	return encoded
 }
 
-// GetKeys returns all the topic keys currently in the cache
+// GetKeys returns all the topic keys currently in the cache.
 func (c *Cache) GetKeys() []string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -321,38 +331,43 @@ func (c *Cache) GetKeys() []string {
 	for key := range c.eventMap {
 		keys = append(keys, key)
 	}
+
 	return keys
 }
 
-// Size returns the number of topics currently cached
+// Size returns the number of topics currently cached.
 func (c *Cache) Size() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return len(c.unsMap.Entries)
+
+	return len(c.unsMap.GetEntries())
 }
 
-// GetLastProcessedSequenceNum returns the sequence number of the last processed buffer
+// GetLastProcessedSequenceNum returns the sequence number of the last processed buffer.
 func (c *Cache) GetLastProcessedSequenceNum() uint64 {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+
 	return c.lastProcessedSequenceNum
 }
 
-// GetLastSentTimestamp returns the timestamp of the last bundle sent to subscribers
+// GetLastSentTimestamp returns the timestamp of the last bundle sent to subscribers.
 func (c *Cache) GetLastSentTimestamp() time.Time {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+
 	return c.lastSentTimestamp
 }
 
-// SetLastSentTimestamp updates the timestamp of the last bundle sent to subscribers
+// SetLastSentTimestamp updates the timestamp of the last bundle sent to subscribers.
 func (c *Cache) SetLastSentTimestamp(timestamp time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
 	c.lastSentTimestamp = timestamp
 }
 
-// GetEventMap returns a copy of the eventMap for testing purposes
+// GetEventMap returns a copy of the eventMap for testing purposes.
 func (c *Cache) GetEventMap() map[string]*tbproto.EventTableEntry {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -361,10 +376,11 @@ func (c *Cache) GetEventMap() map[string]*tbproto.EventTableEntry {
 	for k, v := range c.eventMap {
 		eventMapCopy[k] = v
 	}
+
 	return eventMapCopy
 }
 
-// GetUnsMap returns a copy of the unsMap for testing purposes
+// GetUnsMap returns a copy of the unsMap for testing purposes.
 func (c *Cache) GetUnsMap() *tbproto.TopicMap {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -372,15 +388,17 @@ func (c *Cache) GetUnsMap() *tbproto.TopicMap {
 	unsMapCopy := &tbproto.TopicMap{
 		Entries: make(map[string]*tbproto.TopicInfo),
 	}
-	for k, v := range c.unsMap.Entries {
+	for k, v := range c.unsMap.GetEntries() {
 		unsMapCopy.Entries[k] = v
 	}
+
 	return unsMapCopy
 }
 
-// GetLastCachedTimestamp returns the timestamp of the last cached/processed buffer
+// GetLastCachedTimestamp returns the timestamp of the last cached/processed buffer.
 func (c *Cache) GetLastCachedTimestamp() time.Time {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+
 	return c.lastCachedTimestamp
 }

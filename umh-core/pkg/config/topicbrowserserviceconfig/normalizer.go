@@ -20,15 +20,15 @@ import (
 
 // In the TopicBrowser we do not have any user configurable settings, therefore these packages are bare-bones
 
-// Normalizer handles the normalization of Topic Browser configurations
+// Normalizer handles the normalization of Topic Browser configurations.
 type Normalizer struct{}
 
-// NewNormalizer creates a new configuration normalizer for Topic Browser
+// NewNormalizer creates a new configuration normalizer for Topic Browser.
 func NewNormalizer() *Normalizer {
 	return &Normalizer{}
 }
 
-// NormalizeConfig doesn't do anything, there is no normalization needed here
+// NormalizeConfig doesn't do anything, there is no normalization needed here.
 func (n *Normalizer) NormalizeConfig(cfg Config) Config {
 	// Our normalizer will setup a default if not set (just like redpanda)
 	normalized := cfg

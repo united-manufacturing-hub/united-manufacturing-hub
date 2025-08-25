@@ -31,14 +31,14 @@ import (
 // EditInstanceAction implements the Action interface for editing instance properties.
 // Currently, it supports updating the location hierarchy (enterprise, site, area, line, workCell).
 type EditInstanceAction struct {
+	configManager         config.ConfigManager
+	outboundChannel       chan *models.UMHMessage
+	location              *models.EditInstanceLocationModel
+	actionLogger          *zap.SugaredLogger
+	systemSnapshotManager *fsm.SnapshotManager
 	userEmail             string
 	actionUUID            uuid.UUID
 	instanceUUID          uuid.UUID
-	outboundChannel       chan *models.UMHMessage
-	location              *models.EditInstanceLocationModel
-	configManager         config.ConfigManager
-	actionLogger          *zap.SugaredLogger
-	systemSnapshotManager *fsm.SnapshotManager
 }
 
 // NewEditInstanceAction creates a new EditInstanceAction with the provided parameters.
@@ -100,17 +100,21 @@ func (a *EditInstanceAction) Parse(payload interface{}) error {
 	if site, ok := locationMap["site"].(string); ok && site != "" {
 		location.Site = &site
 	}
+
 	if area, ok := locationMap["area"].(string); ok && area != "" {
 		location.Area = &area
 	}
+
 	if line, ok := locationMap["line"].(string); ok && line != "" {
 		location.Line = &line
 	}
+
 	if workCell, ok := locationMap["workCell"].(string); ok && workCell != "" {
 		location.WorkCell = &workCell
 	}
 
 	a.location = location
+
 	return nil
 }
 
@@ -147,6 +151,7 @@ func (a *EditInstanceAction) Execute() (interface{}, map[string]interface{}, err
 	// If we don't have any location to update, return early
 	if a.location == nil {
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "No location changes requested", a.outboundChannel, models.EditInstance)
+
 		return "No changes were made to the instance", nil, nil
 	}
 
@@ -156,10 +161,12 @@ func (a *EditInstanceAction) Execute() (interface{}, map[string]interface{}, err
 	// Update the location in the configuration
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
+
 	err := a.configManager.AtomicSetLocation(ctx, *a.location)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to update instance location: %s", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.EditInstance)
+
 		return nil, nil, fmt.Errorf("failed to update instance location: %w", err)
 	}
 
@@ -182,12 +189,12 @@ func (a *EditInstanceAction) getUuid() uuid.UUID {
 
 // Methods added for testing purposes
 
-// GetLocation returns the location - for testing
+// GetLocation returns the location - for testing.
 func (a *EditInstanceAction) GetLocation() *models.EditInstanceLocationModel {
 	return a.location
 }
 
-// SetLocation sets the location - for testing
+// SetLocation sets the location - for testing.
 func (a *EditInstanceAction) SetLocation(location *models.EditInstanceLocationModel) {
 	a.location = location
 }

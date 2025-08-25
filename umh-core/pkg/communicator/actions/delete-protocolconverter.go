@@ -54,25 +54,26 @@ import (
 // The struct only contains *immutable* data required throughout the whole
 // lifecycle of a deletion.  Any value that changes during execution is local to
 // the respective method to avoid lock contention and race conditions.
-// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------.
 type DeleteProtocolConverterAction struct {
+	configManager config.ConfigManager // abstraction over config store
+
+	// ─── Plumbing ────────────────────────────────────────────────────────────
+	outboundChannel chan *models.UMHMessage // channel for progress events
+
+	// ─── Runtime observation ────────────────────────────────────────────────
+	systemSnapshotManager *fsm.SnapshotManager
+
+	// ─── Utilities ──────────────────────────────────────────────────────────
+	actionLogger *zap.SugaredLogger
 	// ─── Request metadata ────────────────────────────────────────────────────
 	userEmail    string    // used for feedback messages
 	actionUUID   uuid.UUID // unique ID of *this* action instance
 	instanceUUID uuid.UUID // ID of the UMH instance we operate on
 
-	// ─── Plumbing ────────────────────────────────────────────────────────────
-	outboundChannel chan *models.UMHMessage // channel for progress events
-	configManager   config.ConfigManager    // abstraction over config store
-
-	// ─── Runtime observation ────────────────────────────────────────────────
-	systemSnapshotManager *fsm.SnapshotManager
-
 	// ─── Business data ──────────────────────────────────────────────────────
 	componentUUID uuid.UUID // the component slated for deletion
 
-	// ─── Utilities ──────────────────────────────────────────────────────────
-	actionLogger *zap.SugaredLogger
 }
 
 // NewDeleteProtocolConverterAction returns an *empty* action instance prepared
@@ -97,7 +98,7 @@ func (a *DeleteProtocolConverterAction) Parse(payload interface{}) error {
 	// Parse the payload to get the UUID
 	parsedPayload, err := ParseActionPayload[models.DeleteProtocolConverterPayload](payload)
 	if err != nil {
-		return fmt.Errorf("failed to parse payload: %v", err)
+		return fmt.Errorf("failed to parse payload: %w", err)
 	}
 
 	a.componentUUID = parsedPayload.UUID
@@ -133,21 +134,24 @@ func (a *DeleteProtocolConverterAction) Execute() (interface{}, map[string]inter
 	defer cancel()
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Removing protocol converter from configuration...", a.outboundChannel, models.DeleteProtocolConverter)
+
 	err := a.configManager.AtomicDeleteProtocolConverter(ctx, a.componentUUID)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to delete protocol converter: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeleteProtocolConverter)
+
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
 	// ─── 3  Observe the runtime until the FSM forgets the instance ─────────
 	if a.systemSnapshotManager != nil { // skipping this for the unit tests
-
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Configuration updated. Waiting for protocol converter to be fully removed from the system...", a.outboundChannel, models.DeleteProtocolConverter)
+
 		err = a.waitForComponentToBeRemoved()
 		if err != nil {
 			errorMsg := fmt.Sprintf("Failed to wait for protocol converter to be removed: %v", err)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeleteProtocolConverter)
+
 			return nil, nil, fmt.Errorf("%s", errorMsg)
 		}
 	}
@@ -174,9 +178,10 @@ func (a *DeleteProtocolConverterAction) GetComponentUUID() uuid.UUID {
 }
 
 func (a *DeleteProtocolConverterAction) waitForComponentToBeRemoved() error {
-	//check the system snapshot and waits for the instance to be removed
+	// check the system snapshot and waits for the instance to be removed
 	ticker := time.NewTicker(constants.ActionTickerTime)
 	defer ticker.Stop()
+
 	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
 	startTime := time.Now()
 	timeoutDuration := constants.DataflowComponentWaitForActiveTimeout
@@ -190,6 +195,7 @@ func (a *DeleteProtocolConverterAction) waitForComponentToBeRemoved() error {
 		for _, inst := range protocolConverterManager.GetInstances() {
 			if dataflowcomponentserviceconfig.GenerateUUIDFromName(inst.ID) == a.componentUUID {
 				componentName = inst.ID
+
 				break
 			}
 		}
@@ -211,21 +217,26 @@ func (a *DeleteProtocolConverterAction) waitForComponentToBeRemoved() error {
 			systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
 
 			removed := true
+
 			if mgr, ok := systemSnapshot.Managers[constants.ProtocolConverterManagerName]; ok {
 				for _, inst := range mgr.GetInstances() {
 					if dataflowcomponentserviceconfig.GenerateUUIDFromName(inst.ID) == a.componentUUID {
 						removed = false
+
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 							fmt.Sprintf("Component '%s' still exists in state '%s'. Waiting for removal (%ds remaining)...",
 								inst.ID, inst.CurrentState, remainingSeconds), a.outboundChannel, models.DeleteProtocolConverter)
+
 						break
 					}
 				}
 			}
+
 			if removed {
 				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 					fmt.Sprintf("Protocol converter '%s' has been successfully removed from the system.", componentName),
 					a.outboundChannel, models.DeleteProtocolConverter)
+
 				return nil
 			}
 		}

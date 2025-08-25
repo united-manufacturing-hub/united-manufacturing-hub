@@ -21,7 +21,7 @@ import (
 )
 
 // registerCallbacks registers common callbacks for state transitions
-// These callbacks are executed synchronously and should not have any network calls or other operations that could fail
+// These callbacks are executed synchronously and should not have any network calls or other operations that could fail.
 func (instance *ProtocolConverterInstance) registerCallbacks() {
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStopping, func(ctx context.Context, e *fsm.Event) {
 		instance.baseFSMInstance.GetLogger().Infof("Entering stopping state for %s", instance.baseFSMInstance.GetID())
@@ -31,7 +31,7 @@ func (instance *ProtocolConverterInstance) registerCallbacks() {
 		//		SourceEvent: e.Event,
 		//	},
 		//	Time: time.Now(),
-		//})
+		// })
 	})
 
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStopped, func(ctx context.Context, e *fsm.Event) {
@@ -42,7 +42,7 @@ func (instance *ProtocolConverterInstance) registerCallbacks() {
 		//		SourceEvent: e.Event,
 		//	},
 		//	Time: time.Now(),
-		//})
+		// })
 	})
 
 	// Basic operational state callbacks
@@ -50,59 +50,59 @@ func (instance *ProtocolConverterInstance) registerCallbacks() {
 		instance.baseFSMInstance.GetLogger().Infof("Entering starting connection state for %s", instance.baseFSMInstance.GetID())
 		// NOTE: StartConnectionInstance will be called from reconciliation loop, not here
 		// This callback is kept lightweight per FSM pattern requirements
-		//instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
+		// instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
 		//	Record: storage.Record{
 		//		State:       OperationalStateStartingConnection,
 		//		SourceEvent: e.Event,
 		//	},
 		//	Time: time.Now(),
-		//})
+		// })
 	})
 
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStartingRedpanda, func(ctx context.Context, e *fsm.Event) {
 		instance.baseFSMInstance.GetLogger().Infof("Entering starting redpanda state for %s", instance.baseFSMInstance.GetID())
-		//instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
+		// instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
 		//	Record: storage.Record{
 		//		State:       OperationalStateStartingRedpanda,
 		//		SourceEvent: e.Event,
 		//	},
 		//	Time: time.Now(),
-		//})
+		// })
 	})
 
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStartingDFC, func(ctx context.Context, e *fsm.Event) {
 		instance.baseFSMInstance.GetLogger().Infof("Entering starting dfc state for %s", instance.baseFSMInstance.GetID())
 		// NOTE: StartDFCInstance will be called from reconciliation loop, not here
 		// This callback is kept lightweight per FSM pattern requirements
-		//instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
+		// instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
 		//	Record: storage.Record{
 		//		State:       OperationalStateStartingDFC,
 		//		SourceEvent: e.Event,
 		//	},
 		//	Time: time.Now(),
-		//})
+		// })
 	})
 
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStartingFailedDFC, func(ctx context.Context, e *fsm.Event) {
 		instance.baseFSMInstance.GetLogger().Errorf("Entering starting-failed-dfc state for %s", instance.baseFSMInstance.GetID())
-		//instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
+		// instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
 		//	Record: storage.Record{
 		//		State:       OperationalStateStartingFailedDFC,
 		//		SourceEvent: e.Event,
 		//	},
 		//	Time: time.Now(),
-		//})
+		// })
 	})
 
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStartingFailedDFCMissing, func(ctx context.Context, e *fsm.Event) {
 		instance.baseFSMInstance.GetLogger().Errorf("Entering starting-failed-dfc-missing state for %s", instance.baseFSMInstance.GetID())
-		//instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
+		// instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
 		//	Record: storage.Record{
 		//		State:       OperationalStateStartingFailedDFCMissing,
 		//		SourceEvent: e.Event,
 		//	},
 		//	Time: time.Now(),
-		//})
+		// })
 	})
 
 	// Running phase state callbacks
@@ -114,7 +114,7 @@ func (instance *ProtocolConverterInstance) registerCallbacks() {
 		//		SourceEvent: e.Event,
 		//	},
 		//	Time: time.Now(),
-		//})
+		// })
 	})
 
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateActive, func(ctx context.Context, e *fsm.Event) {
@@ -125,7 +125,7 @@ func (instance *ProtocolConverterInstance) registerCallbacks() {
 		//		SourceEvent: e.Event,
 		//	},
 		//	Time: time.Now(),
-		//})
+		// })
 	})
 
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateDegradedConnection, func(ctx context.Context, e *fsm.Event) {
@@ -136,7 +136,7 @@ func (instance *ProtocolConverterInstance) registerCallbacks() {
 		//		SourceEvent: e.Event,
 		//	},
 		//	Time: time.Now(),
-		//})
+		// })
 	})
 
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateDegradedRedpanda, func(ctx context.Context, e *fsm.Event) {
@@ -147,7 +147,7 @@ func (instance *ProtocolConverterInstance) registerCallbacks() {
 		//		SourceEvent: e.Event,
 		//	},
 		//	Time: time.Now(),
-		//})
+		// })
 	})
 
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateDegradedDFC, func(ctx context.Context, e *fsm.Event) {
@@ -158,7 +158,7 @@ func (instance *ProtocolConverterInstance) registerCallbacks() {
 		//		SourceEvent: e.Event,
 		//	},
 		//	Time: time.Now(),
-		//})
+		// })
 	})
 
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateDegradedOther, func(ctx context.Context, e *fsm.Event) {
@@ -169,6 +169,6 @@ func (instance *ProtocolConverterInstance) registerCallbacks() {
 		//		SourceEvent: e.Event,
 		//	},
 		//	Time: time.Now(),
-		//})
+		// })
 	})
 }

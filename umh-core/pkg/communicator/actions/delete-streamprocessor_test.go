@@ -16,6 +16,7 @@ package actions_test
 
 import (
 	"errors"
+	"sync"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
@@ -41,6 +42,7 @@ var _ = Describe("DeleteStreamProcessor", func() {
 		messages        []*models.UMHMessage
 		spName          string
 		spUUID          uuid.UUID
+		mu              sync.Mutex
 	)
 
 	// Setup before each test
@@ -115,7 +117,7 @@ var _ = Describe("DeleteStreamProcessor", func() {
 
 		action = actions.NewDeleteStreamProcessorAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, nil)
 
-		go actions.ConsumeOutboundMessages(outboundChannel, &messages, true)
+		go actions.ConsumeOutboundMessages(outboundChannel, &messages, &mu, true)
 	})
 
 	// Cleanup after each test
@@ -184,7 +186,7 @@ var _ = Describe("DeleteStreamProcessor", func() {
 			}
 
 			err := action.Parse(payload)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing or invalid stream processor UUID"))
@@ -226,7 +228,7 @@ var _ = Describe("DeleteStreamProcessor", func() {
 			Expect(responseMap["deleted_name"]).To(Equal(spName))
 
 			// Verify the stream processor was removed from config
-			Expect(mockConfig.Config.StreamProcessor).To(HaveLen(0))
+			Expect(mockConfig.Config.StreamProcessor).To(BeEmpty())
 		})
 
 		It("should handle AtomicDeleteStreamProcessor failure", func() {
@@ -346,7 +348,7 @@ var _ = Describe("DeleteStreamProcessor", func() {
 			Expect(responseMap["deleted_name"]).To(Equal(spName))
 
 			// Verify the stream processor was removed from config
-			Expect(mockConfig.Config.StreamProcessor).To(HaveLen(0))
+			Expect(mockConfig.Config.StreamProcessor).To(BeEmpty())
 		})
 
 		It("should handle deletion of stream processor with dependent children", func() {

@@ -191,7 +191,7 @@ var _ = Describe("EditInstance", func() {
 
 			// We should have 2 messages in the channel (Confirmed and Executing)
 			var messages []*models.UMHMessage
-			for i := 0; i < 2; i++ {
+			for range 2 {
 				select {
 				case msg := <-outboundChannel:
 					messages = append(messages, msg)
@@ -202,7 +202,7 @@ var _ = Describe("EditInstance", func() {
 			Expect(messages).To(HaveLen(2))
 
 			// Verify that GetConfig wasn't called
-			Expect(mockConfig.GetConfigCalled).To(BeFalse())
+			Expect(mockConfig.IsGetConfigCalled()).To(BeFalse())
 		})
 
 		It("should update location successfully", func() {
@@ -228,7 +228,7 @@ var _ = Describe("EditInstance", func() {
 
 			// Verify correct message sequence - note that success is not sent by Execute
 			var messages []*models.UMHMessage
-			for i := 0; i < 2; i++ {
+			for range 2 {
 				select {
 				case msg := <-outboundChannel:
 					messages = append(messages, msg)
@@ -239,7 +239,7 @@ var _ = Describe("EditInstance", func() {
 			Expect(messages).To(HaveLen(2))
 
 			// Verify GetConfig was called
-			Expect(mockConfig.GetConfigCalled).To(BeTrue())
+			Expect(mockConfig.IsGetConfigCalled()).To(BeTrue())
 
 			// Check that config was updated correctly
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -272,7 +272,7 @@ var _ = Describe("EditInstance", func() {
 
 			// Verify all expected messages: Confirmed + Executing + Failure
 			var messages []*models.UMHMessage
-			for i := 0; i < 3; i++ {
+			for range 3 {
 				select {
 				case msg := <-outboundChannel:
 					messages = append(messages, msg)
@@ -313,7 +313,7 @@ var _ = Describe("EditInstance", func() {
 
 			// Verify all expected messages: Confirmed + Executing + Failure
 			var messages []*models.UMHMessage
-			for i := 0; i < 3; i++ {
+			for range 3 {
 				select {
 				case msg := <-outboundChannel:
 					messages = append(messages, msg)
@@ -335,22 +335,22 @@ type writeFailingMockConfigManager struct {
 	mockConfigManager *config.MockConfigManager
 }
 
-// GetFileSystemService is never called in the mock but only here to implement the ConfigManager interface
+// GetFileSystemService is never called in the mock but only here to implement the ConfigManager interface.
 func (w *writeFailingMockConfigManager) GetFileSystemService() filesystem.Service {
 	return nil
 }
 
-// GetConfig passes through to the underlying mock implementation
+// GetConfig passes through to the underlying mock implementation.
 func (w *writeFailingMockConfigManager) GetConfig(ctx context.Context, tick uint64) (config.FullConfig, error) {
 	return w.mockConfigManager.GetConfig(ctx, tick)
 }
 
-// writeConfig always returns an error to simulate write failures
+// writeConfig always returns an error to simulate write failures.
 func (w *writeFailingMockConfigManager) writeConfig(ctx context.Context, config config.FullConfig) error {
 	return errors.New("mock WriteConfig failure")
 }
 
-// AtomicSetLocation implements the location update operation but forces the write to fail
+// AtomicSetLocation implements the location update operation but forces the write to fail.
 func (w *writeFailingMockConfigManager) AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error {
 	// Get the current config
 	config, err := w.GetConfig(ctx, 0)
@@ -360,16 +360,20 @@ func (w *writeFailingMockConfigManager) AtomicSetLocation(ctx context.Context, l
 
 	// Update location
 	config.Agent.Location = make(map[int]string)
+
 	config.Agent.Location[0] = location.Enterprise
 	if location.Site != nil {
 		config.Agent.Location[1] = *location.Site
 	}
+
 	if location.Area != nil {
 		config.Agent.Location[2] = *location.Area
 	}
+
 	if location.Line != nil {
 		config.Agent.Location[3] = *location.Line
 	}
+
 	if location.WorkCell != nil {
 		config.Agent.Location[4] = *location.WorkCell
 	}
@@ -382,7 +386,7 @@ func (w *writeFailingMockConfigManager) AtomicSetLocation(ctx context.Context, l
 	return nil
 }
 
-// AtomicAddDataflowcomponent implements the required interface method but ensures the write fails
+// AtomicAddDataflowcomponent implements the required interface method but ensures the write fails.
 func (w *writeFailingMockConfigManager) AtomicAddDataflowcomponent(ctx context.Context, dfc config.DataFlowComponentConfig) error {
 	// Get the current config
 	config, err := w.GetConfig(ctx, 0)
@@ -400,7 +404,7 @@ func (w *writeFailingMockConfigManager) AtomicAddDataflowcomponent(ctx context.C
 	return nil
 }
 
-// AtomicDeleteDataflowcomponent implements the required interface method but ensures the write fails
+// AtomicDeleteDataflowcomponent implements the required interface method but ensures the write fails.
 func (w *writeFailingMockConfigManager) AtomicDeleteDataflowcomponent(ctx context.Context, componentUUID uuid.UUID) error {
 	// Get the current config
 	config, err := w.GetConfig(ctx, 0)
@@ -418,7 +422,7 @@ func (w *writeFailingMockConfigManager) AtomicDeleteDataflowcomponent(ctx contex
 	return nil
 }
 
-// AtomicEditDataflowcomponent implements the required interface method but ensures the write fails
+// AtomicEditDataflowcomponent implements the required interface method but ensures the write fails.
 func (w *writeFailingMockConfigManager) AtomicEditDataflowcomponent(ctx context.Context, componentUUID uuid.UUID, dfc config.DataFlowComponentConfig) (config.DataFlowComponentConfig, error) {
 	// Get the current config
 	configData, err := w.GetConfig(ctx, 0)
@@ -436,7 +440,7 @@ func (w *writeFailingMockConfigManager) AtomicEditDataflowcomponent(ctx context.
 	return config.DataFlowComponentConfig{}, nil
 }
 
-// AtomicAddProtocolConverter implements the required interface method but ensures the write fails
+// AtomicAddProtocolConverter implements the required interface method but ensures the write fails.
 func (w *writeFailingMockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc config.ProtocolConverterConfig) error {
 	// Get the current config
 	configData, err := w.GetConfig(ctx, 0)
@@ -454,7 +458,7 @@ func (w *writeFailingMockConfigManager) AtomicAddProtocolConverter(ctx context.C
 	return nil
 }
 
-// AtomicEditProtocolConverter implements the required interface method but ensures the write fails
+// AtomicEditProtocolConverter implements the required interface method but ensures the write fails.
 func (w *writeFailingMockConfigManager) AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc config.ProtocolConverterConfig) (config.ProtocolConverterConfig, error) {
 	// Get the current config
 	configData, err := w.GetConfig(ctx, 0)
@@ -472,7 +476,7 @@ func (w *writeFailingMockConfigManager) AtomicEditProtocolConverter(ctx context.
 	return config.ProtocolConverterConfig{}, nil
 }
 
-// AtomicDeleteProtocolConverter implements the required interface method but ensures the write fails
+// AtomicDeleteProtocolConverter implements the required interface method but ensures the write fails.
 func (w *writeFailingMockConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, componentUUID uuid.UUID) error {
 	// Get the current config
 	configData, err := w.GetConfig(ctx, 0)
@@ -490,27 +494,27 @@ func (w *writeFailingMockConfigManager) AtomicDeleteProtocolConverter(ctx contex
 	return nil
 }
 
-// GetConfigAsString implements the ConfigManager interface
+// GetConfigAsString implements the ConfigManager interface.
 func (w *writeFailingMockConfigManager) GetConfigAsString(ctx context.Context) (string, error) {
 	return w.mockConfigManager.GetConfigAsString(ctx)
 }
 
-// GetCacheModTimeWithoutUpdate returns the modification time without updating the cache
+// GetCacheModTimeWithoutUpdate returns the modification time without updating the cache.
 func (w *writeFailingMockConfigManager) GetCacheModTimeWithoutUpdate() time.Time {
 	return w.mockConfigManager.GetCacheModTimeWithoutUpdate()
 }
 
-// UpdateAndGetCacheModTime updates the cache and returns the modification time
+// UpdateAndGetCacheModTime updates the cache and returns the modification time.
 func (w *writeFailingMockConfigManager) UpdateAndGetCacheModTime(ctx context.Context) (time.Time, error) {
 	return w.mockConfigManager.UpdateAndGetCacheModTime(ctx)
 }
 
-// WriteYAMLConfigFromString implements the ConfigManager interface
+// WriteYAMLConfigFromString implements the ConfigManager interface.
 func (w *writeFailingMockConfigManager) WriteYAMLConfigFromString(ctx context.Context, config string, expectedModTime string) error {
 	return w.mockConfigManager.WriteYAMLConfigFromString(ctx, config, expectedModTime)
 }
 
-// AtomicAddDataModel implements the required interface method but ensures the write fails
+// AtomicAddDataModel implements the required interface method but ensures the write fails.
 func (w *writeFailingMockConfigManager) AtomicAddDataModel(ctx context.Context, name string, dmVersion config.DataModelVersion, description string) error {
 	// Get the current config
 	configData, err := w.GetConfig(ctx, 0)
@@ -528,7 +532,7 @@ func (w *writeFailingMockConfigManager) AtomicAddDataModel(ctx context.Context, 
 	return nil
 }
 
-// AtomicEditDataModel implements the required interface method but ensures the write fails
+// AtomicEditDataModel implements the required interface method but ensures the write fails.
 func (w *writeFailingMockConfigManager) AtomicEditDataModel(ctx context.Context, name string, dmVersion config.DataModelVersion, description string) error {
 	// Get the current config
 	configData, err := w.GetConfig(ctx, 0)
@@ -546,7 +550,7 @@ func (w *writeFailingMockConfigManager) AtomicEditDataModel(ctx context.Context,
 	return nil
 }
 
-// AtomicDeleteDataModel implements the required interface method but ensures the write fails
+// AtomicDeleteDataModel implements the required interface method but ensures the write fails.
 func (w *writeFailingMockConfigManager) AtomicDeleteDataModel(ctx context.Context, name string) error {
 	// Get the current config
 	configData, err := w.GetConfig(ctx, 0)
@@ -564,7 +568,7 @@ func (w *writeFailingMockConfigManager) AtomicDeleteDataModel(ctx context.Contex
 	return nil
 }
 
-// AtomicAddDataContract implements the required interface method but ensures the write fails
+// AtomicAddDataContract implements the required interface method but ensures the write fails.
 func (w *writeFailingMockConfigManager) AtomicAddDataContract(ctx context.Context, dataContract config.DataContractsConfig) error {
 	// Get the current config
 	configData, err := w.GetConfig(ctx, 0)
@@ -582,7 +586,7 @@ func (w *writeFailingMockConfigManager) AtomicAddDataContract(ctx context.Contex
 	return nil
 }
 
-// AtomicAddStreamProcessor implements the required interface method but ensures the write fails
+// AtomicAddStreamProcessor implements the required interface method but ensures the write fails.
 func (w *writeFailingMockConfigManager) AtomicAddStreamProcessor(ctx context.Context, sp config.StreamProcessorConfig) error {
 	// Get the current config
 	configData, err := w.GetConfig(ctx, 0)
@@ -600,7 +604,7 @@ func (w *writeFailingMockConfigManager) AtomicAddStreamProcessor(ctx context.Con
 	return nil
 }
 
-// AtomicEditStreamProcessor implements the required interface method but ensures the write fails
+// AtomicEditStreamProcessor implements the required interface method but ensures the write fails.
 func (w *writeFailingMockConfigManager) AtomicEditStreamProcessor(ctx context.Context, sp config.StreamProcessorConfig) (config.StreamProcessorConfig, error) {
 	// Get the current config
 	configData, err := w.GetConfig(ctx, 0)
@@ -618,7 +622,7 @@ func (w *writeFailingMockConfigManager) AtomicEditStreamProcessor(ctx context.Co
 	return config.StreamProcessorConfig{}, nil
 }
 
-// AtomicDeleteStreamProcessor implements the required interface method but ensures the write fails
+// AtomicDeleteStreamProcessor implements the required interface method but ensures the write fails.
 func (w *writeFailingMockConfigManager) AtomicDeleteStreamProcessor(ctx context.Context, name string) error {
 	// Get the current config
 	configData, err := w.GetConfig(ctx, 0)

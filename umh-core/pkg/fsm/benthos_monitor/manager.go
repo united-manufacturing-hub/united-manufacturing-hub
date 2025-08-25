@@ -15,6 +15,7 @@
 package benthos_monitor
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -24,17 +25,17 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 )
 
-// BenthosMonitorManager is the FSM manager for the benthos monitor instance
+// BenthosMonitorManager is the FSM manager for the benthos monitor instance.
 type BenthosMonitorManager struct {
 	*public_fsm.BaseFSMManager[config.BenthosMonitorConfig]
 }
 
-// BenthosMonitorManagerSnapshot extends the base manager snapshot to hold any benthos monitor-specific info
+// BenthosMonitorManagerSnapshot extends the base manager snapshot to hold any benthos monitor-specific info.
 type BenthosMonitorManagerSnapshot struct {
 	*public_fsm.BaseManagerSnapshot
 }
 
-// Ensure it satisfies fsm.ObservedStateSnapshot
+// Ensure it satisfies fsm.ObservedStateSnapshot.
 func (b *BenthosMonitorManagerSnapshot) IsObservedStateSnapshot() {}
 
 // NewBenthosMonitorManager constructs a manager.
@@ -59,13 +60,14 @@ func NewBenthosMonitorManager(name string) *BenthosMonitorManager {
 		// Create instance
 		func(fc config.BenthosMonitorConfig) (public_fsm.FSMInstance, error) {
 			inst := NewBenthosMonitorInstance(fc)
+
 			return inst, nil
 		},
 		// Compare config => if same, no recreation needed
 		func(instance public_fsm.FSMInstance, fc config.BenthosMonitorConfig) (bool, error) {
 			bi, ok := instance.(*BenthosMonitorInstance)
 			if !ok {
-				return false, fmt.Errorf("instance is not a BenthosMonitorInstance")
+				return false, errors.New("instance is not a BenthosMonitorInstance")
 			}
 			// If same config => return true, else false
 			// Minimal check:
@@ -75,20 +77,24 @@ func NewBenthosMonitorManager(name string) *BenthosMonitorManager {
 		func(instance public_fsm.FSMInstance, fc config.BenthosMonitorConfig) error {
 			bi, ok := instance.(*BenthosMonitorInstance)
 			if !ok {
-				return fmt.Errorf("instance is not a BenthosMonitorInstance")
+				return errors.New("instance is not a BenthosMonitorInstance")
 			}
+
 			bi.config = fc
+
 			return nil
 		},
 		// Get expected max p95 execution time per instance
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
 			bi, ok := instance.(*BenthosMonitorInstance)
 			if !ok {
-				return 0, fmt.Errorf("instance is not a BenthosMonitorInstance")
+				return 0, errors.New("instance is not a BenthosMonitorInstance")
 			}
+
 			return bi.GetMinimumRequiredTime(), nil
 		},
 	)
+
 	metrics.InitErrorCounter(logger.ComponentBenthosMonitorManager, name)
 
 	return &BenthosMonitorManager{
@@ -96,16 +102,20 @@ func NewBenthosMonitorManager(name string) *BenthosMonitorManager {
 	}
 }
 
-// CreateSnapshot overrides the base to add agent-specific fields if desired
+// CreateSnapshot overrides the base to add agent-specific fields if desired.
 func (m *BenthosMonitorManager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	baseSnap := m.BaseFSMManager.CreateSnapshot()
+
 	baseSnapshot, ok := baseSnap.(*public_fsm.BaseManagerSnapshot)
 	if !ok {
 		logger.For(logger.ComponentBenthosMonitorManager).Errorf("Could not cast manager snapshot to BaseManagerSnapshot.")
+
 		return baseSnap
 	}
+
 	snap := &BenthosMonitorManagerSnapshot{
 		BaseManagerSnapshot: baseSnapshot,
 	}
+
 	return snap
 }

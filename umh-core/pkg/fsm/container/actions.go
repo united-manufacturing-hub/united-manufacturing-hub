@@ -33,6 +33,7 @@ import (
 // This function is present for structural consistency with other FSM packages.
 func (c *ContainerInstance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	c.baseFSMInstance.GetLogger().Debugf("Creating container monitor instance %s (no-op)", c.baseFSMInstance.GetID())
+
 	return nil
 }
 
@@ -41,6 +42,7 @@ func (c *ContainerInstance) CreateInstance(ctx context.Context, filesystemServic
 // This function is present for structural consistency with other FSM packages.
 func (c *ContainerInstance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	c.baseFSMInstance.GetLogger().Debugf("Removing container monitor instance %s (no-op)", c.baseFSMInstance.GetID())
+
 	return nil
 }
 
@@ -51,6 +53,7 @@ func (c *ContainerInstance) RemoveInstance(ctx context.Context, filesystemServic
 // Currently this is a no-op as the monitoring service runs independently.
 func (c *ContainerInstance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	c.baseFSMInstance.GetLogger().Infof("Enabling monitoring for %s (no-op)", c.baseFSMInstance.GetID())
+
 	return nil
 }
 
@@ -58,11 +61,12 @@ func (c *ContainerInstance) StartInstance(ctx context.Context, filesystemService
 // Currently this is a no-op as the monitoring service runs independently.
 func (c *ContainerInstance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	c.baseFSMInstance.GetLogger().Infof("Disabling monitoring for %s (no-op)", c.baseFSMInstance.GetID())
+
 	return nil
 }
 
 // CheckForCreation checks whether the creation was successful
-// For container monitoring, this is a no-op as we don't need to check anything
+// For container monitoring, this is a no-op as we don't need to check anything.
 func (c *ContainerInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
 	return true
 }
@@ -74,6 +78,7 @@ func (c *ContainerInstance) UpdateObservedStateOfInstance(ctx context.Context, s
 		if c.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "UpdateObservedStateOfInstance") {
 			return nil
 		}
+
 		return ctx.Err()
 	}
 
@@ -91,10 +96,11 @@ func (c *ContainerInstance) UpdateObservedStateOfInstance(ctx context.Context, s
 	}
 	// Save to observed state
 	c.ObservedState.ServiceInfo = status
+
 	return nil
 }
 
-// areAllMetricsHealthy decides if the container health is Active
+// areAllMetricsHealthy decides if the container health is Active.
 func (c *ContainerInstance) areAllMetricsHealthy() bool {
 	status := c.ObservedState.ServiceInfo
 	if status == nil {

@@ -15,6 +15,7 @@
 package fsm
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -25,25 +26,25 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 )
 
-// ObservedStateSnapshot represents a deep copy of an observed state
+// ObservedStateSnapshot represents a deep copy of an observed state.
 type ObservedStateSnapshot interface {
 	// IsObservedStateSnapshot is a marker method to ensure type safety
 	IsObservedStateSnapshot()
 }
 
-// FSMInstanceSnapshot contains the immutable state of an FSM instance
+// FSMInstanceSnapshot contains the immutable state of an FSM instance.
 type FSMInstanceSnapshot struct {
+	LastErrorTime     time.Time
+	CreatedAt         time.Time
+	LastUpdatedAt     time.Time
+	LastObservedState ObservedStateSnapshot
 	ID                string
 	CurrentState      string
 	DesiredState      string
 	LastError         string
-	LastErrorTime     time.Time
-	LastObservedState ObservedStateSnapshot
-	CreatedAt         time.Time
-	LastUpdatedAt     time.Time
 }
 
-// ManagerSnapshot defines the interface for manager-specific snapshots
+// ManagerSnapshot defines the interface for manager-specific snapshots.
 type ManagerSnapshot interface {
 	// GetName returns the name of the manager
 	GetName() string
@@ -58,19 +59,19 @@ type ManagerSnapshot interface {
 	GetManagerTick() uint64
 }
 
-// BaseManagerSnapshot contains the basic immutable state common to all manager types
+// BaseManagerSnapshot contains the basic immutable state common to all manager types.
 type BaseManagerSnapshot struct {
-	Name           string
+	SnapshotTime   time.Time
 	Instances      map[string]*FSMInstanceSnapshot // this needs to be a pointer to avoid unexported fields when doing deep copies
+	Name           string
 	ManagerTick    uint64
 	NextAddTick    uint64
 	NextUpdateTick uint64
 	NextRemoveTick uint64
 	NextStateTick  uint64
-	SnapshotTime   time.Time
 }
 
-// GetName returns the name of the manager
+// GetName returns the name of the manager.
 func (s *BaseManagerSnapshot) GetName() string {
 	return s.Name
 }
@@ -79,37 +80,37 @@ func (s *BaseManagerSnapshot) GetName() string {
 // Warning: treat the returned snapshots as read-only and do not modify them
 // Warning: treat the returned snapshots as read-only and do not modify them. If you do that within the core loop, you will change the state of the system
 // If you do it in the communicator, it is "fine" as the communicator got only a deep copy of the snapshot
-// The pointers are needed to avoid unexported fields when doing deep copies
+// The pointers are needed to avoid unexported fields when doing deep copies.
 func (s *BaseManagerSnapshot) GetInstances() map[string]*FSMInstanceSnapshot {
 	return s.Instances
 }
 
-// GetSnapshotTime returns the time the snapshot was created
+// GetSnapshotTime returns the time the snapshot was created.
 func (s *BaseManagerSnapshot) GetSnapshotTime() time.Time {
 	return s.SnapshotTime
 }
 
-// GetManagerTick returns the current manager-specific tick
+// GetManagerTick returns the current manager-specific tick.
 func (s *BaseManagerSnapshot) GetManagerTick() uint64 {
 	return s.ManagerTick
 }
 
-// SystemSnapshot contains a thread-safe snapshot of the entire system state
+// SystemSnapshot contains a thread-safe snapshot of the entire system state.
 type SystemSnapshot struct {
-	CurrentConfig config.FullConfig
-	Managers      map[string]ManagerSnapshot
 	SnapshotTime  time.Time
+	Managers      map[string]ManagerSnapshot
 	ConfigHash    string
+	CurrentConfig config.FullConfig
 	Tick          uint64
 }
 
-// SnapshotManager manages thread-safe creation, storage, and retrieval of system snapshots
+// SnapshotManager manages thread-safe creation, storage, and retrieval of system snapshots.
 type SnapshotManager struct {
-	mu           sync.RWMutex
 	lastSnapshot *SystemSnapshot
+	mu           sync.RWMutex
 }
 
-// NewSnapshotManager creates a new snapshot manager
+// NewSnapshotManager creates a new snapshot manager.
 func NewSnapshotManager() *SnapshotManager {
 	return &SnapshotManager{
 		lastSnapshot: &SystemSnapshot{
@@ -119,21 +120,23 @@ func NewSnapshotManager() *SnapshotManager {
 	}
 }
 
-// UpdateSnapshot creates a new system snapshot from the current state
+// UpdateSnapshot creates a new system snapshot from the current state.
 func (s *SnapshotManager) UpdateSnapshot(snapshot *SystemSnapshot) {
 	if s == nil {
 		return // Safety check for nil receiver
 	}
+
 	if snapshot == nil {
 		return // Don't update with nil snapshot
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	s.lastSnapshot = snapshot
 }
 
-// GetSnapshot returns the most recent system snapshot
+// GetSnapshot returns the most recent system snapshot.
 func (s *SnapshotManager) GetSnapshot() *SystemSnapshot {
 	if s == nil {
 		return nil // Safety check for nil receiver
@@ -141,10 +144,11 @@ func (s *SnapshotManager) GetSnapshot() *SystemSnapshot {
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	return s.lastSnapshot
 }
 
-// GetDeepCopySnapshot returns a deep copy of the most recent system snapshot
+// GetDeepCopySnapshot returns a deep copy of the most recent system snapshot.
 func (s *SnapshotManager) GetDeepCopySnapshot() SystemSnapshot {
 	if s == nil {
 		return SystemSnapshot{} // Safety check for nil receiver
@@ -154,18 +158,20 @@ func (s *SnapshotManager) GetDeepCopySnapshot() SystemSnapshot {
 	defer s.mu.RUnlock()
 
 	var snapshotCopy SystemSnapshot
+
 	err := deepcopy.Copy(&snapshotCopy, s.lastSnapshot)
 	if err != nil {
 		// If deep copy fails, return nil to indicate failure
 		return SystemSnapshot{}
 	}
+
 	return snapshotCopy
 }
 
-// GetManagerSnapshots extracts snapshots from all FSM managers
+// GetManagerSnapshots extracts snapshots from all FSM managers.
 func GetManagerSnapshots(managers []FSMManager[any], currentTick uint64, cfg config.FullConfig) (*SystemSnapshot, error) {
 	if managers == nil {
-		return nil, fmt.Errorf("managers list is nil")
+		return nil, errors.New("managers list is nil")
 	}
 
 	snapshot := &SystemSnapshot{
@@ -202,12 +208,12 @@ func GetManagerSnapshots(managers []FSMManager[any], currentTick uint64, cfg con
 	return snapshot, nil
 }
 
-// ManagerSnapshotCreator is an interface for managers that can create their own snapshots
+// ManagerSnapshotCreator is an interface for managers that can create their own snapshots.
 type ManagerSnapshotCreator interface {
 	CreateSnapshot() ManagerSnapshot
 }
 
-// Helper function to extract a snapshot from a single manager
+// Helper function to extract a snapshot from a single manager.
 func getManagerSnapshot(manager FSMManager[any]) ManagerSnapshot {
 	if manager == nil {
 		return nil // Safety check
@@ -268,6 +274,7 @@ func FindManager(
 	if !ok || mgr == nil {
 		return nil, false
 	}
+
 	return mgr, true
 }
 
@@ -282,7 +289,9 @@ func FindInstance(
 	if !ok {
 		return nil, false
 	}
+
 	inst, ok := mgr.GetInstances()[instanceName]
+
 	return inst, ok
 }
 
@@ -296,7 +305,7 @@ func FindInstance(
 func FindDfcInstanceByUUID(systemSnapshot SystemSnapshot, dfcUUID string) (*FSMInstanceSnapshot, error) {
 	dfcManager, ok := FindManager(systemSnapshot, constants.DataflowcomponentManagerName)
 	if !ok {
-		return nil, fmt.Errorf("dfc manager not found")
+		return nil, errors.New("dfc manager not found")
 	}
 
 	dfcInstances := dfcManager.GetInstances()
@@ -325,7 +334,7 @@ func FindDfcInstanceByUUID(systemSnapshot SystemSnapshot, dfcUUID string) (*FSMI
 func FindProtocolConverterInstanceByUUID(systemSnapshot SystemSnapshot, protocolConverterUUID string) (*FSMInstanceSnapshot, error) {
 	protocolConverterManager, ok := FindManager(systemSnapshot, constants.ProtocolConverterManagerName)
 	if !ok {
-		return nil, fmt.Errorf("protocol converter manager not found")
+		return nil, errors.New("protocol converter manager not found")
 	}
 
 	protocolConverterInstances := protocolConverterManager.GetInstances()

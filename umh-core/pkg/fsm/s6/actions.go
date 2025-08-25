@@ -44,6 +44,7 @@ import (
 // CreateInstance attempts to create the S6 service directory structure.
 func (s *S6Instance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".CreateInstance", time.Since(start))
 	}()
@@ -68,6 +69,7 @@ func (s *S6Instance) CreateInstance(ctx context.Context, filesystemService files
 	}
 
 	s.baseFSMInstance.GetLogger().Debugf("S6 service %s directory structure created", s.baseFSMInstance.GetID())
+
 	return nil
 }
 
@@ -75,6 +77,7 @@ func (s *S6Instance) CreateInstance(ctx context.Context, filesystemService files
 // It requires the service to be stopped before removal.
 func (s *S6Instance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".RemoveInstance", time.Since(start))
 	}()
@@ -92,18 +95,22 @@ func (s *S6Instance) RemoveInstance(ctx context.Context, filesystemService files
 		// If the service doesn't exist, consider removal successful
 		if errors.Is(err, s6service.ErrServiceNotExist) {
 			s.baseFSMInstance.GetLogger().Debugf("S6 service %s already removed", s.baseFSMInstance.GetID())
+
 			return nil
 		}
+
 		return fmt.Errorf("failed to remove service directory for %s: %w", s.baseFSMInstance.GetID(), err)
 	}
 
 	s.baseFSMInstance.GetLogger().Debugf("S6 service %s removed", s.baseFSMInstance.GetID())
+
 	return nil
 }
 
 // StartInstance attempts to start the S6 service.
 func (s *S6Instance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".StartInstance", time.Since(start))
 	}()
@@ -116,12 +123,14 @@ func (s *S6Instance) StartInstance(ctx context.Context, filesystemService filesy
 	}
 
 	s.baseFSMInstance.GetLogger().Debugf("S6 service %s start command executed", s.baseFSMInstance.GetID())
+
 	return nil
 }
 
 // StopInstance attempts to stop the S6 service.
 func (s *S6Instance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".StopInstance", time.Since(start))
 	}()
@@ -134,30 +143,35 @@ func (s *S6Instance) StopInstance(ctx context.Context, filesystemService filesys
 	}
 
 	s.baseFSMInstance.GetLogger().Debugf("S6 service %s stop command executed", s.baseFSMInstance.GetID())
+
 	return nil
 }
 
-// CheckForCreation checks whether the creation was successful
+// CheckForCreation checks whether the creation was successful.
 func (s *S6Instance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
 	servicePath := s.servicePath
+
 	ready, err := s.service.EnsureSupervision(ctx, servicePath, filesystemService)
 	if err != nil {
 		s.baseFSMInstance.GetLogger().Warnf("Failed to ensure service supervision: %v", err)
+
 		return false // Don't transition state yet, retry next reconcile
 	}
 
 	// Only transition if the supervise directory actually exists
 	if !ready {
 		s.baseFSMInstance.GetLogger().Debugf("Waiting for s6-svscan to create supervise directory")
+
 		return false // Don't transition state yet, retry next reconcile
 	}
 
 	return true // Transition to the next state
 }
 
-// UpdateObservedStateOfInstance updates the observed state of the service
+// UpdateObservedStateOfInstance updates the observed state of the service.
 func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".updateObservedState", time.Since(start))
 	}()
@@ -182,15 +196,18 @@ func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, services
 	if err != nil {
 		return fmt.Errorf("failed to get service config: %w", err)
 	}
+
 	s.ObservedState.ObservedS6ServiceConfig = config
 
 	// the easiest way to do this is causing this instance to be removed, which will trigger a re-create by the manager
 	if !reflect.DeepEqual(s.ObservedState.ObservedS6ServiceConfig, s.config.S6ServiceConfig) {
 		s.baseFSMInstance.GetLogger().Debugf("Observed config is different from desired config, triggering a re-create")
 		s.logConfigDifferences(s.config.S6ServiceConfig, s.ObservedState.ObservedS6ServiceConfig)
+
 		err := s.baseFSMInstance.Remove(ctx)
 		if err != nil {
 			s.baseFSMInstance.GetLogger().Errorf("error removing S6 instance %s: %v", s.baseFSMInstance.GetID(), err)
+
 			return err
 		}
 	}
@@ -214,6 +231,7 @@ func (s *S6Instance) GetServicePid() int {
 	if s.IsS6Running() {
 		return s.ObservedState.ServiceInfo.Pid
 	}
+
 	return -1
 }
 
@@ -223,6 +241,7 @@ func (s *S6Instance) GetServiceUptime() int64 {
 	if s.IsS6Running() {
 		return s.ObservedState.ServiceInfo.Uptime
 	}
+
 	return -1
 }
 
@@ -232,6 +251,7 @@ func (s *S6Instance) GetExitCode() int {
 	if s.IsS6Running() {
 		return -1
 	}
+
 	return s.ObservedState.ServiceInfo.ExitCode
 }
 
@@ -245,7 +265,7 @@ func (s *S6Instance) GetExitHistory() []s6service.ExitEvent {
 	return s.ObservedState.ServiceInfo.ExitHistory
 }
 
-// logConfigDifferences logs the specific differences between desired and observed configurations
+// logConfigDifferences logs the specific differences between desired and observed configurations.
 func (s *S6Instance) logConfigDifferences(desired, observed s6serviceconfig.S6ServiceConfig) {
 	s.baseFSMInstance.GetLogger().Infof("Configuration differences for %s:", s.baseFSMInstance.GetID())
 

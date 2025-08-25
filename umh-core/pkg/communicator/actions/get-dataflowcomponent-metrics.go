@@ -27,10 +27,6 @@ import (
 
 // Deprecated: Use GetMetricsAction instead. Kept for backward compatibility.
 type GetDataflowcomponentMetricsAction struct {
-	// ─── Request metadata ────────────────────────────────────────────────────
-	userEmail    string
-	actionUUID   uuid.UUID
-	instanceUUID uuid.UUID
 
 	// ─── Plumbing ────────────────────────────────────────────────────────────
 	outboundChannel chan *models.UMHMessage
@@ -38,11 +34,16 @@ type GetDataflowcomponentMetricsAction struct {
 	// ─── Runtime observation ────────────────────────────────────────────────
 	systemSnapshotManager *fsm.SnapshotManager
 
+	// ─── Utilities ──────────────────────────────────────────────────────────
+	actionLogger *zap.SugaredLogger
+	// ─── Request metadata ────────────────────────────────────────────────────
+	userEmail string
+
 	// ─── Parsed request payload ─────────────────────────────────────────────
 	payload models.GetDataflowcomponentMetricsRequest //nolint:staticcheck // Deprecated but kept for back compat
 
-	// ─── Utilities ──────────────────────────────────────────────────────────
-	actionLogger *zap.SugaredLogger
+	actionUUID   uuid.UUID
+	instanceUUID uuid.UUID
 }
 
 func NewGetDataflowcomponentMetricsAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, systemSnapshotManager *fsm.SnapshotManager) *GetDataflowcomponentMetricsAction {
@@ -60,6 +61,7 @@ func (a *GetDataflowcomponentMetricsAction) Parse(payload interface{}) (err erro
 	a.actionLogger.Info("Parsing the payload")
 	a.payload, err = ParseActionPayload[models.GetDataflowcomponentMetricsRequest](payload) //nolint:staticcheck // Deprecated but kept for back compat
 	a.actionLogger.Info("Payload parsed: %v", a.payload)
+
 	return err
 }
 
@@ -72,7 +74,7 @@ func (a *GetDataflowcomponentMetricsAction) Validate() (err error) {
 
 	_, err = uuid.Parse(a.payload.UUID)
 	if err != nil {
-		return fmt.Errorf("invalid UUID format: %v", err)
+		return fmt.Errorf("invalid UUID format: %w", err)
 	}
 
 	return nil
@@ -82,6 +84,7 @@ func (a *GetDataflowcomponentMetricsAction) Execute() (interface{}, map[string]i
 	dfcInstance, err := fsm.FindDfcInstanceByUUID(a.systemSnapshotManager.GetDeepCopySnapshot(), a.payload.UUID)
 	if err != nil {
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "failed to find DFC instance", a.outboundChannel, models.GetDataFlowComponentMetrics) //nolint:staticcheck // Deprecated but kept for back compat
+
 		return nil, nil, err
 	}
 
@@ -89,6 +92,7 @@ func (a *GetDataflowcomponentMetricsAction) Execute() (interface{}, map[string]i
 	if dfcInstance.LastObservedState == nil {
 		err = fmt.Errorf("DFC instance %s has no observed state", a.payload.UUID)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetDataFlowComponentMetrics) //nolint:staticcheck // Deprecated but kept for back compat
+
 		return nil, nil, err
 	}
 
@@ -157,7 +161,8 @@ func (a *GetDataflowcomponentMetricsAction) getUuid() uuid.UUID {
 	return a.actionUUID
 }
 
-func (a *GetDataflowcomponentMetricsAction) GetParsedPayload() models.GetDataflowcomponentMetricsRequest { //nolint:staticcheck // Deprecated but kept for back compat
+//nolint:staticcheck // Deprecated but kept for back compat
+func (a *GetDataflowcomponentMetricsAction) GetParsedPayload() models.GetDataflowcomponentMetricsRequest {
 	return a.payload
 }
 

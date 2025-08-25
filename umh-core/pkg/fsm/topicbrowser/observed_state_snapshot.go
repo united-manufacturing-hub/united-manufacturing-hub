@@ -22,18 +22,18 @@ import (
 	topicbrowsersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/topicbrowser"
 )
 
-// ObservedStateSnapshot is a deep-copyable snapshot of BenthosObservedState
+// ObservedStateSnapshot is a deep-copyable snapshot of BenthosObservedState.
 type ObservedStateSnapshot struct {
 	Config      topicbrowsersvccfg.Config
 	ServiceInfo topicbrowsersvc.ServiceInfo
 }
 
-// IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface
+// IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface.
 func (s *ObservedStateSnapshot) IsObservedStateSnapshot() {
 	// Marker method implementation
 }
 
-// CreateObservedStateSnapshot implements the fsm.ObservedStateConverter interface for the topic browser Instance
+// CreateObservedStateSnapshot implements the fsm.ObservedStateConverter interface for the topic browser Instance.
 func (i *TopicBrowserInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	// Create a deep copy of the observed state
 	snapshot := &ObservedStateSnapshot{}
@@ -42,6 +42,7 @@ func (i *TopicBrowserInstance) CreateObservedStateSnapshot() fsm.ObservedStateSn
 	err := deepcopy.Copy(&snapshot.Config, &i.config)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, i.baseFSMInstance.GetLogger(), "failed to deep copy config: %v", err)
+
 		return nil
 	}
 
@@ -49,6 +50,7 @@ func (i *TopicBrowserInstance) CreateObservedStateSnapshot() fsm.ObservedStateSn
 	err = deepcopy.Copy(&snapshot.ServiceInfo, &i.ObservedState.ServiceInfo)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, i.baseFSMInstance.GetLogger(), "failed to deep copy service info: %v", err)
+
 		return nil
 	}
 

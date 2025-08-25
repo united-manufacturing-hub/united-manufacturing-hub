@@ -134,11 +134,11 @@ var _ = Describe("StateMocker", func() {
 
 			// Set up a transition sequence: starting -> active
 			stateMocker.SetTransitionSequence(componentName, []struct {
-				TickOffset int
 				State      string
+				TickOffset int
 			}{
-				{1, startingState}, // Start in "starting" state
-				{3, desiredState},  // After 2 ticks, move to "active" state
+				{State: startingState, TickOffset: 1}, // Start in "starting" state
+				{State: desiredState, TickOffset: 3},  // After 2 ticks, move to "active" state
 			})
 
 			// Initial update
@@ -194,7 +194,7 @@ var _ = Describe("StateMocker", func() {
 			Expect(component.CurrentState).To(Equal(internalfsm.LifecycleStateToBeCreated))
 
 			// Advance ticks to simulate component creation
-			for i := 0; i < 15; i++ {
+			for range 15 {
 				stateMocker.Tick()
 			}
 
@@ -242,7 +242,7 @@ var _ = Describe("StateMocker", func() {
 			Expect(component.CurrentState).To(Equal(internalfsm.LifecycleStateRemoving))
 
 			// Advance ticks to simulate component removal
-			for i := 0; i < 8; i++ {
+			for range 8 {
 				stateMocker.Tick()
 			}
 
@@ -309,7 +309,7 @@ var _ = Describe("StateMocker", func() {
 			Expect(component.CurrentState).To(Equal(dataflowcomponent.EventBenthosDegraded))
 
 			// Advance ticks to simulate component reconfiguration
-			for i := 0; i < 8; i++ {
+			for range 8 {
 				stateMocker.Tick()
 			}
 
@@ -371,7 +371,7 @@ var _ = Describe("StateMocker", func() {
 			Expect(oldComponent.CurrentState).To(Equal(internalfsm.LifecycleStateRemoving))
 
 			// Advance ticks to let old component reach removed state
-			for i := 0; i < 8; i++ {
+			for range 8 {
 				stateMocker.Tick()
 			}
 
@@ -383,7 +383,7 @@ var _ = Describe("StateMocker", func() {
 			Expect(oldComponent.CurrentState).To(Equal(internalfsm.LifecycleStateRemoved))
 
 			// Advance ticks to let new component appear and initialize
-			for i := 0; i < 5; i++ {
+			for range 5 {
 				stateMocker.Tick()
 			}
 
@@ -395,7 +395,7 @@ var _ = Describe("StateMocker", func() {
 			Expect(newComponent.CurrentState).To(Equal(internalfsm.LifecycleStateCreating))
 
 			// Advance ticks to let new component reach active state
-			for i := 0; i < 15; i++ {
+			for range 15 {
 				stateMocker.Tick()
 			}
 

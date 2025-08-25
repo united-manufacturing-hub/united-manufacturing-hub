@@ -16,8 +16,8 @@ package streamprocessor
 
 import (
 	"context"
-	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -402,7 +402,7 @@ var _ = Describe("StreamProcessorService", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the service was removed
-			Expect(service.dataflowComponentConfig).To(HaveLen(0))
+			Expect(service.dataflowComponentConfig).To(BeEmpty())
 		})
 	})
 
@@ -416,7 +416,8 @@ var _ = Describe("StreamProcessorService", func() {
 			Expect(err).NotTo(HaveOccurred(), "Failed to read example config file")
 
 			// Use the config manager's parseConfig function to properly handle templates and anchors
-			fullConfig, err := config.ParseConfig(data, true) // Allow unknown fields for template handling
+			ctx := context.Background()
+			fullConfig, err := config.ParseConfig(data, ctx, true) // Allow unknown fields for template handling
 			Expect(err).NotTo(HaveOccurred(), "Failed to parse example config")
 
 			// Extract the first stream processor (pump-processor)
@@ -430,7 +431,7 @@ var _ = Describe("StreamProcessorService", func() {
 			// Extract agent location from the config
 			agentLocation := map[string]string{}
 			for k, v := range fullConfig.Agent.Location {
-				agentLocation[fmt.Sprintf("%d", k)] = v
+				agentLocation[strconv.Itoa(k)] = v
 			}
 
 			// Set up test data

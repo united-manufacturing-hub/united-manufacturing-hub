@@ -21,19 +21,19 @@ import (
 	"github.com/united-manufacturing-hub/expiremap/v2/pkg/expiremap"
 )
 
-// SubscriberData holds both the subscriber email and their bootstrapped state
+// SubscriberData holds both the subscriber email and their bootstrapped state.
 type SubscriberData struct {
 	Email        string
 	Bootstrapped bool
 }
 
-// Registry manages subscribers and their bootstrapped state with automatic expiration
+// Registry manages subscribers and their bootstrapped state with automatic expiration.
 type Registry struct {
 	subscribers *expiremap.ExpireMap[string, SubscriberData]
 	mu          sync.RWMutex
 }
 
-// NewRegistry creates a new subscriber registry with the given TTL and cull interval
+// NewRegistry creates a new subscriber registry with the given TTL and cull interval.
 func NewRegistry(cullInterval, ttl time.Duration) *Registry {
 	return &Registry{
 		subscribers: expiremap.NewEx[string, SubscriberData](cullInterval, ttl),
@@ -52,10 +52,11 @@ func (r *Registry) AddOrRefresh(email string, bootstrapped bool) {
 	} else {
 		data.Bootstrapped = bootstrapped
 	}
+
 	r.subscribers.Set(email, *data) // refresh TTL (or insert)
 }
 
-// List returns all active subscriber emails
+// List returns all active subscriber emails.
 func (r *Registry) List() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -63,8 +64,10 @@ func (r *Registry) List() []string {
 	var subscribers []string
 	r.subscribers.Range(func(key string, value SubscriberData) bool {
 		subscribers = append(subscribers, value.Email)
+
 		return true
 	})
+
 	return subscribers
 }
 
@@ -77,10 +80,11 @@ func (r *Registry) IsBootstrapped(email string) bool {
 	if !exists {
 		return false
 	}
+
 	return data.Bootstrapped
 }
 
-// ForEach iterates over all active subscribers and their bootstrapped state
+// ForEach iterates over all active subscribers and their bootstrapped state.
 func (r *Registry) ForEach(fn func(email string, bootstrapped bool)) {
 	// Collect all subscriber data first to avoid holding locks during callback
 	type subscriberInfo struct {
@@ -96,6 +100,7 @@ func (r *Registry) ForEach(fn func(email string, bootstrapped bool)) {
 			email:        value.Email,
 			bootstrapped: value.Bootstrapped,
 		})
+
 		return true
 	})
 	r.mu.RUnlock()
@@ -106,7 +111,7 @@ func (r *Registry) ForEach(fn func(email string, bootstrapped bool)) {
 	}
 }
 
-// SetBootstrapped updates the bootstrapped state for a subscriber
+// SetBootstrapped updates the bootstrapped state for a subscriber.
 func (r *Registry) SetBootstrapped(email string, bootstrapped bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -120,7 +125,7 @@ func (r *Registry) SetBootstrapped(email string, bootstrapped bool) {
 	}
 }
 
-// Length returns the number of active subscribers
+// Length returns the number of active subscribers.
 func (r *Registry) Length() int {
 	return r.subscribers.Length()
 }

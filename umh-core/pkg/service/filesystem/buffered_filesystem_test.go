@@ -16,12 +16,13 @@ package filesystem_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"errors"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -406,6 +407,7 @@ func setupTestFiles(root string) {
 func createLargeFile(path string, sizeBytes int64) {
 	f, err := os.Create(path)
 	Expect(err).NotTo(HaveOccurred())
+
 	defer func() {
 		err := f.Close()
 		if err != nil {
@@ -465,6 +467,7 @@ var _ = Describe("BufferedService with MockFileSystem", func() {
 				if strings.Contains(path, "trouble.txt") {
 					return nil, errors.New("simulated read error")
 				}
+
 				return []byte("normal content"), nil
 			})
 
@@ -587,7 +590,7 @@ var _ = Describe("BufferedService with MockFileSystem", func() {
 			failCount := 0
 			successCount := 0
 
-			for i := 0; i < numAttempts; i++ {
+			for range numAttempts {
 				err := bufService.WriteFile(ctx, filepath.Join(mockRootDir, "random.txt"), []byte("test"), 0644)
 				if err != nil {
 					failCount++
@@ -957,10 +960,11 @@ var _ = Describe("BufferedService Permission Checking", func() {
 	})
 })
 
-// setupTestFilesWithPermissions creates files with different permissions for testing
+// setupTestFilesWithPermissions creates files with different permissions for testing.
 func setupTestFilesWithPermissions(root string) {
 	// Create a read-only file
 	readOnlyFile := filepath.Join(root, "readonly.txt")
+
 	err := os.WriteFile(readOnlyFile, []byte("Read-only content\n"), 0644)
 	if err != nil {
 		panic(err)
@@ -973,12 +977,14 @@ func setupTestFilesWithPermissions(root string) {
 
 	// Create a read-only directory
 	readOnlyDir := filepath.Join(root, "readonly_dir")
+
 	err = os.MkdirAll(readOnlyDir, 0755)
 	if err != nil {
 		panic(err)
 	}
 	// Make a file inside it for testing
 	inDirFile := filepath.Join(readOnlyDir, "existing.txt")
+
 	err = os.WriteFile(inDirFile, []byte("Existing file\n"), 0644)
 	if err != nil {
 		panic(err)
@@ -991,11 +997,14 @@ func setupTestFilesWithPermissions(root string) {
 
 	// Create a writable directory/file for comparison
 	writableDir := filepath.Join(root, "writable_dir")
+
 	err = os.MkdirAll(writableDir, 0755)
 	if err != nil {
 		panic(err)
 	}
+
 	writableFile := filepath.Join(writableDir, "writable.txt")
+
 	err = os.WriteFile(writableFile, []byte("Writable content\n"), 0644)
 	if err != nil {
 		panic(err)

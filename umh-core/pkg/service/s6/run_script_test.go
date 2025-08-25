@@ -93,6 +93,7 @@ var _ = Describe("S6 Run Script", func() {
 							return true, nil
 						}
 					}
+
 					return false, nil
 				}
 			})
@@ -133,6 +134,7 @@ var _ = Describe("S6 Run Script", func() {
 						return []byte(content), nil
 					}
 				}
+
 				return []byte{}, os.ErrNotExist
 			})
 
@@ -194,6 +196,7 @@ var _ = Describe("S6 Run Script", func() {
 							return true, nil
 						}
 					}
+
 					return false, nil
 				}
 			})
@@ -236,6 +239,7 @@ var _ = Describe("S6 Run Script", func() {
 						return []byte(content), nil
 					}
 				}
+
 				return []byte{}, os.ErrNotExist
 			})
 
@@ -282,6 +286,7 @@ var _ = Describe("S6 Run Script", func() {
 				if path == runScriptPath {
 					return true, nil
 				}
+
 				return false, nil
 			})
 
@@ -308,6 +313,7 @@ var _ = Describe("S6 Run Script", func() {
 				if path == runScriptPath {
 					return buf.Bytes(), nil
 				}
+
 				return []byte{}, os.ErrNotExist
 			})
 
@@ -344,6 +350,7 @@ var _ = Describe("S6 Run Script", func() {
 					if path == runScriptPath {
 						return false, nil
 					}
+
 					return true, nil
 				})
 
@@ -364,6 +371,7 @@ var _ = Describe("S6 Run Script", func() {
 					if path == runScriptPath {
 						return nil, os.ErrPermission
 					}
+
 					return []byte{}, os.ErrNotExist
 				})
 

@@ -17,6 +17,7 @@ package actions_test
 import (
 	"encoding/base64"
 	"errors"
+	"sync"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
@@ -49,6 +50,7 @@ var _ = Describe("EditStreamProcessor", func() {
 		spVariables     []models.StreamProcessorVariable
 		spLocation      map[int]string
 		encodedConfig   string
+		mu              sync.Mutex
 	)
 
 	// Setup before each test
@@ -163,7 +165,7 @@ var _ = Describe("EditStreamProcessor", func() {
 
 		action = actions.NewEditStreamProcessorAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, nil)
 
-		go actions.ConsumeOutboundMessages(outboundChannel, &messages, true)
+		go actions.ConsumeOutboundMessages(outboundChannel, &messages, &mu, true)
 	})
 
 	// Cleanup after each test
@@ -309,7 +311,7 @@ var _ = Describe("EditStreamProcessor", func() {
 			}
 
 			err := action.Parse(payload)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing or invalid stream processor UUID"))
@@ -326,7 +328,7 @@ var _ = Describe("EditStreamProcessor", func() {
 			}
 
 			err := action.Parse(payload)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("name cannot be empty"))
@@ -347,7 +349,7 @@ var _ = Describe("EditStreamProcessor", func() {
 			}
 
 			err := action.Parse(payload)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field Model.Name"))
@@ -368,7 +370,7 @@ var _ = Describe("EditStreamProcessor", func() {
 			}
 
 			err := action.Parse(payload)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field Model.Version"))
@@ -385,7 +387,7 @@ var _ = Describe("EditStreamProcessor", func() {
 			}
 
 			err := action.Parse(payload)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("name can only contain letters"))

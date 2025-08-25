@@ -18,11 +18,14 @@ import "time"
 
 const (
 	// ConfigGetConfigTimeout defines the maximum time allowed for retrieving configurations.
-	// This timeout (20ms) prevents configuration retrieval from blocking the reconciliation
-	ConfigGetConfigTimeout = time.Millisecond * 20
+	// This timeout is not blocking the reconciliation because the config retrieval is async.
+	ConfigGetConfigTimeout = time.Millisecond * 80
+
+	// ConfigBackgroundRefreshTimeout defines the maximum time allowed for refreshing the config in the background.
+	ConfigBackgroundRefreshTimeout = time.Second * 5
 
 	// AmountReadersForConfigFile defines the amount of readers that can read the config file at the same time
 	// It is more a safety net to prevent a single reader from blocking the config file
-	// The actual number does not really matter, it should be "high enough"
+	// The actual number does not really matter, it should be "high enough".
 	AmountReadersForConfigFile = 100
 )

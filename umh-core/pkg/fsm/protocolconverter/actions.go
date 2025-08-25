@@ -72,12 +72,15 @@ func (p *ProtocolConverterInstance) CreateInstance(ctx context.Context, filesyst
 	if err != nil {
 		if errors.Is(err, protocolconvertersvc.ErrServiceAlreadyExists) {
 			p.baseFSMInstance.GetLogger().Debugf("ProtocolConverter service %s already exists in DFC and Connection manager", p.baseFSMInstance.GetID())
+
 			return nil // do not throw an error, as each action is expected to be idempotent
 		}
+
 		return fmt.Errorf("failed to add ProtocolConverter service %s to DFC and Connection manager: %w", p.baseFSMInstance.GetID(), err)
 	}
 
 	p.baseFSMInstance.GetLogger().Debugf("ProtocolConverter service %s added to DFC and Connection manager", p.baseFSMInstance.GetID())
+
 	return nil
 }
 
@@ -96,6 +99,7 @@ func (p *ProtocolConverterInstance) RemoveInstance(ctx context.Context, filesyst
 		p.baseFSMInstance.GetLogger().
 			Debugf("Benthos service %s removed from S6 manager",
 				p.baseFSMInstance.GetID())
+
 		return nil
 
 	case errors.Is(err, protocolconvertersvc.ErrServiceNotExist):
@@ -129,6 +133,7 @@ func (p *ProtocolConverterInstance) RemoveInstance(ctx context.Context, filesyst
 // which are called from the reconciliation loop based on FSM state transitions.
 func (p *ProtocolConverterInstance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	p.baseFSMInstance.GetLogger().Debugf("StartInstance called but is now a no-op - startup handled by granular methods")
+
 	return nil
 }
 
@@ -145,6 +150,7 @@ func (p *ProtocolConverterInstance) StartConnectionInstance(ctx context.Context,
 	}
 
 	p.baseFSMInstance.GetLogger().Debugf("ProtocolConverter service %s connection start command executed", p.baseFSMInstance.GetID())
+
 	return nil
 }
 
@@ -161,10 +167,11 @@ func (p *ProtocolConverterInstance) StartDFCInstance(ctx context.Context, filesy
 	}
 
 	p.baseFSMInstance.GetLogger().Debugf("ProtocolConverter service %s DFC start command executed", p.baseFSMInstance.GetID())
+
 	return nil
 }
 
-// StopInstance attempts to stop the DataflowComponent by setting the desired state to stopped for the given instance
+// StopInstance attempts to stop the DataflowComponent by setting the desired state to stopped for the given instance.
 func (p *ProtocolConverterInstance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping ProtocolConverter service %s ...", p.baseFSMInstance.GetID())
 
@@ -176,22 +183,22 @@ func (p *ProtocolConverterInstance) StopInstance(ctx context.Context, filesystem
 	}
 
 	p.baseFSMInstance.GetLogger().Debugf("ProtocolConverter service %s stop command executed", p.baseFSMInstance.GetID())
+
 	return nil
 }
 
 // CheckForCreation checks whether the creation was successful
-// For DataflowComponent, this is a no-op as we don't need to check anything
+// For DataflowComponent, this is a no-op as we don't need to check anything.
 func (p *ProtocolConverterInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
 	return true
 }
 
 // getServiceStatus gets the status of the ProtocolConverter service
-// its main purpose is to handle the edge cases where the service is not yet created or not yet running
+// its main purpose is to handle the edge cases where the service is not yet created or not yet running.
 func (p *ProtocolConverterInstance) getServiceStatus(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (protocolconvertersvc.ServiceInfo, error) {
 	info, err := p.service.Status(ctx, services, snapshot, p.baseFSMInstance.GetID())
 	if err != nil {
 		// If there's an error getting the service status, we need to distinguish between cases
-
 		if errors.Is(err, protocolconvertersvc.ErrServiceNotExist) {
 			// If the service is being created, we don't want to count this as an error
 			// The instance is likely in Creating or ToBeCreated state, so service doesn't exist yet
@@ -203,11 +210,13 @@ func (p *ProtocolConverterInstance) getServiceStatus(ctx context.Context, servic
 
 			// Log the warning but don't treat it as a fatal error
 			p.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation")
+
 			return protocolconvertersvc.ServiceInfo{}, nil
 		}
 
 		// For other errors, log them and return
 		p.baseFSMInstance.GetLogger().Errorf("error updating observed state for %s: %s", p.baseFSMInstance.GetID(), err)
+
 		infoWithFailedHealthChecks := info
 
 		// Set health flags to false to indicate failure, following the pattern used by other FSMs
@@ -218,7 +227,7 @@ func (p *ProtocolConverterInstance) getServiceStatus(ctx context.Context, servic
 		infoWithFailedHealthChecks.DataflowComponentWriteObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady = false
 
 		// Set the StatusReason to explain the error
-		infoWithFailedHealthChecks.StatusReason = fmt.Sprintf("service status error: %s", err.Error())
+		infoWithFailedHealthChecks.StatusReason = "service status error: " + err.Error()
 
 		// return the info with healthchecks failed
 		return infoWithFailedHealthChecks, err
@@ -227,20 +236,23 @@ func (p *ProtocolConverterInstance) getServiceStatus(ctx context.Context, servic
 	return info, nil
 }
 
-// UpdateObservedStateOfInstance updates the observed state of the service
+// UpdateObservedStateOfInstance updates the observed state of the service.
 func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
 		if p.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "UpdateObservedStateOfInstance") {
 			return nil
 		}
+
 		return ctx.Err()
 	}
 
 	start := time.Now()
+
 	info, err := p.getServiceStatus(ctx, services, snapshot)
 	if err != nil {
 		return fmt.Errorf("error while getting service status: %w", err)
 	}
+
 	metrics.ObserveReconcileTime(logger.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
 	// Store the raw service info
 	p.ObservedState.ServiceInfo = info
@@ -257,6 +269,7 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 	start = time.Now()
 	observedConfig, err := p.service.GetConfig(ctx, services.GetFileSystem(), p.baseFSMInstance.GetID())
 	metrics.ObserveReconcileTime(logger.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".getConfig", time.Since(start))
+
 	if err == nil {
 		// Only update if we successfully got the config
 		p.ObservedState.ObservedProtocolConverterRuntimeConfig = observedConfig
@@ -264,6 +277,7 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 		if strings.Contains(err.Error(), protocolconvertersvc.ErrServiceNotExist.Error()) {
 			// Log the error but don't fail - this might happen during creation when the config file doesn't exist yet
 			p.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
+
 			return nil
 		} else {
 			return fmt.Errorf("failed to get observed ProtocolConverter config: %w", err)
@@ -294,6 +308,7 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 
 	// Now render the config
 	start = time.Now()
+
 	p.runtimeConfig, err = runtime_config.BuildRuntimeConfig(
 		p.specConfig,
 		agentLocationStr,
@@ -303,9 +318,11 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 	)
 	if err != nil {
 		// Capture the configuration error in StatusReason for troubleshooting
-		p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("config error: %s", err.Error())
+		p.ObservedState.ServiceInfo.StatusReason = "config error: " + err.Error()
+
 		return fmt.Errorf("failed to build runtime config: %w", err)
 	}
+
 	metrics.ObserveReconcileTime(logger.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".buildRuntimeConfig", time.Since(start))
 
 	if !protocolconverterserviceconfig.ConfigsEqualRuntime(p.runtimeConfig, p.ObservedState.ObservedProtocolConverterRuntimeConfig) {
@@ -321,6 +338,7 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 			if err != nil {
 				return fmt.Errorf("failed to update ProtocolConverter service configuration: %w", err)
 			}
+
 			p.baseFSMInstance.GetLogger().Debugf("config updated")
 
 			// UNIQUE BEHAVIOR: Re-evaluate DFC desired states after config changes
@@ -331,6 +349,7 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 			// 3. This ensures we don't start broken Benthos instances with empty configs
 			if p.baseFSMInstance.GetDesiredFSMState() == OperationalStateActive {
 				p.baseFSMInstance.GetLogger().Debugf("re-evaluating DFC desired states and will be active")
+
 				err := p.service.EvaluateDFCDesiredStates(p.baseFSMInstance.GetID(), "active", p.baseFSMInstance.GetCurrentFSMState()) // NOTE: Hardcoded to avoid circular import
 				if err != nil {
 					p.baseFSMInstance.GetLogger().Debugf("Failed to re-evaluate DFC states after config update: %v", err)
@@ -347,12 +366,13 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 	return nil
 }
 
-// convertIntMapToStringMap converts a map[int]string to map[string]string
+// convertIntMapToStringMap converts a map[int]string to map[string]string.
 func convertIntMapToStringMap(m map[int]string) map[string]string {
 	result := make(map[string]string)
 	for k, v := range m {
 		result[strconv.Itoa(k)] = v
 	}
+
 	return result
 }
 
@@ -367,7 +387,8 @@ func (p *ProtocolConverterInstance) IsConnectionUp() (bool, string) {
 	if p.ObservedState.ServiceInfo.ConnectionFSMState == connectionfsm.OperationalStateUp {
 		return true, ""
 	}
-	return false, fmt.Sprintf("connection is %s", p.ObservedState.ServiceInfo.ConnectionFSMState) // TODO: add flaky status and latency, or alternaitvely status reason
+
+	return false, "connection is " + p.ObservedState.ServiceInfo.ConnectionFSMState // TODO: add flaky status and latency, or alternaitvely status reason
 }
 
 // IsRedpandaHealthy checks whether the underlying redpanda is healthy
@@ -382,10 +403,12 @@ func (p *ProtocolConverterInstance) IsRedpandaHealthy() (bool, string) {
 		return true, ""
 	}
 
-	statusReason := p.ObservedState.ServiceInfo.RedpandaObservedState.ServiceInfo.StatusReason
-	if statusReason == "" {
-		statusReason = "Redpanda Health status unknown"
+	originalStatusReason := p.ObservedState.ServiceInfo.RedpandaObservedState.ServiceInfo.StatusReason
+	if originalStatusReason == "" {
+		return false, "Redpanda Health status unknown"
 	}
+
+	statusReason := "redpanda: " + originalStatusReason
 
 	return false, statusReason
 }
@@ -422,6 +445,7 @@ func (p *ProtocolConverterInstance) safeBenthosMetrics() (input, output struct{ 
 	}
 
 	metrics := p.ObservedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
+
 	return struct{ ConnectionUp, ConnectionLost int64 }{
 			ConnectionUp:   metrics.Input.ConnectionUp,
 			ConnectionLost: metrics.Input.ConnectionLost,
@@ -433,7 +457,7 @@ func (p *ProtocolConverterInstance) safeBenthosMetrics() (input, output struct{ 
 
 // IsOtherDegraded checks for certain states that should never happen
 // and moves the instance into a degraded state if they happen anyway
-// Case 1: DFC and redpanda should either be both idle or both active, if they differ (for more than a tick) something must have gone wrong (exept that redpanda can be active because of a different DFC)
+// Case 1: DFC and redpanda should either be both idle or both active, if they differ (for more than a tick) something must have gone wrong (except that redpanda can be active because of a different DFC)
 // Case 2: if redpanda is idle or active, but the DFC has no output active, something must have gone wrong (either redpanda is actually down and not detected, or the DFC is not connecting to Kafka)
 // Case 3: if the connection is down, but the DFC input is active, something must have gone wrong (either the connection is actually down and not detected, or the DFC is not handling it well)
 //
@@ -489,7 +513,7 @@ func (p *ProtocolConverterInstance) IsDataflowComponentWithProcessingActivity() 
 		dfcState = "not existing"
 	}
 
-	return false, fmt.Sprintf("DFC is %s", dfcState)
+	return false, "DFC is " + dfcState
 }
 
 // IsProtocolConverterStopped checks whether the ProtocolConverter is stopped
@@ -530,5 +554,6 @@ func (p *ProtocolConverterInstance) IsDFCExisting() (bool, string) {
 		len(p.specConfig.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Output) > 0 {
 		return true, ""
 	}
+
 	return false, "no DFCs configured"
 }

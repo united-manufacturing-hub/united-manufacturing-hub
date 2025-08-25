@@ -43,17 +43,18 @@ import (
 // DeleteDataModelAction implements the Action interface for deleting an existing Data Model.
 // All fields are immutable after construction to avoid race conditions.
 type DeleteDataModelAction struct {
-	userEmail    string
-	actionUUID   uuid.UUID
-	instanceUUID uuid.UUID
+	configManager config.ConfigManager
 
 	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager
+
+	actionLogger *zap.SugaredLogger
+	userEmail    string
 
 	// Parsed request payload (only populated after Parse)
 	payload models.DeleteDataModelPayload
 
-	actionLogger *zap.SugaredLogger
+	actionUUID   uuid.UUID
+	instanceUUID uuid.UUID
 }
 
 // NewDeleteDataModelAction returns an un-parsed action instance.
@@ -73,7 +74,7 @@ func (a *DeleteDataModelAction) Parse(payload interface{}) error {
 	// Parse the payload to get the data model name
 	parsedPayload, err := ParseActionPayload[models.DeleteDataModelPayload](payload)
 	if err != nil {
-		return fmt.Errorf("failed to parse payload: %v", err)
+		return fmt.Errorf("failed to parse payload: %w", err)
 	}
 
 	a.payload = parsedPayload
@@ -112,6 +113,7 @@ func (a *DeleteDataModelAction) Execute() (interface{}, map[string]interface{}, 
 		errorMsg := fmt.Sprintf("Failed to delete data model: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.DeleteDataModel)
+
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 

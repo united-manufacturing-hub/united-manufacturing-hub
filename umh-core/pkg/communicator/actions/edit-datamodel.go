@@ -51,21 +51,23 @@ import (
 // EditDataModelAction implements the Action interface for editing an existing Data Model.
 // All fields are immutable after construction to avoid race conditions.
 type EditDataModelAction struct {
-	userEmail    string
-	actionUUID   uuid.UUID
-	instanceUUID uuid.UUID
-
-	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager
 
 	// Parsed request payload (only populated after Parse)
 	payload models.EditDataModelPayload
 
-	actionLogger *zap.SugaredLogger
+	configManager config.ConfigManager
 
 	// Shared context for the entire action lifecycle (validate + execute)
-	ctx    context.Context
-	cancel context.CancelFunc
+	ctx context.Context
+
+	outboundChannel chan *models.UMHMessage
+
+	actionLogger *zap.SugaredLogger
+
+	cancel       context.CancelFunc
+	userEmail    string
+	actionUUID   uuid.UUID
+	instanceUUID uuid.UUID
 }
 
 // NewEditDataModelAction returns an un-parsed action instance.
@@ -90,19 +92,21 @@ func (a *EditDataModelAction) Parse(payload interface{}) error {
 	// Parse the payload to get the data model configuration
 	parsedPayload, err := ParseActionPayload[models.EditDataModelPayload](payload)
 	if err != nil {
-		return fmt.Errorf("failed to parse payload: %v", err)
+		return fmt.Errorf("failed to parse payload: %w", err)
 	}
 
 	a.payload = parsedPayload
+
 	decodedStructure, err := base64.StdEncoding.DecodeString(a.payload.EncodedStructure)
 	if err != nil {
-		return fmt.Errorf("failed to decode data model version: %v", err)
+		return fmt.Errorf("failed to decode data model version: %w", err)
 	}
 
 	var structure map[string]models.Field
+
 	err = yaml.Unmarshal(decodedStructure, &structure)
 	if err != nil {
-		return fmt.Errorf("failed to unmarshal data model version: %v", err)
+		return fmt.Errorf("failed to unmarshal data model version: %w", err)
 	}
 
 	a.payload.Structure = structure
@@ -137,7 +141,7 @@ func (a *EditDataModelAction) Validate() error {
 	// Get all existing data models and payload shapes for validation
 	currentConfig, err := a.configManager.GetConfig(a.ctx, 0)
 	if err != nil {
-		return fmt.Errorf("failed to get current config for validation: %v", err)
+		return fmt.Errorf("failed to get current config for validation: %w", err)
 	}
 
 	// Convert existing data models to the format expected by the validator
@@ -148,7 +152,7 @@ func (a *EditDataModelAction) Validate() error {
 
 	// Validate with references and payload shapes (handles cases with no references gracefully)
 	if err := validator.ValidateWithReferences(a.ctx, dmVersion, allDataModels, currentConfig.PayloadShapes); err != nil {
-		return fmt.Errorf("data model validation failed: %v", err)
+		return fmt.Errorf("data model validation failed: %w", err)
 	}
 
 	return nil
@@ -176,6 +180,7 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 		errorMsg := fmt.Sprintf("Final validation failed before editing data model: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.EditDataModel)
+
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
@@ -187,6 +192,7 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 		errorMsg := fmt.Sprintf("Failed to edit data model: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.EditDataModel)
+
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
@@ -199,10 +205,12 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 
 	// Find the new version number
 	newVersion := uint64(0)
+
 	if err == nil {
 		for _, dmc := range fullConfig.DataModels {
 			if dmc.Name == a.payload.Name {
 				var maxVersion uint64 = 0
+
 				for versionKey := range dmc.Versions {
 					if strings.HasPrefix(versionKey, "v") {
 						if versionNum, err := strconv.Atoi(versionKey[1:]); err == nil {
@@ -212,7 +220,9 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 						}
 					}
 				}
+
 				newVersion = maxVersion
+
 				break
 			}
 		}
@@ -222,6 +232,7 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 		errorMsg := "Failed to edit data model: new version number not found"
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.EditDataModel)
+
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
@@ -264,6 +275,7 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 				if dataContractErr != nil {
 					return "failed"
 				}
+
 				return "created"
 			}(),
 		},
@@ -272,7 +284,7 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 	return response, nil, nil
 }
 
-// convertModelsFieldsToConfigFields converts models.Field map to config.Field map
+// convertModelsFieldsToConfigFields converts models.Field map to config.Field map.
 func (a *EditDataModelAction) convertModelsFieldsToConfigFields(modelsFields map[string]models.Field) map[string]config.Field {
 	if modelsFields == nil {
 		return nil

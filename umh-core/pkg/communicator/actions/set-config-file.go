@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"time"
 
+	"errors"
+
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
@@ -32,23 +34,24 @@ import (
 )
 
 type SetConfigFileAction struct {
-	// ─── Request metadata ────────────────────────────────────────────────────
-	userEmail    string
-	actionUUID   uuid.UUID
-	instanceUUID uuid.UUID
+	configManager config.ConfigManager
 
 	// ─── Plumbing ────────────────────────────────────────────────────────────
 	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager
 
 	// ─── Runtime observation ────────────────────────────────────────────────
 	systemSnapshotManager *fsm.SnapshotManager
 
+	// ─── Utilities ──────────────────────────────────────────────────────────
+	actionLogger *zap.SugaredLogger
+
 	// ─── Request payload ───────────────────────────────────────────────────
 	payload models.SetConfigFilePayload
 
-	// ─── Utilities ──────────────────────────────────────────────────────────
-	actionLogger *zap.SugaredLogger
+	// ─── Request metadata ────────────────────────────────────────────────────
+	userEmail    string
+	actionUUID   uuid.UUID
+	instanceUUID uuid.UUID
 }
 
 // NewSetConfigFileAction creates a new SetConfigFileAction with the provided parameters.
@@ -75,6 +78,7 @@ func (a *SetConfigFileAction) Parse(payload interface{}) error {
 	}
 
 	a.payload = payloadStruct
+
 	return nil
 }
 
@@ -84,21 +88,23 @@ func (a *SetConfigFileAction) Validate() error {
 
 	// Ensure content is not empty
 	if a.payload.Content == "" {
-		return fmt.Errorf("config file content cannot be empty")
+		return errors.New("config file content cannot be empty")
 	}
 
 	// Validate YAML format by trying to parse it with yaml.v3, but allow unknown fields
 	// This will permit YAML anchors while still checking basic YAML syntax
 	var yamlContent interface{}
+
 	dec := yaml.NewDecoder(bytes.NewReader([]byte(a.payload.Content)))
 	dec.KnownFields(false) // Allow unknown fields (including anchors)
+
 	if err := dec.Decode(&yamlContent); err != nil {
 		return fmt.Errorf("invalid YAML content: %w", err)
 	}
 
 	// Ensure LastModifiedTime is not zero
 	if a.payload.LastModifiedTime == "" {
-		return fmt.Errorf("last modified time cannot be zero")
+		return errors.New("last modified time cannot be zero")
 	}
 
 	return nil
@@ -116,7 +122,7 @@ func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 	configPath := config.DefaultConfigPath
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-		fmt.Sprintf("Updating config file at %s", configPath), a.outboundChannel, models.SetConfigFile)
+		"Updating config file at "+configPath, a.outboundChannel, models.SetConfigFile)
 
 	// Write the new content to the file with atomic concurrent modification check
 	err := a.configManager.WriteYAMLConfigFromString(ctx, a.payload.Content, a.payload.LastModifiedTime)
@@ -124,6 +130,7 @@ func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 		errMsg := fmt.Sprintf("Failed to write config file: %v", err)
 		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errMsg, models.ErrRetryConfigWriteFailed, nil, a.outboundChannel, models.SetConfigFile, nil)
+
 		return nil, nil, fmt.Errorf("failed to write config file: %w", err)
 	}
 
@@ -133,6 +140,7 @@ func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 		errMsg := fmt.Sprintf("Failed to update cache mod time: %v", err)
 		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errMsg, models.ErrGetCacheModTimeFailed, nil, a.outboundChannel, models.SetConfigFile, nil)
+
 		return nil, nil, fmt.Errorf("failed to update cache mod time: %w", err)
 	}
 

@@ -21,18 +21,17 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Generator handles the generation of Nmap YAML configurations
+// Generator handles the generation of Nmap YAML configurations.
 type Generator struct {
 }
 
-// NewGenerator creates a new YAML generator for Benthos configurations
+// NewGenerator creates a new YAML generator for Benthos configurations.
 func NewGenerator() *Generator {
 	return &Generator{}
 }
 
-// RenderConfig generates a Connection YAML configuration from a ConnectionServiceConfig
+// RenderConfig generates a Connection YAML configuration from a ConnectionServiceConfig.
 func (g *Generator) RenderConfig(cfg ConnectionServiceConfig) (string, error) {
-
 	// Convert the config to a normalized map
 	configMap := g.ConfigToMap(cfg)
 	normalizedMap := NormalizeConfig(configMap)
@@ -48,7 +47,7 @@ func (g *Generator) RenderConfig(cfg ConnectionServiceConfig) (string, error) {
 	return yamlStr, nil
 }
 
-// ConfigToMap converts a ConnectionServiceConfig to a raw map for YAML generation
+// ConfigToMap converts a ConnectionServiceConfig to a raw map for YAML generation.
 func (g *Generator) ConfigToMap(cfg ConnectionServiceConfig) map[string]any {
 	// use generator to create a valid nmapConfigMap
 	generator := nmapserviceconfig.NewGenerator()
@@ -65,7 +64,7 @@ func (g *Generator) ConfigToMap(cfg ConnectionServiceConfig) map[string]any {
 	return configMap
 }
 
-// NormalizeConfig does not need to adjust anything here
+// NormalizeConfig does not need to adjust anything here.
 func NormalizeConfig(raw map[string]any) map[string]any {
 	return raw
 }

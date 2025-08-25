@@ -26,24 +26,24 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 )
 
-// MockSchemaRegistry simulates Redpanda's Schema Registry for testing
+// MockSchemaRegistry simulates Redpanda's Schema Registry for testing.
 type MockSchemaRegistry struct {
 	server  *httptest.Server
 	schemas map[string]map[int]*MockSchemaVersion // subject -> version -> schema
 }
 
-// MockSchemaVersion represents a schema version in the mock registry
+// MockSchemaVersion represents a schema version in the mock registry.
 type MockSchemaVersion struct {
-	ID      int    `json:"id"`
-	Version int    `json:"version"`
 	Schema  string `json:"schema"`
 	Subject string `json:"subject"`
+	ID      int    `json:"id"`
+	Version int    `json:"version"`
 }
 
-// NoOpSchemaRegistry is a mock implementation that does nothing
+// NoOpSchemaRegistry is a mock implementation that does nothing.
 type NoOpSchemaRegistry struct{}
 
-// NewMockSchemaRegistry creates a new mock schema registry server
+// NewMockSchemaRegistry creates a new mock schema registry server.
 func NewMockSchemaRegistry() *MockSchemaRegistry {
 	mock := &MockSchemaRegistry{
 		schemas: make(map[string]map[int]*MockSchemaVersion),
@@ -55,25 +55,26 @@ func NewMockSchemaRegistry() *MockSchemaRegistry {
 	mux.HandleFunc("/subjects/", mock.handleSubjectOperations)
 
 	mock.server = httptest.NewServer(mux)
+
 	return mock
 }
 
-// NewNoOpSchemaRegistry creates a new no-op schema registry for testing
+// NewNoOpSchemaRegistry creates a new no-op schema registry for testing.
 func NewNoOpSchemaRegistry() *NoOpSchemaRegistry {
 	return &NoOpSchemaRegistry{}
 }
 
-// URL returns the base URL of the mock server
+// URL returns the base URL of the mock server.
 func (m *MockSchemaRegistry) URL() string {
 	return m.server.URL
 }
 
-// Close shuts down the mock server
+// Close shuts down the mock server.
 func (m *MockSchemaRegistry) Close() {
 	m.server.Close()
 }
 
-// AddSchema adds a schema to the mock registry
+// AddSchema adds a schema to the mock registry.
 func (m *MockSchemaRegistry) AddSchema(subject string, version int, schema string) {
 	if m.schemas[subject] == nil {
 		m.schemas[subject] = make(map[int]*MockSchemaVersion)
@@ -90,33 +91,36 @@ func (m *MockSchemaRegistry) AddSchema(subject string, version int, schema strin
 	}
 }
 
-// RemoveSchema removes a schema from the mock registry
+// RemoveSchema removes a schema from the mock registry.
 func (m *MockSchemaRegistry) RemoveSchema(subject string, version int) {
 	if versions, exists := m.schemas[subject]; exists {
 		delete(versions, version)
+
 		if len(versions) == 0 {
 			delete(m.schemas, subject)
 		}
 	}
 }
 
-// GetSchema gets a schema from the mock registry
+// GetSchema gets a schema from the mock registry.
 func (m *MockSchemaRegistry) GetSchema(subject string, version int) *MockSchemaVersion {
 	if versions, exists := m.schemas[subject]; exists {
 		return versions[version]
 	}
+
 	return nil
 }
 
-// ClearSchemas removes all schemas from the mock registry
+// ClearSchemas removes all schemas from the mock registry.
 func (m *MockSchemaRegistry) ClearSchemas() {
 	m.schemas = make(map[string]map[int]*MockSchemaVersion)
 }
 
-// handleSubjects handles GET /subjects - returns all available subjects
+// handleSubjects handles GET /subjects - returns all available subjects.
 func (m *MockSchemaRegistry) handleSubjects(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+
 		return
 	}
 
@@ -127,8 +131,10 @@ func (m *MockSchemaRegistry) handleSubjects(w http.ResponseWriter, r *http.Reque
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+
 	if err := json.NewEncoder(w).Encode(subjects); err != nil {
 		http.Error(w, "Failed to encode subjects", http.StatusInternalServerError)
+
 		return
 	}
 }
@@ -141,6 +147,7 @@ func (m *MockSchemaRegistry) handleSubjectOperations(w http.ResponseWriter, r *h
 
 	if len(parts) == 0 || parts[0] == "" {
 		http.Error(w, "Invalid path", http.StatusBadRequest)
+
 		return
 	}
 
@@ -169,7 +176,7 @@ func (m *MockSchemaRegistry) handleSubjectOperations(w http.ResponseWriter, r *h
 	}
 }
 
-// handleDeleteSubject handles DELETE /subjects/{subject}
+// handleDeleteSubject handles DELETE /subjects/{subject}.
 func (m *MockSchemaRegistry) handleDeleteSubject(w http.ResponseWriter, r *http.Request, subject string) {
 	// Check if subject exists
 	if _, exists := m.schemas[subject]; !exists {
@@ -177,6 +184,7 @@ func (m *MockSchemaRegistry) handleDeleteSubject(w http.ResponseWriter, r *http.
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = fmt.Fprintf(w, `{"error_code":40401,"message":"Subject '%s' not found."}`, subject)
+
 		return
 	}
 
@@ -189,7 +197,7 @@ func (m *MockSchemaRegistry) handleDeleteSubject(w http.ResponseWriter, r *http.
 	_, _ = w.Write([]byte(`[1]`)) // Mock version list
 }
 
-// handlePostSubjectVersion handles POST /subjects/{subject}/versions
+// handlePostSubjectVersion handles POST /subjects/{subject}/versions.
 func (m *MockSchemaRegistry) handlePostSubjectVersion(w http.ResponseWriter, r *http.Request, subject string) {
 	// Parse JSON body
 	var req struct {
@@ -201,6 +209,7 @@ func (m *MockSchemaRegistry) handlePostSubjectVersion(w http.ResponseWriter, r *
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(`{"error_code":42201,"message":"Invalid JSON"}`))
+
 		return
 	}
 
@@ -212,6 +221,7 @@ func (m *MockSchemaRegistry) handlePostSubjectVersion(w http.ResponseWriter, r *
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusConflict)
 				_, _ = fmt.Fprintf(w, `{"id":%d}`, schema.ID)
+
 				return
 			}
 		}
@@ -219,6 +229,7 @@ func (m *MockSchemaRegistry) handlePostSubjectVersion(w http.ResponseWriter, r *
 
 	// Add new schema version
 	version := 1
+
 	if versions, exists := m.schemas[subject]; exists {
 		// Find next version number
 		for v := range versions {
@@ -246,10 +257,11 @@ func (m *MockSchemaRegistry) handlePostSubjectVersion(w http.ResponseWriter, r *
 	_, _ = fmt.Fprintf(w, `{"id":%d}`, id)
 }
 
-// handleGetSubjectVersions handles GET /subjects/{subject}/versions/{version}
+// handleGetSubjectVersions handles GET /subjects/{subject}/versions/{version}.
 func (m *MockSchemaRegistry) handleGetSubjectVersions(w http.ResponseWriter, r *http.Request, subject string, parts []string) {
 	if len(parts) < 3 || parts[1] != "versions" {
 		http.Error(w, "Invalid path", http.StatusBadRequest)
+
 		return
 	}
 
@@ -258,6 +270,7 @@ func (m *MockSchemaRegistry) handleGetSubjectVersions(w http.ResponseWriter, r *
 	// Handle "latest" version request
 	if versionStr == "latest" {
 		m.handleLatestVersion(w, subject)
+
 		return
 	}
 
@@ -265,6 +278,7 @@ func (m *MockSchemaRegistry) handleGetSubjectVersions(w http.ResponseWriter, r *
 	version, err := strconv.Atoi(versionStr)
 	if err != nil {
 		http.Error(w, "Invalid version format", http.StatusBadRequest)
+
 		return
 	}
 
@@ -272,6 +286,7 @@ func (m *MockSchemaRegistry) handleGetSubjectVersions(w http.ResponseWriter, r *
 	versions, subjectExists := m.schemas[subject]
 	if !subjectExists {
 		http.Error(w, fmt.Sprintf(`{"error_code":40401,"message":"Subject '%s' not found."}`, subject), http.StatusNotFound)
+
 		return
 	}
 
@@ -279,28 +294,35 @@ func (m *MockSchemaRegistry) handleGetSubjectVersions(w http.ResponseWriter, r *
 	schema, versionExists := versions[version]
 	if !versionExists {
 		http.Error(w, fmt.Sprintf(`{"error_code":40402,"message":"Version %d not found for subject '%s'."}`, version, subject), http.StatusNotFound)
+
 		return
 	}
 
 	// Return the schema version (Redpanda format)
 	w.Header().Set("Content-Type", "application/json")
+
 	if err := json.NewEncoder(w).Encode(schema); err != nil {
 		http.Error(w, "Failed to encode schema", http.StatusInternalServerError)
+
 		return
 	}
 }
 
-// handleLatestVersion handles requests for the latest version of a subject
+// handleLatestVersion handles requests for the latest version of a subject.
 func (m *MockSchemaRegistry) handleLatestVersion(w http.ResponseWriter, subject string) {
 	versions, subjectExists := m.schemas[subject]
 	if !subjectExists {
 		http.Error(w, fmt.Sprintf(`{"error_code":40401,"message":"Subject '%s' not found."}`, subject), http.StatusNotFound)
+
 		return
 	}
 
 	// Find the latest version
-	var latestVersion int
-	var latestSchema *MockSchemaVersion
+	var (
+		latestVersion int
+		latestSchema  *MockSchemaVersion
+	)
+
 	for version, schema := range versions {
 		if version > latestVersion {
 			latestVersion = version
@@ -310,17 +332,20 @@ func (m *MockSchemaRegistry) handleLatestVersion(w http.ResponseWriter, subject 
 
 	if latestSchema == nil {
 		http.Error(w, fmt.Sprintf(`{"error_code":40402,"message":"No versions found for subject '%s'."}`, subject), http.StatusNotFound)
+
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+
 	if err := json.NewEncoder(w).Encode(latestSchema); err != nil {
 		http.Error(w, "Failed to encode latest schema", http.StatusInternalServerError)
+
 		return
 	}
 }
 
-// SetupTestSchemas adds common test schemas to the mock registry
+// SetupTestSchemas adds common test schemas to the mock registry.
 func (m *MockSchemaRegistry) SetupTestSchemas() {
 	// Add sensor data schemas v1 with different data types
 	sensorDataV1NumberSchema := `{
@@ -490,7 +515,7 @@ func (m *MockSchemaRegistry) SetupTestSchemas() {
 	m.AddSchema("_string_data_v1_timeseries-string", 1, stringDataV1Schema)
 }
 
-// SimulateNetworkError makes the mock server return 500 errors for testing
+// SimulateNetworkError makes the mock server return 500 errors for testing.
 func (m *MockSchemaRegistry) SimulateNetworkError(enable bool) {
 	if enable {
 		// Replace handlers with error handlers
@@ -508,23 +533,26 @@ func (m *MockSchemaRegistry) SimulateNetworkError(enable bool) {
 	}
 }
 
-// GetRegisteredSubjects returns all subjects currently in the mock registry
+// GetRegisteredSubjects returns all subjects currently in the mock registry.
 func (m *MockSchemaRegistry) GetRegisteredSubjects() []string {
 	var subjects []string
 	for subject := range m.schemas {
 		subjects = append(subjects, subject)
 	}
+
 	return subjects
 }
 
-// GetVersionsForSubject returns all versions for a given subject
+// GetVersionsForSubject returns all versions for a given subject.
 func (m *MockSchemaRegistry) GetVersionsForSubject(subject string) []int {
 	var versions []int
+
 	if subjectVersions, exists := m.schemas[subject]; exists {
 		for version := range subjectVersions {
 			versions = append(versions, version)
 		}
 	}
+
 	return versions
 }
 

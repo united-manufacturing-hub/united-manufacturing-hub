@@ -18,7 +18,7 @@ package connection
 
 import (
 	"context"
-	"fmt"
+	"sync"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
@@ -43,7 +43,39 @@ import (
 //	// Test your code that uses IConnectionService
 //	status, err := myComponent.DoSomethingWithConnection(mockService, "test-conn")
 type MockConnectionService struct {
-	// Tracks calls to methods
+	GenerateNmapConfigConnectionError    error
+	GetConfigError                       error
+	StatusError                          error
+	AddConnectionToNmapManagerError      error
+	UpdateConnectionInNmapManagerError   error
+	RemoveConnectionFromNmapManagerError error
+	StartConnectionError                 error
+	StopConnectionError                  error
+	ForceRemoveConnectionError           error
+	ReconcileManagerError                error
+
+	// Interface (16 bytes - pointer + type info)
+	NmapService nmap.INmapService
+
+	// Maps (8 bytes each - pointers)
+	ConnectionStates    map[string]*ServiceInfo
+	ExistingConnections map[string]bool
+	RecentNmapStates    map[string][]string
+	stateFlags          map[string]*ConnectionStateFlags
+
+	// Structs (varies in size)
+	GenerateNmapConfigForConnectionResult nmapserviceconfig.NmapServiceConfig
+	GetConfigResult                       connectionserviceconfig.ConnectionServiceConfig
+
+	// Slice (24 bytes - pointer + len + cap)
+	NmapConfigs []config.NmapConfig
+
+	StatusResult ServiceInfo
+
+	// Mutex (24 bytes typically)
+	mu sync.RWMutex
+
+	// Booleans (1 byte each, but grouped for better packing)
 	GenerateNmapConfigForConnectionCalled bool
 	GetConfigCalled                       bool
 	StatusCalled                          bool
@@ -55,44 +87,17 @@ type MockConnectionService struct {
 	ForceRemoveConnectionCalled           bool
 	ServiceExistsCalled                   bool
 	ReconcileManagerCalled                bool
-
-	// Return values for each method
-	GenerateNmapConfigForConnectionResult nmapserviceconfig.NmapServiceConfig
-	GenerateNmapConfigConnectionError     error
-	GetConfigResult                       connectionserviceconfig.ConnectionServiceConfig
-	GetConfigError                        error
-	StatusResult                          ServiceInfo
-	StatusError                           error
-	AddConnectionToNmapManagerError       error
-	UpdateConnectionInNmapManagerError    error
-	RemoveConnectionFromNmapManagerError  error
-	StartConnectionError                  error
-	StopConnectionError                   error
-	ForceRemoveConnectionError            error
 	ServiceExistsResult                   bool
-	ReconcileManagerError                 error
 	ReconcileManagerReconciled            bool
 	IsConnectionFlakyResult               bool
-
-	// For more complex testing scenarios
-	ConnectionStates    map[string]*ServiceInfo
-	ExistingConnections map[string]bool
-	NmapConfigs         []config.NmapConfig
-	RecentNmapStates    map[string][]string
-
-	// State control for FSM testing
-	stateFlags map[string]*ConnectionStateFlags
-
-	// Nmap service mock
-	NmapService nmap.INmapService
 }
 
 var _ IConnectionService = (*MockConnectionService)(nil)
 
-// ConnectionStateFlags contains all the state flags needed for FSM testing
+// ConnectionStateFlags contains all the state flags needed for FSM testing.
 type ConnectionStateFlags struct {
-	IsNmapRunning bool
 	NmapFSMState  string
+	IsNmapRunning bool
 	IsFlaky       bool
 }
 
@@ -108,39 +113,53 @@ func NewMockConnectionService() *MockConnectionService {
 	}
 }
 
-// SetComponentState sets all state flags for a component at once
+// SetComponentState sets all state flags for a component at once.
 func (m *MockConnectionService) SetConnectionState(connectionState string, flags ConnectionStateFlags) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	// Ensure ServiceInfo exists for this component
 	if _, exists := m.ConnectionStates[connectionState]; !exists {
 		m.ConnectionStates[connectionState] = &ServiceInfo{
 			NmapFSMState: flags.NmapFSMState,
 		}
 	}
+
 	m.IsConnectionFlakyResult = flags.IsFlaky
 
 	// Store the flags
 	m.stateFlags[connectionState] = &flags
 }
 
-// GetComponentState gets the state flags for a component
+// GetComponentState gets the state flags for a component.
 func (m *MockConnectionService) GetConnectionState(connectionName string) *ConnectionStateFlags {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	if flags, exists := m.stateFlags[connectionName]; exists {
 		return flags
 	}
 	// Initialize with default flags if not exists
 	flags := &ConnectionStateFlags{}
 	m.stateFlags[connectionName] = flags
+
 	return flags
 }
 
-// GenerateNmapConfigForConnection mocks generating Nmap config for a Connection
+// GenerateNmapConfigForConnection mocks generating Nmap config for a Connection.
 func (m *MockConnectionService) GenerateNmapConfigForConnection(connectionConfig *connectionserviceconfig.ConnectionServiceConfig, connectionName string) (nmapserviceconfig.NmapServiceConfig, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.GenerateNmapConfigForConnectionCalled = true
+
 	return m.GenerateNmapConfigForConnectionResult, m.GenerateNmapConfigConnectionError
 }
 
-// GetConfig mocks getting the Connection configuration
+// GetConfig mocks getting the Connection configuration.
 func (m *MockConnectionService) GetConfig(ctx context.Context, filesystemService filesystem.Service, connectionName string) (connectionserviceconfig.ConnectionServiceConfig, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.GetConfigCalled = true
 
 	// If error is set, return it
@@ -152,8 +171,11 @@ func (m *MockConnectionService) GetConfig(ctx context.Context, filesystemService
 	return m.GetConfigResult, nil
 }
 
-// Status mocks getting the status of a Connection
+// Status mocks getting the status of a Connection.
 func (m *MockConnectionService) Status(ctx context.Context, filesystemService filesystem.Service, connectionName string, tick uint64) (ServiceInfo, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.StatusCalled = true
 
 	// Check if the connection exists in the ExistingConnections map
@@ -163,19 +185,25 @@ func (m *MockConnectionService) Status(ctx context.Context, filesystemService fi
 
 	// If we have a state already stored, return it
 	if state, exists := m.ConnectionStates[connectionName]; exists {
-		state.IsFlaky = m.isConnectionFlaky()
-		return *state, m.StatusError
+		// Create a copy of the state to avoid modifying the original concurrently
+		stateCopy := *state
+		stateCopy.IsFlaky = m.isConnectionFlaky()
+
+		return stateCopy, m.StatusError
 	}
 
 	// If no state is stored, return the default mock result
 	return m.StatusResult, m.StatusError
 }
 
-// AddConnectionToNmapManager mocks adding a Connection to the Nmap manager
+// AddConnectionToNmapManager mocks adding a Connection to the Nmap manager.
 func (m *MockConnectionService) AddConnectionToNmapManager(ctx context.Context, filesystemService filesystem.Service, cfg *connectionserviceconfig.ConnectionServiceConfig, connectionName string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.AddConnectionToNmapManagerCalled = true
 
-	nmapName := fmt.Sprintf("connection-%s", connectionName)
+	nmapName := "connection-" + connectionName
 
 	// Check whether the component already exists
 	for _, nmapConfig := range m.NmapConfigs {
@@ -202,19 +230,24 @@ func (m *MockConnectionService) AddConnectionToNmapManager(ctx context.Context, 
 	return m.AddConnectionToNmapManagerError
 }
 
-// UpdateConnectionInNmapManager mocks updating a Connection in the Nmap manager
+// UpdateConnectionInNmapManager mocks updating a Connection in the Nmap manager.
 func (m *MockConnectionService) UpdateConnectionInNmapManager(ctx context.Context, filesystemService filesystem.Service, cfg *connectionserviceconfig.ConnectionServiceConfig, connectionName string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.UpdateConnectionInNmapManagerCalled = true
 
-	nmapName := fmt.Sprintf("connection-%s", connectionName)
+	nmapName := "connection-" + connectionName
 
 	// Check if the component exists
 	found := false
 	index := -1
+
 	for i, nmapConfig := range m.NmapConfigs {
 		if nmapConfig.Name == nmapName {
 			found = true
 			index = i
+
 			break
 		}
 	}
@@ -236,11 +269,14 @@ func (m *MockConnectionService) UpdateConnectionInNmapManager(ctx context.Contex
 	return m.UpdateConnectionInNmapManagerError
 }
 
-// RemoveConnectionFromNmapManager mocks removing a Connection from the Nmap manager
+// RemoveConnectionFromNmapManager mocks removing a Connection from the Nmap manager.
 func (m *MockConnectionService) RemoveConnectionFromNmapManager(ctx context.Context, filesystemService filesystem.Service, connectionName string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.RemoveConnectionFromNmapManagerCalled = true
 
-	nmapName := fmt.Sprintf("connection-%s", connectionName)
+	nmapName := "connection-" + connectionName
 
 	found := false
 
@@ -249,6 +285,7 @@ func (m *MockConnectionService) RemoveConnectionFromNmapManager(ctx context.Cont
 		if nmapConfig.Name == nmapName {
 			m.NmapConfigs = append(m.NmapConfigs[:i], m.NmapConfigs[i+1:]...)
 			found = true
+
 			break
 		}
 	}
@@ -264,11 +301,14 @@ func (m *MockConnectionService) RemoveConnectionFromNmapManager(ctx context.Cont
 	return m.RemoveConnectionFromNmapManagerError
 }
 
-// StartDataFlowComponent mocks starting a Connection
+// StartDataFlowComponent mocks starting a Connection.
 func (m *MockConnectionService) StartConnection(ctx context.Context, filesystemService filesystem.Service, connectionName string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.StartConnectionCalled = true
 
-	nmapName := fmt.Sprintf("connection-%s", connectionName)
+	nmapName := "connection-" + connectionName
 
 	found := false
 
@@ -277,6 +317,7 @@ func (m *MockConnectionService) StartConnection(ctx context.Context, filesystemS
 		if nmapConfig.Name == nmapName {
 			m.NmapConfigs[i].DesiredFSMState = nmapfsm.OperationalStateOpen
 			found = true
+
 			break
 		}
 	}
@@ -288,11 +329,14 @@ func (m *MockConnectionService) StartConnection(ctx context.Context, filesystemS
 	return m.StartConnectionError
 }
 
-// StopConnection mocks stopping a Connection
+// StopConnection mocks stopping a Connection.
 func (m *MockConnectionService) StopConnection(ctx context.Context, filesystemService filesystem.Service, connectionName string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.StopConnectionCalled = true
 
-	nmapName := fmt.Sprintf("connection-%s", connectionName)
+	nmapName := "connection-" + connectionName
 
 	found := false
 
@@ -301,6 +345,7 @@ func (m *MockConnectionService) StopConnection(ctx context.Context, filesystemSe
 		if nmapConfig.Name == nmapName {
 			m.NmapConfigs[i].DesiredFSMState = nmapfsm.OperationalStateStopped
 			found = true
+
 			break
 		}
 	}
@@ -312,24 +357,37 @@ func (m *MockConnectionService) StopConnection(ctx context.Context, filesystemSe
 	return m.StopConnectionError
 }
 
-// ForceRemoveConnection mocks force removing a Connection
+// ForceRemoveConnection mocks force removing a Connection.
 func (m *MockConnectionService) ForceRemoveConnection(ctx context.Context, filesystemService filesystem.Service, connectionName string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.ForceRemoveConnectionCalled = true
+
 	return m.ForceRemoveConnectionError
 }
 
-// ServiceExists mocks checking if a DataFlowComponent exists
+// ServiceExists mocks checking if a DataFlowComponent exists.
 func (m *MockConnectionService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, connectionName string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	m.ServiceExistsCalled = true
+
 	return m.ServiceExistsResult
 }
 
-// ReconcileManager mocks reconciling the DataFlowComponent manager
+// ReconcileManager mocks reconciling the DataFlowComponent manager.
 func (m *MockConnectionService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.ReconcileManagerCalled = true
+
 	return m.ReconcileManagerError, m.ReconcileManagerReconciled
 }
 
 func (m *MockConnectionService) isConnectionFlaky() bool {
+	// Note: This method is called from within Status() which already holds the lock
 	return m.IsConnectionFlakyResult
 }

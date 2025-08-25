@@ -85,28 +85,30 @@ func NewContainerInstanceWithService(config config.ContainerConfig, service cont
 	return instance
 }
 
-// SetDesiredFSMState is how external code updates the desired state at runtime
+// SetDesiredFSMState is how external code updates the desired state at runtime.
 func (c *ContainerInstance) SetDesiredFSMState(state string) error {
 	// We only allow "active" or "stopped"
 	if state != OperationalStateActive && state != OperationalStateStopped {
 		return fmt.Errorf("invalid desired state: %s (only '%s' or '%s' allowed)",
 			state, OperationalStateActive, OperationalStateStopped)
 	}
+
 	c.baseFSMInstance.SetDesiredFSMState(state)
+
 	return nil
 }
 
-// GetCurrentFSMState returns the current operational or lifecycle state
+// GetCurrentFSMState returns the current operational or lifecycle state.
 func (c *ContainerInstance) GetCurrentFSMState() string {
 	return c.baseFSMInstance.GetCurrentFSMState()
 }
 
-// GetDesiredFSMState returns what we want operationally
+// GetDesiredFSMState returns what we want operationally.
 func (c *ContainerInstance) GetDesiredFSMState() string {
 	return c.baseFSMInstance.GetDesiredFSMState()
 }
 
-// Remove initiates the removal lifecycle
+// Remove initiates the removal lifecycle.
 func (c *ContainerInstance) Remove(ctx context.Context) error {
 	return c.baseFSMInstance.Remove(ctx)
 }
@@ -127,18 +129,18 @@ func (c *ContainerInstance) IsStopping() bool {
 	return c.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopping
 }
 
-// WantsToBeStopped returns true if the instance wants to be stopped
+// WantsToBeStopped returns true if the instance wants to be stopped.
 func (c *ContainerInstance) WantsToBeStopped() bool {
 	return c.baseFSMInstance.GetDesiredFSMState() == OperationalStateStopped
 }
 
-// PrintState is a helper for debugging
+// PrintState is a helper for debugging.
 func (c *ContainerInstance) PrintState() {
 	c.baseFSMInstance.GetLogger().Infof("ContainerInstance %s - Current state: %s, Desired: %s",
 		c.baseFSMInstance.GetID(), c.GetCurrentFSMState(), c.GetDesiredFSMState())
 }
 
-// GetMinimumRequiredTime returns the minimum required time for this instance
+// GetMinimumRequiredTime returns the minimum required time for this instance.
 func (c *ContainerInstance) GetMinimumRequiredTime() time.Duration {
 	return constants.ContainerUpdateObservedStateTimeout
 }

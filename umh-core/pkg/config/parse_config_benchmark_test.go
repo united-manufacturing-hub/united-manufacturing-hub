@@ -15,11 +15,12 @@
 package config
 
 import (
+	"context"
 	"os"
 	"testing"
 )
 
-// BenchmarkParseConfig_100 benchmarks parseConfig with the example-config-100.yaml file
+// BenchmarkParseConfig_100 benchmarks parseConfig with the example-config-100.yaml file.
 func BenchmarkParseConfig_100(b *testing.B) {
 	cfg, err := os.ReadFile("../../examples/example-config-100.yaml")
 	if err != nil {
@@ -28,15 +29,17 @@ func BenchmarkParseConfig_100(b *testing.B) {
 
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
-		_, err := ParseConfig(cfg, false)
+	ctx := context.Background()
+
+	for range b.N {
+		_, err := ParseConfig(cfg, ctx, false)
 		if err != nil {
 			b.Fatalf("parseConfig failed: %v", err)
 		}
 	}
 }
 
-// BenchmarkParseConfig_Comm benchmarks parseConfig with the example-config-comm.yaml file
+// BenchmarkParseConfig_Comm benchmarks parseConfig with the example-config-comm.yaml file.
 func BenchmarkParseConfig_Comm(b *testing.B) {
 	cfg, err := os.ReadFile("../../examples/example-config-comm.yaml")
 	if err != nil {
@@ -45,8 +48,10 @@ func BenchmarkParseConfig_Comm(b *testing.B) {
 
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
-		_, err := ParseConfig(cfg, false)
+	ctx := context.Background()
+
+	for range b.N {
+		_, err := ParseConfig(cfg, ctx, false)
 		if err != nil {
 			b.Fatalf("parseConfig failed: %v", err)
 		}

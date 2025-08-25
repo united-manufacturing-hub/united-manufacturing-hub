@@ -33,39 +33,39 @@ import (
 	"go.uber.org/zap"
 )
 
-// ErrAlreadyRunning is returned when trying to start a StateMocker that is already running
+// ErrAlreadyRunning is returned when trying to start a StateMocker that is already running.
 var ErrAlreadyRunning = errors.New("state mocker already running")
 
-// ConfigManager interface defines the methods needed by StateMocker to get configuration data
+// ConfigManager interface defines the methods needed by StateMocker to get configuration data.
 type ConfigManager interface {
 	// GetDataFlowConfig returns the DataFlow component configurations
 	GetDataFlowConfig() []config.DataFlowComponentConfig
 }
 
-// StateTransition represents a state transition for a component
+// StateTransition represents a state transition for a component.
 type StateTransition struct {
-	TickAt int
 	State  string
+	TickAt int
 }
 
 // the state mocker is used for unit testing to mock the state of the system
 // it runs in a separate goroutine and regularly updates the state of the system
 // it is passed a config manager that provides the config being used by the action unit tests
-// it then updates the state of the system according to the config just like the real system would do
+// it then updates the state of the system according to the config just like the real system would do.
 type StateMocker struct {
-	StateManager       *fsm.SnapshotManager
 	ConfigManager      ConfigManager
-	TickCounter        int
+	StateManager       *fsm.SnapshotManager
 	PendingTransitions map[string][]StateTransition // key is component ID
 	done               chan struct{}                // channel to signal shutdown of goroutine
-	running            atomic.Bool                  // flag to track if the mocker is running
 	mu                 *sync.RWMutex                // mutex to protect the state of the mocker
-	lastConfig         config.FullConfig            // last config is needed to detect config changes (events)
-	lastConfigSet      bool                         // flag to track if the last config has been set
 	IgnoreDfcUntilTick map[string]int               // map of component ID to tick to ignore
+	lastConfig         config.FullConfig            // last config is needed to detect config changes (events)
+	TickCounter        int
+	running            atomic.Bool // flag to track if the mocker is running
+	lastConfigSet      bool        // flag to track if the last config has been set
 }
 
-// NewStateMocker creates a new StateMocker
+// NewStateMocker creates a new StateMocker.
 func NewStateMocker(configManager ConfigManager) *StateMocker {
 	return &StateMocker{
 		ConfigManager:      configManager,
@@ -134,6 +134,7 @@ func (s *StateMocker) Tick() {
 			Managers: managers,
 		})
 	}
+
 	s.StateManager.UpdateSnapshot(&fsm.SystemSnapshot{
 		Managers: map[string]fsm.ManagerSnapshot{
 			constants.DataflowcomponentManagerName: managerSnapshot,
@@ -141,9 +142,8 @@ func (s *StateMocker) Tick() {
 	})
 }
 
-// detect config events (add, remove, edit) and add the corresponding state transitions to the pending transitions
+// detect config events (add, remove, edit) and add the corresponding state transitions to the pending transitions.
 func detectConfigEvents(curDfcConfig []config.DataFlowComponentConfig, lastDfcConfig []config.DataFlowComponentConfig, lastConfigSet bool, pendingTransitions map[string][]StateTransition, ignoreDfcUntilTick map[string]int, tickCounter int) (map[string][]StateTransition, map[string]int) {
-
 	// in the first run, we dont have a last config, so we dont need to detect any config events
 	// after the call of detectConfigEvents, the last config is set
 	if !lastConfigSet {
@@ -168,16 +168,19 @@ func detectConfigEvents(curDfcConfig []config.DataFlowComponentConfig, lastDfcCo
 	return pendingTransitions, ignoreDfcUntilTick
 }
 
-// detectAddedComponents detects added components by comparing current and last config
+// detectAddedComponents detects added components by comparing current and last config.
 func detectAddedComponents(curDfcConfig []config.DataFlowComponentConfig, lastDfcConfig []config.DataFlowComponentConfig, pendingTransitions map[string][]StateTransition, ignoreDfcUntilTick map[string]int, tickCounter int) (map[string][]StateTransition, map[string]int) {
 	for _, dfcConfig := range curDfcConfig {
 		found := false
+
 		for _, existing := range lastDfcConfig {
 			if existing.Name == dfcConfig.Name {
 				found = true
+
 				break
 			}
 		}
+
 		if !found {
 			zap.S().Info("Detected new dataflow component", zap.String("name", dfcConfig.Name))
 			// depending on the desired state, we apply different transitions
@@ -198,19 +201,23 @@ func detectAddedComponents(curDfcConfig []config.DataFlowComponentConfig, lastDf
 			}
 		}
 	}
+
 	return pendingTransitions, ignoreDfcUntilTick
 }
 
-// detectRemovedComponents detects removed components by comparing current and last config
+// detectRemovedComponents detects removed components by comparing current and last config.
 func detectRemovedComponents(curDfcConfig []config.DataFlowComponentConfig, lastDfcConfig []config.DataFlowComponentConfig, pendingTransitions map[string][]StateTransition, ignoreDfcUntilTick map[string]int, tickCounter int) (map[string][]StateTransition, map[string]int) {
 	for _, existing := range lastDfcConfig {
 		found := false
+
 		for _, new := range curDfcConfig {
 			if new.Name == existing.Name {
 				found = true
+
 				break
 			}
 		}
+
 		if !found {
 			// we wait for 10 ticks before we remove the component from the state
 			// in the meantime, the state will be updated
@@ -222,10 +229,11 @@ func detectRemovedComponents(curDfcConfig []config.DataFlowComponentConfig, last
 			}
 		}
 	}
+
 	return pendingTransitions, ignoreDfcUntilTick
 }
 
-// detectEditedComponents detects edited components by comparing current and last config
+// detectEditedComponents detects edited components by comparing current and last config.
 func detectEditedComponents(curDfcConfig []config.DataFlowComponentConfig, lastDfcConfig []config.DataFlowComponentConfig, pendingTransitions map[string][]StateTransition, ignoreDfcUntilTick map[string]int, tickCounter int) (map[string][]StateTransition, map[string]int) {
 	// checking the config for changes (after edit-dataflowcomponent) is not easy because the name of the component can be changed
 	// thus, we first check if the name of the component has changed by iterating over the last config and checking if the name is present in the new config
@@ -233,34 +241,43 @@ func detectEditedComponents(curDfcConfig []config.DataFlowComponentConfig, lastD
 	oldName := ""
 	newName := ""
 	desiredState := ""
+
 	for _, dfcConfig := range lastDfcConfig {
 		found := false
+
 		for _, new := range curDfcConfig {
 			if new.Name == dfcConfig.Name {
 				found = true
+
 				break
 			}
 		}
+
 		if !found {
 			renamed = true
 			oldName = dfcConfig.Name
 		}
 	}
+
 	if renamed {
 		// iterate over the new config and check if a name is not present in the last config
 		for _, dfcConfig := range curDfcConfig {
 			found := false
+
 			for _, existing := range lastDfcConfig {
 				if existing.Name == dfcConfig.Name {
 					found = true
+
 					break
 				}
 			}
+
 			if !found {
 				newName = dfcConfig.Name
 				desiredState = dfcConfig.DesiredFSMState
 			}
 		}
+
 		zap.S().Info("Detected changed dataflow component; old name: ", zap.String("oldName", oldName), zap.String("newName", newName))
 		// we need to update the pending transitions and ignore ticks for the old name
 		pendingTransitions[oldName] = []StateTransition{
@@ -284,7 +301,9 @@ func detectEditedComponents(curDfcConfig []config.DataFlowComponentConfig, lastD
 				{TickAt: tickCounter + 20, State: dataflowcomponent.OperationalStateStopped},
 			}
 		}
+
 		ignoreDfcUntilTick[newName] = tickCounter + 10 // give it some time to create the component
+
 		return pendingTransitions, ignoreDfcUntilTick
 	}
 	// if the name is not changed, we need to identify which component has changed
@@ -307,16 +326,18 @@ func detectEditedComponents(curDfcConfig []config.DataFlowComponentConfig, lastD
 							{TickAt: tickCounter + 8, State: dataflowcomponent.OperationalStateStopped},
 						}
 					}
+
 					ignoreDfcUntilTick[dfcConfig.Name] = tickCounter + 5 // give it some time to apply the new config
 				}
 			}
 		}
 	}
+
 	return pendingTransitions, ignoreDfcUntilTick
 }
 
 // checkPendingTransitions checks if there are pending transitions for a component and applies them
-// It returns the updated state after applying any transitions that are due, along with the updated transitions map
+// It returns the updated state after applying any transitions that are due, along with the updated transitions map.
 func checkPendingTransitions(componentName string, currentState string, pendingTransitions map[string][]StateTransition, tickCounter int) (string, map[string][]StateTransition) {
 	// Check if there are pending transitions for this component
 	if transitions, exists := pendingTransitions[componentName]; exists {
@@ -332,16 +353,18 @@ func checkPendingTransitions(componentName string, currentState string, pendingT
 					// All transitions applied, clear the list
 					delete(pendingTransitions, componentName)
 				}
+
 				break
 			}
 		}
 	}
+
 	return currentState, pendingTransitions
 }
 
 // createDfcManagerSnapshot creates a snapshot of the DataFlowComponent manager state
 // it therefore uses the config manager to get the dataflowcomponent configs
-// and the pending transitions to update the state of the dataflowcomponent instances based on the tick counter
+// and the pending transitions to update the state of the dataflowcomponent instances based on the tick counter.
 func createDfcManagerSnapshot(
 	systemSnapshot fsm.SystemSnapshot,
 	configManager ConfigManager,
@@ -349,7 +372,7 @@ func createDfcManagerSnapshot(
 	tickCounter int,
 	pendingTransitions map[string][]StateTransition,
 ) (fsm.ManagerSnapshot, map[string][]StateTransition, map[string]int) {
-	//start with a basic snapshot
+	// start with a basic snapshot
 	dfcManagerInstaces := map[string]*fsm.FSMInstanceSnapshot{}
 
 	for _, curDataflowcomponent := range configManager.GetDataFlowConfig() {
@@ -357,6 +380,7 @@ func createDfcManagerSnapshot(
 
 		// get the default currentState from the last observed state (s.state)
 		currentState := curDataflowcomponent.DesiredFSMState
+
 		var instances map[string]*fsm.FSMInstanceSnapshot
 
 		if systemSnapshot.Managers != nil {
@@ -372,6 +396,7 @@ func createDfcManagerSnapshot(
 
 		// Apply any pending transitions
 		var updatedPendingTransitions map[string][]StateTransition
+
 		currentState, updatedPendingTransitions = checkPendingTransitions(curDataflowcomponent.Name, currentState, pendingTransitions, tickCounter)
 		pendingTransitions = updatedPendingTransitions
 
@@ -382,6 +407,7 @@ func createDfcManagerSnapshot(
 				dfcManagerInstaces[curDataflowcomponent.Name] = instances[curDataflowcomponent.Name]
 				dfcManagerInstaces[curDataflowcomponent.Name].CurrentState = currentState
 			}
+
 			continue
 		}
 
@@ -413,12 +439,15 @@ func createDfcManagerSnapshot(
 			for _, instance := range manager.GetInstances() {
 				// check if the instance is in the config
 				found := false
+
 				for _, dfcConfig := range configManager.GetDataFlowConfig() {
 					if dfcConfig.Name == instance.ID {
 						found = true
+
 						break
 					}
 				}
+
 				if !found {
 					// if the instance is not in the config, we need to check if it should be ignored from removing
 					if ignoreTick, ok := ignoreDfcUntilTick[instance.ID]; ok {
@@ -427,6 +456,7 @@ func createDfcManagerSnapshot(
 
 							// Apply any pending transitions
 							var updatedPendingTransitions map[string][]StateTransition
+
 							newState, updatedPendingTransitions := checkPendingTransitions(instance.ID, instance.CurrentState, pendingTransitions, tickCounter)
 							pendingTransitions = updatedPendingTransitions
 							dfcManagerInstaces[instance.ID].CurrentState = newState
@@ -443,13 +473,18 @@ func createDfcManagerSnapshot(
 }
 
 // Run starts the state mocker and updates the state of the system periodically
-// It returns an error if already running
+// It returns an error if already running.
 func (s *StateMocker) Run() error {
 	if s.running.Swap(true) {
 		return ErrAlreadyRunning
 	}
 
 	ticker := time.NewTicker(constants.DefaultTickerTime)
+
+	// Get a reference to the done channel under mutex protection
+	s.mu.RLock()
+	done := s.done
+	s.mu.RUnlock()
 
 	go func() {
 		defer ticker.Stop()
@@ -459,7 +494,7 @@ func (s *StateMocker) Run() error {
 			select {
 			case <-ticker.C:
 				s.Tick()
-			case <-s.done:
+			case <-done:
 				return
 			}
 		}
@@ -469,17 +504,21 @@ func (s *StateMocker) Run() error {
 }
 
 // Start is a convenience method that runs the state mocker in a new goroutine
-// It returns an error if already running
+// It returns an error if already running.
 func (s *StateMocker) Start() error {
 	if err := s.Run(); err != nil {
 		return err
 	}
+
 	return nil
 }
 
 // Stop signals the state mocker to stop updating and waits for it to complete
-// It is safe to call Stop even if the mocker isn't running
+// It is safe to call Stop even if the mocker isn't running.
 func (s *StateMocker) Stop() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if s.running.Load() {
 		close(s.done)
 		// Create a new channel for next run
@@ -488,13 +527,14 @@ func (s *StateMocker) Stop() {
 }
 
 // SetTransitionSequence schedules state transitions for a component
-// Each transition is defined by (tickOffset, state) where tickOffset is relative to current tick
+// Each transition is defined by (tickOffset, state) where tickOffset is relative to current tick.
 func (s *StateMocker) SetTransitionSequence(componentID string, transitions []struct {
-	TickOffset int
 	State      string
+	TickOffset int
 }) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	absoluteTransitions := make([]StateTransition, len(transitions))
 	for i, t := range transitions {
 		absoluteTransitions[i] = StateTransition{
@@ -502,10 +542,11 @@ func (s *StateMocker) SetTransitionSequence(componentID string, transitions []st
 			State:  t.State,
 		}
 	}
+
 	s.PendingTransitions[componentID] = absoluteTransitions
 }
 
-// CreateMockSystemSnapshotWithMissingState is a helper function to create a system snapshot with a component that has no observed state
+// CreateMockSystemSnapshotWithMissingState is a helper function to create a system snapshot with a component that has no observed state.
 func CreateMockSystemSnapshotWithMissingState() *fsm.SystemSnapshot {
 	// Create a dataflowcomponent manager with an instance that has no observed state
 	instanceSlice := []fsm.FSMInstanceSnapshot{
@@ -519,6 +560,7 @@ func CreateMockSystemSnapshotWithMissingState() *fsm.SystemSnapshot {
 
 	// Convert slice to map
 	instances := make(map[string]*fsm.FSMInstanceSnapshot)
+
 	for i := range instanceSlice {
 		instance := instanceSlice[i]
 		instances[instance.ID] = &instance
@@ -536,7 +578,7 @@ func CreateMockSystemSnapshotWithMissingState() *fsm.SystemSnapshot {
 	}
 }
 
-// MockManagerSnapshot is a simple implementation of ManagerSnapshot interface for testing
+// MockManagerSnapshot is a simple implementation of ManagerSnapshot interface for testing.
 type MockManagerSnapshot struct {
 	Instances map[string]*fsm.FSMInstanceSnapshot
 }
@@ -549,11 +591,12 @@ func (m *MockManagerSnapshot) GetInstances() map[string]*fsm.FSMInstanceSnapshot
 	return m.Instances
 }
 
-// GetInstance returns an FSM instance by ID
+// GetInstance returns an FSM instance by ID.
 func (m *MockManagerSnapshot) GetInstance(id string) *fsm.FSMInstanceSnapshot {
 	if instance, exists := m.Instances[id]; exists {
 		return instance
 	}
+
 	return nil
 }
 
@@ -565,7 +608,7 @@ func (m *MockManagerSnapshot) GetManagerTick() uint64 {
 	return 0
 }
 
-// MockObservedState is a fake implementation of ObservedStateSnapshot for testing
+// MockObservedState is a fake implementation of ObservedStateSnapshot for testing.
 type MockObservedState struct{}
 
 func (m *MockObservedState) IsObservedStateSnapshot() {}
@@ -576,6 +619,7 @@ func copyDfcSlice(src []config.DataFlowComponentConfig) []config.DataFlowCompone
 	}
 
 	var dst []config.DataFlowComponentConfig
+
 	err := deepcopy.Copy(&dst, &src)
 	if err != nil {
 		// This should never happen

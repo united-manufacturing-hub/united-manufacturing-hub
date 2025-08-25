@@ -99,7 +99,7 @@ var _ = Describe("Validator References", func() {
 			}
 
 			err := validator.ValidateWithReferences(ctx, pumpModel, allDataModels, payloadShapes)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should fail when referencing a non-existent model", func() {
@@ -253,7 +253,7 @@ var _ = Describe("Validator References", func() {
 			allDataModels := make(map[string]config.DataModelsConfig)
 
 			// Create a chain of 9 models (level0 -> level1 -> ... -> level8)
-			for i := 0; i < 9; i++ {
+			for i := range 9 {
 				modelName := fmt.Sprintf("level%d", i)
 				var structure map[string]config.Field
 
@@ -290,7 +290,7 @@ var _ = Describe("Validator References", func() {
 
 			// Validate the first model - should pass (9 levels deep)
 			err := validator.ValidateWithReferences(ctx, allDataModels["level0"].Versions["v1"], allDataModels, payloadShapes)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should reject reference chains deeper than 10 levels", func() {
@@ -298,7 +298,7 @@ var _ = Describe("Validator References", func() {
 
 			// Create a chain of 12 models (level0 -> level1 -> ... -> level11)
 			// This ensures we definitely exceed 10 levels
-			for i := 0; i < 12; i++ {
+			for i := range 12 {
 				modelName := fmt.Sprintf("level%d", i)
 				var structure map[string]config.Field
 
@@ -400,7 +400,7 @@ var _ = Describe("Validator References", func() {
 			}
 
 			err := validator.ValidateWithReferences(ctx, complexModel, allDataModels, payloadShapes)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should fail basic validation if the data model structure is invalid", func() {
@@ -466,7 +466,7 @@ var _ = Describe("Validator References", func() {
 			}
 
 			err := validator.ValidateWithReferences(ctx, dataModel, allDataModels, payloadShapes)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should respect context cancellation during reference validation", func() {

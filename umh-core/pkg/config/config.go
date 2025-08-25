@@ -29,31 +29,31 @@ import (
 )
 
 type FullConfig struct {
-	Agent             AgentConfig               `yaml:"agent"`                       // Agent config, requires restart to take effect
 	Templates         TemplatesConfig           `yaml:"templates,omitempty"`         // Templates section with enforced structure for protocol converter
 	PayloadShapes     map[string]PayloadShape   `yaml:"payloadShapes,omitempty"`     // PayloadShapes section with enforced structure for payload shapes
+	Internal          InternalConfig            `yaml:"internal,omitempty"`          // Internal config, not to be used by the user, only to be used for testing internal components
 	DataModels        []DataModelsConfig        `yaml:"dataModels,omitempty"`        // DataModels section with enforced structure for data models
 	DataContracts     []DataContractsConfig     `yaml:"dataContracts,omitempty"`     // DataContracts section with enforced structure for data contracts
 	DataFlow          []DataFlowComponentConfig `yaml:"dataFlow,omitempty"`          // DataFlow components to manage, can be updated while running
 	ProtocolConverter []ProtocolConverterConfig `yaml:"protocolConverter,omitempty"` // ProtocolConverter config, can be updated while runnnig
 	StreamProcessor   []StreamProcessorConfig   `yaml:"streamProcessor,omitempty"`   // StreamProcessor config, can be updated while running
-	Internal          InternalConfig            `yaml:"internal,omitempty"`          // Internal config, not to be used by the user, only to be used for testing internal components
+	Agent             AgentConfig               `yaml:"agent"`                       // Agent config, requires restart to take effect
 }
 
-// TemplatesConfig defines the structure for the templates section
+// TemplatesConfig defines the structure for the templates section.
 type TemplatesConfig struct {
 	ProtocolConverter map[string]interface{} `yaml:"protocolConverter,omitempty"` // Array of protocol converter templates
 	StreamProcessor   map[string]interface{} `yaml:"streamProcessor,omitempty"`   // Array of stream processor templates
 }
 
-// DataModelsConfig defines the structure for the data models section
+// DataModelsConfig defines the structure for the data models section.
 type DataModelsConfig struct {
+	Versions    map[string]DataModelVersion `yaml:"version"`               // version of the data model (1, 2, etc.)
 	Name        string                      `yaml:"name"`                  // name of the data model
 	Description string                      `yaml:"description,omitempty"` // description of the data model
-	Versions    map[string]DataModelVersion `yaml:"version"`               // version of the data model (1, 2, etc.)
 }
 
-// DataContractsConfig defines the structure for the data contracts section
+// DataContractsConfig defines the structure for the data contracts section.
 type DataContractsConfig struct {
 	Name           string                   `yaml:"name"`                      // name of the data contract
 	Model          *ModelRef                `yaml:"model,omitempty"`           // reference to the data model
@@ -64,36 +64,36 @@ type DataModelVersion struct {
 	Structure map[string]Field `yaml:"structure"` // structure of the data model (fields)
 }
 
-// ModelRef represents a reference to another data model
+// ModelRef represents a reference to another data model.
 type ModelRef struct {
 	Name    string `yaml:"name"`    // name of the referenced data model
 	Version string `yaml:"version"` // version of the referenced data model
 }
 
 type Field struct {
-	PayloadShape string           `yaml:"_payloadshape,omitempty"` // type of the field (timeseries only for now)
 	ModelRef     *ModelRef        `yaml:"_refModel,omitempty"`     // this is a special field that is used to reference another data model to be used as a type for this field
 	Subfields    map[string]Field `yaml:",inline"`                 // subfields of the field (allow recursive definition of fields)
+	PayloadShape string           `yaml:"_payloadshape,omitempty"` // type of the field (timeseries only for now)
 }
 
 type InternalConfig struct {
 	Services        []S6FSMConfig           `yaml:"services,omitempty"`        // Services to manage, can be updated while running
 	Benthos         []BenthosConfig         `yaml:"benthos,omitempty"`         // Benthos services to manage, can be updated while running
 	Nmap            []NmapConfig            `yaml:"nmap,omitempty"`            // Nmap services to manage, can be updated while running
-	Redpanda        RedpandaConfig          `yaml:"redpanda,omitempty"`        // Redpanda config, can be updated while running
 	BenthosMonitor  []BenthosMonitorConfig  `yaml:"benthosMonitor,omitempty"`  // BenthosMonitor config, can be updated while running
 	Connection      []ConnectionConfig      `yaml:"connection,omitempty"`      // Connection services to manage, can be updated while running
 	RedpandaMonitor []RedpandaMonitorConfig `yaml:"redpandaMonitor,omitempty"` // RedpandaMonitor config, can be updated while running
 	TopicBrowser    TopicBrowserConfig      `yaml:"topicbrowser,omitempty"`
+	Redpanda        RedpandaConfig          `yaml:"redpanda,omitempty"` // Redpanda config, can be updated while running
 }
 
 type AgentConfig struct {
-	MetricsPort        int `yaml:"metricsPort"` // Port to expose metrics on
-	CommunicatorConfig `yaml:"communicator,omitempty"`
-	GraphQLConfig      GraphQLConfig  `yaml:"graphql,omitempty"` // GraphQL server configuration
-	ReleaseChannel     ReleaseChannel `yaml:"releaseChannel,omitempty"`
 	Location           map[int]string `yaml:"location,omitempty"`
-	Simulator          bool           `yaml:"simulator,omitempty"`
+	ReleaseChannel     ReleaseChannel `yaml:"releaseChannel,omitempty"`
+	CommunicatorConfig `yaml:"communicator,omitempty"`
+	GraphQLConfig      GraphQLConfig `yaml:"graphql,omitempty"` // GraphQL server configuration
+	MetricsPort        int           `yaml:"metricsPort"`       // Port to expose metrics on
+	Simulator          bool          `yaml:"simulator,omitempty"`
 }
 
 type CommunicatorConfig struct {
@@ -102,20 +102,20 @@ type CommunicatorConfig struct {
 	AllowInsecureTLS bool   `yaml:"allowInsecureTLS,omitempty"` // Allow TLS connections without verifying the certificate.
 }
 
-// FSMInstanceConfig is the config for a FSM instance
+// FSMInstanceConfig is the config for a FSM instance.
 type FSMInstanceConfig struct {
 	// Name of the service, we use omitempty here, as some services like redpanda will ignore this name, therefore writing the "empty" name back to the config file will cause confusion for the users
 	Name            string `yaml:"name,omitempty"`
 	DesiredFSMState string `yaml:"desiredState,omitempty"`
 }
 
-// ContainerConfig is the config for a container instance
+// ContainerConfig is the config for a container instance.
 type ContainerConfig struct {
 	Name            string `yaml:"name"`
 	DesiredFSMState string `yaml:"desiredState"`
 }
 
-// AgentMonitorConfig is the config for an agent monitor instance
+// AgentMonitorConfig is the config for an agent monitor instance.
 type AgentMonitorConfig struct {
 	Name            string `yaml:"name"`
 	DesiredFSMState string `yaml:"desiredState"`
@@ -129,7 +129,7 @@ const (
 	ReleaseChannelEnterprise ReleaseChannel = "enterprise"
 )
 
-// S6FSMConfig contains configuration for creating a service
+// S6FSMConfig contains configuration for creating a service.
 type S6FSMConfig struct {
 	// For the FSM
 	FSMInstanceConfig `yaml:",inline"`
@@ -137,7 +137,7 @@ type S6FSMConfig struct {
 	S6ServiceConfig s6serviceconfig.S6ServiceConfig `yaml:"s6ServiceConfig"`
 }
 
-// BenthosMonitorConfig contains configuration for creating a benthos monitor
+// BenthosMonitorConfig contains configuration for creating a benthos monitor.
 type BenthosMonitorConfig struct {
 	// For the FSM
 	FSMInstanceConfig `yaml:",inline"`
@@ -145,7 +145,7 @@ type BenthosMonitorConfig struct {
 	MetricsPort uint16 `yaml:"metricsPort"` // Port to expose metrics on
 }
 
-// BenthosConfig contains configuration for creating a Benthos service
+// BenthosConfig contains configuration for creating a Benthos service.
 type BenthosConfig struct {
 	// For the FSM
 	FSMInstanceConfig `yaml:",inline"`
@@ -154,8 +154,9 @@ type BenthosConfig struct {
 	BenthosServiceConfig benthosserviceconfig.BenthosServiceConfig `yaml:"benthosServiceConfig"`
 }
 
-// DataFlowComponentConfig contains configuration for creating a DataFlowComponent
+// DataFlowComponentConfig contains configuration for creating a DataFlowComponent.
 type DataFlowComponentConfig struct {
+
 	// For the FSM
 	FSMInstanceConfig `yaml:",inline"`
 
@@ -166,48 +167,51 @@ type DataFlowComponentConfig struct {
 	hasAnchors bool `yaml:"-"`
 }
 
-// HasAnchors returns true if the DataFlowComponentConfig has anchors, see templating.go
+// HasAnchors returns true if the DataFlowComponentConfig has anchors, see templating.go.
 func (d *DataFlowComponentConfig) HasAnchors() bool { return d.hasAnchors }
 
-// ProtocolConverterConfig contains configuration for creating a ProtocolConverter
+// ProtocolConverterConfig contains configuration for creating a ProtocolConverter.
 type ProtocolConverterConfig struct {
+
 	// For the FSM
 	FSMInstanceConfig `yaml:",inline"`
+
+	anchorName string `yaml:"-"`
 
 	ProtocolConverterServiceConfig protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec `yaml:"protocolConverterServiceConfig"`
 
 	// private marker – not (un)marshalled
 	// explanation see templating.go
-	hasAnchors bool   `yaml:"-"`
-	anchorName string `yaml:"-"`
+	hasAnchors bool `yaml:"-"`
 }
 
-// HasAnchors returns true if the ProtocolConverterConfig has anchors, see templating.go
+// HasAnchors returns true if the ProtocolConverterConfig has anchors, see templating.go.
 func (d *ProtocolConverterConfig) HasAnchors() bool { return d.hasAnchors }
 
-// AnchorName returns the anchor name of the ProtocolConverterConfig, see templating.go
+// AnchorName returns the anchor name of the ProtocolConverterConfig, see templating.go.
 func (d *ProtocolConverterConfig) AnchorName() string { return d.anchorName }
 
-// StreamProcessorConfig contains configuration for creating a StreamProcessor
+// StreamProcessorConfig contains configuration for creating a StreamProcessor.
 type StreamProcessorConfig struct {
+	StreamProcessorServiceConfig streamprocessorserviceconfig.StreamProcessorServiceConfigSpec `yaml:"streamProcessorServiceConfig"`
+
 	// For the FSM
 	FSMInstanceConfig `yaml:",inline"`
 
-	StreamProcessorServiceConfig streamprocessorserviceconfig.StreamProcessorServiceConfigSpec `yaml:"streamProcessorServiceConfig"`
+	anchorName string `yaml:"-"`
 
 	// private marker – not (un)marshalled
 	// explanation see templating.go
-	hasAnchors bool   `yaml:"-"`
-	anchorName string `yaml:"-"`
+	hasAnchors bool `yaml:"-"`
 }
 
-// HasAnchors returns true if the StreamProcessorConfig has anchors, see templating.go
+// HasAnchors returns true if the StreamProcessorConfig has anchors, see templating.go.
 func (d *StreamProcessorConfig) HasAnchors() bool { return d.hasAnchors }
 
-// AnchorName returns the anchor name of the StreamProcessorConfig, see templating.go
+// AnchorName returns the anchor name of the StreamProcessorConfig, see templating.go.
 func (d *StreamProcessorConfig) AnchorName() string { return d.anchorName }
 
-// NmapConfig contains configuration for creating a Nmap service
+// NmapConfig contains configuration for creating a Nmap service.
 type NmapConfig struct {
 	// For the FSM
 	FSMInstanceConfig `yaml:",inline"`
@@ -216,13 +220,13 @@ type NmapConfig struct {
 	NmapServiceConfig nmapserviceconfig.NmapServiceConfig `yaml:"nmapServiceConfig"`
 }
 
-// RedpandaMonitorConfig contains configuration for creating a Redpanda monitor
+// RedpandaMonitorConfig contains configuration for creating a Redpanda monitor.
 type RedpandaMonitorConfig struct {
 	// For the FSM
 	FSMInstanceConfig `yaml:",inline"`
 }
 
-// RedpandaConfig contains configuration for a Redpanda service
+// RedpandaConfig contains configuration for a Redpanda service.
 type RedpandaConfig struct {
 	// For the FSM
 	FSMInstanceConfig `yaml:",inline"`
@@ -231,7 +235,7 @@ type RedpandaConfig struct {
 	RedpandaServiceConfig redpandaserviceconfig.RedpandaServiceConfig `yaml:"redpandaServiceConfig,omitempty"`
 }
 
-// ConnectionConfig contains configuration for creating a Connection service
+// ConnectionConfig contains configuration for creating a Connection service.
 type ConnectionConfig struct {
 	// For the FSM
 	FSMInstanceConfig `yaml:",inline"`
@@ -241,14 +245,14 @@ type ConnectionConfig struct {
 }
 
 type GraphQLConfig struct {
-	Enabled      bool     `yaml:"enabled"`                // Enable/disable GraphQL server
-	Port         int      `yaml:"port"`                   // Port to expose GraphQL on (default: 8090)
 	CORSOrigins  []string `yaml:"corsOrigins,omitempty"`  // CORS allowed origins (default: ["*"])
+	Port         int      `yaml:"port"`                   // Port to expose GraphQL on (default: 8090)
+	Enabled      bool     `yaml:"enabled"`                // Enable/disable GraphQL server
 	Debug        bool     `yaml:"debug,omitempty"`        // Enable GraphiQL playground and debug logging
 	AuthRequired bool     `yaml:"authRequired,omitempty"` // Require authentication (future use)
 }
 
-// TopicBrowserConfig contains configuration for creating a Topic Browser service
+// TopicBrowserConfig contains configuration for creating a Topic Browser service.
 type TopicBrowserConfig struct {
 	// For the FSM
 	FSMInstanceConfig `yaml:",inline"`
@@ -257,19 +261,19 @@ type TopicBrowserConfig struct {
 	TopicBrowserServiceConfig topicbrowserserviceconfig.Config `yaml:"serviceConfig,omitempty"`
 }
 
-// PayloadShape defines the structure for a single payload shape
+// PayloadShape defines the structure for a single payload shape.
 type PayloadShape struct {
-	Description string                  `yaml:"description,omitempty"` // description of the payload shape
 	Fields      map[string]PayloadField `yaml:"fields"`                // fields of the payload shape
+	Description string                  `yaml:"description,omitempty"` // description of the payload shape
 }
 
-// PayloadField represents a field within a payload shape with recursive structure support
+// PayloadField represents a field within a payload shape with recursive structure support.
 type PayloadField struct {
-	Type      string                  `yaml:"_type,omitempty"` // type of the field (number, string, etc.)
 	Subfields map[string]PayloadField `yaml:",inline"`         // subfields for recursive definition (inline to allow direct field access)
+	Type      string                  `yaml:"_type,omitempty"` // type of the field (number, string, etc.)
 }
 
-// Clone creates a deep copy of FullConfig
+// Clone creates a deep copy of FullConfig.
 func (c FullConfig) Clone() FullConfig {
 	clone := FullConfig{
 		Agent:             c.Agent,
@@ -289,41 +293,51 @@ func (c FullConfig) Clone() FullConfig {
 			clone.Agent.Location[k] = v
 		}
 	}
+
 	err := deepcopy.Copy(&clone.Agent, &c.Agent)
 	if err != nil {
 		return FullConfig{}
 	}
+
 	err = deepcopy.Copy(&clone.PayloadShapes, &c.PayloadShapes)
 	if err != nil {
 		return FullConfig{}
 	}
+
 	err = deepcopy.Copy(&clone.DataModels, &c.DataModels)
 	if err != nil {
 		return FullConfig{}
 	}
+
 	err = deepcopy.Copy(&clone.DataContracts, &c.DataContracts)
 	if err != nil {
 		return FullConfig{}
 	}
+
 	err = deepcopy.Copy(&clone.DataFlow, &c.DataFlow)
 	if err != nil {
 		return FullConfig{}
 	}
+
 	err = deepcopy.Copy(&clone.ProtocolConverter, &c.ProtocolConverter)
 	if err != nil {
 		return FullConfig{}
 	}
+
 	err = deepcopy.Copy(&clone.StreamProcessor, &c.StreamProcessor)
 	if err != nil {
 		return FullConfig{}
 	}
+
 	err = deepcopy.Copy(&clone.Templates, &c.Templates)
 	if err != nil {
 		return FullConfig{}
 	}
+
 	err = deepcopy.Copy(&clone.Internal, &c.Internal)
 	if err != nil {
 		return FullConfig{}
 	}
+
 	return clone
 }

@@ -18,6 +18,6 @@ import "time"
 
 const (
 	// ProtocolConverter Operation Timeouts - Level 3 Service (depends on DataflowComponent)
-	// ProtocolConverterUpdateObservedStateTimeout is used to set the context timeout for updating the observed state of a ProtocolConverter instance
+	// ProtocolConverterUpdateObservedStateTimeout is used to set the context timeout for updating the observed state of a ProtocolConverter instance.
 	ProtocolConverterUpdateObservedStateTimeout = 10 * time.Millisecond
 )

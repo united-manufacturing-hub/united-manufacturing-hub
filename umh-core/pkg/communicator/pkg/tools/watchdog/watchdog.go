@@ -34,7 +34,7 @@ import (
 	Watchdog is a simple watchdog for goroutines
 	To begin using it, create a new Watchdog with NewWatchdog, and start it with Start.
 	Afterwards register new goroutines with RegisterHeartbeat.
-	Each routine *shall* report it's status regulary using ReportHeartbeatStatus.
+	Each routine *shall* report it's status regularly using ReportHeartbeatStatus.
 
 ## Example
 		w := watchdog.NewWatchdog(context.Background(), time.NewTicker(5*time.Second))
@@ -78,20 +78,20 @@ import (
 
 */
 
-// Watchdog is a simple watchdog for goroutines
+// Watchdog is a simple watchdog for goroutines.
 type Watchdog struct {
-	registeredHeartbeats      map[string]*Heartbeat
-	registeredHeartbeatsMutex sync.Mutex
-	badHeartbeatChan          chan uuid.UUID
-	hasSubscribers            atomic.Bool
 	ctx                       context.Context
+	registeredHeartbeats      map[string]*Heartbeat
+	badHeartbeatChan          chan uuid.UUID
 	ticker                    *time.Ticker
-	watchdogID                uuid.UUID
-	warningsAreErrors         atomic.Bool
 	logger                    *zap.SugaredLogger
+	registeredHeartbeatsMutex sync.Mutex
+	hasSubscribers            atomic.Bool
+	warningsAreErrors         atomic.Bool
+	watchdogID                uuid.UUID
 }
 
-// NewWatchdog creates a new Watchdog
+// NewWatchdog creates a new Watchdog.
 func NewWatchdog(ctx context.Context, ticker *time.Ticker, warningsAreErrors bool, logger *zap.SugaredLogger) *Watchdog {
 	w := Watchdog{
 		registeredHeartbeats:      make(map[string]*Heartbeat),
@@ -109,10 +109,11 @@ func NewWatchdog(ctx context.Context, ticker *time.Ticker, warningsAreErrors boo
 	if warningsAreErrors {
 		w.warningsAreErrors.Store(true)
 	}
+
 	return &w
 }
 
-// Start synchronously starts the watchdog
+// Start synchronously starts the watchdog.
 func (s *Watchdog) Start() {
 	for {
 		select {
@@ -126,14 +127,15 @@ func (s *Watchdog) Start() {
 		case <-s.ticker.C:
 			{
 				s.reportStateToNiceFail()
+
 				now := time.Now()
 				s.logger.Debugf("Checking heartbeats: [%s] at %s", s.watchdogID, now)
 				s.registeredHeartbeatsMutex.Lock()
 
 				// Check all heartbeats and collect the overdue ones
 				var overdueHeartbeat *struct {
-					name           string
 					hb             *Heartbeat
+					name           string
 					secondsOverdue int64
 				}
 
@@ -142,17 +144,18 @@ func (s *Watchdog) Start() {
 					if lastHeartbeat < 0 {
 						s.logger.Warnf("Time went backwards: [%s] ", s.watchdogID)
 					}
+
 					onlyIfHasSub := hb.onlyIfSubscribers
 					hasSubs := s.hasSubscribers.Load()
 					secondsOverdue := int64(hb.timeout) - lastHeartbeat
-					secondsOverdue = secondsOverdue * -1
+					secondsOverdue *= -1
 					// timeout = 0 disables this check
 					if secondsOverdue > 0 && hb.timeout != 0 {
 						if (onlyIfHasSub && hasSubs) || !onlyIfHasSub {
 							// Found an overdue heartbeat
 							overdueHeartbeat = &struct {
-								name           string
 								hb             *Heartbeat
+								name           string
 								secondsOverdue int64
 							}{
 								name:           name,
@@ -161,6 +164,7 @@ func (s *Watchdog) Start() {
 							}
 							// Remove from the map and break the loop
 							delete(s.registeredHeartbeats, name)
+
 							break
 						} else {
 							s.logger.Infof("Heartbeat: [%s] %s (%s) would fail, but no subscribers are present", s.watchdogID, name, hb.uniqueIdentifier)
@@ -191,35 +195,35 @@ func (s *Watchdog) Start() {
 	}
 }
 
-// HeartbeatStatus is the status of a heartbeat
+// HeartbeatStatus is the status of a heartbeat.
 type HeartbeatStatus int
 
 const (
-	// HEARTBEAT_STATUS_OK is the status of a healthy heartbeat
+	// HEARTBEAT_STATUS_OK is the status of a healthy heartbeat.
 	HEARTBEAT_STATUS_OK HeartbeatStatus = iota
-	// HEARTBEAT_STATUS_WARNING is the status of a heartbeat with a warning, given enough warnings, it will panic the program if configured in RegisterHeartbeat
+	// HEARTBEAT_STATUS_WARNING is the status of a heartbeat with a warning, given enough warnings, it will panic the program if configured in RegisterHeartbeat.
 	HEARTBEAT_STATUS_WARNING
-	// HEARTBEAT_STATUS_ERROR is the status of a heartbeat with an error, it will panic the program
+	// HEARTBEAT_STATUS_ERROR is the status of a heartbeat with an error, it will panic the program.
 	HEARTBEAT_STATUS_ERROR
 )
 
-// Heartbeat is a heartbeat
+// Heartbeat is a heartbeat.
 type Heartbeat struct {
-	uniqueIdentifier     uuid.UUID
-	lastReportedStatus   atomic.Int32
-	lastHeatbeatTime     atomic.Int64
 	file                 string
+	lastHeatbeatTime     atomic.Int64
 	line                 int
-	warningCount         atomic.Uint32
 	warningsUntilFailure uint64
 	timeout              uint64
-	onlyIfSubscribers    bool
 	heartbeatsReceived   atomic.Uint64
+	lastReportedStatus   atomic.Int32
+	warningCount         atomic.Uint32
+	uniqueIdentifier     uuid.UUID
+	onlyIfSubscribers    bool
 }
 
 // RegisterHeartbeat registers a new heartbeat
 // It returns the unique identifier of the heartbeat
-// Keep that identifier to unregister the heartbeat later
+// Keep that identifier to unregister the heartbeat later.
 func (s *Watchdog) RegisterHeartbeat(name string, warningsUntilFailure uint64, timeout uint64, onlyIfSubscribers bool) uuid.UUID {
 	uniqueIdentifier := uuid.New()
 	_, file, line, ok := runtime.Caller(1)
@@ -232,33 +236,39 @@ func (s *Watchdog) RegisterHeartbeat(name string, warningsUntilFailure uint64, t
 		onlyIfSubscribers:    onlyIfSubscribers,
 	}
 	hb.lastHeatbeatTime.Store(time.Now().UTC().Unix())
+
 	if ok {
 		hb.file = file
 		hb.line = line
 	} else {
 		s.logger.Warnf("[%s] Unable to get caller file and line for heartbeat %s", s.watchdogID, name)
 	}
+
 	s.registeredHeartbeatsMutex.Lock()
+
 	if v, ok := s.registeredHeartbeats[name]; ok {
 		s.registeredHeartbeatsMutex.Unlock()
 		s.logger.Errorf("[%s] Heartbeat already registered: %s (%s)", s.watchdogID, name, v.uniqueIdentifier)
 		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "Heartbeat already registered: %s", name)
 		panic(fmt.Sprintf("Heartbeat already registered: %s (%s)", name, v.uniqueIdentifier))
 	}
+
 	s.registeredHeartbeats[name] = &hb
 	s.logger.Infof("[%s] Registered heartbeat %s (%s)", s.watchdogID, name, uniqueIdentifier)
 	s.registeredHeartbeatsMutex.Unlock()
+
 	return uniqueIdentifier
 }
 
 // UnregisterHeartbeat unregisters a heartbeat
-// Call this when the goroutine is doing a normal exit
+// Call this when the goroutine is doing a normal exit.
 func (s *Watchdog) UnregisterHeartbeat(uniqueIdentifier uuid.UUID) {
 	s.logger.Infof("[%s] Unregistering heartbeat %s", s.watchdogID, uniqueIdentifier)
 	// Find the heartbeat
 	name := s.getHeartbeatNameByUUID(uniqueIdentifier)
 	if name == "" {
 		s.logger.Warnf("[%s] Unregister heartbeat called with unknown identifier: %s", s.watchdogID, uniqueIdentifier)
+
 		return
 	}
 
@@ -269,37 +279,44 @@ func (s *Watchdog) UnregisterHeartbeat(uniqueIdentifier uuid.UUID) {
 }
 
 // ReportHeartbeatStatus reports the status of a heartbeat
-// Call this every time the routine is looping (with HEARTBEAT_STATUS_OK), when it's doing something weird (with HEARTBEAT_STATUS_WARNING) or when it's doing nothing (with HEARTBEAT_STATUS_ERROR)
+// Call this every time the routine is looping (with HEARTBEAT_STATUS_OK), when it's doing something weird (with HEARTBEAT_STATUS_WARNING) or when it's doing nothing (with HEARTBEAT_STATUS_ERROR).
 func (s *Watchdog) ReportHeartbeatStatus(uniqueIdentifier uuid.UUID, status HeartbeatStatus) {
 	// Find the heartbeat
 	name := s.getHeartbeatNameByUUID(uniqueIdentifier)
 
 	if name == "" {
 		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "Report heartbeat called with unknown identifier: %s", uniqueIdentifier)
+
 		return
 	}
 
 	// Update the heartbeat
 	s.registeredHeartbeatsMutex.Lock()
+
 	hb := s.registeredHeartbeats[name]
 	if hb == nil {
 		// If the heartbeat doesn't exist, unlock and return
 		s.registeredHeartbeatsMutex.Unlock()
 		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "Report heartbeat called with now invalid name: %s (UUID: %s)", name, uniqueIdentifier)
+
 		return
 	}
 
 	hb.lastReportedStatus.Store(int32(status))
 	hb.lastHeatbeatTime.Store(time.Now().UTC().Unix())
 	hb.heartbeatsReceived.Add(1)
+
 	var warnings uint32
+
 	onlyIfHasSub := hb.onlyIfSubscribers
 	hasSubs := s.hasSubscribers.Load()
+
 	switch status {
 	case HEARTBEAT_STATUS_WARNING:
 		warnings = hb.warningCount.Add(1)
 		if s.warningsAreErrors.Load() {
 			s.logger.Errorf("[%s] Heartbeat %s (%s) send a warning (%d/%d) and warnings are errors", s.watchdogID, name, uniqueIdentifier, warnings, hb.warningsUntilFailure)
+
 			s.badHeartbeatChan <- uniqueIdentifier
 		}
 	case HEARTBEAT_STATUS_OK:
@@ -307,26 +324,31 @@ func (s *Watchdog) ReportHeartbeatStatus(uniqueIdentifier uuid.UUID, status Hear
 	case HEARTBEAT_STATUS_ERROR:
 		s.logger.Errorf("[%s] Heartbeat %s (%s) reported an error", s.watchdogID, name, uniqueIdentifier)
 		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "Heartbeat reported error: %s", name)
+
 		s.badHeartbeatChan <- uniqueIdentifier
 	}
 	// warningsUntilFailure == 0 disables this check
 	if warnings >= uint32(hb.warningsUntilFailure) && hb.warningsUntilFailure != 0 && ((onlyIfHasSub && hasSubs) || !onlyIfHasSub) {
 		s.logger.Errorf("[%s] Heartbeat %s (%s) send to many consecutive warnings (%d/%d)", s.watchdogID, name, uniqueIdentifier, warnings, hb.warningsUntilFailure)
 		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "Heartbeat too many warnings: %s send to many consecutive warnings (%d/%d)", name, warnings, hb.warningsUntilFailure)
+
 		s.badHeartbeatChan <- uniqueIdentifier
 	}
+
 	s.registeredHeartbeatsMutex.Unlock()
 	s.reportStateToNiceFail()
 }
 
-// getHeartbeatNameByUUID returns the name of a heartbeat by its unique identifier
+// getHeartbeatNameByUUID returns the name of a heartbeat by its unique identifier.
 func (s *Watchdog) getHeartbeatNameByUUID(uniqueIdentifier uuid.UUID) string {
 	// Create a copy of the map while holding the lock
 	s.registeredHeartbeatsMutex.Lock()
+
 	heartbeats := make(map[string]*Heartbeat, len(s.registeredHeartbeats))
 	for k, v := range s.registeredHeartbeats {
 		heartbeats[k] = v
 	}
+
 	s.registeredHeartbeatsMutex.Unlock()
 
 	// Search through the copy without holding the lock
@@ -335,10 +357,11 @@ func (s *Watchdog) getHeartbeatNameByUUID(uniqueIdentifier uuid.UUID) string {
 			return name
 		}
 	}
+
 	return ""
 }
 
-// SetHasSubscribers sets if the companion has subscribers
+// SetHasSubscribers sets if the companion has subscribers.
 func (s *Watchdog) SetHasSubscribers(has bool) {
 	s.hasSubscribers.Store(has)
 }

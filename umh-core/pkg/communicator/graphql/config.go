@@ -20,19 +20,19 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 )
 
-// Configuration errors
+// Configuration errors.
 var (
 	ErrInvalidPort = errors.New("invalid port: must be between 1 and 65535")
 )
 
-// ServerConfig holds configuration for the GraphQL server
+// ServerConfig holds configuration for the GraphQL server.
 type ServerConfig struct {
+	CORSOrigins []string `json:"cors_origins"`
 	Port        int      `json:"port"`
 	Debug       bool     `json:"debug"`
-	CORSOrigins []string `json:"cors_origins"`
 }
 
-// DefaultServerConfig returns default configuration values
+// DefaultServerConfig returns default configuration values.
 func DefaultServerConfig() *ServerConfig {
 	return &ServerConfig{
 		Port:        8090,
@@ -41,22 +41,23 @@ func DefaultServerConfig() *ServerConfig {
 	}
 }
 
-// Validate checks if the configuration is valid
+// Validate checks if the configuration is valid.
 func (c *ServerConfig) Validate() error {
 	if c.Port <= 0 || c.Port > 65535 {
 		return ErrInvalidPort
 	}
+
 	return nil
 }
 
-// ConfigAdapter provides a way to convert from external config structures
+// ConfigAdapter provides a way to convert from external config structures.
 type ConfigAdapter interface {
 	GetPort() int
 	GetDebug() bool
 	GetCORSOrigins() []string
 }
 
-// NewServerConfigFromAdapter creates a ServerConfig from any compatible config
+// NewServerConfigFromAdapter creates a ServerConfig from any compatible config.
 func NewServerConfigFromAdapter(adapter ConfigAdapter) *ServerConfig {
 	config := &ServerConfig{
 		Port:        adapter.GetPort(),
@@ -68,6 +69,7 @@ func NewServerConfigFromAdapter(adapter ConfigAdapter) *ServerConfig {
 	if config.Port == 0 {
 		config.Port = 8090
 	}
+
 	if len(config.CORSOrigins) == 0 {
 		config.CORSOrigins = []string{"*"}
 	}
@@ -75,27 +77,27 @@ func NewServerConfigFromAdapter(adapter ConfigAdapter) *ServerConfig {
 	return config
 }
 
-// GraphQLConfigAdapter adapts config.GraphQLConfig to our ConfigAdapter interface
+// GraphQLConfigAdapter adapts config.GraphQLConfig to our ConfigAdapter interface.
 type GraphQLConfigAdapter struct {
 	config *config.GraphQLConfig
 }
 
-// NewGraphQLConfigAdapter creates an adapter for config.GraphQLConfig
+// NewGraphQLConfigAdapter creates an adapter for config.GraphQLConfig.
 func NewGraphQLConfigAdapter(cfg *config.GraphQLConfig) *GraphQLConfigAdapter {
 	return &GraphQLConfigAdapter{config: cfg}
 }
 
-// GetPort returns the configured port
+// GetPort returns the configured port.
 func (g *GraphQLConfigAdapter) GetPort() int {
 	return g.config.Port
 }
 
-// GetDebug returns the debug setting
+// GetDebug returns the debug setting.
 func (g *GraphQLConfigAdapter) GetDebug() bool {
 	return g.config.Debug
 }
 
-// GetCORSOrigins returns the CORS origins
+// GetCORSOrigins returns the CORS origins.
 func (g *GraphQLConfigAdapter) GetCORSOrigins() []string {
 	return g.config.CORSOrigins
 }

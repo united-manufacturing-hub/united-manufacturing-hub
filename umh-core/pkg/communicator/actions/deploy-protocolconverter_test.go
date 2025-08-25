@@ -15,6 +15,8 @@
 package actions_test
 
 import (
+	"sync"
+
 	"errors"
 
 	"github.com/google/uuid"
@@ -44,6 +46,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 		pcLocation      map[int]string
 		stateMocker     *actions.StateMocker
 		messages        []*models.UMHMessage
+		mu              sync.Mutex
 	)
 
 	// Setup before each test
@@ -82,7 +85,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 		stateMocker.Tick()
 		action = actions.NewDeployProtocolConverterAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, nil)
 
-		go actions.ConsumeOutboundMessages(outboundChannel, &messages, true)
+		go actions.ConsumeOutboundMessages(outboundChannel, &messages, &mu, true)
 	})
 
 	// Cleanup after each test
@@ -129,7 +132,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 
 			// Call Parse method
 			err := action.Parse(payload)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field Name"))
@@ -147,7 +150,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 
 			// Call Parse method
 			err := action.Parse(payload)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field Connection.IP"))
@@ -165,7 +168,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 
 			// Call Parse method
 			err := action.Parse(payload)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field Connection.Port"))
@@ -213,7 +216,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 			}
 
 			err := action.Parse(payload)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field Name"))

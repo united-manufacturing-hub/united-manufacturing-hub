@@ -34,13 +34,13 @@ import (
 )
 
 type Puller struct {
-	inboundMessageChannel chan *models.UMHMessage
-	shallRun              atomic.Bool
 	jwt                   atomic.Value
 	dog                   watchdog.Iface
-	insecureTLS           bool
-	apiURL                string
+	inboundMessageChannel chan *models.UMHMessage
 	logger                *zap.SugaredLogger
+	apiURL                string
+	shallRun              atomic.Bool
+	insecureTLS           bool
 }
 
 func NewPuller(jwt string, dog watchdog.Iface, inboundChannel chan *models.UMHMessage, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) *Puller {
@@ -54,6 +54,7 @@ func NewPuller(jwt string, dog watchdog.Iface, inboundChannel chan *models.UMHMe
 		logger:                logger,
 	}
 	p.jwt.Store(jwt)
+
 	return &p
 }
 
@@ -63,11 +64,12 @@ func (p *Puller) UpdateJWT(jwt string) {
 
 func (p *Puller) Start() {
 	p.shallRun.Store(true)
+
 	go p.pull()
 }
 
 // Stop stops the puller
-// This function is only for testing purposes
+// This function is only for testing purposes.
 func (p *Puller) Stop() {
 	if helper.IsTest() {
 		p.logger.Warnf("WARNING: Stopping puller !")
@@ -79,32 +81,40 @@ func (p *Puller) Stop() {
 
 func (p *Puller) pull() {
 	watcherUUID := p.dog.RegisterHeartbeat("pull", 10, 600, false)
+
 	var ticker = time.NewTicker(10 * time.Millisecond)
 	for p.shallRun.Load() {
 		<-ticker.C
 
 		p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
+
 		var cookies = map[string]string{
 			"token": p.jwt.Load().(string),
 		}
+
 		incomingMessages, _, err := http.GetRequest[backend_api_structs.PullPayload](context.Background(), http.PullEndpoint, nil, &cookies, p.insecureTLS, p.apiURL, p.logger)
 		if err != nil {
 			// Ignore context canceled errors
 			if errors.Is(err, context.Canceled) {
 				time.Sleep(1 * time.Second)
+
 				continue
 			}
+
 			p.logger.Errorf("Error pulling messages: %v", err)
+
 			continue
 		}
+
 		error_handler.ResetErrorCounter()
-		if incomingMessages == nil || incomingMessages.UMHMessages == nil || len((*incomingMessages).UMHMessages) == 0 {
+
+		if incomingMessages == nil || incomingMessages.UMHMessages == nil || len(incomingMessages.UMHMessages) == 0 {
 			time.Sleep(1 * time.Second)
+
 			continue
 		}
 
-		for _, message := range (*incomingMessages).UMHMessages {
-
+		for _, message := range incomingMessages.UMHMessages {
 			insertionTimeout := time.After(10 * time.Second)
 			select {
 			case p.inboundMessageChannel <- &models.UMHMessage{
@@ -119,6 +129,7 @@ func (p *Puller) pull() {
 			}
 		}
 	}
+
 	if helper.IsTest() {
 		p.dog.UnregisterHeartbeat(watcherUUID)
 	} else {
@@ -126,17 +137,17 @@ func (p *Puller) pull() {
 	}
 }
 
-// UserCertificateEndpoint is the endpoint for getting a user certificate
+// UserCertificateEndpoint is the endpoint for getting a user certificate.
 var UserCertificateEndpoint http.Endpoint = "/v2/instance/user/certificate"
 
-// UserCertificateResponse represents the response from the user certificate endpoint
+// UserCertificateResponse represents the response from the user certificate endpoint.
 type UserCertificateResponse struct {
 	UserEmail   string `json:"userEmail"`
 	Certificate string `json:"certificate"`
 }
 
 // GetUserCertificate retrieves a user certificate from the backend
-// This function is only for testing purposes
+// This function is only for testing purposes.
 func GetUserCertificate(ctx context.Context, userEmail string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (*UserCertificateResponse, error) {
 	// URL encode the email
 	encodedEmail := url.QueryEscape(userEmail)
@@ -154,7 +165,9 @@ func GetUserCertificate(ctx context.Context, userEmail string, cookies *map[stri
 			// User does not have a certificate
 			return nil, nil
 		}
+
 		logger.Errorf("Failed to get user certificate: %v (status code: %d)", err, statusCode)
+
 		return nil, err
 	}
 

@@ -27,11 +27,11 @@ import (
 )
 
 const (
-	// ScanIntervalSeconds defines the fixed interval between scans
+	// ScanIntervalSeconds defines the fixed interval between scans.
 	ScanIntervalSeconds = 1
 )
 
-// INmapService defines the interface for managing nmap scan services
+// INmapService defines the interface for managing nmap scan services.
 type INmapService interface {
 	// GenerateS6ConfigForNmap generates a S6 config for a given nmap instance
 	GenerateS6ConfigForNmap(nmapConfig *nmapserviceconfig.NmapServiceConfig, s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error)
@@ -57,52 +57,50 @@ type INmapService interface {
 	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
 }
 
-// NmapScanResult contains the results of an nmap scan
+// NmapScanResult contains the results of an nmap scan.
 type NmapScanResult struct {
 	// Timestamp of the scan
 	Timestamp time.Time `json:"timestamp"`
-	// Port result
-	PortResult PortResult `json:"portResult"`
-	// Overall scan metrics
-	Metrics ScanMetrics `json:"metrics"`
 	// Raw output from nmap
 	RawOutput string `json:"rawOutput"`
 	// Error message if scan failed
 	Error string `json:"error,omitempty"`
+	// Port result
+	PortResult PortResult `json:"portResult"`
+	// Overall scan metrics
+	Metrics ScanMetrics `json:"metrics"`
 }
 
-// PortResult contains the result for a specific port
+// PortResult contains the result for a specific port.
 type PortResult struct {
-	// Port number
-	Port uint16 `json:"port"`
 	// State (open/closed/filtered)
 	State string `json:"state"`
 	// Latency in milliseconds
 	LatencyMs float64 `json:"latencyMs"`
+	// Port number
+	Port uint16 `json:"port"`
 }
 
-// ScanMetrics contains overall metrics for the scan
+// ScanMetrics contains overall metrics for the scan.
 type ScanMetrics struct {
 	// Total duration of scan in seconds
 	ScanDuration float64 `json:"scanDuration"`
 }
 
-// ServiceInfo contains information about an nmap service
+// ServiceInfo contains information about an nmap service.
 type ServiceInfo struct {
-	// S6ObservedState contains information about the S6 service
-	S6ObservedState s6fsm.S6ObservedState
 	// S6FSMState contains the current state of the S6 FSM
 	S6FSMState string
 	// NmapStatus contains information about the status of the nmap service
 	NmapStatus NmapServiceInfo
+	// S6ObservedState contains information about the S6 service
+	S6ObservedState s6fsm.S6ObservedState
 }
 
-// NmapServiceInfo contains status information about the nmap service
+// NmapServiceInfo contains status information about the nmap service.
 type NmapServiceInfo struct {
 	// LastScan contains the result of the last scan
 	LastScan *NmapScanResult
-	// IsRunning indicates whether the nmap service is running
-	IsRunning bool
 	// Logs contains the structured s6 log entries emitted by the
 	// nmap service.
 	//
@@ -121,6 +119,8 @@ type NmapServiceInfo struct {
 	// Therefore we override the default behaviour and copy only the 3-word
 	// slice header (24 B on amd64) — see CopyLogs below.
 	Logs []s6service.LogEntry
+	// IsRunning indicates whether the nmap service is running
+	IsRunning bool
 }
 
 // CopyLogs is a go-deepcopy override for the Logs field.
@@ -145,5 +145,6 @@ type NmapServiceInfo struct {
 // See also: https://github.com/tiendc/go-deepcopy?tab=readme-ov-file#copy-struct-fields-via-struct-methods
 func (nsi *NmapServiceInfo) CopyLogs(src []s6service.LogEntry) error {
 	nsi.Logs = src
+
 	return nil
 }

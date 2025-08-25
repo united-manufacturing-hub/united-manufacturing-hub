@@ -38,14 +38,17 @@ func IsDockerDesktopMac() bool {
 		if err != nil {
 			// If we cannot read /proc/version, fall back to false.
 			isDockerDesktopMacVal = false
+
 			return
 		}
 		// Check for "linuxkit" which is indicative of Docker Desktop on macOS.
 		isDockerDesktopMacVal = strings.Contains(string(data), "linuxkit")
+
 		logger := logger.For("platform_detect")
 		if isDockerDesktopMacVal {
 			logger.Infof("Detected Docker Desktop on macOS! Using macOS-adjusted disk metrics.")
 		}
 	})
+
 	return isDockerDesktopMacVal
 }

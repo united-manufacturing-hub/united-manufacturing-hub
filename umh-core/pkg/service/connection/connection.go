@@ -144,29 +144,29 @@ type IConnectionService interface {
 // It uses separate boolean flags for different health aspects instead of
 // a single status value, making it easier to check specific conditions.
 type ServiceInfo struct {
-	// NmapObservedState contains information about the Nmap service
-	NmapObservedState nmapfsm.NmapObservedState
 	// NmapFSMState contains the current state of the Nmap FSM
 	NmapFSMState string
-	// IsFlaky indicates intermittent connectivity based on recent scan history.
-	// A connection is considered flaky if it alternates between open/closed states
-	// within the recent history window (default: last 60 scans).
-	IsFlaky bool
+	// NmapObservedState contains information about the Nmap service
+	NmapObservedState nmapfsm.NmapObservedState
 	// LastChange stores the tick when the status last changed.
 	// This timestamp uses the FSM tick counter rather than wall clock time
 	// to ensure consistency with the FSM reconciliation system.
 	LastChange uint64
+	// IsFlaky indicates intermittent connectivity based on recent scan history.
+	// A connection is considered flaky if it alternates between open/closed states
+	// within the recent history window (default: last 60 scans).
+	IsFlaky bool
 }
 
 // ConnectionService implements IConnectionService using Nmap as the underlying
 // connectivity probe mechanism. It maintains a history of recent states to detect
 // flaky connections and provides a higher-level abstraction over raw Nmap results.
 type ConnectionService struct {
+	nmapService      nmap.INmapService
 	logger           *zap.SugaredLogger
 	nmapManager      *nmapfsm.NmapManager
-	nmapService      nmap.INmapService
-	nmapConfigs      []config.NmapConfig
 	recentNmapStates map[string][]string
+	nmapConfigs      []config.NmapConfig
 }
 
 // ConnectionServiceOption is a function that configures a ConnectionService.
@@ -211,22 +211,22 @@ func NewDefaultConnectionService(connectionName string, opts ...ConnectionServic
 	return service
 }
 
-// getNmapName converts a connectionName to its Nmap service name
+// getNmapName converts a connectionName to its Nmap service name.
 func (c *ConnectionService) getNmapName(connectionName string) string {
-	return fmt.Sprintf("connection-%s", connectionName)
+	return "connection-" + connectionName
 }
 
-// GenerateNmapConfigConnection generates a nmap config for a given connection
+// GenerateNmapConfigConnection generates a nmap config for a given connection.
 func (c *ConnectionService) GenerateNmapConfigForConnection(connectionConfig *connectionserviceconfig.ConnectionServiceConfig, connectionName string) (nmapserviceconfig.NmapServiceConfig, error) {
 	if connectionConfig == nil {
-		return nmapserviceconfig.NmapServiceConfig{}, fmt.Errorf("connection config is nil")
+		return nmapserviceconfig.NmapServiceConfig{}, errors.New("connection config is nil")
 	}
 
 	// Convert Connection config to Nmap service config
 	return connectionConfig.GetNmapServiceConfig(), nil
 }
 
-// GetConfig returns the actual Connection config from the nmap service
+// GetConfig returns the actual Connection config from the nmap service.
 func (c *ConnectionService) GetConfig(
 	ctx context.Context,
 	filesystemService filesystem.Service,
@@ -261,6 +261,7 @@ func (c *ConnectionService) Status(
 	tick uint64,
 ) (ServiceInfo, error) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(logger.ComponentConnectionService, connName+".Status", time.Since(start))
 	}()
@@ -268,6 +269,7 @@ func (c *ConnectionService) Status(
 	if ctx.Err() != nil {
 		return ServiceInfo{}, ctx.Err()
 	}
+
 	if !c.ServiceExists(ctx, filesystemService, connName) {
 		return ServiceInfo{}, ErrServiceNotExist
 	}
@@ -321,6 +323,7 @@ func (c *ConnectionService) AddConnectionToNmapManager(
 	if c.nmapManager == nil {
 		return errors.New("nmap manager not initialized")
 	}
+
 	c.logger.Infof("Adding connection %s", connectionName)
 
 	if ctx.Err() != nil {
@@ -339,7 +342,7 @@ func (c *ConnectionService) AddConnectionToNmapManager(
 	// Convert our connection config to Nmap service config
 	nmapServiceConfig, err := c.GenerateNmapConfigForConnection(cfg, connectionName)
 	if err != nil {
-		return fmt.Errorf("failed to generate nmap config: %v", err)
+		return fmt.Errorf("failed to generate nmap config: %w", err)
 	}
 
 	// Create a config.NmapConfig that wraps the NmapServiceConfig
@@ -377,6 +380,7 @@ func (c *ConnectionService) UpdateConnectionInNmapManager(
 	if c.nmapManager == nil {
 		return errors.New("nmap manager not initialized")
 	}
+
 	c.logger.Infof("Updating connection %s", connectionName)
 
 	if ctx.Err() != nil {
@@ -388,13 +392,16 @@ func (c *ConnectionService) UpdateConnectionInNmapManager(
 	// Check if the config exists
 	found := false
 	index := -1
+
 	for i, config := range c.nmapConfigs {
 		if config.Name == nmapName {
 			found = true
 			index = i
+
 			break
 		}
 	}
+
 	if !found {
 		return ErrServiceNotExist
 	}
@@ -449,6 +456,7 @@ func (c *ConnectionService) RemoveConnectionFromNmapManager(
 				return append(in[:i], in[i+1:]...)
 			}
 		}
+
 		return in // already gone
 	}
 
@@ -469,7 +477,7 @@ func (c *ConnectionService) RemoveConnectionFromNmapManager(
 }
 
 // StartConnection starts a Connection
-// Expects nmapName (e.g. "connection-myservice") as defined in the UMH config
+// Expects nmapName (e.g. "connection-myservice") as defined in the UMH config.
 func (c *ConnectionService) StartConnection(
 	ctx context.Context,
 	filesystemService filesystem.Service,
@@ -487,10 +495,12 @@ func (c *ConnectionService) StartConnection(
 
 	// Find and update our cached config
 	found := false
+
 	for i, config := range c.nmapConfigs {
 		if config.Name == nmapName {
 			c.nmapConfigs[i].DesiredFSMState = nmapfsm.OperationalStateOpen
 			found = true
+
 			break
 		}
 	}
@@ -503,7 +513,7 @@ func (c *ConnectionService) StartConnection(
 }
 
 // StopConnection stops a Connection
-// Expects nmapName (e.g. "connection-myservice") as defined in the UMH config
+// Expects nmapName (e.g. "connection-myservice") as defined in the UMH config.
 func (c *ConnectionService) StopConnection(
 	ctx context.Context,
 	filesystemService filesystem.Service,
@@ -521,10 +531,12 @@ func (c *ConnectionService) StopConnection(
 
 	// Find and update our cached config
 	found := false
+
 	for i, config := range c.nmapConfigs {
 		if config.Name == nmapName {
 			c.nmapConfigs[i].DesiredFSMState = nmapfsm.OperationalStateStopped
 			found = true
+
 			break
 		}
 	}
@@ -548,9 +560,11 @@ func (c *ConnectionService) ReconcileManager(
 	tick uint64,
 ) (error, bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(logger.ComponentConnectionService, "ReconcileManager", time.Since(start))
 	}()
+
 	c.logger.Debugf("Reconciling connection manager at tick %d", tick)
 
 	if c.nmapManager == nil {
@@ -583,6 +597,7 @@ func (c *ConnectionService) ServiceExists(
 	if ctx.Err() != nil {
 		return false
 	}
+
 	nmapName := c.getNmapName(connectionName)
 
 	// Check if the actual service exists
@@ -590,7 +605,7 @@ func (c *ConnectionService) ServiceExists(
 }
 
 // ForceRemoveConnection removes a Connection from the Nmap manager
-// Expects nmapName (e.g. "connection-myservice") as defined in the UMH config
+// Expects nmapName (e.g. "connection-myservice") as defined in the UMH config.
 func (c *ConnectionService) ForceRemoveConnection(
 	ctx context.Context,
 	filesystemService filesystem.Service,
@@ -663,18 +678,20 @@ func (c *ConnectionService) isConnectionFlaky(connName string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
-// GetRecentStatesCount returns the number of recent scan results for a connection
+// GetRecentStatesCount returns the number of recent scan results for a connection.
 func (s *ConnectionService) GetRecentStatesCount(name string) int {
 	return len(s.recentNmapStates[name])
 }
 
-// GetRecentStatesAtIndex returns the scan at the specified index for a connection
+// GetRecentStatesAtIndex returns the scan at the specified index for a connection.
 func (s *ConnectionService) GetRecentStatesAtIndex(name string, index int) (*string, bool) {
 	if states, ok := s.recentNmapStates[name]; ok && len(states) > index {
 		return &states[index], true
 	}
+
 	return nil, false
 }

@@ -52,12 +52,15 @@ func (d *DataflowComponentInstance) CreateInstance(ctx context.Context, filesyst
 	if err != nil {
 		if errors.Is(err, dataflowcomponentservice.ErrServiceAlreadyExists) {
 			d.baseFSMInstance.GetLogger().Debugf("DataflowComponent service %s already exists in Benthos manager", d.baseFSMInstance.GetID())
+
 			return nil // do not throw an error, as each action is expected to be idempotent
 		}
+
 		return fmt.Errorf("failed to add DataflowComponent service %s to Benthos manager: %w", d.baseFSMInstance.GetID(), err)
 	}
 
 	d.baseFSMInstance.GetLogger().Debugf("DataflowComponent service %s added to Benthos manager", d.baseFSMInstance.GetID())
+
 	return nil
 }
 
@@ -76,6 +79,7 @@ func (b *DataflowComponentInstance) RemoveInstance(ctx context.Context, filesyst
 		b.baseFSMInstance.GetLogger().
 			Debugf("Benthos service %s removed from S6 manager",
 				b.baseFSMInstance.GetID())
+
 		return nil
 
 	case errors.Is(err, dataflowcomponentservice.ErrServiceNotExists):
@@ -104,7 +108,7 @@ func (b *DataflowComponentInstance) RemoveInstance(ctx context.Context, filesyst
 	}
 }
 
-// StartInstance to start the DataflowComponent by setting the desired state to running for the given instance
+// StartInstance to start the DataflowComponent by setting the desired state to running for the given instance.
 func (d *DataflowComponentInstance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	d.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting DataflowComponent service %s ...", d.baseFSMInstance.GetID())
 
@@ -118,10 +122,11 @@ func (d *DataflowComponentInstance) StartInstance(ctx context.Context, filesyste
 	}
 
 	d.baseFSMInstance.GetLogger().Debugf("DataflowComponent service %s start command executed", d.baseFSMInstance.GetID())
+
 	return nil
 }
 
-// StopInstance attempts to stop the DataflowComponent by setting the desired state to stopped for the given instance
+// StopInstance attempts to stop the DataflowComponent by setting the desired state to stopped for the given instance.
 func (d *DataflowComponentInstance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	d.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping DataflowComponent service %s ...", d.baseFSMInstance.GetID())
 
@@ -133,22 +138,22 @@ func (d *DataflowComponentInstance) StopInstance(ctx context.Context, filesystem
 	}
 
 	d.baseFSMInstance.GetLogger().Debugf("DataflowComponent service %s stop command executed", d.baseFSMInstance.GetID())
+
 	return nil
 }
 
 // CheckForCreation checks whether the creation was successful
-// For DataflowComponent, this is a no-op as we don't need to check anything
+// For DataflowComponent, this is a no-op as we don't need to check anything.
 func (d *DataflowComponentInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
 	return true
 }
 
 // getServiceStatus gets the status of the DataflowComponent service
-// its main purpose is to handle the edge cases where the service is not yet created or not yet running
+// its main purpose is to handle the edge cases where the service is not yet created or not yet running.
 func (d *DataflowComponentInstance) getServiceStatus(ctx context.Context, filesystemService filesystem.Service, tick uint64) (dataflowcomponentservice.ServiceInfo, error) {
 	info, err := d.service.Status(ctx, filesystemService, d.baseFSMInstance.GetID(), tick)
 	if err != nil {
 		// If there's an error getting the service status, we need to distinguish between cases
-
 		if errors.Is(err, dataflowcomponentservice.ErrServiceNotExists) {
 			// If the service is being created, we don't want to count this as an error
 			// The instance is likely in Creating or ToBeCreated state, so service doesn't exist yet
@@ -160,11 +165,13 @@ func (d *DataflowComponentInstance) getServiceStatus(ctx context.Context, filesy
 
 			// Log the warning but don't treat it as a fatal error
 			d.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation")
+
 			return dataflowcomponentservice.ServiceInfo{}, nil
 		}
 
 		// For other errors, log them and return
 		d.baseFSMInstance.GetLogger().Errorf("error updating observed state for %s: %s", d.baseFSMInstance.GetID(), err)
+
 		infoWithFailedHealthChecks := info
 		infoWithFailedHealthChecks.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive = false
 		infoWithFailedHealthChecks.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady = false
@@ -175,20 +182,23 @@ func (d *DataflowComponentInstance) getServiceStatus(ctx context.Context, filesy
 	return info, nil
 }
 
-// UpdateObservedStateOfInstance updates the observed state of the service
+// UpdateObservedStateOfInstance updates the observed state of the service.
 func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
 		if d.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "UpdateObservedStateOfInstance") {
 			return nil
 		}
+
 		return ctx.Err()
 	}
 
 	start := time.Now()
+
 	info, err := d.getServiceStatus(ctx, services.GetFileSystem(), snapshot.Tick)
 	if err != nil {
 		return fmt.Errorf("error while getting service status: %w", err)
 	}
+
 	metrics.ObserveReconcileTime(logger.ComponentDataFlowComponentInstance, d.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
 	// Store the raw service info
 	d.ObservedState.ServiceInfo = info
@@ -205,6 +215,7 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 	start = time.Now()
 	observedConfig, err := d.service.GetConfig(ctx, services.GetFileSystem(), d.baseFSMInstance.GetID())
 	metrics.ObserveReconcileTime(logger.ComponentDataFlowComponentInstance, d.baseFSMInstance.GetID()+".getConfig", time.Since(start))
+
 	if err == nil {
 		// Only update if we successfully got the config
 		d.ObservedState.ObservedDataflowComponentConfig = observedConfig
@@ -212,6 +223,7 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 		if strings.Contains(err.Error(), dataflowcomponentservice.ErrServiceNotExists.Error()) {
 			// Log the error but don't fail - this might happen during creation when the config file doesn't exist yet
 			d.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
+
 			return nil
 		} else {
 			return fmt.Errorf("failed to get observed DataflowComponent config: %w", err)
@@ -247,6 +259,7 @@ func (d *DataflowComponentInstance) IsDataflowComponentBenthosRunning() bool {
 	case benthosfsm.OperationalStateActive, benthosfsm.OperationalStateIdle, benthosfsm.OperationalStateDegraded:
 		return true
 	}
+
 	return false
 }
 
@@ -268,6 +281,7 @@ func (d *DataflowComponentInstance) IsDataflowComponentDegraded() (bool, string)
 	if d.ObservedState.ServiceInfo.BenthosFSMState == benthosfsm.OperationalStateDegraded {
 		return true, d.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.StatusReason
 	}
+
 	return false, ""
 }
 

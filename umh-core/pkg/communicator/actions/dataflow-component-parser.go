@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
@@ -32,27 +33,28 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// DataflowComponentTopLevelPayload represents the top-level structure for dataflow component payloads
+// DataflowComponentTopLevelPayload represents the top-level structure for dataflow component payloads.
 type DataflowComponentTopLevelPayload struct {
-	Name string `json:"name"`
-	Meta struct {
+	Payload interface{} `json:"payload"`
+	Name    string      `json:"name"`
+	Meta    struct {
 		Type string `json:"type"`
 	} `json:"meta"`
-	IgnoreHealthCheck bool        `json:"ignoreHealthCheck"`
-	Payload           interface{} `json:"payload"`
-	State             string      `json:"state"`
+	State             string `json:"state"`
+	IgnoreHealthCheck bool   `json:"ignoreHealthCheck"`
 }
 
-// ParseDataflowComponentTopLevel parses the top-level payload structure for dataflow components
+// ParseDataflowComponentTopLevel parses the top-level payload structure for dataflow components.
 func ParseDataflowComponentTopLevel(payload interface{}) (DataflowComponentTopLevelPayload, error) {
 	var topLevel DataflowComponentTopLevelPayload
+
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
-		return DataflowComponentTopLevelPayload{}, fmt.Errorf("failed to marshal payload: %v", err)
+		return DataflowComponentTopLevelPayload{}, fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
 	if err := json.Unmarshal(payloadBytes, &topLevel); err != nil {
-		return DataflowComponentTopLevelPayload{}, fmt.Errorf("failed to unmarshal top level payload: %v", err)
+		return DataflowComponentTopLevelPayload{}, fmt.Errorf("failed to unmarshal top level payload: %w", err)
 	}
 
 	// Validate required fields
@@ -68,13 +70,14 @@ func ParseDataflowComponentTopLevel(payload interface{}) (DataflowComponentTopLe
 func ParseCustomDataFlowComponent(payload interface{}) (models.CDFCPayload, error) {
 	// Parse the nested custom data flow component payload
 	var customPayloadMap map[string]interface{}
+
 	nestedPayloadBytes, err := json.Marshal(payload)
 	if err != nil {
-		return models.CDFCPayload{}, fmt.Errorf("failed to marshal nested payload: %v", err)
+		return models.CDFCPayload{}, fmt.Errorf("failed to marshal nested payload: %w", err)
 	}
 
 	if err := json.Unmarshal(nestedPayloadBytes, &customPayloadMap); err != nil {
-		return models.CDFCPayload{}, fmt.Errorf("failed to unmarshal nested payload: %v", err)
+		return models.CDFCPayload{}, fmt.Errorf("failed to unmarshal nested payload: %w", err)
 	}
 
 	// Extract the customDataFlowComponent section
@@ -104,7 +107,7 @@ func ParseCustomDataFlowComponent(payload interface{}) (models.CDFCPayload, erro
 	// Use ParseActionPayload to convert the raw payload to our struct
 	parsedPayload, err := ParseActionPayload[models.CustomDFCPayload](payload)
 	if err != nil {
-		return models.CDFCPayload{}, fmt.Errorf("failed to parse payload: %v", err)
+		return models.CDFCPayload{}, fmt.Errorf("failed to parse payload: %w", err)
 	}
 
 	cdfcParsed := parsedPayload.CustomDataFlowComponent
@@ -134,12 +137,13 @@ func ParseCustomDataFlowComponent(payload interface{}) (models.CDFCPayload, erro
 	return cdfcPayload, nil
 }
 
-// ValidateCustomDataFlowComponentPayload validates the structure and YAML content of a CDFCPayload
+// ValidateCustomDataFlowComponentPayload validates the structure and YAML content of a CDFCPayload.
 func ValidateCustomDataFlowComponentPayload(payload models.CDFCPayload, validateOutput bool) error {
 	// Validate input fields
 	if payload.Inputs.Type == "" {
 		return errors.New("missing required field inputs.type")
 	}
+
 	if payload.Inputs.Data == "" {
 		return errors.New("missing required field inputs.data")
 	}
@@ -149,6 +153,7 @@ func ValidateCustomDataFlowComponentPayload(payload models.CDFCPayload, validate
 		if payload.Outputs.Type == "" {
 			return errors.New("missing required field outputs.type")
 		}
+
 		if payload.Outputs.Data == "" {
 			return errors.New("missing required field outputs.data")
 		}
@@ -164,12 +169,12 @@ func ValidateCustomDataFlowComponentPayload(payload models.CDFCPayload, validate
 
 	// Validate Input YAML
 	if err := yaml.Unmarshal([]byte(payload.Inputs.Data), &temp); err != nil {
-		return fmt.Errorf("inputs.data is not valid YAML: %v", err)
+		return fmt.Errorf("inputs.data is not valid YAML: %w", err)
 	}
 
 	// Validate Output YAML
 	if err := yaml.Unmarshal([]byte(payload.Outputs.Data), &temp); err != nil {
-		return fmt.Errorf("outputs.data is not valid YAML: %v", err)
+		return fmt.Errorf("outputs.data is not valid YAML: %w", err)
 	}
 
 	// Validate pipeline processor YAML and fields
@@ -177,27 +182,28 @@ func ValidateCustomDataFlowComponentPayload(payload models.CDFCPayload, validate
 		if proc.Type == "" {
 			return fmt.Errorf("missing required field pipeline.processors.%s.type", key)
 		}
+
 		if proc.Data == "" {
 			return fmt.Errorf("missing required field pipeline.processors.%s.data", key)
 		}
 
 		// Check processor YAML
 		if err := yaml.Unmarshal([]byte(proc.Data), &temp); err != nil {
-			return fmt.Errorf("pipeline.processors.%s.data is not valid YAML: %v", key, err)
+			return fmt.Errorf("pipeline.processors.%s.data is not valid YAML: %w", key, err)
 		}
 	}
 
 	// Validate inject data
 	if payload.Inject != "" {
 		if err := yaml.Unmarshal([]byte(payload.Inject), &temp); err != nil {
-			return fmt.Errorf("inject.data is not valid YAML: %v", err)
+			return fmt.Errorf("inject.data is not valid YAML: %w", err)
 		}
 	}
 
 	return nil
 }
 
-// CreateBenthosConfigFromCDFCPayload converts a CDFCPayload into a normalized BenthosConfig
+// CreateBenthosConfigFromCDFCPayload converts a CDFCPayload into a normalized BenthosConfig.
 func CreateBenthosConfigFromCDFCPayload(payload models.CDFCPayload, componentName string) (dataflowcomponentserviceconfig.BenthosConfig, error) {
 	// Parse YAML configurations
 	benthosInput := make(map[string]interface{})
@@ -244,6 +250,7 @@ func CreateBenthosConfigFromCDFCPayload(payload models.CDFCPayload, componentNam
 		if !ok {
 			return dataflowcomponentserviceconfig.BenthosConfig{}, fmt.Errorf("cache resource %d is not a valid object", i)
 		}
+
 		benthosCacheResources[i] = resourceMap
 	}
 
@@ -253,6 +260,7 @@ func CreateBenthosConfigFromCDFCPayload(payload models.CDFCPayload, componentNam
 		if !ok {
 			return dataflowcomponentserviceconfig.BenthosConfig{}, fmt.Errorf("rate limit resource %d is not a valid object", i)
 		}
+
 		benthosRateLimitResources[i] = resourceMap
 	}
 
@@ -276,10 +284,12 @@ func CreateBenthosConfigFromCDFCPayload(payload models.CDFCPayload, componentNam
 		if hasNumericKeys {
 			// Process in numeric order
 			for i := range len(payload.Pipeline) {
-				processorName := fmt.Sprintf("%d", i)
+				processorName := strconv.Itoa(i)
 
 				processor := payload.Pipeline[processorName]
+
 				var procConfig map[string]interface{}
+
 				err := yaml.Unmarshal([]byte(processor.Data), &procConfig)
 				if err != nil {
 					return dataflowcomponentserviceconfig.BenthosConfig{}, fmt.Errorf("failed to parse pipeline processor %s: %s", processorName, err.Error())
@@ -291,7 +301,7 @@ func CreateBenthosConfigFromCDFCPayload(payload models.CDFCPayload, componentNam
 		}
 
 		if !hasNumericKeys {
-			return dataflowcomponentserviceconfig.BenthosConfig{}, fmt.Errorf("at least one processor with a non-numerous key was found")
+			return dataflowcomponentserviceconfig.BenthosConfig{}, errors.New("at least one processor with a non-numerous key was found")
 		}
 
 		benthosPipeline["processors"] = processors
@@ -321,7 +331,7 @@ func CreateBenthosConfigFromCDFCPayload(payload models.CDFCPayload, componentNam
 	}, nil
 }
 
-// CreateDataFlowComponentConfig creates a DataFlowComponentConfig from a normalized BenthosConfig
+// CreateDataFlowComponentConfig creates a DataFlowComponentConfig from a normalized BenthosConfig.
 func CreateDataFlowComponentConfig(name string, state string, benthosConfig dataflowcomponentserviceconfig.BenthosConfig) config.DataFlowComponentConfig {
 	return config.DataFlowComponentConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
@@ -351,15 +361,17 @@ func BuildDataFlowComponentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, lo
 		observedState, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
 		if !ok {
 			log.Errorw("Observed state is of unexpected type", "instanceID", instance.ID)
+
 			return config.DataFlowComponentConfig{}, fmt.Errorf("invalid observed state type for dataflowcomponent %s", instance.ID)
 		}
+
 		dfcData.DataFlowComponentServiceConfig = observedState.Config
 		dfcData.Name = instance.ID
 		dfcData.DesiredFSMState = instance.DesiredState
-
 	} else {
 		log.Warnw("No observed state found for dataflowcomponent", "instanceID", instance.ID)
-		return config.DataFlowComponentConfig{}, fmt.Errorf("no observed state found for dataflowcomponent")
+
+		return config.DataFlowComponentConfig{}, errors.New("no observed state found for dataflowcomponent")
 	}
 
 	return dfcData, nil
@@ -380,11 +392,12 @@ func BuildCommonDataFlowComponentPropertiesFromConfig(dfcConfig dataflowcomponen
 	}
 	dfc_payload.CDFCProperties.IgnoreErrors = nil
 
-	//fill the inputs, outputs, pipeline and rawYAML
+	// fill the inputs, outputs, pipeline and rawYAML
 	// Convert the BenthosConfig input to CommonDataFlowComponentInputConfig
 	inputData, err := yaml.Marshal(dfcConfig.BenthosConfig.Input)
 	if err != nil {
 		log.Warnf("Failed to marshal input data: %v", err)
+
 		return models.CommonDataFlowComponentCDFCPropertiesPayload{}, err
 	}
 
@@ -396,10 +409,12 @@ func BuildCommonDataFlowComponentPropertiesFromConfig(dfcConfig dataflowcomponen
 			if innerMap, ok := dfcConfig.BenthosConfig.Input["input"].(map[string]interface{}); ok {
 				for key := range innerMap {
 					inputType = key
+
 					break
 				}
 			}
 		}
+
 		break
 	}
 
@@ -412,6 +427,7 @@ func BuildCommonDataFlowComponentPropertiesFromConfig(dfcConfig dataflowcomponen
 	outputData, err := yaml.Marshal(dfcConfig.BenthosConfig.Output)
 	if err != nil {
 		log.Warnf("Failed to marshal output data: %v", err)
+
 		return models.CommonDataFlowComponentCDFCPropertiesPayload{}, err
 	}
 
@@ -419,6 +435,7 @@ func BuildCommonDataFlowComponentPropertiesFromConfig(dfcConfig dataflowcomponen
 	outputType := "benthos" // Default type
 	for key := range dfcConfig.BenthosConfig.Output {
 		outputType = key
+
 		break
 	}
 
@@ -436,24 +453,27 @@ func BuildCommonDataFlowComponentPropertiesFromConfig(dfcConfig dataflowcomponen
 			procData, err := yaml.Marshal(proc)
 			if err != nil {
 				log.Warnf("Failed to marshal processor data: %v", err)
+
 				continue
 			}
 
 			// Determine processor type by looking at the processor structure
 			processorType := "bloblang" // Default type
+
 			if procMap, ok := proc.(map[string]interface{}); ok {
 				// Get the first key in the processor map as the type
 				for key := range procMap {
 					processorType = key
+
 					break
 				}
 			}
 
 			// Use index as processor name to allow sorting in the frontend
-			procName := fmt.Sprintf("%d", i)
+			procName := strconv.Itoa(i)
 			processors[procName] = struct {
-				Data string `json:"data" yaml:"data" mapstructure:"data"`
-				Type string `json:"type" yaml:"type" mapstructure:"type"`
+				Data string `json:"data" mapstructure:"data" yaml:"data"`
+				Type string `json:"type" mapstructure:"type" yaml:"type"`
 			}{
 				Data: string(procData),
 				Type: processorType,
@@ -513,11 +533,13 @@ func ValidateComponentName(name string) error {
 	if name == "" {
 		return errors.New("name cannot be empty")
 	}
+
 	for _, char := range name {
 		if (char < 'a' || char > 'z') && (char < 'A' || char > 'Z') && (char < '0' || char > '9') && char != '-' {
 			return errors.New("name can only contain letters (a-z, A-Z) and numbers (0-9) and hyphens (-)")
 		}
 	}
+
 	return nil
 }
 
@@ -525,5 +547,6 @@ func ValidateDataFlowComponentState(state string) error {
 	if state != dataflowcomponent.OperationalStateStopped && state != dataflowcomponent.OperationalStateActive {
 		return fmt.Errorf("invalid state: %s", state)
 	}
+
 	return nil
 }

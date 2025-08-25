@@ -23,13 +23,13 @@ var (
 	defaultComparator = NewComparator()
 )
 
-// ModelRef represents a reference to a data model
+// ModelRef represents a reference to a data model.
 type ModelRef struct {
 	Name    string `yaml:"name"`    // name of the referenced data model
 	Version string `yaml:"version"` // version of the referenced data model
 }
 
-// SourceMapping represents the mapping of source aliases to UNS topics
+// SourceMapping represents the mapping of source aliases to UNS topics.
 type SourceMapping map[string]string
 
 // StreamProcessorServiceConfigTemplate is the *blueprint* for deploying a
@@ -40,8 +40,6 @@ type SourceMapping map[string]string
 // This template form allows stream processor parameters to be templated
 // using expressions like "{{ .abc }}" which are resolved during rendering.
 type StreamProcessorServiceConfigTemplate struct {
-	// Model defines which data model this stream processor implements
-	Model ModelRef `yaml:"model"`
 
 	// Sources defines the mapping of source aliases to UNS topics with template support
 	Sources SourceMapping `yaml:"sources,omitempty"`
@@ -49,6 +47,8 @@ type StreamProcessorServiceConfigTemplate struct {
 	// Mapping defines how source values are transformed into model fields
 
 	Mapping map[string]interface{} `yaml:"mapping,omitempty"`
+	// Model defines which data model this stream processor implements
+	Model ModelRef `yaml:"model"`
 }
 
 // StreamProcessorServiceConfigRuntime is the **fully rendered** form of a
@@ -61,8 +61,6 @@ type StreamProcessorServiceConfigTemplate struct {
 //   - Model reference must point to a valid data model.
 //   - All source mappings must be resolved to valid UNS topics.
 type StreamProcessorServiceConfigRuntime struct {
-	// Model defines which data model this stream processor implements
-	Model ModelRef `yaml:"model"`
 
 	// Sources defines the resolved mapping of source aliases to UNS topics
 	Sources SourceMapping `yaml:"sources"`
@@ -73,6 +71,8 @@ type StreamProcessorServiceConfigRuntime struct {
 	// "dynamic" mappings are mappings that are triggered by incoming messages in the specified source topic
 	// "static" mappings are mappings that are triggered by the stream processor itself (e.g. a static value)
 	Mapping map[string]interface{} `yaml:"mapping"`
+	// Model defines which data model this stream processor implements
+	Model ModelRef `yaml:"model"`
 }
 
 // StreamProcessorServiceConfigSpec is the **user‑facing** wrapper that binds a
@@ -95,22 +95,22 @@ type StreamProcessorServiceConfigSpec struct {
 	TemplateRef string                               `yaml:"templateRef,omitempty"`
 }
 
-// Equal checks if two StreamProcessorServiceConfigs are equal
+// Equal checks if two StreamProcessorServiceConfigs are equal.
 func (c StreamProcessorServiceConfigSpec) Equal(other StreamProcessorServiceConfigSpec) bool {
 	return defaultComparator.ConfigsEqual(c, other)
 }
 
-// NormalizeStreamProcessorConfig is a package-level function for easy config normalization
+// NormalizeStreamProcessorConfig is a package-level function for easy config normalization.
 func NormalizeStreamProcessorConfig(cfg StreamProcessorServiceConfigSpec) StreamProcessorServiceConfigSpec {
 	return defaultNormalizer.NormalizeConfig(cfg)
 }
 
-// ConfigsEqual is a package-level function for easy config comparison
+// ConfigsEqual is a package-level function for easy config comparison.
 func ConfigsEqual(desired, observed StreamProcessorServiceConfigSpec) bool {
 	return defaultComparator.ConfigsEqual(desired, observed)
 }
 
-// ConfigDiff is a package-level function for easy config diff generation
+// ConfigDiff is a package-level function for easy config diff generation.
 func ConfigDiff(desired, observed StreamProcessorServiceConfigSpec) string {
 	return defaultComparator.ConfigDiff(desired, observed)
 }
@@ -123,7 +123,7 @@ func convertRuntimeToTemplate(runtime StreamProcessorServiceConfigRuntime) Strea
 	return StreamProcessorServiceConfigTemplate(runtime)
 }
 
-// ConfigsEqualRuntime is a package-level function for comparing runtime configurations
+// ConfigsEqualRuntime is a package-level function for comparing runtime configurations.
 func ConfigsEqualRuntime(desired, observed StreamProcessorServiceConfigRuntime) bool {
 	// Convert runtime configs back to template format for comparison
 	streamProcessorDesiredTemplate := convertRuntimeToTemplate(desired)
@@ -132,10 +132,11 @@ func ConfigsEqualRuntime(desired, observed StreamProcessorServiceConfigRuntime) 
 	// Convert runtime configs to spec configs for comparison
 	desiredSpec := StreamProcessorServiceConfigSpec{Config: streamProcessorDesiredTemplate}
 	observedSpec := StreamProcessorServiceConfigSpec{Config: streamProcessorObservedTemplate}
+
 	return defaultComparator.ConfigsEqual(desiredSpec, observedSpec)
 }
 
-// ConfigDiffRuntime is a package-level function for generating diffs between runtime configurations
+// ConfigDiffRuntime is a package-level function for generating diffs between runtime configurations.
 func ConfigDiffRuntime(desired, observed StreamProcessorServiceConfigRuntime) string {
 	// Convert runtime configs back to template format for diffing
 	streamProcessorDesiredTemplate := convertRuntimeToTemplate(desired)
@@ -144,6 +145,7 @@ func ConfigDiffRuntime(desired, observed StreamProcessorServiceConfigRuntime) st
 	// Convert to spec configs for diffing
 	desiredSpec := StreamProcessorServiceConfigSpec{Config: streamProcessorDesiredTemplate}
 	observedSpec := StreamProcessorServiceConfigSpec{Config: streamProcessorObservedTemplate}
+
 	return defaultComparator.ConfigDiff(desiredSpec, observedSpec)
 }
 

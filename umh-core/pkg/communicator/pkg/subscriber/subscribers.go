@@ -35,16 +35,16 @@ import (
 )
 
 type Handler struct {
-	subscriberRegistry         *subscribers.Registry
 	dog                        watchdog.Iface
-	pusher                     *push.Pusher
-	instanceUUID               uuid.UUID
-	StatusCollector            *generator.StatusCollectorType
-	disableHardwareStatusCheck bool // nolint:unused // will be used in the future
-	systemSnapshotManager      *fsm.SnapshotManager
 	configManager              config.ConfigManager
+	subscriberRegistry         *subscribers.Registry
+	pusher                     *push.Pusher
+	StatusCollector            *generator.StatusCollectorType
+	systemSnapshotManager      *fsm.SnapshotManager
 	topicBrowserCommunicator   *topicbrowser.TopicBrowserCommunicator
 	logger                     *zap.SugaredLogger
+	instanceUUID               uuid.UUID
+	disableHardwareStatusCheck bool //nolint:unused // will be used in the future
 }
 
 func NewHandler(
@@ -92,11 +92,13 @@ func (s *Handler) AddOrRefreshSubscriber(identifier string, bootstrapped bool) {
 func (s *Handler) GetSubscribers() []string {
 	subscribers := s.subscriberRegistry.List()
 	s.dog.SetHasSubscribers(len(subscribers) > 0)
+
 	return subscribers
 }
 
 func (s *Handler) notifySubscribers() {
 	watcherUUID := s.dog.RegisterHeartbeat("notifySubscribers", 0, 600, true)
+
 	var timer = time.NewTicker(time.Second)
 	defer timer.Stop()
 
@@ -110,6 +112,7 @@ func (s *Handler) notifySubscribers() {
 
 func (s *Handler) notify() {
 	s.dog.SetHasSubscribers(s.subscriberRegistry.Length() > 0)
+
 	if s.subscriberRegistry.Length() == 0 {
 		return
 	}
@@ -139,10 +142,13 @@ func (s *Handler) notify() {
 		if ctx.Err() != nil {
 			// It is expected that the first 1-2 times this might fail, due to the systems starting up
 			s.logger.Warnf("Failed to generate status message: %s", ctx.Err().Error())
+
 			return
 		}
+
 		if statusMessage == nil {
 			s.logger.Warnf("Failed to generate status message")
+
 			return
 		}
 
@@ -152,6 +158,7 @@ func (s *Handler) notify() {
 		})
 		if err != nil {
 			s.logger.Warnf("Failed to encrypt message for subscriber %s", email)
+
 			return
 		}
 

@@ -23,15 +23,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// RedpandaBuilder is used to build configuration with Redpanda services
+// RedpandaBuilder is used to build configuration with Redpanda services.
 type RedpandaBuilder struct {
-	full config.FullConfig
 	// Map to track which services are active by name
 	activeRedpanda map[string]bool
 	activeBenthos  map[string]bool
+	full           config.FullConfig
 }
 
-// NewRedpandaBuilder creates a new builder for Redpanda configurations
+// NewRedpandaBuilder creates a new builder for Redpanda configurations.
 func NewRedpandaBuilder() *RedpandaBuilder {
 	return &RedpandaBuilder{
 		full: config.FullConfig{
@@ -48,7 +48,7 @@ func NewRedpandaBuilder() *RedpandaBuilder {
 	}
 }
 
-// AddGoldenRedpanda adds a Redpanda service that serves HTTP requests on port 8082
+// AddGoldenRedpanda adds a Redpanda service that serves HTTP requests on port 8082.
 func (r *RedpandaBuilder) AddGoldenRedpanda() *RedpandaBuilder {
 	// Create Redpanda config with an HTTP server input
 	redpandaConfig := config.RedpandaConfig{
@@ -75,30 +75,34 @@ func (r *RedpandaBuilder) AddGoldenRedpanda() *RedpandaBuilder {
 			DesiredFSMState: "stopped",
 		},
 	}
+
 	return r
 }
 
-// StartRedpanda sets a Redpanda service to active state
+// StartRedpanda sets a Redpanda service to active state.
 func (r *RedpandaBuilder) StartRedpanda(name string) *RedpandaBuilder {
 	r.full.Internal.Redpanda.DesiredFSMState = "active"
 	r.activeRedpanda[name] = true
+
 	return r
 }
 
-// StopRedpanda sets a Redpanda service to inactive state
+// StopRedpanda sets a Redpanda service to inactive state.
 func (r *RedpandaBuilder) StopRedpanda(name string) *RedpandaBuilder {
 	r.full.Internal.Redpanda.DesiredFSMState = "stopped"
 	r.activeRedpanda[name] = false
+
 	return r
 }
 
-// BuildYAML converts the configuration to YAML format
+// BuildYAML converts the configuration to YAML format.
 func (r *RedpandaBuilder) BuildYAML() string {
 	out, _ := yaml.Marshal(r.full)
+
 	return string(out)
 }
 
-// AddBenthosProducer adds a Benthos service that produces messages to a Redpanda topic
+// AddBenthosProducer adds a Benthos service that produces messages to a Redpanda topic.
 func (b *RedpandaBuilder) AddBenthosProducer(name string, productionInterval string, topic string) *RedpandaBuilder {
 	// Create Benthos config with a generator input and Kafka output
 	benthosConfig := config.BenthosConfig{
@@ -141,46 +145,54 @@ func (b *RedpandaBuilder) AddBenthosProducer(name string, productionInterval str
 	if b.activeBenthos == nil {
 		b.activeBenthos = make(map[string]bool)
 	}
+
 	b.activeBenthos[name] = true
+
 	return b
 }
 
-// StartBenthos sets a Benthos service to active state
+// StartBenthos sets a Benthos service to active state.
 func (b *RedpandaBuilder) StartBenthos(name string) *RedpandaBuilder {
 	for i, benthos := range b.full.Internal.Benthos {
 		if benthos.Name == name {
 			b.full.Internal.Benthos[i].DesiredFSMState = "active"
 			b.activeBenthos[name] = true
+
 			break
 		}
 	}
+
 	return b
 }
 
-// StopBenthos sets a Benthos service to inactive state
+// StopBenthos sets a Benthos service to inactive state.
 func (b *RedpandaBuilder) StopBenthos(name string) *RedpandaBuilder {
 	for i, benthos := range b.full.Internal.Benthos {
 		if benthos.Name == name {
 			b.full.Internal.Benthos[i].DesiredFSMState = "stopped"
 			b.activeBenthos[name] = false
+
 			break
 		}
 	}
+
 	return b
 }
 
-// CountActiveBenthos returns the number of active Benthos services
+// CountActiveBenthos returns the number of active Benthos services.
 func (b *RedpandaBuilder) CountActiveBenthos() int {
 	count := 0
+
 	for _, active := range b.activeBenthos {
 		if active {
 			count++
 		}
 	}
+
 	return count
 }
 
-// UpdateBenthosProducer updates the configuration of an existing Benthos producer
+// UpdateBenthosProducer updates the configuration of an existing Benthos producer.
 func (b *RedpandaBuilder) UpdateBenthosProducer(name string, productionInterval string) *RedpandaBuilder {
 	for i, benthos := range b.full.Internal.Benthos {
 		if benthos.Name == name {
@@ -190,8 +202,10 @@ func (b *RedpandaBuilder) UpdateBenthosProducer(name string, productionInterval 
 				benthos.BenthosServiceConfig.Input["generate"] = input
 				b.full.Internal.Benthos[i] = benthos
 			}
+
 			break
 		}
 	}
+
 	return b
 }

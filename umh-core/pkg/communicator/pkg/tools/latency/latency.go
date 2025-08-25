@@ -23,11 +23,13 @@ import (
 )
 
 func CalculateLatency(latencies *expiremap.ExpireMap[time.Time, time.Duration]) models.Latency {
-	var minimumDuration time.Duration
-	var maximumDuration time.Duration
-	var p95 time.Duration
-	var p99 time.Duration
-	var avgNs int64
+	var (
+		minimumDuration time.Duration
+		maximumDuration time.Duration
+		p95             time.Duration
+		p99             time.Duration
+		avgNs           int64
+	)
 
 	var durations []time.Duration
 
@@ -36,24 +38,30 @@ func CalculateLatency(latencies *expiremap.ExpireMap[time.Time, time.Duration]) 
 		if minimumDuration == 0 || value < minimumDuration {
 			minimumDuration = value
 		}
+
 		if value > maximumDuration {
 			maximumDuration = value
 		}
+
 		avgNs += value.Nanoseconds()
 		durations = append(durations, value)
+
 		return true
 	})
 
 	if items > 0 {
 		avgNs /= int64(items)
+
 		sort.Slice(durations, func(i, j int) bool {
 			return durations[i] < durations[j]
 		})
 		p95Index := int(float64(items) * 0.95)
+
 		p99Index := int(float64(items) * 0.99)
 		if p95Index >= items {
 			p95Index = items - 1
 		}
+
 		if p99Index >= items {
 			p99Index = items - 1
 		}
@@ -61,6 +69,7 @@ func CalculateLatency(latencies *expiremap.ExpireMap[time.Time, time.Duration]) 
 		if p95Index < 0 {
 			p95Index = 0
 		}
+
 		if p99Index < 0 {
 			p99Index = 0
 		}

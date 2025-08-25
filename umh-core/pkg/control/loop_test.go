@@ -34,7 +34,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/starvationchecker"
 )
 
-// Generates defective configurations
+// Generates defective configurations.
 func generateDefectiveConfig() config.FullConfig {
 	// Create a local random generator
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -43,6 +43,7 @@ func generateDefectiveConfig() config.FullConfig {
 		// Empty services
 		func(cfg config.FullConfig) config.FullConfig {
 			cfg.Internal.Services = []config.S6FSMConfig{}
+
 			return cfg
 		},
 		// Service with empty name
@@ -53,6 +54,7 @@ func generateDefectiveConfig() config.FullConfig {
 					DesiredFSMState: "running",
 				},
 			}}
+
 			return cfg
 		},
 		// Service with invalid desired state
@@ -63,6 +65,7 @@ func generateDefectiveConfig() config.FullConfig {
 					DesiredFSMState: "invalid-state",
 				},
 			}}
+
 			return cfg
 		},
 		// Multiple services with same name
@@ -81,12 +84,14 @@ func generateDefectiveConfig() config.FullConfig {
 					},
 				},
 			}
+
 			return cfg
 		},
 	}
 
 	// Choose a random defect
 	defectIdx := rng.Intn(len(defects))
+
 	return defects[defectIdx](config.FullConfig{})
 }
 
@@ -156,7 +161,7 @@ var _ = Describe("ControlLoop", func() {
 			err := controlLoop.Reconcile(ctx, tick)
 			tick++
 			Expect(err).NotTo(HaveOccurred())
-			Expect(mockConfig.GetConfigCalled).To(BeTrue())
+			Expect(mockConfig.IsGetConfigCalled()).To(BeTrue())
 			Expect(mockManager.ReconcileCalled).To(BeTrue())
 		})
 
@@ -166,7 +171,7 @@ var _ = Describe("ControlLoop", func() {
 			err := controlLoop.Reconcile(ctx, tick)
 			tick++
 			Expect(err).NotTo(HaveOccurred())
-			Expect(mockConfig.GetConfigCalled).To(BeTrue())
+			Expect(mockConfig.IsGetConfigCalled()).To(BeTrue())
 			Expect(mockManager.ReconcileCalled).To(BeFalse())
 		})
 
@@ -176,7 +181,7 @@ var _ = Describe("ControlLoop", func() {
 			err := controlLoop.Reconcile(ctx, 0)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("manager MockFSMManager reconciliation failed: reconcile error"))
-			Expect(mockConfig.GetConfigCalled).To(BeTrue())
+			Expect(mockConfig.IsGetConfigCalled()).To(BeTrue())
 			Expect(mockManager.ReconcileCalled).To(BeTrue())
 		})
 
@@ -221,13 +226,14 @@ var _ = Describe("ControlLoop", func() {
 			go func() {
 				// Wait until we've seen at least 2 calls
 				for {
-					if trackingConfig.GetConfigCalled {
+					if trackingConfig.IsGetConfigCalled() {
 						atomic.AddInt32(&callCount, 1)
 						trackingConfig.ResetCalls() // Reset for next call detection
 
 						// If we've counted at least 2 calls, signal and exit monitoring
 						if atomic.LoadInt32(&callCount) >= 2 {
 							enoughCalls <- struct{}{}
+
 							return
 						}
 					}
@@ -312,11 +318,12 @@ var _ = Describe("ControlLoop", func() {
 			// Set up a goroutine to monitor calls
 			go func() {
 				// Wait for the GetConfigCalled to be true again after we cleared the error
-				for i := 0; i < 50; i++ { // Try for ~50ms
+				for range 50 { // Try for ~50ms
 					// If GetConfigCalled becomes true after we cleared the error
-					if timeoutConfig.GetConfigCalled {
+					if timeoutConfig.IsGetConfigCalled() {
 						atomic.AddInt32(&callCount, 1)
 						continuedExecution <- struct{}{}
+
 						return
 					}
 					time.Sleep(1 * time.Millisecond)
@@ -377,7 +384,7 @@ var _ = Describe("ControlLoop", func() {
 
 		It("should handle random timing delays", func() {
 			// Run multiple iterations with random delays
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				// Create a local random generator for each iteration
 				mockManager.ResetCalls()
 				mockConfig.ResetCalls()
@@ -388,7 +395,7 @@ var _ = Describe("ControlLoop", func() {
 
 		It("should handle filesystem failures gracefully", func() {
 			// Run multiple iterations with different failure patterns
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				// Create a new mockFS for each iteration with random failure characteristics
 				mockFS := filesystem.NewMockFileSystem().
 					WithFailureRate(0.3). // 30% chance of failure
@@ -441,7 +448,7 @@ var _ = Describe("ControlLoop", func() {
 
 		It("should handle defective configurations", func() {
 			// Run multiple iterations with different defective configs
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				mockManager.ResetCalls()
 
 				FuzzDefectiveConfigs()
@@ -454,7 +461,7 @@ var _ = Describe("ControlLoop", func() {
 			complexCtx, complexCancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 			defer complexCancel()
 
-			for i := 0; i < 5; i++ {
+			for i := range 5 {
 				// Create a local random generator for each iteration
 				rng := rand.New(rand.NewSource(time.Now().UnixNano() + int64(i)))
 

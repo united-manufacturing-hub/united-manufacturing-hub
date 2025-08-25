@@ -43,7 +43,7 @@ var _ = Describe("Sentry Integration", func() {
 		sentry.InitSentry(constants.SentryTestVersion, false)
 
 		// Generate a unique test message with timestamp
-		testMessage := fmt.Sprintf("Sentry test message at %s", time.Now().Format(time.RFC3339))
+		testMessage := "Sentry test message at " + time.Now().Format(time.RFC3339)
 		testError := errors.New(testMessage)
 
 		By("Sending a warning via ReportIssue")

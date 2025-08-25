@@ -162,10 +162,10 @@ var _ = Describe("Connection FSM", func() {
 			// Attempt to reconcile - this should not set an FSM error if errors are correctly identified
 			snapshot := pkgfsm.SystemSnapshot{Tick: tick}
 			err, _ = instance.Reconcile(ctx, snapshot, mockSvcRegistry)
-			Expect(err).To(BeNil()) // Should not propagate an error
+			Expect(err).ToNot(HaveOccurred()) // Should not propagate an error
 
 			// The instance should not have an error set
-			Expect(instance.GetLastError()).To(BeNil())
+			Expect(instance.GetLastError()).To(Succeed())
 
 			// Clean up the mock for other tests
 			mockService.StatusError = nil

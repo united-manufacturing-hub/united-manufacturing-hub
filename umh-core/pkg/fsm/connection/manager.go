@@ -15,6 +15,7 @@
 package connection
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -29,12 +30,12 @@ const (
 	baseConnectionDir = constants.S6BaseDir
 )
 
-// ConnectionManager implements the FSM management for Connection services
+// ConnectionManager implements the FSM management for Connection services.
 type ConnectionManager struct {
 	*public_fsm.BaseFSMManager[config.ConnectionConfig]
 }
 
-// ConnectionSnapshot extends the base ManagerSnapshot with Connection specific information
+// ConnectionSnapshot extends the base ManagerSnapshot with Connection specific information.
 type ConnectionSnapshot struct {
 	// Embed BaseManagerSnapshot to include its methods using composition
 	*public_fsm.BaseManagerSnapshot
@@ -65,35 +66,41 @@ func NewConnectionManager(name string) *ConnectionManager {
 		func(instance public_fsm.FSMInstance, cfg config.ConnectionConfig) (bool, error) {
 			connectionInstance, ok := instance.(*ConnectionInstance)
 			if !ok {
-				return false, fmt.Errorf("instance is not a ConnectionInstance")
+				return false, errors.New("instance is not a ConnectionInstance")
 			}
+
 			return connectionInstance.config.Equal(cfg.ConnectionServiceConfig), nil
 		},
 		// Set Connection config
 		func(instance public_fsm.FSMInstance, cfg config.ConnectionConfig) error {
 			connectionInstance, ok := instance.(*ConnectionInstance)
 			if !ok {
-				return fmt.Errorf("instance is not a ConnectionInstance")
+				return errors.New("instance is not a ConnectionInstance")
 			}
+
 			connectionInstance.config = cfg.ConnectionServiceConfig
+
 			return nil
 		},
 		// Get expected max p95 execution time per instance
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
 			connectionInstance, ok := instance.(*ConnectionInstance)
 			if !ok {
-				return 0, fmt.Errorf("instance is not a ConnectionInstance")
+				return 0, errors.New("instance is not a ConnectionInstance")
 			}
+
 			return connectionInstance.GetMinimumRequiredTime(), nil
 		},
 	)
+
 	metrics.InitErrorCounter(metrics.ComponentConnectionManager, name)
+
 	return &ConnectionManager{
 		BaseFSMManager: baseManager,
 	}
 }
 
-// CreateSnapshot overrides the base CreateSnapshot to include ConnectionManager-specific information
+// CreateSnapshot overrides the base CreateSnapshot to include ConnectionManager-specific information.
 func (m *ConnectionManager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	// Get base snapshot from parent
 	baseSnapshot := m.BaseFSMManager.CreateSnapshot()
@@ -103,6 +110,7 @@ func (m *ConnectionManager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	if !ok {
 		logger.For(logger.ComponentConnectionManager).Errorf(
 			"Failed to convert base snapshot to BaseManagerSnapshot, using generic snapshot")
+
 		return baseSnapshot
 	}
 
@@ -110,10 +118,11 @@ func (m *ConnectionManager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	snap := &ConnectionSnapshot{
 		BaseManagerSnapshot: baseManagerSnapshot,
 	}
+
 	return snap
 }
 
-// IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface
+// IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface.
 func (s *ConnectionSnapshot) IsObservedStateSnapshot() {
 	// Marker method implementation
 }

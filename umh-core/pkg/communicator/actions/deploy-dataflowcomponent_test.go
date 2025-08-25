@@ -16,6 +16,7 @@ package actions_test
 
 import (
 	"errors"
+	"sync"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
@@ -41,6 +42,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 		mockConfig      *config.MockConfigManager
 		stateMocker     *actions.StateMocker
 		messages        []*models.UMHMessage
+		mu              sync.Mutex
 	)
 
 	// Setup before each test
@@ -73,7 +75,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 
 		action = actions.NewDeployDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockStateManager)
 
-		go actions.ConsumeOutboundMessages(outboundChannel, &messages, true)
+		go actions.ConsumeOutboundMessages(outboundChannel, &messages, &mu, true)
 
 	})
 
@@ -632,7 +634,9 @@ var _ = Describe("DeployDataflowComponent", func() {
 			stateMocker.Stop()
 
 			// Verify the failure message content
+			mu.Lock()
 			decodedMessage, err := encoding.DecodeMessageFromUMHInstanceToUser(messages[1].Content)
+			mu.Unlock()
 			Expect(err).NotTo(HaveOccurred())
 
 			// Extract the ActionReplyPayload from the decoded message

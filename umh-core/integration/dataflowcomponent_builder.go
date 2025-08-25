@@ -22,14 +22,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// DataFlowComponentBuilder is used to build configuration with DataFlowComponent services
+// DataFlowComponentBuilder is used to build configuration with DataFlowComponent services.
 type DataFlowComponentBuilder struct {
-	full config.FullConfig
 	// Map to track which components are active by name
 	activeComponents map[string]bool
+	full             config.FullConfig
 }
 
-// NewDataFlowComponentBuilder creates a new builder for DataFlowComponent configurations
+// NewDataFlowComponentBuilder creates a new builder for DataFlowComponent configurations.
 func NewDataFlowComponentBuilder() *DataFlowComponentBuilder {
 	return &DataFlowComponentBuilder{
 		full: config.FullConfig{
@@ -56,7 +56,7 @@ func NewDataFlowComponentBuilder() *DataFlowComponentBuilder {
 	}
 }
 
-// AddGoldenDataFlowComponent adds a DataFlowComponent service that serves HTTP requests on port 8083
+// AddGoldenDataFlowComponent adds a DataFlowComponent service that serves HTTP requests on port 8083.
 func (b *DataFlowComponentBuilder) AddGoldenDataFlowComponent() *DataFlowComponentBuilder {
 	// Create DataFlowComponent config with an HTTP server input
 	dataFlowConfig := config.DataFlowComponentConfig{
@@ -89,10 +89,11 @@ func (b *DataFlowComponentBuilder) AddGoldenDataFlowComponent() *DataFlowCompone
 	// Add to configuration
 	b.full.DataFlow = append(b.full.DataFlow, dataFlowConfig)
 	b.activeComponents["golden-dataflow"] = true
+
 	return b
 }
 
-// AddGeneratorDataFlowComponent adds a DataFlowComponent that generates messages and sends to stdout
+// AddGeneratorDataFlowComponent adds a DataFlowComponent that generates messages and sends to stdout.
 func (b *DataFlowComponentBuilder) AddGeneratorDataFlowComponent(name string, interval string) *DataFlowComponentBuilder {
 	// Create DataFlowComponent config with a generator input
 	dataFlowConfig := config.DataFlowComponentConfig{
@@ -126,10 +127,11 @@ func (b *DataFlowComponentBuilder) AddGeneratorDataFlowComponent(name string, in
 	// Add to configuration
 	b.full.DataFlow = append(b.full.DataFlow, dataFlowConfig)
 	b.activeComponents[name] = true
+
 	return b
 }
 
-// AddGeneratorDataFlowComponentToKafka adds a DataFlowComponent that generates messages and sends to a Kafka topic
+// AddGeneratorDataFlowComponentToKafka adds a DataFlowComponent that generates messages and sends to a Kafka topic.
 func (b *DataFlowComponentBuilder) AddGeneratorDataFlowComponentToKafka(name string, interval string, topic string, key *string) *DataFlowComponentBuilder {
 	dataFlowConfig := config.DataFlowComponentConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
@@ -175,10 +177,11 @@ func (b *DataFlowComponentBuilder) AddGeneratorDataFlowComponentToKafka(name str
 	}
 	b.full.DataFlow = append(b.full.DataFlow, dataFlowConfig)
 	b.activeComponents[name] = true
+
 	return b
 }
 
-// UpdateGeneratorDataFlowComponent updates the interval of an existing generator DataFlowComponent
+// UpdateGeneratorDataFlowComponent updates the interval of an existing generator DataFlowComponent.
 func (b *DataFlowComponentBuilder) UpdateGeneratorDataFlowComponent(name string, newInterval string) *DataFlowComponentBuilder {
 	// Find and update the service
 	for i, component := range b.full.DataFlow {
@@ -188,52 +191,61 @@ func (b *DataFlowComponentBuilder) UpdateGeneratorDataFlowComponent(name string,
 				input["interval"] = newInterval
 				b.full.DataFlow[i].DataFlowComponentServiceConfig.BenthosConfig.Input["generate"] = input
 			}
+
 			break
 		}
 	}
+
 	return b
 }
 
-// StartDataFlowComponent sets a DataFlowComponent to active state
+// StartDataFlowComponent sets a DataFlowComponent to active state.
 func (b *DataFlowComponentBuilder) StartDataFlowComponent(name string) *DataFlowComponentBuilder {
 	for i, component := range b.full.DataFlow {
 		if component.Name == name {
 			b.full.DataFlow[i].DesiredFSMState = "active"
 			b.activeComponents[name] = true
+
 			break
 		}
 	}
+
 	return b
 }
 
-// StopDataFlowComponent sets a DataFlowComponent to stopped state
+// StopDataFlowComponent sets a DataFlowComponent to stopped state.
 func (b *DataFlowComponentBuilder) StopDataFlowComponent(name string) *DataFlowComponentBuilder {
 	for i, component := range b.full.DataFlow {
 		if component.Name == name {
 			b.full.DataFlow[i].DesiredFSMState = "stopped"
 			b.activeComponents[name] = false
+
 			break
 		}
 	}
+
 	return b
 }
 
-// CountActiveDataFlowComponents returns the number of active DataFlowComponent services
+// CountActiveDataFlowComponents returns the number of active DataFlowComponent services.
 func (b *DataFlowComponentBuilder) CountActiveDataFlowComponents() int {
 	count := 0
+
 	for _, isActive := range b.activeComponents {
 		if isActive {
 			count++
 		}
 	}
+
 	return count
 }
 
-// BuildYAML converts the configuration to YAML format
+// BuildYAML converts the configuration to YAML format.
 func (b *DataFlowComponentBuilder) BuildYAML() string {
 	out, err := yaml.Marshal(b.full)
 	if err != nil {
 		panic(fmt.Errorf("failed to marshal DataFlowComponent config: %w", err))
 	}
+
 	return string(out)
 }

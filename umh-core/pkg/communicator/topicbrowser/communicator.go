@@ -29,17 +29,17 @@ import (
 )
 
 const (
-	// MaxTopicCount limits the number of topics to prevent memory exhaustion
+	// MaxTopicCount limits the number of topics to prevent memory exhaustion.
 	MaxTopicCount = 1_000_000
 
-	// MaxBundleSize limits individual bundle size to 50MB
+	// MaxBundleSize limits individual bundle size to 50MB.
 	MaxBundleSize = 50 * 1024 * 1024
 
-	// MaxBufferSize limits total buffer size to 200MB (3x 50MB bundles with safety margin)
+	// MaxBufferSize limits total buffer size to 200MB (3x 50MB bundles with safety margin).
 	MaxBufferSize = 200 * 1024 * 1024
 )
 
-// validateBufferSizeFromSnapshot ensures the buffer snapshot doesn't exceed safe limits
+// validateBufferSizeFromSnapshot ensures the buffer snapshot doesn't exceed safe limits.
 func validateBufferSizeFromSnapshot(snapshot topicbrowserservice.RingBufferSnapshot) error {
 	totalSize := int64(0)
 	for _, buf := range snapshot.Items {
@@ -61,38 +61,39 @@ func validateBufferSizeFromSnapshot(snapshot topicbrowserservice.RingBufferSnaps
 	return nil
 }
 
-// SubscriberData contains data prepared for topic browser subscribers (UI clients)
+// SubscriberData contains data prepared for topic browser subscribers (UI clients).
 type SubscriberData struct {
-	UnsBundles      map[int][]byte // Ready-to-send data indexed by position (0=cache, 1+=incremental)
-	TopicCount      int            // Current number of topics in cache
 	LatestTimestamp time.Time      // Latest timestamp in this subscriber batch
+	UnsBundles      map[int][]byte // Ready-to-send data indexed by position (0=cache, 1+=incremental)
 	Summary         string         // Human-readable summary for debugging
+	TopicCount      int            // Current number of topics in cache
 }
 
 // TopicBrowserCommunicator manages topic browser data flow from ring buffer to UI subscribers
-// It handles both the internal cache state and the communication/subscriber management
+// It handles both the internal cache state and the communication/subscriber management.
 type TopicBrowserCommunicator struct {
-	mu sync.RWMutex
+	lastSentTimestamp time.Time // Last timestamp sent to subscribers
 
 	// 📊 INTERNAL CACHE STATE: The actual topic browser data storage
-	eventMap              map[string]*tbproto.EventTableEntry // Latest event per topic (key = UnsTreeId)
-	unsMap                *tbproto.TopicMap                   // Topic metadata
-	lastProcessedSequence uint64                              // Last processed buffer sequence number
-
-	// 📡 COMMUNICATION STATE: Subscriber and delivery management
-	pendingToSend     []*topicbrowserservice.BufferItem // Processed buffers not yet sent to subscribers
-	lastSentTimestamp time.Time                         // Last timestamp sent to subscribers
+	eventMap map[string]*tbproto.EventTableEntry // Latest event per topic (key = UnsTreeId)
+	unsMap   *tbproto.TopicMap                   // Topic metadata
 
 	// 🎭 SIMULATOR (Optional): For testing/demo purposes
-	simulator        *Simulator
-	simulatorEnabled bool
+	simulator *Simulator
+	logger    *zap.SugaredLogger // Component-specific logging
+
+	// 📡 COMMUNICATION STATE: Subscriber and delivery management
+	pendingToSend         []*topicbrowserservice.BufferItem // Processed buffers not yet sent to subscribers
+	lastProcessedSequence uint64                            // Last processed buffer sequence number
 
 	// 🔧 CONFIGURATION
-	maxPendingBuffers int                // Cleanup threshold for old pending buffers
-	logger            *zap.SugaredLogger // Component-specific logging
+	maxPendingBuffers int // Cleanup threshold for old pending buffers
+	mu                sync.RWMutex
+
+	simulatorEnabled bool
 }
 
-// NewTopicBrowserCommunicator creates a communicator for real FSM data processing
+// NewTopicBrowserCommunicator creates a communicator for real FSM data processing.
 func NewTopicBrowserCommunicator(logger *zap.SugaredLogger) *TopicBrowserCommunicator {
 	return &TopicBrowserCommunicator{
 		eventMap:              make(map[string]*tbproto.EventTableEntry),
@@ -107,24 +108,26 @@ func NewTopicBrowserCommunicator(logger *zap.SugaredLogger) *TopicBrowserCommuni
 	}
 }
 
-// NewTopicBrowserCommunicatorWithSimulator creates a communicator with simulator enabled
+// NewTopicBrowserCommunicatorWithSimulator creates a communicator with simulator enabled.
 func NewTopicBrowserCommunicatorWithSimulator(logger *zap.SugaredLogger) *TopicBrowserCommunicator {
 	tbc := NewTopicBrowserCommunicator(logger)
 	tbc.simulator = NewSimulator()
 	tbc.simulator.InitializeSimulator()
 	tbc.simulatorEnabled = true
+
 	return tbc
 }
 
-// IsSimulatorEnabled returns whether this communicator is in simulator mode
+// IsSimulatorEnabled returns whether this communicator is in simulator mode.
 func (tbc *TopicBrowserCommunicator) IsSimulatorEnabled() bool {
 	tbc.mu.RLock()
 	defer tbc.mu.RUnlock()
+
 	return tbc.simulatorEnabled
 }
 
 // ProcessRealData processes new buffers from FSM observed state
-// This handles actual topic browser data from the running system
+// This handles actual topic browser data from the running system.
 func (tbc *TopicBrowserCommunicator) ProcessRealData(obs *topicbrowserfsm.ObservedStateSnapshot) (*ProcessingResult, error) {
 	if tbc.simulatorEnabled {
 		return nil, errors.New("communicator is in simulator mode, cannot process real data")
@@ -134,7 +137,7 @@ func (tbc *TopicBrowserCommunicator) ProcessRealData(obs *topicbrowserfsm.Observ
 }
 
 // ProcessSimulatedData generates and processes simulated topic browser data
-// This handles fake data for testing/demo purposes
+// This handles fake data for testing/demo purposes.
 func (tbc *TopicBrowserCommunicator) ProcessSimulatedData() (*ProcessingResult, error) {
 	if !tbc.simulatorEnabled {
 		return nil, errors.New("simulator not enabled on this communicator")
@@ -154,7 +157,7 @@ func (tbc *TopicBrowserCommunicator) ProcessSimulatedData() (*ProcessingResult, 
 // - Gets BufferItems from obs.ServiceInfo.Status.BufferSnapshot.Items
 // - Processes the BufferItems for internal cache updates
 // - Returns BufferItems to pool immediately after processing since data is stored in internal cache
-// - Follows the documented ownership model from topicbrowser package
+// - Follows the documented ownership model from topicbrowser package.
 func (tbc *TopicBrowserCommunicator) processNewBuffers(obs *topicbrowserfsm.ObservedStateSnapshot, source ProcessingSource) (*ProcessingResult, error) {
 	tbc.mu.Lock()
 	defer tbc.mu.Unlock()
@@ -177,6 +180,7 @@ func (tbc *TopicBrowserCommunicator) processNewBuffers(obs *topicbrowserfsm.Obse
 	// Validate buffer sizes before processing
 	if err := validateBufferSizeFromSnapshot(snapshot); err != nil {
 		sentry.ReportIssue(err, sentry.IssueTypeError, tbc.logger)
+
 		return nil, fmt.Errorf("buffer size validation failed: %w", err)
 	}
 
@@ -206,18 +210,21 @@ func (tbc *TopicBrowserCommunicator) processNewBuffers(obs *topicbrowserfsm.Obse
 	return result, nil
 }
 
-// processAllBuffers processes all buffers in the snapshot (used after overwrite detection)
+// processAllBuffers processes all buffers in the snapshot (used after overwrite detection).
 func (tbc *TopicBrowserCommunicator) processAllBuffers(buffers []*topicbrowserservice.BufferItem, source ProcessingSource) (*ProcessingResult, error) {
 	result := &ProcessingResult{}
 
 	for _, buf := range buffers {
 		if err := tbc.updateInternalCache(buf); err != nil {
 			tbc.logger.Errorf("Failed to process buffer seq=%d: %v", buf.SequenceNum, err)
+
 			result.SkippedCount++
+
 			continue
 		}
 
 		result.ProcessedCount++
+
 		tbc.pendingToSend = append(tbc.pendingToSend, buf)
 
 		// Track latest timestamp
@@ -239,7 +246,7 @@ func (tbc *TopicBrowserCommunicator) processAllBuffers(buffers []*topicbrowserse
 	return result, nil
 }
 
-// processIncrementalBuffers processes only new buffers since last processing
+// processIncrementalBuffers processes only new buffers since last processing.
 func (tbc *TopicBrowserCommunicator) processIncrementalBuffers(buffers []*topicbrowserservice.BufferItem, newBufferCount uint64, source ProcessingSource) (*ProcessingResult, error) {
 	result := &ProcessingResult{}
 
@@ -254,11 +261,14 @@ func (tbc *TopicBrowserCommunicator) processIncrementalBuffers(buffers []*topicb
 
 		if err := tbc.updateInternalCache(buf); err != nil {
 			tbc.logger.Errorf("Failed to process buffer seq=%d: %v", buf.SequenceNum, err)
+
 			result.SkippedCount++
+
 			continue
 		}
 
 		result.ProcessedCount++
+
 		tbc.pendingToSend = append(tbc.pendingToSend, buf)
 
 		// Track latest timestamp
@@ -280,9 +290,11 @@ func (tbc *TopicBrowserCommunicator) processIncrementalBuffers(buffers []*topicb
 
 	// Generate debug info showing only the sequence range of processed buffers
 	var debugInfo string
+
 	if result.ProcessedCount > 0 {
 		minSeq := buffers[len(buffers)-1].SequenceNum // Oldest processed buffer
-		maxSeq := buffers[startIndex].SequenceNum     // Newest processed buffer
+
+		maxSeq := buffers[startIndex].SequenceNum // Newest processed buffer
 		if minSeq == maxSeq {
 			debugInfo = fmt.Sprintf("Processed %d incremental buffers from %s (seq %d), %d errors",
 				result.ProcessedCount, source.String(), minSeq, result.SkippedCount)
@@ -301,7 +313,7 @@ func (tbc *TopicBrowserCommunicator) processIncrementalBuffers(buffers []*topicb
 	return result, nil
 }
 
-// updateInternalCache processes a single buffer and updates the internal cache maps
+// updateInternalCache processes a single buffer and updates the internal cache maps.
 func (tbc *TopicBrowserCommunicator) updateInternalCache(buf *topicbrowserservice.BufferItem) error {
 	// Unmarshal the protobuf data
 	var ub tbproto.UnsBundle
@@ -313,19 +325,20 @@ func (tbc *TopicBrowserCommunicator) updateInternalCache(buf *topicbrowserservic
 			"component":   "topic_browser_communicator",
 		}
 		sentry.ReportIssueWithContext(err, sentry.IssueTypeError, tbc.logger, context)
+
 		return fmt.Errorf("failed to unmarshal protobuf: %w", err)
 	}
 
 	// Update event map: keep only the latest event per topic
-	for _, entry := range ub.Events.Entries {
-		existing, exists := tbc.eventMap[entry.UnsTreeId]
-		if !exists || entry.ProducedAtMs > existing.ProducedAtMs {
-			tbc.eventMap[entry.UnsTreeId] = entry
+	for _, entry := range ub.GetEvents().GetEntries() {
+		existing, exists := tbc.eventMap[entry.GetUnsTreeId()]
+		if !exists || entry.GetProducedAtMs() > existing.GetProducedAtMs() {
+			tbc.eventMap[entry.GetUnsTreeId()] = entry
 		}
 	}
 
 	// Update topic map
-	for _, entry := range ub.UnsMap.Entries {
+	for _, entry := range ub.GetUnsMap().GetEntries() {
 		hash := HashUNSTableEntry(entry)
 		tbc.unsMap.Entries[hash] = entry
 	}
@@ -335,14 +348,14 @@ func (tbc *TopicBrowserCommunicator) updateInternalCache(buf *topicbrowserservic
 
 // GetSubscriberData prepares topic browser data for UI subscribers
 // For new subscribers (isBootstrapped=false): includes complete cache + incremental data
-// For existing subscribers (isBootstrapped=true): includes only incremental data
+// For existing subscribers (isBootstrapped=true): includes only incremental data.
 func (tbc *TopicBrowserCommunicator) GetSubscriberData(isBootstrapped bool) (*SubscriberData, error) {
 	tbc.mu.RLock()
 	defer tbc.mu.RUnlock()
 
 	data := &SubscriberData{
 		UnsBundles: make(map[int][]byte),
-		TopicCount: len(tbc.unsMap.Entries),
+		TopicCount: len(tbc.unsMap.GetEntries()),
 	}
 
 	index := 0
@@ -354,11 +367,13 @@ func (tbc *TopicBrowserCommunicator) GetSubscriberData(isBootstrapped bool) (*Su
 			data.UnsBundles[0] = cacheBundle
 			index = 1
 		}
+
 		data.Summary = "Prepared cache bundle + "
 	}
 
 	// Add incremental buffers that haven't been sent yet
 	incrementalCount := 0
+
 	for _, buf := range tbc.pendingToSend {
 		if buf.Timestamp.After(tbc.lastSentTimestamp) {
 			data.UnsBundles[index] = buf.Payload
@@ -378,7 +393,7 @@ func (tbc *TopicBrowserCommunicator) GetSubscriberData(isBootstrapped bool) (*Su
 }
 
 // MarkDataAsSent marks data as delivered to subscribers and updates the last sent timestamp
-// This is used for tracking what data has been successfully delivered
+// This is used for tracking what data has been successfully delivered.
 func (tbc *TopicBrowserCommunicator) MarkDataAsSent(timestamp time.Time) {
 	tbc.mu.Lock()
 	defer tbc.mu.Unlock()
@@ -393,7 +408,7 @@ func (tbc *TopicBrowserCommunicator) MarkDataAsSent(timestamp time.Time) {
 	tbc.cleanupOldPendingBuffers()
 }
 
-// cleanupOldPendingBuffers removes old buffers from the pending queue and returns them to pool
+// cleanupOldPendingBuffers removes old buffers from the pending queue and returns them to pool.
 func (tbc *TopicBrowserCommunicator) cleanupOldPendingBuffers() {
 	if len(tbc.pendingToSend) <= tbc.maxPendingBuffers {
 		return
@@ -401,6 +416,7 @@ func (tbc *TopicBrowserCommunicator) cleanupOldPendingBuffers() {
 
 	// Separate buffers: keep newer ones, collect older ones for pool return
 	var buffersToReturn []*topicbrowserservice.BufferItem
+
 	filtered := make([]*topicbrowserservice.BufferItem, 0, len(tbc.pendingToSend))
 
 	for _, buf := range tbc.pendingToSend {
@@ -420,7 +436,7 @@ func (tbc *TopicBrowserCommunicator) cleanupOldPendingBuffers() {
 	}
 }
 
-// getCacheBundle returns the complete cache as a protobuf-encoded UnsBundle
+// getCacheBundle returns the complete cache as a protobuf-encoded UnsBundle.
 func (tbc *TopicBrowserCommunicator) getCacheBundle() []byte {
 	// Create bundle with all current cache data
 	ub := &tbproto.UnsBundle{
@@ -438,7 +454,7 @@ func (tbc *TopicBrowserCommunicator) getCacheBundle() []byte {
 	}
 
 	// Add all topic info from cache
-	for hash, entry := range tbc.unsMap.Entries {
+	for hash, entry := range tbc.unsMap.GetEntries() {
 		ub.UnsMap.Entries[hash] = entry
 	}
 
@@ -446,34 +462,38 @@ func (tbc *TopicBrowserCommunicator) getCacheBundle() []byte {
 	encoded, err := proto.Marshal(ub)
 	if err != nil {
 		tbc.logger.Errorf("Failed to marshal cache bundle: %v", err)
+
 		context := map[string]interface{}{
 			"operation":    "marshal_cache_bundle",
-			"events_count": len(ub.Events.Entries),
-			"unsmap_count": len(ub.UnsMap.Entries),
+			"events_count": len(ub.GetEvents().GetEntries()),
+			"unsmap_count": len(ub.GetUnsMap().GetEntries()),
 			"component":    "topic_browser_communicator",
 		}
 		sentry.ReportIssueWithContext(err, sentry.IssueTypeError, tbc.logger, context)
+
 		return nil
 	}
 
 	return encoded
 }
 
-// GetTopicCount returns the current number of topics in the cache
+// GetTopicCount returns the current number of topics in the cache.
 func (tbc *TopicBrowserCommunicator) GetTopicCount() int {
 	tbc.mu.RLock()
 	defer tbc.mu.RUnlock()
-	return len(tbc.unsMap.Entries)
+
+	return len(tbc.unsMap.GetEntries())
 }
 
-// GetLastProcessedSequence returns the last processed buffer sequence number (for testing/debugging)
+// GetLastProcessedSequence returns the last processed buffer sequence number (for testing/debugging).
 func (tbc *TopicBrowserCommunicator) GetLastProcessedSequence() uint64 {
 	tbc.mu.RLock()
 	defer tbc.mu.RUnlock()
+
 	return tbc.lastProcessedSequence
 }
 
-// GetEventMap returns a copy of the internal event map (for testing)
+// GetEventMap returns a copy of the internal event map (for testing).
 func (tbc *TopicBrowserCommunicator) GetEventMap() map[string]*tbproto.EventTableEntry {
 	tbc.mu.RLock()
 	defer tbc.mu.RUnlock()
@@ -482,10 +502,11 @@ func (tbc *TopicBrowserCommunicator) GetEventMap() map[string]*tbproto.EventTabl
 	for k, v := range tbc.eventMap {
 		eventMapCopy[k] = v
 	}
+
 	return eventMapCopy
 }
 
-// GetUnsMap returns a copy of the internal topic map (for testing)
+// GetUnsMap returns a copy of the internal topic map (for testing).
 func (tbc *TopicBrowserCommunicator) GetUnsMap() *tbproto.TopicMap {
 	tbc.mu.RLock()
 	defer tbc.mu.RUnlock()
@@ -493,8 +514,9 @@ func (tbc *TopicBrowserCommunicator) GetUnsMap() *tbproto.TopicMap {
 	unsMapCopy := &tbproto.TopicMap{
 		Entries: make(map[string]*tbproto.TopicInfo),
 	}
-	for k, v := range tbc.unsMap.Entries {
+	for k, v := range tbc.unsMap.GetEntries() {
 		unsMapCopy.Entries[k] = v
 	}
+
 	return unsMapCopy
 }

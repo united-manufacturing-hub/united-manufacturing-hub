@@ -38,8 +38,8 @@ import (
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/mem"
 
-	. "github.com/onsi/ginkgo/v2" // nolint: staticcheck // Ginkgo is designed to be used with dot imports
-	. "github.com/onsi/gomega"    // nolint: staticcheck // Gomega is designed to be used with dot imports
+	. "github.com/onsi/ginkgo/v2" //nolint: staticcheck // Ginkgo is designed to be used with dot imports
+	. "github.com/onsi/gomega"    //nolint: staticcheck // Gomega is designed to be used with dot imports
 )
 
 // monitorHealth checks the metrics and golden service.
@@ -92,38 +92,44 @@ func printSystemInformation() {
 	}
 }
 
-// failOnMetricsHealthIssue expects the metrics to be healthy, otherwise it fails the test
+// failOnMetricsHealthIssue expects the metrics to be healthy, otherwise it fails the test.
 func failOnMetricsHealthIssue() {
 	data, err := getMetricsHealth()
 	Expect(err).NotTo(HaveOccurred(), "Metrics endpoint should be healthy")
+
 	metricsErrors := checkWhetherMetricsHealthy(string(data), true, true)
 	Expect(metricsErrors).To(BeEmpty(), "Metrics should be healthy")
 }
 
-// reportOnMetricsHealthIssue is similar to failOnMetricsHealthIssue, but it returns an error instead of failing the test, allowing the caller to handle it
+// reportOnMetricsHealthIssue is similar to failOnMetricsHealthIssue, but it returns an error instead of failing the test, allowing the caller to handle it.
 func reportOnMetricsHealthIssue(enforceP99ReconcileTime bool, enforceP95ReconcileTime bool) error {
 	data, err := getMetricsHealth()
 	if err != nil {
 		return fmt.Errorf("failed to get metrics: %w", err)
 	}
+
 	metricsErrors := checkWhetherMetricsHealthy(string(data), enforceP99ReconcileTime, enforceP95ReconcileTime)
 	if len(metricsErrors) > 0 {
 		return fmt.Errorf("metrics are not healthy: %v", metricsErrors)
 	}
+
 	return nil
 }
 
 func getMetricsHealth() ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, "GET", GetMetricsURL(), nil)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, GetMetricsURL(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
+
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get metrics: %w", err)
 	}
+
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
 			Fail(fmt.Sprintf("Error closing response body: %v\n", err))
@@ -142,19 +148,23 @@ func getMetricsHealth() ([]byte, error) {
 	return data, nil
 }
 
-// checkGoldenService sends a test request to the golden service and checks that it returns a 200 status code
+// checkGoldenService sends a test request to the golden service and checks that it returns a 200 status code.
 func checkGoldenService() (int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, "POST", GetGoldenServiceURL(), bytes.NewBuffer([]byte(`{"message": "test"}`)))
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, GetGoldenServiceURL(), bytes.NewBufferString(`{"message": "test"}`))
 	if err != nil {
 		return 0, fmt.Errorf("failed to create request: %w", err)
 	}
+
 	req.Header.Set("Content-Type", "application/json")
+
 	checkResp, e := http.DefaultClient.Do(req)
 	if e != nil {
 		return 0, fmt.Errorf("failed to send request: %w", e)
 	}
+
 	defer func() {
 		if err := checkResp.Body.Close(); err != nil {
 			Fail(fmt.Sprintf("Error closing response body: %v\n", err))
@@ -164,12 +174,13 @@ func checkGoldenService() (int, error) {
 	return checkResp.StatusCode, nil
 }
 
-// checkGoldenServiceWithFailure sends a test request to the golden service and fails the test if it doesn't return 200
+// checkGoldenServiceWithFailure sends a test request to the golden service and fails the test if it doesn't return 200.
 func checkGoldenServiceWithFailure() {
 	statusCode, err := checkGoldenService()
 	if err != nil {
 		Fail(fmt.Sprintf("failed to check golden service: %v\n", err))
 	}
+
 	if statusCode != 200 {
 		Fail(fmt.Sprintf("Golden service returned status: %d", statusCode))
 	}
@@ -183,7 +194,7 @@ func checkGoldenServiceStatusOnly() int {
 	return statusCode
 }
 
-// waitForMetrics polls the /metrics endpoint until it returns 200
+// waitForMetrics polls the /metrics endpoint until it returns 200.
 func waitForMetrics() error {
 	startTime := time.Now()
 
@@ -192,10 +203,12 @@ func waitForMetrics() error {
 	fmt.Printf("Container name: %s\n", getContainerName())
 
 	// Track errors for better debugging
-	var lastError error
-	var consecutiveErrors int
-	var totalAttempts int
-	var lastURL string
+	var (
+		lastError         error
+		consecutiveErrors int
+		totalAttempts     int
+		lastURL           string
+	)
 
 	Eventually(func() error {
 		totalAttempts++
@@ -208,7 +221,7 @@ func waitForMetrics() error {
 		// The URL detection and logging is now handled by GetMetricsURL()
 		fmt.Printf("Attempt %d: Connecting to metrics...\n", totalAttempts)
 
-		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		if err != nil {
 			lastError = fmt.Errorf("failed to create request to %s: %w", url, err)
 			consecutiveErrors++
@@ -223,6 +236,7 @@ func waitForMetrics() error {
 					printContainerDebugInfo()
 				}
 			}
+
 			return lastError
 		}
 
@@ -241,6 +255,7 @@ func waitForMetrics() error {
 					printContainerDebugInfo()
 				}
 			}
+
 			return lastError
 		}
 		defer func() {
@@ -252,6 +267,7 @@ func waitForMetrics() error {
 		if resp.StatusCode != http.StatusOK {
 			lastError = fmt.Errorf("metrics endpoint returned status %d", resp.StatusCode)
 			consecutiveErrors++
+
 			return lastError
 		}
 
@@ -259,6 +275,7 @@ func waitForMetrics() error {
 		consecutiveErrors = 0
 		fmt.Printf("Successfully connected to metrics endpoint (%s) after %v (%d attempts)\n",
 			url, time.Since(startTime), totalAttempts)
+
 		return nil
 	}, 60*time.Second, 1*time.Second).Should(Succeed(), func() string {
 		// If we're still failing after 60 seconds, print detailed debug info

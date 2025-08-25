@@ -32,8 +32,43 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
-// MockRedpandaService is a mock implementation of the IRedpandaService interface for testing
+// MockRedpandaService is a mock implementation of the IRedpandaService interface for testing.
 type MockRedpandaService struct {
+	GenerateS6ConfigForRedpandaError error
+	GetConfigError                   error
+	StatusError                      error
+	AddRedpandaToS6ManagerError      error
+	UpdateRedpandaInS6ManagerError   error
+	RemoveRedpandaFromS6ManagerError error
+	StartRedpandaError               error
+	StopRedpandaError                error
+	ReconcileManagerError            error
+	ForceRemoveRedpandaError         error
+	UpdateRedpandaClusterConfigError error
+
+	// HTTP client for mocking HTTP requests
+	HTTPClient httpclient.HTTPClient
+
+	// S6 service mock
+	S6Service s6service.Service
+
+	// Configuration to return on method calls
+	FileSystemMock filesystem.Service // Mock filesystem service
+	// For more complex testing scenarios
+	ServiceState *ServiceInfo
+
+	// State control for FSM testing
+	stateFlags *ServiceStateFlags
+
+	S6ServiceConfigs []config.S6FSMConfig
+
+	// Return values for each method
+	GenerateS6ConfigForRedpandaResult s6serviceconfig.S6ServiceConfig
+
+	GetConfigResult redpandaserviceconfig.RedpandaServiceConfig
+
+	StatusResult ServiceInfo
+
 	// Tracks calls to methods
 	GenerateS6ConfigForRedpandaCalled bool
 	GetConfigCalled                   bool
@@ -51,46 +86,17 @@ type MockRedpandaService struct {
 	ForceRemoveRedpandaCalled         bool
 	UpdateRedpandaClusterConfigCalled bool
 
-	// Return values for each method
-	GenerateS6ConfigForRedpandaResult s6serviceconfig.S6ServiceConfig
-	GenerateS6ConfigForRedpandaError  error
-	GetConfigResult                   redpandaserviceconfig.RedpandaServiceConfig
-	GetConfigError                    error
-	StatusResult                      ServiceInfo
-	StatusError                       error
-	AddRedpandaToS6ManagerError       error
-	UpdateRedpandaInS6ManagerError    error
-	RemoveRedpandaFromS6ManagerError  error
-	StartRedpandaError                error
-	StopRedpandaError                 error
-	ReconcileManagerError             error
-	ReconcileManagerReconciled        bool
-	ServiceExistsResult               bool
-	ForceRemoveRedpandaError          error
-	UpdateRedpandaClusterConfigError  error
-	// For more complex testing scenarios
-	ServiceState      *ServiceInfo
-	ServiceExistsFlag bool
-	S6ServiceConfigs  []config.S6FSMConfig
-
-	// State control for FSM testing
-	stateFlags *ServiceStateFlags
-
-	// HTTP client for mocking HTTP requests
-	HTTPClient httpclient.HTTPClient
-
-	// S6 service mock
-	S6Service s6service.Service
-
-	// Configuration to return on method calls
-	FileSystemMock filesystem.Service // Mock filesystem service
+	ReconcileManagerReconciled bool
+	ServiceExistsResult        bool
+	ServiceExistsFlag          bool
 }
 
-// Ensure MockRedpandaService implements IRedpandaService
+// Ensure MockRedpandaService implements IRedpandaService.
 var _ IRedpandaService = (*MockRedpandaService)(nil)
 
-// ServiceStateFlags contains all the state flags needed for FSM testing
+// ServiceStateFlags contains all the state flags needed for FSM testing.
 type ServiceStateFlags struct {
+	S6FSMState             string
 	IsS6Running            bool
 	IsConfigLoaded         bool
 	IsHealthchecksPassed   bool
@@ -98,10 +104,9 @@ type ServiceStateFlags struct {
 	HasProcessingActivity  bool
 	IsDegraded             bool
 	IsS6Stopped            bool
-	S6FSMState             string
 }
 
-// NewMockRedpandaService creates a new mock Redpanda service
+// NewMockRedpandaService creates a new mock Redpanda service.
 func NewMockRedpandaService() *MockRedpandaService {
 	return &MockRedpandaService{
 		ServiceState:      nil,
@@ -112,7 +117,7 @@ func NewMockRedpandaService() *MockRedpandaService {
 	}
 }
 
-// SetServiceState sets all state flags at once
+// SetServiceState sets all state flags at once.
 func (m *MockRedpandaService) SetServiceState(flags ServiceStateFlags) {
 	// Initialize ServiceInfo if not exists
 	if m.ServiceState == nil {
@@ -132,18 +137,19 @@ func (m *MockRedpandaService) SetServiceState(flags ServiceStateFlags) {
 	m.stateFlags = &flags
 }
 
-// GetServiceState gets the state flags
+// GetServiceState gets the state flags.
 func (m *MockRedpandaService) GetServiceState() *ServiceStateFlags {
 	return m.stateFlags
 }
 
-// GenerateS6ConfigForRedpanda mocks generating S6 config for Redpanda
+// GenerateS6ConfigForRedpanda mocks generating S6 config for Redpanda.
 func (m *MockRedpandaService) GenerateS6ConfigForRedpanda(redpandaConfig *redpandaserviceconfig.RedpandaServiceConfig, redpandaName string) (s6serviceconfig.S6ServiceConfig, error) {
 	m.GenerateS6ConfigForRedpandaCalled = true
+
 	return m.GenerateS6ConfigForRedpandaResult, m.GenerateS6ConfigForRedpandaError
 }
 
-// GetConfig mocks getting the Redpanda configuration
+// GetConfig mocks getting the Redpanda configuration.
 func (m *MockRedpandaService) GetConfig(ctx context.Context, filesystemService filesystem.Service, redpandaName string, tick uint64, loopStartTime time.Time) (redpandaserviceconfig.RedpandaServiceConfig, error) {
 	m.GetConfigCalled = true
 
@@ -164,10 +170,11 @@ func (m *MockRedpandaService) GetConfig(ctx context.Context, filesystemService f
 	config.Topic.DefaultTopicCompressionAlgorithm = "snappy"
 	config.Topic.DefaultTopicCleanupPolicy = "compact"
 	config.Topic.DefaultTopicSegmentMs = 3600000 // 1 hour
+
 	return config, nil
 }
 
-// Status mocks getting the status of a Redpanda service
+// Status mocks getting the status of a Redpanda service.
 func (m *MockRedpandaService) Status(ctx context.Context, filesystemService filesystem.Service, redpandaName string, tick uint64, loopStartTime time.Time) (ServiceInfo, error) {
 	m.StatusCalled = true
 
@@ -185,7 +192,7 @@ func (m *MockRedpandaService) Status(ctx context.Context, filesystemService file
 	return m.StatusResult, m.StatusError
 }
 
-// AddRedpandaToS6Manager mocks adding a Redpanda instance to the S6 manager
+// AddRedpandaToS6Manager mocks adding a Redpanda instance to the S6 manager.
 func (m *MockRedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig, filesystemService filesystem.Service, redpandaName string) error {
 	m.AddRedpandaToS6ManagerCalled = true
 
@@ -229,7 +236,7 @@ func (m *MockRedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *r
 	return m.AddRedpandaToS6ManagerError
 }
 
-// UpdateRedpandaInS6Manager mocks updating an existing Redpanda instance in the S6 manager
+// UpdateRedpandaInS6Manager mocks updating an existing Redpanda instance in the S6 manager.
 func (m *MockRedpandaService) UpdateRedpandaInS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig, redpandaName string) error {
 	m.UpdateRedpandaInS6ManagerCalled = true
 
@@ -237,10 +244,12 @@ func (m *MockRedpandaService) UpdateRedpandaInS6Manager(ctx context.Context, cfg
 	s6ServiceName := redpandaName
 	found := false
 	index := -1
+
 	for i, s6Config := range m.S6ServiceConfigs {
 		if s6Config.Name == s6ServiceName {
 			found = true
 			index = i
+
 			break
 		}
 	}
@@ -255,7 +264,7 @@ func (m *MockRedpandaService) UpdateRedpandaInS6Manager(ctx context.Context, cfg
 	return m.UpdateRedpandaInS6ManagerError
 }
 
-// RemoveRedpandaFromS6Manager mocks removing a Redpanda instance from the S6 manager
+// RemoveRedpandaFromS6Manager mocks removing a Redpanda instance from the S6 manager.
 func (m *MockRedpandaService) RemoveRedpandaFromS6Manager(ctx context.Context, redpandaName string) error {
 	m.RemoveRedpandaFromS6ManagerCalled = true
 
@@ -267,6 +276,7 @@ func (m *MockRedpandaService) RemoveRedpandaFromS6Manager(ctx context.Context, r
 		if s6Config.Name == s6ServiceName {
 			m.S6ServiceConfigs = append(m.S6ServiceConfigs[:i], m.S6ServiceConfigs[i+1:]...)
 			found = true
+
 			break
 		}
 	}
@@ -281,7 +291,7 @@ func (m *MockRedpandaService) RemoveRedpandaFromS6Manager(ctx context.Context, r
 	return m.RemoveRedpandaFromS6ManagerError
 }
 
-// StartRedpanda mocks starting a Redpanda instance
+// StartRedpanda mocks starting a Redpanda instance.
 func (m *MockRedpandaService) StartRedpanda(ctx context.Context, redpandaName string) error {
 	m.StartRedpandaCalled = true
 
@@ -293,6 +303,7 @@ func (m *MockRedpandaService) StartRedpanda(ctx context.Context, redpandaName st
 		if s6Config.Name == s6ServiceName {
 			m.S6ServiceConfigs[i].DesiredFSMState = s6_fsm.OperationalStateRunning
 			found = true
+
 			break
 		}
 	}
@@ -304,7 +315,7 @@ func (m *MockRedpandaService) StartRedpanda(ctx context.Context, redpandaName st
 	return m.StartRedpandaError
 }
 
-// StopRedpanda mocks stopping a Redpanda instance
+// StopRedpanda mocks stopping a Redpanda instance.
 func (m *MockRedpandaService) StopRedpanda(ctx context.Context, redpandaName string) error {
 	m.StopRedpandaCalled = true
 
@@ -316,6 +327,7 @@ func (m *MockRedpandaService) StopRedpanda(ctx context.Context, redpandaName str
 		if s6Config.Name == s6ServiceName {
 			m.S6ServiceConfigs[i].DesiredFSMState = s6_fsm.OperationalStateStopped
 			found = true
+
 			break
 		}
 	}
@@ -327,46 +339,51 @@ func (m *MockRedpandaService) StopRedpanda(ctx context.Context, redpandaName str
 	return m.StopRedpandaError
 }
 
-// ReconcileManager mocks reconciling the Redpanda manager
+// ReconcileManager mocks reconciling the Redpanda manager.
 func (m *MockRedpandaService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (error, bool) {
 	m.ReconcileManagerCalled = true
+
 	return m.ReconcileManagerError, m.ReconcileManagerReconciled
 }
 
-// IsLogsFine mocks checking if the logs are fine
+// IsLogsFine mocks checking if the logs are fine.
 func (m *MockRedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration, transitionToRunningTime time.Time) (bool, s6service.LogEntry) {
 	m.IsLogsFineCalled = true
 	// For testing purposes, we'll consider logs fine if they're empty or nil
 	return len(logs) == 0, s6service.LogEntry{}
 }
 
-// IsMetricsErrorFree mocks checking if metrics are error-free
+// IsMetricsErrorFree mocks checking if metrics are error-free.
 func (m *MockRedpandaService) IsMetricsErrorFree(metrics redpanda_monitor.Metrics) (bool, string) {
 	m.IsMetricsErrorFreeCalled = true
 	// For testing purposes, we'll consider metrics error-free
 	return !metrics.Infrastructure.Storage.FreeSpaceAlert, ""
 }
 
-// HasProcessingActivity mocks checking if a Redpanda service has processing activity
+// HasProcessingActivity mocks checking if a Redpanda service has processing activity.
 func (m *MockRedpandaService) HasProcessingActivity(status RedpandaStatus) (bool, string) {
 	m.HasProcessingActivityCalled = true
+
 	return status.RedpandaMetrics.MetricsState != nil && status.RedpandaMetrics.MetricsState.IsActive, ""
 }
 
-// ServiceExists mocks checking if a Redpanda service exists
+// ServiceExists mocks checking if a Redpanda service exists.
 func (m *MockRedpandaService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, redpandaName string) bool {
 	m.ServiceExistsCalled = true
+
 	return m.ServiceExistsResult
 }
 
-// ForceRemoveRedpanda mocks forcefully removing a Redpanda instance
+// ForceRemoveRedpanda mocks forcefully removing a Redpanda instance.
 func (m *MockRedpandaService) ForceRemoveRedpanda(ctx context.Context, filesystemService filesystem.Service, redpandaName string) error {
 	m.ForceRemoveRedpandaCalled = true
+
 	return m.ForceRemoveRedpandaError
 }
 
-// UpdateRedpandaClusterConfig mocks updating the cluster config of a Redpanda instance
+// UpdateRedpandaClusterConfig mocks updating the cluster config of a Redpanda instance.
 func (m *MockRedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpandaName string, configUpdates map[string]interface{}) error {
 	m.UpdateRedpandaClusterConfigCalled = true
+
 	return m.UpdateRedpandaClusterConfigError
 }

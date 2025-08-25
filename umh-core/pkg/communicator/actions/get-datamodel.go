@@ -46,17 +46,18 @@ import (
 // GetDataModelAction implements the Action interface for retrieving an existing Data Model.
 // All fields are immutable after construction to avoid race conditions.
 type GetDataModelAction struct {
-	userEmail    string
-	actionUUID   uuid.UUID
-	instanceUUID uuid.UUID
+	configManager config.ConfigManager
 
 	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager
+
+	actionLogger *zap.SugaredLogger
+	userEmail    string
 
 	// Parsed request payload (only populated after Parse)
 	payload models.GetDataModelPayload
 
-	actionLogger *zap.SugaredLogger
+	actionUUID   uuid.UUID
+	instanceUUID uuid.UUID
 }
 
 // NewGetDataModelAction returns an un-parsed action instance.
@@ -76,7 +77,7 @@ func (a *GetDataModelAction) Parse(payload interface{}) error {
 	// Parse the payload to get the data model name
 	parsedPayload, err := ParseActionPayload[models.GetDataModelPayload](payload)
 	if err != nil {
-		return fmt.Errorf("failed to parse payload: %v", err)
+		return fmt.Errorf("failed to parse payload: %w", err)
 	}
 
 	a.payload = parsedPayload
@@ -115,14 +116,17 @@ func (a *GetDataModelAction) Execute() (interface{}, map[string]interface{}, err
 		errorMsg := fmt.Sprintf("Failed to get configuration: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.GetDataModel)
+
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
 	// Find the data model by name
 	var foundDataModel *config.DataModelsConfig
+
 	for _, dmc := range fullConfig.DataModels {
 		if dmc.Name == a.payload.Name {
 			foundDataModel = &dmc
+
 			break
 		}
 	}
@@ -131,6 +135,7 @@ func (a *GetDataModelAction) Execute() (interface{}, map[string]interface{}, err
 		errorMsg := fmt.Sprintf("Data model with name %q not found", a.payload.Name)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.GetDataModel)
+
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
@@ -146,6 +151,7 @@ func (a *GetDataModelAction) Execute() (interface{}, map[string]interface{}, err
 			errorMsg := fmt.Sprintf("Failed to marshal data model structure for version %s: %v", versionKey, err)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 				errorMsg, a.outboundChannel, models.GetDataModel)
+
 			return nil, nil, fmt.Errorf("%s", errorMsg)
 		}
 
@@ -168,7 +174,7 @@ func (a *GetDataModelAction) Execute() (interface{}, map[string]interface{}, err
 	return response, nil, nil
 }
 
-// convertConfigFieldsToModelsFields converts config.Field map to models.Field map recursively
+// convertConfigFieldsToModelsFields converts config.Field map to models.Field map recursively.
 func (a *GetDataModelAction) convertConfigFieldsToModelsFields(configFields map[string]config.Field, fullConfig *config.FullConfig, visited map[string]bool) map[string]models.Field {
 	modelsFields := make(map[string]models.Field)
 
@@ -204,10 +210,12 @@ func (a *GetDataModelAction) convertConfigFieldsToModelsFields(configFields map[
 							if subfields == nil {
 								subfields = make(map[string]models.Field)
 							}
+
 							for enrichedKey, enrichedField := range enrichedFields {
 								subfields[enrichedKey] = enrichedField
 							}
 						}
+
 						break
 					}
 				}

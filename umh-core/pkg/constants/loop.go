@@ -20,18 +20,18 @@ import (
 )
 
 const (
-	// DefaultTickerTime is the default time between ticks
+	// DefaultTickerTime is the default time between ticks.
 	DefaultTickerTime = 100 * time.Millisecond
 
 	// Time budget percentages for parallel execution
 	// These percentages are applied to whatever context time budget is available,
-	// naturally creating a hierarchy without hardcoded absolute timeouts
+	// naturally creating a hierarchy without hardcoded absolute timeouts.
 	ControlLoopReservePercent  = 0.25 // 25% overhead for control loop coordination
 	ManagerReservePercent      = 0.05 // 5% overhead per manager execution
 	UpdateObservedStatePercent = 0.80 // 80% of manager time for I/O operations (parsing logs, health checks, metrics)
-	// Remaining 20% automatically goes to reconciliation logic (FSM transitions, event sending)
+	// Remaining 20% automatically goes to reconciliation logic (FSM transitions, event sending).
 
-	// Legacy constants - to be removed
+	// Legacy constants - to be removed.
 	LoopControlLoopTimeFactor = 1.0 - ControlLoopReservePercent
 
 	StarvationLimit = 5
@@ -44,7 +44,7 @@ const (
 	// at once.
 	StarvationThreshold = 15 * time.Second
 
-	// Default names
+	// Default names.
 	DefaultManagerName  = "Core"
 	DefaultInstanceName = "Core"
 
@@ -52,7 +52,7 @@ const (
 
 	// MaxConcurrentFSMOperations defines the maximum number of concurrent FSM operations
 	// This applies to both manager-level and instance-level parallel execution
-	// Set high for I/O-bound operations like filesystem access, health checks, and network calls
+	// Set high for I/O-bound operations like filesystem access, health checks, and network calls.
 	MaxConcurrentFSMOperations = 1000
 )
 
@@ -77,6 +77,7 @@ func CreateSubContext(parentCtx context.Context, percentage float64) (context.Co
 	}
 
 	subTime := time.Duration(float64(remainingTime) * percentage)
+
 	return context.WithTimeout(parentCtx, subTime)
 }
 
@@ -141,5 +142,5 @@ func CreateManagerContext(controlLoopCtx context.Context) (context.Context, cont
 
 // FilesAndDirectoriesToIgnore is a list of files and directories that we will not read.
 // All older archived logs begin with @40000000
-// As we retain up to 20 logs, this will otherwise lead to reading a lot of logs
+// As we retain up to 20 logs, this will otherwise lead to reading a lot of logs.
 var FilesAndDirectoriesToIgnore = []string{".s6-svscan", "s6-linux-init-shutdown", "s6rc-fdholder", "s6rc-oneshot-runner", "syslogd", "syslogd-log", "/control", "/lock", "@40000000"}

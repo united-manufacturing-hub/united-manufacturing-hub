@@ -64,7 +64,7 @@ var _ = Describe("Translator", func() {
 					nil, // No model references
 				)
 
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).ToNot(BeNil())
 				Expect(result.Schemas).To(HaveLen(tc.expectedSchemas))
 
@@ -205,17 +205,17 @@ var _ = Describe("Translator", func() {
 				nil, // No model references
 			)
 
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			subjectName := "_pump_data_v1-timeseries-number"
 			jsonBytes, err := result.GetSchemaAsJSON(subjectName)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(jsonBytes).ToNot(BeEmpty())
 
 			// Verify it's valid JSON
 			var parsedSchema map[string]interface{}
 			err = json.Unmarshal(jsonBytes, &parsedSchema)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(parsedSchema["type"]).To(Equal("object"))
 		})
 
@@ -267,7 +267,7 @@ var _ = Describe("Translator", func() {
 					nil, // No model references
 				)
 
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).ToNot(BeNil())
 				Expect(result.Schemas).To(HaveLen(tc.expectedSchemas))
 
@@ -417,7 +417,7 @@ var _ = Describe("Translator", func() {
 				allDataModels, // Provide model references
 			)
 
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result.Schemas).To(HaveLen(1)) // Only timeseries-number
 
 			// Check that all virtual paths are included (flattened from reference)
@@ -648,7 +648,7 @@ var _ = Describe("Translator", func() {
 				allDataModels,
 			)
 
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).ToNot(BeNil())
 
 			// Should resolve the deep chain correctly

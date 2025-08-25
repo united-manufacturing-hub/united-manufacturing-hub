@@ -15,8 +15,9 @@
 package runtime_config_test
 
 import (
-	"fmt"
+	"context"
 	"os"
+	"strconv"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -45,7 +46,8 @@ var _ = Describe("BuildRuntimeConfig", func() {
 		Expect(err).NotTo(HaveOccurred(), "Failed to read example config file")
 
 		// Use the config manager's parseConfig function to properly handle templates and anchors
-		fullConfig, err := config.ParseConfig(data, true) // Allow unknown fields for template handling
+		ctx := context.Background()
+		fullConfig, err := config.ParseConfig(data, ctx, true) // Allow unknown fields for template handling
 		Expect(err).NotTo(HaveOccurred(), "Failed to parse example config")
 
 		// Extract the first protocol converter (temperature-sensor-pc)
@@ -59,7 +61,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 		// Extract agent location from the config
 		agentLocation = map[string]string{}
 		for k, v := range fullConfig.Agent.Location {
-			agentLocation[fmt.Sprintf("%d", k)] = v
+			agentLocation[strconv.Itoa(k)] = v
 		}
 
 		// Set up test data

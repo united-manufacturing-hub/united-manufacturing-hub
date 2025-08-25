@@ -21,7 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
-// FSMActions defines the standard lifecycle actions that all FSM instances should implement
+// FSMActions defines the standard lifecycle actions that all FSM instances should implement.
 type FSMInstanceActions interface {
 	// CreateInstance initiates the creation of a managed instance
 	CreateInstance(ctx context.Context, filesystemService filesystem.Service) error

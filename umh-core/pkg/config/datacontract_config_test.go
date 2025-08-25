@@ -84,6 +84,7 @@ dataContracts:
 
 				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
 					writtenData = data
+
 					return nil
 				})
 
@@ -101,14 +102,17 @@ dataContracts:
 					},
 				}
 
-				err := configManager.AtomicAddDataContract(ctx, dataContract)
-				Expect(err).NotTo(HaveOccurred())
+				Eventually(func() error {
+					err := configManager.AtomicAddDataContract(ctx, dataContract)
+
+					return err
+				}, TimeToWaitForConfigRefresh*2, "10ms").Should(Succeed())
 
 				// Verify the written data
 				Expect(writtenData).NotTo(BeEmpty())
 
 				// Parse the written data to verify it contains the data contract
-				writtenConfig, err := ParseConfig(writtenData, false)
+				writtenConfig, err := ParseConfig(writtenData, ctx, false)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(writtenConfig.DataContracts).To(HaveLen(1))
 				Expect(writtenConfig.DataContracts[0].Name).To(Equal("test-contract"))
@@ -141,7 +145,11 @@ dataContracts:
 					},
 				}
 
+				_, _ = configManager.GetConfig(ctx, 0) // get the config to trigger the background refresh
+				time.Sleep(100 * time.Millisecond)     // wait for the background refresh to finish
+
 				err := configManager.AtomicAddDataContract(ctx, dataContract)
+
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("another data contract with name \"existing-contract\" already exists"))
 			})

@@ -44,17 +44,17 @@ HTTPErrorHandler Design Philosophy:
 
 */
 
-// HTTPErrorContext contains all relevant information about an HTTP error
+// HTTPErrorContext contains all relevant information about an HTTP error.
 type HTTPErrorContext struct {
-	Method      string
-	Endpoint    string
-	StatusCode  int
+	Timestamp   time.Time
 	Error       error
 	RequestBody interface{}
-	Response    []byte
-	Timestamp   time.Time
 	Headers     map[string][]string // Response headers
-	Duration    time.Duration       // Request duration
+	Method      string
+	Endpoint    string
+	Response    []byte
+	StatusCode  int
+	Duration    time.Duration // Request duration
 }
 
 // transientErrorCodes defines HTTP status codes that typically indicate temporary issues.
@@ -82,7 +82,7 @@ var (
 	transientErrorCountMapMux sync.Mutex
 )
 
-// ReportHTTPErrors processes and reports HTTP errors with detailed context
+// ReportHTTPErrors processes and reports HTTP errors with detailed context.
 func ReportHTTPErrors(err error, status int, endpoint string, method string, requestBody interface{}, responseBody []byte) {
 	ctx := HTTPErrorContext{
 		Method:      method,
@@ -100,14 +100,17 @@ func ReportHTTPErrors(err error, status int, endpoint string, method string, req
 	// Always report invalid status codes
 	if status < 200 || status > 999 {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), errorMessage, additionalContext)
+
 		return
 	}
 
 	// Handle transient errors
 	if slices.Contains(transientErrorCodes, status) {
 		transientErrorCountMapMux.Lock()
+
 		transientErrorCountMap[status]++
 		count := transientErrorCountMap[status]
+
 		transientErrorCountMapMux.Unlock()
 
 		if count >= transientErrorThreshold {
@@ -116,6 +119,7 @@ func ReportHTTPErrors(err error, status int, endpoint string, method string, req
 				additionalContext,
 			)
 		}
+
 		return
 	}
 
@@ -123,7 +127,7 @@ func ReportHTTPErrors(err error, status int, endpoint string, method string, req
 	sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), errorMessage, additionalContext)
 }
 
-// buildErrorMessage creates a detailed error message
+// buildErrorMessage creates a detailed error message.
 func buildErrorMessage(ctx HTTPErrorContext) string {
 	return fmt.Sprintf("%s %s - Status: %d - Error: %v",
 		ctx.Method,
@@ -133,7 +137,7 @@ func buildErrorMessage(ctx HTTPErrorContext) string {
 	)
 }
 
-// buildErrorContext creates a map of additional context information
+// buildErrorContext creates a map of additional context information.
 func buildErrorContext(ctx HTTPErrorContext) map[string]interface{} {
 	return map[string]interface{}{
 		"HTTP": map[string]interface{}{
@@ -150,8 +154,10 @@ func buildErrorContext(ctx HTTPErrorContext) map[string]interface{} {
 // This is called by successful actions, to reset the error counters.
 func ResetErrorCounter() {
 	transientErrorCountMapMux.Lock()
+
 	for k := range transientErrorCountMap {
 		delete(transientErrorCountMap, k)
 	}
+
 	transientErrorCountMapMux.Unlock()
 }

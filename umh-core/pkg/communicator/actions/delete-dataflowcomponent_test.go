@@ -16,6 +16,7 @@ package actions_test
 
 import (
 	"errors"
+	"sync"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
@@ -43,6 +44,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 		componentUUID   uuid.UUID
 		stateMocker     *actions.StateMocker
 		messages        []*models.UMHMessage
+		mu              sync.Mutex
 	)
 
 	// Setup before each test
@@ -83,7 +85,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 		mockStateManager := stateMocker.GetStateManager()
 		action = actions.NewDeleteDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockStateManager)
 
-		go actions.ConsumeOutboundMessages(outboundChannel, &messages, true)
+		go actions.ConsumeOutboundMessages(outboundChannel, &messages, &mu, true)
 
 	})
 
@@ -178,7 +180,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 			Expect(mockConfig.DeleteDataflowcomponentCalled).To(BeTrue())
 
 			// Verify expected configuration changes
-			Expect(mockConfig.Config.DataFlow).To(HaveLen(0))
+			Expect(mockConfig.Config.DataFlow).To(BeEmpty())
 		})
 
 		It("should handle AtomicDeleteDataflowcomponent failure", func() {
@@ -208,7 +210,9 @@ var _ = Describe("DeleteDataflowComponent", func() {
 			stateMocker.Stop()
 
 			// Verify the failure message content
+			mu.Lock()
 			decodedMessage, err := encoding.DecodeMessageFromUMHInstanceToUser(messages[1].Content)
+			mu.Unlock()
 			Expect(err).NotTo(HaveOccurred())
 
 			// Extract the ActionReplyPayload from the decoded message

@@ -20,16 +20,18 @@ import (
 	"path/filepath"
 	"time"
 
+	"errors"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 // ForceCleanup performs aggressive cleanup for stuck services
 // Uses comprehensive cleanup approach:
 // - Process termination and supervisor killing
-// - Comprehensive artifact removal
+// - Comprehensive artifact removal.
 func (s *DefaultService) ForceCleanup(ctx context.Context, artifacts *ServiceArtifacts, fsService filesystem.Service) error {
 	if s == nil {
-		return fmt.Errorf("lifecycle manager is nil")
+		return errors.New("lifecycle manager is nil")
 	}
 
 	if ctx.Err() != nil {
@@ -37,7 +39,7 @@ func (s *DefaultService) ForceCleanup(ctx context.Context, artifacts *ServiceArt
 	}
 
 	if artifacts == nil {
-		return fmt.Errorf("artifacts is nil")
+		return errors.New("artifacts is nil")
 	}
 
 	s.logger.Warnf("Force cleaning service artifacts: service=%s, files=%d",
@@ -82,6 +84,7 @@ func (s *DefaultService) ForceCleanup(ctx context.Context, artifacts *ServiceArt
 	}
 
 	s.logger.Infof("Force cleanup completed for service: %s", filepath.Base(artifacts.ServiceDir))
+
 	return nil
 }
 
@@ -100,10 +103,12 @@ func (s *DefaultService) removeDirectoryWithTimeout(ctx context.Context, path st
 	defer cancel()
 
 	if err := fsService.RemoveAll(chunkCtx, path); err != nil {
-		if chunkCtx.Err() == context.DeadlineExceeded {
+		if errors.Is(chunkCtx.Err(), context.DeadlineExceeded) {
 			s.logger.Debugf("Directory removal timed out for %s, will retry", path)
+
 			return context.DeadlineExceeded
 		}
+
 		return err
 	}
 

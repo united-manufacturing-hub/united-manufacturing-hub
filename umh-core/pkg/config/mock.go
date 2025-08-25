@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -32,23 +33,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// MockConfigManager is a mock implementation of ConfigManager for testing
+// MockConfigManager is a mock implementation of ConfigManager for testing.
 type MockConfigManager struct {
-	GetConfigCalled                     bool
-	AddDataflowcomponentCalled          bool
-	DeleteDataflowcomponentCalled       bool
-	EditDataflowcomponentCalled         bool
-	AtomicAddProtocolConverterCalled    bool
-	AtomicEditProtocolConverterCalled   bool
-	AtomicDeleteProtocolConverterCalled bool
-	AtomicAddStreamProcessorCalled      bool
-	AtomicEditStreamProcessorCalled     bool
-	AtomicDeleteStreamProcessorCalled   bool
-	AtomicAddDataModelCalled            bool
-	AtomicEditDataModelCalled           bool
-	AtomicDeleteDataModelCalled         bool
-	AtomicAddDataContractCalled         bool
-	Config                              FullConfig
+	CacheModTime                        time.Time
 	ConfigError                         error
 	AddDataflowcomponentError           error
 	DeleteDataflowcomponentError        error
@@ -63,18 +50,32 @@ type MockConfigManager struct {
 	AtomicEditDataModelError            error
 	AtomicDeleteDataModelError          error
 	AtomicAddDataContractError          error
-	ConfigAsString                      string
 	GetConfigAsStringError              error
-	GetConfigAsStringCalled             bool
+	MockFileSystem                      *filesystem.MockFileSystem
+	logger                              *zap.SugaredLogger
+	ConfigAsString                      string
+	Config                              FullConfig
 	ConfigDelay                         time.Duration
 	mutexReadOrWrite                    sync.Mutex
 	mutexReadAndWrite                   sync.Mutex
-	MockFileSystem                      *filesystem.MockFileSystem
-	CacheModTime                        time.Time
-	logger                              *zap.SugaredLogger
+	GetConfigCalled                     int32 // Use atomic int32 for thread safety (0=false, 1=true)
+	AddDataflowcomponentCalled          bool
+	DeleteDataflowcomponentCalled       bool
+	EditDataflowcomponentCalled         bool
+	AtomicAddProtocolConverterCalled    bool
+	AtomicEditProtocolConverterCalled   bool
+	AtomicDeleteProtocolConverterCalled bool
+	AtomicAddStreamProcessorCalled      bool
+	AtomicEditStreamProcessorCalled     bool
+	AtomicDeleteStreamProcessorCalled   bool
+	AtomicAddDataModelCalled            bool
+	AtomicEditDataModelCalled           bool
+	AtomicDeleteDataModelCalled         bool
+	AtomicAddDataContractCalled         bool
+	GetConfigAsStringCalled             bool
 }
 
-// NewMockConfigManager creates a new MockConfigManager instance
+// NewMockConfigManager creates a new MockConfigManager instance.
 func NewMockConfigManager() *MockConfigManager {
 	return &MockConfigManager{
 		MockFileSystem: filesystem.NewMockFileSystem(),
@@ -82,16 +83,17 @@ func NewMockConfigManager() *MockConfigManager {
 	}
 }
 
-// GetDataFlowConfig returns the DataFlow component configurations
+// GetDataFlowConfig returns the DataFlow component configurations.
 func (m *MockConfigManager) GetDataFlowConfig() []DataFlowComponentConfig {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
 	return m.Config.DataFlow
 }
 
-// GetConfig implements the ConfigManager interface
-func (m *MockConfigManager) GetConfig(ctx context.Context, tick uint64) (FullConfig, error) {
-	m.mutexReadOrWrite.Lock()
-	defer m.mutexReadOrWrite.Unlock()
-	m.GetConfigCalled = true
+// getConfigInternal returns the config without locking - for use by atomic methods that already hold the lock.
+func (m *MockConfigManager) getConfigInternal(ctx context.Context, tick uint64) (FullConfig, error) {
+	atomic.StoreInt32(&m.GetConfigCalled, 1)
 
 	if m.ConfigDelay > 0 {
 		select {
@@ -102,16 +104,30 @@ func (m *MockConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 		}
 	}
 
-	return m.Config, m.ConfigError
+	// Return a deep copy of the config to avoid data races
+	// The atomic operations should work on a copy and only update the original via writeConfig
+	configCopy := m.Config
+	configCopy.DataFlow = make([]DataFlowComponentConfig, len(m.Config.DataFlow))
+	copy(configCopy.DataFlow, m.Config.DataFlow)
+
+	return configCopy, m.ConfigError
 }
 
-// GetFileSystemService returns the mock filesystem service
+// GetConfig implements the ConfigManager interface.
+func (m *MockConfigManager) GetConfig(ctx context.Context, tick uint64) (FullConfig, error) {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	return m.getConfigInternal(ctx, tick)
+}
+
+// GetFileSystemService returns the mock filesystem service.
 func (m *MockConfigManager) GetFileSystemService() filesystem.Service {
 	return m.MockFileSystem
 }
 
 // WriteConfig implements the ConfigManager interface
-// all the functions that call MockConfigManager.writeConfig must hold the mutexReadAndWrite mutex
+// all the functions that call MockConfigManager.writeConfig must hold the mutexReadAndWrite mutex.
 func (m *MockConfigManager) writeConfig(ctx context.Context, cfg FullConfig) error {
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
@@ -125,7 +141,7 @@ func (m *MockConfigManager) writeConfig(ctx context.Context, cfg FullConfig) err
 	}
 
 	// Convert spec to YAML using the same logic as the real implementation
-	yamlConfig, err := convertSpecToYaml(cfg)
+	yamlConfig, err := convertSpecToYaml(cfg, ctx)
 	if err != nil {
 		return fmt.Errorf("failed to convert spec to yaml: %w", err)
 	}
@@ -150,107 +166,172 @@ func (m *MockConfigManager) writeConfig(ctx context.Context, cfg FullConfig) err
 	return nil
 }
 
-// WithConfig configures the mock to return the given config
+// WithConfig configures the mock to return the given config.
 func (m *MockConfigManager) WithConfig(cfg FullConfig) *MockConfigManager {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
 	m.Config = cfg
+
 	return m
 }
 
-// WithConfigError configures the mock to return the given error
+// WithConfigError configures the mock to return the given error.
 func (m *MockConfigManager) WithConfigError(err error) *MockConfigManager {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
 	m.ConfigError = err
+
 	return m
 }
 
-// WithConfigDelay configures the mock to delay for the given duration
+// WithConfigDelay configures the mock to delay for the given duration.
 func (m *MockConfigManager) WithConfigDelay(delay time.Duration) *MockConfigManager {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
 	m.ConfigDelay = delay
+
 	return m
 }
 
-// WithAddDataflowcomponentError configures the mock to return the given error when AtomicAddDataflowcomponent is called
+// WithAddDataflowcomponentError configures the mock to return the given error when AtomicAddDataflowcomponent is called.
 func (m *MockConfigManager) WithAddDataflowcomponentError(err error) *MockConfigManager {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
 	m.AddDataflowcomponentError = err
+
 	return m
 }
 
-// WithDeleteDataflowcomponentError configures the mock to return the given error when AtomicDeleteDataflowcomponent is called
+// WithDeleteDataflowcomponentError configures the mock to return the given error when AtomicDeleteDataflowcomponent is called.
 func (m *MockConfigManager) WithDeleteDataflowcomponentError(err error) *MockConfigManager {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
 	m.DeleteDataflowcomponentError = err
+
 	return m
 }
 
-// WithEditDataflowcomponentError configures the mock to return the given error when AtomicEditDataflowcomponent is called
+// WithEditDataflowcomponentError configures the mock to return the given error when AtomicEditDataflowcomponent is called.
 func (m *MockConfigManager) WithEditDataflowcomponentError(err error) *MockConfigManager {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
 	m.EditDataflowcomponentError = err
+
 	return m
 }
 
-// WithAtomicAddProtocolConverterError configures the mock to return the given error when AtomicAddProtocolConverter is called
+// WithAtomicAddProtocolConverterError configures the mock to return the given error when AtomicAddProtocolConverter is called.
 func (m *MockConfigManager) WithAtomicAddProtocolConverterError(err error) *MockConfigManager {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
 	m.AtomicAddProtocolConverterError = err
+
 	return m
 }
 
-// WithAtomicEditProtocolConverterError configures the mock to return the given error when AtomicEditProtocolConverter is called
+// WithAtomicEditProtocolConverterError configures the mock to return the given error when AtomicEditProtocolConverter is called.
 func (m *MockConfigManager) WithAtomicEditProtocolConverterError(err error) *MockConfigManager {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
 	m.AtomicEditProtocolConverterError = err
+
 	return m
 }
 
-// WithAtomicDeleteProtocolConverterError configures the mock to return the given error when AtomicDeleteProtocolConverter is called
+// WithAtomicDeleteProtocolConverterError configures the mock to return the given error when AtomicDeleteProtocolConverter is called.
 func (m *MockConfigManager) WithAtomicDeleteProtocolConverterError(err error) *MockConfigManager {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
 	m.AtomicDeleteProtocolConverterError = err
+
 	return m
 }
 
-// WithAtomicAddStreamProcessorError configures the mock to return the given error when AtomicAddStreamProcessor is called
+// WithAtomicAddStreamProcessorError configures the mock to return the given error when AtomicAddStreamProcessor is called.
 func (m *MockConfigManager) WithAtomicAddStreamProcessorError(err error) *MockConfigManager {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
 	m.AtomicAddStreamProcessorError = err
+
 	return m
 }
 
-// WithAtomicEditStreamProcessorError configures the mock to return the given error when AtomicEditStreamProcessor is called
+// WithAtomicEditStreamProcessorError configures the mock to return the given error when AtomicEditStreamProcessor is called.
 func (m *MockConfigManager) WithAtomicEditStreamProcessorError(err error) *MockConfigManager {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
 	m.AtomicEditStreamProcessorError = err
+
 	return m
 }
 
-// WithAtomicDeleteStreamProcessorError configures the mock to return the given error when AtomicDeleteStreamProcessor is called
+// WithAtomicDeleteStreamProcessorError configures the mock to return the given error when AtomicDeleteStreamProcessor is called.
 func (m *MockConfigManager) WithAtomicDeleteStreamProcessorError(err error) *MockConfigManager {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
 	m.AtomicDeleteStreamProcessorError = err
+
 	return m
 }
 
-// WithAtomicAddDataModelError configures the mock to return the given error when AtomicAddDataModel is called
+// WithAtomicAddDataModelError configures the mock to return the given error when AtomicAddDataModel is called.
 func (m *MockConfigManager) WithAtomicAddDataModelError(err error) *MockConfigManager {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
 	m.AtomicAddDataModelError = err
+
 	return m
 }
 
-// WithAtomicEditDataModelError configures the mock to return the given error when AtomicEditDataModel is called
+// WithAtomicEditDataModelError configures the mock to return the given error when AtomicEditDataModel is called.
 func (m *MockConfigManager) WithAtomicEditDataModelError(err error) *MockConfigManager {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
 	m.AtomicEditDataModelError = err
+
 	return m
 }
 
-// WithAtomicDeleteDataModelError configures the mock to return the given error when AtomicDeleteDataModel is called
+// WithAtomicDeleteDataModelError configures the mock to return the given error when AtomicDeleteDataModel is called.
 func (m *MockConfigManager) WithAtomicDeleteDataModelError(err error) *MockConfigManager {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
 	m.AtomicDeleteDataModelError = err
+
 	return m
 }
 
-// WithAtomicAddDataContractError configures the mock to return the given error when AtomicAddDataContract is called
+// WithAtomicAddDataContractError configures the mock to return the given error when AtomicAddDataContract is called.
 func (m *MockConfigManager) WithAtomicAddDataContractError(err error) *MockConfigManager {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
 	m.AtomicAddDataContractError = err
+
 	return m
 }
 
-// ResetCalls clears the called flags for testing multiple calls
+// ResetCalls clears the called flags for testing multiple calls.
 func (m *MockConfigManager) ResetCalls() {
 	m.mutexReadOrWrite.Lock()
 	defer m.mutexReadOrWrite.Unlock()
-	m.GetConfigCalled = false
+
+	atomic.StoreInt32(&m.GetConfigCalled, 0)
 	m.AddDataflowcomponentCalled = false
 	m.DeleteDataflowcomponentCalled = false
 	m.EditDataflowcomponentCalled = false
@@ -266,28 +347,32 @@ func (m *MockConfigManager) ResetCalls() {
 	m.AtomicAddDataContractCalled = false
 }
 
-// atomic set location
+// atomic set location.
 func (m *MockConfigManager) AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	config, err := m.getConfigInternal(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
 
 	config.Agent.Location = make(map[int]string)
+
 	config.Agent.Location[0] = location.Enterprise
 	if location.Site != nil {
 		config.Agent.Location[1] = *location.Site
 	}
+
 	if location.Area != nil {
 		config.Agent.Location[2] = *location.Area
 	}
+
 	if location.Line != nil {
 		config.Agent.Location[3] = *location.Line
 	}
+
 	if location.WorkCell != nil {
 		config.Agent.Location[4] = *location.WorkCell
 	}
@@ -295,7 +380,7 @@ func (m *MockConfigManager) AtomicSetLocation(ctx context.Context, location mode
 	// Convert the agent location to string map for use in other components
 	agentLocationStr := make(map[string]string)
 	for k, v := range config.Agent.Location {
-		agentLocationStr[fmt.Sprintf("%d", k)] = v
+		agentLocationStr[strconv.Itoa(k)] = v
 	}
 
 	// Update all ProtocolConverter locations to match the agent location
@@ -332,7 +417,7 @@ func (m *MockConfigManager) AtomicSetLocation(ctx context.Context, location mode
 	return nil
 }
 
-// atomic add dataflowcomponent
+// atomic add dataflowcomponent.
 func (m *MockConfigManager) AtomicAddDataflowcomponent(ctx context.Context, dfc DataFlowComponentConfig) error {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
@@ -344,7 +429,7 @@ func (m *MockConfigManager) AtomicAddDataflowcomponent(ctx context.Context, dfc 
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	config, err := m.getConfigInternal(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
@@ -360,7 +445,7 @@ func (m *MockConfigManager) AtomicAddDataflowcomponent(ctx context.Context, dfc 
 	return nil
 }
 
-// AtomicDeleteDataflowcomponent implements the ConfigManager interface
+// AtomicDeleteDataflowcomponent implements the ConfigManager interface.
 func (m *MockConfigManager) AtomicDeleteDataflowcomponent(ctx context.Context, componentUUID uuid.UUID) error {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
@@ -372,7 +457,7 @@ func (m *MockConfigManager) AtomicDeleteDataflowcomponent(ctx context.Context, c
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	config, err := m.getConfigInternal(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
@@ -405,7 +490,7 @@ func (m *MockConfigManager) AtomicDeleteDataflowcomponent(ctx context.Context, c
 	return nil
 }
 
-// AtomicEditDataflowcomponent implements the ConfigManager interface
+// AtomicEditDataflowcomponent implements the ConfigManager interface.
 func (m *MockConfigManager) AtomicEditDataflowcomponent(ctx context.Context, componentUUID uuid.UUID, dfc DataFlowComponentConfig) (DataFlowComponentConfig, error) {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
@@ -417,14 +502,16 @@ func (m *MockConfigManager) AtomicEditDataflowcomponent(ctx context.Context, com
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	config, err := m.getConfigInternal(ctx, 0)
 	if err != nil {
 		return DataFlowComponentConfig{}, fmt.Errorf("failed to get config: %w", err)
 	}
 
 	// Find the component with matching UUID
 	found := false
+
 	var oldConfig DataFlowComponentConfig
+
 	for i, component := range config.DataFlow {
 		componentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
 		if componentID == componentUUID {
@@ -432,6 +519,7 @@ func (m *MockConfigManager) AtomicEditDataflowcomponent(ctx context.Context, com
 			oldConfig = component
 			config.DataFlow[i] = dfc
 			found = true
+
 			break
 		}
 	}
@@ -448,7 +536,7 @@ func (m *MockConfigManager) AtomicEditDataflowcomponent(ctx context.Context, com
 	return oldConfig, nil
 }
 
-// AtomicAddProtocolConverter implements the ConfigManager interface
+// AtomicAddProtocolConverter implements the ConfigManager interface.
 func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc ProtocolConverterConfig) error {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
@@ -460,7 +548,7 @@ func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	config, err := m.getConfigInternal(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
@@ -481,6 +569,7 @@ func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 		for _, existing := range config.ProtocolConverter {
 			if existing.Name == templateRef && existing.ProtocolConverterServiceConfig.TemplateRef == existing.Name {
 				rootExists = true
+
 				break
 			}
 		}
@@ -501,7 +590,7 @@ func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 	return nil
 }
 
-// AtomicEditProtocolConverter implements the ConfigManager interface
+// AtomicEditProtocolConverter implements the ConfigManager interface.
 func (m *MockConfigManager) AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc ProtocolConverterConfig) (ProtocolConverterConfig, error) {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
@@ -513,19 +602,22 @@ func (m *MockConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	config, err := m.getConfigInternal(ctx, 0)
 	if err != nil {
 		return ProtocolConverterConfig{}, fmt.Errorf("failed to get config: %w", err)
 	}
 
 	// Find target index via GenerateUUIDFromName(Name) == componentUUID
 	targetIndex := -1
+
 	var oldConfig ProtocolConverterConfig
+
 	for i, component := range config.ProtocolConverter {
 		curComponentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
 		if curComponentID == componentUUID {
 			targetIndex = i
 			oldConfig = config.ProtocolConverter[i]
+
 			break
 		}
 	}
@@ -569,8 +661,10 @@ func (m *MockConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 			if i == targetIndex {
 				continue
 			}
+
 			if inst.Name == templateRef && inst.ProtocolConverterServiceConfig.TemplateRef == inst.Name {
 				rootExists = true
+
 				break
 			}
 		}
@@ -596,7 +690,7 @@ func (m *MockConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 	return oldConfig, nil
 }
 
-// AtomicDeleteProtocolConverter implements the ConfigManager interface
+// AtomicDeleteProtocolConverter implements the ConfigManager interface.
 func (m *MockConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, componentUUID uuid.UUID) error {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
@@ -608,19 +702,22 @@ func (m *MockConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	config, err := m.getConfigInternal(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
 
 	// Find the component to delete
 	var targetComponent *ProtocolConverterConfig
+
 	targetIndex := -1
+
 	for i, component := range config.ProtocolConverter {
 		componentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
 		if componentID == componentUUID {
 			targetComponent = &component
 			targetIndex = i
+
 			break
 		}
 	}
@@ -651,7 +748,7 @@ func (m *MockConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 	return nil
 }
 
-// AtomicAddStreamProcessor implements the ConfigManager interface
+// AtomicAddStreamProcessor implements the ConfigManager interface.
 func (m *MockConfigManager) AtomicAddStreamProcessor(ctx context.Context, sp StreamProcessorConfig) error {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
@@ -663,7 +760,7 @@ func (m *MockConfigManager) AtomicAddStreamProcessor(ctx context.Context, sp Str
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	config, err := m.getConfigInternal(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
@@ -684,6 +781,7 @@ func (m *MockConfigManager) AtomicAddStreamProcessor(ctx context.Context, sp Str
 		for _, existing := range config.StreamProcessor {
 			if existing.Name == templateRef && existing.StreamProcessorServiceConfig.TemplateRef == existing.Name {
 				rootExists = true
+
 				break
 			}
 		}
@@ -704,7 +802,7 @@ func (m *MockConfigManager) AtomicAddStreamProcessor(ctx context.Context, sp Str
 	return nil
 }
 
-// AtomicEditStreamProcessor implements the ConfigManager interface
+// AtomicEditStreamProcessor implements the ConfigManager interface.
 func (m *MockConfigManager) AtomicEditStreamProcessor(ctx context.Context, sp StreamProcessorConfig) (StreamProcessorConfig, error) {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
@@ -716,18 +814,21 @@ func (m *MockConfigManager) AtomicEditStreamProcessor(ctx context.Context, sp St
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	config, err := m.getConfigInternal(ctx, 0)
 	if err != nil {
 		return StreamProcessorConfig{}, fmt.Errorf("failed to get config: %w", err)
 	}
 
 	// Find target index by name
 	targetIndex := -1
+
 	var oldConfig StreamProcessorConfig
+
 	for i, component := range config.StreamProcessor {
 		if component.Name == sp.Name {
 			targetIndex = i
 			oldConfig = config.StreamProcessor[i]
+
 			break
 		}
 	}
@@ -764,8 +865,10 @@ func (m *MockConfigManager) AtomicEditStreamProcessor(ctx context.Context, sp St
 			if i == targetIndex {
 				continue
 			}
+
 			if inst.Name == templateRef && inst.StreamProcessorServiceConfig.TemplateRef == inst.Name {
 				rootExists = true
+
 				break
 			}
 		}
@@ -791,7 +894,7 @@ func (m *MockConfigManager) AtomicEditStreamProcessor(ctx context.Context, sp St
 	return oldConfig, nil
 }
 
-// AtomicDeleteStreamProcessor implements the ConfigManager interface
+// AtomicDeleteStreamProcessor implements the ConfigManager interface.
 func (m *MockConfigManager) AtomicDeleteStreamProcessor(ctx context.Context, name string) error {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
@@ -803,18 +906,21 @@ func (m *MockConfigManager) AtomicDeleteStreamProcessor(ctx context.Context, nam
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	config, err := m.getConfigInternal(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
 
 	// Find the component to delete
 	var targetComponent *StreamProcessorConfig
+
 	targetIndex := -1
+
 	for i, component := range config.StreamProcessor {
 		if component.Name == name {
 			targetComponent = &component
 			targetIndex = i
+
 			break
 		}
 	}
@@ -845,7 +951,7 @@ func (m *MockConfigManager) AtomicDeleteStreamProcessor(ctx context.Context, nam
 	return nil
 }
 
-// AtomicAddDataModel implements the ConfigManager interface
+// AtomicAddDataModel implements the ConfigManager interface.
 func (m *MockConfigManager) AtomicAddDataModel(ctx context.Context, name string, dmVersion DataModelVersion, description string) error {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
@@ -857,7 +963,7 @@ func (m *MockConfigManager) AtomicAddDataModel(ctx context.Context, name string,
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	config, err := m.getConfigInternal(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
@@ -886,7 +992,7 @@ func (m *MockConfigManager) AtomicAddDataModel(ctx context.Context, name string,
 	return nil
 }
 
-// AtomicEditDataModel implements the ConfigManager interface
+// AtomicEditDataModel implements the ConfigManager interface.
 func (m *MockConfigManager) AtomicEditDataModel(ctx context.Context, name string, dmVersion DataModelVersion, description string) error {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
@@ -898,7 +1004,7 @@ func (m *MockConfigManager) AtomicEditDataModel(ctx context.Context, name string
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	config, err := m.getConfigInternal(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
@@ -908,6 +1014,7 @@ func (m *MockConfigManager) AtomicEditDataModel(ctx context.Context, name string
 	for i, dmc := range config.DataModels {
 		if dmc.Name == name {
 			targetIndex = i
+
 			break
 		}
 	}
@@ -921,6 +1028,7 @@ func (m *MockConfigManager) AtomicEditDataModel(ctx context.Context, name string
 
 	// Find the highest version number to ensure we don't overwrite existing versions
 	var maxVersion = 0
+
 	for versionKey := range currentDataModel.Versions {
 		if strings.HasPrefix(versionKey, "v") {
 			if versionNum, err := strconv.Atoi(versionKey[1:]); err == nil {
@@ -949,7 +1057,7 @@ func (m *MockConfigManager) AtomicEditDataModel(ctx context.Context, name string
 	return nil
 }
 
-// AtomicDeleteDataModel implements the ConfigManager interface
+// AtomicDeleteDataModel implements the ConfigManager interface.
 func (m *MockConfigManager) AtomicDeleteDataModel(ctx context.Context, name string) error {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
@@ -961,16 +1069,18 @@ func (m *MockConfigManager) AtomicDeleteDataModel(ctx context.Context, name stri
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	config, err := m.getConfigInternal(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
 
 	// find the data model to delete
 	targetIndex := -1
+
 	for i, dmc := range config.DataModels {
 		if dmc.Name == name {
 			targetIndex = i
+
 			break
 		}
 	}
@@ -990,7 +1100,7 @@ func (m *MockConfigManager) AtomicDeleteDataModel(ctx context.Context, name stri
 	return nil
 }
 
-// AtomicAddDataContract implements the ConfigManager interface
+// AtomicAddDataContract implements the ConfigManager interface.
 func (m *MockConfigManager) AtomicAddDataContract(ctx context.Context, dataContract DataContractsConfig) error {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
@@ -1002,7 +1112,7 @@ func (m *MockConfigManager) AtomicAddDataContract(ctx context.Context, dataContr
 	}
 
 	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	config, err := m.getConfigInternal(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
@@ -1025,10 +1135,11 @@ func (m *MockConfigManager) AtomicAddDataContract(ctx context.Context, dataContr
 	return nil
 }
 
-// GetConfigAsString implements the ConfigManager interface
+// GetConfigAsString implements the ConfigManager interface.
 func (m *MockConfigManager) GetConfigAsString(ctx context.Context) (string, error) {
 	m.mutexReadOrWrite.Lock()
 	defer m.mutexReadOrWrite.Unlock()
+
 	m.GetConfigAsStringCalled = true
 
 	if m.ConfigDelay > 0 {
@@ -1051,38 +1162,51 @@ func (m *MockConfigManager) GetConfigAsString(ctx context.Context) (string, erro
 
 	// Otherwise, read the file from the mock filesystem
 	data, err := m.MockFileSystem.ReadFile(ctx, DefaultConfigPath)
+
 	return string(data), err
 }
 
-// WithConfigAsString configures the mock to return the given string when GetConfigAsString is called
+// WithConfigAsString configures the mock to return the given string when GetConfigAsString is called.
 func (m *MockConfigManager) WithConfigAsString(content string) *MockConfigManager {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
 	m.ConfigAsString = content
+
 	return m
 }
 
-// WithGetConfigAsStringError configures the mock to return the given error when GetConfigAsString is called
+// WithGetConfigAsStringError configures the mock to return the given error when GetConfigAsString is called.
 func (m *MockConfigManager) WithGetConfigAsStringError(err error) *MockConfigManager {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
 	m.GetConfigAsStringError = err
+
 	return m
 }
 
-// GetCacheModTimeWithoutUpdate returns the modification time from the cache without updating it
+// GetCacheModTimeWithoutUpdate returns the modification time from the cache without updating it.
 func (m *MockConfigManager) GetCacheModTimeWithoutUpdate() time.Time {
 	return m.CacheModTime
 }
 
-// UpdateAndGetCacheModTime updates the cache and returns the modification time
+// UpdateAndGetCacheModTime updates the cache and returns the modification time.
 func (m *MockConfigManager) UpdateAndGetCacheModTime(ctx context.Context) (time.Time, error) {
 	return m.CacheModTime, nil
 }
 
-// WithCacheModTime configures the mock to return the given modification time when GetCacheModTime is called
+// WithCacheModTime configures the mock to return the given modification time when GetCacheModTime is called.
 func (m *MockConfigManager) WithCacheModTime(modTime time.Time) *MockConfigManager {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
 	m.CacheModTime = modTime
+
 	return m
 }
 
-// WriteYAMLConfigFromString implements the ConfigManager interface
+// WriteYAMLConfigFromString implements the ConfigManager interface.
 func (m *MockConfigManager) WriteYAMLConfigFromString(ctx context.Context, config string, expectedModTime string) error {
 	m.mutexReadOrWrite.Lock()
 	defer m.mutexReadOrWrite.Unlock()
@@ -1093,6 +1217,7 @@ func (m *MockConfigManager) WriteYAMLConfigFromString(ctx context.Context, confi
 		if err != nil {
 			return fmt.Errorf("invalid expected modification time format: %w", err)
 		}
+
 		if !m.CacheModTime.Equal(expectedTime) {
 			return fmt.Errorf("concurrent modification detected: file modified at %v, expected %v",
 				m.CacheModTime.Format(time.RFC3339), expectedModTime)
@@ -1100,11 +1225,11 @@ func (m *MockConfigManager) WriteYAMLConfigFromString(ctx context.Context, confi
 	}
 
 	// First parse the config with strict validation to detect syntax errors and schema problems
-	parsedConfig, err := ParseConfig([]byte(config), false)
+	parsedConfig, err := ParseConfig([]byte(config), ctx, false)
 	if err != nil {
 		// If strict parsing fails, try again with allowUnknownFields=true
 		// This allows YAML anchors and other custom fields
-		parsedConfig, err = ParseConfig([]byte(config), true)
+		parsedConfig, err = ParseConfig([]byte(config), ctx, true)
 		if err != nil {
 			return fmt.Errorf("failed to parse config: %w", err)
 		}
@@ -1120,4 +1245,9 @@ func (m *MockConfigManager) WriteYAMLConfigFromString(ctx context.Context, confi
 	m.ConfigAsString = config
 
 	return nil
+}
+
+// IsGetConfigCalled returns true if GetConfig has been called (thread-safe).
+func (m *MockConfigManager) IsGetConfigCalled() bool {
+	return atomic.LoadInt32(&m.GetConfigCalled) != 0
 }

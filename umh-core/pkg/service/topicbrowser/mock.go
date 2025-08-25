@@ -16,7 +16,6 @@ package topicbrowser
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	benthossvccfg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
@@ -31,8 +30,37 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
-// MockService is a mock implementation of the ITopicBrowserService interface for testing
+// MockService is a mock implementation of the ITopicBrowserService interface for testing.
 type MockService struct {
+	GenerateConfigError    error
+	GetConfigError         error
+	StatusError            error
+	AddToManagerError      error
+	UpdateInManagerError   error
+	RemoveFromManagerError error
+	StartError             error
+	StopError              error
+	ForceRemoveError       error
+	ReconcileManagerError  error
+
+	// Benthos service mock
+	BenthosService benthossvc.IBenthosService
+
+	// For more complex testing scenarios
+	States   map[string]*ServiceInfo
+	Existing map[string]bool
+
+	// State control for FSM testing
+	stateFlags map[string]*StateFlags
+
+	BenthosConfigs []config.BenthosConfig
+
+	// Return values for each method
+	GenerateConfigResult benthossvccfg.BenthosServiceConfig
+	GetConfigResult      benthossvccfg.BenthosServiceConfig
+
+	StatusResult ServiceInfo
+
 	// Tracks calls to methods
 	GenerateConfigCalled    bool
 	GetConfigCalled         bool
@@ -46,39 +74,14 @@ type MockService struct {
 	ServiceExistsCalled     bool
 	ReconcileManagerCalled  bool
 
-	// Return values for each method
-	GenerateConfigResult       benthossvccfg.BenthosServiceConfig
-	GenerateConfigError        error
-	GetConfigResult            benthossvccfg.BenthosServiceConfig
-	GetConfigError             error
-	StatusResult               ServiceInfo
-	StatusError                error
-	AddToManagerError          error
-	UpdateInManagerError       error
-	RemoveFromManagerError     error
-	StartError                 error
-	StopError                  error
-	ForceRemoveError           error
 	ServiceExistsResult        bool
-	ReconcileManagerError      error
 	ReconcileManagerReconciled bool
-
-	// For more complex testing scenarios
-	States         map[string]*ServiceInfo
-	Existing       map[string]bool
-	BenthosConfigs []config.BenthosConfig
-
-	// State control for FSM testing
-	stateFlags map[string]*StateFlags
-
-	// Benthos service mock
-	BenthosService benthossvc.IBenthosService
 }
 
-// Ensure MockService implements ITopicBrowserService
+// Ensure MockService implements ITopicBrowserService.
 var _ ITopicBrowserService = (*MockService)(nil)
 
-// StateFlags contains all the state flags needed for FSM testing
+// StateFlags contains all the state flags needed for FSM testing.
 type StateFlags struct {
 	BenthosFSMState       string
 	RedpandaFSMState      string
@@ -86,7 +89,7 @@ type StateFlags struct {
 	HasBenthosOutput      bool
 }
 
-// NewMockService creates a new mock topic browser service
+// NewMockService creates a new mock topic browser service.
 func NewMockService() *MockService {
 	return &MockService{
 		States:         make(map[string]*ServiceInfo),
@@ -96,7 +99,7 @@ func NewMockService() *MockService {
 	}
 }
 
-// SetState sets all state flags for a topic browser at once
+// SetState sets all state flags for a topic browser at once.
 func (m *MockService) SetState(tbName string, flags StateFlags) {
 	bytesOut := 1024
 	batchSent := 1
@@ -104,6 +107,7 @@ func (m *MockService) SetState(tbName string, flags StateFlags) {
 	if !flags.HasBenthosOutput {
 		batchSent = 0
 	}
+
 	benthosObservedState := &benthosfsm.BenthosObservedState{
 		ServiceInfo: benthossvc.ServiceInfo{
 			BenthosStatus: benthossvc.BenthosStatus{
@@ -155,7 +159,7 @@ func (m *MockService) SetState(tbName string, flags StateFlags) {
 	m.stateFlags[tbName] = &flags
 }
 
-// GetState gets the state flags for a topic browser
+// GetState gets the state flags for a topic browser.
 func (m *MockService) GetState(tbName string) *StateFlags {
 	if flags, exists := m.stateFlags[tbName]; exists {
 		return flags
@@ -163,16 +167,18 @@ func (m *MockService) GetState(tbName string) *StateFlags {
 	// Initialize with default flags if not exists
 	flags := &StateFlags{}
 	m.stateFlags[tbName] = flags
+
 	return flags
 }
 
-// GenerateConfig mocks generating Benthos config for a topic browser
+// GenerateConfig mocks generating Benthos config for a topic browser.
 func (m *MockService) GenerateConfig(tbName string) (benthossvccfg.BenthosServiceConfig, error) {
 	m.GenerateConfigCalled = true
+
 	return m.GenerateConfigResult, m.GenerateConfigError
 }
 
-// GetConfig mocks getting the topic browser configuration
+// GetConfig mocks getting the topic browser configuration.
 func (m *MockService) GetConfig(ctx context.Context, filesystemService filesystem.Service, tbName string) (benthossvccfg.BenthosServiceConfig, error) {
 	m.GetConfigCalled = true
 
@@ -185,7 +191,7 @@ func (m *MockService) GetConfig(ctx context.Context, filesystemService filesyste
 	return m.GetConfigResult, nil
 }
 
-// Status mocks getting the status of a topic browser
+// Status mocks getting the status of a topic browser.
 func (m *MockService) Status(
 	ctx context.Context,
 	services serviceregistry.Provider,
@@ -208,7 +214,7 @@ func (m *MockService) Status(
 	return m.StatusResult, m.StatusError
 }
 
-// AddToManager mocks adding a TopicBrowser to the Benthos manager
+// AddToManager mocks adding a TopicBrowser to the Benthos manager.
 func (m *MockService) AddToManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
@@ -217,7 +223,7 @@ func (m *MockService) AddToManager(
 ) error {
 	m.AddToManagerCalled = true
 
-	benthosName := fmt.Sprintf("topicbrowser-%s", tbName)
+	benthosName := "topicbrowser-" + tbName
 
 	// Check whether the topic browser already exists
 	for _, benthosConfig := range m.BenthosConfigs {
@@ -244,7 +250,7 @@ func (m *MockService) AddToManager(
 	return m.AddToManagerError
 }
 
-// UpdateInManager mocks updating a TopicBrowser in the Benthos manager
+// UpdateInManager mocks updating a TopicBrowser in the Benthos manager.
 func (m *MockService) UpdateInManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
@@ -253,15 +259,17 @@ func (m *MockService) UpdateInManager(
 ) error {
 	m.UpdateInManagerCalled = true
 
-	benthosName := fmt.Sprintf("topicbrowser-%s", tbName)
+	benthosName := "topicbrowser-" + tbName
 
 	// Check if the topic browser exists
 	found := false
 	index := -1
+
 	for i, benthosConfig := range m.BenthosConfigs {
 		if benthosConfig.Name == benthosName {
 			found = true
 			index = i
+
 			break
 		}
 	}
@@ -283,7 +291,7 @@ func (m *MockService) UpdateInManager(
 	return m.UpdateInManagerError
 }
 
-// RemoveFromManager mocks removing a TopicBrowser from the Benthos manager
+// RemoveFromManager mocks removing a TopicBrowser from the Benthos manager.
 func (m *MockService) RemoveFromManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
@@ -291,7 +299,7 @@ func (m *MockService) RemoveFromManager(
 ) error {
 	m.RemoveFromManagerCalled = true
 
-	benthosName := fmt.Sprintf("topicbrowser-%s", tbName)
+	benthosName := "topicbrowser-" + tbName
 
 	found := false
 
@@ -300,6 +308,7 @@ func (m *MockService) RemoveFromManager(
 		if benthosConfig.Name == benthosName {
 			m.BenthosConfigs = append(m.BenthosConfigs[:i], m.BenthosConfigs[i+1:]...)
 			found = true
+
 			break
 		}
 	}
@@ -315,7 +324,7 @@ func (m *MockService) RemoveFromManager(
 	return m.RemoveFromManagerError
 }
 
-// Start mocks starting a Topic Browser
+// Start mocks starting a Topic Browser.
 func (m *MockService) Start(
 	ctx context.Context,
 	filesystemService filesystem.Service,
@@ -323,7 +332,7 @@ func (m *MockService) Start(
 ) error {
 	m.StartCalled = true
 
-	benthosName := fmt.Sprintf("topicbrowser-%s", tbName)
+	benthosName := "topicbrowser-" + tbName
 
 	found := false
 
@@ -332,6 +341,7 @@ func (m *MockService) Start(
 		if benthosConfig.Name == benthosName {
 			m.BenthosConfigs[i].DesiredFSMState = benthosfsm.OperationalStateActive
 			found = true
+
 			break
 		}
 	}
@@ -343,7 +353,7 @@ func (m *MockService) Start(
 	return m.StartError
 }
 
-// Stop mocks stopping a Topic Browser
+// Stop mocks stopping a Topic Browser.
 func (m *MockService) Stop(
 	ctx context.Context,
 	filesystemService filesystem.Service,
@@ -351,7 +361,7 @@ func (m *MockService) Stop(
 ) error {
 	m.StopCalled = true
 
-	benthosName := fmt.Sprintf("topicbrowser-%s", tbName)
+	benthosName := "topicbrowser-" + tbName
 
 	found := false
 
@@ -360,6 +370,7 @@ func (m *MockService) Stop(
 		if benthosConfig.Name == benthosName {
 			m.BenthosConfigs[i].DesiredFSMState = benthosfsm.OperationalStateStopped
 			found = true
+
 			break
 		}
 	}
@@ -371,32 +382,35 @@ func (m *MockService) Stop(
 	return m.StopError
 }
 
-// ForceRemove mocks force removing a Topic Browser
+// ForceRemove mocks force removing a Topic Browser.
 func (m *MockService) ForceRemove(
 	ctx context.Context,
 	services serviceregistry.Provider,
 	tbname string,
 ) error {
 	m.ForceRemoveCalled = true
+
 	return m.ForceRemoveError
 }
 
-// ServiceExists mocks checking if a topic browser exists
+// ServiceExists mocks checking if a topic browser exists.
 func (m *MockService) ServiceExists(
 	ctx context.Context,
 	services serviceregistry.Provider,
 	tbName string,
 ) bool {
 	m.ServiceExistsCalled = true
+
 	return m.ServiceExistsResult
 }
 
-// ReconcileManager mocks reconciling the topic browser manager
+// ReconcileManager mocks reconciling the topic browser manager.
 func (m *MockService) ReconcileManager(
 	ctx context.Context,
 	services serviceregistry.Provider,
 	tick uint64,
 ) (error, bool) {
 	m.ReconcileManagerCalled = true
+
 	return m.ReconcileManagerError, m.ReconcileManagerReconciled
 }

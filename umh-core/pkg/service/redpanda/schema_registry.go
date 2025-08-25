@@ -46,6 +46,8 @@ import (
 	"sync"
 	"time"
 
+	"errors"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -71,46 +73,49 @@ type SchemaRegistryPhase string
 // All metrics are thread-safe and updated atomically during reconciliation operations.
 // Use these metrics to track system health, performance, and operational status.
 type SchemaRegistryMetrics struct {
+	LastOperationTime    time.Time
 	CurrentPhase         SchemaRegistryPhase
+	LastError            string
 	TotalReconciliations int64
 	SuccessfulOperations int64
 	FailedOperations     int64
 	SubjectsToAdd        int
 	SubjectsToRemove     int
-	LastOperationTime    time.Time
-	LastError            string
 }
 
-// urlBuilder provides optimized URL construction to avoid repeated allocations
+// urlBuilder provides optimized URL construction to avoid repeated allocations.
 type urlBuilder struct {
 	baseURL string
 	buf     strings.Builder
 }
 
-// subjectsURL builds the /subjects endpoint URL
+// subjectsURL builds the /subjects endpoint URL.
 func (u *urlBuilder) subjectsURL() string {
 	u.buf.Reset()
 	u.buf.WriteString(u.baseURL)
 	u.buf.WriteString("/subjects")
+
 	return u.buf.String()
 }
 
-// subjectURL builds the /subjects/{subject} endpoint URL
+// subjectURL builds the /subjects/{subject} endpoint URL.
 func (u *urlBuilder) subjectURL(subject SubjectName) string {
 	u.buf.Reset()
 	u.buf.WriteString(u.baseURL)
 	u.buf.WriteString("/subjects/")
 	u.buf.WriteString(string(subject))
+
 	return u.buf.String()
 }
 
-// subjectVersionsURL builds the /subjects/{subject}/versions endpoint URL
+// subjectVersionsURL builds the /subjects/{subject}/versions endpoint URL.
 func (u *urlBuilder) subjectVersionsURL(subject SubjectName) string {
 	u.buf.Reset()
 	u.buf.WriteString(u.baseURL)
 	u.buf.WriteString("/subjects/")
 	u.buf.WriteString(string(subject))
 	u.buf.WriteString("/versions")
+
 	return u.buf.String()
 }
 
@@ -164,71 +169,73 @@ type ISchemaRegistry interface {
 //   - Typical operation time: <100ms for small schema sets
 //   - Memory usage: O(n) where n is number of schemas
 type SchemaRegistry struct {
-	// Concurrency protection
-	mu sync.RWMutex
-
-	// Core state
-	currentPhase SchemaRegistryPhase
-	httpClient   http.Client
-	logger       *zap.SugaredLogger
+	lastOperationTime time.Time
+	logger            *zap.SugaredLogger
 
 	// Translation
 	translator *datamodel.Translator
-
-	// Phase-specific data
-	rawSubjectsData  []byte        // Raw HTTP response from lookup
-	registrySubjects []SubjectName // Decoded subjects from registry
 
 	// Comparison results (populated during reconcile with current expectedSubjects)
 	missingInRegistry           map[SubjectName]JSONSchemaDefinition // Subject -> schema (we have, registry doesn't)
 	inRegistryButUnknownLocally map[SubjectName]bool                 // Registry has, we don't expect
 
+	httpClient http.Client
+
+	// Core state
+	currentPhase SchemaRegistryPhase
+
 	// Operation tracking and metrics
 	currentOperationSubject SubjectName // Which subject being processed
-	totalReconciliations    int64
-	successfulOperations    int64
-	failedOperations        int64
-	lastOperationTime       time.Time
 	lastError               string
 	schemaRegistryAddress   string
 
 	// Performance optimizations
 	urlBuilder urlBuilder // Reused for URL construction to avoid allocations
+
+	// Phase-specific data
+	rawSubjectsData  []byte        // Raw HTTP response from lookup
+	registrySubjects []SubjectName // Decoded subjects from registry
+
+	totalReconciliations int64
+	successfulOperations int64
+	failedOperations     int64
+	// Concurrency protection
+	mu sync.RWMutex
 }
 
-// Schema registry reconciliation phases
+// Schema registry reconciliation phases.
 const (
-	// SchemaRegistryPhaseLookup fetches current registry state via HTTP GET /subjects
+	// SchemaRegistryPhaseLookup fetches current registry state via HTTP GET /subjects.
 	SchemaRegistryPhaseLookup SchemaRegistryPhase = "lookup"
 
-	// SchemaRegistryPhaseDecode parses JSON response into typed Go structures
+	// SchemaRegistryPhaseDecode parses JSON response into typed Go structures.
 	SchemaRegistryPhaseDecode SchemaRegistryPhase = "decode"
 
-	// SchemaRegistryPhaseCompare analyzes differences and builds work queues for actions
+	// SchemaRegistryPhaseCompare analyzes differences and builds work queues for actions.
 	SchemaRegistryPhaseCompare SchemaRegistryPhase = "compare"
 
-	// SchemaRegistryPhaseRemoveUnknown deletes unexpected schemas (one at a time)
+	// SchemaRegistryPhaseRemoveUnknown deletes unexpected schemas (one at a time).
 	SchemaRegistryPhaseRemoveUnknown SchemaRegistryPhase = "remove_unknown"
 
-	// SchemaRegistryPhaseAddNew adds missing schemas (one at a time)
+	// SchemaRegistryPhaseAddNew adds missing schemas (one at a time).
 	SchemaRegistryPhaseAddNew SchemaRegistryPhase = "add_new"
 )
 
-// Context timeout requirements per phase for performance monitoring and SLA compliance
+// Context timeout requirements per phase for performance monitoring and SLA compliance.
 const (
-	// MinimumLookupTime is the minimum context timeout for HTTP GET /subjects operations
+	// MinimumLookupTime is the minimum context timeout for HTTP GET /subjects operations.
 	MinimumLookupTime = 25 * time.Millisecond // HTTP GET /subjects (accounts for container networking variations)
 
-	// MinimumDecodeTime is the minimum context timeout for JSON parsing operations
+	// MinimumDecodeTime is the minimum context timeout for JSON parsing operations.
 	MinimumDecodeTime = 5 * time.Millisecond // JSON parsing (accounts for slower CPUs and GC pauses)
 
-	// MinimumCompareTime is the minimum context timeout for map comparison operations
+	// MinimumCompareTime is the minimum context timeout for map comparison operations.
 	MinimumCompareTime = 5 * time.Millisecond // Map operations (accounts for slower CPUs and large schema sets)
 
-	// MinimumRemoveTime is the minimum context timeout for HTTP DELETE operations
+	// MinimumRemoveTime is the minimum context timeout for HTTP DELETE operations.
 	MinimumRemoveTime = 30 * time.Millisecond // HTTP DELETE (accounts for registry processing time)
 
-	// MinimumAddTime is the minimum context timeout for HTTP POST operations with schema payload
+	// MinimumAddTime is the minimum context timeout for HTTP POST operations with schema payload.
 	MinimumAddTime = 35 * time.Millisecond // HTTP POST with schema (accounts for validation and larger payloads)
 )
 
@@ -287,6 +294,7 @@ func NewSchemaRegistry(opts ...func(*SchemaRegistry)) *SchemaRegistry {
 	}
 	// Update urlBuilder baseURL in case it was changed by options
 	registry.urlBuilder.baseURL = registry.schemaRegistryAddress
+
 	return registry
 }
 
@@ -370,12 +378,15 @@ func (s *SchemaRegistry) Reconcile(ctx context.Context, dataModels []config.Data
 	if err != nil {
 		s.mu.Lock()
 		defer s.mu.Unlock()
+
 		s.totalReconciliations++
 		s.lastError = err.Error()
 		s.failedOperations++
 		s.lastOperationTime = time.Now()
+
 		return fmt.Errorf("failed to translate data models to schemas: %w", err)
 	}
+
 	return s.ReconcileWithSchemas(ctx, expectedSubjects)
 }
 
@@ -386,6 +397,7 @@ func (s *SchemaRegistry) ReconcileWithSchemas(ctx context.Context, schemas map[S
 	s.totalReconciliations++
 
 	var err error
+
 	defer func() {
 		s.lastOperationTime = time.Now()
 		if err != nil {
@@ -399,6 +411,7 @@ func (s *SchemaRegistry) ReconcileWithSchemas(ctx context.Context, schemas map[S
 
 	// Use existing reconciliation logic with translated schemas
 	err = s.reconcileInternal(ctx, schemas)
+
 	return err
 }
 
@@ -474,6 +487,7 @@ func (s *SchemaRegistry) translateToSchemas(ctx context.Context, dataModels []co
 		if err != nil {
 			return nil, fmt.Errorf("failed to translate data contract '%s': %w", contract.Name, err)
 		}
+
 		if result == nil {
 			return nil, fmt.Errorf("translator returned nil result for data contract '%s'", contract.Name)
 		}
@@ -518,11 +532,12 @@ func (s *SchemaRegistry) getNextPhase(currentPhase SchemaRegistryPhase, changePh
 		return SchemaRegistryPhaseCompare
 	case SchemaRegistryPhaseCompare:
 		// Decision logic based on what needs to be done
-		if len(s.inRegistryButUnknownLocally) > 0 {
+		switch {
+		case len(s.inRegistryButUnknownLocally) > 0:
 			return SchemaRegistryPhaseRemoveUnknown
-		} else if len(s.missingInRegistry) > 0 {
+		case len(s.missingInRegistry) > 0:
 			return SchemaRegistryPhaseAddNew
-		} else {
+		default:
 			return SchemaRegistryPhaseLookup // Fully in sync, restart cycle
 		}
 	case SchemaRegistryPhaseRemoveUnknown:
@@ -616,7 +631,7 @@ func (s *SchemaRegistry) GetMetrics() SchemaRegistryMetrics {
 //
 // Memory management:
 // - Each phase cleans up its data when transitioning (e.g., decode clears rawSubjectsData)
-// - Work queues are reset at compare phase start to ensure clean state
+// - Work queues are reset at compare phase start to ensure clean state.
 func (s *SchemaRegistry) reconcileInternal(ctx context.Context, expectedSubjects map[SubjectName]JSONSchemaDefinition) (err error) {
 	// Run through phases until we complete the reconciliation cycle or hit an error
 	for {
@@ -626,6 +641,7 @@ func (s *SchemaRegistry) reconcileInternal(ctx context.Context, expectedSubjects
 		}
 
 		var changePhase bool
+
 		switch s.currentPhase {
 		case SchemaRegistryPhaseLookup:
 			// Phase 1: Fetch current registry state via HTTP GET /subjects
@@ -652,6 +668,7 @@ func (s *SchemaRegistry) reconcileInternal(ctx context.Context, expectedSubjects
 			if changePhase {
 				s.currentPhase = s.getNextPhase(s.currentPhase, changePhase)
 			}
+
 			return err
 		}
 
@@ -683,7 +700,7 @@ func (s *SchemaRegistry) reconcileInternal(ctx context.Context, expectedSubjects
 //
 // Returns: (error, changePhase)
 // - error: nil on success, non-nil on network/HTTP errors
-// - changePhase: true to advance to decode phase, false to retry this phase
+// - changePhase: true to advance to decode phase, false to retry this phase.
 func (s *SchemaRegistry) lookup(ctx context.Context) (err error, changePhase bool) {
 	// Check if context has enough time remaining for this operation
 	// Each phase has a minimum time requirement to prevent partial operations that might leave
@@ -692,8 +709,9 @@ func (s *SchemaRegistry) lookup(ctx context.Context) (err error, changePhase boo
 	if deadline, ok := ctx.Deadline(); ok {
 		remaining := time.Until(deadline)
 		if remaining <= 0 {
-			return fmt.Errorf("context deadline already passed"), false
+			return errors.New("context deadline already passed"), false
 		}
+
 		if remaining < MinimumLookupTime {
 			return fmt.Errorf("insufficient time remaining in context (< %v)", MinimumLookupTime), false
 		}
@@ -705,7 +723,7 @@ func (s *SchemaRegistry) lookup(ctx context.Context) (err error, changePhase boo
 	timeoutCtx, cancel := s.createTimeoutContext(ctx, MinimumLookupTime)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(timeoutCtx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(timeoutCtx, http.MethodGet, url, nil)
 	if err != nil {
 		return err, false
 	}
@@ -714,9 +732,11 @@ func (s *SchemaRegistry) lookup(ctx context.Context) (err error, changePhase boo
 	if err != nil {
 		return err, false
 	}
+
 	if resp == nil {
-		return fmt.Errorf("received nil response from schema registry"), false
+		return errors.New("received nil response from schema registry"), false
 	}
+
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
 			zap.S().Warnf("Failed to close schema registry response body: %v", closeErr)
@@ -726,6 +746,7 @@ func (s *SchemaRegistry) lookup(ctx context.Context) (err error, changePhase boo
 	// Only HTTP 200 is considered success - all others are transient failures
 	if resp.StatusCode != http.StatusOK {
 		s.logHTTPErrorDetails(resp, "lookup", resp.StatusCode)
+
 		return fmt.Errorf("schema registry lookup failed with status %d", resp.StatusCode), false
 	}
 
@@ -753,14 +774,15 @@ func (s *SchemaRegistry) lookup(ctx context.Context) (err error, changePhase boo
 //
 // Returns: (error, changePhase)
 // - error: nil on success, non-nil on JSON parsing errors
-// - changePhase: true to advance to compare phase, false to retry this phase
+// - changePhase: true to advance to compare phase, false to retry this phase.
 func (s *SchemaRegistry) decode(ctx context.Context) (err error, changePhase bool) {
 	// Check if context has enough time remaining
 	if deadline, ok := ctx.Deadline(); ok {
 		remaining := time.Until(deadline)
 		if remaining <= 0 {
-			return fmt.Errorf("context deadline already passed"), false
+			return errors.New("context deadline already passed"), false
 		}
+
 		if remaining < MinimumDecodeTime {
 			return fmt.Errorf("insufficient time remaining in context (< %v)", MinimumDecodeTime), false
 		}
@@ -801,14 +823,15 @@ func (s *SchemaRegistry) decode(ctx context.Context) (err error, changePhase boo
 //
 // Returns: (error, changePhase)
 // - error: nil on success (analysis operations don't typically fail)
-// - changePhase: always true (analysis complete, time to act or start new cycle)
+// - changePhase: always true (analysis complete, time to act or start new cycle).
 func (s *SchemaRegistry) compare(ctx context.Context, expectedSubjects map[SubjectName]JSONSchemaDefinition) (err error, changePhase bool) {
 	// Check if context has enough time remaining
 	if deadline, ok := ctx.Deadline(); ok {
 		remaining := time.Until(deadline)
 		if remaining <= 0 {
-			return fmt.Errorf("context deadline already passed"), false
+			return errors.New("context deadline already passed"), false
 		}
+
 		if remaining < MinimumCompareTime {
 			return fmt.Errorf("insufficient time remaining in context (< %v)", MinimumCompareTime), false
 		}
@@ -864,14 +887,15 @@ func (s *SchemaRegistry) compare(ctx context.Context, expectedSubjects map[Subje
 //
 // Returns: (error, changePhase)
 // - error: nil on success, non-nil on network/HTTP/registry errors
-// - changePhase: true if work queue empty (advance), false if more subjects to delete (stay)
+// - changePhase: true if work queue empty (advance), false if more subjects to delete (stay).
 func (s *SchemaRegistry) removeUnknown(ctx context.Context) (err error, changePhase bool) {
 	// Check if context has enough time remaining
 	if deadline, ok := ctx.Deadline(); ok {
 		remaining := time.Until(deadline)
 		if remaining <= 0 {
-			return fmt.Errorf("context deadline already passed"), false
+			return errors.New("context deadline already passed"), false
 		}
+
 		if remaining < MinimumRemoveTime {
 			return fmt.Errorf("insufficient time remaining in context (< %v)", MinimumRemoveTime), false
 		}
@@ -886,8 +910,10 @@ func (s *SchemaRegistry) removeUnknown(ctx context.Context) (err error, changePh
 	var subjectToRemove SubjectName
 	for subject := range s.inRegistryButUnknownLocally {
 		subjectToRemove = subject
+
 		break
 	}
+
 	s.currentOperationSubject = subjectToRemove
 
 	// HTTP DELETE /subjects/{subject}
@@ -897,7 +923,7 @@ func (s *SchemaRegistry) removeUnknown(ctx context.Context) (err error, changePh
 	timeoutCtx, cancel := s.createTimeoutContext(ctx, MinimumRemoveTime)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(timeoutCtx, "DELETE", url, nil)
+	req, err := http.NewRequestWithContext(timeoutCtx, http.MethodDelete, url, nil)
 	if err != nil {
 		return err, false
 	}
@@ -906,9 +932,11 @@ func (s *SchemaRegistry) removeUnknown(ctx context.Context) (err error, changePh
 	if err != nil {
 		return fmt.Errorf("failed to delete subject %s: %w", string(subjectToRemove), err), false
 	}
+
 	if resp == nil {
 		return fmt.Errorf("received nil response from schema registry for DELETE %s", string(subjectToRemove)), false
 	}
+
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
 			zap.S().Warnf("Failed to close response body: %v", closeErr)
@@ -926,7 +954,7 @@ func (s *SchemaRegistry) removeUnknown(ctx context.Context) (err error, changePh
 	default:
 		// Handle client errors with custom error code parsing
 		if resp.StatusCode >= 400 && resp.StatusCode < 500 {
-			respBody, readErr := s.extractResponseBody(resp, fmt.Sprintf("DELETE subject %s", string(subjectToRemove)))
+			respBody, readErr := s.extractResponseBody(resp, "DELETE subject "+string(subjectToRemove))
 			if readErr == nil {
 				var errorResp map[string]interface{}
 				if json.Unmarshal(respBody, &errorResp) == nil {
@@ -952,7 +980,8 @@ func (s *SchemaRegistry) removeUnknown(ctx context.Context) (err error, changePh
 			}
 		} else {
 			// Server errors and other cases - transient failure
-			s.logHTTPErrorDetails(resp, fmt.Sprintf("DELETE subject %s", string(subjectToRemove)), resp.StatusCode)
+			s.logHTTPErrorDetails(resp, "DELETE subject "+string(subjectToRemove), resp.StatusCode)
+
 			return fmt.Errorf("delete subject %s returned status %d", string(subjectToRemove), resp.StatusCode), false
 		}
 	}
@@ -996,14 +1025,15 @@ func (s *SchemaRegistry) removeUnknown(ctx context.Context) (err error, changePh
 //
 // Returns: (error, changePhase)
 // - error: nil on success, non-nil on network/HTTP/registry errors
-// - changePhase: true if work queue empty (start new cycle), false if more subjects to add (stay)
+// - changePhase: true if work queue empty (start new cycle), false if more subjects to add (stay).
 func (s *SchemaRegistry) addNew(ctx context.Context) (err error, changePhase bool) {
 	// Check if context has enough time remaining
 	if deadline, ok := ctx.Deadline(); ok {
 		remaining := time.Until(deadline)
 		if remaining <= 0 {
-			return fmt.Errorf("context deadline already passed"), false
+			return errors.New("context deadline already passed"), false
 		}
+
 		if remaining < MinimumAddTime {
 			return fmt.Errorf("insufficient time remaining in context (< %v)", MinimumAddTime), false
 		}
@@ -1015,13 +1045,18 @@ func (s *SchemaRegistry) addNew(ctx context.Context) (err error, changePhase boo
 	}
 
 	// Get first subject to add
-	var subjectToAdd SubjectName
-	var schemaDefinition JSONSchemaDefinition
+	var (
+		subjectToAdd     SubjectName
+		schemaDefinition JSONSchemaDefinition
+	)
+
 	for subject, schema := range s.missingInRegistry {
 		subjectToAdd = subject
 		schemaDefinition = schema
+
 		break
 	}
+
 	s.currentOperationSubject = subjectToAdd
 
 	// Prepare JSON schema payload (schemaType defaults to JSON)
@@ -1029,6 +1064,7 @@ func (s *SchemaRegistry) addNew(ctx context.Context) (err error, changePhase boo
 		"schema":     string(schemaDefinition),
 		"schemaType": "JSON",
 	}
+
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("failed to marshal schema for %s: %w", string(subjectToAdd), err), false
@@ -1041,19 +1077,22 @@ func (s *SchemaRegistry) addNew(ctx context.Context) (err error, changePhase boo
 	timeoutCtx, cancel := s.createTimeoutContext(ctx, MinimumAddTime)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(timeoutCtx, "POST", url, bytes.NewReader(payloadBytes))
+	req, err := http.NewRequestWithContext(timeoutCtx, http.MethodPost, url, bytes.NewReader(payloadBytes))
 	if err != nil {
 		return err, false
 	}
+
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to add subject %s: %w", string(subjectToAdd), err), false
 	}
+
 	if resp == nil {
 		return fmt.Errorf("received nil response from schema registry for POST %s", string(subjectToAdd)), false
 	}
+
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
 			zap.S().Warnf("Failed to close response body: %v\n", closeErr)
@@ -1074,7 +1113,7 @@ func (s *SchemaRegistry) addNew(ctx context.Context) (err error, changePhase boo
 	default:
 		// Handle client errors with custom error code parsing
 		if resp.StatusCode >= 400 && resp.StatusCode < 500 {
-			respBody, readErr := s.extractResponseBody(resp, fmt.Sprintf("POST subject %s", string(subjectToAdd)))
+			respBody, readErr := s.extractResponseBody(resp, "POST subject "+string(subjectToAdd))
 			if readErr == nil {
 				var errorResp map[string]interface{}
 				if json.Unmarshal(respBody, &errorResp) == nil {
@@ -1099,7 +1138,8 @@ func (s *SchemaRegistry) addNew(ctx context.Context) (err error, changePhase boo
 			}
 		} else {
 			// Server errors and other cases - transient failure
-			s.logHTTPErrorDetails(resp, fmt.Sprintf("POST subject %s", string(subjectToAdd)), resp.StatusCode)
+			s.logHTTPErrorDetails(resp, "POST subject "+string(subjectToAdd), resp.StatusCode)
+
 			return fmt.Errorf("add subject %s returned status %d", string(subjectToAdd), resp.StatusCode), false
 		}
 	}
@@ -1150,12 +1190,14 @@ func (s *SchemaRegistry) createTimeoutContext(ctx context.Context, minTime time.
 func (s *SchemaRegistry) extractResponseBody(resp *http.Response, operation string) ([]byte, error) {
 	if resp == nil {
 		s.logger.Debugf("HTTP %s - no response available", operation)
-		return nil, fmt.Errorf("no response available")
+
+		return nil, errors.New("no response available")
 	}
 
 	if resp.Body == nil {
 		s.logger.Debugf("HTTP %s - no response body available", operation)
-		return nil, fmt.Errorf("no response body available")
+
+		return nil, errors.New("no response body available")
 	}
 
 	// Read the response body
@@ -1168,6 +1210,7 @@ func (s *SchemaRegistry) extractResponseBody(resp *http.Response, operation stri
 		} else {
 			s.logger.Debugf("HTTP %s - failed to read response body: %v", operation, err)
 		}
+
 		return bodyBytes, fmt.Errorf("failed to read response body: %w", err)
 	}
 

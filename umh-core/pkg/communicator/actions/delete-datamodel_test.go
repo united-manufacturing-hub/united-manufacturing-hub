@@ -27,12 +27,13 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
-// Helper function for delete action that doesn't need base64 encoding
+// Helper function for delete action that doesn't need base64 encoding.
 func structToMap(v interface{}) map[string]interface{} {
 	data, err := json.Marshal(v)
 	Expect(err).ToNot(HaveOccurred())
 
 	var result map[string]interface{}
+
 	err = json.Unmarshal(data, &result)
 	Expect(err).ToNot(HaveOccurred())
 
@@ -194,7 +195,7 @@ var _ = Describe("DeleteDataModelAction", func() {
 				responseMap, ok := response.(map[string]interface{})
 				Expect(ok).To(BeTrue())
 				Expect(responseMap["name"]).To(Equal("test-model"))
-				Expect(responseMap["deleted"]).To(Equal(true))
+				Expect(responseMap["deleted"]).To(BeTrue())
 
 				// Verify config manager was called
 				Expect(mockConfigMgr.AtomicDeleteDataModelCalled).To(BeTrue())
@@ -215,11 +216,12 @@ var _ = Describe("DeleteDataModelAction", func() {
 					case <-time.After(100 * time.Millisecond):
 						// Timeout to prevent hanging
 					}
+
 					return len(messages)
 				}, "1s").Should(BeNumerically(">=", 2))
 
 				// Verify we received some messages
-				Expect(len(messages)).To(BeNumerically(">", 0))
+				Expect(messages).ToNot(BeEmpty())
 			})
 		})
 
