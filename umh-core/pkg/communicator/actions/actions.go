@@ -15,9 +15,11 @@
 package actions
 
 import (
+	"crypto/x509"
 	"fmt"
 
 	"github.com/google/uuid"
+	validator "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions/permission"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/safejson"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
@@ -58,11 +60,25 @@ type Action interface {
 //
 // After execution, it handles sending the success reply if the action completed successfully.
 // Error handling for each step is done within this function.
-func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePayload, sender string, outboundChannel chan *models.UMHMessage, releaseChannel config.ReleaseChannel, dog watchdog.Iface, traceID uuid.UUID, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager) {
+func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePayload, sender string, outboundChannel chan *models.UMHMessage, releaseChannel config.ReleaseChannel, dog watchdog.Iface, traceID uuid.UUID, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager, senderCert *x509.Certificate) {
 	log := logger.For(logger.ComponentCommunicator)
 
 	// Start a new transaction for this action
 	log.Debugf("Handling action message: Type: %s, Payload: %v", payload.ActionType, payload.ActionPayload)
+
+	snapshot := systemSnapshotManager.GetSnapshot()
+
+	instanceLocation, err := validator.GetInstanceLocation(snapshot)
+	if err != nil {
+		SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, err.Error(), outboundChannel, payload.ActionType)
+		return
+	}
+
+	err = validator.ValidateUserCertificateForAction(log, senderCert, &payload.ActionType, models.Action, &instanceLocation)
+	if err != nil {
+		SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, err.Error(), outboundChannel, payload.ActionType)
+		return
+	}
 
 	var action Action
 

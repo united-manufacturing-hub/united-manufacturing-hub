@@ -1,0 +1,148 @@
+{
+  "groups": {
+    "Get Actions": {
+      "description": "Read-only operations for viewing resources & states",
+      "actions": {
+        "get-protocol-converter": [
+          "Admin",
+          "Viewer",
+          "Editor"
+        ],
+        "get-data-flow-component": [
+          "Admin",
+          "Viewer",
+          "Editor"
+        ],
+        "get-data-flow-component-log": [
+          "Admin",
+          "Viewer",
+          "Editor"
+        ],
+        "get-logs": [
+          "Admin",
+          "Viewer",
+          "Editor"
+        ],
+        "get-datamodel": [
+          "Admin",
+          "Viewer",
+          "Editor"
+        ],
+        "get-streamprocessor": [
+          "Admin",
+          "Viewer",
+          "Editor"
+        ],
+      }
+    },
+    "Edit Actions": {
+      "description": "Operations that modify existing resources",
+      "actions": {
+        "edit-protocol-converter": [
+          "Admin",
+          "Editor"
+        ],
+        "edit-instance-location": [
+          "Admin"
+        ],
+        "edit-instance": [
+          "Admin"
+        ],
+        "edit-data-flow-component": [
+          "Admin",
+          "Editor"
+        ],
+        "edit-datamodel": [
+          "Admin",
+          "Editor"
+        ],
+        "edit-stream-processor": [
+          "Admin",
+          "Editor"
+        ],
+      }
+    },
+    "Delete Actions": {
+      "description": "Operations that remove resources",
+      "actions": {
+        "delete-protocol-converter": [
+          "Admin",
+          "Editor"
+        ],
+        "delete-data-flow-component": [
+          "Admin",
+          "Editor"
+        ]
+        "delete-datamodel": [
+          "Admin",
+          "Editor"
+        ]
+        "delete-stream-processor": [
+          "Admin",
+          "Editor"
+        ]
+      }
+    },
+    "Deploy Actions": {
+      "description": "Operations for deploying new resources",
+      "actions": {
+        "deploy-protocol-converter": [
+          "Admin",
+          "Editor"
+        ],
+        "deploy-data-flow-component": [
+          "Admin",
+          "Editor"
+        ]
+        "deploy-stream-processor": [
+          "Admin",
+          "Editor"
+        ]
+      }
+    },
+    "Test Actions": {
+      "description": "Operations for testing configurations",
+      "actions": {
+        # currently not in use
+      }
+    },
+    "Company Actions": {
+      "description": "Company-level operations",
+      "actions": {
+        "create-invite": [
+          "Admin"
+        ],
+        "get-company-invites": [
+          "Admin"
+        ],
+        "delete-invite": [
+          "Admin"
+        ],
+        "get-company-users": [
+          "Admin"
+        ],
+        "delete-company-user": [
+          "Admin"
+        ],
+        "change-user-role": [
+          "Admin"
+        ],
+        "change-user-permissions": [
+          "Admin"
+        ]
+      }
+    }
+  },
+  "ungrouped": {
+    "unknown": [
+      "Admin",
+      "Viewer",
+      "Editor"
+    ],
+    "dummy": [
+      "Admin",
+      "Viewer",
+      "Editor"
+    ]
+  }
+}
