@@ -16,7 +16,6 @@ package protocolconverter
 
 import (
 	"context"
-	"strings"
 	"sync"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -630,10 +629,13 @@ func (m *MockProtocolConverterService) EvaluateDFCDesiredStates(protConvName str
 	underlyingWriteName := "write-protocolconverter-" + protConvName
 
 	// Check if connection is confirmed up based on FSM state (matching real implementation)
+	// IMPORTANT: Explicitly exclude degraded_connection as connection is unhealthy in that state
 	connectionConfirmedUp := currentFSMState == "starting_dfc" ||
 		currentFSMState == "idle" ||
 		currentFSMState == "active" ||
-		strings.HasPrefix(currentFSMState, "degraded_")
+		currentFSMState == "degraded_redpanda" ||
+		currentFSMState == "degraded_dfc" ||
+		currentFSMState == "degraded_other"
 
 	// Find and update read DFC config
 	for i, config := range m.dfcConfigs {

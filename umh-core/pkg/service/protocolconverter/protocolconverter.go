@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -747,10 +746,13 @@ func (p *ProtocolConverterService) EvaluateDFCDesiredStates(protConvName string,
 					// the connection is flaky or filtered, leading to unreliable data transmission
 					// NOTE: Hardcoded strings to avoid circular import with pkg/fsm/protocolconverter
 					// These correspond to: OperationalStateStartingDFC, OperationalStateIdle, OperationalStateActive
+					// IMPORTANT: Explicitly exclude degraded_connection as connection is unhealthy in that state
 					if currentFSMState == "starting_dfc" ||
 						currentFSMState == "idle" ||
 						currentFSMState == "active" ||
-						strings.HasPrefix(currentFSMState, "degraded") {
+						currentFSMState == "degraded_redpanda" ||
+						currentFSMState == "degraded_dfc" ||
+						currentFSMState == "degraded_other" {
 						p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateActive
 					} else {
 						// Connection not confirmed up yet - keep DFC stopped
@@ -780,10 +782,13 @@ func (p *ProtocolConverterService) EvaluateDFCDesiredStates(protConvName string,
 					// the connection is flaky or filtered, leading to unreliable data transmission
 					// NOTE: Hardcoded strings to avoid circular import with pkg/fsm/protocolconverter
 					// These correspond to: OperationalStateStartingDFC, OperationalStateIdle, OperationalStateActive
+					// IMPORTANT: Explicitly exclude degraded_connection as connection is unhealthy in that state
 					if currentFSMState == "starting_dfc" ||
 						currentFSMState == "idle" ||
 						currentFSMState == "active" ||
-						strings.HasPrefix(currentFSMState, "degraded") {
+						currentFSMState == "degraded_redpanda" ||
+						currentFSMState == "degraded_dfc" ||
+						currentFSMState == "degraded_other" {
 						p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateActive
 					} else {
 						// Connection not confirmed up yet - keep DFC stopped
