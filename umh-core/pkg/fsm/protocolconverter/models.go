@@ -22,6 +22,10 @@ import (
 )
 
 // Operational state constants (using internal_fsm compatible naming).
+//
+// WARNING: These constants are duplicated in pkg/service/protocolconverter/protocolconverter.go
+// as hardcoded strings to prevent circular imports. Any changes here should be reflected there.
+// A proper refactor would move these to pkg/constants/protocolconverter.go to eliminate duplication.
 const (
 	// OperationalStateStopping is the state when the service is in the process of stopping.
 	OperationalStateStopping = "stopping"

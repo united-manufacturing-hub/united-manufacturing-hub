@@ -56,6 +56,8 @@ type MockProtocolConverterService struct {
 	AddToManagerError      error
 	UpdateInManagerError   error
 	RemoveFromManagerError error
+	StartConnectionError   error
+	StartDFCError          error
 	StartError             error
 	StopError              error
 	ForceRemoveError       error
@@ -99,6 +101,8 @@ type MockProtocolConverterService struct {
 	AddToManagerCalled       bool
 	UpdateInManagerCalled    bool
 	RemoveFromManagerCalled  bool
+	StartConnectionCalled    bool
+	StartDFCCalled           bool
 	StartCalled              bool
 	StopCalled               bool
 	ForceRemoveCalled        bool
@@ -478,6 +482,24 @@ func (m *MockProtocolConverterService) RemoveFromManager(
 	return m.RemoveFromManagerError
 }
 
+// StartConnection mocks starting only the connection component of a ProtocolConverter.
+func (m *MockProtocolConverterService) StartConnection(ctx context.Context, filesystemService filesystem.Service, protConvName string) error {
+	m.StartConnectionCalled = true
+
+	underlyingName := "protocolconverter-" + protConvName
+
+	// Start the connection instance
+	for i, connConfig := range m.connConfigs {
+		if connConfig.Name == underlyingName {
+			m.connConfigs[i].DesiredFSMState = connfsm.OperationalStateUp
+
+			return m.StartConnectionError
+		}
+	}
+
+	return m.StartConnectionError
+}
+
 // StartProtocolConverter mocks starting a ProtocolConverter.
 func (m *MockProtocolConverterService) StartProtocolConverter(ctx context.Context, filesystemService filesystem.Service, protConvName string) error {
 	m.mu.Lock()
@@ -487,13 +509,10 @@ func (m *MockProtocolConverterService) StartProtocolConverter(ctx context.Contex
 
 	underlyingName := "protocolconverter-" + protConvName
 
-	dfcFound := false
-
 	// Set the desired state to active for the given component
 	for i, dfcConfig := range m.dfcConfigs {
 		if dfcConfig.Name == underlyingName {
 			m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateActive
-			dfcFound = true
 
 			break
 		}
@@ -501,7 +520,7 @@ func (m *MockProtocolConverterService) StartProtocolConverter(ctx context.Contex
 
 	connFound := false
 
-	// Set the desired state to active for the given component
+	// Set the desired state to up for the connection
 	for i, connConfig := range m.connConfigs {
 		if connConfig.Name == underlyingName {
 			m.connConfigs[i].DesiredFSMState = connfsm.OperationalStateUp
@@ -511,11 +530,24 @@ func (m *MockProtocolConverterService) StartProtocolConverter(ctx context.Contex
 		}
 	}
 
-	if !dfcFound || !connFound {
+	if !connFound {
 		return ErrServiceNotExist
 	}
 
-	return m.StartError
+	return m.StartConnectionError
+}
+
+// StartDFC mocks starting only the DFC components of a ProtocolConverter.
+func (m *MockProtocolConverterService) StartDFC(ctx context.Context, filesystemService filesystem.Service, protConvName string) error {
+	m.StartDFCCalled = true
+
+	// Use EvaluateDFCDesiredStates to handle the conditional DFC starting logic
+	err := m.EvaluateDFCDesiredStates(protConvName, "active", "starting_dfc")
+	if err != nil {
+		return err
+	}
+
+	return m.StartDFCError
 }
 
 // StopProtocolConverter mocks stopping a ProtocolConverter.
@@ -593,18 +625,27 @@ func (m *MockProtocolConverterService) ReconcileManager(ctx context.Context, ser
 // EvaluateDFCDesiredStates mocks the DFC state evaluation logic.
 // This method exists because protocol converters must re-evaluate DFC states
 // when configs change during reconciliation (unlike other FSMs that set states once).
-func (m *MockProtocolConverterService) EvaluateDFCDesiredStates(protConvName string, protocolConverterDesiredState string) error {
+func (m *MockProtocolConverterService) EvaluateDFCDesiredStates(protConvName string, protocolConverterDesiredState string, currentFSMState string) error {
 	// Mock implementation - just update the configs like the real implementation would
 	underlyingReadName := "read-protocolconverter-" + protConvName
 	underlyingWriteName := "write-protocolconverter-" + protConvName
 
+	// Check if connection is confirmed up based on FSM state (matching real implementation)
+	// IMPORTANT: Explicitly exclude degraded_connection as connection is unhealthy in that state
+	connectionConfirmedUp := currentFSMState == "starting_dfc" ||
+		currentFSMState == "idle" ||
+		currentFSMState == "active" ||
+		currentFSMState == "degraded_redpanda" ||
+		currentFSMState == "degraded_dfc" ||
+		currentFSMState == "degraded_other"
+
 	// Find and update read DFC config
 	for i, config := range m.dfcConfigs {
 		if config.Name == underlyingReadName {
-			if protocolConverterDesiredState == "stopped" {
+			if protocolConverterDesiredState == "stopped" || !connectionConfirmedUp {
 				m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateStopped
 			} else {
-				// Only start the DFC, if it has been configured
+				// Only start the DFC, if it has been configured and connection is up
 				if len(m.dfcConfigs[i].DataFlowComponentServiceConfig.BenthosConfig.Input) > 0 {
 					m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateActive
 				} else {
@@ -619,11 +660,11 @@ func (m *MockProtocolConverterService) EvaluateDFCDesiredStates(protConvName str
 	// Find and update write DFC config
 	for i, config := range m.dfcConfigs {
 		if config.Name == underlyingWriteName {
-			if protocolConverterDesiredState == "stopped" {
+			if protocolConverterDesiredState == "stopped" || !connectionConfirmedUp {
 				m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateStopped
 			} else {
-				// Only start the DFC, if it has been configured
-				if len(m.dfcConfigs[i].DataFlowComponentServiceConfig.BenthosConfig.Input) > 0 {
+				// Only start the DFC, if it has been configured and connection is up
+				if len(m.dfcConfigs[i].DataFlowComponentServiceConfig.BenthosConfig.Output) > 0 {
 					m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateActive
 				} else {
 					m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateStopped

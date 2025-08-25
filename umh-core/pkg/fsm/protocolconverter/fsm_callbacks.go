@@ -48,6 +48,8 @@ func (instance *ProtocolConverterInstance) registerCallbacks() {
 	// Basic operational state callbacks
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStartingConnection, func(ctx context.Context, e *fsm.Event) {
 		instance.baseFSMInstance.GetLogger().Infof("Entering starting connection state for %s", instance.baseFSMInstance.GetID())
+		// NOTE: StartConnectionInstance will be called from reconciliation loop, not here
+		// This callback is kept lightweight per FSM pattern requirements
 		// instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
 		//	Record: storage.Record{
 		//		State:       OperationalStateStartingConnection,
@@ -70,6 +72,8 @@ func (instance *ProtocolConverterInstance) registerCallbacks() {
 
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStartingDFC, func(ctx context.Context, e *fsm.Event) {
 		instance.baseFSMInstance.GetLogger().Infof("Entering starting dfc state for %s", instance.baseFSMInstance.GetID())
+		// NOTE: StartDFCInstance will be called from reconciliation loop, not here
+		// This callback is kept lightweight per FSM pattern requirements
 		// instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
 		//	Record: storage.Record{
 		//		State:       OperationalStateStartingDFC,
