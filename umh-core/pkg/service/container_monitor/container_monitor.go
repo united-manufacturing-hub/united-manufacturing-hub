@@ -24,6 +24,8 @@ import (
 
 	"go.uber.org/zap"
 
+	"encoding/hex"
+
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/mem"
@@ -33,7 +35,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-// ServiceInfo contains both raw metrics and health assessments
+// ServiceInfo contains both raw metrics and health assessments.
 type ServiceInfo struct {
 	// Raw metrics (keeping same structure for compatibility)
 	CPU    *models.CPU    // Keep existing CPU metrics
@@ -51,13 +53,13 @@ type ServiceInfo struct {
 	DiskHealth    models.HealthCategory
 }
 
-// Service defines the interface for container monitoring
+// Service defines the interface for container monitoring.
 type Service interface {
 	// GetStatus returns container metrics with health assessments
 	GetStatus(ctx context.Context) (*ServiceInfo, error)
 }
 
-// ContainerMonitorService implements the Service interface
+// ContainerMonitorService implements the Service interface.
 type ContainerMonitorService struct {
 	fs              filesystem.Service
 	logger          *zap.SugaredLogger
@@ -68,12 +70,12 @@ type ContainerMonitorService struct {
 	dataPath        string                       // Path to check for disk metrics and HWID file
 }
 
-// NewContainerMonitorService creates a new container monitor service instance
+// NewContainerMonitorService creates a new container monitor service instance.
 func NewContainerMonitorService(fs filesystem.Service) *ContainerMonitorService {
 	return NewContainerMonitorServiceWithPath(fs, constants.DataMountPath)
 }
 
-// NewContainerMonitorServiceWithPath creates a new container monitor service with a custom data path
+// NewContainerMonitorServiceWithPath creates a new container monitor service with a custom data path.
 func NewContainerMonitorServiceWithPath(fs filesystem.Service, dataPath string) *ContainerMonitorService {
 	log := logger.For(logger.ComponentContainerMonitorService)
 
@@ -85,17 +87,17 @@ func NewContainerMonitorServiceWithPath(fs filesystem.Service, dataPath string) 
 	}
 }
 
-// GetFilesystemService returns the filesystem service - used for testing only
+// GetFilesystemService returns the filesystem service - used for testing only.
 func (c *ContainerMonitorService) GetFilesystemService() filesystem.Service {
 	return c.fs
 }
 
-// SetDataPath changes the data path - used for testing only
+// SetDataPath changes the data path - used for testing only.
 func (c *ContainerMonitorService) SetDataPath(path string) {
 	c.dataPath = path
 }
 
-// GetStatus collects and returns the current container metrics
+// GetStatus collects and returns the current container metrics.
 func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, error) {
 	// Create a new status with default health (Active)
 	status := &ServiceInfo{
@@ -112,6 +114,7 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get CPU metrics: %w", err)
 	}
+
 	status.CPU = cpuStat
 
 	// Get memory stats
@@ -119,6 +122,7 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get memory metrics: %w", err)
 	}
+
 	status.Memory = memStat
 
 	// Get disk stats
@@ -126,6 +130,7 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get disk metrics: %w", err)
 	}
+
 	status.Disk = diskStat
 
 	// Get hardware info
@@ -135,6 +140,7 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 		// Use empty string as fallback
 		hwid = ""
 	}
+
 	status.Hwid = hwid
 
 	// Update last collected timestamp
@@ -176,7 +182,7 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 	return status, nil
 }
 
-// GetHealth returns the health status of the container based on current metrics
+// GetHealth returns the health status of the container based on current metrics.
 func (c *ContainerMonitorService) GetHealth(ctx context.Context) (*models.Health, error) {
 	status, err := c.GetStatus(ctx)
 	if err != nil {
@@ -193,15 +199,18 @@ func (c *ContainerMonitorService) GetHealth(ctx context.Context) (*models.Health
 	// Generate an appropriate message
 	if status.OverallHealth == models.Degraded {
 		var message string
-		if status.CPUHealth == models.Degraded {
+
+		switch {
+		case status.CPUHealth == models.Degraded:
 			message = "CPU metrics degraded"
-		} else if status.MemoryHealth == models.Degraded {
+		case status.MemoryHealth == models.Degraded:
 			message = "Memory metrics degraded"
-		} else if status.DiskHealth == models.Degraded {
+		case status.DiskHealth == models.Degraded:
 			message = "Disk metrics degraded"
-		} else {
+		default:
 			message = "One or more metrics degraded"
 		}
+
 		health.Message = message
 	} else {
 		health.Message = "Container is operating normally"
@@ -255,6 +264,7 @@ func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMC
 	if err != nil {
 		return 0, 0, 0, err
 	}
+
 	if len(usagePercentages) > 0 {
 		usagePercent = usagePercentages[0]
 	}
@@ -327,7 +337,6 @@ func (c *ContainerMonitorService) getDiskMetrics(ctx context.Context) (*models.D
 	// If the total reported size is greater than 10TB and we are on Docker Desktop on macOS,
 	// then it is likely we are observing the known block-size inflation issue.
 	if IsDockerDesktopMac() && totalBytes > 10*oneTB {
-
 		// Use the macOS-adjusted approach as a fallback.
 		correctedUsed, correctedTotal, err := c.getMacOSAdjustedDiskMetrics()
 		if err == nil {
@@ -365,10 +374,11 @@ func (c *ContainerMonitorService) getDiskMetrics(ctx context.Context) (*models.D
 	return diskStat, nil
 }
 
-// getHWID gets the hardware ID from system
+// getHWID gets the hardware ID from system.
 func (c *ContainerMonitorService) getHWID(ctx context.Context) (string, error) {
 	// Try to read from the hardware ID file
-	hwidPath := fmt.Sprintf("%s/hwid", c.dataPath)
+	hwidPath := c.dataPath + "/hwid"
+
 	exists, err := c.fs.FileExists(ctx, hwidPath)
 	if err != nil {
 		return "", WrapMetricsError(ErrHWIDCollection, "error checking if HWID file exists")
@@ -379,6 +389,7 @@ func (c *ContainerMonitorService) getHWID(ctx context.Context) (string, error) {
 		if err != nil {
 			return "", WrapMetricsError(ErrHWIDCollection, "error reading HWID file")
 		}
+
 		return string(data), nil
 	}
 
@@ -393,7 +404,7 @@ func (c *ContainerMonitorService) getHWID(ctx context.Context) (string, error) {
 	return hwid, nil
 }
 
-// generateNewHWID creates a new hardware ID file with a random hash
+// generateNewHWID creates a new hardware ID file with a random hash.
 func (c *ContainerMonitorService) generateNewHWID(ctx context.Context) (string, error) {
 	// Ensure the data directory exists
 	err := c.fs.EnsureDirectory(ctx, c.dataPath)
@@ -403,6 +414,7 @@ func (c *ContainerMonitorService) generateNewHWID(ctx context.Context) (string, 
 
 	// Generate 1024 bytes of random data
 	buffer := make([]byte, 1024)
+
 	_, err = rand.Read(buffer)
 	if err != nil {
 		return "", WrapMetricsError(ErrHWIDCollection, "error generating random data")
@@ -411,10 +423,11 @@ func (c *ContainerMonitorService) generateNewHWID(ctx context.Context) (string, 
 	// Create a SHA3-256 hash
 	hash := sha3.New256()
 	_, _ = hash.Write(buffer)
-	hwid := fmt.Sprintf("%x", hash.Sum(nil))
+	hwid := hex.EncodeToString(hash.Sum(nil))
 
 	// Write the hash to the file
-	hwidPath := fmt.Sprintf("%s/hwid", c.dataPath)
+	hwidPath := c.dataPath + "/hwid"
+
 	err = c.fs.WriteFile(ctx, hwidPath, []byte(hwid), 0644)
 	if err != nil {
 		return "", WrapMetricsError(ErrHWIDCollection, "error writing HWID file")

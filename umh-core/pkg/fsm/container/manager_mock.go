@@ -15,6 +15,7 @@
 package container
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -24,7 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
 )
 
-// NewContainerManagerWithMockedService creates a ContainerManager that uses a mock container_monitor.Service
+// NewContainerManagerWithMockedService creates a ContainerManager that uses a mock container_monitor.Service.
 func NewContainerManagerWithMockedService(name string, mockSvc container_monitor.MockService) *ContainerManager {
 	managerName := fmt.Sprintf("%s_mock_%s", ContainerManagerComponentName, name)
 
@@ -49,33 +50,39 @@ func NewContainerManagerWithMockedService(name string, mockSvc container_monitor
 		},
 		func(cc config.ContainerConfig) (public_fsm.FSMInstance, error) {
 			inst := NewContainerInstanceWithService(cc, &mockSvc)
+
 			return inst, nil
 		},
 		func(instance public_fsm.FSMInstance, cc config.ContainerConfig) (bool, error) {
 			ci, ok := instance.(*ContainerInstance)
 			if !ok {
-				return false, fmt.Errorf("instance not a ContainerInstance")
+				return false, errors.New("instance not a ContainerInstance")
 			}
+
 			return ci.config.DesiredFSMState == cc.DesiredFSMState, nil
 		},
 		func(instance public_fsm.FSMInstance, cc config.ContainerConfig) error {
 			ci, ok := instance.(*ContainerInstance)
 			if !ok {
-				return fmt.Errorf("instance not a ContainerInstance")
+				return errors.New("instance not a ContainerInstance")
 			}
+
 			ci.config = cc
+
 			return ci.SetDesiredFSMState(cc.DesiredFSMState)
 		},
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
 			ci, ok := instance.(*ContainerInstance)
 			if !ok {
-				return 0, fmt.Errorf("instance not a ContainerInstance")
+				return 0, errors.New("instance not a ContainerInstance")
 			}
+
 			return ci.GetMinimumRequiredTime(), nil
 		},
 	)
 
 	logger.For(managerName).Info("Created ContainerManager with mocked service.")
+
 	return &ContainerManager{
 		BaseFSMManager: baseMgr,
 	}

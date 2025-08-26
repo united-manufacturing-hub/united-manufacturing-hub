@@ -34,7 +34,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-// Standard Ginkgo bootstrap
+// Standard Ginkgo bootstrap.
 func TestIntegration(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "UMH Integration Suite")

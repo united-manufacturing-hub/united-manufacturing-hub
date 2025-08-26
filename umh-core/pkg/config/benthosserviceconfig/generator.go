@@ -22,19 +22,19 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Generator handles the generation of Benthos YAML configurations
+// Generator handles the generation of Benthos YAML configurations.
 type Generator struct {
 	tmpl *template.Template
 }
 
-// NewGenerator creates a new YAML generator for Benthos configurations
+// NewGenerator creates a new YAML generator for Benthos configurations.
 func NewGenerator() *Generator {
 	return &Generator{
 		tmpl: template.Must(template.New("benthos").Parse(simplifiedTemplate)),
 	}
 }
 
-// RenderConfig generates a Benthos YAML configuration from a BenthosServiceConfig
+// RenderConfig generates a Benthos YAML configuration from a BenthosServiceConfig.
 func (g *Generator) RenderConfig(cfg BenthosServiceConfig) (string, error) {
 	if cfg.LogLevel == "" {
 		cfg.LogLevel = "INFO"
@@ -58,7 +58,7 @@ func (g *Generator) RenderConfig(cfg BenthosServiceConfig) (string, error) {
 	return yamlStr, nil
 }
 
-// ConfigToMap converts a BenthosServiceConfig to a raw map for YAML generation
+// ConfigToMap converts a BenthosServiceConfig to a raw map for YAML generation.
 func (g *Generator) ConfigToMap(cfg BenthosServiceConfig) map[string]interface{} {
 	configMap := make(map[string]interface{})
 
@@ -110,7 +110,7 @@ func (g *Generator) ConfigToMap(cfg BenthosServiceConfig) map[string]interface{}
 	return configMap
 }
 
-// NormalizeConfig applies Benthos defaults to ensure consistent comparison
+// NormalizeConfig applies Benthos defaults to ensure consistent comparison.
 func NormalizeConfig(raw map[string]interface{}) map[string]interface{} {
 	// Create a deep copy to avoid modifying the original
 	normalized := make(map[string]interface{})
@@ -185,7 +185,7 @@ func NormalizeConfig(raw map[string]interface{}) map[string]interface{} {
 	return normalized
 }
 
-// simplifiedTemplate is a much simpler template that just places pre-rendered YAML blocks
+// simplifiedTemplate is a much simpler template that just places pre-rendered YAML blocks.
 var simplifiedTemplate = `input:{{.Input}}
 
 output:{{.Output}}

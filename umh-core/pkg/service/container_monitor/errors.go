@@ -19,25 +19,25 @@ import (
 	"fmt"
 )
 
-// Container monitor specific errors
+// Container monitor specific errors.
 var (
-	// ErrCPUMetrics indicates a failure in collecting CPU metrics
+	// ErrCPUMetrics indicates a failure in collecting CPU metrics.
 	ErrCPUMetrics = errors.New("failed to collect CPU metrics")
 
-	// ErrMemoryMetrics indicates a failure in collecting memory metrics
+	// ErrMemoryMetrics indicates a failure in collecting memory metrics.
 	ErrMemoryMetrics = errors.New("failed to collect memory metrics")
 
-	// ErrDiskMetrics indicates a failure in collecting disk metrics
+	// ErrDiskMetrics indicates a failure in collecting disk metrics.
 	ErrDiskMetrics = errors.New("failed to collect disk metrics")
 
-	// ErrHWIDCollection indicates a failure in retrieving the hardware ID
+	// ErrHWIDCollection indicates a failure in retrieving the hardware ID.
 	ErrHWIDCollection = errors.New("failed to retrieve hardware ID")
 
-	// ErrUnsupportedOS indicates the operating system is not supported
+	// ErrUnsupportedOS indicates the operating system is not supported.
 	ErrUnsupportedOS = errors.New("unsupported operating system")
 )
 
-// WrapMetricsError wraps an error with additional context
+// WrapMetricsError wraps an error with additional context.
 func WrapMetricsError(baseErr error, message string) error {
 	return fmt.Errorf("%s: %w", message, baseErr)
 }

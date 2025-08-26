@@ -15,6 +15,7 @@
 package agent_monitor
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -25,17 +26,17 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 )
 
-// AgentManager is the FSM manager for the agent monitor instance
+// AgentManager is the FSM manager for the agent monitor instance.
 type AgentManager struct {
 	*public_fsm.BaseFSMManager[config.AgentMonitorConfig]
 }
 
-// AgentManagerSnapshot extends the base manager snapshot to hold any agent-specific info
+// AgentManagerSnapshot extends the base manager snapshot to hold any agent-specific info.
 type AgentManagerSnapshot struct {
 	*public_fsm.BaseManagerSnapshot
 }
 
-// Ensure it satisfies fsm.ObservedStateSnapshot
+// Ensure it satisfies fsm.ObservedStateSnapshot.
 func (a *AgentManagerSnapshot) IsObservedStateSnapshot() {}
 
 // NewAgentManager constructs a manager.
@@ -49,10 +50,12 @@ func NewAgentManager(name string) *AgentManager {
 		func(fc config.FullConfig) ([]config.AgentMonitorConfig, error) {
 			// Always return a single config
 			var configs []config.AgentMonitorConfig
+
 			configs = append(configs, config.AgentMonitorConfig{
 				Name:            constants.DefaultInstanceName,
 				DesiredFSMState: OperationalStateActive,
 			})
+
 			return configs, nil
 		},
 		// Get name from config
@@ -66,13 +69,14 @@ func NewAgentManager(name string) *AgentManager {
 		// Create instance
 		func(fc config.AgentMonitorConfig) (public_fsm.FSMInstance, error) {
 			inst := NewAgentInstance(fc)
+
 			return inst, nil
 		},
 		// Compare config => if same, no recreation needed
 		func(instance public_fsm.FSMInstance, fc config.AgentMonitorConfig) (bool, error) {
 			ai, ok := instance.(*AgentInstance)
 			if !ok {
-				return false, fmt.Errorf("instance is not an AgentInstance")
+				return false, errors.New("instance is not an AgentInstance")
 			}
 			// If same config => return true, else false
 			// Minimal check:
@@ -82,20 +86,24 @@ func NewAgentManager(name string) *AgentManager {
 		func(instance public_fsm.FSMInstance, fc config.AgentMonitorConfig) error {
 			ai, ok := instance.(*AgentInstance)
 			if !ok {
-				return fmt.Errorf("instance is not an AgentInstance")
+				return errors.New("instance is not an AgentInstance")
 			}
+
 			ai.config = fc
+
 			return nil
 		},
 		// Get expected max p95 execution time per instance
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
 			ai, ok := instance.(*AgentInstance)
 			if !ok {
-				return 0, fmt.Errorf("instance is not an AgentInstance")
+				return 0, errors.New("instance is not an AgentInstance")
 			}
+
 			return ai.GetMinimumRequiredTime(), nil
 		},
 	)
+
 	metrics.InitErrorCounter(logger.AgentManagerComponentName, name)
 
 	return &AgentManager{
@@ -103,16 +111,20 @@ func NewAgentManager(name string) *AgentManager {
 	}
 }
 
-// CreateSnapshot overrides the base to add agent-specific fields if desired
+// CreateSnapshot overrides the base to add agent-specific fields if desired.
 func (m *AgentManager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	baseSnap := m.BaseFSMManager.CreateSnapshot()
+
 	baseSnapshot, ok := baseSnap.(*public_fsm.BaseManagerSnapshot)
 	if !ok {
 		logger.For(logger.AgentManagerComponentName).Errorf("Could not cast manager snapshot to BaseManagerSnapshot.")
+
 		return baseSnap
 	}
+
 	snap := &AgentManagerSnapshot{
 		BaseManagerSnapshot: baseSnapshot,
 	}
+
 	return snap
 }

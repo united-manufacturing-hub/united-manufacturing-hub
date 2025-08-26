@@ -288,6 +288,7 @@ var _ = Describe("Subscribe and Receive Test", func() {
 				decodedContent, err := encoding.DecodeMessageFromUMHInstanceToUser(msg.Content)
 				if err != nil {
 					GinkgoWriter.Printf("  - Failed to decode: %v\n", err)
+
 					continue
 				}
 
@@ -296,7 +297,7 @@ var _ = Describe("Subscribe and Receive Test", func() {
 
 				// Check if it's a status message
 				if decodedContent.MessageType == models.Status {
-					foundMsg := fmt.Sprintf("  - FOUND STATUS MESSAGE for %s", msg.Email)
+					foundMsg := "  - FOUND STATUS MESSAGE for " + msg.Email
 					GinkgoWriter.Println(foundMsg)
 					capturedStatusMessages = append(capturedStatusMessages, foundMsg)
 					foundStatus = true

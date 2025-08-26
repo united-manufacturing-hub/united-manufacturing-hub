@@ -24,7 +24,9 @@ import "encoding/json"
 
 func UnmarshalStatusMessage(data []byte) (StatusMessage, error) {
 	var r StatusMessage
+
 	err := json.Unmarshal(data, &r)
+
 	return r, err
 }
 
@@ -32,7 +34,7 @@ func (r *StatusMessage) Marshal() ([]byte, error) {
 	return json.Marshal(r)
 }
 
-// Schema for the status message containing system state and DFC information
+// Schema for the status message containing system state and DFC information.
 type StatusMessage struct {
 	General General                `json:"general"`
 	Plugins map[string]interface{} `json:"plugins"`

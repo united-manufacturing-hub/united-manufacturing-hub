@@ -87,7 +87,7 @@ func (a *GetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 	configPath := config.DefaultConfigPath
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-		fmt.Sprintf("Reading config file from %s", configPath), a.outboundChannel, models.GetConfigFile)
+		"Reading config file from "+configPath, a.outboundChannel, models.GetConfigFile)
 
 	// Get the config file content as string using the new method
 	content, err := a.configManager.GetConfigAsString(ctx)
@@ -95,6 +95,7 @@ func (a *GetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 		errMsg := fmt.Sprintf("Failed to read config file: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errMsg, a.outboundChannel, models.GetConfigFile)
+
 		return nil, nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 

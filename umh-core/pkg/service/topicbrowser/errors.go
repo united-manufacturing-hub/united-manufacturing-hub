@@ -17,12 +17,12 @@ package topicbrowser
 import "errors"
 
 var (
-	// ErrServiceNotExist indicates the requested service does not exist
+	// ErrServiceNotExist indicates the requested service does not exist.
 	ErrServiceNotExist = errors.New("service does not exist")
 
-	// ErrServiceAlreadyExists indicates the requested service already exists
+	// ErrServiceAlreadyExists indicates the requested service already exists.
 	ErrServiceAlreadyExists = errors.New("service already exists")
 
-	// ErrServiceNoLogFile indicates the health check had no logs to process
+	// ErrServiceNoLogFile indicates the health check had no logs to process.
 	ErrServiceNoLogFile = errors.New("log file not found")
 )

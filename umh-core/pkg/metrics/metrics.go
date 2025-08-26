@@ -19,6 +19,8 @@ import (
 	"runtime"
 	"time"
 
+	"errors"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -28,9 +30,9 @@ import (
 )
 
 const (
-	// Component Labels
+	// Component Labels.
 	ComponentControlLoop = "control_loop"
-	// Manager
+	// Manager.
 	ComponentBaseFSMManager           = "base_fsm_manager"
 	ComponentS6Manager                = "s6_manager"
 	ComponentBenthosManager           = "benthos_manager"
@@ -42,7 +44,7 @@ const (
 	ComponentProtocolConverterManager = "protocol_converter_manager"
 	ComponentStreamProcessorManager   = "stream_processor_manager"
 	ComponentTopicBrowserManager      = "topic_browser_manager"
-	// Instances
+	// Instances.
 	ComponentBaseFSMInstance           = "base_fsm_instance"
 	ComponentS6Instance                = "s6_instance"
 	ComponentBenthosInstance           = "benthos_instance"
@@ -56,7 +58,7 @@ const (
 	ComponentBenthosMonitor            = "benthos_monitor"
 	ComponentRedpandaMonitor           = "redpanda_monitor"
 	ComponentTopicBrowserInstance      = "topic_browser_instance"
-	// Services
+	// Services.
 	ComponentS6Service         = "s6_service"
 	ComponentBenthosService    = "benthos_service"
 	ComponentRedpandaService   = "redpanda_service"
@@ -67,11 +69,11 @@ const (
 )
 
 var (
-	// Namespace and subsystem for all metrics
+	// Namespace and subsystem for all metrics.
 	namespace = "umh"
 	subsystem = "core"
 
-	// Error counters
+	// Error counters.
 	errorCounter = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: namespace,
@@ -82,7 +84,7 @@ var (
 		[]string{"component", "instance"},
 	)
 
-	// Reconcile timing
+	// Reconcile timing.
 	reconcileTime = promauto.NewSummaryVec(
 		prometheus.SummaryOpts{
 			Namespace: namespace,
@@ -99,7 +101,7 @@ var (
 		[]string{"component", "instance"},
 	)
 
-	// Starvation timer
+	// Starvation timer.
 	starvationSeconds = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: namespace,
@@ -109,7 +111,7 @@ var (
 		},
 	)
 
-	// Service state metrics
+	// Service state metrics.
 	serviceCurrentState = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: namespace,
@@ -130,11 +132,11 @@ var (
 		[]string{"component", "instance"},
 	)
 
-	// TODO: observed state
+	// TODO: observed state.
 )
 
 // SetupMetricsEndpoint starts an HTTP server to expose metrics
-// This should be called once at application startup
+// This should be called once at application startup.
 func SetupMetricsEndpoint(addr string) *http.Server {
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
@@ -145,7 +147,7 @@ func SetupMetricsEndpoint(addr string) *http.Server {
 	}
 
 	go func() {
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			sentry.ReportIssue(err, sentry.IssueTypeFatal, logger.For("metrics"))
 		}
 	}()
@@ -153,7 +155,7 @@ func SetupMetricsEndpoint(addr string) *http.Server {
 	return server
 }
 
-// printDetailedStackTrace prints a detailed stack trace with more information
+// printDetailedStackTrace prints a detailed stack trace with more information.
 func printDetailedStackTrace() {
 	// Get stack trace for all goroutines with a large buffer
 	buf := make([]byte, 1024*1024) // Allocate 1MB buffer
@@ -163,9 +165,10 @@ func printDetailedStackTrace() {
 	logger.For("stacktrace").Debugf("=== DETAILED STACK TRACE ===\n%s", string(buf[:n]))
 }
 
-// IncErrorCountAndLog increments the error counter for a component and logs a debug message if a logger is provided
+// IncErrorCountAndLog increments the error counter for a component and logs a debug message if a logger is provided.
 func IncErrorCountAndLog(component, instance string, err error, logger *zap.SugaredLogger) {
 	IncErrorCount(component, instance)
+
 	if logger != nil {
 		// Display detailed stacktrace
 		printDetailedStackTrace()
@@ -173,27 +176,27 @@ func IncErrorCountAndLog(component, instance string, err error, logger *zap.Suga
 	}
 }
 
-// IncErrorCount increments the error counter for a component
+// IncErrorCount increments the error counter for a component.
 func IncErrorCount(component, instance string) {
 	errorCounter.WithLabelValues(component, instance).Inc()
 }
 
-// InitErrorCounter initializes the error counter for a component
+// InitErrorCounter initializes the error counter for a component.
 func InitErrorCounter(component, instance string) {
 	errorCounter.WithLabelValues(component, instance).Add(0)
 }
 
-// ObserveReconcileTime records the time taken for a reconciliation
+// ObserveReconcileTime records the time taken for a reconciliation.
 func ObserveReconcileTime(component, instance string, duration time.Duration) {
 	reconcileTime.WithLabelValues(component, instance).Observe(float64(duration.Milliseconds()))
 }
 
-// AddStarvationTime increases the starvation counter by the specified seconds
+// AddStarvationTime increases the starvation counter by the specified seconds.
 func AddStarvationTime(seconds float64) {
 	starvationSeconds.Add(seconds)
 }
 
-// UpdateServiceState updates the current and desired state metrics for a service
+// UpdateServiceState updates the current and desired state metrics for a service.
 func UpdateServiceState(component, instance string, currentState, desiredState string) {
 	// Convert state strings to numeric values
 	currentValue := getStateValue(currentState)
@@ -204,7 +207,7 @@ func UpdateServiceState(component, instance string, currentState, desiredState s
 	serviceDesiredState.WithLabelValues(component, instance).Set(desiredValue)
 }
 
-// getStateValue converts a state string to a numeric value for the metric
+// getStateValue converts a state string to a numeric value for the metric.
 func getStateValue(state string) float64 {
 	switch state {
 	case "stopped":

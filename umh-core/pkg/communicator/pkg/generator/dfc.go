@@ -36,17 +36,18 @@ func DfcsFromSnapshot(
 	mgr fsm.ManagerSnapshot,
 	log *zap.SugaredLogger,
 ) []models.Dfc {
-
 	if mgr == nil {
 		return defaultDfcs()
 	}
 
 	var out []models.Dfc
+
 	for _, inst := range mgr.GetInstances() {
 		if d, err := buildDfc(*inst, log); err == nil {
 			out = append(out, d)
 		}
 	}
+
 	return out
 }
 
@@ -56,7 +57,6 @@ func buildDfc(
 	instance fsm.FSMInstanceSnapshot,
 	_ *zap.SugaredLogger,
 ) (models.Dfc, error) {
-
 	observed, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
 	if !ok || observed == nil {
 		return models.Dfc{}, fmt.Errorf("observed state %T is not DataflowComponentObservedStateSnapshot", instance.LastObservedState)
@@ -64,6 +64,7 @@ func buildDfc(
 
 	// ---- health ---------------------------------------------------------
 	healthCat := models.Neutral
+
 	switch instance.CurrentState {
 	case dataflowcomponent.OperationalStateActive:
 		healthCat = models.Active
@@ -87,7 +88,6 @@ func buildDfc(
 	svcInfo := observed.ServiceInfo
 	if m := svcInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState; m != nil &&
 		m.Input.LastCount > 0 {
-
 		avgThroughput := m.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds()
 		if instance.DesiredState == dataflowcomponent.OperationalStateStopped {
 			avgThroughput = 0
@@ -97,6 +97,7 @@ func buildDfc(
 			AvgInputThroughputPerMinuteInMsgSec: avgThroughput,
 		}
 	}
+
 	return dfc, nil
 }
 

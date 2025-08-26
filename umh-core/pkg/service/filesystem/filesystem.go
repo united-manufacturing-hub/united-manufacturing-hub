@@ -24,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"errors"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -31,7 +33,7 @@ import (
 )
 
 // Service provides an interface for filesystem operations
-// This allows for easier testing and separation of concerns
+// This allows for easier testing and separation of concerns.
 type Service interface {
 	// EnsureDirectory creates a directory if it doesn't exist
 	EnsureDirectory(ctx context.Context, path string) error
@@ -91,23 +93,24 @@ type Service interface {
 // chunkBufferPool provides reusable buffers for efficient file reading
 // CONCURRENCY SAFETY: sync.Pool is thread-safe and handles concurrent Get/Put operations
 // MEMORY EFFICIENCY: Reuses 1MB buffers across goroutines to reduce GC pressure
-// BUFFER REUSE: Each buffer is completely overwritten by io.ReadFull before being appended to result
+// BUFFER REUSE: Each buffer is completely overwritten by io.ReadFull before being appended to result.
 var chunkBufferPool = sync.Pool{
 	New: func() interface{} {
 		chunk := make([]byte, constants.S6FileReadChunkSize)
+
 		return &chunk
 	},
 }
 
-// DefaultService is the default implementation of FileSystemService
+// DefaultService is the default implementation of FileSystemService.
 type DefaultService struct{}
 
-// NewDefaultService creates a new DefaultFileSystemService
+// NewDefaultService creates a new DefaultFileSystemService.
 func NewDefaultService() *DefaultService {
 	return &DefaultService{}
 }
 
-// checkContext checks if the context is done before proceeding with an operation
+// checkContext checks if the context is done before proceeding with an operation.
 func (s *DefaultService) checkContext(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
@@ -117,7 +120,7 @@ func (s *DefaultService) checkContext(ctx context.Context) error {
 	}
 }
 
-// EnsureDirectory creates a directory if it doesn't exist
+// EnsureDirectory creates a directory if it doesn't exist.
 func (s *DefaultService) EnsureDirectory(ctx context.Context, path string) error {
 	if err := s.checkContext(ctx); err != nil {
 		return fmt.Errorf("failed to check context: %w", err)
@@ -137,13 +140,14 @@ func (s *DefaultService) EnsureDirectory(ctx context.Context, path string) error
 		if err != nil {
 			return fmt.Errorf("failed to create directory %s: %w", path, err)
 		}
+
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
 	}
 }
 
-// ReadFile reads a file's contents respecting the context
+// ReadFile reads a file's contents respecting the context.
 func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, error) {
 	if err := s.checkContext(ctx); err != nil {
 		return nil, fmt.Errorf("failed to check context: %w", err)
@@ -154,6 +158,7 @@ func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, err
 		err  error
 		data []byte
 	}
+
 	resCh := make(chan result, 1)
 
 	// Run file operation in goroutine
@@ -168,12 +173,14 @@ func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, err
 		if res.err != nil {
 			return nil, res.err
 		}
+
 		return res.data, nil
 	case <-ctx.Done():
 		err := ctx.Err()
 		if err == nil {
-			err = fmt.Errorf("context cancelled")
+			err = errors.New("context cancelled")
 		}
+
 		return nil, err
 	}
 }
@@ -192,13 +199,12 @@ func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, err
 // - Result buffer contains ONLY actual file data (no padding/zeros)
 // - newSize is always the correct next read offset (original_from + bytes_read)
 // - Graceful degradation: partial reads return success, allowing incremental progress
-// - Thread-safe: Buffer pool handles concurrent access safely
+// - Thread-safe: Buffer pool handles concurrent access safely.
 func (s *DefaultService) ReadFileRange(
 	ctx context.Context,
 	path string,
 	from int64,
 ) ([]byte, int64, error) {
-
 	if err := s.checkContext(ctx); err != nil {
 		return nil, 0, err
 	}
@@ -208,14 +214,17 @@ func (s *DefaultService) ReadFileRange(
 		data    []byte
 		newSize int64
 	}
+
 	resCh := make(chan result, 1)
 
 	go func() {
 		f, err := os.Open(path)
 		if err != nil {
 			resCh <- result{err: err, data: nil, newSize: 0}
+
 			return
 		}
+
 		defer func() {
 			if err := f.Close(); err != nil {
 				// Sending to resCh will block the goroutine, so we don't want to do that
@@ -228,18 +237,22 @@ func (s *DefaultService) ReadFileRange(
 		fi, err := f.Stat()
 		if err != nil {
 			resCh <- result{err: err, data: nil, newSize: 0}
+
 			return
 		}
+
 		size := fi.Size()
 
 		// nothing new?
 		if from >= size {
 			resCh <- result{err: nil, data: nil, newSize: size}
+
 			return
 		}
 
 		if _, err = f.Seek(from, io.SeekStart); err != nil {
 			resCh <- result{err: err, data: nil, newSize: 0}
+
 			return
 		}
 
@@ -247,9 +260,11 @@ func (s *DefaultService) ReadFileRange(
 		// If less than timeBuffer remains, gracefully exit with partial data instead of timing out
 		deadline, ok := ctx.Deadline()
 		if !ok {
-			resCh <- result{err: fmt.Errorf("context deadline not set"), data: nil, newSize: 0}
+			resCh <- result{err: errors.New("context deadline not set"), data: nil, newSize: 0}
+
 			return
 		}
+
 		timeBuffer := time.Until(deadline) / 2
 
 		// MEMORY PREALLOCATION: Pre-allocate capacity but start with zero length
@@ -262,7 +277,8 @@ func (s *DefaultService) ReadFileRange(
 		smallBuf := chunkBufferPool.Get().(*[]byte)
 		// Sanity check (can't happen unless code changes)
 		if smallBuf == nil {
-			resCh <- result{err: fmt.Errorf("smallBuf is nil"), data: nil, newSize: 0}
+			resCh <- result{err: errors.New("smallBuf is nil"), data: nil, newSize: 0}
+
 			return
 		}
 
@@ -275,22 +291,26 @@ func (s *DefaultService) ReadFileRange(
 				if remaining := time.Until(deadline); remaining < timeBuffer {
 					// NEWSIZE CALCULATION: from + bytes_read = next offset to read from
 					resCh <- result{err: nil, data: buf, newSize: from + int64(len(buf))}
+
 					return
 				}
 			}
 
 			// Read chunk: io.ReadFull either reads exactly len(smallBuf) bytes OR returns error
 			n, err := io.ReadFull(f, *smallBuf)
-			if err == io.EOF || err == io.ErrUnexpectedEOF {
+			if err == io.EOF || errors.Is(err, io.ErrUnexpectedEOF) {
 				if n > 0 {
 					// PARTIAL READ: Use smallBuf[:n] to avoid appending garbage data
 					// This is why buf contains NO EXTRA ZEROS - we only append actual file data
 					buf = append(buf, (*smallBuf)[:n]...)
 				}
+
 				break
 			}
+
 			if err != nil {
 				resCh <- result{err: err, data: nil, newSize: 0}
+
 				return
 			}
 
@@ -311,7 +331,7 @@ func (s *DefaultService) ReadFileRange(
 	}
 }
 
-// WriteFile writes data to a file respecting the context
+// WriteFile writes data to a file respecting the context.
 func (s *DefaultService) WriteFile(ctx context.Context, path string, data []byte, perm os.FileMode) error {
 	if err := s.checkContext(ctx); err != nil {
 		return fmt.Errorf("failed to check context: %w", err)
@@ -331,13 +351,14 @@ func (s *DefaultService) WriteFile(ctx context.Context, path string, data []byte
 		if err != nil {
 			return fmt.Errorf("failed to write file %s: %w", path, err)
 		}
+
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
 	}
 }
 
-// PathExists checks if a path (file or directory) exists
+// PathExists checks if a path (file or directory) exists.
 func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, error) {
 	if err := s.checkContext(ctx); err != nil {
 		return false, err
@@ -348,6 +369,7 @@ func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, err
 		err    error
 		exists bool
 	}
+
 	resCh := make(chan result, 1)
 
 	// Run file operation in goroutine
@@ -355,12 +377,16 @@ func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, err
 		_, err := os.Stat(path)
 		if os.IsNotExist(err) {
 			resCh <- result{err: nil, exists: false}
+
 			return
 		}
+
 		if err != nil {
 			resCh <- result{err: fmt.Errorf("failed to check if path exists: %w", err), exists: false}
+
 			return
 		}
+
 		resCh <- result{err: nil, exists: true}
 	}()
 
@@ -370,6 +396,7 @@ func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, err
 		if res.err != nil {
 			return false, res.err
 		}
+
 		return res.exists, nil
 	case <-ctx.Done():
 		return false, ctx.Err()
@@ -377,12 +404,12 @@ func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, err
 }
 
 // FileExists checks if a file exists
-// Deprecated: use PathExists instead
+// Deprecated: use PathExists instead.
 func (s *DefaultService) FileExists(ctx context.Context, path string) (bool, error) {
 	return s.PathExists(ctx, path)
 }
 
-// Remove removes a file or directory
+// Remove removes a file or directory.
 func (s *DefaultService) Remove(ctx context.Context, path string) error {
 	if err := s.checkContext(ctx); err != nil {
 		return err
@@ -405,7 +432,7 @@ func (s *DefaultService) Remove(ctx context.Context, path string) error {
 	}
 }
 
-// RemoveAll removes a directory and all its contents
+// RemoveAll removes a directory and all its contents.
 func (s *DefaultService) RemoveAll(ctx context.Context, path string) error {
 	if err := s.checkContext(ctx); err != nil {
 		return err
@@ -425,13 +452,14 @@ func (s *DefaultService) RemoveAll(ctx context.Context, path string) error {
 		if err != nil {
 			return fmt.Errorf("failed to remove directory %s: %w", path, err)
 		}
+
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
 	}
 }
 
-// Stat returns file info
+// Stat returns file info.
 func (s *DefaultService) Stat(ctx context.Context, path string) (os.FileInfo, error) {
 	if err := s.checkContext(ctx); err != nil {
 		return nil, fmt.Errorf("failed to check context: %w", err)
@@ -442,6 +470,7 @@ func (s *DefaultService) Stat(ctx context.Context, path string) (os.FileInfo, er
 		info os.FileInfo
 		err  error
 	}
+
 	resCh := make(chan result, 1)
 
 	// Run file operation in goroutine
@@ -456,13 +485,14 @@ func (s *DefaultService) Stat(ctx context.Context, path string) (os.FileInfo, er
 		if res.err != nil {
 			return nil, fmt.Errorf("failed to get file info: %w", res.err)
 		}
+
 		return res.info, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
 }
 
-// Chmod changes the mode of the named file
+// Chmod changes the mode of the named file.
 func (s *DefaultService) Chmod(ctx context.Context, path string, mode os.FileMode) error {
 	if err := s.checkContext(ctx); err != nil {
 		return fmt.Errorf("failed to check context: %w", err)
@@ -482,13 +512,14 @@ func (s *DefaultService) Chmod(ctx context.Context, path string, mode os.FileMod
 		if err != nil {
 			return fmt.Errorf("failed to change mode of file %s: %w", path, err)
 		}
+
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
 	}
 }
 
-// ReadDir reads a directory, returning all its directory entries
+// ReadDir reads a directory, returning all its directory entries.
 func (s *DefaultService) ReadDir(ctx context.Context, path string) ([]os.DirEntry, error) {
 	if err := s.checkContext(ctx); err != nil {
 		return nil, fmt.Errorf("failed to check context: %w", err)
@@ -499,6 +530,7 @@ func (s *DefaultService) ReadDir(ctx context.Context, path string) ([]os.DirEntr
 		err     error
 		entries []os.DirEntry
 	}
+
 	resCh := make(chan result, 1)
 
 	// Run file operation in goroutine
@@ -513,13 +545,14 @@ func (s *DefaultService) ReadDir(ctx context.Context, path string) ([]os.DirEntr
 		if res.err != nil {
 			return nil, fmt.Errorf("failed to read directory %s: %w", path, res.err)
 		}
+
 		return res.entries, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
 }
 
-// Chown changes the owner and group of the named file
+// Chown changes the owner and group of the named file.
 func (s *DefaultService) Chown(ctx context.Context, path string, user string, group string) error {
 	if err := s.checkContext(ctx); err != nil {
 		return fmt.Errorf("failed to check context: %w", err)
@@ -541,15 +574,17 @@ func (s *DefaultService) Chown(ctx context.Context, path string, user string, gr
 		if err != nil {
 			return fmt.Errorf("failed to change owner of file %s to %s:%s: %w", path, user, group, err)
 		}
+
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
 	}
 }
 
-// ExecuteCommand executes a command with context
+// ExecuteCommand executes a command with context.
 func (s *DefaultService) ExecuteCommand(ctx context.Context, name string, args ...string) ([]byte, error) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentFilesystem, name+".executeCommand."+name, time.Since(start))
 	}()
@@ -560,14 +595,16 @@ func (s *DefaultService) ExecuteCommand(ctx context.Context, name string, args .
 
 	// This method already respects context cancellation through exec.CommandContext
 	cmd := exec.CommandContext(ctx, name, args...)
+
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute command %s: %w", name, err)
 	}
+
 	return output, nil
 }
 
-// Glob is a wrapper around filepath.Glob that respects the context
+// Glob is a wrapper around filepath.Glob that respects the context.
 func (s *DefaultService) Glob(ctx context.Context, pattern string) ([]string, error) {
 	if err := s.checkContext(ctx); err != nil {
 		return nil, fmt.Errorf("failed to check context: %w", err)
@@ -578,6 +615,7 @@ func (s *DefaultService) Glob(ctx context.Context, pattern string) ([]string, er
 		err     error
 		matches []string
 	}
+
 	resCh := make(chan result, 1)
 
 	// Run file operation in goroutine
@@ -592,6 +630,7 @@ func (s *DefaultService) Glob(ctx context.Context, pattern string) ([]string, er
 		if res.err != nil {
 			return nil, fmt.Errorf("failed to glob pattern %s: %w", pattern, res.err)
 		}
+
 		return res.matches, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -619,6 +658,7 @@ func (s *DefaultService) Rename(ctx context.Context, oldPath, newPath string) er
 		if err != nil {
 			return fmt.Errorf("failed to rename file %s to %s: %w", oldPath, newPath, err)
 		}
+
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
@@ -645,6 +685,7 @@ func (s *DefaultService) Symlink(ctx context.Context, target, linkPath string) e
 		if err != nil {
 			return fmt.Errorf("failed to create symlink %s -> %s: %w", linkPath, target, err)
 		}
+
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()

@@ -27,18 +27,20 @@ type ContainerObservedStateSnapshot struct {
 	// No need for the config, as it is basically empty
 }
 
-// Ensure it satisfies fsm.ObservedStateSnapshot
+// Ensure it satisfies fsm.ObservedStateSnapshot.
 func (c *ContainerObservedStateSnapshot) IsObservedStateSnapshot() {}
 
-// CreateObservedStateSnapshot is called by the manager to record the state
+// CreateObservedStateSnapshot is called by the manager to record the state.
 func (c *ContainerInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	snapshot := &ContainerObservedStateSnapshot{}
 	if c.ObservedState.ServiceInfo != nil {
 		err := deepcopy.Copy(&snapshot.ServiceInfoSnapshot, &c.ObservedState.ServiceInfo)
 		if err != nil {
 			sentry.ReportIssuef(sentry.IssueTypeError, c.baseFSMInstance.GetLogger(), "failed to deep copy service info: %v", err)
+
 			return nil
 		}
 	}
+
 	return snapshot
 }

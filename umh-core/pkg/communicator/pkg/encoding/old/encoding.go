@@ -32,7 +32,9 @@ import (
 
 func Compress(message string) (string, error) {
 	var b strings.Builder
+
 	err := c(strings.NewReader(message), &b)
+
 	return b.String(), err
 }
 
@@ -41,20 +43,25 @@ func c(in io.Reader, out io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("failed to create zstd writer: %w", err)
 	}
+
 	_, err = io.Copy(enc, in)
 	if err != nil {
 		closeErr := enc.Close()
 		if closeErr != nil {
 			return fmt.Errorf("failed to copy and close: %w", errors.Join(err, closeErr))
 		}
+
 		return fmt.Errorf("failed to copy message: %w", err)
 	}
+
 	return enc.Close()
 }
 
 func Decompress(message string) (string, error) {
 	var b strings.Builder
+
 	err := d(strings.NewReader(message), &b)
+
 	return b.String(), err
 }
 
@@ -63,53 +70,63 @@ func d(in io.Reader, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+
 	_, err = io.Copy(out, dec)
 	if err != nil {
 		dec.Close()
+
 		return err
 	}
+
 	dec.Close()
+
 	return nil
 }
 
 // EncodeMessageFromUserToUMHInstance converts and encodes a UMHMessageContent object to Base64 String.
 // Note: only the inner payload will later be encrypted, not the whole message.
-func EncodeMessageFromUserToUMHInstance(UMHMessage models.UMHMessageContent) (string, error) {
-	messageBytes, err := safejson.Marshal(UMHMessage)
+func EncodeMessageFromUserToUMHInstance(umhMessage models.UMHMessageContent) (string, error) {
+	messageBytes, err := safejson.Marshal(umhMessage)
 	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to marshal UMHMessage: %v (%+v)", err, UMHMessage)
+		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to marshal UMHMessage: %v (%+v)", err, umhMessage)
 		//		zap.S().Debugf("Payload Type: %T", UMHMessage.Payload)
 		return "", err
 	}
+
 	return base64.StdEncoding.EncodeToString(messageBytes), nil
 }
 
 // EncodeMessageFromUMHInstanceToUser converts and encodes a UMHMessageContent object to Base64 String.
 // Note: only the inner payload will later be encrypted, not the whole message.
-func EncodeMessageFromUMHInstanceToUser(UMHMessage models.UMHMessageContent) (string, error) {
-	messageBytes, err := safejson.Marshal(UMHMessage)
+func EncodeMessageFromUMHInstanceToUser(umhMessage models.UMHMessageContent) (string, error) {
+	messageBytes, err := safejson.Marshal(umhMessage)
 	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to marshal UMHMessage: %v (%+v)", err, UMHMessage)
+		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to marshal UMHMessage: %v (%+v)", err, umhMessage)
 		//		zap.S().Debugf("Payload Type: %T", UMHMessage.Payload)
 		return "", err
 	}
+
 	compressed, err := Compress(string(messageBytes))
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to compress message: %v", err)
+
 		return "", err
 	}
+
 	encoded := base64.StdEncoding.EncodeToString([]byte(compressed))
+
 	return encoded, nil
 }
 
 // DecodeMessageFromUserToUMHInstance decodes a Base64 String to a UMHMessageContent object.
 // Note: only the inner payload will later be encrypted, not the whole message.
-func DecodeMessageFromUserToUMHInstance(base64Message string) (UMHMessage models.UMHMessageContent, err error) {
+func DecodeMessageFromUserToUMHInstance(base64Message string) (umhMessage models.UMHMessageContent, err error) {
 	// Decode Base64 to JSON bytes
 	messageBytes, err := base64.StdEncoding.DecodeString(base64Message)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to decode base64 message: %v", err)
-		return
+
+		return umhMessage, err
 	}
 
 	hexEncoded := hex.EncodeToString(messageBytes)
@@ -120,34 +137,41 @@ func DecodeMessageFromUserToUMHInstance(base64Message string) (UMHMessage models
 	if strings.HasPrefix(hexEncoded, "28b52ffd") {
 		// Decompress
 		var decompressedMessage string
+
 		decompressedMessage, err = Decompress(string(messageBytes))
 		if err != nil {
 			sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to decompress base64 message: %v", err)
-			return
+
+			return umhMessage, err
 		}
-		err = safejson.Unmarshal([]byte(decompressedMessage), &UMHMessage)
+
+		err = safejson.Unmarshal([]byte(decompressedMessage), &umhMessage)
 		if err != nil {
 			sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to unmarshal UMHMessage: %v", err)
-			return
+
+			return umhMessage, err
 		}
 	} else {
-		err = safejson.Unmarshal(messageBytes, &UMHMessage)
+		err = safejson.Unmarshal(messageBytes, &umhMessage)
 		if err != nil {
 			sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to unmarshal UMHMessage: %v", err)
-			return
+
+			return umhMessage, err
 		}
 	}
-	return
+
+	return umhMessage, err
 }
 
 // DecodeMessageFromUMHInstanceToUser decodes a Base64 String to a UMHMessageContent object.
 // Note: only the inner payload will later be encrypted, not the whole message.
-func DecodeMessageFromUMHInstanceToUser(base64Message string) (UMHMessage models.UMHMessageContent, err error) {
+func DecodeMessageFromUMHInstanceToUser(base64Message string) (umhMessage models.UMHMessageContent, err error) {
 	// Decode Base64 to JSON bytes
 	messageBytes, err := base64.StdEncoding.DecodeString(base64Message)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to decode base64 message: %v", err)
-		return
+
+		return umhMessage, err
 	}
 
 	hexEncoded := hex.EncodeToString(messageBytes)
@@ -157,23 +181,28 @@ func DecodeMessageFromUMHInstanceToUser(base64Message string) (UMHMessage models
 	if strings.HasPrefix(hexEncoded, "28b52ffd") {
 		// Decompress
 		var decompressedMessage string
+
 		decompressedMessage, err = Decompress(string(messageBytes))
 		if err != nil {
 			sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to decompress base64 message: %v", err)
-			return
+
+			return umhMessage, err
 		}
-		err = safejson.Unmarshal([]byte(decompressedMessage), &UMHMessage)
+
+		err = safejson.Unmarshal([]byte(decompressedMessage), &umhMessage)
 		if err != nil {
 			sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to unmarshal UMHMessage: %v", err)
-			return
+
+			return umhMessage, err
 		}
 	} else {
-		err = safejson.Unmarshal(messageBytes, &UMHMessage)
+		err = safejson.Unmarshal(messageBytes, &umhMessage)
 		if err != nil {
 			sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to unmarshal UMHMessage: %v", err)
-			return
+
+			return umhMessage, err
 		}
 	}
 
-	return
+	return umhMessage, err
 }

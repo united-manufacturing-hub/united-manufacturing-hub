@@ -16,8 +16,8 @@ package runtime_config_test
 
 import (
 	"context"
-	"fmt"
 	"os"
+	"strconv"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -61,7 +61,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 		// Extract agent location from the config
 		agentLocation = map[string]string{}
 		for k, v := range fullConfig.Agent.Location {
-			agentLocation[fmt.Sprintf("%d", k)] = v
+			agentLocation[strconv.Itoa(k)] = v
 		}
 
 		// Set up test data

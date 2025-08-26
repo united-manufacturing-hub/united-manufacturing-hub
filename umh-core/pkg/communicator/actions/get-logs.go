@@ -80,6 +80,7 @@ func (a *GetLogsAction) Parse(payload interface{}) (err error) {
 	a.actionLogger.Info("Parsing the payload")
 	a.payload, err = ParseActionPayload[models.GetLogsRequest](payload)
 	a.actionLogger.Info("Payload parsed: %v", a.payload)
+
 	return err
 }
 
@@ -118,7 +119,7 @@ func (a *GetLogsAction) Validate() (err error) {
 
 		_, err = uuid.Parse(a.payload.UUID)
 		if err != nil {
-			return fmt.Errorf("invalid UUID format: %v", err)
+			return fmt.Errorf("invalid UUID format: %w", err)
 		}
 	}
 
@@ -144,7 +145,7 @@ func mapS6LogsToSlice(s6Logs []s6.LogEntry, startTimeUTC time.Time) []string {
 }
 
 func logsRetrievalError(err error, logType models.LogType) error {
-	return fmt.Errorf("failed to retrieve logs for %s: %v", logType, err)
+	return fmt.Errorf("failed to retrieve logs for %s: %w", logType, err)
 }
 
 // Execute takes care of retrieving the logs from the correct source based on the log type.
@@ -164,8 +165,9 @@ func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
 	case models.RedpandaLogType:
 		redpandaInst, ok := fsm.FindInstance(systemSnapshot, constants.RedpandaManagerName, constants.RedpandaInstanceName)
 		if !ok || redpandaInst == nil {
-			err := logsRetrievalError(fmt.Errorf("redpanda instance not found"), logType)
+			err := logsRetrievalError(errors.New("redpanda instance not found"), logType)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
+
 			return nil, nil, err
 		}
 
@@ -173,6 +175,7 @@ func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
 		if !ok || observedState == nil {
 			err := logsRetrievalError(fmt.Errorf("invalid observed state type for redpanda instance %s", redpandaInst.ID), logType)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
+
 			return nil, nil, err
 		}
 
@@ -180,8 +183,9 @@ func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
 	case models.AgentLogType:
 		agentInstance, ok := fsm.FindInstance(systemSnapshot, constants.AgentManagerName, constants.AgentInstanceName)
 		if !ok || agentInstance == nil {
-			err := logsRetrievalError(fmt.Errorf("agent instance not found"), logType)
+			err := logsRetrievalError(errors.New("agent instance not found"), logType)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
+
 			return nil, nil, err
 		}
 
@@ -189,6 +193,7 @@ func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
 		if !ok || observedState == nil {
 			err := logsRetrievalError(fmt.Errorf("invalid observed state type for agent instance %s", agentInstance.ID), logType)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
+
 			return nil, nil, err
 		}
 
@@ -198,6 +203,7 @@ func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
 		if err != nil || dfcInstance == nil {
 			err := logsRetrievalError(err, logType)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
+
 			return nil, nil, err
 		}
 
@@ -205,6 +211,7 @@ func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
 		if !ok || observedState == nil {
 			err := logsRetrievalError(fmt.Errorf("invalid observed state type for DFC instance %s", dfcInstance.ID), logType)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
+
 			return nil, nil, err
 		}
 
@@ -214,6 +221,7 @@ func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
 		if err != nil || protocolConverterInstance == nil {
 			err := logsRetrievalError(err, logType)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
+
 			return nil, nil, err
 		}
 
@@ -221,6 +229,7 @@ func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
 		if !ok || observedState == nil {
 			err := logsRetrievalError(fmt.Errorf("invalid observed state type for Protocol Converter instance %s", protocolConverterInstance.ID), logType)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
+
 			return nil, nil, err
 		}
 
@@ -232,8 +241,9 @@ func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
 	case models.TopicBrowserLogType:
 		tbInstance, ok := fsm.FindInstance(systemSnapshot, constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
 		if !ok || tbInstance == nil {
-			err := logsRetrievalError(fmt.Errorf("topic browser instance not found"), logType)
+			err := logsRetrievalError(errors.New("topic browser instance not found"), logType)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
+
 			return nil, nil, err
 		}
 
@@ -241,6 +251,7 @@ func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
 		if !ok || observedState == nil {
 			err := logsRetrievalError(fmt.Errorf("invalid observed state type for topic browser instance %s", tbInstance.ID), logType)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
+
 			return nil, nil, err
 		}
 
@@ -248,8 +259,9 @@ func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
 	case models.StreamProcessorLogType:
 		streamProcessorInstance, ok := FindStreamProcessorInstanceByUUID(systemSnapshot, a.payload.UUID)
 		if !ok || streamProcessorInstance == nil {
-			err := logsRetrievalError(fmt.Errorf("stream processor instance not found"), logType)
+			err := logsRetrievalError(errors.New("stream processor instance not found"), logType)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
+
 			return nil, nil, err
 		}
 
@@ -257,6 +269,7 @@ func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
 		if !ok || observedState == nil {
 			err := logsRetrievalError(fmt.Errorf("invalid observed state type for stream processor instance %s", streamProcessorInstance.ID), logType)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
+
 			return nil, nil, err
 		}
 
@@ -270,7 +283,7 @@ func (a *GetLogsAction) getUserEmail() string {
 	return a.userEmail
 }
 
-// FindStreamProcessorInstanceByUUID finds a stream processor instance by its UUID (generated from the name)
+// FindStreamProcessorInstanceByUUID finds a stream processor instance by its UUID (generated from the name).
 func FindStreamProcessorInstanceByUUID(systemSnapshot fsm.SystemSnapshot, uuid string) (*fsm.FSMInstanceSnapshot, bool) {
 	streamProcessorManager, ok := fsm.FindManager(systemSnapshot, constants.StreamProcessorManagerName)
 	if !ok {
@@ -283,6 +296,7 @@ func FindStreamProcessorInstanceByUUID(systemSnapshot fsm.SystemSnapshot, uuid s
 			return instance, true
 		}
 	}
+
 	return nil, false
 }
 
@@ -290,7 +304,7 @@ func (a *GetLogsAction) getUuid() uuid.UUID {
 	return a.actionUUID
 }
 
-// for testing
+// for testing.
 func (a *GetLogsAction) GetPayload() models.GetLogsRequest {
 	return a.payload
 }

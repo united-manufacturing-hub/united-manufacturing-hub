@@ -24,19 +24,19 @@ import (
 // These are the redpanda-monitor operational states, in addition
 // to the lifecycle states from internal_fsm.
 const (
-	// redpanda_monitoring_stopped is the operational state when monitoring is disabled
+	// redpanda_monitoring_stopped is the operational state when monitoring is disabled.
 	OperationalStateStopped = "redpanda_monitoring_stopped"
 
-	// redpanda_monitoring_stopping is the operational state when monitoring is stopping
+	// redpanda_monitoring_stopping is the operational state when monitoring is stopping.
 	OperationalStateStopping = "redpanda_monitoring_stopping"
 
-	// redpanda_monitoring_starting is the operational state when monitoring is starting
+	// redpanda_monitoring_starting is the operational state when monitoring is starting.
 	OperationalStateStarting = "redpanda_monitoring_starting"
 
-	// degraded means monitoring is running, but metrics are not OK
+	// degraded means monitoring is running, but metrics are not OK.
 	OperationalStateDegraded = "degraded"
 
-	// active means monitoring is running, and metrics are OK
+	// active means monitoring is running, and metrics are OK.
 	OperationalStateActive = "active"
 )
 
@@ -51,25 +51,23 @@ func IsOperationalState(state string) bool {
 		OperationalStateActive:
 		return true
 	}
+
 	return false
 }
 
-// IsStartingState returns true if the given state is a starting state
+// IsStartingState returns true if the given state is a starting state.
 func IsStartingState(state string) bool {
-	switch state {
-	case OperationalStateStarting:
-		return true
-	}
-	return false
+	return state == OperationalStateStarting
 }
 
-// IsRunningState returns true if the given state is a running state
+// IsRunningState returns true if the given state is a running state.
 func IsRunningState(state string) bool {
 	switch state {
 	case OperationalStateActive,
 		OperationalStateDegraded:
 		return true
 	}
+
 	return false
 }
 
@@ -84,7 +82,7 @@ const (
 	EventMetricsNotOK = "metrics_not_ok"
 )
 
-// RedpandaMonitorObservedState holds the last known redpanda metrics and health status
+// RedpandaMonitorObservedState holds the last known redpanda metrics and health status.
 type RedpandaMonitorObservedState struct {
 	// We store the redpanda data from redpanda_monitor.GetStatus
 	ServiceInfo *redpanda_monitor.ServiceInfo
@@ -92,12 +90,12 @@ type RedpandaMonitorObservedState struct {
 	// Normally this would have also have an ObservedAgentConfig, but we don't need it here
 }
 
-// Ensure it implements the ObservedState interface
+// Ensure it implements the ObservedState interface.
 func (b RedpandaMonitorObservedState) IsObservedState() {}
 
 // RedpandaMonitorInstance implements fsm.FSMInstance
 // If RedpandaMonitorInstance does not implement the FSMInstance interface, this will
-// be detected at compile time
+// be detected at compile time.
 var _ publicfsm.FSMInstance = (*RedpandaMonitorInstance)(nil)
 
 // RedpandaMonitorInstance holds the FSM instance and references to the redpanda monitor service.
@@ -120,7 +118,7 @@ func (b *RedpandaMonitorInstance) GetLastObservedState() publicfsm.ObservedState
 	return b.ObservedState
 }
 
-// IsTransientStreakCounterMaxed returns true if the instance has been in a transient state for too long
+// IsTransientStreakCounterMaxed returns true if the instance has been in a transient state for too long.
 func (b *RedpandaMonitorInstance) IsTransientStreakCounterMaxed() bool {
 	return b.baseFSMInstance.IsTransientStreakCounterMaxed()
 }

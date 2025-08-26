@@ -36,8 +36,10 @@ import (
 func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
 	start := time.Now()
 	instanceName := b.baseFSMInstance.GetID()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaMonitor, instanceName, time.Since(start))
+
 		if err != nil {
 			b.baseFSMInstance.GetLogger().Errorf("error reconciling redpanda monitor instance %s: %s", instanceName, err)
 			b.PrintState()
@@ -51,6 +53,7 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 		if b.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "start of reconciliation") {
 			return nil, false
 		}
+
 		return ctx.Err(), false
 	}
 
@@ -83,6 +86,7 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 				},
 			)
 		}
+
 		return nil, false
 	}
 
@@ -95,7 +99,7 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 		// Log the error but always continue reconciling - we need reconcileStateTransition to run
 		// to restore services after restart, even if we can't read their status yet
 		b.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)
-		
+
 		// For all other errors, just continue reconciling without setting backoff
 		err = nil
 	}
@@ -115,6 +119,7 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 
 		b.baseFSMInstance.SetError(err, snapshot.Tick)
 		b.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
+
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
@@ -123,13 +128,15 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 		if b.baseFSMInstance.IsDeadlineExceededAndHandle(s6Err, snapshot.Tick, "monitorService reconciliation") {
 			return nil, false
 		}
+
 		b.baseFSMInstance.SetError(s6Err, snapshot.Tick)
 		b.baseFSMInstance.GetLogger().Errorf("error reconciling monitorService: %s", s6Err)
+
 		return nil, false
 	}
 
 	// If either redpanda monitor state or S6 state was reconciled, we return reconciled so that nothing happens anymore in this tick
-	// nothing should happen as we might have already taken up some significant time of the avaialble time per tick, so better
+	// nothing should happen as we might have already taken up some significant time of the available time per tick, so better
 	// to be on the safe side and let the rest handle in another tick
 	reconciled = reconciled || s6Reconciled
 
@@ -140,9 +147,10 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 }
 
 // reconcileExternalChanges checks if the Redpanda monitor service status has changed
-// externally (e.g., if someone manually stopped or started it, or if it crashed)
+// externally (e.g., if someone manually stopped or started it, or if it crashed).
 func (b *RedpandaMonitorInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaMonitor, b.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
 	}()
@@ -156,6 +164,7 @@ func (b *RedpandaMonitorInstance) reconcileExternalChanges(ctx context.Context, 
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}
+
 	return nil
 }
 
@@ -166,6 +175,7 @@ func (b *RedpandaMonitorInstance) reconcileExternalChanges(ctx context.Context, 
 // This is to ensure full testability of the FSM.
 func (b *RedpandaMonitorInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaMonitor, b.baseFSMInstance.GetID()+".reconcileStateTransition", time.Since(start))
 	}()
@@ -179,6 +189,7 @@ func (b *RedpandaMonitorInstance) reconcileStateTransition(ctx context.Context, 
 		if err != nil {
 			return err, false
 		}
+
 		if reconciled {
 			return nil, true
 		} else {
@@ -192,6 +203,7 @@ func (b *RedpandaMonitorInstance) reconcileStateTransition(ctx context.Context, 
 		if err != nil {
 			return err, false
 		}
+
 		if reconciled {
 			return nil, true
 		} else {
@@ -202,9 +214,10 @@ func (b *RedpandaMonitorInstance) reconcileStateTransition(ctx context.Context, 
 	return fmt.Errorf("invalid state: %s", currentState), false
 }
 
-// reconcileOperationalStates handles states related to instance operations (starting/stopping)
+// reconcileOperationalStates handles states related to instance operations (starting/stopping).
 func (b *RedpandaMonitorInstance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaMonitor, b.baseFSMInstance.GetID()+".reconcileOperationalStates", time.Since(start))
 	}()
@@ -223,6 +236,7 @@ func (b *RedpandaMonitorInstance) reconcileOperationalStates(ctx context.Context
 // It deals with moving from various states to the Active state.
 func (b *RedpandaMonitorInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaMonitor, b.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
 	}()
@@ -251,16 +265,16 @@ func (b *RedpandaMonitorInstance) reconcileTransitionToActive(ctx context.Contex
 }
 
 // reconcileStartingStates handles the various starting phase states when transitioning to a running state
-// no big startup process here
+// no big startup process here.
 func (b *RedpandaMonitorInstance) reconcileStartingStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaMonitor, b.baseFSMInstance.GetID()+".reconcileStartingStates", time.Since(start))
 	}()
 
 	switch currentState {
 	case OperationalStateStarting:
-
 		// nothing to verify here, just for consistency with other fsms
 		return b.baseFSMInstance.SendEvent(ctx, EventStartDone), true
 	default:
@@ -271,6 +285,7 @@ func (b *RedpandaMonitorInstance) reconcileStartingStates(ctx context.Context, s
 // reconcileRunningStates handles the various running states when transitioning to Active.
 func (b *RedpandaMonitorInstance) reconcileRunningStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaMonitor, b.baseFSMInstance.GetID()+".reconcileRunningStates", time.Since(start))
 	}()
@@ -281,12 +296,14 @@ func (b *RedpandaMonitorInstance) reconcileRunningStates(ctx context.Context, se
 		if !b.isMonitorHealthy(currentTime) {
 			return b.baseFSMInstance.SendEvent(ctx, EventMetricsNotOK), true
 		}
+
 		return nil, false
 	case OperationalStateDegraded:
 		// If we're in Degraded, we need to recover to move to Active
 		if b.isMonitorHealthy(currentTime) {
 			return b.baseFSMInstance.SendEvent(ctx, EventMetricsAllOK), true
 		}
+
 		return nil, false
 	default:
 		return fmt.Errorf("invalid running state: %s", currentState), false
@@ -297,6 +314,7 @@ func (b *RedpandaMonitorInstance) reconcileRunningStates(ctx context.Context, se
 // It deals with moving from any operational state to Stopping and then to Stopped.
 func (b *RedpandaMonitorInstance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaMonitor, b.baseFSMInstance.GetID()+".reconcileTransitionToStopped", time.Since(start))
 	}()

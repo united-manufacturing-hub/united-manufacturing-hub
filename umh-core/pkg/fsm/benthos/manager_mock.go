@@ -15,6 +15,7 @@
 package benthos
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -40,6 +41,7 @@ func NewBenthosManagerWithMockedServices(name string) (*BenthosManager, *benthos
 	if mockService.ExistingServices == nil {
 		mockService.ExistingServices = make(map[string]bool)
 	}
+
 	if mockService.ServiceStates == nil {
 		mockService.ServiceStates = make(map[string]*benthossvc.ServiceInfo)
 	}
@@ -93,7 +95,7 @@ func NewBenthosManagerWithMockedServices(name string) (*BenthosManager, *benthos
 		func(instance public_fsm.FSMInstance, cfg config.BenthosConfig) (bool, error) {
 			benthosInstance, ok := instance.(*BenthosInstance)
 			if !ok {
-				return false, fmt.Errorf("instance is not a BenthosInstance")
+				return false, errors.New("instance is not a BenthosInstance")
 			}
 
 			// For tests, just update the config instead of triggering recreation
@@ -111,7 +113,7 @@ func NewBenthosManagerWithMockedServices(name string) (*BenthosManager, *benthos
 		func(instance public_fsm.FSMInstance, cfg config.BenthosConfig) error {
 			benthosInstance, ok := instance.(*BenthosInstance)
 			if !ok {
-				return fmt.Errorf("instance is not a BenthosInstance")
+				return errors.New("instance is not a BenthosInstance")
 			}
 
 			// Update the instance config

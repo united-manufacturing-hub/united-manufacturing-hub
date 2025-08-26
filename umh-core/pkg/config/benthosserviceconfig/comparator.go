@@ -22,23 +22,24 @@ import (
 	"go.uber.org/zap"
 )
 
-// Comparator handles the comparison of Benthos configurations
+// Comparator handles the comparison of Benthos configurations.
 type Comparator struct {
 	normalizer *Normalizer
 }
 
-// NewComparator creates a new configuration comparator for Benthos
+// NewComparator creates a new configuration comparator for Benthos.
 func NewComparator() *Comparator {
 	return &Comparator{
 		normalizer: NewNormalizer(),
 	}
 }
 
-// ConfigsEqual compares two BenthosServiceConfigs after normalization
+// ConfigsEqual compares two BenthosServiceConfigs after normalization.
 func (c *Comparator) ConfigsEqual(desired, observed BenthosServiceConfig) (isEqual bool) {
 	// First normalize both configs
 	normDesired := c.normalizer.NormalizeConfig(desired)
 	normObserved := c.normalizer.NormalizeConfig(observed)
+
 	defer func() {
 		if !isEqual {
 			zap.S().Infof("Normalized desired:  %+v", normDesired)
@@ -62,13 +63,16 @@ func (c *Comparator) ConfigsEqual(desired, observed BenthosServiceConfig) (isEqu
 
 	// Special handling for pipeline processors
 	desiredProcs := getProcessors(normDesired.Pipeline)
+
 	observedProcs := getProcessors(normObserved.Pipeline)
 	if len(desiredProcs) == 0 && len(observedProcs) == 0 {
 		// Both have empty processors, now compare the rest of pipeline
 		pipeDesiredCopy := copyMap(normDesired.Pipeline)
 		pipeObservedCopy := copyMap(normObserved.Pipeline)
+
 		delete(pipeDesiredCopy, "processors")
 		delete(pipeObservedCopy, "processors")
+
 		if !reflect.DeepEqual(pipeDesiredCopy, pipeObservedCopy) {
 			return false
 		}
@@ -85,10 +89,11 @@ func (c *Comparator) ConfigsEqual(desired, observed BenthosServiceConfig) (isEqu
 			}
 		}
 	}
+
 	return reflect.DeepEqual(normDesired.Buffer, normObserved.Buffer)
 }
 
-// ConfigDiff returns a human-readable string describing differences between configs
+// ConfigDiff returns a human-readable string describing differences between configs.
 func (c *Comparator) ConfigDiff(desired, observed BenthosServiceConfig) string {
 	var diff strings.Builder
 
@@ -127,6 +132,7 @@ func (c *Comparator) ConfigDiff(desired, observed BenthosServiceConfig) string {
 
 		// Special handling for processors
 		desiredProcs := getProcessors(normDesired.Pipeline)
+
 		observedProcs := getProcessors(normObserved.Pipeline)
 		if !reflect.DeepEqual(desiredProcs, observedProcs) {
 			diff.WriteString("  - Processors differ\n")
@@ -135,6 +141,7 @@ func (c *Comparator) ConfigDiff(desired, observed BenthosServiceConfig) string {
 		// Compare other pipeline keys
 		pipeDesiredCopy := copyMap(normDesired.Pipeline)
 		pipeObservedCopy := copyMap(normObserved.Pipeline)
+
 		delete(pipeDesiredCopy, "processors")
 		delete(pipeObservedCopy, "processors")
 		compareMapKeys(pipeDesiredCopy, pipeObservedCopy, "Pipeline", &diff)
@@ -170,7 +177,7 @@ func (c *Comparator) ConfigDiff(desired, observed BenthosServiceConfig) string {
 
 // Helper functions
 
-// getProcessors extracts the processors array from a pipeline config
+// getProcessors extracts the processors array from a pipeline config.
 func getProcessors(pipeline map[string]interface{}) []interface{} {
 	if pipeline == nil {
 		return []interface{}{}
@@ -181,10 +188,11 @@ func getProcessors(pipeline map[string]interface{}) []interface{} {
 			return procsArray
 		}
 	}
+
 	return []interface{}{}
 }
 
-// copyMap creates a shallow copy of a map
+// copyMap creates a shallow copy of a map.
 func copyMap(m map[string]interface{}) map[string]interface{} {
 	if m == nil {
 		return nil
@@ -194,10 +202,11 @@ func copyMap(m map[string]interface{}) map[string]interface{} {
 	for k, v := range m {
 		result[k] = v
 	}
+
 	return result
 }
 
-// isNoneBuffer checks if a buffer config is the default "none" buffer
+// isNoneBuffer checks if a buffer config is the default "none" buffer.
 func isNoneBuffer(buffer map[string]interface{}) bool {
 	if len(buffer) != 1 {
 		return false
@@ -206,10 +215,11 @@ func isNoneBuffer(buffer map[string]interface{}) bool {
 	if _, hasNone := buffer["none"]; hasNone {
 		return true
 	}
+
 	return false
 }
 
-// compareMapKeys compares keys in two maps and logs differences
+// compareMapKeys compares keys in two maps and logs differences.
 func compareMapKeys(desired, observed map[string]interface{}, prefix string, diff *strings.Builder) {
 	// Check keys in desired that don't exist or are different in observed
 	for k, v := range desired {
@@ -228,7 +238,7 @@ func compareMapKeys(desired, observed map[string]interface{}, prefix string, dif
 	}
 }
 
-// isResourcesEqual handles comparison of resource slices, properly handling nil and empty slices
+// isResourcesEqual handles comparison of resource slices, properly handling nil and empty slices.
 func isResourcesEqual(a, b interface{}) bool {
 	// For nil or empty slices
 	aIsNilOrEmpty := isNilOrEmpty(a)
@@ -243,7 +253,7 @@ func isResourcesEqual(a, b interface{}) bool {
 	return reflect.DeepEqual(a, b)
 }
 
-// isNilOrEmpty checks if a value is nil or an empty slice
+// isNilOrEmpty checks if a value is nil or an empty slice.
 func isNilOrEmpty(v interface{}) bool {
 	if v == nil {
 		return true

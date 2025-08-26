@@ -26,18 +26,18 @@ type UserSignupRequest struct {
 	EncryptedPrivKey *string `json:"encryptedPrivateKey"`
 	CompanyCert      *string `json:"companyCertificate"`
 	CompanyPrivKey   *string `json:"companyEncryptedPrivateKey"`
-	Email            string  `json:"email" binding:"required"`
-	Password         string  `json:"password" binding:"required"`
-	FirstName        string  `json:"firstName" binding:"required"`
-	LastName         string  `json:"lastName" binding:"required"`
-	CompanyName      string  `json:"company" binding:"required"`
+	Email            string  `binding:"required"                json:"email"`
+	Password         string  `binding:"required"                json:"password"`
+	FirstName        string  `binding:"required"                json:"firstName"`
+	LastName         string  `binding:"required"                json:"lastName"`
+	CompanyName      string  `binding:"required"                json:"company"`
 }
 
 type CompanyUserRequest struct {
-	Email string `json:"email" binding:"required,email"`
+	Email string `binding:"required,email" json:"email"`
 }
 
-// UpdateInstancePayload is the payload for updating an instance
+// UpdateInstancePayload is the payload for updating an instance.
 type UpdateInstancePayload struct {
 	InstanceName string `json:"instance_name"`
 }
@@ -45,9 +45,9 @@ type UpdateInstancePayload struct {
 type RegisterInstancePayload struct {
 	Certificate       *string   `json:"certificate"`
 	EncryptedPrivKey  *string   `json:"encryptedPrivateKey"`
-	InstanceName      string    `json:"instanceName" binding:"required,max=100"`
-	HashHashAuthToken string    `json:"hashHashAuthToken" binding:"required,len=64"`
-	InstanceUUID      uuid.UUID `json:"instanceUUID" binding:"required"`
+	InstanceName      string    `binding:"required,max=100" json:"instanceName"`
+	HashHashAuthToken string    `binding:"required,len=64"  json:"hashHashAuthToken"`
+	InstanceUUID      uuid.UUID `binding:"required"         json:"instanceUUID"`
 }
 
 type PushPayload struct {
@@ -58,7 +58,7 @@ type PullPayload struct {
 	UMHMessages []models.UMHMessage `json:"UMHMessages"`
 }
 
-// CompanyDetails contains detailed information about a company
+// CompanyDetails contains detailed information about a company.
 type CompanyDetails struct {
 	Owner            *string       `json:"owner"`
 	Certificate      *string       `json:"certificate"`
@@ -74,7 +74,7 @@ type LicenseStatus struct {
 	IsActive    bool   `json:"isActive"`
 }
 
-// UserMeResponse contains the user's personal information and company details
+// UserMeResponse contains the user's personal information and company details.
 type UserMeResponse struct {
 	Certificate      *string        `json:"certificate"`
 	EncryptedPrivKey *string        `json:"encryptedPrivateKey"`
@@ -85,8 +85,8 @@ type UserMeResponse struct {
 }
 
 type UserLoginRequest struct {
-	Email    string `json:"email" binding:"required"`
-	Password string `json:"password" binding:"required"`
+	Email    string `binding:"required" json:"email"`
+	Password string `binding:"required" json:"password"`
 }
 
 type UserLoginResponse struct {
@@ -124,7 +124,7 @@ type InstanceLoginResponse struct {
 	CompanyDetails   CompanyDetails `json:"companyDetails"`
 }
 
-// Location represents a location in a hierarchy
+// Location represents a location in a hierarchy.
 type Location struct {
 	Enterprise     string `json:"enterprise"`
 	Site           string `json:"site"`
@@ -133,18 +133,18 @@ type Location struct {
 	WorkCell       string `json:"workCell"`
 }
 
-// CreateInviteRequest is the payload for creating a new invite
+// CreateInviteRequest is the payload for creating a new invite.
 type CreateInviteRequest struct {
-	FirstName        string     `json:"firstName" binding:"required"`
-	LastName         string     `json:"lastName" binding:"required"`
-	Email            string     `json:"email" binding:"required,email"`
-	Role             string     `json:"role" binding:"required"`
-	Certificate      string     `json:"certificate" binding:"required"`
-	EncryptedPrivKey string     `json:"encryptedPrivateKey" binding:"required"`
+	FirstName        string     `binding:"required"       json:"firstName"`
+	LastName         string     `binding:"required"       json:"lastName"`
+	Email            string     `binding:"required,email" json:"email"`
+	Role             string     `binding:"required"       json:"role"`
+	Certificate      string     `binding:"required"       json:"certificate"`
+	EncryptedPrivKey string     `binding:"required"       json:"encryptedPrivateKey"`
 	Hierarchies      []Location `json:"hierarchies"`
 }
 
-// InviteResponse represents an invite in API responses
+// InviteResponse represents an invite in API responses.
 type InviteResponse struct {
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
@@ -154,12 +154,12 @@ type InviteResponse struct {
 	Email     string    `json:"email"`
 }
 
-// RemoveUserRequest is the payload for removing a user from a company
+// RemoveUserRequest is the payload for removing a user from a company.
 type RemoveUserRequest struct {
-	Email string `json:"email" binding:"required,email"`
+	Email string `binding:"required,email" json:"email"`
 }
 
-// UserResponse represents a user in API responses
+// UserResponse represents a user in API responses.
 type UserResponse struct {
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
@@ -169,21 +169,21 @@ type UserResponse struct {
 	IsOwner   bool      `json:"isOwner"`
 }
 
-// RedeemInviteRequest is the payload for redeeming an invite
+// RedeemInviteRequest is the payload for redeeming an invite.
 type RedeemInviteRequest struct {
-	InviteID            string `json:"inviteId" binding:"required"`
-	EncryptedPrivateKey string `json:"encryptedPrivateKey" binding:"required"`
-	Password            string `json:"password" binding:"required"`
+	InviteID            string `binding:"required" json:"inviteId"`
+	EncryptedPrivateKey string `binding:"required" json:"encryptedPrivateKey"`
+	Password            string `binding:"required" json:"password"`
 }
 
-// UploadCertificatePatchRequest is the payload for uploading a certificate patch
+// UploadCertificatePatchRequest is the payload for uploading a certificate patch.
 type UploadCertificatePatchRequest struct {
-	UserEmail           string `json:"userEmail" binding:"required,email"`
-	Certificate         string `json:"certificate" binding:"required"`
-	EncryptedPrivateKey string `json:"encryptedPrivateKey" binding:"required"`
+	UserEmail           string `binding:"required,email" json:"userEmail"`
+	Certificate         string `binding:"required"       json:"certificate"`
+	EncryptedPrivateKey string `binding:"required"       json:"encryptedPrivateKey"`
 }
 
-// CertificatePatchResponse is the response for retrieving a certificate patch
+// CertificatePatchResponse is the response for retrieving a certificate patch.
 type CertificatePatchResponse struct {
 	CreatedAt           time.Time `json:"createdAt,omitempty"`
 	UpdatedAt           time.Time `json:"updatedAt,omitempty"`
@@ -192,10 +192,10 @@ type CertificatePatchResponse struct {
 	HasPatch            bool      `json:"hasPatch"`
 }
 
-// ApplyCertificatePatchRequest is the request for applying a certificate patch
+// ApplyCertificatePatchRequest is the request for applying a certificate patch.
 type ApplyCertificatePatchRequest struct {
-	Certificate         string `json:"certificate" binding:"required"`
-	EncryptedPrivateKey string `json:"encryptedPrivateKey" binding:"required"`
+	Certificate         string `binding:"required" json:"certificate"`
+	EncryptedPrivateKey string `binding:"required" json:"encryptedPrivateKey"`
 }
 
 type InviteDetailsResponse struct {
@@ -212,7 +212,7 @@ type InviteDetailsResponse struct {
 // Note: RequestUserCertificateRequest is no longer used as we now use query parameters
 // instead of a JSON body for the GET /instance/user/certificate endpoint
 
-// RequestUserCertificateResponse is the response payload for a user certificate request
+// RequestUserCertificateResponse is the response payload for a user certificate request.
 type RequestUserCertificateResponse struct {
 	UserEmail   string `json:"userEmail"`
 	Certificate string `json:"certificate"`

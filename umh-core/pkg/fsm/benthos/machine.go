@@ -30,12 +30,11 @@ import (
 	benthos_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 )
 
-// NewBenthosInstance creates a new BenthosInstance with the given ID and service path
+// NewBenthosInstance creates a new BenthosInstance with the given ID and service path.
 func NewBenthosInstanceWithService(
 	config config.BenthosConfig,
 	service *benthos_service.BenthosService,
 ) *BenthosInstance {
-
 	cfg := internal_fsm.BaseFSMInstanceConfig{
 		ID:                           config.Name,
 		DesiredFSMState:              OperationalStateStopped,
@@ -109,7 +108,7 @@ func NewBenthosInstance(
 
 // SetDesiredFSMState safely updates the desired state
 // But ensures that the desired state is a valid state and that it is also a reasonable state
-// e.g., nobody wants to have an instance in the "starting" state, that is just intermediate
+// e.g., nobody wants to have an instance in the "starting" state, that is just intermediate.
 func (b *BenthosInstance) SetDesiredFSMState(state string) error {
 	// For Benthos, we only allow setting Stopped or Active as desired states
 	if state != OperationalStateStopped &&
@@ -121,51 +120,52 @@ func (b *BenthosInstance) SetDesiredFSMState(state string) error {
 	}
 
 	b.baseFSMInstance.SetDesiredFSMState(state)
+
 	return nil
 }
 
-// GetCurrentFSMState returns the current state of the FSM
+// GetCurrentFSMState returns the current state of the FSM.
 func (b *BenthosInstance) GetCurrentFSMState() string {
 	return b.baseFSMInstance.GetCurrentFSMState()
 }
 
-// GetDesiredFSMState returns the desired state of the FSM
+// GetDesiredFSMState returns the desired state of the FSM.
 func (b *BenthosInstance) GetDesiredFSMState() string {
 	return b.baseFSMInstance.GetDesiredFSMState()
 }
 
 // Remove starts the removal process, it is idempotent and can be called multiple times
-// Note: it is only removed once IsRemoved returns true
+// Note: it is only removed once IsRemoved returns true.
 func (b *BenthosInstance) Remove(ctx context.Context) error {
 	return b.baseFSMInstance.Remove(ctx)
 }
 
-// IsRemoved returns true if the instance has been removed
+// IsRemoved returns true if the instance has been removed.
 func (b *BenthosInstance) IsRemoved() bool {
 	return b.baseFSMInstance.IsRemoved()
 }
 
-// IsRemoving returns true if the instance is in the removing state
+// IsRemoving returns true if the instance is in the removing state.
 func (b *BenthosInstance) IsRemoving() bool {
 	return b.baseFSMInstance.IsRemoving()
 }
 
-// IsStopping returns true if the instance is in the stopping state
+// IsStopping returns true if the instance is in the stopping state.
 func (b *BenthosInstance) IsStopping() bool {
 	return b.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopping
 }
 
-// IsStopped returns true if the instance is in the stopped state
+// IsStopped returns true if the instance is in the stopped state.
 func (b *BenthosInstance) IsStopped() bool {
 	return b.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopped
 }
 
-// WantsToBeStopped returns true if the instance wants to be stopped
+// WantsToBeStopped returns true if the instance wants to be stopped.
 func (b *BenthosInstance) WantsToBeStopped() bool {
 	return b.baseFSMInstance.GetDesiredFSMState() == OperationalStateStopped
 }
 
-// PrintState prints the current state of the FSM for debugging
+// PrintState prints the current state of the FSM for debugging.
 func (b *BenthosInstance) PrintState() {
 	b.baseFSMInstance.GetLogger().Debugf("Current state: %s", b.baseFSMInstance.GetCurrentFSMState())
 	b.baseFSMInstance.GetLogger().Debugf("Desired state: %s", b.baseFSMInstance.GetDesiredFSMState())
@@ -174,7 +174,7 @@ func (b *BenthosInstance) PrintState() {
 		b.ObservedState.ServiceInfo.BenthosStatus.StatusReason)
 }
 
-// GetMinimumRequiredTime returns the minimum required time for this instance
+// GetMinimumRequiredTime returns the minimum required time for this instance.
 func (b *BenthosInstance) GetMinimumRequiredTime() time.Duration {
 	return constants.BenthosUpdateObservedStateTimeout
 }

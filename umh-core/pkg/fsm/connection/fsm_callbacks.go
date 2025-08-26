@@ -21,7 +21,7 @@ import (
 )
 
 // registerCallbacks registers common callbacks for state transitions
-// These callbacks are executed synchronously and should not have any network calls or other operations that could fail
+// These callbacks are executed synchronously and should not have any network calls or other operations that could fail.
 func (instance *ConnectionInstance) registerCallbacks() {
 	// Basic operational state callbacks
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStarting, func(ctx context.Context, e *fsm.Event) {

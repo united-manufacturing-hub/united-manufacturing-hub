@@ -16,10 +16,10 @@ package dataflowcomponent
 
 import "errors"
 
-// Custom errors for DataFlowComponent service
+// Custom errors for DataFlowComponent service.
 var (
-	// ErrServiceNotExists is returned when a dataflow component does not exist
+	// ErrServiceNotExists is returned when a dataflow component does not exist.
 	ErrServiceNotExists = errors.New("dataflow component does not exist")
-	// ErrServiceAlreadyExists is returned when a dataflow component already exists
+	// ErrServiceAlreadyExists is returned when a dataflow component already exists.
 	ErrServiceAlreadyExists = errors.New("dataflow component already exists")
 )

@@ -17,15 +17,15 @@ package redpanda_monitor
 import "errors"
 
 var (
-	// ErrServiceNotExist indicates the requested service does not exist
+	// ErrServiceNotExist indicates the requested service does not exist.
 	ErrServiceNotExist = errors.New("service does not exist")
 
-	// ErrServiceAlreadyExists indicates the requested service already exists
+	// ErrServiceAlreadyExists indicates the requested service already exists.
 	ErrServiceAlreadyExists = errors.New("service already exists")
 
-	// ErrServiceNoLogFile indicates the health check had no logs to process
+	// ErrServiceNoLogFile indicates the health check had no logs to process.
 	ErrServiceNoLogFile = errors.New("log file not found")
 
-	// ErrServiceNoSectionsFound indicates the redpanda service has no sections
+	// ErrServiceNoSectionsFound indicates the redpanda service has no sections.
 	ErrServiceNoSectionsFound = errors.New("could not parse redpanda metrics/configuration: no sections found. This can happen when the redpanda service is not running, or the logs where rotated")
 )

@@ -20,13 +20,13 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 )
 
-// GetBenthosServiceConfig converts the component config to a full BenthosServiceConfig
+// GetBenthosServiceConfig converts the component config to a full BenthosServiceConfig.
 func (c DataflowComponentServiceConfig) GetBenthosServiceConfig() benthosserviceconfig.BenthosServiceConfig {
 	return c.BenthosConfig.ToBenthosServiceConfig()
 }
 
 // ToBenthosServiceConfig converts the simplified BenthosConfig to a full BenthosServiceConfig
-// with default advanced configuration
+// with default advanced configuration.
 func (bc BenthosConfig) ToBenthosServiceConfig() benthosserviceconfig.BenthosServiceConfig {
 	return benthosserviceconfig.BenthosServiceConfig{
 		Input:              bc.Input,
@@ -42,7 +42,7 @@ func (bc BenthosConfig) ToBenthosServiceConfig() benthosserviceconfig.BenthosSer
 }
 
 // FromBenthosServiceConfig creates a DataFlowComponentConfig from a BenthosServiceConfig,
-// ignoring advanced configuration fields
+// ignoring advanced configuration fields.
 func FromBenthosServiceConfig(benthos benthosserviceconfig.BenthosServiceConfig) DataflowComponentServiceConfig {
 	return DataflowComponentServiceConfig{
 		BenthosConfig: BenthosConfig{
@@ -56,7 +56,7 @@ func FromBenthosServiceConfig(benthos benthosserviceconfig.BenthosServiceConfig)
 	}
 }
 
-// generate the uuid from the name
+// generate the uuid from the name.
 func GenerateUUIDFromName(name string) uuid.UUID {
 	return uuid.NewSHA1(uuid.NameSpaceDNS, []byte(name))
 }

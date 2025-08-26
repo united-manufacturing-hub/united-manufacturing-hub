@@ -26,7 +26,7 @@ import (
 // The semaphore is initialized with a weight of constants.AmountReadersForConfigFile, which means that constants.AmountReadersForConfigFile readers can read the mutex at the same time
 // If the semaphore is locked by a writer, no readers can read the mutex
 // If the semaphore is locked by a reader, no writers can write the mutex but multiple (up to constants.AmountReadersForConfigFile) readers can read the mutex at the same time
-// we only use the weighted semaphore, because it is more flexible than the sync.RWMutex and allows for context cancellation
+// we only use the weighted semaphore, because it is more flexible than the sync.RWMutex and allows for context cancellation.
 type CtxRWMutex struct {
 	sem *semaphore.Weighted
 }
@@ -37,22 +37,22 @@ func NewCtxRWMutex() *CtxRWMutex {
 	}
 }
 
-// RLock locks the mutex for reading
+// RLock locks the mutex for reading.
 func (m *CtxRWMutex) RLock(ctx context.Context) error {
 	return m.sem.Acquire(ctx, 1)
 }
 
-// RUnlock unlocks the mutex for reading
+// RUnlock unlocks the mutex for reading.
 func (m *CtxRWMutex) RUnlock() {
 	m.sem.Release(1)
 }
 
-// Lock locks the mutex for writing
+// Lock locks the mutex for writing.
 func (m *CtxRWMutex) Lock(ctx context.Context) error {
 	return m.sem.Acquire(ctx, constants.AmountReadersForConfigFile)
 }
 
-// Unlock unlocks the mutex for writing
+// Unlock unlocks the mutex for writing.
 func (m *CtxRWMutex) Unlock() {
 	m.sem.Release(constants.AmountReadersForConfigFile)
 }

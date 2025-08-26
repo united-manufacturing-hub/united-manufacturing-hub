@@ -35,12 +35,15 @@ func (r *RedpandaMonitorInstance) CreateInstance(ctx context.Context, filesystem
 	r.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding Redpanda Monitor service %s to S6 manager ...", r.baseFSMInstance.GetID())
 
 	r.baseFSMInstance.GetLogger().Debugf("Adding Redpanda Monitor service %s to S6 manager", r.baseFSMInstance.GetID())
+
 	err := r.monitorService.AddRedpandaMonitorToS6Manager(ctx)
 	if err != nil {
-		if err == redpanda_monitor_service.ErrServiceAlreadyExists {
+		if errors.Is(err, redpanda_monitor_service.ErrServiceAlreadyExists) {
 			r.baseFSMInstance.GetLogger().Debugf("Redpanda Monitor service %s already exists in S6 manager", r.baseFSMInstance.GetID())
+
 			return nil // do not throw an error, as each action is expected to be idempotent
 		}
+
 		return fmt.Errorf("failed to add Redpanda Monitor service %s to S6 manager: %w", r.baseFSMInstance.GetID(), err)
 	}
 
@@ -64,6 +67,7 @@ func (r *RedpandaMonitorInstance) RemoveInstance(ctx context.Context, filesystem
 		r.baseFSMInstance.GetLogger().
 			Infof("Redpanda monitor service %s removed from S6 manager",
 				r.baseFSMInstance.GetID())
+
 		return nil
 
 	case errors.Is(err, redpanda_monitor_service.ErrServiceNotExist):
@@ -90,6 +94,7 @@ func (r *RedpandaMonitorInstance) RemoveInstance(ctx context.Context, filesystem
 		r.baseFSMInstance.GetLogger().
 			Errorf("failed to remove Redpanda Monitor service %s: %s",
 				r.baseFSMInstance.GetID(), err)
+
 		return fmt.Errorf("failed to remove Redpanda Monitor service %s: %w",
 			r.baseFSMInstance.GetID(), err)
 	}
@@ -110,6 +115,7 @@ func (r *RedpandaMonitorInstance) StartInstance(ctx context.Context, filesystemS
 	}
 
 	r.baseFSMInstance.GetLogger().Debugf("Redpanda Monitor service %s start command executed", r.baseFSMInstance.GetID())
+
 	return nil
 }
 
@@ -125,10 +131,11 @@ func (r *RedpandaMonitorInstance) StopInstance(ctx context.Context, filesystemSe
 	}
 
 	r.baseFSMInstance.GetLogger().Debugf("Redpanda Monitor service %s stop command executed", r.baseFSMInstance.GetID())
+
 	return nil
 }
 
-// CheckForCreation checks if the instance has been created
+// CheckForCreation checks if the instance has been created.
 func (r *RedpandaMonitorInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
 	// No need to check anything specific for redpanda monitor
 	// Creation is considered complete immediately
@@ -141,18 +148,22 @@ func (r *RedpandaMonitorInstance) UpdateObservedStateOfInstance(ctx context.Cont
 		if r.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "UpdateObservedStateOfInstance") {
 			return nil
 		}
+
 		return ctx.Err()
 	}
 
 	start := time.Now()
+
 	info, err := r.monitorService.Status(ctx, services.GetFileSystem(), snapshot.Tick)
 	if err != nil {
 		return err
 	}
+
 	metrics.ObserveReconcileTime(logger.ComponentRedpandaMonitorInstance, r.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
 
 	// Store the raw service info
 	r.ObservedState.ServiceInfo = &info
+
 	return nil
 }
 
@@ -169,6 +180,7 @@ func (r *RedpandaMonitorInstance) isMonitorHealthy(loopStartTime time.Time) bool
 	// Check that the last scan is not older then RedpandaMaxMetricsAndConfigAge
 	if loopStartTime.Sub(r.ObservedState.ServiceInfo.RedpandaStatus.LastScan.LastUpdatedAt) > constants.RedpandaMaxMetricsAndConfigAge {
 		r.baseFSMInstance.GetLogger().Warnf("last scan is %s old, returning empty status", loopStartTime.Sub(r.ObservedState.ServiceInfo.RedpandaStatus.LastScan.LastUpdatedAt))
+
 		return false
 	}
 

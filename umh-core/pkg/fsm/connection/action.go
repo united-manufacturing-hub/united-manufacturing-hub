@@ -52,12 +52,15 @@ func (c *ConnectionInstance) CreateInstance(ctx context.Context, filesystemServi
 	if err != nil {
 		if errors.Is(err, connection.ErrServiceAlreadyExists) {
 			c.baseFSMInstance.GetLogger().Debugf("Connection service %s already exists in Nmap manager", c.baseFSMInstance.GetID())
+
 			return nil // do not throw an error, as each action is expected to be idempotent
 		}
+
 		return fmt.Errorf("failed to add Connection service %s to Nmap manager: %w", c.baseFSMInstance.GetID(), err)
 	}
 
 	c.baseFSMInstance.GetLogger().Debugf("Connection service %s added to Nmap manager", c.baseFSMInstance.GetID())
+
 	return nil
 }
 
@@ -71,6 +74,7 @@ func (c *ConnectionInstance) RemoveInstance(ctx context.Context, filesystemServi
 	switch {
 	case err == nil: // fully removed
 		c.baseFSMInstance.GetLogger().Debugf("Connection service %s removed from nmap manager", c.baseFSMInstance.GetID())
+
 		return nil
 
 	case errors.Is(err, connection.ErrServiceNotExist):
@@ -87,7 +91,7 @@ func (c *ConnectionInstance) RemoveInstance(ctx context.Context, filesystemServi
 	}
 }
 
-// StartInstance to start the Connection by setting the desired state to running for the given instance
+// StartInstance to start the Connection by setting the desired state to running for the given instance.
 func (c *ConnectionInstance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	c.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting Connection service %s ...", c.baseFSMInstance.GetID())
 
@@ -99,10 +103,11 @@ func (c *ConnectionInstance) StartInstance(ctx context.Context, filesystemServic
 	}
 
 	c.baseFSMInstance.GetLogger().Debugf("Connection service %s start command executed", c.baseFSMInstance.GetID())
+
 	return nil
 }
 
-// StopInstance attempts to stop the Connection by setting the desired state to stopped for the given instance
+// StopInstance attempts to stop the Connection by setting the desired state to stopped for the given instance.
 func (c *ConnectionInstance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	c.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping Connection service %s ...", c.baseFSMInstance.GetID())
 
@@ -114,22 +119,22 @@ func (c *ConnectionInstance) StopInstance(ctx context.Context, filesystemService
 	}
 
 	c.baseFSMInstance.GetLogger().Debugf("Connection service %s stop command executed", c.baseFSMInstance.GetID())
+
 	return nil
 }
 
 // CheckForCreation checks whether the creation was successful
-// For Connection, this is a no-op as we don't need to check anything
+// For Connection, this is a no-op as we don't need to check anything.
 func (c *ConnectionInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
 	return true
 }
 
 // getServiceStatus gets the status of the Connection service
-// its main purpose is to handle the edge cases where the service is not yet created or not yet running
+// its main purpose is to handle the edge cases where the service is not yet created or not yet running.
 func (c *ConnectionInstance) getServiceStatus(ctx context.Context, filesystemService filesystem.Service, tick uint64) (connection.ServiceInfo, error) {
 	info, err := c.service.Status(ctx, filesystemService, c.baseFSMInstance.GetID(), tick)
 	if err != nil {
 		// If there's an error getting the service status, we need to distinguish between cases
-
 		if errors.Is(err, connection.ErrServiceNotExist) {
 			// If the service is being created, we don't want to count this as an error
 			// The instance is likely in Creating or ToBeCreated state, so service doesn't exist yet
@@ -141,11 +146,13 @@ func (c *ConnectionInstance) getServiceStatus(ctx context.Context, filesystemSer
 
 			// Log the warning but don't treat it as a fatal error
 			c.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation")
+
 			return connection.ServiceInfo{}, nil
 		}
 
 		// For other errors, log them and return
 		c.baseFSMInstance.GetLogger().Errorf("error updating observed state for %s: %s", c.baseFSMInstance.GetID(), err)
+
 		infoWithFailedHealthChecks := info
 		infoWithFailedHealthChecks.NmapObservedState.ServiceInfo.NmapStatus.IsRunning = false
 		// return the info with healthchecks failed
@@ -155,17 +162,19 @@ func (c *ConnectionInstance) getServiceStatus(ctx context.Context, filesystemSer
 	return info, nil
 }
 
-// UpdateObservedStateOfInstance updates the observed state of the service
+// UpdateObservedStateOfInstance updates the observed state of the service.
 func (c *ConnectionInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
 	start := time.Now()
+
 	info, err := c.getServiceStatus(ctx, services.GetFileSystem(), snapshot.Tick)
 	if err != nil {
 		return fmt.Errorf("error while getting service status: %w", err)
 	}
+
 	metrics.ObserveReconcileTime(logger.ComponentConnectionInstance, c.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
 	// Store the raw service info
 	c.ObservedState.ServiceInfo = info
@@ -182,6 +191,7 @@ func (c *ConnectionInstance) UpdateObservedStateOfInstance(ctx context.Context, 
 	start = time.Now()
 	observedConfig, err := c.service.GetConfig(ctx, services.GetFileSystem(), c.baseFSMInstance.GetID())
 	metrics.ObserveReconcileTime(logger.ComponentConnectionInstance, c.baseFSMInstance.GetID()+".getConfig", time.Since(start))
+
 	if err == nil {
 		// Only update if we successfully got the config
 		c.ObservedState.ObservedConnectionConfig = observedConfig
@@ -189,6 +199,7 @@ func (c *ConnectionInstance) UpdateObservedStateOfInstance(ctx context.Context, 
 		if strings.Contains(err.Error(), connection.ErrServiceNotExist.Error()) {
 			// Log the error but don't fail - this might happen during creation when the config file doesn't exist yet
 			c.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
+
 			return nil
 		} else {
 			return fmt.Errorf("failed to get observed Connection config: %w", err)
@@ -236,7 +247,7 @@ func (c *ConnectionInstance) IsConnectionNmapStopped() bool {
 
 // IsConnectionDegraded determines if the Connection service is degraded.
 // These check everything that is checked during the starting phase
-// But it means that it once worked, and then degraded
+// But it means that it once worked, and then degraded.
 func (c *ConnectionInstance) IsConnectionNmapDegraded() bool {
 	return c.ObservedState.ServiceInfo.NmapFSMState == nmap.OperationalStateDegraded
 }
@@ -249,7 +260,7 @@ func (c *ConnectionInstance) IsConnectionNmapUp() bool {
 }
 
 // IsConnectionDown determines based on the state of the Nmap FSM if the connection
-// can be considered as down due to the port scan
+// can be considered as down due to the port scan.
 func (c *ConnectionInstance) IsConnectionNmapDown() bool {
 	switch c.ObservedState.ServiceInfo.NmapFSMState {
 	case nmap.OperationalStateOpenFiltered,
@@ -275,6 +286,7 @@ func (c *ConnectionInstance) IsConnectionDegraded() bool {
 	if c.IsConnectionFlaky() {
 		return true
 	}
+
 	if c.IsConnectionNmapDegraded() {
 		return true
 	}

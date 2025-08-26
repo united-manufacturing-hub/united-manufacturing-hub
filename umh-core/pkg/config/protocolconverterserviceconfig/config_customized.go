@@ -60,11 +60,12 @@ func (c ProtocolConverterServiceConfigSpec) GetDFCWriteServiceConfig() dataflowc
 			},
 		}
 	}
+
 	return dfcWriteConfig
 }
 
 // FromConnectionAndDFCServiceConfig creates a ProtocolConverterServiceConfig
-// from a ConnectionServiceConfig and DataFlowComponentConfig
+// from a ConnectionServiceConfig and DataFlowComponentConfig.
 func FromConnectionAndDFCServiceConfig(
 	connection connectionserviceconfig.ConnectionServiceConfig,
 	dfcRead dataflowcomponentserviceconfig.DataflowComponentServiceConfig,

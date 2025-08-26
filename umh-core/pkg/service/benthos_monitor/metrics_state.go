@@ -14,7 +14,7 @@
 
 package benthos_monitor
 
-// ComponentThroughput tracks throughput metrics for a single component
+// ComponentThroughput tracks throughput metrics for a single component.
 type ComponentThroughput struct {
 	// Window stores the last N message counts for calculating sliding window average
 	// Do not deep-copy this field as it is not needed
@@ -31,14 +31,14 @@ type ComponentThroughput struct {
 	BatchesPerTick float64
 }
 
-// MessageCount stores a count at a specific tick
+// MessageCount stores a count at a specific tick.
 type MessageCount struct {
 	Tick       uint64
 	Count      int64
 	BatchCount int64
 }
 
-// BenthosMetricsState tracks the state of Benthos metrics over time
+// BenthosMetricsState tracks the state of Benthos metrics over time.
 type BenthosMetricsState struct {
 	// Processors tracks processor throughput
 	Processors map[string]ComponentThroughput
@@ -54,13 +54,13 @@ type BenthosMetricsState struct {
 	IsActive bool
 }
 
-// Constants for throughput calculation
+// Constants for throughput calculation.
 const (
-	// ThroughputWindowSize is how many ticks to keep in the sliding window
+	// ThroughputWindowSize is how many ticks to keep in the sliding window.
 	ThroughputWindowSize = 10 * 60 // assuming 100ms per tick, this is 1 minute
 )
 
-// NewBenthosMetricsState creates a new BenthosMetricsState
+// NewBenthosMetricsState creates a new BenthosMetricsState.
 func NewBenthosMetricsState() *BenthosMetricsState {
 	return &BenthosMetricsState{
 		Processors:      make(map[string]ComponentThroughput),
@@ -70,7 +70,7 @@ func NewBenthosMetricsState() *BenthosMetricsState {
 	}
 }
 
-// UpdateFromMetrics updates the metrics state based on new metrics
+// UpdateFromMetrics updates the metrics state based on new metrics.
 func (s *BenthosMetricsState) UpdateFromMetrics(metrics Metrics, tick uint64) {
 	// Update component throughput
 	s.updateComponentThroughput(&s.Input, metrics.Input.Received, 0, tick)
@@ -83,9 +83,11 @@ func (s *BenthosMetricsState) UpdateFromMetrics(metrics Metrics, tick uint64) {
 		if existing, exists := s.Processors[path]; exists {
 			throughput = existing
 		}
+
 		s.updateComponentThroughput(&throughput, processor.Sent, processor.BatchSent, tick)
 		newProcessors[path] = throughput
 	}
+
 	s.Processors = newProcessors
 
 	// Update activity status based on input throughput
@@ -95,7 +97,7 @@ func (s *BenthosMetricsState) UpdateFromMetrics(metrics Metrics, tick uint64) {
 	s.LastTick = tick
 }
 
-// updateComponentThroughput updates throughput metrics for a single component
+// updateComponentThroughput updates throughput metrics for a single component.
 func (s *BenthosMetricsState) updateComponentThroughput(throughput *ComponentThroughput, count, batchCount int64, tick uint64) {
 	// Initialize window if needed
 	if throughput.Window == nil {
@@ -140,5 +142,6 @@ func (s *BenthosMetricsState) updateComponentThroughput(throughput *ComponentThr
 		throughput.LastCount = count
 		throughput.LastBatchCount = batchCount
 	}
+
 	throughput.LastTick = tick
 }

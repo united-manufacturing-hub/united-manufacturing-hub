@@ -52,9 +52,10 @@ func NewBuilder() *Builder {
 	}
 }
 
-// SetMetricsPort sets a custom metrics port for the agent
+// SetMetricsPort sets a custom metrics port for the agent.
 func (b *Builder) SetMetricsPort(port int) *Builder {
 	b.full.Agent.MetricsPort = port
+
 	return b
 }
 
@@ -101,11 +102,13 @@ output:
 
 func (b *Builder) AddService(s config.S6FSMConfig) *Builder {
 	b.full.Internal.Services = append(b.full.Internal.Services, s)
+
 	return b
 }
 
 func (b *Builder) BuildYAML() string {
 	out, _ := yaml.Marshal(b.full)
+
 	return string(out)
 }
 
@@ -119,27 +122,32 @@ func (b *Builder) AddSleepService(name string, duration string) *Builder {
 			Command: []string{"sleep", duration},
 		},
 	})
+
 	return b
 }
 
-// StopService stops a service by name
+// StopService stops a service by name.
 func (b *Builder) StopService(name string) *Builder {
 	for i, s := range b.full.Internal.Services {
 		if s.Name == name {
 			b.full.Internal.Services[i].DesiredFSMState = "stopped"
+
 			break
 		}
 	}
+
 	return b
 }
 
-// StartService starts a service by name
+// StartService starts a service by name.
 func (b *Builder) StartService(name string) *Builder {
 	for i, s := range b.full.Internal.Services {
 		if s.Name == name {
 			b.full.Internal.Services[i].DesiredFSMState = "running"
+
 			break
 		}
 	}
+
 	return b
 }
