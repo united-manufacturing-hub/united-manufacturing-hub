@@ -59,14 +59,6 @@ type EditInstanceLocationModel struct {
 	Enterprise string  `json:"enterprise"`
 }
 
-type InstanceLocation struct {
-	Enterprise string `json:"enterprise"`
-	Site       string `json:"site"`
-	Area       string `json:"area"`
-	Line       string `json:"line"`
-	WorkCell   string `json:"workCell"`
-}
-
 type MessageMetadata struct {
 	TraceID uuid.UUID `json:"traceId"`
 }
@@ -94,8 +86,8 @@ type UMHMessage struct {
 }
 
 type UMHMessageWithAdditionalInfo struct {
-	UMHMessage
 	Certificate *x509.Certificate `json:"certificate"`
+	UMHMessage
 }
 
 // Define MessageType as a custom type for better type safety.
@@ -187,7 +179,7 @@ const (
 	// GetDataFlowComponentMetrics represents the action type for retrieving metrics of a data flow component
 	//
 	// Deprecated: Use GetMetrics instead. Kept for backward compatibility.
-	GetDataFlowComponentMetrics ActionType = "gdatamodelet-data-flow-component-metrics"
+	GetDataFlowComponentMetrics ActionType = "get-data-flow-component-metrics"
 	// GetDataFlowComponentLog reperesents the action type for getting the audit log for a data flow component.
 	GetDataFlowComponentLog ActionType = "get-data-flow-component-log"
 	// GetKubernetesEvents represents the action type for retrieving Kubernetes events.

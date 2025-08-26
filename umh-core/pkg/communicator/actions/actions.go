@@ -16,6 +16,7 @@ package actions
 
 import (
 	"crypto/x509"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -68,13 +69,15 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 
 	snapshot := systemSnapshotManager.GetSnapshot()
 	if snapshot == nil {
-		SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, fmt.Errorf("snapshot is nil").Error(), outboundChannel, payload.ActionType)
+		SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, errors.New("snapshot is nil").Error(), outboundChannel, payload.ActionType)
+
 		return
 	}
 
 	err := validator.ValidateUserCertificateForAction(log, senderCert, &payload.ActionType, models.Action, snapshot.CurrentConfig.Agent.Location)
 	if err != nil {
 		SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, err.Error(), outboundChannel, payload.ActionType)
+
 		return
 	}
 
@@ -227,7 +230,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 
 	SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionExecuting, "Parsing action payload", outboundChannel, payload.ActionType)
 	// Parse the action payload
-	err := action.Parse(payload.ActionPayload)
+	err = action.Parse(payload.ActionPayload)
 	if err != nil {
 		// If parsing fails, send a structured error reply using SendActionReplyV2 with ErrRetryParseFailed
 		// this will allow the UI to retry the action

@@ -40,7 +40,7 @@ type CommunicationState struct {
 	LoginResponseMu       *sync.RWMutex
 	mu                    *sync.RWMutex
 	Watchdog              *watchdog.Watchdog
-	InboundChannel        chan *models.UMHMessage
+	InboundChannel        chan *models.UMHMessageWithAdditionalInfo
 	Puller                *pull.Puller
 	Pusher                *push.Pusher
 	SubscriberHandler     *subscriber.Handler
@@ -62,7 +62,7 @@ type CommunicationState struct {
 // NewCommunicationState creates a new CommunicationState with initialized mutex.
 func NewCommunicationState(
 	watchdog *watchdog.Watchdog,
-	inboundChannel chan *models.UMHMessage,
+	inboundChannel chan *models.UMHMessageWithAdditionalInfo,
 	outboundChannel chan *models.UMHMessage,
 	releaseChannel config.ReleaseChannel,
 	systemSnapshotManager *fsm.SnapshotManager,

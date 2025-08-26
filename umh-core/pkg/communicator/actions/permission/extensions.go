@@ -30,30 +30,30 @@ var UMH_PEN = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 59193}
 // OIDs for our custom extensions
 // 1: V1 of our extensions (backwards compatibility)
 // 1.1: Role extension (v1: global role, v2: per-location role scopes)
-// 1.2: Location extension (deprecated in favor of DNS SANs + Name Constraints)
+// 1.2: Location extension (deprecated in favor of DNS SANs + Name Constraints).
 var (
-	// OID for Role extension (supports both v1 and v2 payloads)
+	// OID for Role extension (supports both v1 and v2 payloads).
 	oidExtensionRole asn1.ObjectIdentifier = append(UMH_PEN, 1, 1)
 
-	// OID for Location extension (deprecated - keeping for backwards compatibility)
+	// OID for Location extension (deprecated - keeping for backwards compatibility).
 	oidExtensionLocation asn1.ObjectIdentifier = append(UMH_PEN, 1, 2)
 )
 
-// Role represents the role of a certificate holder
+// Role represents the role of a certificate holder.
 type Role string
 
 const (
-	// RoleAdmin represents an administrator role
+	// RoleAdmin represents an administrator role.
 	RoleAdmin Role = "Admin"
 
-	// RoleViewer represents a viewer role
+	// RoleViewer represents a viewer role.
 	RoleViewer Role = "Viewer"
 
-	// RoleEditor represents an editor role
+	// RoleEditor represents an editor role.
 	RoleEditor Role = "Editor"
 )
 
-// NEW: LocationDNS represents a location as a DNS name with arbitrary depth
+// NEW: LocationDNS represents a location as a DNS name with arbitrary depth.
 type LocationDNS string
 
 // Examples:
@@ -64,46 +64,46 @@ type LocationDNS string
 // - "*.area2.cologne.umh.internal"            (wildcard: all cells in area2)
 // - "*.cologne.umh.internal"                  (wildcard: all areas in cologne)
 
-// NEW: RoleScope represents a role that applies to a specific DNS subtree
+// NEW: RoleScope represents a role that applies to a specific DNS subtree.
 type RoleScope struct {
 	DNSSuffix LocationDNS `json:"dns_suffix"` // e.g. ".cologne.umh.internal"
 	Role      Role        `json:"role"`       // admin/editor/viewer
 }
 
-// NEW: V2 role extension payload structure
+// NEW: V2 role extension payload structure.
 type roleScopesV2 struct {
-	Version int         `json:"v"`                 // must be 2
-	Scopes  []RoleScope `json:"scopes"`            // per-location role mappings
 	Default Role        `json:"default,omitempty"` // fallback role if no suffix matches
+	Scopes  []RoleScope `json:"scopes"`            // per-location role mappings
+	Version int         `json:"v"`                 // must be 2
 }
 
-// LocationType represents the type of location in the hierarchy
+// LocationType represents the type of location in the hierarchy.
 type LocationType string
 
 const (
-	// LocationTypeEnterprise represents the enterprise level
+	// LocationTypeEnterprise represents the enterprise level.
 	LocationTypeEnterprise LocationType = "Enterprise"
 
-	// LocationTypeSite represents a site level
+	// LocationTypeSite represents a site level.
 	LocationTypeSite LocationType = "Site"
 
-	// LocationTypeArea represents an area level
+	// LocationTypeArea represents an area level.
 	LocationTypeArea LocationType = "Area"
 
-	// LocationTypeProductionLine represents a production line level
+	// LocationTypeProductionLine represents a production line level.
 	LocationTypeProductionLine LocationType = "ProductionLine"
 
-	// LocationTypeWorkCell represents a work cell level
+	// LocationTypeWorkCell represents a work cell level.
 	LocationTypeWorkCell LocationType = "WorkCell"
 )
 
-// Location represents a specific location with a type and value
+// Location represents a specific location with a type and value.
 type Location struct {
 	Type  LocationType
 	Value string
 }
 
-// NewLocation creates a new Location with the given type and value
+// NewLocation creates a new Location with the given type and value.
 func NewLocation(locType LocationType, value string) Location {
 	return Location{
 		Type:  locType,
@@ -111,7 +111,7 @@ func NewLocation(locType LocationType, value string) Location {
 	}
 }
 
-// NewWildcardLocation creates a new Location with the given type and a wildcard value
+// NewWildcardLocation creates a new Location with the given type and a wildcard value.
 func NewWildcardLocation(locType LocationType) Location {
 	return Location{
 		Type:  locType,
@@ -119,7 +119,7 @@ func NewWildcardLocation(locType LocationType) Location {
 	}
 }
 
-// IsWildcard returns true if the location is a wildcard (any value is allowed)
+// IsWildcard returns true if the location is a wildcard (any value is allowed).
 func (l Location) IsWildcard() bool {
 	return l.Value == "*"
 }
@@ -137,6 +137,7 @@ func (l Location) filterString(s string) string {
 	if slices.Contains(wildcardStrings, s) {
 		return "*"
 	}
+
 	if s == "" {
 		return "*"
 	}
@@ -144,12 +145,12 @@ func (l Location) filterString(s string) string {
 	return s
 }
 
-// String returns a string representation of the location
+// String returns a string representation of the location.
 func (l Location) String() string {
 	return fmt.Sprintf("%s:%s", l.Type, l.filterString(l.Value))
 }
 
-// LocationHierarchy represents a complete location hierarchy
+// LocationHierarchy represents a complete location hierarchy.
 type LocationHierarchy struct {
 	Enterprise     Location
 	Site           Location
@@ -158,7 +159,7 @@ type LocationHierarchy struct {
 	WorkCell       Location
 }
 
-// NewLocationHierarchy creates a new LocationHierarchy with the given locations
+// NewLocationHierarchy creates a new LocationHierarchy with the given locations.
 func NewLocationHierarchy(enterprise, site, area, productionLine, workCell Location) LocationHierarchy {
 	return LocationHierarchy{
 		Enterprise:     enterprise,
@@ -169,19 +170,19 @@ func NewLocationHierarchy(enterprise, site, area, productionLine, workCell Locat
 	}
 }
 
-// RoleExtension represents the role extension data
+// RoleExtension represents the role extension data.
 type RoleExtension struct {
 	Role Role
 }
 
-// LocationExtension represents the location extension data
+// LocationExtension represents the location extension data.
 type LocationExtension struct {
 	Hierarchies []LocationHierarchy
 }
 
 // ValidateLocationHierarchy validates that the location hierarchy is correct
 // All levels must be set, but can be wildcards (including Enterprise)
-// If a specific level has a non-wildcard value, all higher levels must also have non-wildcard values
+// If a specific level has a non-wildcard value, all higher levels must also have non-wildcard values.
 func ValidateLocationHierarchy(hierarchy LocationHierarchy) error {
 	// Enterprise must be set
 	if hierarchy.Enterprise.Type != LocationTypeEnterprise {
@@ -207,10 +208,11 @@ func ValidateLocationHierarchy(hierarchy LocationHierarchy) error {
 	if hierarchy.WorkCell.Type != LocationTypeWorkCell {
 		return errors.New("work cell location must be of type WorkCell")
 	}
+
 	return nil
 }
 
-// AddRoleExtension adds a role extension to the certificate template
+// AddRoleExtension adds a role extension to the certificate template.
 func AddRoleExtension(template *x509.Certificate, role Role) error {
 	// Validate role
 	if role != RoleAdmin && role != RoleViewer && role != RoleEditor {
@@ -233,7 +235,7 @@ func AddRoleExtension(template *x509.Certificate, role Role) error {
 	return nil
 }
 
-// AddLocationExtension adds a location extension to the certificate template
+// AddLocationExtension adds a location extension to the certificate template.
 func AddLocationExtension(template *x509.Certificate, hierarchies []LocationHierarchy) error {
 	if len(hierarchies) == 0 {
 		return errors.New("at least one location hierarchy must be specified")
@@ -280,7 +282,7 @@ func AddLocationExtension(template *x509.Certificate, hierarchies []LocationHier
 	return nil
 }
 
-// NEW: AddRoleScopesV2Extension adds a v2 role extension with per-location role mappings
+// NEW: AddRoleScopesV2Extension adds a v2 role extension with per-location role mappings.
 func AddRoleScopesV2Extension(template *x509.Certificate, scopes []RoleScope) error {
 	if len(scopes) == 0 {
 		return errors.New("role scopes cannot be empty")
@@ -291,9 +293,11 @@ func AddRoleScopesV2Extension(template *x509.Certificate, scopes []RoleScope) er
 		if scope.Role != RoleAdmin && scope.Role != RoleEditor && scope.Role != RoleViewer {
 			return fmt.Errorf("invalid role in scope: %s", scope.Role)
 		}
+
 		if scope.DNSSuffix == "" {
 			return errors.New("DNS suffix cannot be empty")
 		}
+
 		if !strings.HasPrefix(string(scope.DNSSuffix), ".") {
 			return fmt.Errorf("DNS suffix must start with '.': %s", scope.DNSSuffix)
 		}
@@ -320,7 +324,7 @@ func AddRoleScopesV2Extension(template *x509.Certificate, scopes []RoleScope) er
 	return nil
 }
 
-// NEW: ParseRoleInfo extracts role information from a certificate (backwards compatible)
+// NEW: ParseRoleInfo extracts role information from a certificate (backwards compatible).
 func ParseRoleInfo(cert *x509.Certificate) (v2 *roleScopesV2, v1 Role, hasV2 bool, hasV1 bool, err error) {
 	for _, ext := range cert.Extensions {
 		if ext.Id.Equal(oidExtensionRole) {
@@ -340,13 +344,14 @@ func ParseRoleInfo(cert *x509.Certificate) (v2 *roleScopesV2, v1 Role, hasV2 boo
 			}
 
 			// If we get here, the extension exists but we can't parse it
-			return nil, "", false, false, fmt.Errorf("unknown role extension payload format")
+			return nil, "", false, false, errors.New("unknown role extension payload format")
 		}
 	}
+
 	return nil, "", false, false, errors.New("role extension not found")
 }
 
-// NEW: EffectiveRoleFor determines the effective role for a given DNS name using v2 scopes
+// NEW: EffectiveRoleFor determines the effective role for a given DNS name using v2 scopes.
 func EffectiveRoleFor(dnsName string, v2 *roleScopesV2) Role {
 	if v2 == nil {
 		return ""
@@ -354,7 +359,9 @@ func EffectiveRoleFor(dnsName string, v2 *roleScopesV2) Role {
 
 	// Find the most specific (longest) matching DNS suffix
 	bestLen := -1
+
 	var bestRole Role
+
 	lowerName := strings.ToLower(dnsName)
 
 	for _, scope := range v2.Scopes {
@@ -368,15 +375,17 @@ func EffectiveRoleFor(dnsName string, v2 *roleScopesV2) Role {
 	if bestLen >= 0 {
 		return bestRole
 	}
+
 	return v2.Default
 }
 
-// NEW: Helper function to convert LocationDNS slice to string slice
+// NEW: Helper function to convert LocationDNS slice to string slice.
 func LocationDNSToStrings(locations []LocationDNS) []string {
 	result := make([]string, len(locations))
 	for i, loc := range locations {
 		result[i] = string(loc)
 	}
+
 	return result
 }
 
@@ -390,6 +399,7 @@ func validateHierarchies(hierarchies []LocationHierarchy) error {
 					symbol, fieldName, value)
 			}
 		}
+
 		return nil
 	}
 
@@ -397,19 +407,24 @@ func validateHierarchies(hierarchies []LocationHierarchy) error {
 		if err := checkValue(hierarchy.Enterprise.Value, "enterprise"); err != nil {
 			return err
 		}
+
 		if err := checkValue(hierarchy.Site.Value, "site"); err != nil {
 			return err
 		}
+
 		if err := checkValue(hierarchy.Area.Value, "area"); err != nil {
 			return err
 		}
+
 		if err := checkValue(hierarchy.ProductionLine.Value, "production line"); err != nil {
 			return err
 		}
+
 		if err := checkValue(hierarchy.WorkCell.Value, "work cell"); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -437,16 +452,18 @@ func GetRoleForLocation(cert *x509.Certificate, location map[int]string) (Role, 
 	if hasV2 {
 		// V2: Per-location roles
 		role := EffectiveRoleFor(locationDNS, v2)
+
 		return role, nil
 	} else if hasV1 {
 		// V1: Global role, but check if certificate has access to this location
 		if hasAccessToLocationV1(cert, location) {
 			return v1, nil
 		}
+
 		return "", nil // No access to this location
 	}
 
-	return "", fmt.Errorf("no valid role information found")
+	return "", errors.New("no valid role information found")
 }
 
 // GetRoleFromCertificate extracts the role from a certificate (DEPRECATED: use GetRoleForLocation)
@@ -455,6 +472,7 @@ func GetRoleFromCertificate(cert *x509.Certificate) (Role, error) {
 	for _, ext := range cert.Extensions {
 		if ext.Id.Equal(oidExtensionRole) {
 			var roleStr string
+
 			_, err := asn1.Unmarshal(ext.Value, &roleStr)
 			if err != nil {
 				return "", errors.Join(err, errors.New("failed to unmarshal role extension"))
@@ -473,7 +491,7 @@ func GetRoleFromCertificate(cert *x509.Certificate) (Role, error) {
 }
 
 // ConvertLocationMapToDNS converts a location map to DNS format
-// Example: map[int]string{0: "cologne", 1: "area2", 2: "cell1"} -> "cell1.area2.cologne.umh.internal"
+// Example: map[int]string{0: "cologne", 1: "area2", 2: "cell1"} -> "cell1.area2.cologne.umh.internal".
 func ConvertLocationMapToDNS(location map[int]string) string {
 	if len(location) == 0 {
 		return ""
@@ -489,6 +507,7 @@ func ConvertLocationMapToDNS(location map[int]string) string {
 
 	// Build the DNS name from highest level (maxKey) to lowest (0)
 	var parts []string
+
 	for i := maxKey; i >= 0; i-- {
 		if part, exists := location[i]; exists && part != "" {
 			parts = append(parts, part)
@@ -504,7 +523,7 @@ func ConvertLocationMapToDNS(location map[int]string) string {
 }
 
 // hasAccessToLocationV1 checks if a v1 certificate has access to the given location
-// based on the stored location hierarchies in the certificate
+// based on the stored location hierarchies in the certificate.
 func hasAccessToLocationV1(cert *x509.Certificate, location map[int]string) bool {
 	// Get the location hierarchies from the v1 certificate
 	hierarchies, err := GetLocationHierarchiesFromCertificate(cert)
@@ -525,22 +544,26 @@ func hasAccessToLocationV1(cert *x509.Certificate, location map[int]string) bool
 	return false
 }
 
-// convertLocationMapToHierarchy converts a location map to LocationHierarchy
+// convertLocationMapToHierarchy converts a location map to LocationHierarchy.
 func convertLocationMapToHierarchy(location map[int]string) LocationHierarchy {
 	hierarchy := LocationHierarchy{}
 
 	if enterprise, exists := location[0]; exists {
 		hierarchy.Enterprise = Location{Type: "Enterprise", Value: enterprise}
 	}
+
 	if site, exists := location[1]; exists {
 		hierarchy.Site = Location{Type: "Site", Value: site}
 	}
+
 	if area, exists := location[2]; exists {
 		hierarchy.Area = Location{Type: "Area", Value: area}
 	}
+
 	if productionLine, exists := location[3]; exists {
 		hierarchy.ProductionLine = Location{Type: "ProductionLine", Value: productionLine}
 	}
+
 	if workCell, exists := location[4]; exists {
 		hierarchy.WorkCell = Location{Type: "WorkCell", Value: workCell}
 	}
@@ -548,21 +571,25 @@ func convertLocationMapToHierarchy(location map[int]string) LocationHierarchy {
 	return hierarchy
 }
 
-// hierarchyContainsLocation checks if a certificate hierarchy contains or matches the requested location
+// hierarchyContainsLocation checks if a certificate hierarchy contains or matches the requested location.
 func hierarchyContainsLocation(certHierarchy, requestedHierarchy LocationHierarchy) bool {
 	// Check each level - certificate hierarchy must match or be a wildcard
 	if !levelMatches(certHierarchy.Enterprise, requestedHierarchy.Enterprise) {
 		return false
 	}
+
 	if !levelMatches(certHierarchy.Site, requestedHierarchy.Site) {
 		return false
 	}
+
 	if !levelMatches(certHierarchy.Area, requestedHierarchy.Area) {
 		return false
 	}
+
 	if !levelMatches(certHierarchy.ProductionLine, requestedHierarchy.ProductionLine) {
 		return false
 	}
+
 	if !levelMatches(certHierarchy.WorkCell, requestedHierarchy.WorkCell) {
 		return false
 	}
@@ -570,7 +597,7 @@ func hierarchyContainsLocation(certHierarchy, requestedHierarchy LocationHierarc
 	return true
 }
 
-// levelMatches checks if a certificate level matches the requested level
+// levelMatches checks if a certificate level matches the requested level.
 func levelMatches(certLevel, requestedLevel Location) bool {
 	// If certificate level is wildcard (*), it matches anything
 	if certLevel.Value == "*" {
@@ -586,14 +613,20 @@ func levelMatches(certLevel, requestedLevel Location) bool {
 	return certLevel.Value == requestedLevel.Value
 }
 
-// GetLocationHierarchiesFromCertificate extracts the location hierarchies from a certificate
+// GetLocationHierarchiesFromCertificate extracts the location hierarchies from a certificate.
 func GetLocationHierarchiesFromCertificate(cert *x509.Certificate) ([]LocationHierarchy, error) {
 	for _, ext := range cert.Extensions {
 		if ext.Id.Equal(oidExtensionLocation) {
 			var locStrings []string
+
 			_, err := asn1.Unmarshal(ext.Value, &locStrings)
 			if err != nil {
 				return nil, errors.Join(err, errors.New("failed to unmarshal location extension"))
+			}
+
+			// Ensure locStrings is not nil and has valid content
+			if locStrings == nil {
+				return nil, errors.New("location extension unmarshaled to nil")
 			}
 
 			// Each hierarchy consists of 5 location strings
@@ -604,11 +637,13 @@ func GetLocationHierarchiesFromCertificate(cert *x509.Certificate) ([]LocationHi
 			hierarchyCount := len(locStrings) / 5
 			hierarchies := make([]LocationHierarchy, hierarchyCount)
 
-			for h := 0; h < hierarchyCount; h++ {
+			for h := range hierarchyCount {
 				// Parse each location string for this hierarchy
 				locations := make([]Location, 5)
-				for i := 0; i < 5; i++ {
+
+				for i := range 5 {
 					locStr := locStrings[h*5+i]
+
 					parts := strings.SplitN(locStr, ":", 2)
 					if len(parts) != 2 {
 						return nil, fmt.Errorf("invalid location string format: %s", locStr)
@@ -646,11 +681,12 @@ func GetLocationHierarchiesFromCertificate(cert *x509.Certificate) ([]LocationHi
 
 // NEW V2 CONVENIENCE FUNCTIONS for easy migration and usage
 
-// CreateRoleScope creates a new RoleScope for a DNS suffix and role
+// CreateRoleScope creates a new RoleScope for a DNS suffix and role.
 func CreateRoleScope(dnsSuffix string, role Role) RoleScope {
 	if !strings.HasPrefix(dnsSuffix, ".") {
 		dnsSuffix = "." + dnsSuffix
 	}
+
 	return RoleScope{
 		DNSSuffix: LocationDNS(dnsSuffix),
 		Role:      role,
@@ -709,16 +745,17 @@ func CreateLocationDNSFromHierarchy(hierarchy LocationHierarchy) LocationDNS {
 	return LocationDNS(locationStr)
 }
 
-// ConvertHierarchiesToLocations converts old v1 hierarchies to v2 location DNS names
+// ConvertHierarchiesToLocations converts old v1 hierarchies to v2 location DNS names.
 func ConvertHierarchiesToLocations(hierarchies []LocationHierarchy) []LocationDNS {
 	locations := make([]LocationDNS, 0, len(hierarchies))
 	for _, hierarchy := range hierarchies {
 		locations = append(locations, CreateLocationDNSFromHierarchy(hierarchy))
 	}
+
 	return locations
 }
 
-// CreateUniformRoleScopes creates role scopes that give the same role to all locations
+// CreateUniformRoleScopes creates role scopes that give the same role to all locations.
 func CreateUniformRoleScopes(locations []LocationDNS, role Role) []RoleScope {
 	scopes := make([]RoleScope, 0, len(locations))
 	for _, location := range locations {
@@ -726,10 +763,11 @@ func CreateUniformRoleScopes(locations []LocationDNS, role Role) []RoleScope {
 		suffix := "." + string(location)
 		scopes = append(scopes, CreateRoleScope(suffix, role))
 	}
+
 	return scopes
 }
 
-// GetEffectiveRoleForLocation is a convenience wrapper around EffectiveRoleFor
+// GetEffectiveRoleForLocation is a convenience wrapper around EffectiveRoleFor.
 func GetEffectiveRoleForLocation(location LocationDNS, cert *x509.Certificate) (Role, error) {
 	v2, v1, hasV2, hasV1, err := ParseRoleInfo(cert)
 	if err != nil {
@@ -746,7 +784,7 @@ func GetEffectiveRoleForLocation(location LocationDNS, cert *x509.Certificate) (
 	return "", errors.New("no role information found")
 }
 
-// ValidateLocationDNS validates that a location DNS name follows proper hierarchy rules
+// ValidateLocationDNS validates that a location DNS name follows proper hierarchy rules.
 func ValidateLocationDNS(location LocationDNS) error {
 	locationStr := string(location)
 
@@ -762,11 +800,13 @@ func ValidateLocationDNS(location LocationDNS) error {
 
 	// Handle wildcard locations (must be exactly "*.something")
 	isWildcard := false
+
 	checkStr := locationStr
 	if strings.HasPrefix(locationStr, "*") {
 		if !strings.HasPrefix(locationStr, "*.") {
 			return fmt.Errorf("wildcard location DNS must use '*.domain' format: %s", locationStr)
 		}
+
 		isWildcard = true
 		checkStr = locationStr[2:] // Remove "*." from the start
 	}
@@ -785,6 +825,7 @@ func ValidateLocationDNS(location LocationDNS) error {
 		if len(parts) != 2 || parts[0] != "umh" || parts[1] != "internal" {
 			return fmt.Errorf("invalid global wildcard format: %s", locationStr)
 		}
+
 		return nil
 	}
 
@@ -811,7 +852,7 @@ func ValidateLocationDNS(location LocationDNS) error {
 	return nil
 }
 
-// IsWildcardLocation checks if a LocationDNS represents a wildcard location
+// IsWildcardLocation checks if a LocationDNS represents a wildcard location.
 func IsWildcardLocation(location LocationDNS) bool {
 	return strings.HasPrefix(string(location), "*.")
 }

@@ -43,7 +43,7 @@ var _ = Describe("UserCertificate", func() {
 					models.Action,
 					map[int]string{0: "test-enterprise"},
 				)
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 			})
 		})
 
@@ -57,7 +57,7 @@ var _ = Describe("UserCertificate", func() {
 					models.Action,
 					map[int]string{0: "test-enterprise"},
 				)
-				Expect(err).ToNot(BeNil())
+				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("no role information found in certificate"))
 			})
 		})
@@ -71,7 +71,7 @@ var _ = Describe("UserCertificate", func() {
 					models.Subscribe,
 					map[int]string{0: "test-enterprise"},
 				)
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 			})
 		})
 	})

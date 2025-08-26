@@ -16,6 +16,7 @@ package pull
 
 import (
 	"context"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	http2 "net/http"
@@ -36,14 +37,14 @@ import (
 type Puller struct {
 	jwt                   atomic.Value
 	dog                   watchdog.Iface
-	inboundMessageChannel chan *models.UMHMessage
+	inboundMessageChannel chan *models.UMHMessageWithAdditionalInfo
 	logger                *zap.SugaredLogger
 	apiURL                string
 	shallRun              atomic.Bool
 	insecureTLS           bool
 }
 
-func NewPuller(jwt string, dog watchdog.Iface, inboundChannel chan *models.UMHMessage, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) *Puller {
+func NewPuller(jwt string, dog watchdog.Iface, inboundChannel chan *models.UMHMessageWithAdditionalInfo, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) *Puller {
 	p := Puller{
 		inboundMessageChannel: inboundChannel,
 		shallRun:              atomic.Bool{},
@@ -82,13 +83,13 @@ func (p *Puller) Stop() {
 func (p *Puller) pull() {
 	watcherUUID := p.dog.RegisterHeartbeat("pull", 10, 600, false)
 
-	var ticker = time.NewTicker(10 * time.Millisecond)
+	ticker := time.NewTicker(10 * time.Millisecond)
 	for p.shallRun.Load() {
 		<-ticker.C
 
 		p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
 
-		var cookies = map[string]string{
+		cookies := map[string]string{
 			"token": p.jwt.Load().(string),
 		}
 
@@ -117,11 +118,15 @@ func (p *Puller) pull() {
 		for _, message := range incomingMessages.UMHMessages {
 			insertionTimeout := time.After(10 * time.Second)
 			select {
-			case p.inboundMessageChannel <- &models.UMHMessage{
-				Email:        message.Email,
-				Content:      message.Content,
-				InstanceUUID: message.InstanceUUID,
-				Metadata:     message.Metadata,
+			case p.inboundMessageChannel <- &models.UMHMessageWithAdditionalInfo{
+				UMHMessage: models.UMHMessage{
+					Email:        message.Email,
+					Content:      message.Content,
+					InstanceUUID: message.InstanceUUID,
+					Metadata:     message.Metadata,
+				},
+				// TODO: implement getting certificate correctly
+				Certificate: &x509.Certificate{},
 			}:
 			case <-insertionTimeout:
 				p.logger.Warnf("Inbound message channel is full !")

@@ -145,7 +145,7 @@ var _ = Describe("Subscribe and Receive Test", func() {
 		state = &communication_state.CommunicationState{
 			LoginResponse:   login,
 			Watchdog:        dog.(*watchdog.Watchdog),
-			InboundChannel:  make(chan *models.UMHMessage, 100),
+			InboundChannel:  make(chan *models.UMHMessageWithAdditionalInfo, 100),
 			OutboundChannel: outboundChan, // Use our custom outbound channel
 			InsecureTLS:     false,
 			ReleaseChannel:  config.ReleaseChannel("stable"),
