@@ -16,6 +16,7 @@ package communicator
 
 import (
 	"context"
+	"crypto/x509"
 	"fmt"
 	"sync"
 	"time"
@@ -173,6 +174,10 @@ var _ = Describe("Subscribe and Receive Test", func() {
 			false,
 			apiUrl,
 			log,
+			make(chan struct {
+				Cert  *x509.Certificate
+				Email string
+			}),
 		)
 
 		// Initialize subscriber handler

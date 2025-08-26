@@ -15,6 +15,7 @@
 package communication_state
 
 import (
+	"crypto/x509"
 	"sync"
 	"time"
 
@@ -51,10 +52,14 @@ type CommunicationState struct {
 	TopicBrowserCache     *topicbrowser.Cache
 	// TopicBrowserSimulator is used to access the simulated topic browser state if the agent is running in simulator mode
 	// it is accessed by the generator to generate the topic browser part of the status message
-	TopicBrowserSimulator *topicbrowser.Simulator
-	ReleaseChannel        config.ReleaseChannel
-	ApiUrl                string
-	InsecureTLS           bool
+	TopicBrowserSimulator                 *topicbrowser.Simulator
+	certChangeChannelForSubscriberHandler chan struct {
+		Cert  *x509.Certificate
+		Email string
+	}
+	ReleaseChannel config.ReleaseChannel
+	ApiUrl         string
+	InsecureTLS    bool
 	// TopicBrowserSimulatorEnabled tracks whether simulator mode is enabled
 	TopicBrowserSimulatorEnabled bool
 }
@@ -85,6 +90,10 @@ func NewCommunicationState(
 		Logger:                logger,
 		InsecureTLS:           insecureTLS,
 		TopicBrowserCache:     topicBrowserCache,
+		certChangeChannelForSubscriberHandler: make(chan struct {
+			Cert  *x509.Certificate
+			Email string
+		}, 100),
 	}
 }
 
@@ -108,7 +117,7 @@ func (c *CommunicationState) InitialiseAndStartPuller() {
 		return
 	}
 
-	c.Puller = pull.NewPuller(c.LoginResponse.JWT, c.Watchdog, c.InboundChannel, c.InsecureTLS, c.ApiUrl, c.Logger)
+	c.Puller = pull.NewPuller(c.LoginResponse.JWT, c.Watchdog, c.InboundChannel, c.InsecureTLS, c.ApiUrl, c.Logger, c.certChangeChannelForSubscriberHandler)
 	if c.Puller == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create puller")
 	}
