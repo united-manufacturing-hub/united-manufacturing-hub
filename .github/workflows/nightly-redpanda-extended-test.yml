@@ -32,7 +32,7 @@ jobs:
       run:
         working-directory: ./umh-core
     steps:
-      - uses: actions/checkout@v45
+      - uses: actions/checkout@v5
         with:
           ref: staging
 
