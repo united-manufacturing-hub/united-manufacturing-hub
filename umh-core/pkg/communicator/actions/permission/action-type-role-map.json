@@ -28,11 +28,11 @@
           "Viewer",
           "Editor"
         ],
-        "get-streamprocessor": [
+        "get-stream-processor": [
           "Admin",
           "Viewer",
           "Editor"
-        ],
+        ]
       }
     },
     "Edit Actions": {
@@ -59,7 +59,7 @@
         "edit-stream-processor": [
           "Admin",
           "Editor"
-        ],
+        ]
       }
     },
     "Delete Actions": {
@@ -72,11 +72,11 @@
         "delete-data-flow-component": [
           "Admin",
           "Editor"
-        ]
+        ],
         "delete-datamodel": [
           "Admin",
           "Editor"
-        ]
+        ],
         "delete-stream-processor": [
           "Admin",
           "Editor"
@@ -93,7 +93,7 @@
         "deploy-data-flow-component": [
           "Admin",
           "Editor"
-        ]
+        ],
         "deploy-stream-processor": [
           "Admin",
           "Editor"
@@ -103,7 +103,6 @@
     "Test Actions": {
       "description": "Operations for testing configurations",
       "actions": {
-        # currently not in use
       }
     },
     "Company Actions": {
@@ -128,6 +127,14 @@
           "Admin"
         ],
         "change-user-permissions": [
+          "Admin"
+        ]
+      }
+    },
+    "System Actions": {
+      "description": "System-level operations",
+      "actions": {
+        "upgrade-companion": [
           "Admin"
         ]
       }

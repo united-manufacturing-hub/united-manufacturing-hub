@@ -22,62 +22,37 @@ import (
 
 	_ "embed"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
 
-func GetInstanceLocation(snap *fsm.SystemSnapshot) (models.InstanceLocation, error) {
-	if snap == nil {
-		return models.InstanceLocation{}, fmt.Errorf("snapshot is nil")
-	}
-
-	return configLocationToInstanceLocation(snap.CurrentConfig.Agent.Location), nil
-}
-
-// TODO: porting the map to InstanceLocation is only a helper for now
-func configLocationToInstanceLocation(configLocation map[int]string) models.InstanceLocation {
-	return models.InstanceLocation{
-		Enterprise: configLocation[0],
-		Site:       configLocation[1],
-		Area:       configLocation[2],
-		Line:       configLocation[3],
-		WorkCell:   configLocation[4],
-	}
-}
-
 // ValidateUserCertificateForAction validates that a user is authorized to perform an action based on their certificate
-func ValidateUserCertificateForAction(log *zap.SugaredLogger, cert *x509.Certificate, actionType *models.ActionType, messageType models.MessageType, instanceLocation *models.InstanceLocation) error {
+func ValidateUserCertificateForAction(log *zap.SugaredLogger, cert *x509.Certificate, actionType *models.ActionType, messageType models.MessageType, instanceLocation map[int]string) error {
 	log.Infof("Validating user certificate for action: %s, message type: %s", actionType, messageType)
 	if cert == nil {
 		log.Infof("No certificate found, skipping validation")
 		return nil // No certificate means no authorization
 	}
 
-	// Extract location hierarchies from the certificate using the cryptolib function
-	hierarchies, err := GetLocationHierarchiesFromCertificate(cert)
-	if err != nil {
-		return fmt.Errorf("failed to extract location hierarchies from certificate: %v", err)
-	}
-
-	log.Infof("Extracted location hierarchies: %v", hierarchies)
-
-	// Check if the user's certificate authorizes them for this location
-	if !IsLocationAuthorized(instanceLocation, hierarchies) {
-		return fmt.Errorf("user is not authorized for location: %+v", instanceLocation)
-	}
-
-	log.Infof("User is authorized to perform actions in this location")
-
-	// Extract role from the certificate (optional, can be used for additional authorization checks)
-	role, err := GetRoleFromCertificate(cert)
+	// Extract the role from the certificate based on the current location
+	role, err := GetRoleForLocation(cert, instanceLocation)
 	if err != nil {
 		log.Warnf("Failed to extract role from certificate: %v", err)
 		// Continue without role check for now
+		return err
+	}
+	if role == "" {
+		var locationStr string
+		for _, loc := range instanceLocation {
+			locationStr = fmt.Sprintf("%s-%s", locationStr, loc)
+		}
+		return fmt.Errorf("User is not allowed to access this location: %s", locationStr)
 	} else {
 		log.Infof("User role from certificate: %s", role)
 		// Additional role-based checks could be added here if needed
 	}
+
+	log.Infof("User is authorized to perform actions in this location")
 
 	if !IsRoleAllowedForActionAndMessageType(role, actionType, messageType) {
 		if actionType != nil {
@@ -229,6 +204,12 @@ func IsAllowedForAction(role Role, actionType models.ActionType) bool {
 	roleMap, err := loadActionTypeRoleMap()
 	if err != nil {
 		zap.S().Errorf("Failed to load role map: %v", err)
+		return false
+	}
+
+	// Additional safety check to prevent nil pointer dereference
+	if roleMap == nil {
+		zap.S().Errorf("Role map is nil")
 		return false
 	}
 

@@ -67,14 +67,12 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 	log.Debugf("Handling action message: Type: %s, Payload: %v", payload.ActionType, payload.ActionPayload)
 
 	snapshot := systemSnapshotManager.GetSnapshot()
-
-	instanceLocation, err := validator.GetInstanceLocation(snapshot)
-	if err != nil {
-		SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, err.Error(), outboundChannel, payload.ActionType)
+	if snapshot == nil {
+		SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, fmt.Errorf("snapshot is nil").Error(), outboundChannel, payload.ActionType)
 		return
 	}
 
-	err = validator.ValidateUserCertificateForAction(log, senderCert, &payload.ActionType, models.Action, &instanceLocation)
+	err := validator.ValidateUserCertificateForAction(log, senderCert, &payload.ActionType, models.Action, snapshot.CurrentConfig.Agent.Location)
 	if err != nil {
 		SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, err.Error(), outboundChannel, payload.ActionType)
 		return
