@@ -58,6 +58,18 @@ type PathCache struct {
 	cache map[string]*CachedPath
 }
 
+// CachedDirectory represents a cached directory creation result.
+type CachedDirectory struct {
+	exists bool
+	expiry time.Time
+}
+
+// DirectoryCache provides thread-safe caching for directory creation operations.
+type DirectoryCache struct {
+	mu    sync.RWMutex
+	cache map[string]*CachedDirectory
+}
+
 // CachedFileContent represents cached file content with metadata for invalidation.
 type CachedFileContent struct {
 	content   []byte
@@ -76,6 +88,7 @@ type FileCache struct {
 type DefaultService struct {
 	pathCache PathCache
 	fileCache FileCache
+	dirCache  DirectoryCache
 }
 
 // NewDefaultService creates a new DefaultFileSystemService.
@@ -86,6 +99,9 @@ func NewDefaultService() *DefaultService {
 		},
 		fileCache: FileCache{
 			cache: make(map[string]*CachedFileContent),
+		},
+		dirCache: DirectoryCache{
+			cache: make(map[string]*CachedDirectory),
 		},
 	}
 }
@@ -125,6 +141,29 @@ func (s *DefaultService) EnsureDirectory(ctx context.Context, path string) error
 		return fmt.Errorf("failed to check context: %w", err)
 	}
 
+	// Cache only the fundamental /data directory with high TTL
+	var cacheTTL time.Duration
+	var useCache bool
+
+	if path == "/data" {
+		cacheTTL = 1 * time.Hour // Long TTL - if /data is gone, something went terribly wrong
+		useCache = true
+	}
+
+	if useCache {
+		// Check cache first
+		s.dirCache.mu.RLock()
+		if cached, ok := s.dirCache.cache[path]; ok && time.Now().Before(cached.expiry) {
+			s.dirCache.mu.RUnlock()
+			if cached.exists {
+				// Directory is cached as existing, no need to create
+				s.recordOp("EnsureDirectory", path, start, nil, true)
+				return nil
+			}
+		}
+		s.dirCache.mu.RUnlock()
+	}
+
 	// Create a channel for results
 	errCh := make(chan error, 1)
 
@@ -140,6 +179,17 @@ func (s *DefaultService) EnsureDirectory(ctx context.Context, path string) error
 			s.recordOp("EnsureDirectory", path, start, err, false)
 			return fmt.Errorf("failed to create directory %s: %w", path, err)
 		}
+
+		// Cache successful result if caching is enabled
+		if useCache {
+			s.dirCache.mu.Lock()
+			s.dirCache.cache[path] = &CachedDirectory{
+				exists: true,
+				expiry: time.Now().Add(cacheTTL),
+			}
+			s.dirCache.mu.Unlock()
+		}
+
 		s.recordOp("EnsureDirectory", path, start, nil, false)
 		return nil
 	case <-ctx.Done():
@@ -443,6 +493,15 @@ func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, err
 	var cacheNegative bool // Whether to cache negative results
 
 	switch {
+	case path == "/data/hwid":
+		cacheTTL = 1 * time.Hour // HWID file rarely changes
+		cacheNegative = true     // Cache both positive and negative results
+	case path == "/data/config.yaml":
+		cacheTTL = 10 * time.Second // Config file can change more frequently
+		cacheNegative = true        // Cache both positive and negative results
+	case strings.HasPrefix(path, "/data/logs/") && strings.HasSuffix(path, "/current"):
+		cacheTTL = 1 * time.Second // Log current files are frequently checked
+		cacheNegative = false      // Only cache positive results (file exists)
 	case strings.HasPrefix(path, "/run/service/"):
 		cacheTTL = 1 * time.Second // Service monitoring paths
 		cacheNegative = false      // Only cache positive results
@@ -524,10 +583,9 @@ func (s *DefaultService) pathExistsUncached(ctx context.Context, path string, st
 // FileExists checks if a file exists
 // Deprecated: use PathExists instead.
 func (s *DefaultService) FileExists(ctx context.Context, path string) (bool, error) {
-	start := time.Now()
-	exists, err := s.PathExists(ctx, path)
-	s.recordOp("FileExists", path, start, err, false)
-	return exists, err
+	// Don't record metrics here since PathExists already records them correctly
+	// This avoids double-recording and incorrect cache status reporting
+	return s.PathExists(ctx, path)
 }
 
 // Remove removes a file or directory.

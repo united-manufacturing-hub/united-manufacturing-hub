@@ -62,7 +62,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/starvationchecker"
 	"go.uber.org/zap"
@@ -325,25 +324,27 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	if c == nil {
 		return errors.New("service registry is nil, possible initialization failure")
 	}
-	// 4) If your filesystem service is a buffered FS, sync once per loop:
-	bufferedFs, ok := c.services.GetFileSystem().(*filesystem.BufferedService)
-	if ok {
-		// Step 1: Flush all pending writes to disk
-		err = bufferedFs.SyncToDisk(ctx)
-		if err != nil {
-			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Failed to sync S6 filesystem to disk: %v", err)
+	/*
+		// 4) If your filesystem service is a buffered FS, sync once per loop:
+		bufferedFs, ok := c.services.GetFileSystem().(*filesystem.BufferedService)
+		if ok {
+			// Step 1: Flush all pending writes to disk
+			err = bufferedFs.SyncToDisk(ctx)
+			if err != nil {
+				sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Failed to sync S6 filesystem to disk: %v", err)
 
-			return fmt.Errorf("failed to sync S6 filesystem to disk: %w", err)
+				return fmt.Errorf("failed to sync S6 filesystem to disk: %w", err)
+			}
+
+			// Step 2: Read the filesystem from disk
+			err = bufferedFs.SyncFromDisk(ctx)
+			if err != nil {
+				sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Failed to sync S6 filesystem from disk: %v", err)
+
+				return fmt.Errorf("failed to sync S6 filesystem from disk: %w", err)
+			}
 		}
-
-		// Step 2: Read the filesystem from disk
-		err = bufferedFs.SyncFromDisk(ctx)
-		if err != nil {
-			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Failed to sync S6 filesystem from disk: %v", err)
-
-			return fmt.Errorf("failed to sync S6 filesystem from disk: %w", err)
-		}
-	}
+	*/
 
 	// <factor>% ctx to ensure we finish in time.
 	deadline, ok := ctx.Deadline()
