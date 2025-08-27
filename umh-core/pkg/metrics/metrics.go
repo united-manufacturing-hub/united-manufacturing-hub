@@ -134,7 +134,7 @@ var (
 
 	// TODO: observed state.
 
-	// Filesystem operation metrics
+	// Filesystem operation metrics.
 	filesystemOpsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: namespace,
@@ -259,13 +259,13 @@ func getStateValue(state string) float64 {
 	}
 }
 
-// RecordFilesystemOp records a filesystem operation metric
+// RecordFilesystemOp records a filesystem operation metric.
 func RecordFilesystemOp(operation, pathPattern, status, cacheStatus string, duration time.Duration) {
 	filesystemOpsTotal.WithLabelValues(operation, pathPattern, status, cacheStatus).Inc()
 	filesystemOpsDuration.WithLabelValues(operation, cacheStatus).Observe(duration.Seconds())
 }
 
-// RecordFilesystemPathAccess records access to a specific path
+// RecordFilesystemPathAccess records access to a specific path.
 func RecordFilesystemPathAccess(operation, path, cacheStatus string) {
 	filesystemPathAccess.WithLabelValues(operation, path, cacheStatus).Inc()
 }

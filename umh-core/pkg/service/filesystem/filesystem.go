@@ -78,7 +78,7 @@ type CachedFileContent struct {
 	lastCheck time.Time // When we last did a stat check
 }
 
-// FileCache provides thread-safe caching for file contents
+// FileCache provides thread-safe caching for file contents.
 type FileCache struct {
 	mu    sync.RWMutex
 	cache map[string]*CachedFileContent
@@ -106,9 +106,10 @@ func NewDefaultService() *DefaultService {
 	}
 }
 
-// recordOp records filesystem operation metrics
+// recordOp records filesystem operation metrics.
 func (s *DefaultService) recordOp(op string, path string, start time.Time, err error, cached bool) {
 	duration := time.Since(start)
+
 	status := "success"
 	if err != nil {
 		status = "error"
@@ -137,13 +138,16 @@ func (s *DefaultService) checkContext(ctx context.Context) error {
 // EnsureDirectory creates a directory if it doesn't exist.
 func (s *DefaultService) EnsureDirectory(ctx context.Context, path string) error {
 	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return fmt.Errorf("failed to check context: %w", err)
 	}
 
 	// Cache only the fundamental /data directory with high TTL
-	var cacheTTL time.Duration
-	var useCache bool
+	var (
+		cacheTTL time.Duration
+		useCache bool
+	)
 
 	if path == "/data" {
 		cacheTTL = 1 * time.Hour // Long TTL - if /data is gone, something went terribly wrong
@@ -153,14 +157,18 @@ func (s *DefaultService) EnsureDirectory(ctx context.Context, path string) error
 	if useCache {
 		// Check cache first
 		s.dirCache.mu.RLock()
+
 		if cached, ok := s.dirCache.cache[path]; ok && time.Now().Before(cached.expiry) {
 			s.dirCache.mu.RUnlock()
+
 			if cached.exists {
 				// Directory is cached as existing, no need to create
 				s.recordOp("EnsureDirectory", path, start, nil, true)
+
 				return nil
 			}
 		}
+
 		s.dirCache.mu.RUnlock()
 	}
 
@@ -177,6 +185,7 @@ func (s *DefaultService) EnsureDirectory(ctx context.Context, path string) error
 	case err := <-errCh:
 		if err != nil {
 			s.recordOp("EnsureDirectory", path, start, err, false)
+
 			return fmt.Errorf("failed to create directory %s: %w", path, err)
 		}
 
@@ -191,10 +200,12 @@ func (s *DefaultService) EnsureDirectory(ctx context.Context, path string) error
 		}
 
 		s.recordOp("EnsureDirectory", path, start, nil, false)
+
 		return nil
 	case <-ctx.Done():
 		err := ctx.Err()
 		s.recordOp("EnsureDirectory", path, start, err, false)
+
 		return err
 	}
 }
@@ -202,6 +213,7 @@ func (s *DefaultService) EnsureDirectory(ctx context.Context, path string) error
 // ReadFile reads a file's contents respecting the context.
 func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, error) {
 	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return nil, fmt.Errorf("failed to check context: %w", err)
 	}
@@ -222,7 +234,9 @@ func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, err
 				delete(s.fileCache.cache, path)
 				s.fileCache.mu.Unlock()
 			}
+
 			s.recordOp("ReadFile", path, start, err, false)
+
 			return nil, err
 		}
 
@@ -232,14 +246,18 @@ func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, err
 			if time.Since(cached.lastCheck) < 10*time.Second {
 				// Record cache hits as cached operations
 				s.recordOp("ReadFile", path, start, nil, true)
+
 				return cached.content, nil
 			}
 			// Update last check time
 			s.fileCache.mu.Lock()
+
 			cached.lastCheck = time.Now()
+
 			s.fileCache.mu.Unlock()
 			// Record cache hits as cached operations
 			s.recordOp("ReadFile", path, start, nil, true)
+
 			return cached.content, nil
 		}
 
@@ -266,7 +284,7 @@ func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, err
 	return s.readFileUncached(ctx, path, start)
 }
 
-// readFileUncached performs the actual file read without caching
+// readFileUncached performs the actual file read without caching.
 func (s *DefaultService) readFileUncached(ctx context.Context, path string, start time.Time) ([]byte, error) {
 	// Create a channel for results
 	type result struct {
@@ -286,16 +304,20 @@ func (s *DefaultService) readFileUncached(ctx context.Context, path string, star
 	select {
 	case res := <-resCh:
 		s.recordOp("ReadFile", path, start, res.err, false)
+
 		if res.err != nil {
 			return nil, res.err
 		}
+
 		return res.data, nil
 	case <-ctx.Done():
 		err := ctx.Err()
 		if err == nil {
 			err = errors.New("context cancelled")
 		}
+
 		s.recordOp("ReadFile", path, start, err, false)
+
 		return nil, err
 	}
 }
@@ -321,6 +343,7 @@ func (s *DefaultService) ReadFileRange(
 	from int64,
 ) ([]byte, int64, error) {
 	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return nil, 0, err
 	}
@@ -442,10 +465,12 @@ func (s *DefaultService) ReadFileRange(
 	select {
 	case res := <-resCh:
 		s.recordOp("ReadFileRange", path, start, res.err, false)
+
 		return res.data, res.newSize, res.err
 	case <-ctx.Done():
 		err := ctx.Err()
 		s.recordOp("ReadFileRange", path, start, err, false)
+
 		return nil, 0, err
 	}
 }
@@ -453,6 +478,7 @@ func (s *DefaultService) ReadFileRange(
 // WriteFile writes data to a file respecting the context.
 func (s *DefaultService) WriteFile(ctx context.Context, path string, data []byte, perm os.FileMode) error {
 	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return fmt.Errorf("failed to check context: %w", err)
 	}
@@ -470,13 +496,17 @@ func (s *DefaultService) WriteFile(ctx context.Context, path string, data []byte
 	case err := <-errCh:
 		if err != nil {
 			s.recordOp("WriteFile", path, start, err, false)
+
 			return fmt.Errorf("failed to write file %s: %w", path, err)
 		}
+
 		s.recordOp("WriteFile", path, start, nil, false)
+
 		return nil
 	case <-ctx.Done():
 		err := ctx.Err()
 		s.recordOp("WriteFile", path, start, err, false)
+
 		return err
 	}
 }
@@ -484,12 +514,14 @@ func (s *DefaultService) WriteFile(ctx context.Context, path string, data []byte
 // PathExists checks if a path (file or directory) exists.
 func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, error) {
 	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return false, err
 	}
 
 	// Determine cache TTL based on path pattern
 	var cacheTTL time.Duration
+
 	var cacheNegative bool // Whether to cache negative results
 
 	switch {
@@ -515,12 +547,15 @@ func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, err
 
 	// Check cache
 	s.pathCache.mu.RLock()
+
 	if cached, ok := s.pathCache.cache[path]; ok && time.Now().Before(cached.expiry) {
 		s.pathCache.mu.RUnlock()
 		// Record cache hits as cached operations
 		s.recordOp("PathExists", path, start, cached.err, true)
+
 		return cached.exists, cached.err
 	}
+
 	s.pathCache.mu.RUnlock()
 
 	// Not in cache or expired - perform actual check
@@ -540,7 +575,7 @@ func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, err
 	return exists, err
 }
 
-// pathExistsUncached performs the actual path existence check without caching
+// pathExistsUncached performs the actual path existence check without caching.
 func (s *DefaultService) pathExistsUncached(ctx context.Context, path string, start time.Time) (bool, error) {
 	// Create a channel for results
 	type result struct {
@@ -556,12 +591,16 @@ func (s *DefaultService) pathExistsUncached(ctx context.Context, path string, st
 		_, err := os.Lstat(path)
 		if os.IsNotExist(err) {
 			resCh <- result{err: nil, exists: false}
+
 			return
 		}
+
 		if err != nil {
 			resCh <- result{err: fmt.Errorf("failed to check if path exists: %w", err), exists: false}
+
 			return
 		}
+
 		resCh <- result{err: nil, exists: true}
 	}()
 
@@ -569,13 +608,16 @@ func (s *DefaultService) pathExistsUncached(ctx context.Context, path string, st
 	select {
 	case res := <-resCh:
 		s.recordOp("PathExists", path, start, res.err, false)
+
 		if res.err != nil {
 			return false, res.err
 		}
+
 		return res.exists, nil
 	case <-ctx.Done():
 		err := ctx.Err()
 		s.recordOp("PathExists", path, start, err, false)
+
 		return false, err
 	}
 }
@@ -591,6 +633,7 @@ func (s *DefaultService) FileExists(ctx context.Context, path string) (bool, err
 // Remove removes a file or directory.
 func (s *DefaultService) Remove(ctx context.Context, path string) error {
 	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return err
 	}
@@ -607,10 +650,12 @@ func (s *DefaultService) Remove(ctx context.Context, path string) error {
 	select {
 	case err := <-errCh:
 		s.recordOp("Remove", path, start, err, false)
+
 		return err
 	case <-ctx.Done():
 		err := ctx.Err()
 		s.recordOp("Remove", path, start, err, false)
+
 		return err
 	}
 }
@@ -618,6 +663,7 @@ func (s *DefaultService) Remove(ctx context.Context, path string) error {
 // RemoveAll removes a directory and all its contents.
 func (s *DefaultService) RemoveAll(ctx context.Context, path string) error {
 	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return err
 	}
@@ -635,13 +681,17 @@ func (s *DefaultService) RemoveAll(ctx context.Context, path string) error {
 	case err := <-errCh:
 		if err != nil {
 			s.recordOp("RemoveAll", path, start, err, false)
+
 			return fmt.Errorf("failed to remove directory %s: %w", path, err)
 		}
+
 		s.recordOp("RemoveAll", path, start, nil, false)
+
 		return nil
 	case <-ctx.Done():
 		err := ctx.Err()
 		s.recordOp("RemoveAll", path, start, err, false)
+
 		return err
 	}
 }
@@ -649,6 +699,7 @@ func (s *DefaultService) RemoveAll(ctx context.Context, path string) error {
 // Stat returns file info.
 func (s *DefaultService) Stat(ctx context.Context, path string) (os.FileInfo, error) {
 	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return nil, fmt.Errorf("failed to check context: %w", err)
 	}
@@ -672,13 +723,17 @@ func (s *DefaultService) Stat(ctx context.Context, path string) (os.FileInfo, er
 	case res := <-resCh:
 		if res.err != nil {
 			s.recordOp("Stat", path, start, res.err, false)
+
 			return nil, fmt.Errorf("failed to get file info: %w", res.err)
 		}
+
 		s.recordOp("Stat", path, start, nil, false)
+
 		return res.info, nil
 	case <-ctx.Done():
 		err := ctx.Err()
 		s.recordOp("Stat", path, start, err, false)
+
 		return nil, err
 	}
 }
@@ -686,6 +741,7 @@ func (s *DefaultService) Stat(ctx context.Context, path string) (os.FileInfo, er
 // Chmod changes the mode of the named file.
 func (s *DefaultService) Chmod(ctx context.Context, path string, mode os.FileMode) error {
 	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return fmt.Errorf("failed to check context: %w", err)
 	}
@@ -703,13 +759,17 @@ func (s *DefaultService) Chmod(ctx context.Context, path string, mode os.FileMod
 	case err := <-errCh:
 		if err != nil {
 			s.recordOp("Chmod", path, start, err, false)
+
 			return fmt.Errorf("failed to change mode of file %s: %w", path, err)
 		}
+
 		s.recordOp("Chmod", path, start, nil, false)
+
 		return nil
 	case <-ctx.Done():
 		err := ctx.Err()
 		s.recordOp("Chmod", path, start, err, false)
+
 		return err
 	}
 }
@@ -717,6 +777,7 @@ func (s *DefaultService) Chmod(ctx context.Context, path string, mode os.FileMod
 // ReadDir reads a directory, returning all its directory entries.
 func (s *DefaultService) ReadDir(ctx context.Context, path string) ([]os.DirEntry, error) {
 	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return nil, fmt.Errorf("failed to check context: %w", err)
 	}
@@ -740,13 +801,17 @@ func (s *DefaultService) ReadDir(ctx context.Context, path string) ([]os.DirEntr
 	case res := <-resCh:
 		if res.err != nil {
 			s.recordOp("ReadDir", path, start, res.err, false)
+
 			return nil, fmt.Errorf("failed to read directory %s: %w", path, res.err)
 		}
+
 		s.recordOp("ReadDir", path, start, nil, false)
+
 		return res.entries, nil
 	case <-ctx.Done():
 		err := ctx.Err()
 		s.recordOp("ReadDir", path, start, err, false)
+
 		return nil, err
 	}
 }
@@ -754,6 +819,7 @@ func (s *DefaultService) ReadDir(ctx context.Context, path string) ([]os.DirEntr
 // Chown changes the owner and group of the named file.
 func (s *DefaultService) Chown(ctx context.Context, path string, user string, group string) error {
 	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return fmt.Errorf("failed to check context: %w", err)
 	}
@@ -773,13 +839,17 @@ func (s *DefaultService) Chown(ctx context.Context, path string, user string, gr
 	case err := <-errCh:
 		if err != nil {
 			s.recordOp("Chown", path, start, err, false)
+
 			return fmt.Errorf("failed to change owner of file %s to %s:%s: %w", path, user, group, err)
 		}
+
 		s.recordOp("Chown", path, start, nil, false)
+
 		return nil
 	case <-ctx.Done():
 		err := ctx.Err()
 		s.recordOp("Chown", path, start, err, false)
+
 		return err
 	}
 }
@@ -787,6 +857,7 @@ func (s *DefaultService) Chown(ctx context.Context, path string, user string, gr
 // ExecuteCommand executes a command with context.
 func (s *DefaultService) ExecuteCommand(ctx context.Context, name string, args ...string) ([]byte, error) {
 	start := time.Now()
+
 	cmdStr := name
 	if len(args) > 0 {
 		cmdStr = fmt.Sprintf("%s %s", name, strings.Join(args, " "))
@@ -805,6 +876,7 @@ func (s *DefaultService) ExecuteCommand(ctx context.Context, name string, args .
 
 	output, err := cmd.CombinedOutput()
 	s.recordOp("ExecuteCommand", cmdStr, start, err, false)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute command %s: %w", name, err)
 	}
@@ -815,6 +887,7 @@ func (s *DefaultService) ExecuteCommand(ctx context.Context, name string, args .
 // Glob is a wrapper around filepath.Glob that respects the context.
 func (s *DefaultService) Glob(ctx context.Context, pattern string) ([]string, error) {
 	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return nil, fmt.Errorf("failed to check context: %w", err)
 	}
@@ -838,13 +911,17 @@ func (s *DefaultService) Glob(ctx context.Context, pattern string) ([]string, er
 	case res := <-resCh:
 		if res.err != nil {
 			s.recordOp("Glob", pattern, start, res.err, false)
+
 			return nil, fmt.Errorf("failed to glob pattern %s: %w", pattern, res.err)
 		}
+
 		s.recordOp("Glob", pattern, start, nil, false)
+
 		return res.matches, nil
 	case <-ctx.Done():
 		err := ctx.Err()
 		s.recordOp("Glob", pattern, start, err, false)
+
 		return nil, err
 	}
 }
@@ -853,6 +930,7 @@ func (s *DefaultService) Glob(ctx context.Context, pattern string) ([]string, er
 // This operation is atomic on the same filesystem mount.
 func (s *DefaultService) Rename(ctx context.Context, oldPath, newPath string) error {
 	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return fmt.Errorf("failed to check context: %w", err)
 	}
@@ -870,13 +948,17 @@ func (s *DefaultService) Rename(ctx context.Context, oldPath, newPath string) er
 	case err := <-errCh:
 		if err != nil {
 			s.recordOp("Rename", fmt.Sprintf("%s->%s", oldPath, newPath), start, err, false)
+
 			return fmt.Errorf("failed to rename file %s to %s: %w", oldPath, newPath, err)
 		}
+
 		s.recordOp("Rename", fmt.Sprintf("%s->%s", oldPath, newPath), start, nil, false)
+
 		return nil
 	case <-ctx.Done():
 		err := ctx.Err()
 		s.recordOp("Rename", fmt.Sprintf("%s->%s", oldPath, newPath), start, err, false)
+
 		return err
 	}
 }
@@ -884,6 +966,7 @@ func (s *DefaultService) Rename(ctx context.Context, oldPath, newPath string) er
 // Symlink creates a symbolic link from linkPath to target.
 func (s *DefaultService) Symlink(ctx context.Context, target, linkPath string) error {
 	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return fmt.Errorf("failed to check context: %w", err)
 	}
@@ -901,13 +984,17 @@ func (s *DefaultService) Symlink(ctx context.Context, target, linkPath string) e
 	case err := <-errCh:
 		if err != nil {
 			s.recordOp("Symlink", fmt.Sprintf("%s->%s", target, linkPath), start, err, false)
+
 			return fmt.Errorf("failed to create symlink %s -> %s: %w", linkPath, target, err)
 		}
+
 		s.recordOp("Symlink", fmt.Sprintf("%s->%s", target, linkPath), start, nil, false)
+
 		return nil
 	case <-ctx.Done():
 		err := ctx.Err()
 		s.recordOp("Symlink", fmt.Sprintf("%s->%s", target, linkPath), start, err, false)
+
 		return err
 	}
 }
