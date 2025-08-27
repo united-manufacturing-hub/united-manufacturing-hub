@@ -47,41 +47,41 @@ var chunkBufferPool = sync.Pool{
 
 // CachedPath represents a cached path existence check result.
 type CachedPath struct {
-	exists bool
-	err    error
 	expiry time.Time
+	err    error
+	exists bool
 }
 
 // PathCache provides thread-safe caching for path existence checks.
 type PathCache struct {
-	mu    sync.RWMutex
 	cache map[string]*CachedPath
+	mu    sync.RWMutex
 }
 
 // CachedDirectory represents a cached directory creation result.
 type CachedDirectory struct {
-	exists bool
 	expiry time.Time
+	exists bool
 }
 
 // DirectoryCache provides thread-safe caching for directory creation operations.
 type DirectoryCache struct {
-	mu    sync.RWMutex
 	cache map[string]*CachedDirectory
+	mu    sync.RWMutex
 }
 
 // CachedFileContent represents cached file content with metadata for invalidation.
 type CachedFileContent struct {
-	content   []byte
 	modTime   time.Time
-	size      int64
 	lastCheck time.Time // When we last did a stat check
+	content   []byte
+	size      int64
 }
 
 // FileCache provides thread-safe caching for file contents.
 type FileCache struct {
-	mu    sync.RWMutex
 	cache map[string]*CachedFileContent
+	mu    sync.RWMutex
 }
 
 // DefaultService is the default implementation of FileSystemService.
