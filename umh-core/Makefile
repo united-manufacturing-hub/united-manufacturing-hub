@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-.PHONY: build run clean test help test-graphql
+.PHONY: build run clean test help test-graphql strace
 
 # Show available commands and common usage patterns
 help: ## Display available make targets and usage information
@@ -36,6 +36,7 @@ help: ## Display available make targets and usage information
 	@echo ""
 	@echo "🛠️  UTILITY COMMANDS:"
 	@echo "   make pod-shell      # Shell into running container"
+	@echo "   make strace         # Generate 30s strace dump of running container"
 	@echo "   make stop-all-pods  # Stop all UMH Core containers"
 	@echo "   make dump-metrics   # Save metrics to file"
 	@echo "   make cleanup-all    # Clean all Docker resources"
@@ -682,6 +683,7 @@ test-no-copy: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 		-p 8090:8090 \
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
+		--cap-add=SYS_PTRACE \
 		$(IMAGE_NAME):$(TAG)
 
 # This test runs the UMH Core instance with a proxy (on the host machine) to the backend.
@@ -705,6 +707,12 @@ test-mitm: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 
 pod-shell:
 	docker exec -it $(IMAGE_NAME) /bin/bash
+
+strace:
+	@echo "🔍 Generating 30s strace dump of running container..."
+	@mkdir -p $(PWD)/data
+	docker exec $(IMAGE_NAME) timeout 30s strace -T -tt -f -p $$(docker exec $(IMAGE_NAME) pgrep umh-core) -o /data/strace.log 2>&1 || true
+	@echo "✅ Strace dump saved to ./data/strace.log"
 
 stop-all-pods:
 	# Stops all pods starting with $(IMAGE_NAME)

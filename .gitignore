@@ -15,3 +15,5 @@ compass_artifact*
 
 # Test results
 *.result.txt
+
+.claude/settings.local.json
