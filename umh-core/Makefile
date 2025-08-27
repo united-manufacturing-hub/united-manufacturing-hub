@@ -683,7 +683,6 @@ test-no-copy: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 		-p 8090:8090 \
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
-		--cap-add=SYS_PTRACE \
 		$(IMAGE_NAME):$(TAG)
 
 # This test runs the UMH Core instance with a proxy (on the host machine) to the backend.
@@ -767,3 +766,12 @@ run:
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
+
+
+# Start monitoring stack (Prometheus + Grafana + UMH Core)
+test-with-monitoring: build
+	mkdir -p $(PWD)/docker-compose/data
+	docker stop umh-core || true
+	docker rm umh-core || true
+	cd $(PWD)/docker-compose && docker compose down || true
+	cd $(PWD)/docker-compose && docker compose up --build
