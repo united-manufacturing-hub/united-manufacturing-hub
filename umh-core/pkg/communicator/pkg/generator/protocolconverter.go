@@ -255,6 +255,7 @@ func getProtocolConverterStatusMessage(state string, statusReason string, connec
 					nmapSuffix += ": " + scanResult.Error
 				}
 			}
+
 			nmapSuffix += ")"
 		default:
 			nmapSuffix = fmt.Sprintf(" (unexpected nmap state: %s)", nmapState)
