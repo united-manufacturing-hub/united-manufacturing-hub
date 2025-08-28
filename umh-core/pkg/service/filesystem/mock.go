@@ -341,6 +341,22 @@ func (m *MockFileSystem) Stat(ctx context.Context, path string) (os.FileInfo, er
 	}, nil
 }
 
+// memFileInfo is a trivial in-memory file info.
+type memFileInfo struct {
+	mtime time.Time
+	name  string
+	size  int64
+	mode  os.FileMode
+	dir   bool
+}
+
+func (m *memFileInfo) Name() string       { return m.name }
+func (m *memFileInfo) Size() int64        { return m.size }
+func (m *memFileInfo) Mode() os.FileMode  { return m.mode }
+func (m *memFileInfo) ModTime() time.Time { return m.mtime }
+func (m *memFileInfo) IsDir() bool        { return m.dir }
+func (m *memFileInfo) Sys() interface{}   { return nil }
+
 // CreateFile creates a new file with the specified permissions.
 func (m *MockFileSystem) CreateFile(ctx context.Context, path string, perm os.FileMode) (*os.File, error) {
 	if m.CreateFileFunc != nil {

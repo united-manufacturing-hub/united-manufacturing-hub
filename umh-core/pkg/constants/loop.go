@@ -34,9 +34,6 @@ const (
 	// Legacy constants - to be removed.
 	LoopControlLoopTimeFactor = 1.0 - ControlLoopReservePercent
 
-	StarvationLimit = 5
-	CoolDownTicks   = 5
-
 	// starvationThreshold defines when to consider the control loop starved.
 	// If no reconciliation has happened for this duration, the starvation
 	// detector will log warnings and record metrics.
@@ -81,13 +78,6 @@ func CreateSubContext(parentCtx context.Context, percentage float64) (context.Co
 	return context.WithTimeout(parentCtx, subTime)
 }
 
-// CreateUpdateObservedStateContext creates a context for UpdateObservedState operations.
-// Takes 80% of the manager's remaining time for I/O operations like parsing logs,
-// health checks, and metrics collection.
-func CreateUpdateObservedStateContext(managerCtx context.Context) (context.Context, context.CancelFunc) {
-	return CreateSubContext(managerCtx, UpdateObservedStatePercent)
-}
-
 // CreateUpdateObservedStateContextWithMinimum creates a context for UpdateObservedState operations
 // with a guaranteed minimum timeout. This ensures that even when the percentage-based allocation
 // is smaller than the minimum required time, the operation gets enough time to complete safely.
@@ -124,23 +114,3 @@ func CreateUpdateObservedStateContextWithMinimum(managerCtx context.Context, min
 
 	return context.WithTimeout(managerCtx, timeoutDuration)
 }
-
-// CreateReconciliationContext creates a context for reconciliation logic.
-// Takes 20% of the manager's remaining time for FSM transitions and event sending.
-func CreateReconciliationContext(managerCtx context.Context) (context.Context, context.CancelFunc) {
-	return CreateSubContext(managerCtx, 1.0-UpdateObservedStatePercent)
-}
-
-// CreateManagerContext creates a context for manager execution.
-// Reserves 5% of available time for manager overhead.
-func CreateManagerContext(controlLoopCtx context.Context) (context.Context, context.CancelFunc) {
-	return CreateSubContext(controlLoopCtx, 1.0-ManagerReservePercent)
-}
-
-// Legacy functions for backward compatibility - these calculate absolute timeouts
-// and should be gradually replaced with percentage-based contexts
-
-// FilesAndDirectoriesToIgnore is a list of files and directories that we will not read.
-// All older archived logs begin with @40000000
-// As we retain up to 20 logs, this will otherwise lead to reading a lot of logs.
-var FilesAndDirectoriesToIgnore = []string{".s6-svscan", "s6-linux-init-shutdown", "s6rc-fdholder", "s6rc-oneshot-runner", "syslogd", "syslogd-log", "/control", "/lock", "@40000000"}
