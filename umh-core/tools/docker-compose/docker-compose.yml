@@ -50,7 +50,7 @@ services:
       resources:
         limits:
           memory: 4096m
-          cpus: '20'
+          cpus: '2'
     networks:
       - monitoring
 
