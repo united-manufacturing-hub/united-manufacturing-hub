@@ -1,0 +1,1115 @@
+{
+  "id": null,
+  "uid": "system-metrics",
+  "title": "System Metrics Dashboard",
+  "tags": ["system", "metrics"],
+  "timezone": "browser",
+  "schemaVersion": 30,
+  "version": 1,
+  "panels": [
+    {
+      "id": 1,
+      "title": "CPU Usage",
+      "type": "gauge",
+      "targets": [
+        {
+          "expr": "rate(process_cpu_seconds_total[5m]) * 100",
+          "legendFormat": "CPU Usage %",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 30},
+              {"color": "red", "value": 60}
+            ]
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+    },
+    {
+      "id": 2,
+      "title": "Memory Usage",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "process_resident_memory_bytes",
+          "legendFormat": "Resident Memory",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "min": 0,
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 100000000},
+              {"color": "red", "value": 500000000}
+            ]
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 8, "x": 12, "y": 0}
+    },
+    {
+      "id": 10,
+      "title": "Goroutines",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "go_goroutines",
+          "legendFormat": "Active Goroutines",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 100},
+              {"color": "red", "value": 500}
+            ]
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 4, "x": 20, "y": 0}
+    },
+    {
+      "id": 3,
+      "title": "CPU Usage Over Time",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(process_cpu_seconds_total[5m]) * 100",
+          "legendFormat": "CPU Usage %",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        }
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8}
+    },
+    {
+      "id": 4,
+      "title": "Memory Usage Over Time",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "process_resident_memory_bytes",
+          "legendFormat": "Resident Memory",
+          "refId": "A"
+        },
+        {
+          "expr": "process_virtual_memory_bytes",
+          "legendFormat": "Virtual Memory",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "min": 0
+        }
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16}
+    },
+    {
+      "id": 5,
+      "title": "Garbage Collection Duration",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "go_gc_duration_seconds",
+          "legendFormat": "GC Duration - {{quantile}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24}
+    },
+    {
+      "id": 6,
+      "title": "Heap Memory Usage",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "go_memstats_heap_alloc_bytes",
+          "legendFormat": "Heap Allocated",
+          "refId": "A"
+        },
+        {
+          "expr": "go_memstats_heap_inuse_bytes",
+          "legendFormat": "Heap In Use",
+          "refId": "B"
+        },
+        {
+          "expr": "go_memstats_heap_idle_bytes",
+          "legendFormat": "Heap Idle",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "min": 0
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24}
+    },
+    {
+      "id": 8,
+      "title": "Reconcile Starved Time",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "umh_core_reconcile_starved_total_seconds",
+          "legendFormat": "Total Starved Time",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 5}
+            ]
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 32}
+    },
+    {
+      "id": 9,
+      "title": "Error Counter",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(umh_core_errors_total[5m]))",
+          "legendFormat": "Errors/sec",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(increase(umh_core_errors_total[1h]))",
+          "legendFormat": "Errors (1h)",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "stacking": {"mode": "none", "group": "A"},
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "scaleDistribution": {"type": "linear"},
+            "hideFrom": {"legend": false, "tooltip": false, "vis": false},
+            "thresholdsStyle": {"mode": "off"}
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 40}
+    },
+    {
+      "id": 11,
+      "title": "Connection Failures",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(net_conntrack_dialer_conn_failed_total[5m])) by (reason)",
+          "legendFormat": "Failed - {{reason}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 48}
+    },
+    {
+      "id": 12,
+      "title": "File Descriptor Usage",
+      "type": "gauge",
+      "targets": [
+        {
+          "expr": "(process_open_fds / process_max_fds) * 100",
+          "legendFormat": "FD Usage %",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 70},
+              {"color": "red", "value": 90}
+            ]
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 48}
+    },
+    {
+      "id": 13,
+      "title": "GC Frequency & Duration",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(go_gc_cycles_total_gc_cycles_total[5m]) * 60",
+          "legendFormat": "GC Cycles/min",
+          "refId": "A"
+        },
+        {
+          "expr": "(rate(go_gc_duration_seconds_sum[5m]) / rate(go_gc_duration_seconds_count[5m])) * 1000",
+          "legendFormat": "Avg GC Duration (ms)",
+          "refId": "B"
+        },
+        {
+          "expr": "go_memstats_gc_sys_bytes / 1024 / 1024",
+          "legendFormat": "GC System Memory (MB)",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byRegexp", "options": ".*Duration.*"},
+            "properties": [{"id": "unit", "value": "ms"}]
+          }
+        ]
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 56}
+    },
+    {
+      "id": 14,
+      "title": "Network I/O Throughput",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(process_network_receive_bytes_total[5m]) * 8",
+          "legendFormat": "RX (bits/sec)",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(process_network_transmit_bytes_total[5m]) * 8",
+          "legendFormat": "TX (bits/sec)",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(process_network_receive_bytes_total[5m])",
+          "legendFormat": "RX (bytes/sec)",
+          "refId": "C"
+        },
+        {
+          "expr": "rate(process_network_transmit_bytes_total[5m])",
+          "legendFormat": "TX (bytes/sec)",
+          "refId": "D"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bps",
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byRegexp", "options": ".*bytes/sec.*"},
+            "properties": [{"id": "unit", "value": "Bps"}]
+          }
+        ]
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 64}
+    },
+    {
+      "id": 15,
+      "title": "Filesystem Operations Rate",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(umh_core_filesystem_ops_total[5m])) by (operation)",
+          "legendFormat": "{{operation}} ops/sec",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "stacking": {"mode": "none", "group": "A"},
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "scaleDistribution": {"type": "linear"},
+            "hideFrom": {"legend": false, "tooltip": false, "vis": false},
+            "thresholdsStyle": {"mode": "off"}
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 72}
+    },
+    {
+      "id": 17,
+      "title": "Filesystem Operation Success Rate",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "(sum(rate(umh_core_filesystem_ops_total{status=\"success\"}[5m])) / sum(rate(umh_core_filesystem_ops_total[5m]))) * 100",
+          "legendFormat": "Success Rate %",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 90},
+              {"color": "green", "value": 95}
+            ]
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 72}
+    },
+    {
+      "id": 18,
+      "title": "Filesystem Operation Duration",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(umh_core_filesystem_ops_duration_seconds_bucket[5m])) by (le, operation))",
+          "legendFormat": "{{operation}} - 95th percentile",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(umh_core_filesystem_ops_duration_seconds_bucket[5m])) by (le, operation))",
+          "legendFormat": "{{operation}} - 50th percentile",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "stacking": {"mode": "none", "group": "A"},
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "scaleDistribution": {"type": "linear"},
+            "hideFrom": {"legend": false, "tooltip": false, "vis": false},
+            "thresholdsStyle": {"mode": "off"}
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 80}
+    },
+    {
+      "id": 19,
+      "title": "Top Filesystem Paths by Access Count",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "topk(10, sum(rate(umh_core_filesystem_path_access_total[5m])) by (path, operation))",
+          "legendFormat": "{{operation}}: {{path}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "stacking": {"mode": "none", "group": "A"},
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "scaleDistribution": {"type": "linear"},
+            "hideFrom": {"legend": false, "tooltip": false, "vis": false},
+            "thresholdsStyle": {"mode": "off"}
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 88}
+    },
+    {
+      "id": 20,
+      "title": "Filesystem Errors by Operation",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(umh_core_filesystem_ops_total{status=\"error\"}[5m])) by (operation)",
+          "legendFormat": "{{operation}} errors/sec",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "stacking": {"mode": "none", "group": "A"},
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "scaleDistribution": {"type": "linear"},
+            "hideFrom": {"legend": false, "tooltip": false, "vis": false},
+            "thresholdsStyle": {"mode": "off"}
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 96}
+    },
+    {
+      "id": 21,
+      "title": "Filesystem Cache Hit Rate",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "(sum(rate(umh_core_filesystem_ops_total{cache_status=\"cached\"}[5m])) / sum(rate(umh_core_filesystem_ops_total[5m]))) * 100",
+          "legendFormat": "Cache Hit Rate %",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 30},
+              {"color": "green", "value": 60}
+            ]
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 104}
+    },
+    {
+      "id": 22,
+      "title": "Cache vs Uncached Operations",
+      "type": "piechart",
+      "targets": [
+        {
+          "expr": "sum(rate(umh_core_filesystem_ops_total{cache_status=\"cached\"}[5m]))",
+          "legendFormat": "Cached Operations",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(umh_core_filesystem_ops_total{cache_status=\"uncached\"}[5m]))",
+          "legendFormat": "Uncached Operations",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0
+        }
+      },
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 104}
+    },
+    {
+      "id": 23,
+      "title": "Cache Hit Rate by Operation",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "(sum(rate(umh_core_filesystem_ops_total{cache_status=\"cached\"}[5m])) by (operation) / sum(rate(umh_core_filesystem_ops_total[5m])) by (operation)) * 100",
+          "legendFormat": "{{operation}} Cache Hit Rate %",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "stacking": {"mode": "none", "group": "A"},
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "scaleDistribution": {"type": "linear"},
+            "hideFrom": {"legend": false, "tooltip": false, "vis": false},
+            "thresholdsStyle": {"mode": "off"}
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 104}
+    },
+    {
+      "id": 24,
+      "title": "Filesystem Operations: Cached vs Uncached Rate",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(umh_core_filesystem_ops_total{cache_status=\"cached\"}[5m])) by (operation)",
+          "legendFormat": "{{operation}} (Cached) ops/sec",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(umh_core_filesystem_ops_total{cache_status=\"uncached\"}[5m])) by (operation)",
+          "legendFormat": "{{operation}} (Uncached) ops/sec",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "stacking": {"mode": "none", "group": "A"},
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "scaleDistribution": {"type": "linear"},
+            "hideFrom": {"legend": false, "tooltip": false, "vis": false},
+            "thresholdsStyle": {"mode": "off"}
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 112}
+    },
+    {
+      "id": 25,
+      "title": "Filesystem Cache Performance Comparison",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(umh_core_filesystem_ops_duration_seconds_bucket{cache_status=\"cached\"}[5m])) by (le, operation))",
+          "legendFormat": "{{operation}} (Cached) - 95th percentile",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(umh_core_filesystem_ops_duration_seconds_bucket{cache_status=\"uncached\"}[5m])) by (le, operation))",
+          "legendFormat": "{{operation}} (Uncached) - 95th percentile",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "stacking": {"mode": "none", "group": "A"},
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "scaleDistribution": {"type": "linear"},
+            "hideFrom": {"legend": false, "tooltip": false, "vis": false},
+            "thresholdsStyle": {"mode": "off"}
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 112}
+    },
+    {
+      "id": 26,
+      "title": "Most Cached Filesystem Paths",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "topk(10, sum(rate(umh_core_filesystem_path_access_total{cache_status=\"cached\"}[5m])) by (path, operation))",
+          "legendFormat": "{{operation}}: {{path}} (cached)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "stacking": {"mode": "none", "group": "A"},
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "scaleDistribution": {"type": "linear"},
+            "hideFrom": {"legend": false, "tooltip": false, "vis": false},
+            "thresholdsStyle": {"mode": "off"}
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 120}
+    },
+    {
+      "id": 27,
+      "title": "Most Uncached Filesystem Paths",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "topk(10, sum(rate(umh_core_filesystem_path_access_total{cache_status=\"uncached\"}[5m])) by (path, operation))",
+          "legendFormat": "{{operation}}: {{path}} (uncached)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "stacking": {"mode": "none", "group": "A"},
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "scaleDistribution": {"type": "linear"},
+            "hideFrom": {"legend": false, "tooltip": false, "vis": false},
+            "thresholdsStyle": {"mode": "off"}
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 128}
+    },
+    {
+      "id": 28,
+      "title": "Cache Miss Rate by Path Pattern",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "topk(10, (sum(rate(umh_core_filesystem_ops_total{cache_status=\"uncached\"}[5m])) by (path_pattern) / sum(rate(umh_core_filesystem_ops_total[5m])) by (path_pattern)) * 100)",
+          "legendFormat": "{{path_pattern}} Miss Rate %",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "stacking": {"mode": "none", "group": "A"},
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "scaleDistribution": {"type": "linear"},
+            "hideFrom": {"legend": false, "tooltip": false, "vis": false},
+            "thresholdsStyle": {"mode": "off"}
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 128}
+    },
+    {
+      "id": 29,
+      "title": "S6 Command Execution Time",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(umh_core_s6_command_execution_duration_seconds_bucket[5m])) by (le, name))",
+          "legendFormat": "{{name}} - 95th percentile",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(umh_core_s6_command_execution_duration_seconds_bucket[5m])) by (le, name))",
+          "legendFormat": "{{name}} - 50th percentile",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(umh_core_s6_command_execution_duration_seconds_sum[5m]) / rate(umh_core_s6_command_execution_duration_seconds_count[5m])",
+          "legendFormat": "{{name}} - Average",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "stacking": {"mode": "none", "group": "A"},
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "scaleDistribution": {"type": "linear"},
+            "hideFrom": {"legend": false, "tooltip": false, "vis": false},
+            "thresholdsStyle": {"mode": "off"}
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 136}
+    },
+    {
+      "id": 30,
+      "title": "S6 Command Execution Rate",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(umh_core_s6_command_execution_duration_seconds_count[5m])) by (name)",
+          "legendFormat": "{{name}} - Commands/sec",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "stacking": {"mode": "none", "group": "A"},
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "scaleDistribution": {"type": "linear"},
+            "hideFrom": {"legend": false, "tooltip": false, "vis": false},
+            "thresholdsStyle": {"mode": "off"}
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 136}
+    },
+    {
+      "id": 31,
+      "title": "S6 Command Usage by Service Path",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(umh_core_s6_command_execution_duration_seconds_count[5m])) by (service_path)",
+          "legendFormat": "{{service_path}} - Commands/sec",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "stacking": {"mode": "none", "group": "A"},
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "scaleDistribution": {"type": "linear"},
+            "hideFrom": {"legend": false, "tooltip": false, "vis": false},
+            "thresholdsStyle": {"mode": "off"}
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 144}
+    },
+    {
+      "id": 32,
+      "title": "S6 Command Error Rate",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(umh_core_s6_command_errors_total[5m])) by (name, error_type)",
+          "legendFormat": "{{name}} - {{error_type}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "stacking": {"mode": "none", "group": "A"},
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "scaleDistribution": {"type": "linear"},
+            "hideFrom": {"legend": false, "tooltip": false, "vis": false},
+            "thresholdsStyle": {"mode": "off"}
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 152}
+    },
+    {
+      "id": 33,
+      "title": "S6 Command Errors by Exit Code",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(umh_core_s6_command_errors_total[5m])) by (name, exit_code)",
+          "legendFormat": "{{name}} - Exit {{exit_code}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "stacking": {"mode": "none", "group": "A"},
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "scaleDistribution": {"type": "linear"},
+            "hideFrom": {"legend": false, "tooltip": false, "vis": false},
+            "thresholdsStyle": {"mode": "off"}
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 152}
+    },
+    {
+      "id": 34,
+      "title": "Top S6 Command Failures by Service Path",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "topk(10, sum(rate(umh_core_s6_command_errors_total[5m])) by (service_path, error_type))",
+          "legendFormat": "{{service_path}} - {{error_type}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "stacking": {"mode": "none", "group": "A"},
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "scaleDistribution": {"type": "linear"},
+            "hideFrom": {"legend": false, "tooltip": false, "vis": false},
+            "thresholdsStyle": {"mode": "off"}
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 160}
+    },
+    {
+      "id": 35,
+      "title": "S6 Command Success vs Error Rate",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "sum(rate(umh_core_s6_command_execution_duration_seconds_count[5m])) - sum(rate(umh_core_s6_command_errors_total[5m]))",
+          "legendFormat": "Success Rate (cmd/sec)",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(umh_core_s6_command_errors_total[5m]))",
+          "legendFormat": "Error Rate (err/sec)",
+          "refId": "B"
+        },
+        {
+          "expr": "(sum(rate(umh_core_s6_command_errors_total[5m])) / sum(rate(umh_core_s6_command_execution_duration_seconds_count[5m]))) * 100",
+          "legendFormat": "Error Percentage %",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0,
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 0.1},
+              {"color": "red", "value": 1.0}
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byRegexp", "options": ".*Percentage.*"},
+            "properties": [
+              {"id": "unit", "value": "percent"},
+              {"id": "max", "value": 100}
+            ]
+          }
+        ]
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 168}
+    }
+  ],
+  "time": {"from": "now-1h", "to": "now"},
+  "refresh": "5s"
+}

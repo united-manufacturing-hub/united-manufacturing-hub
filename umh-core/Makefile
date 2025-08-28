@@ -759,3 +759,15 @@ run:
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
+
+
+# Start monitoring stack (Prometheus + Grafana + UMH Core)
+test-with-monitoring: build
+	mkdir -p $(PWD)/tools/docker-compose/data
+	docker stop umh-core || true
+	docker rm umh-core || true
+	cd $(PWD)/tools/docker-compose && docker compose down || true
+	cd $(PWD)/tools/docker-compose && docker compose up --build
+
+stop-compose:
+	cd $(PWD)/tools/docker-compose && docker compose down || true
