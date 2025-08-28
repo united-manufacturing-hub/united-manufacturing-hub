@@ -15,7 +15,15 @@
 package permission_validator_test
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/asn1"
+	"fmt"
+	"math/big"
+	"strings"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 
@@ -23,11 +31,110 @@ import (
 	. "github.com/onsi/gomega"
 	validator "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions/permission"
 	"go.uber.org/zap"
+	"gopkg.in/yaml.v3"
 )
+
+// createCertificateWithRoleExtension creates a test certificate with the specified location roles.
+func createCertificateWithRoleExtension(locationRoles map[string]string) (*x509.Certificate, error) {
+	// Generate Ed25519 key pair (matching production code)
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+
+	// Generate serial number (matching production code)
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create certificate template (matching production code structure)
+	template := &x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			Organization: []string{"Test Organization"},
+			CommonName:   "test-user",
+		},
+		NotBefore:             time.Now().Add(-5 * time.Minute),
+		NotAfter:              time.Now().AddDate(100, 0, 0), // Valid for 100 years
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+		MaxPathLen:            10,
+	}
+
+	// Convert locationRoles to the format expected by the extension
+	locationRolesMap := make(map[string]validator.Role)
+	for location, roleStr := range locationRoles {
+		locationRolesMap[location] = validator.Role(roleStr)
+	}
+
+	// Add the location role extension manually (based on production AddLocationRoleExtension)
+	if len(locationRolesMap) == 0 {
+		return nil, fmt.Errorf("must have locationRoles")
+	}
+
+	// Validate all roles and locations
+	for location, role := range locationRolesMap {
+		if role != validator.RoleAdmin && role != validator.RoleViewer && role != validator.RoleEditor {
+			return nil, fmt.Errorf("invalid role: %s", role)
+		}
+		if len(strings.Split(location, ".")) <= 0 {
+			return nil, fmt.Errorf("invalid location: %s", location)
+		}
+	}
+
+	// Marshal the LocationRoles to YAML
+	locationRolesBytes, err := yaml.Marshal(locationRolesMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to yaml marshal locationRoles: %w", err)
+	}
+
+	// ASN.1 encode the YAML string
+	value, err := asn1.Marshal(string(locationRolesBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to asn1 marshal locationRoles: %w", err)
+	}
+
+	// Add the extension to the template using the same OID as production code
+	oidExtensionRoleLocation := asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 59193, 2, 1}
+	template.ExtraExtensions = append(template.ExtraExtensions, pkix.Extension{
+		Id:       oidExtensionRoleLocation,
+		Critical: false,
+		Value:    value,
+	})
+
+	// Self-sign the certificate (for testing purposes)
+	certDER, err := x509.CreateCertificate(rand.Reader, template, template, pub, priv)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse the certificate
+	cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		return nil, err
+	}
+
+	return cert, nil
+}
 
 var _ = Describe("UserCertificate", func() {
 	Describe("ValidateUserCertificateForAction", func() {
 		var mockLogger *zap.SugaredLogger
+
+		// Create certificates at declaration time, not in BeforeEach
+		adminCert, _ := createCertificateWithRoleExtension(map[string]string{
+			"test-enterprise": "Admin",
+		})
+		editorCert, _ := createCertificateWithRoleExtension(map[string]string{
+			"test-enterprise": "Editor",
+		})
+		viewerCert, _ := createCertificateWithRoleExtension(map[string]string{
+			"test-enterprise": "Viewer",
+		})
 
 		BeforeEach(func() {
 			mockLogger = zap.NewNop().Sugar()
@@ -58,7 +165,7 @@ var _ = Describe("UserCertificate", func() {
 					map[int]string{0: "test-enterprise"},
 				)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("no role information found in certificate"))
+				Expect(err.Error()).To(ContainSubstring("failed to get locationRoles from certificate"))
 			})
 		})
 
@@ -74,168 +181,193 @@ var _ = Describe("UserCertificate", func() {
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})
+
+		DescribeTable("ValidateUserCertificateForAction with X.509 certificates",
+			func(cert *x509.Certificate, actionTypeValue models.ActionType, useActionType bool, messageType models.MessageType, instanceLocation map[int]string, shouldSucceed bool, expectedErrorSubstring string, description string) {
+				var actionType *models.ActionType
+				if useActionType {
+					actionType = &actionTypeValue
+				}
+
+				err := validator.ValidateUserCertificateForAction(
+					mockLogger,
+					cert,
+					actionType,
+					messageType,
+					instanceLocation,
+				)
+
+				if shouldSucceed {
+					Expect(err).ToNot(HaveOccurred(), "Expected success for %s", description)
+				} else {
+					Expect(err).To(HaveOccurred(), "Expected failure for %s", description)
+					if expectedErrorSubstring != "" {
+						Expect(err.Error()).To(ContainSubstring(expectedErrorSubstring), "Expected error message to contain '%s' for %s", expectedErrorSubstring, description)
+					}
+				}
+			},
+
+			// GET ACTIONS - All roles allowed
+			Entry("Admin - get-protocol-converter - allowed", adminCert, models.GetProtocolConverter, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - get-protocol-converter - allowed", editorCert, models.GetProtocolConverter, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Viewer - get-protocol-converter - allowed", viewerCert, models.GetProtocolConverter, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+
+			Entry("Admin - get-data-flow-component - allowed", adminCert, models.GetDataFlowComponent, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - get-data-flow-component - allowed", editorCert, models.GetDataFlowComponent, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Viewer - get-data-flow-component - allowed", viewerCert, models.GetDataFlowComponent, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+
+			Entry("Admin - get-data-flow-component-log - allowed", adminCert, models.GetDataFlowComponentLog, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - get-data-flow-component-log - allowed", editorCert, models.GetDataFlowComponentLog, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Viewer - get-data-flow-component-log - allowed", viewerCert, models.GetDataFlowComponentLog, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+
+			Entry("Admin - get-logs - allowed", adminCert, models.GetLogs, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - get-logs - allowed", editorCert, models.GetLogs, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Viewer - get-logs - allowed", viewerCert, models.GetLogs, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+
+			Entry("Admin - get-datamodel - allowed", adminCert, models.GetDataModel, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - get-datamodel - allowed", editorCert, models.GetDataModel, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Viewer - get-datamodel - allowed", viewerCert, models.GetDataModel, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+
+			Entry("Admin - get-stream-processor - allowed", adminCert, models.GetStreamProcessor, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - get-stream-processor - allowed", editorCert, models.GetStreamProcessor, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Viewer - get-stream-processor - allowed", viewerCert, models.GetStreamProcessor, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+
+			// SYSTEM ACTIONS - Only Admin allowed
+			Entry("Admin - upgrade-companion - allowed", adminCert, models.UpgradeCompanion, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - upgrade-companion - declined", editorCert, models.UpgradeCompanion, true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+			Entry("Viewer - upgrade-companion - declined", viewerCert, models.UpgradeCompanion, true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+
+			// COMPANY ACTIONS - Only Admin allowed
+			Entry("Admin - create-invite - allowed", adminCert, models.ActionType("create-invite"), true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - create-invite - declined", editorCert, models.ActionType("create-invite"), true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+			Entry("Viewer - create-invite - declined", viewerCert, models.ActionType("create-invite"), true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+
+			// MORE COMPANY ACTIONS - Only Admin allowed
+			Entry("Admin - get-company-invites - allowed", adminCert, models.ActionType("get-company-invites"), true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - get-company-invites - declined", editorCert, models.ActionType("get-company-invites"), true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+			Entry("Viewer - get-company-invites - declined", viewerCert, models.ActionType("get-company-invites"), true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+
+			Entry("Admin - delete-invite - allowed", adminCert, models.ActionType("delete-invite"), true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - delete-invite - declined", editorCert, models.ActionType("delete-invite"), true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+			Entry("Viewer - delete-invite - declined", viewerCert, models.ActionType("delete-invite"), true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+
+			Entry("Admin - get-company-users - allowed", adminCert, models.ActionType("get-company-users"), true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - get-company-users - declined", editorCert, models.ActionType("get-company-users"), true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+			Entry("Viewer - get-company-users - declined", viewerCert, models.ActionType("get-company-users"), true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+
+			Entry("Admin - delete-company-user - allowed", adminCert, models.ActionType("delete-company-user"), true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - delete-company-user - declined", editorCert, models.ActionType("delete-company-user"), true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+			Entry("Viewer - delete-company-user - declined", viewerCert, models.ActionType("delete-company-user"), true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+
+			Entry("Admin - change-user-role - allowed", adminCert, models.ActionType("change-user-role"), true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - change-user-role - declined", editorCert, models.ActionType("change-user-role"), true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+			Entry("Viewer - change-user-role - declined", viewerCert, models.ActionType("change-user-role"), true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+
+			Entry("Admin - change-user-permissions - allowed", adminCert, models.ActionType("change-user-permissions"), true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - change-user-permissions - declined", editorCert, models.ActionType("change-user-permissions"), true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+			Entry("Viewer - change-user-permissions - declined", viewerCert, models.ActionType("change-user-permissions"), true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+
+			// EDIT ACTIONS - Admin and Editor allowed, Viewer declined
+			Entry("Admin - edit-protocol-converter - allowed", adminCert, models.EditProtocolConverter, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - edit-protocol-converter - allowed", editorCert, models.EditProtocolConverter, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Viewer - edit-protocol-converter - declined", viewerCert, models.EditProtocolConverter, true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+
+			Entry("Admin - edit-data-flow-component - allowed", adminCert, models.EditDataFlowComponent, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - edit-data-flow-component - allowed", editorCert, models.EditDataFlowComponent, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Viewer - edit-data-flow-component - declined", viewerCert, models.EditDataFlowComponent, true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+
+			Entry("Admin - edit-datamodel - allowed", adminCert, models.EditDataModel, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - edit-datamodel - allowed", editorCert, models.EditDataModel, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Viewer - edit-datamodel - declined", viewerCert, models.EditDataModel, true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+
+			Entry("Admin - edit-stream-processor - allowed", adminCert, models.EditStreamProcessor, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - edit-stream-processor - allowed", editorCert, models.EditStreamProcessor, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Viewer - edit-stream-processor - declined", viewerCert, models.EditStreamProcessor, true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+
+			// ADMIN-ONLY EDIT ACTIONS - Only Admin allowed
+			Entry("Admin - edit-instance-location - allowed", adminCert, models.EditInstanceLocation, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - edit-instance-location - declined", editorCert, models.EditInstanceLocation, true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+			Entry("Viewer - edit-instance-location - declined", viewerCert, models.EditInstanceLocation, true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+
+			Entry("Admin - edit-instance - allowed", adminCert, models.EditInstance, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - edit-instance - declined", editorCert, models.EditInstance, true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+			Entry("Viewer - edit-instance - declined", viewerCert, models.EditInstance, true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+
+			// DELETE ACTIONS - Admin and Editor allowed, Viewer declined
+			Entry("Admin - delete-protocol-converter - allowed", adminCert, models.DeleteProtocolConverter, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - delete-protocol-converter - allowed", editorCert, models.DeleteProtocolConverter, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Viewer - delete-protocol-converter - declined", viewerCert, models.DeleteProtocolConverter, true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+
+			Entry("Admin - delete-data-flow-component - allowed", adminCert, models.DeleteDataFlowComponent, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - delete-data-flow-component - allowed", editorCert, models.DeleteDataFlowComponent, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Viewer - delete-data-flow-component - declined", viewerCert, models.DeleteDataFlowComponent, true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+
+			Entry("Admin - delete-datamodel - allowed", adminCert, models.DeleteDataModel, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - delete-datamodel - allowed", editorCert, models.DeleteDataModel, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Viewer - delete-datamodel - declined", viewerCert, models.DeleteDataModel, true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+
+			Entry("Admin - delete-stream-processor - allowed", adminCert, models.DeleteStreamProcessor, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - delete-stream-processor - allowed", editorCert, models.DeleteStreamProcessor, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Viewer - delete-stream-processor - declined", viewerCert, models.DeleteStreamProcessor, true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+
+			// DEPLOY ACTIONS - Admin and Editor allowed, Viewer declined
+			Entry("Admin - deploy-protocol-converter - allowed", adminCert, models.DeployProtocolConverter, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - deploy-protocol-converter - allowed", editorCert, models.DeployProtocolConverter, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Viewer - deploy-protocol-converter - declined", viewerCert, models.DeployProtocolConverter, true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+
+			Entry("Admin - deploy-data-flow-component - allowed", adminCert, models.DeployDataFlowComponent, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - deploy-data-flow-component - allowed", editorCert, models.DeployDataFlowComponent, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Viewer - deploy-data-flow-component - declined", viewerCert, models.DeployDataFlowComponent, true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+
+			Entry("Admin - deploy-stream-processor - allowed", adminCert, models.DeployStreamProcessor, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - deploy-stream-processor - allowed", editorCert, models.DeployStreamProcessor, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Viewer - deploy-stream-processor - declined", viewerCert, models.DeployStreamProcessor, true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+
+			// UNGROUPED ACTIONS - All roles allowed
+			Entry("Admin - unknown - allowed", adminCert, models.UnknownAction, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - unknown - allowed", editorCert, models.UnknownAction, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Viewer - unknown - allowed", viewerCert, models.UnknownAction, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+
+			Entry("Admin - dummy - allowed", adminCert, models.DummyAction, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - dummy - allowed", editorCert, models.DummyAction, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Viewer - dummy - allowed", viewerCert, models.DummyAction, true, models.Action, map[int]string{0: "test-enterprise"}, true, "", ""),
+
+			// EDGE CASES - All roles declined for undefined actions
+			Entry("Admin - non-existent-action - declined", adminCert, models.ActionType("non-existent-action"), true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+			Entry("Editor - non-existent-action - declined", editorCert, models.ActionType("non-existent-action"), true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+			Entry("Viewer - non-existent-action - declined", viewerCert, models.ActionType("non-existent-action"), true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+
+			// TEST ACTIONS (empty group) - All roles declined
+			Entry("Admin - test-network-connection - declined", adminCert, models.TestNetworkConnection, true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+			Entry("Editor - test-network-connection - declined", editorCert, models.TestNetworkConnection, true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+			Entry("Viewer - test-network-connection - declined", viewerCert, models.TestNetworkConnection, true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
+
+			// LOCATION-BASED ACCESS CONTROL - All roles declined for wrong location
+			Entry("Admin - nonexistent-location - declined", adminCert, models.GetProtocolConverter, true, models.Action, map[int]string{0: "nonexistent-location"}, false, "did not find this location", ""),
+			Entry("Editor - nonexistent-location - declined", editorCert, models.GetProtocolConverter, true, models.Action, map[int]string{0: "nonexistent-location"}, false, "did not find this location", ""),
+			Entry("Viewer - nonexistent-location - declined", viewerCert, models.GetProtocolConverter, true, models.Action, map[int]string{0: "nonexistent-location"}, false, "did not find this location", ""),
+
+			// MESSAGE TYPE TESTS - Non-Action message types allowed for all roles with nil action type
+			Entry("Admin - Subscribe message - allowed", adminCert, models.ActionType(""), false, models.Subscribe, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - Subscribe message - allowed", editorCert, models.ActionType(""), false, models.Subscribe, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Viewer - Subscribe message - allowed", viewerCert, models.ActionType(""), false, models.Subscribe, map[int]string{0: "test-enterprise"}, true, "", ""),
+
+			Entry("Admin - Status message - allowed", adminCert, models.ActionType(""), false, models.Status, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - Status message - allowed", editorCert, models.ActionType(""), false, models.Status, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Viewer - Status message - allowed", viewerCert, models.ActionType(""), false, models.Status, map[int]string{0: "test-enterprise"}, true, "", ""),
+
+			Entry("Admin - ActionReply message - allowed", adminCert, models.ActionType(""), false, models.ActionReply, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - ActionReply message - allowed", editorCert, models.ActionType(""), false, models.ActionReply, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Viewer - ActionReply message - allowed", viewerCert, models.ActionType(""), false, models.ActionReply, map[int]string{0: "test-enterprise"}, true, "", ""),
+
+			Entry("Admin - EncryptedContent message - allowed", adminCert, models.ActionType(""), false, models.EncryptedContent, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Editor - EncryptedContent message - allowed", editorCert, models.ActionType(""), false, models.EncryptedContent, map[int]string{0: "test-enterprise"}, true, "", ""),
+			Entry("Viewer - EncryptedContent message - allowed", viewerCert, models.ActionType(""), false, models.EncryptedContent, map[int]string{0: "test-enterprise"}, true, "", ""),
+
+			// Action message type with nil action type should be denied for all roles
+			Entry("Admin - Action message with nil action type - declined", adminCert, models.ActionType(""), false, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of message type", ""),
+			Entry("Editor - Action message with nil action type - declined", editorCert, models.ActionType(""), false, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of message type", ""),
+			Entry("Viewer - Action message with nil action type - declined", viewerCert, models.ActionType(""), false, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of message type", ""),
+		)
 	})
-
-	DescribeTable("IsRoleAllowedForActionAndMessageType when action type is nil",
-		func(role validator.Role, messageType models.MessageType, expectedResult bool, description string) {
-			result := validator.IsRoleAllowedForActionAndMessageType(role, nil, messageType)
-			Expect(result).To(Equal(expectedResult), "Role %s should %s for message type %s when action type is nil",
-				role, map[bool]string{true: "be allowed", false: "be denied"}[expectedResult], messageType)
-		},
-
-		// non-action message types - all roles should be allowed
-		Entry("Subscribe [Admin]", validator.RoleAdmin, models.Subscribe, true, "subscribe message type"),
-		Entry("Subscribe [Editor]", validator.RoleEditor, models.Subscribe, true, "subscribe message type"),
-		Entry("Subscribe [Viewer]", validator.RoleViewer, models.Subscribe, true, "subscribe message type"),
-
-		Entry("Status [Admin]", validator.RoleAdmin, models.Status, true, "status message type"),
-		Entry("Status [Editor]", validator.RoleEditor, models.Status, true, "status message type"),
-		Entry("Status [Viewer]", validator.RoleViewer, models.Status, true, "status message type"),
-
-		Entry("ActionReply [Admin]", validator.RoleAdmin, models.ActionReply, true, "action-reply message type"),
-		Entry("ActionReply [Editor]", validator.RoleEditor, models.ActionReply, true, "action-reply message type"),
-		Entry("ActionReply [Viewer]", validator.RoleViewer, models.ActionReply, true, "action-reply message type"),
-
-		Entry("EncryptedContent [Admin]", validator.RoleAdmin, models.EncryptedContent, true, "encrypted-content message type"),
-		Entry("EncryptedContent [Editor]", validator.RoleEditor, models.EncryptedContent, true, "encrypted-content message type"),
-		Entry("EncryptedContent [Viewer]", validator.RoleViewer, models.EncryptedContent, true, "encrypted-content message type"),
-
-		// action message type - all roles should be denied
-		Entry("Action [Admin]", validator.RoleAdmin, models.Action, false, "action message type"),
-		Entry("Action [Editor]", validator.RoleEditor, models.Action, false, "action message type"),
-		Entry("Action [Viewer]", validator.RoleViewer, models.Action, false, "action message type"),
-	)
-
-	DescribeTable("IsRoleAllowedForActionAndMessageType - Comprehensive Action Permission Matrix",
-		func(action models.ActionType, role validator.Role, expectedResult bool, description string) {
-			result := validator.IsRoleAllowedForActionAndMessageType(role, &action, models.Action)
-			Expect(result).To(Equal(expectedResult), "Role %s should %s for action %s", role, map[bool]string{true: "be allowed", false: "be denied"}[expectedResult], description)
-		},
-
-		Entry("get-protocol-converter [Admin]", models.GetProtocolConverter, validator.RoleAdmin, true, "get-protocol-converter"),
-		Entry("get-protocol-converter [Editor]", models.GetProtocolConverter, validator.RoleEditor, true, "get-protocol-converter"),
-		Entry("get-protocol-converter [Viewer]", models.GetProtocolConverter, validator.RoleViewer, true, "get-protocol-converter"),
-
-		Entry("get-data-flow-component [Admin]", models.GetDataFlowComponent, validator.RoleAdmin, true, "get-data-flow-component"),
-		Entry("get-data-flow-component [Editor]", models.GetDataFlowComponent, validator.RoleEditor, true, "get-data-flow-component"),
-		Entry("get-data-flow-component [Viewer]", models.GetDataFlowComponent, validator.RoleViewer, true, "get-data-flow-component"),
-
-		Entry("get-data-flow-component-log [Admin]", models.GetDataFlowComponentLog, validator.RoleAdmin, true, "get-data-flow-component-log"),
-		Entry("get-data-flow-component-log [Editor]", models.GetDataFlowComponentLog, validator.RoleEditor, true, "get-data-flow-component-log"),
-		Entry("get-data-flow-component-log [Viewer]", models.GetDataFlowComponentLog, validator.RoleViewer, true, "get-data-flow-component-log"),
-
-		Entry("get-logs [Admin]", models.GetLogs, validator.RoleAdmin, true, "get-logs"),
-		Entry("get-logs [Editor]", models.GetLogs, validator.RoleEditor, true, "get-logs"),
-		Entry("get-logs [Viewer]", models.GetLogs, validator.RoleViewer, true, "get-logs"),
-
-		Entry("get-datamodel [Admin]", models.GetDataModel, validator.RoleAdmin, true, "get-datamodel"),
-		Entry("get-datamodel [Editor]", models.GetDataModel, validator.RoleEditor, true, "get-datamodel"),
-		Entry("get-datamodel [Viewer]", models.GetDataModel, validator.RoleViewer, true, "get-datamodel"),
-
-		Entry("get-stream-processor [Admin]", models.GetStreamProcessor, validator.RoleAdmin, true, "get-stream-processor"),
-		Entry("get-stream-processor [Editor]", models.GetStreamProcessor, validator.RoleEditor, true, "get-stream-processor"),
-		Entry("get-stream-processor [Viewer]", models.GetStreamProcessor, validator.RoleViewer, true, "get-stream-processor"),
-
-		Entry("edit-protocol-converter [Admin]", models.EditProtocolConverter, validator.RoleAdmin, true, "edit-protocol-converter"),
-		Entry("edit-protocol-converter [Editor]", models.EditProtocolConverter, validator.RoleEditor, true, "edit-protocol-converter"),
-		Entry("edit-protocol-converter [Viewer]", models.EditProtocolConverter, validator.RoleViewer, false, "edit-protocol-converter"),
-
-		Entry("edit-data-flow-component [Admin]", models.EditDataFlowComponent, validator.RoleAdmin, true, "edit-data-flow-component"),
-		Entry("edit-data-flow-component [Editor]", models.EditDataFlowComponent, validator.RoleEditor, true, "edit-data-flow-component"),
-		Entry("edit-data-flow-component [Viewer]", models.EditDataFlowComponent, validator.RoleViewer, false, "edit-data-flow-component"),
-
-		Entry("edit-datamodel [Admin]", models.EditDataModel, validator.RoleAdmin, true, "edit-datamodel"),
-		Entry("edit-datamodel [Editor]", models.EditDataModel, validator.RoleEditor, true, "edit-datamodel"),
-		Entry("edit-datamodel [Viewer]", models.EditDataModel, validator.RoleViewer, false, "edit-datamodel"),
-
-		Entry("edit-stream-processor [Admin]", models.EditStreamProcessor, validator.RoleAdmin, true, "edit-stream-processor"),
-		Entry("edit-stream-processor [Editor]", models.EditStreamProcessor, validator.RoleEditor, true, "edit-stream-processor"),
-		Entry("edit-stream-processor [Viewer]", models.EditStreamProcessor, validator.RoleViewer, false, "edit-stream-processor"),
-
-		Entry("edit-instance [Admin]", models.EditInstance, validator.RoleAdmin, true, "edit-instance"),
-		Entry("edit-instance [Editor]", models.EditInstance, validator.RoleEditor, false, "edit-instance"),
-		Entry("edit-instance [Viewer]", models.EditInstance, validator.RoleViewer, false, "edit-instance"),
-
-		Entry("edit-instance-location [Admin]", models.EditInstanceLocation, validator.RoleAdmin, true, "edit-instance-location"),
-		Entry("edit-instance-location [Editor]", models.EditInstanceLocation, validator.RoleEditor, false, "edit-instance-location"),
-		Entry("edit-instance-location [Viewer]", models.EditInstanceLocation, validator.RoleViewer, false, "edit-instance-location"),
-
-		Entry("delete-protocol-converter [Admin]", models.DeleteProtocolConverter, validator.RoleAdmin, true, "delete-protocol-converter"),
-		Entry("delete-protocol-converter [Editor]", models.DeleteProtocolConverter, validator.RoleEditor, true, "delete-protocol-converter"),
-		Entry("delete-protocol-converter [Viewer]", models.DeleteProtocolConverter, validator.RoleViewer, false, "delete-protocol-converter"),
-
-		Entry("delete-data-flow-component [Admin]", models.DeleteDataFlowComponent, validator.RoleAdmin, true, "delete-data-flow-component"),
-		Entry("delete-data-flow-component [Editor]", models.DeleteDataFlowComponent, validator.RoleEditor, true, "delete-data-flow-component"),
-		Entry("delete-data-flow-component [Viewer]", models.DeleteDataFlowComponent, validator.RoleViewer, false, "delete-data-flow-component"),
-
-		Entry("delete-datamodel [Admin]", models.DeleteDataModel, validator.RoleAdmin, true, "delete-datamodel"),
-		Entry("delete-datamodel [Editor]", models.DeleteDataModel, validator.RoleEditor, true, "delete-datamodel"),
-		Entry("delete-datamodel [Viewer]", models.DeleteDataModel, validator.RoleViewer, false, "delete-datamodel"),
-
-		Entry("delete-stream-processor [Admin]", models.DeleteStreamProcessor, validator.RoleAdmin, true, "delete-stream-processor"),
-		Entry("delete-stream-processor [Editor]", models.DeleteStreamProcessor, validator.RoleEditor, true, "delete-stream-processor"),
-		Entry("delete-stream-processor [Viewer]", models.DeleteStreamProcessor, validator.RoleViewer, false, "delete-stream-processor"),
-
-		Entry("deploy-protocol-converter [Admin]", models.DeployProtocolConverter, validator.RoleAdmin, true, "deploy-protocol-converter"),
-		Entry("deploy-protocol-converter [Editor]", models.DeployProtocolConverter, validator.RoleEditor, true, "deploy-protocol-converter"),
-		Entry("deploy-protocol-converter [Viewer]", models.DeployProtocolConverter, validator.RoleViewer, false, "deploy-protocol-converter"),
-
-		Entry("deploy-data-flow-component [Admin]", models.DeployDataFlowComponent, validator.RoleAdmin, true, "deploy-data-flow-component"),
-		Entry("deploy-data-flow-component [Editor]", models.DeployDataFlowComponent, validator.RoleEditor, true, "deploy-data-flow-component"),
-		Entry("deploy-data-flow-component [Viewer]", models.DeployDataFlowComponent, validator.RoleViewer, false, "deploy-data-flow-component"),
-
-		Entry("deploy-stream-processor [Admin]", models.DeployStreamProcessor, validator.RoleAdmin, true, "deploy-stream-processor"),
-		Entry("deploy-stream-processor [Editor]", models.DeployStreamProcessor, validator.RoleEditor, true, "deploy-stream-processor"),
-		Entry("deploy-stream-processor [Viewer]", models.DeployStreamProcessor, validator.RoleViewer, false, "deploy-stream-processor"),
-
-		Entry("upgrade-companion [Admin]", models.UpgradeCompanion, validator.RoleAdmin, true, "upgrade-companion"),
-		Entry("upgrade-companion [Editor]", models.UpgradeCompanion, validator.RoleEditor, false, "upgrade-companion"),
-		Entry("upgrade-companion [Viewer]", models.UpgradeCompanion, validator.RoleViewer, false, "upgrade-companion"),
-
-		Entry("create-invite [Admin]", models.ActionType("create-invite"), validator.RoleAdmin, true, "create-invite"),
-		Entry("create-invite [Editor]", models.ActionType("create-invite"), validator.RoleEditor, false, "create-invite"),
-		Entry("create-invite [Viewer]", models.ActionType("create-invite"), validator.RoleViewer, false, "create-invite"),
-
-		Entry("get-company-invites [Admin]", models.ActionType("get-company-invites"), validator.RoleAdmin, true, "get-company-invites"),
-		Entry("get-company-invites [Editor]", models.ActionType("get-company-invites"), validator.RoleEditor, false, "get-company-invites"),
-		Entry("get-company-invites [Viewer]", models.ActionType("get-company-invites"), validator.RoleViewer, false, "get-company-invites"),
-
-		Entry("delete-invite [Admin]", models.ActionType("delete-invite"), validator.RoleAdmin, true, "delete-invite"),
-		Entry("delete-invite [Editor]", models.ActionType("delete-invite"), validator.RoleEditor, false, "delete-invite"),
-		Entry("delete-invite [Viewer]", models.ActionType("delete-invite"), validator.RoleViewer, false, "delete-invite"),
-
-		Entry("get-company-users [Admin]", models.ActionType("get-company-users"), validator.RoleAdmin, true, "get-company-users"),
-		Entry("get-company-users [Editor]", models.ActionType("get-company-users"), validator.RoleEditor, false, "get-company-users"),
-		Entry("get-company-users [Viewer]", models.ActionType("get-company-users"), validator.RoleViewer, false, "get-company-users"),
-
-		Entry("delete-company-user [Admin]", models.ActionType("delete-company-user"), validator.RoleAdmin, true, "delete-company-user"),
-		Entry("delete-company-user [Editor]", models.ActionType("delete-company-user"), validator.RoleEditor, false, "delete-company-user"),
-		Entry("delete-company-user [Viewer]", models.ActionType("delete-company-user"), validator.RoleViewer, false, "delete-company-user"),
-
-		Entry("change-user-role [Admin]", models.ActionType("change-user-role"), validator.RoleAdmin, true, "change-user-role"),
-		Entry("change-user-role [Editor]", models.ActionType("change-user-role"), validator.RoleEditor, false, "change-user-role"),
-		Entry("change-user-role [Viewer]", models.ActionType("change-user-role"), validator.RoleViewer, false, "change-user-role"),
-
-		Entry("change-user-permissions [Admin]", models.ActionType("change-user-permissions"), validator.RoleAdmin, true, "change-user-permissions"),
-		Entry("change-user-permissions [Editor]", models.ActionType("change-user-permissions"), validator.RoleEditor, false, "change-user-permissions"),
-		Entry("change-user-permissions [Viewer]", models.ActionType("change-user-permissions"), validator.RoleViewer, false, "change-user-permissions"),
-
-		// ungrouped actions - all roles allowed
-		Entry("unknown [Admin]", models.ActionType("unknown"), validator.RoleAdmin, true, "unknown"),
-		Entry("unknown [Editor]", models.ActionType("unknown"), validator.RoleEditor, true, "unknown"),
-		Entry("unknown [Viewer]", models.ActionType("unknown"), validator.RoleViewer, true, "unknown"),
-
-		Entry("dummy [Admin]", models.ActionType("dummy"), validator.RoleAdmin, true, "dummy"),
-		Entry("dummy [Editor]", models.ActionType("dummy"), validator.RoleEditor, true, "dummy"),
-		Entry("dummy [Viewer]", models.ActionType("dummy"), validator.RoleViewer, true, "dummy"),
-
-		// non-existent actions - all roles denied
-		Entry("non-existent-action [Admin]", models.ActionType("non-existent-action"), validator.RoleAdmin, false, "non-existent-action"),
-		Entry("non-existent-action [Editor]", models.ActionType("non-existent-action"), validator.RoleEditor, false, "non-existent-action"),
-		Entry("non-existent-action [Viewer]", models.ActionType("non-existent-action"), validator.RoleViewer, false, "non-existent-action"),
-
-		Entry("fake-action [Admin]", models.ActionType("fake-action"), validator.RoleAdmin, false, "fake-action"),
-		Entry("fake-action [Editor]", models.ActionType("fake-action"), validator.RoleEditor, false, "fake-action"),
-		Entry("fake-action [Viewer]", models.ActionType("fake-action"), validator.RoleViewer, false, "fake-action"),
-	)
 })

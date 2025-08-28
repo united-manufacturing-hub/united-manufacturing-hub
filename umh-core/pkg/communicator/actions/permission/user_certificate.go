@@ -18,6 +18,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 
 	_ "embed"
@@ -28,35 +29,31 @@ import (
 
 // ValidateUserCertificateForAction validates that a user is authorized to perform an action based on their certificate.
 func ValidateUserCertificateForAction(log *zap.SugaredLogger, cert *x509.Certificate, actionType *models.ActionType, messageType models.MessageType, instanceLocation map[int]string) error {
-	log.Infof("Validating user certificate for action: %s, message type: %s", actionType, messageType)
+	log.Infof("validating user certificate for action: %s, message type: %s", actionType, messageType)
 
 	if cert == nil {
-		log.Infof("No certificate found, skipping validation")
+		log.Infof("no certificate found, skipping validation")
 
 		return nil // No certificate means no authorization
 	}
 
+	levels := make([]string, len(instanceLocation))
+	for i := range instanceLocation {
+		levels[i] = instanceLocation[i]
+	}
+
+	instLocStr := strings.Join(levels, ".")
+
 	// Extract the role from the certificate based on the current location
-	role, err := GetRoleForLocation(cert, instanceLocation)
+	role, err := GetRoleForLocation(cert, instLocStr)
 	if err != nil {
-		log.Warnf("Failed to extract role from certificate: %v", err)
-		// Continue without role check for now
+		log.Warnf("failed to extract role from certificate: %v", err)
+
 		return err
 	}
 
-	if role == "" {
-		var locationStr string
-		for _, loc := range instanceLocation {
-			locationStr = fmt.Sprintf("%s-%s", locationStr, loc)
-		}
-
-		return fmt.Errorf("user is not allowed to access this location: %s", locationStr)
-	} else {
-		log.Infof("User role from certificate: %s", role)
-		// Additional role-based checks could be added here if needed
-	}
-
-	log.Infof("User is authorized to perform actions in this location")
+	log.Infof("user role from certificate: %s", role)
+	log.Infof("user is authorized to perform actions in this location")
 
 	if !IsRoleAllowedForActionAndMessageType(role, actionType, messageType) {
 		if actionType != nil {
