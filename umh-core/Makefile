@@ -775,3 +775,6 @@ test-with-monitoring: build
 	docker rm umh-core || true
 	cd $(PWD)/docker-compose && docker compose down || true
 	cd $(PWD)/docker-compose && docker compose up --build
+
+stop-compose:
+	cd $(PWD)/docker-compose && docker compose down || true

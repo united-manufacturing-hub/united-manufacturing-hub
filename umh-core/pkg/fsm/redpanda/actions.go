@@ -33,6 +33,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/monitor"
 	redpanda_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"golang.org/x/sync/errgroup"
 )
@@ -546,16 +547,24 @@ func (r *RedpandaInstance) AnyUnexpectedRestartsInTheLastHour() (bool, string) {
 
 	// Check if any of the exit codes are 0 (which means a restart)
 	// and if the time of the restart is within the last hour
-	var restarts []int
+	var (
+		restarts     []int
+		lastExit     s6.ExitEvent
+		lastExitTime time.Time
+	)
 
 	for _, exitCode := range r.PreviousObservedState.ServiceInfo.S6ObservedState.ServiceInfo.ExitHistory {
 		if exitCode.ExitCode != 0 && exitCode.Timestamp.After(time.Now().Add(-1*time.Hour)) {
 			restarts = append(restarts, exitCode.ExitCode)
+			if exitCode.Timestamp.After(lastExitTime) {
+				lastExit = exitCode
+				lastExitTime = time.Now()
+			}
 		}
 	}
 
 	if len(restarts) > 0 {
-		return true, fmt.Sprintf("unexpected restarts within the last hour: %v", restarts)
+		return true, fmt.Sprintf("unexpected restarts within the last hour: %v. Last exit: %v", len(restarts), lastExit)
 	}
 
 	return false, ""

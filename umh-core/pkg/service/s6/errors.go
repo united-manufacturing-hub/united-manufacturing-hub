@@ -40,4 +40,10 @@ var (
 
 	// ErrS6ProgramNotExecutable is returned when a s6 command exits with code 126, indicating it failed to execute the program.
 	ErrS6ProgramNotExecutable = errors.New("s6 program not executable (exit code 126)")
+
+	// ErrS6CommandTimeout is returned when a s6 command times out due to context deadline exceeded.
+	ErrS6CommandTimeout = errors.New("s6 command timeout (context deadline exceeded)")
+
+	// ErrS6CommandCanceled is returned when a s6 command is canceled due to context cancellation.
+	ErrS6CommandCanceled = errors.New("s6 command canceled (context canceled)")
 )

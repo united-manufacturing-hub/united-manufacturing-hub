@@ -17,3 +17,7 @@ compass_artifact*
 *.result.txt
 
 .claude/settings.local.json
+
+# Prometheus data directory (contains large binary files)
+prometheus/data/
+prometheus-backup.tar.gz

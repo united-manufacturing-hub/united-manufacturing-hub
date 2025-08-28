@@ -165,6 +165,28 @@ var (
 		},
 		[]string{"operation", "path", "cache_status"},
 	)
+
+	// S6 command execution metrics.
+	s6CommandExecutionTime = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "s6_command_execution_duration_seconds",
+			Help:      "Time taken to execute S6 commands in seconds",
+			Buckets:   []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
+		},
+		[]string{"service_path", "name", "args"},
+	)
+
+	s6CommandErrors = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "s6_command_errors_total",
+			Help:      "Total number of S6 command errors by type",
+		},
+		[]string{"service_path", "name", "args", "error_type", "exit_code"},
+	)
 )
 
 // SetupMetricsEndpoint starts an HTTP server to expose metrics
@@ -268,4 +290,14 @@ func RecordFilesystemOp(operation, pathPattern, status, cacheStatus string, dura
 // RecordFilesystemPathAccess records access to a specific path.
 func RecordFilesystemPathAccess(operation, path, cacheStatus string) {
 	filesystemPathAccess.WithLabelValues(operation, path, cacheStatus).Inc()
+}
+
+// RecordS6CommandExecutionTime records the time taken to execute an S6 command.
+func RecordS6CommandExecutionTime(servicePath, name, args string, duration time.Duration) {
+	s6CommandExecutionTime.WithLabelValues(servicePath, name, args).Observe(duration.Seconds())
+}
+
+// RecordS6CommandError records S6 command errors with error type and exit code.
+func RecordS6CommandError(servicePath, name, args, errorType, exitCode string) {
+	s6CommandErrors.WithLabelValues(servicePath, name, args, errorType, exitCode).Inc()
 }

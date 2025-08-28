@@ -799,13 +799,13 @@ func (s *DefaultService) calculateS6Timeout(ctx context.Context) int {
 	}
 
 	// Calculate percentage-based timeout
-	timeoutDuration := time.Duration(float64(remainingTime) * constants.S6_TIMEOUT_PERCENTAGE)
+	timeoutDuration := time.Duration(float64(remainingTime) * constants.S6TimeoutPercentage)
 
 	// Convert to milliseconds for S6 -T parameter
 	timeoutMs := int(timeoutDuration / time.Millisecond)
 
 	s.logger.Debugf("S6 timeout calculated: %dms (remaining: %v, percentage: %.1f%%)",
-		timeoutMs, remainingTime, constants.S6_TIMEOUT_PERCENTAGE*100)
+		timeoutMs, remainingTime, constants.S6TimeoutPercentage*100)
 
 	return timeoutMs
 }

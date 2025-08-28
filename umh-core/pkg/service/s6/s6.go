@@ -1496,34 +1496,57 @@ func (s *DefaultService) EnsureSupervision(ctx context.Context, servicePath stri
 //   - Exit code 127: Command not found, returns ErrS6ProgramNotFound
 //   - Other exit codes: Returns a descriptive error with the exit code and output
 func (s *DefaultService) ExecuteS6Command(ctx context.Context, servicePath string, fsService filesystem.Service, name string, args ...string) (string, error) {
+	start := time.Now()
+	argsString := strings.Join(args, " ")
+
+	defer func() {
+		duration := time.Since(start)
+		metrics.RecordS6CommandExecutionTime(servicePath, name, argsString, duration)
+	}()
+
 	output, err := fsService.ExecuteCommand(ctx, name, args...)
 	if err != nil {
 		// Check exit codes using errors.As to handle wrapped errors
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
+			exitCode := strconv.Itoa(exitErr.ExitCode())
 			switch exitErr.ExitCode() {
 			case 111:
 				s.logger.Debugf("S6 command encountered a temporary error (exit code 111) for service %s", servicePath)
-
+				metrics.RecordS6CommandError(servicePath, name, argsString, "temporary_error", exitCode)
 				return "", ErrS6TemporaryError
 			case 100:
 				s.logger.Debugf("S6 service %s is already being monitored (exit code 100), continuing", servicePath)
-
+				metrics.RecordS6CommandError(servicePath, name, argsString, "already_monitored", exitCode)
 				return "", nil
 			case 127:
 				s.logger.Debugf("S6 command could not find program (exit code 127) for service %s", servicePath)
-
+				metrics.RecordS6CommandError(servicePath, name, argsString, "program_not_found", exitCode)
 				return "", ErrS6ProgramNotFound
 			case 126:
 				s.logger.Debugf("S6 command could not execute program (exit code 126) for service %s", servicePath)
-
+				metrics.RecordS6CommandError(servicePath, name, argsString, "program_not_executable", exitCode)
 				return "", ErrS6ProgramNotExecutable
 			default:
+				metrics.RecordS6CommandError(servicePath, name, argsString, "unknown_exit_code", exitCode)
 				return "", fmt.Errorf("unknown S6 error (exit code %d) for service %s: %w, output: %s",
 					exitErr.ExitCode(), servicePath, err, string(output))
 			}
 		}
 
+		// Check if error is a context deadline exceeded or cancellation
+		if errors.Is(err, context.DeadlineExceeded) {
+			s.logger.Debugf("S6 command timed out (context deadline exceeded) for service %s", servicePath)
+			metrics.RecordS6CommandError(servicePath, name, argsString, "context_deadline_exceeded", "timeout")
+			return "", ErrS6CommandTimeout
+		}
+		if errors.Is(err, context.Canceled) {
+			s.logger.Debugf("S6 command canceled (context canceled) for service %s", servicePath)
+			metrics.RecordS6CommandError(servicePath, name, argsString, "context_canceled", "canceled")
+			return "", ErrS6CommandCanceled
+		}
+
+		metrics.RecordS6CommandError(servicePath, name, argsString, "execution_error", "unknown")
 		return "", fmt.Errorf("failed to execute s6 command (name: %s, args: %v): %w, output: %s", name, args, err, string(output))
 	}
 
