@@ -137,7 +137,6 @@ func (s *DefaultService) checkContext(ctx context.Context) error {
 
 // EnsureDirectory creates a directory if it doesn't exist.
 func (s *DefaultService) EnsureDirectory(ctx context.Context, path string) error {
-
 	start := time.Now()
 
 	if err := s.checkContext(ctx); err != nil {
@@ -213,7 +212,6 @@ func (s *DefaultService) EnsureDirectory(ctx context.Context, path string) error
 
 // ReadFile reads a file's contents respecting the context.
 func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, error) {
-
 	start := time.Now()
 
 	if err := s.checkContext(ctx); err != nil {
@@ -288,7 +286,6 @@ func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, err
 
 // readFileUncached performs the actual file read without caching.
 func (s *DefaultService) readFileUncached(ctx context.Context, path string, start time.Time) ([]byte, error) {
-
 	// Create a channel for results
 	type result struct {
 		err  error
@@ -345,7 +342,6 @@ func (s *DefaultService) ReadFileRange(
 	path string,
 	from int64,
 ) ([]byte, int64, error) {
-
 	start := time.Now()
 
 	if err := s.checkContext(ctx); err != nil {
@@ -481,7 +477,6 @@ func (s *DefaultService) ReadFileRange(
 
 // WriteFile writes data to a file respecting the context.
 func (s *DefaultService) WriteFile(ctx context.Context, path string, data []byte, perm os.FileMode) error {
-
 	start := time.Now()
 
 	if err := s.checkContext(ctx); err != nil {
@@ -518,7 +513,6 @@ func (s *DefaultService) WriteFile(ctx context.Context, path string, data []byte
 
 // PathExists checks if a path (file or directory) exists.
 func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, error) {
-
 	start := time.Now()
 
 	if err := s.checkContext(ctx); err != nil {
@@ -583,7 +577,6 @@ func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, err
 
 // pathExistsUncached performs the actual path existence check without caching.
 func (s *DefaultService) pathExistsUncached(ctx context.Context, path string, start time.Time) (bool, error) {
-
 	// Create a channel for results
 	type result struct {
 		err    error
@@ -639,7 +632,6 @@ func (s *DefaultService) FileExists(ctx context.Context, path string) (bool, err
 
 // Remove removes a file or directory.
 func (s *DefaultService) Remove(ctx context.Context, path string) error {
-
 	start := time.Now()
 
 	if err := s.checkContext(ctx); err != nil {
@@ -670,7 +662,6 @@ func (s *DefaultService) Remove(ctx context.Context, path string) error {
 
 // RemoveAll removes a directory and all its contents.
 func (s *DefaultService) RemoveAll(ctx context.Context, path string) error {
-
 	start := time.Now()
 
 	if err := s.checkContext(ctx); err != nil {
@@ -707,7 +698,6 @@ func (s *DefaultService) RemoveAll(ctx context.Context, path string) error {
 
 // Stat returns file info.
 func (s *DefaultService) Stat(ctx context.Context, path string) (os.FileInfo, error) {
-
 	start := time.Now()
 
 	if err := s.checkContext(ctx); err != nil {
@@ -750,7 +740,6 @@ func (s *DefaultService) Stat(ctx context.Context, path string) (os.FileInfo, er
 
 // Chmod changes the mode of the named file.
 func (s *DefaultService) Chmod(ctx context.Context, path string, mode os.FileMode) error {
-
 	start := time.Now()
 
 	if err := s.checkContext(ctx); err != nil {
@@ -787,7 +776,6 @@ func (s *DefaultService) Chmod(ctx context.Context, path string, mode os.FileMod
 
 // ReadDir reads a directory, returning all its directory entries.
 func (s *DefaultService) ReadDir(ctx context.Context, path string) ([]os.DirEntry, error) {
-
 	start := time.Now()
 
 	if err := s.checkContext(ctx); err != nil {
@@ -830,7 +818,6 @@ func (s *DefaultService) ReadDir(ctx context.Context, path string) ([]os.DirEntr
 
 // Chown changes the owner and group of the named file.
 func (s *DefaultService) Chown(ctx context.Context, path string, user string, group string) error {
-
 	start := time.Now()
 
 	if err := s.checkContext(ctx); err != nil {
@@ -904,7 +891,6 @@ func (s *DefaultService) ExecuteCommand(ctx context.Context, name string, args .
 
 // Glob is a wrapper around filepath.Glob that respects the context.
 func (s *DefaultService) Glob(ctx context.Context, pattern string) ([]string, error) {
-
 	start := time.Now()
 
 	if err := s.checkContext(ctx); err != nil {
@@ -948,7 +934,6 @@ func (s *DefaultService) Glob(ctx context.Context, pattern string) ([]string, er
 // Rename renames (moves) a file or directory from oldPath to newPath.
 // This operation is atomic on the same filesystem mount.
 func (s *DefaultService) Rename(ctx context.Context, oldPath, newPath string) error {
-
 	start := time.Now()
 
 	if err := s.checkContext(ctx); err != nil {
@@ -985,7 +970,6 @@ func (s *DefaultService) Rename(ctx context.Context, oldPath, newPath string) er
 
 // Symlink creates a symbolic link from linkPath to target.
 func (s *DefaultService) Symlink(ctx context.Context, target, linkPath string) error {
-
 	start := time.Now()
 
 	if err := s.checkContext(ctx); err != nil {
