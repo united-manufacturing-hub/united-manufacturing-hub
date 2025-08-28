@@ -179,7 +179,7 @@ func buildProtocolConverterAsDfc(
 }
 
 // getProtocolConverterStatusMessage returns a human-readable status message for the given state.
-func getProtocolConverterStatusMessage(state string, statusReason string, connectionState string, nmapState string, lastScan interface{}) string {
+func getProtocolConverterStatusMessage(state string, statusReason string, connectionState string, nmapState string, lastScan *nmap_service.NmapScanResult) string {
 	baseMessage := ""
 	connectionSuffix := ""
 
@@ -251,8 +251,8 @@ func getProtocolConverterStatusMessage(state string, statusReason string, connec
 			nmapSuffix = " (nmap execution failed"
 			// Try to extract error details from the last scan
 			if lastScan != nil {
-				if scanResult, ok := lastScan.(*nmap_service.NmapScanResult); ok && scanResult.Error != "" {
-					nmapSuffix += ": " + scanResult.Error
+				if lastScan.Error != "" {
+					nmapSuffix += ": " + lastScan.Error
 				}
 			}
 
