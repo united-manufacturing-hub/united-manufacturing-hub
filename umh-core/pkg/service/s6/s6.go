@@ -1544,18 +1544,13 @@ func (s *DefaultService) ExecuteS6Command(ctx context.Context, servicePath strin
 			s.logger.Debugf("S6 command timed out (context deadline exceeded) for service %s", servicePath)
 			metrics.RecordS6CommandError(servicePath, name, argsString, "context_deadline_exceeded", "timeout")
 
-			return "", ErrS6CommandTimeout
-		}
-
-		if errors.Is(err, context.Canceled) {
+		} else if errors.Is(err, context.Canceled) {
 			s.logger.Debugf("S6 command canceled (context canceled) for service %s", servicePath)
 			metrics.RecordS6CommandError(servicePath, name, argsString, "context_canceled", "canceled")
 
-			return "", ErrS6CommandCanceled
+		} else {
+			metrics.RecordS6CommandError(servicePath, name, argsString, "execution_error", "unknown")
 		}
-
-		metrics.RecordS6CommandError(servicePath, name, argsString, "execution_error", "unknown")
-
 		return "", fmt.Errorf("failed to execute s6 command (name: %s, args: %v): %w, output: %s", name, args, err, string(output))
 	}
 
