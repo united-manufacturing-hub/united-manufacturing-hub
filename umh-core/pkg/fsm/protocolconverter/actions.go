@@ -128,20 +128,45 @@ func (p *ProtocolConverterInstance) RemoveInstance(ctx context.Context, filesyst
 	}
 }
 
-// StartInstance to start the DataflowComponent by setting the desired state to running for the given instance.
+// StartInstance is required by the FSMInstance interface but is now a no-op.
+// The actual startup is handled by granular methods StartConnectionInstance and StartDFCInstance
+// which are called from the reconciliation loop based on FSM state transitions.
 func (p *ProtocolConverterInstance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
-	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting ProtocolConverter service %s ...", p.baseFSMInstance.GetID())
+	p.baseFSMInstance.GetLogger().Debugf("StartInstance called but is now a no-op - startup handled by granular methods")
 
-	// TODO: Add pre-start validation
+	return nil
+}
 
-	// Set the desired state to running for the given instance
-	err := p.service.StartProtocolConverter(ctx, filesystemService, p.baseFSMInstance.GetID())
+// StartConnectionInstance starts only the connection component of a ProtocolConverter.
+// This method is used during the "starting_connection" FSM state and only brings
+// the connection to "up" state without touching DFCs.
+func (p *ProtocolConverterInstance) StartConnectionInstance(ctx context.Context, filesystemService filesystem.Service) error {
+	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting Connection for ProtocolConverter service %s ...", p.baseFSMInstance.GetID())
+
+	// Start only the connection component
+	err := p.service.StartConnection(ctx, filesystemService, p.baseFSMInstance.GetID())
 	if err != nil {
-		// if the service is not there yet but we attempt to start it, we need to throw an error
-		return fmt.Errorf("failed to start ProtocolConverter service %s: %w", p.baseFSMInstance.GetID(), err)
+		return fmt.Errorf("failed to start connection for ProtocolConverter service %s: %w", p.baseFSMInstance.GetID(), err)
 	}
 
-	p.baseFSMInstance.GetLogger().Debugf("ProtocolConverter service %s start command executed", p.baseFSMInstance.GetID())
+	p.baseFSMInstance.GetLogger().Debugf("ProtocolConverter service %s connection start command executed", p.baseFSMInstance.GetID())
+
+	return nil
+}
+
+// StartDFCInstance starts only the DFC components of a ProtocolConverter.
+// This method evaluates which DFCs should be active based on their configurations
+// and is used during the "starting_dfc" FSM state.
+func (p *ProtocolConverterInstance) StartDFCInstance(ctx context.Context, filesystemService filesystem.Service) error {
+	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting DFCs for ProtocolConverter service %s ...", p.baseFSMInstance.GetID())
+
+	// Start the DFC components with conditional evaluation
+	err := p.service.StartDFC(ctx, filesystemService, p.baseFSMInstance.GetID())
+	if err != nil {
+		return fmt.Errorf("failed to start DFCs for ProtocolConverter service %s: %w", p.baseFSMInstance.GetID(), err)
+	}
+
+	p.baseFSMInstance.GetLogger().Debugf("ProtocolConverter service %s DFC start command executed", p.baseFSMInstance.GetID())
 
 	return nil
 }
@@ -325,7 +350,7 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 			if p.baseFSMInstance.GetDesiredFSMState() == OperationalStateActive {
 				p.baseFSMInstance.GetLogger().Debugf("re-evaluating DFC desired states and will be active")
 
-				err := p.service.EvaluateDFCDesiredStates(p.baseFSMInstance.GetID(), "active")
+				err := p.service.EvaluateDFCDesiredStates(p.baseFSMInstance.GetID(), "active", p.baseFSMInstance.GetCurrentFSMState()) // NOTE: Hardcoded to avoid circular import
 				if err != nil {
 					p.baseFSMInstance.GetLogger().Debugf("Failed to re-evaluate DFC states after config update: %v", err)
 					// Don't fail the entire update - this is a best-effort re-evaluation
