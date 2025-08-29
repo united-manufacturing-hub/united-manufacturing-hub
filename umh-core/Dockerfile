@@ -71,6 +71,9 @@ RUN chmod +x /opt/redpanda/bin/redpanda
 # Install nmap
 RUN apk add --no-cache nmap=${NMAP_VERSION}
 
+# Install strace
+RUN apk add --no-cache strace
+
 # Cleanup all the files we don't need
 RUN rm -rf /s6-overlay /benthos /redpanda
 
