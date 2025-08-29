@@ -12,12 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build darwin
-// +build darwin
+package permission_validator_test
 
-package container_monitor
+import (
+	"testing"
 
-// getMacOSAdjustedDiskMetrics is not implemented for Darwin / MacOS.
-func (c *ContainerMonitorService) getMacOSAdjustedDiskMetrics() (usedBytes, totalBytes uint64, err error) {
-	return 0, 0, nil
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools"
+)
+
+func TestPermissionValidator(t *testing.T) {
+	tools.InitLogging()
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Permission Validator Suite")
 }
