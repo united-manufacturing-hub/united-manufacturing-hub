@@ -20,6 +20,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -44,6 +45,7 @@ func createCertificateWithRoleExtension(locationRoles map[string]string) (*x509.
 
 	// Generate serial number (matching production code)
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 	if err != nil {
 		return nil, err
@@ -73,7 +75,7 @@ func createCertificateWithRoleExtension(locationRoles map[string]string) (*x509.
 
 	// Add the location role extension manually (based on production AddLocationRoleExtension)
 	if len(locationRolesMap) == 0 {
-		return nil, fmt.Errorf("must have locationRoles")
+		return nil, errors.New("must have locationRoles")
 	}
 
 	// Validate all roles and locations
@@ -81,7 +83,8 @@ func createCertificateWithRoleExtension(locationRoles map[string]string) (*x509.
 		if role != validator.RoleAdmin && role != validator.RoleViewer && role != validator.RoleEditor {
 			return nil, fmt.Errorf("invalid role: %s", role)
 		}
-		if len(strings.Split(location, ".")) <= 0 {
+
+		if len(strings.Split(location, ".")) == 0 {
 			return nil, fmt.Errorf("invalid location: %s", location)
 		}
 	}

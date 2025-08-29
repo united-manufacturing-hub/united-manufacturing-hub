@@ -35,7 +35,7 @@ var (
 	oidExtensionRoleLocation asn1.ObjectIdentifier = append(UMH_PEN, 2, 1)
 )
 
-var ERR_RoleLocation_Not_Found = errors.New("locationRoles extension not found in certificate")
+var ErrRoleLocationNotFound = errors.New("locationRoles extension not found in certificate")
 
 // Role represents the role of a certificate holder.
 type Role string
@@ -112,7 +112,7 @@ func GetLocationRolesFromCertificate(cert *x509.Certificate) (LocationRoles, err
 					return LocationRoles{}, fmt.Errorf("invalid role: %s", role)
 				}
 
-				if len(strings.Split(location, ".")) <= 0 {
+				if len(strings.Split(location, ".")) == 0 {
 					return LocationRoles{}, fmt.Errorf("invalid location: %s", location)
 				}
 			}
@@ -121,5 +121,5 @@ func GetLocationRolesFromCertificate(cert *x509.Certificate) (LocationRoles, err
 		}
 	}
 
-	return LocationRoles{}, ERR_RoleLocation_Not_Found
+	return LocationRoles{}, ErrRoleLocationNotFound
 }
