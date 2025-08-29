@@ -54,6 +54,7 @@ services:
     networks:
       - monitoring
 
+
   fast-ok-service:
     image: nginx:alpine
     container_name: fast-ok-service

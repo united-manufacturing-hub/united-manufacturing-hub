@@ -10,3 +10,4 @@ scrape_configs:
     scrape_interval: 10s
     scrape_timeout: 9s
     metrics_path: /metrics
+

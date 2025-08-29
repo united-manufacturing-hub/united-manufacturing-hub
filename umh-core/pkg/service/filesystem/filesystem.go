@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -62,8 +63,29 @@ func (s *DefaultService) checkContext(ctx context.Context) error {
 	}
 }
 
+// recordOp records filesystem operation metrics.
+func (s *DefaultService) recordOp(op string, path string, start time.Time, err error, cached bool) {
+	duration := time.Since(start)
+
+	status := "success"
+	if err != nil {
+		status = "error"
+	}
+
+	cacheStatus := "uncached"
+	if cached {
+		cacheStatus = "cached"
+	}
+
+	// Use the actual path directly
+	metrics.RecordFilesystemOp(op, path, status, cacheStatus, duration)
+	metrics.RecordFilesystemPathAccess(op, path, cacheStatus)
+}
+
 // EnsureDirectory creates a directory if it doesn't exist.
 func (s *DefaultService) EnsureDirectory(ctx context.Context, path string) error {
+	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return fmt.Errorf("failed to check context: %w", err)
 	}
@@ -80,17 +102,23 @@ func (s *DefaultService) EnsureDirectory(ctx context.Context, path string) error
 	select {
 	case err := <-errCh:
 		if err != nil {
+			s.recordOp("EnsureDirectory", path, start, err, false)
 			return fmt.Errorf("failed to create directory %s: %w", path, err)
 		}
 
+		s.recordOp("EnsureDirectory", path, start, nil, false)
 		return nil
 	case <-ctx.Done():
-		return ctx.Err()
+		err := ctx.Err()
+		s.recordOp("EnsureDirectory", path, start, err, false)
+		return err
 	}
 }
 
 // ReadFile reads a file's contents respecting the context.
 func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, error) {
+	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return nil, fmt.Errorf("failed to check context: %w", err)
 	}
@@ -112,6 +140,8 @@ func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, err
 	// Wait for either completion or context cancellation
 	select {
 	case res := <-resCh:
+		s.recordOp("ReadFile", path, start, res.err, false)
+
 		if res.err != nil {
 			return nil, res.err
 		}
@@ -123,6 +153,7 @@ func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, err
 			err = errors.New("context cancelled")
 		}
 
+		s.recordOp("ReadFile", path, start, err, false)
 		return nil, err
 	}
 }
@@ -147,6 +178,8 @@ func (s *DefaultService) ReadFileRange(
 	path string,
 	from int64,
 ) ([]byte, int64, error) {
+	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return nil, 0, err
 	}
@@ -267,14 +300,19 @@ func (s *DefaultService) ReadFileRange(
 
 	select {
 	case res := <-resCh:
+		s.recordOp("ReadFileRange", path, start, res.err, false)
 		return res.data, res.newSize, res.err
 	case <-ctx.Done():
-		return nil, 0, ctx.Err()
+		err := ctx.Err()
+		s.recordOp("ReadFileRange", path, start, err, false)
+		return nil, 0, err
 	}
 }
 
 // WriteFile writes data to a file respecting the context.
 func (s *DefaultService) WriteFile(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return fmt.Errorf("failed to check context: %w", err)
 	}
@@ -291,17 +329,23 @@ func (s *DefaultService) WriteFile(ctx context.Context, path string, data []byte
 	select {
 	case err := <-errCh:
 		if err != nil {
+			s.recordOp("WriteFile", path, start, err, false)
 			return fmt.Errorf("failed to write file %s: %w", path, err)
 		}
 
+		s.recordOp("WriteFile", path, start, nil, false)
 		return nil
 	case <-ctx.Done():
-		return ctx.Err()
+		err := ctx.Err()
+		s.recordOp("WriteFile", path, start, err, false)
+		return err
 	}
 }
 
 // PathExists checks if a path (file or directory) exists.
 func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, error) {
+	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return false, err
 	}
@@ -335,13 +379,17 @@ func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, err
 	// Wait for either completion or context cancellation
 	select {
 	case res := <-resCh:
+		s.recordOp("PathExists", path, start, res.err, false)
+
 		if res.err != nil {
 			return false, res.err
 		}
 
 		return res.exists, nil
 	case <-ctx.Done():
-		return false, ctx.Err()
+		err := ctx.Err()
+		s.recordOp("PathExists", path, start, err, false)
+		return false, err
 	}
 }
 
@@ -353,6 +401,8 @@ func (s *DefaultService) FileExists(ctx context.Context, path string) (bool, err
 
 // Remove removes a file or directory.
 func (s *DefaultService) Remove(ctx context.Context, path string) error {
+	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return err
 	}
@@ -368,14 +418,19 @@ func (s *DefaultService) Remove(ctx context.Context, path string) error {
 	// Wait for either completion or context cancellation
 	select {
 	case err := <-errCh:
+		s.recordOp("Remove", path, start, err, false)
 		return err
 	case <-ctx.Done():
-		return ctx.Err()
+		err := ctx.Err()
+		s.recordOp("Remove", path, start, err, false)
+		return err
 	}
 }
 
 // RemoveAll removes a directory and all its contents.
 func (s *DefaultService) RemoveAll(ctx context.Context, path string) error {
+	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return err
 	}
@@ -392,17 +447,23 @@ func (s *DefaultService) RemoveAll(ctx context.Context, path string) error {
 	select {
 	case err := <-errCh:
 		if err != nil {
+			s.recordOp("RemoveAll", path, start, err, false)
 			return fmt.Errorf("failed to remove directory %s: %w", path, err)
 		}
 
+		s.recordOp("RemoveAll", path, start, nil, false)
 		return nil
 	case <-ctx.Done():
-		return ctx.Err()
+		err := ctx.Err()
+		s.recordOp("RemoveAll", path, start, err, false)
+		return err
 	}
 }
 
 // Stat returns file info.
 func (s *DefaultService) Stat(ctx context.Context, path string) (os.FileInfo, error) {
+	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return nil, fmt.Errorf("failed to check context: %w", err)
 	}
@@ -425,17 +486,23 @@ func (s *DefaultService) Stat(ctx context.Context, path string) (os.FileInfo, er
 	select {
 	case res := <-resCh:
 		if res.err != nil {
+			s.recordOp("Stat", path, start, res.err, false)
 			return nil, fmt.Errorf("failed to get file info: %w", res.err)
 		}
 
+		s.recordOp("Stat", path, start, nil, false)
 		return res.info, nil
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		err := ctx.Err()
+		s.recordOp("Stat", path, start, err, false)
+		return nil, err
 	}
 }
 
 // Chmod changes the mode of the named file.
 func (s *DefaultService) Chmod(ctx context.Context, path string, mode os.FileMode) error {
+	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return fmt.Errorf("failed to check context: %w", err)
 	}
@@ -452,17 +519,23 @@ func (s *DefaultService) Chmod(ctx context.Context, path string, mode os.FileMod
 	select {
 	case err := <-errCh:
 		if err != nil {
+			s.recordOp("Chmod", path, start, err, false)
 			return fmt.Errorf("failed to change mode of file %s: %w", path, err)
 		}
 
+		s.recordOp("Chmod", path, start, nil, false)
 		return nil
 	case <-ctx.Done():
-		return ctx.Err()
+		err := ctx.Err()
+		s.recordOp("Chmod", path, start, err, false)
+		return err
 	}
 }
 
 // ReadDir reads a directory, returning all its directory entries.
 func (s *DefaultService) ReadDir(ctx context.Context, path string) ([]os.DirEntry, error) {
+	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return nil, fmt.Errorf("failed to check context: %w", err)
 	}
@@ -485,17 +558,23 @@ func (s *DefaultService) ReadDir(ctx context.Context, path string) ([]os.DirEntr
 	select {
 	case res := <-resCh:
 		if res.err != nil {
+			s.recordOp("ReadDir", path, start, res.err, false)
 			return nil, fmt.Errorf("failed to read directory %s: %w", path, res.err)
 		}
 
+		s.recordOp("ReadDir", path, start, nil, false)
 		return res.entries, nil
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		err := ctx.Err()
+		s.recordOp("ReadDir", path, start, err, false)
+		return nil, err
 	}
 }
 
 // Chown changes the owner and group of the named file.
 func (s *DefaultService) Chown(ctx context.Context, path string, user string, group string) error {
+	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return fmt.Errorf("failed to check context: %w", err)
 	}
@@ -514,18 +593,27 @@ func (s *DefaultService) Chown(ctx context.Context, path string, user string, gr
 	select {
 	case err := <-errCh:
 		if err != nil {
+			s.recordOp("Chown", fmt.Sprintf("%s:%s->%s", user, group, path), start, err, false)
 			return fmt.Errorf("failed to change owner of file %s to %s:%s: %w", path, user, group, err)
 		}
 
+		s.recordOp("Chown", fmt.Sprintf("%s:%s->%s", user, group, path), start, nil, false)
 		return nil
 	case <-ctx.Done():
-		return ctx.Err()
+		err := ctx.Err()
+		s.recordOp("Chown", fmt.Sprintf("%s:%s->%s", user, group, path), start, err, false)
+		return err
 	}
 }
 
 // ExecuteCommand executes a command with context.
 func (s *DefaultService) ExecuteCommand(ctx context.Context, name string, args ...string) ([]byte, error) {
 	start := time.Now()
+
+	cmdStr := name
+	if len(args) > 0 {
+		cmdStr = fmt.Sprintf("%s %s", name, strings.Join(args, " "))
+	}
 
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentFilesystem, name+".executeCommand."+name, time.Since(start))
@@ -539,6 +627,8 @@ func (s *DefaultService) ExecuteCommand(ctx context.Context, name string, args .
 	cmd := exec.CommandContext(ctx, name, args...)
 
 	output, err := cmd.CombinedOutput()
+	s.recordOp("ExecuteCommand", cmdStr, start, err, false)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute command %s: %w", name, err)
 	}
@@ -548,6 +638,8 @@ func (s *DefaultService) ExecuteCommand(ctx context.Context, name string, args .
 
 // Glob is a wrapper around filepath.Glob that respects the context.
 func (s *DefaultService) Glob(ctx context.Context, pattern string) ([]string, error) {
+	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return nil, fmt.Errorf("failed to check context: %w", err)
 	}
@@ -570,18 +662,24 @@ func (s *DefaultService) Glob(ctx context.Context, pattern string) ([]string, er
 	select {
 	case res := <-resCh:
 		if res.err != nil {
+			s.recordOp("Glob", pattern, start, res.err, false)
 			return nil, fmt.Errorf("failed to glob pattern %s: %w", pattern, res.err)
 		}
 
+		s.recordOp("Glob", pattern, start, nil, false)
 		return res.matches, nil
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		err := ctx.Err()
+		s.recordOp("Glob", pattern, start, err, false)
+		return nil, err
 	}
 }
 
 // Rename renames (moves) a file or directory from oldPath to newPath.
 // This operation is atomic on the same filesystem mount.
 func (s *DefaultService) Rename(ctx context.Context, oldPath, newPath string) error {
+	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return fmt.Errorf("failed to check context: %w", err)
 	}
@@ -598,17 +696,23 @@ func (s *DefaultService) Rename(ctx context.Context, oldPath, newPath string) er
 	select {
 	case err := <-errCh:
 		if err != nil {
+			s.recordOp("Rename", fmt.Sprintf("%s->%s", oldPath, newPath), start, err, false)
 			return fmt.Errorf("failed to rename file %s to %s: %w", oldPath, newPath, err)
 		}
 
+		s.recordOp("Rename", fmt.Sprintf("%s->%s", oldPath, newPath), start, nil, false)
 		return nil
 	case <-ctx.Done():
-		return ctx.Err()
+		err := ctx.Err()
+		s.recordOp("Rename", fmt.Sprintf("%s->%s", oldPath, newPath), start, err, false)
+		return err
 	}
 }
 
 // Symlink creates a symbolic link from linkPath to target.
 func (s *DefaultService) Symlink(ctx context.Context, target, linkPath string) error {
+	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return fmt.Errorf("failed to check context: %w", err)
 	}
@@ -625,11 +729,15 @@ func (s *DefaultService) Symlink(ctx context.Context, target, linkPath string) e
 	select {
 	case err := <-errCh:
 		if err != nil {
+			s.recordOp("Symlink", fmt.Sprintf("%s->%s", target, linkPath), start, err, false)
 			return fmt.Errorf("failed to create symlink %s -> %s: %w", linkPath, target, err)
 		}
 
+		s.recordOp("Symlink", fmt.Sprintf("%s->%s", target, linkPath), start, nil, false)
 		return nil
 	case <-ctx.Done():
-		return ctx.Err()
+		err := ctx.Err()
+		s.recordOp("Symlink", fmt.Sprintf("%s->%s", target, linkPath), start, err, false)
+		return err
 	}
 }

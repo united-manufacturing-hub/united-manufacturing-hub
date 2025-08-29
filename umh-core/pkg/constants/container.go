@@ -37,4 +37,9 @@ const (
 
 	DiskHighThresholdPercent   = 90.0 // Degraded if above this
 	DiskMediumThresholdPercent = 80.0 // Warning level (but still Active)
+
+	// CPU throttling thresholds (percentage of periods that were throttled)
+	CPUThrottlingCriticalPercent = 30.0 // Degraded - severe throttling
+	CPUThrottlingHighPercent     = 15.0 // Warning - significant throttling
+	CPUThrottlingMediumPercent   = 5.0  // Notice - moderate throttling
 )

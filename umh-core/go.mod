@@ -126,3 +126,10 @@ require (
 	golang.org/x/text v0.28.0 // indirect
 	golang.org/x/tools v0.36.0 // indirect
 )
+
+ignore (
+	./data
+	./docs
+	./.docker-cache
+	./tools
+)

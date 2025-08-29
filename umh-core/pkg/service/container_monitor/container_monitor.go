@@ -15,11 +15,15 @@
 package container_monitor
 
 import (
+	"bufio"
 	"context"
 	"crypto/rand"
 	"crypto/sha3"
 	"fmt"
+	"os"
 	"runtime"
+	"strconv"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -32,8 +36,17 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
+
+// CPUThrottlingStats represents CPU throttling statistics from cgroup.
+type CPUThrottlingStats struct {
+	NrThrottled   uint64
+	NrPeriods     uint64
+	ThrottledUsec uint64
+	ThrottleRate  float64 // Calculated percentage: (nr_throttled / nr_periods) * 100
+}
 
 // ServiceInfo contains both raw metrics and health assessments.
 type ServiceInfo struct {
@@ -219,7 +232,7 @@ func (c *ContainerMonitorService) GetHealth(ctx context.Context) (*models.Health
 	return health, nil
 }
 
-// getCPUMetrics collects CPU metrics using gopsutil.
+// getCPUMetrics collects CPU metrics using gopsutil and checks for CPU throttling.
 // By default, this retrieves host-level usage unless gopsutil is configured
 // to read from container cgroup data. See notes below for cgroup-limited usage.
 func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CPU, error) {
@@ -232,12 +245,52 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	category := models.Active
 	message := "CPU utilization normal"
 
-	if usagePercent >= constants.CPUHighThresholdPercent {
-		category = models.Degraded
-		message = "CPU utilization critical"
-	} else if usagePercent >= constants.CPUMediumThresholdPercent {
-		// Still Active but with a warning message
-		message = "CPU utilization warning"
+	// Check CPU throttling first (higher priority than usage)
+	throttlingStats, err := c.getCPUThrottlingStats()
+	if err != nil {
+		// Log debug message but don't fail - we can still report usage metrics
+		c.logger.Debugf("Could not read CPU throttling stats: %v", err)
+	}
+
+	// Determine health based on throttling (takes precedence over usage)
+	if throttlingStats != nil && throttlingStats.NrPeriods > 0 {
+		throttleRate := throttlingStats.ThrottleRate
+
+		if throttleRate >= constants.CPUThrottlingCriticalPercent {
+			category = models.Degraded
+			message = fmt.Sprintf("CPU throttling critical (%.1f%% throttled). Reduce workload or increase CPU limits to improve performance", throttleRate)
+
+			// Report as warning to sentry with context
+			sentry.ReportIssueWithContext(
+				fmt.Errorf("CPU throttling critical at %.1f%%", throttleRate),
+				sentry.IssueTypeWarning,
+				c.logger,
+				map[string]interface{}{
+					"throttle_rate":     throttleRate,
+					"nr_throttled":      throttlingStats.NrThrottled,
+					"nr_periods":        throttlingStats.NrPeriods,
+					"throttled_usec":    throttlingStats.ThrottledUsec,
+					"cpu_usage_percent": usagePercent,
+				},
+			)
+		} else if throttleRate >= constants.CPUThrottlingHighPercent {
+			// Still Active but significant throttling
+			message = fmt.Sprintf("CPU throttling high (%.1f%% throttled). Consider reducing bridge workloads or adding more compute capacity", throttleRate)
+		} else if throttleRate >= constants.CPUThrottlingMediumPercent {
+			// Still Active but noticeable throttling
+			message = fmt.Sprintf("CPU throttling detected (%.1f%% throttled). Monitor bridge performance", throttleRate)
+		}
+	}
+
+	// If no throttling issues, check usage-based warnings
+	if category == models.Active && message == "CPU utilization normal" {
+		if usagePercent >= constants.CPUHighThresholdPercent {
+			category = models.Degraded
+			message = "CPU utilization critical"
+		} else if usagePercent >= constants.CPUMediumThresholdPercent {
+			// Still Active but with a warning message
+			message = "CPU utilization warning"
+		}
 	}
 
 	cpuStat := &models.CPU{
@@ -277,6 +330,53 @@ func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMC
 	usageMCores = usageCores * 1000
 
 	return usageMCores, coreCount, usagePercent, nil
+}
+
+// getCPUThrottlingStats reads CPU throttling statistics from cgroup v2.
+func (c *ContainerMonitorService) getCPUThrottlingStats() (*CPUThrottlingStats, error) {
+	file, err := os.Open("/sys/fs/cgroup/cpu.stat")
+	if err != nil {
+		// Not running in container or cgroup v2 not available
+		return nil, fmt.Errorf("failed to read cgroup cpu.stat: %w", err)
+	}
+	defer file.Close()
+
+	stats := &CPUThrottlingStats{}
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		fields := strings.Fields(line)
+
+		if len(fields) != 2 {
+			continue
+		}
+
+		value, err := strconv.ParseUint(fields[1], 10, 64)
+		if err != nil {
+			continue
+		}
+
+		switch fields[0] {
+		case "nr_throttled":
+			stats.NrThrottled = value
+		case "nr_periods":
+			stats.NrPeriods = value
+		case "throttled_usec":
+			stats.ThrottledUsec = value
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error reading cpu.stat: %w", err)
+	}
+
+	// Calculate throttle rate
+	if stats.NrPeriods > 0 {
+		stats.ThrottleRate = (float64(stats.NrThrottled) / float64(stats.NrPeriods)) * 100.0
+	}
+
+	return stats, nil
 }
 
 // getMemoryMetrics collects memory metrics using gopsutil.

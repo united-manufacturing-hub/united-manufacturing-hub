@@ -86,6 +86,9 @@ func main() {
 	// Start the metrics server
 	server := metrics.SetupMetricsEndpoint(fmt.Sprintf(":%d", configData.Agent.MetricsPort))
 
+	// Start cgroup metrics collection
+	metrics.StartCgroupMetricsCollection(ctx)
+
 	defer func() {
 		// S6_KILL_FINISH_MAXTIME is 5 seconds, so we need to finish before that
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)

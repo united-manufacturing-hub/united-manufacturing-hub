@@ -1,0 +1,6 @@
+# HELP cgroup_cpu_nr_throttled Number of throttled periods
+# TYPE cgroup_cpu_nr_throttled counter
+# HELP cgroup_cpu_nr_periods Total number of periods
+# TYPE cgroup_cpu_nr_periods counter
+# HELP cgroup_cpu_throttled_usec Time spent throttled in microseconds
+# TYPE cgroup_cpu_throttled_usec counter

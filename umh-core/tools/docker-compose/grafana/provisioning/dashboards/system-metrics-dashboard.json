@@ -13,7 +13,7 @@
       "type": "gauge",
       "targets": [
         {
-          "expr": "rate(process_cpu_seconds_total[5m]) * 100",
+          "expr": "rate(process_cpu_seconds_total{job=\"umh-core\"}[5m]) * 100",
           "legendFormat": "CPU Usage %",
           "refId": "A"
         }
@@ -40,7 +40,7 @@
       "type": "stat",
       "targets": [
         {
-          "expr": "process_resident_memory_bytes",
+          "expr": "process_resident_memory_bytes{job=\"umh-core\"}",
           "legendFormat": "Resident Memory",
           "refId": "A"
         }
@@ -66,7 +66,7 @@
       "type": "stat",
       "targets": [
         {
-          "expr": "go_goroutines",
+          "expr": "go_goroutines{job=\"umh-core\"}",
           "legendFormat": "Active Goroutines",
           "refId": "A"
         }
@@ -92,7 +92,7 @@
       "type": "timeseries",
       "targets": [
         {
-          "expr": "rate(process_cpu_seconds_total[5m]) * 100",
+          "expr": "rate(process_cpu_seconds_total{job=\"umh-core\"}[5m]) * 100",
           "legendFormat": "CPU Usage %",
           "refId": "A"
         }
@@ -100,8 +100,7 @@
       "fieldConfig": {
         "defaults": {
           "unit": "percent",
-          "min": 0,
-          "max": 100
+          "min": 0
         }
       },
       "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8}
@@ -112,12 +111,12 @@
       "type": "timeseries",
       "targets": [
         {
-          "expr": "process_resident_memory_bytes",
+          "expr": "process_resident_memory_bytes{job=\"umh-core\"}",
           "legendFormat": "Resident Memory",
           "refId": "A"
         },
         {
-          "expr": "process_virtual_memory_bytes",
+          "expr": "process_virtual_memory_bytes{job=\"umh-core\"}",
           "legendFormat": "Virtual Memory",
           "refId": "B"
         }
@@ -136,7 +135,7 @@
       "type": "timeseries",
       "targets": [
         {
-          "expr": "go_gc_duration_seconds",
+          "expr": "go_gc_duration_seconds{job=\"umh-core\"}",
           "legendFormat": "GC Duration - {{quantile}}",
           "refId": "A"
         }
@@ -155,17 +154,17 @@
       "type": "timeseries",
       "targets": [
         {
-          "expr": "go_memstats_heap_alloc_bytes",
+          "expr": "go_memstats_heap_alloc_bytes{job=\"umh-core\"}",
           "legendFormat": "Heap Allocated",
           "refId": "A"
         },
         {
-          "expr": "go_memstats_heap_inuse_bytes",
+          "expr": "go_memstats_heap_inuse_bytes{job=\"umh-core\"}",
           "legendFormat": "Heap In Use",
           "refId": "B"
         },
         {
-          "expr": "go_memstats_heap_idle_bytes",
+          "expr": "go_memstats_heap_idle_bytes{job=\"umh-core\"}",
           "legendFormat": "Heap Idle",
           "refId": "C"
         }
@@ -271,7 +270,7 @@
       "type": "gauge",
       "targets": [
         {
-          "expr": "(process_open_fds / process_max_fds) * 100",
+          "expr": "(process_open_fds{job=\"umh-core\"} / process_max_fds{job=\"umh-core\"}) * 100",
           "legendFormat": "FD Usage %",
           "refId": "A"
         }
@@ -1065,6 +1064,113 @@
       "gridPos": {"h": 8, "w": 24, "x": 0, "y": 160}
     },
     {
+      "id": 36,
+      "title": "CPU Throttling Events",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(umh_core_cgroup_cpu_nr_throttled[5m])",
+          "legendFormat": "Throttled Periods/sec",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(umh_core_cgroup_cpu_nr_periods[5m])",
+          "legendFormat": "Total Periods/sec",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "stacking": {"mode": "none", "group": "A"},
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "scaleDistribution": {"type": "linear"},
+            "hideFrom": {"legend": false, "tooltip": false, "vis": false},
+            "thresholdsStyle": {"mode": "off"}
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 176}
+    },
+    {
+      "id": 37,
+      "title": "CPU Throttling Rate %",
+      "type": "gauge",
+      "targets": [
+        {
+          "expr": "(umh_core_cgroup_cpu_nr_throttled / umh_core_cgroup_cpu_nr_periods) * 100",
+          "legendFormat": "Throttle %",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 5},
+              {"color": "orange", "value": 15},
+              {"color": "red", "value": 30}
+            ]
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 6, "x": 12, "y": 176}
+    },
+    {
+      "id": 38,
+      "title": "CPU Throttled Time",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(umh_core_cgroup_cpu_throttled_usec[5m]) / 1000000",
+          "legendFormat": "Throttled Time/sec",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "stacking": {"mode": "none", "group": "A"},
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "scaleDistribution": {"type": "linear"},
+            "hideFrom": {"legend": false, "tooltip": false, "vis": false},
+            "thresholdsStyle": {"mode": "off"}
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 6, "x": 18, "y": 176}
+    },
+    {
       "id": 35,
       "title": "S6 Command Success vs Error Rate",
       "type": "stat",
@@ -1107,7 +1213,7 @@
           }
         ]
       },
-      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 168}
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 192}
     }
   ],
   "time": {"from": "now-1h", "to": "now"},
