@@ -15,14 +15,8 @@
 package metrics
 
 import (
-	"bufio"
-	"context"
-	"fmt"
 	"net/http"
-	"os"
 	"runtime"
-	"strconv"
-	"strings"
 	"time"
 
 	"errors"
@@ -193,34 +187,6 @@ var (
 		},
 		[]string{"service_path", "name", "args", "error_type", "exit_code"},
 	)
-
-	// Cgroup CPU throttling metrics.
-	cgroupCPUThrottledPeriods = promauto.NewGauge(
-		prometheus.GaugeOpts{
-			Namespace: namespace,
-			Subsystem: subsystem,
-			Name:      "cgroup_cpu_nr_throttled",
-			Help:      "Number of periods that were throttled",
-		},
-	)
-
-	cgroupCPUTotalPeriods = promauto.NewGauge(
-		prometheus.GaugeOpts{
-			Namespace: namespace,
-			Subsystem: subsystem,
-			Name:      "cgroup_cpu_nr_periods",
-			Help:      "Total number of periods",
-		},
-	)
-
-	cgroupCPUThrottledTime = promauto.NewGauge(
-		prometheus.GaugeOpts{
-			Namespace: namespace,
-			Subsystem: subsystem,
-			Name:      "cgroup_cpu_throttled_usec",
-			Help:      "Time spent throttled in microseconds",
-		},
-	)
 )
 
 // SetupMetricsEndpoint starts an HTTP server to expose metrics
@@ -334,88 +300,4 @@ func RecordS6CommandExecutionTime(servicePath, name, args string, duration time.
 // RecordS6CommandError records S6 command errors with error type and exit code.
 func RecordS6CommandError(servicePath, name, args, errorType, exitCode string) {
 	s6CommandErrors.WithLabelValues(servicePath, name, args, errorType, exitCode).Inc()
-}
-
-// StartCgroupMetricsCollection starts a goroutine that periodically collects cgroup metrics
-func StartCgroupMetricsCollection(ctx context.Context) {
-	log := logger.For("cgroup_metrics")
-
-	go func() {
-		ticker := time.NewTicker(1 * time.Second)
-		defer ticker.Stop()
-
-		log.Info("Starting cgroup metrics collection")
-
-		for {
-			select {
-			case <-ctx.Done():
-				log.Info("Stopping cgroup metrics collection")
-				return
-			case <-ticker.C:
-				updateCgroupMetrics(log)
-			}
-		}
-	}()
-}
-
-// updateCgroupMetrics reads cgroup CPU stats and updates Prometheus metrics
-func updateCgroupMetrics(log *zap.SugaredLogger) {
-	stats, err := readCgroupCPUStats()
-	if err != nil {
-		log.Debugf("Failed to read cgroup CPU stats: %v", err)
-		return
-	}
-
-	// Set gauge values directly to cgroup values
-	cgroupCPUThrottledPeriods.Set(float64(stats.NrThrottled))
-	cgroupCPUTotalPeriods.Set(float64(stats.NrPeriods))
-	cgroupCPUThrottledTime.Set(float64(stats.ThrottledUsec))
-}
-
-// CgroupCPUStats represents the CPU statistics from cgroup
-type CgroupCPUStats struct {
-	NrThrottled   uint64
-	NrPeriods     uint64
-	ThrottledUsec uint64
-}
-
-// readCgroupCPUStats reads the CPU stats from /sys/fs/cgroup/cpu.stat
-func readCgroupCPUStats() (*CgroupCPUStats, error) {
-	file, err := os.Open("/sys/fs/cgroup/cpu.stat")
-	if err != nil {
-		return nil, fmt.Errorf("failed to open /sys/fs/cgroup/cpu.stat: %w", err)
-	}
-	defer file.Close()
-
-	stats := &CgroupCPUStats{}
-	scanner := bufio.NewScanner(file)
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		fields := strings.Fields(line)
-
-		if len(fields) != 2 {
-			continue
-		}
-
-		value, err := strconv.ParseUint(fields[1], 10, 64)
-		if err != nil {
-			continue
-		}
-
-		switch fields[0] {
-		case "nr_throttled":
-			stats.NrThrottled = value
-		case "nr_periods":
-			stats.NrPeriods = value
-		case "throttled_usec":
-			stats.ThrottledUsec = value
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading cpu.stat: %w", err)
-	}
-
-	return stats, nil
 }

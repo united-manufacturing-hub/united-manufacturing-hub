@@ -128,8 +128,8 @@ require (
 )
 
 ignore (
+	./.docker-cache
 	./data
 	./docs
-	./.docker-cache
 	./tools
 )

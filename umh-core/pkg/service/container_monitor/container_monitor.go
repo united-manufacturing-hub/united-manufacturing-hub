@@ -130,6 +130,13 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 
 	status.CPU = cpuStat
 
+	// Get cgroup throttling stats for metrics recording
+	throttlingStats, err := c.getCPUThrottlingStats()
+	if err != nil {
+		// Log debug message but don't fail - this matches existing behavior in getCPUMetrics
+		c.logger.Debugf("Could not read CPU throttling stats for metrics: %v", err)
+	}
+
 	// Get memory stats
 	memStat, err := c.getMemoryMetrics(ctx)
 	if err != nil {
@@ -191,6 +198,11 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 
 	// Record metrics
 	RecordContainerStatus(status, c.instanceName)
+
+	// Record cgroup throttling metrics (maintain compatibility with main loop metrics)
+	if throttlingStats != nil {
+		RecordCgroupMetrics(throttlingStats.NrThrottled, throttlingStats.NrPeriods, throttlingStats.ThrottledUsec)
+	}
 
 	return status, nil
 }

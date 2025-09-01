@@ -110,6 +110,34 @@ var (
 		Name:      "health_status",
 		Help:      "Health status of container components (0=Neutral, 1=Active, 2=Degraded)",
 	}, []string{"instance", "component"})
+
+	// Cgroup CPU throttling metrics (using umh_core namespace to maintain compatibility).
+	cgroupCPUThrottledPeriods = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Namespace: "umh",
+			Subsystem: "core",
+			Name:      "cgroup_cpu_nr_throttled",
+			Help:      "Number of periods that were throttled",
+		},
+	)
+
+	cgroupCPUTotalPeriods = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Namespace: "umh",
+			Subsystem: "core",
+			Name:      "cgroup_cpu_nr_periods",
+			Help:      "Total number of periods",
+		},
+	)
+
+	cgroupCPUThrottledTime = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Namespace: "umh",
+			Subsystem: "core",
+			Name:      "cgroup_cpu_throttled_usec",
+			Help:      "Time spent throttled in microseconds",
+		},
+	)
 )
 
 // RecordContainerStatus updates Prometheus metrics based on the new ContainerStatus type.
@@ -170,4 +198,11 @@ func RecordContainerStatus(status *ServiceInfo, instanceName string) {
 			containerDiskUsagePercent.WithLabelValues(instanceName).Set(usagePercent)
 		}
 	}
+}
+
+// RecordCgroupMetrics updates the cgroup throttling metrics.
+func RecordCgroupMetrics(throttledPeriods, totalPeriods, throttledUsec uint64) {
+	cgroupCPUThrottledPeriods.Set(float64(throttledPeriods))
+	cgroupCPUTotalPeriods.Set(float64(totalPeriods))
+	cgroupCPUThrottledTime.Set(float64(throttledUsec))
 }
