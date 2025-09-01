@@ -130,9 +130,9 @@ func (s *DefaultService) EnsureDirectory(ctx context.Context, path string) error
 	errCh := make(chan error, 1)
 
 	// Run operation in goroutine
-	go func() {
+	sentry.SafeGo(func() {
 		errCh <- os.MkdirAll(path, 0755)
-	}()
+	})
 
 	// Wait for either completion or context cancellation
 	select {
@@ -162,10 +162,12 @@ func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, err
 	resCh := make(chan result, 1)
 
 	// Run file operation in goroutine
-	go func() {
+	sentry.SafeGo(func() {
 		data, err := os.ReadFile(path)
+
 		resCh <- result{err: err, data: data}
-	}()
+	})
+
 
 	// Wait for either completion or context cancellation
 	select {
@@ -217,7 +219,7 @@ func (s *DefaultService) ReadFileRange(
 
 	resCh := make(chan result, 1)
 
-	go func() {
+	sentry.SafeGo(func() {
 		f, err := os.Open(path)
 		if err != nil {
 			resCh <- result{err: err, data: nil, newSize: 0}
@@ -320,8 +322,10 @@ func (s *DefaultService) ReadFileRange(
 		}
 
 		// FINAL RESULT: buf contains only actual file data, newSize = next read offset
+
 		resCh <- result{err: nil, data: buf, newSize: from + int64(len(buf))}
-	}()
+	})
+
 
 	select {
 	case res := <-resCh:
@@ -341,9 +345,9 @@ func (s *DefaultService) WriteFile(ctx context.Context, path string, data []byte
 	errCh := make(chan error, 1)
 
 	// Run file operation in goroutine
-	go func() {
+	sentry.SafeGo(func() {
 		errCh <- os.WriteFile(path, data, perm)
-	}()
+	})
 
 	// Wait for either completion or context cancellation
 	select {
@@ -373,7 +377,7 @@ func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, err
 	resCh := make(chan result, 1)
 
 	// Run file operation in goroutine
-	go func() {
+	sentry.SafeGo(func() {
 		_, err := os.Stat(path)
 		if os.IsNotExist(err) {
 			resCh <- result{err: nil, exists: false}
@@ -388,7 +392,7 @@ func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, err
 		}
 
 		resCh <- result{err: nil, exists: true}
-	}()
+	})
 
 	// Wait for either completion or context cancellation
 	select {
@@ -419,9 +423,9 @@ func (s *DefaultService) Remove(ctx context.Context, path string) error {
 	errCh := make(chan error, 1)
 
 	// Run file operation in goroutine
-	go func() {
+	sentry.SafeGo(func() {
 		errCh <- os.Remove(path)
-	}()
+	})
 
 	// Wait for either completion or context cancellation
 	select {
@@ -442,9 +446,9 @@ func (s *DefaultService) RemoveAll(ctx context.Context, path string) error {
 	errCh := make(chan error, 1)
 
 	// Run file operation in goroutine
-	go func() {
+	sentry.SafeGo(func() {
 		errCh <- os.RemoveAll(path)
-	}()
+	})
 
 	// Wait for either completion or context cancellation
 	select {
@@ -474,10 +478,10 @@ func (s *DefaultService) Stat(ctx context.Context, path string) (os.FileInfo, er
 	resCh := make(chan result, 1)
 
 	// Run file operation in goroutine
-	go func() {
+	sentry.SafeGo(func() {
 		info, err := os.Stat(path)
 		resCh <- result{info, err}
-	}()
+	})
 
 	// Wait for either completion or context cancellation
 	select {
@@ -502,9 +506,9 @@ func (s *DefaultService) Chmod(ctx context.Context, path string, mode os.FileMod
 	errCh := make(chan error, 1)
 
 	// Run file operation in goroutine
-	go func() {
+	sentry.SafeGo(func() {
 		errCh <- os.Chmod(path, mode)
-	}()
+	})
 
 	// Wait for either completion or context cancellation
 	select {
@@ -534,10 +538,10 @@ func (s *DefaultService) ReadDir(ctx context.Context, path string) ([]os.DirEntr
 	resCh := make(chan result, 1)
 
 	// Run file operation in goroutine
-	go func() {
+	sentry.SafeGo(func() {
 		entries, err := os.ReadDir(path)
 		resCh <- result{err: err, entries: entries}
-	}()
+	})
 
 	// Wait for either completion or context cancellation
 	select {
@@ -562,11 +566,11 @@ func (s *DefaultService) Chown(ctx context.Context, path string, user string, gr
 	errCh := make(chan error, 1)
 
 	// Run file operation in goroutine
-	go func() {
+	sentry.SafeGo(func() {
 		// Use chown command as os.Chown needs numeric user/group IDs
 		cmd := exec.Command("chown", fmt.Sprintf("%s:%s", user, group), path)
 		errCh <- cmd.Run()
-	}()
+	})
 
 	// Wait for either completion or context cancellation
 	select {
@@ -619,10 +623,11 @@ func (s *DefaultService) Glob(ctx context.Context, pattern string) ([]string, er
 	resCh := make(chan result, 1)
 
 	// Run file operation in goroutine
-	go func() {
+
+	sentry.SafeGo(func() {
 		matches, err := filepath.Glob(pattern)
 		resCh <- result{err: err, matches: matches}
-	}()
+	})
 
 	// Wait for either completion or context cancellation
 	select {
@@ -648,9 +653,9 @@ func (s *DefaultService) Rename(ctx context.Context, oldPath, newPath string) er
 	errCh := make(chan error, 1)
 
 	// Run file operation in goroutine
-	go func() {
+	sentry.SafeGo(func() {
 		errCh <- os.Rename(oldPath, newPath)
-	}()
+	})
 
 	// Wait for either completion or context cancellation
 	select {
@@ -675,9 +680,9 @@ func (s *DefaultService) Symlink(ctx context.Context, target, linkPath string) e
 	errCh := make(chan error, 1)
 
 	// Run file operation in goroutine
-	go func() {
+	sentry.SafeGo(func() {
 		errCh <- os.Symlink(target, linkPath)
-	}()
+	})
 
 	// Wait for either completion or context cancellation
 	select {

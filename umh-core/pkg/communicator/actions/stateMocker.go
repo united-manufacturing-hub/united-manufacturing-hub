@@ -29,6 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	dfcservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 	"go.uber.org/zap"
 )
@@ -481,12 +482,12 @@ func (s *StateMocker) Run() error {
 
 	ticker := time.NewTicker(constants.DefaultTickerTime)
 
-	// Get a reference to the done channel under mutex protection
-	s.mu.RLock()
-	done := s.done
-	s.mu.RUnlock()
+	sentry.SafeGo(func() {
+		// Get a reference to the done channel under mutex protection
+		s.mu.RLock()
+		done := s.done
+		s.mu.RUnlock()
 
-	go func() {
 		defer ticker.Stop()
 		defer s.running.Store(false)
 
@@ -498,7 +499,7 @@ func (s *StateMocker) Run() error {
 				return
 			}
 		}
-	}()
+	})
 
 	return nil
 }

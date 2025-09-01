@@ -567,6 +567,8 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 
 	if metricsChanged {
 		g.Go(func() error {
+			defer sentry.RecoverAndReport()
+
 			var err error
 
 			metrics, err = s.processMetricsDataBytes(metricsDataBytes, tick)
@@ -579,6 +581,8 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 
 	if clusterConfigChanged {
 		g.Go(func() error {
+			defer sentry.RecoverAndReport()
+
 			var err error
 
 			clusterConfig, err = s.processClusterConfigDataBytes(clusterConfigDataBytes, tick)
@@ -596,11 +600,11 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 
 		// Run g.Wait() in a separate goroutine.
 		// This allows us to use a select statement to return early if the context is canceled.
-		go func() {
+		sentry.SafeGo(func() {
 			// g.Wait() blocks until all goroutines launched with g.Go() have returned.
 			// It returns the first non-nil error, if any.
 			errc <- g.Wait()
-		}()
+		})
 
 		// Use a select statement to wait for either the g.Wait() result or the context's cancellation.
 		select {

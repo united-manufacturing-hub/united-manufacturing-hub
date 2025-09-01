@@ -52,6 +52,9 @@ func main() {
 	// Get a logger for the main component
 	log := logger.For(logger.ComponentCore)
 
+	// Set up global panic recovery to catch any unhandled panics
+	defer sentry.HandleGlobalPanic(log)
+
 	// Log using the component logger with structured fields
 	log.Info("Starting umh-core...")
 
@@ -168,8 +171,10 @@ func main() {
 		log.Warnf("No backend connection enabled, please set API_URL and AUTH_TOKEN")
 	}
 
-	// Start the system snapshot logger
-	go SystemSnapshotLogger(ctx, controlLoop)
+	// Start the system snapshot logger with automatic panic recovery
+	sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
+		SystemSnapshotLogger(ctx, controlLoop)
+	})
 
 	// Start the control loop
 	err = controlLoop.Execute(ctx)

@@ -299,7 +299,7 @@ func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 }
 
 func (c *CommunicationState) InitialiseReAuthHandler(authToken string, insecureTLS bool) {
-	go func() {
+	sentry.SafeGo(func() {
 		ticker := time.NewTicker(1 * time.Hour)
 
 		// Register a watchdog with a timeout of 3 hours, allowing up to 3 ticks, before it fails.
@@ -333,5 +333,5 @@ func (c *CommunicationState) InitialiseReAuthHandler(authToken string, insecureT
 		}
 
 		// The ticker will run for the lifetime of our program, therefore no cleanup is required.
-	}()
+	})
 }

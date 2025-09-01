@@ -707,9 +707,9 @@ func (m *BaseFSMManager[C]) Reconcile(
 
 	waitErrorChannel := make(chan error, 1)
 
-	go func() {
+	sentry.SafeGo(func() {
 		waitErrorChannel <- errorgroup.Wait()
-	}()
+	})
 
 	// Wait for either the error group to finish or the context to be done
 	select {
@@ -906,7 +906,7 @@ func (m *BaseFSMManager[C]) maybeEscalateRemoval(ctx context.Context, inst FSMIn
 			ForceRemove(context.Context, filesystem.Service) error
 		}); ok {
 			// Run force removal in a detached goroutine to avoid blocking the main reconciliation loop
-			go func() {
+			sentry.SafeGo(func() {
 				err := forceRemover.ForceRemove(ctx, services.GetFileSystem())
 				if err != nil {
 					sentry.ReportFSMErrorf(
@@ -920,7 +920,7 @@ func (m *BaseFSMManager[C]) maybeEscalateRemoval(ctx context.Context, inst FSMIn
 				}
 
 				sentry.ReportIssuef(sentry.IssueTypeWarning, m.logger, "force removing instance %s: %v", instanceName, err)
-			}()
+			})
 		} else {
 			sentry.ReportIssuef(sentry.IssueTypeWarning, m.logger, "no force remover for instance %s, cannot force remove", instanceName)
 		}
@@ -943,7 +943,7 @@ func (m *BaseFSMManager[C]) maybeEscalateRemoval(ctx context.Context, inst FSMIn
 				ForceRemove(context.Context, filesystem.Service) error
 			}); ok {
 				// Run force removal in a detached goroutine to avoid blocking the main reconciliation loop
-				go func() {
+				sentry.SafeGo(func() {
 					err := forceRemover.ForceRemove(ctx, services.GetFileSystem())
 					if err != nil {
 						sentry.ReportFSMErrorf(
@@ -957,7 +957,7 @@ func (m *BaseFSMManager[C]) maybeEscalateRemoval(ctx context.Context, inst FSMIn
 					}
 
 					sentry.ReportIssuef(sentry.IssueTypeWarning, m.logger, "force removing instance %s after normal removal failed: %v", instanceName, err)
-				}()
+				})
 			} else {
 				sentry.ReportIssuef(sentry.IssueTypeWarning, m.logger, "no force remover for instance %s, cannot force remove", instanceName)
 			}

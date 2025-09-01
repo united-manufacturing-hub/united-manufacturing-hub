@@ -403,6 +403,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 		capturedManager := c.managers[i]
 
 		started := errorgroup.TryGo(func() error {
+			defer sentry.RecoverAndReport()
 			// It might be that .Go is blocked until the ctx is already cancelled, in that case we just return
 			if innerCtx.Err() != nil {
 				c.logger.Debugf("Context is already cancelled, skipping manager %s", capturedManager.GetManagerName())
@@ -434,9 +435,9 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 
 	waitErrorChannel := make(chan error, 1)
 
-	go func() {
+	sentry.SafeGo(func() {
 		waitErrorChannel <- errorgroup.Wait()
-	}()
+	})
 
 	select {
 	case wgErr := <-waitErrorChannel:
