@@ -94,7 +94,8 @@ var _ = Describe("ProtocolConverter FSM", func() {
 				protocolconverterfsm.OperationalStateStopped,
 				protocolconverterfsm.OperationalStateStartingConnection, 5, tick, startTime)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(mockService.StartCalled).To(BeTrue()) // ensure start initiated
+			// StartCalled is no longer set because we use granular methods
+			// The connection will be started in the starting_connection state
 		})
 
 		It("should transition from StartingConnection to StartingRedpanda when connection becomes active", func() {
