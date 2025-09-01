@@ -30,6 +30,20 @@ Shorten retention (either during install with `internal.redpanda.redpandaService
 
 _One core_ is kept busy by Redpanda. _One additional core_ comfortably covers the agent and the first dozen pipelines doing light transforms. Heavy parsing, encryption, or synchronous HTTP calls may warrant more cores or a faster CPU.
 
+##### Performance benchmarks
+
+Based on testing with an AMD Ryzen 9 7950X 16-Core Processor with 4GB allocated memory:
+
+| CPU Cores | Bridge Instances |
+|-----------|------------------|
+| 2         | ~10 bridges      |
+| 4         | ~20 bridges      |
+| 6         | ~30 bridges      |
+| 8         | ~35 bridges      |
+
+Additional CPU cores beyond 8 show diminishing returns for bridge capacity.
+Currently horizontal scaling is recommended for more than 35 bridges.
+
 #### Easy vertical scaling
 
 UMH Core is stateless besides the **`/data`** volume. To grow:
