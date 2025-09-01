@@ -30,7 +30,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
-// getTmpDir returns the temporary directory for a container
+// getTmpDir returns the temporary directory for a container.
 func getTmpDir() string {
 	tmpDir := "/tmp"
 	// If we are in a devcontainer, use the workspace as tmp dir
@@ -38,10 +38,11 @@ func getTmpDir() string {
 	if os.Getenv("REMOTE_CONTAINERS") != "" || os.Getenv("CODESPACE_NAME") != "" || os.Getenv("USER") == "vscode" {
 		tmpDir = "/workspaces/united-manufacturing-hub/umh-core/tmp"
 	}
+
 	return tmpDir
 }
 
-// newTimeoutContext creates a context with a 30-second timeout
+// newTimeoutContext creates a context with a 30-second timeout.
 func newTimeoutContext() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), 30*time.Second)
 }
@@ -128,17 +129,17 @@ var _ = Describe("Benthos Monitor Service", func() {
 
 			// Set up mock logs that include our markers and some fake metrics data
 			mockLogs := []s6service.LogEntry{
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.BLOCK_START_MARKER)},
+				{Content: benthos_monitor.BLOCK_START_MARKER + "\n"},
 				{Content: pingResponse + "\n"}, // Some hex-encoded gzipped data from the /ping endpoint
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.PING_END_MARKER)},
+				{Content: benthos_monitor.PING_END_MARKER + "\n"},
 				{Content: readyResponse + "\n"}, // Some hex-encoded gzipped data from the /ready endpoint
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.READY_END)},
+				{Content: benthos_monitor.READY_END + "\n"},
 				{Content: versionResponse + "\n"}, // Some hex-encoded gzipped data from the /version endpoint
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.VERSION_END)},
+				{Content: benthos_monitor.VERSION_END + "\n"},
 				{Content: metricsResponse + "XXXXXXXXXX\n"}, // Some hex-encoded gzipped data from the /metrics endpoint, + some random data that should result in a failure
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.METRICS_END_MARKER)},
+				{Content: benthos_monitor.METRICS_END_MARKER + "\n"},
 				{Content: "1745502164\n"}, // Some  timestamp
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.BLOCK_END_MARKER)},
+				{Content: benthos_monitor.BLOCK_END_MARKER + "\n"},
 			}
 			// Set the mock logs result directly
 			mockS6.GetLogsResult = mockLogs
@@ -165,15 +166,15 @@ var _ = Describe("Benthos Monitor Service", func() {
 
 		It("should return an error if no block end marker is found", func() {
 			logs := []s6service.LogEntry{
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.BLOCK_START_MARKER)},
+				{Content: benthos_monitor.BLOCK_START_MARKER + "\n"},
 				{Content: "some data\n"},
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.PING_END_MARKER)},
+				{Content: benthos_monitor.PING_END_MARKER + "\n"},
 				{Content: "more data\n"},
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.READY_END)},
+				{Content: benthos_monitor.READY_END + "\n"},
 				{Content: "more data\n"},
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.VERSION_END)},
+				{Content: benthos_monitor.VERSION_END + "\n"},
 				{Content: "more data\n"},
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.METRICS_END_MARKER)},
+				{Content: benthos_monitor.METRICS_END_MARKER + "\n"},
 				{Content: "timestamp data\n"},
 				// but no block end marker
 			}
@@ -185,15 +186,15 @@ var _ = Describe("Benthos Monitor Service", func() {
 		It("should return an error if no start marker is found", func() {
 			logs := []s6service.LogEntry{
 				{Content: "some data\n"},
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.PING_END_MARKER)},
+				{Content: benthos_monitor.PING_END_MARKER + "\n"},
 				{Content: "more data\n"},
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.READY_END)},
+				{Content: benthos_monitor.READY_END + "\n"},
 				{Content: "more data\n"},
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.VERSION_END)},
+				{Content: benthos_monitor.VERSION_END + "\n"},
 				{Content: "more data\n"},
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.METRICS_END_MARKER)},
+				{Content: benthos_monitor.METRICS_END_MARKER + "\n"},
 				{Content: "timestamp data\n"},
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.BLOCK_END_MARKER)},
+				{Content: benthos_monitor.BLOCK_END_MARKER + "\n"},
 			}
 			_, err := service.ParseBenthosLogs(ctx, logs, tick)
 			Expect(err).To(HaveOccurred())
@@ -202,16 +203,16 @@ var _ = Describe("Benthos Monitor Service", func() {
 
 		It("should return an error if no ping end marker is found", func() {
 			logs := []s6service.LogEntry{
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.BLOCK_START_MARKER)},
+				{Content: benthos_monitor.BLOCK_START_MARKER + "\n"},
 				{Content: "some data\n"},
 				{Content: "more data\n"},
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.READY_END)},
+				{Content: benthos_monitor.READY_END + "\n"},
 				{Content: "more data\n"},
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.VERSION_END)},
+				{Content: benthos_monitor.VERSION_END + "\n"},
 				{Content: "more data\n"},
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.METRICS_END_MARKER)},
+				{Content: benthos_monitor.METRICS_END_MARKER + "\n"},
 				{Content: "timestamp data\n"},
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.BLOCK_END_MARKER)},
+				{Content: benthos_monitor.BLOCK_END_MARKER + "\n"},
 			}
 			_, err := service.ParseBenthosLogs(ctx, logs, tick)
 			Expect(err).To(HaveOccurred())
@@ -220,15 +221,15 @@ var _ = Describe("Benthos Monitor Service", func() {
 
 		It("should return an error if no ready end marker is found", func() {
 			logs := []s6service.LogEntry{
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.BLOCK_START_MARKER)},
+				{Content: benthos_monitor.BLOCK_START_MARKER + "\n"},
 				{Content: "some data\n"},
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.PING_END_MARKER)},
+				{Content: benthos_monitor.PING_END_MARKER + "\n"},
 				{Content: "more data\n"},
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.VERSION_END)},
+				{Content: benthos_monitor.VERSION_END + "\n"},
 				{Content: "more data\n"},
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.METRICS_END_MARKER)},
+				{Content: benthos_monitor.METRICS_END_MARKER + "\n"},
 				{Content: "timestamp data\n"},
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.BLOCK_END_MARKER)},
+				{Content: benthos_monitor.BLOCK_END_MARKER + "\n"},
 			}
 			_, err := service.ParseBenthosLogs(ctx, logs, tick)
 			Expect(err).To(HaveOccurred())
@@ -237,15 +238,15 @@ var _ = Describe("Benthos Monitor Service", func() {
 
 		It("should return an error if no version end marker is found", func() {
 			logs := []s6service.LogEntry{
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.BLOCK_START_MARKER)},
+				{Content: benthos_monitor.BLOCK_START_MARKER + "\n"},
 				{Content: "some data\n"},
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.PING_END_MARKER)},
+				{Content: benthos_monitor.PING_END_MARKER + "\n"},
 				{Content: "more data\n"},
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.READY_END)},
+				{Content: benthos_monitor.READY_END + "\n"},
 				{Content: "more data\n"},
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.METRICS_END_MARKER)},
+				{Content: benthos_monitor.METRICS_END_MARKER + "\n"},
 				{Content: "timestamp data\n"},
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.BLOCK_END_MARKER)},
+				{Content: benthos_monitor.BLOCK_END_MARKER + "\n"},
 			}
 			_, err := service.ParseBenthosLogs(ctx, logs, tick)
 			Expect(err).To(HaveOccurred())
@@ -254,17 +255,17 @@ var _ = Describe("Benthos Monitor Service", func() {
 
 		It("should return an error if no metrics end marker is found", func() {
 			logs := []s6service.LogEntry{
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.BLOCK_START_MARKER)},
+				{Content: benthos_monitor.BLOCK_START_MARKER + "\n"},
 				{Content: "some data\n"},
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.PING_END_MARKER)},
+				{Content: benthos_monitor.PING_END_MARKER + "\n"},
 				{Content: "more data\n"},
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.READY_END)},
+				{Content: benthos_monitor.READY_END + "\n"},
 				{Content: "more data\n"},
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.VERSION_END)},
+				{Content: benthos_monitor.VERSION_END + "\n"},
 				{Content: "more data\n"},
 				// {Content: fmt.Sprintf("%s\n", benthos_monitor.METRICS_END_MARKER)},
 				{Content: "timestamp data\n"},
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.BLOCK_END_MARKER)},
+				{Content: benthos_monitor.BLOCK_END_MARKER + "\n"},
 			}
 			_, err := service.ParseBenthosLogs(ctx, logs, tick)
 			Expect(err).To(HaveOccurred())
@@ -273,17 +274,17 @@ var _ = Describe("Benthos Monitor Service", func() {
 
 		It("should return an error if markers are in incorrect order", func() {
 			logs := []s6service.LogEntry{
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.BLOCK_START_MARKER)},
+				{Content: benthos_monitor.BLOCK_START_MARKER + "\n"},
 				{Content: "some data\n"},
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.METRICS_END_MARKER)}, // Wrong order
+				{Content: benthos_monitor.METRICS_END_MARKER + "\n"}, // Wrong order
 				{Content: "more data\n"},
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.READY_END)},
+				{Content: benthos_monitor.READY_END + "\n"},
 				{Content: "more data\n"},
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.VERSION_END)},
+				{Content: benthos_monitor.VERSION_END + "\n"},
 				{Content: "more data\n"},
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.PING_END_MARKER)}, // wrong order
+				{Content: benthos_monitor.PING_END_MARKER + "\n"}, // wrong order
 				{Content: "timestamp data\n"},
-				{Content: fmt.Sprintf("%s\n", benthos_monitor.BLOCK_END_MARKER)},
+				{Content: benthos_monitor.BLOCK_END_MARKER + "\n"},
 			}
 			_, err := service.ParseBenthosLogs(ctx, logs, tick)
 			Expect(err).To(HaveOccurred())

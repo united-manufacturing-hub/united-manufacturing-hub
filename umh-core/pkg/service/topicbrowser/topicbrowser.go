@@ -74,6 +74,7 @@ type Status struct {
 //	func (dst *T) Copy<FieldName>(src <FieldType>) error
 func (st *Status) CopyLogs(src []s6svc.LogEntry) error {
 	st.Logs = src
+
 	return nil
 }
 
@@ -99,6 +100,7 @@ func (st *Status) CopyLogs(src []s6svc.LogEntry) error {
 // See also: https://github.com/tiendc/go-deepcopy?tab=readme-ov-file#copy-struct-fields-via-struct-methods
 func (st *Status) CopyBufferSnapshot(src RingBufferSnapshot) error {
 	st.BufferSnapshot = src
+
 	return nil
 }
 
@@ -136,10 +138,11 @@ func (si *ServiceInfo) CopyStatus(src Status) error {
 	// Use the Status struct's own copy logic which handles Buffer and Logs efficiently
 	si.Status.BufferSnapshot = src.BufferSnapshot // Shallow copy (handled by Status.CopyBuffer)
 	si.Status.Logs = src.Logs                     // Shallow copy (handled by Status.CopyLogs)
+
 	return nil
 }
 
-// Service implements ITopicBrowserService
+// Service implements ITopicBrowserService.
 type Service struct {
 
 	// Block processing tracking
@@ -193,13 +196,13 @@ func NewDefaultService(tbName string, opts ...ServiceOption) *Service {
 	return service
 }
 
-// getName converts the tbName (e.g. "myservice") that was given during NewService to its benthos service name (e.g. "topicbrowser-myservice")
+// getName converts the tbName (e.g. "myservice") that was given during NewService to its benthos service name (e.g. "topicbrowser-myservice").
 func (svc *Service) getName(tbName string) string {
-	return fmt.Sprintf("topicbrowser-%s", tbName)
+	return "topicbrowser-" + tbName
 }
 
 // GetConfig returns the actual Benthos config from the Benthos service
-// Expects benthosName (e.g. "topicbrowser-myservice") as defined in the UMH config
+// Expects benthosName (e.g. "topicbrowser-myservice") as defined in the UMH config.
 func (svc *Service) GetConfig(ctx context.Context, filesystemService filesystem.Service, tbName string) (benthossvccfg.BenthosServiceConfig, error) {
 	if ctx.Err() != nil {
 		return benthossvccfg.BenthosServiceConfig{}, ctx.Err()
@@ -232,6 +235,7 @@ func (svc *Service) Status(
 	snapshot fsm.SystemSnapshot,
 ) (ServiceInfo, error) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(logger.ComponentTopicBrowserService, tbName+".Status", time.Since(start))
 	}()
@@ -269,7 +273,7 @@ func (svc *Service) Status(
 	// get the redpanda instance from the redpanda manager
 	rpInst, ok := fsm.FindInstance(snapshot, constants.RedpandaManagerName, constants.RedpandaInstanceName)
 	if !ok || rpInst == nil {
-		return ServiceInfo{}, fmt.Errorf("redpanda instance not found")
+		return ServiceInfo{}, errors.New("redpanda instance not found")
 	}
 
 	redpandaStatus := rpInst.LastObservedState
@@ -295,11 +299,14 @@ func (svc *Service) Status(
 	// Parse the logs and hex-decode it, afterwards the data gets written
 	// into the ringbuffer
 	svc.logger.Debugf("parsing block from logs: %d", len(logs))
+
 	err = svc.parseBlock(logs)
 	if err != nil {
 		svc.logger.Errorf("failed to parse block from logs: %v", err)
+
 		return ServiceInfo{}, fmt.Errorf("failed to parse block from logs: %w", err)
 	}
+
 	svc.logger.Debugf("parsed block from logs")
 
 	// check for invalidMetrics from benthos and redpanda
@@ -390,10 +397,12 @@ func (svc *Service) UpdateInManager(
 	// Check if the component exists
 	found := false
 	index := -1
+
 	for i, config := range svc.benthosConfigs {
 		if config.Name == benthosName {
 			found = true
 			index = i
+
 			break
 		}
 	}
@@ -451,6 +460,7 @@ func (svc *Service) RemoveFromManager(
 				return append(arr[:i], arr[i+1:]...)
 			}
 		}
+
 		return arr
 	}
 
@@ -466,7 +476,7 @@ func (svc *Service) RemoveFromManager(
 	return nil
 }
 
-// Start starts a topic browser
+// Start starts a topic browser.
 func (svc *Service) Start(
 	ctx context.Context,
 	filesystemService filesystem.Service,
@@ -484,10 +494,12 @@ func (svc *Service) Start(
 
 	// Find and update our cached config
 	found := false
+
 	for i, config := range svc.benthosConfigs {
 		if config.Name == benthosName {
 			svc.benthosConfigs[i].DesiredFSMState = benthosfsm.OperationalStateActive
 			found = true
+
 			break
 		}
 	}
@@ -499,7 +511,7 @@ func (svc *Service) Start(
 	return nil
 }
 
-// Stop stops a Topic Browser
+// Stop stops a Topic Browser.
 func (svc *Service) Stop(
 	ctx context.Context,
 	filesystemService filesystem.Service,
@@ -517,10 +529,12 @@ func (svc *Service) Stop(
 
 	// Find and update our cached config
 	found := false
+
 	for i, config := range svc.benthosConfigs {
 		if config.Name == benthosName {
 			svc.benthosConfigs[i].DesiredFSMState = benthosfsm.OperationalStateStopped
 			found = true
+
 			break
 		}
 	}
@@ -539,6 +553,7 @@ func (svc *Service) ReconcileManager(
 	tick uint64,
 ) (error, bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(logger.ComponentTopicBrowserService, "ReconcileManager", time.Since(start))
 	}()
@@ -579,7 +594,7 @@ func (svc *Service) ServiceExists(
 	return svc.benthosService.ServiceExists(ctx, services.GetFileSystem(), benthosName)
 }
 
-// ForceRemove removes a topic browser from the s6 manager
+// ForceRemove removes a topic browser from the s6 manager.
 func (svc *Service) ForceRemove(
 	ctx context.Context,
 	services serviceregistry.Provider,
@@ -596,7 +611,7 @@ func (svc *Service) ForceRemove(
 // checks for invalid metric states e.g.:
 // - redpanda has output but benthos no input
 // - redpanda has no output but benthos has
-// - redpanda has output but benthos not
+// - redpanda has output but benthos not.
 func (svc *Service) checkMetrics(
 	rpObsState rpfsm.RedpandaObservedState,
 	benObsState benthosfsm.BenthosObservedState,
@@ -631,29 +646,33 @@ func (svc *Service) checkMetrics(
 }
 
 // check if benthos is active / has processing activity to provide information
-// for starting phase of fsm
+// for starting phase of fsm.
 func (svc *Service) benthosProcessingActivity(observedState benthosfsm.BenthosObservedState) bool {
 	if observedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState == nil {
 		return false
 	}
+
 	return observedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState.IsActive
 }
 
 // check if redpanda is active / has processing activity to provide information
-// for starting phase of fsm
+// for starting phase of fsm.
 func (svc *Service) redpandaProcessingActivity(observedState rpfsm.RedpandaObservedState) bool {
 	if observedState.ServiceInfo.RedpandaStatus.RedpandaMetrics.MetricsState == nil {
 		return false
 	}
+
 	if observedState.ServiceInfo.RedpandaStatus.RedpandaMetrics.MetricsState.IsActive {
 		return true
 	}
+
 	return false
 }
 
-// ResetBlockProcessing resets the block processing state (useful for testing or restart scenarios)
+// ResetBlockProcessing resets the block processing state (useful for testing or restart scenarios).
 func (svc *Service) ResetBlockProcessing() {
 	svc.processingMutex.Lock()
 	defer svc.processingMutex.Unlock()
+
 	svc.lastProcessedTimestamp = time.Time{}
 }

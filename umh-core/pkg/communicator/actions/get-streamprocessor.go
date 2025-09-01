@@ -49,6 +49,7 @@ package actions
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -114,6 +115,7 @@ func (a *GetStreamProcessorAction) Parse(payload interface{}) (err error) {
 	a.actionLogger.Info("Parsing the payload")
 	a.payload, err = ParseActionPayload[models.GetStreamProcessorPayload](payload)
 	a.actionLogger.Info("Payload parsed, uuid: ", a.payload.UUID)
+
 	return err
 }
 
@@ -122,7 +124,7 @@ func (a *GetStreamProcessorAction) Parse(payload interface{}) (err error) {
 func (a *GetStreamProcessorAction) Validate() error {
 	// Check if UUID is the zero value (empty UUID)
 	if a.payload.UUID == uuid.Nil {
-		return fmt.Errorf("uuid must be set to retrieve stream processor")
+		return errors.New("uuid must be set to retrieve stream processor")
 	}
 
 	return nil
@@ -140,17 +142,21 @@ func (a *GetStreamProcessorAction) Execute() (interface{}, map[string]interface{
 
 	// Get the current config to read the stream processor configuration
 	ctx := context.Background()
+
 	currentConfig, err := a.configManager.GetConfig(ctx, 0)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to get current config: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.GetStreamProcessor)
+
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
 	// Look for the stream processor in the config by matching UUID
-	var foundStreamProcessor *config.StreamProcessorConfig
-	var foundStreamProcessorName string
+	var (
+		foundStreamProcessor     *config.StreamProcessorConfig
+		foundStreamProcessorName string
+	)
 
 	for _, sp := range currentConfig.StreamProcessor {
 		// Generate the deterministic UUID from the stream processor name
@@ -158,6 +164,7 @@ func (a *GetStreamProcessorAction) Execute() (interface{}, map[string]interface{
 		if generatedUUID == a.payload.UUID {
 			foundStreamProcessor = &sp
 			foundStreamProcessorName = sp.Name
+
 			break
 		}
 	}
@@ -166,6 +173,7 @@ func (a *GetStreamProcessorAction) Execute() (interface{}, map[string]interface{
 		errorMsg := fmt.Sprintf("Stream processor with UUID %s not found", a.payload.UUID)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.GetStreamProcessor)
+
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
@@ -178,10 +186,12 @@ func (a *GetStreamProcessorAction) Execute() (interface{}, map[string]interface{
 		errorMsg := fmt.Sprintf("Failed to build stream processor data: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.GetStreamProcessor)
+
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
 	a.actionLogger.Info("Stream processor retrieved successfully")
+
 	return streamProcessor, nil, nil
 }
 
@@ -189,6 +199,7 @@ func (a *GetStreamProcessorAction) Execute() (interface{}, map[string]interface{
 func (a *GetStreamProcessorAction) buildStreamProcessorFromConfig(streamProcessorConfig *config.StreamProcessorConfig, instanceName string) (*models.StreamProcessor, error) {
 	// Build location map from agent location - convert map[int]string to map[int]string
 	locationMap := make(map[int]string)
+
 	if streamProcessorConfig.StreamProcessorServiceConfig.Location != nil {
 		// Convert the location map[string]string to map[int]string
 		for key, value := range streamProcessorConfig.StreamProcessorServiceConfig.Location {
@@ -206,6 +217,7 @@ func (a *GetStreamProcessorAction) buildStreamProcessorFromConfig(streamProcesso
 
 	// Build encoded config - encode the YAML representation
 	var encodedConfig string
+
 	spConfig := streamProcessorConfig.StreamProcessorServiceConfig.Config
 	// remove the model reference from the config and encode the rest (sources and mapping)
 	toEncode := map[string]interface{}{
@@ -218,12 +230,14 @@ func (a *GetStreamProcessorAction) buildStreamProcessorFromConfig(streamProcesso
 
 	// Build template info if template ref is set
 	var templateInfo *models.StreamProcessorTemplateInfo
+
 	if streamProcessorConfig.StreamProcessorServiceConfig.TemplateRef != "" {
 		// Check if this is a templated instance
 		isTemplated := streamProcessorConfig.StreamProcessorServiceConfig.TemplateRef != streamProcessorConfig.Name
 
 		// Build variables from the StreamProcessorServiceConfig
 		variables := make([]models.StreamProcessorVariable, 0)
+
 		if streamProcessorConfig.StreamProcessorServiceConfig.Variables.User != nil {
 			for label, value := range streamProcessorConfig.StreamProcessorServiceConfig.Variables.User {
 				variables = append(variables, models.StreamProcessorVariable{
@@ -257,12 +271,12 @@ func (a *GetStreamProcessorAction) buildStreamProcessorFromConfig(streamProcesso
 	return streamProcessor, nil
 }
 
-// getUserEmail returns the user email for this action
+// getUserEmail returns the user email for this action.
 func (a *GetStreamProcessorAction) getUserEmail() string {
 	return a.userEmail
 }
 
-// getUuid returns the action UUID for this action
+// getUuid returns the action UUID for this action.
 func (a *GetStreamProcessorAction) getUuid() uuid.UUID {
 	return a.actionUUID
 }

@@ -85,7 +85,7 @@ var _ = Describe("GraphQL Resolver", func() {
 	})
 })
 
-// Helper function
+// Helper function.
 func stringPtr(s string) *string {
 	return &s
 }

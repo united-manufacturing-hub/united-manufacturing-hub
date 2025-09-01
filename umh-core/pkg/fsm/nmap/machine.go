@@ -218,28 +218,30 @@ func NewNmapInstanceWithService(config config.NmapConfig, service nmap_service.I
 
 // SetDesiredFSMState safely updates the desired state
 // But ensures that the desired state is a valid state and that it is also a reasonable state
-// e.g., nobody wants to have an instance in the "starting" state, that is just intermediate
+// e.g., nobody wants to have an instance in the "starting" state, that is just intermediate.
 func (n *NmapInstance) SetDesiredFSMState(state string) error {
 	if state != OperationalStateOpen &&
 		state != OperationalStateStopped {
 		return fmt.Errorf("invalid desired state: %s (only '%s' or '%s' allowed)",
 			state, OperationalStateOpen, OperationalStateStopped)
 	}
+
 	n.baseFSMInstance.SetDesiredFSMState(state)
+
 	return nil
 }
 
-// GetCurrentFSMState returns the current operational or lifecycle state
+// GetCurrentFSMState returns the current operational or lifecycle state.
 func (n *NmapInstance) GetCurrentFSMState() string {
 	return n.baseFSMInstance.GetCurrentFSMState()
 }
 
-// GetDesiredFSMState returns what we want operationally
+// GetDesiredFSMState returns what we want operationally.
 func (n *NmapInstance) GetDesiredFSMState() string {
 	return n.baseFSMInstance.GetDesiredFSMState()
 }
 
-// Remove initiates the removal lifecycle
+// Remove initiates the removal lifecycle.
 func (n *NmapInstance) Remove(ctx context.Context) error {
 	return n.baseFSMInstance.Remove(ctx)
 }
@@ -260,18 +262,18 @@ func (n *NmapInstance) IsStopping() bool {
 	return n.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopping
 }
 
-// WantsToBeStopped returns true if the instance wants to be stopped
+// WantsToBeStopped returns true if the instance wants to be stopped.
 func (n *NmapInstance) WantsToBeStopped() bool {
 	return n.baseFSMInstance.GetDesiredFSMState() == OperationalStateStopped
 }
 
-// PrintState is a helper for debugging
+// PrintState is a helper for debugging.
 func (n *NmapInstance) PrintState() {
 	n.baseFSMInstance.GetLogger().Infof("NmapInstance %s - Current state: %s, Desired: %s",
 		n.baseFSMInstance.GetID(), n.GetCurrentFSMState(), n.GetDesiredFSMState())
 }
 
-// GetMinimumRequiredTime returns the minimum required time for this instance
+// GetMinimumRequiredTime returns the minimum required time for this instance.
 func (n *NmapInstance) GetMinimumRequiredTime() time.Duration {
 	return constants.NmapUpdateObservedStateTimeout
 }

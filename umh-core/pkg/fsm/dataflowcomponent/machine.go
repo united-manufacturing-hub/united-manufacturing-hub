@@ -29,12 +29,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 )
 
-// NewDataflowComponentInstance creates a new DataflowComponentInstance with a given ID and service path
+// NewDataflowComponentInstance creates a new DataflowComponentInstance with a given ID and service path.
 func NewDataflowComponentInstance(
 	s6BaseDir string,
 	config config.DataFlowComponentConfig,
 ) *DataflowComponentInstance {
-
 	cfg := internal_fsm.BaseFSMInstanceConfig{
 		ID:                           config.Name,
 		DesiredFSMState:              OperationalStateStopped,
@@ -101,7 +100,7 @@ func NewDataflowComponentInstance(
 
 // SetDesiredFSMState safely updates the desired state
 // But ensures that the desired state is a valid state and that it is also a reasonable state
-// e.g., nobody wants to have an instance in the "starting" state, that is just intermediate
+// e.g., nobody wants to have an instance in the "starting" state, that is just intermediate.
 func (d *DataflowComponentInstance) SetDesiredFSMState(state string) error {
 	if state != OperationalStateStopped &&
 		state != OperationalStateActive {
@@ -112,46 +111,47 @@ func (d *DataflowComponentInstance) SetDesiredFSMState(state string) error {
 	}
 
 	d.baseFSMInstance.SetDesiredFSMState(state)
+
 	return nil
 }
 
-// GetCurrentFSMState returns the current state of the FSM
+// GetCurrentFSMState returns the current state of the FSM.
 func (d *DataflowComponentInstance) GetCurrentFSMState() string {
 	return d.baseFSMInstance.GetCurrentFSMState()
 }
 
-// GetDesiredFSMState returns the desired state of the FSM
+// GetDesiredFSMState returns the desired state of the FSM.
 func (d *DataflowComponentInstance) GetDesiredFSMState() string {
 	return d.baseFSMInstance.GetDesiredFSMState()
 }
 
 // Remove starts the removal process, it is idempotent and can be called multiple times
-// Note: it is only removed once IsRemoved returns true
+// Note: it is only removed once IsRemoved returns true.
 func (d *DataflowComponentInstance) Remove(ctx context.Context) error {
 	return d.baseFSMInstance.Remove(ctx)
 }
 
-// IsRemoved returns true if the instance has been removed
+// IsRemoved returns true if the instance has been removed.
 func (d *DataflowComponentInstance) IsRemoved() bool {
 	return d.baseFSMInstance.IsRemoved()
 }
 
-// IsRemoving returns true if the instance is in the removing state
+// IsRemoving returns true if the instance is in the removing state.
 func (d *DataflowComponentInstance) IsRemoving() bool {
 	return d.baseFSMInstance.IsRemoving()
 }
 
-// IsStopping returns true if the instance is in the stopping state
+// IsStopping returns true if the instance is in the stopping state.
 func (d *DataflowComponentInstance) IsStopping() bool {
 	return d.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopping
 }
 
-// IsStopped returns true if the instance is in the stopped state
+// IsStopped returns true if the instance is in the stopped state.
 func (d *DataflowComponentInstance) IsStopped() bool {
 	return d.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopped
 }
 
-// PrintState prints the current state of the FSM for debugging
+// PrintState prints the current state of the FSM for debugging.
 func (d *DataflowComponentInstance) PrintState() {
 	d.baseFSMInstance.GetLogger().Debugf("Current state: %s", d.baseFSMInstance.GetCurrentFSMState())
 	d.baseFSMInstance.GetLogger().Debugf("Desired state: %s", d.baseFSMInstance.GetDesiredFSMState())
@@ -160,7 +160,7 @@ func (d *DataflowComponentInstance) PrintState() {
 		d.ObservedState.ServiceInfo.StatusReason)
 }
 
-// GetMinimumRequiredTime returns the minimum required time for this instance
+// GetMinimumRequiredTime returns the minimum required time for this instance.
 func (d *DataflowComponentInstance) GetMinimumRequiredTime() time.Duration {
 	return constants.DataflowComponentUpdateObservedStateTimeout
 }

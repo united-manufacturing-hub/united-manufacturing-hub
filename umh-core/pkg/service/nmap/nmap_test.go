@@ -16,7 +16,7 @@ package nmap
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"path/filepath"
 	"time"
 
@@ -31,7 +31,7 @@ import (
 
 // parseLogOutput converts raw log output (like from the current log file) into []s6service.LogEntry
 // Input format: "2025-05-27 09:29:59.576902049  NMAP_SCAN_START"
-// Just copy-paste the actual log lines and this will convert them to the test format
+// Just copy-paste the actual log lines and this will convert them to the test format.
 func parseLogOutput(rawLogs string) []s6service.LogEntry {
 	// Use the existing optimized s6 parsing function
 	entries, err := s6service.ParseLogsFromBytes([]byte(rawLogs))
@@ -39,6 +39,7 @@ func parseLogOutput(rawLogs string) []s6service.LogEntry {
 		// Fallback to empty slice if parsing fails
 		return []s6service.LogEntry{}
 	}
+
 	return entries
 }
 
@@ -820,7 +821,7 @@ done`
 			ctx := context.Background()
 
 			// Set up mock to return an error
-			mockError := fmt.Errorf("mock force remove error")
+			mockError := errors.New("mock force remove error")
 			mockS6Service.ForceRemoveError = mockError
 
 			// Call ForceRemoveNmap

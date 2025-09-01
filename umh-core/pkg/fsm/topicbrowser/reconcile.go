@@ -24,8 +24,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
-	topicbrowsersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 
@@ -43,8 +41,10 @@ import (
 func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
 	start := time.Now()
 	tbInstanceName := i.baseFSMInstance.GetID()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, tbInstanceName, time.Since(start))
+
 		if err != nil {
 			i.baseFSMInstance.GetLogger().Errorf("error reconciling topic browser instance %s: %s", tbInstanceName, err)
 			i.PrintState()
@@ -58,6 +58,7 @@ func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.Syste
 		if i.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "start of reconciliation") {
 			return nil, false
 		}
+
 		return ctx.Err(), false
 	}
 
@@ -94,11 +95,13 @@ func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.Syste
 				},
 			)
 		}
+
 		return nil, false
 	}
 
 	// Early optimization: if both current and desired states are stopped, skip all reconciliation
 	currentState := i.baseFSMInstance.GetCurrentFSMState()
+
 	desiredState := i.baseFSMInstance.GetDesiredFSMState()
 	if currentState == OperationalStateStopped && desiredState == OperationalStateStopped {
 		return nil, false
@@ -110,34 +113,22 @@ func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.Syste
 		i.baseFSMInstance.GetLogger().Debugf("Skipping external changes detection during removal")
 	} else {
 		if err = i.reconcileExternalChanges(ctx, services, snapshot); err != nil {
-			// If the service is not running, we don't want to return an error here, because we want to continue reconciling
-			if !errors.Is(err, topicbrowsersvc.ErrServiceNotExist) && !errors.Is(err, s6.ErrServiceNotExist) {
-				// Consider a special case for TopicBrowser FSM here
-				// While creating for the first time, reconcileExternalChanges function will throw an error such as
-				// s6 service not found in the path since TopicBrowser fsm is relying on BenthosFSM and Benthos in turn relies on S6 fsm
-				// Inorder for TopicBrowser fsm to start, benthosManager.Reconcile should be called and this is called at the end of the function
-				// So set the err to nil in this case
-				// An example error: "failed to update observed state: failed to get observed TopicBrowser config: failed to get benthos config: failed to get benthos config file for service benthos-topic-browser: service does not exist"
-
-				if errors.Is(err, context.DeadlineExceeded) {
-					// Context deadline exceeded should be retried with backoff, not ignored
-					i.baseFSMInstance.SetError(err, snapshot.Tick)
-					i.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileExternalChanges, will retry with backoff")
-					err = nil // Clear error so reconciliation continues
-					return nil, false
-				}
-
-				i.baseFSMInstance.SetError(err, snapshot.Tick)
-				i.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
-				return nil, false // We don't want to return an error here, because we want to continue reconciling
+			if i.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
+				return nil, false
 			}
 
-			err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
+			// Log the error but always continue reconciling - we need reconcileStateTransition to run
+			// to restore services after restart, even if we can't read their status yet
+			i.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)
+
+			// For all other errors, just continue reconciling without setting backoff
+			err = nil
 		}
 	}
 
 	// Step 3: Attempt to reconcile the state.
 	currentTime := time.Now() // this is used to check if the instance is degraded and for the log check
+
 	err, reconciled = i.reconcileStateTransition(ctx, services, currentTime, snapshot)
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
@@ -145,15 +136,13 @@ func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.Syste
 			return nil, false
 		}
 
-		if errors.Is(err, context.DeadlineExceeded) {
-			// Context deadline exceeded should be retried with backoff, not ignored
-			i.baseFSMInstance.SetError(err, snapshot.Tick)
-			i.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in reconcileStateTransition, will retry with backoff")
+		if i.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileStateTransition") {
 			return nil, false
 		}
 
 		i.baseFSMInstance.SetError(err, snapshot.Tick)
 		i.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
+
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
@@ -164,10 +153,13 @@ func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.Syste
 			// Context deadline exceeded should be retried with backoff, not ignored
 			i.baseFSMInstance.SetError(managerErr, snapshot.Tick)
 			i.baseFSMInstance.GetLogger().Warnf("Context deadline exceeded in manager reconciliation, will retry with backoff")
+
 			return nil, false
 		}
+
 		i.baseFSMInstance.SetError(managerErr, snapshot.Tick)
 		i.baseFSMInstance.GetLogger().Errorf("error reconciling manager: %s", managerErr)
+
 		return nil, false
 	}
 
@@ -183,9 +175,10 @@ func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.Syste
 }
 
 // reconcileExternalChanges checks if the TopicBrowserInstance service status has changed
-// externally (e.g., if someone manually stopped or started it, or if it crashed)
+// externally (e.g., if someone manually stopped or started it, or if it crashed).
 func (i *TopicBrowserInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
 	}()
@@ -199,6 +192,7 @@ func (i *TopicBrowserInstance) reconcileExternalChanges(ctx context.Context, ser
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}
+
 	return nil
 }
 
@@ -209,6 +203,7 @@ func (i *TopicBrowserInstance) reconcileExternalChanges(ctx context.Context, ser
 // This is to ensure full testability of the FSM.
 func (i *TopicBrowserInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider, currentTime time.Time, snapshot fsm.SystemSnapshot) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".reconcileStateTransition", time.Since(start))
 	}()
@@ -231,6 +226,7 @@ func (i *TopicBrowserInstance) reconcileStateTransition(ctx context.Context, ser
 		if err != nil {
 			return err, false
 		}
+
 		return nil, reconciled
 	}
 
@@ -240,15 +236,17 @@ func (i *TopicBrowserInstance) reconcileStateTransition(ctx context.Context, ser
 		if err != nil {
 			return err, false
 		}
+
 		return nil, reconciled
 	}
 
 	return fmt.Errorf("invalid state: %s", currentState), false
 }
 
-// reconcileOperationalStates handles states related to instance operations (starting/stopping)
+// reconcileOperationalStates handles states related to instance operations (starting/stopping).
 func (i *TopicBrowserInstance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".reconcileOperationalStates", time.Since(start))
 	}()
@@ -267,6 +265,7 @@ func (i *TopicBrowserInstance) reconcileOperationalStates(ctx context.Context, s
 // It deals with moving from various states to the Active state.
 func (i *TopicBrowserInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
 	}()
@@ -297,6 +296,7 @@ func (i *TopicBrowserInstance) reconcileTransitionToActive(ctx context.Context, 
 // reconcileStartingStates handles the various starting phase states when transitioning to Active.
 func (i *TopicBrowserInstance) reconcileStartingStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".reconcileStartingStates", time.Since(start))
 	}()
@@ -306,6 +306,7 @@ func (i *TopicBrowserInstance) reconcileStartingStates(ctx context.Context, serv
 		// Check if Benthos is healthy
 		if i.isBenthosRunning() {
 			i.ObservedState.ServiceInfo.StatusReason = "benthos started"
+
 			return i.baseFSMInstance.SendEvent(ctx, EventBenthosStarted), true
 		}
 
@@ -314,19 +315,22 @@ func (i *TopicBrowserInstance) reconcileStartingStates(ctx context.Context, serv
 			benthosStatusReason = "not existing"
 		}
 
-		i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting - waiting for benthos: %s", benthosStatusReason)
+		i.ObservedState.ServiceInfo.StatusReason = "starting - waiting for benthos: " + benthosStatusReason
+
 		return nil, false
 
 	case OperationalStateStartingBenthos:
 		// First check if Benthos is still running (previous check still valid)
 		if !i.isBenthosRunning() {
 			i.ObservedState.ServiceInfo.StatusReason = "benthos failed during startup - restarting"
+
 			return i.baseFSMInstance.SendEvent(ctx, EventStartupFailed), true
 		}
 
 		// Check if Redpanda is healthy
 		if i.isRedpandaRunning() {
 			i.ObservedState.ServiceInfo.StatusReason = "redpanda started"
+
 			return i.baseFSMInstance.SendEvent(ctx, EventRedpandaStarted), true
 		}
 
@@ -335,29 +339,34 @@ func (i *TopicBrowserInstance) reconcileStartingStates(ctx context.Context, serv
 			redpandaStatusReason = "not existing"
 		}
 
-		i.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting - waiting for redpanda: %s", redpandaStatusReason)
+		i.ObservedState.ServiceInfo.StatusReason = "starting - waiting for redpanda: " + redpandaStatusReason
+
 		return nil, false
 
 	case OperationalStateStartingRedpanda:
 		// First check if Benthos is still running (previous check still valid)
 		if !i.isBenthosRunning() {
 			i.ObservedState.ServiceInfo.StatusReason = "benthos failed during startup - restarting"
+
 			return i.baseFSMInstance.SendEvent(ctx, EventStartupFailed), true
 		}
 
 		// Check if Redpanda is still running (previous check still valid)
 		if !i.isRedpandaRunning() {
 			i.ObservedState.ServiceInfo.StatusReason = "redpanda failed during startup - restarting"
+
 			return i.baseFSMInstance.SendEvent(ctx, EventStartupFailed), true
 		}
 
 		// Both services are up, transition to idle
 		if healthy, _ := i.isTopicBrowserHealthy(); healthy {
 			i.ObservedState.ServiceInfo.StatusReason = "started up"
+
 			return i.baseFSMInstance.SendEvent(ctx, EventStartDone), true
 		}
 
 		i.ObservedState.ServiceInfo.StatusReason = "starting - finalizing startup"
+
 		return nil, false
 
 	default:
@@ -368,6 +377,7 @@ func (i *TopicBrowserInstance) reconcileStartingStates(ctx context.Context, serv
 // reconcileRunningStates handles the various running states when transitioning to Active.
 func (i *TopicBrowserInstance) reconcileRunningStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".reconcileRunningStates", time.Since(start))
 	}()
@@ -377,49 +387,65 @@ func (i *TopicBrowserInstance) reconcileRunningStates(ctx context.Context, servi
 		// Check for specific degradation types
 		if !i.isBenthosRunning() {
 			i.ObservedState.ServiceInfo.StatusReason = "benthos degraded"
+
 			return i.baseFSMInstance.SendEvent(ctx, EventBenthosDegraded), true
 		}
+
 		if !i.isRedpandaRunning() {
 			i.ObservedState.ServiceInfo.StatusReason = "redpanda degraded"
+
 			return i.baseFSMInstance.SendEvent(ctx, EventRedpandaDegraded), true
 		}
 		// Check for idle transition
 		if i.shouldTransitionToIdle() {
 			i.ObservedState.ServiceInfo.StatusReason = "no data activity"
+
 			return i.baseFSMInstance.SendEvent(ctx, EventNoDataTimeout), true
 		}
+
 		return nil, false
 	case OperationalStateIdle:
 		// Check for specific degradation types
 		if !i.isBenthosRunning() {
 			i.ObservedState.ServiceInfo.StatusReason = "benthos degraded"
+
 			return i.baseFSMInstance.SendEvent(ctx, EventBenthosDegraded), true
 		}
+
 		if !i.isRedpandaRunning() {
 			i.ObservedState.ServiceInfo.StatusReason = "redpanda degraded"
+
 			return i.baseFSMInstance.SendEvent(ctx, EventRedpandaDegraded), true
 		}
 		// Check for activity to transition back to active
 		if i.hasDataActivity() {
 			i.ObservedState.ServiceInfo.StatusReason = "data activity detected"
+
 			return i.baseFSMInstance.SendEvent(ctx, EventDataReceived), true
 		}
+
 		return nil, false
 	case OperationalStateDegradedBenthos:
 		// Check if benthos has recovered
 		if i.isBenthosRunning() {
 			i.ObservedState.ServiceInfo.StatusReason = "benthos recovered"
+
 			return i.baseFSMInstance.SendEvent(ctx, EventRecovered), true
 		}
+
 		i.ObservedState.ServiceInfo.StatusReason = "benthos degraded"
+
 		return nil, false
 	case OperationalStateDegradedRedpanda:
 		// Check if redpanda has recovered
 		if i.isRedpandaRunning() {
 			i.ObservedState.ServiceInfo.StatusReason = "redpanda recovered"
+
 			return i.baseFSMInstance.SendEvent(ctx, EventRecovered), true
 		}
+
 		i.ObservedState.ServiceInfo.StatusReason = "redpanda degraded"
+
 		return nil, false
 	default:
 		return fmt.Errorf("invalid running state: %s", currentState), false
@@ -430,6 +456,7 @@ func (i *TopicBrowserInstance) reconcileRunningStates(ctx context.Context, servi
 // It deals with moving from any operational state to Stopping and then to Stopped.
 func (i *TopicBrowserInstance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentTopicBrowserInstance, i.baseFSMInstance.GetID()+".reconcileTransitionToStopped", time.Since(start))
 	}()
@@ -438,14 +465,18 @@ func (i *TopicBrowserInstance) reconcileTransitionToStopped(ctx context.Context,
 	case OperationalStateStopped:
 		// Already stopped, nothing to do more
 		i.ObservedState.ServiceInfo.StatusReason = "stopped"
+
 		return nil, false
 	case OperationalStateStopping:
 		if i.IsTopicBrowserBenthosStopped() {
 			// Transition from Stopping to Stopped
 			i.ObservedState.ServiceInfo.StatusReason = "stopped"
+
 			return i.baseFSMInstance.SendEvent(ctx, EventStopDone), true
 		}
+
 		i.ObservedState.ServiceInfo.StatusReason = "stopping"
+
 		return nil, false
 	default:
 		if err := i.StopInstance(ctx, services.GetFileSystem()); err != nil {
@@ -453,6 +484,7 @@ func (i *TopicBrowserInstance) reconcileTransitionToStopped(ctx context.Context,
 		}
 		// Send event to transition to Stopping
 		i.ObservedState.ServiceInfo.StatusReason = "stopping"
+
 		return i.baseFSMInstance.SendEvent(ctx, EventStop), true
 	}
 }

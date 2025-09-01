@@ -42,7 +42,7 @@ type Action interface {
 	// Execute executes the action, returns the result as an interface and an error if something went wrong.
 	// It must send ActionConfirmed and ActionExecuting messages for progress updates.
 	// It must send ActionFinishedWithFailure messages if an error occurs.
-	// It must not send the final successfull action reply, as it is done by the caller.
+	// It must not send the final successful action reply, as it is done by the caller.
 	Execute() (interface{}, map[string]interface{}, error)
 
 	// getUserEmail returns the user email of the action
@@ -65,8 +65,8 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 	log.Debugf("Handling action message: Type: %s, Payload: %v", payload.ActionType, payload.ActionPayload)
 
 	var action Action
-	switch payload.ActionType {
 
+	switch payload.ActionType {
 	case models.EditInstance:
 		action = &EditInstanceAction{
 			userEmail:             sender,
@@ -207,6 +207,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 	default:
 		log.Errorf("Unknown action type: %s", payload.ActionType)
 		SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, "Unknown action type", outboundChannel, payload.ActionType)
+
 		return
 	}
 
@@ -218,6 +219,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 		// this will allow the UI to retry the action
 		SendActionReplyV2(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, "Failed to parse action payload: "+err.Error(), models.ErrParseFailed, nil, outboundChannel, payload.ActionType, nil)
 		log.Errorf("Error parsing action payload: %s", err)
+
 		return
 	}
 
@@ -228,6 +230,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 		// If validation fails, send a structured error reply using SendActionReplyV2 with ErrEditValidationFailed
 		SendActionReplyV2(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, "Failed to validate action payload: "+err.Error(), models.ErrValidationFailed, nil, outboundChannel, payload.ActionType, nil)
 		log.Errorf("Error validating action payload: %s", err)
+
 		return
 	}
 
@@ -236,6 +239,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 	result, metadata, err := action.Execute()
 	if err != nil {
 		log.Errorf("Error executing action: %s", err)
+
 		return
 	}
 
@@ -257,7 +261,6 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 // It returns false if an error occurred during message generation or sending.
 func SendActionReply(instanceUUID uuid.UUID, userEmail string, actionUUID uuid.UUID, arstate models.ActionReplyState, payload interface{}, outboundChannel chan *models.UMHMessage, action models.ActionType) bool {
 	// TODO: The 'action' parameter will be used in the future for action-specific logic or logging
-
 	return SendActionReplyWithAdditionalContext(instanceUUID, userEmail, actionUUID, arstate, payload, outboundChannel, action, nil)
 }
 
@@ -269,12 +272,13 @@ func SendActionReply(instanceUUID uuid.UUID, userEmail string, actionUUID uuid.U
 // used for confirmation, progress updates, success, and failure notifications.
 func SendActionReplyWithAdditionalContext(instanceUUID uuid.UUID, userEmail string, actionUUID uuid.UUID, arstate models.ActionReplyState, payload interface{}, outboundChannel chan *models.UMHMessage, action models.ActionType, actionContext map[string]interface{}) bool {
 	// TODO: The 'action' parameter will be used in the future for action-specific logic or logging
-
 	err := sendActionReplyInternal(instanceUUID, userEmail, actionUUID, arstate, payload, outboundChannel, actionContext)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, logger.For(logger.ComponentCommunicator), "Error generating action reply: %w", err)
+
 		return false
 	}
+
 	return true
 }
 
@@ -283,8 +287,11 @@ func SendActionReplyWithAdditionalContext(instanceUUID uuid.UUID, userEmail stri
 // This function is only meant to be called within the actions.go file!
 // Use SendActionReply instead (or SendActionReplyWithAdditionalContext if you need to pass additional context).
 func sendActionReplyInternal(instanceUUID uuid.UUID, userEmail string, actionUUID uuid.UUID, arstate models.ActionReplyState, payload interface{}, outboundChannel chan *models.UMHMessage, actionContext map[string]interface{}) error {
-	var err error
-	var umhMessage models.UMHMessage
+	var (
+		err        error
+		umhMessage models.UMHMessage
+	)
+
 	if actionContext == nil {
 		umhMessage, err = generateUMHMessage(instanceUUID, userEmail, models.ActionReply, models.ActionReplyMessagePayload{
 			ActionUUID:         actionUUID,
@@ -299,8 +306,10 @@ func sendActionReplyInternal(instanceUUID uuid.UUID, userEmail string, actionUUI
 			ActionContext:      actionContext,
 		})
 	}
+
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, logger.For(logger.ComponentCommunicator), "Error generating umh message: %v", err)
+
 		return err
 	}
 
@@ -370,7 +379,7 @@ func ParseActionPayload[T any](actionPayload interface{}) (T, error) {
 // SendActionReplyV2 sends an action reply with the given state and payload which is a map[string]interface{}
 // SendActionReplyV2 should be used only for ActionFailure messages for backwards compatibility. This will be changed in the future.
 // This function is preferred over SendActionReply as it is more flexible and allows for more complex payloads
-// The return type is a bool and returns false if an error occurred
+// The return type is a bool and returns false if an error occurred.
 func SendActionReplyV2(
 	instanceUUID uuid.UUID,
 	userEmail string,
@@ -384,7 +393,6 @@ func SendActionReplyV2(
 	actionContext map[string]interface{},
 ) bool {
 	// TODO: The 'action' parameter will be used in the future for action-specific logic or logging
-
 	return sendActionReplyWithAdditionalContextV2(instanceUUID, userEmail, actionUUID, arstate, message, errorCode, payloadV2, outboundChannel, action, actionContext)
 }
 
@@ -401,12 +409,13 @@ func sendActionReplyWithAdditionalContextV2(
 	actionContext map[string]interface{},
 ) bool {
 	// TODO: The 'action' parameter will be used in the future for action-specific logic or logging
-
 	err := sendActionReplyInternalV2(instanceUUID, userEmail, actionUUID, arstate, message, errorCode, payloadV2, outboundChannel, actionContext)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, logger.For(logger.ComponentCommunicator), "Error generating action reply: %w", err)
+
 		return false
 	}
+
 	return true
 }
 
@@ -426,14 +435,16 @@ func sendActionReplyInternalV2(
 	umhMessageV2, err := generateUMHMessage(instanceUUID, userEmail, models.ActionReply, payloadResponse)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, logger.For(logger.ComponentCommunicator), "Error generating umh message: %w", err)
+
 		return err
 	}
+
 	outboundChannel <- &umhMessageV2
 
 	return nil
 }
 
-// ConstructActionReplyV2Response creates a new ActionReplyResponseSchemaJson
+// ConstructActionReplyV2Response creates a new ActionReplyResponseSchemaJson.
 func ConstructActionReplyV2Response(
 	message string,
 	errorCode string,
@@ -472,5 +483,6 @@ func GetFirstMessageFromMap(msg map[string]interface{}) interface{} {
 	for _, v := range msg {
 		return v
 	}
+
 	return nil
 }

@@ -22,17 +22,17 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 )
 
-// Comparator handles the comparison of Connection configurations
+// Comparator handles the comparison of Connection configurations.
 type Comparator struct {
 }
 
-// NewComparator creates a new configuration comparator for Connection
+// NewComparator creates a new configuration comparator for Connection.
 func NewComparator() *Comparator {
 	return &Comparator{}
 }
 
 // ConfigsEqual compares two ConnectionServiceConfigs by converting to NmapServiceConfig
-// and using the existing comparison utilization
+// and using the existing comparison utilization.
 func (c *Comparator) ConfigsEqual(desired, observed ProtocolConverterServiceConfigSpec) (isEqual bool) {
 	connectionD := desired.GetConnectionServiceConfig()
 	connectionO := observed.GetConnectionServiceConfig()
@@ -57,7 +57,7 @@ func (c *Comparator) ConfigsEqual(desired, observed ProtocolConverterServiceConf
 		comparatorVariable.ConfigsEqual(desired.Variables, observed.Variables)
 }
 
-// ConfigDiff returns a human-readable string describing differences between configs
+// ConfigDiff returns a human-readable string describing differences between configs.
 func (c *Comparator) ConfigDiff(desired, observed ProtocolConverterServiceConfigSpec) string {
 	connectionD := desired.GetConnectionServiceConfig()
 	connectionO := observed.GetConnectionServiceConfig()

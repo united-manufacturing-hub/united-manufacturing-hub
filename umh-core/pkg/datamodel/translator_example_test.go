@@ -60,7 +60,7 @@ var _ = Describe("Translator Examples", func() {
 				nil, // No model references
 			)
 
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Get the generated schema
 			subjectName := "_pump_data_v1-timeseries-number"
@@ -69,7 +69,7 @@ var _ = Describe("Translator Examples", func() {
 
 			// Print the result for demonstration
 			jsonBytes, err := result.GetSchemaAsJSON(subjectName)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			GinkgoWriter.Printf("\n=== Translation Example ===\n")
 			GinkgoWriter.Printf("Input YAML Structure:\n")
@@ -84,7 +84,7 @@ var _ = Describe("Translator Examples", func() {
 
 			// Verify the exact structure matches expectations (check individual fields to avoid map ordering issues)
 			Expect(schema["type"]).To(Equal("object"))
-			Expect(schema["additionalProperties"]).To(Equal(false))
+			Expect(schema["additionalProperties"]).To(BeFalse())
 			Expect(schema["required"]).To(ConsistOf("virtual_path", "fields"))
 
 			properties, ok := schema["properties"].(map[string]interface{})
@@ -100,7 +100,7 @@ var _ = Describe("Translator Examples", func() {
 			fields, ok := properties["fields"].(map[string]interface{})
 			Expect(ok).To(BeTrue())
 			Expect(fields["type"]).To(Equal("object"))
-			Expect(fields["additionalProperties"]).To(Equal(false))
+			Expect(fields["additionalProperties"]).To(BeFalse())
 			Expect(fields["required"]).To(ConsistOf("timestamp_ms", "value"))
 
 			fieldsProps, ok := fields["properties"].(map[string]interface{})
@@ -178,11 +178,11 @@ var _ = Describe("Translator Examples", func() {
 				allDataModels, // Provide model references
 			)
 
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			subjectName := "_pump_data_v1-timeseries-number"
 			jsonBytes, err := result.GetSchemaAsJSON(subjectName)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			GinkgoWriter.Printf("=== Model Reference Example ===\n")
 			GinkgoWriter.Printf("YAML with _refModel (new format):\n")

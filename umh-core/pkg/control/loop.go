@@ -164,7 +164,7 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 // Critical error handling patterns:
 // - Deadline exceeded: Log warning and continue (temporary slowness indicating the ticker is too fast or the managers are slow)
 // - Context cancelled: Clean shutdown
-// - Other errors: Abort the loop
+// - Other errors: Abort the loop.
 func (c *ControlLoop) Execute(ctx context.Context) error {
 	ticker := time.NewTicker(c.tickerTime)
 	defer ticker.Stop()
@@ -187,6 +187,7 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 			timeoutCtx, cancel := context.WithTimeout(ctx, c.tickerTime)
 			// Reconcile the managers
 			err := c.Reconcile(timeoutCtx, c.currentTick)
+
 			cancel()
 
 			// Record metrics for the reconcile cycle
@@ -205,17 +206,20 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 
 			// Handle errors differently based on type
 			if err != nil {
-				if errors.Is(err, context.DeadlineExceeded) {
+				switch {
+				case errors.Is(err, context.DeadlineExceeded):
 					// For timeouts, log warning but continue
 					sentry.ReportIssuef(sentry.IssueTypeWarning, c.logger, "Control loop reconcile timed out: %v", err)
-				} else if errors.Is(err, context.Canceled) {
+				case errors.Is(err, context.Canceled):
 					// For cancellation, exit the loop
 					c.logger.Infof("Control loop cancelled")
+
 					return nil
-				} else {
+				default:
 					metrics.IncErrorCountAndLog(metrics.ComponentControlLoop, "main", err, c.logger)
 					// Any other unhandled error will result in the control loop stopping
 					sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Control loop error: %v", err)
+
 					return err
 				}
 			}
@@ -252,7 +256,7 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	// Get the config
 	if c.configManager == nil {
-		return fmt.Errorf("config manager is not set")
+		return errors.New("config manager is not set")
 	}
 
 	// Check if context is already cancelled
@@ -262,6 +266,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 
 	// 1) Retrieve or create the "previous" snapshot
 	prevSnapshot := c.snapshotManager.GetSnapshot()
+
 	var newSnapshot fsm.SystemSnapshot
 
 	// If there is no previous snapshot, create a new one
@@ -279,8 +284,10 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 		err := deepcopy.Copy(&newSnapshot, prevSnapshot)
 		if err != nil {
 			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Failed to deep copy snapshot: %v", err)
+
 			return fmt.Errorf("failed to deep copy snapshot: %w", err)
 		}
+
 		newSnapshot.Tick = ticker
 		newSnapshot.SnapshotTime = time.Now()
 	}
@@ -291,10 +298,12 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	cfg, err := c.configManager.GetConfig(ctx, ticker)
 	if err != nil {
 		// Handle temporary backoff errors --> we want to continue reconciling
-		if backoff.IsTemporaryBackoffError(err) {
+		switch {
+		case backoff.IsTemporaryBackoffError(err):
 			c.logger.Debugf("Skipping reconcile cycle due to temporary config backoff: %v", err)
+
 			return nil
-		} else if backoff.IsPermanentFailureError(err) { // Handle permanent failure errors --> we want to stop the control loop
+		case backoff.IsPermanentFailureError(err): // Handle permanent failure errors --> we want to stop the control loop
 			originalErr := backoff.ExtractOriginalError(err)
 			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Config manager has permanently failed after max retries: %v (original error: %v)",
 				err, originalErr)
@@ -302,9 +311,10 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 
 			// Propagate the error to the parent component so it can potentially restart the system
 			return fmt.Errorf("config permanently failed, system needs intervention: %w", err)
-		} else {
+		default:
 			// Handle other errors --> we want to continue reconciling
 			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Config manager error: %v", err)
+
 			return nil
 		}
 	}
@@ -313,7 +323,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	newSnapshot.CurrentConfig = cfg
 
 	if c == nil {
-		return fmt.Errorf("service registry is nil, possible initialization failure")
+		return errors.New("service registry is nil, possible initialization failure")
 	}
 	// 4) If your filesystem service is a buffered FS, sync once per loop:
 	bufferedFs, ok := c.services.GetFileSystem().(*filesystem.BufferedService)
@@ -322,6 +332,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 		err = bufferedFs.SyncToDisk(ctx)
 		if err != nil {
 			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Failed to sync S6 filesystem to disk: %v", err)
+
 			return fmt.Errorf("failed to sync S6 filesystem to disk: %w", err)
 		}
 
@@ -329,6 +340,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 		err = bufferedFs.SyncFromDisk(ctx)
 		if err != nil {
 			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Failed to sync S6 filesystem from disk: %v", err)
+
 			return fmt.Errorf("failed to sync S6 filesystem from disk: %w", err)
 		}
 	}
@@ -338,9 +350,11 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	if !ok {
 		return ctxutil.ErrNoDeadline
 	}
+
 	remainingTime := time.Until(deadline)
 	timeToAdd := time.Duration(float64(remainingTime) * constants.LoopControlLoopTimeFactor)
 	newDeadline := time.Now().Add(timeToAdd)
+
 	innerCtx, cancel := context.WithDeadline(ctx, newDeadline)
 	defer cancel()
 
@@ -352,6 +366,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 
 	// Track executed managers for logging purposes
 	var executedManagers []string
+
 	executedManagersMutex := sync.RWMutex{}
 
 	// Track if any managers were reconciled
@@ -373,6 +388,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 		currentBatch := int(c.currentTick % uint64(totalBatches))
 
 		startIdx = currentBatch * constants.MaxConcurrentFSMOperations
+
 		endIdx = startIdx + constants.MaxConcurrentFSMOperations
 		if endIdx > len(c.managers) {
 			endIdx = len(c.managers)
@@ -391,6 +407,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 			// It might be that .Go is blocked until the ctx is already cancelled, in that case we just return
 			if innerCtx.Err() != nil {
 				c.logger.Debugf("Context is already cancelled, skipping manager %s", capturedManager.GetManagerName())
+
 				return nil
 			}
 
@@ -398,18 +415,24 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 			if err != nil {
 				return err
 			}
+
 			if reconciled {
 				hasAnyReconcilesMutex.Lock()
+
 				hasAnyReconciles = true
+
 				hasAnyReconcilesMutex.Unlock()
 			}
+
 			return nil
 		})
 		if !started {
 			c.logger.Debugf("To many running managers, skipping remaining")
+
 			break
 		}
 	}
+
 	waitErrorChannel := make(chan error, 1)
 	sentry.SafeGo(func() {
 		waitErrorChannel <- errorgroup.Wait()
@@ -425,9 +448,11 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	// If any managers were reconciled, create a snapshot
 	hasAnyReconcilesMutex.Lock()
 	defer hasAnyReconcilesMutex.Unlock()
+
 	if hasAnyReconciles {
 		// Create a snapshot after any successful reconciliation
 		c.updateSystemSnapshot(ctx, cfg)
+
 		return nil
 	}
 
@@ -443,7 +468,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 			return fmt.Errorf("starvation checker reconciliation failed: %w", err)
 		}
 	} else {
-		return fmt.Errorf("starvation checker is not set")
+		return errors.New("starvation checker is not set")
 	}
 
 	// 6) Finally, persist the updated snapshot
@@ -453,7 +478,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	return nil
 }
 
-// updateSystemSnapshot creates a snapshot of the current system state
+// updateSystemSnapshot creates a snapshot of the current system state.
 func (c *ControlLoop) updateSystemSnapshot(ctx context.Context, cfg config.FullConfig) {
 	// Check if logger is nil to prevent panic
 	if c.logger == nil {
@@ -463,6 +488,7 @@ func (c *ControlLoop) updateSystemSnapshot(ctx context.Context, cfg config.FullC
 
 	if c.snapshotManager == nil {
 		sentry.ReportIssuef(sentry.IssueTypeWarning, c.logger, "[updateSystemSnapshot] Cannot create system snapshot: snapshot manager is not set")
+
 		return
 	}
 
@@ -470,6 +496,7 @@ func (c *ControlLoop) updateSystemSnapshot(ctx context.Context, cfg config.FullC
 	if err != nil {
 		c.logger.Errorf("Failed to create system snapshot: %v", err)
 		sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "[updateSystemSnapshot] Failed to create system snapshot: %v", err)
+
 		return
 	}
 
@@ -478,7 +505,7 @@ func (c *ControlLoop) updateSystemSnapshot(ctx context.Context, cfg config.FullC
 }
 
 // GetSystemSnapshot returns the current snapshot of the system state
-// This is thread-safe and can be called from any goroutine
+// This is thread-safe and can be called from any goroutine.
 func (c *ControlLoop) GetSystemSnapshot() *fsm.SystemSnapshot {
 	// Check if logger is nil to prevent panic
 	if c.logger == nil {
@@ -488,18 +515,20 @@ func (c *ControlLoop) GetSystemSnapshot() *fsm.SystemSnapshot {
 
 	if c.snapshotManager == nil {
 		sentry.ReportIssuef(sentry.IssueTypeWarning, c.logger, "[GetSystemSnapshot] Cannot get system snapshot: snapshot manager is not set")
+
 		return nil
 	}
+
 	return c.snapshotManager.GetSnapshot()
 }
 
 // GetConfigManager returns the config manager
-// This can be used by components that need direct access to the current configuration
+// This can be used by components that need direct access to the current configuration.
 func (c *ControlLoop) GetConfigManager() config.ConfigManager {
 	return c.configManager
 }
 
-// GetSnapshotManager returns the snapshot manager
+// GetSnapshotManager returns the snapshot manager.
 func (c *ControlLoop) GetSnapshotManager() *fsm.SnapshotManager {
 	return c.snapshotManager
 }
@@ -516,11 +545,12 @@ func (c *ControlLoop) Stop(ctx context.Context) error {
 		// Stop the starvation checker
 		c.starvationChecker.Stop()
 	} else {
-		return fmt.Errorf("starvation checker is not set")
+		return errors.New("starvation checker is not set")
 	}
 
 	// Signal the control loop to stop
 	ctx.Done()
+
 	return nil
 }
 
@@ -550,7 +580,9 @@ func (c *ControlLoop) reconcileManager(ctx context.Context, manager fsm.FSMManag
 	managerName := manager.GetManagerName()
 
 	executedManagersMutex.Lock()
+
 	*executedManagers = append(*executedManagers, managerName)
+
 	executedManagersMutex.Unlock()
 
 	// Record manager execution time
@@ -564,6 +596,7 @@ func (c *ControlLoop) reconcileManager(ctx context.Context, manager fsm.FSMManag
 
 	if err != nil {
 		metrics.IncErrorCountAndLog(metrics.ComponentControlLoop, managerName, err, c.logger)
+
 		return false, fmt.Errorf("manager %s reconciliation failed: %w", managerName, err)
 	}
 

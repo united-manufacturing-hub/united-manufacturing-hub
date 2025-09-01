@@ -100,13 +100,14 @@ func (a *EditStreamProcessorAction) Parse(payload interface{}) error {
 	// Parse the payload directly as a complete StreamProcessor object
 	spPayload, err := ParseActionPayload[models.StreamProcessor](payload)
 	if err != nil {
-		return fmt.Errorf("failed to parse stream processor payload: %v", err)
+		return fmt.Errorf("failed to parse stream processor payload: %w", err)
 	}
 
 	// Extract UUID
 	if spPayload.UUID == nil {
 		return errors.New("missing required field UUID")
 	}
+
 	a.streamProcessorUUID = *spPayload.UUID
 	a.name = spPayload.Name
 	a.model = spPayload.Model
@@ -114,13 +115,14 @@ func (a *EditStreamProcessorAction) Parse(payload interface{}) error {
 	// Decode the base64-encoded config
 	decodedConfig, err := base64.StdEncoding.DecodeString(spPayload.EncodedConfig)
 	if err != nil {
-		return fmt.Errorf("failed to decode stream processor config: %v", err)
+		return fmt.Errorf("failed to decode stream processor config: %w", err)
 	}
 
 	var config models.StreamProcessorConfig
+
 	err = yaml.Unmarshal(decodedConfig, &config)
 	if err != nil {
-		return fmt.Errorf("failed to unmarshal stream processor config: %v", err)
+		return fmt.Errorf("failed to unmarshal stream processor config: %w", err)
 	}
 
 	a.sources = config.Sources
@@ -139,6 +141,7 @@ func (a *EditStreamProcessorAction) Parse(payload interface{}) error {
 
 	a.actionLogger.Debugf("Parsed EditStreamProcessor action payload: uuid=%s, name=%s, model=%s:%s",
 		a.streamProcessorUUID, a.name, a.model.Name, a.model.Version)
+
 	return nil
 }
 
@@ -183,6 +186,7 @@ func (a *EditStreamProcessorAction) Execute() (interface{}, map[string]interface
 		errorMsg := fmt.Sprintf("Failed to apply configuration mutation: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.EditStreamProcessor)
+
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
@@ -195,6 +199,7 @@ func (a *EditStreamProcessorAction) Execute() (interface{}, map[string]interface
 		errorMsg := fmt.Sprintf("Failed to persist configuration changes: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.EditStreamProcessor)
+
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
@@ -205,6 +210,7 @@ func (a *EditStreamProcessorAction) Execute() (interface{}, map[string]interface
 			errorMsg := fmt.Sprintf("Failed during rollout: %v", err)
 			SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 				errorMsg, errCode, nil, a.outboundChannel, models.EditStreamProcessor, nil)
+
 			return nil, nil, fmt.Errorf("%s", errorMsg)
 		}
 
@@ -236,12 +242,15 @@ func (a *EditStreamProcessorAction) applyMutation() (config.StreamProcessorConfi
 
 	// Find the stream processor in the configuration
 	var targetSP config.StreamProcessorConfig
+
 	found := false
+
 	for _, sp := range currentConfig.StreamProcessor {
 		spID := dataflowcomponentserviceconfig.GenerateUUIDFromName(sp.Name)
 		if spID == a.streamProcessorUUID {
 			targetSP = sp
 			found = true
+
 			break
 		}
 	}
@@ -259,19 +268,24 @@ func (a *EditStreamProcessorAction) applyMutation() (config.StreamProcessorConfi
 		targetSP.StreamProcessorServiceConfig.TemplateRef != targetSP.Name
 
 	// Determine which instance to modify and which UUID to use for atomic operation
-	var instanceToModify config.StreamProcessorConfig
-	var atomicEditUUID uuid.UUID
-	var newVB map[string]any
+	var (
+		instanceToModify config.StreamProcessorConfig
+		atomicEditUUID   uuid.UUID
+		newVB            map[string]any
+	)
 
 	if isChild {
 		// Find the root instance
 		var rootSP config.StreamProcessorConfig
+
 		rootFound := false
+
 		for _, sp := range currentConfig.StreamProcessor {
 			if sp.Name == targetSP.StreamProcessorServiceConfig.TemplateRef &&
 				sp.StreamProcessorServiceConfig.TemplateRef == sp.Name {
 				rootSP = sp
 				rootFound = true
+
 				break
 			}
 		}
@@ -288,6 +302,7 @@ func (a *EditStreamProcessorAction) applyMutation() (config.StreamProcessorConfi
 		// Add the new variables and preserve existing child variables
 		newVB = make(map[string]any)
 		maps.Copy(newVB, targetSP.StreamProcessorServiceConfig.Variables.User)
+
 		for _, variable := range a.vb {
 			newVB[variable.Label] = variable.Value
 		}
@@ -299,6 +314,7 @@ func (a *EditStreamProcessorAction) applyMutation() (config.StreamProcessorConfi
 		// Add the variables and keep the existing variables
 		newVB = make(map[string]any)
 		maps.Copy(newVB, targetSP.StreamProcessorServiceConfig.Variables.User)
+
 		for _, variable := range a.vb {
 			newVB[variable.Label] = variable.Value
 		}
@@ -324,6 +340,7 @@ func (a *EditStreamProcessorAction) applyMutation() (config.StreamProcessorConfi
 	for k, v := range a.location {
 		locationMap[strconv.Itoa(k)] = v
 	}
+
 	instanceToModify.StreamProcessorServiceConfig.Location = locationMap
 
 	return instanceToModify, atomicEditUUID, nil
@@ -363,6 +380,7 @@ func (a *EditStreamProcessorAction) awaitRollout(oldConfig config.StreamProcesso
 func (a *EditStreamProcessorAction) waitForComponentToBeActive(oldConfig config.StreamProcessorConfig) (string, error) {
 	ticker := time.NewTicker(constants.ActionTickerTime)
 	defer ticker.Stop()
+
 	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
 	startTime := time.Now()
 	timeoutDuration := constants.DataflowComponentWaitForActiveTimeout
@@ -377,13 +395,16 @@ func (a *EditStreamProcessorAction) waitForComponentToBeActive(oldConfig config.
 			// Rollback to previous configuration
 			ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 			defer cancel()
+
 			_, err := a.configManager.AtomicEditStreamProcessor(ctx, oldConfig)
 			if err != nil {
 				a.actionLogger.Errorf("Failed to rollback to previous configuration: %v", err)
 				stateMessage := fmt.Sprintf("Stream processor '%s' edit timeout reached. It did not become active in time. Rolling back to previous configuration failed: %v", a.name, err)
+
 				return models.ErrRetryRollbackTimeout, fmt.Errorf("%s", stateMessage)
 			} else {
 				stateMessage := fmt.Sprintf("Stream processor '%s' edit timeout reached. It did not become active in time. Rolled back to previous configuration", a.name)
+
 				return models.ErrRetryRollbackTimeout, fmt.Errorf("%s", stateMessage)
 			}
 
@@ -393,6 +414,7 @@ func (a *EditStreamProcessorAction) waitForComponentToBeActive(oldConfig config.
 			if streamProcessorManager, exists := systemSnapshot.Managers[constants.StreamProcessorManagerName]; exists {
 				instances := streamProcessorManager.GetInstances()
 				found := false
+
 				for _, instance := range instances {
 					curName := instance.ID
 					if curName != a.name {
@@ -400,7 +422,7 @@ func (a *EditStreamProcessorAction) waitForComponentToBeActive(oldConfig config.
 					}
 
 					found = true
-					currentStateReason := fmt.Sprintf("current state: %s", instance.CurrentState)
+					currentStateReason := "current state: " + instance.CurrentState
 
 					// Cast the instance LastObservedState to a streamprocessor instance
 					spSnapshot, ok := instance.LastObservedState.(*streamprocessor.ObservedStateSnapshot)
@@ -413,6 +435,7 @@ func (a *EditStreamProcessorAction) waitForComponentToBeActive(oldConfig config.
 						stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("stream processor successfully activated with state '%s'", instance.CurrentState)
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage,
 							a.outboundChannel, models.EditStreamProcessor)
+
 						return "", nil
 					}
 
@@ -426,7 +449,6 @@ func (a *EditStreamProcessorAction) waitForComponentToBeActive(oldConfig config.
 					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 						stateMessage, a.outboundChannel, models.EditStreamProcessor)
 				}
-
 			} else {
 				stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for stream processor manager to initialise"
 				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
@@ -460,8 +482,10 @@ func (a *EditStreamProcessorAction) GetParsedPayload() models.StreamProcessor {
 	})
 	if err != nil {
 		a.actionLogger.Errorf("Failed to marshal stream processor config: %v", err)
+
 		return models.StreamProcessor{}
 	}
+
 	encodedConfig := base64.StdEncoding.EncodeToString(configData)
 
 	return models.StreamProcessor{

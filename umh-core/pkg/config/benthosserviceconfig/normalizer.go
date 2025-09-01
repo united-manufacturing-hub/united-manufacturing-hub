@@ -14,15 +14,15 @@
 
 package benthosserviceconfig
 
-// Normalizer handles the normalization of Benthos configurations
+// Normalizer handles the normalization of Benthos configurations.
 type Normalizer struct{}
 
-// NewNormalizer creates a new configuration normalizer for Benthos
+// NewNormalizer creates a new configuration normalizer for Benthos.
 func NewNormalizer() *Normalizer {
 	return &Normalizer{}
 }
 
-// NormalizeConfig applies Benthos defaults to a structured config
+// NormalizeConfig applies Benthos defaults to a structured config.
 func (n *Normalizer) NormalizeConfig(cfg BenthosServiceConfig) BenthosServiceConfig {
 	// create a shallow copy
 	normalized := cfg

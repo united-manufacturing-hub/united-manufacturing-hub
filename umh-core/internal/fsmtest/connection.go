@@ -28,7 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
-// CreateConnectionTestConfig creates a standard Connection config for testing
+// CreateConnectionTestConfig creates a standard Connection config for testing.
 func CreateConnectionTestConfig(name string, desiredState string) config.ConnectionConfig {
 	return config.ConnectionConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
@@ -44,7 +44,7 @@ func CreateConnectionTestConfig(name string, desiredState string) config.Connect
 	}
 }
 
-// SetupConnectionServiceState configures the mock service state for Connection instance tests
+// SetupConnectionServiceState configures the mock service state for Connection instance tests.
 func SetupConnectionServiceState(
 	mockService *connectionsvc.MockConnectionService,
 	serviceName string,
@@ -67,7 +67,7 @@ func SetupConnectionServiceState(
 	mockService.SetConnectionState(serviceName, flags)
 }
 
-// ConfigureConnectionServiceConfig configures the mock service with a default Connection config
+// ConfigureConnectionServiceConfig configures the mock service with a default Connection config.
 func ConfigureConnectionServiceConfig(mockService *connectionsvc.MockConnectionService) {
 	mockService.GetConfigResult = connectionserviceconfig.ConnectionServiceConfig{
 		NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
@@ -77,7 +77,7 @@ func ConfigureConnectionServiceConfig(mockService *connectionsvc.MockConnectionS
 	}
 }
 
-// TransitionToConnectionState is a helper to configure a service for a given high-level state
+// TransitionToConnectionState is a helper to configure a service for a given high-level state.
 func TransitionToConnectionState(mockService *connectionsvc.MockConnectionService, serviceName string, state string) {
 	switch state {
 	case connectionfsm.OperationalStateStopped:
@@ -143,7 +143,7 @@ func SetupConnectionInstance(serviceName string, desiredState string) (*connecti
 }
 
 // setUpMockConnectionInstance creates a ConnectionInstance with a mock service
-// This is an internal helper function used by SetupConnectionInstance
+// This is an internal helper function used by SetupConnectionInstance.
 func setUpMockConnectionInstance(
 	cfg config.ConnectionConfig,
 	mockService *connectionsvc.MockConnectionService,
@@ -153,6 +153,7 @@ func setUpMockConnectionInstance(
 
 	// Set the mock service
 	instance.SetService(mockService)
+
 	return instance
 }
 
@@ -194,7 +195,8 @@ func TestConnectionStateTransition(
 
 	// 3. Reconcile until we reach the target state or exhaust attempts
 	tick := startTick
-	for i := 0; i < maxAttempts; i++ {
+
+	for range maxAttempts {
 		currentState := instance.GetCurrentFSMState()
 		if currentState == toState {
 			return tick, nil // Success!
@@ -248,7 +250,7 @@ func VerifyConnectionStableState(
 
 	// Execute reconcile cycles and check state stability
 	tick := snapshot.Tick
-	for i := 0; i < numCycles; i++ {
+	for i := range numCycles {
 		snapshot.Tick = tick
 		_, _ = instance.Reconcile(ctx, snapshot, services)
 		tick++
@@ -288,6 +290,7 @@ func CreateMockConnectionInstance(
 	cfg := CreateConnectionTestConfig(serviceName, desiredState)
 	instance := connectionfsm.NewConnectionInstance("", cfg)
 	instance.SetService(mockService)
+
 	return instance
 }
 
@@ -321,8 +324,9 @@ func StabilizeConnectionInstance(
 
 	// First wait for the instance to reach the target state
 	tick := snapshot.Tick
-	for i := 0; i < maxAttempts; i++ {
+	for range maxAttempts {
 		snapshot.Tick = tick
+
 		currentState := instance.GetCurrentFSMState()
 		if currentState == targetState {
 			// Now verify it remains stable
@@ -362,7 +366,7 @@ func WaitForConnectionDesiredState(
 ) (uint64, error) {
 	tick := snapshot.Tick
 
-	for i := 0; i < maxAttempts; i++ {
+	for range maxAttempts {
 		snapshot.Tick = tick
 		// Check if we've reached the target desired state
 		if instance.GetDesiredFSMState() == targetState {
@@ -410,7 +414,7 @@ func ReconcileConnectionUntilError(
 ) (uint64, error, bool) {
 	tick := snapshot.Tick
 
-	for i := 0; i < maxAttempts; i++ {
+	for range maxAttempts {
 		// Perform a reconcile cycle and capture the error and reconciled status
 		snapshot.Tick = tick
 		err, reconciled := instance.Reconcile(ctx, snapshot, servies)

@@ -20,26 +20,26 @@ import (
 )
 
 var (
-	// ErrServiceNotExist indicates the requested service does not exist
+	// ErrServiceNotExist indicates the requested service does not exist.
 	ErrServiceNotExist = errors.New("service does not exist")
 
-	// ErrServiceAlreadyExists indicates the requested service already exists
+	// ErrServiceAlreadyExists indicates the requested service already exists.
 	ErrServiceAlreadyExists = errors.New("service already exists")
 
-	// ErrServiceNoLogFile indicates the health check had no logs to process
+	// ErrServiceNoLogFile indicates the health check had no logs to process.
 	ErrServiceNoLogFile = errors.New("log file not found")
 
-	// ErrRedpandaMonitorNotRunning indicates the redpanda monitor service is not running
+	// ErrRedpandaMonitorNotRunning indicates the redpanda monitor service is not running.
 	ErrRedpandaMonitorNotRunning = errors.New("redpanda monitor service is not running")
 
-	// ErrRedpandaMonitorInstanceNotFound indicates the redpanda monitor instance was not found
+	// ErrRedpandaMonitorInstanceNotFound indicates the redpanda monitor instance was not found.
 	ErrRedpandaMonitorInstanceNotFound = errors.New("instance redpanda-monitor not found")
 
-	// ErrLastObservedStateNil indicates the last observed state is nil
+	// ErrLastObservedStateNil indicates the last observed state is nil.
 	ErrLastObservedStateNil = errors.New("last observed state is nil")
 )
 
-// SchemaRegistryError wraps errors that originate from schema registry operations
+// SchemaRegistryError wraps errors that originate from schema registry operations.
 type SchemaRegistryError struct {
 	Err error
 }
@@ -52,16 +52,18 @@ func (e *SchemaRegistryError) Unwrap() error {
 	return e.Err
 }
 
-// WrapSchemaRegistryError wraps an error as a schema registry error
+// WrapSchemaRegistryError wraps an error as a schema registry error.
 func WrapSchemaRegistryError(err error) error {
 	if err == nil {
 		return nil
 	}
+
 	return &SchemaRegistryError{Err: err}
 }
 
-// IsSchemaRegistryError checks if an error is a schema registry error
+// IsSchemaRegistryError checks if an error is a schema registry error.
 func IsSchemaRegistryError(err error) bool {
 	var schemaRegistryErr *SchemaRegistryError
+
 	return errors.As(err, &schemaRegistryErr)
 }

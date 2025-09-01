@@ -20,7 +20,7 @@ import (
 )
 
 // AtomicAddDataContract adds a new data contract to the config
-// Data contracts can only be added, never edited or deleted
+// Data contracts can only be added, never edited or deleted.
 func (m *FileConfigManager) AtomicAddDataContract(ctx context.Context, dataContract DataContractsConfig) error {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
@@ -54,7 +54,6 @@ func (m *FileConfigManager) AtomicAddDataContract(ctx context.Context, dataContr
 }
 
 func (m *FileConfigManagerWithBackoff) AtomicAddDataContract(ctx context.Context, dataContract DataContractsConfig) error {
-
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return ctx.Err()

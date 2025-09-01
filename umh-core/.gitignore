@@ -10,3 +10,4 @@ tmp/
 
 # Compiled binaries
 main
+tools/loganalyzer/loganalyzer

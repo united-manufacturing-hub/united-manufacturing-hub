@@ -15,6 +15,7 @@
 package benthos_monitor
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -24,7 +25,7 @@ import (
 	benthos_monitor "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 )
 
-// NewBenthosMonitorManagerWithMockedService creates an BenthosMonitorManager that uses a mock benthos_monitor.Service
+// NewBenthosMonitorManagerWithMockedService creates an BenthosMonitorManager that uses a mock benthos_monitor.Service.
 func NewBenthosMonitorManagerWithMockedService(name string, mockSvc benthos_monitor.MockBenthosMonitorService) *BenthosMonitorManager {
 	managerName := fmt.Sprintf("%s_mock_%s", logger.ComponentBenthosMonitorManager, name)
 
@@ -52,33 +53,39 @@ func NewBenthosMonitorManagerWithMockedService(name string, mockSvc benthos_moni
 		},
 		func(fc config.BenthosMonitorConfig) (public_fsm.FSMInstance, error) {
 			inst := NewBenthosMonitorInstanceWithService(fc, &mockSvc)
+
 			return inst, nil
 		},
 		func(instance public_fsm.FSMInstance, fc config.BenthosMonitorConfig) (bool, error) {
 			bi, ok := instance.(*BenthosMonitorInstance)
 			if !ok {
-				return false, fmt.Errorf("instance not an BenthosMonitorInstance")
+				return false, errors.New("instance not an BenthosMonitorInstance")
 			}
+
 			return bi.config.DesiredFSMState == fc.DesiredFSMState, nil
 		},
 		func(instance public_fsm.FSMInstance, fc config.BenthosMonitorConfig) error {
 			bi, ok := instance.(*BenthosMonitorInstance)
 			if !ok {
-				return fmt.Errorf("instance not an BenthosMonitorInstance")
+				return errors.New("instance not an BenthosMonitorInstance")
 			}
+
 			bi.config = fc
+
 			return bi.SetDesiredFSMState(fc.DesiredFSMState)
 		},
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
 			bi, ok := instance.(*BenthosMonitorInstance)
 			if !ok {
-				return 0, fmt.Errorf("instance not an BenthosMonitorInstance")
+				return 0, errors.New("instance not an BenthosMonitorInstance")
 			}
+
 			return bi.GetMinimumRequiredTime(), nil
 		},
 	)
 
 	logger.For(managerName).Info("Created BenthosMonitorManager with mocked service.")
+
 	return &BenthosMonitorManager{
 		BaseFSMManager: baseMgr,
 	}

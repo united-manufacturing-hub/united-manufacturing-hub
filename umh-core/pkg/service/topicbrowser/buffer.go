@@ -69,13 +69,13 @@ type Ringbuffer struct {
 	mu          sync.Mutex
 }
 
-// RingBufferSnapshot provides a consistent view of the ring buffer state
+// RingBufferSnapshot provides a consistent view of the ring buffer state.
 type RingBufferSnapshot struct {
 	Items           []*BufferItem // Current buffer contents, newest-to-oldest
 	LastSequenceNum uint64        // Latest sequence number
 }
 
-// NewRingbufferWithDefaultCapacity creates a ring buffer with the standard production capacity
+// NewRingbufferWithDefaultCapacity creates a ring buffer with the standard production capacity.
 func NewRingbufferWithDefaultCapacity() *Ringbuffer {
 	return NewRingbuffer(constants.RingBufferCapacity)
 }
@@ -136,17 +136,19 @@ func PutBufferItems(items []*BufferItem) {
 func (rb *Ringbuffer) Len() int {
 	rb.mu.Lock()
 	defer rb.mu.Unlock()
+
 	n := rb.count
+
 	return n
 }
 
-// Cap returns the fixed capacity of the ring buffer
+// Cap returns the fixed capacity of the ring buffer.
 func (rb *Ringbuffer) Cap() int {
 	return len(rb.buf)
 }
 
 // GetSnapshot returns a consistent snapshot of the ring buffer state
-// This is the primary interface for consumers to get ring buffer data
+// This is the primary interface for consumers to get ring buffer data.
 func (rb *Ringbuffer) GetSnapshot() RingBufferSnapshot {
 	rb.mu.Lock()
 	defer rb.mu.Unlock()
@@ -158,14 +160,15 @@ func (rb *Ringbuffer) GetSnapshot() RingBufferSnapshot {
 }
 
 // getBuffersInternal returns shared references to buffer items (newest to oldest)
-// This is used internally by GetSnapshot and assumes mutex is already held
+// This is used internally by GetSnapshot and assumes mutex is already held.
 func (rb *Ringbuffer) getBuffersInternal() []*BufferItem {
 	result := make([]*BufferItem, 0, rb.count)
-	for i := 0; i < rb.count; i++ {
+	for i := range rb.count {
 		idx := (rb.writePos - 1 - i + len(rb.buf)) % len(rb.buf)
 		if b := rb.buf[idx]; b != nil {
 			result = append(result, b) // Share the reference, no copying
 		}
 	}
+
 	return result
 }

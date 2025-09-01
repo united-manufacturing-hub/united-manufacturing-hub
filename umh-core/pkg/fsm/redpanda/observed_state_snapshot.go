@@ -22,18 +22,18 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
 )
 
-// RedpandaObservedStateSnapshot is a deep-copyable snapshot of BenthosObservedState
+// RedpandaObservedStateSnapshot is a deep-copyable snapshot of BenthosObservedState.
 type RedpandaObservedStateSnapshot struct {
 	Config              redpandaserviceconfig.RedpandaServiceConfig
 	ServiceInfoSnapshot redpanda.ServiceInfo
 }
 
-// IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface
+// IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface.
 func (s *RedpandaObservedStateSnapshot) IsObservedStateSnapshot() {
 	// Marker method implementation
 }
 
-// CreateObservedStateSnapshot implements the fsm.ObservedStateConverter interface for RedpandaInstance
+// CreateObservedStateSnapshot implements the fsm.ObservedStateConverter interface for RedpandaInstance.
 func (d *RedpandaInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	// Create a deep copy of the observed state
 	snapshot := &RedpandaObservedStateSnapshot{}
@@ -42,6 +42,7 @@ func (d *RedpandaInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapsh
 	err := deepcopy.Copy(&snapshot.Config, &d.config)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, d.baseFSMInstance.GetLogger(), "failed to deep copy config: %v", err)
+
 		return nil
 	}
 
@@ -49,6 +50,7 @@ func (d *RedpandaInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapsh
 	err = deepcopy.Copy(&snapshot.ServiceInfoSnapshot, &d.PreviousObservedState.ServiceInfo)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, d.baseFSMInstance.GetLogger(), "failed to deep copy service info: %v", err)
+
 		return nil
 	}
 

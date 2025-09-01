@@ -21,45 +21,45 @@ import (
 	dataflowcomponentsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 )
 
-// Operational state constants (using internal_fsm compatible naming)
+// Operational state constants (using internal_fsm compatible naming).
 const (
-	// OperationalStateStopping is the state when the service is in the process of stopping
+	// OperationalStateStopping is the state when the service is in the process of stopping.
 	OperationalStateStopping = "stopping"
-	// OperationalStateStopped is the initial state and also the state when the service is stopped
+	// OperationalStateStopped is the initial state and also the state when the service is stopped.
 	OperationalStateStopped = "stopped"
 
 	// Starting phase states
-	// OperationalStateStarting is the state when benthos starts
+	// OperationalStateStarting is the state when benthos starts.
 	OperationalStateStarting = "starting"
-	// OperationalStateStartingFailed is the state when benthos failed to start
+	// OperationalStateStartingFailed is the state when benthos failed to start.
 	OperationalStateStartingFailed = "starting_failed"
 
 	// Running phase states
-	// OperationalStateIdle is the state when the service is running but not actively processing data
+	// OperationalStateIdle is the state when the service is running but not actively processing data.
 	OperationalStateIdle = "idle"
-	// OperationalStateActive is the state when the service is running and actively processing data
+	// OperationalStateActive is the state when the service is running and actively processing data.
 	OperationalStateActive = "active"
-	// OperationalStateDegraded is the state when the service is running but has encountered issues
+	// OperationalStateDegraded is the state when the service is running but has encountered issues.
 	OperationalStateDegraded = "degraded"
 )
 
-// Operational event constants
+// Operational event constants.
 const (
-	// Basic lifecycle events
+	// Basic lifecycle events.
 	EventStart       = "start"
 	EventStartDone   = "start_done"
 	EventStop        = "stop"
 	EventStopDone    = "stop_done"
 	EventStartFailed = "start_failed"
 
-	// Running phase events
+	// Running phase events.
 	EventBenthosDataReceived   = "benthos_data_received"
 	EventBenthosNoDataReceived = "benthos_no_data_received"
 	EventBenthosDegraded       = "benthos_degraded"
 	EventBenthosRecovered      = "benthos_recovered"
 )
 
-// IsOperationalState returns whether the given state is a valid operational state
+// IsOperationalState returns whether the given state is a valid operational state.
 func IsOperationalState(state string) bool {
 	switch state {
 	case OperationalStateStopped,
@@ -71,20 +71,22 @@ func IsOperationalState(state string) bool {
 		OperationalStateStopping:
 		return true
 	}
+
 	return false
 }
 
-// IsStartingState returns whether the given state is a starting state
+// IsStartingState returns whether the given state is a starting state.
 func IsStartingState(state string) bool {
 	switch state {
 	case OperationalStateStarting,
 		OperationalStateStartingFailed:
 		return true
 	}
+
 	return false
 }
 
-// IsRunningState returns whether the given state is a running state
+// IsRunningState returns whether the given state is a running state.
 func IsRunningState(state string) bool {
 	switch state {
 	case OperationalStateIdle,
@@ -92,10 +94,11 @@ func IsRunningState(state string) bool {
 		OperationalStateDegraded:
 		return true
 	}
+
 	return false
 }
 
-// DataflowComponentObservedState contains the observed runtime state of a DataflowComponent instance
+// DataflowComponentObservedState contains the observed runtime state of a DataflowComponent instance.
 type DataflowComponentObservedState struct {
 
 	// ObservedDataflowComponentConfig contains the observed DataflowComponent service config
@@ -104,12 +107,12 @@ type DataflowComponentObservedState struct {
 	ServiceInfo dataflowcomponentsvc.ServiceInfo
 }
 
-// IsObservedState implements the ObservedState interface
+// IsObservedState implements the ObservedState interface.
 func (b DataflowComponentObservedState) IsObservedState() {}
 
 // BenthosInstance implements the FSMInstance interface
 // If BenthosInstance does not implement the FSMInstance interface, this will
-// be detected at compile time
+// be detected at compile time.
 var _ publicfsm.FSMInstance = (*DataflowComponentInstance)(nil)
 
 // DataflowComponentInstance is a state-machine managed instance of a DataflowComponent service.
@@ -131,32 +134,32 @@ type DataflowComponentInstance struct {
 	ObservedState DataflowComponentObservedState
 }
 
-// GetLastObservedState returns the last known state of the instance
+// GetLastObservedState returns the last known state of the instance.
 func (d *DataflowComponentInstance) GetLastObservedState() publicfsm.ObservedState {
 	return d.ObservedState
 }
 
 // SetService sets the DataflowComponent service implementation to use
-// This is a testing-only utility to access the private service field
+// This is a testing-only utility to access the private service field.
 func (d *DataflowComponentInstance) SetService(service dataflowcomponentsvc.IDataFlowComponentService) {
 	d.service = service
 }
 
 // GetConfig returns the DataflowComponentServiceConfig for this service
-// This is a testing-only utility to access the private service field
+// This is a testing-only utility to access the private service field.
 func (d *DataflowComponentInstance) GetConfig() dataflowcomponentconfig.DataflowComponentServiceConfig {
 	return d.config
 }
 
 // GetLastError returns the last error of the instance
-// This is a testing-only utility to access the private baseFSMInstance field
+// This is a testing-only utility to access the private baseFSMInstance field.
 func (d *DataflowComponentInstance) GetLastError() error {
 	return d.baseFSMInstance.GetLastError()
 }
 
 // IsTransientStreakCounterMaxed returns whether the transient streak counter
 // has reached the maximum number of ticks, which means that the FSM is stuck in a state
-// and should be removed
+// and should be removed.
 func (d *DataflowComponentInstance) IsTransientStreakCounterMaxed() bool {
 	return d.baseFSMInstance.IsTransientStreakCounterMaxed()
 }

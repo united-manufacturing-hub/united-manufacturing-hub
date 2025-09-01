@@ -31,7 +31,7 @@ import (
 //
 // Fails if:
 // - Another converter with the same name already exists
-// - Adding a child converter but the referenced template doesn't exist
+// - Adding a child converter but the referenced template doesn't exist.
 func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc ProtocolConverterConfig) error {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
@@ -61,6 +61,7 @@ func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 		for _, existing := range config.ProtocolConverter {
 			if existing.Name == templateRef && existing.ProtocolConverterServiceConfig.TemplateRef == existing.Name {
 				rootExists = true
+
 				break
 			}
 		}
@@ -81,9 +82,8 @@ func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 	return nil
 }
 
-// AtomicAddProtocolConverter delegates to the underlying FileConfigManager
+// AtomicAddProtocolConverter delegates to the underlying FileConfigManager.
 func (m *FileConfigManagerWithBackoff) AtomicAddProtocolConverter(ctx context.Context, pc ProtocolConverterConfig) error {
-
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -107,7 +107,7 @@ func (m *FileConfigManagerWithBackoff) AtomicAddProtocolConverter(ctx context.Co
 // Fails if:
 // - Converter with given UUID doesn't exist
 // - New name conflicts with another converter (excluding the one being edited)
-// - Child converter references a non-existent template
+// - Child converter references a non-existent template.
 func (m *FileConfigManager) AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc ProtocolConverterConfig) (ProtocolConverterConfig, error) {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
@@ -124,12 +124,15 @@ func (m *FileConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 	// Find target index via GenerateUUIDFromName(Name) == componentUUID
 	// the index is used later to update the config
 	targetIndex := -1
+
 	var oldConfig ProtocolConverterConfig
+
 	for i, component := range config.ProtocolConverter {
 		curComponentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
 		if curComponentID == componentUUID {
 			targetIndex = i
 			oldConfig = config.ProtocolConverter[i]
+
 			break
 		}
 	}
@@ -193,7 +196,7 @@ func (m *FileConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 //
 // Fails if:
 // - Converter with given UUID doesn't exist
-// - Attempting to delete a root converter that has dependent children
+// - Attempting to delete a root converter that has dependent children.
 func (m *FileConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, componentUUID uuid.UUID) error {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
@@ -209,12 +212,15 @@ func (m *FileConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 
 	// Find the target protocol converter by UUID
 	targetIndex := -1
+
 	var targetConverter ProtocolConverterConfig
+
 	for i, converter := range config.ProtocolConverter {
 		converterID := dataflowcomponentserviceconfig.GenerateUUIDFromName(converter.Name)
 		if converterID == componentUUID {
 			targetIndex = i
 			targetConverter = converter
+
 			break
 		}
 	}
@@ -230,6 +236,7 @@ func (m *FileConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 	// If it's a root, check for dependent children
 	if isRoot {
 		childCount := 0
+
 		for i, converter := range config.ProtocolConverter {
 			// Skip the target itself
 			if i == targetIndex {
@@ -265,7 +272,7 @@ func (m *FileConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 	return nil
 }
 
-// AtomicEditProtocolConverter delegates to the underlying FileConfigManager
+// AtomicEditProtocolConverter delegates to the underlying FileConfigManager.
 func (m *FileConfigManagerWithBackoff) AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc ProtocolConverterConfig) (ProtocolConverterConfig, error) {
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
@@ -275,7 +282,7 @@ func (m *FileConfigManagerWithBackoff) AtomicEditProtocolConverter(ctx context.C
 	return m.configManager.AtomicEditProtocolConverter(ctx, componentUUID, pc)
 }
 
-// AtomicDeleteProtocolConverter delegates to the underlying FileConfigManager
+// AtomicDeleteProtocolConverter delegates to the underlying FileConfigManager.
 func (m *FileConfigManagerWithBackoff) AtomicDeleteProtocolConverter(ctx context.Context, componentUUID uuid.UUID) error {
 	// Check if context is already cancelled
 	if ctx.Err() != nil {

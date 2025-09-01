@@ -21,7 +21,7 @@ import (
 )
 
 // Generator handles the generation of Nmap YAML configurations
-// Currently BoilerPlate-Code
+// Currently BoilerPlate-Code.
 type Generator struct {
 }
 
@@ -32,9 +32,8 @@ func NewGenerator() *Generator {
 	return &Generator{}
 }
 
-// RenderConfig generates a Nmap YAML configuration from a NmapServiceConfig
+// RenderConfig generates a Nmap YAML configuration from a NmapServiceConfig.
 func (g *Generator) RenderConfig(cfg NmapServiceConfig) (string, error) {
-
 	// Convert the config to a normalized map
 	configMap := g.ConfigToMap(cfg)
 	normalizedMap := normalizeConfig(configMap)
@@ -50,7 +49,7 @@ func (g *Generator) RenderConfig(cfg NmapServiceConfig) (string, error) {
 	return yamlStr, nil
 }
 
-// ConfigToMap converts a NmapServiceConfig to a raw map for YAML generation
+// ConfigToMap converts a NmapServiceConfig to a raw map for YAML generation.
 func (g *Generator) ConfigToMap(cfg NmapServiceConfig) map[string]any {
 	configMap := make(map[string]any)
 
@@ -66,7 +65,7 @@ func (g *Generator) ConfigToMap(cfg NmapServiceConfig) map[string]any {
 	return configMap
 }
 
-// normalizeConfig applies nothing since Nmap has no default settings
+// normalizeConfig applies nothing since Nmap has no default settings.
 func normalizeConfig(raw map[string]any) map[string]any {
 	return raw
 }

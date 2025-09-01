@@ -17,12 +17,12 @@ package monitor
 import "errors"
 
 var (
-	// ErrServiceConnectionRefused indicates the service connection was refused
+	// ErrServiceConnectionRefused indicates the service connection was refused.
 	ErrServiceConnectionRefused = errors.New("connection refused, while attempting to fetch metrics via curl. This is expected during the startup phase of the service, when the service is not yet ready to receive connections")
 
-	// ErrServiceConnectionTimedOut indicates the service connection timed out
+	// ErrServiceConnectionTimedOut indicates the service connection timed out.
 	ErrServiceConnectionTimedOut = errors.New("connection timed out, while attempting to fetch metrics via curl. This can happen if the service or the system is experiencing high load")
 
-	// ErrServiceStopped indicates the service is stopped
+	// ErrServiceStopped indicates the service is stopped.
 	ErrServiceStopped = errors.New("service is stopped")
 )

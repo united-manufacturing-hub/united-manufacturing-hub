@@ -17,6 +17,8 @@ package actions_test
 import (
 	"fmt"
 
+	"errors"
+
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -308,7 +310,7 @@ var _ = Describe("GetMetricsAction", func() {
 		It("should handle metrics provider errors gracefully", func() {
 			// Setup mock provider to return an error
 			mockProvider.GetMockMetrics = func(payload models.GetMetricsRequest, _ fsm.SystemSnapshot) (models.GetMetricsResponse, error) {
-				return models.GetMetricsResponse{}, fmt.Errorf("failed to get metrics")
+				return models.GetMetricsResponse{}, errors.New("failed to get metrics")
 			}
 
 			payload := map[string]interface{}{

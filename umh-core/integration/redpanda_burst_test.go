@@ -30,7 +30,7 @@ var _ = Describe("Redpanda Extended Tests (burst)", Ordered, Label("redpanda-ext
 		PrintLogsAndStopContainer()
 		CleanupDockerBuildCache()
 
-		//Keep temp dirs for debugging if the test failed
+		// Keep temp dirs for debugging if the test failed
 		if !CurrentSpecReport().Failed() {
 			cleanupTmpDirs(containerName)
 		}
@@ -66,7 +66,7 @@ var _ = Describe("Redpanda Extended Tests (burst)", Ordered, Label("redpanda-ext
 			builder.AddGoldenRedpanda()
 			testTopic := "test-throughput"
 
-			for i := 0; i < producers; i++ {
+			for i := range producers {
 				builder.AddBenthosProducer(fmt.Sprintf("benthos-%d", i), fmt.Sprintf("%dms", 1000/messagesPerSecond), testTopic)
 			}
 

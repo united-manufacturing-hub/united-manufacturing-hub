@@ -44,7 +44,6 @@ func NewStatusCollector(
 	logger *zap.SugaredLogger,
 	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator,
 ) *StatusCollectorType {
-
 	collector := &StatusCollectorType{
 		dog:                      dog,
 		systemSnapshotManager:    systemSnapshotManager,
@@ -57,7 +56,7 @@ func NewStatusCollector(
 }
 
 // UpdateTopicBrowserCache processes new topic browser data using the communicator
-// This automatically handles both real FSM data and simulated data based on the communicator mode
+// This automatically handles both real FSM data and simulated data based on the communicator mode.
 func (s *StatusCollectorType) UpdateTopicBrowserCache() error {
 	s.logger.Debug("Updating topic browser cache")
 
@@ -69,7 +68,7 @@ func (s *StatusCollectorType) UpdateTopicBrowserCache() error {
 }
 
 // updateTopicBrowserCacheFromSimulator updates the cache using simulated data
-// This generates fake topic browser data for testing/demo purposes
+// This generates fake topic browser data for testing/demo purposes.
 func (s *StatusCollectorType) updateTopicBrowserCacheFromSimulator() error {
 	s.logger.Debug("Updating topic browser cache from simulator")
 
@@ -77,6 +76,7 @@ func (s *StatusCollectorType) updateTopicBrowserCacheFromSimulator() error {
 	result, err := s.topicBrowserCommunicator.ProcessSimulatedData()
 	if err != nil {
 		s.logger.Errorf("Failed to update topic browser cache from simulator: %v", err)
+
 		return err
 	}
 
@@ -87,7 +87,7 @@ func (s *StatusCollectorType) updateTopicBrowserCacheFromSimulator() error {
 }
 
 // updateTopicBrowserCacheFromFSM updates the cache using real FSM observed state
-// This processes actual topic browser data from the running system
+// This processes actual topic browser data from the running system.
 func (s *StatusCollectorType) updateTopicBrowserCacheFromFSM() error {
 	s.logger.Debug("Updating topic browser cache from FSM")
 
@@ -98,6 +98,7 @@ func (s *StatusCollectorType) updateTopicBrowserCacheFromFSM() error {
 	tbInstance, ok := fsm.FindInstance(snapshot, constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
 	if !ok || tbInstance == nil {
 		s.logger.Debug("Topic browser instance not found in snapshot - system not ready yet")
+
 		return nil // Not an error, just not ready yet
 	}
 
@@ -105,6 +106,7 @@ func (s *StatusCollectorType) updateTopicBrowserCacheFromFSM() error {
 	tbObservedState, ok := tbInstance.LastObservedState.(*topicbrowserfsm.ObservedStateSnapshot)
 	if !ok || tbObservedState == nil {
 		s.logger.Debug("Topic browser observed state not available - system not ready yet")
+
 		return nil // Not an error, just not ready yet
 	}
 
@@ -112,6 +114,7 @@ func (s *StatusCollectorType) updateTopicBrowserCacheFromFSM() error {
 	result, err := s.topicBrowserCommunicator.ProcessRealData(tbObservedState)
 	if err != nil {
 		s.logger.Errorf("Failed to update topic browser cache from FSM: %v", err)
+
 		return err
 	}
 
@@ -132,12 +135,12 @@ func (s *StatusCollectorType) updateTopicBrowserCacheFromFSM() error {
 }
 
 func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBootstrapped bool) *models.StatusMessage {
-
 	// Step 1: Get the snapshot
 	snapshot := s.systemSnapshotManager.GetDeepCopySnapshot()
 	if len(snapshot.Managers) == 0 {
 		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "[GenerateStatusMessage] State is nil, using empty state")
 		s.logger.Error("State is nil, using empty state")
+
 		return nil
 	}
 
@@ -145,16 +148,20 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 
 	// --- container (only one instance) ---------------------------------------------------------
 	var containerData models.Container
+
 	contInst, ok := fsm.FindInstance(snapshot, constants.ContainerManagerName, constants.CoreInstanceName)
 	if ok {
 		containerData = ContainerFromSnapshot(contInst, s.logger)
 	}
 
 	// --- agent + release (only one instance) -------------------------------------------------------------
-	var agentData models.Agent
-	var agentDataReleaseChannel string
-	var agentDataCurrentVersion string
-	var agentDataVersions []models.Version
+	var (
+		agentData               models.Agent
+		agentDataReleaseChannel string
+		agentDataCurrentVersion string
+		agentDataVersions       []models.Version
+	)
+
 	agInst, ok := fsm.FindInstance(snapshot, constants.AgentManagerName, constants.AgentInstanceName)
 	if ok {
 		agentData, agentDataReleaseChannel, agentDataCurrentVersion, agentDataVersions = AgentFromSnapshot(agInst, s.logger)
@@ -162,6 +169,7 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 
 	// --- redpanda (only one instance) -------------------------------------------------------------
 	var redpandaData models.Redpanda
+
 	rpInst, ok := fsm.FindInstance(snapshot, constants.RedpandaManagerName, constants.RedpandaInstanceName)
 	if ok {
 		redpandaData = RedpandaFromSnapshot(rpInst, s.logger)
@@ -171,6 +179,7 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 	dataModelData, err := DataModelsFromConfig(ctx, s.configManager, s.logger)
 	if err != nil {
 		s.logger.Warnf("Failed to get data models from config: %v", err)
+
 		return &models.StatusMessage{} // Return empty status message on error
 	}
 
@@ -178,11 +187,13 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 	dataContractData, err := DataContractsFromConfig(ctx, s.configManager, s.logger)
 	if err != nil {
 		s.logger.Warnf("Failed to get data contracts from config: %v", err)
+
 		return &models.StatusMessage{} // Return empty status message on error
 	}
 
 	// --- dfc (multiple instances) ----------------------	---------------------------------------
 	var dfcData []models.Dfc
+
 	dfcMgr, ok := fsm.FindManager(snapshot, constants.DataflowcomponentManagerName)
 	if ok {
 		dfcData = DfcsFromSnapshot(dfcMgr, s.logger)
@@ -209,11 +220,12 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 		topicBrowserData = GenerateTopicBrowserFromCommunicator(s.topicBrowserCommunicator, isBootstrapped, s.logger, nil)
 	} else {
 		inst, ok := fsm.FindInstance(snapshot, constants.TopicBrowserManagerName, constants.TopicBrowserInstanceName)
-		if !ok {
+		switch {
+		case !ok:
 			s.logger.Error("Topic browser instance not found")
-		} else if inst == nil || inst.LastObservedState == nil {
+		case inst == nil || inst.LastObservedState == nil:
 			s.logger.Error("Topic browser instance has nil observed state or is nil")
-		} else {
+		default:
 			topicBrowserData = GenerateTopicBrowserFromCommunicator(s.topicBrowserCommunicator, isBootstrapped, s.logger, inst)
 		}
 	}

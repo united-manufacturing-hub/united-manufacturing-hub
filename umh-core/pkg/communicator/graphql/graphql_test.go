@@ -22,7 +22,7 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-// MockTopicBrowserCache for testing
+// MockTopicBrowserCache for testing.
 type MockTopicBrowserCache struct {
 	eventMap map[string]*tbproto.EventTableEntry
 	unsMap   *tbproto.TopicMap
@@ -99,6 +99,7 @@ func TestResolver_Topics(t *testing.T) {
 		if topic.Topic == "" {
 			t.Error("Topic name should not be empty")
 		}
+
 		if len(topic.Metadata) == 0 {
 			t.Error("Expected metadata, got none")
 		}
@@ -133,6 +134,7 @@ func TestServer_Creation(t *testing.T) {
 	}
 
 	config := DefaultServerConfig()
+
 	server, err := NewServer(resolver, config, nil)
 	if err != nil {
 		t.Fatalf("NewServer should not return error: %v", err)
@@ -140,6 +142,7 @@ func TestServer_Creation(t *testing.T) {
 
 	if server == nil {
 		t.Fatal("NewServer should not return nil")
+
 		return // This return is never reached but helps static analysis
 	}
 

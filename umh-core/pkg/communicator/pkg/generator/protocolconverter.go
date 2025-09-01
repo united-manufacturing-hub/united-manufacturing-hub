@@ -37,17 +37,18 @@ func ProtocolConvertersFromSnapshot(
 	mgr fsm.ManagerSnapshot,
 	log *zap.SugaredLogger,
 ) []models.Dfc {
-
 	if mgr == nil {
 		return []models.Dfc{}
 	}
 
 	var out []models.Dfc
+
 	for _, inst := range mgr.GetInstances() {
 		if pc, err := buildProtocolConverterAsDfc(*inst, log); err == nil {
 			out = append(out, pc)
 		}
 	}
+
 	return out
 }
 
@@ -57,7 +58,6 @@ func buildProtocolConverterAsDfc(
 	instance fsm.FSMInstanceSnapshot,
 	log *zap.SugaredLogger,
 ) (models.Dfc, error) {
-
 	observed, ok := instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot)
 	if !ok || observed == nil {
 		return models.Dfc{}, fmt.Errorf("observed state %T is not ProtocolConverterObservedStateSnapshot", instance.LastObservedState)
@@ -65,6 +65,7 @@ func buildProtocolConverterAsDfc(
 
 	// ---- health ---------------------------------------------------------
 	healthCat := models.Neutral
+
 	switch instance.CurrentState {
 	case protocolconverter.OperationalStateActive:
 		healthCat = models.Active
@@ -82,6 +83,7 @@ func buildProtocolConverterAsDfc(
 
 	// Create connection info for protocol converter
 	var connections []models.Connection
+
 	if observed.ObservedProtocolConverterSpecConfig.Config.ConnectionServiceConfig.NmapTemplate != nil &&
 		observed.ObservedProtocolConverterSpecConfig.Config.ConnectionServiceConfig.NmapTemplate.Target != "" {
 		var lastLatencyMs float64
@@ -135,10 +137,12 @@ func buildProtocolConverterAsDfc(
 
 	// Check if the protocol converter is initialized by checking if a read dfc is present.
 	isInitialized := false
+
 	var input map[string]any
 	if observed.ObservedProtocolConverterSpecConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input != nil {
 		input = observed.ObservedProtocolConverterSpecConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input
 	}
+
 	if len(input) > 0 {
 		isInitialized = true
 	}
@@ -165,7 +169,6 @@ func buildProtocolConverterAsDfc(
 	svcInfo := observed.ServiceInfo
 	if m := svcInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState; m != nil &&
 		m.Input.LastCount > 0 {
-
 		dfc.Metrics = &models.DfcMetrics{
 			AvgInputThroughputPerMinuteInMsgSec: m.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds(),
 		}
@@ -174,7 +177,7 @@ func buildProtocolConverterAsDfc(
 	return dfc, nil
 }
 
-// getProtocolConverterStatusMessage returns a human-readable status message for the given state
+// getProtocolConverterStatusMessage returns a human-readable status message for the given state.
 func getProtocolConverterStatusMessage(state string, statusReason string, connectionState string, nmapState string) string {
 	baseMessage := ""
 	connectionSuffix := ""
@@ -198,7 +201,7 @@ func getProtocolConverterStatusMessage(state string, statusReason string, connec
 	case protocolconverter.OperationalStateStartingFailedDFCMissing:
 		baseMessage = "No DFC added yet"
 	default:
-		baseMessage = fmt.Sprintf("Protocol converter state: %s", state)
+		baseMessage = "Protocol converter state: " + state
 	}
 
 	// Add connection state information if available
@@ -217,7 +220,7 @@ func getProtocolConverterStatusMessage(state string, statusReason string, connec
 		default:
 			// For specific error states or unknown states, include the raw connection state
 			if connectionState != "unknown" && connectionState != "" {
-				connectionSuffix = fmt.Sprintf(" - connection: %s", connectionState)
+				connectionSuffix = " - connection: " + connectionState
 			}
 		}
 	}
@@ -225,6 +228,7 @@ func getProtocolConverterStatusMessage(state string, statusReason string, connec
 	// Add Nmap state information if available
 	if nmapState != "" {
 		nmapSuffix := ""
+
 		switch nmapState {
 		case nmap.OperationalStateOpen:
 			nmapSuffix = " (port is open)"
@@ -259,7 +263,7 @@ func getProtocolConverterStatusMessage(state string, statusReason string, connec
 	return baseMessage + connectionSuffix + " - " + statusReason
 }
 
-// getHealthCategoryFromState converts a FSM state string to models.HealthCategory
+// getHealthCategoryFromState converts a FSM state string to models.HealthCategory.
 func getHealthCategoryFromState(state string) models.HealthCategory {
 	switch state {
 	case connection.OperationalStateUp:

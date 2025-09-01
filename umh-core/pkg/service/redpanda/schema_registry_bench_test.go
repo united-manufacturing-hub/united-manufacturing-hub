@@ -27,22 +27,25 @@ import (
 
 // emptySchemaRegistryConfig returns empty configuration for schema registry reconciliation
 // This is used in benchmarks where we want to test the reconciliation performance
-// without the overhead of data model translation
+// without the overhead of data model translation.
 func emptySchemaRegistryConfig() ([]config.DataModelsConfig, []config.DataContractsConfig, map[string]config.PayloadShape) {
 	return []config.DataModelsConfig{}, []config.DataContractsConfig{}, make(map[string]config.PayloadShape)
 }
 
-// BenchmarkSchemaRegistry provides comprehensive performance benchmarks for schema registry operations
+// BenchmarkSchemaRegistry provides comprehensive performance benchmarks for schema registry operations.
 func BenchmarkSchemaRegistry(b *testing.B) {
 	// Setup Redpanda container for benchmarks
 	ctx := context.Background()
+
 	container, err := redpanda.Run(ctx, "redpandadata/redpanda:latest")
 	if err != nil {
 		b.Fatalf("Failed to start Redpanda container: %v", err)
 	}
+
 	if container == nil {
 		b.Fatalf("Received nil container from redpanda.Run")
 	}
+
 	defer func() {
 		if err := container.Terminate(ctx); err != nil {
 			b.Logf("Failed to terminate container: %v", err)
@@ -57,11 +60,12 @@ func BenchmarkSchemaRegistry(b *testing.B) {
 	registry := NewSchemaRegistry(WithSchemaRegistryAddress(schemaRegistryURL))
 
 	// Wait for registry to be ready
-	for i := 0; i < 30; i++ {
+	for range 30 {
 		dataModels, dataContracts, payloadShapes := emptySchemaRegistryConfig()
 		if err := registry.Reconcile(ctx, dataModels, dataContracts, payloadShapes); err == nil {
 			break
 		}
+
 		time.Sleep(1 * time.Second)
 	}
 
@@ -105,7 +109,7 @@ func BenchmarkSchemaRegistry(b *testing.B) {
 	})
 }
 
-// performWarmup ensures stable performance measurements by priming the system
+// performWarmup ensures stable performance measurements by priming the system.
 func performWarmup(b *testing.B, registry *SchemaRegistry) {
 	b.Helper()
 
@@ -131,47 +135,58 @@ func performWarmup(b *testing.B, registry *SchemaRegistry) {
 
 	// Phase 1: HTTP connection warmup
 	b.Logf("Warmup Phase 1: HTTP connection establishment")
-	for i := 0; i < 10; i++ {
+
+	for range 10 {
 		warmupCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		dataModels, dataContracts, payloadShapes := emptySchemaRegistryConfig()
 		_ = registry.Reconcile(warmupCtx, dataModels, dataContracts, payloadShapes)
+
 		cancel()
 	}
 
 	// Phase 2: Single schema operations warmup
 	b.Logf("Warmup Phase 2: Single schema operations")
-	for i := 0; i < 20; i++ {
+
+	for range 20 {
 		warmupCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		_ = reconcileUntilComplete(warmupCtx, registry, singleSchema)
+
 		cancel()
 	}
 
 	// Phase 3: Multiple schemas warmup
 	b.Logf("Warmup Phase 3: Multiple schemas operations")
-	for i := 0; i < 10; i++ {
+
+	for range 10 {
 		warmupCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 		_ = reconcileUntilComplete(warmupCtx, registry, multipleSchemas)
+
 		cancel()
 	}
 
 	// Phase 4: Large schema warmup
 	b.Logf("Warmup Phase 4: Large schema operations")
-	for i := 0; i < 5; i++ {
+
+	for range 5 {
 		warmupCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 		_ = reconcileUntilComplete(warmupCtx, registry, largeSchema)
+
 		cancel()
 	}
 
 	// Phase 5: Metrics access warmup
 	b.Logf("Warmup Phase 5: Metrics access")
-	for i := 0; i < 1000; i++ {
+
+	for range 1000 {
 		_ = registry.GetMetrics()
 	}
 
 	// Phase 6: Clean slate for benchmarks
 	b.Logf("Warmup Phase 6: Clean slate preparation")
+
 	cleanCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	_ = reconcileUntilComplete(cleanCtx, registry, emptySchemas)
+
 	cancel()
 
 	// Allow system to stabilize
@@ -180,7 +195,7 @@ func performWarmup(b *testing.B, registry *SchemaRegistry) {
 	b.Logf("Warmup completed - system ready for benchmarks")
 }
 
-// benchmarkSingleSchema measures performance of reconciling a single schema
+// benchmarkSingleSchema measures performance of reconciling a single schema.
 func benchmarkSingleSchema(b *testing.B, registry *SchemaRegistry) {
 	schema := map[SubjectName]JSONSchemaDefinition{
 		"benchmark-single": JSONSchemaDefinition(`{
@@ -198,17 +213,20 @@ func benchmarkSingleSchema(b *testing.B, registry *SchemaRegistry) {
 	warmupSingleSchema(b, registry, schema)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+
 		err := registry.ReconcileWithSchemas(ctx, schema)
 		if err != nil {
 			b.Fatalf("Reconciliation failed: %v", err)
 		}
+
 		cancel()
 	}
 }
 
-// benchmarkMultipleSchemas measures performance with varying numbers of schemas
+// benchmarkMultipleSchemas measures performance with varying numbers of schemas.
 func benchmarkMultipleSchemas(b *testing.B, registry *SchemaRegistry) {
 	schemaCounts := []int{5, 10, 25, 50, 100}
 
@@ -221,7 +239,8 @@ func benchmarkMultipleSchemas(b *testing.B, registry *SchemaRegistry) {
 			warmupMultipleSchemas(b, registry, schemas)
 
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+
+			for range b.N {
 				ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 
 				// Measure time to complete reconciliation
@@ -244,23 +263,26 @@ func benchmarkMultipleSchemas(b *testing.B, registry *SchemaRegistry) {
 	}
 }
 
-// benchmarkIncrementalUpdates measures performance of incremental schema updates
+// benchmarkIncrementalUpdates measures performance of incremental schema updates.
 func benchmarkIncrementalUpdates(b *testing.B, registry *SchemaRegistry) {
 	baseSchemas := generateSchemas(20, "incremental-base")
 
 	// Setup base schemas
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	err := reconcileUntilComplete(ctx, registry, baseSchemas)
+
 	cancel()
+
 	if err != nil {
 		b.Fatalf("Failed to setup base schemas: %v", err)
 	}
 
 	// Pre-generate all schemas we'll need for incremental updates
 	const maxIterations = 10000 // More than enough for any reasonable benchmark
+
 	preGeneratedSchemas := make([]map[SubjectName]JSONSchemaDefinition, maxIterations)
 
-	for i := 0; i < maxIterations; i++ {
+	for i := range maxIterations {
 		// Create incremental update: keep 15, remove 5, add 10
 		updatedSchemas := make(map[SubjectName]JSONSchemaDefinition)
 
@@ -270,6 +292,7 @@ func benchmarkIncrementalUpdates(b *testing.B, registry *SchemaRegistry) {
 			if j >= 15 {
 				break
 			}
+
 			updatedSchemas[subject] = schema
 			j++
 		}
@@ -287,7 +310,8 @@ func benchmarkIncrementalUpdates(b *testing.B, registry *SchemaRegistry) {
 	warmupIncrementalUpdatesWithPreGenerated(b, registry, preGeneratedSchemas[:3])
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for i := range b.N {
 		// Use pre-generated schemas
 		updatedSchemas := preGeneratedSchemas[i%maxIterations]
 
@@ -305,7 +329,7 @@ func benchmarkIncrementalUpdates(b *testing.B, registry *SchemaRegistry) {
 	}
 }
 
-// benchmarkLargeSchemaPayload measures performance with large schema definitions
+// benchmarkLargeSchemaPayload measures performance with large schema definitions.
 func benchmarkLargeSchemaPayload(b *testing.B, registry *SchemaRegistry) {
 	// Pre-generate large schema outside benchmark timing
 	largeSchema := generateLargeSchema(100) // 100 properties
@@ -317,7 +341,8 @@ func benchmarkLargeSchemaPayload(b *testing.B, registry *SchemaRegistry) {
 	warmupLargeSchema(b, registry, schemas)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 
 		start := time.Now()
@@ -330,6 +355,7 @@ func benchmarkLargeSchemaPayload(b *testing.B, registry *SchemaRegistry) {
 
 		// Report payload size and time
 		payloadSize := len(string(largeSchema))
+
 		b.ReportMetric(float64(duration.Nanoseconds()), "ns/large-schema")
 		b.ReportMetric(float64(payloadSize), "bytes/schema")
 		b.ReportMetric(float64(duration.Nanoseconds())/float64(payloadSize), "ns/byte")
@@ -338,15 +364,16 @@ func benchmarkLargeSchemaPayload(b *testing.B, registry *SchemaRegistry) {
 	}
 }
 
-// benchmarkMetricsAccess measures performance of metrics retrieval
+// benchmarkMetricsAccess measures performance of metrics retrieval.
 func benchmarkMetricsAccess(b *testing.B, registry *SchemaRegistry) {
 	// Benchmark-specific warmup
-	for i := 0; i < 10000; i++ {
+	for range 10000 {
 		_ = registry.GetMetrics()
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		metrics := registry.GetMetrics()
 		// Ensure we're actually using the metrics to prevent optimization
 		if metrics.TotalReconciliations < 0 {
@@ -355,7 +382,7 @@ func benchmarkMetricsAccess(b *testing.B, registry *SchemaRegistry) {
 	}
 }
 
-// benchmarkConcurrentReconciliation measures performance under concurrent load
+// benchmarkConcurrentReconciliation measures performance under concurrent load.
 func benchmarkConcurrentReconciliation(b *testing.B, registry *SchemaRegistry) {
 	schema := map[SubjectName]JSONSchemaDefinition{
 		"concurrent-bench": JSONSchemaDefinition(`{
@@ -374,32 +401,37 @@ func benchmarkConcurrentReconciliation(b *testing.B, registry *SchemaRegistry) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+
 			err := registry.ReconcileWithSchemas(ctx, schema)
 			if err != nil {
 				b.Errorf("Concurrent reconciliation failed: %v", err)
 			}
+
 			cancel()
 		}
 	})
 }
 
-// benchmarkAddOnly measures performance when only adding schemas (empty registry → populated)
+// benchmarkAddOnly measures performance when only adding schemas (empty registry → populated).
 func benchmarkAddOnly(b *testing.B, registry *SchemaRegistry) {
 	// Pre-generate schemas for adding
 	schemasToAdd := generateSchemas(20, "add-only")
 
 	// Warmup: ensure we start with a clean registry
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		_ = reconcileUntilComplete(ctx, registry, map[SubjectName]JSONSchemaDefinition{})
+
 		cancel()
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		// Start with empty registry
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		_ = reconcileUntilComplete(ctx, registry, map[SubjectName]JSONSchemaDefinition{})
+
 		cancel()
 
 		// Measure adding schemas
@@ -420,32 +452,37 @@ func benchmarkAddOnly(b *testing.B, registry *SchemaRegistry) {
 	}
 }
 
-// benchmarkRemoveOnly measures performance when only removing schemas (populated registry → empty)
+// benchmarkRemoveOnly measures performance when only removing schemas (populated registry → empty).
 func benchmarkRemoveOnly(b *testing.B, registry *SchemaRegistry) {
 	// Pre-generate schemas for setup
 	schemasToRemove := generateSchemas(20, "remove-only")
 
 	// Warmup: practice the remove-only pattern
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		// Setup schemas
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		_ = reconcileUntilComplete(ctx, registry, schemasToRemove)
+
 		cancel()
 
 		// Remove all schemas
 		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
 		_ = reconcileUntilComplete(ctx, registry, map[SubjectName]JSONSchemaDefinition{})
+
 		cancel()
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		// Setup: populate registry with schemas
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+
 		err := reconcileUntilComplete(ctx, registry, schemasToRemove)
 		if err != nil {
 			b.Fatalf("Failed to setup schemas for removal: %v", err)
 		}
+
 		cancel()
 
 		// Measure removing all schemas
@@ -466,16 +503,17 @@ func benchmarkRemoveOnly(b *testing.B, registry *SchemaRegistry) {
 	}
 }
 
-// benchmarkMixedOperations measures performance when both adding and removing schemas
+// benchmarkMixedOperations measures performance when both adding and removing schemas.
 func benchmarkMixedOperations(b *testing.B, registry *SchemaRegistry) {
 	// Pre-generate schemas for mixed operations
 	baseSchemas := generateSchemas(20, "mixed-base")
 
 	// Pre-generate all mixed operation scenarios
 	const maxIterations = 10000
+
 	preGeneratedMixedSchemas := make([]map[SubjectName]JSONSchemaDefinition, maxIterations)
 
-	for i := 0; i < maxIterations; i++ {
+	for i := range maxIterations {
 		mixedSchemas := make(map[SubjectName]JSONSchemaDefinition)
 
 		// Keep first 10 from base (remove 10)
@@ -484,6 +522,7 @@ func benchmarkMixedOperations(b *testing.B, registry *SchemaRegistry) {
 			if j >= 10 {
 				break
 			}
+
 			mixedSchemas[subject] = schema
 			j++
 		}
@@ -498,26 +537,31 @@ func benchmarkMixedOperations(b *testing.B, registry *SchemaRegistry) {
 	}
 
 	// Warmup: practice mixed operations
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		// Setup base schemas
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		_ = reconcileUntilComplete(ctx, registry, baseSchemas)
+
 		cancel()
 
 		// Perform mixed operation
 		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
 		_ = reconcileUntilComplete(ctx, registry, preGeneratedMixedSchemas[i])
+
 		cancel()
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for i := range b.N {
 		// Setup: start with base schemas
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+
 		err := reconcileUntilComplete(ctx, registry, baseSchemas)
 		if err != nil {
 			b.Fatalf("Failed to setup base schemas: %v", err)
 		}
+
 		cancel()
 
 		// Measure mixed operation (remove 10, add 10)
@@ -543,27 +587,31 @@ func benchmarkMixedOperations(b *testing.B, registry *SchemaRegistry) {
 
 // Benchmark-specific warmup functions
 
-// warmupSingleSchema performs targeted warmup for single schema benchmarks
+// warmupSingleSchema performs targeted warmup for single schema benchmarks.
 func warmupSingleSchema(b *testing.B, registry *SchemaRegistry, schema map[SubjectName]JSONSchemaDefinition) {
 	b.Helper()
-	for i := 0; i < 5; i++ {
+
+	for range 5 {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		_ = registry.ReconcileWithSchemas(ctx, schema)
+
 		cancel()
 	}
 }
 
-// warmupMultipleSchemas performs targeted warmup for multiple schema benchmarks
+// warmupMultipleSchemas performs targeted warmup for multiple schema benchmarks.
 func warmupMultipleSchemas(b *testing.B, registry *SchemaRegistry, schemas map[SubjectName]JSONSchemaDefinition) {
 	b.Helper()
-	for i := 0; i < 3; i++ {
+
+	for range 3 {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		_ = reconcileUntilComplete(ctx, registry, schemas)
+
 		cancel()
 	}
 }
 
-// warmupIncrementalUpdatesWithPreGenerated performs targeted warmup using pre-generated schemas
+// warmupIncrementalUpdatesWithPreGenerated performs targeted warmup using pre-generated schemas.
 func warmupIncrementalUpdatesWithPreGenerated(b *testing.B, registry *SchemaRegistry, preGeneratedSchemas []map[SubjectName]JSONSchemaDefinition) {
 	b.Helper()
 
@@ -571,58 +619,66 @@ func warmupIncrementalUpdatesWithPreGenerated(b *testing.B, registry *SchemaRegi
 		if i >= 3 { // Only use first 3 for warmup
 			break
 		}
+
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		_ = reconcileUntilComplete(ctx, registry, schemas)
+
 		cancel()
 	}
 }
 
-// warmupLargeSchema performs targeted warmup for large schema benchmarks
+// warmupLargeSchema performs targeted warmup for large schema benchmarks.
 func warmupLargeSchema(b *testing.B, registry *SchemaRegistry, schemas map[SubjectName]JSONSchemaDefinition) {
 	b.Helper()
-	for i := 0; i < 3; i++ {
+
+	for range 3 {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		_ = reconcileUntilComplete(ctx, registry, schemas)
+
 		cancel()
 	}
 }
 
-// warmupConcurrentReconciliation performs targeted warmup for concurrent benchmarks
+// warmupConcurrentReconciliation performs targeted warmup for concurrent benchmarks.
 func warmupConcurrentReconciliation(b *testing.B, registry *SchemaRegistry, schema map[SubjectName]JSONSchemaDefinition) {
 	b.Helper()
 
 	// Sequential warmup first
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		_ = registry.ReconcileWithSchemas(ctx, schema)
+
 		cancel()
 	}
 
 	// Concurrent warmup
 	done := make(chan bool)
-	for i := 0; i < 5; i++ {
+
+	for range 5 {
 		go func() {
 			defer func() { done <- true }()
-			for j := 0; j < 5; j++ {
+
+			for range 5 {
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				_ = registry.ReconcileWithSchemas(ctx, schema)
+
 				cancel()
 			}
 		}()
 	}
 
 	// Wait for all warmup goroutines to complete
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		<-done
 	}
 }
 
 // Helper functions
 
-// generateSchemas creates a map of schemas with specified count and prefix
+// generateSchemas creates a map of schemas with specified count and prefix.
 func generateSchemas(count int, prefix string) map[SubjectName]JSONSchemaDefinition {
 	schemas := make(map[SubjectName]JSONSchemaDefinition)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		subject := SubjectName(fmt.Sprintf("%s-%d", prefix, i))
 		schema := JSONSchemaDefinition(fmt.Sprintf(`{
 			"type": "object",
@@ -644,15 +700,16 @@ func generateSchemas(count int, prefix string) map[SubjectName]JSONSchemaDefinit
 		}`, i, i+1000))
 		schemas[subject] = schema
 	}
+
 	return schemas
 }
 
-// generateLargeSchema creates a schema with many properties
+// generateLargeSchema creates a schema with many properties.
 func generateLargeSchema(propertyCount int) JSONSchemaDefinition {
 	properties := make(map[string]interface{})
 	required := make([]string, 0, propertyCount/2)
 
-	for i := 0; i < propertyCount; i++ {
+	for i := range propertyCount {
 		propName := fmt.Sprintf("property_%d", i)
 		properties[propName] = map[string]interface{}{
 			"type":        "string",
@@ -674,10 +731,11 @@ func generateLargeSchema(propertyCount int) JSONSchemaDefinition {
 
 	// Convert to JSON
 	jsonBytes, _ := json.Marshal(schema)
+
 	return JSONSchemaDefinition(string(jsonBytes))
 }
 
-// reconcileUntilComplete calls reconcile repeatedly until completion
+// reconcileUntilComplete calls reconcile repeatedly until completion.
 func reconcileUntilComplete(ctx context.Context, registry *SchemaRegistry, schemas map[SubjectName]JSONSchemaDefinition) error {
 	for {
 		select {
@@ -689,6 +747,7 @@ func reconcileUntilComplete(ctx context.Context, registry *SchemaRegistry, schem
 		// Convert old-style schemas to new configuration format
 		// This is a temporary compatibility layer for benchmarks
 		dataModels, dataContracts, payloadShapes := emptySchemaRegistryConfig()
+
 		err := registry.Reconcile(ctx, dataModels, dataContracts, payloadShapes)
 		if err != nil {
 			return err

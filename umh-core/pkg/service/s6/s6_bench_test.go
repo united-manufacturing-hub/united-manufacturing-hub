@@ -100,7 +100,7 @@ import (
 // parseLogLineOptimized is an optimized version of parseLogLine that:
 // 1. Avoids allocations for simple cases
 // 2. Uses a more efficient string scanning strategy
-// 3. Checks for minimum length before trying to parse
+// 3. Checks for minimum length before trying to parse.
 func parseLogLineOptimized(line string) LogEntry {
 	// Quick check for empty strings or too short lines
 	if len(line) < 29 { // Minimum length for "YYYY-MM-DD HH:MM:SS  content"
@@ -135,7 +135,7 @@ func parseLogLineOptimized(line string) LogEntry {
 	}
 }
 
-// parseLogLine parses a log line from S6 format and returns a LogEntry
+// parseLogLine parses a log line from S6 format and returns a LogEntry.
 func parseLogLineOriginal(line string) LogEntry {
 	// S6 log format with T flag: YYYY-MM-DD HH:MM:SS.NNNNNNNNN  content
 	parts := strings.SplitN(line, "  ", 2)
@@ -155,10 +155,12 @@ func parseLogLineOriginal(line string) LogEntry {
 	}
 }
 
-// findLatestRotatedFileByParsing is the old implementation that parses TAI64N timestamps (for comparison)
+// findLatestRotatedFileByParsing is the old implementation that parses TAI64N timestamps (for comparison).
 func findLatestRotatedFileByParsing(entries []string) string {
-	var latestFile string
-	var latestTime time.Time
+	var (
+		latestFile string
+		latestTime time.Time
+	)
 
 	for _, entry := range entries {
 		// Extract just the filename part for parsing
@@ -166,6 +168,7 @@ func findLatestRotatedFileByParsing(entries []string) string {
 		// Remove the .s extension to get just the TAI64N timestamp
 		if strings.HasSuffix(filename, ".s") {
 			timestamp := strings.TrimSuffix(filename, ".s")
+
 			parsedTime, err := tai64.Parse(timestamp)
 			if err != nil {
 				continue
@@ -181,7 +184,7 @@ func findLatestRotatedFileByParsing(entries []string) string {
 	return latestFile
 }
 
-// findLatestRotatedFileByMaxFunc is the implementation that uses slices.MaxFunc
+// findLatestRotatedFileByMaxFunc is the implementation that uses slices.MaxFunc.
 func findLatestRotatedFileByMaxFunc(entries []string) string {
 	if len(entries) == 0 {
 		return ""
@@ -189,10 +192,11 @@ func findLatestRotatedFileByMaxFunc(entries []string) string {
 
 	// Use slices.MaxFunc to find the latest file
 	latestFile := slices.MaxFunc(entries, cmp.Compare[string])
+
 	return latestFile
 }
 
-// findLatestRotatedFileBySlicesSort is the implementation that uses slices.Sort
+// findLatestRotatedFileBySlicesSort is the implementation that uses slices.Sort.
 func findLatestRotatedFileBySlicesSort(entries []string) string {
 	if len(entries) == 0 {
 		return ""
@@ -255,7 +259,8 @@ func BenchmarkParseLogLine(b *testing.B) {
 		b.Run(tc.name, func(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+
+			for range b.N {
 				entry := parseLogLineOriginal(tc.logLine)
 				// Prevent compiler optimizations by using the result
 				if entry.Content == "" && tc.name != "Empty string" && tc.name != "Missing content" {
@@ -266,7 +271,7 @@ func BenchmarkParseLogLine(b *testing.B) {
 	}
 }
 
-// BenchmarkParseLogLineOptimized benchmarks the optimized implementation
+// BenchmarkParseLogLineOptimized benchmarks the optimized implementation.
 func BenchmarkParseLogLineOptimized(b *testing.B) {
 	// Test cases with different log line formats
 	testCases := []struct {
@@ -317,7 +322,8 @@ func BenchmarkParseLogLineOptimized(b *testing.B) {
 		b.Run(tc.name, func(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+
+			for range b.N {
 				entry := parseLogLineOptimized(tc.logLine)
 				// Prevent compiler optimizations by using the result
 				if entry.Content == "" && tc.name != "Empty string" && tc.name != "Missing content" {
@@ -328,7 +334,7 @@ func BenchmarkParseLogLineOptimized(b *testing.B) {
 	}
 }
 
-// BenchmarkParseLogLineCombined benchmarks the function with all test cases in a single run
+// BenchmarkParseLogLineCombined benchmarks the function with all test cases in a single run.
 func BenchmarkParseLogLineCombined(b *testing.B) {
 	logLines := []string{
 		"2023-01-02 15:04:05.123456789  This is a valid log entry",
@@ -343,14 +349,15 @@ func BenchmarkParseLogLineCombined(b *testing.B) {
 
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		for _, line := range logLines {
 			_ = parseLogLineOriginal(line)
 		}
 	}
 }
 
-// BenchmarkParseLogLineCombinedOptimized benchmarks the optimized function with all test cases
+// BenchmarkParseLogLineCombinedOptimized benchmarks the optimized function with all test cases.
 func BenchmarkParseLogLineCombinedOptimized(b *testing.B) {
 	logLines := []string{
 		"2023-01-02 15:04:05.123456789  This is a valid log entry",
@@ -365,14 +372,15 @@ func BenchmarkParseLogLineCombinedOptimized(b *testing.B) {
 
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		for _, line := range logLines {
 			_ = parseLogLineOptimized(line)
 		}
 	}
 }
 
-// BenchmarkParseRealLogData benchmarks parsing real log data from the test file
+// BenchmarkParseRealLogData benchmarks parsing real log data from the test file.
 func BenchmarkParseRealLogData(b *testing.B) {
 	lines, err := readLogLines("s6_test_data.txt")
 	if err != nil {
@@ -389,7 +397,7 @@ func BenchmarkParseRealLogData(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for i := range b.N {
 			// Use i % len(lines) to cycle through all lines
 			idx := i % len(lines)
 			_ = parseLogLineOriginal(lines[idx])
@@ -400,7 +408,7 @@ func BenchmarkParseRealLogData(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for i := range b.N {
 			// Use i % len(lines) to cycle through all lines
 			idx := i % len(lines)
 			_ = parseLogLineOptimized(lines[idx])
@@ -415,7 +423,7 @@ func BenchmarkParseRealLogData(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				for _, line := range testLines {
 					_ = parseLogLineOriginal(line)
 				}
@@ -426,7 +434,7 @@ func BenchmarkParseRealLogData(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				for _, line := range testLines {
 					_ = parseLogLineOptimized(line)
 				}
@@ -435,7 +443,7 @@ func BenchmarkParseRealLogData(b *testing.B) {
 	}
 }
 
-// BenchmarkFindLatestRotatedFile benchmarks different approaches to finding the latest rotated file
+// BenchmarkFindLatestRotatedFile benchmarks different approaches to finding the latest rotated file.
 func BenchmarkFindLatestRotatedFile(b *testing.B) {
 	// Test with different numbers of rotated files
 	fileCounts := []int{1, 5, 10, 20, 50, 100}
@@ -445,6 +453,7 @@ func BenchmarkFindLatestRotatedFile(b *testing.B) {
 			// Create temporary directory and files
 			tempDir := b.TempDir()
 			logDir := filepath.Join(tempDir, "logs")
+
 			err := os.MkdirAll(logDir, 0755)
 			if err != nil {
 				b.Fatalf("Failed to create log directory: %v", err)
@@ -455,9 +464,10 @@ func BenchmarkFindLatestRotatedFile(b *testing.B) {
 
 			// Create rotated files with incrementing timestamps
 			baseTime := time.Now().Add(-1 * time.Hour)
+
 			var expectedLatest string
 
-			for i := 0; i < fileCount; i++ {
+			for i := range fileCount {
 				timestamp := baseTime.Add(time.Duration(i) * time.Minute)
 				filename := tai64.FormatNano(timestamp) + ".s"
 				filepath := filepath.Join(logDir, filename)
@@ -473,6 +483,7 @@ func BenchmarkFindLatestRotatedFile(b *testing.B) {
 			}
 
 			pattern := filepath.Join(logDir, "@*.s")
+
 			entries, err := fsService.Glob(ctx, pattern)
 			if err != nil {
 				b.Fatalf("Failed to read log directory %s: %v", logDir, err)
@@ -483,7 +494,7 @@ func BenchmarkFindLatestRotatedFile(b *testing.B) {
 				b.ReportAllocs()
 				b.ResetTimer()
 
-				for i := 0; i < b.N; i++ {
+				for range b.N {
 					result := findLatestRotatedFileByParsing(entries)
 					if result != expectedLatest {
 						b.Fatalf("Expected %s, got %s", expectedLatest, result)
@@ -496,7 +507,7 @@ func BenchmarkFindLatestRotatedFile(b *testing.B) {
 				b.ReportAllocs()
 				b.ResetTimer()
 
-				for i := 0; i < b.N; i++ {
+				for range b.N {
 					result := findLatestRotatedFileBySlicesSort(entries)
 					if result != expectedLatest {
 						b.Fatalf("Expected %s, got %s", expectedLatest, result)
@@ -508,7 +519,7 @@ func BenchmarkFindLatestRotatedFile(b *testing.B) {
 				b.ReportAllocs()
 				b.ResetTimer()
 
-				for i := 0; i < b.N; i++ {
+				for range b.N {
 					result := findLatestRotatedFileByMaxFunc(entries)
 					if result != expectedLatest {
 						b.Fatalf("Expected %s, got %s", expectedLatest, result)
@@ -519,11 +530,12 @@ func BenchmarkFindLatestRotatedFile(b *testing.B) {
 	}
 }
 
-// BenchmarkFindLatestRotatedFileRealistic benchmarks with realistic file patterns
+// BenchmarkFindLatestRotatedFileRealistic benchmarks with realistic file patterns.
 func BenchmarkFindLatestRotatedFileRealistic(b *testing.B) {
 	// Create temporary directory
 	tempDir := b.TempDir()
 	logDir := filepath.Join(tempDir, "logs")
+
 	err := os.MkdirAll(logDir, 0755)
 	if err != nil {
 		b.Fatalf("Failed to create log directory: %v", err)
@@ -536,10 +548,11 @@ func BenchmarkFindLatestRotatedFileRealistic(b *testing.B) {
 	// In practice, only current, lock, state and rotated TAI64N files exist
 
 	baseTime := time.Now().Add(-2 * time.Hour)
+
 	var expectedLatest string
 
 	// Create 15 rotated files over 2 hours
-	for i := 0; i < 15; i++ {
+	for i := range 15 {
 		timestamp := baseTime.Add(time.Duration(i*8) * time.Minute) // Every 8 minutes
 		filename := tai64.FormatNano(timestamp) + ".s"
 		filepath := filepath.Join(logDir, filename)
@@ -558,6 +571,7 @@ func BenchmarkFindLatestRotatedFileRealistic(b *testing.B) {
 	standardFiles := []string{"current", "lock", "state"}
 	for _, filename := range standardFiles {
 		filepath := filepath.Join(logDir, filename)
+
 		err := os.WriteFile(filepath, []byte("standard s6 file content"), 0644)
 		if err != nil {
 			b.Fatalf("Failed to create standard file: %v", err)
@@ -565,6 +579,7 @@ func BenchmarkFindLatestRotatedFileRealistic(b *testing.B) {
 	}
 
 	pattern := filepath.Join(logDir, "@*.s")
+
 	entries, err := fsService.Glob(ctx, pattern)
 	if err != nil {
 		b.Fatalf("Failed to read log directory %s: %v", logDir, err)
@@ -574,7 +589,7 @@ func BenchmarkFindLatestRotatedFileRealistic(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			result := findLatestRotatedFileByParsing(entries)
 			if result != expectedLatest {
 				b.Fatalf("Expected %s, got %s", expectedLatest, result)
@@ -586,7 +601,7 @@ func BenchmarkFindLatestRotatedFileRealistic(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			result := findLatestRotatedFileBySlicesSort(entries)
 			if result != expectedLatest {
 				b.Fatalf("Expected %s, got %s", expectedLatest, result)
@@ -598,22 +613,22 @@ func BenchmarkFindLatestRotatedFileRealistic(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			result := findLatestRotatedFileByMaxFunc(entries)
 			if result != expectedLatest {
 				b.Fatalf("Expected %s, got %s", expectedLatest, result)
 			}
 		}
 	})
-
 }
 
-// readLogLines reads lines from the test data file
+// readLogLines reads lines from the test data file.
 func readLogLines(filePath string) ([]string, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
 	}
+
 	defer func() {
 		if closeErr := file.Close(); closeErr != nil {
 			err = closeErr
@@ -621,6 +636,7 @@ func readLogLines(filePath string) ([]string, error) {
 	}()
 
 	var lines []string
+
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		lines = append(lines, scanner.Text())

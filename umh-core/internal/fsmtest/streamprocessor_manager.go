@@ -24,10 +24,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
-// streamProcessorInstancePrefix is the consistent prefix used for stream processor instance IDs
+// streamProcessorInstancePrefix is the consistent prefix used for stream processor instance IDs.
 const streamProcessorInstancePrefix = "streamprocessor"
 
-// WaitForStreamProcessorManagerStable waits for the manager to reach a stable state with all instances
+// WaitForStreamProcessorManagerStable waits for the manager to reach a stable state with all instances.
 func WaitForStreamProcessorManagerStable(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
@@ -37,7 +37,7 @@ func WaitForStreamProcessorManagerStable(
 	tick := snapshot.Tick
 	maxAttempts := 10
 
-	for i := 0; i < maxAttempts; i++ {
+	for range maxAttempts {
 		// Create a copy of the snapshot with updated tick
 		currentSnapshot := snapshot
 		currentSnapshot.Tick = tick
@@ -47,13 +47,14 @@ func WaitForStreamProcessorManagerStable(
 		if err != nil {
 			return tick, err
 		}
+
 		tick++
 	}
 
 	return tick, nil
 }
 
-// WaitForStreamProcessorManagerInstanceState waits for an instance to reach a specific state
+// WaitForStreamProcessorManagerInstanceState waits for an instance to reach a specific state.
 func WaitForStreamProcessorManagerInstanceState(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
@@ -66,7 +67,7 @@ func WaitForStreamProcessorManagerInstanceState(
 	// Same pattern as in other similar functions
 	tick := snapshot.Tick
 
-	for i := 0; i < maxAttempts; i++ {
+	for range maxAttempts {
 		// Create a new snapshot copy with updated tick
 		currentSnapshot := snapshot
 		currentSnapshot.Tick = tick
@@ -76,6 +77,7 @@ func WaitForStreamProcessorManagerInstanceState(
 		if err != nil {
 			return tick, err
 		}
+
 		tick++
 
 		// Get the instance and check its state
@@ -88,7 +90,7 @@ func WaitForStreamProcessorManagerInstanceState(
 	return tick, fmt.Errorf("instance %s didn't reach expected state: %s", instanceName, expectedState)
 }
 
-// WaitForStreamProcessorManagerInstanceRemoval waits for an instance to be removed
+// WaitForStreamProcessorManagerInstanceRemoval waits for an instance to be removed.
 func WaitForStreamProcessorManagerInstanceRemoval(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
@@ -99,7 +101,7 @@ func WaitForStreamProcessorManagerInstanceRemoval(
 ) (uint64, error) {
 	tick := snapshot.Tick
 
-	for i := 0; i < maxAttempts; i++ {
+	for range maxAttempts {
 		// Create a new snapshot copy with updated tick
 		currentSnapshot := snapshot
 		currentSnapshot.Tick = tick
@@ -109,6 +111,7 @@ func WaitForStreamProcessorManagerInstanceRemoval(
 		if err != nil {
 			return tick, err
 		}
+
 		tick++
 
 		// Check if the instance is gone
@@ -132,32 +135,38 @@ func WaitForStreamProcessorManagerMultiState(
 	maxAttempts int,
 ) (uint64, error) {
 	tick := snapshot.Tick
-	for i := 0; i < maxAttempts; i++ {
+	for range maxAttempts {
 		// Create a copy of the snapshot with updated tick
 		currentSnapshot := snapshot
 		currentSnapshot.Tick = tick
+
 		err, _ := manager.Reconcile(ctx, currentSnapshot, services)
 		if err != nil {
 			return tick, err
 		}
+
 		tick++
 
 		allMatched := true
+
 		for proc, desired := range desiredMap {
 			inst, found := manager.GetInstance(fmt.Sprintf("%s-%s", streamProcessorInstancePrefix, proc))
 			if !found || inst.GetCurrentFSMState() != desired {
 				allMatched = false
+
 				break
 			}
 		}
+
 		if allMatched {
 			return tick, nil
 		}
 	}
+
 	return tick, fmt.Errorf("not all instances reached desired states after %d attempts", maxAttempts)
 }
 
-// SetupServiceInStreamProcessorManager adds a service to the manager and configures it
+// SetupServiceInStreamProcessorManager adds a service to the manager and configures it.
 func SetupServiceInStreamProcessorManager(
 	manager *spfsm.Manager,
 	mockService *spsvc.MockService,
@@ -180,7 +189,7 @@ func SetupServiceInStreamProcessorManager(
 	}
 }
 
-// CreateMockStreamProcessorManager creates a StreamProcessor manager with a mock service for testing
+// CreateMockStreamProcessorManager creates a StreamProcessor manager with a mock service for testing.
 func CreateMockStreamProcessorManager(name string) (*spfsm.Manager, *spsvc.MockService) {
 	mockManager, mockService := spfsm.NewManagerWithMockedServices(name)
 
@@ -203,7 +212,7 @@ func ConfigureStreamProcessorManagerForState(
 	TransitionToStreamProcessorState(mockService, processorName, targetState)
 }
 
-// ReconcileOnceStreamProcessorManager performs a single reconciliation cycle on the manager
+// ReconcileOnceStreamProcessorManager performs a single reconciliation cycle on the manager.
 func ReconcileOnceStreamProcessorManager(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
@@ -211,5 +220,6 @@ func ReconcileOnceStreamProcessorManager(
 	services serviceregistry.Provider,
 ) (newTick uint64, err error, reconciled bool) {
 	err, reconciled = manager.Reconcile(ctx, snapshot, services)
+
 	return snapshot.Tick + 1, err, reconciled
 }

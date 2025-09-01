@@ -66,7 +66,7 @@ var _ = Describe("BaseFSMInstance", func() {
 	Context("when using backoff functionality", func() {
 		It("should track errors and reset correctly", func() {
 			// Initially no error
-			Expect(fsmInstance.GetError()).To(BeNil())
+			Expect(fsmInstance.GetError()).To(Succeed())
 			Expect(fsmInstance.IsPermanentlyFailed()).To(BeFalse())
 
 			// Set a temporary error
@@ -80,7 +80,7 @@ var _ = Describe("BaseFSMInstance", func() {
 
 			// Reset the state
 			fsmInstance.ResetState()
-			Expect(fsmInstance.GetError()).To(BeNil())
+			Expect(fsmInstance.GetError()).To(Succeed())
 			Expect(fsmInstance.ShouldSkipReconcileBecauseOfError(tick)).To(BeFalse())
 		})
 
@@ -151,7 +151,7 @@ var _ = Describe("BaseFSMInstance", func() {
 			fsmInstance.ResetState()
 
 			// Verify error is cleared
-			Expect(fsmInstance.GetError()).To(BeNil())
+			Expect(fsmInstance.GetError()).To(Succeed())
 			Expect(fsmInstance.ShouldSkipReconcileBecauseOfError(tick)).To(BeFalse())
 		})
 	})
@@ -209,7 +209,7 @@ var _ = Describe("BaseFSMInstance", func() {
 			err := fsmInstance.SendEvent(ctx, "start")
 
 			// There should be no error since we have a valid transition and plenty of time
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Verify transition occurred
 			Expect(fsmInstance.GetCurrentFSMState()).To(Equal("running"))
@@ -240,7 +240,7 @@ var _ = Describe("BaseFSMInstance", func() {
 			Expect(handled).To(BeFalse())
 
 			// Should not have set the error on the FSM
-			Expect(fsmInstance.GetError()).To(BeNil())
+			Expect(fsmInstance.GetError()).To(Succeed())
 		})
 	})
 })

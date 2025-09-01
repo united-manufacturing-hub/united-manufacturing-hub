@@ -17,8 +17,8 @@ package connection
 import "errors"
 
 var (
-	// ErrServiceNotExist indicates the requested service does not exist
+	// ErrServiceNotExist indicates the requested service does not exist.
 	ErrServiceNotExist = errors.New("service does not exist")
-	// ErrServiceAlreadyExists indicates the service already exists
+	// ErrServiceAlreadyExists indicates the service already exists.
 	ErrServiceAlreadyExists = errors.New("service already exists")
 )

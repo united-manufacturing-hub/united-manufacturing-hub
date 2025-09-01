@@ -27,7 +27,7 @@ const (
 
 const (
 	// Redpanda Operation Timeouts - Level 1 Service (depends on S6)
-	// RedpandaUpdateObservedStateTimeout is the timeout for updating the observed state
+	// RedpandaUpdateObservedStateTimeout is the timeout for updating the observed state.
 	RedpandaUpdateObservedStateTimeout = 40 * time.Millisecond
 )
 

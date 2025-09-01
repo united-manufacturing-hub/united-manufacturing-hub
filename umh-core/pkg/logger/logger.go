@@ -24,46 +24,46 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// LogLevel represents the logging level
+// LogLevel represents the logging level.
 type LogLevel string
 
-// LogFormat represents the logging format
+// LogFormat represents the logging format.
 type LogFormat string
 
 const (
-	// DebugLevel logs debug level messages
+	// DebugLevel logs debug level messages.
 	DebugLevel LogLevel = "DEBUG"
-	// InfoLevel logs informational messages
+	// InfoLevel logs informational messages.
 	InfoLevel LogLevel = "INFO"
-	// WarnLevel logs warning messages
+	// WarnLevel logs warning messages.
 	WarnLevel LogLevel = "WARN"
-	// ErrorLevel logs error messages
+	// ErrorLevel logs error messages.
 	ErrorLevel LogLevel = "ERROR"
-	// DPanicLevel logs critical errors and panics in development
+	// DPanicLevel logs critical errors and panics in development.
 	DPanicLevel LogLevel = "DPANIC"
-	// PanicLevel logs critical errors and panics
+	// PanicLevel logs critical errors and panics.
 	PanicLevel LogLevel = "PANIC"
-	// FatalLevel logs fatal errors
+	// FatalLevel logs fatal errors.
 	FatalLevel LogLevel = "FATAL"
-	// ProductionLevel is an alias for InfoLevel, used for easier configuration
+	// ProductionLevel is an alias for InfoLevel, used for easier configuration.
 	ProductionLevel LogLevel = "PRODUCTION"
 
-	// FormatConsole indicates human-readable console format
+	// FormatConsole indicates human-readable console format.
 	FormatConsole LogFormat = "CONSOLE"
-	// FormatJSON indicates structured JSON format
+	// FormatJSON indicates structured JSON format.
 	FormatJSON LogFormat = "JSON"
-	// FormatPretty indicates highly human-readable format
+	// FormatPretty indicates highly human-readable format.
 	FormatPretty LogFormat = "PRETTY"
 )
 
 var (
-	// Mutex to ensure thread safety for logger initialization
+	// Mutex to ensure thread safety for logger initialization.
 	loggerMutex sync.Once
-	// initialized tracks whether the global logger has been initialized
+	// initialized tracks whether the global logger has been initialized.
 	initialized bool
 )
 
-// getLogLevel converts a string log level to zapcore.Level
+// getLogLevel converts a string log level to zapcore.Level.
 func getLogLevel(level LogLevel) zapcore.Level {
 	switch strings.ToUpper(string(level)) {
 	case string(DebugLevel):
@@ -87,30 +87,32 @@ func getLogLevel(level LogLevel) zapcore.Level {
 	}
 }
 
-// getLogFormat returns the log format based on the environment variable or default value
+// getLogFormat returns the log format based on the environment variable or default value.
 func getLogFormat(defaultFormat LogFormat) LogFormat {
 	format := LogFormat(getEnv("LOGGING_FORMAT", string(defaultFormat)))
 	if format != FormatConsole && format != FormatJSON && format != FormatPretty {
 		return defaultFormat
 	}
+
 	return format
 }
 
-// getEnv gets environment variable with a default value
+// getEnv gets environment variable with a default value.
 func getEnv(key, defaultValue string) string {
 	value := os.Getenv(key)
 	if value == "" {
 		return defaultValue
 	}
+
 	return value
 }
 
-// timeEncoder encodes the time as a human-readable timestamp
+// timeEncoder encodes the time as a human-readable timestamp.
 func timeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
 	enc.AppendString(t.Format("2006-01-02 15:04:05 MST"))
 }
 
-// New creates a new zap logger with the specified log level and format
+// New creates a new zap logger with the specified log level and format.
 func New(logLevel string, logFormat LogFormat) *zap.Logger {
 	level := getLogLevel(LogLevel(logLevel))
 
@@ -143,6 +145,7 @@ func New(logLevel string, logFormat LogFormat) *zap.Logger {
 
 	// Choose the encoder based on format
 	var encoder zapcore.Encoder
+
 	switch logFormat {
 	case FormatPretty:
 		encoder = NewPrettyConsoleEncoder(encoderConfig)
@@ -167,7 +170,7 @@ func New(logLevel string, logFormat LogFormat) *zap.Logger {
 	return logger
 }
 
-// Initialize sets up the global logger with the specified log level using zap.ReplaceGlobals()
+// Initialize sets up the global logger with the specified log level using zap.ReplaceGlobals().
 func Initialize() {
 	loggerMutex.Do(func() {
 		logLevel := getEnv("LOGGING_LEVEL", string(ProductionLevel))
@@ -186,31 +189,34 @@ func Initialize() {
 	})
 }
 
-// GetLogger returns the global logger, initializing it if needed
+// GetLogger returns the global logger, initializing it if needed.
 func GetLogger() *zap.Logger {
 	if !initialized {
 		Initialize()
 	}
+
 	return zap.L()
 }
 
-// GetSugaredLogger returns the global sugared logger, initializing it if needed
+// GetSugaredLogger returns the global sugared logger, initializing it if needed.
 func GetSugaredLogger() *zap.SugaredLogger {
 	if !initialized {
 		Initialize()
 	}
+
 	return zap.S()
 }
 
-// Sync flushes any buffered log entries
+// Sync flushes any buffered log entries.
 func Sync() error {
 	return zap.L().Sync()
 }
 
-// For creates a named logger for a specific component
+// For creates a named logger for a specific component.
 func For(component string) *zap.SugaredLogger {
 	if !initialized {
 		Initialize()
 	}
+
 	return zap.S().Named(component)
 }

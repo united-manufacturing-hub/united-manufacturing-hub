@@ -24,21 +24,21 @@ import (
 	"go.uber.org/zap"
 )
 
-// Package-level state for debouncing errors
+// Package-level state for debouncing errors.
 var shouldDebounceErrors = true
 
-// EnableTestMode disables debouncing for testing
+// EnableTestMode disables debouncing for testing.
 func EnableTestMode() {
 	shouldDebounceErrors = false
 }
 
-// DisableTestMode restores normal debouncing behavior
+// DisableTestMode restores normal debouncing behavior.
 func DisableTestMode() {
 	shouldDebounceErrors = true
 }
 
 // InitSentry initializes sentry with the given app name and version
-// If debounceErrors is true, errors will be debounced to avoid spamming Sentry
+// If debounceErrors is true, errors will be debounced to avoid spamming Sentry.
 func InitSentry(appVersion string, debounceErrors bool) {
 	// Set debouncing configuration
 	shouldDebounceErrors = debounceErrors
@@ -49,6 +49,7 @@ func InitSentry(appVersion string, debounceErrors bool) {
 	// The default appVersion "0.0.0-dev" comes from cmd/main.go when not built with proper version tags.
 	if appVersion == "" || appVersion == constants.DefaultAppVersion {
 		zap.S().Debug("Sentry disabled for local development build")
+
 		return
 	}
 
@@ -57,10 +58,8 @@ func InitSentry(appVersion string, debounceErrors bool) {
 	version, err := semver.NewVersion(appVersion)
 	if err != nil {
 		zap.S().Errorf("Failed to parse app version, using default environment (development): %s", err)
-	} else {
-		if version.Prerelease() == "" {
-			environment = constants.DefaultProductionEnvironment
-		}
+	} else if version.Prerelease() == "" {
+		environment = constants.DefaultProductionEnvironment
 	}
 
 	err = sentry.Init(sentry.ClientOptions{
@@ -72,6 +71,7 @@ func InitSentry(appVersion string, debounceErrors bool) {
 	})
 	if err != nil {
 		zap.S().Error("Failed to initialize Sentry: %s", err)
+
 		return
 	}
 }
@@ -130,7 +130,7 @@ func createSentryEvent(level sentry.Level, err error) *sentry.Event {
 	return event
 }
 
-// createSentryEventWithContext creates a Sentry event with additional context data
+// createSentryEventWithContext creates a Sentry event with additional context data.
 func createSentryEventWithContext(level sentry.Level, err error, context map[string]interface{}) *sentry.Event {
 	event := createSentryEvent(level, err)
 
@@ -154,6 +154,7 @@ func createSentryEventWithContext(level sentry.Level, err error, context map[str
 				if event.Extra == nil {
 					event.Extra = make(map[string]interface{})
 				}
+
 				event.Extra[key] = v
 			}
 
@@ -178,7 +179,7 @@ func createSentryEventWithContext(level sentry.Level, err error, context map[str
 	return event
 }
 
-// Helper function to convert sentry.Level to string
+// Helper function to convert sentry.Level to string.
 func getLevelString(level sentry.Level) string {
 	switch level {
 	case sentry.LevelDebug:
@@ -196,12 +197,12 @@ func getLevelString(level sentry.Level) string {
 	}
 }
 
-// Helper function to convert simple values to string for tags
+// Helper function to convert simple values to string for tags.
 func convertToString(v interface{}) string {
 	return fmt.Sprintf("%v", v)
 }
 
-// Helper function to send an event to Sentry
+// Helper function to send an event to Sentry.
 func sendSentryEvent(event *sentry.Event) {
 	localHub := sentry.CurrentHub().Clone()
 	localHub.CaptureEvent(event)

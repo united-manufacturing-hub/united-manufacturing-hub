@@ -46,5 +46,6 @@ func CheckBenthosLogLinesForConfigErrors(logs []s6.LogEntry) bool {
 			}
 		}
 	}
+
 	return false
 }

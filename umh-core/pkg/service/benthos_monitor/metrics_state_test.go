@@ -185,7 +185,7 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 			Expect(state.IsActive).To(BeTrue()) // Still active as we had throughput previously
 
 			// No new input activity for a while
-			for i := uint64(0); i < benthos_monitor.ThroughputWindowSize+1; i++ {
+			for range uint64(benthos_monitor.ThroughputWindowSize + 1) {
 				state.UpdateFromMetrics(benthos_monitor.Metrics{Input: benthos_monitor.InputMetrics{Received: 200}}, tick)
 				tick++
 			}

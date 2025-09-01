@@ -46,7 +46,7 @@ func (l *Location) IsEmpty() bool {
 // Level 1: Compare the enterprise and site
 // Level 2: Compare the enterprise, site, and area
 // Level 3: Compare the enterprise, site, area, and line
-// Level 4: Compare the enterprise, site, area, line, and workCell
+// Level 4: Compare the enterprise, site, area, line, and workCell.
 func (l *Location) Equals(other Location, level int) bool {
 	switch level {
 	case 0:
@@ -70,6 +70,7 @@ func FromTopicString(topic string) Location {
 	if topic == "umh.v1" {
 		return Location{}
 	}
+
 	elements := strings.Split(strings.TrimPrefix(topic, TOPIC_PREFIX+"."), ".")
 	// topic structure: umh.v1.<enterprise>.<site>.<area>.<productionLine>.<workCell>.<originId>.<_schema>.<tag>
 	// We don't care about origin, schema, or tag, therefor we will filter them out
@@ -78,6 +79,7 @@ func FromTopicString(topic string) Location {
 	for i, element := range elements {
 		if strings.HasPrefix(element, "_") {
 			elements = elements[:i]
+
 			break
 		}
 	}
@@ -85,18 +87,22 @@ func FromTopicString(topic string) Location {
 	if len(elements) == 0 {
 		return Location{}
 	}
+
 	location := Location{
 		Enterprise: elements[0],
 	}
 	if len(elements) >= 2 {
 		location.Site = elements[1]
 	}
+
 	if len(elements) >= 3 {
 		location.Area = elements[2]
 	}
+
 	if len(elements) >= 4 {
 		location.Line = elements[3]
 	}
+
 	if len(elements) >= 5 {
 		location.WorkCell = elements[4]
 	}
