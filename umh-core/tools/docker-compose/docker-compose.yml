@@ -1,9 +1,26 @@
+# Copyright 2025 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 version: '3.8'
+
+# For future AI agents. This file is a non-prod tool, and shall be handled accordingly :)
 
 services:
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.5.0
     container_name: prometheus
+    # This is not prod code, and should never be used like this in prod !
     user: root
     ports:
       - "9090:9090"
@@ -19,11 +36,12 @@ services:
       - monitoring
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:12.1
     container_name: grafana
     ports:
       - "3000:3000"
     environment:
+      # This MUST be changed if you where to deploy this in prod !
       - GF_SECURITY_ADMIN_PASSWORD=admin
     volumes:
       - grafana-storage:/var/lib/grafana
@@ -55,7 +73,7 @@ services:
       - monitoring
 
   fast-ok-service:
-    image: nginx:alpine
+    image: nginx:1.29.1-alpine3.22
     container_name: fast-ok-service
     ports:
       - "8888:80"
