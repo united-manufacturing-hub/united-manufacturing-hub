@@ -16,6 +16,7 @@
 ARG GOLANG_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG ALPINE_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG NMAP_VERSION=MUST_BE_SET_BY_MAKEFILE
+ARG STRACE_VERSION=MUST_BE_SET_BY_MAKEFILE
 
 # --- Cache Stage ---
 FROM scratch as cache
@@ -33,6 +34,7 @@ ARG S6_OVERLAY_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG BENTHOS_UMH_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG REDPANDA_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG NMAP_VERSION=MUST_BE_SET_BY_MAKEFILE
+ARG STRACE_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG DLV_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG TARGETARCH=amd64
 
@@ -70,9 +72,6 @@ RUN chmod +x /opt/redpanda/bin/redpanda
 
 # Install nmap
 RUN apk add --no-cache nmap=${NMAP_VERSION}
-
-# Install strace
-RUN apk add --no-cache strace
 
 # Cleanup all the files we don't need
 RUN rm -rf /s6-overlay /benthos /redpanda
@@ -133,13 +132,15 @@ COPY --from=build /go/bin/umh-core /usr/local/bin/umh-core
 # Install coreutils (this allows date resolution beyond seconds)
 RUN apk add --no-cache coreutils
 
-# Handle DEBUG mode - install Go and Delve when DEBUG=true
+# Handle DEBUG mode - install Go, Delve, and strace when DEBUG=true
 # Delve is a debugger for Go (https://github.com/go-delve/delve/)
 # We can use it for remote debugging of the UMH Core
+# strace is used for system call tracing and debugging
 ARG DEBUG=false
 ARG DLV_VERSION=MUST_BE_SET_BY_MAKEFILE
+ARG STRACE_VERSION=MUST_BE_SET_BY_MAKEFILE
 RUN if [ "$DEBUG" = "true" ]; then \
-    apk add --no-cache go && \
+    apk add --no-cache go strace=${STRACE_VERSION} && \
     go install github.com/go-delve/delve/cmd/dlv@${DLV_VERSION}; \
     fi
 
