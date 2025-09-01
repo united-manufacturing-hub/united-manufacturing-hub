@@ -1,7 +1,7 @@
 module github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core
 
 // NOTE: Keep this in sync with GOLANG_VERSION in Makefile
-go 1.25
+go 1.25.0
 
 require (
 	github.com/99designs/gqlgen v0.17.78

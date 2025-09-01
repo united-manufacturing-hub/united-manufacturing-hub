@@ -11,7 +11,7 @@
         },
         "ghcr.io/devcontainers/features/go:1": {
             // NOTE: Keep this in sync with GOLANG_VERSION in umh-core/Makefile
-            "version": "1.25"
+            "version": "1.25.0"
         },
         "ghcr.io/devcontainers/features/git:1": {
             "version": "latest",
