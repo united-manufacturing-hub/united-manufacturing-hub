@@ -706,6 +706,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 	}
 
 	waitErrorChannel := make(chan error, 1)
+
 	sentry.SafeGo(func() {
 		waitErrorChannel <- errorgroup.Wait()
 	})

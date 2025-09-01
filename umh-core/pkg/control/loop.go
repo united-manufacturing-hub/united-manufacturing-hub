@@ -434,6 +434,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	}
 
 	waitErrorChannel := make(chan error, 1)
+
 	sentry.SafeGo(func() {
 		waitErrorChannel <- errorgroup.Wait()
 	})

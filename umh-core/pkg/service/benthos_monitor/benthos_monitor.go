@@ -540,6 +540,7 @@ func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6s
 	// Step 1: Process Liveness from /ping endpoint
 	g.Go(func() error {
 		defer sentry.RecoverAndReport()
+
 		var err error
 
 		isLive, err = s.ProcessPingData(pingDataBytes)
@@ -553,6 +554,7 @@ func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6s
 	// Step 2: Process Readiness from /ready endpoint
 	g.Go(func() error {
 		defer sentry.RecoverAndReport()
+
 		var err error
 
 		isReady, readyResp, err = s.ProcessReadyData(readyDataBytes)
@@ -566,6 +568,7 @@ func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6s
 	// Step 3: Process Version from /version endpoint
 	g.Go(func() error {
 		defer sentry.RecoverAndReport()
+
 		var err error
 
 		versionResp, err = s.ProcessVersionData(versionDataBytes)
@@ -579,6 +582,7 @@ func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6s
 	// Step 4: Process the Metrics and update the metrics state
 	g.Go(func() error {
 		defer sentry.RecoverAndReport()
+
 		var err error
 
 		metrics, err = s.ProcessMetricsData(metricsDataBytes, tick)

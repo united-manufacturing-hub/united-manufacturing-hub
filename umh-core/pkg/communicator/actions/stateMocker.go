@@ -483,12 +483,11 @@ func (s *StateMocker) Run() error {
 	ticker := time.NewTicker(constants.DefaultTickerTime)
 
 	sentry.SafeGo(func() {
+		// Get a reference to the done channel under mutex protection
+		s.mu.RLock()
+		done := s.done
+		s.mu.RUnlock()
 
-    // Get a reference to the done channel under mutex protection
-	  s.mu.RLock()
-	  done := s.done
-	  s.mu.RUnlock()
-    
 		defer ticker.Stop()
 		defer s.running.Store(false)
 

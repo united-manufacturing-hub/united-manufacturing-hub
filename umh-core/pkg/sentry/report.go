@@ -128,7 +128,7 @@ func ReportServiceErrorf(log *zap.SugaredLogger, serviceID string, serviceType s
 }
 
 // RecoverAndReport captures panics and sends them to Sentry, then continues execution
-// Use it with defer: defer sentry.RecoverAndReport()
+// Use it with defer: defer sentry.RecoverAndReport().
 func RecoverAndReport() {
 	if r := recover(); r != nil {
 		// Capture the panic with Sentry including stack trace
@@ -145,7 +145,7 @@ func RecoverAndReport() {
 }
 
 // RecoverReportAndRePanic captures panics, sends them to Sentry, then re-panics
-// Use when you want to log the panic but still crash the program
+// Use when you want to log the panic but still crash the program.
 func RecoverReportAndRePanic() {
 	if r := recover(); r != nil {
 		// Get a logger for better structured reporting
@@ -172,7 +172,7 @@ func RecoverReportAndRePanic() {
 	}
 }
 
-// RecoverReportAndRePanicWithContext captures panics with additional context
+// RecoverReportAndRePanicWithContext captures panics with additional context.
 func RecoverReportAndRePanicWithContext(contextData map[string]interface{}) {
 	if r := recover(); r != nil {
 		// Get a logger for structured reporting
@@ -186,6 +186,7 @@ func RecoverReportAndRePanicWithContext(contextData map[string]interface{}) {
 		for k, v := range contextData {
 			fullContext[k] = v
 		}
+
 		fullContext["panic_value"] = fmt.Sprintf("%v", r)
 
 		// Report with context
@@ -204,18 +205,18 @@ func RecoverReportAndRePanicWithContext(contextData map[string]interface{}) {
 }
 
 // Recover wraps sentry-go's Recover function for use in main function panic recovery
-// Returns the event ID if a panic was captured, nil otherwise
+// Returns the event ID if a panic was captured, nil otherwise.
 func Recover() *sentry.EventID {
 	return sentry.Recover()
 }
 
-// Flush wraps sentry-go's Flush function to ensure events are sent before program exit
+// Flush wraps sentry-go's Flush function to ensure events are sent before program exit.
 func Flush(timeout time.Duration) bool {
 	return sentry.Flush(timeout)
 }
 
 // GlobalPanicRecovery sets up global panic recovery for main()
-// Use with: defer sentry.GlobalPanicRecovery(log)()
+// Use with: defer sentry.GlobalPanicRecovery(log)().
 func GlobalPanicRecovery(log *zap.SugaredLogger) func() {
 	return func() {
 		if r := recover(); r != nil {
@@ -247,7 +248,7 @@ func GlobalPanicRecovery(log *zap.SugaredLogger) func() {
 }
 
 // HandleGlobalPanic is a simpler alternative - call directly with defer
-// Use with: defer sentry.HandleGlobalPanic(log)
+// Use with: defer sentry.HandleGlobalPanic(log).
 func HandleGlobalPanic(log *zap.SugaredLogger) {
 	if r := recover(); r != nil {
 		// Log the panic locally first
@@ -277,19 +278,21 @@ func HandleGlobalPanic(log *zap.SugaredLogger) {
 }
 
 // SafeGo launches a goroutine with automatic panic recovery
-// Use this instead of 'go' throughout the codebase for safer goroutine execution
+// Use this instead of 'go' throughout the codebase for safer goroutine execution.
 func SafeGo(fn func()) {
 	go func() {
 		defer RecoverAndReport()
+
 		fn()
 	}()
 }
 
 // SafeGoWithContext launches a goroutine with automatic panic recovery and context support
-// The function will be called with the provided context
+// The function will be called with the provided context.
 func SafeGoWithContext(ctx context.Context, fn func(context.Context)) {
 	go func() {
 		defer RecoverAndReport()
+
 		fn(ctx)
 	}()
 }

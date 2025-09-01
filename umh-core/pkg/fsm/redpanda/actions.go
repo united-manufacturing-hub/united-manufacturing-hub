@@ -237,6 +237,7 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 
 	g.Go(func() error {
 		defer sentry.RecoverAndReport()
+
 		start := time.Now()
 		info, err := r.GetServiceStatus(gctx, services.GetFileSystem(), snapshot.Tick, snapshot.SnapshotTime)
 		metrics.ObserveReconcileTime(logger.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
@@ -266,6 +267,7 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 
 	g.Go(func() error {
 		defer sentry.RecoverAndReport()
+
 		start := time.Now()
 		// This GetConfig requires the tick parameter, which will be used to calculate the metrics state
 		observedConfig, err := r.service.GetConfig(gctx, services.GetFileSystem(), r.baseFSMInstance.GetID(), snapshot.Tick, snapshot.SnapshotTime)
