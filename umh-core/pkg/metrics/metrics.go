@@ -133,6 +133,60 @@ var (
 	)
 
 	// TODO: observed state.
+
+	// Filesystem operation metrics.
+	filesystemOpsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "filesystem_ops_total",
+			Help:      "Total number of filesystem operations by type and path pattern",
+		},
+		[]string{"operation", "path_pattern", "status", "cache_status"},
+	)
+
+	filesystemOpsDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "filesystem_ops_duration_seconds",
+			Help:      "Duration of filesystem operations in seconds",
+			Buckets:   []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
+		},
+		[]string{"operation", "cache_status"},
+	)
+
+	filesystemPathAccess = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "filesystem_path_access_total",
+			Help:      "Total number of times specific paths were accessed",
+		},
+		[]string{"operation", "path", "cache_status"},
+	)
+
+	// S6 command execution metrics.
+	s6CommandExecutionTime = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "s6_command_execution_duration_seconds",
+			Help:      "Time taken to execute S6 commands in seconds",
+			Buckets:   []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
+		},
+		[]string{"service_path", "name", "args"},
+	)
+
+	s6CommandErrors = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "s6_command_errors_total",
+			Help:      "Total number of S6 command errors by type",
+		},
+		[]string{"service_path", "name", "args", "error_type", "exit_code"},
+	)
 )
 
 // SetupMetricsEndpoint starts an HTTP server to expose metrics
@@ -225,4 +279,25 @@ func getStateValue(state string) float64 {
 	default:
 		return -1 // Unknown state
 	}
+}
+
+// RecordFilesystemOp records a filesystem operation metric.
+func RecordFilesystemOp(operation, pathPattern, status, cacheStatus string, duration time.Duration) {
+	filesystemOpsTotal.WithLabelValues(operation, pathPattern, status, cacheStatus).Inc()
+	filesystemOpsDuration.WithLabelValues(operation, cacheStatus).Observe(duration.Seconds())
+}
+
+// RecordFilesystemPathAccess records access to a specific path.
+func RecordFilesystemPathAccess(operation, path, cacheStatus string) {
+	filesystemPathAccess.WithLabelValues(operation, path, cacheStatus).Inc()
+}
+
+// RecordS6CommandExecutionTime records the time taken to execute an S6 command.
+func RecordS6CommandExecutionTime(servicePath, name, args string, duration time.Duration) {
+	s6CommandExecutionTime.WithLabelValues(servicePath, name, args).Observe(duration.Seconds())
+}
+
+// RecordS6CommandError records S6 command errors with error type and exit code.
+func RecordS6CommandError(servicePath, name, args, errorType, exitCode string) {
+	s6CommandErrors.WithLabelValues(servicePath, name, args, errorType, exitCode).Inc()
 }

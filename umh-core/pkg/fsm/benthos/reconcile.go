@@ -291,7 +291,6 @@ func (b *BenthosInstance) reconcileStartingStates(ctx context.Context, services 
 		return b.baseFSMInstance.SendEvent(ctx, EventS6Started), true
 	case OperationalStateStartingConfigLoading:
 		// Check if config has been loaded
-
 		// If the S6 is not running, go back to starting
 		running, reason := b.IsBenthosS6Running()
 		if !running {

@@ -25,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	nmap_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	"go.uber.org/zap"
 )
 
@@ -153,7 +154,7 @@ func buildProtocolConverterAsDfc(
 		Name:        &instance.ID,
 		Connections: connections,
 		Health: &models.Health{
-			Message:       getProtocolConverterStatusMessage(instance.CurrentState, observed.ServiceInfo.StatusReason, observed.ServiceInfo.ConnectionFSMState, observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapFSMState),
+			Message:       getProtocolConverterStatusMessage(instance.CurrentState, observed.ServiceInfo.StatusReason, observed.ServiceInfo.ConnectionFSMState, observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapFSMState, observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ServiceInfo.NmapStatus.LastScan),
 			ObservedState: instance.CurrentState,
 			DesiredState:  instance.DesiredState,
 			Category:      healthCat,
@@ -178,7 +179,7 @@ func buildProtocolConverterAsDfc(
 }
 
 // getProtocolConverterStatusMessage returns a human-readable status message for the given state.
-func getProtocolConverterStatusMessage(state string, statusReason string, connectionState string, nmapState string) string {
+func getProtocolConverterStatusMessage(state string, statusReason string, connectionState string, nmapState string, lastScan *nmap_service.NmapScanResult) string {
 	baseMessage := ""
 	connectionSuffix := ""
 
@@ -247,7 +248,15 @@ func getProtocolConverterStatusMessage(state string, statusReason string, connec
 		case nmap.OperationalStateStopped:
 			nmapSuffix = " (nmap is stopped)"
 		case nmap.OperationalStateDegraded:
-			nmapSuffix = " (nmap execution failed)"
+			nmapSuffix = " (nmap execution failed"
+			// Try to extract error details from the last scan
+			if lastScan != nil {
+				if lastScan.Error != "" {
+					nmapSuffix += ": " + lastScan.Error
+				}
+			}
+
+			nmapSuffix += ")"
 		default:
 			nmapSuffix = fmt.Sprintf(" (unexpected nmap state: %s)", nmapState)
 		}
