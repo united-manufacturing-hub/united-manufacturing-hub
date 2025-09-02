@@ -38,6 +38,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/httpclient"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_default"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"go.uber.org/zap"
 
@@ -76,7 +77,7 @@ type IRedpandaService interface {
 	// It returns:
 	//   ok    – true when logs look clean, false otherwise.
 	//   entry – zero value when ok is true; otherwise the first offending log line.
-	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration, transitionToRunningTime time.Time) (bool, s6service.LogEntry)
+	IsLogsFine(logs []s6_shared.LogEntry, currentTime time.Time, logWindow time.Duration, transitionToRunningTime time.Time) (bool, s6_shared.LogEntry)
 	// IsMetricsErrorFree reports true when Redpanda metrics show no alerts or
 	// cluster‑level errors.
 	//
@@ -128,7 +129,7 @@ type RedpandaStatus struct {
 	//
 	// Therefore we override the default behaviour and copy only the 3-word
 	// slice header (24 B on amd64) — see CopyLogs below.
-	Logs []s6service.LogEntry
+	Logs []s6_shared.LogEntry
 	// RedpandaMetrics contains information about the metrics of the Redpanda service
 	RedpandaMetrics redpanda_monitor.RedpandaMetrics
 }
@@ -153,7 +154,7 @@ type RedpandaStatus struct {
 // deep-copy (O(n) but safe for mutable slices).
 //
 // See also: https://github.com/tiendc/go-deepcopy?tab=readme-ov-file#copy-struct-fields-via-struct-methods
-func (rs *RedpandaStatus) CopyLogs(src []s6service.LogEntry) error {
+func (rs *RedpandaStatus) CopyLogs(src []s6_shared.LogEntry) error {
 	rs.Logs = src
 
 	return nil
@@ -241,7 +242,7 @@ func NewDefaultRedpandaService(redpandaName string, opts ...RedpandaServiceOptio
 	service := &RedpandaService{
 		logger:                 logger.For(managerName),
 		s6Manager:              s6fsm.NewS6Manager(managerName),
-		s6Service:              s6service.NewDefaultService(),
+		s6Service:              s6_default.NewDefaultService(),
 		httpClient:             httpclient.NewDefaultHTTPClient(),
 		baseDir:                constants.DefaultRedpandaBaseDir,
 		redpandaMonitorManager: redpanda_monitor_fsm.NewRedpandaMonitorManager(redpandaName),
@@ -430,11 +431,11 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, filesystemService)
 	if err != nil {
 		switch {
-		case errors.Is(err, s6service.ErrServiceNotExist):
+		case errors.Is(err, s6_default.ErrServiceNotExist):
 			s.logger.Debugf("Service %s does not exist, returning empty logs", s6ServiceName)
 
 			return ServiceInfo{}, ErrServiceNotExist
-		case errors.Is(err, s6service.ErrLogFileNotFound):
+		case errors.Is(err, s6_default.ErrLogFileNotFound):
 			s.logger.Debugf("Log file for service %s not found, returning empty logs", s6ServiceName)
 
 			return ServiceInfo{}, ErrServiceNotExist
@@ -508,7 +509,7 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 }
 
 // GetHealthCheckAndMetrics returns the health check and metrics of a Redpanda service.
-func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uint64, logs []s6service.LogEntry, filesystemService filesystem.Service, redpandaName string, loopStartTime time.Time) (RedpandaStatus, error) {
+func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uint64, logs []s6_shared.LogEntry, filesystemService filesystem.Service, redpandaName string, loopStartTime time.Time) (RedpandaStatus, error) {
 	start := time.Now()
 
 	defer func() {
@@ -531,7 +532,7 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 				Metrics:      redpanda_monitor.Metrics{},
 				MetricsState: nil,
 			},
-			Logs: []s6service.LogEntry{},
+			Logs: []s6_shared.LogEntry{},
 		}, nil
 	}
 
@@ -954,7 +955,7 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, services service
 //
 //	ok    – true when logs look clean, false otherwise.
 //	entry – zero value when ok is true; otherwise the first offending log line.
-func (s *RedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration, transitionToRunningTime time.Time) (bool, s6service.LogEntry) {
+func (s *RedpandaService) IsLogsFine(logs []s6_shared.LogEntry, currentTime time.Time, logWindow time.Duration, transitionToRunningTime time.Time) (bool, s6_shared.LogEntry) {
 	// Check logs within the time window
 	windowStart := currentTime.Add(-logWindow)
 
@@ -974,7 +975,7 @@ func (s *RedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time
 		}
 	}
 
-	return true, s6service.LogEntry{}
+	return true, s6_shared.LogEntry{}
 }
 
 // IsMetricsErrorFree reports true when Redpanda metrics show no alerts or

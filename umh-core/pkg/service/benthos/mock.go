@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/httpclient"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_default"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -116,7 +117,7 @@ func NewMockBenthosService() *MockBenthosService {
 		ExistingServices: make(map[string]bool),
 		S6ServiceConfigs: make([]config.S6FSMConfig, 0),
 		stateFlags:       make(map[string]*ServiceStateFlags),
-		S6Service:        &s6service.MockService{},
+		S6Service:        &s6_default.MockService{},
 	}
 }
 
@@ -258,16 +259,16 @@ func (m *MockBenthosService) IsBenthosHealthchecksPassed(serviceName string, cur
 	return false
 }
 
-func (m *MockBenthosService) IsBenthosRunningForSomeTimeWithoutErrors(serviceName string) (bool, s6service.LogEntry) {
+func (m *MockBenthosService) IsBenthosRunningForSomeTimeWithoutErrors(serviceName string) (bool, s6_shared.LogEntry) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.IsBenthosRunningForSomeTimeWithoutErrorsCalled = true
 	if flags := m.GetServiceState(serviceName); flags != nil {
-		return flags.IsRunningWithoutErrors, s6service.LogEntry{}
+		return flags.IsRunningWithoutErrors, s6_shared.LogEntry{}
 	}
 
-	return false, s6service.LogEntry{}
+	return false, s6_shared.LogEntry{}
 }
 
 func (m *MockBenthosService) IsBenthosDegraded(serviceName string) bool {
@@ -431,13 +432,13 @@ func (m *MockBenthosService) ReconcileManager(ctx context.Context, services serv
 }
 
 // IsLogsFine mocks checking if the logs are fine.
-func (m *MockBenthosService) IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) (bool, s6service.LogEntry) {
+func (m *MockBenthosService) IsLogsFine(logs []s6_shared.LogEntry, currentTime time.Time, logWindow time.Duration) (bool, s6_shared.LogEntry) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.IsLogsFineCalled = true
 	// For testing purposes, always return true
-	return true, s6service.LogEntry{}
+	return true, s6_shared.LogEntry{}
 }
 
 // IsMetricsErrorFree mocks checking if metrics are error-free.

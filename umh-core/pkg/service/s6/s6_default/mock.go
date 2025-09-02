@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package s6
+package s6_default
 
 import (
 	"context"
@@ -21,6 +21,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_shared"
 )
 
 // MockService is a mock implementation of the S6 Service interface for testing.
@@ -51,18 +52,18 @@ type MockService struct {
 	ForceRemoveResult             error
 
 	// For more complex testing scenarios
-	ServiceStates    map[string]ServiceInfo
+	ServiceStates    map[string]s6_shared.ServiceInfo
 	ExistingServices map[string]bool
 
 	// Used parameters for each method (only if needed for certain tests)
 	ForceRemovePath string
 
-	ExitHistoryResult     []ExitEvent
+	ExitHistoryResult     []s6_shared.ExitEvent
 	GetS6ConfigFileResult []byte
-	GetLogsResult         []LogEntry
+	GetLogsResult         []s6_shared.LogEntry
 
 	GetConfigResult s6serviceconfig.S6ServiceConfig
-	StatusResult    ServiceInfo
+	StatusResult    s6_shared.ServiceInfo
 
 	// Mutex to protect concurrent access to shared maps
 	mu sync.RWMutex
@@ -92,10 +93,10 @@ type MockService struct {
 // NewMockService creates a new mock S6 service.
 func NewMockService() *MockService {
 	return &MockService{
-		ServiceStates:    make(map[string]ServiceInfo),
+		ServiceStates:    make(map[string]s6_shared.ServiceInfo),
 		ExistingServices: make(map[string]bool),
-		StatusResult: ServiceInfo{
-			Status: ServiceUnknown,
+		StatusResult: s6_shared.ServiceInfo{
+			Status: s6_shared.ServiceUnknown,
 		},
 	}
 }
@@ -137,7 +138,7 @@ func (m *MockService) Start(ctx context.Context, servicePath string, filesystemS
 	}
 
 	info := m.ServiceStates[servicePath]
-	info.Status = ServiceUp
+	info.Status = s6_shared.ServiceUp
 	m.ServiceStates[servicePath] = info
 
 	return m.StartError
@@ -155,7 +156,7 @@ func (m *MockService) Stop(ctx context.Context, servicePath string, filesystemSe
 	}
 
 	info := m.ServiceStates[servicePath]
-	info.Status = ServiceDown
+	info.Status = s6_shared.ServiceDown
 	m.ServiceStates[servicePath] = info
 
 	return m.StopError
@@ -170,18 +171,18 @@ func (m *MockService) Restart(ctx context.Context, servicePath string, filesyste
 	}
 
 	info := m.ServiceStates[servicePath]
-	info.Status = ServiceRestarting
+	info.Status = s6_shared.ServiceRestarting
 	m.ServiceStates[servicePath] = info
 
 	// Simulate a successful restart
-	info.Status = ServiceUp
+	info.Status = s6_shared.ServiceUp
 	m.ServiceStates[servicePath] = info
 
 	return m.RestartError
 }
 
 // Status mocks getting the status of an S6 service.
-func (m *MockService) Status(ctx context.Context, servicePath string, filesystemService filesystem.Service) (ServiceInfo, error) {
+func (m *MockService) Status(ctx context.Context, servicePath string, filesystemService filesystem.Service) (s6_shared.ServiceInfo, error) {
 	m.StatusCalled = true
 
 	if state, exists := m.ServiceStates[servicePath]; exists {
@@ -208,7 +209,7 @@ func (m *MockService) GetConfig(ctx context.Context, servicePath string, filesys
 	return m.GetConfigResult, m.GetConfigError
 }
 
-func (m *MockService) ExitHistory(ctx context.Context, servicePath string, filesystemService filesystem.Service) ([]ExitEvent, error) {
+func (m *MockService) ExitHistory(ctx context.Context, servicePath string, filesystemService filesystem.Service) ([]s6_shared.ExitEvent, error) {
 	m.ExitHistoryCalled = true
 
 	return m.ExitHistoryResult, m.ExitHistoryError
@@ -236,7 +237,7 @@ func (m *MockService) ForceRemove(ctx context.Context, servicePath string, files
 	return m.ForceRemoveError
 }
 
-func (m *MockService) GetLogs(ctx context.Context, servicePath string, filesystemService filesystem.Service) ([]LogEntry, error) {
+func (m *MockService) GetLogs(ctx context.Context, servicePath string, filesystemService filesystem.Service) ([]s6_shared.LogEntry, error) {
 	m.GetLogsCalled = true
 
 	return m.GetLogsResult, m.GetLogsError

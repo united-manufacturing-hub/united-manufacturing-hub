@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 
 	"github.com/looplab/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_default"
 
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
@@ -57,7 +58,7 @@ func NewS6Instance(
 		baseFSMInstance: internal_fsm.NewBaseFSMInstance(cfg, backoffConfig, logger),
 		servicePath:     filepath.Join(s6BaseDir, config.Name),
 		config:          config,
-		service:         s6service.NewDefaultService(),
+		service:         s6_default.NewDefaultService(),
 	}
 
 	metrics.InitErrorCounter(metrics.ComponentS6Instance, config.Name)

@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_default"
 )
 
 type RedpandaFailure interface {

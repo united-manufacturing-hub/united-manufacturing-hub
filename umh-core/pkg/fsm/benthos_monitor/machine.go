@@ -27,13 +27,13 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	benthos_monitor "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_default"
 )
 
 // NewBenthosMonitorInstance creates a new BenthosMonitorInstance with the standard transitions.
 func NewBenthosMonitorInstance(config config.BenthosMonitorConfig) *BenthosMonitorInstance {
 	return NewBenthosMonitorInstanceWithService(config, benthos_monitor.NewBenthosMonitorService(config.Name,
-		benthos_monitor.WithS6Service(s6.NewDefaultService()),
+		benthos_monitor.WithS6Service(s6_default.NewDefaultService()),
 	))
 }
 

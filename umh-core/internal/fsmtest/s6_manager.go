@@ -22,7 +22,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_default"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -34,7 +34,7 @@ func ConfigureS6MockServiceState(s6Instance *s6.S6Instance, state string) {
 	}
 
 	// Get the mock service
-	mockService, ok := s6Instance.GetService().(*s6service.MockService)
+	mockService, ok := s6Instance.GetService().(*s6_default.MockService)
 	if !ok {
 		return // Not a mock service
 	}
@@ -48,26 +48,26 @@ func ConfigureS6MockServiceState(s6Instance *s6.S6Instance, state string) {
 	switch state {
 	case s6.OperationalStateRunning:
 		// Configure mock for running state
-		mockService.ServiceStates[servicePath] = s6service.ServiceInfo{
-			Status: s6service.ServiceUp,
+		mockService.ServiceStates[servicePath] = s6_shared.ServiceInfo{
+			Status: s6_default.ServiceUp,
 			Pid:    12345,
 			Uptime: 60,
 		}
 	case s6.OperationalStateStopped:
 		// Configure mock for stopped state
-		mockService.ServiceStates[servicePath] = s6service.ServiceInfo{
-			Status:   s6service.ServiceDown,
+		mockService.ServiceStates[servicePath] = s6_shared.ServiceInfo{
+			Status:   s6_default.ServiceDown,
 			ExitCode: 0,
 		}
 	case s6.OperationalStateStarting:
 		// Configure mock for starting/transitioning state
-		mockService.ServiceStates[servicePath] = s6service.ServiceInfo{
-			Status: s6service.ServiceRestarting,
+		mockService.ServiceStates[servicePath] = s6_shared.ServiceInfo{
+			Status: s6_default.ServiceRestarting,
 		}
 	default:
 		// Default to unknown state
-		mockService.ServiceStates[servicePath] = s6service.ServiceInfo{
-			Status: s6service.ServiceUnknown,
+		mockService.ServiceStates[servicePath] = s6_shared.ServiceInfo{
+			Status: s6_default.ServiceUnknown,
 		}
 	}
 }

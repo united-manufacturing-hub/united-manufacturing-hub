@@ -24,7 +24,7 @@ import (
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_default"
 )
 
 // NewS6ManagerWithMockedServices creates an S6Manager with fully mocked instances
@@ -57,13 +57,13 @@ func NewS6ManagerWithMockedServices(name string) *S6Manager {
 			}
 
 			// Import the mockService package
-			mockService := s6service.NewMockService()
+			mockService := s6_default.NewMockService()
 
 			// Pre-configure mock responses for stopped state
 			servicePath := instance.GetServicePath()
 			mockService.ExistingServices[servicePath] = true
-			mockService.ServiceStates[servicePath] = s6service.ServiceInfo{
-				Status: s6service.ServiceDown,
+			mockService.ServiceStates[servicePath] = s6_shared.ServiceInfo{
+				Status: s6_default.ServiceDown,
 			}
 
 			// Setup mock to return the config we're setting
@@ -82,7 +82,7 @@ func NewS6ManagerWithMockedServices(name string) *S6Manager {
 			}
 
 			// Get the mock service
-			mockService, ok := s6Instance.GetService().(*s6service.MockService)
+			mockService, ok := s6Instance.GetService().(*s6_default.MockService)
 			if ok {
 				// For mocks, update the stored config
 				mockService.GetConfigResult = cfg.S6ServiceConfig
@@ -105,7 +105,7 @@ func NewS6ManagerWithMockedServices(name string) *S6Manager {
 			s6Instance.config.S6ServiceConfig = cfg.S6ServiceConfig
 
 			// Get the mock service and update its config too
-			if mockService, ok := s6Instance.GetService().(*s6service.MockService); ok {
+			if mockService, ok := s6Instance.GetService().(*s6_default.MockService); ok {
 				mockService.GetConfigResult = cfg.S6ServiceConfig
 			}
 

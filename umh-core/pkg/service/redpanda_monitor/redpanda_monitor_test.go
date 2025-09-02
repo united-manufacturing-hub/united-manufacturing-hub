@@ -28,10 +28,10 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_default"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -128,7 +128,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 			defer cancel()
 
 			// Mock the S6 service to return some logs
-			mockS6 := s6service.NewMockService()
+			mockS6 := s6_default.NewMockService()
 
 			// Create a new service with the mock S6 service
 			service = redpanda_monitor.NewRedpandaMonitorService("test-redpanda", redpanda_monitor.WithS6Service(mockS6))
@@ -146,7 +146,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 			mockS6.ExistingServices[servicePath] = true
 
 			// Set up mock logs that include our markers and some fake metrics data
-			mockLogs := []s6service.LogEntry{
+			mockLogs := []s6_shared.LogEntry{
 				{Content: redpanda_monitor.BLOCK_START_MARKER + "\n"},
 				{Content: "1f8b0800000000000003abcd4f2c492d2e516c0600000000ffff0300ee1f0e9e09000000\n"}, // Some hex-encoded gzipped data
 				{Content: redpanda_monitor.METRICS_END_MARKER + "\n"},
@@ -171,14 +171,14 @@ var _ = Describe("Redpanda Monitor Service", func() {
 
 	Describe("ParseRedpandaLogs", func() {
 		It("should return an error for empty logs", func() {
-			logs := []s6service.LogEntry{}
+			logs := []s6_shared.LogEntry{}
 			_, err := service.ParseRedpandaLogs(ctx, logs, tick)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("no logs provided"))
 		})
 
 		It("should return an error if no block end marker is found", func() {
-			logs := []s6service.LogEntry{
+			logs := []s6_shared.LogEntry{
 				{Content: redpanda_monitor.BLOCK_START_MARKER + "\n"},
 				{Content: "some data\n"},
 				{Content: redpanda_monitor.METRICS_END_MARKER + "\n"},
@@ -192,7 +192,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 		})
 
 		It("should return an error if no start marker is found", func() {
-			logs := []s6service.LogEntry{
+			logs := []s6_shared.LogEntry{
 				{Content: "some data\n"},
 				{Content: redpanda_monitor.METRICS_END_MARKER + "\n"},
 				{Content: "more data\n"},
@@ -206,7 +206,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 		})
 
 		It("should return an error if no metrics end marker is found", func() {
-			logs := []s6service.LogEntry{
+			logs := []s6_shared.LogEntry{
 				{Content: redpanda_monitor.BLOCK_START_MARKER + "\n"},
 				{Content: "some data\n"},
 				{Content: "more data\n"},
@@ -220,7 +220,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 		})
 
 		It("should return an error if no config end marker is found", func() {
-			logs := []s6service.LogEntry{
+			logs := []s6_shared.LogEntry{
 				{Content: redpanda_monitor.BLOCK_START_MARKER + "\n"},
 				{Content: "some data\n"},
 				{Content: redpanda_monitor.METRICS_END_MARKER + "\n"},
@@ -234,7 +234,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 		})
 
 		It("should return an error if markers are in incorrect order", func() {
-			logs := []s6service.LogEntry{
+			logs := []s6_shared.LogEntry{
 				{Content: redpanda_monitor.BLOCK_START_MARKER + "\n"},
 				{Content: redpanda_monitor.CLUSTERCONFIG_END_MARKER + "\n"}, // Wrong order
 				{Content: "some data\n"},
@@ -281,7 +281,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 
 	Describe("Can parse the metrics", func() {
 		It("should return an error if no metrics are provided", func() {
-			logs := []s6service.LogEntry{}
+			logs := []s6_shared.LogEntry{}
 			_, err := service.ParseRedpandaLogs(ctx, logs, tick)
 			Expect(err).To(HaveOccurred())
 		})
@@ -320,7 +320,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 
 		// 2. Parse it line by line into s6service.LogEntry
 		lines := strings.Split(string(metricsData), "\n")
-		var logEntries []s6service.LogEntry
+		var logEntries []s6_shared.LogEntry
 
 		for _, line := range lines {
 			if len(line) > 0 {
@@ -328,10 +328,10 @@ var _ = Describe("Redpanda Monitor Service", func() {
 				parts := strings.SplitN(line, "  ", 2)
 				if len(parts) == 2 {
 					// Use the content part (after the timestamp)
-					logEntries = append(logEntries, s6service.LogEntry{Content: parts[1]})
+					logEntries = append(logEntries, s6_shared.LogEntry{Content: parts[1]})
 				} else {
 					// For lines without timestamps (like the marker lines)
-					logEntries = append(logEntries, s6service.LogEntry{Content: line})
+					logEntries = append(logEntries, s6_shared.LogEntry{Content: line})
 				}
 			}
 		}
@@ -739,7 +739,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 	// Test for concatContent function
 	Describe("concatContent", func() {
 		It("should concatenate log entries correctly", func() {
-			logs := []s6service.LogEntry{
+			logs := []s6_shared.LogEntry{
 				{Content: "Hello "},
 				{Content: "World"},
 				{Content: "!"},
@@ -749,7 +749,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 		})
 
 		It("should handle empty log entries", func() {
-			logs := []s6service.LogEntry{
+			logs := []s6_shared.LogEntry{
 				{Content: ""},
 				{Content: ""},
 				{Content: ""},
@@ -759,7 +759,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 		})
 
 		It("should handle mixed content", func() {
-			logs := []s6service.LogEntry{
+			logs := []s6_shared.LogEntry{
 				{Content: "Line 1\n"},
 				{Content: "Line 2\n"},
 				{Content: "Line 3"},
@@ -769,7 +769,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 		})
 
 		It("should handle binary data", func() {
-			logs := []s6service.LogEntry{
+			logs := []s6_shared.LogEntry{
 				{Content: string([]byte{0x01, 0x02})},
 				{Content: string([]byte{0x03, 0x04})},
 			}
@@ -778,7 +778,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 		})
 
 		It("should handle a single log entry", func() {
-			logs := []s6service.LogEntry{
+			logs := []s6_shared.LogEntry{
 				{Content: "Single entry"},
 			}
 			result := redpanda_monitor.ConcatContent(logs)
@@ -786,7 +786,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 		})
 
 		It("should handle empty logs slice", func() {
-			var logs []s6service.LogEntry
+			var logs []s6_shared.LogEntry
 			result := redpanda_monitor.ConcatContent(logs)
 			Expect(result).To(BeEmpty())
 		})

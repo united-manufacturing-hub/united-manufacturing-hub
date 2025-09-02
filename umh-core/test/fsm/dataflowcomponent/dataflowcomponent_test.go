@@ -25,7 +25,7 @@ import (
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	dataflowcomponentsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_default"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
@@ -784,7 +784,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Force the exact error message from the logs with proper error wrapping
-			mockService.StatusError = fmt.Errorf("failed to get benthos config: failed to get benthos config file for service benthos-dataflow-%s: %w", componentName, s6.ErrServiceNotExist)
+			mockService.StatusError = fmt.Errorf("failed to get benthos config: failed to get benthos config file for service benthos-dataflow-%s: %w", componentName, s6_default.ErrServiceNotExist)
 
 			// Attempt to reconcile - this should not set an FSM error if errors are correctly identified
 			snapshot := pkgfsm.SystemSnapshot{Tick: tick}

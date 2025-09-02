@@ -33,7 +33,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/monitor"
 	redpanda_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_default"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"golang.org/x/sync/errgroup"
 )
@@ -549,7 +549,7 @@ func (r *RedpandaInstance) AnyUnexpectedRestartsInTheLastHour() (bool, string) {
 	// and if the time of the restart is within the last hour
 	var (
 		restarts     []int
-		lastExit     s6.ExitEvent
+		lastExit     s6_shared.ExitEvent
 		lastExitTime time.Time
 	)
 

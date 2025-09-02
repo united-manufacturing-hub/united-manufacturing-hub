@@ -30,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_default"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/prometheus/common/expfmt"
@@ -191,7 +192,7 @@ type RedpandaMonitorStatus struct {
 	//
 	// Therefore we override the default behaviour and copy only the 3-word
 	// slice header (24 B on amd64) — see CopyLogs below.
-	Logs []s6service.LogEntry
+	Logs []s6_shared.LogEntry
 	// IsRunning indicates whether the redpanda_monitor service is running
 	IsRunning bool
 }
@@ -216,7 +217,7 @@ type RedpandaMonitorStatus struct {
 // deep-copy (O(n) but safe for mutable slices).
 //
 // See also: https://github.com/tiendc/go-deepcopy?tab=readme-ov-file#copy-struct-fields-via-struct-methods
-func (rms *RedpandaMonitorStatus) CopyLogs(src []s6service.LogEntry) error {
+func (rms *RedpandaMonitorStatus) CopyLogs(src []s6_shared.LogEntry) error {
 	rms.Logs = src
 
 	return nil
@@ -280,7 +281,7 @@ func NewRedpandaMonitorService(redpandaName string, opts ...RedpandaMonitorServi
 		logger:       logger.For(managerName),
 		metricsState: NewRedpandaMetricsState(),
 		s6Manager:    s6fsm.NewS6Manager(logger.ComponentRedpandaMonitorService),
-		s6Service:    s6service.NewDefaultService(),
+		s6Service:    s6_default.NewDefaultService(),
 		redpandaName: redpandaName,
 	}
 	for _, opt := range opts {
@@ -370,7 +371,7 @@ type Section struct {
 // ConcatContent concatenates the content of a slice of LogEntry objects into a single byte slice.
 // It calculates the total size of the content, allocates a buffer of that size, and then copies each LogEntry's content into the buffer.
 // This approach is more efficient than using multiple strings.ReplaceAll calls or regex operations.
-func ConcatContent(logs []s6service.LogEntry) []byte {
+func ConcatContent(logs []s6_shared.LogEntry) []byte {
 	// 1st pass: exact size
 	size := 0
 	for i := range logs {
@@ -407,7 +408,7 @@ func StripMarkers(b []byte) []byte {
 }
 
 // ParseRedpandaLogs parses the logs of a redpanda service and extracts metrics.
-func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s6service.LogEntry, tick uint64) (*RedpandaMetricsScan, error) {
+func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s6_shared.LogEntry, tick uint64) (*RedpandaMetricsScan, error) {
 	/*
 		A normal log entry looks like this:
 		BLOCK_START_MARKER

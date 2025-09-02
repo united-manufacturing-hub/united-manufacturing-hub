@@ -28,7 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
-	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_default"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -151,11 +151,11 @@ var _ = Describe("Redpanda Service", func() {
 	Describe("Lifecycle Management", func() {
 		var (
 			service       *RedpandaService
-			mockS6Service *s6service.MockService
+			mockS6Service *s6_default.MockService
 		)
 
 		BeforeEach(func() {
-			mockS6Service = s6service.NewMockService()
+			mockS6Service = s6_default.NewMockService()
 
 			// Set up mock schema registry server for real network calls
 			mockSchemaRegistry := NewMockSchemaRegistry()
@@ -414,12 +414,12 @@ var _ = Describe("Redpanda Service", func() {
 
 		Context("IsLogsFine", func() {
 			It("should return true when there are no logs", func() {
-				result, _ := service.IsLogsFine([]s6service.LogEntry{}, currentTime, logWindow, time.Time{})
+				result, _ := service.IsLogsFine([]s6_shared.LogEntry{}, currentTime, logWindow, time.Time{})
 				Expect(result).To(BeTrue())
 			})
 
 			It("should detect 'Address already in use' errors", func() {
-				logs := []s6service.LogEntry{
+				logs := []s6_shared.LogEntry{
 					{
 						Timestamp: currentTime.Add(-1 * time.Minute),
 						Content:   "INFO Starting Redpanda",
@@ -434,7 +434,7 @@ var _ = Describe("Redpanda Service", func() {
 			})
 
 			It("should detect 'Reactor stalled for' errors", func() {
-				logs := []s6service.LogEntry{
+				logs := []s6_shared.LogEntry{
 					{
 						Timestamp: currentTime.Add(-1 * time.Minute),
 						Content:   "INFO Starting Redpanda",
@@ -449,7 +449,7 @@ var _ = Describe("Redpanda Service", func() {
 			})
 
 			It("should pass with normal logs", func() {
-				logs := []s6service.LogEntry{
+				logs := []s6_shared.LogEntry{
 					{
 						Timestamp: currentTime.Add(-1 * time.Minute),
 						Content:   "INFO Starting Redpanda",
@@ -464,7 +464,7 @@ var _ = Describe("Redpanda Service", func() {
 			})
 
 			It("should ignore logs outside the time window", func() {
-				logs := []s6service.LogEntry{
+				logs := []s6_shared.LogEntry{
 					{
 						Timestamp: currentTime.Add(-10 * time.Minute),
 						Content:   "ERROR Address already in use (port 9092)",
@@ -479,7 +479,7 @@ var _ = Describe("Redpanda Service", func() {
 			})
 
 			It("should handle logs at the edge of the time window", func() {
-				errorLog := s6service.LogEntry{
+				errorLog := s6_shared.LogEntry{
 					Timestamp: currentTime.Add(-logWindow),
 					Content:   "ERROR Address already in use (port 9092)",
 				}
@@ -490,13 +490,13 @@ var _ = Describe("Redpanda Service", func() {
 				fmt.Printf("Debug - Is error log before window start? %v\n", errorLog.Timestamp.Before(windowStart))
 				fmt.Printf("Debug - Is error log equal to window start? %v\n", errorLog.Timestamp.Equal(windowStart))
 
-				logs := []s6service.LogEntry{errorLog}
+				logs := []s6_shared.LogEntry{errorLog}
 
 				result, _ := service.IsLogsFine(logs, currentTime, logWindow, time.Time{})
 				fmt.Printf("Debug - IsLogsFine result: %v\n", result)
 				Expect(result).To(BeFalse(), "Error log exactly at window boundary should be excluded")
 
-				normalLog := s6service.LogEntry{
+				normalLog := s6_shared.LogEntry{
 					Timestamp: currentTime.Add(-logWindow).Add(1 * time.Millisecond),
 					Content:   "INFO Normal log inside window",
 				}
@@ -508,7 +508,7 @@ var _ = Describe("Redpanda Service", func() {
 				fmt.Printf("Debug - IsLogsFine result with normal log: %v\n", result)
 				Expect(result).To(BeFalse(), "Adding a normal log inside the window should not affect the result")
 
-				errorLogInside := s6service.LogEntry{
+				errorLogInside := s6_shared.LogEntry{
 					Timestamp: currentTime.Add(-logWindow).Add(2 * time.Millisecond),
 					Content:   "ERROR Reactor stalled for 5s",
 				}
@@ -522,7 +522,7 @@ var _ = Describe("Redpanda Service", func() {
 			})
 
 			It("should evaluate logs with mixed timestamps correctly", func() {
-				logs := []s6service.LogEntry{
+				logs := []s6_shared.LogEntry{
 					{
 						Timestamp: currentTime.Add(-10 * time.Minute),
 						Content:   "ERROR Address already in use (port 9092)",
@@ -554,7 +554,7 @@ var _ = Describe("Redpanda Service", func() {
 			})
 
 			It("should respect different window sizes", func() {
-				logs := []s6service.LogEntry{
+				logs := []s6_shared.LogEntry{
 					{
 						Timestamp: currentTime.Add(-3 * time.Minute),
 						Content:   "ERROR Address already in use (port 9092)",
@@ -573,7 +573,7 @@ var _ = Describe("Redpanda Service", func() {
 
 			It("should ignore errors before transition time", func() {
 				transitionTime := currentTime.Add(-2 * time.Minute)
-				logs := []s6service.LogEntry{
+				logs := []s6_shared.LogEntry{
 					{
 						Timestamp: currentTime.Add(-3 * time.Minute), // Before transition
 						Content:   "ERROR Reactor stalled for 1000 ms",
@@ -589,7 +589,7 @@ var _ = Describe("Redpanda Service", func() {
 
 			It("should detect errors after transition time", func() {
 				transitionTime := currentTime.Add(-2 * time.Minute)
-				logs := []s6service.LogEntry{
+				logs := []s6_shared.LogEntry{
 					{
 						Timestamp: currentTime.Add(-1 * time.Minute), // After transition
 						Content:   "ERROR Reactor stalled for 1000 ms",
@@ -604,12 +604,12 @@ var _ = Describe("Redpanda Service", func() {
 	Describe("ForceRemoveRedpanda", func() {
 		var (
 			service       *RedpandaService
-			mockS6Service *s6service.MockService
+			mockS6Service *s6_default.MockService
 			mockFS        *filesystem.MockFileSystem
 		)
 
 		BeforeEach(func() {
-			mockS6Service = s6service.NewMockService()
+			mockS6Service = s6_default.NewMockService()
 			mockFS = filesystem.NewMockFileSystem()
 
 			// Set up mock schema registry server for real network calls

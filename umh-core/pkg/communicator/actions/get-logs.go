@@ -33,7 +33,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_default"
 	"go.uber.org/zap"
 )
 
@@ -128,7 +128,7 @@ func (a *GetLogsAction) Validate() (err error) {
 
 // mapS6LogsToSlice maps the S6 logs to a slice of strings.
 // It filters out logs that are before the provided start time.
-func mapS6LogsToSlice(s6Logs []s6.LogEntry, startTimeUTC time.Time) []string {
+func mapS6LogsToSlice(s6Logs []s6_shared.LogEntry, startTimeUTC time.Time) []string {
 	logs := []string{}
 
 	for _, log := range s6Logs {

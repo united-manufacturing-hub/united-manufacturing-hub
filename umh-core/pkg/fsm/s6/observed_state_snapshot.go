@@ -20,14 +20,14 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_default"
 )
 
 // S6ObservedStateSnapshot is a deep-copyable snapshot of S6ObservedState.
 type S6ObservedStateSnapshot struct {
 	Config                  config.S6FSMConfig
 	ObservedS6ServiceConfig s6serviceconfig.S6ServiceConfig
-	ServiceInfo             s6.ServiceInfo
+	ServiceInfo             s6_shared.ServiceInfo
 	LastStateChange         int64
 }
 

@@ -25,7 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_default"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -176,7 +176,7 @@ func CreateMockBenthosManager(name string) (*benthosfsm.BenthosManager, *benthos
 	manager, mockService := benthosfsm.NewBenthosManagerWithMockedServices(name)
 
 	// Set up the mock service to prevent real filesystem operations
-	s6MockService := mockService.S6Service.(*s6svc.MockService)
+	s6MockService := mockService.S6Service.(*s6_default.MockService)
 
 	// Configure default responses to prevent real filesystem operations
 	s6MockService.CreateError = nil
@@ -189,8 +189,8 @@ func CreateMockBenthosManager(name string) (*benthosfsm.BenthosManager, *benthos
 	s6MockService.ServiceExistsResult = true
 
 	// Configure default successful statuses
-	s6MockService.StatusResult = s6svc.ServiceInfo{
-		Status: s6svc.ServiceUp,
+	s6MockService.StatusResult = s6_shared.ServiceInfo{
+		Status: s6_default.ServiceUp,
 		Pid:    12345, // Fake PID
 		Uptime: 60,    // Fake uptime in seconds
 	}

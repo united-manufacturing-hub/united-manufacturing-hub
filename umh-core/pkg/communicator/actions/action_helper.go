@@ -21,7 +21,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_default"
 	"go.uber.org/zap"
 )
 
@@ -51,14 +51,14 @@ func ConsumeOutboundMessages(outboundChannel chan *models.UMHMessage, messages *
 // SendLimitedLogs sends a maximum of 10 logs to the user and a message about remaining logs.
 // Returns the updated lastLogs array that includes all logs, even those not sent.
 func SendLimitedLogs(
-	logs []s6.LogEntry,
-	lastLogs []s6.LogEntry,
+	logs []s6_shared.LogEntry,
+	lastLogs []s6_shared.LogEntry,
 	instanceUUID uuid.UUID,
 	userEmail string,
 	actionUUID uuid.UUID,
 	outboundChannel chan *models.UMHMessage,
 	actionType models.ActionType,
-	remainingSeconds int) []s6.LogEntry {
+	remainingSeconds int) []s6_shared.LogEntry {
 	if len(logs) <= len(lastLogs) {
 		return lastLogs
 	}

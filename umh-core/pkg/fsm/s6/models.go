@@ -23,6 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_default"
 )
 
 // Operational state constants represent the runtime states of a service.
@@ -71,7 +72,7 @@ type S6ObservedState struct {
 	ObservedS6ServiceConfig s6serviceconfig.S6ServiceConfig
 
 	// ServiceInfo contains the actual service info from s6
-	ServiceInfo s6svc.ServiceInfo
+	ServiceInfo s6_shared.ServiceInfo
 
 	// LastStateChange is the timestamp of the last observed state change
 	LastStateChange int64
