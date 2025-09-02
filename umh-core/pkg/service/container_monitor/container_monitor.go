@@ -268,7 +268,8 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	if throttlingStats != nil && throttlingStats.NrPeriods > 0 {
 		throttleRate := throttlingStats.ThrottleRate
 
-		if throttleRate >= constants.CPUThrottlingCriticalPercent {
+		switch {
+		case throttleRate >= constants.CPUThrottlingCriticalPercent:
 			category = models.Degraded
 			message = fmt.Sprintf("CPU throttling critical (%.1f%% throttled). Reduce workload or increase CPU limits to improve performance", throttleRate)
 
@@ -285,10 +286,10 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 					"cpu_usage_percent": usagePercent,
 				},
 			)
-		} else if throttleRate >= constants.CPUThrottlingHighPercent {
+		case throttleRate >= constants.CPUThrottlingHighPercent:
 			// Still Active but significant throttling
 			message = fmt.Sprintf("CPU throttling high (%.1f%% throttled). Consider reducing bridge workloads or adding more compute capacity", throttleRate)
-		} else if throttleRate >= constants.CPUThrottlingMediumPercent {
+		case throttleRate >= constants.CPUThrottlingMediumPercent:
 			// Still Active but noticeable throttling
 			message = fmt.Sprintf("CPU throttling detected (%.1f%% throttled). Monitor bridge performance", throttleRate)
 		}
@@ -351,7 +352,12 @@ func (c *ContainerMonitorService) getCPUThrottlingStats() (*CPUThrottlingStats, 
 		// Not running in container or cgroup v2 not available
 		return nil, fmt.Errorf("failed to read cgroup cpu.stat: %w", err)
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			c.logger.Warnf("failed to close cgroup cpu.stat file: %v", err)
+		}
+	}(file)
 
 	stats := &CPUThrottlingStats{}
 	scanner := bufio.NewScanner(file)

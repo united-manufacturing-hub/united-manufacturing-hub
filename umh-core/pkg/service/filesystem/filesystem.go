@@ -103,14 +103,17 @@ func (s *DefaultService) EnsureDirectory(ctx context.Context, path string) error
 	case err := <-errCh:
 		if err != nil {
 			s.recordOp("EnsureDirectory", path, start, err, false)
+
 			return fmt.Errorf("failed to create directory %s: %w", path, err)
 		}
 
 		s.recordOp("EnsureDirectory", path, start, nil, false)
+
 		return nil
 	case <-ctx.Done():
 		err := ctx.Err()
 		s.recordOp("EnsureDirectory", path, start, err, false)
+
 		return err
 	}
 }
@@ -154,6 +157,7 @@ func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, err
 		}
 
 		s.recordOp("ReadFile", path, start, err, false)
+
 		return nil, err
 	}
 }
@@ -301,10 +305,12 @@ func (s *DefaultService) ReadFileRange(
 	select {
 	case res := <-resCh:
 		s.recordOp("ReadFileRange", path, start, res.err, false)
+
 		return res.data, res.newSize, res.err
 	case <-ctx.Done():
 		err := ctx.Err()
 		s.recordOp("ReadFileRange", path, start, err, false)
+
 		return nil, 0, err
 	}
 }
@@ -330,14 +336,17 @@ func (s *DefaultService) WriteFile(ctx context.Context, path string, data []byte
 	case err := <-errCh:
 		if err != nil {
 			s.recordOp("WriteFile", path, start, err, false)
+
 			return fmt.Errorf("failed to write file %s: %w", path, err)
 		}
 
 		s.recordOp("WriteFile", path, start, nil, false)
+
 		return nil
 	case <-ctx.Done():
 		err := ctx.Err()
 		s.recordOp("WriteFile", path, start, err, false)
+
 		return err
 	}
 }
@@ -389,6 +398,7 @@ func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, err
 	case <-ctx.Done():
 		err := ctx.Err()
 		s.recordOp("PathExists", path, start, err, false)
+
 		return false, err
 	}
 }
@@ -419,10 +429,12 @@ func (s *DefaultService) Remove(ctx context.Context, path string) error {
 	select {
 	case err := <-errCh:
 		s.recordOp("Remove", path, start, err, false)
+
 		return err
 	case <-ctx.Done():
 		err := ctx.Err()
 		s.recordOp("Remove", path, start, err, false)
+
 		return err
 	}
 }
@@ -448,14 +460,17 @@ func (s *DefaultService) RemoveAll(ctx context.Context, path string) error {
 	case err := <-errCh:
 		if err != nil {
 			s.recordOp("RemoveAll", path, start, err, false)
+
 			return fmt.Errorf("failed to remove directory %s: %w", path, err)
 		}
 
 		s.recordOp("RemoveAll", path, start, nil, false)
+
 		return nil
 	case <-ctx.Done():
 		err := ctx.Err()
 		s.recordOp("RemoveAll", path, start, err, false)
+
 		return err
 	}
 }
@@ -487,14 +502,17 @@ func (s *DefaultService) Stat(ctx context.Context, path string) (os.FileInfo, er
 	case res := <-resCh:
 		if res.err != nil {
 			s.recordOp("Stat", path, start, res.err, false)
+
 			return nil, fmt.Errorf("failed to get file info: %w", res.err)
 		}
 
 		s.recordOp("Stat", path, start, nil, false)
+
 		return res.info, nil
 	case <-ctx.Done():
 		err := ctx.Err()
 		s.recordOp("Stat", path, start, err, false)
+
 		return nil, err
 	}
 }
@@ -520,14 +538,17 @@ func (s *DefaultService) Chmod(ctx context.Context, path string, mode os.FileMod
 	case err := <-errCh:
 		if err != nil {
 			s.recordOp("Chmod", path, start, err, false)
+
 			return fmt.Errorf("failed to change mode of file %s: %w", path, err)
 		}
 
 		s.recordOp("Chmod", path, start, nil, false)
+
 		return nil
 	case <-ctx.Done():
 		err := ctx.Err()
 		s.recordOp("Chmod", path, start, err, false)
+
 		return err
 	}
 }
@@ -559,14 +580,17 @@ func (s *DefaultService) ReadDir(ctx context.Context, path string) ([]os.DirEntr
 	case res := <-resCh:
 		if res.err != nil {
 			s.recordOp("ReadDir", path, start, res.err, false)
+
 			return nil, fmt.Errorf("failed to read directory %s: %w", path, res.err)
 		}
 
 		s.recordOp("ReadDir", path, start, nil, false)
+
 		return res.entries, nil
 	case <-ctx.Done():
 		err := ctx.Err()
 		s.recordOp("ReadDir", path, start, err, false)
+
 		return nil, err
 	}
 }
@@ -594,14 +618,17 @@ func (s *DefaultService) Chown(ctx context.Context, path string, user string, gr
 	case err := <-errCh:
 		if err != nil {
 			s.recordOp("Chown", fmt.Sprintf("%s:%s->%s", user, group, path), start, err, false)
+
 			return fmt.Errorf("failed to change owner of file %s to %s:%s: %w", path, user, group, err)
 		}
 
 		s.recordOp("Chown", fmt.Sprintf("%s:%s->%s", user, group, path), start, nil, false)
+
 		return nil
 	case <-ctx.Done():
 		err := ctx.Err()
 		s.recordOp("Chown", fmt.Sprintf("%s:%s->%s", user, group, path), start, err, false)
+
 		return err
 	}
 }
@@ -663,14 +690,17 @@ func (s *DefaultService) Glob(ctx context.Context, pattern string) ([]string, er
 	case res := <-resCh:
 		if res.err != nil {
 			s.recordOp("Glob", pattern, start, res.err, false)
+
 			return nil, fmt.Errorf("failed to glob pattern %s: %w", pattern, res.err)
 		}
 
 		s.recordOp("Glob", pattern, start, nil, false)
+
 		return res.matches, nil
 	case <-ctx.Done():
 		err := ctx.Err()
 		s.recordOp("Glob", pattern, start, err, false)
+
 		return nil, err
 	}
 }
@@ -697,14 +727,17 @@ func (s *DefaultService) Rename(ctx context.Context, oldPath, newPath string) er
 	case err := <-errCh:
 		if err != nil {
 			s.recordOp("Rename", fmt.Sprintf("%s->%s", oldPath, newPath), start, err, false)
+
 			return fmt.Errorf("failed to rename file %s to %s: %w", oldPath, newPath, err)
 		}
 
 		s.recordOp("Rename", fmt.Sprintf("%s->%s", oldPath, newPath), start, nil, false)
+
 		return nil
 	case <-ctx.Done():
 		err := ctx.Err()
 		s.recordOp("Rename", fmt.Sprintf("%s->%s", oldPath, newPath), start, err, false)
+
 		return err
 	}
 }
@@ -730,14 +763,17 @@ func (s *DefaultService) Symlink(ctx context.Context, target, linkPath string) e
 	case err := <-errCh:
 		if err != nil {
 			s.recordOp("Symlink", fmt.Sprintf("%s->%s", target, linkPath), start, err, false)
+
 			return fmt.Errorf("failed to create symlink %s -> %s: %w", linkPath, target, err)
 		}
 
 		s.recordOp("Symlink", fmt.Sprintf("%s->%s", target, linkPath), start, nil, false)
+
 		return nil
 	case <-ctx.Done():
 		err := ctx.Err()
 		s.recordOp("Symlink", fmt.Sprintf("%s->%s", target, linkPath), start, err, false)
+
 		return err
 	}
 }
