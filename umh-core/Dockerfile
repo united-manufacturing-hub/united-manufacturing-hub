@@ -82,6 +82,7 @@ ARG S6_OVERLAY_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG BENTHOS_UMH_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG REDPANDA_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG DEBUG=false
+ARG RACE=false
 ARG PPROF=false
 WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub
 
@@ -94,33 +95,33 @@ WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub/umh
 COPY . .
 RUN echo "GOOS: ${GOOS:-$(go env GOOS)}, GOARCH: ${GOARCH:-$(go env GOARCH)}"
 RUN echo "Go version: $(go version)"
-# CGO_ENABLED=1 is needed for the race detector to work
-RUN if [ "$DEBUG" = "true" ]; then \
-    CGO_ENABLED=1 go build \
-    -race \
-    -gcflags="all=-N -l" \
-    -ldflags "-X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
+
+# Build with conditional flags based on DEBUG, RACE, and PPROF
+RUN BUILD_FLAGS=""; \
+    LDFLAGS="-X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.RedpandaVersion=${REDPANDA_VERSION} \
-    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version.AppVersion=${APP_VERSION}" \
-    -o /go/bin/umh-core cmd/main.go; \
-    elif [ "$PPROF" = "true" ]; then \
-    CGO_ENABLED=1 go build -mod=vendor -tags pprof \
-    -ldflags "-s -w \
-    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
-    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \
-    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.RedpandaVersion=${REDPANDA_VERSION} \
-    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version.AppVersion=${APP_VERSION}" \
-    -o /go/bin/umh-core cmd/main.go; \
-    else \
-    CGO_ENABLED=1 go build -mod=vendor  \
-    -ldflags "-s -w \
-    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
-    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \
-    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.RedpandaVersion=${REDPANDA_VERSION} \
-    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version.AppVersion=${APP_VERSION}" \
-    -o /go/bin/umh-core cmd/main.go; \
-    fi
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version.AppVersion=${APP_VERSION}"; \
+    \
+    if [ "$RACE" = "true" ]; then \
+        BUILD_FLAGS="${BUILD_FLAGS} -race"; \
+    fi; \
+    \
+    if [ "$DEBUG" = "true" ]; then \
+        BUILD_FLAGS="${BUILD_FLAGS} -gcflags=all=-N -l"; \
+    fi; \
+    \
+    if [ "$PPROF" = "true" ]; then \
+        BUILD_FLAGS="${BUILD_FLAGS} -tags pprof -mod=vendor"; \
+        LDFLAGS="-s -w ${LDFLAGS}"; \
+    elif [ "$DEBUG" != "true" ]; then \
+        BUILD_FLAGS="${BUILD_FLAGS} -mod=vendor"; \
+        LDFLAGS="-s -w ${LDFLAGS}"; \
+    fi; \
+    \
+    echo "Building with flags: ${BUILD_FLAGS}"; \
+    echo "Building with ldflags: ${LDFLAGS}"; \
+    CGO_ENABLED=1 go build ${BUILD_FLAGS} -ldflags "${LDFLAGS}" -o /go/bin/umh-core cmd/main.go
 
 # --- Final Stage ---
 FROM alpine:${ALPINE_VERSION} as runner

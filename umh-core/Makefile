@@ -23,9 +23,13 @@ help: ## Display available make targets and usage information
 	@echo "   make test-graphql    # Start GraphQL server with simulator data (port 8090)"
 	@echo ""
 	@echo "🔨 BUILD COMMANDS:"
-	@echo "   make build          # Build Docker image"
-	@echo "   make build-debug    # Build with debug support"
-	@echo "   make build-pprof    # Build with profiling support"
+	@echo "   make build                    # Build Docker image"
+	@echo ""
+	@echo "🎛️  BUILD FLAVORS (can be combined):"
+	@echo "   make build FLAVOR=debug       # Enable debug symbols + Delve"
+	@echo "   make build FLAVOR=race        # Enable race detection"
+	@echo "   make build FLAVOR=pprof       # Enable profiling"
+	@echo "   make build FLAVOR=debug,race  # Multiple flavors combined"
 	@echo ""
 	@echo "🧪 TEST COMMANDS:"
 	@echo "   make test-graphql      # GraphQL API with real-time simulator data (recommended)"
@@ -180,7 +184,25 @@ download-docker-binaries:
 
 	@echo "All required files are present and up to date"
 
-.PHONY: build build-pprof build-debug
+# Parse comma-separated flavors
+comma := ,
+empty :=
+space := $(empty) $(empty)
+FLAVOR_LIST = $(subst $(comma),$(space),$(FLAVOR))
+
+# Build EXTRA_ARGS dynamically based on flavors
+EXTRA_ARGS :=
+ifneq (,$(filter debug,$(FLAVOR_LIST)))
+	EXTRA_ARGS += --build-arg DEBUG=true
+endif
+ifneq (,$(filter race,$(FLAVOR_LIST)))
+	EXTRA_ARGS += --build-arg RACE=true
+endif
+ifneq (,$(filter pprof,$(FLAVOR_LIST)))
+	EXTRA_ARGS += --build-arg PPROF=true
+endif
+
+.PHONY: build
 COMMON_ARGS = \
 	--platform linux/$(TARGETARCH) \
 	--build-arg GOLANG_VERSION=$(GOLANG_VERSION) \
@@ -199,16 +221,11 @@ define DOCKER_BUILD
 		-t $(IMAGE_NAME):$(TAG) .
 endef
 
-build:
-build-pprof:       EXTRA_ARGS := --build-arg PPROF=true
-build-debug:       EXTRA_ARGS := --build-arg DEBUG=true
-
-# Refresh cache and build docker binaries
-build build-pprof build-debug: build-protobuf download-docker-binaries
+build: build-protobuf download-docker-binaries
 	$(call DOCKER_BUILD)
 
-FLAVOR ?=                         # empty → normal build
-BUILD_TARGET = $(if $(FLAVOR),build-$(FLAVOR),build)
+FLAVOR ?=                         # empty → normal build, or comma-separated list (e.g., "debug,race")
+BUILD_TARGET = build
 
 stop-and-remove-umh-core-latest:
 	docker stop $(IMAGE_NAME) || true
@@ -378,10 +395,14 @@ build-protobuf: install-buf
 	@echo "Go protobuf files generated successfully."
 
 ###############################################################################
-# choose build flavour                                                        #
-#   make test-dfc              → uses normal  image (build)                  #
-#   make test-dfc FLAVOR=pprof → uses pprof   image (build-pprof)            #
-#   make test-dfc FLAVOR=debug → uses delve   image (build-debug)            #
+# choose build flavour(s) - can be combined with comma separation            #
+#   make test-dfc                        → uses normal  image                #
+#   make test-dfc FLAVOR=pprof           → uses pprof   image                #
+#   make test-dfc FLAVOR=debug           → uses debug   image                #
+#   make test-dfc FLAVOR=race            → uses race    detection build      #
+#   make test-dfc FLAVOR=debug,race      → uses debug + race detection       #
+#   make test-dfc FLAVOR=pprof,debug     → uses pprof + debug build          #
+#   make test-dfc FLAVOR=debug,race,pprof → uses all three options            #
 ###############################################################################
 # To extract pprof data use:
 # http://localhost:6060/debug/pprof/profile?seconds=20
@@ -762,7 +783,7 @@ run:
 
 
 # Start monitoring stack (Prometheus + Grafana + UMH Core)
-test-with-monitoring: build
+test-with-monitoring: $(BUILD_TARGET)
 	mkdir -p $(PWD)/tools/docker-compose/data
 	docker stop umh-core || true
 	docker rm umh-core || true
