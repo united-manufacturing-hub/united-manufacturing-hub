@@ -731,12 +731,14 @@ func (m *BaseFSMManager[C]) Reconcile(
 	if errors.Is(err, context.DeadlineExceeded) {
 		hasAnyReconcilesMutex.Lock()
 		defer hasAnyReconcilesMutex.Unlock()
+
 		return nil, hasAnyReconciles
 	}
 
 	// Return nil if no errors occurred
 	hasAnyReconcilesMutex.Lock()
 	defer hasAnyReconcilesMutex.Unlock()
+
 	return err, hasAnyReconciles
 }
 
