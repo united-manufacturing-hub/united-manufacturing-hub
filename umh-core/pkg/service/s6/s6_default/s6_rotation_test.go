@@ -27,6 +27,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_shared"
 )
 
 // mockFileInfoWithSys is a custom mock FileInfo that implements Sys() to return syscall.Stat_t.
@@ -206,7 +207,7 @@ var _ = Describe("S6 Log Rotation", func() {
 	Describe("appendToRingBuffer", func() {
 		It("should append entries to empty ring buffer", func() {
 			st := &logState{}
-			entries := []LogEntry{
+			entries := []s6_shared.LogEntry{
 				{Timestamp: time.Now(), Content: "test1"},
 				{Timestamp: time.Now(), Content: "test2"},
 			}
@@ -231,12 +232,12 @@ var _ = Describe("S6 Log Rotation", func() {
 
 			// Create more entries than the ring buffer can hold
 			totalEntries := maxLines + 50 // Exceed capacity by 50
-			entries := make([]LogEntry, totalEntries)
+			entries := make([]s6_shared.LogEntry, totalEntries)
 
 			// Create entries with sequential timestamps and identifiable content
 			baseTime := time.Now()
 			for i := range totalEntries {
-				entries[i] = LogEntry{
+				entries[i] = s6_shared.LogEntry{
 					Timestamp: baseTime.Add(time.Duration(i) * time.Second),
 					Content:   fmt.Sprintf("entry_%d", i),
 				}
@@ -291,9 +292,9 @@ var _ = Describe("S6 Log Rotation", func() {
 			maxLines := constants.S6MaxLines
 
 			// Create exactly maxLines entries (should fill but not wrap)
-			entries := make([]LogEntry, maxLines)
+			entries := make([]s6_shared.LogEntry, maxLines)
 			for i := range maxLines {
-				entries[i] = LogEntry{
+				entries[i] = s6_shared.LogEntry{
 					Timestamp: time.Now().Add(time.Duration(i) * time.Second),
 					Content:   fmt.Sprintf("exact_entry_%d", i),
 				}
@@ -318,16 +319,16 @@ var _ = Describe("S6 Log Rotation", func() {
 			maxLines := constants.S6MaxLines
 
 			// First fill: exactly maxLines entries
-			firstBatch := make([]LogEntry, maxLines)
+			firstBatch := make([]s6_shared.LogEntry, maxLines)
 			for i := range maxLines {
-				firstBatch[i] = LogEntry{Content: fmt.Sprintf("first_%d", i)}
+				firstBatch[i] = s6_shared.LogEntry{Content: fmt.Sprintf("first_%d", i)}
 			}
 			service.appendToRingBuffer(firstBatch, st)
 
 			// Second fill: another maxLines entries (complete wrap)
-			secondBatch := make([]LogEntry, maxLines)
+			secondBatch := make([]s6_shared.LogEntry, maxLines)
 			for i := range maxLines {
-				secondBatch[i] = LogEntry{Content: fmt.Sprintf("second_%d", i)}
+				secondBatch[i] = s6_shared.LogEntry{Content: fmt.Sprintf("second_%d", i)}
 			}
 			service.appendToRingBuffer(secondBatch, st)
 

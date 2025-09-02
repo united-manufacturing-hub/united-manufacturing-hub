@@ -36,6 +36,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_shared"
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -114,7 +115,7 @@ type logState struct {
 
 	// logs is the backing array that holds *at most* S6MaxLines entries.
 	// Allocated once; after that, entries are overwritten in place.
-	logs []LogEntry
+	logs []s6_shared.LogEntry
 	// inode is the inode of the file when we last touched it; changes ⇒ rotation
 	inode uint64
 	// offset is the next byte to read on disk (monotonically increases until
@@ -455,7 +456,7 @@ func (s *DefaultService) Restart(ctx context.Context, servicePath string, fsServ
 	return nil
 }
 
-func (s *DefaultService) Status(ctx context.Context, servicePath string, fsService filesystem.Service) (ServiceInfo, error) {
+func (s *DefaultService) Status(ctx context.Context, servicePath string, fsService filesystem.Service) (s6_shared.ServiceInfo, error) {
 	start := time.Now()
 
 	defer func() {
@@ -465,16 +466,16 @@ func (s *DefaultService) Status(ctx context.Context, servicePath string, fsServi
 	// First, check that the service exists.
 	exists, err := s.ServiceExists(ctx, servicePath, fsService)
 	if err != nil {
-		return ServiceInfo{}, fmt.Errorf("failed to check if service exists: %w", err)
+		return s6_shared.ServiceInfo{}, fmt.Errorf("failed to check if service exists: %w", err)
 	}
 
 	if !exists {
-		return ServiceInfo{}, ErrServiceNotExist
+		return s6_shared.ServiceInfo{}, ErrServiceNotExist
 	}
 
 	// Default info.
-	info := ServiceInfo{
-		Status: ServiceUnknown,
+	info := s6_shared.ServiceInfo{
+		Status: s6_shared.ServiceUnknown,
 	}
 
 	// Build supervise directory path.
@@ -985,12 +986,12 @@ func (s *DefaultService) ForceRemove(
 }
 
 // appendToRingBuffer appends entries to the ring buffer, extracted from existing GetLogs logic.
-func (s *DefaultService) appendToRingBuffer(entries []LogEntry, st *logState) {
+func (s *DefaultService) appendToRingBuffer(entries []s6_shared.LogEntry, st *logState) {
 	const max = constants.S6MaxLines
 
 	// Preallocate backing storage to full size once - it's recycled at runtime and never dropped
 	if st.logs == nil {
-		st.logs = make([]LogEntry, max) // len == max, cap == max
+		st.logs = make([]s6_shared.LogEntry, max) // len == max, cap == max
 		st.head = 0
 		st.full = false
 	}
@@ -1073,7 +1074,7 @@ func (s *DefaultService) appendToRingBuffer(entries []LogEntry, st *logState) {
 //
 // Errors are returned early and unwrapped where they occur so callers
 // see the root cause (e.g. "file disappeared", "permission denied").
-func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsService filesystem.Service) ([]LogEntry, error) {
+func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsService filesystem.Service) ([]s6_shared.LogEntry, error) {
 	start := time.Now()
 
 	defer func() {
@@ -1136,7 +1137,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 
 		// Ensure ring buffer is initialized but preserve existing entries
 		if st.logs == nil {
-			st.logs = make([]LogEntry, constants.S6MaxLines)
+			st.logs = make([]s6_shared.LogEntry, constants.S6MaxLines)
 		}
 		// NOTE: We do NOT reset st.head or st.full here to preserve existing entries
 		// The ring buffer will naturally handle new entries being appended
@@ -1209,7 +1210,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 		length = st.head // number of valid entries written so far
 	}
 
-	out := make([]LogEntry, length)
+	out := make([]s6_shared.LogEntry, length)
 
 	// `head` always points **to** the slot for the *next* write, so the
 	// oldest entry is there, and the newest entry is just before it.
@@ -1253,13 +1254,13 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 //
 //	*apart from the unavoidable string↔[]byte conversions needed for the
 //	LogEntry struct – those are just header copies, no heap memcopy.
-func ParseLogsFromBytes(buf []byte) ([]LogEntry, error) {
+func ParseLogsFromBytes(buf []byte) ([]s6_shared.LogEntry, error) {
 	// Trim one trailing newline that is always present in rotated logs.
 	buf = bytes.TrimSuffix(buf, []byte{'\n'})
 
 	// 1) -------- pre-allocation --------------------------------------
 	nLines := bytes.Count(buf, []byte{'\n'}) + 1
-	entries := make([]LogEntry, 0, nLines) // avoids  runtime.growslice
+	entries := make([]s6_shared.LogEntry, 0, nLines) // avoids  runtime.growslice
 
 	// 2) -------- single pass over the buffer -------------------------
 	for start := 0; start < len(buf); {
@@ -1283,19 +1284,19 @@ func ParseLogsFromBytes(buf []byte) ([]LogEntry, error) {
 		// format: 2025-04-20 13:01:02.123456789␠␠payload
 		sep := bytes.Index(line, []byte("  "))
 		if sep == -1 || sep < 29 { // malformed – keep raw
-			entries = append(entries, LogEntry{Content: string(line)})
+			entries = append(entries, s6_shared.LogEntry{Content: string(line)})
 
 			continue
 		}
 
 		ts, err := ParseNano(string(line[:sep])) // ParseNano is already fast
 		if err != nil {
-			entries = append(entries, LogEntry{Content: string(line)})
+			entries = append(entries, s6_shared.LogEntry{Content: string(line)})
 
 			continue
 		}
 
-		entries = append(entries, LogEntry{
+		entries = append(entries, s6_shared.LogEntry{
 			Timestamp: ts,
 			Content:   string(line[sep+2:]),
 		})
@@ -1305,12 +1306,12 @@ func ParseLogsFromBytes(buf []byte) ([]LogEntry, error) {
 }
 
 // ParseLogsFromBytes_Unoptimized is the more readable not optimized version of ParseLogsFromBytes.
-func ParseLogsFromBytes_Unoptimized(content []byte) ([]LogEntry, error) {
+func ParseLogsFromBytes_Unoptimized(content []byte) ([]s6_shared.LogEntry, error) {
 	// Split logs by newline
 	logs := strings.Split(strings.TrimSpace(string(content)), "\n")
 
 	// Parse each log line into structured entries
-	var entries []LogEntry
+	var entries []s6_shared.LogEntry
 
 	for _, line := range logs {
 		if line == "" {
@@ -1327,16 +1328,16 @@ func ParseLogsFromBytes_Unoptimized(content []byte) ([]LogEntry, error) {
 }
 
 // parseLogLine parses a log line from S6 format and returns a LogEntry.
-func parseLogLine(line string) LogEntry {
+func parseLogLine(line string) s6_shared.LogEntry {
 	// Quick check for empty strings or too short lines
 	if len(line) < 28 { // Minimum length for "YYYY-MM-DD HH:MM:SS.<9 digit nanoseconds>  content"
-		return LogEntry{Content: line}
+		return s6_shared.LogEntry{Content: line}
 	}
 
 	// Check if we have the double space separator
 	sepIdx := strings.Index(line, "  ")
 	if sepIdx == -1 || sepIdx > 29 {
-		return LogEntry{Content: line}
+		return s6_shared.LogEntry{Content: line}
 	}
 
 	// Extract timestamp part
@@ -1352,10 +1353,10 @@ func parseLogLine(line string) LogEntry {
 	// We are using ParseNano over time.Parse because it is faster for our specific time format
 	timestamp, err := ParseNano(timestampStr)
 	if err != nil {
-		return LogEntry{Content: line}
+		return s6_shared.LogEntry{Content: line}
 	}
 
-	return LogEntry{
+	return s6_shared.LogEntry{
 		Timestamp: timestamp,
 		Content:   content,
 	}

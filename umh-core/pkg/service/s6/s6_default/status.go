@@ -25,6 +25,7 @@ import (
 
 	"github.com/cactus/tai64"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_shared"
 )
 
 // S6StatusData holds the parsed binary data from S6's 43-byte status file
@@ -160,10 +161,10 @@ func parseS6StatusFile(ctx context.Context, statusFilePath string, fsService fil
 // buildFullServiceInfo converts S6StatusData into a complete ServiceInfo
 // This adds the high-level business logic (down files, exit history, etc.)
 // that's needed for the full Status() method but not for cleanup detection.
-func (s *DefaultService) buildFullServiceInfo(ctx context.Context, servicePath string, statusData *S6StatusData, fsService filesystem.Service) (ServiceInfo, error) {
+func (s *DefaultService) buildFullServiceInfo(ctx context.Context, servicePath string, statusData *S6StatusData, fsService filesystem.Service) (s6_shared.ServiceInfo, error) {
 	// Start with basic info from the binary status data
-	info := ServiceInfo{
-		Status:             ServiceUnknown,
+	info := s6_shared.ServiceInfo{
+		Status:             s6_shared.ServiceUnknown,
 		Pid:                statusData.Pid,
 		Pgid:               statusData.Pgid,
 		IsPaused:           statusData.IsPaused,
@@ -179,12 +180,12 @@ func (s *DefaultService) buildFullServiceInfo(ctx context.Context, servicePath s
 	now := time.Now().UTC()
 
 	if statusData.Pid != 0 && !statusData.IsFinishing {
-		info.Status = ServiceUp
+		info.Status = s6_shared.ServiceUp
 		// uptime is measured from the stamp timestamp
 		info.Uptime = int64(now.Sub(statusData.StampTime).Seconds())
 		info.ReadyTime = int64(now.Sub(statusData.ReadyTime).Seconds())
 	} else {
-		info.Status = ServiceDown
+		info.Status = s6_shared.ServiceDown
 		// Interpret wstat as a wait status
 		ws := syscall.WaitStatus(statusData.Wstat)
 		switch {
@@ -231,7 +232,7 @@ func (s *DefaultService) buildFullServiceInfo(ctx context.Context, servicePath s
 //
 // If the file size is not a multiple of the record size, it is considered corrupted.
 // In that case, you may choose to truncate the file (as the C code does) or return an error.
-func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, fsService filesystem.Service) ([]ExitEvent, error) {
+func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, fsService filesystem.Service) ([]s6_shared.ExitEvent, error) {
 	// Build the full path to the dtally file.
 	dtallyFile := filepath.Join(superviseDir, S6DtallyFileName)
 
@@ -267,7 +268,7 @@ func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, f
 	// Calculate the number of records.
 	numRecords := len(data) / S6_DTALLY_PACK
 
-	var history []ExitEvent
+	var history []s6_shared.ExitEvent
 
 	// Process each dtally record.
 	for i := range numRecords {
@@ -289,7 +290,7 @@ func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, f
 		exitCode := int(record[12])
 		signalNumber := int(record[13])
 
-		history = append(history, ExitEvent{
+		history = append(history, s6_shared.ExitEvent{
 			Timestamp: parsedTime,
 			ExitCode:  exitCode,
 			Signal:    signalNumber,
