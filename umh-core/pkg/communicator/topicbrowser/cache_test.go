@@ -19,7 +19,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_default"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_shared"
 	"google.golang.org/protobuf/proto"
 
 	tbproto "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models/topicbrowser/pb"
@@ -354,7 +354,7 @@ func createMockObservedStateSnapshot(buffers []*topicbrowserservice.BufferItem) 
 
 					LastSequenceNum: maxSeq,
 				},
-				Logs: []s6svc.LogEntry{}, // Initialize with empty slice
+				Logs: []s6_shared.LogEntry{}, // Initialize with empty slice
 			},
 			// Leave other fields as zero values
 		},

@@ -23,6 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_default"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_shared"
 )
 
 func NewConnectionManagerWithMockedServices(name string) (*ConnectionManager, *connection.MockConnectionService) {
@@ -50,7 +51,7 @@ func NewConnectionManagerWithMockedServices(name string) (*ConnectionManager, *c
 			s6MockService := s6_default.NewMockService()
 			s6MockService.ServiceExistsResult = true
 			s6MockService.StatusResult = s6_shared.ServiceInfo{
-				Status: s6_default.ServiceUp,
+				Status: s6_shared.ServiceUp,
 				Pid:    12345, // Fake PID
 				Uptime: 60,    // Fake uptime in seconds
 			}

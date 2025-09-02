@@ -28,6 +28,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_default"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_shared"
 
 	s6 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
@@ -185,7 +186,7 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 
 		// Set default state to stopped
 		mockS6Service.StatusResult = s6_shared.ServiceInfo{
-			Status: s6_default.ServiceDown,
+			Status: s6_shared.ServiceDown,
 		}
 
 		// Create a mocked S6 manager with mocked services to prevent using real S6 functionality

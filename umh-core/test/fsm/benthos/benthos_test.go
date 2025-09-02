@@ -24,7 +24,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_default"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_shared"
 
 	// Adjust these imports to your actual module paths
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm" // for LifecycleStateToBeCreated, etc.
@@ -89,7 +89,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			mockService.ServiceStates[serviceName] = &benthossvc.ServiceInfo{
 				S6FSMState: s6fsm.OperationalStateStopped,
 				S6ObservedState: s6fsm.S6ObservedState{
-					ServiceInfo: s6svc.ServiceInfo{Status: s6svc.ServiceDown, Uptime: 5},
+					ServiceInfo: s6_shared.ServiceInfo{Status: s6_shared.ServiceDown, Uptime: 5},
 				},
 				BenthosStatus: benthossvc.BenthosStatus{
 					BenthosMetrics: benthos_monitor.BenthosMetrics{

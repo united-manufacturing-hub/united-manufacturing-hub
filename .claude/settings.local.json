@@ -5,7 +5,9 @@
       "Bash(./loganalyzer:*)",
       "Bash(go vet:*)",
       "Bash(grep:*)",
-      "Bash(go build:*)"
+      "Bash(go build:*)",
+      "Bash(make:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

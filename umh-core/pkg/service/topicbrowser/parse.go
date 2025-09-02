@@ -25,7 +25,7 @@ import (
 	"unsafe"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_default"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_shared"
 )
 
 // Parsing utilities for Benthos‑UMH log blocks.
@@ -94,7 +94,7 @@ func containsMarker(content string, marker []byte) bool {
 //
 // Returned raw slice is **caller‑owned** – the function copies it out of the
 // pooled buffer before returning.
-func extractNextBlock(entries []s6svc.LogEntry, lastProcessedTimestamp time.Time) ([]byte, int64, int, error) {
+func extractNextBlock(entries []s6_shared.LogEntry, lastProcessedTimestamp time.Time) ([]byte, int64, int, error) {
 	// Find the first complete block with timestamp > lastProcessedTimestamp
 	// If lastProcessedTimestamp is zero (initial state), start from beginning
 	searchStart := 0
@@ -194,7 +194,7 @@ func extractNextBlock(entries []s6svc.LogEntry, lastProcessedTimestamp time.Time
 }
 
 // extractBlockData extracts the hex payload from a complete block.
-func extractBlockData(entries []s6svc.LogEntry, startIndex, dataEndIndex, blockEndIndex int, epochMS int64) ([]byte, int64, int, error) {
+func extractBlockData(entries []s6_shared.LogEntry, startIndex, dataEndIndex, blockEndIndex int, epochMS int64) ([]byte, int64, int, error) {
 	// Extract hex payload using parseBufferPool (see memory management docs above)
 	bufPtr := parseBufferPool.Get().(*[]byte)
 	buf := *bufPtr
@@ -242,7 +242,7 @@ func extractBlockData(entries []s6svc.LogEntry, startIndex, dataEndIndex, blockE
 // ▸ Uses bufferItemPool for the struct.
 // ▸ payload is written in‑place, no extra copy.
 // ▸ On error the item is returned to the pool immediately.
-func (svc *Service) parseBlock(entries []s6svc.LogEntry) error {
+func (svc *Service) parseBlock(entries []s6_shared.LogEntry) error {
 	svc.processingMutex.Lock()
 	defer svc.processingMutex.Unlock()
 

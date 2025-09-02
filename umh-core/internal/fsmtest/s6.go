@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_default"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_shared"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -73,13 +74,13 @@ func ConfigureServiceForState(mockService *s6_default.MockService, servicePath s
 		// Service directory exists but isn't running
 		mockService.ExistingServices[servicePath] = true
 		mockService.ServiceStates[servicePath] = s6_shared.ServiceInfo{
-			Status: s6_default.ServiceDown,
+			Status: s6_shared.ServiceDown,
 		}
 	case internal_fsm.LifecycleStateRemoving:
 		// Service exists but is about to be removed
 		mockService.ExistingServices[servicePath] = true
 		mockService.ServiceStates[servicePath] = s6_shared.ServiceInfo{
-			Status: s6_default.ServiceDown,
+			Status: s6_shared.ServiceDown,
 		}
 	case internal_fsm.LifecycleStateRemoved:
 		// Service doesn't exist anymore
@@ -88,29 +89,29 @@ func ConfigureServiceForState(mockService *s6_default.MockService, servicePath s
 	case s6RunningState:
 		mockService.ExistingServices[servicePath] = true
 		mockService.ServiceStates[servicePath] = s6_shared.ServiceInfo{
-			Status: s6_default.ServiceUp,
+			Status: s6_shared.ServiceUp,
 			Uptime: 10,
 			Pid:    12345,
 		}
 	case s6StoppedState:
 		mockService.ExistingServices[servicePath] = true
 		mockService.ServiceStates[servicePath] = s6_shared.ServiceInfo{
-			Status: s6_default.ServiceDown,
+			Status: s6_shared.ServiceDown,
 		}
 	case s6StartingState:
 		mockService.ExistingServices[servicePath] = true
 		mockService.ServiceStates[servicePath] = s6_shared.ServiceInfo{
-			Status: s6_default.ServiceRestarting, // Use as proxy for "starting"
+			Status: s6_shared.ServiceRestarting, // Use as proxy for "starting"
 		}
 	case s6StoppingState:
 		mockService.ExistingServices[servicePath] = true
 		mockService.ServiceStates[servicePath] = s6_shared.ServiceInfo{
-			Status: s6_default.ServiceDown, // Use as proxy for "stopping"
+			Status: s6_shared.ServiceDown, // Use as proxy for "stopping"
 		}
 	default:
 		mockService.ExistingServices[servicePath] = true
 		mockService.ServiceStates[servicePath] = s6_shared.ServiceInfo{
-			Status: s6_default.ServiceUnknown,
+			Status: s6_shared.ServiceUnknown,
 		}
 	}
 }

@@ -27,6 +27,7 @@ import (
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_default"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_shared"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -619,7 +620,7 @@ var _ = Describe("Benthos Service", func() {
 
 			// Set up the mock S6 service status to simulate running service
 			mockS6Service.StatusResult = s6_shared.ServiceInfo{
-				Status:   s6_default.ServiceUp,
+				Status:   s6_shared.ServiceUp,
 				WantUp:   true,
 				Pid:      12345,
 				Uptime:   10,
@@ -822,7 +823,7 @@ logger:
 
 			// Setup S6 service status to reflect a running service
 			mockS6Service.StatusResult = s6_shared.ServiceInfo{
-				Status:   s6_default.ServiceUp,
+				Status:   s6_shared.ServiceUp,
 				WantUp:   true,
 				Pid:      12345,
 				Uptime:   60, // Running for a minute

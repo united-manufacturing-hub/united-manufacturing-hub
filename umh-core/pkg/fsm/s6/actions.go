@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_default"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6/s6_shared"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -217,12 +218,12 @@ func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, services
 
 // IsS6Running checks if the S6 service is running.
 func (s *S6Instance) IsS6Running() bool {
-	return s.ObservedState.ServiceInfo.Status == s6_default.ServiceUp
+	return s.ObservedState.ServiceInfo.Status == s6_shared.ServiceUp
 }
 
 // IsS6Stopped checks if the S6 service is stopped.
 func (s *S6Instance) IsS6Stopped() bool {
-	return s.ObservedState.ServiceInfo.Status == s6_default.ServiceDown
+	return s.ObservedState.ServiceInfo.Status == s6_shared.ServiceDown
 }
 
 // GetServicePid gets the process ID of the running service.
