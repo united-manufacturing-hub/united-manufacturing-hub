@@ -245,8 +245,10 @@ func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, err
 			}
 			// Update last check time
 			s.fileCache.mu.Lock()
-
-			cached.lastCheck = time.Now()
+			// Re-check that the entry still exists after acquiring the lock
+			if entry, ok := s.fileCache.cache[path]; ok {
+				entry.lastCheck = time.Now()
+			}
 
 			s.fileCache.mu.Unlock()
 			// Cache hit - record as cached operation
