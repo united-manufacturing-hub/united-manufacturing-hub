@@ -528,8 +528,9 @@ func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, err
 
 	// Not in cache or expired - perform actual check
 	exists, err := s.pathExistsUncached(ctx, path)
-	// Always cache the result with 1-second TTL
-	if err == nil {
+	// Only cache positive results (when path exists) with 1-second TTL
+	// Don't cache negative results as paths might be created immediately after
+	if err == nil && exists {
 		s.pathCache.mu.Lock()
 		s.pathCache.cache[path] = &CachedPath{
 			exists: exists,
@@ -556,8 +557,8 @@ func (s *DefaultService) pathExistsUncached(ctx context.Context, path string) (b
 
 	// Run file operation in goroutine
 	sentry.SafeGo(func() {
-		// Use Lstat to handle symlinks properly (don't follow them)
-		_, err := os.Lstat(path)
+		// Use Stat to follow symlinks and check if the target exists
+		_, err := os.Stat(path)
 		if os.IsNotExist(err) {
 			resCh <- result{err: nil, exists: false}
 
