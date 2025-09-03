@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -102,12 +103,65 @@ var chunkBufferPool = sync.Pool{
 	},
 }
 
+// CachedPath represents a cached path existence check result.
+type CachedPath struct {
+	expiry time.Time
+	err    error
+	exists bool
+}
+
+// PathCache provides thread-safe caching for path existence checks.
+type PathCache struct {
+	cache map[string]*CachedPath
+	mu    sync.RWMutex
+}
+
+// CachedFileContent represents cached file content with metadata for invalidation.
+type CachedFileContent struct {
+	modTime   time.Time
+	lastCheck time.Time // When we last did a stat check
+	content   []byte
+	size      int64
+}
+
+// FileCache provides thread-safe caching for file contents.
+type FileCache struct {
+	cache map[string]*CachedFileContent
+	mu    sync.RWMutex
+}
+
+// CachedDirEntry represents cached directory entries.
+type CachedDirEntry struct {
+	expiry  time.Time
+	entries []os.DirEntry
+}
+
+// DirCache provides thread-safe caching for directory listings.
+type DirCache struct {
+	cache map[string]*CachedDirEntry
+	mu    sync.RWMutex
+}
+
 // DefaultService is the default implementation of FileSystemService.
-type DefaultService struct{}
+type DefaultService struct {
+	pathCache PathCache
+	fileCache FileCache
+	dirCache  DirCache
+}
 
 // NewDefaultService creates a new DefaultFileSystemService.
 func NewDefaultService() *DefaultService {
-	return &DefaultService{}
+	return &DefaultService{
+		pathCache: PathCache{
+			cache: make(map[string]*CachedPath),
+		},
+		fileCache: FileCache{
+			cache: make(map[string]*CachedFileContent),
+		},
+		dirCache: DirCache{
+			cache: make(map[string]*CachedDirEntry),
+		},
+	}
 }
 
 // checkContext checks if the context is done before proceeding with an operation.
@@ -149,10 +203,90 @@ func (s *DefaultService) EnsureDirectory(ctx context.Context, path string) error
 
 // ReadFile reads a file's contents respecting the context.
 func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, error) {
+	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return nil, fmt.Errorf("failed to check context: %w", err)
 	}
 
+	// Cache all files under service directories and data directories
+	// These are the primary paths that are read frequently
+	// Using a simple prefix check is more maintainable and consistent
+	if strings.HasPrefix(path, "/run/service/") || strings.HasPrefix(path, "/data/") {
+		// Check cache with stat-based invalidation
+		s.fileCache.mu.RLock()
+		cached, exists := s.fileCache.cache[path]
+		s.fileCache.mu.RUnlock()
+
+		// Do a stat to check if file changed
+		stat, err := os.Stat(path)
+		if err != nil {
+			// File doesn't exist or error - invalidate cache and return error
+			if exists {
+				s.fileCache.mu.Lock()
+				delete(s.fileCache.cache, path)
+				s.fileCache.mu.Unlock()
+			}
+
+			metrics.RecordFilesystemOp("ReadFile", path, false, time.Since(start))
+
+			return nil, err
+		}
+
+		// If we have a cached version and file hasn't changed, return it
+		if exists && cached.modTime.Equal(stat.ModTime()) && cached.size == stat.Size() {
+			// Re-check stat every 1 second for all cached files
+			// This provides a good balance between freshness and performance
+			if time.Since(cached.lastCheck) < 1*time.Second {
+				// Cache hit - record as cached operation
+				metrics.RecordFilesystemOp("ReadFile", path, true, time.Since(start))
+
+				return cached.content, nil
+			}
+			// Update last check time
+			s.fileCache.mu.Lock()
+
+			cached.lastCheck = time.Now()
+
+			s.fileCache.mu.Unlock()
+			// Cache hit - record as cached operation
+			metrics.RecordFilesystemOp("ReadFile", path, true, time.Since(start))
+
+			return cached.content, nil
+		}
+
+		// File changed or not in cache - read it
+		content, err := s.readFileUncached(ctx, path)
+		if err != nil {
+			metrics.RecordFilesystemOp("ReadFile", path, false, time.Since(start))
+
+			return nil, err
+		}
+
+		// Update cache
+		s.fileCache.mu.Lock()
+		s.fileCache.cache[path] = &CachedFileContent{
+			content:   content,
+			modTime:   stat.ModTime(),
+			size:      stat.Size(),
+			lastCheck: time.Now(),
+		}
+		s.fileCache.mu.Unlock()
+
+		metrics.RecordFilesystemOp("ReadFile", path, false, time.Since(start))
+
+		return content, nil
+	}
+
+	// Don't cache other paths - use original implementation
+	content, err := s.readFileUncached(ctx, path)
+	metrics.RecordFilesystemOp("ReadFile", path, false, time.Since(start))
+
+	return content, err
+}
+
+// readFileUncached performs the actual file read without caching.
+func (s *DefaultService) readFileUncached(ctx context.Context, path string) ([]byte, error) {
 	// Create a channel for results
 	type result struct {
 		err  error
@@ -167,8 +301,6 @@ func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, err
 
 		resCh <- result{err: err, data: data}
 	})
-
-
 	// Wait for either completion or context cancellation
 	select {
 	case res := <-resCh:
@@ -326,7 +458,6 @@ func (s *DefaultService) ReadFileRange(
 		resCh <- result{err: nil, data: buf, newSize: from + int64(len(buf))}
 	})
 
-
 	select {
 	case res := <-resCh:
 		return res.data, res.newSize, res.err
@@ -337,6 +468,12 @@ func (s *DefaultService) ReadFileRange(
 
 // WriteFile writes data to a file respecting the context.
 func (s *DefaultService) WriteFile(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+	start := time.Now()
+
+	defer func() {
+		metrics.RecordFilesystemOp("WriteFile", path, false, time.Since(start))
+	}()
+
 	if err := s.checkContext(ctx); err != nil {
 		return fmt.Errorf("failed to check context: %w", err)
 	}
@@ -364,10 +501,49 @@ func (s *DefaultService) WriteFile(ctx context.Context, path string, data []byte
 
 // PathExists checks if a path (file or directory) exists.
 func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, error) {
+	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return false, err
 	}
 
+	// Cache all paths with 1-second TTL for simplicity
+	// This provides good balance between freshness and performance
+	const cacheTTL = 1 * time.Second
+
+	// Check cache
+	s.pathCache.mu.RLock()
+
+	if cached, ok := s.pathCache.cache[path]; ok && time.Now().Before(cached.expiry) {
+		s.pathCache.mu.RUnlock()
+		// Cache hit - record as cached operation
+		metrics.RecordFilesystemOp("PathExists", path, true, time.Since(start))
+
+		return cached.exists, cached.err
+	}
+
+	s.pathCache.mu.RUnlock()
+
+	// Not in cache or expired - perform actual check
+	exists, err := s.pathExistsUncached(ctx, path)
+	// Always cache the result with 1-second TTL
+	if err == nil {
+		s.pathCache.mu.Lock()
+		s.pathCache.cache[path] = &CachedPath{
+			exists: exists,
+			err:    err,
+			expiry: time.Now().Add(cacheTTL),
+		}
+		s.pathCache.mu.Unlock()
+	}
+
+	metrics.RecordFilesystemOp("PathExists", path, false, time.Since(start))
+
+	return exists, err
+}
+
+// pathExistsUncached performs the actual path existence check without caching.
+func (s *DefaultService) pathExistsUncached(ctx context.Context, path string) (bool, error) {
 	// Create a channel for results
 	type result struct {
 		err    error
@@ -378,7 +554,8 @@ func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, err
 
 	// Run file operation in goroutine
 	sentry.SafeGo(func() {
-		_, err := os.Stat(path)
+		// Use Lstat to handle symlinks properly (don't follow them)
+		_, err := os.Lstat(path)
 		if os.IsNotExist(err) {
 			resCh <- result{err: nil, exists: false}
 
@@ -465,6 +642,12 @@ func (s *DefaultService) RemoveAll(ctx context.Context, path string) error {
 
 // Stat returns file info.
 func (s *DefaultService) Stat(ctx context.Context, path string) (os.FileInfo, error) {
+	start := time.Now()
+
+	defer func() {
+		metrics.RecordFilesystemOp("Stat", path, false, time.Since(start))
+	}()
+
 	if err := s.checkContext(ctx); err != nil {
 		return nil, fmt.Errorf("failed to check context: %w", err)
 	}
@@ -525,10 +708,48 @@ func (s *DefaultService) Chmod(ctx context.Context, path string, mode os.FileMod
 
 // ReadDir reads a directory, returning all its directory entries.
 func (s *DefaultService) ReadDir(ctx context.Context, path string) ([]os.DirEntry, error) {
+	start := time.Now()
+
 	if err := s.checkContext(ctx); err != nil {
 		return nil, fmt.Errorf("failed to check context: %w", err)
 	}
 
+	// Check cache first
+	s.dirCache.mu.RLock()
+
+	if cached, ok := s.dirCache.cache[path]; ok && time.Now().Before(cached.expiry) {
+		s.dirCache.mu.RUnlock()
+		// Cache hit - record as cached operation
+		metrics.RecordFilesystemOp("ReadDir", path, true, time.Since(start))
+
+		return cached.entries, nil
+	}
+
+	s.dirCache.mu.RUnlock()
+
+	// Not in cache or expired - perform actual read
+	entries, err := s.readDirUncached(ctx, path)
+	if err != nil {
+		metrics.RecordFilesystemOp("ReadDir", path, false, time.Since(start))
+
+		return nil, err
+	}
+
+	// Cache the result with 1-second TTL
+	s.dirCache.mu.Lock()
+	s.dirCache.cache[path] = &CachedDirEntry{
+		entries: entries,
+		expiry:  time.Now().Add(1 * time.Second),
+	}
+	s.dirCache.mu.Unlock()
+
+	metrics.RecordFilesystemOp("ReadDir", path, false, time.Since(start))
+
+	return entries, nil
+}
+
+// readDirUncached performs the actual directory read without caching.
+func (s *DefaultService) readDirUncached(ctx context.Context, path string) ([]os.DirEntry, error) {
 	// Create a channel for results
 	type result struct {
 		err     error
