@@ -182,8 +182,8 @@ func (m *MockProtocolConverterService) SetComponentState(protConvName string, fl
 
 // GetConverterState gets the state flags for a protocol converter.
 func (m *MockProtocolConverterService) GetConverterState(protConvName string) *ConverterStateFlags {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	if flags, exists := m.stateFlags[protConvName]; exists {
 		return flags
@@ -352,7 +352,7 @@ func (m *MockProtocolConverterService) AddToManager(
 		DataFlowComponentServiceConfig: m.GenerateConfigResultDFC,
 	}
 
-	// Create a dfcConfig for this component
+	// Create a connConfig for this component
 	connConfig := config.ConnectionConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            underlyingName,
@@ -435,7 +435,7 @@ func (m *MockProtocolConverterService) UpdateInManager(
 	return m.UpdateInManagerError
 }
 
-// RemoveFromManager mocks removing a DataFlowComponent from the Benthos manager.
+// RemoveFromManager mocks removing a ProtocolConverter (and its underlying DFC/Connection) from the manager.
 func (m *MockProtocolConverterService) RemoveFromManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
@@ -484,6 +484,9 @@ func (m *MockProtocolConverterService) RemoveFromManager(
 
 // StartConnection mocks starting only the connection component of a ProtocolConverter.
 func (m *MockProtocolConverterService) StartConnection(ctx context.Context, filesystemService filesystem.Service, protConvName string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.StartConnectionCalled = true
 
 	underlyingName := "protocolconverter-" + protConvName
@@ -539,7 +542,9 @@ func (m *MockProtocolConverterService) StartProtocolConverter(ctx context.Contex
 
 // StartDFC mocks starting only the DFC components of a ProtocolConverter.
 func (m *MockProtocolConverterService) StartDFC(ctx context.Context, filesystemService filesystem.Service, protConvName string) error {
+	m.mu.Lock()
 	m.StartDFCCalled = true
+	m.mu.Unlock()
 
 	// Use EvaluateDFCDesiredStates to handle the conditional DFC starting logic
 	err := m.EvaluateDFCDesiredStates(protConvName, "active", "starting_dfc")
@@ -626,6 +631,9 @@ func (m *MockProtocolConverterService) ReconcileManager(ctx context.Context, ser
 // This method exists because protocol converters must re-evaluate DFC states
 // when configs change during reconciliation (unlike other FSMs that set states once).
 func (m *MockProtocolConverterService) EvaluateDFCDesiredStates(protConvName string, protocolConverterDesiredState string, currentFSMState string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	// Mock implementation - just update the configs like the real implementation would
 	underlyingReadName := "read-protocolconverter-" + protConvName
 	underlyingWriteName := "write-protocolconverter-" + protConvName
