@@ -484,6 +484,9 @@ func (m *MockProtocolConverterService) RemoveFromManager(
 
 // StartConnection mocks starting only the connection component of a ProtocolConverter.
 func (m *MockProtocolConverterService) StartConnection(ctx context.Context, filesystemService filesystem.Service, protConvName string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.StartConnectionCalled = true
 
 	underlyingName := "protocolconverter-" + protConvName
@@ -539,7 +542,9 @@ func (m *MockProtocolConverterService) StartProtocolConverter(ctx context.Contex
 
 // StartDFC mocks starting only the DFC components of a ProtocolConverter.
 func (m *MockProtocolConverterService) StartDFC(ctx context.Context, filesystemService filesystem.Service, protConvName string) error {
+	m.mu.Lock()
 	m.StartDFCCalled = true
+	m.mu.Unlock()
 
 	// Use EvaluateDFCDesiredStates to handle the conditional DFC starting logic
 	err := m.EvaluateDFCDesiredStates(protConvName, "active", "starting_dfc")
@@ -626,6 +631,9 @@ func (m *MockProtocolConverterService) ReconcileManager(ctx context.Context, ser
 // This method exists because protocol converters must re-evaluate DFC states
 // when configs change during reconciliation (unlike other FSMs that set states once).
 func (m *MockProtocolConverterService) EvaluateDFCDesiredStates(protConvName string, protocolConverterDesiredState string, currentFSMState string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	// Mock implementation - just update the configs like the real implementation would
 	underlyingReadName := "read-protocolconverter-" + protConvName
 	underlyingWriteName := "write-protocolconverter-" + protConvName
