@@ -17,20 +17,11 @@ package portmanager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"net"
-	"os"
-	"strconv"
-	"strings"
 	"sync"
-	"time"
-
-	"errors"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 // PortManager is an interface that defines methods for managing ports.
@@ -62,7 +53,8 @@ type PortManager interface {
 }
 
 // DefaultPortManager is a thread-safe implementation of PortManager
-// that randomly selects ports from the OS ephemeral port range.
+// that randomly selects ports from a fixed service port range (20000-32767)
+// to avoid conflicts with the OS ephemeral ports.
 type DefaultPortManager struct {
 
 	// instanceToPorts maps instance names to their allocated ports
@@ -100,12 +92,12 @@ func GetDefaultPortManager() *DefaultPortManager {
 
 // initDefaultPortManager initializes the singleton DefaultPortManager.
 // It ensures the DefaultPortManager is initialized only once.
-func initDefaultPortManager(fs filesystem.Service) *DefaultPortManager {
+func initDefaultPortManager() *DefaultPortManager {
 	defaultPortManagerOnce.Do(func() {
 		defaultPortManagerMutex.Lock()
 		defer defaultPortManagerMutex.Unlock()
 
-		manager := newDefaultPortManager(fs)
+		manager := newDefaultPortManager()
 		defaultPortManagerInstance = manager
 	})
 
@@ -119,14 +111,14 @@ func initDefaultPortManager(fs filesystem.Service) *DefaultPortManager {
 // NewDefaultPortManager creates a new DefaultPortManager using OS port allocation.
 // If a singleton instance already exists, it returns that instance.
 // Otherwise, it creates and initializes the singleton instance.
-func NewDefaultPortManager(fs filesystem.Service) (*DefaultPortManager, error) {
+func NewDefaultPortManager() (*DefaultPortManager, error) {
 	// Check if singleton already exists
 	if existing := GetDefaultPortManager(); existing != nil {
 		return existing, nil
 	}
 
 	// Initialize singleton if it doesn't exist
-	instance := initDefaultPortManager(fs)
+	instance := initDefaultPortManager()
 	if instance == nil {
 		return nil, errors.New("failed to initialize port manager")
 	}
@@ -134,51 +126,25 @@ func NewDefaultPortManager(fs filesystem.Service) (*DefaultPortManager, error) {
 	return instance, nil
 }
 
-// getEphemeralPortRange returns the OS ephemeral port range.
-// On Linux, it reads from /proc/sys/net/ipv4/ip_local_port_range.
-// Falls back to default range 32768-65535 if unable to read from OS.
-func getEphemeralPortRange(fs filesystem.Service) (uint16, uint16) {
-	// Try to read from Linux proc filesystem (at max 500ms timeout)
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel()
-
-	var (
-		data []byte
-		err  error
-	)
-
-	if fs != nil {
-		data, err = fs.ReadFile(ctx, "/proc/sys/net/ipv4/ip_local_port_range")
-	} else {
-		// Unit test path
-		data, err = os.ReadFile("/proc/sys/net/ipv4/ip_local_port_range")
-	}
-
-	if err == nil {
-		content := strings.TrimSpace(string(data))
-
-		parts := strings.Fields(content)
-		if len(parts) == 2 {
-			if min, err1 := strconv.Atoi(parts[0]); err1 == nil {
-				if max, err2 := strconv.Atoi(parts[1]); err2 == nil {
-					return uint16(min), uint16(max)
-				}
-			}
-		}
-	}
-
-	// Fallback to typical ephemeral port range
-	log := logger.For("portmanager")
-	log.Warnf("Failed to read ephemeral port range from OS (/proc/sys/net/ipv4/ip_local_port_range), falling back to default range 32768-65535. Error: %v", err)
-	sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to read ephemeral port range from OS, using fallback range 32768-65535. Error: %v", err)
-
-	return 32768, 65535
+// getServicePortRange returns the port range to use for service allocation.
+// We use a custom range (20000-32767) instead of the OS ephemeral range to avoid
+// conflicts with outgoing connections that the kernel assigns ports to.
+func getServicePortRange() (uint16, uint16) {
+	// IMPORTANT: We intentionally use a different range than the OS ephemeral ports
+	// to avoid conflicts with outgoing connections that the kernel assigns ports to.
+	// Using range 20000-32767 which is:
+	// - Above well-known ports (0-1023) and registered ports (1024-19999)
+	// - Below the typical OS ephemeral range (32768-65535)
+	// - Gives us ~12,000 ports to work with
+	// This prevents the race condition where the kernel "steals" our allocated ports
+	// for outgoing TCP connections between allocation and service startup.
+	return 20000, 32767
 }
 
 // newDefaultPortManager is an internal function that creates a new DefaultPortManager instance
 // without using the singleton pattern. This is used by initDefaultPortManager.
-func newDefaultPortManager(fs filesystem.Service) *DefaultPortManager {
-	minPort, maxPort := getEphemeralPortRange(fs)
+func newDefaultPortManager() *DefaultPortManager {
+	minPort, maxPort := getServicePortRange()
 
 	return &DefaultPortManager{
 		instanceToPorts: make(map[string]uint16),
@@ -190,7 +156,7 @@ func newDefaultPortManager(fs filesystem.Service) *DefaultPortManager {
 }
 
 // AllocatePort allocates an available port for a given instance using random selection
-// from the OS ephemeral port range with collision detection and retries.
+// from the configured service port range with collision detection and retries.
 func (pm *DefaultPortManager) AllocatePort(ctx context.Context, instanceName string) (uint16, error) {
 	pm.mutex.Lock()
 	defer pm.mutex.Unlock()
@@ -276,8 +242,12 @@ func (pm *DefaultPortManager) GetPort(instanceName string) (uint16, bool) {
 
 // ReservePort attempts to reserve a specific port for an instance.
 func (pm *DefaultPortManager) ReservePort(ctx context.Context, instanceName string, port uint16) error {
-	if port <= 0 {
-		return fmt.Errorf("invalid port: %d (must be positive)", port)
+	// Validate against the manager's allowed range
+	if port < pm.minPort || port > pm.maxPort {
+		return fmt.Errorf(
+			"invalid port %d: allowed range is %d-%d; choose a port in range or let the manager allocate one",
+			port, pm.minPort, pm.maxPort,
+		)
 	}
 
 	pm.mutex.Lock()
@@ -348,13 +318,7 @@ func (pm *DefaultPortManager) PreReconcile(ctx context.Context, instanceNames []
 	}
 
 	if len(errs) > 0 {
-		// Combine all errors into a single error message
-		errMsg := "port allocation failed:"
-		for _, err := range errs {
-			errMsg += "\n  - " + err.Error()
-		}
-
-		return fmt.Errorf("%s", errMsg)
+		return fmt.Errorf("port allocation failed: %w", errors.Join(errs...))
 	}
 
 	return nil
@@ -368,6 +332,8 @@ func (pm *DefaultPortManager) PostReconcile(ctx context.Context) error {
 }
 
 // ResetDefaultPortManager resets the singleton instance for testing purposes.
+// Do not call concurrently with New/Get/Allocate/Reserve; use only in tests
+// when no goroutines are interacting with the manager.
 func ResetDefaultPortManager() {
 	defaultPortManagerMutex.Lock()
 	defer defaultPortManagerMutex.Unlock()

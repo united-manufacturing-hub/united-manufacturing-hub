@@ -40,7 +40,7 @@ func NewRegistry() (*Registry, error) {
 
 	fs := filesystem.NewDefaultService()
 
-	pm, portErr := portmanager.NewDefaultPortManager(fs)
+	pm, portErr := portmanager.NewDefaultPortManager()
 	if portErr != nil {
 		return nil, fmt.Errorf("failed to create port manager: %w", portErr)
 	}
@@ -59,6 +59,9 @@ func NewRegistry() (*Registry, error) {
 // GetGlobalRegistry returns the global registry instance.
 // This function is used to be called inside the manager.CreateSnapshot which might not have the service registry dependency injected.
 func GetGlobalRegistry() *Registry {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	
 	if !initialized || globalRegistry == nil {
 		panic("GetGlobalRegistry called before registry was initialized")
 	}
