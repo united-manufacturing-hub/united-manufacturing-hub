@@ -182,8 +182,8 @@ func (m *MockProtocolConverterService) SetComponentState(protConvName string, fl
 
 // GetConverterState gets the state flags for a protocol converter.
 func (m *MockProtocolConverterService) GetConverterState(protConvName string) *ConverterStateFlags {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	if flags, exists := m.stateFlags[protConvName]; exists {
 		return flags
@@ -352,7 +352,7 @@ func (m *MockProtocolConverterService) AddToManager(
 		DataFlowComponentServiceConfig: m.GenerateConfigResultDFC,
 	}
 
-	// Create a dfcConfig for this component
+	// Create a connConfig for this component
 	connConfig := config.ConnectionConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            underlyingName,
@@ -435,7 +435,7 @@ func (m *MockProtocolConverterService) UpdateInManager(
 	return m.UpdateInManagerError
 }
 
-// RemoveFromManager mocks removing a DataFlowComponent from the Benthos manager.
+// RemoveFromManager mocks removing a ProtocolConverter (and its underlying DFC/Connection) from the manager.
 func (m *MockProtocolConverterService) RemoveFromManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
