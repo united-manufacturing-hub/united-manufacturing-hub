@@ -20,16 +20,10 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"net"
-	"os"
-	"strconv"
-	"strings"
 	"sync"
-	"time"
 
 	"errors"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -134,45 +128,19 @@ func NewDefaultPortManager(fs filesystem.Service) (*DefaultPortManager, error) {
 	return instance, nil
 }
 
-// getEphemeralPortRange returns the OS ephemeral port range.
-// On Linux, it reads from /proc/sys/net/ipv4/ip_local_port_range.
-// Falls back to default range 32768-65535 if unable to read from OS.
+// getEphemeralPortRange returns the port range to use for service allocation.
+// We use a custom range (20000-32767) instead of the OS ephemeral range to avoid
+// conflicts with outgoing connections that the kernel assigns ports to.
 func getEphemeralPortRange(fs filesystem.Service) (uint16, uint16) {
-	// Try to read from Linux proc filesystem (at max 500ms timeout)
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel()
-
-	var (
-		data []byte
-		err  error
-	)
-
-	if fs != nil {
-		data, err = fs.ReadFile(ctx, "/proc/sys/net/ipv4/ip_local_port_range")
-	} else {
-		// Unit test path
-		data, err = os.ReadFile("/proc/sys/net/ipv4/ip_local_port_range")
-	}
-
-	if err == nil {
-		content := strings.TrimSpace(string(data))
-
-		parts := strings.Fields(content)
-		if len(parts) == 2 {
-			if min, err1 := strconv.Atoi(parts[0]); err1 == nil {
-				if max, err2 := strconv.Atoi(parts[1]); err2 == nil {
-					return uint16(min), uint16(max)
-				}
-			}
-		}
-	}
-
-	// Fallback to typical ephemeral port range
-	log := logger.For("portmanager")
-	log.Warnf("Failed to read ephemeral port range from OS (/proc/sys/net/ipv4/ip_local_port_range), falling back to default range 32768-65535. Error: %v", err)
-	sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to read ephemeral port range from OS, using fallback range 32768-65535. Error: %v", err)
-
-	return 32768, 65535
+	// IMPORTANT: We intentionally use a different range than the OS ephemeral ports
+	// to avoid conflicts with outgoing connections that the kernel assigns ports to.
+	// Using range 20000-32767 which is:
+	// - Above well-known ports (0-1023) and registered ports (1024-19999)
+	// - Below the typical OS ephemeral range (32768-65535)
+	// - Gives us ~12,000 ports to work with
+	// This prevents the race condition where the kernel "steals" our allocated ports
+	// for outgoing TCP connections between allocation and service startup.
+	return 20000, 32767
 }
 
 // newDefaultPortManager is an internal function that creates a new DefaultPortManager instance
