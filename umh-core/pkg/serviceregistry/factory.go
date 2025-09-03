@@ -40,7 +40,7 @@ func NewRegistry() (*Registry, error) {
 
 	fs := filesystem.NewDefaultService()
 
-	pm, portErr := portmanager.NewDefaultPortManager(fs)
+	pm, portErr := portmanager.NewDefaultPortManager()
 	if portErr != nil {
 		return nil, fmt.Errorf("failed to create port manager: %w", portErr)
 	}
