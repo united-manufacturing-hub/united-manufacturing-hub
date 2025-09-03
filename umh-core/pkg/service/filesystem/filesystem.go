@@ -545,6 +545,46 @@ func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, err
 	return exists, err
 }
 
+// invalidatePathCache invalidates cache entries for a path and all subpaths.
+func (s *DefaultService) invalidatePathCache(path string) {
+	// Invalidate path existence cache
+	s.pathCache.mu.Lock()
+	// Delete exact path match
+	delete(s.pathCache.cache, path)
+	// Delete any cached paths that are under this path (for RemoveAll)
+	pathWithSlash := path + "/"
+	for cachedPath := range s.pathCache.cache {
+		if strings.HasPrefix(cachedPath, pathWithSlash) {
+			delete(s.pathCache.cache, cachedPath)
+		}
+	}
+	s.pathCache.mu.Unlock()
+	
+	// Invalidate directory cache
+	s.dirCache.mu.Lock()
+	// Delete exact path match
+	delete(s.dirCache.cache, path)
+	// Delete parent directory's cache since its contents changed
+	parentDir := filepath.Dir(path)
+	delete(s.dirCache.cache, parentDir)
+	// Delete any cached directories under this path (for RemoveAll)
+	for cachedPath := range s.dirCache.cache {
+		if strings.HasPrefix(cachedPath, pathWithSlash) {
+			delete(s.dirCache.cache, cachedPath)
+		}
+	}
+	s.dirCache.mu.Unlock()
+	
+	// Invalidate file cache for any files under this path
+	s.fileCache.mu.Lock()
+	for cachedPath := range s.fileCache.cache {
+		if cachedPath == path || strings.HasPrefix(cachedPath, pathWithSlash) {
+			delete(s.fileCache.cache, cachedPath)
+		}
+	}
+	s.fileCache.mu.Unlock()
+}
+
 // pathExistsUncached performs the actual path existence check without caching.
 func (s *DefaultService) pathExistsUncached(ctx context.Context, path string) (bool, error) {
 	// Create a channel for results
@@ -610,6 +650,12 @@ func (s *DefaultService) Remove(ctx context.Context, path string) error {
 	// Wait for either completion or context cancellation
 	select {
 	case err := <-errCh:
+		// Invalidate cache entry for this path if removal succeeded
+		if err == nil {
+			s.pathCache.mu.Lock()
+			delete(s.pathCache.cache, path)
+			s.pathCache.mu.Unlock()
+		}
 		return err
 	case <-ctx.Done():
 		return ctx.Err()
@@ -636,6 +682,9 @@ func (s *DefaultService) RemoveAll(ctx context.Context, path string) error {
 		if err != nil {
 			return fmt.Errorf("failed to remove directory %s: %w", path, err)
 		}
+
+		// Invalidate cache entries for this path and all subpaths
+		s.invalidatePathCache(path)
 
 		return nil
 	case <-ctx.Done():
@@ -888,6 +937,12 @@ func (s *DefaultService) Rename(ctx context.Context, oldPath, newPath string) er
 			return fmt.Errorf("failed to rename file %s to %s: %w", oldPath, newPath, err)
 		}
 
+		// Invalidate cache for both old and new paths
+		s.invalidatePathCache(oldPath)
+		s.pathCache.mu.Lock()
+		delete(s.pathCache.cache, newPath)
+		s.pathCache.mu.Unlock()
+
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
@@ -914,6 +969,12 @@ func (s *DefaultService) Symlink(ctx context.Context, target, linkPath string) e
 		if err != nil {
 			return fmt.Errorf("failed to create symlink %s -> %s: %w", linkPath, target, err)
 		}
+
+		// Invalidate cache for the link path since we just created it
+		// This ensures PathExists will check the actual filesystem
+		s.pathCache.mu.Lock()
+		delete(s.pathCache.cache, linkPath)
+		s.pathCache.mu.Unlock()
 
 		return nil
 	case <-ctx.Done():
