@@ -144,6 +144,9 @@ type DirCache struct {
 
 // DefaultService is the default implementation of FileSystemService.
 type DefaultService struct {
+	// DESIGN NOTE: We use simple TTL-based caching without eviction.
+	// The 1-second TTL naturally limits memory growth for most use cases.
+	// LRU or periodic cleanup can be added if memory becomes a concern.
 	pathCache PathCache
 	fileCache FileCache
 	dirCache  DirCache
@@ -203,6 +206,8 @@ func (s *DefaultService) EnsureDirectory(ctx context.Context, path string) error
 
 // shouldCachePath determines if a path should be cached based on configured prefixes.
 func (s *DefaultService) shouldCachePath(path string) bool {
+	// Normalize path to handle edge cases like "/run/service/./x"
+	path = filepath.Clean(path)
 	for _, prefix := range constants.FilesystemCachePrefixes {
 		if strings.HasPrefix(path, prefix) {
 			return true
@@ -228,7 +233,9 @@ func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, err
 		cached, exists := s.fileCache.cache[path]
 		s.fileCache.mu.RUnlock()
 
-		// Do a stat to check if file changed
+		// DESIGN NOTE: We intentionally stat on EVERY read, not just after TTL expires.
+		// This ensures we never serve stale content if files are modified externally.
+		// The stat cost is acceptable for correctness and simplicity.
 		stat, err := os.Stat(path)
 		if err != nil {
 			// File doesn't exist or error - invalidate cache and return error
@@ -504,7 +511,9 @@ func (s *DefaultService) WriteFile(ctx context.Context, path string, data []byte
 		if err != nil {
 			return fmt.Errorf("failed to write file %s: %w", path, err)
 		}
-
+		// NOTE: We intentionally do NOT invalidate caches here.
+		// ReadFile uses os.Stat to detect file changes via modTime/size,
+		// so cache invalidation happens automatically on the next read.
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
@@ -624,7 +633,7 @@ func (s *DefaultService) pathExistsUncached(ctx context.Context, path string) (b
 		}
 
 		if err != nil {
-			resCh <- result{err: fmt.Errorf("failed to check if path exists: %w", err), exists: false}
+			resCh <- result{err: fmt.Errorf("failed to check if path exists (%s): %w", path, err), exists: false}
 
 			return
 		}
@@ -958,9 +967,7 @@ func (s *DefaultService) Rename(ctx context.Context, oldPath, newPath string) er
 
 		// Invalidate cache for both old and new paths
 		s.invalidatePathCache(oldPath)
-		s.pathCache.mu.Lock()
-		delete(s.pathCache.cache, newPath)
-		s.pathCache.mu.Unlock()
+		s.invalidatePathCache(newPath)
 
 		return nil
 	case <-ctx.Done():
