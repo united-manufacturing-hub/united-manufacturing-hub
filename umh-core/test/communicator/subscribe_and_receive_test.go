@@ -16,6 +16,7 @@ package communicator
 
 import (
 	"context"
+	"crypto/x509"
 	"fmt"
 	"sync"
 	"time"
@@ -145,7 +146,7 @@ var _ = Describe("Subscribe and Receive Test", func() {
 		state = &communication_state.CommunicationState{
 			LoginResponse:   login,
 			Watchdog:        dog.(*watchdog.Watchdog),
-			InboundChannel:  make(chan *models.UMHMessage, 100),
+			InboundChannel:  make(chan *models.UMHMessageWithAdditionalInfo, 100),
 			OutboundChannel: outboundChan, // Use our custom outbound channel
 			InsecureTLS:     false,
 			ReleaseChannel:  config.ReleaseChannel("stable"),
@@ -173,6 +174,10 @@ var _ = Describe("Subscribe and Receive Test", func() {
 			false,
 			apiUrl,
 			log,
+			make(chan struct {
+				Cert  *x509.Certificate
+				Email string
+			}),
 		)
 
 		// Initialize subscriber handler
