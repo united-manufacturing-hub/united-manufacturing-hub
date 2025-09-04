@@ -47,7 +47,7 @@ jobs:
           password: ${{ secrets.DOCKER_READ_ONLY_PAT }}
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: "umh-core/go.mod"
           cache-dependency-path: |
