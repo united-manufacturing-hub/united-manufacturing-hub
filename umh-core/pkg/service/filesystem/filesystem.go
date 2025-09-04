@@ -201,6 +201,17 @@ func (s *DefaultService) EnsureDirectory(ctx context.Context, path string) error
 	}
 }
 
+// shouldCachePath determines if a path should be cached based on configured prefixes.
+func (s *DefaultService) shouldCachePath(path string) bool {
+	for _, prefix := range constants.FilesystemCachePrefixes {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // ReadFile reads a file's contents respecting the context.
 func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, error) {
 	start := time.Now()
@@ -209,10 +220,9 @@ func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, err
 		return nil, fmt.Errorf("failed to check context: %w", err)
 	}
 
-	// Cache all files under service directories and data directories
+	// Cache files based on configured path prefixes
 	// These are the primary paths that are read frequently
-	// Using a simple prefix check is more maintainable and consistent
-	if strings.HasPrefix(path, "/run/service/") || strings.HasPrefix(path, "/data/") {
+	if s.shouldCachePath(path) {
 		// Check cache with stat-based invalidation
 		s.fileCache.mu.RLock()
 		cached, exists := s.fileCache.cache[path]
@@ -237,7 +247,7 @@ func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, err
 		if exists && cached.modTime.Equal(stat.ModTime()) && cached.size == stat.Size() {
 			// Re-check stat every 1 second for all cached files
 			// This provides a good balance between freshness and performance
-			if time.Since(cached.lastCheck) < 1*time.Second {
+			if time.Since(cached.lastCheck) < constants.FilesystemCacheRecheckInterval {
 				// Cache hit - record as cached operation
 				metrics.RecordFilesystemOp("ReadFile", path, true, time.Since(start))
 
@@ -511,7 +521,6 @@ func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, err
 
 	// Cache all paths with 1-second TTL for simplicity
 	// This provides good balance between freshness and performance
-	const cacheTTL = 1 * time.Second
 
 	// Check cache
 	s.pathCache.mu.RLock()
@@ -535,7 +544,7 @@ func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, err
 		s.pathCache.cache[path] = &CachedPath{
 			exists: exists,
 			err:    err,
-			expiry: time.Now().Add(cacheTTL),
+			expiry: time.Now().Add(constants.FilesystemCacheTTL),
 		}
 		s.pathCache.mu.Unlock()
 	}
@@ -547,19 +556,25 @@ func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, err
 
 // invalidatePathCache invalidates cache entries for a path and all subpaths.
 func (s *DefaultService) invalidatePathCache(path string) {
+	// Safely create path with trailing slash, avoiding double slashes
+	pathWithSlash := path
+	if !strings.HasSuffix(path, "/") {
+		pathWithSlash = path + "/"
+	}
+
 	// Invalidate path existence cache
 	s.pathCache.mu.Lock()
 	// Delete exact path match
 	delete(s.pathCache.cache, path)
 	// Delete any cached paths that are under this path (for RemoveAll)
-	pathWithSlash := path + "/"
 	for cachedPath := range s.pathCache.cache {
 		if strings.HasPrefix(cachedPath, pathWithSlash) {
 			delete(s.pathCache.cache, cachedPath)
 		}
 	}
+
 	s.pathCache.mu.Unlock()
-	
+
 	// Invalidate directory cache
 	s.dirCache.mu.Lock()
 	// Delete exact path match
@@ -573,15 +588,18 @@ func (s *DefaultService) invalidatePathCache(path string) {
 			delete(s.dirCache.cache, cachedPath)
 		}
 	}
+
 	s.dirCache.mu.Unlock()
-	
+
 	// Invalidate file cache for any files under this path
 	s.fileCache.mu.Lock()
+
 	for cachedPath := range s.fileCache.cache {
 		if cachedPath == path || strings.HasPrefix(cachedPath, pathWithSlash) {
 			delete(s.fileCache.cache, cachedPath)
 		}
 	}
+
 	s.fileCache.mu.Unlock()
 }
 
@@ -650,12 +668,12 @@ func (s *DefaultService) Remove(ctx context.Context, path string) error {
 	// Wait for either completion or context cancellation
 	select {
 	case err := <-errCh:
-		// Invalidate cache entry for this path if removal succeeded
-		if err == nil {
-			s.pathCache.mu.Lock()
-			delete(s.pathCache.cache, path)
-			s.pathCache.mu.Unlock()
-		}
+		// Always invalidate cache, even on error
+		// This ensures we don't serve stale data if remove partially succeeded
+		s.pathCache.mu.Lock()
+		delete(s.pathCache.cache, path)
+		s.pathCache.mu.Unlock()
+		
 		return err
 	case <-ctx.Done():
 		return ctx.Err()
@@ -679,13 +697,14 @@ func (s *DefaultService) RemoveAll(ctx context.Context, path string) error {
 	// Wait for either completion or context cancellation
 	select {
 	case err := <-errCh:
+		// Always invalidate cache entries, even on error
+		// We don't know what state the filesystem is in after a failed RemoveAll
+		s.invalidatePathCache(path)
+		
 		if err != nil {
 			return fmt.Errorf("failed to remove directory %s: %w", path, err)
 		}
-
-		// Invalidate cache entries for this path and all subpaths
-		s.invalidatePathCache(path)
-
+		
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
@@ -791,7 +810,7 @@ func (s *DefaultService) ReadDir(ctx context.Context, path string) ([]os.DirEntr
 	s.dirCache.mu.Lock()
 	s.dirCache.cache[path] = &CachedDirEntry{
 		entries: entries,
-		expiry:  time.Now().Add(1 * time.Second),
+		expiry:  time.Now().Add(constants.FilesystemCacheTTL),
 	}
 	s.dirCache.mu.Unlock()
 
