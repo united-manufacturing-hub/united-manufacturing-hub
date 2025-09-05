@@ -20,7 +20,7 @@ var (
 	defaultComparator = NewComparator()
 )
 
-// NmapServiceConfig represents the configuration for a Nmap service
+// NmapServiceConfig represents the configuration for a Nmap service.
 type NmapServiceConfig struct {
 	// Target to scan (hostname or IP)
 	Target string `yaml:"target"`
@@ -28,12 +28,12 @@ type NmapServiceConfig struct {
 	Port uint16 `yaml:"port"`
 }
 
-// Equal checks if two BenthosServiceConfigs are equal
+// Equal checks if two BenthosServiceConfigs are equal.
 func (c NmapServiceConfig) Equal(other NmapServiceConfig) bool {
 	return NewComparator().ConfigsEqual(c, other)
 }
 
-// RenderNmapYAML is a package-level function for easy YAML generation
+// RenderNmapYAML is a package-level function for easy YAML generation.
 func RenderNmapYAML(target string, port uint16) (string, error) {
 	// Create a config object from the individual components
 	cfg := NmapServiceConfig{
@@ -45,17 +45,17 @@ func RenderNmapYAML(target string, port uint16) (string, error) {
 	return defaultGenerator.RenderConfig(cfg)
 }
 
-// NormalizeNmapConfig is a package-level function for easy config normalization
+// NormalizeNmapConfig is a package-level function for easy config normalization.
 func NormalizeNmapConfig(cfg NmapServiceConfig) NmapServiceConfig {
 	return defaultNormalizer.NormalizeConfig(cfg)
 }
 
-// ConfigsEqual is a package-level function for easy config comparison
+// ConfigsEqual is a package-level function for easy config comparison.
 func ConfigsEqual(desired, observed NmapServiceConfig) bool {
 	return defaultComparator.ConfigsEqual(desired, observed)
 }
 
-// ConfigDiff is a package-level function for easy config diff generation
+// ConfigDiff is a package-level function for easy config diff generation.
 func ConfigDiff(desired, observed NmapServiceConfig) string {
 	return defaultComparator.ConfigDiff(desired, observed)
 }

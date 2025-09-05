@@ -16,7 +16,7 @@ package streamprocessor_test
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -100,7 +100,7 @@ var _ = Describe("StreamProcessorManager", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Double-check the manager state
-			inst, exists := manager.GetInstance(fmt.Sprintf("streamprocessor-%s", processorName))
+			inst, exists := manager.GetInstance("streamprocessor-" + processorName)
 			Expect(exists).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(spfsm.OperationalStateStopped))
 		})
@@ -178,12 +178,12 @@ var _ = Describe("StreamProcessorManager", func() {
 				fsm.SystemSnapshot{CurrentConfig: emptyConfig, Tick: tick},
 				manager,
 				mockSvcRegistry,
-				fmt.Sprintf("streamprocessor-%s", processorName),
+				"streamprocessor-"+processorName,
 				30, // More attempts for removal
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
-			Expect(manager.GetInstances()).NotTo(HaveKey(fmt.Sprintf("streamprocessor-%s", processorName)))
+			Expect(manager.GetInstances()).NotTo(HaveKey("streamprocessor-" + processorName))
 		})
 
 		It("should toggle from active/idle to stopped and back to active/idle with config changes", func() {
@@ -291,9 +291,9 @@ var _ = Describe("StreamProcessorManager", func() {
 			// Verify all instances exist and are in correct states
 			instances := manager.GetInstances()
 			Expect(instances).To(HaveLen(3))
-			Expect(instances).To(HaveKey(fmt.Sprintf("streamprocessor-%s", processor1Name)))
-			Expect(instances).To(HaveKey(fmt.Sprintf("streamprocessor-%s", processor2Name)))
-			Expect(instances).To(HaveKey(fmt.Sprintf("streamprocessor-%s", processor3Name)))
+			Expect(instances).To(HaveKey("streamprocessor-" + processor1Name))
+			Expect(instances).To(HaveKey("streamprocessor-" + processor2Name))
+			Expect(instances).To(HaveKey("streamprocessor-" + processor3Name))
 		})
 
 		It("should handle partial processor removal", func() {
@@ -341,7 +341,7 @@ var _ = Describe("StreamProcessorManager", func() {
 				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
 				manager,
 				mockSvcRegistry,
-				fmt.Sprintf("streamprocessor-%s", processor1Name),
+				"streamprocessor-"+processor1Name,
 				30,
 			)
 			tick = newTick
@@ -350,11 +350,11 @@ var _ = Describe("StreamProcessorManager", func() {
 			// Verify processor1 is gone but processor2 remains
 			instances := manager.GetInstances()
 			Expect(instances).To(HaveLen(1))
-			Expect(instances).NotTo(HaveKey(fmt.Sprintf("streamprocessor-%s", processor1Name)))
-			Expect(instances).To(HaveKey(fmt.Sprintf("streamprocessor-%s", processor2Name)))
+			Expect(instances).NotTo(HaveKey("streamprocessor-" + processor1Name))
+			Expect(instances).To(HaveKey("streamprocessor-" + processor2Name))
 
 			// Verify processor2 is still in idle state
-			inst, exists := manager.GetInstance(fmt.Sprintf("streamprocessor-%s", processor2Name))
+			inst, exists := manager.GetInstance("streamprocessor-" + processor2Name)
 			Expect(exists).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(spfsm.OperationalStateIdle))
 		})
@@ -386,7 +386,7 @@ var _ = Describe("StreamProcessorManager", func() {
 
 			// Get the instance ID before update
 			instancesBefore := manager.GetInstances()
-			instanceKeyBefore := fmt.Sprintf("streamprocessor-%s", processorName)
+			instanceKeyBefore := "streamprocessor-" + processorName
 			instanceBefore, exists := instancesBefore[instanceKeyBefore]
 			Expect(exists).To(BeTrue())
 
@@ -452,8 +452,8 @@ var _ = Describe("StreamProcessorManager", func() {
 			// Verify old processor is gone and new processor exists
 			instances := manager.GetInstances()
 			Expect(instances).To(HaveLen(1))
-			Expect(instances).NotTo(HaveKey(fmt.Sprintf("streamprocessor-%s", originalName)))
-			Expect(instances).To(HaveKey(fmt.Sprintf("streamprocessor-%s", newName)))
+			Expect(instances).NotTo(HaveKey("streamprocessor-" + originalName))
+			Expect(instances).To(HaveKey("streamprocessor-" + newName))
 		})
 	})
 
@@ -471,7 +471,7 @@ var _ = Describe("StreamProcessorManager", func() {
 
 			// Configure mock service to NOT exist and fail during creation
 			mockService.ExistingComponents[processorName] = false
-			mockService.AddToManagerError = fmt.Errorf("simulated creation failure")
+			mockService.AddToManagerError = errors.New("simulated creation failure")
 
 			// Attempt to create the processor
 			newTick, err := fsmtest.WaitForStreamProcessorManagerStable(
@@ -484,7 +484,7 @@ var _ = Describe("StreamProcessorManager", func() {
 			// Even though AddToManager failed, the mock service still sets up state, so FSM progresses
 			instances := manager.GetInstances()
 			Expect(instances).To(HaveLen(1))
-			inst, exists := instances[fmt.Sprintf("streamprocessor-%s", processorName)]
+			inst, exists := instances["streamprocessor-"+processorName]
 			Expect(exists).To(BeTrue())
 			// Should be in starting_redpanda state as FSM progresses despite creation error
 			Expect(inst.GetCurrentFSMState()).To(Equal("starting_redpanda"))
@@ -493,11 +493,11 @@ var _ = Describe("StreamProcessorManager", func() {
 		It("should continue reconciling despite missing DFC dependencies in UpdateObservedState", func() {
 			// ARCHITECTURAL DECISION: We now continue reconciling even when UpdateObservedState
 			// encounters configuration validation errors like missing DFC dependencies.
-			// This enables force-kill recovery scenarios where S6 services exist on filesystem 
+			// This enables force-kill recovery scenarios where S6 services exist on filesystem
 			// but FSM managers lose their in-memory mappings.
-			// 
+			//
 			// The trade-off: Configuration errors during UpdateObservedState (like missing DFC deps)
-			// no longer block FSM progression. Missing dependencies will be logged but won't 
+			// no longer block FSM progression. Missing dependencies will be logged but won't
 			// prevent the system from attempting to restore services after unexpected shutdowns/restarts.
 
 			processorName := "test-missing-dfc"
@@ -517,13 +517,13 @@ var _ = Describe("StreamProcessorManager", func() {
 			// Verify instance exists and continues reconciling despite missing DFC dependencies
 			instances := manager.GetInstances()
 			Expect(instances).To(HaveLen(1))
-			inst, exists := instances[fmt.Sprintf("streamprocessor-%s", processorName)]
+			inst, exists := instances["streamprocessor-"+processorName]
 			Expect(exists).To(BeTrue())
-			
+
 			// With the new architecture, the FSM should continue reconciling despite config errors
 			// The instance should progress beyond creating state despite the missing DFC dependency
 			currentState := inst.GetCurrentFSMState()
-			Expect(spfsm.IsStartingState(currentState) || spfsm.IsRunningState(currentState) || currentState == spfsm.OperationalStateStopped).To(BeTrue(), 
+			Expect(spfsm.IsStartingState(currentState) || spfsm.IsRunningState(currentState) || currentState == spfsm.OperationalStateStopped).To(BeTrue(),
 				"FSM should progress beyond creating state despite missing DFC dependencies in UpdateObservedState")
 
 			// Missing DFC dependencies should be logged but not block progression
@@ -576,7 +576,7 @@ var _ = Describe("StreamProcessorManager", func() {
 
 			// Verify instance is back to idle state
 			instances := manager.GetInstances()
-			inst, exists := instances[fmt.Sprintf("streamprocessor-%s", processorName)]
+			inst, exists := instances["streamprocessor-"+processorName]
 			Expect(exists).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(spfsm.OperationalStateIdle))
 		})

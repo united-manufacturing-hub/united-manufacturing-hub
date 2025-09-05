@@ -17,18 +17,18 @@ package benthos_monitor
 import "errors"
 
 var (
-	// ErrServiceNotExist indicates the requested service does not exist
+	// ErrServiceNotExist indicates the requested service does not exist.
 	ErrServiceNotExist = errors.New("service does not exist")
 
-	// ErrServiceAlreadyExists indicates the requested service already exists
+	// ErrServiceAlreadyExists indicates the requested service already exists.
 	ErrServiceAlreadyExists = errors.New("service already exists")
 
-	// ErrServiceNoLogFile indicates the health check had no logs to process
+	// ErrServiceNoLogFile indicates the health check had no logs to process.
 	ErrServiceNoLogFile = errors.New("log file not found")
 
-	// ErrBenthosMonitorNotRunning indicates the benthos monitor service is not running
+	// ErrBenthosMonitorNotRunning indicates the benthos monitor service is not running.
 	ErrBenthosMonitorNotRunning = errors.New("benthos monitor service is not running")
 
-	// ErrServiceNoSectionsFound indicates the benthos service has no sections
+	// ErrServiceNoSectionsFound indicates the benthos service has no sections.
 	ErrServiceNoSectionsFound = errors.New("could not parse benthos metrics/configuration: no sections found. This can happen when the benthos service is not running, or the logs where rotated")
 )

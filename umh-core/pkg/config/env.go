@@ -84,8 +84,11 @@ func LoadConfigWithEnvOverrides(ctx context.Context, configManager *FileConfigMa
 	}
 
 	// For AllowInsecureTLS, we need to know if it was explicitly set, so we first check the raw env var
-	var allowInsecureTLS bool
-	var allowInsecureTLSSet bool
+	var (
+		allowInsecureTLS    bool
+		allowInsecureTLSSet bool
+	)
+
 	if allowInsecureTLSStr, exists := os.LookupEnv("ALLOW_INSECURE_TLS"); exists {
 		allowInsecureTLS, err = env.GetAsBool("ALLOW_INSECURE_TLS", false, false)
 		if err != nil {
@@ -97,11 +100,13 @@ func LoadConfigWithEnvOverrides(ctx context.Context, configManager *FileConfigMa
 
 	// Location values are numbered 0-6 and passed as LOCATION_0, LOCATION_1, etc.
 	locations := make(map[int]string)
-	for i := 0; i <= 6; i++ {
+
+	for i := range 7 {
 		location, err := env.GetAsString(fmt.Sprintf("LOCATION_%d", i), false, "")
 		if err != nil {
 			sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to get LOCATION_%d: %w", i, err)
 		}
+
 		locations[i] = location
 	}
 

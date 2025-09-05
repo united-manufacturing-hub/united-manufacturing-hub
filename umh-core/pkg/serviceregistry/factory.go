@@ -38,14 +38,13 @@ func NewRegistry() (*Registry, error) {
 		panic("NewRegistry called more than once - registry must be initialized once and explicitly passed between components")
 	}
 
-	minPort := uint16(9000)
-	maxPort := uint16(9999)
-	pm, portErr := portmanager.NewDefaultPortManager(minPort, maxPort)
+	fs := filesystem.NewDefaultService()
+
+	pm, portErr := portmanager.NewDefaultPortManager()
 	if portErr != nil {
 		return nil, fmt.Errorf("failed to create port manager: %w", portErr)
 	}
 
-	fs := filesystem.NewDefaultService()
 	registry := &Registry{
 		PortManager: pm,
 		FileSystem:  fs,
@@ -53,14 +52,19 @@ func NewRegistry() (*Registry, error) {
 
 	globalRegistry = registry
 	initialized = true
+
 	return registry, nil
 }
 
 // GetGlobalRegistry returns the global registry instance.
 // This function is used to be called inside the manager.CreateSnapshot which might not have the service registry dependency injected.
 func GetGlobalRegistry() *Registry {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	
 	if !initialized || globalRegistry == nil {
 		panic("GetGlobalRegistry called before registry was initialized")
 	}
+
 	return globalRegistry
 }

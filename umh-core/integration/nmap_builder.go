@@ -20,14 +20,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// NmapBuilder is used to build configuration with Nmap service
+// NmapBuilder is used to build configuration with Nmap service.
 type NmapBuilder struct {
 	// Map to track which services are active by name
 	activeNmap map[string]bool
 	full       config.FullConfig
 }
 
-// NewNmapBuilder creates a new builder for Benthos configurations
+// NewNmapBuilder creates a new builder for Benthos configurations.
 func NewNmapBuilder() *NmapBuilder {
 	return &NmapBuilder{
 		full: config.FullConfig{
@@ -43,7 +43,7 @@ func NewNmapBuilder() *NmapBuilder {
 	}
 }
 
-// AddGoldenNmap adds a Nmap service that serves HTTP requests on port 8082
+// AddGoldenNmap adds a Nmap service that serves HTTP requests on port 8082.
 func (b *NmapBuilder) AddGoldenNmap() *NmapBuilder {
 	// Create Nmap config
 	nmapConfig := config.NmapConfig{
@@ -73,46 +73,54 @@ func (b *NmapBuilder) AddGoldenNmap() *NmapBuilder {
 			DesiredFSMState: "stopped",
 		},
 	}
+
 	return b
 }
 
-// StartNmap sets a Nmap service to active state
+// StartNmap sets a Nmap service to active state.
 func (b *NmapBuilder) StartNmap(name string) *NmapBuilder {
 	for i, nmap := range b.full.Internal.Nmap {
 		if nmap.Name == name {
 			b.full.Internal.Nmap[i].DesiredFSMState = "active"
 			b.activeNmap[name] = true
+
 			break
 		}
 	}
+
 	return b
 }
 
-// StopNmap sets a Nmap service to stopped state
+// StopNmap sets a Nmap service to stopped state.
 func (b *NmapBuilder) StopNmap(name string) *NmapBuilder {
 	for i, nmap := range b.full.Internal.Nmap {
 		if nmap.Name == name {
 			b.full.Internal.Nmap[i].DesiredFSMState = "stopped"
 			b.activeNmap[name] = false
+
 			break
 		}
 	}
+
 	return b
 }
 
-// CountActiveNmap returns the number of active Benthos services
+// CountActiveNmap returns the number of active Benthos services.
 func (b *NmapBuilder) CountActiveNmap() int {
 	count := 0
+
 	for _, isActive := range b.activeNmap {
 		if isActive {
 			count++
 		}
 	}
+
 	return count
 }
 
-// BuildYAML converts the configuration to YAML format
+// BuildYAML converts the configuration to YAML format.
 func (b *NmapBuilder) BuildYAML() string {
 	out, _ := yaml.Marshal(b.full)
+
 	return string(out)
 }

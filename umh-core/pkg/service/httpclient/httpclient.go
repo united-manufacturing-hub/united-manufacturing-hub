@@ -30,7 +30,7 @@ import (
 )
 
 var (
-	// defaultTransport is a shared transport with connection pooling
+	// defaultTransport is a shared transport with connection pooling.
 	defaultTransport = &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
@@ -45,14 +45,14 @@ var (
 		DisableCompression:    true, // For our metrics endpoint, compression is likely overkill
 	}
 
-	// sharedClient is a reusable client for quick local requests
+	// sharedClient is a reusable client for quick local requests.
 	sharedClient = &http.Client{
 		Transport: defaultTransport,
 		Timeout:   1 * time.Second,
 	}
 )
 
-// HTTPClient interface for making HTTP requests
+// HTTPClient interface for making HTTP requests.
 type HTTPClient interface {
 	// Do executes an HTTP request and returns the response
 	Do(req *http.Request) (*http.Response, error)
@@ -63,19 +63,19 @@ type HTTPClient interface {
 	GetWithBody(ctx context.Context, url string) (*http.Response, []byte, error)
 }
 
-// DefaultHTTPClient is the default implementation of HTTPClient
+// DefaultHTTPClient is the default implementation of HTTPClient.
 type DefaultHTTPClient struct {
 	logger *zap.SugaredLogger
 }
 
-// NewDefaultHTTPClient creates a new DefaultHTTPClient
+// NewDefaultHTTPClient creates a new DefaultHTTPClient.
 func NewDefaultHTTPClient() *DefaultHTTPClient {
 	return &DefaultHTTPClient{
 		logger: logger.For("HTTPClient"),
 	}
 }
 
-// Do performs the HTTP request, creating a context-optimized client
+// Do performs the HTTP request, creating a context-optimized client.
 func (c *DefaultHTTPClient) Do(req *http.Request) (*http.Response, error) {
 	// Extract context from request
 	ctx := req.Context()
@@ -97,18 +97,18 @@ func (c *DefaultHTTPClient) Do(req *http.Request) (*http.Response, error) {
 	return client.Do(req)
 }
 
-// isLocalRequest checks if the host is a localhost or loopback address
+// isLocalRequest checks if the host is a localhost or loopback address.
 func isLocalRequest(host string) bool {
 	return host == "localhost" || host == "127.0.0.1" || host == "[::1]" || host == ""
 }
 
-// createClientFromContext creates an HTTP client with timeouts based on context deadline
+// createClientFromContext creates an HTTP client with timeouts based on context deadline.
 func (c *DefaultHTTPClient) createClientFromContext(ctx context.Context) (*http.Client, error) {
 	// Verify context has deadline and sufficient time
 	remaining, _, err := ctxutil.HasSufficientTime(ctx, time.Millisecond) // Just need a minimal required time
 	if err != nil {
 		if errors.Is(err, ctxutil.ErrNoDeadline) {
-			return nil, fmt.Errorf("no deadline set in context")
+			return nil, errors.New("no deadline set in context")
 		}
 		// For other errors, we still want to create a client with whatever time remains
 		c.logger.Warnf("Creating HTTP client with limited time: %v", err)
@@ -139,7 +139,7 @@ func (c *DefaultHTTPClient) createClientFromContext(ctx context.Context) (*http.
 	}, nil
 }
 
-// GetWithBody performs a GET request and returns the response with body
+// GetWithBody performs a GET request and returns the response with body.
 func (c *DefaultHTTPClient) GetWithBody(ctx context.Context, url string) (*http.Response, []byte, error) {
 	// Create request with context
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -152,9 +152,11 @@ func (c *DefaultHTTPClient) GetWithBody(ctx context.Context, url string) (*http.
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to execute request for %s: %w", url, err)
 	}
+
 	if resp == nil {
 		return nil, nil, fmt.Errorf("received nil response for %s", url)
 	}
+
 	defer func() {
 		err := resp.Body.Close()
 		if err != nil {

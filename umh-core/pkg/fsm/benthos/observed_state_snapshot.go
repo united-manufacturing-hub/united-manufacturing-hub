@@ -23,18 +23,18 @@ import (
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
-// BenthosObservedStateSnapshot is a deep-copyable snapshot of BenthosObservedState
+// BenthosObservedStateSnapshot is a deep-copyable snapshot of BenthosObservedState.
 type BenthosObservedStateSnapshot struct {
 	Config      benthosserviceconfig.BenthosServiceConfig
 	ServiceInfo benthos.ServiceInfo
 }
 
-// IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface
+// IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface.
 func (s *BenthosObservedStateSnapshot) IsObservedStateSnapshot() {
 	// Marker method implementation
 }
 
-// CreateObservedStateSnapshot implements the fsm.ObservedStateConverter interface for BenthosInstance
+// CreateObservedStateSnapshot implements the fsm.ObservedStateConverter interface for BenthosInstance.
 func (b *BenthosInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	// Create a deep copy of the observed state
 	snapshot := &BenthosObservedStateSnapshot{}
@@ -43,6 +43,7 @@ func (b *BenthosInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapsho
 	err := deepcopy.Copy(&snapshot.Config, &b.config)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, b.baseFSMInstance.GetLogger(), "failed to deep copy config: %v", err)
+
 		return nil
 	}
 
@@ -55,6 +56,7 @@ func (b *BenthosInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapsho
 	err = deepcopy.Copy(&snapshot.ServiceInfo, &b.ObservedState.ServiceInfo)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, b.baseFSMInstance.GetLogger(), "failed to deep copy service info: %v", err)
+
 		return nil
 	}
 

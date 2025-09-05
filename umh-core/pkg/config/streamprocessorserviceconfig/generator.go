@@ -21,18 +21,17 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Generator handles the generation of StreamProcessor YAML configurations
+// Generator handles the generation of StreamProcessor YAML configurations.
 type Generator struct {
 }
 
-// NewGenerator creates a new YAML generator for StreamProcessor configurations
+// NewGenerator creates a new YAML generator for StreamProcessor configurations.
 func NewGenerator() *Generator {
 	return &Generator{}
 }
 
-// RenderConfig generates a StreamProcessor YAML configuration from a StreamProcessorServiceConfigSpec
+// RenderConfig generates a StreamProcessor YAML configuration from a StreamProcessorServiceConfigSpec.
 func (g *Generator) RenderConfig(cfg StreamProcessorServiceConfigSpec) (string, error) {
-
 	// Convert the config to a normalized map
 	configMap := g.configToMap(cfg)
 	normalizedMap := normalizeConfig(configMap)
@@ -48,7 +47,7 @@ func (g *Generator) RenderConfig(cfg StreamProcessorServiceConfigSpec) (string, 
 	return yamlStr, nil
 }
 
-// configToMap converts a StreamProcessorServiceConfigSpec to a raw map for YAML generation
+// configToMap converts a StreamProcessorServiceConfigSpec to a raw map for YAML generation.
 func (g *Generator) configToMap(cfg StreamProcessorServiceConfigSpec) map[string]any {
 	// use generator to create a valid variableBundleConfigMap
 	variableBundleGenerator := variables.NewGenerator()
@@ -68,10 +67,11 @@ func (g *Generator) configToMap(cfg StreamProcessorServiceConfigSpec) map[string
 	configMap["template"] = templateMap
 	configMap["variables"] = variableBundleConfigMap
 	configMap["location"] = cfg.Location
+
 	return configMap
 }
 
-// normalizeConfig normalizes the configuration by applying defaults and ensuring consistency
+// normalizeConfig normalizes the configuration by applying defaults and ensuring consistency.
 func normalizeConfig(raw map[string]any) map[string]any {
 	normalized := make(map[string]any)
 
@@ -130,5 +130,6 @@ func normalizeConfig(raw map[string]any) map[string]any {
 	normalized["template"] = normalizedTemplate
 	normalized["variables"] = normalizedVariables
 	normalized["location"] = locationMap // Use our correctly processed location map
+
 	return normalized
 }

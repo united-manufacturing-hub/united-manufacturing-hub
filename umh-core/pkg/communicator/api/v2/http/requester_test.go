@@ -42,7 +42,7 @@ var _ = Describe("Requester", func() {
 	// doHTTPRequestWithRetry is a test helper that retries HTTP requests on connection issues
 	doHTTPRequestWithRetry := func(ctx context.Context, url string, header map[string]string, cookies *map[string]string, insecureTLS bool, logger *zap.SugaredLogger) (*netHTTP.Response, error) {
 		var lastErr error
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			response, err := http.DoHTTPRequest(ctx, url, header, cookies, insecureTLS, logger)
 			if err == nil {
 				return response, nil
@@ -54,12 +54,14 @@ var _ = Describe("Requester", func() {
 				strings.Contains(err.Error(), "EOF") {
 				lastErr = err
 				time.Sleep(time.Second * time.Duration(i+1)) // Exponential backoff
+
 				continue
 			}
 
 			// For non-connection errors, return immediately
 			return response, err
 		}
+
 		return nil, fmt.Errorf("failed after 10 retries, last error: %w", lastErr)
 	}
 
@@ -122,7 +124,7 @@ var _ = Describe("Requester", func() {
 			}
 
 			for name, url := range testCases {
-				It(fmt.Sprintf("should fail with secure TLS for %s", name), func() {
+				It("should fail with secure TLS for "+name, func() {
 					ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 					defer cancel()
 					_, err := doHTTPRequestWithRetry(ctx, url, nil, nil, false, log)
@@ -130,7 +132,7 @@ var _ = Describe("Requester", func() {
 					Expect(err.Error()).To(ContainSubstring("certificate"))
 				})
 
-				It(fmt.Sprintf("should succeed with insecure TLS for %s", name), func() {
+				It("should succeed with insecure TLS for "+name, func() {
 					ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 					defer cancel()
 					_, err := doHTTPRequestWithRetry(ctx, url, nil, nil, true, log)
@@ -149,14 +151,14 @@ var _ = Describe("Requester", func() {
 				"dh-composite":      "https://dh-composite.badssl.com",
 			}
 			for name, url := range testCases {
-				It(fmt.Sprintf("should fail with secure TLS for %s", name), func() {
+				It("should fail with secure TLS for "+name, func() {
 					ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 					defer cancel()
 					_, err := doHTTPRequestWithRetry(ctx, url, nil, nil, false, log)
 					Expect(err).To(HaveOccurred())
 				})
 
-				It(fmt.Sprintf("should fail with insecure TLS for %s", name), func() {
+				It("should fail with insecure TLS for "+name, func() {
 					ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 					defer cancel()
 					_, err := doHTTPRequestWithRetry(ctx, url, nil, nil, true, log)
@@ -172,14 +174,14 @@ var _ = Describe("Requester", func() {
 				"tls-v1-1": "https://tls-v1-1.badssl.com",
 			}
 			for name, url := range testCases {
-				It(fmt.Sprintf("should fail with secure TLS for %s", name), func() {
+				It("should fail with secure TLS for "+name, func() {
 					ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 					defer cancel()
 					_, err := doHTTPRequestWithRetry(ctx, url, nil, nil, false, log)
 					Expect(err).To(HaveOccurred())
 				})
 
-				It(fmt.Sprintf("should succeed with insecure TLS for %s", name), func() {
+				It("should succeed with insecure TLS for "+name, func() {
 					ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 					defer cancel()
 					_, err := doHTTPRequestWithRetry(ctx, url, nil, nil, true, log)
@@ -197,14 +199,14 @@ var _ = Describe("Requester", func() {
 				"null":    "https://null.badssl.com",
 			}
 			for name, url := range testCases {
-				It(fmt.Sprintf("should fail with secure TLS for %s", name), func() {
+				It("should fail with secure TLS for "+name, func() {
 					ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 					defer cancel()
 					_, err := doHTTPRequestWithRetry(ctx, url, nil, nil, false, log)
 					Expect(err).To(HaveOccurred())
 				})
 
-				It(fmt.Sprintf("should fail with insecure TLS for %s", name), func() {
+				It("should fail with insecure TLS for "+name, func() {
 					ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 					defer cancel()
 					_, err := doHTTPRequestWithRetry(ctx, url, nil, nil, true, log)

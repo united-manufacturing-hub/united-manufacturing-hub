@@ -180,7 +180,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 			Expect(mockConfig.DeleteDataflowcomponentCalled).To(BeTrue())
 
 			// Verify expected configuration changes
-			Expect(mockConfig.Config.DataFlow).To(HaveLen(0))
+			Expect(mockConfig.Config.DataFlow).To(BeEmpty())
 		})
 
 		It("should handle AtomicDeleteDataflowcomponent failure", func() {

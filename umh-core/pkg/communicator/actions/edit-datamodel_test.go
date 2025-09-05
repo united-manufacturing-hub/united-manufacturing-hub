@@ -27,7 +27,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Helper function for edit datamodel action that needs base64 encoding
+// Helper function for edit datamodel action that needs base64 encoding.
 func structToEncodedMapForEdit(v interface{}) map[string]interface{} {
 	payload := v.(models.EditDataModelPayload)
 

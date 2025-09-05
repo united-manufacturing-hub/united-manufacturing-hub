@@ -28,7 +28,8 @@ func BenchmarkResolver_Topics(b *testing.B) {
 	queryResolver := &queryResolver{resolver}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, err := queryResolver.Topics(context.Background(), nil, nil)
 		if err != nil {
 			b.Fatal(err)
@@ -44,7 +45,8 @@ func BenchmarkResolver_TopicsWithTextFilter(b *testing.B) {
 	filter := &TopicFilter{Text: benchStringPtr("temperature")}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, err := queryResolver.Topics(context.Background(), filter, nil)
 		if err != nil {
 			b.Fatal(err)
@@ -60,7 +62,8 @@ func BenchmarkResolver_TopicsWithLimit(b *testing.B) {
 	limit := benchIntPtr(10)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, err := queryResolver.Topics(context.Background(), nil, limit)
 		if err != nil {
 			b.Fatal(err)
@@ -80,7 +83,8 @@ func BenchmarkResolver_TopicsWithMetaFilter(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, err := queryResolver.Topics(context.Background(), filter, nil)
 		if err != nil {
 			b.Fatal(err)
@@ -96,7 +100,8 @@ func BenchmarkResolver_SingleTopic(b *testing.B) {
 	topic := "enterprise.site.area.productionLine.workstation.sensor.temperature"
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, err := queryResolver.Topic(context.Background(), topic)
 		if err != nil {
 			b.Fatal(err)
@@ -104,7 +109,7 @@ func BenchmarkResolver_SingleTopic(b *testing.B) {
 	}
 }
 
-// Benchmark the topic hashing function which is critical for performance
+// Benchmark the topic hashing function which is critical for performance.
 func BenchmarkTopicHashing(b *testing.B) {
 	resolver := &Resolver{
 		TopicBrowserCache: NewMockTopicBrowserCache(),
@@ -118,12 +123,13 @@ func BenchmarkTopicHashing(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_ = resolver.hashUNSTableEntry(topicInfo)
 	}
 }
 
-// Benchmark filtering logic
+// Benchmark filtering logic.
 func BenchmarkMatchesFilter(b *testing.B) {
 	resolver := &Resolver{
 		TopicBrowserCache: NewMockTopicBrowserCache(),
@@ -145,12 +151,13 @@ func BenchmarkMatchesFilter(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_ = resolver.matchesFilter(topic, filter)
 	}
 }
 
-// Benchmark building topic names from protobuf data
+// Benchmark building topic names from protobuf data.
 func BenchmarkBuildTopicName(b *testing.B) {
 	resolver := &Resolver{
 		TopicBrowserCache: NewMockTopicBrowserCache(),
@@ -163,11 +170,12 @@ func BenchmarkBuildTopicName(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_ = resolver.buildTopicName(topicInfo)
 	}
 }
 
-// Helper functions for benchmark tests (prefixed to avoid conflicts)
+// Helper functions for benchmark tests (prefixed to avoid conflicts).
 func benchStringPtr(s string) *string { return &s }
 func benchIntPtr(i int) *int          { return &i }

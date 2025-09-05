@@ -23,7 +23,7 @@ var (
 )
 
 // BenthosConfig contains only the essential Benthos configuration fields
-// that should be exposed to DataFlowComponent users
+// that should be exposed to DataFlowComponent users.
 type BenthosConfig struct {
 	Input              map[string]any   `yaml:"input,omitempty"`
 	Pipeline           map[string]any   `yaml:"pipeline,omitempty"`
@@ -33,17 +33,17 @@ type BenthosConfig struct {
 	RateLimitResources []map[string]any `yaml:"rate_limit_resources,omitempty"`
 }
 
-// DataflowComponentServiceConfig represents the configuration for a DataFlowComponent
+// DataflowComponentServiceConfig represents the configuration for a DataFlowComponent.
 type DataflowComponentServiceConfig struct {
 	BenthosConfig BenthosConfig `yaml:"benthos"`
 }
 
-// Equal checks if two DataFlowComponentServiceConfigs are equal
+// Equal checks if two DataFlowComponentServiceConfigs are equal.
 func (c DataflowComponentServiceConfig) Equal(other DataflowComponentServiceConfig) bool {
 	return NewComparator().ConfigsEqual(c, other)
 }
 
-// RenderDataFlowComponentYAML is a package-level function for easy YAML generation
+// RenderDataFlowComponentYAML is a package-level function for easy YAML generation.
 func RenderDataFlowComponentYAML(benthos benthosserviceconfig.BenthosServiceConfig) (string, error) {
 	// Create a config object from the individual components
 	cfg := DataflowComponentServiceConfig{
@@ -54,17 +54,17 @@ func RenderDataFlowComponentYAML(benthos benthosserviceconfig.BenthosServiceConf
 	return defaultGenerator.RenderConfig(cfg)
 }
 
-// NormalizeDataFlowComponentConfig is a package-level function for easy config normalization
+// NormalizeDataFlowComponentConfig is a package-level function for easy config normalization.
 func NormalizeDataFlowComponentConfig(cfg DataflowComponentServiceConfig) DataflowComponentServiceConfig {
 	return defaultNormalizer.NormalizeConfig(cfg)
 }
 
-// ConfigsEqual is a package-level function for easy config comparison
+// ConfigsEqual is a package-level function for easy config comparison.
 func ConfigsEqual(desired, observed DataflowComponentServiceConfig) bool {
 	return defaultComparator.ConfigsEqual(desired, observed)
 }
 
-// ConfigDiff is a package-level function for easy config diff generation
+// ConfigDiff is a package-level function for easy config diff generation.
 func ConfigDiff(desired, observed DataflowComponentServiceConfig) string {
 	return defaultComparator.ConfigDiff(desired, observed)
 }

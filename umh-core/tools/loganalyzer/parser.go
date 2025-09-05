@@ -30,17 +30,17 @@ var (
 	levelRegex     = regexp.MustCompile(`\[(DEBUG|INFO|WARN|ERROR)\]`)
 	sourceRegex    = regexp.MustCompile(`\[([^\]]+)\]`)
 	componentRegex = regexp.MustCompile(`\[([^\]]+)\]\s+(?:FSM|Reconciling|Setting desired state|Updated system snapshot|Starting Action|Action:)`)
-	
-	tickRegex         = regexp.MustCompile(`Updated system snapshot at tick (\d+)`)
-	fsmAttemptRegex   = regexp.MustCompile(`FSM (\S+) attempting transition: current_state='([^']+)' -> event='([^']+)' \(desired_state='([^']+)'\)`)
-	fsmSuccessRegex   = regexp.MustCompile(`FSM (\S+) successful transition: '([^']+)' -> '([^']+)' via event='([^']+)' \(desired_state='([^']+)'\)`)
-	fsmFailedRegex    = regexp.MustCompile(`FSM (\S+) failed transition: current_state='([^']+)' -> event='([^']+)' \(desired_state='([^']+)'\)`)
-	fsmDesiredRegex   = regexp.MustCompile(`Setting desired state of FSM (\S+) to (\S+)`)
-	reconcileRegex    = regexp.MustCompile(`Reconciling (\S+) (?:manager )?at tick (\d+)`)
-	actionStartRegex  = regexp.MustCompile(`Starting Action: (.+)`)
-	actionDoneRegex   = regexp.MustCompile(`Action: (.+) done`)
-	errorRegex        = regexp.MustCompile(`Error (?:executing action|removing|creating|starting|stopping): (.+)`)
-	startupRegex      = regexp.MustCompile(`Starting umh-core\.\.\.`)
+
+	tickRegex        = regexp.MustCompile(`Updated system snapshot at tick (\d+)`)
+	fsmAttemptRegex  = regexp.MustCompile(`FSM (\S+) attempting transition: current_state='([^']+)' -> event='([^']+)' \(desired_state='([^']+)'\)`)
+	fsmSuccessRegex  = regexp.MustCompile(`FSM (\S+) successful transition: '([^']+)' -> '([^']+)' via event='([^']+)' \(desired_state='([^']+)'\)`)
+	fsmFailedRegex   = regexp.MustCompile(`FSM (\S+) failed transition: current_state='([^']+)' -> event='([^']+)' \(desired_state='([^']+)'\)`)
+	fsmDesiredRegex  = regexp.MustCompile(`Setting desired state of FSM (\S+) to (\S+)`)
+	reconcileRegex   = regexp.MustCompile(`Reconciling (\S+) (?:manager )?at tick (\d+)`)
+	actionStartRegex = regexp.MustCompile(`Starting Action: (.+)`)
+	actionDoneRegex  = regexp.MustCompile(`Action: (.+) done`)
+	errorRegex       = regexp.MustCompile(`Error (?:executing action|removing|creating|starting|stopping): (.+)`)
+	startupRegex     = regexp.MustCompile(`Starting umh-core\.\.\.`)
 )
 
 func ParseLogFile(filename string) (*LogAnalyzer, error) {
@@ -48,6 +48,7 @@ func ParseLogFile(filename string) (*LogAnalyzer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open log file: %w", err)
 	}
+
 	defer func() { _ = file.Close() }()
 
 	analyzer := &LogAnalyzer{
@@ -61,11 +62,11 @@ func ParseLogFile(filename string) (*LogAnalyzer, error) {
 
 	scanner := bufio.NewScanner(file)
 	lineNum := 0
-	
+
 	for scanner.Scan() {
 		lineNum++
 		line := scanner.Text()
-		
+
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
@@ -77,12 +78,12 @@ func ParseLogFile(filename string) (*LogAnalyzer, error) {
 
 		analyzer.processEntry(entry)
 		analyzer.Entries = append(analyzer.Entries, entry)
-		
+
 		// Check for startup
 		if startupRegex.MatchString(line) {
 			analyzer.Starts = append(analyzer.Starts, entry.Timestamp)
 		}
-		
+
 		// Collect errors
 		if entry.Level == "ERROR" || entry.EntryType == EntryTypeError {
 			analyzer.Errors = append(analyzer.Errors, entry)
@@ -119,7 +120,7 @@ func parseLine(line string) (LogEntry, error) {
 	if len(sourceMatches) >= 2 {
 		entry.Source = sourceMatches[1][1]
 	}
-	
+
 	if match := componentRegex.FindStringSubmatch(line); match != nil {
 		entry.Component = match[1]
 	}
@@ -181,13 +182,13 @@ func (a *LogAnalyzer) processEntry(entry LogEntry) {
 				Events:    make([]LogEntry, 0),
 			}
 		}
-		
+
 	case EntryTypeFSMTransition:
 		a.recordFSMTransition(entry, true)
-		
+
 	case EntryTypeFSMAttempt:
 		a.recordFSMTransition(entry, false)
-		
+
 	case EntryTypeFSMFailed:
 		a.recordFSMTransition(entry, false)
 	}
@@ -233,7 +234,7 @@ func (a *LogAnalyzer) buildSessions() {
 		return a.Starts[i].Before(a.Starts[j])
 	})
 
-	for i := 0; i < len(a.Starts); i++ {
+	for i := range len(a.Starts) {
 		session := SessionInfo{
 			StartTime: a.Starts[i],
 			StartTick: -1,
@@ -249,11 +250,12 @@ func (a *LogAnalyzer) buildSessions() {
 
 		// Find tick range for this session
 		for tick, tickData := range a.TickMap {
-			if tickData.Timestamp.After(session.StartTime) && 
-			   (session.EndTime.IsZero() || tickData.Timestamp.Before(session.EndTime)) {
+			if tickData.Timestamp.After(session.StartTime) &&
+				(session.EndTime.IsZero() || tickData.Timestamp.Before(session.EndTime)) {
 				if session.StartTick == -1 || tick < session.StartTick {
 					session.StartTick = tick
 				}
+
 				if tick > session.EndTick {
 					session.EndTick = tick
 				}
@@ -262,8 +264,8 @@ func (a *LogAnalyzer) buildSessions() {
 
 		// Count errors in this session
 		for _, err := range a.Errors {
-			if err.Timestamp.After(session.StartTime) && 
-			   (session.EndTime.IsZero() || err.Timestamp.Before(session.EndTime)) {
+			if err.Timestamp.After(session.StartTime) &&
+				(session.EndTime.IsZero() || err.Timestamp.Before(session.EndTime)) {
 				session.Errors++
 			}
 		}

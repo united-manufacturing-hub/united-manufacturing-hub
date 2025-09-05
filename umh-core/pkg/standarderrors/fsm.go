@@ -17,7 +17,7 @@ package standarderrors
 import "errors"
 
 var (
-	// ErrInstanceRemoved is returned when an instance has been successfully removed
+	// ErrInstanceRemoved is returned when an instance has been successfully removed.
 	ErrInstanceRemoved = errors.New("instance removed")
 
 	// ErrRemovalPending is returned by RemoveBenthosFromS6Manager while the

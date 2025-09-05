@@ -26,22 +26,25 @@ import (
 )
 
 // ConsumeOutboundMessages processes messages from the outbound channel
-// This method is used for testing purposes to consume messages that would normally be sent to the user
+// This method is used for testing purposes to consume messages that would normally be sent to the user.
 func ConsumeOutboundMessages(outboundChannel chan *models.UMHMessage, messages *[]*models.UMHMessage, messagesMutex *sync.Mutex, logMessages bool) {
 	for msg := range outboundChannel {
 		messagesMutex.Lock()
+
 		*messages = append(*messages, msg)
+
 		messagesMutex.Unlock()
 
 		decodedMessage, err := encoding.DecodeMessageFromUMHInstanceToUser(msg.Content)
 		if err != nil {
 			zap.S().Error("error decoding message", zap.Error(err))
+
 			continue
 		}
+
 		if logMessages {
 			zap.S().Info("received message", decodedMessage.Payload)
 		}
-
 	}
 }
 
@@ -56,7 +59,6 @@ func SendLimitedLogs(
 	outboundChannel chan *models.UMHMessage,
 	actionType models.ActionType,
 	remainingSeconds int) []s6.LogEntry {
-
 	if len(logs) <= len(lastLogs) {
 		return lastLogs
 	}
@@ -97,7 +99,7 @@ func RemainingPrefixSec(dSeconds int) string {
 //	action = "deploy", "edit" …
 //	name   = human name of the component
 //
-// → "deploy(foo): "
+// → "deploy(foo): ".
 func Label(action, name string) string {
 	return fmt.Sprintf("%s(%s): ", action, name)
 }

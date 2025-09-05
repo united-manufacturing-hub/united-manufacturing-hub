@@ -23,7 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel"
 )
 
-// BenchmarkValidateStructureOnly_Simple benchmarks simple data model validation
+// BenchmarkValidateStructureOnly_Simple benchmarks simple data model validation.
 func BenchmarkValidateStructureOnly_Simple(b *testing.B) {
 	validator := datamodel.NewValidator()
 	ctx := context.Background()
@@ -46,7 +46,7 @@ func BenchmarkValidateStructureOnly_Simple(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		err := validator.ValidateStructureOnly(ctx, dataModel)
 		if err != nil {
 			b.Fatal(err)
@@ -54,7 +54,7 @@ func BenchmarkValidateStructureOnly_Simple(b *testing.B) {
 	}
 }
 
-// BenchmarkValidateStructureOnly_Complex benchmarks complex nested data model validation
+// BenchmarkValidateStructureOnly_Complex benchmarks complex nested data model validation.
 func BenchmarkValidateStructureOnly_Complex(b *testing.B) {
 	validator := datamodel.NewValidator()
 	ctx := context.Background()
@@ -141,7 +141,7 @@ func BenchmarkValidateStructureOnly_Complex(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		err := validator.ValidateStructureOnly(ctx, dataModel)
 		if err != nil {
 			b.Fatal(err)
@@ -149,7 +149,7 @@ func BenchmarkValidateStructureOnly_Complex(b *testing.B) {
 	}
 }
 
-// BenchmarkValidateStructureOnly_WithReferences benchmarks validation with references
+// BenchmarkValidateStructureOnly_WithReferences benchmarks validation with references.
 func BenchmarkValidateStructureOnly_WithReferences(b *testing.B) {
 	validator := datamodel.NewValidator()
 	ctx := context.Background()
@@ -188,7 +188,7 @@ func BenchmarkValidateStructureOnly_WithReferences(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		err := validator.ValidateStructureOnly(ctx, dataModel)
 		if err != nil {
 			b.Fatal(err)
@@ -196,7 +196,7 @@ func BenchmarkValidateStructureOnly_WithReferences(b *testing.B) {
 	}
 }
 
-// BenchmarkValidateWithReferences benchmarks full reference validation
+// BenchmarkValidateWithReferences benchmarks full reference validation.
 func BenchmarkValidateWithReferences(b *testing.B) {
 	validator := datamodel.NewValidator()
 	ctx := context.Background()
@@ -288,7 +288,7 @@ func BenchmarkValidateWithReferences(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		err := validator.ValidateWithReferences(ctx, dataModel, allDataModels, payloadShapes)
 		if err != nil {
 			b.Fatal(err)
@@ -296,7 +296,7 @@ func BenchmarkValidateWithReferences(b *testing.B) {
 	}
 }
 
-// BenchmarkValidateWithReferences_Deep benchmarks deep reference chains
+// BenchmarkValidateWithReferences_Deep benchmarks deep reference chains.
 func BenchmarkValidateWithReferences_Deep(b *testing.B) {
 	validator := datamodel.NewValidator()
 	ctx := context.Background()
@@ -406,7 +406,7 @@ func BenchmarkValidateWithReferences_Deep(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		err := validator.ValidateWithReferences(ctx, dataModel, allDataModels, payloadShapes)
 		if err != nil {
 			b.Fatal(err)
@@ -414,7 +414,7 @@ func BenchmarkValidateWithReferences_Deep(b *testing.B) {
 	}
 }
 
-// BenchmarkValidateStructureOnly_Large benchmarks validation of very large schemas
+// BenchmarkValidateStructureOnly_Large benchmarks validation of very large schemas.
 func BenchmarkValidateStructureOnly_Large(b *testing.B) {
 	validator := datamodel.NewValidator()
 	ctx := context.Background()
@@ -423,20 +423,21 @@ func BenchmarkValidateStructureOnly_Large(b *testing.B) {
 	structure := make(map[string]config.Field)
 
 	// Add 100 simple fields
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		structure[fmt.Sprintf("field_%d", i)] = config.Field{
 			PayloadShape: "timeseries-number",
 		}
 	}
 
 	// Add 10 complex nested structures
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		subfields := make(map[string]config.Field)
-		for j := 0; j < 10; j++ {
+		for j := range 10 {
 			subfields[fmt.Sprintf("subfield_%d", j)] = config.Field{
 				PayloadShape: "timeseries-number",
 			}
 		}
+
 		structure[fmt.Sprintf("nested_%d", i)] = config.Field{
 			Subfields: subfields,
 		}
@@ -449,7 +450,7 @@ func BenchmarkValidateStructureOnly_Large(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		err := validator.ValidateStructureOnly(ctx, dataModel)
 		if err != nil {
 			b.Fatal(err)
@@ -457,12 +458,12 @@ func BenchmarkValidateStructureOnly_Large(b *testing.B) {
 	}
 }
 
-// BenchmarkValidatorCreation benchmarks validator creation overhead
+// BenchmarkValidatorCreation benchmarks validator creation overhead.
 func BenchmarkValidatorCreation(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		validator := datamodel.NewValidator()
 		_ = validator // Prevent optimization
 	}

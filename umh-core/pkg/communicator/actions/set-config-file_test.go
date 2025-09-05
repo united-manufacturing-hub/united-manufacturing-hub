@@ -68,6 +68,7 @@ var _ = Describe("SetConfigFile", func() {
 			if path == config.DefaultConfigPath {
 				return []byte(configContent), nil
 			}
+
 			return nil, errors.New("file not found")
 		})
 

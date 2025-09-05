@@ -34,17 +34,18 @@ func StreamProcessorsFromSnapshot(
 	mgr fsm.ManagerSnapshot,
 	log *zap.SugaredLogger,
 ) []models.Dfc {
-
 	if mgr == nil {
 		return []models.Dfc{}
 	}
 
 	var out []models.Dfc
+
 	for _, inst := range mgr.GetInstances() {
 		if sp, err := buildStreamProcessorAsDfc(*inst); err == nil {
 			out = append(out, sp)
 		}
 	}
+
 	return out
 }
 
@@ -53,7 +54,6 @@ func StreamProcessorsFromSnapshot(
 func buildStreamProcessorAsDfc(
 	instance fsm.FSMInstanceSnapshot,
 ) (models.Dfc, error) {
-
 	observed, ok := instance.LastObservedState.(*streamprocessor.ObservedStateSnapshot)
 	if !ok || observed == nil {
 		return models.Dfc{}, fmt.Errorf("observed state %T is not ObservedStateSnapshot", instance.LastObservedState)
@@ -61,6 +61,7 @@ func buildStreamProcessorAsDfc(
 
 	// ---- health ---------------------------------------------------------
 	healthCat := models.Neutral
+
 	switch instance.CurrentState {
 	case streamprocessor.OperationalStateActive:
 		healthCat = models.Active
@@ -76,7 +77,7 @@ func buildStreamProcessorAsDfc(
 	uuid := dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID)
 
 	health := &models.Health{
-		Message:       fmt.Sprintf("Stream processor %s", instance.CurrentState),
+		Message:       "Stream processor " + instance.CurrentState,
 		ObservedState: instance.CurrentState,
 		DesiredState:  instance.DesiredState,
 		Category:      healthCat,
@@ -96,7 +97,6 @@ func buildStreamProcessorAsDfc(
 	svcInfo := observed.ServiceInfo
 	if m := svcInfo.DFCObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState; m != nil &&
 		m.Input.LastCount > 0 {
-
 		dfc.Metrics = &models.DfcMetrics{
 			AvgInputThroughputPerMinuteInMsgSec: m.Output.MessagesPerTick / constants.DefaultTickerTime.Seconds(),
 		}

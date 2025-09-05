@@ -22,18 +22,17 @@ import (
 )
 
 // Generator handles the generation of DFC YAML configurations
-// BoilerPlateCode
+// BoilerPlateCode.
 type Generator struct {
 }
 
-// NewGenerator creates a new YAML generator for DFC configurations
+// NewGenerator creates a new YAML generator for DFC configurations.
 func NewGenerator() *Generator {
 	return &Generator{}
 }
 
-// RenderConfig generates a DFC YAML configuration from a DFCServiceConfig
+// RenderConfig generates a DFC YAML configuration from a DFCServiceConfig.
 func (g *Generator) RenderConfig(cfg DataflowComponentServiceConfig) (string, error) {
-
 	// Convert the config to a normalized map
 	configMap := g.ConfigToMap(cfg)
 	normalizedMap := NormalizeConfig(configMap)
@@ -49,7 +48,7 @@ func (g *Generator) RenderConfig(cfg DataflowComponentServiceConfig) (string, er
 	return yamlStr, nil
 }
 
-// ConfigToMap converts a DataFlowComponentServiceConfig to a raw map for YAML generation
+// ConfigToMap converts a DataFlowComponentServiceConfig to a raw map for YAML generation.
 func (g *Generator) ConfigToMap(cfg DataflowComponentServiceConfig) map[string]any {
 	// use generator to create a valid benthosConfigMap
 	generator := benthosserviceconfig.NewGenerator()
@@ -65,7 +64,7 @@ func (g *Generator) ConfigToMap(cfg DataflowComponentServiceConfig) map[string]a
 	return configMap
 }
 
-// NormalizeConfig needs to adjust underlying benthos here
+// NormalizeConfig needs to adjust underlying benthos here.
 func NormalizeConfig(raw map[string]any) map[string]any {
 	benthosConfig, ok := raw["benthos"].(map[string]any)
 	if !ok {
@@ -75,5 +74,6 @@ func NormalizeConfig(raw map[string]any) map[string]any {
 	normalized := make(map[string]any)
 	normalizedBenthosConfig := benthosserviceconfig.NormalizeConfig(benthosConfig)
 	normalized["benthos"] = normalizedBenthosConfig
+
 	return normalized
 }

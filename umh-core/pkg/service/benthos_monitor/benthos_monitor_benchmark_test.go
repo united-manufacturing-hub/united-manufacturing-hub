@@ -51,10 +51,10 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/hex"
-	"fmt"
 	"io"
 	"reflect"
 	"sort"
+	"strconv"
 	"testing"
 	"time"
 
@@ -112,21 +112,24 @@ var sampleReady = `{"statuses":[{"label":"tcp_server","path":"root.input","conne
 var sampleVersion = `{"version":"3.71.0","built":"2023-08-15T12:00:00Z"}`
 
 // Returns a gzip compressed string of the sample metrics
-// Also returns the same data but hex encoded
+// Also returns the same data but hex encoded.
 func prepareDataForBenchmark() ([]byte, string) {
 	var buf bytes.Buffer
+
 	gzipWriter := gzip.NewWriter(&buf)
 	_, _ = gzipWriter.Write([]byte(sampleMetrics))
+
 	err := gzipWriter.Close()
 	if err != nil {
 		panic(err)
 	}
 
 	hexData := hex.EncodeToString(buf.Bytes())
+
 	return buf.Bytes(), hexData
 }
 
-// Prepare sample log entries for ParseBenthosLogs benchmark
+// Prepare sample log entries for ParseBenthosLogs benchmark.
 func prepareSampleLogEntries() []s6service.LogEntry {
 	entries := []s6service.LogEntry{}
 
@@ -162,7 +165,7 @@ func prepareSampleLogEntries() []s6service.LogEntry {
 	entries = append(entries, s6service.LogEntry{Content: METRICS_END_MARKER})
 
 	// Add timestamp (unix timestamp in nanoseconds)
-	timestamp := fmt.Sprintf("%d", time.Now().UnixNano())
+	timestamp := strconv.FormatInt(time.Now().UnixNano(), 10)
 	entries = append(entries, s6service.LogEntry{Content: timestamp})
 
 	// Add BLOCK_END_MARKER
@@ -171,11 +174,13 @@ func prepareSampleLogEntries() []s6service.LogEntry {
 	return entries
 }
 
-// Helper to compress and hex encode a string
+// Helper to compress and hex encode a string.
 func compressAndHex(data string) string {
 	var buf bytes.Buffer
+
 	gzipWriter := gzip.NewWriter(&buf)
 	_, _ = gzipWriter.Write([]byte(data))
+
 	err := gzipWriter.Close()
 	if err != nil {
 		panic(err)
@@ -184,20 +189,23 @@ func compressAndHex(data string) string {
 	return hex.EncodeToString(buf.Bytes())
 }
 
-// BenchmarkGzipDecode benchmarks just the gzip decoding operation
+// BenchmarkGzipDecode benchmarks just the gzip decoding operation.
 func BenchmarkGzipDecode(b *testing.B) {
 	encodedData, _ := prepareDataForBenchmark()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		reader, err := gzip.NewReader(bytes.NewReader(encodedData))
 		if err != nil {
 			b.Fatal(err)
 		}
+
 		_, err = io.ReadAll(reader)
 		if err != nil {
 			b.Fatal(err)
 		}
+
 		err = reader.Close()
 		if err != nil {
 			b.Fatal(err)
@@ -205,12 +213,13 @@ func BenchmarkGzipDecode(b *testing.B) {
 	}
 }
 
-// BenchmarkHexDecode benchmarks just the hex decoding operation
+// BenchmarkHexDecode benchmarks just the hex decoding operation.
 func BenchmarkHexDecode(b *testing.B) {
 	_, encodedAndHexedData := prepareDataForBenchmark()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, err := hex.DecodeString(encodedAndHexedData)
 		if err != nil {
 			b.Fatal(err)
@@ -218,10 +227,11 @@ func BenchmarkHexDecode(b *testing.B) {
 	}
 }
 
-// BenchmarkMetricsParsing benchmarks the metrics parsing operation
+// BenchmarkMetricsParsing benchmarks the metrics parsing operation.
 func BenchmarkMetricsParsing(b *testing.B) {
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, err := ParseMetricsFromBytesSlow([]byte(sampleMetrics))
 		if err != nil {
 			b.Fatal(err)
@@ -229,10 +239,11 @@ func BenchmarkMetricsParsing(b *testing.B) {
 	}
 }
 
-// BenchmarkMetricsParsingOpt benchmarks the metrics parsing operation
+// BenchmarkMetricsParsingOpt benchmarks the metrics parsing operation.
 func BenchmarkMetricsParsingOpt(b *testing.B) {
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, err := ParseMetricsFromBytes([]byte(sampleMetrics))
 		if err != nil {
 			b.Fatal(err)
@@ -240,16 +251,18 @@ func BenchmarkMetricsParsingOpt(b *testing.B) {
 	}
 }
 
-// Test that both output the same result
+// Test that both output the same result.
 func TestMetricsParsing(t *testing.T) {
 	metrics, err := ParseMetricsFromBytes([]byte(sampleMetrics))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	metricsOpt, err := ParseMetricsFromBytesSlow([]byte(sampleMetrics))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if !reflect.DeepEqual(metrics, metricsOpt) {
 		t.Logf("metrics: %+v", metrics)
 		t.Logf("metricsOpt: %+v", metricsOpt)
@@ -257,12 +270,13 @@ func TestMetricsParsing(t *testing.T) {
 	}
 }
 
-// BenchmarkCompleteProcessing benchmarks the entire pipeline: hex decode -> gzip decode -> parse metrics
+// BenchmarkCompleteProcessing benchmarks the entire pipeline: hex decode -> gzip decode -> parse metrics.
 func BenchmarkCompleteProcessing(b *testing.B) {
 	_, encodedAndHexedData := prepareDataForBenchmark()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		// Step 1: Hex decode
 		decodedMetricsDataBytes, _ := hex.DecodeString(encodedAndHexedData)
 
@@ -271,10 +285,12 @@ func BenchmarkCompleteProcessing(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
+
 		decompressedData, err := io.ReadAll(gzipReader)
 		if err != nil {
 			b.Fatal(err)
 		}
+
 		err = gzipReader.Close()
 		if err != nil {
 			b.Fatal(err)
@@ -288,7 +304,7 @@ func BenchmarkCompleteProcessing(b *testing.B) {
 	}
 }
 
-// BenchmarkParseBenthosLogs benchmarks the ParseBenthosLogs function
+// BenchmarkParseBenthosLogs benchmarks the ParseBenthosLogs function.
 func BenchmarkParseBenthosLogsWithPercentiles(b *testing.B) {
 	// Create service and test data
 	service := NewBenthosMonitorService("test-benthos")
@@ -300,14 +316,20 @@ func BenchmarkParseBenthosLogsWithPercentiles(b *testing.B) {
 
 	b.ResetTimer()
 	b.StopTimer()
-	for i := 0; i < b.N; i++ {
+
+	for i := range b.N {
 		start := time.Now()
+
 		b.StartTimer()
+
 		_, err := service.ParseBenthosLogs(ctx, logs, uint64(i))
+
 		b.StopTimer()
+
 		if err != nil {
 			b.Fatal(err)
 		}
+
 		times[i] = time.Since(start)
 	}
 
@@ -326,7 +348,7 @@ func BenchmarkParseBenthosLogsWithPercentiles(b *testing.B) {
 	b.ReportMetric(float64(p99.Nanoseconds()), "p99ns")
 }
 
-// BenchmarkUpdateFromMetricsWithPercentiles benchmarks the UpdateFromMetrics method and reports percentiles
+// BenchmarkUpdateFromMetricsWithPercentiles benchmarks the UpdateFromMetrics method and reports percentiles.
 func BenchmarkUpdateFromMetricsWithPercentiles(b *testing.B) {
 	// Create a metrics state
 	metricsState := NewBenthosMetricsState()
@@ -387,10 +409,12 @@ func BenchmarkUpdateFromMetricsWithPercentiles(b *testing.B) {
 
 	b.ResetTimer()
 	b.StopTimer()
-	for i := 0; i < b.N; i++ {
+
+	for i := range b.N {
 		// Simulate increasing counters for realistic benchmark
 		metrics.Input.Received++
 		metrics.Output.Sent++
+
 		metrics.Output.BatchSent++
 		for path := range metrics.Process.Processors {
 			proc := metrics.Process.Processors[path]
@@ -402,9 +426,11 @@ func BenchmarkUpdateFromMetricsWithPercentiles(b *testing.B) {
 		}
 
 		start := time.Now()
+
 		b.StartTimer()
 		metricsState.UpdateFromMetrics(metrics, uint64(i))
 		b.StopTimer()
+
 		times[i] = time.Since(start)
 	}
 

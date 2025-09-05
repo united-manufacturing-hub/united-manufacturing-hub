@@ -190,7 +190,7 @@ var _ = Describe("GetLogsAction", func() {
 			}
 
 			err := action.Parse(payload)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(action.GetPayload().UUID).To(Equal(dfcUUID.String()))
 			Expect(action.GetPayload().Type).To(Equal(models.DFCLogType))
 		})
@@ -217,10 +217,10 @@ var _ = Describe("GetLogsAction", func() {
 			}
 
 			err := action.Parse(payload)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			err = action.Validate()
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should return an error if the payload is missing a required field", func() {
@@ -230,7 +230,7 @@ var _ = Describe("GetLogsAction", func() {
 				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
 			}
 			err := action.Parse(payload)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
@@ -242,7 +242,7 @@ var _ = Describe("GetLogsAction", func() {
 				"type": models.DFCLogType,
 			}
 			err = action.Parse(payload)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
@@ -256,7 +256,7 @@ var _ = Describe("GetLogsAction", func() {
 				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
 			}
 			err := action.Parse(payload)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
@@ -269,7 +269,7 @@ var _ = Describe("GetLogsAction", func() {
 				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
 			}
 			err := action.Parse(payload)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
@@ -282,7 +282,7 @@ var _ = Describe("GetLogsAction", func() {
 				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
 			}
 			err := action.Parse(payload)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
@@ -293,7 +293,7 @@ var _ = Describe("GetLogsAction", func() {
 				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
 			}
 			err = action.Parse(payload)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
@@ -307,7 +307,7 @@ var _ = Describe("GetLogsAction", func() {
 				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
 			}
 			err := action.Parse(payload)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
@@ -331,10 +331,10 @@ var _ = Describe("GetLogsAction", func() {
 			}
 
 			err := action.Parse(payload)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			err = action.Validate()
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			// add the time to the loglines
 			expectedLogs := []string{
@@ -343,7 +343,7 @@ var _ = Describe("GetLogsAction", func() {
 			}
 
 			result, _, err := action.Execute()
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(models.GetLogsResponse{Logs: expectedLogs}))
 		},
 			Entry("dfc", models.DFCLogType),
@@ -360,13 +360,13 @@ var _ = Describe("GetLogsAction", func() {
 			}
 
 			err := action.Parse(payload)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			err = action.Validate()
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			result, _, err := action.Execute()
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(models.GetLogsResponse{Logs: []string{fmt.Sprintf("[%s] test log 2", mockedLogs[1].Timestamp.Format(time.RFC3339))}}))
 		})
 
@@ -380,10 +380,10 @@ var _ = Describe("GetLogsAction", func() {
 			}
 
 			err := action.Parse(payload)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			err = action.Validate()
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			result, _, err := action.Execute()
 			Expect(result).To(BeNil())
@@ -402,10 +402,10 @@ var _ = Describe("GetLogsAction", func() {
 			}
 
 			err := action.Parse(payload)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			err = action.Validate()
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			result, _, err := action.Execute()
 			Expect(result).To(BeNil())

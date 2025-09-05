@@ -22,7 +22,7 @@ const (
 
 const (
 	// TopicBrowser Operation Timeouts - Level 2 Service (depends on Redpanda)
-	// TopicBrowserUpdateObservedStateTimeout is the timeout for updating the observed state
+	// TopicBrowserUpdateObservedStateTimeout is the timeout for updating the observed state.
 	TopicBrowserUpdateObservedStateTimeout = 10 * time.Millisecond
 )
 

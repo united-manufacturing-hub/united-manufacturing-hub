@@ -24,7 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
-// MockService is a mock implementation of the agent monitor Service interface
+// MockService is a mock implementation of the agent monitor Service interface.
 type MockService struct {
 
 	// Return values for each method
@@ -41,7 +41,7 @@ type MockService struct {
 	GetStatusCalled bool
 }
 
-// NewMockService creates a new mock service instance
+// NewMockService creates a new mock service instance.
 func NewMockService(fs filesystem.Service) *MockService {
 	return &MockService{
 		// Default to Active health
@@ -52,7 +52,7 @@ func NewMockService(fs filesystem.Service) *MockService {
 	}
 }
 
-// Status is a mock implementation of Service.Status
+// Status is a mock implementation of Service.Status.
 func (m *MockService) Status(ctx context.Context, snapshot fsm.SystemSnapshot) (*ServiceInfo, error) {
 	m.GetStatusCalled = true
 
@@ -64,7 +64,7 @@ func (m *MockService) Status(ctx context.Context, snapshot fsm.SystemSnapshot) (
 	return m.GetStatusResult, nil
 }
 
-// CreateDefaultAgentStatus returns a default agent status with healthy metrics for testing
+// CreateDefaultAgentStatus returns a default agent status with healthy metrics for testing.
 func CreateDefaultAgentStatus() *ServiceInfo {
 	return &ServiceInfo{
 		Location: map[int]string{
@@ -98,27 +98,28 @@ func CreateDefaultAgentStatus() *ServiceInfo {
 	}
 }
 
-// CreateDegradedAgentStatus creates an agent status with degraded health
+// CreateDegradedAgentStatus creates an agent status with degraded health.
 func CreateDegradedAgentStatus() *ServiceInfo {
 	status := CreateDefaultAgentStatus()
 	status.OverallHealth = models.Degraded
 	status.LatencyHealth = models.Degraded
+
 	return status
 }
 
-// SetupMockForHealthyState configures the mock to return healthy agent status
+// SetupMockForHealthyState configures the mock to return healthy agent status.
 func (m *MockService) SetupMockForHealthyState() {
 	m.GetStatusResult = CreateDefaultAgentStatus()
 	m.healthState = models.Active
 }
 
-// SetupMockForDegradedState configures the mock to return degraded agent status
+// SetupMockForDegradedState configures the mock to return degraded agent status.
 func (m *MockService) SetupMockForDegradedState() {
 	m.GetStatusResult = CreateDegradedAgentStatus()
 	m.healthState = models.Degraded
 }
 
-// SetupMockForError configures the mock to return errors
+// SetupMockForError configures the mock to return errors.
 func (m *MockService) SetupMockForError(err error) {
 	m.GetStatusError = err
 }

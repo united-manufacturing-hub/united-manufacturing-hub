@@ -21,7 +21,7 @@ import (
 )
 
 // this function returns weather the string indexes of the given map are all numeric
-// this func is only called when len(pipeline) > 0 so we dont need to check
+// this func is only called when len(pipeline) > 0 so we dont need to check.
 func CheckIfOrderedNumericKeys(pipeline map[string]models.DfcDataConfig) bool {
 	for processorName := range pipeline {
 		index, err := strconv.Atoi(processorName)
@@ -29,5 +29,6 @@ func CheckIfOrderedNumericKeys(pipeline map[string]models.DfcDataConfig) bool {
 			return false
 		}
 	}
+
 	return true
 }

@@ -84,6 +84,7 @@ dataContracts:
 
 				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
 					writtenData = data
+
 					return nil
 				})
 
@@ -103,6 +104,7 @@ dataContracts:
 
 				Eventually(func() error {
 					err := configManager.AtomicAddDataContract(ctx, dataContract)
+
 					return err
 				}, TimeToWaitForConfigRefresh*2, "10ms").Should(Succeed())
 

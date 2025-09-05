@@ -20,17 +20,16 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 )
 
-// Normalizer handles the normalization of ProtocolConverter configurations
+// Normalizer handles the normalization of ProtocolConverter configurations.
 type Normalizer struct{}
 
-// NewNormalizer creates a new configuration normalizer for ProtocolConverter
+// NewNormalizer creates a new configuration normalizer for ProtocolConverter.
 func NewNormalizer() *Normalizer {
 	return &Normalizer{}
 }
 
-// NormalizeConfig applies ProtocolConverter defaults to a structured config
+// NormalizeConfig applies ProtocolConverter defaults to a structured config.
 func (n *Normalizer) NormalizeConfig(cfg ProtocolConverterServiceConfigSpec) ProtocolConverterServiceConfigSpec {
-
 	// create a shallow copy
 	normalized := cfg
 

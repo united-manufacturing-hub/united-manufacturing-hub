@@ -51,14 +51,17 @@ func (b *BenthosInstance) CreateInstance(ctx context.Context, filesystemService 
 
 	err := b.service.AddBenthosToS6Manager(ctx, filesystemService, &b.config, b.baseFSMInstance.GetID())
 	if err != nil {
-		if err == benthos_service.ErrServiceAlreadyExists {
+		if errors.Is(err, benthos_service.ErrServiceAlreadyExists) {
 			b.baseFSMInstance.GetLogger().Debugf("Benthos service %s already exists in S6 manager", b.baseFSMInstance.GetID())
+
 			return nil // do not throw an error, as each action is expected to be idempotent
 		}
+
 		return fmt.Errorf("failed to add Benthos service %s to S6 manager: %w", b.baseFSMInstance.GetID(), err)
 	}
 
 	b.baseFSMInstance.GetLogger().Debugf("Benthos service %s added to S6 manager", b.baseFSMInstance.GetID())
+
 	return nil
 }
 
@@ -92,6 +95,7 @@ func (b *BenthosInstance) RemoveInstance(
 		b.baseFSMInstance.GetLogger().
 			Infof("Benthos service %s removed from S6 manager",
 				b.baseFSMInstance.GetID())
+
 		return nil
 
 	case errors.Is(err, benthos_service.ErrServiceNotExist):
@@ -118,12 +122,13 @@ func (b *BenthosInstance) RemoveInstance(
 		b.baseFSMInstance.GetLogger().
 			Errorf("failed to remove service %s: %s",
 				b.baseFSMInstance.GetID(), err)
+
 		return fmt.Errorf("failed to remove service %s: %w",
 			b.baseFSMInstance.GetID(), err)
 	}
 }
 
-// StartInstance attempts to start the benthos by setting the desired state to running for the given instance
+// StartInstance attempts to start the benthos by setting the desired state to running for the given instance.
 func (b *BenthosInstance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting Benthos service %s ...", b.baseFSMInstance.GetID())
 
@@ -137,10 +142,11 @@ func (b *BenthosInstance) StartInstance(ctx context.Context, filesystemService f
 	}
 
 	b.baseFSMInstance.GetLogger().Debugf("Benthos service %s start command executed", b.baseFSMInstance.GetID())
+
 	return nil
 }
 
-// StopInstance attempts to stop the Benthos by setting the desired state to stopped for the given instance
+// StopInstance attempts to stop the Benthos by setting the desired state to stopped for the given instance.
 func (b *BenthosInstance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping Benthos service %s ...", b.baseFSMInstance.GetID())
 
@@ -152,22 +158,23 @@ func (b *BenthosInstance) StopInstance(ctx context.Context, filesystemService fi
 	}
 
 	b.baseFSMInstance.GetLogger().Debugf("Benthos service %s stop command executed", b.baseFSMInstance.GetID())
+
 	return nil
 }
 
-// CheckForCreation checks if the Benthos service should be created
+// CheckForCreation checks if the Benthos service should be created.
 func (b *BenthosInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
 	return true
 }
 
 // getServiceStatus gets the status of the Benthos service
-// its main purpose is to handle the edge cases where the service is not yet created or not yet running
+// its main purpose is to handle the edge cases where the service is not yet created or not yet running.
 func (b *BenthosInstance) getServiceStatus(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) (benthos_service.ServiceInfo, error) {
 	info, err := b.service.Status(ctx, services, b.baseFSMInstance.GetID(), b.config.MetricsPort, tick, loopStartTime)
 	if err != nil {
 		// If there's an error getting the service status, we need to distinguish between cases
-
-		if errors.Is(err, benthos_service.ErrServiceNotExist) {
+		switch {
+		case errors.Is(err, benthos_service.ErrServiceNotExist):
 			// If the service is being created, we don't want to count this as an error
 			// The instance is likely in Creating or ToBeCreated state, so service doesn't exist yet
 			// This will be handled in the reconcileStateTransition where the service gets created
@@ -178,14 +185,16 @@ func (b *BenthosInstance) getServiceStatus(ctx context.Context, services service
 
 			// Log the warning but don't treat it as a fatal error
 			b.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation")
+
 			return benthos_service.ServiceInfo{}, nil
-		} else if errors.Is(err, benthos_service.ErrLastObservedStateNil) {
+		case errors.Is(err, benthos_service.ErrLastObservedStateNil):
 			// If the last observed state is nil, we can ignore this error
 			infoWithFailedHealthChecks := info
 			infoWithFailedHealthChecks.BenthosStatus.HealthCheck.IsLive = false
 			infoWithFailedHealthChecks.BenthosStatus.HealthCheck.IsReady = false
+
 			return infoWithFailedHealthChecks, nil
-		} else if errors.Is(err, benthos_service.ErrBenthosMonitorNotRunning) {
+		case errors.Is(err, benthos_service.ErrBenthosMonitorNotRunning):
 			// If the metrics service is not running, we are unable to get the logs/metrics, therefore we must return an empty status
 			if !IsRunningState(b.baseFSMInstance.GetCurrentFSMState()) {
 				return info, nil
@@ -194,18 +203,20 @@ func (b *BenthosInstance) getServiceStatus(ctx context.Context, services service
 
 		// For other errors, log them and return
 		b.baseFSMInstance.GetLogger().Errorf("error updating observed state for %s: %s", b.baseFSMInstance.GetID(), err)
+
 		return benthos_service.ServiceInfo{}, err
 	}
 
 	return info, nil
 }
 
-// UpdateObservedStateOfInstance updates the observed state of the service
+// UpdateObservedStateOfInstance updates the observed state of the service.
 func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
 		if b.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "UpdateObservedStateOfInstance") {
 			return nil
 		}
+
 		return ctx.Err()
 	}
 
@@ -214,10 +225,12 @@ func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, ser
 	// it has either 80% of manager time OR the minimum required time, whichever is larger
 
 	start := time.Now()
+
 	info, err := b.getServiceStatus(ctx, services, snapshot.Tick, snapshot.SnapshotTime)
 	if err != nil {
 		return err
 	}
+
 	metrics.ObserveReconcileTime(logger.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
 	// Store the raw service info
 	b.ObservedState.ServiceInfo = info
@@ -234,6 +247,7 @@ func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, ser
 	start = time.Now()
 	observedConfig, err := b.service.GetConfig(ctx, services.GetFileSystem(), b.baseFSMInstance.GetID())
 	metrics.ObserveReconcileTime(logger.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".getConfig", time.Since(start))
+
 	if err == nil {
 		// Only update if we successfully got the config
 		b.ObservedState.ObservedBenthosServiceConfig = observedConfig
@@ -241,6 +255,7 @@ func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, ser
 		if strings.Contains(err.Error(), benthos_service.ErrServiceNotExist.Error()) {
 			// Log the error but don't fail - this might happen during creation when the config file doesn't exist yet
 			b.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
+
 			return nil
 		} else {
 			return fmt.Errorf("failed to get observed Benthos config: %w", err)
@@ -283,11 +298,13 @@ func (b *BenthosInstance) IsBenthosS6Running() (bool, string) {
 	if b.ObservedState.ServiceInfo.S6FSMState == s6fsm.OperationalStateRunning {
 		return true, ""
 	}
+
 	currentState := b.ObservedState.ServiceInfo.S6FSMState
 	if currentState == "" {
 		currentState = "not existing"
 	}
-	return false, fmt.Sprintf("s6 is not running, current state: %s", currentState)
+
+	return false, "s6 is not running, current state: " + currentState
 }
 
 // IsBenthosS6Stopped reports true when the FSM state is
@@ -303,7 +320,6 @@ func (b *BenthosInstance) IsBenthosS6Stopped() (bool, string) {
 	// Empty string occurs when a service crashes (e.g., due to invalid config) and gets
 	// completely removed from S6, leaving no state. This is effectively "stopped" from
 	// the FSM perspective and allows proper recovery from corrupted states (see ENG-3243).
-
 	fsmState := b.ObservedState.ServiceInfo.S6FSMState
 	switch fsmState {
 	case "":
@@ -311,7 +327,8 @@ func (b *BenthosInstance) IsBenthosS6Stopped() (bool, string) {
 	case s6fsm.OperationalStateStopped:
 		return true, ""
 	}
-	return false, fmt.Sprintf("s6 is not stopped, current state: %s", fsmState)
+
+	return false, "s6 is not stopped, current state: " + fsmState
 }
 
 // IsBenthosConfigLoaded reports true once Benthos uptime is at least
@@ -328,6 +345,7 @@ func (b *BenthosInstance) IsBenthosConfigLoaded() (bool, string) {
 	if currentUptime >= constants.BenthosTimeUntilConfigLoadedInSeconds {
 		return true, ""
 	}
+
 	return false, fmt.Sprintf("uptime %d s (< %d s threshold)", currentUptime, constants.BenthosTimeUntilConfigLoadedInSeconds)
 }
 
@@ -383,6 +401,7 @@ func (b *BenthosInstance) IsBenthosHealthchecksPassed(currentTick uint64) (bool,
 	} else {
 		// Reset the timestamp if any check fails
 		b.healthChecksPassingSinceTick = 0
+
 		return false, fmt.Sprintf("healthchecks did not pass: live=%t, ready=%t",
 			b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive,
 			b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady)
@@ -400,6 +419,7 @@ func (b *BenthosInstance) IsBenthosHealthchecksPassed(currentTick uint64) (bool,
 		return false, fmt.Sprintf("healthchecks passing but not stable yet (%d %%)",
 			percentage)
 	}
+
 	return false, fmt.Sprintf("healthchecks not passing: live=%t, ready=%t",
 		b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive,
 		b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady)
@@ -458,6 +478,7 @@ func (b *BenthosInstance) IsBenthosLogsFine(currentTime time.Time, logWindow tim
 	if !logsFine {
 		return false, fmt.Sprintf("log issue: [%s] %s", logEntry.Timestamp.Format(time.RFC3339), logEntry.Content)
 	}
+
 	return true, ""
 }
 
@@ -515,5 +536,6 @@ func (b *BenthosInstance) IsBenthosWithProcessingActivity() (bool, string) {
 	if !hasActivity {
 		return false, reason
 	}
+
 	return true, ""
 }

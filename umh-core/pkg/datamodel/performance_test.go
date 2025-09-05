@@ -23,7 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel"
 )
 
-// TestPerformanceTarget verifies the validator meets the 1000 schemas/second target
+// TestPerformanceTarget verifies the validator meets the 1000 schemas/second target.
 func TestPerformanceTarget(t *testing.T) {
 	validator := datamodel.NewValidator()
 	ctx := context.Background()
@@ -116,6 +116,7 @@ func TestPerformanceTarget(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Validation failed: %v", err)
 		}
+
 		count++
 	}
 
@@ -133,7 +134,7 @@ func TestPerformanceTarget(t *testing.T) {
 	}
 }
 
-// TestPerformanceTargetWithReferences verifies reference validation performance
+// TestPerformanceTargetWithReferences verifies reference validation performance.
 func TestPerformanceTargetWithReferences(t *testing.T) {
 	validator := datamodel.NewValidator()
 	ctx := context.Background()
@@ -246,6 +247,7 @@ func TestPerformanceTargetWithReferences(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Reference validation failed: %v", err)
 		}
+
 		count++
 	}
 
@@ -263,7 +265,7 @@ func TestPerformanceTargetWithReferences(t *testing.T) {
 	}
 }
 
-// TestMemoryUsage verifies memory usage stays reasonable
+// TestMemoryUsage verifies memory usage stays reasonable.
 func TestMemoryUsage(t *testing.T) {
 	validator := datamodel.NewValidator()
 	ctx := context.Background()
@@ -301,7 +303,7 @@ func TestMemoryUsage(t *testing.T) {
 
 	// Validate multiple times to ensure no memory leaks
 	const iterations = 10000
-	for i := 0; i < iterations; i++ {
+	for i := range iterations {
 		err := validator.ValidateStructureOnly(ctx, dataModel)
 		if err != nil {
 			t.Fatalf("Validation failed at iteration %d: %v", i, err)

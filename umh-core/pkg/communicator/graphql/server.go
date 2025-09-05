@@ -16,6 +16,7 @@ package graphql
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -24,10 +25,11 @@ import (
 	"github.com/99designs/gqlgen/graphql/handler/transport"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/gin-gonic/gin"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
 )
 
-// Server wraps the GraphQL HTTP server with proper setup and lifecycle management
+// Server wraps the GraphQL HTTP server with proper setup and lifecycle management.
 type Server struct {
 	server   *http.Server
 	logger   *zap.SugaredLogger
@@ -35,7 +37,7 @@ type Server struct {
 	config   *ServerConfig
 }
 
-// NewServer creates a new GraphQL server with the provided resolver and configuration
+// NewServer creates a new GraphQL server with the provided resolver and configuration.
 func NewServer(resolver *Resolver, config *ServerConfig, logger *zap.SugaredLogger) (*Server, error) {
 	if config == nil {
 		config = DefaultServerConfig()
@@ -56,7 +58,7 @@ func NewServer(resolver *Resolver, config *ServerConfig, logger *zap.SugaredLogg
 	}, nil
 }
 
-// Start starts the GraphQL server with proper middleware and routing setup
+// Start starts the GraphQL server with proper middleware and routing setup.
 func (s *Server) Start(ctx context.Context) error {
 	// Set Gin mode based on debug setting
 	if s.config.Debug {
@@ -92,7 +94,8 @@ func (s *Server) Start(ctx context.Context) error {
 	// Add error handling and recovery
 	srv.SetRecoverFunc(func(ctx context.Context, err interface{}) error {
 		s.logger.Errorf("GraphQL panic: %v", err)
-		return fmt.Errorf("internal server error")
+
+		return errors.New("internal server error")
 	})
 
 	// Register GraphQL routes
@@ -120,30 +123,33 @@ func (s *Server) Start(ctx context.Context) error {
 	)
 
 	// Start server in a goroutine
-	go func() {
-		if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	sentry.SafeGo(func() {
+		if err := s.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			s.logger.Errorw("GraphQL server failed", "error", err)
 		}
-	}()
+	})
 
 	return nil
 }
 
-// Stop gracefully stops the GraphQL server
+// Stop gracefully stops the GraphQL server.
 func (s *Server) Stop(ctx context.Context) error {
 	if s.server == nil {
 		return nil
 	}
 
 	s.logger.Info("Stopping GraphQL server")
+
 	return s.server.Shutdown(ctx)
 }
 
-// loggingMiddleware provides request logging
+// loggingMiddleware provides request logging.
 func (s *Server) loggingMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
+
 		c.Next()
+
 		if s.config.Debug {
 			s.logger.Infow("GraphQL request",
 				"method", c.Request.Method,
@@ -155,7 +161,7 @@ func (s *Server) loggingMiddleware() gin.HandlerFunc {
 	}
 }
 
-// corsMiddleware provides CORS support
+// corsMiddleware provides CORS support.
 func (s *Server) corsMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		origin := c.Request.Header.Get("Origin")
@@ -166,13 +172,15 @@ func (s *Server) corsMiddleware() gin.HandlerFunc {
 				c.Header("Access-Control-Allow-Origin", allowedOrigin)
 				c.Header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 				c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
 				break
 			}
 		}
 
 		// Handle preflight requests
-		if c.Request.Method == "OPTIONS" {
+		if c.Request.Method == http.MethodOptions {
 			c.AbortWithStatus(204)
+
 			return
 		}
 

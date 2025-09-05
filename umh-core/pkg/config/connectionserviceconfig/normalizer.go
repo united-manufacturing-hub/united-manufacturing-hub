@@ -16,10 +16,10 @@ package connectionserviceconfig
 
 import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 
-// Normalizer handles the normalization of Connection configurations
+// Normalizer handles the normalization of Connection configurations.
 type Normalizer struct{}
 
-// NewNormalizer creates a new configuration normalizer for Connection
+// NewNormalizer creates a new configuration normalizer for Connection.
 func NewNormalizer() *Normalizer {
 	return &Normalizer{}
 }

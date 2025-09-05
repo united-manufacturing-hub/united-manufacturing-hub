@@ -57,18 +57,18 @@ TARGETARCH := $(shell go env GOARCH)
 # Default values for go tools
 GINKGO_VERSION = v2.23.4
 NILWAY_VERSION = latest
-GOLANGCI_LINT_VERSION = v2.1.6
+GOLANGCI_LINT_VERSION = v2.3.1
 BETTERALIGN_VERSION = v0.7.1
-DLV_VERSION = v1.25.0
+DLV_VERSION = v1.25.1
 
 # Default values for build arguments
-GOLANG_VERSION = 1.24.4
-ALPINE_VERSION = 3.21
-NMAP_VERSION = 7.95-r1
+GOLANG_VERSION = 1.25.0
+ALPINE_VERSION = 3.22
+NMAP_VERSION = 7.97-r0
 S6_OVERLAY_VERSION = 3.2.0.2
 REDPANDA_VERSION = 24.3.8
 ## Benthos version is a tag or a sha-<commit hash> (e.g. 0.9.4 or sha-a51a685) to be used in the docker image
-BENTHOS_UMH_VERSION = 0.10.2
+BENTHOS_UMH_VERSION = 0.11.1
 BUF_VERSION = 1.55.1
 PROTOC_GEN_GO_VERSION = 1.36.6
 
@@ -247,7 +247,7 @@ vet:
 	go vet -tags=test ./...
 
 lint:
-	golangci-lint run ./...
+	golangci-lint run --fix ./...
 
 nilaway:
 	# See lefthook.yaml for more details

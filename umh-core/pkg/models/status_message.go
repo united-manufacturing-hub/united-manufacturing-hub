@@ -55,7 +55,7 @@ const (
 	Degraded
 )
 
-// String returns the string representation of a HealthCategory
+// String returns the string representation of a HealthCategory.
 func (hc HealthCategory) String() string {
 	switch hc {
 	case Active:
@@ -193,7 +193,7 @@ type Redpanda struct {
 type TopicBrowser struct {
 	Health *Health `json:"health"`
 	// UnsBundles is a map because there might be the case that the topic browser service generated more than one uns bundle
-	// inbetween two runs of the status message generation. In this case, we need to send the uns bundles in the order they were generated
+	// between two runs of the status message generation. In this case, we need to send the uns bundles in the order they were generated
 	// to not lose any data. The order is maintained by the index of the map.
 	// The uns bundles are compressed protobuf data of protobuf type tbproto.UnsBundle.
 	// also, if we send the status message to a new subscriber, we want to send the cached uns bundle first and then the new uns bundles

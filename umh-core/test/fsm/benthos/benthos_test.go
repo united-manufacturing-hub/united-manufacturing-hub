@@ -1003,7 +1003,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 		It("should handle errors during startup", func() {
 			// 1) We simulate port allocation, but don't need to use the result
 			mockPortManager := portmanager.NewMockPortManager()
-			_, portErr := mockPortManager.AllocatePort(serviceName)
+			_, portErr := mockPortManager.AllocatePort(context.Background(), serviceName)
 			Expect(portErr).NotTo(HaveOccurred())
 
 			// 2) Simulate service creation failure

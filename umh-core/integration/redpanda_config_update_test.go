@@ -68,6 +68,7 @@ var _ = Describe("Redpanda Config Update Integration Test", Ordered, Label("inte
 			newOffset, err := checkRPK(topicName, lastOffset, lastTimestamp, 0.1, 0.2, messagesPerSecond)
 			lastOffset = newOffset
 			lastTimestamp = time.Now()
+
 			return err == nil && newOffset != -1
 		}, 30*time.Second, 1*time.Second).Should(BeTrue(), "Messages should be produced initially")
 
@@ -85,6 +86,7 @@ var _ = Describe("Redpanda Config Update Integration Test", Ordered, Label("inte
 			GinkgoWriter.Printf("Redpanda config: %s\n", redpandaConfig)
 			GinkgoWriter.Printf("Compression config: %s\n", compressionConfig)
 			GinkgoWriter.Printf("Error: %v\n", err)
+
 			return err == nil && err2 == nil && redpandaConfig == "7200000" && compressionConfig == "lz4"
 		}, 20*time.Second, 1*time.Second).Should(BeTrue(), "Redpanda config should be updated")
 
@@ -92,6 +94,7 @@ var _ = Describe("Redpanda Config Update Integration Test", Ordered, Label("inte
 		// Wait for metrics to become available again after restart
 		Eventually(func() bool {
 			resp, err := httpGetWithTimeout(GetMetricsURL(), 1*time.Second)
+
 			return err == nil && resp == 200
 		}, 20*time.Second, 1*time.Second).Should(BeTrue(), "Metrics endpoint should be healthy after config update")
 
@@ -100,6 +103,7 @@ var _ = Describe("Redpanda Config Update Integration Test", Ordered, Label("inte
 			newOffset, err := checkRPK(topicName, lastOffset, lastTimestamp, 0.1, 0.2, messagesPerSecond)
 			lastOffset = newOffset
 			lastTimestamp = time.Now()
+
 			return err == nil && newOffset != -1
 		}, 5*time.Second, 1*time.Second).Should(BeTrue(), "Messages should be produced after config update")
 
@@ -111,9 +115,11 @@ var _ = Describe("Redpanda Config Update Integration Test", Ordered, Label("inte
 				lastOffset = newOffset
 				lastTimestamp = time.Now()
 				failureCount = 0 // Reset failure count on success
+
 				return true
 			}
 			failureCount++
+
 			return failureCount < 5 // Allow up to 5 failures before returning false
 		}, testDuration, 1*time.Second).Should(BeTrue(), "Messages should be consistently produced for full test duration after config update")
 
@@ -123,6 +129,7 @@ var _ = Describe("Redpanda Config Update Integration Test", Ordered, Label("inte
 			if err != nil {
 				return -1
 			}
+
 			return redpandaState
 		}, 10*time.Second, 1*time.Second).Should(BeNumerically("==", 3), "Redpanda should be in healthy state")
 
@@ -133,6 +140,7 @@ var _ = Describe("Redpanda Config Update Integration Test", Ordered, Label("inte
 			GinkgoWriter.Printf("Redpanda config: %s\n", redpandaConfig)
 			GinkgoWriter.Printf("Compression config: %s\n", compressionConfig)
 			GinkgoWriter.Printf("Error: %v\n", err)
+
 			return err == nil && err2 == nil && redpandaConfig == "7200000" && compressionConfig == "lz4"
 		}, 5*time.Second, 1*time.Second).Should(BeTrue(), "Redpanda config should not be changed back")
 	})
@@ -141,9 +149,11 @@ var _ = Describe("Redpanda Config Update Integration Test", Ordered, Label("inte
 func getRedpandaConfig(key string) (string, error) {
 	ctx, cncl := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cncl()
+
 	out, err := runDockerCommandWithCtx(ctx, "exec", getContainerName(), "/opt/redpanda/bin/rpk", "cluster", "config", "get", key)
 	if err != nil {
 		return "", err
 	}
+
 	return strings.TrimSpace(out), nil
 }

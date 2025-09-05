@@ -16,15 +16,15 @@ package redpandaserviceconfig
 
 import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 
-// Normalizer handles the normalization of Redpanda configurations
+// Normalizer handles the normalization of Redpanda configurations.
 type Normalizer struct{}
 
-// NewNormalizer creates a new configuration normalizer for Redpanda
+// NewNormalizer creates a new configuration normalizer for Redpanda.
 func NewNormalizer() *Normalizer {
 	return &Normalizer{}
 }
 
-// NormalizeConfig applies Redpanda defaults to a structured config
+// NormalizeConfig applies Redpanda defaults to a structured config.
 func (n *Normalizer) NormalizeConfig(cfg RedpandaServiceConfig) RedpandaServiceConfig {
 	// create a shallow copy
 	normalized := cfg

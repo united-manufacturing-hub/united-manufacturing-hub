@@ -78,14 +78,14 @@ var _ = Describe("Nmap YAML Generator", func() {
 			// Use package-level function
 			yamlStr1, err := RenderNmapYAML(
 				target,
-				uint16(port),
+				port,
 			)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Use Generator directly
 			cfg := NmapServiceConfig{
 				Target: target,
-				Port:   uint16(port),
+				Port:   port,
 			}
 			generator := NewGenerator()
 			yamlStr2, err := generator.RenderConfig(cfg)

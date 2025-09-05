@@ -144,7 +144,7 @@ var _ = Describe("Watchdog", func() {
 		It("should not panic", func() {
 			uuid := dog.Load().RegisterHeartbeat("test-6", 5, 0, false)
 			Expect(uuid).ToNot(BeNil())
-			for i := 0; i < 4; i++ {
+			for range 4 {
 				dog.Load().ReportHeartbeatStatus(uuid, HEARTBEAT_STATUS_WARNING)
 				panickingUUIDsLock.Lock()
 				Expect(panickingUUIDs[uuid]).To(BeFalse())
@@ -157,7 +157,7 @@ var _ = Describe("Watchdog", func() {
 		It("should panic", func() {
 			uuid := dog.Load().RegisterHeartbeat("test-7", 5, 0, false)
 			Expect(uuid).ToNot(BeNil())
-			for i := 0; i < 5; i++ {
+			for range 5 {
 				dog.Load().ReportHeartbeatStatus(uuid, HEARTBEAT_STATUS_WARNING)
 			}
 			time.Sleep(1 * time.Second)
@@ -171,7 +171,7 @@ var _ = Describe("Watchdog", func() {
 		It("should not panic", func() {
 			uuid := dog.Load().RegisterHeartbeat("test-8", 5, 0, true)
 			Expect(uuid).ToNot(BeNil())
-			for i := 0; i < 5; i++ {
+			for range 5 {
 				dog.Load().ReportHeartbeatStatus(uuid, HEARTBEAT_STATUS_WARNING)
 			}
 			time.Sleep(1 * time.Second)

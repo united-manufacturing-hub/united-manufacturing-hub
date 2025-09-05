@@ -24,18 +24,18 @@ Inside that one image you'll find:
 ```
 Instance
 └─ Core
-   ├─ Bridges           # ingest or egest data (ex-"Protocol Converters")
-   │   ├─ Read Flow ✅   # read side - Available now
-   │   └─ Write Flow 🚧  # write side - Roadmap Item
-   │   └─ Connection ✅  # monitors the network connection - Available now
-   ├─ Stream Processors ✅  # transforms messages inside UNS
-   └─ Stand-alone Flows ✅  # Available now
+   ├─ Bridges             # ingest or egest data (ex-"Protocol Converters")
+   │   ├─ Read Flow       # read side
+   │   └─ Write Flow 🚧   # write side - Roadmap Item
+   │   └─ Connection      # monitors the network connection
+   ├─ Stream Processors   # transforms messages inside UNS
+   └─ Stand-alone Flows   # point-to-point when UNS buffering isn't wanted
 ```
 
-* **Bridge** – connects external systems to the UNS with health monitoring. See [Bridges](usage/data-flows/bridges.md) for details. _(Read flows available ✅, Write flows in development 🚧)_
-* **Stream Processor** ✅ – transforms messages already inside the UNS. _(Available now)_
-* **Stand-alone Flow** ✅ – point-to-point when UNS buffering isn't wanted. _(Available now)_
-* **Connection** ✅ - a continuous network check whether the external system is available. _(Available now)_
+* **Bridge** – connects external systems to the UNS with health monitoring. See [Bridges](usage/data-flows/bridges.md) for details. _(Read flows available, Write flows in development 🚧)_
+* **Stream Processor**  – transforms messages already inside the UNS.
+* **Stand-alone Flow**  – point-to-point when UNS buffering isn't wanted.
+* **Connection**  - a continuous network check whether the external system is available.
 
 ### Typical architecture
 

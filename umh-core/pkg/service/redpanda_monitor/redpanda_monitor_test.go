@@ -35,7 +35,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
-// getTmpDir returns the temporary directory for a container
+// getTmpDir returns the temporary directory for a container.
 func getTmpDir() string {
 	tmpDir := "/tmp"
 	// If we are in a devcontainer, use the workspace as tmp dir
@@ -43,10 +43,11 @@ func getTmpDir() string {
 	if os.Getenv("REMOTE_CONTAINERS") != "" || os.Getenv("CODESPACE_NAME") != "" || os.Getenv("USER") == "vscode" {
 		tmpDir = "/workspaces/united-manufacturing-hub/umh-core/tmp"
 	}
+
 	return tmpDir
 }
 
-// newTimeoutContext creates a context with a 40-second timeout
+// newTimeoutContext creates a context with a 40-second timeout.
 func newTimeoutContext() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), 40*time.Second)
 }
@@ -64,7 +65,9 @@ func getMetricsReader() *bytes.Reader {
 	// Read all
 	data, err := io.ReadAll(gzipReader)
 	Expect(err).NotTo(HaveOccurred())
+
 	dataReader := bytes.NewReader(data)
+
 	return dataReader
 }
 
@@ -144,11 +147,11 @@ var _ = Describe("Redpanda Monitor Service", func() {
 
 			// Set up mock logs that include our markers and some fake metrics data
 			mockLogs := []s6service.LogEntry{
-				{Content: fmt.Sprintf("%s\n", redpanda_monitor.BLOCK_START_MARKER)},
+				{Content: redpanda_monitor.BLOCK_START_MARKER + "\n"},
 				{Content: "1f8b0800000000000003abcd4f2c492d2e516c0600000000ffff0300ee1f0e9e09000000\n"}, // Some hex-encoded gzipped data
-				{Content: fmt.Sprintf("%s\n", redpanda_monitor.METRICS_END_MARKER)},
+				{Content: redpanda_monitor.METRICS_END_MARKER + "\n"},
 				{Content: "1f8b0800000000000003abcd4f2c492d2e516c0600000000ffff0300ee1f0e9e09000000\n"}, // Some hex-encoded gzipped data
-				{Content: fmt.Sprintf("%s\n", redpanda_monitor.BLOCK_END_MARKER)},
+				{Content: redpanda_monitor.BLOCK_END_MARKER + "\n"},
 			}
 
 			// Set the mock logs result directly
@@ -176,11 +179,11 @@ var _ = Describe("Redpanda Monitor Service", func() {
 
 		It("should return an error if no block end marker is found", func() {
 			logs := []s6service.LogEntry{
-				{Content: fmt.Sprintf("%s\n", redpanda_monitor.BLOCK_START_MARKER)},
+				{Content: redpanda_monitor.BLOCK_START_MARKER + "\n"},
 				{Content: "some data\n"},
-				{Content: fmt.Sprintf("%s\n", redpanda_monitor.METRICS_END_MARKER)},
+				{Content: redpanda_monitor.METRICS_END_MARKER + "\n"},
 				{Content: "more data\n"},
-				{Content: fmt.Sprintf("%s\n", redpanda_monitor.CLUSTERCONFIG_END_MARKER)},
+				{Content: redpanda_monitor.CLUSTERCONFIG_END_MARKER + "\n"},
 				{Content: "timestamp data\n"},
 			}
 			_, err := service.ParseRedpandaLogs(ctx, logs, tick)
@@ -191,11 +194,11 @@ var _ = Describe("Redpanda Monitor Service", func() {
 		It("should return an error if no start marker is found", func() {
 			logs := []s6service.LogEntry{
 				{Content: "some data\n"},
-				{Content: fmt.Sprintf("%s\n", redpanda_monitor.METRICS_END_MARKER)},
+				{Content: redpanda_monitor.METRICS_END_MARKER + "\n"},
 				{Content: "more data\n"},
-				{Content: fmt.Sprintf("%s\n", redpanda_monitor.CLUSTERCONFIG_END_MARKER)},
+				{Content: redpanda_monitor.CLUSTERCONFIG_END_MARKER + "\n"},
 				{Content: "timestamp data\n"},
-				{Content: fmt.Sprintf("%s\n", redpanda_monitor.BLOCK_END_MARKER)},
+				{Content: redpanda_monitor.BLOCK_END_MARKER + "\n"},
 			}
 			_, err := service.ParseRedpandaLogs(ctx, logs, tick)
 			Expect(err).To(HaveOccurred())
@@ -204,12 +207,12 @@ var _ = Describe("Redpanda Monitor Service", func() {
 
 		It("should return an error if no metrics end marker is found", func() {
 			logs := []s6service.LogEntry{
-				{Content: fmt.Sprintf("%s\n", redpanda_monitor.BLOCK_START_MARKER)},
+				{Content: redpanda_monitor.BLOCK_START_MARKER + "\n"},
 				{Content: "some data\n"},
 				{Content: "more data\n"},
-				{Content: fmt.Sprintf("%s\n", redpanda_monitor.CLUSTERCONFIG_END_MARKER)},
+				{Content: redpanda_monitor.CLUSTERCONFIG_END_MARKER + "\n"},
 				{Content: "timestamp data\n"},
-				{Content: fmt.Sprintf("%s\n", redpanda_monitor.BLOCK_END_MARKER)},
+				{Content: redpanda_monitor.BLOCK_END_MARKER + "\n"},
 			}
 			_, err := service.ParseRedpandaLogs(ctx, logs, tick)
 			Expect(err).To(HaveOccurred())
@@ -218,12 +221,12 @@ var _ = Describe("Redpanda Monitor Service", func() {
 
 		It("should return an error if no config end marker is found", func() {
 			logs := []s6service.LogEntry{
-				{Content: fmt.Sprintf("%s\n", redpanda_monitor.BLOCK_START_MARKER)},
+				{Content: redpanda_monitor.BLOCK_START_MARKER + "\n"},
 				{Content: "some data\n"},
-				{Content: fmt.Sprintf("%s\n", redpanda_monitor.METRICS_END_MARKER)},
+				{Content: redpanda_monitor.METRICS_END_MARKER + "\n"},
 				{Content: "more data\n"},
 				{Content: "timestamp data\n"},
-				{Content: fmt.Sprintf("%s\n", redpanda_monitor.BLOCK_END_MARKER)},
+				{Content: redpanda_monitor.BLOCK_END_MARKER + "\n"},
 			}
 			_, err := service.ParseRedpandaLogs(ctx, logs, tick)
 			Expect(err).To(HaveOccurred())
@@ -232,12 +235,12 @@ var _ = Describe("Redpanda Monitor Service", func() {
 
 		It("should return an error if markers are in incorrect order", func() {
 			logs := []s6service.LogEntry{
-				{Content: fmt.Sprintf("%s\n", redpanda_monitor.BLOCK_START_MARKER)},
-				{Content: fmt.Sprintf("%s\n", redpanda_monitor.CLUSTERCONFIG_END_MARKER)}, // Wrong order
+				{Content: redpanda_monitor.BLOCK_START_MARKER + "\n"},
+				{Content: redpanda_monitor.CLUSTERCONFIG_END_MARKER + "\n"}, // Wrong order
 				{Content: "some data\n"},
-				{Content: fmt.Sprintf("%s\n", redpanda_monitor.METRICS_END_MARKER)},
+				{Content: redpanda_monitor.METRICS_END_MARKER + "\n"},
 				{Content: "more data\n"},
-				{Content: fmt.Sprintf("%s\n", redpanda_monitor.BLOCK_END_MARKER)},
+				{Content: redpanda_monitor.BLOCK_END_MARKER + "\n"},
 			}
 			_, err := service.ParseRedpandaLogs(ctx, logs, tick)
 			Expect(err).To(HaveOccurred())
@@ -356,7 +359,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 		Expect(metricsResult.Metrics.Throughput.BytesOut).To(Equal(int64(0)))
 
 		// Verify topic metrics
-		Expect(metricsResult.Metrics.Topic.TopicPartitionMap).To(HaveLen(0))
+		Expect(metricsResult.Metrics.Topic.TopicPartitionMap).To(BeEmpty())
 
 		// Verify the cluster config
 		config := redpandaMetricsConfig.ClusterConfig
@@ -481,7 +484,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 			state.UpdateFromMetrics(metrics, 0) // Lower tick value
 
 			// This should be treated as a reset since the tick value is lower
-			Expect(len(state.Input.Window)).To(Equal(1))
+			Expect(state.Input.Window).To(HaveLen(1))
 			Expect(state.Input.BytesPerTick).To(Equal(float64(maxInt64 - 100)))
 		})
 
@@ -785,7 +788,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 		It("should handle empty logs slice", func() {
 			var logs []s6service.LogEntry
 			result := redpanda_monitor.ConcatContent(logs)
-			Expect(result).To(HaveLen(0))
+			Expect(result).To(BeEmpty())
 		})
 	})
 
@@ -815,7 +818,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 		It("should handle empty input", func() {
 			input := []byte{}
 			result := redpanda_monitor.StripMarkers(input)
-			Expect(result).To(HaveLen(0))
+			Expect(result).To(BeEmpty())
 		})
 
 		It("should handle input with only markers", func() {
@@ -826,7 +829,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 					redpanda_monitor.BLOCK_END_MARKER)
 
 			result := redpanda_monitor.StripMarkers(input)
-			Expect(result).To(HaveLen(0))
+			Expect(result).To(BeEmpty())
 		})
 
 		It("should handle multiple occurrences of markers", func() {

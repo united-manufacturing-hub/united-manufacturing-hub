@@ -105,7 +105,7 @@ type ServiceInfo struct {
 	DFCObservedState dfcfsm.DataflowComponentObservedState
 }
 
-// Service implements IStreamProcessorService using it's underlying components
+// Service implements IStreamProcessorService using it's underlying components.
 type Service struct {
 	logger *zap.SugaredLogger
 
@@ -121,7 +121,7 @@ type Service struct {
 type ServiceOption func(*Service)
 
 // WithUnderlyingService sets the underlying services for the stream processor service
-// Used for testing purposes
+// Used for testing purposes.
 func WithUnderlyingService(
 	dfcService dfc.IDataFlowComponentService,
 ) ServiceOption {
@@ -131,7 +131,7 @@ func WithUnderlyingService(
 }
 
 // WithUnderlyingManager sets the underlying managers for the stream processor service
-// Used for testing purposes
+// Used for testing purposes.
 func WithUnderlyingManager(
 	dfcMgr *dfcfsm.DataflowComponentManager,
 ) ServiceOption {
@@ -165,13 +165,13 @@ func NewDefaultService(spName string, opts ...ServiceOption) *Service {
 // getUnderlyingName returns the *base* external name that all child services of
 // a Stream Processor share.
 func (p *Service) getUnderlyingName(spName string) string {
-	return fmt.Sprintf("streamprocessor-%s", spName)
+	return "streamprocessor-" + spName
 }
 
 // getUnderlyingDFCReadName returns the external name handed to the
 // **Data-flow-Component manager** for the  DFC.
 func (p *Service) getUnderlyingDFCReadName(spName string) string {
-	return fmt.Sprintf("dfc-%s", p.getUnderlyingName(spName))
+	return "dfc-" + p.getUnderlyingName(spName)
 }
 
 // GetConfig pulls the **actual** runtime configuration that is currently
@@ -205,6 +205,7 @@ func (p *Service) Status(
 	spName string,
 ) (ServiceInfo, error) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(logger.ComponentStreamProcessorService, spName+".Status", time.Since(start))
 	}()
@@ -212,6 +213,7 @@ func (p *Service) Status(
 	if ctx.Err() != nil {
 		return ServiceInfo{}, ctx.Err()
 	}
+
 	if !p.ServiceExists(ctx, services.GetFileSystem(), spName) {
 		return ServiceInfo{}, ErrServiceNotExist
 	}
@@ -221,7 +223,7 @@ func (p *Service) Status(
 	// --- redpanda (only one instance) -------------------------------------------------------------
 	rpInst, ok := fsm.FindInstance(snapshot, constants.RedpandaManagerName, constants.RedpandaInstanceName)
 	if !ok || rpInst == nil {
-		return ServiceInfo{}, fmt.Errorf("redpanda instance not found")
+		return ServiceInfo{}, errors.New("redpanda instance not found")
 	}
 
 	redpandaStatus := rpInst.LastObservedState
@@ -245,8 +247,12 @@ func (p *Service) Status(
 
 	dfcStatus, err := p.dataflowComponentManager.GetLastObservedState(underlyingDFCName)
 	dfcExists := err == nil
-	var dfcObservedState dfcfsm.DataflowComponentObservedState
-	var dfcFSMState string
+
+	var (
+		dfcObservedState dfcfsm.DataflowComponentObservedState
+		dfcFSMState      string
+	)
+
 	if dfcExists {
 		dfcObservedState, ok = dfcStatus.(dfcfsm.DataflowComponentObservedState)
 		if !ok {
@@ -339,10 +345,12 @@ func (p *Service) UpdateInManager(
 	// Check if the dfcconfig exists
 	foundDFC := false
 	indexDFC := -1
+
 	for i, config := range p.dataflowComponentConfig {
 		if config.Name == p.getUnderlyingDFCReadName(spName) {
 			foundDFC = true
 			indexDFC = i
+
 			break
 		}
 	}
@@ -394,6 +402,7 @@ func (p *Service) RemoveFromManager(
 				return append(in[:i], in[i+1:]...)
 			}
 		}
+
 		return in // already gone
 	}
 
@@ -434,7 +443,7 @@ func (p *Service) RemoveFromManager(
 // Called from:
 // 1. Start() - during initial activation
 // 2. Stop() - during shutdown
-// 3. UpdateObservedStateOfInstance() - when config changes are detected during reconciliation
+// 3. UpdateObservedStateOfInstance() - when config changes are detected during reconciliation.
 func (p *Service) EvaluateDFCDesiredStates(
 	spName string,
 	spDesiredState string,
@@ -447,6 +456,7 @@ func (p *Service) EvaluateDFCDesiredStates(
 
 	// Find and update our cached config for read DFC
 	dfcFound := false
+
 	for i, config := range p.dataflowComponentConfig {
 		if config.Name == dfcName {
 			if spDesiredState == "stopped" {
@@ -459,7 +469,9 @@ func (p *Service) EvaluateDFCDesiredStates(
 					p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateStopped
 				}
 			}
+
 			dfcFound = true
+
 			break
 		}
 	}
@@ -498,7 +510,7 @@ func (p *Service) Start(
 }
 
 // Stop stops a Stream Processor
-// Expects spName (e.g. "streamprocessor-myservice") as defined in the UMH config
+// Expects spName (e.g. "streamprocessor-myservice") as defined in the UMH config.
 func (p *Service) Stop(
 	ctx context.Context,
 	filesystemService filesystem.Service,
@@ -528,9 +540,11 @@ func (p *Service) ReconcileManager(
 	tick uint64,
 ) (error, bool) {
 	start := time.Now()
+
 	defer func() {
 		metrics.ObserveReconcileTime(logger.ComponentStreamProcessorService, "ReconcileManager", time.Since(start))
 	}()
+
 	p.logger.Debugf("Reconciling streamprocessor manager at tick %d", tick)
 
 	if p.dataflowComponentManager == nil {
@@ -548,7 +562,6 @@ func (p *Service) ReconcileManager(
 		},
 		Tick: tick,
 	}, services)
-
 	if err != nil {
 		return err, dfcReconciled
 	}
@@ -577,7 +590,7 @@ func (p *Service) ServiceExists(
 }
 
 // ForceRemove removes a StreamProcessor from the  DFC manager
-// Expects spName (e.g. "streamprocessor-myservice") as defined in the UMH config
+// Expects spName (e.g. "streamprocessor-myservice") as defined in the UMH config.
 func (c *Service) ForceRemove(
 	ctx context.Context,
 	filesystemService filesystem.Service,

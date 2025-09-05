@@ -29,7 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
-// MockNmapService is a mock implementation of the INmapService interface for testing
+// MockNmapService is a mock implementation of the INmapService interface for testing.
 type MockNmapService struct {
 
 	// Error to return for various operations
@@ -88,10 +88,10 @@ type MockNmapService struct {
 	ShouldErrScanFailed        bool
 }
 
-// Ensure MockNmapService implements INmapService
+// Ensure MockNmapService implements INmapService.
 var _ INmapService = (*MockNmapService)(nil)
 
-// ServiceStateFlags contains all the state flags needed for FSM testing
+// ServiceStateFlags contains all the state flags needed for FSM testing.
 type ServiceStateFlags struct {
 	PortState   string
 	S6FSMState  string
@@ -101,7 +101,7 @@ type ServiceStateFlags struct {
 	IsS6Stopped bool
 }
 
-// SetServiceState sets all state flags for a service at once
+// SetServiceState sets all state flags for a service at once.
 func (m *MockNmapService) SetServiceState(serviceName string, flags ServiceStateFlags) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -134,7 +134,7 @@ func (m *MockNmapService) SetServiceState(serviceName string, flags ServiceState
 	m.stateFlags[serviceName] = &flags
 }
 
-// GetServiceState gets the state flags for a service
+// GetServiceState gets the state flags for a service.
 func (m *MockNmapService) GetServiceState(serviceName string) *ServiceStateFlags {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -145,10 +145,11 @@ func (m *MockNmapService) GetServiceState(serviceName string) *ServiceStateFlags
 	// Initialize with default flags if not exists
 	flags := &ServiceStateFlags{}
 	m.stateFlags[serviceName] = flags
+
 	return flags
 }
 
-// NewMockNmapService creates a new mock nmap service
+// NewMockNmapService creates a new mock nmap service.
 func NewMockNmapService() *MockNmapService {
 	return &MockNmapService{
 		Configs:          make(map[string]*nmapserviceconfig.NmapServiceConfig),
@@ -160,7 +161,7 @@ func NewMockNmapService() *MockNmapService {
 	}
 }
 
-// GenerateS6ConfigForNmap generates a mock S6 config
+// GenerateS6ConfigForNmap generates a mock S6 config.
 func (m *MockNmapService) GenerateS6ConfigForNmap(nmapConfig *nmapserviceconfig.NmapServiceConfig, s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error) {
 	if m.GenerateS6ConfigForNmapError != nil {
 		return s6serviceconfig.S6ServiceConfig{}, m.GenerateS6ConfigForNmapError
@@ -174,7 +175,7 @@ func (m *MockNmapService) GenerateS6ConfigForNmap(nmapConfig *nmapserviceconfig.
 	}, nil
 }
 
-// GetConfig returns the mock config
+// GetConfig returns the mock config.
 func (m *MockNmapService) GetConfig(ctx context.Context, filesystemService filesystem.Service, nmapName string) (nmapserviceconfig.NmapServiceConfig, error) {
 	if ctx.Err() != nil {
 		return nmapserviceconfig.NmapServiceConfig{}, ctx.Err()
@@ -191,7 +192,7 @@ func (m *MockNmapService) GetConfig(ctx context.Context, filesystemService files
 	return m.GetConfigResult, nil
 }
 
-// Status returns the mock status
+// Status returns the mock status.
 func (m *MockNmapService) Status(ctx context.Context, filesystemService filesystem.Service, nmapName string, tick uint64) (ServiceInfo, error) {
 	m.StatusCalled = true
 
@@ -219,14 +220,16 @@ func parseScanLogs(shouldErr bool) *NmapScanResult {
 	if shouldErr {
 		return nil
 	}
+
 	return &NmapScanResult{
 		Timestamp: time.Now(),
 	}
 }
 
-// AddNmapToS6Manager mocks adding a service
+// AddNmapToS6Manager mocks adding a service.
 func (m *MockNmapService) AddNmapToS6Manager(ctx context.Context, cfg *nmapserviceconfig.NmapServiceConfig, nmapName string) error {
 	m.AddNmapToS6ManagerCalled = true
+
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -263,7 +266,7 @@ func (m *MockNmapService) AddNmapToS6Manager(ctx context.Context, cfg *nmapservi
 	return nil
 }
 
-// UpdateNmapInS6Manager mocks updating a service
+// UpdateNmapInS6Manager mocks updating a service.
 func (m *MockNmapService) UpdateNmapInS6Manager(ctx context.Context, cfg *nmapserviceconfig.NmapServiceConfig, nmapName string) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -289,6 +292,7 @@ func (m *MockNmapService) UpdateNmapInS6Manager(ctx context.Context, cfg *nmapse
 					"run_nmap.sh": "updated mock script content",
 				},
 			}
+
 			break
 		}
 	}
@@ -296,7 +300,7 @@ func (m *MockNmapService) UpdateNmapInS6Manager(ctx context.Context, cfg *nmapse
 	return nil
 }
 
-// RemoveNmapFromS6Manager mocks removing a service
+// RemoveNmapFromS6Manager mocks removing a service.
 func (m *MockNmapService) RemoveNmapFromS6Manager(ctx context.Context, nmapName string) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -322,6 +326,7 @@ func (m *MockNmapService) RemoveNmapFromS6Manager(ctx context.Context, nmapName 
 	for i, s6Config := range m.S6ServiceConfigs {
 		if s6Config.Name == s6ServiceName {
 			m.S6ServiceConfigs = append(m.S6ServiceConfigs[:i], m.S6ServiceConfigs[i+1:]...)
+
 			break
 		}
 	}
@@ -331,12 +336,14 @@ func (m *MockNmapService) RemoveNmapFromS6Manager(ctx context.Context, nmapName 
 
 func (m *MockNmapService) ForceRemoveNmap(ctx context.Context, filesystemService filesystem.Service, nmapName string) error {
 	m.ForceRemoveNmapCalled = true
+
 	return m.ForceRemoveNmapError
 }
 
-// StartNmap mocks starting a service
+// StartNmap mocks starting a service.
 func (m *MockNmapService) StartNmap(ctx context.Context, nmapName string) error {
 	m.StartNmapCalled = true
+
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -356,6 +363,7 @@ func (m *MockNmapService) StartNmap(ctx context.Context, nmapName string) error 
 	for i, s6Config := range m.S6ServiceConfigs {
 		if s6Config.Name == s6ServiceName {
 			m.S6ServiceConfigs[i].DesiredFSMState = s6fsm.OperationalStateRunning
+
 			break
 		}
 	}
@@ -363,7 +371,7 @@ func (m *MockNmapService) StartNmap(ctx context.Context, nmapName string) error 
 	return nil
 }
 
-// StopNmap mocks stopping a service
+// StopNmap mocks stopping a service.
 func (m *MockNmapService) StopNmap(ctx context.Context, nmapName string) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -384,6 +392,7 @@ func (m *MockNmapService) StopNmap(ctx context.Context, nmapName string) error {
 	for i, s6Config := range m.S6ServiceConfigs {
 		if s6Config.Name == s6ServiceName {
 			m.S6ServiceConfigs[i].DesiredFSMState = s6fsm.OperationalStateStopped
+
 			break
 		}
 	}
@@ -391,24 +400,25 @@ func (m *MockNmapService) StopNmap(ctx context.Context, nmapName string) error {
 	return nil
 }
 
-// ReconcileManager mocks reconciling the manager
+// ReconcileManager mocks reconciling the manager.
 func (m *MockNmapService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool) {
 	if ctx.Err() != nil {
 		return ctx.Err(), false
 	}
+
 	m.ReconcileManagerCalled = true
 
 	return m.ReconcileManagerError, m.ReconcileManagerReconciled
 }
 
-// ServiceExists mocks checking if a service exists
+// ServiceExists mocks checking if a service exists.
 func (m *MockNmapService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, nmapName string) bool {
-
 	m.ServiceExistsCalled = true
+
 	return m.ServiceExistsResult
 }
 
-// SetStatusInfo sets a mock status for a given service
+// SetStatusInfo sets a mock status for a given service.
 func (m *MockNmapService) SetStatusInfo(serviceName string, status ServiceInfo) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -417,7 +427,7 @@ func (m *MockNmapService) SetStatusInfo(serviceName string, status ServiceInfo) 
 	m.ExistingServices[serviceName] = true
 }
 
-// SetServicePortState sets a specific port state for a service's scan result
+// SetServicePortState sets a specific port state for a service's scan result.
 func (m *MockNmapService) SetServicePortState(serviceName string, state string, latencyMs float64) {
 	now := time.Now()
 	// Initialize if not exists
@@ -514,6 +524,7 @@ func (m *MockNmapService) SetServicePortState(serviceName string, state string, 
 		info.NmapStatus.LastScan.PortResult.LatencyMs = latencyMs
 		info.NmapStatus.Logs = logs
 	}
+
 	m.StatusResult = *info
 }
 

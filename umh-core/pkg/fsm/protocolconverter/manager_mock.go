@@ -15,7 +15,7 @@
 package protocolconverter
 
 import (
-	"fmt"
+	"errors"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -27,7 +27,6 @@ import (
 )
 
 func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConverterManager, *protocolconvertersvc.MockProtocolConverterService) {
-
 	mockSvc := protocolconvertersvc.NewMockProtocolConverterService()
 
 	// Create a new manager instance
@@ -39,7 +38,7 @@ func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConver
 			return config.ProtocolConverter, nil
 		},
 		func(config config.ProtocolConverterConfig) (string, error) {
-			return fmt.Sprintf("protocolconverter-%s", config.Name), nil
+			return "protocolconverter-" + config.Name, nil
 		},
 		// Get desired state for ProtocolConverter config
 		func(cfg config.ProtocolConverterConfig) (string, error) {
@@ -57,13 +56,14 @@ func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConver
 			// TODO: potentially pre-configure these mock services here
 
 			instance.service = mockSvc
+
 			return instance, nil
 		},
 		// Compare ProtocolConverter configs
 		func(instance public_fsm.FSMInstance, cfg config.ProtocolConverterConfig) (bool, error) {
 			protocolConverterInstance, ok := instance.(*ProtocolConverterInstance)
 			if !ok {
-				return false, fmt.Errorf("instance is not a ProtocolConverterInstance")
+				return false, errors.New("instance is not a ProtocolConverterInstance")
 			}
 
 			// Perform actual comparison - return true if configs are equal
@@ -79,6 +79,7 @@ func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConver
 						// This matches the behavior of the real manager where invalid configs are handled gracefully
 						return configsEqual, nil
 					}
+
 					mockSvc.GetConfigResult = runtimeConfig
 				}
 			}
@@ -89,8 +90,9 @@ func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConver
 		func(instance public_fsm.FSMInstance, cfg config.ProtocolConverterConfig) error {
 			protocolConverterInstance, ok := instance.(*ProtocolConverterInstance)
 			if !ok {
-				return fmt.Errorf("instance is not a ProtocolConverterInstance")
+				return errors.New("instance is not a ProtocolConverterInstance")
 			}
+
 			protocolConverterInstance.specConfig = cfg.ProtocolConverterServiceConfig
 			if mockSvc, ok := protocolConverterInstance.service.(*protocolconvertersvc.MockProtocolConverterService); ok {
 				runtimeConfig, err := protocolconverterserviceconfig.SpecToRuntime(cfg.ProtocolConverterServiceConfig)
@@ -99,16 +101,19 @@ func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConver
 					// This matches the behavior of the real manager where invalid configs are handled gracefully
 					return nil
 				}
+
 				mockSvc.GetConfigResult = runtimeConfig
 			}
+
 			return nil
 		},
 		// Get expected max p95 execution time per instance
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
 			protocolConverterInstance, ok := instance.(*ProtocolConverterInstance)
 			if !ok {
-				return 0, fmt.Errorf("instance is not a ProtocolConverterInstance")
+				return 0, errors.New("instance is not a ProtocolConverterInstance")
 			}
+
 			return protocolConverterInstance.GetMinimumRequiredTime(), nil
 		},
 	)

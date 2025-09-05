@@ -111,6 +111,7 @@ func parseS6StatusFile(ctx context.Context, statusFilePath string, fsService fil
 	// Stamp: bytes [0:12] - When status last changed
 	stampBytes := statusData[S6StatusChangedOffset : S6StatusChangedOffset+12]
 	stampHex := "@" + hex.EncodeToString(stampBytes)
+
 	stampTime, err := tai64.Parse(stampHex)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse stamp (%s): %w", stampHex, err)
@@ -119,6 +120,7 @@ func parseS6StatusFile(ctx context.Context, statusFilePath string, fsService fil
 	// Readystamp: bytes [12:24] - When service was last ready
 	readyStampBytes := statusData[S6StatusReadyOffset : S6StatusReadyOffset+12]
 	readyStampHex := "@" + hex.EncodeToString(readyStampBytes)
+
 	readyTime, err := tai64.Parse(readyStampHex)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse readystamp (%s): %w", readyStampHex, err)
@@ -157,7 +159,7 @@ func parseS6StatusFile(ctx context.Context, statusFilePath string, fsService fil
 
 // buildFullServiceInfo converts S6StatusData into a complete ServiceInfo
 // This adds the high-level business logic (down files, exit history, etc.)
-// that's needed for the full Status() method but not for cleanup detection
+// that's needed for the full Status() method but not for cleanup detection.
 func (s *DefaultService) buildFullServiceInfo(ctx context.Context, servicePath string, statusData *S6StatusData, fsService filesystem.Service) (ServiceInfo, error) {
 	// Start with basic info from the binary status data
 	info := ServiceInfo{
@@ -175,6 +177,7 @@ func (s *DefaultService) buildFullServiceInfo(ctx context.Context, servicePath s
 
 	// --- Determine service status and calculate time fields ---
 	now := time.Now().UTC()
+
 	if statusData.Pid != 0 && !statusData.IsFinishing {
 		info.Status = ServiceUp
 		// uptime is measured from the stamp timestamp
@@ -184,14 +187,16 @@ func (s *DefaultService) buildFullServiceInfo(ctx context.Context, servicePath s
 		info.Status = ServiceDown
 		// Interpret wstat as a wait status
 		ws := syscall.WaitStatus(statusData.Wstat)
-		if ws.Exited() {
+		switch {
+		case ws.Exited():
 			info.ExitCode = ws.ExitStatus()
-		} else if ws.Signaled() {
+		case ws.Signaled():
 			// Record the signal number as a negative exit code
 			info.ExitCode = -int(ws.Signal())
-		} else {
+		default:
 			info.ExitCode = int(statusData.Wstat)
 		}
+
 		info.DownTime = int64(now.Sub(statusData.StampTime).Seconds())
 		info.ReadyTime = int64(now.Sub(statusData.ReadyTime).Seconds())
 	}
@@ -205,6 +210,7 @@ func (s *DefaultService) buildFullServiceInfo(ctx context.Context, servicePath s
 
 	// Add exit history from the supervise directory
 	superviseDir := filepath.Join(servicePath, "supervise")
+
 	history, histErr := s.ExitHistory(ctx, superviseDir, fsService)
 	if histErr == nil {
 		info.ExitHistory = history
@@ -234,6 +240,7 @@ func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, f
 	if err != nil {
 		return nil, err
 	}
+
 	if !exists {
 		// If the dtally file does not exist, no exit history is available.
 		return nil, nil
@@ -244,6 +251,7 @@ func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, f
 	if err != nil {
 		return nil, fmt.Errorf("failed to read dtally file: %w", err)
 	}
+
 	if data == nil { // Empty history file
 		return nil, nil
 	}
@@ -258,10 +266,11 @@ func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, f
 
 	// Calculate the number of records.
 	numRecords := len(data) / S6_DTALLY_PACK
+
 	var history []ExitEvent
 
 	// Process each dtally record.
-	for i := 0; i < numRecords; i++ {
+	for i := range numRecords {
 		offset := i * S6_DTALLY_PACK
 		record := data[offset : offset+S6_DTALLY_PACK]
 
@@ -269,6 +278,7 @@ func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, f
 		// The timestamp is encoded as 12 bytes, which we first convert to a hex string,
 		// then prepend "@" (as required by the tai64.Parse function) and parse.
 		tai64Str := "@" + hex.EncodeToString(record[:12])
+
 		parsedTime, err := tai64.Parse(tai64Str)
 		if err != nil {
 			// If parsing fails, skip this record.
@@ -304,11 +314,11 @@ const (
 	// 24-31      | Process ID (big-endian uint64, 8 bytes)
 	// 32-39      | Process group ID (big-endian uint64, 8 bytes)
 	// 40-41      | Wait status (big-endian uint16, 2 bytes)
-	// 42         | Flags byte (1 byte: bit 0=paused, bit 1=finishing, bit 2=want up, bit 3=ready)
+	// 42         | Flags byte (1 byte: bit 0=paused, bit 1=finishing, bit 2=want up, bit 3=ready).
 
 	// Source: https://github.com/skarnet/s6/blob/main/src/libs6/s6_svstatus_unpack.c
 
-	// Offsets in the status file:
+	// Offsets in the status file:.
 	S6StatusChangedOffset = 0  // TAI64N timestamp when status last changed (12 bytes)
 	S6StatusReadyOffset   = 12 // TAI64N timestamp when service was last ready (12 bytes)
 	S6StatusPidOffset     = 24 // Process ID (uint64, 8 bytes)
@@ -316,13 +326,13 @@ const (
 	S6StatusWstatOffset   = 40 // Wait status (uint16, 2 bytes)
 	S6StatusFlagsOffset   = 42 // Flags byte (1 byte)
 
-	// Flags in the flags byte:
+	// Flags in the flags byte:.
 	S6FlagPaused    = 0x01 // Service is paused
 	S6FlagFinishing = 0x02 // Service is shutting down
 	S6FlagWantUp    = 0x04 // Service wants to be up
 	S6FlagReady     = 0x08 // Service is ready
 
-	// Expected size of the status file:
+	// Expected size of the status file:.
 	S6StatusFileSize = 43 // bytes
 )
 
