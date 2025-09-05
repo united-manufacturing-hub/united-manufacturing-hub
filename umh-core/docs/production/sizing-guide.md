@@ -4,7 +4,7 @@
 
 #### What that box handles
 
-* **≈ 9 bridges instances** (e.g. OPC UA ➜ Redpanda) **plus one bridge instance** that forwards from the local Redpanda to an external MQTT broker
+* **≈ 4 bridges instances** (e.g. OPC UA ➜ Redpanda) **plus one bridge instance** that forwards from the local Redpanda to an external MQTT broker
 * **≈ 900 tags at 1 message / second each**
 * Keeps **seven days** of history under the default cluster retention (`log_retention_ms = 7 days`)
 * Runs comfortably below 70 % CPU and I/O on a Hetzner CAX21 / CX32-class VM or Raspberry Pi 4
@@ -28,7 +28,7 @@ Shorten retention (either during install with `internal.redpanda.redpandaService
 
 #### CPU
 
-_One core_ is kept busy by Redpanda. _One additional core_ comfortably covers the agent and the first dozen pipelines doing light transforms. Heavy parsing, encryption, or synchronous HTTP calls may warrant more cores or a faster CPU.
+_One core_ is kept busy by Redpanda. _One additional core_ comfortably covers the agent and the first dozen pipelines doing light transforms. Heavy parsing, encryption, or synchronous HTTP calls may warrant more cores or a faster CPU. For any additional 5 bridges we enforce that you need to provide one additional core. You cannot deploy more bridges if we detect throttling or hiogh memory, disk or CPU consumption.
 
 #### Easy vertical scaling
 
