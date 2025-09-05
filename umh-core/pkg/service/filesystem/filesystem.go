@@ -106,7 +106,6 @@ var chunkBufferPool = sync.Pool{
 // CachedPath represents a cached path existence check result.
 type CachedPath struct {
 	expiry time.Time
-	err    error
 	exists bool
 }
 
@@ -225,12 +224,15 @@ func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, err
 		return nil, fmt.Errorf("failed to check context: %w", err)
 	}
 
+	// Canonicalize the path for consistent cache keying
+	cacheKey := filepath.Clean(path)
+
 	// Cache files based on configured path prefixes
 	// These are the primary paths that are read frequently
-	if s.shouldCachePath(path) {
+	if s.shouldCachePath(cacheKey) {
 		// Check cache with stat-based invalidation
 		s.fileCache.mu.RLock()
-		cached, exists := s.fileCache.cache[path]
+		cached, exists := s.fileCache.cache[cacheKey]
 		s.fileCache.mu.RUnlock()
 
 		// DESIGN NOTE: We intentionally stat on EVERY read, not just after TTL expires.
@@ -241,7 +243,7 @@ func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, err
 			// File doesn't exist or error - invalidate cache and return error
 			if exists {
 				s.fileCache.mu.Lock()
-				delete(s.fileCache.cache, path)
+				delete(s.fileCache.cache, cacheKey)
 				s.fileCache.mu.Unlock()
 			}
 
@@ -255,7 +257,7 @@ func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, err
 			// Check if we need to update lastCheck time
 			// We need to read lastCheck under lock to avoid data race
 			s.fileCache.mu.RLock()
-			current, stillExists := s.fileCache.cache[path]
+			current, stillExists := s.fileCache.cache[cacheKey]
 
 			// Handle cache miss or changed entry
 			if !stillExists || current != cached {
@@ -277,7 +279,7 @@ func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, err
 				// Upgrade to write lock to update lastCheck
 				s.fileCache.mu.Lock()
 				// Re-check that the entry still exists and hasn't changed
-				if entry, ok := s.fileCache.cache[path]; ok && entry == cached {
+				if entry, ok := s.fileCache.cache[cacheKey]; ok && entry == cached {
 					entry.lastCheck = time.Now()
 
 					s.fileCache.mu.Unlock()
@@ -301,7 +303,7 @@ func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, err
 
 		// Update cache
 		s.fileCache.mu.Lock()
-		s.fileCache.cache[path] = &CachedFileContent{
+		s.fileCache.cache[cacheKey] = &CachedFileContent{
 			content:   content,
 			modTime:   stat.ModTime(),
 			size:      stat.Size(),
@@ -545,18 +547,21 @@ func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, err
 		return false, err
 	}
 
+	// Canonicalize the path for consistent cache keying
+	cacheKey := filepath.Clean(path)
+
 	// Cache all paths with 1-second TTL for simplicity
 	// This provides good balance between freshness and performance
 
 	// Check cache
 	s.pathCache.mu.RLock()
 
-	if cached, ok := s.pathCache.cache[path]; ok && time.Now().Before(cached.expiry) {
+	if cached, ok := s.pathCache.cache[cacheKey]; ok && time.Now().Before(cached.expiry) {
 		s.pathCache.mu.RUnlock()
 		// Cache hit - record as cached operation
 		metrics.RecordFilesystemOp("PathExists", path, true, time.Since(start))
 
-		return cached.exists, cached.err
+		return cached.exists, nil
 	}
 
 	s.pathCache.mu.RUnlock()
@@ -567,9 +572,8 @@ func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, err
 	// Don't cache negative results as paths might be created immediately after
 	if err == nil && exists {
 		s.pathCache.mu.Lock()
-		s.pathCache.cache[path] = &CachedPath{
+		s.pathCache.cache[cacheKey] = &CachedPath{
 			exists: exists,
-			err:    err,
 			expiry: time.Now().Add(constants.FilesystemCacheTTL),
 		}
 		s.pathCache.mu.Unlock()
@@ -582,6 +586,9 @@ func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, err
 
 // invalidatePathCache invalidates cache entries for a path and all subpaths.
 func (s *DefaultService) invalidatePathCache(path string) {
+	// Canonicalize the path for consistent cache keying
+	path = filepath.Clean(path)
+	
 	// Safely create path with trailing slash, avoiding double slashes
 	pathWithSlash := path
 	if !strings.HasSuffix(path, "/") {
@@ -809,10 +816,13 @@ func (s *DefaultService) ReadDir(ctx context.Context, path string) ([]os.DirEntr
 		return nil, fmt.Errorf("failed to check context: %w", err)
 	}
 
+	// Canonicalize the path for consistent cache keying
+	cacheKey := filepath.Clean(path)
+
 	// Check cache first
 	s.dirCache.mu.RLock()
 
-	if cached, ok := s.dirCache.cache[path]; ok && time.Now().Before(cached.expiry) {
+	if cached, ok := s.dirCache.cache[cacheKey]; ok && time.Now().Before(cached.expiry) {
 		s.dirCache.mu.RUnlock()
 		// Cache hit - record as cached operation
 		metrics.RecordFilesystemOp("ReadDir", path, true, time.Since(start))
@@ -832,7 +842,7 @@ func (s *DefaultService) ReadDir(ctx context.Context, path string) ([]os.DirEntr
 
 	// Cache the result with 1-second TTL
 	s.dirCache.mu.Lock()
-	s.dirCache.cache[path] = &CachedDirEntry{
+	s.dirCache.cache[cacheKey] = &CachedDirEntry{
 		entries: entries,
 		expiry:  time.Now().Add(constants.FilesystemCacheTTL),
 	}
