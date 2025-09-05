@@ -29,12 +29,24 @@ const ContainerUpdateObservedStateTimeout = 10 * time.Millisecond
 
 // Health assessment thresholds.
 const (
-	CPUHighThresholdPercent   = 90.0 // Degraded if above this
-	CPUMediumThresholdPercent = 70.0 // Warning level (but still Active)
+	CPUHighThresholdPercent   = 70.0 // Degraded if above this - lowered from 90% to prevent throttling
+	CPUMediumThresholdPercent = 60.0 // Warning level (but still Active)
 
-	MemoryHighThresholdPercent   = 90.0 // Degraded if above this
-	MemoryMediumThresholdPercent = 80.0 // Warning level (but still Active)
+	MemoryHighThresholdPercent   = 80.0 // Degraded if above this - lowered from 90% for earlier detection
+	MemoryMediumThresholdPercent = 70.0 // Warning level (but still Active)
 
-	DiskHighThresholdPercent   = 90.0 // Degraded if above this
-	DiskMediumThresholdPercent = 80.0 // Warning level (but still Active)
+	DiskHighThresholdPercent   = 85.0 // Degraded if above this - lowered from 90% for safety margin
+	DiskMediumThresholdPercent = 75.0 // Warning level (but still Active)
+)
+
+// Resource scaling limits.
+const (
+	// MaxBridgesPerCPUCore defines the maximum number of protocol converter bridges per CPU core.
+	// This limit ensures stable performance and prevents resource exhaustion.
+	// See docs/production/sizing-guide.md for more details on resource planning.
+	MaxBridgesPerCPUCore = 5
+
+	// CPUThrottleRatioThreshold defines when CPU throttling is considered significant.
+	// If more than 5% of periods are throttled, the CPU is considered throttled.
+	CPUThrottleRatioThreshold = 0.05
 )

@@ -82,7 +82,7 @@ func NewContainerMonitorServiceWithPath(fs filesystem.Service, dataPath string) 
 	return &ContainerMonitorService{
 		fs:           fs,
 		logger:       log,
-		instanceName: "Core", // Single container instance name
+		instanceName: constants.CoreInstanceName, // Single container instance name
 		dataPath:     dataPath,
 	}
 }
@@ -228,16 +228,38 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		return nil, err
 	}
 
+	// Get cgroup info for throttling and limits
+	cgroupInfo, cgroupErr := c.getCgroupCPUInfo(ctx)
+	
 	// Default to Active health
 	category := models.Active
 	message := "CPU utilization normal"
+	
+	// Check for throttling
+	isThrottled := cgroupErr == nil && cgroupInfo.IsThrottled
+	highThrottling := cgroupErr == nil && cgroupInfo.ThrottleRatio > 0.20
 
-	if usagePercent >= constants.CPUHighThresholdPercent {
+	if usagePercent >= constants.CPUHighThresholdPercent || highThrottling {
 		category = models.Degraded
-		message = "CPU utilization critical"
-	} else if usagePercent >= constants.CPUMediumThresholdPercent {
-		// Still Active but with a warning message
-		message = "CPU utilization warning"
+		
+		if highThrottling {
+			message = fmt.Sprintf("CPU throttled (%.1f%% periods throttled)", cgroupInfo.ThrottleRatio*100)
+		} else {
+			message = "CPU utilization critical"
+		}
+	} else if usagePercent >= constants.CPUMediumThresholdPercent || isThrottled {
+		// Still could be Active or Degraded depending on severity
+		if isThrottled {
+			category = models.Degraded
+			message = fmt.Sprintf("CPU throttled (%.1f%% periods throttled)", cgroupInfo.ThrottleRatio*100)
+		} else {
+			message = "CPU utilization warning"
+		}
+	}
+	
+	// Log throttling warnings
+	if isThrottled {
+		c.logger.Warnf("CPU throttling detected: %.1f%% of periods throttled", cgroupInfo.ThrottleRatio*100)
 	}
 
 	cpuStat := &models.CPU{
@@ -250,16 +272,22 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		TotalUsageMCpu: usageMCores,
 		CoreCount:      coreCount,
 	}
+	
+	// Add cgroup info if available
+	if cgroupErr == nil {
+		cpuStat.CgroupCores = cgroupInfo.QuotaCores
+		cpuStat.ThrottleRatio = cgroupInfo.ThrottleRatio
+		cpuStat.IsThrottled = cgroupInfo.IsThrottled
+	}
 
 	return cpuStat, nil
 }
 
 func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMCores float64, coreCount int, usagePercent float64, err error) {
-	// Fetching from cgroup is incredibly difficult, so we fallback to host-level usage
-
-	// -- FALLBACK: host-level usage with cpu.Percent() --
-	// Gather CPU usage over a short interval (0 => immediate snapshot).
-	// Optionally you could do time.Sleep and call cpu.Percent again for a delta.
+	// Try to get cgroup info first for accurate container limits
+	cgroupInfo, cgroupErr := c.getCgroupCPUInfo(ctx)
+	
+	// Get actual CPU usage
 	usagePercentages, err := cpu.PercentWithContext(ctx, 0, false)
 	if err != nil {
 		return 0, 0, 0, err
@@ -269,11 +297,22 @@ func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMC
 		usagePercent = usagePercentages[0]
 	}
 
-	// Convert usage percent to mCPU (i.e. 1000 mCPU = 1 core).
-	// For example, if usage is 50% on a system with 4 cores,
-	// the container is effectively using 2 cores => 2000 mCPU.
-	coreCount = runtime.NumCPU()
-	usageCores := (usagePercent / 100.0) * float64(coreCount)
+	// Determine effective core count
+	// Use cgroup limit if available, otherwise fall back to host CPU count
+	effectiveCores := runtime.NumCPU()
+	if cgroupErr == nil && cgroupInfo.QuotaCores > 0 {
+		// Use cgroup limit for more accurate mCPU calculation
+		effectiveCores = int(cgroupInfo.QuotaCores)
+		if effectiveCores < 1 {
+			effectiveCores = 1
+		}
+	}
+	
+	coreCount = runtime.NumCPU() // Always report host cores for compatibility
+	
+	// Convert usage percent to mCPU based on effective cores
+	// This gives us a more accurate representation when cgroups limit CPU
+	usageCores := (usagePercent / 100.0) * float64(effectiveCores)
 	usageMCores = usageCores * 1000
 
 	return usageMCores, coreCount, usagePercent, nil
