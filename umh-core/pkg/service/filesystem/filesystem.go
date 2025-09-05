@@ -252,26 +252,34 @@ func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, err
 
 		// If we have a cached version and file hasn't changed, return it
 		if exists && cached.modTime.Equal(stat.ModTime()) && cached.size == stat.Size() {
-			// Re-check stat every 1 second for all cached files
-			// This provides a good balance between freshness and performance
-			if time.Since(cached.lastCheck) < constants.FilesystemCacheRecheckInterval {
-				// Cache hit - record as cached operation
+			// Check if we need to update lastCheck time
+			// We need to read lastCheck under lock to avoid data race
+			s.fileCache.mu.RLock()
+			current, stillExists := s.fileCache.cache[path]
+			if !stillExists || current != cached {
+				// Entry was replaced, fall through to re-read
+				s.fileCache.mu.RUnlock()
+			} else if time.Since(current.lastCheck) < constants.FilesystemCacheRecheckInterval {
+				// Cache hit within recheck interval - no need to update lastCheck
+				s.fileCache.mu.RUnlock()
 				metrics.RecordFilesystemOp("ReadFile", path, true, time.Since(start))
-
-				return cached.content, nil
+				return current.content, nil
+			} else {
+				// Need to update lastCheck time
+				s.fileCache.mu.RUnlock()
+				
+				// Upgrade to write lock to update lastCheck
+				s.fileCache.mu.Lock()
+				// Re-check that the entry still exists and hasn't changed
+				if entry, ok := s.fileCache.cache[path]; ok && entry == cached {
+					entry.lastCheck = time.Now()
+					s.fileCache.mu.Unlock()
+					metrics.RecordFilesystemOp("ReadFile", path, true, time.Since(start))
+					return entry.content, nil
+				}
+				s.fileCache.mu.Unlock()
+				// Entry changed while we waited for lock, fall through to re-read
 			}
-			// Update last check time
-			s.fileCache.mu.Lock()
-			// Re-check that the entry still exists after acquiring the lock
-			if entry, ok := s.fileCache.cache[path]; ok {
-				entry.lastCheck = time.Now()
-			}
-
-			s.fileCache.mu.Unlock()
-			// Cache hit - record as cached operation
-			metrics.RecordFilesystemOp("ReadFile", path, true, time.Since(start))
-
-			return cached.content, nil
 		}
 
 		// File changed or not in cache - read it
@@ -677,11 +685,9 @@ func (s *DefaultService) Remove(ctx context.Context, path string) error {
 	// Wait for either completion or context cancellation
 	select {
 	case err := <-errCh:
-		// Always invalidate cache, even on error
+		// Always invalidate all related caches, even on error
 		// This ensures we don't serve stale data if remove partially succeeded
-		s.pathCache.mu.Lock()
-		delete(s.pathCache.cache, path)
-		s.pathCache.mu.Unlock()
+		s.invalidatePathCache(path)
 		
 		return err
 	case <-ctx.Done():
@@ -996,11 +1002,9 @@ func (s *DefaultService) Symlink(ctx context.Context, target, linkPath string) e
 			return fmt.Errorf("failed to create symlink %s -> %s: %w", linkPath, target, err)
 		}
 
-		// Invalidate cache for the link path since we just created it
-		// This ensures PathExists will check the actual filesystem
-		s.pathCache.mu.Lock()
-		delete(s.pathCache.cache, linkPath)
-		s.pathCache.mu.Unlock()
+		// Invalidate caches for the link path and parent directory
+		// since creating a symlink changes directory contents
+		s.invalidatePathCache(linkPath)
 
 		return nil
 	case <-ctx.Done():
