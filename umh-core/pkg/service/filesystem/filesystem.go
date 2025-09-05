@@ -256,27 +256,36 @@ func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, err
 			// We need to read lastCheck under lock to avoid data race
 			s.fileCache.mu.RLock()
 			current, stillExists := s.fileCache.cache[path]
+
+			// Handle cache miss or changed entry
 			if !stillExists || current != cached {
 				// Entry was replaced, fall through to re-read
 				s.fileCache.mu.RUnlock()
-			} else if time.Since(current.lastCheck) < constants.FilesystemCacheRecheckInterval {
-				// Cache hit within recheck interval - no need to update lastCheck
-				s.fileCache.mu.RUnlock()
-				metrics.RecordFilesystemOp("ReadFile", path, true, time.Since(start))
-				return current.content, nil
 			} else {
+				// Check if we can use cached content without updating lastCheck
+				if time.Since(current.lastCheck) < constants.FilesystemCacheRecheckInterval {
+					// Cache hit within recheck interval - no need to update lastCheck
+					s.fileCache.mu.RUnlock()
+					metrics.RecordFilesystemOp("ReadFile", path, true, time.Since(start))
+
+					return current.content, nil
+				}
+
 				// Need to update lastCheck time
 				s.fileCache.mu.RUnlock()
-				
+
 				// Upgrade to write lock to update lastCheck
 				s.fileCache.mu.Lock()
 				// Re-check that the entry still exists and hasn't changed
 				if entry, ok := s.fileCache.cache[path]; ok && entry == cached {
 					entry.lastCheck = time.Now()
+
 					s.fileCache.mu.Unlock()
 					metrics.RecordFilesystemOp("ReadFile", path, true, time.Since(start))
+
 					return entry.content, nil
 				}
+
 				s.fileCache.mu.Unlock()
 				// Entry changed while we waited for lock, fall through to re-read
 			}
@@ -688,7 +697,7 @@ func (s *DefaultService) Remove(ctx context.Context, path string) error {
 		// Always invalidate all related caches, even on error
 		// This ensures we don't serve stale data if remove partially succeeded
 		s.invalidatePathCache(path)
-		
+
 		return err
 	case <-ctx.Done():
 		return ctx.Err()
@@ -715,11 +724,11 @@ func (s *DefaultService) RemoveAll(ctx context.Context, path string) error {
 		// Always invalidate cache entries, even on error
 		// We don't know what state the filesystem is in after a failed RemoveAll
 		s.invalidatePathCache(path)
-		
+
 		if err != nil {
 			return fmt.Errorf("failed to remove directory %s: %w", path, err)
 		}
-		
+
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
