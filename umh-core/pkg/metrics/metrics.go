@@ -133,6 +133,28 @@ var (
 	)
 
 	// TODO: observed state.
+
+	// Filesystem operation metrics.
+	filesystemOpsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "filesystem_ops_total",
+			Help:      "Total number of filesystem operations by type and path",
+		},
+		[]string{"operation", "path", "cached"},
+	)
+
+	filesystemOpsDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "filesystem_ops_duration_seconds",
+			Help:      "Duration of filesystem operations in seconds",
+			Buckets:   []float64{0.00001, 0.00005, 0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1},
+		},
+		[]string{"operation", "cached"},
+	)
 )
 
 // SetupMetricsEndpoint starts an HTTP server to expose metrics
@@ -225,4 +247,15 @@ func getStateValue(state string) float64 {
 	default:
 		return -1 // Unknown state
 	}
+}
+
+// RecordFilesystemOp records a filesystem operation metric.
+func RecordFilesystemOp(operation, path string, cached bool, duration time.Duration) {
+	cachedStr := "false"
+	if cached {
+		cachedStr = "true"
+	}
+
+	filesystemOpsTotal.WithLabelValues(operation, path, cachedStr).Inc()
+	filesystemOpsDuration.WithLabelValues(operation, cachedStr).Observe(duration.Seconds())
 }
