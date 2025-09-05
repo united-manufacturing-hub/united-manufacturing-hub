@@ -24,3 +24,9 @@ import "time"
 // This prevents "previous transition did not complete" errors.
 // See Linear ticket ENG-3419 for full context.
 const FSMTransitionTimeout = 200 * time.Millisecond
+
+// ForceRemovalTimeout is the timeout for force removal operations.
+// These operations must succeed to clean up failed instances, even if parent context expired.
+// Set to 5 seconds to allow thorough cleanup including file operations and service stops.
+// See Linear ticket ENG-3420 for full context.
+const ForceRemovalTimeout = 5 * time.Second

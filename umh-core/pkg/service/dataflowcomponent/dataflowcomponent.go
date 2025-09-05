@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
@@ -448,9 +449,15 @@ func (s *DataFlowComponentService) ServiceExists(ctx context.Context, filesystem
 // and the instance itself cannot be stopped or removed
 // Expects benthosName (e.g. "dataflow-myservice") as defined in the UMH config.
 func (s *DataFlowComponentService) ForceRemoveDataFlowComponent(ctx context.Context, filesystemService filesystem.Service, componentName string) error {
+	// CRITICAL: Always use fresh context for force removal to ensure cleanup succeeds
+	// Force removal must complete even if parent context expired or is about to expire
+	// See Linear ticket ENG-3420 for full context
 	if ctx.Err() != nil {
-		return ctx.Err()
+		s.logger.Warnf("Parent context already expired for force removal of %s", componentName)
 	}
+	
+	ctx, cancel := context.WithTimeout(context.Background(), constants.ForceRemovalTimeout)
+	defer cancel()
 
 	// Then force remove from Benthos manager
 	return s.benthosService.ForceRemoveBenthos(ctx, filesystemService, s.getBenthosName(componentName))
