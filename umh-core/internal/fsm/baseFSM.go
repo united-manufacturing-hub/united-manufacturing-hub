@@ -225,7 +225,7 @@ func (s *BaseFSMInstance) SendEvent(ctx context.Context, eventName string, args 
 	//    is worse than failing to start, as it leaves the FSM in an inconsistent state
 	if deadline, ok := ctx.Deadline(); ok {
 		if time.Until(deadline) < constants.ExpectedMaxP95ExecutionTimePerEvent {
-			return errors.New("context deadline exceeded")
+			return context.DeadlineExceeded
 		}
 	}
 
