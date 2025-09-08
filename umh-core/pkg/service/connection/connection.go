@@ -611,9 +611,15 @@ func (c *ConnectionService) ForceRemoveConnection(
 	filesystemService filesystem.Service,
 	connectionName string,
 ) error {
+	// CRITICAL: Always use fresh context for force removal to ensure cleanup succeeds
+	// Force removal must complete even if parent context expired or is about to expire
+	// See Linear ticket ENG-3420 for full context
 	if ctx.Err() != nil {
-		return ctx.Err()
+		c.logger.Warnf("Parent context already expired for force removal of %s", connectionName)
 	}
+	
+	ctx, cancel := context.WithTimeout(context.Background(), constants.ForceRemovalTimeout)
+	defer cancel()
 
 	// force remove from Nmap manager
 	return c.nmapService.ForceRemoveNmap(ctx, filesystemService, c.getNmapName(connectionName))

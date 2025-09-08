@@ -1,0 +1,87 @@
+# Copyright 2025 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Snyk configuration file
+# Documentation: https://docs.snyk.io/snyk-cli/commands/test#ignore-project-files-and-folders
+#
+# This configuration file defines paths excluded from Snyk security scanning
+# with documented justifications for compliance purposes.
+
+# Ignore rules for United Manufacturing Hub project
+exclude:
+   global:
+      # Legacy Helm charts - Enterprise-only support, no longer actively developed
+      # Justification: This directory contains the legacy UMH Classic Kubernetes deployment
+      # which is only supported for enterprise customers and is not under active development.
+      # Security updates are handled through enterprise support channels only.
+      - 'deployment/**'
+
+      # Development and build tools - Non-production code
+      # Justification: The tools directory contains development utilities, build scripts,
+      # and testing tools that are not deployed to production environments. These are
+      # internal development resources only.
+      - 'umh-core/tools/**'
+
+      # Third-party dependencies managed by package managers
+      # Justification: Vendor directories are managed by Go modules and contain
+      # third-party dependencies that are scanned at the module level
+      - '**/vendor/**'
+      - 'umh-core/vendor/**'
+
+      # Node.js dependencies
+      # Justification: Node modules are scanned via package.json/package-lock.json
+      - 'node_modules/**'
+
+      # Version control metadata
+      # Justification: Git metadata does not contain executable code
+      - '.git/**'
+      - '.github/**'
+
+      # Build artifacts and compiled binaries
+      # Justification: These are generated files that are not source code.
+      # Security scanning should focus on source code, not build outputs.
+      - 'dist/**'
+      - 'build/**'
+      - 'target/**'
+      - 'out/**'
+      - 'bin/**'
+
+      # Test and example code - Non-production
+      # Justification: Test files and examples are not deployed to production.
+      # They may contain intentionally vulnerable code for testing purposes.
+      - 'test/**'
+      - 'tests/**'
+      - 'examples/**'
+      - 'integration/**'
+      - 'e2e/**'
+
+      # Documentation files - Non-executable
+      # Justification: Documentation files do not contain executable code
+      - 'docs/**'
+      - '*.md'
+      - 'LICENSE'
+      - 'NOTICE'
+
+      # Auto-generated code files
+      # Justification: These files are automatically generated from source definitions.
+      # The source files that generate these should be scanned instead.
+      - '*.pb.go'        # Protocol buffer generated files
+      - '*_gen.go'       # Generic generated Go files
+      - '*.generated.go' # Explicitly marked generated files
+      - 'mock_*.go'      # Mock files for testing
+
+# Language-specific settings
+language-settings:
+  go:
+    enableVulnerabilitiesScan: true

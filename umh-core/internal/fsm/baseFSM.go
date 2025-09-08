@@ -225,7 +225,7 @@ func (s *BaseFSMInstance) SendEvent(ctx context.Context, eventName string, args 
 	//    is worse than failing to start, as it leaves the FSM in an inconsistent state
 	if deadline, ok := ctx.Deadline(); ok {
 		if time.Until(deadline) < constants.ExpectedMaxP95ExecutionTimePerEvent {
-			return errors.New("context deadline exceeded")
+			return context.DeadlineExceeded
 		}
 	}
 
@@ -238,7 +238,22 @@ func (s *BaseFSMInstance) SendEvent(ctx context.Context, eventName string, args 
 	s.logger.Debugf("FSM %s attempting transition: current_state='%s' -> event='%s' (desired_state='%s')",
 		instanceID, currentState, eventName, desiredState)
 
-	err := s.fsm.Event(ctx, eventName, args...)
+	// CRITICAL: Always give FSM a fresh context to prevent "previous transition did not complete" errors
+	// This ensures the FSM can complete even under CPU throttling (cgroups throttle for ~100ms periods)
+	// We ignore the parent context deadline to guarantee the transition completes
+	// See Linear ticket ENG-3419 for full context and analysis
+
+	fsmCtx, cancel := context.WithTimeout(context.Background(), constants.FSMTransitionTimeout)
+	defer cancel()
+
+	// Execute the FSM transition with guaranteed time to complete
+	err := s.fsm.Event(fsmCtx, eventName, args...)
+	
+	// Check if parent context expired while we were executing
+	if err == nil && ctx.Err() != nil {
+		s.logger.Warnf("FSM transition completed successfully but parent context expired - prevented stuck transition but now outside of cycle time (preventing bigger impact)")
+	}
+	
 	if err != nil {
 		// Enhanced error message with state context
 		enhancedErr := fmt.Errorf("FSM %s failed transition: current_state='%s' -> event='%s' (desired_state='%s'): %w",

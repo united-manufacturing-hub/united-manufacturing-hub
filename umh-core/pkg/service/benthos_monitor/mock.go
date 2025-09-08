@@ -23,6 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
@@ -31,6 +32,7 @@ import (
 type MockBenthosMonitorService struct {
 	LastScanTime                           time.Time
 	GenerateS6ConfigForBenthosMonitorError error
+	GetConfigError                         error
 	StatusError                            error
 	AddBenthosToS6ManagerError             error
 	UpdateBenthosMonitorInS6ManagerError   error
@@ -50,10 +52,12 @@ type MockBenthosMonitorService struct {
 	metricsState *BenthosMetricsState
 	// Return values for each method
 	GenerateS6ConfigForBenthosMonitorResult s6serviceconfig.S6ServiceConfig
+	GetConfigResult                         config.BenthosMonitorConfig
 	StatusResult                            ServiceInfo
 	UpdateLastPort                          uint16
 	// Tracks calls to methods
 	GenerateS6ConfigForBenthosMonitorCalled bool
+	GetConfigCalled                         bool
 	StatusCalled                            bool
 	AddBenthosToS6ManagerCalled             bool
 	UpdateBenthosMonitorInS6ManagerCalled   bool
@@ -250,6 +254,29 @@ func (m *MockBenthosMonitorService) GenerateS6ConfigForBenthosMonitor(s6ServiceN
 	}
 
 	return s6Config, nil
+}
+
+// GetConfig mocks the GetConfig method for the BenthosMonitor.
+func (m *MockBenthosMonitorService) GetConfig(ctx context.Context, filesystemService filesystem.Service) (config.BenthosMonitorConfig, error) {
+	m.GetConfigCalled = true
+	
+	if m.GetConfigError != nil {
+		return config.BenthosMonitorConfig{}, m.GetConfigError
+	}
+	
+	// If a result is preset, return it
+	if m.GetConfigResult.MetricsPort != 0 {
+		return m.GetConfigResult, nil
+	}
+	
+	// Return a default config with the last updated port
+	return config.BenthosMonitorConfig{
+		FSMInstanceConfig: config.FSMInstanceConfig{
+			Name:            "test-benthos",
+			DesiredFSMState: "stopped",
+		},
+		MetricsPort: m.UpdateLastPort,
+	}, nil
 }
 
 // Status mocks getting the status of a Benthos Monitor service.
