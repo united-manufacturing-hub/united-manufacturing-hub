@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -40,6 +41,7 @@ import (
 
 	dto "github.com/prometheus/client_model/go"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/monitor"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"go.uber.org/zap"
@@ -214,6 +216,8 @@ func (bms *BenthosMonitorStatus) CopyLogs(src []s6service.LogEntry) error {
 
 type IBenthosMonitorService interface {
 	GenerateS6ConfigForBenthosMonitor(benthosName string, port uint16) (s6serviceconfig.S6ServiceConfig, error)
+	// GetConfig returns the actual monitor config (port) from the S6 service
+	GetConfig(ctx context.Context, filesystemService filesystem.Service) (config.BenthosMonitorConfig, error)
 	Status(ctx context.Context, services serviceregistry.Provider, tick uint64) (ServiceInfo, error)
 	AddBenthosMonitorToS6Manager(ctx context.Context, port uint16) error
 	RemoveBenthosMonitorFromS6Manager(ctx context.Context) error
@@ -345,7 +349,51 @@ func (s *BenthosMonitorService) GenerateS6ConfigForBenthosMonitor(s6ServiceName 
 	return s6Config, nil
 }
 
-// GetConfig is not implemented, as the config is static
+// GetConfig reads the actual monitor configuration from the S6 service.
+// This reads the port from the running monitor script to detect config changes.
+func (s *BenthosMonitorService) GetConfig(ctx context.Context, filesystemService filesystem.Service) (config.BenthosMonitorConfig, error) {
+	if ctx.Err() != nil {
+		return config.BenthosMonitorConfig{}, ctx.Err()
+	}
+	
+	// If we don't have an S6 service config stored, the service doesn't exist
+	if s.s6ServiceConfig == nil {
+		return config.BenthosMonitorConfig{}, ErrServiceNotExist
+	}
+	
+	// Read the actual script from the filesystem to get the configured port
+	s6ServiceName := s.GetS6ServiceName()
+	scriptPath := fmt.Sprintf("%s/%s/config/run_benthos_monitor.sh", constants.S6BaseDir, s6ServiceName)
+	
+	scriptContent, err := filesystemService.ReadFile(ctx, scriptPath)
+	if err != nil {
+		return config.BenthosMonitorConfig{}, fmt.Errorf("failed to read monitor script: %w", err)
+	}
+	
+	// Parse the port from the script content
+	// The script contains lines like: curl -sSL http://localhost:PORT/ping
+	// We need to extract the PORT value
+	portRegex := regexp.MustCompile(`http://localhost:(\d+)/ping`)
+	matches := portRegex.FindStringSubmatch(string(scriptContent))
+	
+	if len(matches) < 2 {
+		return config.BenthosMonitorConfig{}, errors.New("could not find port in monitor script")
+	}
+	
+	port, err := strconv.ParseUint(matches[1], 10, 16)
+	if err != nil {
+		return config.BenthosMonitorConfig{}, fmt.Errorf("failed to parse port from script: %w", err)
+	}
+	
+	// Return the config with the observed port
+	return config.BenthosMonitorConfig{
+		FSMInstanceConfig: config.FSMInstanceConfig{
+			Name:            s.benthosName,
+			DesiredFSMState: s.s6ServiceConfig.DesiredFSMState,
+		},
+		MetricsPort: uint16(port),
+	}, nil
+}
 
 type Section struct {
 	StartMarkerIndex      int
