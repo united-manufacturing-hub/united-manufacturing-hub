@@ -35,7 +35,7 @@ jobs:
         working-directory: ./umh-core
         run: echo "version=$(make print-golang-version)" >> $GITHUB_OUTPUT
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: ${{ steps.go_version.outputs.version }}
           cache: true
@@ -59,7 +59,7 @@ jobs:
         run: echo "version=$(make print-golang-version)" >> $GITHUB_OUTPUT
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ steps.go_version.outputs.version }}
           cache: true
