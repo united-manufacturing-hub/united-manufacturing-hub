@@ -31,4 +31,19 @@ const (
 
 	// FilesystemMaxWorkers caps the maximum number of workers to prevent excessive goroutines.
 	FilesystemMaxWorkers = 32
+
+	// FilesystemCacheTTL defines how long cached filesystem entries remain valid
+	// before requiring revalidation. Short TTL balances freshness vs performance.
+	FilesystemCacheTTL = time.Second
+
+	// FilesystemCacheRecheckInterval defines how often to recheck file stats
+	// for cached file content to detect external modifications.
+	FilesystemCacheRecheckInterval = time.Second
 )
+
+// FilesystemCachePrefixes defines which path prefixes should have caching enabled.
+// These are high-frequency read paths that benefit from caching.
+var FilesystemCachePrefixes = []string{
+	"/run/service/", // S6 service definitions
+	"/data/",        // Data and configuration files
+}
