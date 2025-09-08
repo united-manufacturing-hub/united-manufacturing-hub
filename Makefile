@@ -64,3 +64,6 @@ install-git-hooks:
 	@echo "Installing git hooks..."
 	go install github.com/evilmartians/lefthook@latest
 	lefthook install
+
+snyk:
+	snyk test ./umh-core
