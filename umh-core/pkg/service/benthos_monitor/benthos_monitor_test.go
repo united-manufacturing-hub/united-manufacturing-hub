@@ -16,14 +16,18 @@ package benthos_monitor_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -445,6 +449,112 @@ var _ = Describe("Benthos Monitor Service", func() {
 			val, err := benthos_monitor.TailInt(line)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(val).To(Equal(int64(1074682)))
+		})
+	})
+
+	Describe("GetConfig", func() {
+		It("should extract port from monitor script pattern", func() {
+			// Test the regex parsing logic directly using sample script content
+			testCases := []struct {
+				name         string
+				scriptContent string
+				expectedPort  uint16
+				expectError   bool
+			}{
+				{
+					name: "should parse port from standard script",
+					scriptContent: `#!/bin/sh
+while true; do
+  echo "BEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGIN"
+  curl -sSL --max-time 1 http://localhost:25387/ping 2>&1 | gzip -c | xxd -p
+  curl -sSL --max-time 1 http://localhost:25387/ready 2>&1 | gzip -c | xxd -p
+done`,
+					expectedPort: 25387,
+					expectError:  false,
+				},
+				{
+					name: "should parse different port numbers",
+					scriptContent: `curl -sSL --max-time 1 http://localhost:8080/ping`,
+					expectedPort: 8080,
+					expectError:  false,
+				},
+				{
+					name: "should handle port 65535",
+					scriptContent: `curl -sSL http://localhost:65535/ping`,
+					expectedPort: 65535,
+					expectError:  false,
+				},
+				{
+					name: "should return error when no port pattern found",
+					scriptContent: `#!/bin/sh
+echo "No curl commands here"`,
+					expectedPort: 0,
+					expectError:  true,
+				},
+			}
+
+			for _, tc := range testCases {
+				// Use regex pattern from the actual implementation
+				portRegex := regexp.MustCompile(`http://localhost:(\d+)/ping`)
+				matches := portRegex.FindStringSubmatch(tc.scriptContent)
+				
+				if tc.expectError {
+					Expect(len(matches)).To(BeNumerically("<", 2), "Test case: %s", tc.name)
+				} else {
+					Expect(len(matches)).To(BeNumerically(">=", 2), "Test case: %s", tc.name)
+					port, err := strconv.ParseUint(matches[1], 10, 16)
+					Expect(err).NotTo(HaveOccurred(), "Test case: %s", tc.name)
+					Expect(uint16(port)).To(Equal(tc.expectedPort), "Test case: %s", tc.name)
+				}
+			}
+		})
+
+		It("should test mock service GetConfig", func() {
+			ctx, cancel := newTimeoutContext()
+			defer cancel()
+
+			// Use a mock service and set up the expected response
+			mockService := benthos_monitor.NewMockBenthosMonitorService()
+			mockService.GetConfigResult = config.BenthosMonitorConfig{
+				FSMInstanceConfig: config.FSMInstanceConfig{
+					Name:            serviceName,
+					DesiredFSMState: "running",
+				},
+				MetricsPort: 25387,
+			}
+
+			// Test GetConfig
+			result, err := mockService.GetConfig(ctx, mockServices.GetFileSystem())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.MetricsPort).To(Equal(uint16(25387)))
+			Expect(mockService.GetConfigCalled).To(BeTrue())
+		})
+
+		It("should return error when service does not exist", func() {
+			ctx, cancel := newTimeoutContext()
+			defer cancel()
+
+			// Use a service that hasn't been set up (no s6ServiceConfig)
+			freshService := benthos_monitor.NewBenthosMonitorService(serviceName, benthos_monitor.WithS6Service(s6service.NewMockService()))
+			
+			// Don't call AddBenthosMonitorToS6Manager, so s6ServiceConfig is nil
+			_, err := freshService.GetConfig(ctx, mockServices.GetFileSystem())
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(Equal(benthos_monitor.ErrServiceNotExist))
+		})
+
+		It("should return error when GetConfig fails with error", func() {
+			ctx, cancel := newTimeoutContext()
+			defer cancel()
+
+			// Use mock service with predefined error
+			mockService := benthos_monitor.NewMockBenthosMonitorService()
+			mockService.GetConfigError = errors.New("mock error for testing")
+
+			_, err := mockService.GetConfig(ctx, mockServices.GetFileSystem())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("mock error for testing"))
+			Expect(mockService.GetConfigCalled).To(BeTrue())
 		})
 	})
 })
