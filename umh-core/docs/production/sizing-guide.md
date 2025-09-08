@@ -48,7 +48,13 @@ The system will prevent you from deploying new bridges if:
 1. You've reached the theoretical limit for your CPU allocation, OR
 2. The system detects resource degradation (high CPU, throttling, memory, or disk pressure)
 
-This ensures system stability and prevents one bridge from impacting others. If you need more bridges, either:
+This resource-based blocking is controlled by a feature flag and can be configured in your `config.yaml`:
+```yaml
+agent:
+  enableResourceLimitBlocking: true  # Enable resource-based bridge blocking (default: false)
+```
+
+When enabled, this ensures system stability and prevents one bridge from impacting others. If you need more bridges, either:
 - Increase CPU allocation (for containerized deployments)
 - Upgrade to a larger instance (for VM/bare-metal deployments)
 - Optimize existing bridges (reduce polling rates, tag counts, or processing complexity)

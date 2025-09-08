@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	pkgfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
@@ -39,9 +40,14 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 		// Create service with mock logger (or use NewDefaultProtocolConverterService)
 		service = protocolconverter.NewDefaultProtocolConverterService("test")
 		
-		// Initialize with empty snapshot
+		// Initialize with empty snapshot with feature flag enabled by default
 		snapshot = pkgfsm.SystemSnapshot{
 			Managers: make(map[string]pkgfsm.ManagerSnapshot),
+			CurrentConfig: config.FullConfig{
+				Agent: config.AgentConfig{
+					EnableResourceLimitBlocking: true,
+				},
+			},
 		}
 	})
 
@@ -554,6 +560,146 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				snapshot.Managers[constants.ProtocolConverterManagerName] = &MockManagerSnapshot{
 					Instances: instances,
 				}
+				
+				limited, reason := service.IsResourceLimited(snapshot)
+				
+				Expect(limited).To(BeFalse())
+				Expect(reason).To(BeEmpty())
+			})
+		})
+
+		Describe("6. Feature Flag - EnableResourceLimitBlocking", func() {
+			BeforeEach(func() {
+				// Set up container manager with degraded resources for these tests
+				snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
+					Instances: map[string]*pkgfsm.FSMInstanceSnapshot{
+						constants.CoreInstanceName: {
+							ID:           constants.CoreInstanceName,
+							CurrentState: "active",
+							DesiredState: "active",
+							LastObservedState: &container.ContainerObservedStateSnapshot{
+								ServiceInfoSnapshot: container_monitor.ServiceInfo{
+									OverallHealth: models.Degraded,
+									CPUHealth:     models.Degraded,
+									MemoryHealth:  models.Active,
+									DiskHealth:    models.Active,
+								},
+							},
+						},
+					},
+				}
+			})
+
+			It("should block creation when feature flag is enabled and resources are degraded", func() {
+				// Feature flag is already enabled in BeforeEach
+				limited, reason := service.IsResourceLimited(snapshot)
+				
+				Expect(limited).To(BeTrue())
+				Expect(reason).To(ContainSubstring("CPU resources degraded"))
+			})
+
+			It("should NOT block creation when feature flag is disabled even if resources are degraded", func() {
+				// Disable feature flag
+				snapshot.CurrentConfig.Agent.EnableResourceLimitBlocking = false
+				
+				limited, reason := service.IsResourceLimited(snapshot)
+				
+				Expect(limited).To(BeFalse())
+				Expect(reason).To(BeEmpty())
+			})
+
+			It("should block creation when feature flag is enabled and bridge limit exceeded", func() {
+				// Set up healthy container but too many bridges
+				snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
+					Instances: map[string]*pkgfsm.FSMInstanceSnapshot{
+						constants.CoreInstanceName: {
+							ID:           constants.CoreInstanceName,
+							CurrentState: "active",
+							DesiredState: "active",
+							LastObservedState: &container.ContainerObservedStateSnapshot{
+								ServiceInfoSnapshot: container_monitor.ServiceInfo{
+									OverallHealth: models.Active,
+									CPUHealth:     models.Active,
+									MemoryHealth:  models.Active,
+									DiskHealth:    models.Active,
+								},
+							},
+						},
+					},
+				}
+
+				// Calculate max bridges
+				availableCores := runtime.NumCPU() - 1
+				if availableCores < 0 {
+					availableCores = 0
+				}
+				maxBridges := availableCores * constants.MaxBridgesPerCPUCore
+
+				// Add bridges exceeding limit to trigger blocking
+				instances := make(map[string]*pkgfsm.FSMInstanceSnapshot)
+				// Add one more than the limit to ensure blocking
+				for i := 0; i <= maxBridges; i++ {
+					instances[string(rune('a'+i))] = &pkgfsm.FSMInstanceSnapshot{
+						ID:           string(rune('a' + i)),
+						CurrentState: "active",
+						DesiredState: "active",
+					}
+				}
+				
+				snapshot.Managers[constants.ProtocolConverterManagerName] = &MockManagerSnapshot{
+					Instances: instances,
+				}
+				
+				// Feature flag enabled
+				limited, reason := service.IsResourceLimited(snapshot)
+				
+				Expect(limited).To(BeTrue())
+				Expect(reason).To(ContainSubstring("Cannot create bridge - limit exceeded"))
+			})
+
+			It("should NOT block creation when feature flag is disabled even if bridge limit exceeded", func() {
+				// Set up healthy container but too many bridges
+				snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
+					Instances: map[string]*pkgfsm.FSMInstanceSnapshot{
+						constants.CoreInstanceName: {
+							ID:           constants.CoreInstanceName,
+							CurrentState: "active",
+							DesiredState: "active",
+							LastObservedState: &container.ContainerObservedStateSnapshot{
+								ServiceInfoSnapshot: container_monitor.ServiceInfo{
+									OverallHealth: models.Active,
+									CPUHealth:     models.Active,
+									MemoryHealth:  models.Active,
+									DiskHealth:    models.Active,
+								},
+							},
+						},
+					},
+				}
+
+				// Calculate max bridges
+				availableCores := runtime.NumCPU() - 1
+				if availableCores < 0 {
+					availableCores = 0
+				}
+				maxBridges := availableCores * constants.MaxBridgesPerCPUCore
+
+				// Add bridges over limit
+				instances := make(map[string]*pkgfsm.FSMInstanceSnapshot)
+				for i := 0; i <= maxBridges; i++ { // Note: <= to exceed limit
+					instances[string(rune('a'+i))] = &pkgfsm.FSMInstanceSnapshot{
+						ID:           string(rune('a' + i)),
+						CurrentState: "active",
+						DesiredState: "active",
+					}
+				}
+				
+				snapshot.Managers[constants.ProtocolConverterManagerName] = &MockManagerSnapshot{
+					Instances: instances,
+				}
+				
+				// Disable feature flag
+				snapshot.CurrentConfig.Agent.EnableResourceLimitBlocking = false
 				
 				limited, reason := service.IsResourceLimited(snapshot)
 				

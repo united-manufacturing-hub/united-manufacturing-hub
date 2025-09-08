@@ -1115,6 +1115,12 @@ func (c *ProtocolConverterService) ForceRemoveProtocolConverter(
 //	limited – true when resources are limited and bridge creation should be blocked, false otherwise.
 //	reason  – empty when limited is false; otherwise a short explanation of why resources are limited.
 func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot) (bool, string) {
+	// Check if feature flag is enabled
+	if !snapshot.CurrentConfig.Agent.EnableResourceLimitBlocking {
+		// Feature flag is disabled, don't block bridge creation
+		return false, ""
+	}
+
 	// Check if container resources are degraded
 	containerManager, exists := snapshot.Managers[constants.ContainerManagerName]
 	if !exists {

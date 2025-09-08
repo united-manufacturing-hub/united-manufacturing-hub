@@ -147,7 +147,12 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 	c.lastCollectedAt = time.Now()
 
 	// Assess CPU health
-	if cpuStat.CoreCount > 0 {
+	// Check if CPU is already marked as degraded (e.g., due to throttling)
+	if cpuStat.Health != nil && cpuStat.Health.Category == models.Degraded {
+		status.CPUHealth = models.Degraded
+		status.OverallHealth = models.Degraded
+	} else if cpuStat.CoreCount > 0 {
+		// Also check raw usage percentage
 		cpuPercent := (cpuStat.TotalUsageMCpu / 1000.0) / float64(cpuStat.CoreCount) * 100.0
 
 		if cpuPercent > constants.CPUHighThresholdPercent {
