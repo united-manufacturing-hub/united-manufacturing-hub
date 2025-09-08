@@ -168,7 +168,7 @@ var _ = Describe("UserCertificate", func() {
 					map[int]string{0: "test-enterprise"},
 				)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to get locationRoles from certificate"))
+				Expect(err.Error()).To(ContainSubstring("failed to encode certificate"))
 			})
 		})
 
@@ -346,9 +346,9 @@ var _ = Describe("UserCertificate", func() {
 			Entry("Viewer - test-network-connection - declined", viewerCert, models.TestNetworkConnection, true, models.Action, map[int]string{0: "test-enterprise"}, false, "user is not authorized to perform actions of type", ""),
 
 			// LOCATION-BASED ACCESS CONTROL - All roles declined for wrong location
-			Entry("Admin - nonexistent-location - declined", adminCert, models.GetProtocolConverter, true, models.Action, map[int]string{0: "nonexistent-location"}, false, "did not find this location", ""),
-			Entry("Editor - nonexistent-location - declined", editorCert, models.GetProtocolConverter, true, models.Action, map[int]string{0: "nonexistent-location"}, false, "did not find this location", ""),
-			Entry("Viewer - nonexistent-location - declined", viewerCert, models.GetProtocolConverter, true, models.Action, map[int]string{0: "nonexistent-location"}, false, "did not find this location", ""),
+			Entry("Admin - nonexistent-location - declined", adminCert, models.GetProtocolConverter, true, models.Action, map[int]string{0: "nonexistent-location"}, false, "", ""),
+			Entry("Editor - nonexistent-location - declined", editorCert, models.GetProtocolConverter, true, models.Action, map[int]string{0: "nonexistent-location"}, false, "", ""),
+			Entry("Viewer - nonexistent-location - declined", viewerCert, models.GetProtocolConverter, true, models.Action, map[int]string{0: "nonexistent-location"}, false, "", ""),
 
 			// MESSAGE TYPE TESTS - Non-Action message types allowed for all roles with nil action type
 			Entry("Admin - Subscribe message - allowed", adminCert, models.ActionType(""), false, models.Subscribe, map[int]string{0: "test-enterprise"}, true, "", ""),

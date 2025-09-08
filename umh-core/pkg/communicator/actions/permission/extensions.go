@@ -15,27 +15,17 @@
 package permission_validator
 
 import (
+	"context"
 	"crypto/x509"
-	"encoding/asn1"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
-
-	"gopkg.in/yaml.v3"
+	"time"
 )
-
-var UMH_PEN = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 59193}
-
-// OIDs for our custom extensions
-// 1: V1 of our extensions
-// 1.1: Role extension
-// 1.2: Location extension.
-var (
-	// OID for the location-role extension.
-	oidExtensionRoleLocation asn1.ObjectIdentifier = append(UMH_PEN, 2, 1)
-)
-
-var ErrRoleLocationNotFound = errors.New("locationRoles extension not found in certificate")
 
 // Role represents the role of a certificate holder.
 type Role string
@@ -51,75 +41,70 @@ const (
 	RoleEditor Role = "Editor"
 )
 
-// LocationType represents the type of location in the hierarchy (for ExtensionLocation).
-type LocationType string
-
-const (
-	// LocationTypeEnterprise represents the enterprise level.
-	LocationTypeEnterprise LocationType = "Enterprise"
-
-	// LocationTypeSite represents a site level.
-	LocationTypeSite LocationType = "Site"
-
-	// LocationTypeArea represents an area level.
-	LocationTypeArea LocationType = "Area"
-
-	// LocationTypeProductionLine represents a production line level.
-	LocationTypeProductionLine LocationType = "ProductionLine"
-
-	// LocationTypeWorkCell represents a work cell level.
-	LocationTypeWorkCell LocationType = "WorkCell"
-)
-
-// LocataionRoles maps the locations to roles for the LocationRoles extension.
-type LocationRoles map[string]Role
-
-func GetRoleForLocation(cert *x509.Certificate, location string) (Role, error) {
-	locationRoles, err := GetLocationRolesFromCertificate(cert)
-	if err != nil {
-		return "", errors.Join(err, errors.New("failed to get locationRoles from certificate"))
-	}
-
-	for currentLocation, role := range locationRoles {
-		if currentLocation == location {
-			return role, nil
-		}
-	}
-
-	return "", errors.New("did not find this location")
+func EncodeX509Certificate(cert *x509.Certificate) string {
+	return base64.StdEncoding.EncodeToString(cert.Raw)
 }
 
-func GetLocationRolesFromCertificate(cert *x509.Certificate) (LocationRoles, error) {
-	for _, ext := range cert.Extensions {
-		if ext.Id.Equal(oidExtensionRoleLocation) {
-			var locationRoles LocationRoles
+func DecodeX509Certificate(encoded string) (*x509.Certificate, error) {
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, errors.Join(err, errors.New("failed to decode base64"))
+	}
+	return x509.ParseCertificate(decoded)
+}
 
-			var locataionRolesString string
+func GetRoleForLocation(cert *x509.Certificate, location string) (Role, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	return GetRoleForLocationWithContext(ctx, cert, location)
+}
 
-			_, err := asn1.Unmarshal(ext.Value, &locataionRolesString)
-			if err != nil {
-				return LocationRoles{}, errors.Join(err, errors.New("failed to asn1 unmarshal locationRole extension"))
-			}
-
-			err = yaml.Unmarshal([]byte(locataionRolesString), &locationRoles)
-			if err != nil {
-				return LocationRoles{}, errors.Join(err, errors.New("failed to yaml unmarshal locationRole extension value"))
-			}
-
-			// validate all roles and locations
-			for location, role := range locationRoles {
-				if role != RoleAdmin && role != RoleViewer && role != RoleEditor {
-					return LocationRoles{}, fmt.Errorf("invalid role: %s", role)
-				}
-
-				if len(strings.Split(location, ".")) == 0 {
-					return LocationRoles{}, fmt.Errorf("invalid location: %s", location)
-				}
-			}
-
-			return locationRoles, nil
-		}
+func GetRoleForLocationWithContext(ctx context.Context, cert *x509.Certificate, location string) (Role, error) {
+	if cert == nil {
+		return "", errors.New("certificate cannot be nil")
+	}
+	if location == "" {
+		return "", errors.New("location cannot be empty")
 	}
 
-	return LocationRoles{}, ErrRoleLocationNotFound
+	// encode the cert to a string x509(encode)
+	certString := EncodeX509Certificate(cert)
+
+	if certString == "" {
+		return "", errors.New("failed to encode certificate")
+	}
+
+	// Determine the binary name based on OS and architecture
+	binaryName := fmt.Sprintf("crypto-core-%s-%s", runtime.GOOS, runtime.GOARCH)
+
+	// Get the absolute path to the binary (assumes it's in the bin subdirectory of this package)
+	executableDir, err := filepath.Abs(filepath.Dir(""))
+	if err != nil {
+		return "", fmt.Errorf("failed to get executable directory: %w", err)
+	}
+	binaryPath := filepath.Join(executableDir, "bin", binaryName)
+
+	// call the cryptocore GetRoleForLocation via CLI
+	cmd := exec.CommandContext(ctx, binaryPath, certString, location)
+
+	output, err := cmd.Output()
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return "", errors.New("crypto-core execution timed out")
+		}
+		return "", fmt.Errorf("failed to get role for location: %w", err)
+	}
+
+	// Trim whitespace from output
+	role := strings.TrimSpace(string(output))
+	if role == "" {
+		return "", errors.New("crypto-core returned empty role")
+	}
+
+	// validate the role
+	if role != string(RoleAdmin) && role != string(RoleViewer) && role != string(RoleEditor) {
+		return "", errors.New("invalid role: " + role)
+	}
+
+	return Role(role), nil
 }
