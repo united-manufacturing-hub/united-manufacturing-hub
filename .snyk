@@ -25,7 +25,7 @@ exclude:
       # Justification: This directory contains the legacy UMH Classic Kubernetes deployment
       # which is only supported for enterprise customers and is not under active development.
       # Security updates are handled through enterprise support channels only.
-      - deployment/united-manufacturing-hub/**
+      - deployment/**
 
       # Development and build tools - Non-production code
       # Justification: The tools directory contains development utilities, build scripts,
@@ -36,7 +36,7 @@ exclude:
       # Third-party dependencies managed by package managers
       # Justification: Vendor directories are managed by Go modules and contain
       # third-party dependencies that are scanned at the module level
-      - vendor/**
+      - **/vendor/**
 
       # Node.js dependencies
       # Justification: Node modules are scanned via package.json/package-lock.json
