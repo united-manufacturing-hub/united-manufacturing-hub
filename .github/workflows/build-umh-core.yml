@@ -284,7 +284,7 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${{ github.ref_name }}"
-          SECRET="${{ secrets.UMH_MC_WEBHOOK_SECRET }}"
+          SECRET='${{ secrets.UMH_MC_WEBHOOK_SECRET }}'
 
           notify_mc() {
             local base_url=$1
