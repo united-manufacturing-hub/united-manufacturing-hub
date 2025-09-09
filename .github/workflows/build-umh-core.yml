@@ -281,10 +281,12 @@ jobs:
       group: arc-runners-small
     steps:
       - name: Notify management console
+        env:
+          UMH_MC_WEBHOOK_SECRET: ${{ secrets.UMH_MC_WEBHOOK_SECRET }}
         run: |
           set -euo pipefail
           VERSION="${{ github.ref_name }}"
-          SECRET="${{ secrets.UMH_MC_WEBHOOK_SECRET }}"
+          SECRET="$UMH_MC_WEBHOOK_SECRET"
 
           notify_mc() {
             local base_url=$1
