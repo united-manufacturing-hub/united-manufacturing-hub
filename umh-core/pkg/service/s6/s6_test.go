@@ -745,3 +745,4 @@ var _ = Describe("MaxFunc Approach for Rotated Files", func() {
 		Expect(result).To(Equal(expectedLatest))
 	})
 })
+

@@ -47,6 +47,13 @@ const (
 	// S6FileReadChunkSize is the buffer size used for reading files in chunks
 	// Set to 1MB for optimal I/O performance while maintaining reasonable memory usage.
 	S6FileReadChunkSize = 1024 * 1024
+	
+	// S6DownAndReadyRestartDelay is the minimum time to wait before attempting to restart
+	// a service that is in the S6 "down and ready" edge case state (PID=0 with flagready=1).
+	// This delay prevents rapid restart loops when services transition quickly between states,
+	// particularly during chaos testing or when stop->start happens in quick succession.
+	// See ServiceInfo.IsDownAndReady in pkg/service/s6/s6.go for detailed explanation of this state.
+	S6DownAndReadyRestartDelay = 3 * time.Second
 )
 
 const (
