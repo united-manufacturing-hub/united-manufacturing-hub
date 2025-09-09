@@ -120,6 +120,27 @@ type ServiceInfo struct {
 	IsFinishing        bool          // Whether the service is shutting down
 	IsWantingUp        bool          // Whether the service wants to be up (based on flags)
 	IsReady            bool          // Whether the service is ready
+
+	// IsDownAndReady indicates the S6 "down and ready" edge case state (PID=0 with flagready=1).
+	//
+	// WHAT IT IS:
+	// A legitimate S6 supervisor state where a service has no running process (PID=0) but is marked
+	// as "ready" (flagready=1). Created by S6's set_down_and_ready() function in s6-supervise.c.
+	//
+	// WHEN IT OCCURS:
+	// 1. Finish script cannot spawn (ENOENT) - service cleanup script missing
+	// 2. Finish script exits with code 125 - signaling permanent failure
+	// 3. SIGPIPE deaths during container shutdown - monitor processes killed by broken pipes
+	//
+	// RESOLUTION:
+	// The FSM automatically detects this state and issues RestartInstance() to recover.
+	// See reconcileTransitionToRunning() in reconcile.go for the detection and recovery logic.
+	//
+	// REFERENCES:
+	// - S6 source: https://github.com/skarnet/s6/blob/main/src/supervision/s6-supervise.c
+	// - Linear issue: ENG-3383 (Bridges stuck in starting state due to healthcheck failure)
+	// - Related: linuxserver/docker-transmission#279 (SIGPIPE deaths in s6-notifyoncheck)
+	IsDownAndReady bool
 }
 
 // ExitEvent represents a service exit event.
@@ -1051,7 +1072,7 @@ func (s *DefaultService) ForceRemove(
 	if ctx.Err() != nil {
 		s.logger.Warnf("Parent context already expired for force removal of %s", servicePath)
 	}
-	
+
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ForceRemovalTimeout)
 	defer cancel()
 

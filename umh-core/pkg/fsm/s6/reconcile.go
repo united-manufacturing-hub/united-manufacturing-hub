@@ -131,7 +131,9 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 	}
 
 	// Step 3: Attempt to reconcile the state.
-	err, reconciled = s.reconcileStateTransition(ctx, services)
+	currentTime := snapshot.SnapshotTime // Used for checking down-and-ready state duration
+	
+	err, reconciled = s.reconcileStateTransition(ctx, services, currentTime)
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
 		// Also this should not
@@ -182,7 +184,7 @@ func (s *S6Instance) reconcileExternalChanges(ctx context.Context, services serv
 // Any functions that fetch information are disallowed here and must be called in reconcileExternalChanges
 // and exist in ExternalState.
 // This is to ensure full testability of the FSM.
-func (s *S6Instance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider) (err error, reconciled bool) {
+func (s *S6Instance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 
 	defer func() {
@@ -191,11 +193,6 @@ func (s *S6Instance) reconcileStateTransition(ctx context.Context, services serv
 
 	currentState := s.baseFSMInstance.GetCurrentFSMState()
 	desiredState := s.baseFSMInstance.GetDesiredFSMState()
-
-	// If already in the desired state, nothing to do.
-	if currentState == desiredState {
-		return nil, false
-	}
 
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {
@@ -213,7 +210,7 @@ func (s *S6Instance) reconcileStateTransition(ctx context.Context, services serv
 
 	// Handle operational states
 	if IsOperationalState(currentState) {
-		err, reconciled := s.reconcileOperationalStates(ctx, services, currentState, desiredState)
+		err, reconciled := s.reconcileOperationalStates(ctx, services, currentState, desiredState, currentTime)
 		if err != nil {
 			return err, false
 		}
@@ -229,7 +226,7 @@ func (s *S6Instance) reconcileStateTransition(ctx context.Context, services serv
 }
 
 // reconcileOperationalStates handles states related to instance operations (starting/stopping).
-func (s *S6Instance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string) (err error, reconciled bool) {
+func (s *S6Instance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 
 	defer func() {
@@ -238,7 +235,7 @@ func (s *S6Instance) reconcileOperationalStates(ctx context.Context, services se
 
 	switch desiredState {
 	case OperationalStateRunning:
-		return s.reconcileTransitionToRunning(ctx, services, currentState)
+		return s.reconcileTransitionToRunning(ctx, services, currentState, currentTime)
 	case OperationalStateStopped:
 		return s.reconcileTransitionToStopped(ctx, services, currentState)
 	default:
@@ -248,7 +245,7 @@ func (s *S6Instance) reconcileOperationalStates(ctx context.Context, services se
 
 // reconcileTransitionToRunning handles transitions when the desired state is Running.
 // It deals with moving from Stopped/Failed to Starting and then to Running.
-func (s *S6Instance) reconcileTransitionToRunning(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
+func (s *S6Instance) reconcileTransitionToRunning(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 
 	defer func() {
@@ -262,6 +259,33 @@ func (s *S6Instance) reconcileTransitionToRunning(ctx context.Context, services 
 		}
 		// Send event to transition from Stopped/Failed to Starting
 		return s.baseFSMInstance.SendEvent(ctx, EventStart), true
+	}
+
+	// Check for S6 "down and ready" edge case and recover
+	// See ServiceInfo.IsDownAndReady in pkg/service/s6/s6.go for detailed explanation
+	if s.IsInDownAndReadyState() {
+		// Only attempt restart if the service has been in this state for a while
+		// This prevents rapid restart loops during transient state changes
+		timeSinceLastChange := currentTime.Sub(s.ObservedState.ServiceInfo.LastChangedAt)
+		
+		if timeSinceLastChange < constants.S6DownAndReadyRestartDelay {
+			// Service just entered this state, wait before attempting restart
+			// This handles race conditions where stop->start happens quickly
+			s.baseFSMInstance.GetLogger().Debugf("S6 service %s in 'down and ready' state for %.1fs, waiting %.1fs before restart attempt", 
+				s.baseFSMInstance.GetID(), timeSinceLastChange.Seconds(), constants.S6DownAndReadyRestartDelay.Seconds())
+			
+			return nil, false
+		}
+		
+		// Service has been stuck in this state, attempt restart
+		s.baseFSMInstance.GetLogger().Warnf("S6 service %s stuck in 'down and ready' state for %.1fs, restarting to recover", 
+			s.baseFSMInstance.GetID(), timeSinceLastChange.Seconds())
+		
+		if err := s.RestartInstance(ctx, services.GetFileSystem()); err != nil {
+			return err, true
+		}
+		// After restart, wait for next reconciliation to check if it worked
+		return nil, false
 	}
 
 	if currentState == OperationalStateStarting {
