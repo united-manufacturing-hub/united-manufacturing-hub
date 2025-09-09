@@ -25,60 +25,61 @@ exclude:
       # Justification: This directory contains the legacy UMH Classic Kubernetes deployment
       # which is only supported for enterprise customers and is not under active development.
       # Security updates are handled through enterprise support channels only.
-      - deployment/**
+      - 'deployment/**'
 
       # Development and build tools - Non-production code
       # Justification: The tools directory contains development utilities, build scripts,
       # and testing tools that are not deployed to production environments. These are
       # internal development resources only.
-      - umh-core/tools/**
+      - 'umh-core/tools/**'
 
       # Third-party dependencies managed by package managers
       # Justification: Vendor directories are managed by Go modules and contain
       # third-party dependencies that are scanned at the module level
-      - **/vendor/**
+      - '**/vendor/**'
+      - 'umh-core/vendor/**'
 
       # Node.js dependencies
       # Justification: Node modules are scanned via package.json/package-lock.json
-      - node_modules/**
+      - 'node_modules/**'
 
       # Version control metadata
       # Justification: Git metadata does not contain executable code
-      - .git/**
-      - .github/**
+      - '.git/**'
+      - '.github/**'
 
       # Build artifacts and compiled binaries
       # Justification: These are generated files that are not source code.
       # Security scanning should focus on source code, not build outputs.
-      - dist/**
-      - build/**
-      - target/**
-      - out/**
-      - bin/**
+      - 'dist/**'
+      - 'build/**'
+      - 'target/**'
+      - 'out/**'
+      - 'bin/**'
 
       # Test and example code - Non-production
       # Justification: Test files and examples are not deployed to production.
       # They may contain intentionally vulnerable code for testing purposes.
-      - test/**
-      - tests/**
-      - examples/**
-      - integration/**
-      - e2e/**
+      - 'test/**'
+      - 'tests/**'
+      - 'examples/**'
+      - 'integration/**'
+      - 'e2e/**'
 
       # Documentation files - Non-executable
       # Justification: Documentation files do not contain executable code
-      - docs/**
-      - "*.md"
-      - LICENSE
-      - NOTICE
+      - 'docs/**'
+      - '*.md'
+      - 'LICENSE'
+      - 'NOTICE'
 
       # Auto-generated code files
       # Justification: These files are automatically generated from source definitions.
       # The source files that generate these should be scanned instead.
-      - "*.pb.go"        # Protocol buffer generated files
-      - "*_gen.go"       # Generic generated Go files
-      - "*.generated.go" # Explicitly marked generated files
-      - mock_*.go        # Mock files for testing
+      - '*.pb.go'        # Protocol buffer generated files
+      - '*_gen.go'       # Generic generated Go files
+      - '*.generated.go' # Explicitly marked generated files
+      - 'mock_*.go'      # Mock files for testing
 
 # Language-specific settings
 language-settings:
