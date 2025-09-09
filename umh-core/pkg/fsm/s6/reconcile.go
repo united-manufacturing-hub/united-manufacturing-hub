@@ -264,6 +264,18 @@ func (s *S6Instance) reconcileTransitionToRunning(ctx context.Context, services 
 		return s.baseFSMInstance.SendEvent(ctx, EventStart), true
 	}
 
+	// Check for S6 "down and ready" edge case and recover
+	// See ServiceInfo.IsDownAndReady in pkg/service/s6/s6.go for detailed explanation
+	if s.IsInDownAndReadyState() {
+		s.baseFSMInstance.GetLogger().Warnf("S6 service %s is in 'down and ready' state, restarting to recover", s.baseFSMInstance.GetID())
+		
+		if err := s.RestartInstance(ctx, services.GetFileSystem()); err != nil {
+			return err, true
+		}
+		// After restart, the service should transition back to running
+		return nil, true
+	}
+
 	if currentState == OperationalStateStarting {
 		// If already in the process of starting, check if the service is healthy
 		if s.IsS6Running() {

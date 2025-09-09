@@ -147,6 +147,28 @@ func (s *S6Instance) StopInstance(ctx context.Context, filesystemService filesys
 	return nil
 }
 
+// RestartInstance attempts to restart the S6 service.
+// This is used to recover from the S6 "down and ready" edge case.
+// See ServiceInfo.IsDownAndReady in pkg/service/s6/s6.go for detailed explanation.
+func (s *S6Instance) RestartInstance(ctx context.Context, filesystemService filesystem.Service) error {
+	start := time.Now()
+
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".RestartInstance", time.Since(start))
+	}()
+
+	s.baseFSMInstance.GetLogger().Debugf("Starting Action: Restarting S6 service %s ...", s.baseFSMInstance.GetID())
+
+	err := s.service.Restart(ctx, s.servicePath, filesystemService)
+	if err != nil {
+		return fmt.Errorf("failed to restart S6 service %s: %w", s.baseFSMInstance.GetID(), err)
+	}
+
+	s.baseFSMInstance.GetLogger().Infof("S6 service %s restart command executed (recovering from down-and-ready state)", s.baseFSMInstance.GetID())
+
+	return nil
+}
+
 // CheckForCreation checks whether the creation was successful.
 func (s *S6Instance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
 	servicePath := s.servicePath
@@ -263,6 +285,12 @@ func (s *S6Instance) IsServiceWantingUp() bool {
 // GetExitHistory gets the history of service exit events.
 func (s *S6Instance) GetExitHistory() []s6service.ExitEvent {
 	return s.ObservedState.ServiceInfo.ExitHistory
+}
+
+// IsInDownAndReadyState checks if the service is in the S6 "down and ready" edge case state.
+// See ServiceInfo.IsDownAndReady in pkg/service/s6/s6.go for detailed explanation.
+func (s *S6Instance) IsInDownAndReadyState() bool {
+	return s.ObservedState.ServiceInfo.IsDownAndReady
 }
 
 // logConfigDifferences logs the specific differences between desired and observed configurations.
