@@ -1,7 +1,7 @@
 module github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core
 
 // NOTE: Keep this in sync with GOLANG_VERSION in Makefile
-go 1.24.4
+go 1.25.0
 
 require (
 	github.com/99designs/gqlgen v0.17.78
@@ -125,4 +125,10 @@ require (
 	golang.org/x/mod v0.27.0 // indirect
 	golang.org/x/text v0.28.0 // indirect
 	golang.org/x/tools v0.36.0 // indirect
+)
+
+ignore (
+	.docker-cache
+	data
+	tools/docker-compose
 )
