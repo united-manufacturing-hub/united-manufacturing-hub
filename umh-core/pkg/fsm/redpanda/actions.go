@@ -600,7 +600,14 @@ func (r *RedpandaInstance) IsRedpandaRunningWithoutErrors(currentTime time.Time,
 func (r *RedpandaInstance) IsRedpandaLogsFine(currentTime time.Time, logWindow time.Duration) (bool, string) {
 	logsFine, logEntry := r.service.IsLogsFine(r.PreviousObservedState.ServiceInfo.RedpandaStatus.Logs, currentTime, logWindow, r.transitionToRunningTime)
 	if !logsFine {
-		return false, fmt.Sprintf("log issue: [%s] %s", logEntry.Timestamp.Format(time.RFC3339), logEntry.Content)
+		timeUntilClear := logEntry.Timestamp.Add(logWindow).Sub(currentTime)
+		if timeUntilClear > 0 {
+			return false, fmt.Sprintf("found error (clears in %v): %s",
+				timeUntilClear.Round(time.Second),
+				logEntry.Content)
+		}
+		// This shouldn't happen as IsLogsFine filters by time window, but keep as fallback
+		return false, "found error: " + logEntry.Content
 	}
 
 	return true, ""

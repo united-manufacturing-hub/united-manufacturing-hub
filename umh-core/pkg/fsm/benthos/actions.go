@@ -476,7 +476,14 @@ func (b *BenthosInstance) IsBenthosRunningForSomeTimeWithoutErrors(currentTime t
 func (b *BenthosInstance) IsBenthosLogsFine(currentTime time.Time, logWindow time.Duration) (bool, string) {
 	logsFine, logEntry := b.service.IsLogsFine(b.ObservedState.ServiceInfo.BenthosStatus.BenthosLogs, currentTime, logWindow)
 	if !logsFine {
-		return false, fmt.Sprintf("log issue: [%s] %s", logEntry.Timestamp.Format(time.RFC3339), logEntry.Content)
+		timeUntilClear := logEntry.Timestamp.Add(logWindow).Sub(currentTime)
+		if timeUntilClear > 0 {
+			return false, fmt.Sprintf("found error (clears in %v): %s",
+				timeUntilClear.Round(time.Second),
+				logEntry.Content)
+		}
+		// This shouldn't happen as IsLogsFine filters by time window, but keep as fallback
+		return false, "found error: " + logEntry.Content
 	}
 
 	return true, ""
