@@ -276,10 +276,10 @@ test: vet-nilaway-lint-betteralign
 	go test -race -v -tags=test ./...
 
 unit-test: vet-nilaway-lint-betteralign
-	ginkgo -r -v --tags=test --race --label-filter='!integration && !redpanda-extended && !tls' --fail-fast ./...
+	ginkgo -r -v --tags=test --race --label-filter='!integration && !redpanda-extended && !tls && !e2e' --fail-fast ./...
 
 unit-test-fail-slow: vet-nilaway-lint-betteralign
-	ginkgo -r -v --tags=test --race --label-filter='!integration && !redpanda-extended && !tls' ./...
+	ginkgo -r -v --tags=test --race --label-filter='!integration && !redpanda-extended && !tls && !e2e' ./...
 
 benchmark:
 	@echo "Running benchmarks..."
@@ -316,6 +316,11 @@ benchmark-encoding:
 	cd pkg/communicator/pkg/encoding && go test -bench=. -benchmem -benchtime=10s -count=1
 
 integration-test: stop-all-pods vet-nilaway-lint-betteralign
+
+# E2E tests that use Docker containers and mock backend API
+e2e-test: build
+	@echo "Running E2E tests..."
+	cd e2e && go mod tidy && ginkgo -v --label-filter='e2e' --fail-fast ./...
 
 # Meta target to setup the environment for the tests
 pre-test: build-protobuf stop-all-pods vet-nilaway-lint-betteralign
