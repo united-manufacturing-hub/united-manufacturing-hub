@@ -17,7 +17,7 @@
 
 package container_monitor
 
-// getMacOSAdjustedDiskMetrics is not implemented for Darwin / MacOS
+// getMacOSAdjustedDiskMetrics is not implemented for Darwin / MacOS.
 func (c *ContainerMonitorService) getMacOSAdjustedDiskMetrics() (usedBytes, totalBytes uint64, err error) {
 	return 0, 0, nil
 }
