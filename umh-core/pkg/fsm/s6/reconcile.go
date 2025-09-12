@@ -328,7 +328,15 @@ func (s *S6Instance) reconcileTransitionToStopped(ctx context.Context, services 
 
 	if currentState == OperationalStateStopping {
 		// If already stopping, verify if the instance is completely stopped
-		if s.IsS6Stopped() {
+		// WORKAROUND for ENG-3468: Also consider it stopped if the directory is missing/corrupted
+		// This prevents the FSM from getting stuck in "stopping" state when the directory
+		// is deleted while the service is stopping. Without this, IsS6Stopped() returns false
+		// because it can't read the service status from the missing directory.
+		// NOTE: This is a temporary fix until ENG-3473 is resolved (manager health awareness)
+		if s.IsS6Stopped() || s.ObservedState.DirectoryHealth == s6service.HealthBad {
+			if s.ObservedState.DirectoryHealth == s6service.HealthBad {
+				s.baseFSMInstance.GetLogger().Infof("Directory missing/corrupted while stopping - considering service stopped")
+			}
 			// Transition from Stopping to Stopped
 			return s.baseFSMInstance.SendEvent(ctx, EventStopDone), true
 		}
@@ -350,21 +358,24 @@ func (s *S6Instance) handleUnhealthyDirectory(ctx context.Context, services serv
 	switch currentState {
 	case OperationalStateStopping:
 		// Directory gone while stopping - consider it stopped
-		s.baseFSMInstance.GetLogger().Infof("Directory integrity bad while stopping - completing stop transition")
+		// This case is now handled in reconcileTransitionToStopped
+		s.baseFSMInstance.GetLogger().Infof("Directory integrity bad while stopping - will complete stop transition")
 
-		return s.baseFSMInstance.SendEvent(ctx, EventStopDone), true
+		return nil, false
 
 	case OperationalStateRunning, OperationalStateStarting:
-		// Directory gone while running/starting - trigger self-removal for clean recreation
-		s.baseFSMInstance.GetLogger().Infof("Directory integrity bad while %s - triggering self-removal for recreation", currentState)
+		// Directory gone while running/starting - log the issue
+		// Note: Self-removal is blocked by manager (ENG-3473), so we just log for now
+		s.baseFSMInstance.GetLogger().Errorf("Directory integrity bad while %s - manual intervention required (self-healing blocked by ENG-3473)", currentState)
 
-		return s.baseFSMInstance.Remove(ctx), true
+		return nil, false
 
 	case OperationalStateStopped:
-		// Already stopped - trigger removal if directory is bad
-		s.baseFSMInstance.GetLogger().Infof("Directory integrity bad while stopped - triggering removal")
+		// Already stopped with bad directory - log the issue  
+		// Note: Self-removal is blocked by manager (ENG-3473)
+		s.baseFSMInstance.GetLogger().Warnf("Directory integrity bad while stopped - manual intervention required (self-healing blocked by ENG-3473)")
 
-		return s.baseFSMInstance.Remove(ctx), true
+		return nil, false
 
 	default:
 		// For other states, log but don't take action yet
