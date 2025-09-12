@@ -76,8 +76,12 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 				ctx,
 				err,
 				func() bool {
-					// Determine if we're already in a shutdown state where normal removal isn't possible
-					// and force removal is required
+					// For directory corruption, ALWAYS consider it a shutdown state to force removal
+					// This ensures we skip normal removal (which would fail) and go straight to force removal
+					if s.ObservedState.DirectoryHealth == s6service.HealthBad {
+						return true
+					}
+					// Otherwise check normal shutdown states
 					return s.IsRemoved() || s.IsRemoving() || s.IsStopping() || s.IsStopped() || s.WantsToBeStopped()
 				},
 				func(ctx context.Context) error {
@@ -234,12 +238,19 @@ func (s *S6Instance) reconcileOperationalStates(ctx context.Context, services se
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".reconcileOperationalStates", time.Since(start))
 	}()
 
-	// Check for directory health issues that might require special handling
-	// Currently this is mostly a placeholder that logs degraded states.
-	// The critical "stopping" state issue is handled by a workaround in reconcileTransitionToStopped.
-	// TODO(ENG-3473): Once manager is health-aware, this will trigger self-healing via FSM removal
-	if shouldOverride, event := s.checkForDirectoryHealthOverride(ctx); shouldOverride {
-		return s.baseFSMInstance.SendEvent(ctx, event), true
+	// Check for directory health issues and trigger force removal if needed
+	// When directory health is bad (corrupted/deleted), we're in an undefined state
+	// and cannot go through normal state transitions. Return a permanent error to
+	// trigger force removal and direct transition to "removed" state.
+	if s.ObservedState.DirectoryHealth == s6service.HealthBad {
+		s.baseFSMInstance.GetLogger().Errorf(
+			"S6 service %s has bad directory integrity - triggering force removal for recreation",
+			s.baseFSMInstance.GetID(),
+		)
+		// Return permanent error to trigger HandlePermanentError which will:
+		// 1. Call ForceRemove to clean up everything including orphaned symlinks
+		// 2. Transition FSM directly to "removed" state
+		return fmt.Errorf("%s: directory corrupted or deleted", backoff.PermanentFailureError), true
 	}
 
 	switch desiredState {
@@ -321,6 +332,15 @@ func (s *S6Instance) reconcileTransitionToStopped(ctx context.Context, services 
 	}()
 
 	if currentState == OperationalStateRunning || currentState == OperationalStateStarting {
+		// Special case: If directory health is bad (deleted/corrupted), skip the stop attempt
+		// since there's nothing to stop. Go directly to stopping state.
+		// This prevents "service does not exist" errors when trying to stop a deleted service.
+		if s.ObservedState.DirectoryHealth == s6service.HealthBad {
+			s.baseFSMInstance.GetLogger().Infof("Directory health is bad - skipping stop attempt, transitioning directly to stopping")
+			// Send event to transition to Stopping (will be immediately considered stopped due to workaround below)
+			return s.baseFSMInstance.SendEvent(ctx, EventStop), true
+		}
+		
 		// Attempt to initiate a stop
 		if err := s.StopInstance(ctx, services.GetFileSystem()); err != nil {
 			return err, true
@@ -351,36 +371,3 @@ func (s *S6Instance) reconcileTransitionToStopped(ctx context.Context, services 
 	return nil, false
 }
 
-// checkForDirectoryHealthOverride is a placeholder for future self-healing behavior when 
-// S6 service directories are missing/corrupted. Once ENG-3473 is resolved (manager becomes
-// health-aware), this function will trigger FSM self-removal to force recreation.
-// Currently it only logs the issue as the manager would override any self-healing attempts.
-func (s *S6Instance) checkForDirectoryHealthOverride(ctx context.Context) (shouldOverride bool, overrideEvent string) {
-	// Early return for healthy directories - most common case
-	if s.ObservedState.DirectoryHealth != s6service.HealthBad {
-		return false, ""
-	}
-
-	currentState := s.baseFSMInstance.GetCurrentFSMState()
-
-	// TODO(ENG-3473): Once manager is health-aware, trigger self-removal here for recovery
-	// For now, just log the issue - the stopping state workaround handles the critical case
-	switch currentState {
-	case OperationalStateStopping:
-		// Handled by existing workaround in reconcileTransitionToStopped
-		return false, ""
-
-	case OperationalStateStarting, OperationalStateRunning:
-		// Log degraded state but continue - manager blocks self-healing
-		s.baseFSMInstance.GetLogger().Debugf(
-			"S6 service %s directory missing while %s - degraded state (self-healing blocked by ENG-3473)",
-			s.baseFSMInstance.GetID(), currentState,
-		)
-
-		return false, ""
-
-	default:
-		// Stopped state with missing directory is normal after cleanup
-		return false, ""
-	}
-}

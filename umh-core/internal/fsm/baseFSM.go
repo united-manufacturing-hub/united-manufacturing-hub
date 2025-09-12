@@ -444,6 +444,11 @@ func (s *BaseFSMInstance) HandlePermanentError(
 			return fmt.Errorf("failed to force remove the %s instance: %s : %w", s.cfg.ID, backoff.PermanentFailureError, forceErr), false
 		}
 
+		// After successful force removal, set FSM state directly to removed
+		// This will cause ReconcileLifecycleStates to return ErrInstanceRemoved,
+		// signaling the manager to delete and recreate the instance
+		s.SetCurrentFSMState(LifecycleStateRemoved)
+		logger.Infof("%s instance %s force removed and transitioned to removed state", s.cfg.ID, instanceID)
 		return err, true
 	} else {
 		// Not in a shutdown state yet, so try normal removal first
@@ -465,6 +470,9 @@ func (s *BaseFSMInstance) HandlePermanentError(
 
 				return fmt.Errorf("failed to force remove the %s instance: %s : %w", s.cfg.ID, backoff.PermanentFailureError, forceErr), false
 			}
+			// After successful force removal, set FSM state directly to removed
+			s.SetCurrentFSMState(LifecycleStateRemoved)
+			logger.Infof("%s instance %s force removed after normal removal failed and transitioned to removed state", s.cfg.ID, instanceID)
 		}
 
 		return nil, false // Let's try to at least reconcile towards a stopped/removed state
