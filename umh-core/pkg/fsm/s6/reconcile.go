@@ -234,9 +234,12 @@ func (s *S6Instance) reconcileOperationalStates(ctx context.Context, services se
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".reconcileOperationalStates", time.Since(start))
 	}()
 
-	// Check for unhealthy directory first - this takes precedence over normal state transitions
-	if s.ObservedState.DirectoryHealth == s6service.HealthBad {
-		return s.handleUnhealthyDirectory(ctx, services)
+	// Check for directory health issues that might require special handling
+	// Currently this is mostly a placeholder that logs degraded states.
+	// The critical "stopping" state issue is handled by a workaround in reconcileTransitionToStopped.
+	// TODO(ENG-3473): Once manager is health-aware, this will trigger self-healing via FSM removal
+	if shouldOverride, event := s.checkForDirectoryHealthOverride(ctx); shouldOverride {
+		return s.baseFSMInstance.SendEvent(ctx, event), true
 	}
 
 	switch desiredState {
@@ -348,40 +351,36 @@ func (s *S6Instance) reconcileTransitionToStopped(ctx context.Context, services 
 	return nil, false
 }
 
-// handleUnhealthyDirectory handles the case when the S6 service directory integrity is bad.
-// It triggers appropriate state transitions based on the current FSM state to recover.
-func (s *S6Instance) handleUnhealthyDirectory(ctx context.Context, services serviceregistry.Provider) (err error, reconciled bool) {
+// checkForDirectoryHealthOverride is a placeholder for future self-healing behavior when 
+// S6 service directories are missing/corrupted. Once ENG-3473 is resolved (manager becomes
+// health-aware), this function will trigger FSM self-removal to force recreation.
+// Currently it only logs the issue as the manager would override any self-healing attempts.
+func (s *S6Instance) checkForDirectoryHealthOverride(ctx context.Context) (shouldOverride bool, overrideEvent string) {
+	// Early return for healthy directories - most common case
+	if s.ObservedState.DirectoryHealth != s6service.HealthBad {
+		return false, ""
+	}
+
 	currentState := s.baseFSMInstance.GetCurrentFSMState()
 
-	s.baseFSMInstance.GetLogger().Warnf("S6 service %s has bad directory integrity in state %s, handling recovery",
-		s.baseFSMInstance.GetID(), currentState)
-
+	// TODO(ENG-3473): Once manager is health-aware, trigger self-removal here for recovery
+	// For now, just log the issue - the stopping state workaround handles the critical case
 	switch currentState {
 	case OperationalStateStopping:
-		// Directory gone while stopping - consider it stopped
-		// This case is now handled in reconcileTransitionToStopped
-		s.baseFSMInstance.GetLogger().Infof("Directory integrity bad while stopping - will complete stop transition")
+		// Handled by existing workaround in reconcileTransitionToStopped
+		return false, ""
 
-		return nil, false
+	case OperationalStateStarting, OperationalStateRunning:
+		// Log degraded state but continue - manager blocks self-healing
+		s.baseFSMInstance.GetLogger().Debugf(
+			"S6 service %s directory missing while %s - degraded state (self-healing blocked by ENG-3473)",
+			s.baseFSMInstance.GetID(), currentState,
+		)
 
-	case OperationalStateRunning, OperationalStateStarting:
-		// Directory gone while running/starting - log the issue
-		// Note: Self-removal is blocked by manager (ENG-3473), so we just log for now
-		s.baseFSMInstance.GetLogger().Errorf("Directory integrity bad while %s - manual intervention required (self-healing blocked by ENG-3473)", currentState)
-
-		return nil, false
-
-	case OperationalStateStopped:
-		// Already stopped with bad directory - log the issue  
-		// Note: Self-removal is blocked by manager (ENG-3473)
-		s.baseFSMInstance.GetLogger().Warnf("Directory integrity bad while stopped - manual intervention required (self-healing blocked by ENG-3473)")
-
-		return nil, false
+		return false, ""
 
 	default:
-		// For other states, log but don't take action yet
-		s.baseFSMInstance.GetLogger().Debugf("Directory integrity bad in state %s - no action taken", currentState)
-
-		return nil, false
+		// Stopped state with missing directory is normal after cleanup
+		return false, ""
 	}
 }
