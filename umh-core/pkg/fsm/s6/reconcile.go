@@ -332,7 +332,8 @@ func (s *S6Instance) reconcileTransitionToStopped(ctx context.Context, services 
 		// This prevents the FSM from getting stuck in "stopping" state when the directory
 		// is deleted while the service is stopping. Without this, IsS6Stopped() returns false
 		// because it can't read the service status from the missing directory.
-		// NOTE: This is a temporary fix until ENG-3473 is resolved (manager health awareness)
+		// TODO(ENG-3473): Remove this workaround once manager is health-aware and allows
+		// FSM-initiated self-healing without override conflicts
 		if s.IsS6Stopped() || s.ObservedState.DirectoryHealth == s6service.HealthBad {
 			if s.ObservedState.DirectoryHealth == s6service.HealthBad {
 				s.baseFSMInstance.GetLogger().Infof("Directory missing/corrupted while stopping - considering service stopped")

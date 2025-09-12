@@ -76,7 +76,10 @@ func (s *S6Instance) CreateInstance(ctx context.Context, filesystemService files
 	}
 	
 	if health == s6service.HealthUnknown {
-		return fmt.Errorf("service directory integrity unknown after creation for %s", s.baseFSMInstance.GetID())
+		// Return error to trigger retry via reconciliation backoff mechanism
+		// HealthUnknown indicates temporary I/O issues or timeouts that should resolve
+		// The FSM will retry this action with exponential backoff
+		return fmt.Errorf("service directory integrity unknown after creation for %s (temporary I/O issue, will retry)", s.baseFSMInstance.GetID())
 	}
 
 	s.baseFSMInstance.GetLogger().Debugf("S6 service %s directory structure created and verified", s.baseFSMInstance.GetID())
