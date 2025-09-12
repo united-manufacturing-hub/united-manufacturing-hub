@@ -25,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
@@ -132,7 +133,7 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 
 	// Step 3: Attempt to reconcile the state.
 	currentTime := snapshot.SnapshotTime // Used for checking down-and-ready state duration
-	
+
 	err, reconciled = s.reconcileStateTransition(ctx, services, currentTime)
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
@@ -233,6 +234,11 @@ func (s *S6Instance) reconcileOperationalStates(ctx context.Context, services se
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".reconcileOperationalStates", time.Since(start))
 	}()
 
+	// Check for unhealthy directory first - this takes precedence over normal state transitions
+	if s.ObservedState.DirectoryHealth == s6service.HealthBad {
+		return s.handleUnhealthyDirectory(ctx, services)
+	}
+
 	switch desiredState {
 	case OperationalStateRunning:
 		return s.reconcileTransitionToRunning(ctx, services, currentState, currentTime)
@@ -267,20 +273,20 @@ func (s *S6Instance) reconcileTransitionToRunning(ctx context.Context, services 
 		// Only attempt restart if the service has been in this state for a while
 		// This prevents rapid restart loops during transient state changes
 		timeSinceLastChange := currentTime.Sub(s.ObservedState.ServiceInfo.LastChangedAt)
-		
+
 		if timeSinceLastChange < constants.S6DownAndReadyRestartDelay {
 			// Service just entered this state, wait before attempting restart
 			// This handles race conditions where stop->start happens quickly
-			s.baseFSMInstance.GetLogger().Debugf("S6 service %s in 'down and ready' state for %.1fs, waiting %.1fs before restart attempt", 
+			s.baseFSMInstance.GetLogger().Debugf("S6 service %s in 'down and ready' state for %.1fs, waiting %.1fs before restart attempt",
 				s.baseFSMInstance.GetID(), timeSinceLastChange.Seconds(), constants.S6DownAndReadyRestartDelay.Seconds())
-			
+
 			return nil, false
 		}
-		
+
 		// Service has been stuck in this state, attempt restart
-		s.baseFSMInstance.GetLogger().Warnf("S6 service %s stuck in 'down and ready' state for %.1fs, restarting to recover", 
+		s.baseFSMInstance.GetLogger().Warnf("S6 service %s stuck in 'down and ready' state for %.1fs, restarting to recover",
 			s.baseFSMInstance.GetID(), timeSinceLastChange.Seconds())
-		
+
 		if err := s.RestartInstance(ctx, services.GetFileSystem()); err != nil {
 			return err, true
 		}
@@ -331,4 +337,39 @@ func (s *S6Instance) reconcileTransitionToStopped(ctx context.Context, services 
 	}
 
 	return nil, false
+}
+
+// handleUnhealthyDirectory handles the case when the S6 service directory integrity is bad.
+// It triggers appropriate state transitions based on the current FSM state to recover.
+func (s *S6Instance) handleUnhealthyDirectory(ctx context.Context, services serviceregistry.Provider) (err error, reconciled bool) {
+	currentState := s.baseFSMInstance.GetCurrentFSMState()
+
+	s.baseFSMInstance.GetLogger().Warnf("S6 service %s has bad directory integrity in state %s, handling recovery",
+		s.baseFSMInstance.GetID(), currentState)
+
+	switch currentState {
+	case OperationalStateStopping:
+		// Directory gone while stopping - consider it stopped
+		s.baseFSMInstance.GetLogger().Infof("Directory integrity bad while stopping - completing stop transition")
+
+		return s.baseFSMInstance.SendEvent(ctx, EventStopDone), true
+
+	case OperationalStateRunning, OperationalStateStarting:
+		// Directory gone while running/starting - trigger self-removal for clean recreation
+		s.baseFSMInstance.GetLogger().Infof("Directory integrity bad while %s - triggering self-removal for recreation", currentState)
+
+		return s.baseFSMInstance.Remove(ctx), true
+
+	case OperationalStateStopped:
+		// Already stopped - trigger removal if directory is bad
+		s.baseFSMInstance.GetLogger().Infof("Directory integrity bad while stopped - triggering removal")
+
+		return s.baseFSMInstance.Remove(ctx), true
+
+	default:
+		// For other states, log but don't take action yet
+		s.baseFSMInstance.GetLogger().Debugf("Directory integrity bad in state %s - no action taken", currentState)
+
+		return nil, false
+	}
 }

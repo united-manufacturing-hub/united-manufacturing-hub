@@ -68,7 +68,18 @@ func (s *S6Instance) CreateInstance(ctx context.Context, filesystemService files
 		}
 	}
 
-	s.baseFSMInstance.GetLogger().Debugf("S6 service %s directory structure created", s.baseFSMInstance.GetID())
+	// Verify the directory integrity after creation
+	// This ensures we have properly tracked artifacts before considering creation successful
+	health := s.service.CheckServiceDirectoryIntegrity(ctx, s.servicePath, filesystemService)
+	if health == s6service.HealthBad {
+		return fmt.Errorf("service directory integrity is bad after creation for %s", s.baseFSMInstance.GetID())
+	}
+	
+	if health == s6service.HealthUnknown {
+		return fmt.Errorf("service directory integrity unknown after creation for %s", s.baseFSMInstance.GetID())
+	}
+
+	s.baseFSMInstance.GetLogger().Debugf("S6 service %s directory structure created and verified", s.baseFSMInstance.GetID())
 
 	return nil
 }
@@ -198,16 +209,34 @@ func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, services
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".updateObservedState", time.Since(start))
 	}()
 
+	// Check directory integrity first
+	s.ObservedState.DirectoryHealth = s.service.CheckServiceDirectoryIntegrity(ctx, s.servicePath, services.GetFileSystem())
+	
+	// Log if directory is unhealthy
+	if s.ObservedState.DirectoryHealth == s6service.HealthBad {
+		s.baseFSMInstance.GetLogger().Warnf("S6 service %s directory integrity is bad", s.baseFSMInstance.GetID())
+	}
+
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.S6UpdateObservedStateTimeout)
 	defer cancel()
 
 	//nolint:gosec
 	serviceInfo, err := s.service.Status(observedStateCtx, s.servicePath, services.GetFileSystem())
 	if err != nil {
-		return fmt.Errorf("failed to get service status: %w", err)
+		// If directory is unhealthy, we expect status to fail - don't return error
+		if s.ObservedState.DirectoryHealth == s6service.HealthBad {
+			s.baseFSMInstance.GetLogger().Debugf("Status failed as expected due to unhealthy directory: %v", err)
+			// Set default ServiceInfo to avoid nil issues
+			s.ObservedState.ServiceInfo = s6service.ServiceInfo{
+				Status: s6service.ServiceUnknown,
+			}
+			// Continue to config check
+		} else {
+			return fmt.Errorf("failed to get service status: %w", err)
+		}
+	} else {
+		s.ObservedState.ServiceInfo = serviceInfo
 	}
-
-	s.ObservedState.ServiceInfo = serviceInfo
 
 	if s.ObservedState.LastStateChange == 0 {
 		s.ObservedState.LastStateChange = time.Now().Unix()
@@ -216,21 +245,33 @@ func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, services
 	// Fetch the actual service config from s6
 	config, err := s.service.GetConfig(ctx, s.servicePath, services.GetFileSystem())
 	if err != nil {
-		return fmt.Errorf("failed to get service config: %w", err)
+		// If directory is unhealthy, config fetch may also fail
+		if s.ObservedState.DirectoryHealth == s6service.HealthBad {
+			s.baseFSMInstance.GetLogger().Debugf("Config fetch failed as expected due to unhealthy directory: %v", err)
+			// Set empty config to avoid nil issues
+			s.ObservedState.ObservedS6ServiceConfig = s6serviceconfig.S6ServiceConfig{}
+			// Continue - reconcile will handle the unhealthy state
+		} else {
+			return fmt.Errorf("failed to get service config: %w", err)
+		}
+	} else {
+		s.ObservedState.ObservedS6ServiceConfig = config
 	}
 
-	s.ObservedState.ObservedS6ServiceConfig = config
+	// Only check config differences if directory is healthy
+	// If directory is unhealthy, we can't trust the observed config and will handle it in reconcileStateTransition
+	if s.ObservedState.DirectoryHealth != s6service.HealthBad {
+		// the easiest way to do this is causing this instance to be removed, which will trigger a re-create by the manager
+		if !reflect.DeepEqual(s.ObservedState.ObservedS6ServiceConfig, s.config.S6ServiceConfig) {
+			s.baseFSMInstance.GetLogger().Debugf("Observed config is different from desired config, triggering a re-create")
+			s.logConfigDifferences(s.config.S6ServiceConfig, s.ObservedState.ObservedS6ServiceConfig)
 
-	// the easiest way to do this is causing this instance to be removed, which will trigger a re-create by the manager
-	if !reflect.DeepEqual(s.ObservedState.ObservedS6ServiceConfig, s.config.S6ServiceConfig) {
-		s.baseFSMInstance.GetLogger().Debugf("Observed config is different from desired config, triggering a re-create")
-		s.logConfigDifferences(s.config.S6ServiceConfig, s.ObservedState.ObservedS6ServiceConfig)
+			err := s.baseFSMInstance.Remove(ctx)
+			if err != nil {
+				s.baseFSMInstance.GetLogger().Errorf("error removing S6 instance %s: %v", s.baseFSMInstance.GetID(), err)
 
-		err := s.baseFSMInstance.Remove(ctx)
-		if err != nil {
-			s.baseFSMInstance.GetLogger().Errorf("error removing S6 instance %s: %v", s.baseFSMInstance.GetID(), err)
-
-			return err
+				return err
+			}
 		}
 	}
 

@@ -190,6 +190,9 @@ type Service interface {
 	// s6-svscan if it doesn't, to trigger supervision setup.
 	// Returns true if supervise directory exists (ready for supervision), false otherwise.
 	EnsureSupervision(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error)
+	// CheckServiceDirectoryIntegrity checks the integrity of the S6 service directory structure
+	// Returns HealthUnknown for I/O errors, HealthOK for intact structure, HealthBad for broken/missing directories
+	CheckServiceDirectoryIntegrity(ctx context.Context, servicePath string, fsService filesystem.Service) HealthStatus
 }
 
 // logState is the per-log-file cursor used by GetLogs.
@@ -435,10 +438,7 @@ func (s *DefaultService) Start(ctx context.Context, servicePath string, fsServic
 				// Continue anyway - s6-svc -u might still work
 			} else {
 				s.logger.Debugf("Removed down file %s", downFile)
-				// Update artifacts to remove the down file from tracking
-				if s.artifacts != nil {
-					s.removeFileFromArtifacts(downFile)
-				}
+				// Down files are not tracked in artifacts - see lifecycle.go:383
 			}
 		}
 	}
@@ -515,10 +515,7 @@ func (s *DefaultService) Stop(ctx context.Context, servicePath string, fsService
 			// Continue anyway - service is already stopped
 		} else {
 			s.logger.Debugf("Created down file %s", downFile)
-			// Update artifacts to track the down file
-			if s.artifacts != nil {
-				s.addFileToArtifacts(downFile)
-			}
+			// Down files are not tracked in artifacts - see lifecycle.go:383
 		}
 	}
 
@@ -637,6 +634,36 @@ func (s *DefaultService) ServiceExists(ctx context.Context, servicePath string, 
 	}
 
 	return true, nil
+}
+
+// CheckServiceDirectoryIntegrity checks the integrity of the S6 service directory structure.
+// It verifies that the service was properly created and has all required files.
+// Returns:
+// - HealthOK: Service directory structure is intact and valid
+// - HealthBad: Service directory is missing or corrupted
+// - HealthUnknown: Cannot determine health (no artifacts tracked or I/O errors).
+func (s *DefaultService) CheckServiceDirectoryIntegrity(ctx context.Context, servicePath string, fsService filesystem.Service) HealthStatus {
+	// If we have no artifacts tracked, we can't determine directory health
+	// This is expected in two cases:
+	// 1. Before Create() is called on a new instance
+	// 2. After agent restart when in-memory tracking is lost
+	// Return HealthUnknown to indicate we need more information
+	if s.artifacts == nil {
+		s.logger.Debugf("No artifacts tracked for service %s - directory integrity unknown", servicePath)
+		
+		return HealthUnknown
+	}
+	
+	// Delegate to CheckArtifactsHealth which validates all tracked files exist
+	health, err := s.CheckArtifactsHealth(ctx, s.artifacts, fsService)
+	if err != nil {
+		s.logger.Debugf("Error checking artifacts health for %s: %v", servicePath, err)
+		// CheckArtifactsHealth returns error for context cancellation or nil artifacts
+		// Both cases mean we can't determine health, so return Unknown
+		return HealthUnknown
+	}
+	
+	return health
 }
 
 // GetConfig gets the actual service config from s6.
