@@ -590,6 +590,8 @@ var _ = Describe("BenthosManager", func() {
 			myMockS6Svc.GetS6ConfigFileResult = []byte("logger:\n  level: info\n")
 			// we also return a stub S6ServiceConfig for GetConfig()
 			myMockS6Svc.GetConfigResult = s6Config
+			// Set MockExists to true so CheckServiceDirectoryIntegrity returns HealthOK
+			myMockS6Svc.MockExists = true
 
 			mockBenthosMonitorSvc := benthos_monitor_service.NewMockBenthosMonitorService()
 			mockBenthosMonitorMgr := benthos_monitor_fsm.NewBenthosMonitorManagerWithMockedService("rm-test-mgr", *mockBenthosMonitorSvc)
@@ -641,6 +643,9 @@ var _ = Describe("BenthosManager", func() {
 
 			innerMockS6Svc, ok := s6Inst.GetService().(*s6service.MockService)
 			Expect(ok).To(BeTrue(), "internal service is not a MockService")
+
+			// Set MockExists to true on the inner mock so CheckServiceDirectoryIntegrity returns HealthOK
+			innerMockS6Svc.MockExists = true
 
 			//----------------------------------------------------------------------
 			// 4. Hand the manager an *empty* Benthos section → instance must vanish

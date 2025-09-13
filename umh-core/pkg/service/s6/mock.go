@@ -264,3 +264,19 @@ func (m *MockService) EnsureSupervision(ctx context.Context, servicePath string,
 
 	return true, nil
 }
+
+// CheckServiceDirectoryIntegrity is a mock implementation that checks directory integrity.
+func (m *MockService) CheckServiceDirectoryIntegrity(ctx context.Context, servicePath string, fsService filesystem.Service) HealthStatus {
+	// If error mode is on, return HealthUnknown
+	if m.ErrorMode {
+		return HealthUnknown
+	}
+	
+	// If service doesn't exist, return HealthBad
+	if !m.MockExists {
+		return HealthBad
+	}
+	
+	// Default to HealthOK
+	return HealthOK
+}

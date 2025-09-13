@@ -16,6 +16,14 @@ package benthos
 
 import "errors"
 
+// S6StateNotExisting is the display string used when S6FSMState is empty.
+// This occurs when:
+//   - The service has been removed from S6 manager (returns ErrServiceNotExist)
+//   - The service directory is corrupted or missing
+//   - The service has never been created
+// This is used as a user-friendly representation of an undefined/empty S6 state.
+const S6StateNotExisting = "not existing"
+
 var (
 	// ErrServiceNotExist indicates the requested service does not exist.
 	ErrServiceNotExist = errors.New("service does not exist")

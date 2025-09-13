@@ -380,13 +380,39 @@ func (s *DefaultService) createS6FilesInRepository(ctx context.Context, reposito
 		return nil, fmt.Errorf("failed to create repository directory: %w", err)
 	}
 
+	// Down File Management Strategy:
+	// Down files are S6 control files that indicate whether a service should auto-start.
+	// We deliberately DO NOT track them in artifacts because:
+	// 
+	// 1. They are temporary control files - removed when starting, recreated when stopping
+	// 2. Their presence/absence indicates desired operational state, not health
+	// 3. After agent restart, the S6 service directory remains in its actual state:
+	//    - Running service: no down file, process still running
+	//    - Stopped service: has down file, process not running
+	// 4. Tracking them would cause false failures because after restart:
+	//    - We lose in-memory tracking (artifacts==nil) 
+	//    - Service might be legitimately running (no down file)
+	//    - Health check would fail on missing down file, triggering unnecessary removal
+	// 
+	// Our mitigation strategy relies on observed state detection:
+	// - UpdateObservedStateOfInstance calls Status() to detect actual S6 service state
+	// - This detects both process state (up/down) and control state (WantUp via down file)
+	// - FSM reconciles from this observed state to desired state, handling any inconsistencies
+	// 
+	// Edge case: If config changes during agent crash (e.g., running→stopped), there may be
+	// a brief inconsistency where the service is still running but should be stopped.
+	// This is acceptable because:
+	// - Extremely rare (requires simultaneous config change + crash)
+	// - Self-corrects within 1-2 reconciliation cycles via observed state detection
+	// - No data loss or corruption, just temporary state mismatch
+	
 	// Create down file to prevent automatic startup
 	downFilePath := filepath.Join(repositoryDir, "down")
 	if err := fsService.WriteFile(ctx, downFilePath, []byte{}, 0644); err != nil {
 		return nil, fmt.Errorf("failed to create down file: %w", err)
 	}
 
-	createdFiles = append(createdFiles, downFilePath)
+	// NOTE: Down files are NOT added to createdFiles - see comment above
 
 	// Create type file (required for s6-rc)
 	typeFile := filepath.Join(repositoryDir, "type")
@@ -414,12 +440,13 @@ func (s *DefaultService) createS6FilesInRepository(ctx context.Context, reposito
 	createdFiles = append(createdFiles, logTypeFile)
 
 	// Create log service down file to prevent automatic startup during creation
+	// NOTE: Down files are not tracked - see down file management comment above
 	logDownFile := filepath.Join(logServicePath, "down")
 	if err := fsService.WriteFile(ctx, logDownFile, []byte{}, 0644); err != nil {
 		return nil, fmt.Errorf("failed to create log service down file: %w", err)
 	}
 
-	createdFiles = append(createdFiles, logDownFile)
+	// NOTE: Down files are NOT added to createdFiles - see comment at line 383
 
 	// Create log run script immediately after other log service files to avoid race conditions
 	logRunContent, err := getLogRunScript(config, logDir)
@@ -557,9 +584,6 @@ func (s *DefaultService) createS6ConfigFiles(ctx context.Context, servicePath st
 			return nil, fmt.Errorf("config filename contains invalid characters: %s", path)
 		}
 
-		// Store original path for tracking
-		originalPath := path
-
 		// If path is relative, make it relative to service directory
 		if !filepath.IsAbs(path) {
 			path = filepath.Join(configPath, path)
@@ -576,8 +600,8 @@ func (s *DefaultService) createS6ConfigFiles(ctx context.Context, servicePath st
 			return nil, fmt.Errorf("failed to write to config file %s: %w", path, err)
 		}
 
-		// Track the created file using relative path from service directory
-		createdFiles = append(createdFiles, filepath.Join("config", originalPath))
+		// Track the created file using absolute path for consistency
+		createdFiles = append(createdFiles, path)
 	}
 
 	return createdFiles, nil
@@ -749,39 +773,6 @@ func (s *DefaultService) checkSingleSupervisionEnded(ctx context.Context, servic
 
 // Note: parseStatusFile logic has been moved to status.go as parseS6StatusFile
 // This centralizes all S6 status parsing logic in one place
-
-// removeFileFromArtifacts removes a file from the artifacts tracking.
-func (s *DefaultService) removeFileFromArtifacts(filePath string) {
-	if s.artifacts == nil {
-		return
-	}
-
-	// Remove from CreatedFiles slice
-	for i, createdFile := range s.artifacts.CreatedFiles {
-		if createdFile == filePath {
-			s.artifacts.CreatedFiles = append(s.artifacts.CreatedFiles[:i], s.artifacts.CreatedFiles[i+1:]...)
-
-			break
-		}
-	}
-}
-
-// addFileToArtifacts adds a file to the artifacts tracking.
-func (s *DefaultService) addFileToArtifacts(filePath string) {
-	if s.artifacts == nil {
-		return
-	}
-
-	// Check if file is already tracked
-	for _, createdFile := range s.artifacts.CreatedFiles {
-		if createdFile == filePath {
-			return // Already tracked
-		}
-	}
-
-	// Add to CreatedFiles slice
-	s.artifacts.CreatedFiles = append(s.artifacts.CreatedFiles, filePath)
-}
 
 // calculateS6Timeout calculates the timeout for S6 commands based on remaining context time
 // Uses S6_TIMEOUT_PERCENTAGE of remaining context time.

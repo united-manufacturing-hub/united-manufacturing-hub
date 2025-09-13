@@ -320,6 +320,8 @@ func SetupS6Instance(
 	desiredState string,
 ) (*s6fsm.S6Instance, *s6service.MockService, string) {
 	mockService := s6service.NewMockService()
+	// Set MockExists to true so CheckServiceDirectoryIntegrity returns HealthOK
+	mockService.MockExists = true
 
 	// Create config
 	instanceConfig := CreateS6TestConfig(name, desiredState)

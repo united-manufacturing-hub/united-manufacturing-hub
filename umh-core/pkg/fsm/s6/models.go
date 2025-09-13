@@ -75,6 +75,12 @@ type S6ObservedState struct {
 
 	// LastStateChange is the timestamp of the last observed state change
 	LastStateChange int64
+
+	// DirectoryHealth indicates the health of the S6 service directory
+	// HealthUnknown: I/O errors, timeouts, etc. (retry next tick)
+	// HealthOK: Service directory is healthy and complete
+	// HealthBad: Service directory is broken (triggers FSM transition)
+	DirectoryHealth s6svc.HealthStatus
 }
 
 // IsObservedState implements the ObservedState interface.
