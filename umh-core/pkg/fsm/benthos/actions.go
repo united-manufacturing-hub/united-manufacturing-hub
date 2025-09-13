@@ -53,7 +53,7 @@ import (
 func (b *BenthosInstance) logS6DirectoryState(ctx context.Context, trigger string) {
 	// Only log when S6FSMState is empty or shows problems
 	s6State := b.ObservedState.ServiceInfo.S6FSMState
-	if s6State != "" && s6State != "not existing" {
+	if s6State != "" && s6State != benthos_service.S6StateNotExisting {
 		return
 	}
 
@@ -166,7 +166,7 @@ func (b *BenthosInstance) logS6DirectoryState(ctx context.Context, trigger strin
 	}
 
 	// If we're in a problematic state, log additional context
-	if s6State == "" || s6State == "not existing" {
+	if s6State == "" || s6State == benthos_service.S6StateNotExisting {
 		// Log what files are actually present
 		if dirExists && isDir {
 			entries, err := os.ReadDir(servicePath)
@@ -500,7 +500,7 @@ func (b *BenthosInstance) IsBenthosS6Running() (bool, string) {
 		// Log diagnostic info when we encounter empty S6 state
 		b.logS6DirectoryState(context.Background(), "IsBenthosS6Running_empty_state")
 
-		currentState = "not existing"
+		currentState = benthos_service.S6StateNotExisting
 	}
 
 	return false, "s6 is not running, current state: " + currentState
@@ -525,7 +525,7 @@ func (b *BenthosInstance) IsBenthosS6Stopped() (bool, string) {
 		// Log diagnostic info when we encounter empty S6 state
 		b.logS6DirectoryState(context.Background(), "IsBenthosS6Stopped_empty_state")
 
-		fsmState = "not existing"
+		fsmState = benthos_service.S6StateNotExisting
 	case s6fsm.OperationalStateStopped:
 		return true, ""
 	}
