@@ -30,6 +30,7 @@ import (
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	logger "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	benthos_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
@@ -60,32 +61,32 @@ func (b *BenthosInstance) logS6DirectoryState(ctx context.Context, trigger strin
 	// Convert to S6 service name format (benthos- prefix)
 	s6ServiceName := "benthos-" + serviceName
 	servicePath := filepath.Join("/var/run/s6/services", s6ServiceName)
-	
+
 	// Gather comprehensive directory state
 	var dirExists, isDir, statusExists, runExists, downExists bool
 	var statusSize, runSize int64
 	var superviseExists bool
 	var pidFileExists bool
 	var pid string
-	
+
 	// Check main service directory
 	if info, err := os.Stat(servicePath); err == nil {
 		dirExists = true
 		isDir = info.IsDir()
-		
+
 		if isDir {
 			// Check supervise directory
 			supervisePath := filepath.Join(servicePath, "supervise")
 			if _, err := os.Stat(supervisePath); err == nil {
 				superviseExists = true
-				
+
 				// Check status file
 				statusPath := filepath.Join(supervisePath, "status")
 				if sInfo, err := os.Stat(statusPath); err == nil {
 					statusExists = true
 					statusSize = sInfo.Size()
 				}
-				
+
 				// Check PID file
 				pidPath := filepath.Join(supervisePath, "pid")
 				if pidBytes, err := os.ReadFile(pidPath); err == nil {
@@ -93,14 +94,14 @@ func (b *BenthosInstance) logS6DirectoryState(ctx context.Context, trigger strin
 					pid = strings.TrimSpace(string(pidBytes))
 				}
 			}
-			
+
 			// Check run script
 			runPath := filepath.Join(servicePath, "run")
 			if rInfo, err := os.Stat(runPath); err == nil {
 				runExists = true
 				runSize = rInfo.Size()
 			}
-			
+
 			// Check down file (indicates service should not auto-start)
 			downPath := filepath.Join(servicePath, "down")
 			if _, err := os.Stat(downPath); err == nil {
@@ -108,25 +109,26 @@ func (b *BenthosInstance) logS6DirectoryState(ctx context.Context, trigger strin
 			}
 		}
 	}
-	
+
 	// Gather FSM state context
 	currentFSMState := b.baseFSMInstance.GetCurrentFSMState()
-	
+
 	// Check if process is actually running
 	processRunning := false
-	
+
 	if pid != "" {
 		procPath := "/proc/" + pid
 		if _, err := os.Stat(procPath); err == nil {
 			processRunning = true
 		}
 	}
-	
+
 	// Extract S6 service info for comprehensive logging
 	s6Info := b.ObservedState.ServiceInfo.S6ObservedState.ServiceInfo
-	
-	// Log comprehensive state - this is critical for debugging
-	b.baseFSMInstance.GetLogger().Warnf(
+
+	// TODO(ENG-3468): Remove DEBUG logging and Sentry reporting once S6 directory corruption issues are resolved
+	// Using DEBUG + Sentry to capture production diagnostics without log spam
+	b.baseFSMInstance.GetLogger().Debugf(
 		"S6 Directory State Debug [trigger=%s]: "+
 			"service=%s, path=%s, FSMState='%s', currentFSM=%s, "+
 			"dir[exists=%v, isDir=%v], supervise[exists=%v], "+
@@ -140,9 +142,9 @@ func (b *BenthosInstance) logS6DirectoryState(ctx context.Context, trigger strin
 		b.ObservedState.ServiceInfo.S6FSMState,
 		b.ObservedState.ServiceInfo.BenthosStatus.StatusReason,
 	)
-	
+
 	// Log complete S6 ServiceInfo
-	b.baseFSMInstance.GetLogger().Warnf(
+	b.baseFSMInstance.GetLogger().Debugf(
 		"S6 ServiceInfo [trigger=%s]: "+
 			"PID=%d, PGID=%d, ExitCode=%d, Status=%s, "+
 			"Uptime=%ds, DownTime=%ds, ReadyTime=%ds, "+
@@ -154,7 +156,7 @@ func (b *BenthosInstance) logS6DirectoryState(ctx context.Context, trigger strin
 		s6Info.WantUp, s6Info.IsPaused, s6Info.IsFinishing, s6Info.IsWantingUp, s6Info.IsReady, s6Info.IsDownAndReady,
 		s6Info.LastChangedAt, s6Info.LastReadyAt, s6Info.LastDeploymentTime,
 	)
-	
+
 	// Log exit history if present
 	if len(s6Info.ExitHistory) > 0 {
 		b.baseFSMInstance.GetLogger().Debugf(
@@ -162,7 +164,7 @@ func (b *BenthosInstance) logS6DirectoryState(ctx context.Context, trigger strin
 			trigger, len(s6Info.ExitHistory), s6Info.ExitHistory,
 		)
 	}
-	
+
 	// If we're in a problematic state, log additional context
 	if s6State == "" || s6State == "not existing" {
 		// Log what files are actually present
@@ -173,14 +175,14 @@ func (b *BenthosInstance) logS6DirectoryState(ctx context.Context, trigger strin
 				for _, entry := range entries {
 					fileList = append(fileList, entry.Name())
 				}
-				
+
 				b.baseFSMInstance.GetLogger().Debugf(
 					"S6 Directory contents for %s: %v",
 					serviceName, fileList,
 				)
 			}
 		}
-		
+
 		// Log Benthos-specific health and metrics
 		healthStatus := b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck
 		metricsInfo := b.ObservedState.ServiceInfo.BenthosStatus.BenthosMetrics
@@ -191,7 +193,7 @@ func (b *BenthosInstance) logS6DirectoryState(ctx context.Context, trigger strin
 			metricsInfo.MetricsState,
 			len(b.ObservedState.ServiceInfo.BenthosStatus.BenthosLogs),
 		)
-		
+
 		// Log last few Benthos logs if any errors
 		logs := b.ObservedState.ServiceInfo.BenthosStatus.BenthosLogs
 		if len(logs) > 0 {
@@ -205,6 +207,38 @@ func (b *BenthosInstance) logS6DirectoryState(ctx context.Context, trigger strin
 			)
 		}
 	}
+
+	// Report to Sentry for production visibility (uses built-in 2hr debounce to prevent spam)
+	// This ensures we capture diagnostics even when customers run at INFO log level
+	diagnosticContext := map[string]interface{}{
+		"trigger":          trigger,
+		"service_name":     serviceName,
+		"service_path":     servicePath,
+		"fsm_state":        currentFSMState,
+		"s6_state":         s6State,
+		"directory_exists": dirExists,
+		"is_directory":     isDir,
+		"supervise_exists": superviseExists,
+		"status_exists":    statusExists,
+		"status_size":      statusSize,
+		"run_exists":       runExists,
+		"run_size":         runSize,
+		"down_exists":      downExists,
+		"pid_file_exists":  pidFileExists,
+		"pid":              pid,
+		"process_running":  processRunning,
+		"benthos_status":   b.ObservedState.ServiceInfo.BenthosStatus.StatusReason,
+		"health_live":      b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive,
+		"health_ready":     b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady,
+	}
+
+	sentry.ReportIssueWithContext(
+		fmt.Errorf("S6 directory health issue: service=%s, state='%s', trigger=%s",
+			serviceName, s6State, trigger),
+		sentry.IssueTypeWarning,
+		b.baseFSMInstance.GetLogger(),
+		diagnosticContext,
+	)
 }
 
 // CreateInstance attempts to add the Benthos to the S6 manager.
@@ -465,7 +499,7 @@ func (b *BenthosInstance) IsBenthosS6Running() (bool, string) {
 	if currentState == "" {
 		// Log diagnostic info when we encounter empty S6 state
 		b.logS6DirectoryState(context.Background(), "IsBenthosS6Running_empty_state")
-		
+
 		currentState = "not existing"
 	}
 
@@ -490,7 +524,7 @@ func (b *BenthosInstance) IsBenthosS6Stopped() (bool, string) {
 	case "":
 		// Log diagnostic info when we encounter empty S6 state
 		b.logS6DirectoryState(context.Background(), "IsBenthosS6Stopped_empty_state")
-		
+
 		fsmState = "not existing"
 	case s6fsm.OperationalStateStopped:
 		return true, ""
