@@ -50,6 +50,7 @@ import (
 
 // logS6DirectoryState provides comprehensive diagnostic logging when S6 state is empty or problematic.
 // This helps troubleshoot "not existing" errors (ENG-3468) by capturing the full state of S6 directories.
+// This function spawns a goroutine for async logging to avoid blocking the reconciliation loop.
 func (b *BenthosInstance) logS6DirectoryState(ctx context.Context, trigger string) {
 	// Only log when S6FSMState is empty or shows problems
 	s6State := b.ObservedState.ServiceInfo.S6FSMState
@@ -57,6 +58,14 @@ func (b *BenthosInstance) logS6DirectoryState(ctx context.Context, trigger strin
 		return
 	}
 
+	// Spawn goroutine for async diagnostic logging and Sentry reporting
+	// This prevents blocking the reconciliation loop with I/O operations
+	go b.logS6DirectoryStateAsync(trigger, s6State)
+}
+
+// logS6DirectoryStateAsync performs the actual diagnostic logging in a goroutine.
+// Uses context.Background() since this is fire-and-forget async logging.
+func (b *BenthosInstance) logS6DirectoryStateAsync(trigger string, s6State string) {
 	serviceName := b.baseFSMInstance.GetID()
 	// Convert to S6 service name format (benthos- prefix)
 	s6ServiceName := "benthos-" + serviceName
