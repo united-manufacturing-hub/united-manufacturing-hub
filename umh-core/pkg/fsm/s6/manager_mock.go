@@ -65,6 +65,8 @@ func NewS6ManagerWithMockedServices(name string) *S6Manager {
 			mockService.ServiceStates[servicePath] = s6service.ServiceInfo{
 				Status: s6service.ServiceDown,
 			}
+			// Set MockExists to true so CheckServiceDirectoryIntegrity returns HealthOK
+			mockService.MockExists = true
 
 			// Setup mock to return the config we're setting
 			mockService.GetConfigResult = cfg.S6ServiceConfig
