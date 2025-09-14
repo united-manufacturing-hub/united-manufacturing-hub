@@ -10,4 +10,4 @@ tmp/
 
 # Compiled binaries
 main
-tools/loganalyzer/loganalyzer
+tools/s6-analyzer/s6-analyzer
