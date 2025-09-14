@@ -248,12 +248,12 @@ func (s *BaseFSMInstance) SendEvent(ctx context.Context, eventName string, args 
 
 	// Execute the FSM transition with guaranteed time to complete
 	err := s.fsm.Event(fsmCtx, eventName, args...)
-	
+
 	// Check if parent context expired while we were executing
 	if err == nil && ctx.Err() != nil {
 		s.logger.Warnf("FSM transition completed successfully but parent context expired - prevented stuck transition but now outside of cycle time (preventing bigger impact)")
 	}
-	
+
 	if err != nil {
 		// Enhanced error message with state context
 		enhancedErr := fmt.Errorf("FSM %s failed transition: current_state='%s' -> event='%s' (desired_state='%s'): %w",
@@ -458,6 +458,7 @@ func (s *BaseFSMInstance) HandlePermanentError(
 		// and needs to be completely recreated.
 		s.SetCurrentFSMState(LifecycleStateRemoved)
 		logger.Infof("%s instance %s force removed and transitioned to removed state", s.cfg.ID, instanceID)
+
 		return err, true
 	} else {
 		// Not in a shutdown state yet, so try normal removal first
