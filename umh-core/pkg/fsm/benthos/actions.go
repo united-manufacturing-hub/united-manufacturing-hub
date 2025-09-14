@@ -18,8 +18,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
+
+	"go.uber.org/zap"
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	benthosserviceconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
@@ -28,8 +32,10 @@ import (
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	logger "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	benthos_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
@@ -44,6 +50,250 @@ import (
 //   - Each action takes a context.Context and can return an error if the operation fails.
 //   - If an error occurs, the Reconcile function must handle
 //     setting error state and scheduling a retry/backoff.
+
+// logS6DirectoryState provides comprehensive diagnostic logging when S6 state is empty or problematic.
+// This helps troubleshoot "not existing" errors (ENG-3468) by capturing the full state of S6 directories.
+// This function spawns a short-lived goroutine for async logging to avoid blocking the reconciliation loop.
+func (b *BenthosInstance) logS6DirectoryState(trigger string) {
+	// Only log when S6FSMState is empty or shows problems
+	s6State := b.ObservedState.ServiceInfo.S6FSMState
+	if s6State != "" && s6State != benthos_service.S6StateNotExisting {
+		return
+	}
+
+	// Capture snapshots of mutable data to avoid data races in the goroutine
+	// We only copy what we actually need for logging, not entire structures
+	serviceName := b.baseFSMInstance.GetID()
+	currentFSMState := b.baseFSMInstance.GetCurrentFSMState()
+	logger := b.baseFSMInstance.GetLogger()
+	
+	// Copy S6 ServiceInfo (it's a value type, so this is a deep copy)
+	s6Info := b.ObservedState.ServiceInfo.S6ObservedState.ServiceInfo
+	
+	// Extract only the Benthos status fields we actually use
+	benthosStatusReason := b.ObservedState.ServiceInfo.BenthosStatus.StatusReason
+	healthIsLive := b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive
+	healthIsReady := b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady
+	metricsState := b.ObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState
+	
+	// Copy only the last 3 log entries (not the entire log array)
+	var lastLogs []s6service.LogEntry
+	logs := b.ObservedState.ServiceInfo.BenthosStatus.BenthosLogs
+	if len(logs) > 0 {
+		n := min(3, len(logs))
+		// Make a copy of just the last n entries
+		lastLogs = append([]s6service.LogEntry(nil), logs[len(logs)-n:]...)
+	}
+
+	// Create a timeout context for the async logging goroutine to prevent leaks
+	logCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	
+	// Spawn short-lived goroutine for async diagnostic logging and Sentry reporting.
+	// This prevents blocking the reconciliation loop with I/O operations.
+	// The goroutine completes quickly after logging diagnostics.
+	go func() {
+		defer cancel()
+		b.logS6DirectoryStateAsync(
+			logCtx,
+			trigger, s6State, serviceName, currentFSMState, logger,
+			s6Info, benthosStatusReason, healthIsLive, healthIsReady,
+			metricsState, lastLogs,
+		)
+	}()
+}
+
+// logS6DirectoryStateAsync performs the actual diagnostic logging in a goroutine.
+// All parameters are immutable snapshots to avoid data races.
+// This is a short-lived goroutine that completes quickly after logging.
+func (b *BenthosInstance) logS6DirectoryStateAsync(
+	ctx context.Context,
+	trigger string,
+	s6State string,
+	serviceName string,
+	currentFSMState string,
+	logger *zap.SugaredLogger,
+	s6Info s6service.ServiceInfo,
+	benthosStatusReason string,
+	healthIsLive bool,
+	healthIsReady bool,
+	metricsState interface{},
+	lastLogs []s6service.LogEntry,
+) {
+	// Convert to S6 service name format (benthos- prefix)
+	s6ServiceName := "benthos-" + serviceName
+	servicePath := filepath.Join("/var/run/s6/services", s6ServiceName)
+
+	// Gather comprehensive directory state
+	var (
+		dirExists, isDir, statusExists, runExists, downExists bool
+		statusSize, runSize                                   int64
+		superviseExists                                       bool
+		pidFileExists                                         bool
+		pid                                                   string
+	)
+
+	// Check main service directory
+
+	if info, err := os.Stat(servicePath); err == nil {
+		dirExists = true
+		isDir = info.IsDir()
+
+		if isDir {
+			// Check supervise directory
+			supervisePath := filepath.Join(servicePath, "supervise")
+			if _, err := os.Stat(supervisePath); err == nil {
+				superviseExists = true
+
+				// Check status file
+				statusPath := filepath.Join(supervisePath, "status")
+				if sInfo, err := os.Stat(statusPath); err == nil {
+					statusExists = true
+					statusSize = sInfo.Size()
+				}
+
+				// Check PID file
+				pidPath := filepath.Join(supervisePath, "pid")
+				if pidBytes, err := os.ReadFile(pidPath); err == nil {
+					pidFileExists = true
+					pid = strings.TrimSpace(string(pidBytes))
+				}
+			}
+
+			// Check run script
+			runPath := filepath.Join(servicePath, "run")
+			if rInfo, err := os.Stat(runPath); err == nil {
+				runExists = true
+				runSize = rInfo.Size()
+			}
+
+			// Check down file (indicates service should not auto-start)
+			downPath := filepath.Join(servicePath, "down")
+			if _, err := os.Stat(downPath); err == nil {
+				downExists = true
+			}
+		}
+	}
+
+	// Check if process is actually running
+	processRunning := false
+
+	if pid != "" {
+		procPath := "/proc/" + pid
+		if _, err := os.Stat(procPath); err == nil {
+			processRunning = true
+		}
+	}
+
+	// Note: s6Info is now a parameter, already captured as a snapshot
+
+	// TODO(ENG-3468): Remove DEBUG logging and Sentry reporting once S6 directory corruption issues are resolved
+	// Using DEBUG + Sentry to capture production diagnostics without log spam
+	logger.Debugf(
+		"S6 Directory State Debug [trigger=%s]: "+
+			"service=%s, path=%s, FSMState='%s', currentFSM=%s, "+
+			"dir[exists=%v, isDir=%v], supervise[exists=%v], "+
+			"status[exists=%v, size=%d], run[exists=%v, size=%d], "+
+			"down[exists=%v], pid[exists=%v, value=%s, running=%v], "+
+			"s6State='%s', benthosStatus='%s'",
+		trigger, serviceName, servicePath, s6State, currentFSMState,
+		dirExists, isDir, superviseExists,
+		statusExists, statusSize, runExists, runSize,
+		downExists, pidFileExists, pid, processRunning,
+		s6State,
+		benthosStatusReason,
+	)
+
+	// Log complete S6 ServiceInfo
+	logger.Debugf(
+		"S6 ServiceInfo [trigger=%s]: "+
+			"PID=%d, PGID=%d, ExitCode=%d, Status=%s, "+
+			"Uptime=%ds, DownTime=%ds, ReadyTime=%ds, "+
+			"WantUp=%v, IsPaused=%v, IsFinishing=%v, IsWantingUp=%v, IsReady=%v, IsDownAndReady=%v, "+
+			"LastChangedAt=%v, LastReadyAt=%v, LastDeploymentTime=%v",
+		trigger,
+		s6Info.Pid, s6Info.Pgid, s6Info.ExitCode, s6Info.Status,
+		s6Info.Uptime, s6Info.DownTime, s6Info.ReadyTime,
+		s6Info.WantUp, s6Info.IsPaused, s6Info.IsFinishing, s6Info.IsWantingUp, s6Info.IsReady, s6Info.IsDownAndReady,
+		s6Info.LastChangedAt, s6Info.LastReadyAt, s6Info.LastDeploymentTime,
+	)
+
+	// Log exit history if present
+	if len(s6Info.ExitHistory) > 0 {
+		logger.Debugf(
+			"S6 Exit History [trigger=%s]: Last %d exits: %+v",
+			trigger, len(s6Info.ExitHistory), s6Info.ExitHistory,
+		)
+	}
+
+	// If we're in a problematic state, log additional context
+	if s6State == "" || s6State == benthos_service.S6StateNotExisting {
+		// Log what files are actually present
+		if dirExists && isDir {
+			entries, err := os.ReadDir(servicePath)
+			if err == nil {
+				var fileList []string
+				for _, entry := range entries {
+					fileList = append(fileList, entry.Name())
+				}
+
+				logger.Debugf(
+					"S6 Directory contents for %s: %v",
+					serviceName, fileList,
+				)
+			}
+		}
+
+		// Log Benthos-specific health and metrics
+		// Note: These values are now parameters, not read from b.ObservedState
+		logger.Debugf(
+			"Benthos Status [trigger=%s]: health[live=%v, ready=%v], "+
+				"metricsState=%+v, logsCount=%d",
+			trigger, healthIsLive, healthIsReady,
+			metricsState,
+			len(lastLogs),
+		)
+
+		// Log last few Benthos logs if any errors
+		// Note: lastLogs already contains only the last 3 entries we need
+		if len(lastLogs) > 0 {
+			logger.Debugf(
+				"Last Benthos logs: %+v", lastLogs,
+			)
+		}
+	}
+
+	// Report to Sentry for production visibility (uses built-in 2hr debounce to prevent spam)
+	// This ensures we capture diagnostics even when customers run at INFO log level
+	diagnosticContext := map[string]interface{}{
+		"trigger":          trigger,
+		"service_name":     serviceName,
+		"service_path":     servicePath,
+		"fsm_state":        currentFSMState,
+		"s6_state":         s6State,
+		"directory_exists": dirExists,
+		"is_directory":     isDir,
+		"supervise_exists": superviseExists,
+		"status_exists":    statusExists,
+		"status_size":      statusSize,
+		"run_exists":       runExists,
+		"run_size":         runSize,
+		"down_exists":      downExists,
+		"pid_file_exists":  pidFileExists,
+		"pid":              pid,
+		"process_running":  processRunning,
+		"benthos_status":   benthosStatusReason,
+		"health_live":      healthIsLive,
+		"health_ready":     healthIsReady,
+	}
+
+	sentry.ReportIssueWithContext(
+		fmt.Errorf("S6 directory health issue: service=%s, state='%s', trigger=%s",
+			serviceName, s6State, trigger),
+		sentry.IssueTypeWarning,
+		logger,
+		diagnosticContext,
+	)
+}
 
 // CreateInstance attempts to add the Benthos to the S6 manager.
 func (b *BenthosInstance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
@@ -301,7 +551,10 @@ func (b *BenthosInstance) IsBenthosS6Running() (bool, string) {
 
 	currentState := b.ObservedState.ServiceInfo.S6FSMState
 	if currentState == "" {
-		currentState = "not existing"
+		// Log diagnostic info when we encounter empty S6 state
+		b.logS6DirectoryState("IsBenthosS6Running_empty_state")
+
+		currentState = benthos_service.S6StateNotExisting
 	}
 
 	return false, "s6 is not running, current state: " + currentState
@@ -323,7 +576,10 @@ func (b *BenthosInstance) IsBenthosS6Stopped() (bool, string) {
 	fsmState := b.ObservedState.ServiceInfo.S6FSMState
 	switch fsmState {
 	case "":
-		fsmState = "not existing"
+		// Log diagnostic info when we encounter empty S6 state
+		b.logS6DirectoryState("IsBenthosS6Stopped_empty_state")
+
+		fsmState = benthos_service.S6StateNotExisting
 	case s6fsm.OperationalStateStopped:
 		return true, ""
 	}

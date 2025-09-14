@@ -188,6 +188,9 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 			Status: s6service.ServiceDown,
 		}
 
+		// Set MockExists to true so CheckServiceDirectoryIntegrity returns HealthOK
+		mockS6Service.MockExists = true
+
 		// Create a mocked S6 manager with mocked services to prevent using real S6 functionality
 		mockedS6Manager := s6fsm.NewS6ManagerWithMockedServices("test-redpanda")
 

@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
@@ -25,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	benthos_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
@@ -427,9 +429,14 @@ func (b *BenthosInstance) reconcileRunningStates(ctx context.Context, services s
 		s6Running, _ := b.IsBenthosS6Running()
 		if !s6Running {
 			b.baseFSMInstance.GetLogger().Debugf("S6 service stopped while in degraded state, attempting to restart")
+			
+			// Log diagnostic state before attempting restart
+			b.logS6DirectoryState("degraded_before_restart")
 
 			err := b.StartInstance(ctx, services.GetFileSystem())
 			if err != nil {
+				// Log diagnostic state when restart fails
+				b.logS6DirectoryState("degraded_restart_failed")
 				b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("degraded: failed to restart service: %v", err)
 
 				return err, false
@@ -473,6 +480,11 @@ func (b *BenthosInstance) reconcileTransitionToStopped(ctx context.Context, serv
 	isStopped, reason := b.IsBenthosS6Stopped()
 	if currentState == OperationalStateStopping {
 		if !isStopped {
+			// Log diagnostic info when stuck in stopping state
+			if strings.Contains(reason, benthos_service.S6StateNotExisting) {
+				b.logS6DirectoryState("stopping_not_existing")
+			}
+			
 			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = "stopping: " + reason
 
 			return nil, false

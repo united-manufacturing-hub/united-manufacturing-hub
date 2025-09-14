@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# NOTE: This workflow only sets nightly/stable versions through the management console webhook.
+# Enterprise versions are NOT set here - they must be set directly in the database.
+
 name: Build UMH Core
 
 on:
