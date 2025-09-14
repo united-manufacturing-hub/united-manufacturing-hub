@@ -53,7 +53,7 @@ import (
 
 // logS6DirectoryState provides comprehensive diagnostic logging when S6 state is empty or problematic.
 // This helps troubleshoot "not existing" errors (ENG-3468) by capturing the full state of S6 directories.
-// This function spawns a goroutine for async logging to avoid blocking the reconciliation loop.
+// This function spawns a short-lived goroutine for async logging to avoid blocking the reconciliation loop.
 func (b *BenthosInstance) logS6DirectoryState(ctx context.Context, trigger string) {
 	// Only log when S6FSMState is empty or shows problems
 	s6State := b.ObservedState.ServiceInfo.S6FSMState
@@ -80,28 +80,33 @@ func (b *BenthosInstance) logS6DirectoryState(ctx context.Context, trigger strin
 	var lastLogs []s6service.LogEntry
 	logs := b.ObservedState.ServiceInfo.BenthosStatus.BenthosLogs
 	if len(logs) > 0 {
-		start := len(logs) - 3
-		if start < 0 {
-			start = 0
-		}
-		// Make a copy of just the entries we need
-		lastLogs = make([]s6service.LogEntry, len(logs[start:]))
-		copy(lastLogs, logs[start:])
+		n := min(3, len(logs))
+		// Make a copy of just the last n entries
+		lastLogs = append([]s6service.LogEntry(nil), logs[len(logs)-n:]...)
 	}
 
-	// Spawn goroutine for async diagnostic logging and Sentry reporting
-	// This prevents blocking the reconciliation loop with I/O operations
-	go b.logS6DirectoryStateAsync(
-		trigger, s6State, serviceName, currentFSMState, logger,
-		s6Info, benthosStatusReason, healthIsLive, healthIsReady,
-		metricsState, lastLogs,
-	)
+	// Create a timeout context for the async logging goroutine to prevent leaks
+	logCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	
+	// Spawn short-lived goroutine for async diagnostic logging and Sentry reporting.
+	// This prevents blocking the reconciliation loop with I/O operations.
+	// The goroutine completes quickly after logging diagnostics.
+	go func() {
+		defer cancel()
+		b.logS6DirectoryStateAsync(
+			logCtx,
+			trigger, s6State, serviceName, currentFSMState, logger,
+			s6Info, benthosStatusReason, healthIsLive, healthIsReady,
+			metricsState, lastLogs,
+		)
+	}()
 }
 
 // logS6DirectoryStateAsync performs the actual diagnostic logging in a goroutine.
 // All parameters are immutable snapshots to avoid data races.
-// Uses context.Background() since this is fire-and-forget async logging.
+// This is a short-lived goroutine that completes quickly after logging.
 func (b *BenthosInstance) logS6DirectoryStateAsync(
+	ctx context.Context,
 	trigger string,
 	s6State string,
 	serviceName string,
@@ -114,7 +119,6 @@ func (b *BenthosInstance) logS6DirectoryStateAsync(
 	metricsState interface{},
 	lastLogs []s6service.LogEntry,
 ) {
-	// Note: serviceName is now a parameter, not read from b.baseFSMInstance
 	// Convert to S6 service name format (benthos- prefix)
 	s6ServiceName := "benthos-" + serviceName
 	servicePath := filepath.Join("/var/run/s6/services", s6ServiceName)
@@ -169,8 +173,6 @@ func (b *BenthosInstance) logS6DirectoryStateAsync(
 			}
 		}
 	}
-
-	// Note: currentFSMState is now a parameter, already captured
 
 	// Check if process is actually running
 	processRunning := false
