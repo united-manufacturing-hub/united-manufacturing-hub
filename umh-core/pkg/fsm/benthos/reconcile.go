@@ -431,12 +431,12 @@ func (b *BenthosInstance) reconcileRunningStates(ctx context.Context, services s
 			b.baseFSMInstance.GetLogger().Debugf("S6 service stopped while in degraded state, attempting to restart")
 			
 			// Log diagnostic state before attempting restart
-			b.logS6DirectoryState(ctx, "degraded_before_restart")
+			b.logS6DirectoryState("degraded_before_restart")
 
 			err := b.StartInstance(ctx, services.GetFileSystem())
 			if err != nil {
 				// Log diagnostic state when restart fails
-				b.logS6DirectoryState(ctx, "degraded_restart_failed")
+				b.logS6DirectoryState("degraded_restart_failed")
 				b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("degraded: failed to restart service: %v", err)
 
 				return err, false
@@ -482,7 +482,7 @@ func (b *BenthosInstance) reconcileTransitionToStopped(ctx context.Context, serv
 		if !isStopped {
 			// Log diagnostic info when stuck in stopping state
 			if strings.Contains(reason, benthos_service.S6StateNotExisting) {
-				b.logS6DirectoryState(ctx, "stopping_not_existing")
+				b.logS6DirectoryState("stopping_not_existing")
 			}
 			
 			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = "stopping: " + reason

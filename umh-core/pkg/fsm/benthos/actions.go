@@ -54,7 +54,7 @@ import (
 // logS6DirectoryState provides comprehensive diagnostic logging when S6 state is empty or problematic.
 // This helps troubleshoot "not existing" errors (ENG-3468) by capturing the full state of S6 directories.
 // This function spawns a short-lived goroutine for async logging to avoid blocking the reconciliation loop.
-func (b *BenthosInstance) logS6DirectoryState(ctx context.Context, trigger string) {
+func (b *BenthosInstance) logS6DirectoryState(trigger string) {
 	// Only log when S6FSMState is empty or shows problems
 	s6State := b.ObservedState.ServiceInfo.S6FSMState
 	if s6State != "" && s6State != benthos_service.S6StateNotExisting {
@@ -86,7 +86,7 @@ func (b *BenthosInstance) logS6DirectoryState(ctx context.Context, trigger strin
 	}
 
 	// Create a timeout context for the async logging goroutine to prevent leaks
-	logCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	logCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	
 	// Spawn short-lived goroutine for async diagnostic logging and Sentry reporting.
 	// This prevents blocking the reconciliation loop with I/O operations.
@@ -552,7 +552,7 @@ func (b *BenthosInstance) IsBenthosS6Running() (bool, string) {
 	currentState := b.ObservedState.ServiceInfo.S6FSMState
 	if currentState == "" {
 		// Log diagnostic info when we encounter empty S6 state
-		b.logS6DirectoryState(context.Background(), "IsBenthosS6Running_empty_state")
+		b.logS6DirectoryState("IsBenthosS6Running_empty_state")
 
 		currentState = benthos_service.S6StateNotExisting
 	}
@@ -577,7 +577,7 @@ func (b *BenthosInstance) IsBenthosS6Stopped() (bool, string) {
 	switch fsmState {
 	case "":
 		// Log diagnostic info when we encounter empty S6 state
-		b.logS6DirectoryState(context.Background(), "IsBenthosS6Stopped_empty_state")
+		b.logS6DirectoryState("IsBenthosS6Stopped_empty_state")
 
 		fsmState = benthos_service.S6StateNotExisting
 	case s6fsm.OperationalStateStopped:
