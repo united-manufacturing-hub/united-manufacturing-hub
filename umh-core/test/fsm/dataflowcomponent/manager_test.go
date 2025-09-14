@@ -264,7 +264,7 @@ var _ = Describe("DataflowComponentManager", func() {
 					comp1Name: dataflowcomponent.OperationalStateIdle,
 					comp2Name: dataflowcomponent.OperationalStateStopped,
 				},
-				30, // Attempts
+				100, // Increased attempts due to TicksBeforeNextAdd = 30
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
