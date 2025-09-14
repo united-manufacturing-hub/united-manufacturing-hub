@@ -267,7 +267,7 @@ var _ = Describe("StreamProcessorManager", func() {
 			newTick, err := fsmtest.WaitForStreamProcessorManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockSvcRegistry,
 				processor1Name,
 				spfsm.OperationalStateIdle,
-				30,
+				100, // Increased attempts for first processor
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
@@ -275,7 +275,7 @@ var _ = Describe("StreamProcessorManager", func() {
 			newTick, err = fsmtest.WaitForStreamProcessorManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockSvcRegistry,
 				processor2Name,
 				spfsm.OperationalStateStopped,
-				30,
+				100, // Increased attempts due to TicksBeforeNextAdd = 30
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
@@ -283,7 +283,7 @@ var _ = Describe("StreamProcessorManager", func() {
 			newTick, err = fsmtest.WaitForStreamProcessorManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockSvcRegistry,
 				processor3Name,
 				spfsm.OperationalStateIdle,
-				30,
+				150, // Increased attempts - third processor needs 60+ ticks
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
@@ -316,7 +316,7 @@ var _ = Describe("StreamProcessorManager", func() {
 			newTick, err := fsmtest.WaitForStreamProcessorManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockSvcRegistry,
 				processor1Name,
 				spfsm.OperationalStateIdle,
-				30,
+				100, // Increased attempts for first processor
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
@@ -324,7 +324,7 @@ var _ = Describe("StreamProcessorManager", func() {
 			newTick, err = fsmtest.WaitForStreamProcessorManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockSvcRegistry,
 				processor2Name,
 				spfsm.OperationalStateIdle,
-				30,
+				100, // Increased attempts due to TicksBeforeNextAdd = 30
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
@@ -444,7 +444,7 @@ var _ = Describe("StreamProcessorManager", func() {
 			newTick, err = fsmtest.WaitForStreamProcessorManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockSvcRegistry,
 				newName,
 				spfsm.OperationalStateIdle,
-				30,
+				100, // Increased attempts due to TicksBeforeNextAdd = 30
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())

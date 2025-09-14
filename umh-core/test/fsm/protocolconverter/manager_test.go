@@ -344,7 +344,7 @@ var _ = Describe("ProtocolConverterManager", func() {
 				manager,
 				mockSvcRegistry,
 				desiredStates,
-				30,
+				100, // Increased attempts due to TicksBeforeNextAdd = 30
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
@@ -387,7 +387,7 @@ var _ = Describe("ProtocolConverterManager", func() {
 				manager,
 				mockSvcRegistry,
 				desiredStates,
-				30,
+				100, // Increased attempts due to TicksBeforeNextAdd = 30
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
@@ -581,10 +581,10 @@ var _ = Describe("ProtocolConverterManager", func() {
 			fsmtest.ConfigureProtocolConverterManagerForState(mockService, validConverterName, protocolconverter.OperationalStateIdle)
 
 			// Try to reconcile - give it more time since it needs to create two instances
-			// The manager can only create one instance per tick, so we need at least 2 ticks
+			// With TicksBeforeNextAdd = 30, we need at least 30 ticks between instances
 			// Let's manually reconcile multiple times to ensure both instances are created
 			var err error
-			for i := 0; i < 20; i++ {
+			for i := 0; i < 100; i++ {
 				currentSnapshot := fsm.SystemSnapshot{CurrentConfig: cfg, Tick: tick}
 				err, _ = manager.Reconcile(ctx, currentSnapshot, mockSvcRegistry)
 				if err != nil {
