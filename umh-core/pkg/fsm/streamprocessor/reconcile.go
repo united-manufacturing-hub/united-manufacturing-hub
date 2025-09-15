@@ -118,7 +118,7 @@ func (i *Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, s
 	}
 
 	// Step 3: Attempt to reconcile the state.
-	currentTime := time.Now() // this is used to check if the instance is degraded and for the log check
+	currentTime := snapshot.SnapshotTime // this is used to check if the instance is degraded and for the log check
 
 	err, reconciled = i.reconcileStateTransition(ctx, services, currentTime)
 	if err != nil {

@@ -118,7 +118,7 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 	}
 
 	// Step 3: Attempt to reconcile the state.
-	currentTime := time.Now() // this is used to check if the instance is degraded and for the log check
+	currentTime := snapshot.SnapshotTime // this is used to check if the instance is degraded and for the log check
 
 	err, reconciled = d.reconcileStateTransition(ctx, services, currentTime)
 	if err != nil {
