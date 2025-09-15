@@ -315,14 +315,16 @@ func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMC
 		usagePercent = usagePercentages[0]
 	}
 
-	// Determine effective core count
+	// Determine effective core count (keep as float64 to preserve fractional quotas)
 	// Use cgroup limit if available, otherwise fall back to host CPU count
-	effectiveCores := runtime.NumCPU()
+	effectiveCores := float64(runtime.NumCPU())
 	if cgroupErr == nil && cgroupInfo.QuotaCores > 0 {
 		// Use cgroup limit for more accurate mCPU calculation
-		effectiveCores = int(cgroupInfo.QuotaCores)
-		if effectiveCores < 1 {
-			effectiveCores = 1
+		// QuotaCores can be fractional (e.g., 0.5 for 500m, 1.5 for 1500m)
+		effectiveCores = cgroupInfo.QuotaCores
+		// Use a small minimum to avoid divide-by-zero, but preserve fractional limits
+		if effectiveCores < 0.1 {
+			effectiveCores = 0.1
 		}
 	}
 	
@@ -330,7 +332,7 @@ func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMC
 	
 	// Convert usage percent to mCPU based on effective cores
 	// This gives us a more accurate representation when cgroups limit CPU
-	usageCores := (usagePercent / 100.0) * float64(effectiveCores)
+	usageCores := (usagePercent / 100.0) * effectiveCores
 	usageMCores = usageCores * 1000
 
 	return usageMCores, coreCount, usagePercent, nil
