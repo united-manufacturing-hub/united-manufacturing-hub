@@ -136,7 +136,8 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 	}
 
 	// Reconcile the s6Manager
-	s6Err, s6Reconciled := b.service.ReconcileManager(ctx, services, snapshot.Tick)
+	// Pass the full snapshot to maintain the "one time.Now() per tick" principle
+	s6Err, s6Reconciled := b.service.ReconcileManager(ctx, services, snapshot)
 	if s6Err != nil {
 		if b.baseFSMInstance.IsDeadlineExceededAndHandle(s6Err, snapshot.Tick, "s6Manager reconciliation") {
 			return nil, false

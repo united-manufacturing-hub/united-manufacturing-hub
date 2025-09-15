@@ -138,7 +138,7 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 	}
 
 	// Reconcile the benthosManager
-	nmapErr, nmapReconciled := c.service.ReconcileManager(ctx, services, snapshot.Tick)
+	nmapErr, nmapReconciled := c.service.ReconcileManager(ctx, services, snapshot)
 	if nmapErr != nil {
 		if c.baseFSMInstance.IsDeadlineExceededAndHandle(nmapErr, snapshot.Tick, "nmapManager reconciliation") {
 			return nil, false

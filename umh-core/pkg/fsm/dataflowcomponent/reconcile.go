@@ -138,7 +138,8 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 	}
 
 	// Reconcile the benthosManager
-	benthosErr, benthosReconciled := d.service.ReconcileManager(ctx, services, snapshot.Tick)
+	// Pass the full snapshot to maintain the "one time.Now() per tick" principle
+	benthosErr, benthosReconciled := d.service.ReconcileManager(ctx, services, snapshot)
 	if benthosErr != nil {
 		if errors.Is(benthosErr, context.DeadlineExceeded) {
 			// Context deadline exceeded should be retried with backoff, not ignored

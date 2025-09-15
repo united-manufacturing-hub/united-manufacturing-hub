@@ -619,7 +619,7 @@ func (m *MockProtocolConverterService) ServiceExists(ctx context.Context, filesy
 }
 
 // ReconcileManager mocks reconciling the ProtocolConverter manager.
-func (m *MockProtocolConverterService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool) {
+func (m *MockProtocolConverterService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (error, bool) {
 	m.mu.Lock()
 	m.ReconcileManagerCalled = true
 	m.mu.Unlock()

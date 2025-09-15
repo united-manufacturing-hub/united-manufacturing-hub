@@ -142,7 +142,8 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 	}
 
 	// Reconcile the manager
-	managerErr, managerReconciled := p.service.ReconcileManager(ctx, services, snapshot.Tick)
+	// Pass the full snapshot to maintain the \"one time.Now() per tick\" principle
+	managerErr, managerReconciled := p.service.ReconcileManager(ctx, services, snapshot)
 	if managerErr != nil {
 		if errors.Is(managerErr, context.DeadlineExceeded) {
 			// Context deadline exceeded should be retried with backoff, not ignored

@@ -125,7 +125,7 @@ func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sys
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
-	s6Err, s6Reconciled := b.monitorService.ReconcileManager(ctx, services, snapshot.Tick)
+	s6Err, s6Reconciled := b.monitorService.ReconcileManager(ctx, services, snapshot)
 	if s6Err != nil {
 		if errors.Is(s6Err, context.DeadlineExceeded) {
 			// Context deadline exceeded should be retried with backoff, not ignored

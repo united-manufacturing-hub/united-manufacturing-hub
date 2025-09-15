@@ -70,7 +70,7 @@ type IDataFlowComponentService interface {
 	ServiceExists(ctx context.Context, filesystemService filesystem.Service, componentName string) bool
 
 	// ReconcileManager reconciles the DataFlowComponent manager with the actual state
-	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
+	ReconcileManager(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (error, bool)
 }
 
 // ServiceInfo contains information about a DataFlowComponent service.
@@ -409,7 +409,7 @@ func (s *DataFlowComponentService) StopDataFlowComponent(ctx context.Context, fi
 }
 
 // ReconcileManager reconciles the DataFlowComponent manager.
-func (s *DataFlowComponentService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool) {
+func (s *DataFlowComponentService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (error, bool) {
 	start := time.Now()
 
 	defer func() {
@@ -426,13 +426,15 @@ func (s *DataFlowComponentService) ReconcileManager(ctx context.Context, service
 
 	// Reconcile the Benthos manager with our configs
 	// The Benthos manager will handle the reconciliation with the S6 manager
+	// Pass the snapshot time from parent to maintain "one time.Now() per tick" principle
 	return s.benthosManager.Reconcile(ctx, fsm.SystemSnapshot{
 		CurrentConfig: config.FullConfig{
 			Internal: config.InternalConfig{
 				Benthos: s.benthosConfigs,
 			},
 		},
-		Tick: tick,
+		Tick:         snapshot.Tick,
+		SnapshotTime: snapshot.SnapshotTime,
 	}, services)
 }
 

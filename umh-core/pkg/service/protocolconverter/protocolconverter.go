@@ -95,7 +95,7 @@ type IProtocolConverterService interface {
 	// returns:
 	//   err        – unrecoverable problem (configuration bug, ctx cancellation)
 	//   reconciled – true when *any* child manager made progress
-	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
+	ReconcileManager(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (error, bool)
 
 	// EvaluateDFCDesiredStates determines the appropriate desired states for the underlying
 	// DFCs based on the protocol converter's desired state and current DFC configurations.
@@ -977,7 +977,7 @@ func (p *ProtocolConverterService) StartDFC(
 func (p *ProtocolConverterService) ReconcileManager(
 	ctx context.Context,
 	services serviceregistry.Provider,
-	tick uint64,
+	snapshot fsm.SystemSnapshot,
 ) (error, bool) {
 	start := time.Now()
 
@@ -985,7 +985,7 @@ func (p *ProtocolConverterService) ReconcileManager(
 		metrics.ObserveReconcileTime(logger.ComponentProtocolConverterService, "ReconcileManager", time.Since(start))
 	}()
 
-	p.logger.Debugf("Reconciling protocolconverter manager at tick %d", tick)
+	p.logger.Debugf("Reconciling protocolconverter manager at tick %d", snapshot.Tick)
 
 	if p.connectionManager == nil {
 		return errors.New("connection manager not initilized"), false
@@ -1000,23 +1000,27 @@ func (p *ProtocolConverterService) ReconcileManager(
 	}
 
 	// Use the connectionManager's Reconcile method
+	// Pass the snapshot time from parent to maintain "one time.Now() per tick" principle
 	err, connReconciled := p.connectionManager.Reconcile(ctx, fsm.SystemSnapshot{
 		CurrentConfig: config.FullConfig{
 			Internal: config.InternalConfig{
 				Connection: p.connectionConfig,
 			}},
-		Tick: tick,
+		Tick:         snapshot.Tick,
+		SnapshotTime: snapshot.SnapshotTime,
 	}, services)
 	if err != nil {
 		return err, connReconciled
 	}
 
 	// Use the dfcManager's Reconcile method
+	// Pass the snapshot time from parent to maintain "one time.Now() per tick" principle
 	err, dfcReconciled := p.dataflowComponentManager.Reconcile(ctx, fsm.SystemSnapshot{
 		CurrentConfig: config.FullConfig{
 			DataFlow: p.dataflowComponentConfig,
 		},
-		Tick: tick,
+		Tick:         snapshot.Tick,
+		SnapshotTime: snapshot.SnapshotTime,
 	}, services)
 	if err != nil {
 		return err, dfcReconciled
