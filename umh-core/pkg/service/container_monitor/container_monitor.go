@@ -240,21 +240,21 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	category := models.Active
 	message := "CPU utilization normal"
 	
-	// Check for throttling
-	isThrottled := cgroupErr == nil && cgroupInfo.IsThrottled
-	highThrottling := cgroupErr == nil && cgroupInfo.ThrottleRatio > 0.20
+	// Check for throttling - only if cgroupInfo is not nil
+	isThrottled := cgroupErr == nil && cgroupInfo != nil && cgroupInfo.IsThrottled
+	highThrottling := cgroupErr == nil && cgroupInfo != nil && cgroupInfo.ThrottleRatio > 0.20
 
 	if usagePercent >= constants.CPUHighThresholdPercent || highThrottling {
 		category = models.Degraded
 		
-		if highThrottling {
+		if highThrottling && cgroupInfo != nil {
 			message = fmt.Sprintf("CPU throttled (%.1f%% periods throttled)", cgroupInfo.ThrottleRatio*100)
 		} else {
 			message = "CPU utilization critical"
 		}
 	} else if usagePercent >= constants.CPUMediumThresholdPercent || isThrottled {
 		// Still could be Active or Degraded depending on severity
-		if isThrottled {
+		if isThrottled && cgroupInfo != nil {
 			category = models.Degraded
 			message = fmt.Sprintf("CPU throttled (%.1f%% periods throttled)", cgroupInfo.ThrottleRatio*100)
 		} else {
@@ -263,7 +263,7 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	}
 	
 	// Log throttling warnings
-	if isThrottled {
+	if isThrottled && cgroupInfo != nil {
 		c.logger.Warnf("CPU throttling detected: %.1f%% of periods throttled", cgroupInfo.ThrottleRatio*100)
 	}
 

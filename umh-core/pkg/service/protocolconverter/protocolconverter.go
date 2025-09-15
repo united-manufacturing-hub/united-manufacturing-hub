@@ -1251,7 +1251,7 @@ func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot
 	p.logger.Debugf("IsResourceLimited: Total CPU cores=%.1f, cores for bridges=%.1f (1 reserved for Redpanda), max bridges=%d, current bridges=%d",
 		cpuCores, availableCoresForBridges, maxBridges, bridgeCount)
 
-	if bridgeCount > maxBridges {
+	if bridgeCount >= maxBridges {
 		// Clear message explaining the limit and what's reserved
 		return true, fmt.Sprintf("Cannot create bridge - limit exceeded (%d bridges maximum with %.1f CPU cores, 1 core reserved for Redpanda)",
 			maxBridges, cpuCores)
