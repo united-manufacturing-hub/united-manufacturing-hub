@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# NOTE: This workflow only sets nightly/stable versions through the management console webhook.
+# Enterprise versions are NOT set here - they must be set directly in the database.
+
 name: Build UMH Core
 
 on:
@@ -281,10 +284,12 @@ jobs:
       group: arc-runners-small
     steps:
       - name: Notify management console
+        env:
+          UMH_MC_WEBHOOK_SECRET: ${{ secrets.UMH_MC_WEBHOOK_SECRET }}
         run: |
           set -euo pipefail
           VERSION="${{ github.ref_name }}"
-          SECRET="${{ secrets.UMH_MC_WEBHOOK_SECRET }}"
+          SECRET="$UMH_MC_WEBHOOK_SECRET"
 
           notify_mc() {
             local base_url=$1

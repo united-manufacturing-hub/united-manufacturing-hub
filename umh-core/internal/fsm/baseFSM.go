@@ -248,12 +248,12 @@ func (s *BaseFSMInstance) SendEvent(ctx context.Context, eventName string, args 
 
 	// Execute the FSM transition with guaranteed time to complete
 	err := s.fsm.Event(fsmCtx, eventName, args...)
-	
+
 	// Check if parent context expired while we were executing
 	if err == nil && ctx.Err() != nil {
 		s.logger.Warnf("FSM transition completed successfully but parent context expired - prevented stuck transition but now outside of cycle time (preventing bigger impact)")
 	}
-	
+
 	if err != nil {
 		// Enhanced error message with state context
 		enhancedErr := fmt.Errorf("FSM %s failed transition: current_state='%s' -> event='%s' (desired_state='%s'): %w",
@@ -444,6 +444,21 @@ func (s *BaseFSMInstance) HandlePermanentError(
 			return fmt.Errorf("failed to force remove the %s instance: %s : %w", s.cfg.ID, backoff.PermanentFailureError, forceErr), false
 		}
 
+		// After successful force removal, set FSM state directly to removed
+		// This will cause ReconcileLifecycleStates to return ErrInstanceRemoved,
+		// signaling the manager to delete and recreate the instance.
+		//
+		// NOTE: This is an intentional violation of normal FSM state transition rules.
+		// We directly manipulate the state here because:
+		// 1. This is an emergency recovery path after force removal
+		// 2. Normal state transitions have already failed or are impossible
+		// 3. The instance will be deleted and recreated by the manager anyway
+		// 4. The mutex in SetCurrentFSMState prevents data races
+		// This is safe because force removal only happens when the instance is corrupted
+		// and needs to be completely recreated.
+		s.SetCurrentFSMState(LifecycleStateRemoved)
+		logger.Infof("%s instance %s force removed and transitioned to removed state", s.cfg.ID, instanceID)
+
 		return err, true
 	} else {
 		// Not in a shutdown state yet, so try normal removal first
@@ -465,6 +480,10 @@ func (s *BaseFSMInstance) HandlePermanentError(
 
 				return fmt.Errorf("failed to force remove the %s instance: %s : %w", s.cfg.ID, backoff.PermanentFailureError, forceErr), false
 			}
+			// After successful force removal, set FSM state directly to removed
+			// (See comment above for why this direct state manipulation is safe)
+			s.SetCurrentFSMState(LifecycleStateRemoved)
+			logger.Infof("%s instance %s force removed after normal removal failed and transitioned to removed state", s.cfg.ID, instanceID)
 		}
 
 		return nil, false // Let's try to at least reconcile towards a stopped/removed state

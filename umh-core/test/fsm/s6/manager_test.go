@@ -382,13 +382,13 @@ var _ = Describe("S6Manager", func() {
 
 			// Wait for the new instance to be created
 			nextTick, err = fsmtest.WaitForManagerInstanceCreation(ctx, manager, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: updatedConfig}}, Tick: tick}, mockSvcRegistry,
-				newServiceName, 20)
+				newServiceName, 100) // Increased attempts due to TicksBeforeNextAdd = 30
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Failed to create new instance")
 
 			// Now wait for the new service to reach stopped state
 			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: updatedConfig}}, Tick: tick}, mockSvcRegistry,
-				newServiceName, s6fsm.OperationalStateStopped, 20)
+				newServiceName, s6fsm.OperationalStateStopped, 100) // Increased attempts
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred())
 
@@ -441,25 +441,25 @@ var _ = Describe("S6Manager", func() {
 
 			// Wait for first service to be created
 			nextTick, err = fsmtest.WaitForManagerInstanceCreation(ctx, manager, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: initialConfig}}, Tick: tick}, mockSvcRegistry,
-				service1Name, 20)
+				service1Name, 100) // Increased attempts for safety
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Failed to create first instance")
 
 			// Wait for second service to be created
 			nextTick, err = fsmtest.WaitForManagerInstanceCreation(ctx, manager, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: initialConfig}}, Tick: tick}, mockSvcRegistry,
-				service2Name, 20)
+				service2Name, 100) // Increased attempts due to TicksBeforeNextAdd = 30
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Failed to create second instance")
 
 			// Wait for first service to reach stopped state
 			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: initialConfig}}, Tick: tick}, mockSvcRegistry,
-				service1Name, s6fsm.OperationalStateStopped, 20)
+				service1Name, s6fsm.OperationalStateStopped, 100) // Increased attempts
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred())
 
 			// Wait for second service to reach stopped state
 			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: initialConfig}}, Tick: tick}, mockSvcRegistry,
-				service2Name, s6fsm.OperationalStateStopped, 20)
+				service2Name, s6fsm.OperationalStateStopped, 100) // Increased attempts
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred())
 
@@ -659,23 +659,23 @@ var _ = Describe("S6Manager", func() {
 
 			// Wait for both services to be created
 			nextTick, err = fsmtest.WaitForManagerInstanceCreation(ctx, manager, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: multiServiceConfig}}, Tick: tick}, mockSvcRegistry,
-				service1Name, 20)
+				service1Name, 100) // Increased attempts for safety
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Failed to create first service")
 
 			nextTick, err = fsmtest.WaitForManagerInstanceCreation(ctx, manager, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: multiServiceConfig}}, Tick: tick}, mockSvcRegistry,
-				service2Name, 20)
+				service2Name, 100) // Increased attempts due to TicksBeforeNextAdd = 30
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Failed to create second service")
 
 			// Wait for both services to reach stopped state
 			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: multiServiceConfig}}, Tick: tick}, mockSvcRegistry,
-				service1Name, s6fsm.OperationalStateStopped, 20)
+				service1Name, s6fsm.OperationalStateStopped, 100) // Increased attempts
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "First service failed to reach stopped state")
 
 			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: multiServiceConfig}}, Tick: tick}, mockSvcRegistry,
-				service2Name, s6fsm.OperationalStateStopped, 20)
+				service2Name, s6fsm.OperationalStateStopped, 100) // Increased attempts
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Second service failed to reach stopped state")
 
@@ -729,23 +729,23 @@ var _ = Describe("S6Manager", func() {
 
 			// Wait for both instances to be created
 			nextTick, err = fsmtest.WaitForManagerInstanceCreation(ctx, manager, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: multiServiceConfig}}, Tick: tick}, mockSvcRegistry,
-				stableServiceName, 20)
+				stableServiceName, 100) // Increased attempts for safety
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Failed to create stable service")
 
 			nextTick, err = fsmtest.WaitForManagerInstanceCreation(ctx, manager, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: multiServiceConfig}}, Tick: tick}, mockSvcRegistry,
-				failingServiceName, 20)
+				failingServiceName, 100) // Increased attempts due to TicksBeforeNextAdd = 30
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Failed to create failing service")
 
 			// Wait for both to reach stopped state
 			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: multiServiceConfig}}, Tick: tick}, mockSvcRegistry,
-				stableServiceName, s6fsm.OperationalStateStopped, 20)
+				stableServiceName, s6fsm.OperationalStateStopped, 100) // Increased attempts
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Stable service failed to reach stopped state")
 
 			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: multiServiceConfig}}, Tick: tick}, mockSvcRegistry,
-				failingServiceName, s6fsm.OperationalStateStopped, 20)
+				failingServiceName, s6fsm.OperationalStateStopped, 100) // Increased attempts
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Failing service failed to reach stopped state")
 

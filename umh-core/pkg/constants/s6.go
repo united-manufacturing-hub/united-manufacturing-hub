@@ -33,7 +33,8 @@ const (
 	// S6 Operation Timeouts - Foundation Service (Level 0)
 	// S6 is the foundation service with no dependencies
 	// Increased from 6ms to 15ms to handle scaling test load (benthos-scaling integration test).
-	S6UpdateObservedStateTimeout = 15 * time.Millisecond
+	// Further increased to 20ms to handle production workloads with 25+ bridges.
+	S6UpdateObservedStateTimeout = 20 * time.Millisecond
 	// Increased from 10ms to 20ms to handle scaling test load.
 	S6RemoveTimeout = 20 * time.Millisecond
 	S6MaxLines      = 10000
@@ -47,6 +48,13 @@ const (
 	// S6FileReadChunkSize is the buffer size used for reading files in chunks
 	// Set to 1MB for optimal I/O performance while maintaining reasonable memory usage.
 	S6FileReadChunkSize = 1024 * 1024
+	
+	// S6DownAndReadyRestartDelay is the minimum time to wait before attempting to restart
+	// a service that is in the S6 "down and ready" edge case state (PID=0 with flagready=1).
+	// This delay prevents rapid restart loops when services transition quickly between states,
+	// particularly during chaos testing or when stop->start happens in quick succession.
+	// See ServiceInfo.IsDownAndReady in pkg/service/s6/s6.go for detailed explanation of this state.
+	S6DownAndReadyRestartDelay = 3 * time.Second
 )
 
 const (

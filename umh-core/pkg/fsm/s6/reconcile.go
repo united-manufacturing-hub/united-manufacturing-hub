@@ -25,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
@@ -75,8 +76,12 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 				ctx,
 				err,
 				func() bool {
-					// Determine if we're already in a shutdown state where normal removal isn't possible
-					// and force removal is required
+					// For directory corruption, ALWAYS consider it a shutdown state to force removal
+					// This ensures we skip normal removal (which would fail) and go straight to force removal
+					if s.ObservedState.DirectoryHealth == s6service.HealthBad {
+						return true
+					}
+					// Otherwise check normal shutdown states
 					return s.IsRemoved() || s.IsRemoving() || s.IsStopping() || s.IsStopped() || s.WantsToBeStopped()
 				},
 				func(ctx context.Context) error {
@@ -131,7 +136,9 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 	}
 
 	// Step 3: Attempt to reconcile the state.
-	err, reconciled = s.reconcileStateTransition(ctx, services)
+	currentTime := snapshot.SnapshotTime // Used for checking down-and-ready state duration
+
+	err, reconciled = s.reconcileStateTransition(ctx, services, currentTime)
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
 		// Also this should not
@@ -182,7 +189,7 @@ func (s *S6Instance) reconcileExternalChanges(ctx context.Context, services serv
 // Any functions that fetch information are disallowed here and must be called in reconcileExternalChanges
 // and exist in ExternalState.
 // This is to ensure full testability of the FSM.
-func (s *S6Instance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider) (err error, reconciled bool) {
+func (s *S6Instance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 
 	defer func() {
@@ -191,11 +198,6 @@ func (s *S6Instance) reconcileStateTransition(ctx context.Context, services serv
 
 	currentState := s.baseFSMInstance.GetCurrentFSMState()
 	desiredState := s.baseFSMInstance.GetDesiredFSMState()
-
-	// If already in the desired state, nothing to do.
-	if currentState == desiredState {
-		return nil, false
-	}
 
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {
@@ -213,7 +215,7 @@ func (s *S6Instance) reconcileStateTransition(ctx context.Context, services serv
 
 	// Handle operational states
 	if IsOperationalState(currentState) {
-		err, reconciled := s.reconcileOperationalStates(ctx, services, currentState, desiredState)
+		err, reconciled := s.reconcileOperationalStates(ctx, services, currentState, desiredState, currentTime)
 		if err != nil {
 			return err, false
 		}
@@ -229,16 +231,31 @@ func (s *S6Instance) reconcileStateTransition(ctx context.Context, services serv
 }
 
 // reconcileOperationalStates handles states related to instance operations (starting/stopping).
-func (s *S6Instance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string) (err error, reconciled bool) {
+func (s *S6Instance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".reconcileOperationalStates", time.Since(start))
 	}()
 
+	// Check for directory health issues and trigger force removal if needed
+	// When directory health is bad (corrupted/deleted), we're in an undefined state
+	// and cannot go through normal state transitions. Return a permanent error to
+	// trigger force removal and direct transition to "removed" state.
+	if s.ObservedState.DirectoryHealth == s6service.HealthBad {
+		s.baseFSMInstance.GetLogger().Errorf(
+			"S6 service %s has bad directory integrity - triggering force removal for recreation",
+			s.baseFSMInstance.GetID(),
+		)
+		// Return permanent error to trigger HandlePermanentError which will:
+		// 1. Call ForceRemove to clean up everything including orphaned symlinks
+		// 2. Transition FSM directly to "removed" state
+		return fmt.Errorf("%s: directory corrupted or deleted", backoff.PermanentFailureError), true
+	}
+
 	switch desiredState {
 	case OperationalStateRunning:
-		return s.reconcileTransitionToRunning(ctx, services, currentState)
+		return s.reconcileTransitionToRunning(ctx, services, currentState, currentTime)
 	case OperationalStateStopped:
 		return s.reconcileTransitionToStopped(ctx, services, currentState)
 	default:
@@ -248,7 +265,7 @@ func (s *S6Instance) reconcileOperationalStates(ctx context.Context, services se
 
 // reconcileTransitionToRunning handles transitions when the desired state is Running.
 // It deals with moving from Stopped/Failed to Starting and then to Running.
-func (s *S6Instance) reconcileTransitionToRunning(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
+func (s *S6Instance) reconcileTransitionToRunning(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 
 	defer func() {
@@ -262,6 +279,33 @@ func (s *S6Instance) reconcileTransitionToRunning(ctx context.Context, services 
 		}
 		// Send event to transition from Stopped/Failed to Starting
 		return s.baseFSMInstance.SendEvent(ctx, EventStart), true
+	}
+
+	// Check for S6 "down and ready" edge case and recover
+	// See ServiceInfo.IsDownAndReady in pkg/service/s6/s6.go for detailed explanation
+	if s.IsInDownAndReadyState() {
+		// Only attempt restart if the service has been in this state for a while
+		// This prevents rapid restart loops during transient state changes
+		timeSinceLastChange := currentTime.Sub(s.ObservedState.ServiceInfo.LastChangedAt)
+
+		if timeSinceLastChange < constants.S6DownAndReadyRestartDelay {
+			// Service just entered this state, wait before attempting restart
+			// This handles race conditions where stop->start happens quickly
+			s.baseFSMInstance.GetLogger().Debugf("S6 service %s in 'down and ready' state for %.1fs, waiting %.1fs before restart attempt",
+				s.baseFSMInstance.GetID(), timeSinceLastChange.Seconds(), constants.S6DownAndReadyRestartDelay.Seconds())
+
+			return nil, false
+		}
+
+		// Service has been stuck in this state, attempt restart
+		s.baseFSMInstance.GetLogger().Warnf("S6 service %s stuck in 'down and ready' state for %.1fs, restarting to recover",
+			s.baseFSMInstance.GetID(), timeSinceLastChange.Seconds())
+
+		if err := s.RestartInstance(ctx, services.GetFileSystem()); err != nil {
+			return err, true
+		}
+		// After restart, wait for next reconciliation to check if it worked
+		return nil, false
 	}
 
 	if currentState == OperationalStateStarting {
@@ -288,6 +332,15 @@ func (s *S6Instance) reconcileTransitionToStopped(ctx context.Context, services 
 	}()
 
 	if currentState == OperationalStateRunning || currentState == OperationalStateStarting {
+		// Special case: If directory health is bad (deleted/corrupted), skip the stop attempt
+		// since there's nothing to stop. Go directly to stopping state.
+		// This prevents "service does not exist" errors when trying to stop a deleted service.
+		if s.ObservedState.DirectoryHealth == s6service.HealthBad {
+			s.baseFSMInstance.GetLogger().Infof("Directory health is bad - skipping stop attempt, transitioning directly to stopping")
+			// Send event to transition to Stopping (will be immediately considered stopped due to workaround below)
+			return s.baseFSMInstance.SendEvent(ctx, EventStop), true
+		}
+		
 		// Attempt to initiate a stop
 		if err := s.StopInstance(ctx, services.GetFileSystem()); err != nil {
 			return err, true
@@ -298,7 +351,16 @@ func (s *S6Instance) reconcileTransitionToStopped(ctx context.Context, services 
 
 	if currentState == OperationalStateStopping {
 		// If already stopping, verify if the instance is completely stopped
-		if s.IsS6Stopped() {
+		// WORKAROUND for ENG-3468: Also consider it stopped if the directory is missing/corrupted
+		// This prevents the FSM from getting stuck in "stopping" state when the directory
+		// is deleted while the service is stopping. Without this, IsS6Stopped() returns false
+		// because it can't read the service status from the missing directory.
+		// TODO(ENG-3473): Remove this workaround once manager is health-aware and allows
+		// FSM-initiated self-healing without override conflicts
+		if s.IsS6Stopped() || s.ObservedState.DirectoryHealth == s6service.HealthBad {
+			if s.ObservedState.DirectoryHealth == s6service.HealthBad {
+				s.baseFSMInstance.GetLogger().Infof("Directory missing/corrupted while stopping - considering service stopped")
+			}
 			// Transition from Stopping to Stopped
 			return s.baseFSMInstance.SendEvent(ctx, EventStopDone), true
 		}
@@ -308,3 +370,4 @@ func (s *S6Instance) reconcileTransitionToStopped(ctx context.Context, services 
 
 	return nil, false
 }
+

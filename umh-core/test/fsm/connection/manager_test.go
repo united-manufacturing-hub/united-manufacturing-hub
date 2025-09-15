@@ -339,7 +339,7 @@ var _ = Describe("ConnectionManager", func() {
 					conn1Name: connection.OperationalStateUp,
 					conn2Name: connection.OperationalStateStopped,
 				},
-				30, // Attempts
+				100, // Increased attempts due to TicksBeforeNextAdd = 30
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())

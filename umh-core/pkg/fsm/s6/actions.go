@@ -68,7 +68,21 @@ func (s *S6Instance) CreateInstance(ctx context.Context, filesystemService files
 		}
 	}
 
-	s.baseFSMInstance.GetLogger().Debugf("S6 service %s directory structure created", s.baseFSMInstance.GetID())
+	// Verify the directory integrity after creation
+	// This ensures we have properly tracked artifacts before considering creation successful
+	health := s.service.CheckServiceDirectoryIntegrity(ctx, s.servicePath, filesystemService)
+	if health == s6service.HealthBad {
+		return fmt.Errorf("service directory integrity is bad after creation for %s", s.baseFSMInstance.GetID())
+	}
+
+	if health == s6service.HealthUnknown {
+		// Return error to trigger retry via reconciliation backoff mechanism
+		// HealthUnknown indicates temporary I/O issues or timeouts that should resolve
+		// The FSM will retry this action with exponential backoff
+		return fmt.Errorf("service directory integrity unknown after creation for %s (temporary I/O issue, will retry)", s.baseFSMInstance.GetID())
+	}
+
+	s.baseFSMInstance.GetLogger().Debugf("S6 service %s directory structure created and verified", s.baseFSMInstance.GetID())
 
 	return nil
 }
@@ -147,6 +161,28 @@ func (s *S6Instance) StopInstance(ctx context.Context, filesystemService filesys
 	return nil
 }
 
+// RestartInstance attempts to restart the S6 service.
+// This is used to recover from the S6 "down and ready" edge case.
+// See ServiceInfo.IsDownAndReady in pkg/service/s6/s6.go for detailed explanation.
+func (s *S6Instance) RestartInstance(ctx context.Context, filesystemService filesystem.Service) error {
+	start := time.Now()
+
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".RestartInstance", time.Since(start))
+	}()
+
+	s.baseFSMInstance.GetLogger().Debugf("Starting Action: Restarting S6 service %s ...", s.baseFSMInstance.GetID())
+
+	err := s.service.Restart(ctx, s.servicePath, filesystemService)
+	if err != nil {
+		return fmt.Errorf("failed to restart S6 service %s: %w", s.baseFSMInstance.GetID(), err)
+	}
+
+	s.baseFSMInstance.GetLogger().Infof("S6 service %s restart command executed (recovering from down-and-ready state)", s.baseFSMInstance.GetID())
+
+	return nil
+}
+
 // CheckForCreation checks whether the creation was successful.
 func (s *S6Instance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
 	servicePath := s.servicePath
@@ -179,6 +215,26 @@ func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, services
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.S6UpdateObservedStateTimeout)
 	defer cancel()
 
+	// Check directory integrity first - this determines if we can trust any other operations
+	s.ObservedState.DirectoryHealth = s.service.CheckServiceDirectoryIntegrity(observedStateCtx, s.servicePath, services.GetFileSystem())
+
+	// If directory is unhealthy, skip Status() and GetConfig() calls entirely
+	// These would fail anyway and we avoid unnecessary errors in logs
+	if s.ObservedState.DirectoryHealth == s6service.HealthBad {
+		s.baseFSMInstance.GetLogger().Warnf("S6 service %s directory integrity is bad - skipping status/config fetch", s.baseFSMInstance.GetID())
+
+		// Set safe defaults to avoid nil issues
+		s.ObservedState.ServiceInfo = s6service.ServiceInfo{
+			Status: s6service.ServiceUnknown,
+		}
+		s.ObservedState.ObservedS6ServiceConfig = s6serviceconfig.S6ServiceConfig{}
+
+		// Return early - reconcile will handle the unhealthy state via handleUnhealthyDirectory()
+		return nil
+	}
+
+	// Directory is healthy, proceed with normal status and config fetching
+
 	//nolint:gosec
 	serviceInfo, err := s.service.Status(observedStateCtx, s.servicePath, services.GetFileSystem())
 	if err != nil {
@@ -186,10 +242,6 @@ func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, services
 	}
 
 	s.ObservedState.ServiceInfo = serviceInfo
-
-	if s.ObservedState.LastStateChange == 0 {
-		s.ObservedState.LastStateChange = time.Now().Unix()
-	}
 
 	// Fetch the actual service config from s6
 	config, err := s.service.GetConfig(ctx, s.servicePath, services.GetFileSystem())
@@ -199,6 +251,7 @@ func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, services
 
 	s.ObservedState.ObservedS6ServiceConfig = config
 
+	// Check if config has changed and needs recreation
 	// the easiest way to do this is causing this instance to be removed, which will trigger a re-create by the manager
 	if !reflect.DeepEqual(s.ObservedState.ObservedS6ServiceConfig, s.config.S6ServiceConfig) {
 		s.baseFSMInstance.GetLogger().Debugf("Observed config is different from desired config, triggering a re-create")
@@ -263,6 +316,12 @@ func (s *S6Instance) IsServiceWantingUp() bool {
 // GetExitHistory gets the history of service exit events.
 func (s *S6Instance) GetExitHistory() []s6service.ExitEvent {
 	return s.ObservedState.ServiceInfo.ExitHistory
+}
+
+// IsInDownAndReadyState checks if the service is in the S6 "down and ready" edge case state.
+// See ServiceInfo.IsDownAndReady in pkg/service/s6/s6.go for detailed explanation.
+func (s *S6Instance) IsInDownAndReadyState() bool {
+	return s.ObservedState.ServiceInfo.IsDownAndReady
 }
 
 // logConfigDifferences logs the specific differences between desired and observed configurations.
