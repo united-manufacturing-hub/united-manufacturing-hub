@@ -151,13 +151,32 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 	if cpuStat.Health != nil && cpuStat.Health.Category == models.Degraded {
 		status.CPUHealth = models.Degraded
 		status.OverallHealth = models.Degraded
-	} else if cpuStat.CoreCount > 0 {
-		// Also check raw usage percentage
-		cpuPercent := (cpuStat.TotalUsageMCpu / 1000.0) / float64(cpuStat.CoreCount) * 100.0
+	} else {
+		// Calculate CPU percentage against effective cores (cgroup limit if available)
+		// 
+		// NOTE: CPU percentage is fundamentally misleading for understanding performance:
+		// 1. In containers, throttling matters more than usage percentage
+		// 2. CPU % doesn't scale linearly due to hyperthreading, turbo boost, etc.
+		// 3. Users need to know throttling status, not just usage
+		//
+		// See ENG-3423 for planned improvements to show mCPU instead of percentage
+		// See https://www.brendanlong.com/cpu-utilization-is-a-lie.html for why CPU % is misleading
+		//
+		// We maintain percentage calculation for API compatibility, but throttling
+		// detection (handled elsewhere) is the more important health signal.
+		effectiveCores := cpuStat.CgroupCores
+		if effectiveCores <= 0 {
+			// Fall back to host cores if cgroup info unavailable
+			effectiveCores = float64(cpuStat.CoreCount)
+		}
+		
+		if effectiveCores > 0 {
+			cpuPercent := (cpuStat.TotalUsageMCpu / 1000.0) / effectiveCores * 100.0
 
-		if cpuPercent > constants.CPUHighThresholdPercent {
-			status.CPUHealth = models.Degraded
-			status.OverallHealth = models.Degraded
+			if cpuPercent > constants.CPUHighThresholdPercent {
+				status.CPUHealth = models.Degraded
+				status.OverallHealth = models.Degraded
+			}
 		}
 	}
 
