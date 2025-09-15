@@ -22,6 +22,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 
@@ -723,7 +724,7 @@ done`
 			// Add and reconcile service
 			err := service.AddNmapToS6Manager(ctx, cfg, nmapName)
 			Expect(err).NotTo(HaveOccurred())
-			err, _ = service.ReconcileManager(ctx, mockSvcRegistry, tick)
+			err, _ = service.ReconcileManager(ctx, mockSvcRegistry, fsm.SystemSnapshot{Tick: tick, SnapshotTime: time.Now()})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -749,7 +750,7 @@ done`
 			// Add and reconcile service
 			err := service.AddNmapToS6Manager(ctx, cfg, nmapName)
 			Expect(err).NotTo(HaveOccurred())
-			err, _ = service.ReconcileManager(ctx, mockSvcRegistry, tick)
+			err, _ = service.ReconcileManager(ctx, mockSvcRegistry, fsm.SystemSnapshot{Tick: tick, SnapshotTime: time.Now()})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
