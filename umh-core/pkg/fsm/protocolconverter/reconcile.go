@@ -119,7 +119,7 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 	// Step 3: Attempt to reconcile the state.
 	currentTime := snapshot.SnapshotTime // this is used to check if the instance is degraded and for the log check
 
-	err, reconciled = p.reconcileStateTransition(ctx, services, currentTime)
+	err, reconciled = p.reconcileStateTransition(ctx, services, snapshot, currentTime)
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
 		if errors.Is(err, standarderrors.ErrInstanceRemoved) {
@@ -197,7 +197,7 @@ func (p *ProtocolConverterInstance) reconcileExternalChanges(ctx context.Context
 // Any functions that fetch information are disallowed here and must be called in reconcileExternalChanges
 // and exist in ObservedState.
 // This is to ensure full testability of the FSM.
-func (p *ProtocolConverterInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider, currentTime time.Time) (err error, reconciled bool) {
+func (p *ProtocolConverterInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 
 	defer func() {
@@ -209,6 +209,32 @@ func (p *ProtocolConverterInstance) reconcileStateTransition(ctx context.Context
 
 	// Report current and desired state metrics
 	metrics.UpdateServiceState(metrics.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID(), currentState, desiredState)
+
+	// Check resource limits before allowing bridge creation
+	// BUT allow transition if the desired state is "stopped" (which leads to removal)
+	if currentState == internal_fsm.LifecycleStateToBeCreated {
+		// Check if we're trying to stop/remove this bridge
+		// When desired state is "stopped" for something in to_be_created, it means we want to remove it
+		if desiredState == OperationalStateStopped || desiredState == internal_fsm.LifecycleStateRemoving || desiredState == internal_fsm.LifecycleStateRemoved {
+			// Allow transition to removal even if resources are limited
+			p.baseFSMInstance.GetLogger().Debugf("Bridge %s in to_be_created with desired state %s - allowing removal despite resource limits", p.baseFSMInstance.GetID(), desiredState)
+			// KNOWN EDGE CASE: A user could potentially bypass resource limits by:
+			// 1. Creating a bridge when at resource limits (it gets stuck in to_be_created)
+			// 2. Setting desired state to "stopped" (transitions to creating->stopped)
+			// 3. Setting desired state back to "active" (now bypasses the resource check)
+			// This is acceptable as it requires deliberate action and the resource limits
+			// will still protect against accidental overload. The system will degrade
+			// appropriately if actually overloaded.
+		} else if limited, reason := p.service.IsResourceLimited(snapshot); limited {
+			// Block creation due to resource limits
+			p.baseFSMInstance.GetLogger().Warnf("Bridge %s blocked: %s", p.baseFSMInstance.GetID(), reason)
+			// Set the status reason so it appears in the snapshot logger and frontend
+			// Just use the reason directly - it's already clear and actionable
+			p.ObservedState.ServiceInfo.StatusReason = reason
+			// Don't transition, just return (stay in to_be_created state)
+			return nil, false
+		}
+	}
 
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {

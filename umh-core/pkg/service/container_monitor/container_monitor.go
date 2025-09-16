@@ -82,7 +82,7 @@ func NewContainerMonitorServiceWithPath(fs filesystem.Service, dataPath string) 
 	return &ContainerMonitorService{
 		fs:           fs,
 		logger:       log,
-		instanceName: "Core", // Single container instance name
+		instanceName: constants.CoreInstanceName, // Single container instance name
 		dataPath:     dataPath,
 	}
 }
@@ -147,12 +147,36 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 	c.lastCollectedAt = time.Now()
 
 	// Assess CPU health
-	if cpuStat.CoreCount > 0 {
-		cpuPercent := (cpuStat.TotalUsageMCpu / 1000.0) / float64(cpuStat.CoreCount) * 100.0
+	// Check if CPU is already marked as degraded (e.g., due to throttling)
+	if cpuStat.Health != nil && cpuStat.Health.Category == models.Degraded {
+		status.CPUHealth = models.Degraded
+		status.OverallHealth = models.Degraded
+	} else {
+		// Calculate CPU percentage against effective cores (cgroup limit if available)
+		// 
+		// NOTE: CPU percentage is fundamentally misleading for understanding performance:
+		// 1. In containers, throttling matters more than usage percentage
+		// 2. CPU % doesn't scale linearly due to hyperthreading, turbo boost, etc.
+		// 3. Users need to know throttling status, not just usage
+		//
+		// See ENG-3423 for planned improvements to show mCPU instead of percentage
+		// See https://www.brendanlong.com/cpu-utilization-is-a-lie.html for why CPU % is misleading
+		//
+		// We maintain percentage calculation for API compatibility, but throttling
+		// detection (handled elsewhere) is the more important health signal.
+		effectiveCores := cpuStat.CgroupCores
+		if effectiveCores <= 0 {
+			// Fall back to host cores if cgroup info unavailable
+			effectiveCores = float64(cpuStat.CoreCount)
+		}
+		
+		if effectiveCores > 0 {
+			cpuPercent := (cpuStat.TotalUsageMCpu / 1000.0) / effectiveCores * 100.0
 
-		if cpuPercent > constants.CPUHighThresholdPercent {
-			status.CPUHealth = models.Degraded
-			status.OverallHealth = models.Degraded
+			if cpuPercent > constants.CPUHighThresholdPercent {
+				status.CPUHealth = models.Degraded
+				status.OverallHealth = models.Degraded
+			}
 		}
 	}
 
@@ -228,16 +252,32 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		return nil, err
 	}
 
+	// Get cgroup info for throttling and limits
+	cgroupInfo, cgroupErr := c.getCgroupCPUInfo(ctx)
+	
 	// Default to Active health
 	category := models.Active
 	message := "CPU utilization normal"
+	
+	// Check for throttling - only if cgroupInfo is not nil
+	isThrottled := cgroupErr == nil && cgroupInfo != nil && cgroupInfo.IsThrottled
 
-	if usagePercent >= constants.CPUHighThresholdPercent {
+	if usagePercent >= constants.CPUHighThresholdPercent || isThrottled {
 		category = models.Degraded
-		message = "CPU utilization critical"
+		
+		if isThrottled && cgroupInfo != nil {
+			message = fmt.Sprintf("CPU throttled (%.1f%% periods throttled)", cgroupInfo.ThrottleRatio*100)
+		} else {
+			message = "CPU utilization critical"
+		}
 	} else if usagePercent >= constants.CPUMediumThresholdPercent {
-		// Still Active but with a warning message
+		// Warning level but not degraded
 		message = "CPU utilization warning"
+	}
+	
+	// Log throttling warnings
+	if isThrottled && cgroupInfo != nil {
+		c.logger.Warnf("CPU throttling detected: %.1f%% of periods throttled", cgroupInfo.ThrottleRatio*100)
 	}
 
 	cpuStat := &models.CPU{
@@ -250,16 +290,22 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		TotalUsageMCpu: usageMCores,
 		CoreCount:      coreCount,
 	}
+	
+	// Add cgroup info if available
+	if cgroupErr == nil {
+		cpuStat.CgroupCores = cgroupInfo.QuotaCores
+		cpuStat.ThrottleRatio = cgroupInfo.ThrottleRatio
+		cpuStat.IsThrottled = cgroupInfo.IsThrottled
+	}
 
 	return cpuStat, nil
 }
 
 func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMCores float64, coreCount int, usagePercent float64, err error) {
-	// Fetching from cgroup is incredibly difficult, so we fallback to host-level usage
-
-	// -- FALLBACK: host-level usage with cpu.Percent() --
-	// Gather CPU usage over a short interval (0 => immediate snapshot).
-	// Optionally you could do time.Sleep and call cpu.Percent again for a delta.
+	// Try to get cgroup info first for accurate container limits
+	cgroupInfo, cgroupErr := c.getCgroupCPUInfo(ctx)
+	
+	// Get actual CPU usage
 	usagePercentages, err := cpu.PercentWithContext(ctx, 0, false)
 	if err != nil {
 		return 0, 0, 0, err
@@ -269,11 +315,24 @@ func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMC
 		usagePercent = usagePercentages[0]
 	}
 
-	// Convert usage percent to mCPU (i.e. 1000 mCPU = 1 core).
-	// For example, if usage is 50% on a system with 4 cores,
-	// the container is effectively using 2 cores => 2000 mCPU.
-	coreCount = runtime.NumCPU()
-	usageCores := (usagePercent / 100.0) * float64(coreCount)
+	// Determine effective core count (keep as float64 to preserve fractional quotas)
+	// Use cgroup limit if available, otherwise fall back to host CPU count
+	effectiveCores := float64(runtime.NumCPU())
+	if cgroupErr == nil && cgroupInfo.QuotaCores > 0 {
+		// Use cgroup limit for more accurate mCPU calculation
+		// QuotaCores can be fractional (e.g., 0.5 for 500m, 1.5 for 1500m)
+		effectiveCores = cgroupInfo.QuotaCores
+		// Use a small minimum to avoid divide-by-zero, but preserve fractional limits
+		if effectiveCores < 0.1 {
+			effectiveCores = 0.1
+		}
+	}
+	
+	coreCount = runtime.NumCPU() // Always report host cores for compatibility
+	
+	// Convert usage percent to mCPU based on effective cores
+	// This gives us a more accurate representation when cgroups limit CPU
+	usageCores := (usagePercent / 100.0) * effectiveCores
 	usageMCores = usageCores * 1000
 
 	return usageMCores, coreCount, usagePercent, nil
