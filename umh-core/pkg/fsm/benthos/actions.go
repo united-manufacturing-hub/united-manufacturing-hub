@@ -66,18 +66,19 @@ func (b *BenthosInstance) logS6DirectoryState(trigger string) {
 	serviceName := b.baseFSMInstance.GetID()
 	currentFSMState := b.baseFSMInstance.GetCurrentFSMState()
 	logger := b.baseFSMInstance.GetLogger()
-	
+
 	// Copy S6 ServiceInfo (it's a value type, so this is a deep copy)
 	s6Info := b.ObservedState.ServiceInfo.S6ObservedState.ServiceInfo
-	
+
 	// Extract only the Benthos status fields we actually use
 	benthosStatusReason := b.ObservedState.ServiceInfo.BenthosStatus.StatusReason
 	healthIsLive := b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive
 	healthIsReady := b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady
 	metricsState := b.ObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState
-	
+
 	// Copy only the last 3 log entries (not the entire log array)
 	var lastLogs []s6service.LogEntry
+
 	logs := b.ObservedState.ServiceInfo.BenthosStatus.BenthosLogs
 	if len(logs) > 0 {
 		n := min(3, len(logs))
@@ -87,12 +88,13 @@ func (b *BenthosInstance) logS6DirectoryState(trigger string) {
 
 	// Create a timeout context for the async logging goroutine to prevent leaks
 	logCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	
+
 	// Spawn short-lived goroutine for async diagnostic logging and Sentry reporting.
 	// This prevents blocking the reconciliation loop with I/O operations.
 	// The goroutine completes quickly after logging diagnostics.
 	go func() {
 		defer cancel()
+
 		b.logS6DirectoryStateAsync(
 			logCtx,
 			trigger, s6State, serviceName, currentFSMState, logger,

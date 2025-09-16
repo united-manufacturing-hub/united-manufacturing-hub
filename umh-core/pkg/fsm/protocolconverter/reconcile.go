@@ -117,7 +117,7 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 	}
 
 	// Step 3: Attempt to reconcile the state.
-	currentTime := time.Now() // this is used to check if the instance is degraded and for the log check
+	currentTime := snapshot.SnapshotTime // this is used to check if the instance is degraded and for the log check
 
 	err, reconciled = p.reconcileStateTransition(ctx, services, currentTime)
 	if err != nil {
@@ -142,7 +142,8 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 	}
 
 	// Reconcile the manager
-	managerErr, managerReconciled := p.service.ReconcileManager(ctx, services, snapshot.Tick)
+	// Pass the full snapshot to maintain the \"one time.Now() per tick\" principle
+	managerErr, managerReconciled := p.service.ReconcileManager(ctx, services, snapshot)
 	if managerErr != nil {
 		if errors.Is(managerErr, context.DeadlineExceeded) {
 			// Context deadline exceeded should be retried with backoff, not ignored

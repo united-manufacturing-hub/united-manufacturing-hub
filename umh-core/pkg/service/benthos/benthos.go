@@ -80,8 +80,8 @@ type IBenthosService interface {
 	// Expects benthosName (e.g. "myservice") as defined in the UMH config
 	ServiceExists(ctx context.Context, filesystemService filesystem.Service, benthosName string) bool
 	// ReconcileManager reconciles the Benthos manager
-	// Expects tick (uint64) as the current tick
-	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
+	// Expects snapshot (fsm.SystemSnapshot) containing current state and timestamp
+	ReconcileManager(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (error, bool)
 	// IsLogsFine reports true when recent Benthos logs (within the supplied
 	// window) contain no critical errors or warnings.
 	//
@@ -931,7 +931,7 @@ func (s *BenthosService) StopBenthos(ctx context.Context, filesystemService file
 }
 
 // ReconcileManager reconciles the Benthos manager.
-func (s *BenthosService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (err error, reconciled bool) {
+func (s *BenthosService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (err error, reconciled bool) {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized"), false
 	}
@@ -942,9 +942,11 @@ func (s *BenthosService) ReconcileManager(ctx context.Context, services servicer
 
 	// Create a new snapshot with the current S6 service configs
 	// Note: therefore, the S6 manager will not have access to the full observed state
+	// Pass the snapshot time from parent to maintain "one time.Now() per tick" principle
 	s6Snapshot := fsm.SystemSnapshot{
 		CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: s.s6ServiceConfigs}},
-		Tick:          tick,
+		Tick:          snapshot.Tick,
+		SnapshotTime:  snapshot.SnapshotTime,
 	}
 
 	s6Err, s6Reconciled := s.s6Manager.Reconcile(ctx, s6Snapshot, services)
@@ -954,9 +956,11 @@ func (s *BenthosService) ReconcileManager(ctx context.Context, services servicer
 
 	// Also reconcile the benthos monitor
 
+	// Pass the snapshot time from parent to maintain "one time.Now() per tick" principle
 	benthosMonitorSnapshot := fsm.SystemSnapshot{
 		CurrentConfig: config.FullConfig{Internal: config.InternalConfig{BenthosMonitor: s.benthosMonitorConfigs}},
-		Tick:          tick,
+		Tick:          snapshot.Tick,
+		SnapshotTime:  snapshot.SnapshotTime,
 	}
 
 	monitorErr, monitorReconciled := s.benthosMonitorManager.Reconcile(ctx, benthosMonitorSnapshot, services)

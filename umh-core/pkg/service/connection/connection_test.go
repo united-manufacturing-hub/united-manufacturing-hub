@@ -120,7 +120,7 @@ var _ = Describe("ConnectionService", func() {
 
 			// Reconcile to ensure the component is passed to nmap manager
 			mockNmap.ReconcileManagerReconciled = true
-			_, reconciled := service.ReconcileManager(ctx, mockServices, tick)
+			_, reconciled := service.ReconcileManager(ctx, mockServices, fsm.SystemSnapshot{Tick: tick, SnapshotTime: time.Now()})
 
 			// Assert
 			Expect(reconciled).To(BeTrue())
@@ -214,9 +214,10 @@ var _ = Describe("ConnectionService", func() {
 
 			mockNmapService.ServiceStates[nmapName].NmapStatus.IsRunning = true
 			mockNmapService.ServiceStates[nmapName].NmapStatus.LastScan.PortResult.State = "open"
+			mockNmapService.ServiceStates[nmapName].NmapStatus.LastScan.Timestamp = time.Now() // Set recent timestamp to prevent degraded state
 
 			// Reconcile once to ensure that serviceInfo is used to update the observed state
-			_, reconciled := statusService.ReconcileManager(ctx, mockServices, tick)
+			_, reconciled := statusService.ReconcileManager(ctx, mockServices, fsm.SystemSnapshot{Tick: tick, SnapshotTime: time.Now()})
 			Expect(reconciled).To(BeFalse())
 
 			// Call Status
@@ -435,7 +436,7 @@ var _ = Describe("ConnectionService", func() {
 			mockNmap.ReconcileManagerReconciled = true
 
 			// Act
-			err, reconciled := service.ReconcileManager(ctx, mockServices, tick)
+			err, reconciled := service.ReconcileManager(ctx, mockServices, fsm.SystemSnapshot{Tick: tick, SnapshotTime: time.Now()})
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
@@ -467,7 +468,7 @@ var _ = Describe("ConnectionService", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// First reconcile - this will just create the instance in the manager
-			firstErr, reconciled := testService.ReconcileManager(ctx, mockServices, tick)
+			firstErr, reconciled := testService.ReconcileManager(ctx, mockServices, fsm.SystemSnapshot{Tick: tick, SnapshotTime: time.Now()})
 			Expect(firstErr).NotTo(HaveOccurred())
 			Expect(reconciled).To(BeTrue()) // Should be true because we created a new instance
 
@@ -475,7 +476,7 @@ var _ = Describe("ConnectionService", func() {
 			mockNmapService.ReconcileManagerError = mockError
 
 			// Second reconcile - now that the instance exists, it will try to reconcile it
-			err, reconciled = testService.ReconcileManager(ctx, mockServices, tick+1)
+			err, reconciled = testService.ReconcileManager(ctx, mockServices, fsm.SystemSnapshot{Tick: tick+1, SnapshotTime: time.Now()})
 
 			// Assert
 			Expect(err).ToNot(HaveOccurred()) // it should not return an error

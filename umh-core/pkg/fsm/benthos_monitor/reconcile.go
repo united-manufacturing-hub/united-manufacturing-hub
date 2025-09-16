@@ -105,7 +105,7 @@ func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sys
 	}
 
 	// Step 3: Attempt to reconcile the state.
-	err, reconciled = b.reconcileStateTransition(ctx, services)
+	err, reconciled = b.reconcileStateTransition(ctx, services, snapshot)
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
 		// Also this should not
@@ -125,7 +125,7 @@ func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sys
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
-	s6Err, s6Reconciled := b.monitorService.ReconcileManager(ctx, services, snapshot.Tick)
+	s6Err, s6Reconciled := b.monitorService.ReconcileManager(ctx, services, snapshot)
 	if s6Err != nil {
 		if errors.Is(s6Err, context.DeadlineExceeded) {
 			// Context deadline exceeded should be retried with backoff, not ignored
@@ -179,7 +179,7 @@ func (b *BenthosMonitorInstance) reconcileExternalChanges(ctx context.Context, s
 // Any functions that fetch information are disallowed here and must be called in reconcileExternalChanges
 // and exist in ExternalState.
 // This is to ensure full testability of the FSM.
-func (b *BenthosMonitorInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider) (err error, reconciled bool) {
+func (b *BenthosMonitorInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (err error, reconciled bool) {
 	start := time.Now()
 
 	defer func() {
@@ -205,7 +205,7 @@ func (b *BenthosMonitorInstance) reconcileStateTransition(ctx context.Context, s
 
 	// Handle operational states
 	if IsOperationalState(currentState) {
-		err, reconciled := b.reconcileOperationalStates(ctx, services, currentState, desiredState, time.Now())
+		err, reconciled := b.reconcileOperationalStates(ctx, services, currentState, desiredState, snapshot.SnapshotTime)
 		if err != nil {
 			return err, false
 		}

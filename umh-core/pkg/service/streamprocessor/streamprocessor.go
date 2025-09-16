@@ -80,7 +80,7 @@ type IStreamProcessorService interface {
 
 	// ReconcileManager is the heart-beat: on every tick it feeds the *desired*
 	// slices into the child-managers, lets them run one state-machine cycle and
-	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
+	ReconcileManager(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (error, bool)
 
 	// EvaluateDFCDesiredStates determines the appropriate desired states for the underlying
 	// DFCs based on the stream processor's desired state and current DFC configurations.
@@ -534,10 +534,11 @@ func (p *Service) Stop(
 // for all services.
 //
 // This should be called periodically by a control loop.
+// Maintains "one time.Now() per tick" principle by using the provided snapshot timestamp.
 func (p *Service) ReconcileManager(
 	ctx context.Context,
 	services serviceregistry.Provider,
-	tick uint64,
+	snapshot fsm.SystemSnapshot,
 ) (error, bool) {
 	start := time.Now()
 
@@ -545,7 +546,7 @@ func (p *Service) ReconcileManager(
 		metrics.ObserveReconcileTime(logger.ComponentStreamProcessorService, "ReconcileManager", time.Since(start))
 	}()
 
-	p.logger.Debugf("Reconciling streamprocessor manager at tick %d", tick)
+	p.logger.Debugf("Reconciling streamprocessor manager at tick %d", snapshot.Tick)
 
 	if p.dataflowComponentManager == nil {
 		return errors.New("dataflowcomponent manager not initialized"), false
@@ -560,7 +561,8 @@ func (p *Service) ReconcileManager(
 		CurrentConfig: config.FullConfig{
 			DataFlow: p.dataflowComponentConfig,
 		},
-		Tick: tick,
+		Tick: snapshot.Tick,
+		SnapshotTime: snapshot.SnapshotTime,
 	}, services)
 	if err != nil {
 		return err, dfcReconciled
