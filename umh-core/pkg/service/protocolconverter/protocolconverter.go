@@ -1122,17 +1122,14 @@ func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot
 	}
 
 	// Check if container resources are degraded
-	containerManager, exists := snapshot.Managers[constants.ContainerManagerName]
-	if !exists {
+	containerManager, managerExists := fsm.FindManager(snapshot, constants.ContainerManagerName)
+	if !managerExists {
 		// If container manager doesn't exist, err on the side of caution and block
 		return true, "Container monitor not available"
 	}
 
-	// Get container instances - there should be one instance called "Core"
-	instances := containerManager.GetInstances()
-
-	containerInstance, exists := instances[constants.CoreInstanceName]
-	if !exists {
+	containerInstance, instanceExists := containerManager.GetInstances()[constants.CoreInstanceName]
+	if !instanceExists {
 		// If Core instance doesn't exist, err on the side of caution and block
 		return true, "Container health status unavailable"
 	}

@@ -35,6 +35,64 @@ type CPUCgroupInfo struct {
 	IsThrottled   bool    // True if throttling detected (ratio > 0.05)
 }
 
+// parseCPUMax parses the cpu.max file content and returns quota cores and period.
+func parseCPUMax(data []byte) (quotaCores float64, periodMicros int64, err error) {
+	// Parse cpu.max format: "quota period" or "max period"
+	parts := strings.Fields(string(data))
+	if len(parts) != 2 {
+		return 0, 0, fmt.Errorf("unexpected cpu.max format: %s", string(data))
+	}
+
+	// Parse period (always second field)
+	periodMicros, err = strconv.ParseInt(parts[1], 10, 64)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to parse cpu period: %w", err)
+	}
+
+	// Parse quota (first field, can be "max" for unlimited)
+	if parts[0] != "max" {
+		quota, err := strconv.ParseInt(parts[0], 10, 64)
+		if err != nil {
+			return 0, 0, fmt.Errorf("failed to parse cpu quota: %w", err)
+		}
+		// Calculate cores from quota and period
+		// quota/period gives us the fraction of CPU time allowed
+		if periodMicros > 0 {
+			quotaCores = float64(quota) / float64(periodMicros)
+		}
+	}
+
+	return quotaCores, periodMicros, nil
+}
+
+// parseCPUStats parses the cpu.stat file content and returns throttling statistics.
+func parseCPUStats(data []byte) (nrPeriods, nrThrottled, throttledUsec int64, err error) {
+	// Parse cpu.stat (key-value pairs)
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines {
+		parts := strings.Fields(line)
+		if len(parts) != 2 {
+			continue
+		}
+
+		value, err := strconv.ParseInt(parts[1], 10, 64)
+		if err != nil {
+			continue
+		}
+
+		switch parts[0] {
+		case "nr_periods":
+			nrPeriods = value
+		case "nr_throttled":
+			nrThrottled = value
+		case "throttled_usec":
+			throttledUsec = value
+		}
+	}
+
+	return nrPeriods, nrThrottled, throttledUsec, nil
+}
+
 // getCgroupCPUInfo reads cgroup v2 CPU limits and throttling statistics.
 func (c *ContainerMonitorService) getCgroupCPUInfo(ctx context.Context) (*CPUCgroupInfo, error) {
 	info := &CPUCgroupInfo{}
@@ -50,33 +108,14 @@ func (c *ContainerMonitorService) getCgroupCPUInfo(ctx context.Context) (*CPUCgr
 		return nil, fmt.Errorf("failed to read cpu.max: %w", err)
 	}
 
-	// Parse cpu.max format: "quota period" or "max period"
-	parts := strings.Fields(string(cpuMaxData))
-	if len(parts) != 2 {
-		return nil, fmt.Errorf("unexpected cpu.max format: %s", string(cpuMaxData))
-	}
-
-	// Parse period (always second field)
-	period, err := strconv.ParseInt(parts[1], 10, 64)
+	// Parse cpu.max
+	quotaCores, periodMicros, err := parseCPUMax(cpuMaxData)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse cpu period: %w", err)
+		return nil, err
 	}
 
-	info.PeriodMicros = period
-
-	// Parse quota (first field, can be "max" for unlimited)
-	if parts[0] != "max" {
-		quota, err := strconv.ParseInt(parts[0], 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse cpu quota: %w", err)
-		}
-		// Calculate cores from quota and period
-		// quota/period gives us the fraction of CPU time allowed
-		// Multiply by number of CPUs to get effective core count
-		if period > 0 {
-			info.QuotaCores = float64(quota) / float64(period)
-		}
-	}
+	info.QuotaCores = quotaCores
+	info.PeriodMicros = periodMicros
 
 	// Read cpu.stat for throttling information
 	cpuStatPath := "/sys/fs/cgroup/cpu.stat"
@@ -89,28 +128,15 @@ func (c *ContainerMonitorService) getCgroupCPUInfo(ctx context.Context) (*CPUCgr
 		return info, nil
 	}
 
-	// Parse cpu.stat (key-value pairs)
-	lines := strings.Split(string(cpuStatData), "\n")
-	for _, line := range lines {
-		parts := strings.Fields(line)
-		if len(parts) != 2 {
-			continue
-		}
-
-		value, err := strconv.ParseInt(parts[1], 10, 64)
-		if err != nil {
-			continue
-		}
-
-		switch parts[0] {
-		case "nr_periods":
-			info.NrPeriods = value
-		case "nr_throttled":
-			info.NrThrottled = value
-		case "throttled_usec":
-			info.ThrottledUsec = value
-		}
+	// Parse cpu.stat
+	nrPeriods, nrThrottled, throttledUsec, err := parseCPUStats(cpuStatData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse cpu.stat: %w", err)
 	}
+
+	info.NrPeriods = nrPeriods
+	info.NrThrottled = nrThrottled
+	info.ThrottledUsec = throttledUsec
 
 	// Calculate throttle ratio
 	if info.NrPeriods > 0 {
