@@ -1088,15 +1088,34 @@ func (m *FileConfigManager) WriteYAMLConfigFromString(ctx context.Context, confi
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	// For WriteYAMLConfigFromString, we invalidate the cache instead of updating it directly.
-	// This is because WriteYAMLConfigFromString writes the raw YAML string directly to the file,
-	// which may not preserve the original YAML structure (anchors/aliases).
-	// Caching the converted data caused Protocol Converter templating bugs.
-	// Cache invalidation forces a fresh read that properly handles YAML templating.
+	// Get the file stats for the config file to update cache with new mod time
+	fileStats, err := m.fsService.Stat(ctx, m.configPath)
+	if err != nil {
+		return fmt.Errorf("failed to get file stats: %w", err)
+	}
+
+	// Parse the new config to update the cache properly
+	// We already validated the config above, so this should succeed
+	// This parsing step is crucial as it converts the raw YAML to the proper spec config format,
+	// ensuring template references are resolved and the cache contains valid, usable config data
+	newConfig, err := ParseConfig([]byte(configStr), ctx, true) // Allow unknown fields for YAML anchors
+	if err != nil {
+		// If parsing fails, invalidate cache to force fresh read later
+		m.cacheMu.Lock()
+		m.cacheModTime = time.Time{}
+		m.cacheConfig = FullConfig{}
+		m.cacheRawConfig = ""
+		m.cacheError = err
+		m.cacheMu.Unlock()
+		return fmt.Errorf("failed to parse new config for cache update: %w", err)
+	}
+
+	// Update cache with the new config, raw data, and mod time
 	m.cacheMu.Lock()
-	m.cacheModTime = time.Time{} // Invalidate cache by setting modtime to zero
-	m.cacheConfig = FullConfig{}
-	m.cacheRawConfig = ""
+	m.cacheModTime = fileStats.ModTime()
+	m.cacheConfig = newConfig
+	m.cacheRawConfig = configStr
+	m.cacheError = nil
 	m.cacheMu.Unlock()
 
 	m.logger.Infof("Successfully wrote config to %s", m.configPath)
