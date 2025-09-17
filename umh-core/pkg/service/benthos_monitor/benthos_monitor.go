@@ -225,7 +225,7 @@ type IBenthosMonitorService interface {
 	UpdateBenthosMonitorInS6Manager(ctx context.Context, port uint16) error
 	StartBenthosMonitor(ctx context.Context) error
 	StopBenthosMonitor(ctx context.Context) error
-	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
+	ReconcileManager(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (error, bool)
 	ServiceExists(ctx context.Context, services serviceregistry.Provider) bool
 }
 
@@ -1674,7 +1674,8 @@ func (s *BenthosMonitorService) StopBenthosMonitor(ctx context.Context) error {
 }
 
 // ReconcileManager reconciles the Benthos manager.
-func (s *BenthosMonitorService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (err error, reconciled bool) {
+// Maintains "one time.Now() per tick" principle by using the provided snapshot timestamp.
+func (s *BenthosMonitorService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (err error, reconciled bool) {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized"), false
 	}
@@ -1689,7 +1690,7 @@ func (s *BenthosMonitorService) ReconcileManager(ctx context.Context, services s
 		serviceMap.Internal.Services = []config.S6FSMConfig{*s.s6ServiceConfig}
 	}
 
-	return s.s6Manager.Reconcile(ctx, fsm.SystemSnapshot{CurrentConfig: serviceMap}, services)
+	return s.s6Manager.Reconcile(ctx, fsm.SystemSnapshot{CurrentConfig: serviceMap, SnapshotTime: snapshot.SnapshotTime, Tick: snapshot.Tick}, services)
 }
 
 // ServiceExists checks if a benthos instance exists.

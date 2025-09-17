@@ -29,6 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	connfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	dfcfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	connservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
@@ -167,7 +168,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Reconcile to ensure the protocl converter is passed to managers
 			mockConn.ReconcileManagerReconciled = true
 			mockDfc.ReconcileManagerReconciled = true
-			_, _ = service.ReconcileManager(ctx, mockSvcRegistry, tick)
+			_, _ = service.ReconcileManager(ctx, mockSvcRegistry, fsm.SystemSnapshot{Tick: tick, SnapshotTime: time.Now()})
 
 			Expect(service.connectionConfig).To(HaveLen(1))
 			Expect(service.dataflowComponentConfig).To(HaveLen(2))
@@ -570,7 +571,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			mockDfc.ReconcileManagerReconciled = true
 
 			// Act
-			err, reconciled := service.ReconcileManager(ctx, mockSvcRegistry, tick)
+			err, reconciled := service.ReconcileManager(ctx, mockSvcRegistry, fsm.SystemSnapshot{Tick: tick, SnapshotTime: time.Now()})
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
@@ -620,7 +621,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// First reconcile - this will just create the instance in the manager
-			firstErr, reconciled := testService.ReconcileManager(ctx, mockSvcRegistry, tick)
+			firstErr, reconciled := testService.ReconcileManager(ctx, mockSvcRegistry, fsm.SystemSnapshot{Tick: tick, SnapshotTime: time.Now()})
 			Expect(firstErr).NotTo(HaveOccurred())
 			Expect(reconciled).To(BeTrue()) // Should be true because we created a new instance
 
@@ -629,7 +630,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			mockConnService.ReconcileManagerError = mockError
 
 			// Second reconcile - now that the instance exists, it will try to reconcile it
-			err, reconciled = testService.ReconcileManager(ctx, mockSvcRegistry, tick+1)
+			err, reconciled = testService.ReconcileManager(ctx, mockSvcRegistry, fsm.SystemSnapshot{Tick: tick+1, SnapshotTime: time.Now()})
 
 			// Assert
 			Expect(err).ToNot(HaveOccurred()) // it should not return an error

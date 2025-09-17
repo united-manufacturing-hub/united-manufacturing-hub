@@ -59,7 +59,7 @@ type ITopicBrowserService interface {
 	// ServiceExists checks if a topic browser with the given name exists.
 	ServiceExists(ctx context.Context, services serviceregistry.Provider, tbName string) bool
 	// ReconcileManager synchronizes all connections on each tick.
-	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
+	ReconcileManager(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (error, bool)
 }
 
 type Status struct {
@@ -547,10 +547,11 @@ func (svc *Service) Stop(
 }
 
 // ReconcileManager synchronizes the topic browser on each tick.
+// Maintains "one time.Now() per tick" principle by using the provided snapshot timestamp.
 func (svc *Service) ReconcileManager(
 	ctx context.Context,
 	services serviceregistry.Provider,
-	tick uint64,
+	snapshot fsm.SystemSnapshot,
 ) (error, bool) {
 	start := time.Now()
 
@@ -574,7 +575,8 @@ func (svc *Service) ReconcileManager(
 				Benthos: svc.benthosConfigs,
 			},
 		},
-		Tick: tick,
+		Tick: snapshot.Tick,
+		SnapshotTime: snapshot.SnapshotTime,
 	}, services)
 }
 

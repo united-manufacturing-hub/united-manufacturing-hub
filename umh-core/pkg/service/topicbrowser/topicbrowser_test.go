@@ -138,7 +138,7 @@ var _ = Describe("TopicBrowserService", func() {
 
 			// Reconcile to ensure the topic browser is passed to benthos manager
 			mockBenthos.ReconcileManagerReconciled = true
-			_, reconciled := service.ReconcileManager(ctx, mockSvcRegistry, tick)
+			_, reconciled := service.ReconcileManager(ctx, mockSvcRegistry, fsm.SystemSnapshot{Tick: tick, SnapshotTime: time.Now()})
 
 			// Assert
 			Expect(reconciled).To(BeTrue())
@@ -266,7 +266,7 @@ var _ = Describe("TopicBrowserService", func() {
 			mockBenthosService.ServiceStates[benthosName].BenthosStatus.BenthosLogs = append(mockBenthosService.ServiceStates[benthosName].BenthosStatus.BenthosLogs, logs...)
 
 			// Reconcile once to ensure that serviceInfo is used to update the observed state
-			_, reconciled := statusService.ReconcileManager(ctx, mockSvcRegistry, tick)
+			_, reconciled := statusService.ReconcileManager(ctx, mockSvcRegistry, fsm.SystemSnapshot{Tick: tick, SnapshotTime: time.Now()})
 			Expect(reconciled).To(BeFalse())
 
 			rpObserved := &rpfsm.RedpandaObservedStateSnapshot{
@@ -581,7 +581,7 @@ var _ = Describe("TopicBrowserService", func() {
 			mockBenthos.ReconcileManagerReconciled = true
 
 			// Act
-			err, reconciled := service.ReconcileManager(ctx, mockSvcRegistry, tick)
+			err, reconciled := service.ReconcileManager(ctx, mockSvcRegistry, fsm.SystemSnapshot{Tick: tick, SnapshotTime: time.Now()})
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
@@ -629,7 +629,7 @@ var _ = Describe("TopicBrowserService", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// First reconcile - this will just create the instance in the manager
-			firstErr, reconciled := testService.ReconcileManager(ctx, mockSvcRegistry, tick)
+			firstErr, reconciled := testService.ReconcileManager(ctx, mockSvcRegistry, fsm.SystemSnapshot{Tick: tick, SnapshotTime: time.Now()})
 			Expect(firstErr).NotTo(HaveOccurred())
 			Expect(reconciled).To(BeTrue()) // Should be true because we created a new instance
 
@@ -637,7 +637,7 @@ var _ = Describe("TopicBrowserService", func() {
 			mockBenthosService.ReconcileManagerError = mockError
 
 			// Second reconcile - now that the instance exists, it will try to reconcile it
-			err, reconciled = testService.ReconcileManager(ctx, mockSvcRegistry, tick+1)
+			err, reconciled = testService.ReconcileManager(ctx, mockSvcRegistry, fsm.SystemSnapshot{Tick: tick+1, SnapshotTime: time.Now()})
 
 			// Assert
 			Expect(err).ToNot(HaveOccurred()) // it should not return an error

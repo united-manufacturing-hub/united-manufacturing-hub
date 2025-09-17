@@ -127,7 +127,7 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 	}
 
 	// Reconcile the s6Manager
-	s6Err, s6Reconciled := n.monitorService.ReconcileManager(ctx, services, snapshot.Tick)
+	s6Err, s6Reconciled := n.monitorService.ReconcileManager(ctx, services, snapshot)
 	if s6Err != nil {
 		if n.baseFSMInstance.IsDeadlineExceededAndHandle(s6Err, snapshot.Tick, "monitorService reconciliation") {
 			return nil, false

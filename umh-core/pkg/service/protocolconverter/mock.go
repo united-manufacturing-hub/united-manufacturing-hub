@@ -619,7 +619,7 @@ func (m *MockProtocolConverterService) ServiceExists(ctx context.Context, filesy
 }
 
 // ReconcileManager mocks reconciling the ProtocolConverter manager.
-func (m *MockProtocolConverterService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool) {
+func (m *MockProtocolConverterService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (error, bool) {
 	m.mu.Lock()
 	m.ReconcileManagerCalled = true
 	m.mu.Unlock()
@@ -684,4 +684,15 @@ func (m *MockProtocolConverterService) EvaluateDFCDesiredStates(protConvName str
 	}
 
 	return nil
+}
+
+// IsResourceLimited mocks checking if the system is at resource limits.
+//
+// It returns:
+//
+//	limited – true when resources are limited and bridge creation should be blocked, false otherwise.
+//	reason  – empty when limited is false; otherwise a short explanation of why resources are limited.
+func (m *MockProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot) (bool, string) {
+	// For testing, always return false to allow bridge creation
+	return false, ""
 }

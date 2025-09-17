@@ -557,7 +557,8 @@ func (s *NmapService) StopNmap(ctx context.Context, nmapName string) error {
 }
 
 // ReconcileManager reconciles the Nmap manager.
-func (s *NmapService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (err error, reconciled bool) {
+// Maintains "one time.Now() per tick" principle by using the provided snapshot timestamp.
+func (s *NmapService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (err error, reconciled bool) {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized"), false
 	}
@@ -567,12 +568,13 @@ func (s *NmapService) ReconcileManager(ctx context.Context, services serviceregi
 	}
 
 	// Create a snapshot from the full config
-	snapshot := fsm.SystemSnapshot{
+	updatedSnapshot := fsm.SystemSnapshot{
 		CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: s.s6ServiceConfigs}},
-		Tick:          tick,
+		Tick:          snapshot.Tick,
+		SnapshotTime:  snapshot.SnapshotTime,
 	}
 
-	return s.s6Manager.Reconcile(ctx, snapshot, services)
+	return s.s6Manager.Reconcile(ctx, updatedSnapshot, services)
 }
 
 // ServiceExists checks if a nmap service exists.

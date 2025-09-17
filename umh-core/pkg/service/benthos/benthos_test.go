@@ -23,6 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthos_monitor_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos_monitor"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
@@ -56,7 +57,7 @@ var _ = Describe("Benthos Service", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Reconcile the S6 and benthos monitor manager
-		err, _ = service.ReconcileManager(context.Background(), mockSvcRegistry, tick)
+		err, _ = service.ReconcileManager(context.Background(), mockSvcRegistry, fsm.SystemSnapshot{Tick: tick, SnapshotTime: time.Now()})
 		Expect(err).NotTo(HaveOccurred())
 
 		benthosMonitorMockService.SetReadyStatus(true, true, "")
@@ -606,7 +607,7 @@ var _ = Describe("Benthos Service", func() {
 
 			// Reconcile the S6 manager a couple of times
 			for range 10 {
-				err, _ = service.ReconcileManager(ctx, mockSvcRegistry, 0)
+				err, _ = service.ReconcileManager(ctx, mockSvcRegistry, fsm.SystemSnapshot{Tick: 0, SnapshotTime: time.Now()})
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})
@@ -669,7 +670,7 @@ var _ = Describe("Benthos Service", func() {
 			// Second reconciliation - detects the config change and triggers restart
 			By("Reconciling the manager to apply the configuration change")
 			tick++
-			err, _ = service.ReconcileManager(ctx, mockSvcRegistry, tick)
+			err, _ = service.ReconcileManager(ctx, mockSvcRegistry, fsm.SystemSnapshot{Tick: tick, SnapshotTime: time.Now()})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Change the mock to return the updated config
@@ -799,7 +800,7 @@ logger:
 
 			// Reconcile the S6 manager a couple of times
 			for range 10 {
-				err, _ = service.ReconcileManager(ctx, mockSvcRegistry, 0)
+				err, _ = service.ReconcileManager(ctx, mockSvcRegistry, fsm.SystemSnapshot{Tick: 0, SnapshotTime: time.Now()})
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})

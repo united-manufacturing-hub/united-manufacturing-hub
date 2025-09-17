@@ -105,7 +105,7 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 	}
 
 	// Step 3: Attempt to reconcile the state.
-	err, reconciled = b.reconcileStateTransition(ctx, services)
+	err, reconciled = b.reconcileStateTransition(ctx, services, snapshot)
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
 		// Also this should not
@@ -123,7 +123,7 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
-	s6Err, s6Reconciled := b.monitorService.ReconcileManager(ctx, services, snapshot.Tick)
+	s6Err, s6Reconciled := b.monitorService.ReconcileManager(ctx, services, snapshot)
 	if s6Err != nil {
 		if b.baseFSMInstance.IsDeadlineExceededAndHandle(s6Err, snapshot.Tick, "monitorService reconciliation") {
 			return nil, false
@@ -173,7 +173,7 @@ func (b *RedpandaMonitorInstance) reconcileExternalChanges(ctx context.Context, 
 // Any functions that fetch information are disallowed here and must be called in reconcileExternalChanges
 // and exist in ExternalState.
 // This is to ensure full testability of the FSM.
-func (b *RedpandaMonitorInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider) (err error, reconciled bool) {
+func (b *RedpandaMonitorInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (err error, reconciled bool) {
 	start := time.Now()
 
 	defer func() {
@@ -199,7 +199,7 @@ func (b *RedpandaMonitorInstance) reconcileStateTransition(ctx context.Context, 
 
 	// Handle operational states
 	if IsOperationalState(currentState) {
-		err, reconciled := b.reconcileOperationalStates(ctx, services, currentState, desiredState, time.Now())
+		err, reconciled := b.reconcileOperationalStates(ctx, services, currentState, desiredState, snapshot.SnapshotTime)
 		if err != nil {
 			return err, false
 		}

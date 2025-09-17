@@ -77,14 +77,14 @@ var _ = Describe("RedpandaMonitor FSM", func() {
 	Context("When newly created", func() {
 		It("should initially transition from creation to operational stopped", func() {
 			// On the first reconcile, the instance should process creation steps.
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 1}, mockSvcRegistry)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 1, SnapshotTime: time.Now()}, mockSvcRegistry)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeTrue())
 			// Assuming the FSM goes to a "LifecycleStateCreating" state during the creation phase.
 			Expect(inst.GetCurrentFSMState()).To(Equal(internalfsm.LifecycleStateCreating))
 
 			// On the next reconcile, the instance should complete creation and be operational in the stopped state.
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 2}, mockSvcRegistry)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 2, SnapshotTime: time.Now()}, mockSvcRegistry)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(redpanda_monitor.OperationalStateStopped))
@@ -95,8 +95,8 @@ var _ = Describe("RedpandaMonitor FSM", func() {
 	Context("Lifecycle transitions", func() {
 		BeforeEach(func() {
 			// Advance the instance to an operational state.
-			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 10}, mockSvcRegistry)
-			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 11}, mockSvcRegistry)
+			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 10, SnapshotTime: time.Now()}, mockSvcRegistry)
+			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 11, SnapshotTime: time.Now()}, mockSvcRegistry)
 			Expect(inst.GetCurrentFSMState()).To(Equal(redpanda_monitor.OperationalStateStopped))
 		})
 
@@ -106,7 +106,7 @@ var _ = Describe("RedpandaMonitor FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reconcile to trigger the start sequence.
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 12}, mockSvcRegistry)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 12, SnapshotTime: time.Now()}, mockSvcRegistry)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(redpanda_monitor.OperationalStateStarting))
@@ -114,17 +114,17 @@ var _ = Describe("RedpandaMonitor FSM", func() {
 			err = inst.SetDesiredFSMState(redpanda_monitor.OperationalStateStopped)
 			Expect(err).NotTo(HaveOccurred())
 
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 13}, mockSvcRegistry)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 13, SnapshotTime: time.Now()}, mockSvcRegistry)
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(redpanda_monitor.OperationalStateStopping))
 
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 14}, mockSvcRegistry)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 14, SnapshotTime: time.Now()}, mockSvcRegistry)
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(redpanda_monitor.OperationalStateStopped))
 		})
 
 		It("should remain stopped when desired state is stopped", func() {
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 15}, mockSvcRegistry)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 15, SnapshotTime: time.Now()}, mockSvcRegistry)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeFalse())
 			Expect(inst.GetCurrentFSMState()).To(Equal(redpanda_monitor.OperationalStateStopped))
@@ -134,23 +134,23 @@ var _ = Describe("RedpandaMonitor FSM", func() {
 	Context("When monitoring is running", func() {
 		BeforeEach(func() {
 			// Advance the instance to an operational state.
-			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 20}, mockSvcRegistry)
-			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 21}, mockSvcRegistry)
+			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 20, SnapshotTime: time.Now()}, mockSvcRegistry)
+			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 21, SnapshotTime: time.Now()}, mockSvcRegistry)
 			err := inst.SetDesiredFSMState(redpanda_monitor.OperationalStateActive)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reconcile to trigger the start sequence: from stopped -> starting -> degraded.
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 22}, mockSvcRegistry)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 22, SnapshotTime: time.Now()}, mockSvcRegistry)
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(redpanda_monitor.OperationalStateStarting))
 
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 23}, mockSvcRegistry)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 23, SnapshotTime: time.Now()}, mockSvcRegistry)
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(redpanda_monitor.OperationalStateDegraded))
 		})
 
 		It("should remain degraded when nothing is happening", func() {
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 24}, mockSvcRegistry)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 24, SnapshotTime: time.Now()}, mockSvcRegistry)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeFalse())
 			Expect(inst.GetCurrentFSMState()).To(Equal(redpanda_monitor.OperationalStateDegraded))
@@ -159,7 +159,7 @@ var _ = Describe("RedpandaMonitor FSM", func() {
 		It("should remain degraded when the S6 service is running, but there was no last scan yet", func() {
 			mockSvc.SetRedpandaMonitorRunning()
 
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 25}, mockSvcRegistry)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 25, SnapshotTime: time.Now()}, mockSvcRegistry)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeFalse())
 			Expect(inst.GetCurrentFSMState()).To(Equal(redpanda_monitor.OperationalStateDegraded))
@@ -170,7 +170,7 @@ var _ = Describe("RedpandaMonitor FSM", func() {
 			mockSvc.SetReadyStatus(true, true, "")
 			mockSvc.SetGoodLastScan(time.Now())
 
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 26}, mockSvcRegistry)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 26, SnapshotTime: time.Now()}, mockSvcRegistry)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeFalse())
 			Expect(inst.GetCurrentFSMState()).To(Equal(redpanda_monitor.OperationalStateDegraded))
@@ -182,7 +182,7 @@ var _ = Describe("RedpandaMonitor FSM", func() {
 			mockSvc.SetLiveStatus(true)
 			mockSvc.SetGoodLastScan(time.Now())
 
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 26}, mockSvcRegistry)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 26, SnapshotTime: time.Now()}, mockSvcRegistry)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeFalse())
 			Expect(inst.GetCurrentFSMState()).To(Equal(redpanda_monitor.OperationalStateDegraded))
@@ -195,7 +195,7 @@ var _ = Describe("RedpandaMonitor FSM", func() {
 			mockSvc.SetMetricsState(true)
 			mockSvc.SetGoodLastScan(time.Now())
 
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 26}, mockSvcRegistry)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 26, SnapshotTime: time.Now()}, mockSvcRegistry)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(redpanda_monitor.OperationalStateActive))
@@ -206,23 +206,26 @@ var _ = Describe("RedpandaMonitor FSM", func() {
 			mockSvc.SetReadyStatus(true, true, "")
 			mockSvc.SetLiveStatus(true)
 			mockSvc.SetMetricsState(true)
-			mockSvc.SetGoodLastScan(time.Now())
+			currentTime := time.Now()
+			mockSvc.SetGoodLastScan(currentTime)
 
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 26}, mockSvcRegistry)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 26, SnapshotTime: currentTime}, mockSvcRegistry)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(redpanda_monitor.OperationalStateActive))
 
 			mockSvc.SetMetricsState(false) // this means redpanda is not active, but the monitor still is to it remains active
+			currentTime = currentTime.Add(1 * time.Second)
 
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 27}, mockSvcRegistry)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 27, SnapshotTime: currentTime}, mockSvcRegistry)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeFalse())
 			Expect(inst.GetCurrentFSMState()).To(Equal(redpanda_monitor.OperationalStateActive))
 
-			mockSvc.SetOutdatedLastScan(time.Now())
+			mockSvc.SetOutdatedLastScan(currentTime)
+			currentTime = currentTime.Add(1 * time.Second)
 
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 28}, mockSvcRegistry)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 28, SnapshotTime: currentTime}, mockSvcRegistry)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(redpanda_monitor.OperationalStateDegraded))

@@ -29,6 +29,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	s6 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -205,7 +206,7 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 		// We need to ensure that the instance created by the manager also uses the mock service
 		err = monitorService.AddRedpandaMonitorToS6Manager(ctx)
 		Expect(err).NotTo(HaveOccurred())
-		err, reconciled := monitorService.ReconcileManager(ctx, mockSvcRegistry, 0)
+		err, reconciled := monitorService.ReconcileManager(ctx, mockSvcRegistry, fsm.SystemSnapshot{Tick: 0, SnapshotTime: time.Now()})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(reconciled).To(BeTrue())
 		// Get the instance after reconciliation
@@ -332,7 +333,7 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 
 func reconcileMonitorUntilState(ctx context.Context, monitorService *redpanda_monitor.RedpandaMonitorService, services serviceregistry.Provider, tick uint64, expectedState string) uint64 {
 	for range 20 {
-		err, _ := monitorService.ReconcileManager(ctx, services, tick)
+		err, _ := monitorService.ReconcileManager(ctx, services, fsm.SystemSnapshot{Tick: tick, SnapshotTime: time.Now()})
 		Expect(err).NotTo(HaveOccurred())
 
 		tick++
@@ -356,7 +357,7 @@ func reconcileMonitorUntilState(ctx context.Context, monitorService *redpanda_mo
 
 func ensureMonitorState(ctx context.Context, monitorService *redpanda_monitor.RedpandaMonitorService, services serviceregistry.Provider, tick uint64, expectedState string, iterations int) {
 	for range iterations {
-		err, _ := monitorService.ReconcileManager(ctx, services, tick)
+		err, _ := monitorService.ReconcileManager(ctx, services, fsm.SystemSnapshot{Tick: tick, SnapshotTime: time.Now()})
 		Expect(err).NotTo(HaveOccurred())
 
 		tick++

@@ -408,7 +408,7 @@ func (m *MockService) ServiceExists(
 func (m *MockService) ReconcileManager(
 	ctx context.Context,
 	services serviceregistry.Provider,
-	tick uint64,
+	snapshot fsm.SystemSnapshot,
 ) (error, bool) {
 	m.ReconcileManagerCalled = true
 

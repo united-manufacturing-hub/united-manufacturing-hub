@@ -30,6 +30,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
@@ -138,7 +139,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Make sure the service exists by reconciling
-			err, _ = service.ReconcileManager(ctx, mockSvcRegistry, 0)
+			err, _ = service.ReconcileManager(ctx, mockSvcRegistry, fsm.SystemSnapshot{Tick: 0, SnapshotTime: time.Now()})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Explicitly mark the service as existing in the mock

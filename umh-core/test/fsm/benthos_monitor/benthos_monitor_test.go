@@ -78,14 +78,14 @@ var _ = Describe("BenthosMonitor FSM", func() {
 	Context("When newly created", func() {
 		It("should initially transition from creation to operational stopped", func() {
 			// On the first reconcile, the instance should process creation steps.
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 1}, mockServices)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 1, SnapshotTime: time.Now()}, mockServices)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeTrue())
 			// Assuming the FSM goes to a "LifecycleStateCreating" state during the creation phase.
 			Expect(inst.GetCurrentFSMState()).To(Equal(internalfsm.LifecycleStateCreating))
 
 			// On the next reconcile, the instance should complete creation and be operational in the stopped state.
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 2}, mockServices)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 2, SnapshotTime: time.Now()}, mockServices)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(benthos_monitor.OperationalStateStopped))
@@ -96,8 +96,8 @@ var _ = Describe("BenthosMonitor FSM", func() {
 	Context("Lifecycle transitions", func() {
 		BeforeEach(func() {
 			// Advance the instance to an operational state.
-			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 10}, mockServices)
-			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 11}, mockServices)
+			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 10, SnapshotTime: time.Now()}, mockServices)
+			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 11, SnapshotTime: time.Now()}, mockServices)
 			Expect(inst.GetCurrentFSMState()).To(Equal(benthos_monitor.OperationalStateStopped))
 		})
 
@@ -107,7 +107,7 @@ var _ = Describe("BenthosMonitor FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reconcile to trigger the start sequence.
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 12}, mockServices)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 12, SnapshotTime: time.Now()}, mockServices)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(benthos_monitor.OperationalStateStarting))
@@ -115,17 +115,17 @@ var _ = Describe("BenthosMonitor FSM", func() {
 			err = inst.SetDesiredFSMState(benthos_monitor.OperationalStateStopped)
 			Expect(err).NotTo(HaveOccurred())
 
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 13}, mockServices)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 13, SnapshotTime: time.Now()}, mockServices)
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(benthos_monitor.OperationalStateStopping))
 
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 14}, mockServices)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 14, SnapshotTime: time.Now()}, mockServices)
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(benthos_monitor.OperationalStateStopped))
 		})
 
 		It("should remain stopped when desired state is stopped", func() {
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 15}, mockServices)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 15, SnapshotTime: time.Now()}, mockServices)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeFalse())
 			Expect(inst.GetCurrentFSMState()).To(Equal(benthos_monitor.OperationalStateStopped))
@@ -135,23 +135,23 @@ var _ = Describe("BenthosMonitor FSM", func() {
 	Context("When monitoring is running", func() {
 		BeforeEach(func() {
 			// Advance the instance to an operational state.
-			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 20}, mockServices)
-			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 21}, mockServices)
+			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 20, SnapshotTime: time.Now()}, mockServices)
+			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 21, SnapshotTime: time.Now()}, mockServices)
 			err := inst.SetDesiredFSMState(benthos_monitor.OperationalStateActive)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reconcile to trigger the start sequence: from stopped -> starting -> degraded.
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 22}, mockServices)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 22, SnapshotTime: time.Now()}, mockServices)
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(benthos_monitor.OperationalStateStarting))
 
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 23}, mockServices)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 23, SnapshotTime: time.Now()}, mockServices)
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(benthos_monitor.OperationalStateDegraded))
 		})
 
 		It("should remain degraded when nothing is happening", func() {
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 24}, mockServices)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 24, SnapshotTime: time.Now()}, mockServices)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeFalse())
 			Expect(inst.GetCurrentFSMState()).To(Equal(benthos_monitor.OperationalStateDegraded))
@@ -160,7 +160,7 @@ var _ = Describe("BenthosMonitor FSM", func() {
 		It("should remain degraded when the S6 service is running, but there was no last scan yet", func() {
 			mockSvc.SetBenthosMonitorRunning()
 
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 25}, mockServices)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 25, SnapshotTime: time.Now()}, mockServices)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeFalse())
 			Expect(inst.GetCurrentFSMState()).To(Equal(benthos_monitor.OperationalStateDegraded))
@@ -171,7 +171,7 @@ var _ = Describe("BenthosMonitor FSM", func() {
 			mockSvc.SetReadyStatus(true, true, "")
 			mockSvc.SetGoodLastScan(time.Now())
 
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 26}, mockServices)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 26, SnapshotTime: time.Now()}, mockServices)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeFalse())
 			Expect(inst.GetCurrentFSMState()).To(Equal(benthos_monitor.OperationalStateDegraded))
@@ -183,7 +183,7 @@ var _ = Describe("BenthosMonitor FSM", func() {
 			mockSvc.SetLiveStatus(true)
 			mockSvc.SetGoodLastScan(time.Now())
 
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 26}, mockServices)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 26, SnapshotTime: time.Now()}, mockServices)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeFalse())
 			Expect(inst.GetCurrentFSMState()).To(Equal(benthos_monitor.OperationalStateDegraded))
@@ -196,7 +196,7 @@ var _ = Describe("BenthosMonitor FSM", func() {
 			mockSvc.SetMetricsState(true)
 			mockSvc.SetGoodLastScan(time.Now())
 
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 26}, mockServices)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 26, SnapshotTime: time.Now()}, mockServices)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(benthos_monitor.OperationalStateActive))
@@ -207,23 +207,26 @@ var _ = Describe("BenthosMonitor FSM", func() {
 			mockSvc.SetReadyStatus(true, true, "")
 			mockSvc.SetLiveStatus(true)
 			mockSvc.SetMetricsState(true)
-			mockSvc.SetGoodLastScan(time.Now())
+			currentTime := time.Now()
+			mockSvc.SetGoodLastScan(currentTime)
 
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 26}, mockServices)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 26, SnapshotTime: currentTime}, mockServices)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(benthos_monitor.OperationalStateActive))
 
 			mockSvc.SetMetricsState(false) // this means benthos is not active, but the monitor still is to it remains active
+			currentTime = currentTime.Add(1 * time.Second)
 
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 27}, mockServices)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 27, SnapshotTime: currentTime}, mockServices)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeFalse())
 			Expect(inst.GetCurrentFSMState()).To(Equal(benthos_monitor.OperationalStateActive))
 
-			mockSvc.SetOutdatedLastScan(time.Now())
+			mockSvc.SetOutdatedLastScan(currentTime)
+			currentTime = currentTime.Add(1 * time.Second)
 
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 28}, mockServices)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 28, SnapshotTime: currentTime}, mockServices)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(benthos_monitor.OperationalStateDegraded))

@@ -229,7 +229,7 @@ type IRedpandaMonitorService interface {
 	RemoveRedpandaMonitorFromS6Manager(ctx context.Context) error
 	StartRedpandaMonitor(ctx context.Context) error
 	StopRedpandaMonitor(ctx context.Context) error
-	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
+	ReconcileManager(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (error, bool)
 	ServiceExists(ctx context.Context, filesystemService filesystem.Service) bool
 	ForceRemoveRedpandaMonitor(ctx context.Context, filesystemService filesystem.Service) error
 }
@@ -1346,7 +1346,8 @@ func (s *RedpandaMonitorService) StopRedpandaMonitor(ctx context.Context) error 
 }
 
 // ReconcileManager reconciles the Redpanda manager.
-func (s *RedpandaMonitorService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (err error, reconciled bool) {
+// Maintains "one time.Now() per tick" principle by using the provided snapshot timestamp.
+func (s *RedpandaMonitorService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (err error, reconciled bool) {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized"), false
 	}
@@ -1359,7 +1360,7 @@ func (s *RedpandaMonitorService) ReconcileManager(ctx context.Context, services 
 		return ErrServiceNotExist, false
 	}
 
-	return s.s6Manager.Reconcile(ctx, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: []config.S6FSMConfig{*s.s6ServiceConfig}}}}, services)
+	return s.s6Manager.Reconcile(ctx, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: []config.S6FSMConfig{*s.s6ServiceConfig}}}, SnapshotTime: snapshot.SnapshotTime, Tick: snapshot.Tick}, services)
 }
 
 // ServiceExists checks if a redpanda instance exists.

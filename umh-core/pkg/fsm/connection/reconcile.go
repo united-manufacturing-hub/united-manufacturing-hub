@@ -118,7 +118,7 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 	}
 
 	// Step 3: Attempt to reconcile the state.
-	currentTime := time.Now() // this is used to check if the instance is degraded and for the log check
+	currentTime := snapshot.SnapshotTime // this is used to check if the instance is degraded and for the log check
 
 	err, reconciled = c.reconcileStateTransition(ctx, services, currentTime)
 	if err != nil {
@@ -138,7 +138,7 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 	}
 
 	// Reconcile the benthosManager
-	nmapErr, nmapReconciled := c.service.ReconcileManager(ctx, services, snapshot.Tick)
+	nmapErr, nmapReconciled := c.service.ReconcileManager(ctx, services, snapshot)
 	if nmapErr != nil {
 		if c.baseFSMInstance.IsDeadlineExceededAndHandle(nmapErr, snapshot.Tick, "nmapManager reconciliation") {
 			return nil, false

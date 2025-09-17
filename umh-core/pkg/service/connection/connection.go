@@ -137,7 +137,7 @@ type IConnectionService interface {
 	//
 	// Returns an error and a boolean indicating if reconciliation occurred.
 	// The boolean is false if reconciliation was skipped (e.g., due to an error).
-	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
+	ReconcileManager(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (error, bool)
 }
 
 // ServiceInfo holds information about the connection's health status.
@@ -554,10 +554,11 @@ func (c *ConnectionService) StopConnection(
 // for all services.
 //
 // This should be called periodically by a control loop.
+// Maintains "one time.Now() per tick" principle by using the provided snapshot timestamp.
 func (c *ConnectionService) ReconcileManager(
 	ctx context.Context,
 	services serviceregistry.Provider,
-	tick uint64,
+	snapshot fsm.SystemSnapshot,
 ) (error, bool) {
 	start := time.Now()
 
@@ -565,7 +566,7 @@ func (c *ConnectionService) ReconcileManager(
 		metrics.ObserveReconcileTime(logger.ComponentConnectionService, "ReconcileManager", time.Since(start))
 	}()
 
-	c.logger.Debugf("Reconciling connection manager at tick %d", tick)
+	c.logger.Debugf("Reconciling connection manager at tick %d", snapshot.Tick)
 
 	if c.nmapManager == nil {
 		return errors.New("nmap manager not initilized"), false
@@ -581,7 +582,8 @@ func (c *ConnectionService) ReconcileManager(
 			Internal: config.InternalConfig{
 				Nmap: c.nmapConfigs,
 			}},
-		Tick: tick,
+		Tick: snapshot.Tick,
+		SnapshotTime: snapshot.SnapshotTime,
 	}, services)
 }
 
