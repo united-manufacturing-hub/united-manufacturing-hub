@@ -37,7 +37,11 @@ var (
 // By default, it uses /tmp/umh-core-services for fresh state on container restart.
 // When S6_PERSIST_DIRECTORY environment variable is set to "true", it uses /data/services
 // for persistent storage across restarts (useful for debugging).
-// The value is computed once and cached for the lifetime of the process.
+// GetS6RepositoryBaseDir returns the repository base directory used for s6-managed services.
+// 
+// On first call it computes and caches the value for the process lifetime. If the environment
+// variable S6_PERSIST_DIRECTORY is set to "true" the persistent path "/data/services" is used;
+// otherwise the default temporary path "/tmp/umh-core-services" is returned.
 func GetS6RepositoryBaseDir() string {
 	s6RepositoryBaseDirOnce.Do(func() {
 		if os.Getenv("S6_PERSIST_DIRECTORY") == "true" {

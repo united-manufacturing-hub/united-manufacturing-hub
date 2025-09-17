@@ -44,6 +44,11 @@ import (
 	"go.uber.org/zap"
 )
 
+// main is the program entry point for umh-core. It initializes global logging and Sentry, starts optional pprof,
+// loads and persists configuration, ensures the S6 repository directory exists, and configures telemetry/metrics.
+// It constructs the control loop and communication state (including the topic browser simulator), optionally starts
+// the GraphQL server, enables the backend connection when API credentials are present, launches the background
+// system snapshot logger, and runs the main control loop until shutdown.
 func main() {
 	// Initialize the global logger first thing
 	logger.Initialize()
@@ -196,7 +201,12 @@ func main() {
 }
 
 // ensureS6RepositoryDirectory ensures that the S6 repository directory exists.
-// This is particularly important when using the temporary directory (/tmp/umh-core/services).
+// ensureS6RepositoryDirectory ensures the S6 repository base directory exists.
+// It obtains the target path from constants.GetS6RepositoryBaseDir(), attempts to
+// create the directory (mode 0755) if it does not exist, and returns an error
+// if the stat or creation fails. The function logs whether the directory was
+// created or already present and logs whether the service is using persistent
+// storage when S6_PERSIST_DIRECTORY="true" or a temporary directory otherwise.
 func ensureS6RepositoryDirectory(log *zap.SugaredLogger) error {
 	repoDir := constants.GetS6RepositoryBaseDir()
 	
@@ -224,7 +234,11 @@ func ensureS6RepositoryDirectory(log *zap.SugaredLogger) error {
 }
 
 // SystemSnapshotLogger logs the system snapshot every 5 seconds
-// It is an example on how to access the system snapshot and log it for communication with other components.
+// SystemSnapshotLogger periodically retrieves the system snapshot from the control loop and logs a human-readable summary until the provided context is cancelled.
+// 
+// It runs a 5s ticker loop, logs a header for each tick (including tick number and manager count), and then prints each manager and its instances with a state icon,
+// desired/current state and an optional status reason extracted from the instance's last observed state. If no snapshot is available on a tick, a warning is reported to Sentry.
+// The function returns when ctx is done.
 func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
