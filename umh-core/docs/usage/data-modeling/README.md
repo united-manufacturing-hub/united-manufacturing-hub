@@ -70,9 +70,6 @@ datacontracts:
     model:
       name: temperature
       version: v1
-    default_bridges:
-      - type: timescaledb
-        retention_in_days: 365
 ```
 
 ### 4. Stream Processor
@@ -94,39 +91,4 @@ streamprocessors:
 ```
 Topic: umh.v1.corpA.plant-A.line-4.furnace1._temperature.temperatureInC
 Payload: { "value": 815.6, "timestamp_ms": 1733904005123 }
-Database: Auto-created TimescaleDB hypertable
 ```
-
-## Key Benefits
-
-- **Unified YAML Dialect**: Single configuration language for all transformations
-- **Generic ISA-95 Support**: Built-in hierarchical naming (level0-4)
-- **Schema Registry Integration**: All layers pushed to Redpanda Schema Registry
-- **Automatic Validation**: UNS output plugin rejects non-compliant messages
-- **Sub-Model Reusability**: Define once, use across multiple assets
-- **Enterprise Reliability**: Combines MQTT simplicity with data-center-grade features
-- **Generic Hierarchical Support**: Built-in hierarchical naming (level0-4+) supports ISA-95, KKS, or custom standards
-
-## Getting Started
-
-1. **[Define Data Models](data-models.md)** - Create reusable data structures
-2. **[Create Data Contracts](data-contracts.md)** - Bind models to storage and retention policies  
-3. **[Deploy Stream Processors](stream-processors.md)** - Implement real-time data transformation
-4. **[Configure in Management Console](../data-flows/stream-processor.md#management-console)** - Use the web interface for deployment
-
-## Architecture Context
-
-This unified approach builds on UMH's hybrid architecture, combining:
-
-- **MQTT** for lightweight edge communication
-- **Kafka** for reliable enterprise messaging  
-- **Data Contracts** for application-level guarantees
-- **Schema Registry** for centralized validation
-
-For deeper technical background on why this hybrid approach is necessary, see our [comprehensive analysis of MQTT limitations and data contract solutions](https://learn.umh.app/blog/what-is-mqtt-why-most-mqtt-explanations-suck-and-our-attempt-to-fix-them/).
-
-## Related Documentation
-
-- [Stream Processors Implementation](../data-flows/stream-processor.md) - Detailed runtime configuration
-- [Unified Namespace](../unified-namespace/README.md) - Topic structure and payload formats
-- [Data Flows Overview](../data-flows/README.md) - Integration with other flow types 

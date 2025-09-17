@@ -28,7 +28,7 @@ templates:
         r: "${{ .location_path }}._raw.run"
       mapping:               # field → JS / constant / alias
         pressure: "press"
-        temperature: "(tF-32)*5/9" # JavaScript expressions for data transformation 
+        temperature: "(tF-32)*5/9" # JavaScript expressions for data transformation
         running: "r"
         motor:
           rpm: "press"
@@ -128,15 +128,12 @@ datamodels:
           temperatureInC:
             _payloadshape: timeseries-number
 
-# Data contract (from data-contracts.md)  
+# Data contract (from data-contracts.md)
 datacontracts:
   - name: _temperature_v1
     model:
       name: temperature
       version: v1
-    default_bridges:
-      - type: timescaledb
-        retention_in_days: 365
 
 # Stream processor implementation
 streamprocessors:
@@ -155,38 +152,6 @@ streamprocessors:
 **Result:**
 - Input: `1500°F` from PLC
 - Output: `815.6°C` in structured format
-- Storage: Auto-created TimescaleDB hypertable
-
-## Complex Example
-
-### Pump with Motor Sub-Model
-
-```yaml
-# Stream processor for pump with motor sub-model
-streamprocessors:
-  - name: pump41_sp
-    _templateRef: "pump_template"
-    location:
-      0: corpA
-      1: plant-A
-      2: line-4
-      3: pump41
-    variables:
-      abc: "deviceX"
-      sn: "SN-P41-007"
-```
-
-**Generated Topics:**
-```
-umh.v1.corpA.plant-A.line-4.pump41._pump.pressure
-umh.v1.corpA.plant-A.line-4.pump41._pump.temperature
-umh.v1.corpA.plant-A.line-4.pump41._pump.running
-umh.v1.corpA.plant-A.line-4.pump41._pump.diagnostics.vibration
-umh.v1.corpA.plant-A.line-4.pump41._pump.motor.current
-umh.v1.corpA.plant-A.line-4.pump41._pump.motor.rpm
-umh.v1.corpA.plant-A.line-4.pump41._pump.total_power
-umh.v1.corpA.plant-A.line-4.pump41._pump.serial_number
-```
 
 ## Validation and Error Handling
 
@@ -208,77 +173,3 @@ mapping:
 mapping:
   temperature: "temp / 0"   # Expression error: skips message
 ```
-
-### Error Scenarios
-- **Unknown fields**: Processor fails to start
-- **Missing variables**: Processor fails to start  
-- **Expression errors**: Message skipped, logged
-- **Undefined expression results**: Message skipped
-
-## Deployment and Management
-
-Stream processors are deployed through:
-
-1. **YAML Configuration**: Direct configuration files
-2. **Management Console**: Web-based interface (recommended)
-3. **API**: Programmatic deployment
-
-### Management Console Workflow
-
-For detailed information on using the Management Console interface, see:
-
-**[Stream Processor Implementation → Management Console](../data-flows/stream-processor.md#management-console)**
-
-The console provides:
-- Visual data model builder
-- Interactive mapping configuration
-- Tag browser for source selection
-- Live validation and preview
-- One-click deployment
-
-## Operational Benefits
-
-### Automatic Infrastructure
-- **Database tables**: Auto-created from data models
-- **Schema registry**: Models registered automatically
-- **Validation pipelines**: Generated from contracts
-- **Monitoring**: Built-in performance metrics
-
-### Scalability
-- **Multiple instances**: Same model deployed across assets
-- **Shared infrastructure**: One contract, many processors
-- **Resource efficiency**: Optimized processing pipelines
-
-### Maintainability  
-- **Version management**: Controlled model/contract evolution
-- **Configuration as code**: YAML-based, version-controlled
-- **Centralized validation**: Consistent across all processors
-
-## Best Practices
-
-### Naming
-- **Descriptive names**: `pump41_sp`, `furnace_temp_sp`
-- **Include location**: Reference the asset/location
-- **Consistent suffix**: Use `_sp` for stream processors
-
-### Source Management
-- **Meaningful variable names**: `press`, `temp`, not `var1`, `var2`
-- **Full topic paths**: Avoid ambiguity with complete UNS paths
-- **Document complex sources**: Comment unusual data sources
-
-### Mapping Logic
-- **Keep expressions simple**: Complex logic should be in separate steps
-- **Use appropriate precision**: Match industrial data accuracy
-- **Handle edge cases**: Consider sensor failure scenarios
-- **Document calculations**: Comment unit conversions and formulas
-
-## Related Documentation
-
-For complete implementation details, configuration syntax, and Management Console usage:
-
-**[Data Flows → Stream Processor Implementation](../data-flows/stream-processor.md)**
-
-Additional references:
-- [Data Models](data-models.md) - Defining data structures
-- [Data Contracts](data-contracts.md) - Storage and retention policies
-- [Unified Namespace](../unified-namespace/README.md) - Topic structure and conventions 
