@@ -17,6 +17,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/pprof"
@@ -27,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
@@ -83,6 +85,13 @@ func main() {
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to load config: %w", err)
 
+		return
+	}
+
+	// Ensure the S6 repository directory exists
+	// This is particularly important when using /tmp/umh-core/services (the default)
+	if err := ensureS6RepositoryDirectory(log); err != nil {
+		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to ensure S6 repository directory: %w", err)
 		return
 	}
 
@@ -184,6 +193,34 @@ func main() {
 	}
 
 	log.Info("umh-core completed")
+}
+
+// ensureS6RepositoryDirectory ensures that the S6 repository directory exists.
+// This is particularly important when using the temporary directory (/tmp/umh-core/services).
+func ensureS6RepositoryDirectory(log *zap.SugaredLogger) error {
+	repoDir := constants.GetS6RepositoryBaseDir()
+	
+	// Check if directory exists
+	if _, err := os.Stat(repoDir); os.IsNotExist(err) {
+		// Create the directory with appropriate permissions
+		if err := os.MkdirAll(repoDir, 0755); err != nil {
+			return fmt.Errorf("failed to create S6 repository directory %s: %w", repoDir, err)
+		}
+		log.Infof("Created S6 repository directory: %s", repoDir)
+	} else if err != nil {
+		return fmt.Errorf("failed to check S6 repository directory %s: %w", repoDir, err)
+	} else {
+		log.Debugf("S6 repository directory already exists: %s", repoDir)
+	}
+	
+	// Log whether we're using persistent or temporary storage
+	if os.Getenv("S6_PERSIST_DIRECTORY") == "true" {
+		log.Infof("Using persistent S6 directory for debugging: %s", repoDir)
+	} else {
+		log.Infof("Using temporary S6 directory (cleared on container restart): %s", repoDir)
+	}
+	
+	return nil
 }
 
 // SystemSnapshotLogger logs the system snapshot every 5 seconds

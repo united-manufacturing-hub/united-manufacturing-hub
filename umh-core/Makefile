@@ -209,6 +209,10 @@ build build-pprof build-debug: build-protobuf download-docker-binaries
 
 FLAVOR ?=                         # empty → normal build
 BUILD_TARGET = $(if $(FLAVOR),build-$(FLAVOR),build)
+S6_PERSIST ?=                     # empty → temp directory (default), true → persistent /data/services
+
+# Common Docker environment variables
+DOCKER_ENV = $(if $(S6_PERSIST),-e S6_PERSIST_DIRECTORY=$(S6_PERSIST),)
 
 stop-and-remove-umh-core-latest:
 	docker stop $(IMAGE_NAME) || true
@@ -378,10 +382,19 @@ build-protobuf: install-buf
 	@echo "Go protobuf files generated successfully."
 
 ###############################################################################
-# choose build flavour                                                        #
+# Build flavors and configuration options:                                    #
+#                                                                             #
+# FLAVOR - controls build type:                                              #
 #   make test-dfc              → uses normal  image (build)                  #
 #   make test-dfc FLAVOR=pprof → uses pprof   image (build-pprof)            #
 #   make test-dfc FLAVOR=debug → uses delve   image (build-debug)            #
+#                                                                             #
+# S6_PERSIST - controls S6 directory persistence:                            #
+#   make test-dfc              → uses /tmp/umh-core-services (default)       #
+#   make test-dfc S6_PERSIST=true → uses /data/services (for debugging)     #
+#                                                                             #
+# Can be combined:                                                           #
+#   make test-dfc FLAVOR=debug S6_PERSIST=true                              #
 ###############################################################################
 # To extract pprof data use:
 # http://localhost:6060/debug/pprof/profile?seconds=20
@@ -467,6 +480,7 @@ test-benthos: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 		--name $(IMAGE_NAME) \
 		-v $(PWD)/data:/data \
 		-e LOGGING_LEVEL=DEBUG \
+		$(DOCKER_ENV) \
 		-p 8081:8080 \
 		-p 4195:4195 \
 		-p 6060:6060 \
@@ -518,6 +532,7 @@ test-dfc: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
 		-e LOGGING_LEVEL=DEBUG \
+		$(DOCKER_ENV) \
 		$(IMAGE_NAME):$(TAG)
 
 
@@ -534,6 +549,7 @@ test-protocolconverter: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
 		-e LOGGING_LEVEL=DEBUG \
+		$(DOCKER_ENV) \
 		$(IMAGE_NAME):$(TAG)
 
 test-protocolconverter-templated: stop-and-remove-umh-core-latest $(BUILD_TARGET)

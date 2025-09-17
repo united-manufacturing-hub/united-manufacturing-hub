@@ -14,14 +14,40 @@
 
 package constants
 
-import "time"
+import (
+	"os"
+	"sync"
+	"time"
+)
 
 const (
-	S6BaseDir           = "/run/service"   // Scan directory (contains symlinks)
-	S6RepositoryBaseDir = "/data/services" // Repository directory (contains actual service files)
-	S6ConfigDirName     = "config"
-	S6LogBaseDir        = "/data/logs"
+	S6BaseDir       = "/run/service" // Scan directory (contains symlinks)
+	S6ConfigDirName = "config"
+	S6LogBaseDir    = "/data/logs"
 )
+
+var (
+	// s6RepositoryBaseDir holds the computed repository directory path
+	s6RepositoryBaseDir string
+	// s6RepositoryBaseDirOnce ensures the directory is computed only once
+	s6RepositoryBaseDirOnce sync.Once
+)
+
+// GetS6RepositoryBaseDir returns the S6 repository directory path.
+// By default, it uses /tmp/umh-core-services for fresh state on container restart.
+// When S6_PERSIST_DIRECTORY environment variable is set to "true", it uses /data/services
+// for persistent storage across restarts (useful for debugging).
+// The value is computed once and cached for the lifetime of the process.
+func GetS6RepositoryBaseDir() string {
+	s6RepositoryBaseDirOnce.Do(func() {
+		if os.Getenv("S6_PERSIST_DIRECTORY") == "true" {
+			s6RepositoryBaseDir = "/data/services" // Persistent directory for debugging
+		} else {
+			s6RepositoryBaseDir = "/tmp/umh-core-services" // Temporary directory (default)
+		}
+	})
+	return s6RepositoryBaseDir
+}
 
 var (
 	// Set by build process via ldflags using -ldflags="-X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION}"

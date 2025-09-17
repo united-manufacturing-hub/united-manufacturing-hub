@@ -567,7 +567,7 @@ var _ = Describe("LifecycleManager", func() {
 			repositoryDirRemoved := false
 
 			mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
-				if strings.Contains(path, constants.S6RepositoryBaseDir) {
+				if strings.Contains(path, constants.GetS6RepositoryBaseDir()) {
 					repositoryDirCreated = true
 				}
 
@@ -575,7 +575,7 @@ var _ = Describe("LifecycleManager", func() {
 			})
 
 			mockFS.WithRemoveAllFunc(func(ctx context.Context, path string) error {
-				if strings.Contains(path, constants.S6RepositoryBaseDir) {
+				if strings.Contains(path, constants.GetS6RepositoryBaseDir()) {
 					repositoryDirRemoved = true
 				}
 

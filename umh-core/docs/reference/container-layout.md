@@ -7,10 +7,15 @@
  ├─ config.yaml           # See also configuration reference
  ├─ logs/                 # Rolling logs for agent, every data flow, Redpanda …
  ├─ redpanda/             # Redpanda data & WALs (backup-worthy)
+ ├─ services/             # S6 service directories (only when S6_PERSIST_DIRECTORY=true)
  └─ hwid                  # Device fingerprint sent to the console
+
+/tmp/umh-core-services/   # S6 service directories (default, cleared on restart)
+
+/run/service/             # S6 scan directory (contains symlinks to service directories)
 ```
 
-Mount **one persistent volume** (e.g. `umh-core-data`) to `/data` and you’re done.
+Mount **one persistent volume** (e.g. `umh-core-data`) to `/data` and you're done.
 
 
 
@@ -50,3 +55,15 @@ The Redpanda data directory.
 ### HWID
 
 A unique identifier for that UMH Core installation. Useful for troubleshooting.
+
+### S6 Service Directories
+
+UMH Core uses S6 overlay for service supervision. Service directories contain the runtime state and configuration for each managed service (Benthos, Redpanda, monitors, etc.).
+
+By default, these directories are created in `/tmp/umh-core-services/` which is **cleared on container restart**, ensuring a clean state. This prevents issues from stale supervisor state files.
+
+For debugging purposes, you can set `S6_PERSIST_DIRECTORY=true` to use `/data/services/` instead, which persists across container restarts. This allows inspection of S6 supervisor state files when troubleshooting service startup issues.
+
+The `/run/service/` directory contains symlinks pointing to the actual service directories, which S6's scanner monitors for changes.
+
+See the [Environment Variables](environment-variables.md) reference for more details on `S6_PERSIST_DIRECTORY`.
