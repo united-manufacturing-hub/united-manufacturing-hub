@@ -16,6 +16,7 @@ package constants
 
 import (
 	"os"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -27,29 +28,36 @@ const (
 )
 
 var (
-	// s6RepositoryBaseDir holds the computed repository directory path
+	// s6RepositoryBaseDir holds the computed repository directory path.
 	s6RepositoryBaseDir string
-	// s6RepositoryBaseDirOnce ensures the directory is computed only once
+	// s6RepositoryBaseDirOnce ensures the directory is computed only once.
 	s6RepositoryBaseDirOnce sync.Once
 )
 
 // GetS6RepositoryBaseDir returns the S6 repository directory path.
 // By default, it uses /tmp/umh-core-services for fresh state on container restart.
-// When S6_PERSIST_DIRECTORY environment variable is set to "true", it uses /data/services
+// When S6_PERSIST_DIRECTORY environment variable is set to a truthy value
+// ("true", "1", "TRUE", "True", etc.), it uses /data/services
 // for persistent storage across restarts (useful for debugging).
 // The value is computed once and cached for the lifetime of the process.
 func GetS6RepositoryBaseDir() string {
 	s6RepositoryBaseDirOnce.Do(func() {
-		if os.Getenv("S6_PERSIST_DIRECTORY") == "true" {
+		// Use strconv.ParseBool for flexible boolean parsing
+		// Accepts: "true", "1", "TRUE", "True", "t", "T" as true values
+		// Defaults to false for any other value or parse error
+		persist, _ := strconv.ParseBool(os.Getenv("S6_PERSIST_DIRECTORY"))
+		if persist {
 			s6RepositoryBaseDir = "/data/services" // Persistent directory for debugging
 		} else {
 			s6RepositoryBaseDir = "/tmp/umh-core-services" // Temporary directory (default)
 		}
 	})
+
 	return s6RepositoryBaseDir
 }
 
 var (
+	// S6OverlayVersion is the version of the S6 overlay used in the container.
 	// Set by build process via ldflags using -ldflags="-X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION}"
 	// This injects the version at build time from the environment, eliminating the need for hard-coded values.
 	S6OverlayVersion = "unknown"
@@ -74,7 +82,7 @@ const (
 	// S6FileReadChunkSize is the buffer size used for reading files in chunks
 	// Set to 1MB for optimal I/O performance while maintaining reasonable memory usage.
 	S6FileReadChunkSize = 1024 * 1024
-	
+
 	// S6DownAndReadyRestartDelay is the minimum time to wait before attempting to restart
 	// a service that is in the S6 "down and ready" edge case state (PID=0 with flagready=1).
 	// This delay prevents rapid restart loops when services transition quickly between states,

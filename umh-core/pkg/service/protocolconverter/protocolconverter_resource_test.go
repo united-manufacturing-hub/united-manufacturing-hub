@@ -39,7 +39,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 	BeforeEach(func() {
 		// Create service with mock logger (or use NewDefaultProtocolConverterService)
 		service = protocolconverter.NewDefaultProtocolConverterService("test")
-		
+
 		// Initialize with empty snapshot with feature flag enabled by default
 		snapshot = pkgfsm.SystemSnapshot{
 			Managers: make(map[string]pkgfsm.ManagerSnapshot),
@@ -62,7 +62,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					availableCores = 0
 				}
 				maxBridges = availableCores * constants.MaxBridgesPerCPUCore
-				
+
 				// Add healthy container for these tests
 				snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
 					Instances: map[string]*pkgfsm.FSMInstanceSnapshot{
@@ -86,20 +86,20 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 			It("should block when exactly at bridge limit", func() {
 				// Add protocol converter manager with bridges at limit
 				instances := make(map[string]*pkgfsm.FSMInstanceSnapshot)
-				for i := 0; i < maxBridges; i++ {
+				for i := range maxBridges {
 					instances[string(rune('a'+i))] = &pkgfsm.FSMInstanceSnapshot{
 						ID:           string(rune('a' + i)),
 						CurrentState: "active",
 						DesiredState: "active",
 					}
 				}
-				
+
 				snapshot.Managers[constants.ProtocolConverterManagerName] = &MockManagerSnapshot{
 					Instances: instances,
 				}
-				
+
 				limited, reason := service.IsResourceLimited(snapshot)
-				
+
 				Expect(limited).To(BeTrue())
 				Expect(reason).To(ContainSubstring("Cannot create bridge - limit exceeded"))
 				Expect(reason).To(ContainSubstring("Cannot create bridge - limit exceeded"))
@@ -109,20 +109,20 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 			It("should allow creation when below limit", func() {
 				// Add bridges below limit
 				instances := make(map[string]*pkgfsm.FSMInstanceSnapshot)
-				for i := 0; i < maxBridges-1; i++ {
+				for i := range maxBridges - 1 {
 					instances[string(rune('a'+i))] = &pkgfsm.FSMInstanceSnapshot{
 						ID:           string(rune('a' + i)),
 						CurrentState: "active",
 						DesiredState: "active",
 					}
 				}
-				
+
 				snapshot.Managers[constants.ProtocolConverterManagerName] = &MockManagerSnapshot{
 					Instances: instances,
 				}
-				
+
 				limited, reason := service.IsResourceLimited(snapshot)
-				
+
 				Expect(limited).To(BeFalse())
 				Expect(reason).To(BeEmpty())
 			})
@@ -149,26 +149,26 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 						},
 					},
 				}
-				
+
 				// Max bridges should be (2-1) * 5 = 5 (1 core reserved for Redpanda)
 				cgroupMaxBridges := (2 - 1) * constants.MaxBridgesPerCPUCore
-				
+
 				// Add exactly at cgroup limit
 				instances := make(map[string]*pkgfsm.FSMInstanceSnapshot)
-				for i := 0; i < cgroupMaxBridges; i++ {
+				for i := range cgroupMaxBridges {
 					instances[string(rune('a'+i))] = &pkgfsm.FSMInstanceSnapshot{
 						ID:           string(rune('a' + i)),
 						CurrentState: "active",
 						DesiredState: "active",
 					}
 				}
-				
+
 				snapshot.Managers[constants.ProtocolConverterManagerName] = &MockManagerSnapshot{
 					Instances: instances,
 				}
-				
+
 				limited, reason := service.IsResourceLimited(snapshot)
-				
+
 				Expect(limited).To(BeTrue())
 				Expect(reason).To(ContainSubstring("Cannot create bridge - limit exceeded"))
 				Expect(reason).To(ContainSubstring("5 bridges maximum"))
@@ -179,16 +179,16 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 			It("should not count removing/removed bridges", func() {
 				// Mix of active and removing bridges
 				instances := make(map[string]*pkgfsm.FSMInstanceSnapshot)
-				
+
 				// Add active bridges just below limit
-				for i := 0; i < maxBridges-1; i++ {
+				for i := range maxBridges - 1 {
 					instances[string(rune('a'+i))] = &pkgfsm.FSMInstanceSnapshot{
 						ID:           string(rune('a' + i)),
 						CurrentState: "active",
 						DesiredState: "active",
 					}
 				}
-				
+
 				// Add removing/removed (shouldn't count)
 				instances["removing1"] = &pkgfsm.FSMInstanceSnapshot{
 					ID:           "removing1",
@@ -200,13 +200,13 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					CurrentState: fsm.LifecycleStateRemoved,
 					DesiredState: "removed",
 				}
-				
+
 				snapshot.Managers[constants.ProtocolConverterManagerName] = &MockManagerSnapshot{
 					Instances: instances,
 				}
-				
+
 				limited, reason := service.IsResourceLimited(snapshot)
-				
+
 				Expect(limited).To(BeFalse())
 				Expect(reason).To(BeEmpty())
 			})
@@ -237,9 +237,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 							},
 						},
 					}
-					
+
 					limited, reason := service.IsResourceLimited(snapshot)
-					
+
 					Expect(limited).To(BeTrue())
 					Expect(reason).To(Equal("CPU degraded: CPU usage at 85%"))
 				})
@@ -260,16 +260,16 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 										CPU: &models.CPU{
 											IsThrottled:   true,
 											ThrottleRatio: 0.15, // 15% throttled
-											CgroupCores:   2.0,   // Limited to 2 cores
+											CgroupCores:   2.0,  // Limited to 2 cores
 										},
 									},
 								},
 							},
 						},
 					}
-					
+
 					limited, reason := service.IsResourceLimited(snapshot)
-					
+
 					Expect(limited).To(BeTrue())
 					Expect(reason).To(ContainSubstring("CPU throttled (15% of time)"))
 					Expect(reason).To(ContainSubstring("Container limited to 2.0 cores"))
@@ -302,9 +302,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 							},
 						},
 					}
-					
+
 					limited, reason := service.IsResourceLimited(snapshot)
-					
+
 					Expect(limited).To(BeTrue())
 					Expect(reason).To(Equal("Memory degraded: Memory usage at 92%"))
 				})
@@ -328,9 +328,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 							},
 						},
 					}
-					
+
 					limited, reason := service.IsResourceLimited(snapshot)
-					
+
 					Expect(limited).To(BeTrue())
 					Expect(reason).To(Equal("Memory resources degraded"))
 				})
@@ -360,9 +360,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 							},
 						},
 					}
-					
+
 					limited, reason := service.IsResourceLimited(snapshot)
-					
+
 					Expect(limited).To(BeTrue())
 					Expect(reason).To(Equal("Disk degraded: Disk usage at 95%"))
 				})
@@ -380,7 +380,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 								LastObservedState: &container.ContainerObservedStateSnapshot{
 									ServiceInfoSnapshot: container_monitor.ServiceInfo{
 										OverallHealth: models.Degraded,
-										CPUHealth:     models.Degraded,    // This should be reported first
+										CPUHealth:     models.Degraded, // This should be reported first
 										MemoryHealth:  models.Degraded,
 										DiskHealth:    models.Degraded,
 										CPU: &models.CPU{
@@ -403,9 +403,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 							},
 						},
 					}
-					
+
 					limited, reason := service.IsResourceLimited(snapshot)
-					
+
 					Expect(limited).To(BeTrue())
 					Expect(reason).To(Equal("CPU degraded: CPU overloaded"))
 				})
@@ -430,9 +430,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 							},
 						},
 					}
-					
+
 					limited, reason := service.IsResourceLimited(snapshot)
-					
+
 					Expect(limited).To(BeTrue())
 					Expect(reason).To(Equal("Overall system resources degraded"))
 				})
@@ -451,9 +451,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 						},
 					},
 				}
-				
+
 				limited, reason := service.IsResourceLimited(snapshot)
-				
+
 				Expect(limited).To(BeTrue())
 				Expect(reason).To(Equal("System in degraded state"))
 			})
@@ -461,7 +461,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 			It("should block when container manager not present", func() {
 				// No container manager at all
 				limited, reason := service.IsResourceLimited(snapshot)
-				
+
 				Expect(limited).To(BeTrue())
 				Expect(reason).To(Equal("Container monitor not available"))
 			})
@@ -470,9 +470,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
 					Instances: make(map[string]*pkgfsm.FSMInstanceSnapshot),
 				}
-				
+
 				limited, reason := service.IsResourceLimited(snapshot)
-				
+
 				Expect(limited).To(BeTrue())
 				Expect(reason).To(Equal("Container health status unavailable"))
 			})
@@ -483,7 +483,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				// This test documents the expected behavior that bridges stuck in to_be_created
 				// due to resource limits can still be removed. The actual removal logic is handled
 				// in the FSM reconciliation, not in IsResourceLimited.
-				
+
 				// Setup: System at resource limits
 				snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
 					Instances: map[string]*pkgfsm.FSMInstanceSnapshot{
@@ -507,13 +507,13 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 						},
 					},
 				}
-				
+
 				// IsResourceLimited should still return true (resources are limited)
 				limited, reason := service.IsResourceLimited(snapshot)
-				
+
 				Expect(limited).To(BeTrue())
 				Expect(reason).To(ContainSubstring("CPU throttled"))
-				
+
 				// Note: The FSM reconciliation logic (not tested here) should allow
 				// transition from to_be_created -> to_be_removed even when IsResourceLimited returns true
 			})
@@ -543,7 +543,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 						},
 					},
 				}
-				
+
 				// A few bridges, below limit
 				instances := make(map[string]*pkgfsm.FSMInstanceSnapshot)
 				instances["bridge1"] = &pkgfsm.FSMInstanceSnapshot{
@@ -556,13 +556,13 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					CurrentState: "active",
 					DesiredState: "active",
 				}
-				
+
 				snapshot.Managers[constants.ProtocolConverterManagerName] = &MockManagerSnapshot{
 					Instances: instances,
 				}
-				
+
 				limited, reason := service.IsResourceLimited(snapshot)
-				
+
 				Expect(limited).To(BeFalse())
 				Expect(reason).To(BeEmpty())
 			})
@@ -593,7 +593,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 			It("should block creation when feature flag is enabled and resources are degraded", func() {
 				// Feature flag is already enabled in BeforeEach
 				limited, reason := service.IsResourceLimited(snapshot)
-				
+
 				Expect(limited).To(BeTrue())
 				Expect(reason).To(ContainSubstring("CPU resources degraded"))
 			})
@@ -601,9 +601,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 			It("should NOT block creation when feature flag is disabled even if resources are degraded", func() {
 				// Disable feature flag
 				snapshot.CurrentConfig.Agent.EnableResourceLimitBlocking = false
-				
+
 				limited, reason := service.IsResourceLimited(snapshot)
-				
+
 				Expect(limited).To(BeFalse())
 				Expect(reason).To(BeEmpty())
 			})
@@ -645,14 +645,14 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 						DesiredState: "active",
 					}
 				}
-				
+
 				snapshot.Managers[constants.ProtocolConverterManagerName] = &MockManagerSnapshot{
 					Instances: instances,
 				}
-				
+
 				// Feature flag enabled
 				limited, reason := service.IsResourceLimited(snapshot)
-				
+
 				Expect(limited).To(BeTrue())
 				Expect(reason).To(ContainSubstring("Cannot create bridge - limit exceeded"))
 			})
@@ -693,16 +693,16 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 						DesiredState: "active",
 					}
 				}
-				
+
 				snapshot.Managers[constants.ProtocolConverterManagerName] = &MockManagerSnapshot{
 					Instances: instances,
 				}
-				
+
 				// Disable feature flag
 				snapshot.CurrentConfig.Agent.EnableResourceLimitBlocking = false
-				
+
 				limited, reason := service.IsResourceLimited(snapshot)
-				
+
 				Expect(limited).To(BeFalse())
 				Expect(reason).To(BeEmpty())
 			})
@@ -734,7 +734,7 @@ func (m *MockManagerSnapshot) GetSnapshotTime() time.Time {
 	if m.SnapshotTime.IsZero() {
 		return time.Now()
 	}
-	
+
 	return m.SnapshotTime
 }
 

@@ -10,5 +10,5 @@ This is the reference for all environment variables used by umh-core. These vari
 | RELEASE\_CHANNEL | enterprise, stable, nightly                                            | Auto-update channel. Enterprise = most stable, nightly = latest features |
 | ALLOW\_INSECURE\_TLS | true, false                                                        | Skip TLS certificate verification. Use for corporate firewalls with MITM proxies |
 | LOCATION\_<0-6>  | (string values)                                                        | Sets Agent location hierarchy levels 0-6. Example: LOCATION_0=factory, LOCATION_1=line1 |
-| S6\_PERSIST\_DIRECTORY | true, (unset/any other value)                                    | Controls S6 service directory persistence. true = /data/services (persist across restarts for debugging), unset = /tmp/umh-core-services (cleared on restart, default) |
+| S6\_PERSIST\_DIRECTORY | true/1/TRUE/True, (unset/false/other)                           | Controls S6 service directory persistence. Truthy values (true, 1, TRUE, etc.) = /data/services (persist across container restarts for debugging). Default/false = /tmp/umh-core-services (cleared on container restart for fresh state) |
 

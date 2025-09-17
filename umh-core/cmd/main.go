@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/pprof"
@@ -92,6 +93,7 @@ func main() {
 	// This is particularly important when using /tmp/umh-core/services (the default)
 	if err := ensureS6RepositoryDirectory(log); err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to ensure S6 repository directory: %w", err)
+
 		return
 	}
 
@@ -195,31 +197,34 @@ func main() {
 	log.Info("umh-core completed")
 }
 
-// ensureS6RepositoryDirectory ensures that the S6 repository directory exists.
-// This is particularly important when using the temporary directory (/tmp/umh-core/services).
+// ensureS6RepositoryDirectory ensures that the S6 repository directory exists with proper permissions.
+// This is critical when using the temporary directory (/tmp/umh-core-services) which may not exist after container restart.
+// The function creates the directory if it doesn't exist and logs whether persistent or temporary storage is being used.
 func ensureS6RepositoryDirectory(log *zap.SugaredLogger) error {
 	repoDir := constants.GetS6RepositoryBaseDir()
-	
+
 	// Check if directory exists
 	if _, err := os.Stat(repoDir); os.IsNotExist(err) {
 		// Create the directory with appropriate permissions
 		if err := os.MkdirAll(repoDir, 0755); err != nil {
 			return fmt.Errorf("failed to create S6 repository directory %s: %w", repoDir, err)
 		}
+
 		log.Infof("Created S6 repository directory: %s", repoDir)
 	} else if err != nil {
 		return fmt.Errorf("failed to check S6 repository directory %s: %w", repoDir, err)
 	} else {
 		log.Debugf("S6 repository directory already exists: %s", repoDir)
 	}
-	
+
 	// Log whether we're using persistent or temporary storage
-	if os.Getenv("S6_PERSIST_DIRECTORY") == "true" {
+	persist, _ := strconv.ParseBool(os.Getenv("S6_PERSIST_DIRECTORY"))
+	if persist {
 		log.Infof("Using persistent S6 directory for debugging: %s", repoDir)
 	} else {
 		log.Infof("Using temporary S6 directory (cleared on container restart): %s", repoDir)
 	}
-	
+
 	return nil
 }
 

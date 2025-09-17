@@ -211,8 +211,8 @@ FLAVOR ?=                         # empty → normal build
 BUILD_TARGET = $(if $(FLAVOR),build-$(FLAVOR),build)
 S6_PERSIST ?=                     # empty → temp directory (default), true → persistent /data/services
 
-# Common Docker environment variables
-DOCKER_ENV = $(if $(S6_PERSIST),-e S6_PERSIST_DIRECTORY=$(S6_PERSIST),)
+# Common Docker environment variables - only pass if S6_PERSIST is exactly "true"
+DOCKER_ENV = $(if $(filter true,$(S6_PERSIST)),-e S6_PERSIST_DIRECTORY=true,)
 
 stop-and-remove-umh-core-latest:
 	docker stop $(IMAGE_NAME) || true
