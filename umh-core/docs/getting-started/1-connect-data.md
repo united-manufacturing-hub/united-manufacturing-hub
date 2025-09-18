@@ -1,10 +1,8 @@
-# Getting Started: Your First Data in 5 Minutes
+# Step 2: Connect Your First Data Source
 
-## Step 1: Connect Your First Device (2 minutes)
+Let's get some data flowing! We'll start with simulated data, then you can connect real devices later.
 
-Let's get some data flowing. We'll start with simulated data, then you can connect real devices later.
-
-### In the Management Console:
+## Navigate to Data Flows
 
 1. Click **"Data Flows"** in the left menu
 2. Go to the "Bridges" tab. Here you find all of your bridges.
@@ -12,89 +10,110 @@ Let's get some data flowing. We'll start with simulated data, then you can conne
 
 ![](images/data-flow.png)
 
-### Fill in the Bridge General Tab:
+## Configure the Bridge - General Tab
 
 **Bridge Name:** `my-first-bridge`
 **Instance:** <Your UMH Core instance>
-**Location:** Will be pre-filled with the location of the selected instance. You can further give the bridge a more detailed location, but for now let's leave it like this. In the screenshot, we are defining a bridge for `enterprise.siteA`
-**Connection:** Here you can enter the IP / Hostname of the device you want to read or write from including the port you want to read/write from. In this tutorial, we don't have a real PLC, so we fake this by entering `localhost` as IP and `8080` as port.
+**Location:** Pre-filled with your instance location. You can add more detail later, but for now leave it as is. In the screenshot, we're defining a bridge for `enterprise.siteA`.
+**Connection:** Enter the IP/hostname and port of the device you want to connect to. Since we don't have a real PLC for this tutorial, we'll use `localhost` as IP and `8080` as port.
 
 ![Screenshot: Bridge creation form with these fields filled](images/bridge-general.png)
 
-Press "Save and Deploy". You now see a popup where you can follow the "Save and Deploy" flow and receive errors or warnings if these should occur. If everything goes well, you will be automatically redirected.
+Click **"Save and Deploy"**. A popup will show the deployment progress and any errors or warnings. If everything goes well, you'll be automatically redirected.
 
 ![](images/bridge-general-deploy.png)
 
-If you go back to the "General" tab, you can see whether the connection was successful. In this case, we can see a latency of "0 ms" as we are connecting to the local endpoint of UMH Core.
+Back on the "General" tab, you can verify the connection was successful. Here we see a latency of "0 ms" since we're connecting to localhost.
 
 ![](images/bridge-general-latency.png)
 
-If you are connecting to a PLC and we cannot make a network connection, you will see that as the latency will go orange.
+If connecting to a real PLC fails, the latency indicator will turn orange:
 
 ![](images/bridge-general-latency-bad.png)
 
-You might ask yourself what "Starting_failed_dfc_missing" means. This means, you have not configured a flow yet. So far, we only checked whether the connection is working. Now, lets actually make "some data flow" by reading from the endpoint. Go to the "Read" tab, as we want to read from the connection.
+The status "Starting_failed_dfc_missing" means we haven't configured a data flow yet - we've only tested the connection. Let's actually get data flowing by configuring the "Read" tab.
 
 ![](images/bridge-read-header.png)
 
-**Protocol:** Now you can select the protocol which you want to read from and the type of data you want to read out. For this example, select "generate" so that we don't have to connect to a real PLC.
-**Data Type:** For PLCs you typically want to read out "tags" which are always "Time Series" (if you want to learn more about this, understand unified-namespace/payload-formats.md).
-**Monitoring:** Under Monitoring you can see the state of the entire bridge (which is "Starting_failed_dfc_missing") as well as the throughput (which is zero as well).
+**Protocol:** Select the protocol to read from. Choose "Generate" to simulate data without a real PLC.
+**Data Type:** Select "Time Series" (the standard for PLC tags).
+**Monitoring:** Shows the bridge state (currently "Starting_failed_dfc_missing") and throughput (currently zero).
 
 ![](images/bridge-read-input.png)
 
-**Input:** Because we selected "generate", we can generate here new messages. If you would have selected "Modbus" or "Siemens S7" you would see here protocol specific settings. For now, let's just take the default values here and generate every `1s` a message of `hello world`. You can open the [benthos-umh input documentation](https://docs.umh.app/benthos-umh/input) for more details.
+**Input:** Since we selected "Generate", we can create test messages. With real protocols like "Modbus" or "Siemens S7", you'd see protocol-specific settings here. For now, use the defaults: generate `hello world` every `1s`.
 
 ![](images/bridge-read-processing.png)
 
-**Processing:** Because we selected under **Data Type** "Time Series", we get now the Tag Processor here.
+**Processing:** The "Tag Processor" appears because we selected "Time Series" data type.
 
-Under **Always** you can define using JavaScript / NodeRED syntax how you want to process each of the incoming messages. This gets executed always.
+Three required fields:
+- **location_path:** Where the data goes (auto-filled from bridge location)
+- **data_contract:** Leave as `_raw` for now (no validation rules)
+- **tag_name:** Name your data point - we'll use `my_data`
 
-In the Tag Processor you always have to define the
-- `location_path` which identifies which location you want the data to
-- `data_contract` which allows you to fill in an existing data model for a specific location. Leave this to the default for now.
-- `tag_name` which is the name of the tag. In the example, we use `my_data`.
+The **Always** section uses JavaScript to process messages. We're not modifying anything for now, just passing the data through.
 
-There are more options available like `virtual_path` to organize your tags within a location into folders, but we will talk about this later. If you want to understand how these parameters are used to create the final topic, check out ../unified-namespace/topic-convention.md To understand how the tag processor work you can check out its documentation: https://docs.umh.app/benthos-umh/processing/tag-processor
-
-In the example, we don't change the payload, but you could now use JavaScript to modify the payload, e.g., convert the incoming `hello world` to uppercase or similar. If you don't know JavaScript, don't worry. You can use the LLM of your choice (ChatGPT, Claude, etc.) for that.
-
-You could also click on **Add Condition** to add a condition under which data gets additionally processed. This is helpful for example if you want to handle specific datapoints, e.g., from a specific OPC UA folder differently and move it to a different location. For now, let's ignore it.
-
-You can also click on the `<>` symbol besides `Tag Processor` to switch to the full code mode. But that is for advanced users and therefore later.
+💡 **Tip:** You can modify data here later (e.g., unit conversions, renaming). If you don't know JavaScript, any LLM (ChatGPT, Claude) can help write the code.
 
 ![](images/bridge-read-output.png)
 
-The other fields can be ignored. The Output will be autogenerated for you (it will technically use the [UNS Output Plugin](https://docs.umh.app/benthos-umh/output/uns-output) for benthos-umh, but we will talk about that later).
+The Output section is auto-generated - it sends data to your Unified Namespace.
 
-Press Save & Deploy.
+Click **"Save & Deploy"**.
 
 ![](images/bridge-read-deployed.png)
 
-If everything was successful, you should now see "Status: Active" and a throughput of roughly 1 msg/sec.
+## 🎉 Success!
 
-## View the data
+You should now see:
+- **Status:** Active ✅
+- **Throughput:** ~1 msg/sec
+
+Your data is flowing!
+
+## Step 3: View Your Data in the Topic Browser
 
 ![](images/topic-browser-my_data.png)
 
-Now you can go in the left menu to "Topic Browser". Here you can find all the data that you have sent to your Unified Namespace.
+Click **"Topic Browser"** in the left menu. This shows all data in your Unified Namespace.
 
-You should now see your `enterprise` and `siteA` with a data contract of `_historian` and a tag name of `my_data`. Exactly how we defined it earlier! Click on it.
+You'll see your data organized as:
+- `enterprise` → `siteA` → `_raw` → `my_data`
 
-Under **Topic Details** you should now see everything you have entered in the Bridge before. You can even see from which bridge it is coming from.
+Exactly as we configured it! Click on `my_data` to see details.
 
-Under **Last Message** you can see the last message. Because we selected `Time Series` and used the `Tag Processor` we see here `Time Series`. You can additionally view its timestamp, the data type, its value, etc.
+**Topic Details:** Shows your bridge configuration and data location
+**Last Message:** The most recent `hello world` message with timestamp
+**History:** A table showing recent messages (would be a chart for numeric data)
+**Metadata:** Additional information about the data source (we'll use this later)
 
-Under **Metadata** you can see all the metadata of the tag, so everything you have manually added in the Tag Processor using `msg.meta` as well as everything that was automatically generated. We can ignore this for now, but it will become handy later.
+## Understanding What You Built
 
-Under **History** you can see either as a chart (if you have a data type of number) or a table (which we have as we send in `hello world` so a string).
+You just created a complete data pipeline:
 
-### What Just Happened?
+```
+Bridge → Processing → Unified Namespace → Topic Browser
+```
 
-You created a "bridge" - the ONLY way data enters UMH. The bridge:
-- Generates fake `hello world` messages
-- Adds location information automatically from your bridges location
-- Sends data to the Unified Namespace
+**Key Concepts:**
+- **Bridge:** The ONLY way data enters UMH (ensures quality and monitoring)
+- **Location Path:** Automatically organizes your data (`enterprise.siteA`)
+- **Data Contract:** Currently `_raw` (no validation rules)
+- **Tag Name:** Your measurement name (`my_data`)
 
-That's it for now! In the next step, we will modify this to allow you to select multiple locations.
+## What's Next?
+
+**You have data flowing!** This is already production-ready for many use cases.
+
+**Want to organize better?** → [Continue to Step 3: Organize Your Data](2-organize-data.md)
+
+**Connect a real device?** Simply change the protocol from "Generate" to:
+- **OPC UA** for modern PLCs
+- **Modbus** for older equipment
+- **MQTT Subscribe** for existing MQTT devices
+- [See all 50+ supported protocols →](https://docs.umh.app/benthos-umh/input)
+
+---
+
+**Pro tip:** Everything you just configured in the UI is stored as YAML. As you get comfortable, you can copy and modify these configurations for faster setup of similar devices.
