@@ -1,16 +1,29 @@
 # Stream Processors
 
-Stream processors transform raw data into structured, validated information according to your data models using reusable template configurations.
+> **Important**: Stream processors are for **Silver → Gold transformations only**. For device-specific modeling (Bronze → Silver), use [bridges with data contracts](../data-flows/bridges.md) instead. Most users don't need stream processors.
+>
+> **Current Limitation**: Stream processors currently support [time-series output](../unified-namespace/payload-formats.md#time-series-data) only. [Relational output](../unified-namespace/payload-formats.md#relational-data) for Gold-level business data is planned.
 
-Stream processors are the runtime components that bring data models to life. They consume raw data from your industrial systems, apply transformations according to your data models, and output structured data. Stream processors work directly with data models through templates, not through data contracts.
+Stream processors transform Silver data into Gold by aggregating multiple sources and creating different views of existing UNS data.
+
+## When to Use Stream Processors
+
+| Need | Solution | Why |
+|------|----------|-----|
+| Structure device data | **Bridge** with data contract | Device modeling happens in bridges |
+| Convert units (°F → °C) | **Bridge** with expression | Simple transformation, same model |
+| Rename cryptic tags | **Bridge** with tag_processor | Device-level mapping |
+| **Aggregate multiple devices** | **Stream Processor** | Cross-device, new model |
+| **Create business KPIs** | **Stream Processor** | Silver → Gold transformation |
+| **Generate different data views** | **Stream Processor** | Same data, new perspective |
 
 ## Overview
 
-Stream processors bridge the gap between raw industrial data and structured business information:
+Stream processors create business-ready Gold data from device-specific Silver data:
 
-- **Input**: Raw sensor data, PLC values, device messages
-- **Processing**: Transformation, validation, contextualization according to data models
-- **Output**: Structured data compliant with data models
+- **Input**: Silver data from multiple devices (e.g., `_raw`, `_pump_v1`, `_temperature_v1`)
+- **Processing**: Aggregation, calculation, business logic across devices
+- **Output**: Gold-level business data (e.g., `_workorder_v1`, `_maintenance_v1`)
 - **Templates**: Reusable configurations with variable substitution
 - **Auto-validation**: If data contracts exist for the model, output is automatically validated and routed to contract bridges
 
