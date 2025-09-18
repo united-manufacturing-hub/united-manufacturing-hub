@@ -2,6 +2,10 @@
 
 * [Introduction](README.md)
 * [Getting Started](getting-started/README.md)
+  * [Step 1: Install](getting-started/README.md)
+  * [Step 2: Connect Data](getting-started/1-connect-data.md)
+  * [Step 3: Organize Data](getting-started/2-organize-data.md)
+  * [Step 4: Validate Data](getting-started/3-validate-data.md)
 * [Usage](usage/README.md)
   * [Unified Namespace](usage/unified-namespace/README.md)
     * [Overview](usage/unified-namespace/overview.md)

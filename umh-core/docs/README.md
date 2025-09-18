@@ -2,9 +2,17 @@
 
 > **Looking for the old Kubernetes Helm stack?** See the [UMH Core vs UMH Classic FAQ](umh-core-vs-classic-faq.md) to understand which edition fits your project and the current migration path.
 
+## What is UMH Core?
+
 UMH Core is a **single Docker container that turns any PC, VM, or edge gateway into an Industrial Data Hub**.
 
-Inside that one image you'll find:
+**The problem it solves:** In manufacturing, every device speaks a different language - PLCs use OPC UA, sensors use Modbus, MES systems use REST APIs. Connecting them all creates a tangled mess of point-to-point integrations. Change one thing, break ten others.
+
+**The solution:** UMH Core creates a **Unified Namespace (UNS)** - a central data backbone where all your industrial data lives in one organized, validated place. Instead of 100 devices talking to each other (creating 1000s of connections), they all publish to one place, and consumers subscribe to what they need.
+
+### What's Inside
+
+That one Docker container includes everything you need:
 
 * **Redpanda** – an embedded, Kafka-compatible broker that buffers every message.
 * **Benthos-UMH** – a stream-processor engine with 50+ industrial connectors.
@@ -19,48 +27,49 @@ Inside that one image you'll find:
 | **Lightweight** | Runs on almost everything                                                                                               |
 | **No lock-in**  | 100 % open-source stack: Redpanda, Benthos, S6, and much more                                                           |
 
-### Key concepts at a glance
+### Core Concepts You'll Learn
+
+Through our getting-started guide, you'll understand:
+
+* **Unified Namespace (UNS)** – The event-driven data backbone that eliminates point-to-point connections
+* **Bridge** – The gateway for external data into the UNS (the ONLY way data enters)
+* **Topic** – How data is addressed: `location.contract.virtual_path.tag_name`
+* **Tag** – A time-series data point (like a PLC variable or sensor reading)
+* **Data Model** – Templates that define and validate data structure
+* **Data Contract** – Validation rules (`_raw` = no validation, `_model_v1` = enforced structure)
+
+Advanced concepts (after getting-started):
+* **Stream Processor** – Transforms messages already inside the UNS
+* **Stand-alone Flow** – Point-to-point when UNS buffering isn't wanted
+
+### How It Works
 
 ```
-Instance
-└─ Core
-   ├─ Bridges             # ingest or egest data (ex-"Protocol Converters")
-   │   ├─ Read Flow       # read side
-   │   └─ Write Flow 🚧   # write side - Roadmap Item
-   │   └─ Connection      # monitors the network connection
-   ├─ Stream Processors   # transforms messages inside UNS
-   └─ Stand-alone Flows   # point-to-point when UNS buffering isn't wanted
+Your Factory Floor                    UMH Core                         Your Systems
+──────────────────                    ────────                         ────────────
+                                                        
+PLCs (S7, Modbus)    ─┐                                          ┌─▶ Dashboards
+Sensors (OPC UA)     ─┼─[Bridge]─▶ Unified Namespace ─[Bridge]─┼─▶ Cloud/MQTT
+MES/ERP (REST)       ─┘              (organized data)            └─▶ Databases
 ```
 
-* **Bridge** – connects external systems to the UNS with health monitoring. See [Bridges](usage/data-flows/bridges.md) for details. _(Read flows available, Write flows in development 🚧)_
-* **Stream Processor**  – transforms messages already inside the UNS.
-* **Stand-alone Flow**  – point-to-point when UNS buffering isn't wanted.
-* **Connection**  - a continuous network check whether the external system is available.
+1. **Bridges** connect your devices to the UNS (50+ protocols supported)
+2. **Data flows** into organized topics: `enterprise.site.area.line._contract.tag`
+3. **Models** validate critical data (optional but recommended)
+4. **Consumers** subscribe to the data they need
 
-### Typical architecture
-
-```
-┌──────── PLC / Device ───────┐
-│  OPC UA / Modbus / S7 / …   │
-└────────────┬────────────────┘
-             │  Bridge (Read Flow)
-             ▼
-    ┌───────────────────┐
-    │ Unified Namespace │
-    └───────────────────┘
-             │  Bridge (Write Flow)
-             ▼
-   MQTT broker ▸ Cloud ▸ Historian ▸ Dashboards
-```
-
-_Every message first lands in the Unified Namespace, giving you replay, buffering, and reliable data processing. MQTT Brokers, Databases, Historians, Dashboards, etc. then consume the data from that._
+_Every message is buffered, validated, and organized - no data loss, guaranteed structure._
 
 ## Getting Started
 
-1. [**Quick Setup**](getting-started.md) - Get UMH Core running in minutes
-2. [**Unified Namespace Guide**](usage/unified-namespace/) - Understand the core messaging architecture
-3. [**Connect Your First Device**](usage/unified-namespace/producing-data.md) 🚧 - Bridge industrial protocols to the UNS
-4. [**Data Modeling**](usage/data-modeling/) - Structure your industrial data for enterprise-scale analytics
+**New to UMH Core?** Follow our progressive 4-step guide:
+
+1. [**Install UMH Core**](getting-started/README.md) - One Docker command (5 minutes)
+2. [**Connect Your First Data**](getting-started/1-connect-data.md) - Create a Bridge and see data flow (10 minutes)
+3. [**Organize Your Data**](getting-started/2-organize-data.md) - Scale from 1 to 1000s of tags automatically (15 minutes)
+4. [**Validate Your Data**](getting-started/3-validate-data.md) - Add quality control with Data Models (20 minutes)
+
+By the end, you'll have production-ready data pipelines with validation, organization, and monitoring.
 
 ## Documentation Structure
 
