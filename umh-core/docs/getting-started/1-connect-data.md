@@ -114,6 +114,21 @@ Bridge → Processing → Unified Namespace → Topic Browser
 - **MQTT Subscribe** for existing MQTT devices
 - [See all 50+ supported protocols →](https://docs.umh.app/benthos-umh/input)
 
+## Concepts Learned
+
+- **Bridge** - The only way data enters UMH Core
+- **Data Flows** - Configuration area for bridges
+- **Protocol** - How to connect (Generate, OPC UA, Modbus, S7)
+- **Connection settings** - IP/hostname and port configuration
+- **Latency indicator** - Connection health monitoring
+- **Tag Processor** - JavaScript-based data transformation
+- **location_path** - Data organization hierarchy
+- **data_contract** - Data validation rules (_raw = no validation)
+- **tag_name** - Individual measurement identifier
+- **Unified Namespace** - Central data repository
+- **Topic Browser** - UI for viewing all data
+- **Throughput** - Messages per second metric
+
 ---
 
 **Pro tip:** Everything you just configured in the UI is stored as YAML. As you get comfortable, you can copy and modify these configurations for faster setup of similar devices.

@@ -87,6 +87,14 @@ See the [Migration Guide](../production/migration-from-classic.md) for step-by-s
 
 ---
 
+## Concepts Learned
+
+- **UMH Core** - Single-container Industrial IoT platform
+- **Management Console** - Cloud UI for managing instances
+- **Instance** - A running UMH Core deployment
+- **Location hierarchy** - Organizational structure (enterprise → site → area → line)
+- **Docker container** - How UMH Core runs
+
 ## Ready to Connect Data?
 
 **You've successfully installed UMH Core!** 🚀

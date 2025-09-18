@@ -1,232 +1,284 @@
-# Step 2: Organize Your Data
+# Step 3: Organize Your Data
 
-> **Prerequisite:** You should have data flowing with `_raw` from [Step 1](connect-data.md). If not, go back and get that working first!
+> **Prerequisite:** You should have data flowing from [Step 2](1-connect-data.md). If not, go back and complete that first!
 
-## What You'll Learn
+## The Challenge
 
-Right now your data flows into wherever you put it:
+Right now you have one measurement going to one place:
 ```
-umh.v1.plant-1.packaging.line-3.sealer._raw.temperature
-```
-
-But what if:
-- You want to move that sealer to a different line?
-- You want to rename `temp_01` to `temperature_fahrenheit`?
-- You want to group related sensors together?
-
-You'll learn to "think in folders" - organizing your data like a file system.
-
-## Understanding Your Data's Address
-
-Open the Topic Browser and look at any data point:
-
-![Screenshot: Topic Browser highlighting the topic path]
-
-The "address" has these parts:
-
-```
-umh.v1.plant-1.packaging.line-3.sealer._raw.temperature
-       └─────────── where ───────────┘   │        │
-                                   format┘        └what
+enterprise.siteA._raw.my_data
 ```
 
-You control:
-- **WHERE** - The location path (your folder structure)
-- **WHAT** - The tag name (what you're measuring)
+But real PLCs have:
+- Hundreds of data points (DB1.DW20, DB1.S30.10, DB3.I270...)
+- Different data types (numbers, strings, booleans)
+- Multiple machines on the same line
 
-The system controls:
-- **FORMAT** - The data contract (we'll keep using `_raw` for now)
+**Do you need to map each tag manually?** No! Let's connect a real PLC and see the magic.
 
-## Organize by Location
+## Part 1: Connect a Real PLC (Or Simulate One)
 
-Let's say you need to move that sealer to line-5:
+### Create a New Bridge for Siemens S7
 
-### Edit Your Bridge:
+1. Go to **Data Flows** → **Add Bridge**
+2. **Name:** `s7-plc`
+3. **Protocol:** Select **Siemens S7** (instead of Generate)
+4. **Connection:**
+   - **IP:** Use `{{ .IP }}` (we'll set this in variables)
+   - **Rack:** 0
+   - **Slot:** 1
 
-1. Go to **Data Flows**
-2. Click on your bridge name
-3. Click **Edit**
-4. Change **Line** from `line-3` to `line-5`
-5. Click **Save**
+![S7 Connection Setup](images/s7-connection.png)
 
-![Screenshot: Editing location in bridge settings]
+### Configure What to Read
 
-### See the Change:
+In the **Input** section, you'll see S7-specific settings:
 
-In Topic Browser, your data now appears at:
-```
-umh.v1.plant-1.packaging.line-5.sealer._raw.temperature
-                          ↑
-                      It moved!
-```
-
-**The old location stops updating, the new one starts.** This is like moving a file to a different folder!
-
-## Rename Your Measurements
-
-Maybe your PLC sends cryptic names like `AI_001_PV`. Let's fix that:
-
-### In Your Bridge Settings:
-
-1. Click **Edit** on your bridge
-2. Find the **Tag Mappings** section
-3. You'll see your original tag names from the device
-
-![Screenshot: Tag mapping interface showing original names]
-
-### Add Friendly Names:
-
-| Device sends | Rename to |
-|-------------|-----------|
-| AI_001_PV | temperature |
-| AI_002_PV | pressure |
-| DI_001 | door_open |
-| CNT_001 | parts_count |
-
-Click **Save**
-
-### The Result:
-
-Instead of:
-```
-umh.v1.plant-1.packaging.line-5.sealer._raw.AI_001_PV  ❌ What is this?
+```yaml
+s7comm:
+    addresses:
+        - DB1.DW20      # Data Word in Data Block 1
+        - DB1.S30.10    # String in DB1 (30 chars)
+        - DB3.I270      # Integer in Data Block 3
+    tcpDevice: '{{ .IP }}'
+    rack: 0
+    slot: 1
 ```
 
-You now have:
-```
-umh.v1.plant-1.packaging.line-5.sealer._raw.temperature  ✅ Clear meaning!
-```
+**What are these addresses?**
+- `DB1` = Data Block 1 (like a folder in your PLC)
+- `DW20` = Data Word at position 20 (a number)
+- `S30.10` = String, 30 characters starting at position 10
+- `I270` = Integer at position 270
 
-## Group Related Data
+### The Magic Line
 
-You can add more levels to organize better. Think of it like creating subfolders:
+In the **Processing** section, look at the **Always** code:
 
-### Standard Levels (Optional):
+```javascript
+// Set location from bridge config
+msg.meta.location_path = "{{ .location_path }}";
 
-The location path can have up to 10 levels. Common patterns:
+// Use _historian for S7 data
+msg.meta.data_contract = "_historian";
 
-**ISA-95 Style:**
-```
-enterprise.site.area.line.workcell.device
-```
+// THE MAGIC: S7 address becomes the tag name automatically!
+msg.meta.tag_name = msg.meta.s7_address;
 
-**Functional Style:**
-```
-region.plant.building.department.process.equipment
-```
+// Pass the value through
+msg.payload = msg.payload;
 
-**Custom Style:** (Yours can be anything!)
-```
-customer.factory.workshop.machine.subsystem.component
+return msg;
 ```
 
-### Example: Adding Subsystems
+**The brilliant part:** `msg.meta.tag_name = msg.meta.s7_address`
 
-If your sealer has multiple subsystems:
+This one line means:
+- `DB1.DW20` automatically becomes a tag
+- `DB1.S30.10` automatically becomes a tag
+- `DB3.I270` automatically becomes a tag
+- **You don't map anything manually!**
 
-1. Edit the bridge
-2. Add level 5: `heater`
-3. Map temperature tags there
+### Understanding Template Variables
 
-Now you get:
+Notice the `tcpDevice: '{{ .IP }}'` in the configuration? This is a **template variable**.
+
+When you entered the IP address in the **Connection** settings (Step 1 of bridge creation), it automatically became available as `{{ .IP }}` throughout your configuration. The same happens with the port as `{{ .PORT }}`.
+
+💡 **Why Variables?** Instead of hardcoding `192.168.1.100` everywhere, using `{{ .IP }}` means you can change the PLC address in one place (Connection settings) and it updates everywhere. Perfect for deploying the same configuration to multiple sites!
+
+Learn more: [Template Variables Reference](../reference/variables.md)
+
+Click **Save & Deploy**.
+
+### See Your PLC Data
+
+In **Topic Browser**, you now see ALL your PLC data automatically organized:
+
 ```
-umh.v1.plant-1.packaging.line-5.sealer.heater._raw.temperature
-umh.v1.plant-1.packaging.line-5.sealer.heater._raw.setpoint
-umh.v1.plant-1.packaging.line-5.sealer.conveyor._raw.speed
-umh.v1.plant-1.packaging.line-5.sealer.conveyor._raw.running
-```
-
-It's organized like folders:
-```
-sealer/
-├── heater/
-│   ├── temperature
-│   └── setpoint
-└── conveyor/
-    ├── speed
-    └── running
-```
-
-## Think in Folders
-
-The key mental model: **UMH organizes data like a file system**
-
-- Each level is a folder
-- Tags are files in those folders
-- You can reorganize without losing data
-- Consumers can subscribe to entire "folders"
-
-### Example: Subscribe to Everything from Line 5
-
-A dashboard can subscribe to:
-```
-umh.v1.plant-1.packaging.line-5.+.+._raw.+
+enterprise.sksk._historian.DB1.DW20     [12345]
+enterprise.sksk._historian.DB1.S30.10   ["Product ABC"]
+enterprise.sksk._historian.DB3.I270     [789]
 ```
 
-This gives ALL data from line-5, regardless of which machine or measurement!
+**🎉 One bridge reads your ENTIRE PLC!** Every address becomes a tag automatically.
 
-## Try It Yourself
+## Part 2: Special Handling with Conditions
 
-### Exercise 1: Plant-Wide View
-Create bridges for different areas and see how they organize:
-- Packaging line-3
-- Assembly line-1
-- Warehouse zone-A
+Some PLC tags need special treatment - scaling, unit conversion, or validation. Let's use **Conditions** to handle specific addresses differently.
 
-### Exercise 2: Consistent Naming
-Rename all temperature sensors to follow a pattern:
-- `temperature_celsius`
-- `temperature_fahrenheit`
-- `temperature_setpoint`
+### Add Your First Condition
 
-### Exercise 3: Hierarchical Organization
-Add detail levels for a complex machine:
+1. Below the **Always** section, click **Add Condition**
+2. **If Condition:** `msg.meta.s7_address == "DB1.DW20"`
+3. **Then Action:**
+
+```javascript
+// Scale the value and add engineering unit
+msg.payload = parseFloat(msg.payload) * 1.0;
+msg.meta.unit = "bar";  // This is pressure in bar
+return msg;
 ```
-plant-1/machining/cnc-01/spindle/motor/temperature
-plant-1/machining/cnc-01/spindle/motor/current
-plant-1/machining/cnc-01/axes/x/position
-plant-1/machining/cnc-01/axes/y/position
+
+### Add Another Condition for String Data
+
+1. Click **Add Condition** again
+2. **If Condition:** `msg.meta.s7_address == "DB1.S30.10"`
+3. **Then Action:**
+
+```javascript
+// Clean up string data
+msg.payload = msg.payload.trim();
+msg.meta.unit = "Text";  // Mark as text data
+return msg;
 ```
+
+![Conditions in Tag Processor](images/tag-processor-conditions.png)
+
+### What Conditions Do
+
+- **Always section:** Runs for EVERY tag (sets basics)
+- **Conditions:** Run ONLY for specific tags (special handling)
+
+**The power:** You can handle hundreds of tags with just a few conditions for the special cases!
+
+### View the Enhanced Data
+
+In **Topic Browser**, click on `DB1.DW20`. Notice:
+- The value might be scaled
+- **Metadata** now shows `unit: "bar"`
+- Special handling applied ONLY to this tag
+
+![Metadata showing unit](images/topic-browser-metadata.png)
+
+## Part 3: Organize with Virtual Folders
+
+Right now all tags are at the root level. Let's organize them into logical folders using virtual paths.
+
+### Add Organization with Conditions
+
+1. **Add Condition** for production data
+2. **If Condition:** `msg.meta.s7_address.startsWith("DB1")`
+3. **Then Action:**
+
+```javascript
+// Group all DB1 data under "production" folder
+msg.meta.virtual_path = "production";
+return msg;
+```
+
+4. **Add Condition** for quality data
+5. **If Condition:** `msg.meta.s7_address.startsWith("DB3")`
+6. **Then Action:**
+
+```javascript
+// Group all DB3 data under "quality" folder
+msg.meta.virtual_path = "quality";
+return msg;
+```
+
+### The Result: Organized Folders
+
+In **Topic Browser**, your data is now organized:
+
+```
+enterprise.sksk._historian.production.DB1.DW20     [12345]
+enterprise.sksk._historian.production.DB1.S30.10   ["Product ABC"]
+enterprise.sksk._historian.quality.DB3.I270        [789]
+```
+
+**📁 It's like folders on your computer!**
+- All DB1 tags → production folder
+- All DB3 tags → quality folder
+- Automatically organized by data block!
+
+💡 **The Power:** You organize ENTIRE data blocks with one condition, not individual tags!
+
+## Part 4: Route to Different Machines
+
+What if different data blocks belong to different machines? Let's route them!
+
+### Dynamic Location Routing
+
+Add conditions to route data blocks to different machines:
+
+1. **Add Condition** for Machine 1
+2. **If Condition:** `msg.meta.s7_address.startsWith("DB1")`
+3. **Then Action:**
+
+```javascript
+// DB1 belongs to machine-1
+msg.meta.location_path = "{{ .location_path }}.machine-1";
+msg.meta.virtual_path = "sensors";
+return msg;
+```
+
+4. **Add Condition** for Machine 2
+5. **If Condition:** `msg.meta.s7_address.startsWith("DB3")`
+6. **Then Action:**
+
+```javascript
+// DB3 belongs to machine-2
+msg.meta.location_path = "{{ .location_path }}.machine-2";
+msg.meta.virtual_path = "quality";
+return msg;
+```
+
+### The Magic Result
+
+**ONE bridge now routes to MULTIPLE machines:**
+
+```
+enterprise.sksk.machine-1._historian.sensors.DB1.DW20     [12345]
+enterprise.sksk.machine-1._historian.sensors.DB1.S30.10   ["Product ABC"]
+enterprise.sksk.machine-2._historian.quality.DB3.I270     [789]
+```
+
+## Understanding the Complete Picture
+
+You now control every part of the topic:
+
+```
+umh.v1.enterprise.sksk.machine-1._historian.sensors.DB1.DW20
+       └─ fixed ─┘└─ location_path ─┘          └virtual┘└tag┘
+                                                  path   name
+```
+
+- **location_path**: WHERE the device is (can be dynamic)
+- **virtual_path**: HOW you organize (folders for grouping)
+- **tag_name**: WHAT you're reading (automatic from S7 address!)
 
 ## What You've Learned
 
-✅ **Data addresses are like folder paths** - Organize hierarchically
-✅ **You control the structure** - Change locations and names anytime
-✅ **Think in folders** - Group related data together
-✅ **Subscribers can use wildcards** - Get entire "folders" of data
+✅ **Protocol addresses become tag names** - No manual mapping needed!
+✅ **Conditions handle special cases** - Not every tag, just the exceptions
+✅ **Folders organize automatically** - Group entire data blocks at once
+✅ **Dynamic routing is simple** - Send different PLCs to different locations
+✅ **Variables make it reusable** - `{{ .IP }}` works for any PLC
 
-## Still Using _raw - That's OK!
+## Concepts Learned
 
-Notice we haven't talked about:
-- Data models
-- Validation
-- Data contracts
-- Payload shapes
+Building on previous guides, you now understand:
 
-**You don't need them yet!** Many users run production with just `_raw` and good organization.
+- **PLC addresses** - DB1.DW20 format for Siemens PLCs
+- **Data Blocks** - PLC memory organization (DB1, DB3)
+- **S7 protocol** - Siemens-specific communication
+- **Template variables** - `{{ .IP }}`, `{{ .PORT }}`, `{{ .location_path }}`
+- **_historian contract** - Different validation than _raw
+- **Conditions** - If-then rules in Tag Processor
+- **virtual_path** - Folder organization within topics
+- **Dynamic routing** - One bridge serving multiple machines
+- **Engineering units** - Adding metadata like "bar", "°C"
+- **msg object** - Message structure (msg.meta, msg.payload)
+- **Auto-tagging** - Protocol addresses becoming tag names
 
-## When You Need More
+## What's Next?
 
-Using `_raw` works great until:
+You can now:
+- Connect entire PLCs with one bridge
+- Organize hundreds of tags with a few conditions
+- Route to different locations dynamically
 
-- 🚫 Bad data crashes your dashboard (string instead of number)
-- 🚫 Different devices send different formats
-- 🚫 You need guaranteed data structure
+**But there's still a risk:** What if DB1.DW20 suddenly sends a string instead of a number? Or DB3.I270 goes out of range?
 
-**Ready to add validation?**
-→ [Step 3: Validate Your Data](3-validate-data.md)
-
-**Happy with _raw?**
-→ [Start Consuming Data](../usage/consuming-data/README.md)
-
----
-
-## Quick Tips
-
-💡 **Location changes don't affect history** - Old data stays at old address
-
-💡 **Plan your hierarchy early** - Easier than reorganizing later
-
-💡 **Use consistent patterns** - All pumps → `pump-01`, `pump-02`, etc.
-
-💡 **Keep it simple** - 3-5 levels usually enough
+**Ready to add data validation?** → [Step 4: Validate Your Data](3-validate-data.md)
